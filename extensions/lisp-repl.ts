@@ -25,7 +25,9 @@ import { CURSOR_MARKER, Text } from "@mariozechner/pi-tui";
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 const LISP_PATH = join(SRC_DIR, "lisp.ts");
 const PROMPT = "> ";
-const EVAL_TIMEOUT_MS = 15_000;
+// Kept above src/mcp.ts's 30s MCP-call timeout so a slow tool surfaces as a
+// clean Lisp error rather than tripping this REPL-level restart path.
+const EVAL_TIMEOUT_MS = 60_000;
 const OUTPUT_TYPE = "lisp-output";
 const CODE_TYPE = "lisp-code";
 
@@ -155,7 +157,13 @@ class LispRepl {
 		this.proc = spawn(
 			process.execPath,
 			["--no-warnings", "--experimental-transform-types", LISP_PATH],
-			{ stdio: ["pipe", "pipe", "pipe"], cwd: SRC_DIR },
+			{
+				stdio: ["pipe", "pipe", "pipe"],
+				cwd: SRC_DIR,
+				// MCP_SERVERS (JSON array of predefined connection configs) is read
+				// by src/mcp.ts at startup; `load-mcp` then expands them on demand.
+				env: process.env,
+			},
 		);
 		this.proc.stdout.setEncoding("utf8");
 		this.proc.stdout.on("data", (chunk: string) => {
@@ -368,6 +376,14 @@ export default function (pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			await repl.start();
 			ctx.ui.notify("Lisp REPL restarted", "info");
+		},
+	});
+
+	pi.registerCommand("mcp", {
+		description: "List MCP servers known to the Lisp REPL (loaded/unloaded)",
+		handler: async (_args, ctx) => {
+			const { output } = await evalCode("(list-mcps)");
+			ctx.ui.notify(`MCP servers: ${output || "none"}`, "info");
 		},
 	});
 }
