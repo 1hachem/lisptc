@@ -5,8 +5,9 @@
  *   when the session starts; the interpreter itself has no pi dependency.
  * - Replaces the agent's system prompt with a lisp-only policy plus the
  *   full interpreter source code (src/arith.ts + src/lisp.ts).
- * - Registers a `lisp_eval` tool so the agent can evaluate snippets in
- *   the same REPL session (definitions persist across calls).
+ * - The agent has NO tools. Everything the agent outputs as assistant
+ *   text is sent verbatim to the REPL and evaluated; the result is
+ *   injected back into the session as a custom message.
  * - /lisp-reset restarts the REPL process.
  */
 
@@ -15,16 +16,100 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+	CustomEditor,
 	type ExtensionAPI,
 	highlightCode,
 } from "@mariozechner/pi-coding-agent";
-import { Container, Text } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { CURSOR_MARKER, Text } from "@mariozechner/pi-tui";
 
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 const LISP_PATH = join(SRC_DIR, "lisp.ts");
 const PROMPT = "> ";
 const EVAL_TIMEOUT_MS = 15_000;
+const OUTPUT_TYPE = "lisp-output";
+const CODE_TYPE = "lisp-code";
+
+const ESC = String.fromCharCode(27);
+// ANSI color/style sequences, e.g. "\x1b[32m"
+const ANSI_COLOR_RE = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
+// The editor's inverse-video cursor cell: "\x1b[7m<grapheme>\x1b[0m"
+const CURSOR_CELL_RE = new RegExp(`^${ESC}\\[7m[\\s\\S]*?${ESC}\\[0m`);
+
+// Editor that live-highlights the input buffer as Lisp while it starts
+// with "!" (the prefix that sends the line straight to the REPL).
+//
+// The base editor emits plain text lines plus a zero-width CURSOR_MARKER
+// and an inverse-video cursor cell (\x1b[7m…\x1b[0m). Highlighting only
+// inserts color codes, so visible widths — and thus cursor positioning
+// and wrapping — are unchanged.
+class LispEditor extends CustomEditor {
+	// Called with the bare code when the user submits a "!" line. Intercepts
+	// submission entirely, so pi's bash path (and its command-echo row)
+	// never runs.
+	onLisp?: (code: string) => void;
+
+	constructor(...args: ConstructorParameters<typeof CustomEditor>) {
+		super(...args);
+		let inner: ((text: string) => void) | undefined;
+		Object.defineProperty(this, "onSubmit", {
+			get: () => (text: string) => {
+				const trimmed = text.trimStart();
+				if (trimmed.startsWith("!") && this.onLisp) {
+					const code = trimmed.replace(/^!+\s*/, "");
+					this.addToHistory(text);
+					this.setText("");
+					if (code !== "") this.onLisp(code);
+					return;
+				}
+				inner?.(text);
+			},
+			set: (fn: ((text: string) => void) | undefined) => {
+				inner = fn;
+			},
+		});
+	}
+
+	private hl(s: string): string {
+		return s === "" ? s : (highlightCode(s, "lisp")[0] ?? s);
+	}
+
+	render(width: number): string[] {
+		const lines = super.render(width);
+		if (!this.getText().trimStart().startsWith("!")) return lines;
+
+		const isBorder = (line: string) =>
+			line.replace(ANSI_COLOR_RE, "").trimEnd().startsWith("─");
+		let sawTopBorder = false;
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (isBorder(line)) {
+				if (sawTopBorder) break; // bottom border: stop before autocomplete
+				sawTopBorder = true;
+				continue;
+			}
+			if (!sawTopBorder) continue;
+			const markerIdx = line.indexOf(CURSOR_MARKER);
+			if (markerIdx === -1) {
+				lines[i] = this.hl(line);
+				continue;
+			}
+			// Highlight around the cursor: before-part and after-part are
+			// colored separately so the marker and the inverse-video cursor
+			// cell stay byte-identical.
+			const before = line.slice(0, markerIdx);
+			const after = line.slice(markerIdx + CURSOR_MARKER.length);
+			const cursorMatch = after.match(CURSOR_CELL_RE);
+			if (!cursorMatch) {
+				lines[i] = this.hl(before) + CURSOR_MARKER + after;
+				continue;
+			}
+			const rest = after.slice(cursorMatch[0].length);
+			lines[i] =
+				this.hl(before) + CURSOR_MARKER + cursorMatch[0] + this.hl(rest);
+		}
+		return lines;
+	}
+}
 
 function loadSource(): string {
 	const arith = readFileSync(join(SRC_DIR, "arith.ts"), "utf8");
@@ -34,15 +119,16 @@ function loadSource(): string {
 
 const POLICY = `You are a Lisp machine. You are NOT a chat assistant.
 
+Everything you output is fed DIRECTLY to a Lisp REPL and evaluated. You have no tools. Your entire output must be Lisp source code — nothing else.
+
 ABSOLUTE RULES:
-1. You may ONLY communicate by evaluating Lisp code through the \`lisp_eval\` tool.
-2. You must NEVER write plain text, markdown, or explanations to the user. Your assistant text output must always be empty.
-3. Every request from the user — questions, greetings, computations, anything — must be answered by writing and evaluating Lisp code in the REPL. Produce the answer as the VALUE of the last expression. Do NOT wrap it in \`print\`/\`princ\`: the REPL already prints the value of every expression, so printing it too shows it twice. Use \`print\`/\`princ\` only for side-effect output in the middle of a computation.
-4. If something cannot be expressed in Lisp, respond by evaluating a Lisp expression whose value is an explanation string, e.g. "cannot comply".
-5. The REPL session is persistent: functions and variables defined in one \`lisp_eval\` call remain available in later calls. Build on previous definitions.
-6. Send complete, balanced expressions only. Each \`lisp_eval\` call is sent to the running REPL as-is.
-7. Comments are FORBIDDEN. Never include \`;\` comments in the code you evaluate — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
-8. The dialect is Bakab Lisp (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
+1. Your output is evaluated verbatim by the REPL. Output ONLY Lisp code: no plain text, no markdown, no code fences, no explanations. A single stray word outside an s-expression is a syntax error.
+2. Every request from the user — questions, greetings, computations, anything — must be answered with Lisp code. Produce the answer as the VALUE of the last expression. Do NOT wrap it in \`print\`/\`princ\`: the REPL already prints the value of every expression. Use \`print\`/\`princ\` only for side-effect output in the middle of a computation.
+3. If something cannot be expressed in Lisp, output a Lisp expression whose value is an explanation string, e.g. "cannot comply".
+4. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result is sent back to you as a message of type ${OUTPUT_TYPE}.
+5. Output complete, balanced expressions only.
+6. Comments are FORBIDDEN. Never include \`;\` comments — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
+7. The dialect is Bakab Lisp (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
 
 Below is the full source code of the interpreter you are running on:
 
@@ -132,16 +218,44 @@ class LispRepl {
 	}
 }
 
+// Occasionally the model wraps its code in a markdown fence despite the
+// policy; unwrap it so the REPL sees bare Lisp.
+function stripFences(text: string): string {
+	const m = text.trim().match(/^```[a-zA-Z]*\n([\s\S]*?)\n?```$/);
+	return m ? m[1] : text.trim();
+}
+
 export default function (pi: ExtensionAPI) {
 	const repl = new LispRepl();
 	let systemPrompt: string | null = null;
 
 	pi.on("session_start", async (_event, ctx) => {
-		// Disable every default/built-in tool; the agent gets lisp_eval only.
-		pi.setActiveTools(["lisp_eval"]);
+		// The agent has no tools at all — its text output IS the Lisp program.
+		pi.setActiveTools([]);
 		await repl.start();
+		// Live Lisp highlighting while typing in "!" mode; submitting a "!"
+		// line evals it directly (code + result rendered as messages).
+		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+			const editor = new LispEditor(tui, theme, keybindings);
+			editor.onLisp = async (code) => {
+				const { output, error } = await evalCode(stripFences(code));
+				sendWhenIdle(ctx, {
+					customType: CODE_TYPE,
+					content: code,
+					display: true,
+					details: {},
+				});
+				sendWhenIdle(ctx, {
+					customType: OUTPUT_TYPE,
+					content: output || "(no output)",
+					display: true,
+					details: { code, output, error },
+				});
+			};
+			return editor;
+		});
 		ctx.ui.notify(
-			"Lisp REPL started (persistent subprocess, lisp_eval is the only tool)",
+			"Lisp REPL started — assistant output is evaluated as Lisp, `! <code>` evals directly",
 			"info",
 		);
 	});
@@ -157,77 +271,103 @@ export default function (pi: ExtensionAPI) {
 		return { systemPrompt };
 	});
 
+	async function evalCode(code: string): Promise<{
+		output: string;
+		error: boolean;
+	}> {
+		try {
+			return { output: await repl.eval(code), error: false };
+		} catch (ex) {
+			repl.stop();
+			await repl.start();
+			const msg = ex instanceof Error ? ex.message : String(ex);
+			return {
+				output: `REPL error: ${msg} (interpreter was restarted, definitions lost)`,
+				error: true,
+			};
+		}
+	}
+
+	// sendMessage only appends + displays immediately when the agent is
+	// idle (otherwise it lands in steer/followUp queues and re-triggers or
+	// disappears). Wait for idle before injecting REPL results.
+	function sendWhenIdle(
+		ctx: { isIdle(): boolean },
+		message: Parameters<ExtensionAPI["sendMessage"]>[0],
+	): void {
+		if (ctx.isIdle()) pi.sendMessage(message);
+		else setTimeout(() => sendWhenIdle(ctx, message), 50);
+	}
+
+	// Everything the agent says is a Lisp program: evaluate it and inject
+	// the REPL output back into the session (displayed below the code with
+	// its own background, and part of the agent's context).
+	pi.on("message_end", async (event, ctx) => {
+		if (event.message.role !== "assistant") return;
+		const code = event.message.content
+			.filter((c): c is { type: "text"; text: string } => c.type === "text")
+			.map((c) => c.text)
+			.join("\n");
+		const trimmed = stripFences(code);
+		if (trimmed === "") return;
+
+		const { output, error } = await evalCode(trimmed);
+		sendWhenIdle(ctx, {
+			customType: OUTPUT_TYPE,
+			content: output || "(no output)",
+			display: true,
+			details: { code: trimmed, output, error },
+		});
+
+		// Re-fence the code as ```lisp so the default markdown renderer
+		// shows it syntax-highlighted instead of as plain prose.
+		return {
+			message: {
+				...event.message,
+				content: [
+					...event.message.content.filter((c) => c.type !== "text"),
+					{
+						type: "text" as const,
+						text: `\`\`\`lisp\n${trimmed}\n\`\`\``,
+					},
+				],
+			},
+		};
+	});
+
+	// User-entered "!" code renders syntax-highlighted on its own background,
+	// distinct from the result background below it.
+	pi.registerMessageRenderer(CODE_TYPE, (message, _options, theme) => {
+		const code =
+			typeof message.content === "string"
+				? message.content
+				: JSON.stringify(message.content);
+		return new Text(highlightCode(code, "lisp").join("\n"), 1, 0, (t) =>
+			theme.bg("userMessageBg", t),
+		);
+	});
+
+	// REPL output gets its own background so it reads apart from the code.
+	pi.registerMessageRenderer(OUTPUT_TYPE, (message, _options, theme) => {
+		const details = message.details as { error?: boolean } | undefined;
+		const isError = details?.error === true;
+		const text =
+			typeof message.content === "string"
+				? message.content
+				: JSON.stringify(message.content);
+		return new Text(
+			theme.fg(isError ? "error" : "toolOutput", text),
+			1,
+			0,
+			(t) => theme.bg(isError ? "toolErrorBg" : "toolSuccessBg", t),
+		);
+	});
+
 	pi.registerCommand("lisp-reset", {
 		description: "Restart the Lisp REPL (clears all definitions)",
 		handler: async (_args, ctx) => {
 			await repl.start();
 			ctx.ui.notify("Lisp REPL restarted", "info");
-		},
-	});
-
-	pi.registerTool({
-		name: "lisp_eval",
-		label: "Lisp Eval",
-		description:
-			"Evaluate Lisp code in the persistent session REPL. Accepts one or more complete expressions; " +
-			"returns the REPL output (printed output and the value of each expression). Definitions persist across calls. " +
-			"Sending `:up` re-enters the previous input line.",
-		parameters: Type.Object({
-			code: Type.String({
-				description:
-					"Lisp source code to evaluate (complete, balanced expressions)",
-			}),
-		}),
-
-		// Code (call) and output (result) get distinct full-width backgrounds
-		// so they are easy to tell apart in the TUI.
-		renderCall(args, theme) {
-			const box = new Container();
-			box.addChild(new Text(theme.fg("toolTitle", theme.bold("λ lisp")), 0, 0));
-			box.addChild(
-				new Text(highlightCode(args.code, "lisp").join("\n"), 1, 0, (t) =>
-					theme.bg("userMessageBg", t),
-				),
-			);
-			return box;
-		},
-
-		renderResult(result, { isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("warning", "evaluating…"), 0, 0);
-			const out = result.content?.[0];
-			const text = out?.type === "text" ? out.text : "(no output)";
-			const isError =
-				(result.details as { error?: boolean } | undefined)?.error === true;
-			return new Text(
-				theme.fg(isError ? "error" : "toolOutput", text),
-				1,
-				0,
-				(t) => theme.bg(isError ? "toolErrorBg" : "toolSuccessBg", t),
-			);
-		},
-
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			try {
-				const output = await repl.eval(params.code);
-				return {
-					content: [{ type: "text", text: output || "(no output)" }],
-					details: { code: params.code, output },
-				};
-			} catch (ex) {
-				repl.stop();
-				await repl.start();
-				const msg = ex instanceof Error ? ex.message : String(ex);
-				return {
-					content: [
-						{
-							type: "text",
-							text: `REPL error: ${msg} (interpreter was restarted, definitions lost)`,
-						},
-					],
-					isError: true,
-					details: { code: params.code, error: true },
-				};
-			}
 		},
 	});
 }
