@@ -1441,10 +1441,10 @@ async function main(): Promise<void> {
 				emitKeypressEvents(process.stdin, rl);
 				process.stdin.on("keypress", (_s, key) => {
 					if (key?.ctrl && key.name === "l" && rl) {
-						const buf = rl.line;
+						// prompt(true) redraws the prompt AND the current rl.line
+						// (preserveCursor), so the typed input survives the clear.
 						write(CLEAR_SCREEN);
-						rl.prompt();
-						if (buf !== "") rl.write(buf);
+						rl.prompt(true);
 					}
 				});
 			}
