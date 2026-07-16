@@ -8,6 +8,7 @@
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"lint": "biome ci",
+		"format": "biome check --write",
 		"repl": "node --no-warnings --experimental-transform-types src/lisp.ts",
 		"test": "vitest run",
 		"test:watch": "vitest",
