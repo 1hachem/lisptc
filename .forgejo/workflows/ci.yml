@@ -26,5 +26,8 @@ jobs:
       - name: Lint & format check
         run: pnpm lint
 
+      - name: Knip
+        run: pnpm knip
+
       - name: Test
         run: pnpm test
