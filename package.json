@@ -10,7 +10,8 @@
 		"lint": "biome ci",
 		"repl": "node --no-warnings --experimental-transform-types src/lisp.ts",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"prepare": "husky"
 	},
 	"keywords": [
 		"pi-package"
@@ -34,8 +35,12 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.12",
-		"typescript": "^5.9.3",
+		"@commitlint/cli": "^21.2.1",
+		"@commitlint/config-conventional": "^21.2.0",
+		"@commitlint/types": "^21.2.0",
 		"@types/node": "^22.0.0",
+		"husky": "^9.1.7",
+		"typescript": "^5.9.3",
 		"vitest": "^3.0.0"
 	}
 }
