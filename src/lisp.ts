@@ -16,6 +16,7 @@ import {
 	tryToParse,
 	ZERO,
 } from "./arith.ts";
+import { registerMcp } from "./mcp.ts";
 
 // An inefficient substitution of assert statement in Dart
 function assert(x: boolean, message?: string): asserts x {
@@ -42,7 +43,7 @@ export function setWriter(fn: (s: string) => void): (s: string) => void {
 //----------------------------------------------------------------------
 
 // Lisp cons cell
-class Cell {
+export class Cell {
 	constructor(
 		public car: unknown,
 		public cdr: unknown,
@@ -59,7 +60,7 @@ class Cell {
 }
 
 // Lisp's list
-type List = Cell | null;
+export type List = Cell | null;
 
 // foldl(x, (a b c), fn) => fn(fn(fn(x, a), b), c)
 function foldl<T>(x: T, j: List, fn: (x: T, y: unknown) => T): T {
@@ -81,7 +82,7 @@ function mapcar(j: List, fn: (x: unknown) => unknown): List {
 }
 
 // Lisp symbol
-class Sym {
+export class Sym {
 	// Construct an uninterned symbol.
 	constructor(public readonly name: string) {}
 
@@ -98,11 +99,36 @@ class Sym {
 // Expression keyword
 class Keyword extends Sym {}
 
+// Self-evaluating keyword literal, e.g. `:query`. Distinct from the special-form
+// `Keyword` class above (which subclasses Sym and drives cond/lambda/setq/...).
+// A LispKeyword evaluates to itself (like a number or string) and prints with a
+// leading colon. Used for ergonomic `(fn :key val ...)` call syntax.
+export class LispKeyword {
+	// name is stored WITHOUT the leading colon.
+	constructor(public readonly name: string) {}
+
+	toString(): string {
+		return `:${this.name}`;
+	}
+}
+
+// Interned keyword literals so that `(eq :a :a)` holds.
+const keywordLiteralTable: { [key: string]: LispKeyword } = {};
+
+export function newLispKeyword(name: string): LispKeyword {
+	let k = keywordLiteralTable[name];
+	if (k === undefined) {
+		k = new LispKeyword(name);
+		keywordLiteralTable[name] = k;
+	}
+	return k;
+}
+
 // The table of interned symbols
 const symTable: { [key: string]: Sym } = {};
 
 // Construct an interned symbol; construct a Keyword if isKeyword holds.
-function newSym(name: string, isKeyword = false): Sym {
+export function newSym(name: string, isKeyword = false): Sym {
 	let result = symTable[name];
 	assert(result === undefined || !isKeyword, name);
 	if (result === undefined) {
@@ -349,7 +375,7 @@ class Arg {
 }
 
 // Exception in evaluation
-class EvalException extends Error {
+export class EvalException extends Error {
 	readonly trace: string[] = [];
 
 	constructor(msg: string, x: unknown, quoteString = true) {
@@ -515,12 +541,36 @@ export class Interp {
 			newSym("*version*"),
 			new Cell(2.1, new Cell("TypeScript", new Cell("Bakab Lisp", null))),
 		);
+
+		// Install native MCP built-ins (load-mcp, unload-mcp, list-tools, ...).
+		registerMcp(this);
 	}
 
 	// Define a built-in function by giving a name, a carity, and a body.
 	def(name: string, carity: number, body: BuiltInFuncBody) {
 		const sym = newSym(name);
 		this.globals.set(sym, new BuiltInFunc(name, carity, body));
+	}
+
+	// Define/undefine a global binding. Used by the MCP layer to install and
+	// remove per-tool wrapper functions at runtime (see src/mcp.ts).
+	defineGlobal(sym: Sym, value: unknown): void {
+		this.globals.set(sym, value);
+	}
+
+	undefineGlobal(sym: Sym): void {
+		// A missing binding makes eval raise "void variable" (see below), so
+		// deletion cleanly unbinds the symbol.
+		this.globals.delete(sym);
+	}
+
+	hasGlobal(sym: Sym): boolean {
+		return this.globals.has(sym);
+	}
+
+	// Build a BuiltInFunc without binding it (for wrappers stored elsewhere).
+	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
+		return new BuiltInFunc(name, carity, body);
 	}
 
 	// Evaluate a Lisp expression in an environment.
@@ -588,7 +638,7 @@ export class Interp {
 				} else if (x instanceof Lambda) {
 					return Closure.makeFrom(x, env);
 				} else {
-					return x; // numbers, strings, null etc.
+					return x; // numbers, strings, keywords (:foo), null etc.
 				}
 			}
 		} catch (ex) {
@@ -1037,6 +1087,9 @@ class Reader {
 				if (n !== null) this.token = n;
 				else if (t === "nil") this.token = null;
 				else if (t === "t") this.token = true;
+				else if (t.length > 1 && t[0] === ":")
+					// Self-evaluating keyword literal, e.g. :query
+					this.token = newLispKeyword(t.slice(1));
 				else this.token = newSym(t);
 				return;
 			}
@@ -1289,7 +1342,7 @@ export const prelude = `
      \`((lambda ,(vars args) ,@body) ,@(vals args)))
    nil nil))
 
-(defmacro letrec (args &rest body)      ; (letrec ((v e) ...) body...)
+(defmacro letrec (args &rest body)
   (let (vars setqs)
     (defun vars (x)
       (cond (x (cons (caar x)
@@ -1323,7 +1376,7 @@ export const prelude = `
            ((or ,@y)))))
 
 (defun listp (x)
-  (or (null x) (consp x)))    ; NB (listp (lambda (x) (+ x 1))) => nil
+  (or (null x) (consp x)))
 
 (defun memq (key x)
   (cond ((null x) nil)
@@ -1353,7 +1406,7 @@ export const prelude = `
     (if (null next)
         x
       (_nreverse next x))))
-(defun nreverse (list)        ; (nreverse (quote (a b c d))) => (d c b a))
+(defun nreverse (list)
   (cond (list (_nreverse list nil))))
 
 (defun last (list)
@@ -1375,7 +1428,7 @@ export const prelude = `
     \`(letrec ((,loop (lambda () (cond (,test ,@body (,loop))))))
        (,loop))))
 
-(defmacro dolist (spec &rest body) ; (dolist (name list [result]) body...)
+(defmacro dolist (spec &rest body)
   (let ((name (car spec))
         (list (gensym)))
     \`(let (,name
@@ -1388,7 +1441,7 @@ export const prelude = `
              \`((setq ,name nil)
                ,(caddr spec))))))
 
-(defmacro dotimes (spec &rest body) ; (dotimes (name count [result]) body...)
+(defmacro dotimes (spec &rest body)
   (let ((name (car spec))
         (count (gensym)))
     \`(let ((,name 0)

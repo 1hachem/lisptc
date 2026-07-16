@@ -1,0 +1,12 @@
+[
+	{
+		"name": "linear",
+		"url": "https://mcp.linear.app/mcp",
+		"headers": { "Authorization": "Bearer YOUR_TOKEN" }
+	},
+	{
+		"name": "fs",
+		"command": "npx",
+		"args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+	}
+]
