@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+import { ev } from "./helpers.ts";
+
+describe("cond / if / when", () => {
+	it("cond selects the first true clause", () => {
+		expect(ev("(cond (nil 1) (t 2))")).toBe("2");
+		expect(ev("(cond)")).toBe("nil");
+		expect(ev("(cond (nil 1))")).toBe("nil");
+	});
+
+	it("cond returns the test value for a single-element clause", () => {
+		expect(ev("(cond (5))")).toBe("5");
+		expect(ev("(cond (nil) (7))")).toBe("7");
+	});
+
+	it("if requires no else", () => {
+		expect(ev("(if t 1 2)")).toBe("1");
+		expect(ev("(if nil 1 2)")).toBe("2");
+		expect(ev("(if nil 1)")).toBe("nil");
+		expect(ev("(if t 1)")).toBe("1");
+	});
+
+	it("if runs multiple else forms", () => {
+		expect(ev("(if nil 1 2 3 4)")).toBe("4");
+	});
+
+	it("when runs the body only when the test holds", () => {
+		expect(ev("(when t 1 2 3)")).toBe("3");
+		expect(ev("(when nil 1)")).toBe("nil");
+	});
+});
+
+describe("and / or short-circuiting", () => {
+	it("and returns the last value or nil", () => {
+		expect(ev("(and 1 2 3)")).toBe("3");
+		expect(ev("(and 1 nil 3)")).toBe("nil");
+	});
+
+	it("and does not evaluate past a nil", () => {
+		// If the tail were evaluated, the unbound function would throw.
+		expect(ev("(and nil (undefined-fn))")).toBe("nil");
+	});
+
+	it("or returns the first true value or nil", () => {
+		expect(ev("(or nil nil 5)")).toBe("5");
+		expect(ev("(or nil nil)")).toBe("nil");
+		expect(ev("(or 1 (undefined-fn))")).toBe("1");
+	});
+
+	it("not / null negate truthiness", () => {
+		expect(ev("(not nil)")).toBe("t");
+		expect(ev("(not 5)")).toBe("nil");
+		expect(ev("(null nil)")).toBe("t");
+	});
+});
+
+describe("progn / sequencing", () => {
+	it("returns the last form", () => {
+		expect(ev("(progn 1 2 3)")).toBe("3");
+		expect(ev("(progn)")).toBe("nil");
+	});
+});
+
+describe("let / lambda / lexical scope", () => {
+	it("binds with let and shadows", () => {
+		expect(ev("(let ((x 1) (y 2)) (+ x y))")).toBe("3");
+		expect(ev("(let ((x 1)) (let ((x 2)) x))")).toBe("2");
+		expect(ev("(let (x) x)")).toBe("nil");
+	});
+
+	it("applies lambdas, including &rest", () => {
+		expect(ev("((lambda (x) (* x x)) 5)")).toBe("25");
+		expect(ev("((lambda (x &rest r) r) 1 2 3)")).toBe("(2 3)");
+		expect(ev("((lambda (&rest r) r) 1 2 3)")).toBe("(1 2 3)");
+		expect(ev("((lambda (&rest r) r))")).toBe("nil");
+	});
+
+	it("closures capture the defining environment lexically", () => {
+		expect(ev("(((lambda (a) (lambda (b) (+ a b))) 3) 4)")).toBe("7");
+	});
+
+	it("functions see globals lexically, not the caller's locals", () => {
+		expect(ev("(setq x 10) (defun f () x) (defun g (x) (f)) (g 99)")).toBe(
+			"10",
+		);
+	});
+
+	it("setq on a parameter mutates the frame, not the global", () => {
+		expect(ev("(setq z 1) (defun h (z) (setq z 100) z) (list (h 5) z)")).toBe(
+			"(100 1)",
+		);
+	});
+});
+
+describe("closures with mutable captured state", () => {
+	const counter = `
+    (defun make-counter ()
+      (let ((n 0))
+        (lambda () (setq n (+ n 1)))))
+  `;
+
+	it("increments captured state across calls", () => {
+		expect(ev(`${counter} (setq c (make-counter)) (c) (c) (c)`)).toBe("3");
+	});
+
+	it("keeps independent state per closure", () => {
+		expect(
+			ev(
+				`${counter}
+         (setq c1 (make-counter))
+         (setq c2 (make-counter))
+         (c1) (c1) (c2)
+         (list (c1) (c2))`,
+			),
+		).toBe("(3 2)");
+	});
+});

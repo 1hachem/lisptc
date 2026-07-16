@@ -25,8 +25,19 @@ function assert(x: boolean, message?: string): asserts x {
 // Read a line as a string (displaying the given prompt), or null on EOF.
 let readLine: (prompt: string) => Promise<string | null>;
 
-let write: (s: string) => void; // Output string s (a new line on \n char).
-let exit: (n: number) => void; // Terminate the process with exit code n.
+// Output string s (a new line on \n char). Defaults to a no-op so the
+// interpreter can be imported (e.g. by tests) without a running REPL; the
+// REPL entry point and setWriter() below override it.
+let write: (s: string) => void = () => {};
+let exit: (n: number) => void = () => {}; // Terminate the process with exit code n.
+
+// Redirect interpreter output (used by prin1/princ/terpri). Returns the
+// previous writer so callers can restore it.
+export function setWriter(fn: (s: string) => void): (s: string) => void {
+	const prev = write;
+	write = fn;
+	return prev;
+}
 
 //----------------------------------------------------------------------
 
@@ -368,7 +379,7 @@ const EndOfFile = { toString: () => "EOF" };
 //----------------------------------------------------------------------
 
 // Core of the interpreter
-class Interp {
+export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
 
@@ -1055,7 +1066,7 @@ const quotes: { [key: string]: string } = {
 };
 
 // Make a string representation of Lisp expression
-function str(
+export function str(
 	x: unknown,
 	quoteString = true,
 	count?: number,
@@ -1200,7 +1211,7 @@ class REPL {
 }
 
 // Evaluate a string as a list of Lisp exps; return the result of the last exp.
-function run(interp: Interp, text: string): unknown {
+export function run(interp: Interp, text: string): unknown {
 	const tokens = new Reader();
 	tokens.push(text);
 	let result: unknown;
@@ -1212,7 +1223,7 @@ function run(interp: Interp, text: string): unknown {
 }
 
 // Lisp initialization script
-const prelude = `
+export const prelude = `
 (setq defmacro
       (macro (name args &rest body)
              \`(progn (setq ,name (macro ,args ,@body))
@@ -1393,8 +1404,16 @@ const prelude = `
 // Main procedure for Node.js: a dedicated standalone REPL.
 // Run the REPL on the first '-' argument (or with no arguments);
 // run each script file for other arguments.
+//
+// Guarded so that importing this module (e.g. from tests) does NOT start
+// the REPL / attach to stdin; it only runs when this file is the process
+// entry point (node lisp.ts, or the subprocess the pi extension spawns).
 
-{
+async function main(): Promise<void> {
+	const { pathToFileURL } = await import("node:url");
+	const entry = process.argv[1];
+	if (!entry || import.meta.url !== pathToFileURL(entry).href) return;
+
 	const isTTY = process.stdin.isTTY === true;
 	let rl: import("node:readline").Interface | null = null;
 	let closed = false;
@@ -1477,33 +1496,32 @@ const prelude = `
   Ctrl-D (EOF)   : exit the REPL
 `;
 
-	const main = async () => {
-		const interp = new Interp();
-		run(interp, prelude);
+	const interp = new Interp();
+	run(interp, prelude);
 
-		let repl: REPL | undefined;
-		let fs: typeof import("node:fs") | undefined;
-		let argv = process.argv as string[];
-		if (argv.length <= 2) argv = ["", "", "-"];
-		try {
-			for (let i = 2; i < argv.length; i++) {
-				const fileName = argv[i];
-				if (fileName === "-") {
-					if (repl === undefined) {
-						write(BANNER);
-						repl = new REPL();
-						await repl.readEvalPrintLoop(interp);
-					}
-				} else {
-					fs = fs || (await import("node:fs")).default;
-					const text = fs.readFileSync(fileName, "utf8");
-					run(interp, text);
+	let repl: REPL | undefined;
+	let fs: typeof import("node:fs") | undefined;
+	let argv = process.argv as string[];
+	if (argv.length <= 2) argv = ["", "", "-"];
+	try {
+		for (let i = 2; i < argv.length; i++) {
+			const fileName = argv[i];
+			if (fileName === "-") {
+				if (repl === undefined) {
+					write(BANNER);
+					repl = new REPL();
+					await repl.readEvalPrintLoop(interp);
 				}
+			} else {
+				fs = fs || (await import("node:fs")).default;
+				const text = fs.readFileSync(fileName, "utf8");
+				run(interp, text);
 			}
-		} catch (ex) {
-			console.log(ex);
-			exit(1);
 		}
-	};
-	main();
+	} catch (ex) {
+		console.log(ex);
+		exit(1);
+	}
 }
+
+main();

@@ -3,7 +3,9 @@
 	"type": "module",
 	"scripts": {
 		"typecheck": "tsc --noEmit",
-		"repl": "node --no-warnings --experimental-transform-types src/lisp.ts"
+		"repl": "node --no-warnings --experimental-transform-types src/lisp.ts",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"keywords": [
 		"pi-package"
@@ -28,6 +30,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.12",
 		"typescript": "^5.9.3",
-		"@types/node": "^22.0.0"
+		"@types/node": "^22.0.0",
+		"vitest": "^3.0.0"
 	}
 }
