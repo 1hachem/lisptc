@@ -1,8 +1,13 @@
 {
 	"name": "lisp-pi",
 	"type": "module",
+	"packageManager": "pnpm@10.28.0",
+	"engines": {
+		"node": ">=22.6.0"
+	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
+		"lint": "biome ci",
 		"repl": "node --no-warnings --experimental-transform-types src/lisp.ts",
 		"test": "vitest run",
 		"test:watch": "vitest"
