@@ -1,0 +1,33 @@
+{
+	"name": "lisp-pi",
+	"type": "module",
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"repl": "node --no-warnings --experimental-transform-types src/lisp.ts"
+	},
+	"keywords": [
+		"pi-package"
+	],
+	"pi": {
+		"extensions": [
+			"./extensions"
+		],
+		"skills": [
+			"./skills"
+		],
+		"prompts": [],
+		"themes": []
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-agent-core": "*",
+		"@mariozechner/pi-ai": "*",
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-tui": "*",
+		"@sinclair/typebox": "*"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.12",
+		"typescript": "^5.9.3",
+		"@types/node": "^22.0.0"
+	}
+}
