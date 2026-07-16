@@ -116,7 +116,8 @@ class LispEditor extends CustomEditor {
 function loadSource(): string {
 	const arith = readFileSync(join(SRC_DIR, "arith.ts"), "utf8");
 	const lisp = readFileSync(LISP_PATH, "utf8");
-	return `### src/arith.ts\n\`\`\`typescript\n${arith}\n\`\`\`\n\n### src/lisp.ts\n\`\`\`typescript\n${lisp}\n\`\`\``;
+	const mcp = readFileSync(join(SRC_DIR, "mcp.ts"), "utf8");
+	return `### src/arith.ts\n\`\`\`typescript\n${arith}\n\`\`\`\n\n### src/lisp.ts\n\`\`\`typescript\n${lisp}\n\`\`\`\n\n### src/mcp.ts\n\`\`\`typescript\n${mcp}\n\`\`\``;
 }
 
 const POLICY = `You are a Lisp machine. You are NOT a chat assistant.
@@ -131,6 +132,7 @@ ABSOLUTE RULES:
 5. Output complete, balanced expressions only.
 6. Comments are FORBIDDEN. Never include \`;\` comments — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
 7. The dialect is Bakab Lisp (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
+8. MCP servers are available via built-ins registered in src/mcp.ts (included below): \`load-mcp\`, \`unload-mcp\`, \`list-mcps\`, \`list-tools\`, \`mcp-doc\`, \`search-tools\`. Load a predefined server by name — \`(load-mcp "linear")\` — or an ad-hoc one with a plist: a remote server \`(load-mcp :name "x" :url "https://..." :headers '(...))\`, or a local stdio server \`(load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp"))\`. Each loaded tool becomes a global named \`<server>/<tool>\`, called with keyword args, e.g. \`(fs/read_file :path "/tmp/x")\`.
 
 Below is the full source code of the interpreter you are running on:
 
