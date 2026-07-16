@@ -1414,6 +1414,9 @@ async function main(): Promise<void> {
 	const entry = process.argv[1];
 	if (!entry || import.meta.url !== pathToFileURL(entry).href) return;
 
+	// Clear screen + scrollback and home the cursor.
+	const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
+
 	const isTTY = process.stdin.isTTY === true;
 	let rl: import("node:readline").Interface | null = null;
 	let closed = false;
@@ -1423,13 +1426,28 @@ async function main(): Promise<void> {
 
 	readLine = async (prompt) => {
 		if (rl === null) {
-			const { createInterface } = await import("node:readline");
+			const { createInterface, emitKeypressEvents } = await import(
+				"node:readline"
+			);
 			rl = createInterface({
 				input: process.stdin,
 				output: process.stdout,
 				terminal: isTTY, // enables arrow-key line editing & history on a TTY
 				historySize: 500,
 			});
+			// Ctrl-L clears the screen, then redraws the prompt with whatever the
+			// user had already typed (preserved via rl.line).
+			if (isTTY) {
+				emitKeypressEvents(process.stdin, rl);
+				process.stdin.on("keypress", (_s, key) => {
+					if (key?.ctrl && key.name === "l" && rl) {
+						const buf = rl.line;
+						write(CLEAR_SCREEN);
+						rl.prompt();
+						if (buf !== "") rl.write(buf);
+					}
+				});
+			}
 			rl.on("line", (l) => {
 				if (waiter) {
 					const w = waiter;
@@ -1476,6 +1494,12 @@ async function main(): Promise<void> {
 			}
 		});
 		if (line === null) return null;
+		// :clear (or "clear") wipes the screen and re-prompts. Works when piped,
+		// too, and complements the Ctrl-L keystroke on a TTY.
+		if (line.trim() === ":clear" || line.trim() === "clear") {
+			write(CLEAR_SCREEN);
+			return "";
+		}
 		// :up (or a raw up-arrow escape sequence, when there is no TTY to
 		// interpret it) recalls the previous input line.
 		if (line.trim() === ":up" || line.trim() === "\x1b[A") {
@@ -1492,6 +1516,8 @@ async function main(): Promise<void> {
 	const BANNER = `Bakab Lisp REPL — special keystrokes & commands:
   Up/Down arrows : browse input history (previous / next line)
   :up            : re-enter the previous input line (works when piped, too)
+  :clear / clear : clear the screen and re-prompt
+  Ctrl-L         : clear the screen (keeps the current input line)
   Ctrl-C         : cancel the current input line
   Ctrl-D (EOF)   : exit the REPL
 `;
