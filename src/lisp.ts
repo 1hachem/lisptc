@@ -1479,28 +1479,13 @@ async function main(): Promise<void> {
 
 	readLine = async (prompt) => {
 		if (rl === null) {
-			const { createInterface, emitKeypressEvents } = await import(
-				"node:readline"
-			);
+			const { createInterface } = await import("node:readline");
 			rl = createInterface({
 				input: process.stdin,
 				output: process.stdout,
 				terminal: isTTY, // enables arrow-key line editing & history on a TTY
 				historySize: 500,
 			});
-			// Ctrl-L clears the screen, then redraws the prompt with whatever the
-			// user had already typed (preserved via rl.line).
-			if (isTTY) {
-				emitKeypressEvents(process.stdin, rl);
-				process.stdin.on("keypress", (_s, key) => {
-					if (key?.ctrl && key.name === "l" && rl) {
-						// prompt(true) redraws the prompt AND the current rl.line
-						// (preserveCursor), so the typed input survives the clear.
-						write(CLEAR_SCREEN);
-						rl.prompt(true);
-					}
-				});
-			}
 			rl.on("line", (l) => {
 				if (waiter) {
 					const w = waiter;
@@ -1570,7 +1555,6 @@ async function main(): Promise<void> {
   Up/Down arrows : browse input history (previous / next line)
   :up            : re-enter the previous input line (works when piped, too)
   :clear / clear : clear the screen and re-prompt
-  Ctrl-L         : clear the screen (keeps the current input line)
   Ctrl-C         : cancel the current input line
   Ctrl-D (EOF)   : exit the REPL
 `;
