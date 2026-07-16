@@ -17,10 +17,11 @@ they both write to each other
 - [x] basic lisp interpreter
 - [x] setup tests, commitlint
 - [x] setup pi for testing the setup in cli
-- [ ] mcp intergraion with:
-    - [ ] load_mcp: (e.g. `(load-mcp "linear")`) which loades the tools as symboles, 
+- [x] add clear and ctrl-l commands to the repl
+- [x] mcp intergraion with:
+    - [x] load_mcp: (e.g. `(load-mcp "linear")`) which loades the tools as symboles, 
     the become a real binding in the interpreter's global environment (e.g. `(linear/list-issues :query "x")`)
-    - [ ] helpers such as: list-mcps, list-tools, search-tools (which uses a search api on docs and names of tools)
+    - [x] helpers such as: list-mcps, list-tools, search-tools (which uses a search api on docs and names of tools)
 - [ ] setup a web client for the agent
 - [ ] add a vizualization tool that goes from the lisp script into a 3d force graph
 - [ ] add memory and hooks macros and helpers
