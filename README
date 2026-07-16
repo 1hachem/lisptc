@@ -1,0 +1,37 @@
+
+A lisp interpreter that is desgined to be the brain of an AI agent in a neuro-symbolic cognitive architecture
+or as called today "harness"
+
+the llm writes code into the REPL and the REPL influnces the context of the agent, with event based hooks,
+builtin mcp tools and helpers that get called with PTC
+
+the llm is the programmer and bespoke person, the runtime is the program, and the steerer of the llm
+
+you can think of this agent as having 2 sides of the brain:
+
+- llm which is the creative, inspired, encoding tacit knowledge
+- lisp runtime which is the logical, deterministic, experince driven, memory holding part of the brain
+
+they both write to each other
+
+- [x] basic lisp interpreter
+- [x] setup tests, commitlint
+- [x] setup pi for testing the setup in cli
+- [ ] mcp intergraion with:
+    - [ ] load_mcp: (e.g. `(load-mcp "linear")`) which loades the tools as symboles, 
+    the become a real binding in the interpreter's global environment (e.g. `(linear/list-issues :query "x")`)
+    - [ ] helpers such as: list-mcps, list-tools, search-tools (which uses a search api on docs and names of tools)
+- [ ] setup a web client for the agent
+- [ ] add a vizualization tool that goes from the lisp script into a 3d force graph
+- [ ] add memory and hooks macros and helpers
+
+this repo contains:
+
+- lisp interpreter
+- pi coding agent extension
+
+later it will include:
+
+- [ ] monorepo setup for a web interface (chat + brain viz)
+- [ ] kubernetes charts to deploy agent as CRD with its sandbox where the interpreter runs
+
