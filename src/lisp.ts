@@ -138,6 +138,13 @@ function cdrCell(x: Cell): List {
 	else throw new EvalException("proper list expected", x);
 }
 
+// Assert that x is a number, throwing an EvalException otherwise. Used to
+// guard the arithmetic/comparison built-ins against non-numeric arguments.
+function ensureNum(x: unknown): Numeric {
+	if (isNumeric(x)) return x;
+	throw new EvalException("not a number", x);
+}
+
 // Common base class of Lisp functions
 abstract class Func {
 	// carity is a number of arguments, made negative if the func has &rest.
@@ -366,12 +373,16 @@ class Interp {
 	private readonly globals: Map<Sym, unknown> = new Map();
 
 	constructor() {
-		this.def("car", 1, (a: unknown[]) =>
-			a[0] === null ? null : (<Cell>a[0]).car,
-		);
-		this.def("cdr", 1, (a: unknown[]) =>
-			a[0] === null ? null : (<Cell>a[0]).cdr,
-		);
+		this.def("car", 1, (a: unknown[]) => {
+			if (a[0] === null) return null;
+			if (a[0] instanceof Cell) return a[0].car;
+			throw new EvalException("list expected", a[0]);
+		});
+		this.def("cdr", 1, (a: unknown[]) => {
+			if (a[0] === null) return null;
+			if (a[0] instanceof Cell) return a[0].cdr;
+			throw new EvalException("list expected", a[0]);
+		});
 		this.def("cons", 2, (a: unknown[]) => new Cell(a[0], a[1]));
 		this.def("atom", 1, (a: unknown[]) => (a[0] instanceof Cell ? null : true));
 		this.def("eq", 2, (a: unknown[]) => (Object.is(a[0], a[1]) ? true : null));
@@ -386,7 +397,7 @@ class Interp {
 			return a[1];
 		});
 		this.def("length", 1, (a: unknown[]) =>
-			a[0] === null ? 0 : quotient((a[0] as Cell | string).length, 1),
+			a[0] === null ? ZERO : quotient((a[0] as Cell | string).length, 1),
 		);
 		this.def("stringp", 1, (a: unknown[]) =>
 			typeof a[0] === "string" ? true : null,
@@ -404,44 +415,44 @@ class Interp {
 		});
 
 		this.def("<", 2, (a: unknown[]) =>
-			compare(a[0] as Numeric, a[1] as Numeric) < 0 ? true : null,
+			compare(ensureNum(a[0]), ensureNum(a[1])) < 0 ? true : null,
 		);
 
 		this.def("%", 2, (a: unknown[]) =>
-			remainder(a[0] as Numeric, a[1] as Numeric),
+			remainder(ensureNum(a[0]), ensureNum(a[1])),
 		);
 
 		this.def("mod", 2, (a: unknown[]) => {
-			const x = a[0] as Numeric;
-			const y = a[1] as Numeric;
+			const x = ensureNum(a[0]);
+			const y = ensureNum(a[1]);
 			const q = remainder(x, y);
 			return compare(multiply(x, y), ZERO) < 0 ? add(q, y) : q;
 		});
 
 		this.def("+", -1, (a: unknown[]) =>
-			foldl(ZERO, a[0] as List, (i, j) => add(i as Numeric, j as Numeric)),
+			foldl(ZERO, a[0] as List, (i, j) => add(i as Numeric, ensureNum(j))),
 		);
 
 		this.def("*", -1, (a: unknown[]) =>
-			foldl(ONE, a[0] as List, (i, j) => multiply(i as Numeric, j as Numeric)),
+			foldl(ONE, a[0] as List, (i, j) => multiply(i as Numeric, ensureNum(j))),
 		);
 
 		this.def("-", -2, (a: unknown[]) => {
-			const x = a[0] as Numeric;
+			const x = ensureNum(a[0]);
 			const y = a[1] as List;
 			return y == null
 				? -x
-				: foldl(x, y, (i, j) => subtract(i as Numeric, j as Numeric));
+				: foldl(x, y, (i, j) => subtract(i as Numeric, ensureNum(j)));
 		});
 
 		this.def("/", -3, (a: unknown[]) =>
-			foldl(divide(a[0] as Numeric, a[1] as Numeric), a[2] as List, (i, j) =>
-				divide(i as Numeric, j as Numeric),
+			foldl(divide(ensureNum(a[0]), ensureNum(a[1])), a[2] as List, (i, j) =>
+				divide(i as Numeric, ensureNum(j)),
 			),
 		);
 
 		this.def("truncate", -2, (a: unknown[]) => {
-			const x = a[0] as Numeric;
+			const x = ensureNum(a[0]);
 			const y = a[1] as List;
 			if (y === null) {
 				return quotient(x, ONE);
