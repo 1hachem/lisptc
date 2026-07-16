@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    runs-on: docker
+    runs-on: codeberg-tiny
     container:
       image: node:22-bookworm
     steps:
