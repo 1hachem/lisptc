@@ -22,17 +22,27 @@ they both write to each other
     - [x] load_mcp: (e.g. `(load-mcp "linear")`) which loades the tools as symboles, 
     the become a real binding in the interpreter's global environment (e.g. `(linear/list-issues :query "x")`)
     - [x] helpers such as: list-mcps, list-tools, search-tools (which uses a search api on docs and names of tools)
+- [ ] add memory and hooks macros and helpers
 - [ ] setup a web client for the agent
 - [ ] add a vizualization tool that goes from the lisp script into a 3d force graph
-- [ ] add memory and hooks macros and helpers
-
-this repo contains:
-
-- lisp interpreter
-- pi coding agent extension
-
-later it will include:
-
-- [ ] monorepo setup for a web interface (chat + brain viz)
+- [ ] monorepo setup for a web interface, pi extension, interpreter, mcp adapter
 - [ ] kubernetes charts to deploy agent as CRD with its sandbox where the interpreter runs
 
+- [ ] messaging gateway (heremes)
+- [ ] heremes/claude exetension
+
+
+- AI suggestions
+- [ ] pattern-matching: destructuring with match/case macros                                            
+- [ ] module-system: require/import for code organization                                               
+- [ ] hash-tables: efficient key-value storage beyond alists                                            
+- [ ] vectors/arrays: O(1) indexed access vs lists                                                      
+- [ ] lazy-evaluation: delay and force for streams                                                      
+- [ ] error-handling: try/catch/finally exception handling                                              
+- [ ] multiple-return-values: values/call-with-values                                                   
+- [ ] tail-call-optimization: already present but worth noting                                          
+- [ ] reader-macros: custom syntax extensions                                                           
+- [ ] meta-programming: stronger reflection/introspection                                               
+- [ ] async/await: seamless async operations                                                            
+- [ ] type-checking: optional static type annotations                                                   
+- [ ] documentation-strings: docstrings in defun/defmacro
