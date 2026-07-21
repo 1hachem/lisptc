@@ -6,30 +6,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 this repo is a Lisp interpreter designed to be the deterministic "brain" of an AI agent in a neuro-symbolic architecture. 
 The idea (see `README`): the LLM writes Lisp code into a REPL, and the REPL's state/output steers the LLM's context back. 
-The repo ships two things:
+This is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`) shipping two workspaces:
 
-1. The standalone interpreter (`src/`) — pure TypeScript, **no `pi` dependency**.
-2. A `pi` coding-agent extension (`extensions/lisp-repl.ts`) that wires the interpreter into a pi session.
+1. `packages/interpreter` (`@lisptc/interpreter`) — the standalone interpreter (`src/`) plus its tests (`test/`). Pure TypeScript, **no `pi` dependency**. Exposes its `.ts` sources directly via the `exports` map (no build step).
+2. `apps/extension` (`@lisptc/extension`) — a `pi` coding-agent extension (`extensions/lisp-repl.ts`) that wires the interpreter into a pi session. Depends on `@lisptc/interpreter` (`workspace:*`) and resolves the interpreter's `src/` dir at runtime via `require.resolve("@lisptc/interpreter/package.json")`.
 
-It is also a `pi-package` (see the `pi` field in `package.json`) exposing `extensions` and `skills`.
+The repo root is itself the published `pi-package` (see the `pi` field in the root `package.json`) exposing `extensions` (pointing at `./apps/extension/extensions`) and `skills`.
 
 ## Commands
 
+Root scripts delegate to Turbo, which fans out across workspaces:
+
 ```bash
-pnpm test                    # run all tests (vitest run)
-pnpm test:watch              # vitest watch mode
-pnpm exec vitest run test/macros.test.ts          # single test file
-pnpm exec vitest run -t "name of test"            # single test by name
-pnpm typecheck               # tsc --noEmit
-pnpm lint                    # biome ci (lint + format check) — matches CI
+pnpm test                    # turbo run test (vitest run in each package)
+pnpm typecheck               # turbo run typecheck (tsc --noEmit per package)
+pnpm lint                    # biome ci (lint + format check) — matches CI, run at root
 pnpm format                  # biome check --write (auto-fix)
-pnpm knip                    # dead-code / unused-dependency check (part of CI)
-pnpm repl                    # run the interpreter REPL directly
+pnpm knip                    # dead-code / unused-dependency check (part of CI), run at root
+pnpm test:watch              # turbo run test:watch
+pnpm repl                    # turbo run repl (run the interpreter REPL directly)
+
+# Single test file / by name — run inside the interpreter package:
+pnpm --filter @lisptc/interpreter exec vitest run test/macros.test.ts
+pnpm --filter @lisptc/interpreter exec vitest run -t "name of test"
 ```
 
-Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via `--experimental-transform-types` (no build step). CI (`.forgejo/workflows/ci.yml`) runs, in order: typecheck → lint → knip → test. Commits are linted by commitlint (conventional commits) via husky.
+Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via `--experimental-transform-types` (no build step). CI (`.forgejo/workflows/ci.yml`) runs, in order: typecheck → lint → knip → test. `lint` and `knip` run once at the root; `typecheck` and `test` fan out through Turbo. Commits are linted by commitlint (conventional commits) via husky.
 
 ## Architecture
+
+Paths below are relative to `packages/interpreter/` unless noted.
 
 ### Interpreter core (`src/lisp.ts`, ~1600 lines)
 Derived from Nukata Lisp. Key exports used across the codebase: `Interp` (the interpreter/environment), `prelude` (Lisp source string of standard defs), `run(interp, code)` (eval a program, returns last value), `str(value)` (printed representation), `setWriter(fn)` (redirect `prin1`/`princ`/`terpri` output — returns previous writer). Core types: `Cell` (cons cell), `Sym`, `LispKeyword`, `EvalException`. 
@@ -46,7 +52,7 @@ The synchronous main thread posts a request and blocks on a `SharedArrayBuffer` 
 - Loaded MCP tools become ordinary global bindings named `<server>/<tool>` called with keyword syntax, e.g. `(linear/list-issues :query "auth bug")`.
 - Server config comes from an MCP config file; see `mcp.example.json` for the shape (stdio `command`/`args` servers and HTTP `url`/`headers` servers). `(load-mcp "linear")` loads by name.
 
-### pi extension (`extensions/lisp-repl.ts`)
+### pi extension (`apps/extension/extensions/lisp-repl.ts`)
 Spawns the standalone REPL (`src/lisp.ts`) as a **subprocess** and mediates between it and a pi session:
 - Replaces the agent's system prompt with a lisp-only policy plus the full interpreter source (so the LLM knows the exact language it's programming).
 - The agent has **no tools**: assistant text is sent verbatim to the REPL, evaluated, and the result injected back as a custom message. A `!`-prefixed user line (via `LispEditor`) is sent straight to the REPL.
