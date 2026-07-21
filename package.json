@@ -10,7 +10,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
-    "repl": "turbo run repl",
+    "repl": "pnpm --filter @repo/interpreter repl",
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
