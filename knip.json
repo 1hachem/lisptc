@@ -1,5 +1,13 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"entry": ["extensions/*.ts"],
-	"project": ["src/**/*.ts", "extensions/**/*.ts"]
+	"workspaces": {
+		"packages/interpreter": {
+			"entry": ["test/**/*.test.ts"],
+			"project": ["src/**/*.ts"]
+		},
+		"apps/extension": {
+			"entry": ["extensions/*.ts"],
+			"project": ["extensions/**/*.ts"]
+		}
+	}
 }

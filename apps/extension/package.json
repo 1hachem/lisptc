@@ -1,0 +1,34 @@
+{
+	"name": "@lisptc/extension",
+	"version": "0.0.0",
+	"type": "module",
+	"private": true,
+	"engines": {
+		"node": ">=22.6.0"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions"
+		],
+		"skills": [],
+		"prompts": [],
+		"themes": []
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@lisptc/interpreter": "workspace:*"
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-agent-core": "*",
+		"@mariozechner/pi-ai": "*",
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-tui": "*",
+		"@sinclair/typebox": "*"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"typescript": "^5.9.3"
+	}
+}

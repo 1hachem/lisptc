@@ -1,3 +1,5 @@
 .direnv/
 
 node_modules/
+
+.turbo/

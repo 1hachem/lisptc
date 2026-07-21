@@ -13,8 +13,8 @@
 
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
 	CustomEditor,
 	type ExtensionAPI,
@@ -22,7 +22,14 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { CURSOR_MARKER, Text } from "@mariozechner/pi-tui";
 
-const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
+// The interpreter is a separate workspace package (@lisptc/interpreter) with
+// no build step — its TypeScript sources are read/spawned directly. Resolve
+// its `src` dir from the installed package rather than a relative path.
+const require = createRequire(import.meta.url);
+const SRC_DIR = join(
+	dirname(require.resolve("@lisptc/interpreter/package.json")),
+	"src",
+);
 const LISP_PATH = join(SRC_DIR, "lisp.ts");
 const PROMPT = "> ";
 // Kept above src/mcp.ts's 30s MCP-call timeout so a slow tool surfaces as a

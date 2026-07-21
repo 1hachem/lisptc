@@ -1,18 +1,19 @@
 {
 	"name": "lisptc",
 	"type": "module",
+	"private": true,
 	"packageManager": "pnpm@10.28.0",
 	"engines": {
 		"node": ">=22.6.0"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "turbo run typecheck",
+		"test": "turbo run test",
+		"test:watch": "turbo run test:watch",
+		"repl": "turbo run repl",
 		"lint": "biome ci",
 		"format": "biome check --write",
-		"repl": "node --no-warnings --experimental-transform-types src/lisp.ts",
-		"test": "vitest run",
 		"knip": "knip",
-		"test:watch": "vitest",
 		"prepare": "husky"
 	},
 	"keywords": [
@@ -20,7 +21,7 @@
 	],
 	"pi": {
 		"extensions": [
-			"./extensions"
+			"./apps/extension/extensions"
 		],
 		"skills": [
 			"./skills"
@@ -28,26 +29,14 @@
 		"prompts": [],
 		"themes": []
 	},
-	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.12.0"
-	},
-	"peerDependencies": {
-		"@mariozechner/pi-agent-core": "*",
-		"@mariozechner/pi-ai": "*",
-		"@mariozechner/pi-coding-agent": "*",
-		"@mariozechner/pi-tui": "*",
-		"@sinclair/typebox": "*"
-	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.12",
 		"@commitlint/cli": "^21.2.1",
 		"@commitlint/config-conventional": "^21.2.0",
 		"@commitlint/types": "^21.2.0",
-		"@types/node": "^22.0.0",
 		"husky": "^9.1.7",
 		"knip": "^6.27.0",
-		"typescript": "^5.9.3",
-		"vitest": "^3.0.0",
-		"zod": "^4.4.3"
+		"turbo": "^2.5.0",
+		"typescript": "^5.9.3"
 	}
 }
