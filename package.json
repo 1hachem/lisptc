@@ -1,42 +1,39 @@
 {
-	"name": "lisptc",
-	"type": "module",
-	"private": true,
-	"packageManager": "pnpm@10.28.0",
-	"engines": {
-		"node": ">=22.6.0"
-	},
-	"scripts": {
-		"typecheck": "turbo run typecheck",
-		"test": "turbo run test",
-		"test:watch": "turbo run test:watch",
-		"repl": "turbo run repl",
-		"lint": "biome ci",
-		"format": "biome check --write",
-		"knip": "knip",
-		"prepare": "husky"
-	},
-	"keywords": [
-		"pi-package"
-	],
-	"pi": {
-		"extensions": [
-			"./apps/extension/extensions"
-		],
-		"skills": [
-			"./skills"
-		],
-		"prompts": [],
-		"themes": []
-	},
-	"devDependencies": {
-		"@biomejs/biome": "2.4.12",
-		"@commitlint/cli": "^21.2.1",
-		"@commitlint/config-conventional": "^21.2.0",
-		"@commitlint/types": "^21.2.0",
-		"husky": "^9.1.7",
-		"knip": "^6.27.0",
-		"turbo": "^2.5.0",
-		"typescript": "^5.9.3"
-	}
+  "name": "lisptc",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "repl": "turbo run repl",
+    "lint": "biome ci",
+    "format": "biome check --write",
+    "knip": "knip",
+    "prepare": "husky"
+  },
+  "pi": {
+    "extensions": [
+      "./apps/pi/extensions"
+    ],
+    "skills": [
+      "./apps/pi/skills"
+    ],
+    "prompts": [],
+    "themes": []
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@commitlint/types": "^21.2.0",
+    "husky": "^9.1.7",
+    "knip": "^6.27.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.3"
+  }
 }
