@@ -1,5 +1,5 @@
 /*
- * MCP integration for Bakab Lisp (main-thread side).
+ * MCP integration for Lisptc (main-thread side).
  *
  * Installs the load-mcp / unload-mcp / list-mcps / list-tools / mcp-doc /
  * search-tools / mcp-shutdown built-ins into an Interp. All async MCP work is

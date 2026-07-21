@@ -1,7 +1,7 @@
 /**
  * Lisp REPL Extension
  *
- * - Spawns the standalone Bakab Lisp REPL (src/lisp.ts) as a subprocess
+ * - Spawns the standalone Lisptc REPL (src/lisp.ts) as a subprocess
  *   when the session starts; the interpreter itself has no pi dependency.
  * - Replaces the agent's system prompt with a lisp-only policy plus the
  *   full interpreter source code (src/arith.ts + src/lisp.ts).
@@ -131,7 +131,7 @@ ABSOLUTE RULES:
 4. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result is sent back to you as a message of type ${OUTPUT_TYPE}.
 5. Output complete, balanced expressions only.
 6. Comments are FORBIDDEN. Never include \`;\` comments — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
-7. The dialect is Bakab Lisp (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
+7. The dialect is Lisptc (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
 8. MCP servers are available via built-ins registered in src/mcp.ts (included below): \`load-mcp\`, \`unload-mcp\`, \`list-mcps\`, \`list-tools\`, \`mcp-doc\`, \`search-tools\`. Load a predefined server by name — \`(load-mcp "linear")\` — or an ad-hoc one with a plist: a remote server \`(load-mcp :name "x" :url "https://..." :headers '(...))\`, or a local stdio server \`(load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp"))\`. Each loaded tool becomes a global named \`<server>/<tool>\`, called with keyword args, e.g. \`(fs/read_file :path "/tmp/x")\`.
 
 Below is the full source code of the interpreter you are running on:

@@ -1,5 +1,5 @@
 /*
-  Bakab Lisp — derived from Nukata Lisp 2.1.0 in TypeScript 4.6 by SUZUKI Hisao (H28.02.08/R04.03.28)
+  Lisptc — derived from Nukata Lisp 2.1.0 in TypeScript 4.6 by SUZUKI Hisao (H28.02.08/R04.03.28)
 */
 import {
 	add,
@@ -536,10 +536,9 @@ export class Interp {
 			return s;
 		});
 
-		// named after Tōkai-dō Mikawa-koku Nukata-gun (東海道 三河国 額田郡)
 		this.globals.set(
 			newSym("*version*"),
-			new Cell(2.1, new Cell("TypeScript", new Cell("Bakab Lisp", null))),
+			new Cell(2.1, new Cell("TypeScript", new Cell("Lisptc", null))),
 		);
 
 		// Install native MCP built-ins (load-mcp, unload-mcp, list-tools, ...).
@@ -1551,7 +1550,7 @@ async function main(): Promise<void> {
 	write = (s: string) => process.stdout.write(s);
 	exit = process.exit;
 
-	const BANNER = `Bakab Lisp REPL — special keystrokes & commands:
+	const BANNER = `Lisptc REPL — special keystrokes & commands:
   Up/Down arrows : browse input history (previous / next line)
   :up            : re-enter the previous input line (works when piped, too)
   :clear / clear : clear the screen and re-prompt

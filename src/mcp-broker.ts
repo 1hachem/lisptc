@@ -118,7 +118,7 @@ async function connect(
 				});
 
 	const client = new Client(
-		{ name: "bakab-lisp", version: "1.0.0" },
+		{ name: "lisptc", version: "1.0.0" },
 		{ capabilities: {} },
 	);
 	// SDK performs the initialize + notifications/initialized handshake.
@@ -197,7 +197,7 @@ function reply(req: Request, state: number, json: string): void {
 	} else {
 		// Too large for the shared buffer: spill to a temp file and hand back
 		// its path (length field is repurposed as the path byte length).
-		const path = join(tmpdir(), `bakab-mcp-${req.id}.json`);
+		const path = join(tmpdir(), `lisptc-mcp-${req.id}.json`);
 		writeFileSync(path, json, "utf8");
 		const pathBytes = new TextEncoder().encode(path);
 		dataView.set(pathBytes);
