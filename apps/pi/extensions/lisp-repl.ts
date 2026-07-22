@@ -19,15 +19,15 @@ import {
 	CustomEditor,
 	type ExtensionAPI,
 	highlightCode,
-} from "@mariozechner/pi-coding-agent";
-import { CURSOR_MARKER, Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
 
-// The interpreter is a separate workspace package (@lisptc/interpreter) with
+// The interpreter is a separate workspace package (@repo/interpreter) with
 // no build step — its TypeScript sources are read/spawned directly. Resolve
 // its `src` dir from the installed package rather than a relative path.
 const require = createRequire(import.meta.url);
 const SRC_DIR = join(
-	dirname(require.resolve("@lisptc/interpreter/package.json")),
+	dirname(require.resolve("@repo/interpreter/package.json")),
 	"src",
 );
 const LISP_PATH = join(SRC_DIR, "lisp.ts");
