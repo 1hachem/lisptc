@@ -62,11 +62,52 @@
           exec topiary format "$@"
         '';
       };
+      # The interpreter REPL, packaged hermetically. pnpm deps are fetched
+      # offline from pnpm-lock.yaml; the interpreter runs its .ts sources
+      # directly via node's --experimental-transform-types (no build step).
+      pnpm = pkgs.pnpm_10;
+      ptcrepl = pkgs.stdenv.mkDerivation (finalAttrs: {
+        pname = "ptcrepl";
+        version = "0.0.0";
+
+        src = ./.;
+
+        nativeBuildInputs = [
+          pkgs.nodejs
+          pnpm.configHook
+          pkgs.makeWrapper
+        ];
+
+        pnpmDeps = pnpm.fetchDeps {
+          inherit (finalAttrs) pname version src;
+          fetcherVersion = 2;
+          hash = "sha256-a6hJ75gqVIBpvGOUVW6nIo8BTSoHYQsA9FHBu6iHVj4=";
+        };
+
+        # No compile step — just stage the workspace (with its installed
+        # node_modules) and wrap node to launch the REPL entrypoint.
+        dontBuild = true;
+
+        installPhase = ''
+          runHook preInstall
+
+          mkdir -p "$out/libexec/lisptc"
+          cp -r . "$out/libexec/lisptc/"
+
+          makeWrapper ${pkgs.nodejs}/bin/node "$out/bin/ptcrepl" \
+            --add-flags "--no-warnings --experimental-transform-types" \
+            --add-flags "$out/libexec/lisptc/packages/interpreter/src/lisp.ts"
+
+          runHook postInstall
+        '';
+      });
     in {
       packages.ptcfmt = ptcfmt;
+      packages.ptcrepl = ptcrepl;
       packages.default = ptcfmt;
 
       apps.ptcfmt = flake-utils.lib.mkApp {drv = ptcfmt;};
+      apps.ptcrepl = flake-utils.lib.mkApp {drv = ptcrepl;};
       apps.default = self.apps.${system}.ptcfmt;
 
       devShells.default = pkgs.mkShell {
@@ -75,6 +116,7 @@
           nodejs
           go-task
           ptcfmt
+          ptcrepl
         ];
 
         shellHook = ''
