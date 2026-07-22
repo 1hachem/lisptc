@@ -40,6 +40,14 @@ export function setWriter(fn: (s: string) => void): (s: string) => void {
 	return prev;
 }
 
+// REPL usage text, printed by the (help) built-in on demand.
+const HELP_TEXT = `Lisptc REPL — special keystrokes & commands:
+  Up/Down arrows : browse input history (previous / next line)
+  :up            : re-enter the previous input line (works when piped, too)
+  :clear / clear : clear the screen and re-prompt
+  Ctrl-C         : cancel the current input line
+  Ctrl-D (EOF)   : exit the REPL`;
+
 //----------------------------------------------------------------------
 
 // Lisp cons cell
@@ -510,6 +518,10 @@ export class Interp {
 		});
 		this.def("terpri", 0, (_a: unknown[]) => {
 			write("\n");
+			return true;
+		});
+		this.def("help", 0, (_a: unknown[]) => {
+			write(`${HELP_TEXT}\n`);
 			return true;
 		});
 
@@ -1550,14 +1562,6 @@ async function main(): Promise<void> {
 	write = (s: string) => process.stdout.write(s);
 	exit = process.exit;
 
-	const BANNER = `Lisptc REPL — special keystrokes & commands:
-  Up/Down arrows : browse input history (previous / next line)
-  :up            : re-enter the previous input line (works when piped, too)
-  :clear / clear : clear the screen and re-prompt
-  Ctrl-C         : cancel the current input line
-  Ctrl-D (EOF)   : exit the REPL
-`;
-
 	const interp = new Interp();
 	run(interp, prelude);
 
@@ -1570,7 +1574,6 @@ async function main(): Promise<void> {
 			const fileName = argv[i];
 			if (fileName === "-") {
 				if (repl === undefined) {
-					write(BANNER);
 					repl = new REPL();
 					await repl.readEvalPrintLoop(interp);
 				}
