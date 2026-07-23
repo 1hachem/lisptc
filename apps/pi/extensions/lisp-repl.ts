@@ -1,17 +1,16 @@
 /**
  * Lisp REPL Extension
  *
- * - Spawns the standalone Lisptc REPL (src/lisp.ts) as a subprocess
- *   when the session starts; the interpreter itself has no pi dependency.
+ * - Runs the Lisptc interpreter in-process via the @repo/interpreter
+ *   `ReplSession` binding (no subprocess, no stdout scraping).
  * - Replaces the agent's system prompt with a lisp-only policy plus the
  *   full interpreter source code (src/arith.ts + src/lisp.ts).
  * - The agent has NO tools. Everything the agent outputs as assistant
  *   text is sent verbatim to the REPL and evaluated; the result is
  *   injected back into the session as a custom message.
- * - /lisp-reset restarts the REPL process.
+ * - /lisp-reset clears all definitions (fresh interpreter).
  */
 
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -21,20 +20,16 @@ import {
 	highlightCode,
 } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
+import { ReplSession } from "@repo/interpreter";
 
-// The interpreter is a separate workspace package (@repo/interpreter) with
-// no build step — its TypeScript sources are read/spawned directly. Resolve
-// its `src` dir from the installed package rather than a relative path.
+// Resolve the interpreter package's `src` dir to read the source we embed
+// into the system prompt (the interpreter itself runs via ReplSession above).
 const require = createRequire(import.meta.url);
 const SRC_DIR = join(
 	dirname(require.resolve("@repo/interpreter/package.json")),
 	"src",
 );
 const LISP_PATH = join(SRC_DIR, "lisp.ts");
-const PROMPT = "> ";
-// Kept above src/mcp.ts's 30s MCP-call timeout so a slow tool surfaces as a
-// clean Lisp error rather than tripping this REPL-level restart path.
-const EVAL_TIMEOUT_MS = 60_000;
 const OUTPUT_TYPE = "lisp-output";
 const CODE_TYPE = "lisp-code";
 
@@ -157,81 +152,14 @@ function dedupePrintedValue(out: string): string {
 }
 
 class LispRepl {
-	private proc: ChildProcessWithoutNullStreams | null = null;
-	private buffer = "";
-	private waiter: ((out: string) => void) | null = null;
+	private session = new ReplSession();
 
-	async start(): Promise<void> {
-		this.stop();
-		this.proc = spawn(
-			process.execPath,
-			["--no-warnings", "--experimental-transform-types", LISP_PATH],
-			{
-				stdio: ["pipe", "pipe", "pipe"],
-				cwd: SRC_DIR,
-				// MCP_SERVERS (JSON array of predefined connection configs) is read
-				// by src/mcp.ts at startup; `load-mcp` then expands them on demand.
-				env: process.env,
-			},
-		);
-		this.proc.stdout.setEncoding("utf8");
-		this.proc.stdout.on("data", (chunk: string) => {
-			this.buffer += chunk;
-			if (this.waiter && this.buffer.endsWith(PROMPT)) {
-				const out = this.buffer.slice(0, -PROMPT.length);
-				this.buffer = "";
-				const w = this.waiter;
-				this.waiter = null;
-				w(out);
-			}
-		});
-		// Wait for the initial "> " prompt.
-		await this.waitForPrompt();
+	reset(): void {
+		this.session.reset();
 	}
 
-	stop(): void {
-		if (this.proc) {
-			this.proc.kill();
-			this.proc = null;
-		}
-		this.buffer = "";
-		this.waiter = null;
-	}
-
-	get running(): boolean {
-		return this.proc !== null && this.proc.exitCode === null;
-	}
-
-	private waitForPrompt(): Promise<string> {
-		return new Promise<string>((resolve, reject) => {
-			if (this.buffer.endsWith(PROMPT)) {
-				const out = this.buffer.slice(0, -PROMPT.length);
-				this.buffer = "";
-				resolve(out);
-				return;
-			}
-			const timer = setTimeout(() => {
-				this.waiter = null;
-				reject(
-					new Error(
-						`REPL did not return a prompt within ${EVAL_TIMEOUT_MS / 1000}s (unbalanced expression or infinite loop?). Use /lisp-reset to restart.`,
-					),
-				);
-			}, EVAL_TIMEOUT_MS);
-			this.waiter = (out) => {
-				clearTimeout(timer);
-				resolve(out);
-			};
-		});
-	}
-
-	async eval(code: string): Promise<string> {
-		if (!this.running) await this.start();
-		const pending = this.waitForPrompt();
-		this.proc?.stdin.write(`${code.trim()}\n`);
-		const out = await pending;
-		// The REPL echoes continuation prompts ("  ") for multi-line input; strip trailing whitespace noise.
-		return dedupePrintedValue(out.replace(/^(\s{2})+/, "").trim());
+	eval(code: string): string {
+		return dedupePrintedValue(this.session.eval(code.trim()).trim());
 	}
 }
 
@@ -249,13 +177,12 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		// The agent has no tools at all — its text output IS the Lisp program.
 		pi.setActiveTools([]);
-		await repl.start();
 		// Live Lisp highlighting while typing in "!" mode; submitting a "!"
 		// line evals it directly (code + result rendered as messages).
 		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
 			const editor = new LispEditor(tui, theme, keybindings);
 			editor.onLisp = async (code) => {
-				const { output, error } = await evalCode(stripFences(code));
+				const { output, error } = evalCode(stripFences(code));
 				sendWhenIdle(ctx, {
 					customType: CODE_TYPE,
 					content: code,
@@ -277,10 +204,6 @@ export default function (pi: ExtensionAPI) {
 		);
 	});
 
-	pi.on("session_shutdown", async () => {
-		repl.stop();
-	});
-
 	pi.on("before_agent_start", async () => {
 		if (systemPrompt === null) {
 			systemPrompt = POLICY + loadSource();
@@ -288,18 +211,16 @@ export default function (pi: ExtensionAPI) {
 		return { systemPrompt };
 	});
 
-	async function evalCode(code: string): Promise<{
-		output: string;
-		error: boolean;
-	}> {
+	// ReplSession renders Lisp errors into its output, so a throw here means an
+	// unexpected host error; reset so corrupt state doesn't persist.
+	function evalCode(code: string): { output: string; error: boolean } {
 		try {
-			return { output: await repl.eval(code), error: false };
+			return { output: repl.eval(code), error: false };
 		} catch (ex) {
-			repl.stop();
-			await repl.start();
+			repl.reset();
 			const msg = ex instanceof Error ? ex.message : String(ex);
 			return {
-				output: `REPL error: ${msg} (interpreter was restarted, definitions lost)`,
+				output: `REPL error: ${msg} (interpreter was reset, definitions lost)`,
 				error: true,
 			};
 		}
@@ -328,7 +249,7 @@ export default function (pi: ExtensionAPI) {
 		const trimmed = stripFences(code);
 		if (trimmed === "") return;
 
-		const { output, error } = await evalCode(trimmed);
+		const { output, error } = evalCode(trimmed);
 		sendWhenIdle(ctx, {
 			customType: OUTPUT_TYPE,
 			content: output || "(no output)",
@@ -381,17 +302,17 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("lisp-reset", {
-		description: "Restart the Lisp REPL (clears all definitions)",
+		description: "Reset the Lisp REPL (clears all definitions)",
 		handler: async (_args, ctx) => {
-			await repl.start();
-			ctx.ui.notify("Lisp REPL restarted", "info");
+			repl.reset();
+			ctx.ui.notify("Lisp REPL reset", "info");
 		},
 	});
 
 	pi.registerCommand("mcp", {
 		description: "List MCP servers known to the Lisp REPL (loaded/unloaded)",
 		handler: async (_args, ctx) => {
-			const { output } = await evalCode("(list-mcps)");
+			const { output } = evalCode("(list-mcps)");
 			ctx.ui.notify(`MCP servers: ${output || "none"}`, "info");
 		},
 	});
