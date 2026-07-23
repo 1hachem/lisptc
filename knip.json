@@ -1,13 +1,13 @@
 {
-	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"workspaces": {
-		"packages/interpreter": {
-			"entry": ["test/**/*.test.ts"],
-			"project": ["src/**/*.ts"]
-		},
-		"apps/extension": {
-			"entry": ["extensions/*.ts"],
-			"project": ["extensions/**/*.ts"]
-		}
-	}
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    "packages/interpreter": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/extension": {
+      "entry": ["extensions/*.ts"],
+      "project": ["extensions/**/*.ts"]
+    }
+  }
 }
