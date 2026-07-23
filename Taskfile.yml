@@ -6,3 +6,25 @@ tasks:
   default:
     desc: prints this help
     cmd: task -l
+  
+  test:
+    desc: run all tests (interpreter + nix flake checks)
+    cmds:
+      - task: test:pnpm
+      - task: test:nix
+
+  test:pnpm:
+    desc: run the interpreter test suite (vitest via turbo)
+    cmd: pnpm test
+
+  test:nix:
+    desc: run the nix flake checks (includes the ptcfmt formatter test)
+    vars:
+      SYSTEM:
+        sh: nix eval --impure --raw --expr builtins.currentSystem
+    cmds:
+      - nix flake check --no-warn-dirty
+      # nix flake check hides check output once cached; print the stored
+      # ptcfmt test summary so the pass count is always visible.
+      - nix build --no-warn-dirty --no-link ".#checks.{{.SYSTEM}}.ptcfmt"
+      - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"

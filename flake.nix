@@ -23,8 +23,17 @@
       packages.ptcfmt = ptcfmt;
       packages.ptcrepl = ptcrepl;
 
-      apps.ptcfmt = flake-utils.lib.mkApp {drv = ptcfmt;};
-      apps.ptcrepl = flake-utils.lib.mkApp {drv = ptcrepl;};
+      checks.ptcfmt = pkgs.callPackage ./nix/tests/ptcfmt-check.nix {
+        src = ./.;
+        inherit ptcfmt;
+      };
+
+      apps.ptcfmt =
+        flake-utils.lib.mkApp {drv = ptcfmt;}
+        // {meta.description = "Topiary-based formatter for Lisptc (.ptc) source files";};
+      apps.ptcrepl =
+        flake-utils.lib.mkApp {drv = ptcrepl;}
+        // {meta.description = "Lisptc interpreter REPL";};
 
       devShells.default = pkgs.mkShell {
         packages = with pkgs; [
