@@ -5,7 +5,7 @@
       "entry": ["test/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
-    "apps/extension": {
+    "apps/pi": {
       "entry": ["extensions/*.ts"],
       "project": ["extensions/**/*.ts"]
     }
