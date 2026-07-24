@@ -1,6 +1,8 @@
 /*
   Lisptc — derived from Nukata Lisp 2.1.0 in TypeScript 4.6 by SUZUKI Hisao (H28.02.08/R04.03.28)
 */
+
+import { z } from "zod";
 import {
 	add,
 	compare,
@@ -188,6 +190,35 @@ function cdrCell(x: Cell): List {
 function ensureNum(x: unknown): Numeric {
 	if (isNumeric(x)) return x;
 	throw new EvalException("not a number", x);
+}
+
+// Zod schemas for the arguments of built-in functions. Validation failures
+// are surfaced as EvalException via parseArgs, matching the historical
+// hand-written checks (e.g. "list expected", "not a number").
+export const zAny = z.unknown();
+export const zList = z.custom<List>(
+	(x) => x === null || x instanceof Cell,
+	"list expected",
+);
+const zCell = z.custom<Cell>((x) => x instanceof Cell, "cell expected");
+const zNumeric = z.custom<Numeric>(isNumeric, "not a number");
+const zString = z.custom<string>(
+	(x) => typeof x === "string",
+	"string expected",
+);
+const zSym = z.custom<Sym>((x) => x instanceof Sym, "symbol expected");
+
+// Validate a built-in's argument frame against a tuple schema, throwing an
+// EvalException that names the offending argument on failure.
+function parseArgs<T extends z.ZodType>(schema: T, a: unknown[]): z.infer<T> {
+	const result = schema.safeParse(a);
+	if (result.success) return result.data;
+	const issue = result.error.issues[0];
+	const index = issue?.path[0];
+	throw new EvalException(
+		issue?.message ?? "invalid argument",
+		typeof index === "number" ? a[index] : a,
+	);
 }
 
 // Common base class of Lisp functions
@@ -483,43 +514,40 @@ export class Interp {
 			1,
 			"(car list)",
 			"Return the first element of `list`, or nil for nil.",
-			(a: unknown[]) => {
-				if (a[0] === null) return null;
-				if (a[0] instanceof Cell) return a[0].car;
-				throw new EvalException("list expected", a[0]);
-			},
+			z.tuple([zList]),
+			([x]) => (x === null ? null : x.car),
 		);
 		this.def(
 			"cdr",
 			1,
 			"(cdr list)",
 			"Return the rest of `list` after the first element, or nil for nil.",
-			(a: unknown[]) => {
-				if (a[0] === null) return null;
-				if (a[0] instanceof Cell) return a[0].cdr;
-				throw new EvalException("list expected", a[0]);
-			},
+			z.tuple([zList]),
+			([x]) => (x === null ? null : x.cdr),
 		);
 		this.def(
 			"cons",
 			2,
 			"(cons x y)",
 			"Return a new cons cell with `x` as car and `y` as cdr.",
-			(a: unknown[]) => new Cell(a[0], a[1]),
+			z.tuple([zAny, zAny]),
+			([x, y]) => new Cell(x, y),
 		);
 		this.def(
 			"atom",
 			1,
 			"(atom x)",
 			"Return t if `x` is not a cons cell (i.e. not a non-empty list).",
-			(a: unknown[]) => (a[0] instanceof Cell ? null : true),
+			z.tuple([zAny]),
+			([x]) => (x instanceof Cell ? null : true),
 		);
 		this.def(
 			"eq",
 			2,
 			"(eq x y)",
 			"Return t if `x` and `y` are the same object (identity).",
-			(a: unknown[]) => (Object.is(a[0], a[1]) ? true : null),
+			z.tuple([zAny, zAny]),
+			([x, y]) => (Object.is(x, y) ? true : null),
 		);
 
 		this.def(
@@ -527,16 +555,18 @@ export class Interp {
 			-1,
 			"(list x...)",
 			"Return a new list of the given elements.",
-			(a: unknown[]) => a[0],
+			z.tuple([zList]),
+			([rest]) => rest,
 		);
 		this.def(
 			"rplaca",
 			2,
 			"(rplaca cell x)",
 			"Destructively set the car of `cell` to `x`; return `x`. Alias: `setcar`.",
-			(a: unknown[]) => {
-				(<Cell>a[0]).car = a[1];
-				return a[1];
+			z.tuple([zCell, zAny]),
+			([cell, x]) => {
+				cell.car = x;
+				return x;
 			},
 		);
 		this.def(
@@ -544,9 +574,10 @@ export class Interp {
 			2,
 			"(rplacd cell x)",
 			"Destructively set the cdr of `cell` to `x`; return `x`. Alias: `setcdr`.",
-			(a: unknown[]) => {
-				(<Cell>a[0]).cdr = a[1];
-				return a[1];
+			z.tuple([zCell, zAny]),
+			([cell, x]) => {
+				cell.cdr = x;
+				return x;
 			},
 		);
 		this.def(
@@ -554,22 +585,29 @@ export class Interp {
 			1,
 			"(length x)",
 			"Return the length of a list or string.",
-			(a: unknown[]) =>
-				a[0] === null ? ZERO : quotient((a[0] as Cell | string).length, 1),
+			z.tuple([
+				z.custom<Cell | string | null>(
+					(x) => x === null || x instanceof Cell || typeof x === "string",
+					"list or string expected",
+				),
+			]),
+			([x]) => (x === null ? ZERO : quotient(x.length, 1)),
 		);
 		this.def(
 			"stringp",
 			1,
 			"(stringp x)",
 			"Return t if `x` is a string.",
-			(a: unknown[]) => (typeof a[0] === "string" ? true : null),
+			z.tuple([zAny]),
+			([x]) => (typeof x === "string" ? true : null),
 		);
 		this.def(
 			"numberp",
 			1,
 			"(numberp x)",
 			"Return t if `x` is a number.",
-			(a: unknown[]) => (isNumeric(a[0]) ? true : null),
+			z.tuple([zAny]),
+			([x]) => (isNumeric(x) ? true : null),
 		);
 
 		this.def(
@@ -577,9 +615,8 @@ export class Interp {
 			2,
 			"(eql x y)",
 			"Return t if `x` and `y` are identical or numerically equal. Alias: `=`.",
-			(a: unknown[]) => {
-				const x = a[0];
-				const y = a[1];
+			z.tuple([zAny, zAny]),
+			([x, y]) => {
 				return x === y
 					? true
 					: isNumeric(x) && isNumeric(y) && compare(x, y) === 0
@@ -593,8 +630,8 @@ export class Interp {
 			2,
 			"(< x y)",
 			"Return t if `x` is numerically less than `y`.",
-			(a: unknown[]) =>
-				compare(ensureNum(a[0]), ensureNum(a[1])) < 0 ? true : null,
+			z.tuple([zNumeric, zNumeric]),
+			([x, y]) => (compare(x, y) < 0 ? true : null),
 		);
 
 		this.def(
@@ -602,7 +639,8 @@ export class Interp {
 			2,
 			"(% x y)",
 			"Return the remainder of `x` divided by `y`. Alias: `rem`.",
-			(a: unknown[]) => remainder(ensureNum(a[0]), ensureNum(a[1])),
+			z.tuple([zNumeric, zNumeric]),
+			([x, y]) => remainder(x, y),
 		);
 
 		this.def(
@@ -610,9 +648,8 @@ export class Interp {
 			2,
 			"(mod x y)",
 			"Return `x` modulo `y` (result has the sign of `y`).",
-			(a: unknown[]) => {
-				const x = ensureNum(a[0]);
-				const y = ensureNum(a[1]);
+			z.tuple([zNumeric, zNumeric]),
+			([x, y]) => {
 				const q = remainder(x, y);
 				return compare(multiply(x, y), ZERO) < 0 ? add(q, y) : q;
 			},
@@ -623,8 +660,8 @@ export class Interp {
 			-1,
 			"(+ x...)",
 			"Return the sum of the arguments (0 with no arguments).",
-			(a: unknown[]) =>
-				foldl(ZERO, a[0] as List, (i, j) => add(i as Numeric, ensureNum(j))),
+			z.tuple([zList]),
+			([rest]) => foldl(ZERO, rest, (i, j) => add(i as Numeric, ensureNum(j))),
 		);
 
 		this.def(
@@ -632,10 +669,9 @@ export class Interp {
 			-1,
 			"(* x...)",
 			"Return the product of the arguments (1 with no arguments).",
-			(a: unknown[]) =>
-				foldl(ONE, a[0] as List, (i, j) =>
-					multiply(i as Numeric, ensureNum(j)),
-				),
+			z.tuple([zList]),
+			([rest]) =>
+				foldl(ONE, rest, (i, j) => multiply(i as Numeric, ensureNum(j))),
 		);
 
 		this.def(
@@ -643,13 +679,11 @@ export class Interp {
 			-2,
 			"(- x y...)",
 			"Subtract the rest from `x`; with one argument, negate it.",
-			(a: unknown[]) => {
-				const x = ensureNum(a[0]);
-				const y = a[1] as List;
-				return y == null
+			z.tuple([zNumeric, zList]),
+			([x, rest]) =>
+				rest === null
 					? -x
-					: foldl(x, y, (i, j) => subtract(i as Numeric, ensureNum(j)));
-			},
+					: foldl<Numeric>(x, rest, (i, j) => subtract(i, ensureNum(j))),
 		);
 
 		this.def(
@@ -657,10 +691,9 @@ export class Interp {
 			-3,
 			"(/ x y...)",
 			"Divide `x` by the remaining arguments.",
-			(a: unknown[]) =>
-				foldl(divide(ensureNum(a[0]), ensureNum(a[1])), a[2] as List, (i, j) =>
-					divide(i as Numeric, ensureNum(j)),
-				),
+			z.tuple([zNumeric, zNumeric, zList]),
+			([x, y, rest]) =>
+				foldl(divide(x, y), rest, (i, j) => divide(i as Numeric, ensureNum(j))),
 		);
 
 		this.def(
@@ -668,13 +701,12 @@ export class Interp {
 			-2,
 			"(truncate x [y])",
 			"Return `x` (or `x`/`y`) truncated toward zero to an integer.",
-			(a: unknown[]) => {
-				const x = ensureNum(a[0]);
-				const y = a[1] as List;
-				if (y === null) {
+			z.tuple([zNumeric, zList]),
+			([x, rest]) => {
+				if (rest === null) {
 					return quotient(x, ONE);
-				} else if (y.cdr === null) {
-					return quotient(x, y.car as Numeric);
+				} else if (rest.cdr === null) {
+					return quotient(x, ensureNum(rest.car));
 				} else {
 					throw "one or two arguments expected";
 				}
@@ -686,9 +718,10 @@ export class Interp {
 			1,
 			"(prin1 x)",
 			"Print `x` in re-readable form (strings quoted); return `x`.",
-			(a: unknown[]) => {
-				write(str(a[0], true));
-				return a[0];
+			z.tuple([zAny]),
+			([x]) => {
+				write(str(x, true));
+				return x;
 			},
 		);
 		this.def(
@@ -696,9 +729,10 @@ export class Interp {
 			1,
 			"(princ x)",
 			"Print `x` in human-readable form (strings unquoted); return `x`.",
-			(a: unknown[]) => {
-				write(str(a[0], false));
-				return a[0];
+			z.tuple([zAny]),
+			([x]) => {
+				write(str(x, false));
+				return x;
 			},
 		);
 		this.def(
@@ -706,7 +740,8 @@ export class Interp {
 			0,
 			"(terpri)",
 			"Print a newline; return t.",
-			(_a: unknown[]) => {
+			z.tuple([]),
+			() => {
 				write("\n");
 				return true;
 			},
@@ -716,7 +751,8 @@ export class Interp {
 			0,
 			"(help)",
 			"Print the REPL usage text.",
-			(_a: unknown[]) => {
+			z.tuple([]),
+			() => {
 				write(`${HELP_TEXT}\n`);
 				return true;
 			},
@@ -733,7 +769,8 @@ export class Interp {
 			0,
 			"(gensym)",
 			"Return a new uninterned symbol (G1, G2, ...).",
-			(_a: unknown[]) => {
+			z.tuple([]),
+			() => {
 				const i = this.globals.get(gensymCounter) as Numeric;
 				this.globals.set(gensymCounter, add(i, ONE));
 				return new Sym(`G${i}`); // an uninterned symbol
@@ -745,21 +782,24 @@ export class Interp {
 			1,
 			"(make-symbol name)",
 			"Return a new uninterned symbol named `name`.",
-			(a: unknown[]) => new Sym(a[0] as string),
+			z.tuple([zString]),
+			([name]) => new Sym(name),
 		);
 		this.def(
 			"intern",
 			1,
 			"(intern name)",
 			"Return the interned symbol named `name`.",
-			(a: unknown[]) => newSym(a[0] as string),
+			z.tuple([zString]),
+			([name]) => newSym(name),
 		);
 		this.def(
 			"symbol-name",
 			1,
 			"(symbol-name sym)",
 			"Return the name of `sym` as a string.",
-			(a: unknown[]) => (<Sym>a[0]).name,
+			z.tuple([zSym]),
+			([sym]) => sym.name,
 		);
 
 		this.def(
@@ -767,8 +807,8 @@ export class Interp {
 			2,
 			"(apply f args)",
 			"Call `f` with the elements of the list `args` as its arguments.",
-			(a: unknown[]) =>
-				this.eval(new Cell(a[0], mapcar(a[1] as List, qqQuote)), null),
+			z.tuple([zAny, zList]),
+			([f, args]) => this.eval(new Cell(f, mapcar(args, qqQuote)), null),
 		);
 
 		this.def(
@@ -776,14 +816,16 @@ export class Interp {
 			1,
 			"(exit code)",
 			"Exit the process with the given status code.",
-			(a: unknown[]) => exit(Number(a[0])),
+			z.tuple([zNumeric]),
+			([code]) => exit(Number(code)),
 		);
 		this.def(
 			"dump",
 			0,
 			"(dump)",
 			"Return a list of all global symbols.",
-			(_a: unknown[]) => {
+			z.tuple([]),
+			() => {
 				let s: List = null;
 				for (const x of this.globals.keys()) s = new Cell(x, s);
 				return s;
@@ -809,15 +851,25 @@ export class Interp {
 			3,
 			"(_set-doc 'name args-or-signature docstring)",
 			"Register documentation for the binding `name`; return `name`.",
-			(a: unknown[]) => {
-				const name = (<Sym>a[0]).name;
-				const sig =
-					typeof a[1] === "string"
-						? a[1]
-						: `(${[name, ...listToStrings(a[1] as List)].join(" ")})`;
-				if (typeof a[2] === "string")
-					this.docTable.set(name, { signature: sig, doc: a[2] });
-				return a[0];
+			z.tuple([
+				// Usually a Sym, but a defun nested in a lambda passes the
+				// compiled local variable instead — tolerated and skipped below.
+				zAny,
+				z.custom<string | List>(
+					(x) => typeof x === "string" || x === null || x instanceof Cell,
+					"string or list expected",
+				),
+				zAny,
+			]),
+			([sym, argsOrSig, docstring]) => {
+				if (sym instanceof Sym && typeof docstring === "string") {
+					const sig =
+						typeof argsOrSig === "string"
+							? argsOrSig
+							: `(${[sym.name, ...listToStrings(argsOrSig)].join(" ")})`;
+					this.docTable.set(sym.name, { signature: sig, doc: docstring });
+				}
+				return sym;
 			},
 		);
 
@@ -826,17 +878,20 @@ export class Interp {
 	}
 
 	// Define a built-in function by giving a name, a carity, documentation
-	// (a call signature and a one-line description), and a body. Docs are a
+	// (a call signature and a one-line description), a zod schema for the
+	// argument frame, and a body. The frame is validated against the schema
+	// before the body runs, so the body receives typed arguments. Docs are a
 	// required argument so a built-in cannot be added without them.
-	def(
+	def<T extends z.ZodType>(
 		name: string,
 		carity: number,
 		signature: string,
 		doc: string,
-		body: BuiltInFuncBody,
+		schema: T,
+		body: (a: z.infer<T>) => unknown,
 	) {
-		const sym = newSym(name);
-		this.globals.set(sym, new BuiltInFunc(name, carity, body));
+		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
+		this.globals.set(newSym(name), new BuiltInFunc(name, carity, wrapped));
 		this.docTable.set(name, { signature, doc });
 	}
 

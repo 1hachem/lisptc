@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, unlinkSync } from "node:fs";
 import { Worker } from "node:worker_threads";
+import { z } from "zod";
 import { isNumeric } from "./arith.ts";
 import {
 	Cell,
@@ -24,7 +25,17 @@ import {
 	newLispKeyword,
 	newSym,
 	Sym,
+	zList,
 } from "./lisp.ts";
+
+// A tool/server name argument: a string, symbol or keyword, coerced to string.
+const zName = z
+	.custom<string | Sym | LispKeyword>(
+		(x) =>
+			typeof x === "string" || x instanceof Sym || x instanceof LispKeyword,
+		"string or symbol expected",
+	)
+	.transform((x) => asName(x));
 
 // --- Broker reply protocol (must match src/mcp-broker.ts) --------------------
 const STATE_PENDING = 0;
@@ -341,8 +352,8 @@ export function registerMcp(interp: Interp): void {
 		-1,
 		'(load-mcp "server" [:config "path"])',
 		"Load an MCP server from the config file; each of its tools becomes a global function named `server/tool` called with keyword arguments.",
-		(frame: unknown[]) => {
-			const rest = frame[0] as List;
+		z.tuple([zList]),
+		([rest]) => {
 			const conf = connConfigFromArgs(rest);
 			if (servers.has(conf.name)) doUnload(interp, conf.name); // clean reload
 
@@ -387,10 +398,8 @@ export function registerMcp(interp: Interp): void {
 		1,
 		'(unload-mcp "server")',
 		"Unload an MCP server and remove its `server/tool` bindings.",
-		(frame: unknown[]) => {
-			const name = asName(frame[0]);
-			return arrayToList(doUnload(interp, name));
-		},
+		z.tuple([zName]),
+		([name]) => arrayToList(doUnload(interp, name)),
 	);
 
 	// (list-mcps) -> ((name :loaded|:unloaded count) ...)
@@ -399,6 +408,7 @@ export function registerMcp(interp: Interp): void {
 		0,
 		"(list-mcps)",
 		"Return the list of currently loaded MCP servers.",
+		z.tuple([]),
 		() => {
 			const names = new Set<string>([...predefined.keys(), ...servers.keys()]);
 			const rows = [...names].map((name) => {
@@ -419,8 +429,8 @@ export function registerMcp(interp: Interp): void {
 		-1,
 		'(list-tools ["server"])',
 		"Return the tools of all loaded MCP servers (or one server).",
-		(frame: unknown[]) => {
-			const rest = frame[0] as List;
+		z.tuple([zList]),
+		([rest]) => {
 			const only = rest !== null ? asName(rest.car) : null;
 			const rows: unknown[] = [];
 			for (const rec of servers.values()) {
@@ -452,8 +462,8 @@ export function registerMcp(interp: Interp): void {
 		1,
 		'(mcp-doc "server/tool")',
 		"Return the documentation (description and input schema) of an MCP tool.",
-		(frame: unknown[]) => {
-			const name = asName(frame[0]);
+		z.tuple([zName]),
+		([name]) => {
 			const tool = findTool(name);
 			if (!tool) throw new EvalException("unknown tool", name, false);
 			return renderDoc(name, tool);
@@ -466,8 +476,9 @@ export function registerMcp(interp: Interp): void {
 		1,
 		'(search-tools "query")',
 		"Search the tools of all loaded MCP servers by name/description.",
-		(frame: unknown[]) => {
-			const query = asName(frame[0]).toLowerCase();
+		z.tuple([zName]),
+		([rawQuery]) => {
+			const query = rawQuery.toLowerCase();
 			const terms = query.split(/\s+/).filter(Boolean);
 			const scored: { sym: Sym; score: number; doc: string }[] = [];
 			for (const rec of servers.values()) {
@@ -493,6 +504,7 @@ export function registerMcp(interp: Interp): void {
 		0,
 		"(mcp-shutdown)",
 		"Shut down the MCP broker worker and unload all servers.",
+		z.tuple([]),
 		() => {
 			servers.clear();
 			if (worker) {
