@@ -138,6 +138,39 @@
 ;; blocks on the async broker under the hood.
 (print (fs/echo :message "hello from lisptc"))
 ; => "hello from lisptc"
+(princ "=== 9. async MCP calls: futures, await & poll ===")
+(terpri)
+
+;; Pass :async t to any tool call and it returns an mcp-future
+;; immediately instead of blocking; the request runs concurrently in
+;; the broker. The interpreter itself stays synchronous — only the
+;; waiting is deferred to (await ...).
+(fs/write_file :path "/tmp/a.txt" :content "alpha")
+(fs/write_file :path "/tmp/b.txt" :content "beta")
+
+;; Fire two calls at once; both are in flight before either is read.
+(setq fa (fs/read_text_file :path "/tmp/a.txt" :async t))
+(setq fb (fs/read_text_file :path "/tmp/b.txt" :async t))
+(print fa)
+; => #<mcp-future:fs/read_text_file:...>
+;; Check status without blocking: :pending | :done | :error
+(print (poll fa))
+
+;; Block until one future resolves; returns the tool result.
+;; An optional second arg is a timeout in milliseconds.
+(print (await fa))
+; => "alpha"
+(print (await fb 5000))
+; => "beta"
+;; Awaiting again returns the memoized result; poll now says :done.
+(print (poll fa))
+; => :done
+;; await-all resolves a whole list of futures (concurrently — total
+;; wall time is the slowest call, not the sum).
+(print (await-all (list (fs/read_text_file :path "/tmp/a.txt" :async t)
+                        (fs/read_text_file :path "/tmp/b.txt" :async t))))
+; => ("alpha" "beta")
+
 ;; Unload releases the tool bindings; shutdown tears down the broker.
 (print (unload-mcp "fs"))
 
