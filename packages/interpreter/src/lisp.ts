@@ -417,6 +417,11 @@ export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
 
+	// Names of all global bindings (built-ins, prelude defs, MCP tools).
+	globalNames(): string[] {
+		return [...this.globals.keys()].map((s) => s.name);
+	}
+
 	constructor() {
 		this.def("car", 1, (a: unknown[]) => {
 			if (a[0] === null) return null;
@@ -986,6 +991,11 @@ class Reader {
 		}
 	}
 
+	// 1-based line number of the token last consumed.
+	get line(): number {
+		return this.lineNo;
+	}
+
 	// Make this be a clone of the other.
 	copyFrom(other: Reader): void {
 		this.tokens = other.tokens.slice();
@@ -1284,6 +1294,36 @@ export function run(interp: Interp, text: string): unknown {
 		result = interp.eval(exp, null);
 	}
 	return result;
+}
+
+// A syntax error found by checkSyntax, with the 1-based line it was found at.
+export interface SyntaxError_ {
+	message: string;
+	line: number;
+}
+
+// Parse (but do not evaluate) a whole program, returning any syntax errors.
+// Stops at the first error since the token stream is unreliable past it.
+export function checkSyntax(text: string): SyntaxError_[] {
+	const tokens = new Reader();
+	tokens.push(text);
+	while (!tokens.isEmpty()) {
+		try {
+			tokens.read();
+		} catch (ex) {
+			if (ex === EndOfFile)
+				return [
+					{
+						message: "unexpected end of input (unbalanced parentheses?)",
+						line: tokens.line,
+					},
+				];
+			if (ex instanceof EvalException)
+				return [{ message: String(ex.message), line: tokens.line }];
+			throw ex;
+		}
+	}
+	return [];
 }
 
 // A persistent in-process REPL: `eval` runs a program and returns what the
