@@ -1,0 +1,25 @@
+{
+  "name": "@lisptc/lsp",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "bin": {
+    "lisptc-lsp": "./src/server.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "node --no-warnings --experimental-transform-types src/server.ts --stdio"
+  },
+  "dependencies": {
+    "@repo/interpreter": "workspace:*",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}
