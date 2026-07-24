@@ -1,0 +1,153 @@
+;;; =====================================================================
+;;; lisptc — a language showcase (.ptc)
+;;;
+;;; Run me:
+;;;   pnpm --filter @lisptc/interpreter exec \
+;;;     node --experimental-transform-types src/lisp.ts ../../test.ptc
+;;;
+;;; (the interpreter runs each non-"-" argv entry as a script file)
+;;; =====================================================================
+(princ "=== 1. atoms, arithmetic & big numbers ===")
+(terpri)
+
+;; numbers are number | bigint; arithmetic promotes automatically
+(print (+ 1 2 3 4 5))
+; => 15
+(print (* 6 7))
+; => 42
+(print (/ 22 7))
+; => rational-ish float
+(print (- 10 3 2))
+; => 5
+(print (expt 2 100))
+; => bigint, exact
+(print (< 1 2 3))
+; chained comparison via prelude
+(princ "=== 2. lists & cons cells ===")
+(terpri)
+
+(setq xs (list 1 2 3 4 5))
+(print xs)
+(print (car xs))
+; => 1
+(print (cdr xs))
+; => (2 3 4 5)
+(print (cadr xs))
+
+(caadr)
+
+; => 2
+(print (append xs (list 6 7)))
+; => (1 .. 7)
+(print (nreverse (list 1 2 3)))
+; => (3 2 1)
+(princ "=== 3. lambdas, closures & higher order ===")
+(terpri)
+
+;; a closure capturing `n`
+(defun adder (n) (lambda (x) (+ x n)))
+(setq add10 (adder 10))
+(print (add10 5))
+; => 15
+(print (mapcar add10 (list 1 2 3)))
+; => (11 12 13)
+;; fold via recursion
+(defun reduce (f acc lst) (if (null lst) acc
+    (reduce f (f acc (car lst)) (cdr lst))))
+(print (reduce + 0 (list 1 2 3 4 5)))
+; => 15
+(princ "=== 4. recursion ===")
+(terpri)
+
+(defun fact (n) (if (<= n 1) 1 (* n (fact (- n 1)))))
+(print (fact 20))
+; => 2432902008176640000
+(print (fact 30))
+; => big, exact bigint
+(defun fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
+(print (fib 15))
+; => 610
+(princ "=== 5. control flow: cond / when / let / while / dolist ===")
+(terpri)
+
+(defun classify (n) (cond ((< n 0) 'negative) ((= n 0) 'zero) (t 'positive)))
+(print (mapcar classify (list -3 0 7)))
+
+(let ((a 3) (b 4)) (print (+ (* a a) (* b b))))
+; => 25
+;; imperative loop with mutation
+(setq sum 0)
+(dolist (x (list 10 20 30)) (setq sum (+ sum x)))
+(print sum)
+; => 60
+(setq i 0)
+(setq acc nil)
+(while (< i 5) (setq acc (cons i acc)) (setq i (+ i 1)))
+(print (nreverse acc))
+; => (0 1 2 3 4)
+(princ "=== 6. macros & quasiquotation ===")
+(terpri)
+
+;; define our own control macro with `,` unquote and `,@` splice
+(defmacro unless (test &rest body) `(cond ((not ,test) ,@body)))
+(print (unless nil 'ran 'ok))
+; => ok
+;; a macro that builds code at expansion time
+(defmacro swap (a b) `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
+(setq p 1)
+(setq q 2)
+(swap p q)
+(print (list p q))
+; => (2 1)
+(princ "=== 7. association lists (symbolic data) ===")
+(terpri)
+
+(setq db '((alice .30) (bob .25) (carol .35)))
+(print (assoc 'bob db))
+; => (bob . 25)
+(print (cdr (assoc 'carol db)))
+; => 35
+(princ "=== 8. MCP support ===")
+(terpri)
+
+;; MCP built-ins are installed on every Interp:
+;;   load-mcp / unload-mcp / list-mcps / list-tools
+;;   mcp-doc / search-tools / mcp-shutdown
+;;
+;; Load a server ad-hoc. Here we boot the repo's fixture stdio server,
+;; which exposes a single tool, `echo`.
+(load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp"))
+
+(fs/read_file "/tmp/test")
+
+;; What servers are loaded, and how many tools each has?
+(list-mcps)
+; => ((fx :loaded 1))
+;; Enumerate tools: (symbol param-count doc)
+(print (list-tools "fs"))
+
+;; Full documentation for one tool, including per-parameter docs.
+(princ (mcp-doc 'fs/echo))
+(terpri)
+
+;; Fuzzy search across all loaded tools, ranked best-first.
+(print (search-tools "echo text back"))
+
+;; Each tool is an ordinary global binding named <server>/<tool>,
+;; called with native keyword syntax. The synchronous interpreter
+;; blocks on the async broker under the hood.
+(print (fs/echo :message "hello from lisptc"))
+; => "hello from lisptc"
+;; Unload releases the tool bindings; shutdown tears down the broker.
+(print (unload-mcp "fs"))
+
+; => (fx/echo)
+(mcp-shutdown)
+
+(princ "=== done ===")
+
+(cddr '(1 4 5))
+
+(cddr (4 (5 5)))
+
+(terpri)
