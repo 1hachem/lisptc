@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, unlinkSync } from "node:fs";
 import { Worker } from "node:worker_threads";
+import { z } from "zod";
 import { isNumeric } from "./arith.ts";
 import {
 	Cell,
@@ -24,7 +25,17 @@ import {
 	newLispKeyword,
 	newSym,
 	Sym,
+	zList,
 } from "./lisp.ts";
+
+// A tool/server name argument: a string, symbol or keyword, coerced to string.
+const zName = z
+	.custom<string | Sym | LispKeyword>(
+		(x) =>
+			typeof x === "string" || x instanceof Sym || x instanceof LispKeyword,
+		"string or symbol expected",
+	)
+	.transform((x) => asName(x));
 
 // --- Broker reply protocol (must match src/mcp-broker.ts) --------------------
 const STATE_PENDING = 0;
@@ -336,127 +347,173 @@ export function registerMcp(interp: Interp): void {
 
 	// (load-mcp "name") | (load-mcp :name "x" :url "..." [:headers al])
 	//                   | (load-mcp :name "x" :command "cmd" [:args (...)])
-	interp.def("load-mcp", -1, (frame: unknown[]) => {
-		const rest = frame[0] as List;
-		const conf = connConfigFromArgs(rest);
-		if (servers.has(conf.name)) doUnload(interp, conf.name); // clean reload
+	interp.def(
+		"load-mcp",
+		-1,
+		'(load-mcp "server" [:config "path"])',
+		"Load an MCP server from the config file; each of its tools becomes a global function named `server/tool` called with keyword arguments.",
+		z.tuple([zList]),
+		([rest]) => {
+			const conf = connConfigFromArgs(rest);
+			if (servers.has(conf.name)) doUnload(interp, conf.name); // clean reload
 
-		const res = mcpRequest("connect", conf) as {
-			serverId: string;
-			tools: Tool[];
-		};
-		const toolMap = new Map<string, Tool>();
-		const toolSyms: Sym[] = [];
-		for (const tool of res.tools) {
-			toolMap.set(tool.name, tool);
-			const sym = newSym(`${conf.name}/${tool.name}`);
-			const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
-				const args = plistToJson(f[0] as List);
-				validate(tool, args);
-				const result = mcpRequest("call-tool", {
-					serverId: res.serverId,
-					tool: tool.name,
-					args,
+			const res = mcpRequest("connect", conf) as {
+				serverId: string;
+				tools: Tool[];
+			};
+			const toolMap = new Map<string, Tool>();
+			const toolSyms: Sym[] = [];
+			for (const tool of res.tools) {
+				toolMap.set(tool.name, tool);
+				const sym = newSym(`${conf.name}/${tool.name}`);
+				const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
+					const args = plistToJson(f[0] as List);
+					validate(tool, args);
+					const result = mcpRequest("call-tool", {
+						serverId: res.serverId,
+						tool: tool.name,
+						args,
+					});
+					return jsonToLisp(result);
 				});
-				return jsonToLisp(result);
+				interp.defineGlobal(sym, wrapper, {
+					signature: `(${sym.name} :arg value...)`,
+					doc: tool.description ?? "MCP tool (no description provided).",
+				});
+				toolSyms.push(sym);
+			}
+			servers.set(conf.name, {
+				name: conf.name,
+				serverId: res.serverId,
+				toolSyms,
+				tools: toolMap,
 			});
-			interp.defineGlobal(sym, wrapper);
-			toolSyms.push(sym);
-		}
-		servers.set(conf.name, {
-			name: conf.name,
-			serverId: res.serverId,
-			toolSyms,
-			tools: toolMap,
-		});
-		return arrayToList(toolSyms);
-	});
+			return arrayToList(toolSyms);
+		},
+	);
 
 	// (unload-mcp "name") -> list of removed symbols
-	interp.def("unload-mcp", 1, (frame: unknown[]) => {
-		const name = asName(frame[0]);
-		return arrayToList(doUnload(interp, name));
-	});
+	interp.def(
+		"unload-mcp",
+		1,
+		'(unload-mcp "server")',
+		"Unload an MCP server and remove its `server/tool` bindings.",
+		z.tuple([zName]),
+		([name]) => arrayToList(doUnload(interp, name)),
+	);
 
 	// (list-mcps) -> ((name :loaded|:unloaded count) ...)
-	interp.def("list-mcps", 0, () => {
-		const names = new Set<string>([...predefined.keys(), ...servers.keys()]);
-		const rows = [...names].map((name) => {
-			const rec = servers.get(name);
-			return arrayToList([
-				name,
-				newLispKeyword(rec ? "loaded" : "unloaded"),
-				BigInt(rec ? rec.tools.size : 0),
-			]);
-		});
-		return arrayToList(rows);
-	});
+	interp.def(
+		"list-mcps",
+		0,
+		"(list-mcps)",
+		"Return the list of currently loaded MCP servers.",
+		z.tuple([]),
+		() => {
+			const names = new Set<string>([...predefined.keys(), ...servers.keys()]);
+			const rows = [...names].map((name) => {
+				const rec = servers.get(name);
+				return arrayToList([
+					name,
+					newLispKeyword(rec ? "loaded" : "unloaded"),
+					BigInt(rec ? rec.tools.size : 0),
+				]);
+			});
+			return arrayToList(rows);
+		},
+	);
 
 	// (list-tools) | (list-tools "server") -> ((sym param-count doc) ...)
-	interp.def("list-tools", -1, (frame: unknown[]) => {
-		const rest = frame[0] as List;
-		const only = rest !== null ? asName(rest.car) : null;
-		const rows: unknown[] = [];
-		for (const rec of servers.values()) {
-			if (only !== null && rec.name !== only) continue;
-			for (const sym of rec.toolSyms) {
-				const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
-				rows.push(
-					arrayToList([
-						sym,
-						BigInt(
-							tool?.inputSchema?.properties
-								? Object.keys(tool.inputSchema.properties).length
-								: 0,
-						),
-						firstLine(tool?.description),
-					]),
-				);
+	interp.def(
+		"list-tools",
+		-1,
+		'(list-tools ["server"])',
+		"Return the tools of all loaded MCP servers (or one server).",
+		z.tuple([zList]),
+		([rest]) => {
+			const only = rest !== null ? asName(rest.car) : null;
+			const rows: unknown[] = [];
+			for (const rec of servers.values()) {
+				if (only !== null && rec.name !== only) continue;
+				for (const sym of rec.toolSyms) {
+					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
+					rows.push(
+						arrayToList([
+							sym,
+							BigInt(
+								tool?.inputSchema?.properties
+									? Object.keys(tool.inputSchema.properties).length
+									: 0,
+							),
+							firstLine(tool?.description),
+						]),
+					);
+				}
 			}
-		}
-		if (only !== null && !servers.has(only))
-			throw new EvalException("MCP server not loaded", only, false);
-		return arrayToList(rows);
-	});
+			if (only !== null && !servers.has(only))
+				throw new EvalException("MCP server not loaded", only, false);
+			return arrayToList(rows);
+		},
+	);
 
 	// (mcp-doc 'server/tool) -> full description + per-parameter docs (string)
-	interp.def("mcp-doc", 1, (frame: unknown[]) => {
-		const name = asName(frame[0]);
-		const tool = findTool(name);
-		if (!tool) throw new EvalException("unknown tool", name, false);
-		return renderDoc(name, tool);
-	});
+	interp.def(
+		"mcp-doc",
+		1,
+		'(mcp-doc "server/tool")',
+		"Return the documentation (description and input schema) of an MCP tool.",
+		z.tuple([zName]),
+		([name]) => {
+			const tool = findTool(name);
+			if (!tool) throw new EvalException("unknown tool", name, false);
+			return renderDoc(name, tool);
+		},
+	);
 
 	// (search-tools "query") -> ((sym score doc) ...) ranked, best first
-	interp.def("search-tools", 1, (frame: unknown[]) => {
-		const query = asName(frame[0]).toLowerCase();
-		const terms = query.split(/\s+/).filter(Boolean);
-		const scored: { sym: Sym; score: number; doc: string }[] = [];
-		for (const rec of servers.values()) {
-			for (const sym of rec.toolSyms) {
-				const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
-				const hay = `${sym.name} ${tool?.description ?? ""}`.toLowerCase();
-				let score = 0;
-				for (const t of terms) if (hay.includes(t)) score++;
-				if (score > 0)
-					scored.push({ sym, score, doc: firstLine(tool?.description) });
+	interp.def(
+		"search-tools",
+		1,
+		'(search-tools "query")',
+		"Search the tools of all loaded MCP servers by name/description.",
+		z.tuple([zName]),
+		([rawQuery]) => {
+			const query = rawQuery.toLowerCase();
+			const terms = query.split(/\s+/).filter(Boolean);
+			const scored: { sym: Sym; score: number; doc: string }[] = [];
+			for (const rec of servers.values()) {
+				for (const sym of rec.toolSyms) {
+					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
+					const hay = `${sym.name} ${tool?.description ?? ""}`.toLowerCase();
+					let score = 0;
+					for (const t of terms) if (hay.includes(t)) score++;
+					if (score > 0)
+						scored.push({ sym, score, doc: firstLine(tool?.description) });
+				}
 			}
-		}
-		scored.sort((a, b) => b.score - a.score);
-		return arrayToList(
-			scored.map((s) => arrayToList([s.sym, BigInt(s.score), s.doc])),
-		);
-	});
+			scored.sort((a, b) => b.score - a.score);
+			return arrayToList(
+				scored.map((s) => arrayToList([s.sym, BigInt(s.score), s.doc])),
+			);
+		},
+	);
 
 	// (mcp-shutdown) -> t ; terminates the broker and clears all state
-	interp.def("mcp-shutdown", 0, () => {
-		servers.clear();
-		if (worker) {
-			void worker.terminate();
-			worker = null;
-		}
-		return true;
-	});
+	interp.def(
+		"mcp-shutdown",
+		0,
+		"(mcp-shutdown)",
+		"Shut down the MCP broker worker and unload all servers.",
+		z.tuple([]),
+		() => {
+			servers.clear();
+			if (worker) {
+				void worker.terminate();
+				worker = null;
+			}
+			return true;
+		},
+	);
 }
 
 // --- Helpers -----------------------------------------------------------------
