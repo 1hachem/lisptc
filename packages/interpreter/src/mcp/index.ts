@@ -2,31 +2,42 @@
  * MCP integration for Lisptc (main-thread side).
  *
  * Installs the load-mcp / unload-mcp / list-mcps / list-tools / mcp-doc /
- * search-tools / mcp-shutdown built-ins into an Interp. All async MCP work is
- * delegated to a worker_threads broker (src/mcp-broker.ts); the synchronous
- * interpreter blocks on it through a SharedArrayBuffer + Atomics.wait bridge,
- * which is the only way to call async code from Node's synchronous main thread
- * without deadlocking its event loop.
+ * search-tools / await / await-all / poll / mcp-shutdown built-ins into an
+ * Interp. All async MCP work goes through a SyncBridge (default: the
+ * worker_threads WorkerBridge, see bridges/worker.ts), which is the only way
+ * to call async code from Node's synchronous main thread without
+ * deadlocking its event loop. Deployment of the servers themselves (stdio
+ * subprocess, HTTP, docker, k8s, ...) is a broker-side adapter concern —
+ * see adapter.ts.
  *
- * Loaded tools become ordinary global bindings named "<server>/<tool>", called
- * with native keyword syntax, e.g. (linear/list-issues :query "auth bug").
+ * Loaded tools become ordinary global bindings named "<server>/<tool>",
+ * called with native keyword syntax, e.g. (linear/list-issues :query "auth
+ * bug"). Passing :async t to a tool call returns an McpFuture immediately
+ * instead of blocking; resolve it with (await f), (await-all list) or check
+ * it with (poll f).
  */
-import { randomUUID } from "node:crypto";
-import { readFileSync, unlinkSync } from "node:fs";
-import { Worker } from "node:worker_threads";
 import { z } from "zod";
-import { isNumeric } from "./arith.ts";
+import { EvalException } from "../exceptions.ts";
+import type { Interp } from "../interp.ts";
+import { zList } from "../schemas.ts";
 import {
-	Cell,
-	EvalException,
-	type Interp,
 	LispKeyword,
 	type List,
 	newLispKeyword,
 	newSym,
 	Sym,
-	zList,
-} from "./lisp.ts";
+} from "../sexpr.ts";
+import type { SyncBridge } from "./bridge.ts";
+import { WorkerBridge } from "./bridges/worker.ts";
+import { McpFuture } from "./futures.ts";
+import {
+	arrayToList,
+	jsonToLisp,
+	lispToJson,
+	listToArray,
+	parsePlist,
+} from "./json.ts";
+import type { ConnConfig } from "./protocol.ts";
 
 // A tool/server name argument: a string, symbol or keyword, coerced to string.
 const zName = z
@@ -37,15 +48,10 @@ const zName = z
 	)
 	.transform((x) => asName(x));
 
-// --- Broker reply protocol (must match src/mcp-broker.ts) --------------------
-const STATE_PENDING = 0;
-// STATE_DONE = 1 is implicit: any non-PENDING, non-ERROR, non-SPILL state.
-const STATE_ERROR = 2;
-const STATE_SPILL = 3;
-
-const CTRL_BYTES = 8; // Int32Array [state, length]
-const DATA_BYTES = 1 << 20; // 1 MiB inline reply buffer
-const DEFAULT_TIMEOUT_MS = 30_000;
+const zFuture = z.custom<McpFuture>(
+	(x) => x instanceof McpFuture,
+	"mcp future expected",
+);
 
 // --- Types -------------------------------------------------------------------
 interface Tool {
@@ -62,15 +68,6 @@ interface JsonSchema {
 	description?: string;
 }
 
-type ConnConfig =
-	| { name: string; url: string; headers?: Record<string, string> }
-	| {
-			name: string;
-			command: string;
-			args?: string[];
-			env?: Record<string, string>;
-	  };
-
 interface ServerRec {
 	name: string;
 	serverId: string;
@@ -79,163 +76,17 @@ interface ServerRec {
 }
 
 // --- Module state ------------------------------------------------------------
+// Shared across interpreters, like the bridge: MCP connections are per
+// process, not per Interp.
 const servers = new Map<string, ServerRec>();
 const predefined = new Map<string, ConnConfig>();
-let worker: Worker | null = null;
 
-// --- The synchronous bridge --------------------------------------------------
-function ensureWorker(): Worker {
-	if (worker) return worker;
-	worker = new Worker(new URL("./mcp-broker.ts", import.meta.url), {
-		execArgv: ["--no-warnings", "--experimental-transform-types"],
-	});
-	// Keep the worker from holding the process open on its own.
-	worker.unref();
-	return worker;
-}
-
-// Post a request to the broker and block until it replies (or times out).
-function mcpRequest(
-	op: string,
-	payload: unknown,
-	timeoutMs = DEFAULT_TIMEOUT_MS,
-): unknown {
-	const w = ensureWorker();
-	const ctrlSab = new SharedArrayBuffer(CTRL_BYTES);
-	const dataSab = new SharedArrayBuffer(DATA_BYTES);
-	const ctrl = new Int32Array(ctrlSab);
-	Atomics.store(ctrl, 0, STATE_PENDING);
-	const id = randomUUID();
-	w.postMessage({ id, op, payload, ctrl: ctrlSab, data: dataSab });
-
-	const waited = Atomics.wait(ctrl, 0, STATE_PENDING, timeoutMs);
-	if (waited === "timed-out")
-		throw new EvalException("MCP call timed out", op, false);
-
-	const state = Atomics.load(ctrl, 0);
-	const len = Atomics.load(ctrl, 1);
-	let json: string;
-	if (state === STATE_SPILL) {
-		const path = new TextDecoder().decode(new Uint8Array(dataSab, 0, len));
-		json = readFileSync(path, "utf8");
-		try {
-			unlinkSync(path);
-		} catch {
-			// best-effort cleanup
-		}
-	} else {
-		json = new TextDecoder().decode(new Uint8Array(dataSab, 0, len));
-	}
-
-	const parsed = JSON.parse(json) as unknown;
-	if (state === STATE_ERROR) {
-		const msg =
-			parsed && typeof parsed === "object" && "error" in parsed
-				? String((parsed as { error: unknown }).error)
-				: json;
-		throw new EvalException(`MCP error: ${msg}`, op, false);
-	}
-	return parsed;
-}
-
-// --- Lisp <-> JS/JSON conversion ---------------------------------------------
-function listToArray(list: List): unknown[] {
-	const out: unknown[] = [];
-	for (let j = list; j !== null; j = j.cdr as List) out.push(j.car);
-	return out;
-}
-
-function arrayToList(arr: unknown[]): List {
-	let out: List = null;
-	for (let i = arr.length - 1; i >= 0; i--) out = new Cell(arr[i], out);
-	return out;
-}
-
-// Parse a keyword plist (:k1 v1 :k2 v2 ...) into a Map of name -> raw Lisp value.
-function parsePlist(list: List): Map<string, unknown> {
-	const out = new Map<string, unknown>();
-	let j = list;
-	while (j !== null) {
-		const key = j.car;
-		const rest = j.cdr as List;
-		if (rest === null)
-			throw new EvalException(
-				"odd-length keyword list; missing value for",
-				key,
-			);
-		const name = keyName(key);
-		out.set(name, rest.car);
-		j = rest.cdr as List;
-	}
-	return out;
-}
-
-// Extract the string name from a :keyword, symbol, or string key.
-function keyName(key: unknown): string {
-	if (key instanceof LispKeyword) return key.name;
-	if (key instanceof Sym) return key.name;
-	if (typeof key === "string") return key;
-	throw new EvalException("keyword expected as key", key);
-}
-
-// Detect an alist: a proper list whose every element is a (key . value) pair.
-function isAlist(x: Cell): boolean {
-	for (let j: List = x; j !== null; j = j.cdr as List) {
-		const e = j.car;
-		if (!(e instanceof Cell)) return false;
-		const k = e.car;
-		if (
-			!(k instanceof Sym || k instanceof LispKeyword || typeof k === "string")
-		)
-			return false;
-	}
-	return true;
-}
-
-function lispToJson(x: unknown): unknown {
-	if (x === null) return null;
-	if (x === true) return true;
-	if (typeof x === "string") return x;
-	if (typeof x === "bigint") return Number(x);
-	if (isNumeric(x)) return x;
-	if (x instanceof LispKeyword) return x.name;
-	if (x instanceof Sym) return x.name;
-	if (x instanceof Cell) {
-		if (isAlist(x)) {
-			const obj: Record<string, unknown> = {};
-			for (let j: List = x; j !== null; j = j.cdr as List) {
-				const pair = j.car as Cell;
-				obj[keyName(pair.car)] = lispToJson(pair.cdr);
-			}
-			return obj;
-		}
-		return listToArray(x).map(lispToJson);
-	}
-	return String(x);
-}
-
-function jsonToLisp(x: unknown): unknown {
-	if (x === null || x === undefined) return null;
-	if (x === true) return true;
-	if (x === false) return null; // Lisp has only nil for falsity
-	if (typeof x === "number" || typeof x === "bigint") return x;
-	if (typeof x === "string") return x;
-	if (Array.isArray(x)) return arrayToList(x.map(jsonToLisp));
-	if (typeof x === "object") {
-		const pairs = Object.entries(x as Record<string, unknown>).map(
-			([k, v]) => new Cell(k, jsonToLisp(v)),
-		);
-		return arrayToList(pairs);
-	}
-	return String(x);
-}
-
-// Build the outgoing arguments object from a call-site keyword plist.
-function plistToJson(list: List): Record<string, unknown> {
-	const plist = parsePlist(list);
-	const obj: Record<string, unknown> = {};
-	for (const [k, v] of plist) obj[k] = lispToJson(v);
-	return obj;
+// The default bridge is a lazy process-wide singleton so that every Interp
+// (tests create many) shares one broker worker.
+let defaultBridge: SyncBridge | null = null;
+function getDefaultBridge(): SyncBridge {
+	if (!defaultBridge) defaultBridge = new WorkerBridge();
+	return defaultBridge;
 }
 
 // --- Validation --------------------------------------------------------------
@@ -304,6 +155,7 @@ function connConfigFromArgs(rest: List): ConnConfig {
 	const name = opts.get("name");
 	if (typeof name !== "string")
 		throw new EvalException("load-mcp requires a :name string", null, false);
+	const deploy = opts.has("deploy") ? asName(opts.get("deploy")) : undefined;
 	if (opts.has("url")) {
 		const url = opts.get("url");
 		if (typeof url !== "string")
@@ -311,7 +163,7 @@ function connConfigFromArgs(rest: List): ConnConfig {
 		const headers = opts.has("headers")
 			? (lispToJson(opts.get("headers")) as Record<string, string>)
 			: undefined;
-		return { name, url, headers };
+		return { name, deploy, url, headers };
 	}
 	if (opts.has("command")) {
 		const command = opts.get("command");
@@ -323,7 +175,7 @@ function connConfigFromArgs(rest: List): ConnConfig {
 		const env = opts.has("env")
 			? (lispToJson(opts.get("env")) as Record<string, string>)
 			: undefined;
-		return { name, command, args: cmdArgs, env };
+		return { name, deploy, command, args: cmdArgs, env };
 	}
 	throw new EvalException(
 		"load-mcp requires either :url or :command",
@@ -332,18 +184,19 @@ function connConfigFromArgs(rest: List): ConnConfig {
 	);
 }
 
-function doUnload(interp: Interp, name: string): Sym[] {
+function doUnload(interp: Interp, bridge: SyncBridge, name: string): Sym[] {
 	const rec = servers.get(name);
 	if (!rec) throw new EvalException("MCP server not loaded", name, false);
-	mcpRequest("disconnect", { serverId: rec.serverId });
+	bridge.request("disconnect", { serverId: rec.serverId });
 	for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 	servers.delete(name);
 	return rec.toolSyms;
 }
 
 // --- Built-in installation ---------------------------------------------------
-export function registerMcp(interp: Interp): void {
+export function registerMcp(interp: Interp, bridge?: SyncBridge): void {
 	parsePredefined();
+	const br = () => bridge ?? getDefaultBridge();
 
 	// (load-mcp "name") | (load-mcp :name "x" :url "..." [:headers al])
 	//                   | (load-mcp :name "x" :command "cmd" [:args (...)])
@@ -355,9 +208,9 @@ export function registerMcp(interp: Interp): void {
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest);
-			if (servers.has(conf.name)) doUnload(interp, conf.name); // clean reload
+			if (servers.has(conf.name)) doUnload(interp, br(), conf.name); // clean reload
 
-			const res = mcpRequest("connect", conf) as {
+			const res = br().request("connect", conf) as {
 				serverId: string;
 				tools: Tool[];
 			};
@@ -367,17 +220,24 @@ export function registerMcp(interp: Interp): void {
 				toolMap.set(tool.name, tool);
 				const sym = newSym(`${conf.name}/${tool.name}`);
 				const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
-					const args = plistToJson(f[0] as List);
+					const plist = parsePlist(f[0] as List);
+					// :async t makes the call return an McpFuture immediately.
+					const async = plist.get("async") ?? null;
+					plist.delete("async");
+					const args: Record<string, unknown> = {};
+					for (const [k, v] of plist) args[k] = lispToJson(v);
 					validate(tool, args);
-					const result = mcpRequest("call-tool", {
+					const payload = {
 						serverId: res.serverId,
 						tool: tool.name,
 						args,
-					});
-					return jsonToLisp(result);
+					};
+					if (async !== null)
+						return new McpFuture(br().post("call-tool", payload), sym.name);
+					return jsonToLisp(br().request("call-tool", payload));
 				});
 				interp.defineGlobal(sym, wrapper, {
-					signature: `(${sym.name} :arg value...)`,
+					signature: `(${sym.name} :arg value... [:async t])`,
 					doc: tool.description ?? "MCP tool (no description provided).",
 				});
 				toolSyms.push(sym);
@@ -399,7 +259,7 @@ export function registerMcp(interp: Interp): void {
 		'(unload-mcp "server")',
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
-		([name]) => arrayToList(doUnload(interp, name)),
+		([name]) => arrayToList(doUnload(interp, br(), name)),
 	);
 
 	// (list-mcps) -> ((name :loaded|:unloaded count) ...)
@@ -498,18 +358,60 @@ export function registerMcp(interp: Interp): void {
 		},
 	);
 
+	// (await future [timeout-ms]) -> the tool result (blocks until done)
+	interp.def(
+		"await",
+		-2,
+		"(await future [timeout-ms])",
+		"Block until an :async MCP call completes and return its result. Awaiting the same future again returns the same result.",
+		z.tuple([zFuture, zList]),
+		([future, rest]) => {
+			const timeout = rest !== null ? Number(rest.car) : undefined;
+			return jsonToLisp(br().wait(future.ticket, timeout));
+		},
+	);
+
+	// (await-all (f1 f2 ...)) -> list of results, in the same order
+	interp.def(
+		"await-all",
+		1,
+		"(await-all futures)",
+		"Block until every future in the list completes; return their results as a list (the calls run concurrently).",
+		z.tuple([zList]),
+		([futures]) =>
+			arrayToList(
+				listToArray(futures).map((f) => {
+					const parsed = zFuture.safeParse(f);
+					if (!parsed.success)
+						throw new EvalException("mcp future expected", f);
+					return jsonToLisp(br().wait(parsed.data.ticket));
+				}),
+			),
+	);
+
+	// (poll future) -> :pending | :done | :error, without blocking
+	interp.def(
+		"poll",
+		1,
+		"(poll future)",
+		"Return the status of an :async MCP call without blocking: :pending, :done or :error.",
+		z.tuple([zFuture]),
+		([future]) => newLispKeyword(br().poll(future.ticket)),
+	);
+
 	// (mcp-shutdown) -> t ; terminates the broker and clears all state
 	interp.def(
 		"mcp-shutdown",
 		0,
 		"(mcp-shutdown)",
-		"Shut down the MCP broker worker and unload all servers.",
+		"Shut down the MCP broker and unload all servers.",
 		z.tuple([]),
 		() => {
 			servers.clear();
-			if (worker) {
-				void worker.terminate();
-				worker = null;
+			if (bridge) bridge.shutdown();
+			else if (defaultBridge) {
+				defaultBridge.shutdown();
+				defaultBridge = null;
 			}
 			return true;
 		},

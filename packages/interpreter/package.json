@@ -7,8 +7,7 @@
     ".": "./src/lisp.ts",
     "./lisp.ts": "./src/lisp.ts",
     "./arith.ts": "./src/arith.ts",
-    "./mcp.ts": "./src/mcp.ts",
-    "./mcp-broker.ts": "./src/mcp-broker.ts",
+    "./mcp": "./src/mcp/index.ts",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -18,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "repl": "node --no-warnings --experimental-transform-types src/lisp.ts"
+    "repl": "node --no-warnings --experimental-transform-types src/main.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
