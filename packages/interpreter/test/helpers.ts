@@ -1,11 +1,7 @@
-import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import { createInterp, type Interp, run, setWriter, str } from "../src/lisp.ts";
 
 /** A fresh interpreter with the standard prelude loaded. */
-export function freshInterp(): Interp {
-	const interp = new Interp();
-	run(interp, prelude);
-	return interp;
-}
+export const freshInterp = createInterp;
 
 /**
  * Evaluate a whole program (one or more top-level forms) and return the
