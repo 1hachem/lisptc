@@ -413,171 +413,445 @@ const EndOfFile = { toString: () => "EOF" };
 //----------------------------------------------------------------------
 
 // Core of the interpreter
+// Documentation of a binding: a call signature and a one-line description.
+export interface Doc {
+	signature: string;
+	doc: string;
+}
+
+// Docs for the special forms (keywords handled directly by the evaluator)
+// and reader constants. These are not global bindings, so they are kept
+// here, next to the evaluator that implements them.
+const specialFormDocs: Record<string, Doc> = {
+	quote: {
+		signature: "(quote x)",
+		doc: "Return `x` unevaluated. `'x` is shorthand.",
+	},
+	progn: {
+		signature: "(progn expr...)",
+		doc: "Evaluate the expressions in order; return the last value.",
+	},
+	cond: {
+		signature: "(cond (test expr...)...)",
+		doc: "Evaluate each `test` in turn; for the first non-nil one, evaluate its body and return the last value (or the test's value if the body is empty). Returns nil if no test passes.",
+	},
+	setq: {
+		signature: "(setq name value...)",
+		doc: "Assign each `value` to the (global or lexical) variable `name`; return the last value.",
+	},
+	lambda: {
+		signature: "(lambda (arg...) body...)",
+		doc: "Create an anonymous function. The argument list may end with `&rest name` to collect remaining arguments as a list.",
+	},
+	macro: {
+		signature: "(macro (arg...) body...)",
+		doc: "Create a macro (only at the top level). Prefer `defmacro`.",
+	},
+	t: { signature: "t", doc: "The canonical true value." },
+	nil: { signature: "nil", doc: "The empty list / false value." },
+};
+
+// Printed representations of a list's elements (for building signatures).
+function listToStrings(list: List): string[] {
+	const out: string[] = [];
+	for (let c = list; c !== null; c = c.cdr as Cell | null) out.push(str(c.car));
+	return out;
+}
+
 export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
+
+	// Documentation of global bindings, keyed by name. Populated alongside
+	// each definition (def / defineGlobal / the _set-doc built-in) so docs
+	// cannot drift from the bindings they describe.
+	private readonly docTable: Map<string, Doc> = new Map();
 
 	// Names of all global bindings (built-ins, prelude defs, MCP tools).
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);
 	}
 
+	// Documentation for every documented binding plus the special forms.
+	docs(): Map<string, Doc> {
+		return new Map([...Object.entries(specialFormDocs), ...this.docTable]);
+	}
+
 	constructor() {
-		this.def("car", 1, (a: unknown[]) => {
-			if (a[0] === null) return null;
-			if (a[0] instanceof Cell) return a[0].car;
-			throw new EvalException("list expected", a[0]);
-		});
-		this.def("cdr", 1, (a: unknown[]) => {
-			if (a[0] === null) return null;
-			if (a[0] instanceof Cell) return a[0].cdr;
-			throw new EvalException("list expected", a[0]);
-		});
-		this.def("cons", 2, (a: unknown[]) => new Cell(a[0], a[1]));
-		this.def("atom", 1, (a: unknown[]) => (a[0] instanceof Cell ? null : true));
-		this.def("eq", 2, (a: unknown[]) => (Object.is(a[0], a[1]) ? true : null));
-
-		this.def("list", -1, (a: unknown[]) => a[0]);
-		this.def("rplaca", 2, (a: unknown[]) => {
-			(<Cell>a[0]).car = a[1];
-			return a[1];
-		});
-		this.def("rplacd", 2, (a: unknown[]) => {
-			(<Cell>a[0]).cdr = a[1];
-			return a[1];
-		});
-		this.def("length", 1, (a: unknown[]) =>
-			a[0] === null ? ZERO : quotient((a[0] as Cell | string).length, 1),
+		this.def(
+			"car",
+			1,
+			"(car list)",
+			"Return the first element of `list`, or nil for nil.",
+			(a: unknown[]) => {
+				if (a[0] === null) return null;
+				if (a[0] instanceof Cell) return a[0].car;
+				throw new EvalException("list expected", a[0]);
+			},
 		);
-		this.def("stringp", 1, (a: unknown[]) =>
-			typeof a[0] === "string" ? true : null,
+		this.def(
+			"cdr",
+			1,
+			"(cdr list)",
+			"Return the rest of `list` after the first element, or nil for nil.",
+			(a: unknown[]) => {
+				if (a[0] === null) return null;
+				if (a[0] instanceof Cell) return a[0].cdr;
+				throw new EvalException("list expected", a[0]);
+			},
 		);
-		this.def("numberp", 1, (a: unknown[]) => (isNumeric(a[0]) ? true : null));
+		this.def(
+			"cons",
+			2,
+			"(cons x y)",
+			"Return a new cons cell with `x` as car and `y` as cdr.",
+			(a: unknown[]) => new Cell(a[0], a[1]),
+		);
+		this.def(
+			"atom",
+			1,
+			"(atom x)",
+			"Return t if `x` is not a cons cell (i.e. not a non-empty list).",
+			(a: unknown[]) => (a[0] instanceof Cell ? null : true),
+		);
+		this.def(
+			"eq",
+			2,
+			"(eq x y)",
+			"Return t if `x` and `y` are the same object (identity).",
+			(a: unknown[]) => (Object.is(a[0], a[1]) ? true : null),
+		);
 
-		this.def("eql", 2, (a: unknown[]) => {
-			const x = a[0];
-			const y = a[1];
-			return x === y
-				? true
-				: isNumeric(x) && isNumeric(y) && compare(x, y) === 0
+		this.def(
+			"list",
+			-1,
+			"(list x...)",
+			"Return a new list of the given elements.",
+			(a: unknown[]) => a[0],
+		);
+		this.def(
+			"rplaca",
+			2,
+			"(rplaca cell x)",
+			"Destructively set the car of `cell` to `x`; return `x`. Alias: `setcar`.",
+			(a: unknown[]) => {
+				(<Cell>a[0]).car = a[1];
+				return a[1];
+			},
+		);
+		this.def(
+			"rplacd",
+			2,
+			"(rplacd cell x)",
+			"Destructively set the cdr of `cell` to `x`; return `x`. Alias: `setcdr`.",
+			(a: unknown[]) => {
+				(<Cell>a[0]).cdr = a[1];
+				return a[1];
+			},
+		);
+		this.def(
+			"length",
+			1,
+			"(length x)",
+			"Return the length of a list or string.",
+			(a: unknown[]) =>
+				a[0] === null ? ZERO : quotient((a[0] as Cell | string).length, 1),
+		);
+		this.def(
+			"stringp",
+			1,
+			"(stringp x)",
+			"Return t if `x` is a string.",
+			(a: unknown[]) => (typeof a[0] === "string" ? true : null),
+		);
+		this.def(
+			"numberp",
+			1,
+			"(numberp x)",
+			"Return t if `x` is a number.",
+			(a: unknown[]) => (isNumeric(a[0]) ? true : null),
+		);
+
+		this.def(
+			"eql",
+			2,
+			"(eql x y)",
+			"Return t if `x` and `y` are identical or numerically equal. Alias: `=`.",
+			(a: unknown[]) => {
+				const x = a[0];
+				const y = a[1];
+				return x === y
 					? true
-					: null;
-		});
-
-		this.def("<", 2, (a: unknown[]) =>
-			compare(ensureNum(a[0]), ensureNum(a[1])) < 0 ? true : null,
+					: isNumeric(x) && isNumeric(y) && compare(x, y) === 0
+						? true
+						: null;
+			},
 		);
 
-		this.def("%", 2, (a: unknown[]) =>
-			remainder(ensureNum(a[0]), ensureNum(a[1])),
+		this.def(
+			"<",
+			2,
+			"(< x y)",
+			"Return t if `x` is numerically less than `y`.",
+			(a: unknown[]) =>
+				compare(ensureNum(a[0]), ensureNum(a[1])) < 0 ? true : null,
 		);
 
-		this.def("mod", 2, (a: unknown[]) => {
-			const x = ensureNum(a[0]);
-			const y = ensureNum(a[1]);
-			const q = remainder(x, y);
-			return compare(multiply(x, y), ZERO) < 0 ? add(q, y) : q;
-		});
-
-		this.def("+", -1, (a: unknown[]) =>
-			foldl(ZERO, a[0] as List, (i, j) => add(i as Numeric, ensureNum(j))),
+		this.def(
+			"%",
+			2,
+			"(% x y)",
+			"Return the remainder of `x` divided by `y`. Alias: `rem`.",
+			(a: unknown[]) => remainder(ensureNum(a[0]), ensureNum(a[1])),
 		);
 
-		this.def("*", -1, (a: unknown[]) =>
-			foldl(ONE, a[0] as List, (i, j) => multiply(i as Numeric, ensureNum(j))),
+		this.def(
+			"mod",
+			2,
+			"(mod x y)",
+			"Return `x` modulo `y` (result has the sign of `y`).",
+			(a: unknown[]) => {
+				const x = ensureNum(a[0]);
+				const y = ensureNum(a[1]);
+				const q = remainder(x, y);
+				return compare(multiply(x, y), ZERO) < 0 ? add(q, y) : q;
+			},
 		);
 
-		this.def("-", -2, (a: unknown[]) => {
-			const x = ensureNum(a[0]);
-			const y = a[1] as List;
-			return y == null
-				? -x
-				: foldl(x, y, (i, j) => subtract(i as Numeric, ensureNum(j)));
-		});
-
-		this.def("/", -3, (a: unknown[]) =>
-			foldl(divide(ensureNum(a[0]), ensureNum(a[1])), a[2] as List, (i, j) =>
-				divide(i as Numeric, ensureNum(j)),
-			),
+		this.def(
+			"+",
+			-1,
+			"(+ x...)",
+			"Return the sum of the arguments (0 with no arguments).",
+			(a: unknown[]) =>
+				foldl(ZERO, a[0] as List, (i, j) => add(i as Numeric, ensureNum(j))),
 		);
 
-		this.def("truncate", -2, (a: unknown[]) => {
-			const x = ensureNum(a[0]);
-			const y = a[1] as List;
-			if (y === null) {
-				return quotient(x, ONE);
-			} else if (y.cdr === null) {
-				return quotient(x, y.car as Numeric);
-			} else {
-				throw "one or two arguments expected";
-			}
-		});
+		this.def(
+			"*",
+			-1,
+			"(* x...)",
+			"Return the product of the arguments (1 with no arguments).",
+			(a: unknown[]) =>
+				foldl(ONE, a[0] as List, (i, j) =>
+					multiply(i as Numeric, ensureNum(j)),
+				),
+		);
 
-		this.def("prin1", 1, (a: unknown[]) => {
-			write(str(a[0], true));
-			return a[0];
-		});
-		this.def("princ", 1, (a: unknown[]) => {
-			write(str(a[0], false));
-			return a[0];
-		});
-		this.def("terpri", 0, (_a: unknown[]) => {
-			write("\n");
-			return true;
-		});
-		this.def("help", 0, (_a: unknown[]) => {
-			write(`${HELP_TEXT}\n`);
-			return true;
-		});
+		this.def(
+			"-",
+			-2,
+			"(- x y...)",
+			"Subtract the rest from `x`; with one argument, negate it.",
+			(a: unknown[]) => {
+				const x = ensureNum(a[0]);
+				const y = a[1] as List;
+				return y == null
+					? -x
+					: foldl(x, y, (i, j) => subtract(i as Numeric, ensureNum(j)));
+			},
+		);
+
+		this.def(
+			"/",
+			-3,
+			"(/ x y...)",
+			"Divide `x` by the remaining arguments.",
+			(a: unknown[]) =>
+				foldl(divide(ensureNum(a[0]), ensureNum(a[1])), a[2] as List, (i, j) =>
+					divide(i as Numeric, ensureNum(j)),
+				),
+		);
+
+		this.def(
+			"truncate",
+			-2,
+			"(truncate x [y])",
+			"Return `x` (or `x`/`y`) truncated toward zero to an integer.",
+			(a: unknown[]) => {
+				const x = ensureNum(a[0]);
+				const y = a[1] as List;
+				if (y === null) {
+					return quotient(x, ONE);
+				} else if (y.cdr === null) {
+					return quotient(x, y.car as Numeric);
+				} else {
+					throw "one or two arguments expected";
+				}
+			},
+		);
+
+		this.def(
+			"prin1",
+			1,
+			"(prin1 x)",
+			"Print `x` in re-readable form (strings quoted); return `x`.",
+			(a: unknown[]) => {
+				write(str(a[0], true));
+				return a[0];
+			},
+		);
+		this.def(
+			"princ",
+			1,
+			"(princ x)",
+			"Print `x` in human-readable form (strings unquoted); return `x`.",
+			(a: unknown[]) => {
+				write(str(a[0], false));
+				return a[0];
+			},
+		);
+		this.def(
+			"terpri",
+			0,
+			"(terpri)",
+			"Print a newline; return t.",
+			(_a: unknown[]) => {
+				write("\n");
+				return true;
+			},
+		);
+		this.def(
+			"help",
+			0,
+			"(help)",
+			"Print the REPL usage text.",
+			(_a: unknown[]) => {
+				write(`${HELP_TEXT}\n`);
+				return true;
+			},
+		);
 
 		const gensymCounter = newSym("*gensym-counter*");
 		this.globals.set(gensymCounter, ONE);
-		this.def("gensym", 0, (_a: unknown[]) => {
-			const i = this.globals.get(gensymCounter) as Numeric;
-			this.globals.set(gensymCounter, add(i, ONE));
-			return new Sym(`G${i}`); // an uninterned symbol
+		this.docTable.set("*gensym-counter*", {
+			signature: "*gensym-counter*",
+			doc: "Counter used by `gensym` to name fresh symbols.",
 		});
-
-		this.def("make-symbol", 1, (a: unknown[]) => new Sym(a[0] as string));
-		this.def("intern", 1, (a: unknown[]) => newSym(a[0] as string));
-		this.def("symbol-name", 1, (a: unknown[]) => (<Sym>a[0]).name);
-
-		this.def("apply", 2, (a: unknown[]) =>
-			this.eval(new Cell(a[0], mapcar(a[1] as List, qqQuote)), null),
+		this.def(
+			"gensym",
+			0,
+			"(gensym)",
+			"Return a new uninterned symbol (G1, G2, ...).",
+			(_a: unknown[]) => {
+				const i = this.globals.get(gensymCounter) as Numeric;
+				this.globals.set(gensymCounter, add(i, ONE));
+				return new Sym(`G${i}`); // an uninterned symbol
+			},
 		);
 
-		this.def("exit", 1, (a: unknown[]) => exit(Number(a[0])));
-		this.def("dump", 0, (_a: unknown[]) => {
-			let s: List = null;
-			for (const x of this.globals.keys()) s = new Cell(x, s);
-			return s;
-		});
+		this.def(
+			"make-symbol",
+			1,
+			"(make-symbol name)",
+			"Return a new uninterned symbol named `name`.",
+			(a: unknown[]) => new Sym(a[0] as string),
+		);
+		this.def(
+			"intern",
+			1,
+			"(intern name)",
+			"Return the interned symbol named `name`.",
+			(a: unknown[]) => newSym(a[0] as string),
+		);
+		this.def(
+			"symbol-name",
+			1,
+			"(symbol-name sym)",
+			"Return the name of `sym` as a string.",
+			(a: unknown[]) => (<Sym>a[0]).name,
+		);
+
+		this.def(
+			"apply",
+			2,
+			"(apply f args)",
+			"Call `f` with the elements of the list `args` as its arguments.",
+			(a: unknown[]) =>
+				this.eval(new Cell(a[0], mapcar(a[1] as List, qqQuote)), null),
+		);
+
+		this.def(
+			"exit",
+			1,
+			"(exit code)",
+			"Exit the process with the given status code.",
+			(a: unknown[]) => exit(Number(a[0])),
+		);
+		this.def(
+			"dump",
+			0,
+			"(dump)",
+			"Return a list of all global symbols.",
+			(_a: unknown[]) => {
+				let s: List = null;
+				for (const x of this.globals.keys()) s = new Cell(x, s);
+				return s;
+			},
+		);
 
 		this.globals.set(
 			newSym("*version*"),
 			new Cell(2.1, new Cell("TypeScript", new Cell("Lisptc", null))),
+		);
+		this.docTable.set("*version*", {
+			signature: "*version*",
+			doc: "The interpreter version: (number implementation-language name).",
+		});
+
+		// Register documentation for a Lisp-defined binding. Called by the
+		// defun/defmacro expansions in the prelude, so a definition and its
+		// docs always travel together. The second argument is either the
+		// argument list of the definition (the signature is derived from it)
+		// or a ready-made signature string (used for aliases).
+		this.def(
+			"_set-doc",
+			3,
+			"(_set-doc 'name args-or-signature docstring)",
+			"Register documentation for the binding `name`; return `name`.",
+			(a: unknown[]) => {
+				const name = (<Sym>a[0]).name;
+				const sig =
+					typeof a[1] === "string"
+						? a[1]
+						: `(${[name, ...listToStrings(a[1] as List)].join(" ")})`;
+				if (typeof a[2] === "string")
+					this.docTable.set(name, { signature: sig, doc: a[2] });
+				return a[0];
+			},
 		);
 
 		// Install native MCP built-ins (load-mcp, unload-mcp, list-tools, ...).
 		registerMcp(this);
 	}
 
-	// Define a built-in function by giving a name, a carity, and a body.
-	def(name: string, carity: number, body: BuiltInFuncBody) {
+	// Define a built-in function by giving a name, a carity, documentation
+	// (a call signature and a one-line description), and a body. Docs are a
+	// required argument so a built-in cannot be added without them.
+	def(
+		name: string,
+		carity: number,
+		signature: string,
+		doc: string,
+		body: BuiltInFuncBody,
+	) {
 		const sym = newSym(name);
 		this.globals.set(sym, new BuiltInFunc(name, carity, body));
+		this.docTable.set(name, { signature, doc });
 	}
 
 	// Define/undefine a global binding. Used by the MCP layer to install and
 	// remove per-tool wrapper functions at runtime (see src/mcp.ts).
-	defineGlobal(sym: Sym, value: unknown): void {
+	defineGlobal(sym: Sym, value: unknown, doc?: Doc): void {
 		this.globals.set(sym, value);
+		if (doc !== undefined) this.docTable.set(sym.name, doc);
 	}
 
 	undefineGlobal(sym: Sym): void {
 		// A missing binding makes eval raise "void variable" (see below), so
 		// deletion cleanly unbinds the symbol.
 		this.globals.delete(sym);
+		this.docTable.delete(sym.name);
 	}
 
 	hasGlobal(sym: Sym): boolean {
@@ -1376,28 +1650,49 @@ export const prelude = `
 (setq defmacro
       (macro (name args &rest body)
              \`(progn (setq ,name (macro ,args ,@body))
+                     (_set-doc ',name ',args ,(cond ((stringp (car body)) (car body))))
                      ',name)))
+(_set-doc 'defmacro "(defmacro name (arg...) [docstring] body...)"
+          "Define a global macro named name. A leading docstring is registered as its documentation.")
 
 (defmacro defun (name args &rest body)
+  "Define a global function named name. A leading docstring is registered as its documentation; use &rest for variadic arguments."
   \`(progn (setq ,name (lambda ,args ,@body))
+          (_set-doc ',name ',args ,(cond ((stringp (car body)) (car body))))
           ',name))
 
-(defun caar (x) (car (car x)))
-(defun cadr (x) (car (cdr x)))
-(defun cdar (x) (cdr (car x)))
-(defun cddr (x) (cdr (cdr x)))
-(defun caaar (x) (car (car (car x))))
-(defun caadr (x) (car (car (cdr x))))
-(defun cadar (x) (car (cdr (car x))))
-(defun caddr (x) (car (cdr (cdr x))))
-(defun cdaar (x) (cdr (car (car x))))
-(defun cdadr (x) (cdr (car (cdr x))))
-(defun cddar (x) (cdr (cdr (car x))))
-(defun cdddr (x) (cdr (cdr (cdr x))))
-(defun not (x) (eq x nil))
-(defun consp (x) (not (atom x)))
-(defun print (x) (prin1 x) (terpri) x)
-(defun identity (x) x)
+(defun caar (x)
+  "(car (car x))" (car (car x)))
+(defun cadr (x)
+  "(car (cdr x)) - the second element of a list." (car (cdr x)))
+(defun cdar (x)
+  "(cdr (car x))" (cdr (car x)))
+(defun cddr (x)
+  "(cdr (cdr x))" (cdr (cdr x)))
+(defun caaar (x)
+  "(car (car (car x)))" (car (car (car x))))
+(defun caadr (x)
+  "(car (car (cdr x)))" (car (car (cdr x))))
+(defun cadar (x)
+  "(car (cdr (car x)))" (car (cdr (car x))))
+(defun caddr (x)
+  "(car (cdr (cdr x))) - the third element of a list." (car (cdr (cdr x))))
+(defun cdaar (x)
+  "(cdr (car (car x)))" (cdr (car (car x))))
+(defun cdadr (x)
+  "(cdr (car (cdr x)))" (cdr (car (cdr x))))
+(defun cddar (x)
+  "(cdr (cdr (car x)))" (cdr (cdr (car x))))
+(defun cdddr (x)
+  "(cdr (cdr (cdr x)))" (cdr (cdr (cdr x))))
+(defun not (x)
+  "Return t if x is nil. Alias: null." (eq x nil))
+(defun consp (x)
+  "Return t if x is a cons cell (a non-empty list)." (not (atom x)))
+(defun print (x)
+  "Print x via prin1 followed by a newline; return x." (prin1 x) (terpri) x)
+(defun identity (x)
+  "Return x unchanged." x)
 
 (setq
  = eql
@@ -1405,25 +1700,38 @@ export const prelude = `
  null not
  setcar rplaca
  setcdr rplacd)
+(_set-doc '= "(= x y)" "Return t if x and y are numerically equal (alias of eql).")
+(_set-doc 'rem "(rem x y)" "Return the remainder of x divided by y (alias of %).")
+(_set-doc 'null "(null x)" "Return t if x is nil (alias of not).")
+(_set-doc 'setcar "(setcar cell x)" "Destructively set the car of cell to x (alias of rplaca).")
+(_set-doc 'setcdr "(setcdr cell x)" "Destructively set the cdr of cell to x (alias of rplacd).")
 
-(defun > (x y) (< y x))
-(defun >= (x y) (not (< x y)))
-(defun <= (x y) (not (< y x)))
-(defun /= (x y) (not (= x y)))
+(defun > (x y)
+  "Return t if x is numerically greater than y." (< y x))
+(defun >= (x y)
+  "Return t if x is greater than or equal to y." (not (< x y)))
+(defun <= (x y)
+  "Return t if x is less than or equal to y." (not (< y x)))
+(defun /= (x y)
+  "Return t if x and y are not numerically equal." (not (= x y)))
 
 (defun equal (x y)
+  "Return t if x and y are structurally equal (recursing into lists)."
   (cond ((atom x) (eql x y))
         ((atom y) nil)
         ((equal (car x) (car y)) (equal (cdr x) (cdr y)))))
 
 (defmacro if (test then &rest else)
+  "If test is non-nil, evaluate then; otherwise evaluate the else forms."
   \`(cond (,test ,then)
          ,@(cond (else \`((t ,@else))))))
 
 (defmacro when (test &rest body)
+  "If test is non-nil, evaluate body and return its last value."
   \`(cond (,test ,@body)))
 
 (defmacro let (args &rest body)
+  "Bind variables in parallel, then evaluate body. A bare name binds to nil."
   ((lambda (vars vals)
      (defun vars (x)
        (cond (x (cons (if (atom (car x))
@@ -1439,6 +1747,7 @@ export const prelude = `
    nil nil))
 
 (defmacro letrec (args &rest body)
+  "Like let, but bindings may refer to each other (e.g. for local recursive functions)."
   (let (vars setqs)
     (defun vars (x)
       (cond (x (cons (caar x)
@@ -1453,44 +1762,53 @@ export const prelude = `
       y
     (cons (car x) (_append (cdr x) y))))
 (defmacro append (x &rest y)
+  "Return the concatenation of the given lists (copies all but the last)."
   (if (null y)
       x
     \`(_append ,x (append ,@y))))
 
 (defmacro and (x &rest y)
+  "Evaluate left to right; return nil on the first nil value, else the last value."
   (if (null y)
       x
     \`(cond (,x (and ,@y)))))
 
 (defun mapcar (f x)
+  "Return a new list of f applied to each element of x."
   (and x (cons (f (car x)) (mapcar f (cdr x)))))
 
 (defmacro or (x &rest y)
+  "Evaluate left to right; return the first non-nil value, else nil."
   (if (null y)
       x
     \`(cond (,x)
            ((or ,@y)))))
 
 (defun listp (x)
+  "Return t if x is a list (nil or a cons cell)."
   (or (null x) (consp x)))
 
 (defun memq (key x)
+  "Return the tail of x whose car is eq to key, or nil."
   (cond ((null x) nil)
         ((eq key (car x)) x)
         (t (memq key (cdr x)))))
 
 (defun member (key x)
+  "Return the tail of x whose car is equal to key, or nil."
   (cond ((null x) nil)
         ((equal key (car x)) x)
         (t (member key (cdr x)))))
 
 (defun assq (key alist)
+  "Return the first pair of alist whose car is eq to key, or nil."
   (cond (alist (let ((e (car alist)))
                  (if (and (consp e) (eq key (car e)))
                      e
                    (assq key (cdr alist)))))))
 
 (defun assoc (key alist)
+  "Return the first pair of alist whose car is equal to key, or nil."
   (cond (alist (let ((e (car alist)))
                  (if (and (consp e) (equal key (car e)))
                      e
@@ -1503,14 +1821,17 @@ export const prelude = `
         x
       (_nreverse next x))))
 (defun nreverse (list)
+  "Reverse list destructively; return the reversed list."
   (cond (list (_nreverse list nil))))
 
 (defun last (list)
+  "Return the last cons cell of list."
   (if (atom (cdr list))
       list
     (last (cdr list))))
 
 (defun nconc (&rest lists)
+  "Concatenate the lists destructively; return the result."
   (if (null (cdr lists))
       (car lists)
     (if (null (car lists))
@@ -1520,11 +1841,13 @@ export const prelude = `
       (car lists))))
 
 (defmacro while (test &rest body)
+  "Loop: evaluate body while test is non-nil; return nil."
   (let ((loop (gensym)))
     \`(letrec ((,loop (lambda () (cond (,test ,@body (,loop))))))
        (,loop))))
 
 (defmacro dolist (spec &rest body)
+  "Evaluate body with name (car of spec) bound to each element of the list (cadr of spec); return the optional third element of spec."
   (let ((name (car spec))
         (list (gensym)))
     \`(let (,name
@@ -1538,6 +1861,7 @@ export const prelude = `
                ,(caddr spec))))))
 
 (defmacro dotimes (spec &rest body)
+  "Evaluate body with name (car of spec) bound to 0..count-1; return the optional third element of spec."
   (let ((name (car spec))
         (count (gensym)))
     \`(let ((,name 0)

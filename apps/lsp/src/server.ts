@@ -11,36 +11,39 @@ import {
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { checkSyntax, Interp, prelude, run } from "@repo/interpreter";
-import { docs } from "@repo/interpreter/docs.ts";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
+// One prelude-loaded interpreter: the source of global names and their docs
+// (which the interpreter registers alongside each definition). docs() also
+// covers special forms and t/nil, which are not globals.
+const interp = new Interp();
+run(interp, prelude);
+const docs = interp.docs();
+
 function markdownFor(name: string): string | undefined {
-	const d = docs[name];
+	const d = docs.get(name);
 	if (d === undefined) return undefined;
 	return `\`\`\`lisp\n${d.signature}\n\`\`\`\n${d.doc}`;
 }
 
-// One prelude-loaded interpreter, used only as the source of global names.
-// Documented names not in globals (special forms, t/nil) are added on top.
-const interp = new Interp();
+const names = new Set([...interp.globalNames(), ...docs.keys()]);
 
-run(interp, prelude);
-const names = new Set([...interp.globalNames(), ...Object.keys(docs)]);
-
-const completions = [...names].map((name) => {
-	const markdown = markdownFor(name);
-	return {
-		label: name,
-		kind: CompletionItemKind.Function,
-		detail: docs[name]?.signature,
-		documentation:
-			markdown === undefined
-				? undefined
-				: { kind: MarkupKind.Markdown, value: markdown },
-	};
-});
+const completions = [...names]
+	.filter((name) => !name.startsWith("_"))
+	.map((name) => {
+		const markdown = markdownFor(name);
+		return {
+			label: name,
+			kind: CompletionItemKind.Function,
+			detail: docs.get(name)?.signature,
+			documentation:
+				markdown === undefined
+					? undefined
+					: { kind: MarkupKind.Markdown, value: markdown },
+		};
+	});
 
 connection.onInitialize(() => ({
 	capabilities: {
