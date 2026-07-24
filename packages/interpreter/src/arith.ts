@@ -50,7 +50,9 @@ export function multiply(x: Numeric, y: Numeric): Numeric {
 	}
 }
 
-// x / y (rounded quotient)
+// x / y. Deliberately coerces through Number (unlike the other operations,
+// which keep BigInts exact): Lisp `/` is true division, so (/ 1 2) must be
+// 0.5. Use quotient/remainder for exact integer division.
 export function divide(x: Numeric, y: Numeric): Numeric {
 	return Number(x) / Number(y);
 }

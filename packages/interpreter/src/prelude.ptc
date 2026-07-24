@@ -1,0 +1,224 @@
+(setq defmacro
+      (macro (name args &rest body)
+             `(progn (setq ,name (macro ,args ,@body))
+                     (_set-doc ',name ',args ,(cond ((stringp (car body)) (car body))))
+                     ',name)))
+(_set-doc 'defmacro "(defmacro name (arg...) [docstring] body...)"
+          "Define a global macro named name. A leading docstring is registered as its documentation.")
+
+(defmacro defun (name args &rest body)
+  "Define a global function named name. A leading docstring is registered as its documentation; use &rest for variadic arguments."
+  `(progn (setq ,name (lambda ,args ,@body))
+          (_set-doc ',name ',args ,(cond ((stringp (car body)) (car body))))
+          ',name))
+
+(defun caar (x)
+  "(car (car x))" (car (car x)))
+(defun cadr (x)
+  "(car (cdr x)) - the second element of a list." (car (cdr x)))
+(defun cdar (x)
+  "(cdr (car x))" (cdr (car x)))
+(defun cddr (x)
+  "(cdr (cdr x))" (cdr (cdr x)))
+(defun caaar (x)
+  "(car (car (car x)))" (car (car (car x))))
+(defun caadr (x)
+  "(car (car (cdr x)))" (car (car (cdr x))))
+(defun cadar (x)
+  "(car (cdr (car x)))" (car (cdr (car x))))
+(defun caddr (x)
+  "(car (cdr (cdr x))) - the third element of a list." (car (cdr (cdr x))))
+(defun cdaar (x)
+  "(cdr (car (car x)))" (cdr (car (car x))))
+(defun cdadr (x)
+  "(cdr (car (cdr x)))" (cdr (car (cdr x))))
+(defun cddar (x)
+  "(cdr (cdr (car x)))" (cdr (cdr (car x))))
+(defun cdddr (x)
+  "(cdr (cdr (cdr x)))" (cdr (cdr (cdr x))))
+(defun not (x)
+  "Return t if x is nil. Alias: null." (eq x nil))
+(defun consp (x)
+  "Return t if x is a cons cell (a non-empty list)." (not (atom x)))
+(defun print (x)
+  "Print x via prin1 followed by a newline; return x." (prin1 x) (terpri) x)
+(defun identity (x)
+  "Return x unchanged." x)
+
+(setq
+ = eql
+ rem %
+ null not
+ setcar rplaca
+ setcdr rplacd)
+(_set-doc '= "(= x y)" "Return t if x and y are numerically equal (alias of eql).")
+(_set-doc 'rem "(rem x y)" "Return the remainder of x divided by y (alias of %).")
+(_set-doc 'null "(null x)" "Return t if x is nil (alias of not).")
+(_set-doc 'setcar "(setcar cell x)" "Destructively set the car of cell to x (alias of rplaca).")
+(_set-doc 'setcdr "(setcdr cell x)" "Destructively set the cdr of cell to x (alias of rplacd).")
+
+(defun > (x y)
+  "Return t if x is numerically greater than y." (< y x))
+(defun >= (x y)
+  "Return t if x is greater than or equal to y." (not (< x y)))
+(defun <= (x y)
+  "Return t if x is less than or equal to y." (not (< y x)))
+(defun /= (x y)
+  "Return t if x and y are not numerically equal." (not (= x y)))
+
+(defun equal (x y)
+  "Return t if x and y are structurally equal (recursing into lists)."
+  (cond ((atom x) (eql x y))
+        ((atom y) nil)
+        ((equal (car x) (car y)) (equal (cdr x) (cdr y)))))
+
+(defmacro if (test then &rest else)
+  "If test is non-nil, evaluate then; otherwise evaluate the else forms."
+  `(cond (,test ,then)
+         ,@(cond (else `((t ,@else))))))
+
+(defmacro when (test &rest body)
+  "If test is non-nil, evaluate body and return its last value."
+  `(cond (,test ,@body)))
+
+(defmacro let (args &rest body)
+  "Bind variables in parallel, then evaluate body. A bare name binds to nil."
+  ((lambda (vars vals)
+     (defun vars (x)
+       (cond (x (cons (if (atom (car x))
+                          (car x)
+                        (caar x))
+                      (vars (cdr x))))))
+     (defun vals (x)
+       (cond (x (cons (if (atom (car x))
+                          nil
+                        (cadar x))
+                      (vals (cdr x))))))
+     `((lambda ,(vars args) ,@body) ,@(vals args)))
+   nil nil))
+
+(defmacro letrec (args &rest body)
+  "Like let, but bindings may refer to each other (e.g. for local recursive functions)."
+  (let (vars setqs)
+    (defun vars (x)
+      (cond (x (cons (caar x)
+                     (vars (cdr x))))))
+    (defun sets (x)
+      (cond (x (cons `(setq ,(caar x) ,(cadar x))
+                     (sets (cdr x))))))
+    `(let ,(vars args) ,@(sets args) ,@body)))
+
+(defun _append (x y)
+  (if (null x)
+      y
+    (cons (car x) (_append (cdr x) y))))
+(defmacro append (x &rest y)
+  "Return the concatenation of the given lists (copies all but the last)."
+  (if (null y)
+      x
+    `(_append ,x (append ,@y))))
+
+(defmacro and (x &rest y)
+  "Evaluate left to right; return nil on the first nil value, else the last value."
+  (if (null y)
+      x
+    `(cond (,x (and ,@y)))))
+
+(defun mapcar (f x)
+  "Return a new list of f applied to each element of x."
+  (and x (cons (f (car x)) (mapcar f (cdr x)))))
+
+(defmacro or (x &rest y)
+  "Evaluate left to right; return the first non-nil value, else nil."
+  (if (null y)
+      x
+    `(cond (,x)
+           ((or ,@y)))))
+
+(defun listp (x)
+  "Return t if x is a list (nil or a cons cell)."
+  (or (null x) (consp x)))
+
+(defun memq (key x)
+  "Return the tail of x whose car is eq to key, or nil."
+  (cond ((null x) nil)
+        ((eq key (car x)) x)
+        (t (memq key (cdr x)))))
+
+(defun member (key x)
+  "Return the tail of x whose car is equal to key, or nil."
+  (cond ((null x) nil)
+        ((equal key (car x)) x)
+        (t (member key (cdr x)))))
+
+(defun assq (key alist)
+  "Return the first pair of alist whose car is eq to key, or nil."
+  (cond (alist (let ((e (car alist)))
+                 (if (and (consp e) (eq key (car e)))
+                     e
+                   (assq key (cdr alist)))))))
+
+(defun assoc (key alist)
+  "Return the first pair of alist whose car is equal to key, or nil."
+  (cond (alist (let ((e (car alist)))
+                 (if (and (consp e) (equal key (car e)))
+                     e
+                   (assoc key (cdr alist)))))))
+
+(defun _nreverse (x prev)
+  (let ((next (cdr x)))
+    (setcdr x prev)
+    (if (null next)
+        x
+      (_nreverse next x))))
+(defun nreverse (list)
+  "Reverse list destructively; return the reversed list."
+  (cond (list (_nreverse list nil))))
+
+(defun last (list)
+  "Return the last cons cell of list."
+  (if (atom (cdr list))
+      list
+    (last (cdr list))))
+
+(defun nconc (&rest lists)
+  "Concatenate the lists destructively; return the result."
+  (if (null (cdr lists))
+      (car lists)
+    (if (null (car lists))
+        (apply nconc (cdr lists))
+      (setcdr (last (car lists))
+              (apply nconc (cdr lists)))
+      (car lists))))
+
+(defmacro while (test &rest body)
+  "Loop: evaluate body while test is non-nil; return nil."
+  (let ((loop (gensym)))
+    `(letrec ((,loop (lambda () (cond (,test ,@body (,loop))))))
+       (,loop))))
+
+(defmacro dolist (spec &rest body)
+  "Evaluate body with name (car of spec) bound to each element of the list (cadr of spec); return the optional third element of spec."
+  (let ((name (car spec))
+        (list (gensym)))
+    `(let (,name
+           (,list ,(cadr spec)))
+       (while ,list
+         (setq ,name (car ,list))
+         ,@body
+         (setq ,list (cdr ,list)))
+       ,@(if (cddr spec)
+             `((setq ,name nil)
+               ,(caddr spec))))))
+
+(defmacro dotimes (spec &rest body)
+  "Evaluate body with name (car of spec) bound to 0..count-1; return the optional third element of spec."
+  (let ((name (car spec))
+        (count (gensym)))
+    `(let ((,name 0)
+           (,count ,(cadr spec)))
+       (while (< ,name ,count)
+         ,@body
+         (setq ,name (+ ,name 1)))
+       ,@(if (cddr spec)
+             `(,(caddr spec))))))
