@@ -14,9 +14,14 @@ tasks:
     vars:
       DIR: '{{.DIR | default "."}}'
     cmd: |
-      infisical run -e {{.ENV}} \
-       --projectId={{.PROJECTID}} \
-       --paths="{{.PATHS}}" --dir={{.DIR}} "{{.CMD}}"
+      set -eu
+      path_flags=""
+      for p in {{.PATHS}}; do
+        path_flags="$path_flags --path=$p"
+      done
+      cd {{.DIR}} && infisical run -e {{.ENV}} \
+        --projectId={{.PROJECTID}} \
+        $path_flags -- {{.CMD}}
 
   test:
     desc: run all tests (interpreter + nix flake checks)
