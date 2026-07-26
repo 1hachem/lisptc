@@ -42,6 +42,7 @@
           go-task
           ptcfmt
           ptcrepl
+          infisical
         ];
       };
     });

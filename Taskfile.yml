@@ -1,12 +1,23 @@
 version: '3'
 dotenv: ['.env']
 silent: true
-
+vars:
+  PROJECTID: 2601ca1c-d740-482b-b0f9-62ad78773f62
 tasks:
   default:
     desc: prints this help
     cmd: task -l
-  
+
+  _infisical-run:
+    requires:
+      vars: [ENV, PATHS, CMD]
+    vars:
+      DIR: '{{.DIR | default "."}}'
+    cmd: |
+      infisical run -e {{.ENV}} \
+       --projectId={{.PROJECTID}} \
+       --paths="{{.PATHS}}" --dir={{.DIR}} "{{.CMD}}"
+
   test:
     desc: run all tests (interpreter + nix flake checks)
     cmds:
