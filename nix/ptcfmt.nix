@@ -4,45 +4,20 @@
 # and the formatting queries are copied into the store, so ptcfmt never has to
 # fetch a git source or compile a grammar at runtime.
 {
-  lib,
+  callPackage,
   writeShellApplication,
-  writeText,
   runCommand,
-  tree-sitter,
-  fetchFromGitHub,
   topiary,
-  # Repo root, so we can pull in .topiary/queries without depending on the
-  # working tree at run time.
+  # Just the query file (.topiary/queries/commonlisp.scm), not the repo root —
+  # so unrelated working-tree edits (Taskfile, README, …) don't rebuild ptcfmt.
   src,
 }: let
-  # The Common-Lisp tree-sitter grammar. Pinned to match .topiary/languages.ncl.
-  commonlispGrammar = tree-sitter.buildGrammar {
-    language = "commonlisp";
-    version = "32323509";
-    src = fetchFromGitHub {
-      owner = "theHamsta";
-      repo = "tree-sitter-commonlisp";
-      rev = "32323509b3d9fe96607d151c2da2c9009eb13a2f";
-      hash = "sha256-cNGxZXoxhnXGo4yhMHDSjF/j43JNXg1ClpqN2xJgLQU=";
-    };
-  };
-
-  # Topiary config pointing at the nix-built grammar (a `.so`).
-  languagesNcl = writeText "languages.ncl" ''
-    {
-      languages = {
-        commonlisp = {
-          extensions = ["ptc", "lisp", "cl"],
-          grammar.source.path = "${commonlispGrammar}/parser",
-        },
-      },
-    }
-  '';
+  inherit (callPackage ./topiary-config.nix {}) languagesNcl;
 
   # The formatting rules, copied into the store.
   queries = runCommand "ptcfmt-queries" {} ''
     mkdir -p "$out"
-    cp ${src + "/.topiary/queries/commonlisp.scm"} "$out/commonlisp.scm"
+    cp ${src} "$out/commonlisp.scm"
   '';
 in
   writeShellApplication {
