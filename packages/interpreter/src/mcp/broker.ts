@@ -17,7 +17,11 @@ import { join } from "node:path";
 import { parentPort } from "node:worker_threads";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { registerAdapter, resolveAdapter } from "./adapter.ts";
+import {
+	type DeploymentAdapter,
+	registerAdapter,
+	resolveAdapter,
+} from "./adapter.ts";
 import { httpAdapter } from "./adapters/http.ts";
 import { stdioAdapter } from "./adapters/stdio.ts";
 import {
@@ -34,8 +38,16 @@ import {
 registerAdapter("stdio", stdioAdapter);
 registerAdapter("http", httpAdapter);
 
-// Live MCP clients keyed by the serverId the broker mints on connect.
-const clients = new Map<string, { client: Client; tools: Tool[] }>();
+// Live MCP connections keyed by the serverId the broker mints on connect.
+// The adapter + workload handle are kept so disconnect can deprovision
+// whatever provision acquired.
+interface Connection {
+	client: Client;
+	tools: Tool[];
+	adapter: DeploymentAdapter;
+	handle: unknown;
+}
+const clients = new Map<string, Connection>();
 
 if (!parentPort) throw new Error("mcp broker must run as a worker thread");
 const port = parentPort;
@@ -77,17 +89,28 @@ async function dispatch(op: Op, payload: unknown): Promise<unknown> {
 async function connect(
 	conf: ConnConfig,
 ): Promise<{ serverId: string; tools: Tool[] }> {
-	const transport = await resolveAdapter(conf).createTransport(conf);
-	const client = new Client(
-		{ name: "lisptc", version: "1.0.0" },
-		{ capabilities: {} },
-	);
-	// SDK performs the initialize + notifications/initialized handshake.
-	await client.connect(transport);
-	const { tools } = await client.listTools();
-	const serverId = randomUUID();
-	clients.set(serverId, { client, tools });
-	return { serverId, tools };
+	const adapter = resolveAdapter(conf);
+	// Workload lifecycle first (ensure the pod / start the container / no-op),
+	// then the connection to it.
+	const handle = await adapter.provision(conf);
+	try {
+		const transport = await adapter.createTransport(conf, handle);
+		const client = new Client(
+			{ name: "lisptc", version: "1.0.0" },
+			{ capabilities: {} },
+		);
+		// SDK performs the initialize + notifications/initialized handshake.
+		await client.connect(transport);
+		const { tools } = await client.listTools();
+		const serverId = randomUUID();
+		clients.set(serverId, { client, tools, adapter, handle });
+		return { serverId, tools };
+	} catch (ex) {
+		// Connecting failed after the workload was acquired: release it so a
+		// failed load-mcp does not leak pods/containers.
+		await adapter.deprovision?.(handle);
+		throw ex;
+	}
 }
 
 async function callTool(payload: {
@@ -122,7 +145,9 @@ async function callTool(payload: {
 async function disconnect(serverId: string): Promise<{ ok: true }> {
 	const entry = clients.get(serverId);
 	if (!entry) throw new Error(`no such server: ${serverId}`);
+	// Connection first, then workload — mirror of connect.
 	await entry.client.close();
+	await entry.adapter.deprovision?.(entry.handle);
 	clients.delete(serverId);
 	return { ok: true };
 }

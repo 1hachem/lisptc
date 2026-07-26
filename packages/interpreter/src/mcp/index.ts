@@ -407,6 +407,16 @@ export function registerMcp(interp: Interp, bridge?: SyncBridge): void {
 		"Shut down the MCP broker and unload all servers.",
 		z.tuple([]),
 		() => {
+			// Disconnect every server first (best-effort) so deployment
+			// adapters get to deprovision the workloads they acquired —
+			// terminating the worker outright would leak pods/containers.
+			for (const name of [...servers.keys()]) {
+				try {
+					doUnload(interp, br(), name);
+				} catch {
+					// A dead server must not block shutdown of the rest.
+				}
+			}
 			servers.clear();
 			if (bridge) bridge.shutdown();
 			else if (defaultBridge) {
