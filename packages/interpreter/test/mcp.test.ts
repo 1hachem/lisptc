@@ -71,6 +71,12 @@ describe("MCP integration (stdio fixture)", () => {
 		expect(evalStr(interp, '(search-tools "echo")')).toContain("fx/echo");
 	});
 
+	it("searches the toolkit's MCP servers by keyword", () => {
+		const out = evalStr(interp, '(search-mcps "browser")');
+		expect(out).toContain("playwright");
+		expect(out).toContain(":unloaded");
+	});
+
 	it("unloads a server and removes its bindings", () => {
 		expect(evalStr(interp, '(unload-mcp "fx")')).toContain("fx/echo");
 		expect(() => run(interp, '(fx/echo :message "hi")')).toThrow(

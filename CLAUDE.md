@@ -48,9 +48,9 @@ Because the interpreter is synchronous but MCP is async, async work is offloaded
 The synchronous main thread posts a request and blocks on a `SharedArrayBuffer` via `Atomics.wait`; the worker performs the SDK call and writes the reply back into shared memory, then `Atomics.notify` wakes the main thread. Large replies "spill" to a temp file (STATE_SPILL) instead of the 1 MiB inline buffer.
 
 - The reply protocol constants (`STATE_PENDING/DONE/ERROR/SPILL`, byte sizes) are duplicated in **both** files and **must stay in sync**.
-- `src/mcp.ts` installs the Lisp built-ins: `load-mcp`, `unload-mcp`, `list-mcps`, `list-tools`, `mcp-doc`, `search-tools`, `mcp-shutdown`.
+- `src/mcp.ts` installs the Lisp built-ins: `load-mcp`, `unload-mcp`, `list-mcps`, `list-toolkit`, `list-tools`, `mcp-doc`, `search-tools`, `search-mcps`, `mcp-shutdown`.
 - Loaded MCP tools become ordinary global bindings named `<server>/<tool>` called with keyword syntax, e.g. `(linear/list-issues :query "auth bug")`.
-- Server config comes from an MCP config file; see `mcp.example.json` for the shape (stdio `command`/`args` servers and HTTP `url`/`headers` servers). `(load-mcp "linear")` loads by name.
+- Predefined servers come exclusively from the bundled `mcp.toolkit.json` (stdio `command`/`args` servers and HTTP `url`/`headers` servers) — a curated, ready-to-use set loaded at `registerMcp` time. Each is callable by bare name, e.g. `(load-mcp "playwright")`. There is no env-var config; edit `mcp.toolkit.json` to add servers.
 
 ### pi extension (`apps/extension/extensions/lisp-repl.ts`)
 Spawns the standalone REPL (`src/lisp.ts`) as a **subprocess** and mediates between it and a pi session:

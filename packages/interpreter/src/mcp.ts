@@ -1,8 +1,8 @@
 /*
  * MCP integration for Lisptc (main-thread side).
  *
- * Installs the load-mcp / unload-mcp / list-mcps / list-tools / mcp-doc /
- * search-tools / mcp-shutdown built-ins into an Interp. All async MCP work is
+ * Installs the load-mcp / unload-mcp / list-mcps / list-toolkit / list-tools / mcp-doc /
+ * search-tools / search-mcps / mcp-shutdown built-ins into an Interp. All async MCP work is
  * delegated to a worker_threads broker (src/mcp-broker.ts); the synchronous
  * interpreter blocks on it through a SharedArrayBuffer + Atomics.wait bridge,
  * which is the only way to call async code from Node's synchronous main thread
@@ -62,14 +62,15 @@ interface JsonSchema {
 	description?: string;
 }
 
-type ConnConfig =
+type ConnConfig = { description?: string } & (
 	| { name: string; url: string; headers?: Record<string, string> }
 	| {
 			name: string;
 			command: string;
 			args?: string[];
 			env?: Record<string, string>;
-	  };
+	  }
+);
 
 interface ServerRec {
 	name: string;
@@ -423,6 +424,67 @@ export function registerMcp(interp: Interp): void {
 		},
 	);
 
+	// (list-toolkit) -> ((name description :loaded|:unloaded) ...)
+	interp.def(
+		"list-toolkit",
+		0,
+		"(list-toolkit)",
+		"Return the ready-to-use MCP servers from the toolkit, each as (name description :loaded|:unloaded). Load one by bare name with (load-mcp name).",
+		z.tuple([]),
+		() => {
+			const rows = [...predefined.entries()].map(([name, conf]) =>
+				arrayToList([
+					name,
+					conf.description ?? "",
+					newLispKeyword(servers.has(name) ? "loaded" : "unloaded"),
+				]),
+			);
+			return arrayToList(rows);
+		},
+	);
+
+	// (search-mcps "query") -> ((name score description :loaded|:unloaded) ...)
+	interp.def(
+		"search-mcps",
+		1,
+		'(search-mcps "query")',
+		"Search the toolkit's MCP servers by name/description; load a match by bare name with (load-mcp name).",
+		z.tuple([zName]),
+		([rawQuery]) => {
+			const query = rawQuery.toLowerCase();
+			const terms = query.split(/\s+/).filter(Boolean);
+			const scored: {
+				name: string;
+				score: number;
+				description: string;
+				loaded: boolean;
+			}[] = [];
+			for (const [name, conf] of predefined.entries()) {
+				const hay = `${name} ${conf.description ?? ""}`.toLowerCase();
+				let score = 0;
+				for (const t of terms) if (hay.includes(t)) score++;
+				if (score > 0)
+					scored.push({
+						name,
+						score,
+						description: firstLine(conf.description),
+						loaded: servers.has(name),
+					});
+			}
+			scored.sort((a, b) => b.score - a.score);
+			return arrayToList(
+				scored.map((s) =>
+					arrayToList([
+						s.name,
+						BigInt(s.score),
+						s.description,
+						newLispKeyword(s.loaded ? "loaded" : "unloaded"),
+					]),
+				),
+			);
+		},
+	);
+
 	// (list-tools) | (list-tools "server") -> ((sym param-count doc) ...)
 	interp.def(
 		"list-tools",
@@ -554,14 +616,31 @@ function renderDoc(name: string, tool: Tool): string {
 	return lines.join("\n");
 }
 
-// Parse the MCP_SERVERS env var (JSON array of connection configs).
-function parsePredefined(): void {
-	const raw = process.env.MCP_SERVERS;
-	if (!raw) return;
+// Expand ${VAR} references against process.env so the toolkit can point at
+// environment-provided paths (e.g. the Nix-built browser) without hardcoding
+// machine-specific store paths. Unset vars expand to the empty string.
+function expandEnv(s: string): string {
+	return s.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] ?? "");
+}
+
+// Register a JSON array of connection configs into the predefined table.
+function registerConfigs(raw: string): void {
 	try {
 		const arr = JSON.parse(raw) as ConnConfig[];
-		for (const conf of arr) if (conf?.name) predefined.set(conf.name, conf);
+		for (const conf of arr) {
+			if (!conf?.name) continue;
+			if ("args" in conf && conf.args) conf.args = conf.args.map(expandEnv);
+			predefined.set(conf.name, conf);
+		}
 	} catch {
 		// Malformed config: ignore rather than crash the interpreter startup.
 	}
+}
+
+// Load predefined servers from the bundled mcp.toolkit.json — the single source
+// of ready-to-use servers, callable by bare name, e.g. (load-mcp "playwright").
+function parsePredefined(): void {
+	registerConfigs(
+		readFileSync(new URL("../mcp.toolkit.json", import.meta.url), "utf8"),
+	);
 }

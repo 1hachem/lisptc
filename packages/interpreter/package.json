@@ -12,6 +12,7 @@
     "./arith.ts": "./src/arith.ts",
     "./mcp.ts": "./src/mcp.ts",
     "./mcp-broker.ts": "./src/mcp-broker.ts",
+    "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./package.json": "./package.json"
   },
   "engines": {
