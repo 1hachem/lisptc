@@ -8,6 +8,7 @@
     "./lisp.ts": "./src/lisp.ts",
     "./repl.ts": "./src/repl.ts",
     "./grammar.ts": "./src/grammar.ts",
+    "./source.ts": "./src/source.ts",
     "./arith.ts": "./src/arith.ts",
     "./mcp.ts": "./src/mcp.ts",
     "./mcp-broker.ts": "./src/mcp-broker.ts",
