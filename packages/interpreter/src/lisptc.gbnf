@@ -1,0 +1,29 @@
+# GBNF grammar for the lisptc (.ptc) Lisp dialect.
+# Derived from the reader in packages/interpreter/src/lisp.ts, whose tokeniser is
+#   /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g
+# Comments (;) are intentionally omitted: the REPL forbids them.
+
+root    ::= ws form (ws form)* ws
+
+form    ::= list | quoted | string | atom
+
+# Reader macros: 'x  `x  ,x  ,@x
+quoted  ::= (",@" | "'" | "`" | ",") ws form
+
+# Proper or dotted list: (a b c) or (a b . c)
+list    ::= "(" ws (form ws)* ("." ws form ws)? ")"
+
+# Symbols, numbers (int/bigint/float), keywords (:kw), nil and t all share one
+# lexical class: a run of any char except whitespace, the structural chars
+# ( ) " ; the quote chars ' ` , and ~. A lone "." is excluded — the reader only
+# ever treats a bare "." as the dotted-pair marker, never as a symbol — while
+# atoms that merely contain "." (e.g. .30, 3.14, fs/read) stay valid.
+atom    ::= hchar achar* | "." achar+
+hchar   ::= [^ \t\r\n()'\"`;,~.]
+achar   ::= [^ \t\r\n()'\"`;,~]
+
+# Double-quoted string with backslash escapes.
+string  ::= "\"" schar* "\""
+schar   ::= [^\"\\] | "\\" .
+
+ws      ::= [ \t\r\n]*
