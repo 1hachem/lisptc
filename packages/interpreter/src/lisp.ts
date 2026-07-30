@@ -806,6 +806,53 @@ export class Interp {
 			([sym]) => sym.name,
 		);
 
+		// --- String primitives (the rest of the string library is Lisp; see
+		// the prelude). These require JS: character indexing, building strings
+		// from parts, and Unicode case mapping cannot be done in pure Lisp.
+		this.def(
+			"char",
+			2,
+			"(char s i)",
+			"Return the character at index `i` of `s` as a one-character string, or nil if `i` is out of range.",
+			z.tuple([zString, zNumeric]),
+			([s, i]) => {
+				const n = Number(i);
+				return n >= 0 && n < s.length ? s[n] : null;
+			},
+		);
+		this.def(
+			"concat",
+			-1,
+			"(concat s...)",
+			"Concatenate the string arguments into one string.",
+			z.tuple([zList]),
+			([rest]) => {
+				let out = "";
+				for (let p = rest; p !== null; p = p.cdr as List) {
+					const s = (p as Cell).car;
+					if (typeof s !== "string") throw new EvalException("not a string", s);
+					out += s;
+				}
+				return out;
+			},
+		);
+		this.def(
+			"string-upcase",
+			1,
+			"(string-upcase s)",
+			"Return `s` with all letters converted to upper case.",
+			z.tuple([zString]),
+			([s]) => s.toUpperCase(),
+		);
+		this.def(
+			"string-downcase",
+			1,
+			"(string-downcase s)",
+			"Return `s` with all letters converted to lower case.",
+			z.tuple([zString]),
+			([s]) => s.toLowerCase(),
+		);
+
 		this.def(
 			"apply",
 			2,
@@ -1715,7 +1762,7 @@ export const prelude = `
 
 (defmacro letrec (args &rest body)
   "Like let, but bindings may refer to each other (e.g. for local recursive functions)."
-  (let (vars setqs)
+  (let (vars sets)
     (defun vars (x)
       (cond (x (cons (caar x)
                      (vars (cdr x))))))
@@ -1838,4 +1885,101 @@ export const prelude = `
          (setq ,name (+ ,name 1)))
        ,@(if (cddr spec)
              \`(,(caddr spec))))))
+
+;; --- String library ---
+;; Built on the native primitives char, concat, string-upcase and
+;; string-downcase (plus length, which works on strings).
+
+(defun substring (s start &rest end)
+  "Return the substring of s from index start up to (but not including) end (default: end of s)."
+  (let ((stop (if end (car end) (length s)))
+        (out ""))
+    (while (< start stop)
+      (setq out (concat out (char s start)))
+      (setq start (+ start 1)))
+    out))
+
+(defun string-prefix? (prefix s)
+  "Return t if the string s starts with prefix."
+  (and (<= (length prefix) (length s))
+       (equal prefix (substring s 0 (length prefix)))))
+
+(defun string-suffix? (suffix s)
+  "Return t if the string s ends with suffix."
+  (and (<= (length suffix) (length s))
+       (equal suffix (substring s (- (length s) (length suffix))))))
+
+(defun string-index (s sub &rest start)
+  "Return the index of the first occurrence of sub in s at or after start (default 0), or nil."
+  (let ((i (if start (car start) 0))
+        (last (- (length s) (length sub)))
+        (found nil))
+    (while (and (null found) (<= i last))
+      (if (equal sub (substring s i (+ i (length sub))))
+          (setq found i)
+        (setq i (+ i 1))))
+    found))
+
+(defun string-contains? (s sub)
+  "Return t if s contains the substring sub."
+  (and (string-index s sub) t))
+
+(defun string-count (s sub)
+  "Return the number of non-overlapping occurrences of sub in s."
+  (if (equal sub "")
+      (+ (length s) 1)
+    (let ((i 0)
+          (n 0)
+          (pos nil))
+      (while (setq pos (string-index s sub i))
+        (setq n (+ n 1))
+        (setq i (+ pos (length sub))))
+      n)))
+
+(defun string-replace (s old new)
+  "Return s with every occurrence of the substring old replaced by new."
+  (if (equal old "")
+      s
+    (let ((out "")
+          (i 0)
+          (pos nil))
+      (while (setq pos (string-index s old i))
+        (setq out (concat out (substring s i pos) new))
+        (setq i (+ pos (length old))))
+      (concat out (substring s i)))))
+
+(defun string-split (s sep)
+  "Split s on the separator string sep and return a list of strings; an empty sep splits into characters."
+  (if (equal sep "")
+      (let ((chars nil)
+            (i (length s)))
+        (while (< 0 i)
+          (setq i (- i 1))
+          (setq chars (cons (char s i) chars)))
+        chars)
+    (let ((parts nil)
+          (i 0)
+          (pos nil))
+      (while (setq pos (string-index s sep i))
+        (setq parts (cons (substring s i pos) parts))
+        (setq i (+ pos (length sep))))
+      (nreverse (cons (substring s i) parts)))))
+
+(defun string-join (list sep)
+  "Join the strings in list into one string separated by sep."
+  (cond ((null list) "")
+        ((null (cdr list)) (car list))
+        (t (concat (car list) sep (string-join (cdr list) sep)))))
+
+(defun _whitespace? (c)
+  (or (equal c " ") (equal c "\\t") (equal c "\\n") (equal c "\\r")))
+(defun string-trim (s)
+  "Return s with leading and trailing whitespace removed."
+  (let ((start 0)
+        (end (length s)))
+    (while (and (< start end) (_whitespace? (char s start)))
+      (setq start (+ start 1)))
+    (while (and (< start end) (_whitespace? (char s (- end 1))))
+      (setq end (- end 1)))
+    (substring s start end)))
 `;
