@@ -44,3 +44,7 @@ tasks:
       # ptcfmt test summary so the pass count is always visible.
       - nix build --no-warn-dirty --no-link ".#checks.{{.SYSTEM}}.ptcfmt"
       - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
+  pi:
+    desc: run pi agent with access to secrets
+    cmd: go-task _infisical-run  ENV=dev PATHS="/ai" CMD="pnpm run pi"
+

@@ -170,7 +170,36 @@ function stripFences(text: string): string {
 	return m ? m[1] : text.trim();
 }
 
+// Register Fireworks as an OpenAI-compatible provider. Fireworks ships as a
+// built-in pi provider; registering it here replaces its model list with the
+// models we care about and pins the API-key env var. Grammar-based structured
+// output (docs.fireworks.ai/structured-responses/structured-output-grammar-based)
+// is a per-request `response_format` feature, not a provider setting, so it is
+// not configured here.
+function registerFireworks(pi: ExtensionAPI): void {
+	pi.registerProvider("fireworks", {
+		baseUrl: "https://api.fireworks.ai/inference/v1",
+		apiKey: "$FIREWORKS_API_KEY",
+		api: "openai-completions",
+		models: [
+			{
+				id: "accounts/fireworks/models/kimi-k3",
+				name: "Kimi K3",
+				reasoning: false,
+				// Kimi K3 is multimodal — it accepts image_url content parts.
+				input: ["text", "image"],
+				// Pricing unknown for K3; left at zero rather than guessing.
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 262144,
+				maxTokens: 131072,
+			},
+		],
+	});
+}
+
 export default function (pi: ExtensionAPI) {
+	registerFireworks(pi);
+
 	const repl = new LispRepl();
 	let systemPrompt: string | null = null;
 
