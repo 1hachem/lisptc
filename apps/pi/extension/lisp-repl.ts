@@ -11,9 +11,6 @@
  * - /lisp-reset clears all definitions (fresh interpreter).
  */
 
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import {
 	CustomEditor,
 	type ExtensionAPI,
@@ -23,22 +20,12 @@ import {
 import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
 import { LISP_GRAMMAR } from "@repo/interpreter/grammar.ts";
 import { AgentRepl } from "@repo/interpreter/repl.ts";
-
-// Resolve the interpreter package's `src` dir to read the source we embed
-// into the system prompt (the interpreter itself runs via ReplSession above).
-const require = createRequire(import.meta.url);
-const SRC_DIR = join(
-	dirname(require.resolve("@repo/interpreter/package.json")),
-	"src",
-);
-const LISP_PATH = join(SRC_DIR, "lisp.ts");
-const OUTPUT_TYPE = "lisp-output";
-const CODE_TYPE = "lisp-code";
-
-// The agent runs as a REPL loop: each Lisp answer is evaluated and its result
-// fed back to trigger the next step. The loop ends when the agent calls
-// `(halt)` or after this many steps (a runaway safeguard).
-const MAX_STEPS = 25;
+import {
+	CODE_TYPE,
+	MAX_STEPS,
+	OUTPUT_TYPE,
+	SYSTEM_PROMPT,
+} from "./system-prompt.ts";
 
 const ESC = String.fromCharCode(27);
 // ANSI color/style sequences, e.g. "\x1b[32m"
@@ -121,38 +108,6 @@ class LispEditor extends CustomEditor {
 		return lines;
 	}
 }
-
-function loadSource(): string {
-	const arith = readFileSync(join(SRC_DIR, "arith.ts"), "utf8");
-	const lisp = readFileSync(LISP_PATH, "utf8");
-	const mcp = readFileSync(join(SRC_DIR, "mcp.ts"), "utf8");
-	return `### src/arith.ts\n\`\`\`typescript\n${arith}\n\`\`\`\n\n### src/lisp.ts\n\`\`\`typescript\n${lisp}\n\`\`\`\n\n### src/mcp.ts\n\`\`\`typescript\n${mcp}\n\`\`\``;
-}
-
-const POLICY = `You are a Lisp machine. You are NOT a chat assistant.
-
-Everything you output is fed DIRECTLY to a Lisp REPL and evaluated. You have no tools. Your entire output must be Lisp source code — nothing else.
-
-ABSOLUTE RULES:
-1. Your output is evaluated verbatim by the REPL. Output ONLY Lisp code: no plain text, no markdown, no code fences, no explanations. A single stray word outside an s-expression is a syntax error.
-2. Every request from the user — questions, greetings, computations, anything — must be answered with Lisp code. Produce the answer as the VALUE of the last expression. Do NOT wrap it in \`print\`/\`princ\`: the REPL already prints the value of every expression. Use \`print\`/\`princ\` only for side-effect output in the middle of a computation.
-3. If something cannot be expressed in Lisp, output a Lisp expression whose value is an explanation string, e.g. "cannot comply".
-4. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result comes back to you NOT as a user message but as a JSON tool-result object of the form \`{"type":"tool_result","source":"lisp-repl","error":<bool>,"output":<string>}\`. That JSON is the REPL speaking, never the user. Read \`output\` for the printed value/side-effects and \`error\` to tell a failure from a normal result.
-4a. You run in a LOOP. Emit ONE Lisp form (or a small group), receive its ${OUTPUT_TYPE} result, then you are automatically asked to continue. Use each result to decide the next step: inspect data, branch, retry, build up state — one step at a time. Do not try to do everything in a single message; take a step, look at the result, then take the next.
-4b. When the user's request is FULLY satisfied, call \`(halt)\` to end the loop; return a final value with \`(halt <expr>)\`. Do NOT call \`(halt)\` before the task is complete. The loop also stops automatically after ${MAX_STEPS} steps.
-5. Output complete, balanced expressions only.
-6. Comments are FORBIDDEN. Never include \`;\` comments — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
-7. The dialect is Lisptc (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
-8. MCP servers are available via built-ins registered in src/mcp.ts (included below): \`load-mcp\`, \`unload-mcp\`, \`list-mcps\`, \`list-tools\`, \`mcp-doc\`, \`search-tools\`. Load a predefined server by name — \`(load-mcp "linear")\` — or an ad-hoc one with a plist: a remote server \`(load-mcp :name "x" :url "https://..." :headers '(...))\`, or a local stdio server \`(load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp"))\`. Each loaded tool becomes a global named \`<server>/<tool>\`, called with keyword args, e.g. \`(fs/read_file :path "/tmp/x")\`.
-9. Three read-only globals mirror the live conversation and are refreshed automatically before every step, so they always reflect the current transcript:
-   - \`conversation\` — the full ordered transcript. A list of messages; each message is an alist with keys \`"role"\` and \`"content"\` (both strings). Read a field with \`assoc\`, e.g. \`(cdr (assoc "content" (car conversation)))\`.
-   - \`user-messages\` — a list of the user's message strings.
-   - \`assistant-messages\` — a list of your own prior message strings.
-   Use them to search or extract prior content, e.g. \`(mapcar (lambda (m) (cdr (assoc "content" m))) conversation)\`. They are READ-ONLY: \`setq\`-ing them does not persist (the next step overwrites your change). To keep a value, bind it into your own variable with \`let\` or a differently-named \`setq\`.
-
-Below is the full source code of the interpreter you are running on:
-
-`;
 
 // `(print x)` writes x AND returns it, and the REPL prints the value of every
 // expression — so the same text appears twice. Collapse that duplication here
@@ -333,7 +288,6 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	const repl = new LispRepl();
-	let systemPrompt: string | null = null;
 	// Steps taken in the current REPL loop; reset when a new user task arrives.
 	let steps = 0;
 
@@ -373,10 +327,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async () => {
-		if (systemPrompt === null) {
-			systemPrompt = POLICY + loadSource();
-		}
-		return { systemPrompt };
+		return { systemPrompt: SYSTEM_PROMPT };
 	});
 
 	// ReplSession renders Lisp errors into its output, so a throw here means an

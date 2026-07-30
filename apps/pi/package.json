@@ -8,7 +8,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions"
+      "./extension/lisp-repl.ts"
     ],
     "skills": [
       "./skills"
