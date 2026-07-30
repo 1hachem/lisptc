@@ -2,7 +2,7 @@
  * Lisp REPL Extension
  *
  * - Runs the Lisptc interpreter in-process via the @repo/interpreter
- *   `ReplSession` binding (no subprocess, no stdout scraping).
+ *   `AgentRepl` binding (no subprocess, no stdout scraping).
  * - Replaces the agent's system prompt with a lisp-only policy plus the
  *   full interpreter source code (src/arith.ts + src/lisp.ts).
  * - The agent has NO tools. Everything the agent outputs as assistant
@@ -18,10 +18,11 @@ import {
 	CustomEditor,
 	type ExtensionAPI,
 	highlightCode,
+	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
-import { ReplSession } from "@repo/interpreter";
 import { LISP_GRAMMAR } from "@repo/interpreter/grammar.ts";
+import { AgentRepl } from "@repo/interpreter/repl.ts";
 
 // Resolve the interpreter package's `src` dir to read the source we embed
 // into the system prompt (the interpreter itself runs via ReplSession above).
@@ -143,6 +144,11 @@ ABSOLUTE RULES:
 6. Comments are FORBIDDEN. Never include \`;\` comments — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
 7. The dialect is Lisptc (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
 8. MCP servers are available via built-ins registered in src/mcp.ts (included below): \`load-mcp\`, \`unload-mcp\`, \`list-mcps\`, \`list-tools\`, \`mcp-doc\`, \`search-tools\`. Load a predefined server by name — \`(load-mcp "linear")\` — or an ad-hoc one with a plist: a remote server \`(load-mcp :name "x" :url "https://..." :headers '(...))\`, or a local stdio server \`(load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp"))\`. Each loaded tool becomes a global named \`<server>/<tool>\`, called with keyword args, e.g. \`(fs/read_file :path "/tmp/x")\`.
+9. Three read-only globals mirror the live conversation and are refreshed automatically before every step, so they always reflect the current transcript:
+   - \`conversation\` — the full ordered transcript. A list of messages; each message is an alist with keys \`"role"\` and \`"content"\` (both strings). Read a field with \`assoc\`, e.g. \`(cdr (assoc "content" (car conversation)))\`.
+   - \`user-messages\` — a list of the user's message strings.
+   - \`assistant-messages\` — a list of your own prior message strings.
+   Use them to search or extract prior content, e.g. \`(mapcar (lambda (m) (cdr (assoc "content" m))) conversation)\`. They are READ-ONLY: \`setq\`-ing them does not persist (the next step overwrites your change). To keep a value, bind it into your own variable with \`let\` or a differently-named \`setq\`.
 
 Below is the full source code of the interpreter you are running on:
 
@@ -160,10 +166,16 @@ function dedupePrintedValue(out: string): string {
 }
 
 class LispRepl {
-	private session = new ReplSession();
+	private session = new AgentRepl();
 
 	reset(): void {
 		this.session.reset();
+	}
+
+	// Refresh the read-only conversation globals from a host snapshot; called
+	// before every eval so the agent always sees the current transcript.
+	setConversationVars(vars: Record<string, unknown>): void {
+		this.session.setConversationVars(vars);
 	}
 
 	eval(code: string): string {
@@ -175,6 +187,57 @@ class LispRepl {
 	takeHalted(): boolean {
 		return this.session.takeHalted();
 	}
+}
+
+// Flatten a message's content into plain text: a raw string as-is, otherwise
+// the concatenation of its text parts (images and other parts are dropped).
+function messageText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (Array.isArray(content))
+		return content
+			.filter(
+				(p): p is { type: "text"; text: string } =>
+					typeof p === "object" &&
+					p !== null &&
+					(p as { type?: unknown }).type === "text",
+			)
+			.map((p) => p.text)
+			.join("");
+	return "";
+}
+
+// Build the read-only conversation snapshot injected into the REPL before each
+// eval. `conversation` is the full ordered transcript (real messages plus this
+// extension's own `lisp-code`/`lisp-output` custom messages, so the agent can
+// search prior REPL output); the two filtered lists hold only real user/
+// assistant message text. Each message is a plain object → a Lisp alist.
+function snapshotConversation(ctx: {
+	sessionManager: { getEntries(): SessionEntry[] };
+}): Record<string, unknown> {
+	const conversation: { role: string; content: string }[] = [];
+	const userMessages: string[] = [];
+	const assistantMessages: string[] = [];
+	for (const entry of ctx.sessionManager.getEntries()) {
+		if (entry.type === "message") {
+			const { role } = entry.message;
+			const content = messageText(
+				(entry.message as { content?: unknown }).content,
+			);
+			conversation.push({ role, content });
+			if (role === "user") userMessages.push(content);
+			else if (role === "assistant") assistantMessages.push(content);
+		} else if (entry.type === "custom_message") {
+			conversation.push({
+				role: entry.customType,
+				content: messageText(entry.content),
+			});
+		}
+	}
+	return {
+		conversation,
+		"user-messages": userMessages,
+		"assistant-messages": assistantMessages,
+	};
 }
 
 // Occasionally the model wraps its code in a markdown fence despite the
@@ -235,6 +298,15 @@ export default function (pi: ExtensionAPI) {
 	// Steps taken in the current REPL loop; reset when a new user task arrives.
 	let steps = 0;
 
+	// Refresh the read-only conversation globals from the live session before an
+	// eval, so `conversation`/`user-messages`/`assistant-messages` always reflect
+	// the current transcript.
+	function refreshConversation(ctx: {
+		sessionManager: { getEntries(): SessionEntry[] };
+	}): void {
+		repl.setConversationVars(snapshotConversation(ctx));
+	}
+
 	pi.on("session_start", async (_event, ctx) => {
 		// The agent has no tools at all — its text output IS the Lisp program.
 		pi.setActiveTools([]);
@@ -243,6 +315,7 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
 			const editor = new LispEditor(tui, theme, keybindings);
 			editor.onLisp = async (code) => {
+				refreshConversation(ctx);
 				const { output, error } = evalCode(stripFences(code));
 				sendWhenIdle(ctx, {
 					customType: CODE_TYPE,
@@ -318,6 +391,7 @@ export default function (pi: ExtensionAPI) {
 		const trimmed = stripFences(code);
 		if (trimmed === "") return;
 
+		refreshConversation(ctx);
 		const { output, error } = evalCode(trimmed);
 		steps += 1;
 
