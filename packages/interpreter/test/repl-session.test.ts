@@ -34,4 +34,44 @@ describe("ReplSession (in-process REPL binding)", () => {
 		r.reset();
 		expect(r.eval("sq")).toContain("void variable");
 	});
+
+	describe("halt", () => {
+		it("(halt) returns t and raises the halted flag", () => {
+			const r = new ReplSession();
+			expect(r.eval("(halt)")).toBe("t\n");
+			expect(r.takeHalted()).toBe(true);
+		});
+
+		it("(halt value) returns the value", () => {
+			const r = new ReplSession();
+			expect(r.eval("(halt 42)")).toBe("42\n");
+			expect(r.takeHalted()).toBe(true);
+		});
+
+		it("takeHalted() clears the flag after reading", () => {
+			const r = new ReplSession();
+			r.eval("(halt)");
+			expect(r.takeHalted()).toBe(true);
+			expect(r.takeHalted()).toBe(false);
+		});
+
+		it("is false when no (halt) was evaluated", () => {
+			const r = new ReplSession();
+			r.eval("(+ 1 2)");
+			expect(r.takeHalted()).toBe(false);
+		});
+
+		it("only sets the flag when the (halt) branch actually runs", () => {
+			const r = new ReplSession();
+			r.eval("(if nil (halt) 1)");
+			expect(r.takeHalted()).toBe(false);
+		});
+
+		it("reset() clears a raised halted flag", () => {
+			const r = new ReplSession();
+			r.eval("(halt)");
+			r.reset();
+			expect(r.takeHalted()).toBe(false);
+		});
+	});
 });
