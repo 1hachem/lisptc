@@ -273,6 +273,16 @@ function registerFireworks(pi: ExtensionAPI): void {
 				contextWindow: 262144,
 				maxTokens: 131072,
 			},
+			{
+				id: "accounts/fireworks/models/glm-5p2",
+				name: "GLM 5.2",
+				reasoning: false,
+				input: ["text"],
+				// Pricing/limits unknown; left at zero rather than guessing.
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 131072,
+				maxTokens: 65536,
+			},
 		],
 	});
 }
