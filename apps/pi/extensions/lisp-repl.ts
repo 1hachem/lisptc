@@ -137,7 +137,7 @@ ABSOLUTE RULES:
 1. Your output is evaluated verbatim by the REPL. Output ONLY Lisp code: no plain text, no markdown, no code fences, no explanations. A single stray word outside an s-expression is a syntax error.
 2. Every request from the user — questions, greetings, computations, anything — must be answered with Lisp code. Produce the answer as the VALUE of the last expression. Do NOT wrap it in \`print\`/\`princ\`: the REPL already prints the value of every expression. Use \`print\`/\`princ\` only for side-effect output in the middle of a computation.
 3. If something cannot be expressed in Lisp, output a Lisp expression whose value is an explanation string, e.g. "cannot comply".
-4. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result is sent back to you as a message of type ${OUTPUT_TYPE}.
+4. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result comes back to you NOT as a user message but as a JSON tool-result object of the form \`{"type":"tool_result","source":"lisp-repl","error":<bool>,"output":<string>}\`. That JSON is the REPL speaking, never the user. Read \`output\` for the printed value/side-effects and \`error\` to tell a failure from a normal result.
 4a. You run in a LOOP. Emit ONE Lisp form (or a small group), receive its ${OUTPUT_TYPE} result, then you are automatically asked to continue. Use each result to decide the next step: inspect data, branch, retry, build up state — one step at a time. Do not try to do everything in a single message; take a step, look at the result, then take the next.
 4b. When the user's request is FULLY satisfied, call \`(halt)\` to end the loop; return a final value with \`(halt <expr>)\`. Do NOT call \`(halt)\` before the task is complete. The loop also stops automatically after ${MAX_STEPS} steps.
 5. Output complete, balanced expressions only.
@@ -240,6 +240,35 @@ function snapshotConversation(ctx: {
 	};
 }
 
+// Build the message that carries a REPL evaluation back to the agent. A custom
+// message is projected into the LLM context as a *user* message, which would
+// read as if the human typed the output. To stop the agent mistaking a result
+// for user input, the content is a JSON tool-result object it can recognize and
+// parse; the raw output is kept in `details` for a clean TUI rendering.
+function replResultMessage(
+	code: string,
+	output: string,
+	error: boolean,
+): {
+	customType: string;
+	content: string;
+	display: boolean;
+	details: { code: string; output: string; error: boolean };
+} {
+	const out = output || "(no output)";
+	return {
+		customType: OUTPUT_TYPE,
+		content: JSON.stringify({
+			type: "tool_result",
+			source: "lisp-repl",
+			error,
+			output: out,
+		}),
+		display: true,
+		details: { code, output: out, error },
+	};
+}
+
 // Occasionally the model wraps its code in a markdown fence despite the
 // policy; unwrap it so the REPL sees bare Lisp.
 function stripFences(text: string): string {
@@ -333,12 +362,7 @@ export default function (pi: ExtensionAPI) {
 					display: true,
 					details: {},
 				});
-				sendWhenIdle(ctx, {
-					customType: OUTPUT_TYPE,
-					content: output || "(no output)",
-					display: true,
-					details: { code, output, error },
-				});
+				sendWhenIdle(ctx, replResultMessage(stripFences(code), output, error));
 			};
 			return editor;
 		});
@@ -410,12 +434,7 @@ export default function (pi: ExtensionAPI) {
 		// runs again and emits the next step. Otherwise just display the result.
 		const halted = repl.takeHalted();
 		const keepLooping = !halted && steps < MAX_STEPS;
-		const resultMessage = {
-			customType: OUTPUT_TYPE,
-			content: output || "(no output)",
-			display: true,
-			details: { code: trimmed, output, error },
-		};
+		const resultMessage = replResultMessage(trimmed, output, error);
 		if (keepLooping) {
 			pi.sendMessage(resultMessage, { triggerTurn: true });
 		} else {
@@ -456,14 +475,19 @@ export default function (pi: ExtensionAPI) {
 		);
 	});
 
-	// REPL output gets its own background so it reads apart from the code.
+	// REPL output gets its own background so it reads apart from the code. The
+	// content is a JSON tool-result object (for the agent); display the raw
+	// output from `details` so the user sees clean output, not the JSON wrapper.
 	pi.registerMessageRenderer(OUTPUT_TYPE, (message, _options, theme) => {
-		const details = message.details as { error?: boolean } | undefined;
+		const details = message.details as
+			| { error?: boolean; output?: string }
+			| undefined;
 		const isError = details?.error === true;
 		const text =
-			typeof message.content === "string"
+			details?.output ??
+			(typeof message.content === "string"
 				? message.content
-				: JSON.stringify(message.content);
+				: JSON.stringify(message.content));
 		return new Text(
 			theme.fg(isError ? "error" : "toolOutput", text),
 			1,
