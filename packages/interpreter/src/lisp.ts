@@ -1660,6 +1660,10 @@ export function checkSyntax(text: string): SyntaxError_[] {
 // rendered inline). Lets embedders run Lisp without spawning a subprocess.
 export class ReplSession {
 	private interp: Interp;
+	// Set by the `halt` built-in this session installs; read (and cleared) via
+	// takeHalted(). `halt` is a REPL feature, not part of the interpreter
+	// language — a driver looping over eval() uses it to know when to stop.
+	private halted = false;
 
 	constructor() {
 		this.interp = this.freshInterp();
@@ -1668,7 +1672,23 @@ export class ReplSession {
 	private freshInterp(): Interp {
 		const interp = new Interp();
 		run(interp, prelude);
+		this.installHalt(interp);
 		return interp;
+	}
+
+	// Install `(halt [value])`: record that the program asked to stop and return
+	// `value` (or t). It only sets a flag — evaluation of any following forms
+	// continues — so it is meant as the final form of a program.
+	private installHalt(interp: Interp): void {
+		const halt = interp.makeBuiltIn("halt", -1, (frame) => {
+			this.halted = true;
+			const rest = frame[0] as List;
+			return rest === null ? true : rest.car;
+		});
+		interp.defineGlobal(newSym("halt"), halt, {
+			signature: "(halt [value])",
+			doc: "Signal the REPL to stop after this program; return `value` (or t).",
+		});
 	}
 
 	// Evaluate a program; state persists across calls. Lisp errors are rendered
@@ -1697,6 +1717,15 @@ export class ReplSession {
 	// Discard all definitions; start from a fresh prelude-loaded interp.
 	reset(): void {
 		this.interp = this.freshInterp();
+		this.halted = false;
+	}
+
+	// Whether the last-evaluated program called `(halt)`; reads and clears the
+	// flag so each check reflects only evaluations since the previous check.
+	takeHalted(): boolean {
+		const h = this.halted;
+		this.halted = false;
+		return h;
 	}
 }
 

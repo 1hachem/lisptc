@@ -21,6 +21,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
 import { ReplSession } from "@repo/interpreter";
+import { LISP_GRAMMAR } from "@repo/interpreter/grammar.ts";
 
 // Resolve the interpreter package's `src` dir to read the source we embed
 // into the system prompt (the interpreter itself runs via ReplSession above).
@@ -32,6 +33,11 @@ const SRC_DIR = join(
 const LISP_PATH = join(SRC_DIR, "lisp.ts");
 const OUTPUT_TYPE = "lisp-output";
 const CODE_TYPE = "lisp-code";
+
+// The agent runs as a REPL loop: each Lisp answer is evaluated and its result
+// fed back to trigger the next step. The loop ends when the agent calls
+// `(halt)` or after this many steps (a runaway safeguard).
+const MAX_STEPS = 25;
 
 const ESC = String.fromCharCode(27);
 // ANSI color/style sequences, e.g. "\x1b[32m"
@@ -131,6 +137,8 @@ ABSOLUTE RULES:
 2. Every request from the user — questions, greetings, computations, anything — must be answered with Lisp code. Produce the answer as the VALUE of the last expression. Do NOT wrap it in \`print\`/\`princ\`: the REPL already prints the value of every expression. Use \`print\`/\`princ\` only for side-effect output in the middle of a computation.
 3. If something cannot be expressed in Lisp, output a Lisp expression whose value is an explanation string, e.g. "cannot comply".
 4. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result is sent back to you as a message of type ${OUTPUT_TYPE}.
+4a. You run in a LOOP. Emit ONE Lisp form (or a small group), receive its ${OUTPUT_TYPE} result, then you are automatically asked to continue. Use each result to decide the next step: inspect data, branch, retry, build up state — one step at a time. Do not try to do everything in a single message; take a step, look at the result, then take the next.
+4b. When the user's request is FULLY satisfied, call \`(halt)\` to end the loop; return a final value with \`(halt <expr>)\`. Do NOT call \`(halt)\` before the task is complete. The loop also stops automatically after ${MAX_STEPS} steps.
 5. Output complete, balanced expressions only.
 6. Comments are FORBIDDEN. Never include \`;\` comments — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
 7. The dialect is Lisptc (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
@@ -161,6 +169,12 @@ class LispRepl {
 	eval(code: string): string {
 		return dedupePrintedValue(this.session.eval(code.trim()).trim());
 	}
+
+	// Did the just-evaluated program call `(halt)`? The REPL session owns the
+	// `halt` built-in and its flag; this just surfaces it (see message_end).
+	takeHalted(): boolean {
+		return this.session.takeHalted();
+	}
 }
 
 // Occasionally the model wraps its code in a markdown fence despite the
@@ -170,9 +184,56 @@ function stripFences(text: string): string {
 	return m ? m[1] : text.trim();
 }
 
+// Register Fireworks as an OpenAI-compatible provider. Fireworks ships as a
+// built-in pi provider; registering it here replaces its model list with the
+// models we care about and pins the API-key env var. Grammar-based structured
+// output (docs.fireworks.ai/structured-responses/structured-output-grammar-based)
+// is a per-request `response_format` feature, not a provider setting, so it is
+// not configured here.
+function registerFireworks(pi: ExtensionAPI): void {
+	pi.registerProvider("fireworks", {
+		baseUrl: "https://api.fireworks.ai/inference/v1",
+		apiKey: "$FIREWORKS_API_KEY",
+		api: "openai-completions",
+		models: [
+			{
+				id: "accounts/fireworks/models/kimi-k3",
+				name: "Kimi K3",
+				// Thinking off at the provider level: declaring the model
+				// non-reasoning makes pi clamp its thinking level to off, so no
+				// `:off` CLI suffix is needed.
+				reasoning: false,
+				// Kimi K3 is multimodal — it accepts image_url content parts.
+				input: ["text", "image"],
+				// Pricing unknown for K3; left at zero rather than guessing.
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 262144,
+				maxTokens: 131072,
+			},
+		],
+	});
+}
+
 export default function (pi: ExtensionAPI) {
+	registerFireworks(pi);
+
+	// Constrain every reply to valid lisptc source via Fireworks grammar-based
+	// structured output. The payload is the OpenAI-compatible request body;
+	// returning it replaces what pi sends over the wire.
+	pi.on("before_provider_request", async (event) => {
+		const payload = event.payload;
+		if (typeof payload !== "object" || payload === null) return;
+		(payload as { response_format?: unknown }).response_format = {
+			type: "grammar",
+			grammar: LISP_GRAMMAR,
+		};
+		return payload;
+	});
+
 	const repl = new LispRepl();
 	let systemPrompt: string | null = null;
+	// Steps taken in the current REPL loop; reset when a new user task arrives.
+	let steps = 0;
 
 	pi.on("session_start", async (_event, ctx) => {
 		// The agent has no tools at all — its text output IS the Lisp program.
@@ -237,10 +298,18 @@ export default function (pi: ExtensionAPI) {
 		else setTimeout(() => sendWhenIdle(ctx, message), 50);
 	}
 
-	// Everything the agent says is a Lisp program: evaluate it and inject
-	// the REPL output back into the session (displayed below the code with
-	// its own background, and part of the agent's context).
+	// The agent has no tools and its answer is grammar-constrained to lisptc, so
+	// the assistant's text IS a Lisp program: eval it and inject the REPL output
+	// back into the session. Only the `text` parts are the grammar-constrained
+	// answer; Kimi's reasoning arrives as separate `thinking` parts the grammar
+	// cannot reach (Fireworks exposes no switch to disable it on the OpenAI-
+	// compatible endpoint), so those are excluded from eval and dropped from the
+	// transcript rather than fed to the REPL as non-Lisp prose.
 	pi.on("message_end", async (event, ctx) => {
+		const msg = event.message as { role: string; customType?: string };
+		// A genuine user prompt (not one of our injected results) starts a new
+		// task — reset the step budget so each request gets a fresh loop.
+		if (msg.role === "user" && msg.customType === undefined) steps = 0;
 		if (event.message.role !== "assistant") return;
 		const code = event.message.content
 			.filter((c): c is { type: "text"; text: string } => c.type === "text")
@@ -250,20 +319,38 @@ export default function (pi: ExtensionAPI) {
 		if (trimmed === "") return;
 
 		const { output, error } = evalCode(trimmed);
-		sendWhenIdle(ctx, {
+		steps += 1;
+
+		// Drive the loop: unless the agent asked to stop with `(halt)` or we hit
+		// the step cap, feed the result back WITH `triggerTurn` so the agent
+		// runs again and emits the next step. Otherwise just display the result.
+		const halted = repl.takeHalted();
+		const keepLooping = !halted && steps < MAX_STEPS;
+		const resultMessage = {
 			customType: OUTPUT_TYPE,
 			content: output || "(no output)",
 			display: true,
 			details: { code: trimmed, output, error },
-		});
+		};
+		if (keepLooping) {
+			pi.sendMessage(resultMessage, { triggerTurn: true });
+		} else {
+			sendWhenIdle(ctx, resultMessage);
+			if (!halted && steps >= MAX_STEPS)
+				ctx.ui.notify(`Lisp loop stopped after ${MAX_STEPS} steps`, "warning");
+		}
 
 		// Re-fence the code as ```lisp so the default markdown renderer
-		// shows it syntax-highlighted instead of as plain prose.
+		// shows it syntax-highlighted instead of as plain prose. Drop the
+		// original text/thinking parts (folded into `trimmed`); keep anything
+		// else (e.g. images) untouched.
 		return {
 			message: {
 				...event.message,
 				content: [
-					...event.message.content.filter((c) => c.type !== "text"),
+					...event.message.content.filter(
+						(c) => c.type !== "text" && c.type !== "thinking",
+					),
 					{
 						type: "text" as const,
 						text: `\`\`\`lisp\n${trimmed}\n\`\`\``,

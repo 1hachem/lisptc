@@ -14,6 +14,7 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
+    "pi": "pi --provider fireworks --model kimi-k3:off",
     "prepare": "husky"
   },
   "pi": {
