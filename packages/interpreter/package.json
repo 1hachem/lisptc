@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/lisp.ts",
     "./lisp.ts": "./src/lisp.ts",
+    "./repl.ts": "./src/repl.ts",
     "./grammar.ts": "./src/grammar.ts",
     "./arith.ts": "./src/arith.ts",
     "./mcp.ts": "./src/mcp.ts",
@@ -19,7 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "repl": "node --no-warnings --experimental-transform-types src/lisp.ts"
+    "repl": "node --no-warnings --experimental-transform-types src/cli.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
