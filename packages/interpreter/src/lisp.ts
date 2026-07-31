@@ -25,12 +25,10 @@ function assert(x: boolean, message?: string): asserts x {
 	if (!x) throw new Error(`Assertion Failure: ${message || ""}`);
 }
 
-// Read a line as a string (displaying the given prompt), or null on EOF.
-let readLine: (prompt: string) => Promise<string | null>;
-
 // Output string s (a new line on \n char). Defaults to a no-op so the
 // interpreter can be imported (e.g. by tests) without a running REPL; the
-// REPL entry point and setWriter() below override it.
+// CLI entry point (src/cli.ts) wires these to stdout/process.exit via
+// setWriter()/setExit() below.
 let write: (s: string) => void = () => {};
 let exit: (n: number) => void = () => {}; // Terminate the process with exit code n.
 
@@ -40,6 +38,12 @@ export function setWriter(fn: (s: string) => void): (s: string) => void {
 	const prev = write;
 	write = fn;
 	return prev;
+}
+
+// Wire the `(exit code)` built-in to a real process-exit. Defaults to a no-op
+// so importing the interpreter never terminates the host; the CLI sets it.
+export function setExit(fn: (n: number) => void): void {
+	exit = fn;
 }
 
 // REPL usage text, printed by the (help) built-in on demand.
@@ -439,7 +443,7 @@ class NotVariableException extends EvalException {
 class FormatException extends Error {}
 
 // Singleton for end-of-file
-const EndOfFile = { toString: () => "EOF" };
+export const EndOfFile = { toString: () => "EOF" };
 
 //----------------------------------------------------------------------
 
@@ -800,6 +804,53 @@ export class Interp {
 			"Return the name of `sym` as a string.",
 			z.tuple([zSym]),
 			([sym]) => sym.name,
+		);
+
+		// --- String primitives (the rest of the string library is Lisp; see
+		// the prelude). These require JS: character indexing, building strings
+		// from parts, and Unicode case mapping cannot be done in pure Lisp.
+		this.def(
+			"char",
+			2,
+			"(char s i)",
+			"Return the character at index `i` of `s` as a one-character string, or nil if `i` is out of range.",
+			z.tuple([zString, zNumeric]),
+			([s, i]) => {
+				const n = Number(i);
+				return n >= 0 && n < s.length ? s[n] : null;
+			},
+		);
+		this.def(
+			"concat",
+			-1,
+			"(concat s...)",
+			"Concatenate the string arguments into one string.",
+			z.tuple([zList]),
+			([rest]) => {
+				let out = "";
+				for (let p = rest; p !== null; p = p.cdr as List) {
+					const s = (p as Cell).car;
+					if (typeof s !== "string") throw new EvalException("not a string", s);
+					out += s;
+				}
+				return out;
+			},
+		);
+		this.def(
+			"string-upcase",
+			1,
+			"(string-upcase s)",
+			"Return `s` with all letters converted to upper case.",
+			z.tuple([zString]),
+			([s]) => s.toUpperCase(),
+		);
+		this.def(
+			"string-downcase",
+			1,
+			"(string-downcase s)",
+			"Return `s` with all letters converted to lower case.",
+			z.tuple([zString]),
+			([s]) => s.toLowerCase(),
 		);
 
 		this.def(
@@ -1298,7 +1349,7 @@ function qqExpand2(y: unknown, level: number): unknown {
 //----------------------------------------------------------------------
 
 // A list of tokens, which works as a reader of Lisp expressions
-class Reader {
+export class Reader {
 	private token: unknown;
 	private tokens: string[] = [];
 	private lineNo = 1;
@@ -1566,53 +1617,6 @@ function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 
 //----------------------------------------------------------------------
 
-// Read-Eval-Print Loop
-class REPL {
-	private readonly stdInTokens: Reader = new Reader();
-
-	// Read an expression from the standard-in asynchronously.
-	private async readExpression(
-		prompt1: string,
-		prompt2: string,
-	): Promise<unknown> {
-		const oldTokens = new Reader();
-		for (;;) {
-			oldTokens.copyFrom(this.stdInTokens);
-			try {
-				return this.stdInTokens.read();
-			} catch (ex) {
-				if (ex === EndOfFile) {
-					const line = await readLine(oldTokens.isEmpty() ? prompt1 : prompt2);
-					if (line === null) return EndOfFile;
-					oldTokens.push(line);
-					this.stdInTokens.copyFrom(oldTokens);
-				} else {
-					this.stdInTokens.clear(); // Discard the erroneous tokens.
-					throw ex;
-				}
-			}
-		}
-	}
-
-	// Repeat Read-Eval-Print until End-Of-File asynchronously.
-	async readEvalPrintLoop(interp: Interp): Promise<void> {
-		for (;;) {
-			try {
-				const exp = await this.readExpression("> ", "  ");
-				if (exp === EndOfFile) {
-					write("Goodbye\n");
-					return;
-				}
-				const result = interp.eval(exp, null);
-				write(`${str(result)}\n`);
-			} catch (ex) {
-				if (ex instanceof EvalException) write(`${ex}\n`);
-				else throw ex;
-			}
-		}
-	}
-}
-
 // Evaluate a string as a list of Lisp exps; return the result of the last exp.
 export function run(interp: Interp, text: string): unknown {
 	const tokens = new Reader();
@@ -1653,80 +1657,6 @@ export function checkSyntax(text: string): SyntaxError_[] {
 		}
 	}
 	return [];
-}
-
-// A persistent in-process REPL: `eval` runs a program and returns what the
-// interactive REPL would have printed (last value + side-effect output, errors
-// rendered inline). Lets embedders run Lisp without spawning a subprocess.
-export class ReplSession {
-	private interp: Interp;
-	// Set by the `halt` built-in this session installs; read (and cleared) via
-	// takeHalted(). `halt` is a REPL feature, not part of the interpreter
-	// language — a driver looping over eval() uses it to know when to stop.
-	private halted = false;
-
-	constructor() {
-		this.interp = this.freshInterp();
-	}
-
-	private freshInterp(): Interp {
-		const interp = new Interp();
-		run(interp, prelude);
-		this.installHalt(interp);
-		return interp;
-	}
-
-	// Install `(halt [value])`: record that the program asked to stop and return
-	// `value` (or t). It only sets a flag — evaluation of any following forms
-	// continues — so it is meant as the final form of a program.
-	private installHalt(interp: Interp): void {
-		const halt = interp.makeBuiltIn("halt", -1, (frame) => {
-			this.halted = true;
-			const rest = frame[0] as List;
-			return rest === null ? true : rest.car;
-		});
-		interp.defineGlobal(newSym("halt"), halt, {
-			signature: "(halt [value])",
-			doc: "Signal the REPL to stop after this program; return `value` (or t).",
-		});
-	}
-
-	// Evaluate a program; state persists across calls. Lisp errors are rendered
-	// into the returned output rather than thrown.
-	eval(code: string): string {
-		let out = "";
-		const prev = setWriter((s) => {
-			out += s;
-		});
-		try {
-			// Bind value before appending: `out += str(run(...))` reads `out`
-			// before run() writes side-effect output into it, clobbering it.
-			const value = str(run(this.interp, code));
-			out += `${value}\n`;
-		} catch (ex) {
-			if (ex instanceof EvalException) out += `${ex}\n`;
-			else if (ex === EndOfFile)
-				out += "unbalanced expression (unexpected end of input)\n";
-			else throw ex;
-		} finally {
-			setWriter(prev);
-		}
-		return out;
-	}
-
-	// Discard all definitions; start from a fresh prelude-loaded interp.
-	reset(): void {
-		this.interp = this.freshInterp();
-		this.halted = false;
-	}
-
-	// Whether the last-evaluated program called `(halt)`; reads and clears the
-	// flag so each check reflects only evaluations since the previous check.
-	takeHalted(): boolean {
-		const h = this.halted;
-		this.halted = false;
-		return h;
-	}
 }
 
 // Lisp initialization script
@@ -1832,7 +1762,7 @@ export const prelude = `
 
 (defmacro letrec (args &rest body)
   "Like let, but bindings may refer to each other (e.g. for local recursive functions)."
-  (let (vars setqs)
+  (let (vars sets)
     (defun vars (x)
       (cond (x (cons (caar x)
                      (vars (cdr x))))))
@@ -1955,131 +1885,101 @@ export const prelude = `
          (setq ,name (+ ,name 1)))
        ,@(if (cddr spec)
              \`(,(caddr spec))))))
+
+;; --- String library ---
+;; Built on the native primitives char, concat, string-upcase and
+;; string-downcase (plus length, which works on strings).
+
+(defun substring (s start &rest end)
+  "Return the substring of s from index start up to (but not including) end (default: end of s)."
+  (let ((stop (if end (car end) (length s)))
+        (out ""))
+    (while (< start stop)
+      (setq out (concat out (char s start)))
+      (setq start (+ start 1)))
+    out))
+
+(defun string-prefix? (prefix s)
+  "Return t if the string s starts with prefix."
+  (and (<= (length prefix) (length s))
+       (equal prefix (substring s 0 (length prefix)))))
+
+(defun string-suffix? (suffix s)
+  "Return t if the string s ends with suffix."
+  (and (<= (length suffix) (length s))
+       (equal suffix (substring s (- (length s) (length suffix))))))
+
+(defun string-index (s sub &rest start)
+  "Return the index of the first occurrence of sub in s at or after start (default 0), or nil."
+  (let ((i (if start (car start) 0))
+        (last (- (length s) (length sub)))
+        (found nil))
+    (while (and (null found) (<= i last))
+      (if (equal sub (substring s i (+ i (length sub))))
+          (setq found i)
+        (setq i (+ i 1))))
+    found))
+
+(defun string-contains? (s sub)
+  "Return t if s contains the substring sub."
+  (and (string-index s sub) t))
+
+(defun string-count (s sub)
+  "Return the number of non-overlapping occurrences of sub in s."
+  (if (equal sub "")
+      (+ (length s) 1)
+    (let ((i 0)
+          (n 0)
+          (pos nil))
+      (while (setq pos (string-index s sub i))
+        (setq n (+ n 1))
+        (setq i (+ pos (length sub))))
+      n)))
+
+(defun string-replace (s old new)
+  "Return s with every occurrence of the substring old replaced by new."
+  (if (equal old "")
+      s
+    (let ((out "")
+          (i 0)
+          (pos nil))
+      (while (setq pos (string-index s old i))
+        (setq out (concat out (substring s i pos) new))
+        (setq i (+ pos (length old))))
+      (concat out (substring s i)))))
+
+(defun string-split (s sep)
+  "Split s on the separator string sep and return a list of strings; an empty sep splits into characters."
+  (if (equal sep "")
+      (let ((chars nil)
+            (i (length s)))
+        (while (< 0 i)
+          (setq i (- i 1))
+          (setq chars (cons (char s i) chars)))
+        chars)
+    (let ((parts nil)
+          (i 0)
+          (pos nil))
+      (while (setq pos (string-index s sep i))
+        (setq parts (cons (substring s i pos) parts))
+        (setq i (+ pos (length sep))))
+      (nreverse (cons (substring s i) parts)))))
+
+(defun string-join (list sep)
+  "Join the strings in list into one string separated by sep."
+  (cond ((null list) "")
+        ((null (cdr list)) (car list))
+        (t (concat (car list) sep (string-join (cdr list) sep)))))
+
+(defun _whitespace? (c)
+  (or (equal c " ") (equal c "\\t") (equal c "\\n") (equal c "\\r")))
+(defun string-trim (s)
+  "Return s with leading and trailing whitespace removed."
+  (let ((start 0)
+        (end (length s)))
+    (while (and (< start end) (_whitespace? (char s start)))
+      (setq start (+ start 1)))
+    (while (and (< start end) (_whitespace? (char s (- end 1))))
+      (setq end (- end 1)))
+    (substring s start end)))
 `;
-
-//----------------------------------------------------------------------
-// Main procedure for Node.js: a dedicated standalone REPL.
-// Run the REPL on the first '-' argument (or with no arguments);
-// run each script file for other arguments.
-//
-// Guarded so that importing this module (e.g. from tests) does NOT start
-// the REPL / attach to stdin; it only runs when this file is the process
-// entry point (node lisp.ts, or the subprocess the pi extension spawns).
-
-async function main(): Promise<void> {
-	const { pathToFileURL } = await import("node:url");
-	const entry = process.argv[1];
-	if (!entry || import.meta.url !== pathToFileURL(entry).href) return;
-
-	// Clear screen + scrollback and home the cursor.
-	const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
-
-	const isTTY = process.stdin.isTTY === true;
-	let rl: import("node:readline").Interface | null = null;
-	let closed = false;
-	let lastInput = ""; // for the :up recall command in non-TTY (piped) mode
-	const pending: string[] = []; // lines received while no reader was waiting
-	let waiter: ((line: string | null) => void) | null = null;
-
-	readLine = async (prompt) => {
-		if (rl === null) {
-			const { createInterface } = await import("node:readline");
-			rl = createInterface({
-				input: process.stdin,
-				output: process.stdout,
-				terminal: isTTY, // enables arrow-key line editing & history on a TTY
-				historySize: 500,
-			});
-			rl.on("line", (l) => {
-				if (waiter) {
-					const w = waiter;
-					waiter = null;
-					w(l);
-				} else {
-					pending.push(l);
-				}
-			});
-			rl.on("close", () => {
-				closed = true;
-				if (waiter) {
-					const w = waiter;
-					waiter = null;
-					w(null);
-				}
-			});
-			// Ctrl-C cancels the current input line instead of exiting.
-			rl.on("SIGINT", () => {
-				write("\n");
-				if (waiter) {
-					const w = waiter;
-					waiter = null;
-					w("");
-				}
-			});
-		}
-		const line = await new Promise<string | null>((resolve) => {
-			if (pending.length > 0) {
-				write(prompt);
-				resolve(pending.shift() as string);
-				return;
-			}
-			if (closed) {
-				resolve(null);
-				return;
-			}
-			waiter = resolve;
-			if (isTTY) {
-				rl?.setPrompt(prompt);
-				rl?.prompt();
-			} else {
-				write(prompt);
-			}
-		});
-		if (line === null) return null;
-		// :clear (or "clear") wipes the screen and re-prompts. Works when piped,
-		// too, and complements the Ctrl-L keystroke on a TTY.
-		if (line.trim() === ":clear" || line.trim() === "clear") {
-			write(CLEAR_SCREEN);
-			return "";
-		}
-		// :up (or a raw up-arrow escape sequence, when there is no TTY to
-		// interpret it) recalls the previous input line.
-		if (line.trim() === ":up" || line.trim() === "\x1b[A") {
-			if (!isTTY && lastInput !== "") write(`${lastInput}\n`);
-			return lastInput;
-		}
-		if (line.trim() !== "") lastInput = line;
-		return line;
-	};
-
-	write = (s: string) => process.stdout.write(s);
-	exit = process.exit;
-
-	const interp = new Interp();
-	run(interp, prelude);
-
-	let repl: REPL | undefined;
-	let fs: typeof import("node:fs") | undefined;
-	let argv = process.argv as string[];
-	if (argv.length <= 2) argv = ["", "", "-"];
-	try {
-		for (let i = 2; i < argv.length; i++) {
-			const fileName = argv[i];
-			if (fileName === "-") {
-				if (repl === undefined) {
-					repl = new REPL();
-					await repl.readEvalPrintLoop(interp);
-				}
-			} else {
-				fs = fs || (await import("node:fs")).default;
-				const text = fs.readFileSync(fileName, "utf8");
-				run(interp, text);
-			}
-		}
-	} catch (ex) {
-		console.log(ex);
-		exit(1);
-	}
-}
-
-main();

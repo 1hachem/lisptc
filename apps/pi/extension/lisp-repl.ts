@@ -2,7 +2,7 @@
  * Lisp REPL Extension
  *
  * - Runs the Lisptc interpreter in-process via the @repo/interpreter
- *   `ReplSession` binding (no subprocess, no stdout scraping).
+ *   `AgentRepl` binding (no subprocess, no stdout scraping).
  * - Replaces the agent's system prompt with a lisp-only policy plus the
  *   full interpreter source code (src/arith.ts + src/lisp.ts).
  * - The agent has NO tools. Everything the agent outputs as assistant
@@ -11,33 +11,21 @@
  * - /lisp-reset clears all definitions (fresh interpreter).
  */
 
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import {
 	CustomEditor,
 	type ExtensionAPI,
 	highlightCode,
+	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
-import { ReplSession } from "@repo/interpreter";
 import { LISP_GRAMMAR } from "@repo/interpreter/grammar.ts";
-
-// Resolve the interpreter package's `src` dir to read the source we embed
-// into the system prompt (the interpreter itself runs via ReplSession above).
-const require = createRequire(import.meta.url);
-const SRC_DIR = join(
-	dirname(require.resolve("@repo/interpreter/package.json")),
-	"src",
-);
-const LISP_PATH = join(SRC_DIR, "lisp.ts");
-const OUTPUT_TYPE = "lisp-output";
-const CODE_TYPE = "lisp-code";
-
-// The agent runs as a REPL loop: each Lisp answer is evaluated and its result
-// fed back to trigger the next step. The loop ends when the agent calls
-// `(halt)` or after this many steps (a runaway safeguard).
-const MAX_STEPS = 25;
+import { AgentRepl } from "@repo/interpreter/repl.ts";
+import {
+	CODE_TYPE,
+	MAX_STEPS,
+	OUTPUT_TYPE,
+	SYSTEM_PROMPT,
+} from "./system-prompt.ts";
 
 const ESC = String.fromCharCode(27);
 // ANSI color/style sequences, e.g. "\x1b[32m"
@@ -121,33 +109,6 @@ class LispEditor extends CustomEditor {
 	}
 }
 
-function loadSource(): string {
-	const arith = readFileSync(join(SRC_DIR, "arith.ts"), "utf8");
-	const lisp = readFileSync(LISP_PATH, "utf8");
-	const mcp = readFileSync(join(SRC_DIR, "mcp.ts"), "utf8");
-	return `### src/arith.ts\n\`\`\`typescript\n${arith}\n\`\`\`\n\n### src/lisp.ts\n\`\`\`typescript\n${lisp}\n\`\`\`\n\n### src/mcp.ts\n\`\`\`typescript\n${mcp}\n\`\`\``;
-}
-
-const POLICY = `You are a Lisp machine. You are NOT a chat assistant.
-
-Everything you output is fed DIRECTLY to a Lisp REPL and evaluated. You have no tools. Your entire output must be Lisp source code — nothing else.
-
-ABSOLUTE RULES:
-1. Your output is evaluated verbatim by the REPL. Output ONLY Lisp code: no plain text, no markdown, no code fences, no explanations. A single stray word outside an s-expression is a syntax error.
-2. Every request from the user — questions, greetings, computations, anything — must be answered with Lisp code. Produce the answer as the VALUE of the last expression. Do NOT wrap it in \`print\`/\`princ\`: the REPL already prints the value of every expression. Use \`print\`/\`princ\` only for side-effect output in the middle of a computation.
-3. If something cannot be expressed in Lisp, output a Lisp expression whose value is an explanation string, e.g. "cannot comply".
-4. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result is sent back to you as a message of type ${OUTPUT_TYPE}.
-4a. You run in a LOOP. Emit ONE Lisp form (or a small group), receive its ${OUTPUT_TYPE} result, then you are automatically asked to continue. Use each result to decide the next step: inspect data, branch, retry, build up state — one step at a time. Do not try to do everything in a single message; take a step, look at the result, then take the next.
-4b. When the user's request is FULLY satisfied, call \`(halt)\` to end the loop; return a final value with \`(halt <expr>)\`. Do NOT call \`(halt)\` before the task is complete. The loop also stops automatically after ${MAX_STEPS} steps.
-5. Output complete, balanced expressions only.
-6. Comments are FORBIDDEN. Never include \`;\` comments — the interpreter ignores them and emits a warning. Code must be self-explanatory without comments.
-7. The dialect is Lisptc (a Common-Lisp-like Lisp with macros, lexical scoping, and tail-call optimization). Its complete interpreter source code is given below — it is the authoritative definition of the language semantics, built-in functions, and the prelude. Consult it to know exactly what is available.
-8. MCP servers are available via built-ins registered in src/mcp.ts (included below): \`load-mcp\`, \`unload-mcp\`, \`list-mcps\`, \`list-tools\`, \`mcp-doc\`, \`search-tools\`. Load a predefined server by name — \`(load-mcp "linear")\` — or an ad-hoc one with a plist: a remote server \`(load-mcp :name "x" :url "https://..." :headers '(...))\`, or a local stdio server \`(load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp"))\`. Each loaded tool becomes a global named \`<server>/<tool>\`, called with keyword args, e.g. \`(fs/read_file :path "/tmp/x")\`.
-
-Below is the full source code of the interpreter you are running on:
-
-`;
-
 // `(print x)` writes x AND returns it, and the REPL prints the value of every
 // expression — so the same text appears twice. Collapse that duplication here
 // so the user sees it once.
@@ -160,10 +121,16 @@ function dedupePrintedValue(out: string): string {
 }
 
 class LispRepl {
-	private session = new ReplSession();
+	private session = new AgentRepl();
 
 	reset(): void {
 		this.session.reset();
+	}
+
+	// Refresh the read-only conversation globals from a host snapshot; called
+	// before every eval so the agent always sees the current transcript.
+	setConversationVars(vars: Record<string, unknown>): void {
+		this.session.setConversationVars(vars);
 	}
 
 	eval(code: string): string {
@@ -175,6 +142,86 @@ class LispRepl {
 	takeHalted(): boolean {
 		return this.session.takeHalted();
 	}
+}
+
+// Flatten a message's content into plain text: a raw string as-is, otherwise
+// the concatenation of its text parts (images and other parts are dropped).
+function messageText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (Array.isArray(content))
+		return content
+			.filter(
+				(p): p is { type: "text"; text: string } =>
+					typeof p === "object" &&
+					p !== null &&
+					(p as { type?: unknown }).type === "text",
+			)
+			.map((p) => p.text)
+			.join("");
+	return "";
+}
+
+// Build the read-only conversation snapshot injected into the REPL before each
+// eval. `conversation` is the full ordered transcript (real messages plus this
+// extension's own `lisp-code`/`lisp-output` custom messages, so the agent can
+// search prior REPL output); the two filtered lists hold only real user/
+// assistant message text. Each message is a plain object → a Lisp alist.
+function snapshotConversation(ctx: {
+	sessionManager: { getEntries(): SessionEntry[] };
+}): Record<string, unknown> {
+	const conversation: { role: string; content: string }[] = [];
+	const userMessages: string[] = [];
+	const assistantMessages: string[] = [];
+	for (const entry of ctx.sessionManager.getEntries()) {
+		if (entry.type === "message") {
+			const { role } = entry.message;
+			const content = messageText(
+				(entry.message as { content?: unknown }).content,
+			);
+			conversation.push({ role, content });
+			if (role === "user") userMessages.push(content);
+			else if (role === "assistant") assistantMessages.push(content);
+		} else if (entry.type === "custom_message") {
+			conversation.push({
+				role: entry.customType,
+				content: messageText(entry.content),
+			});
+		}
+	}
+	return {
+		conversation,
+		"user-messages": userMessages,
+		"assistant-messages": assistantMessages,
+	};
+}
+
+// Build the message that carries a REPL evaluation back to the agent. A custom
+// message is projected into the LLM context as a *user* message, which would
+// read as if the human typed the output. To stop the agent mistaking a result
+// for user input, the content is a JSON tool-result object it can recognize and
+// parse; the raw output is kept in `details` for a clean TUI rendering.
+function replResultMessage(
+	code: string,
+	output: string,
+	error: boolean,
+): {
+	customType: string;
+	content: string;
+	display: boolean;
+	details: { code: string; output: string; error: boolean };
+} {
+	const out = output || "(no output)";
+	return {
+		customType: OUTPUT_TYPE,
+		content: JSON.stringify({
+			type: "tool_result",
+			source: "lisp-repl",
+			error,
+			output: out,
+		}),
+		display: true,
+		details: { code, output: out, error },
+	};
 }
 
 // Occasionally the model wraps its code in a markdown fence despite the
@@ -210,6 +257,16 @@ function registerFireworks(pi: ExtensionAPI): void {
 				contextWindow: 262144,
 				maxTokens: 131072,
 			},
+			{
+				id: "accounts/fireworks/models/glm-5p2",
+				name: "GLM 5.2",
+				reasoning: false,
+				input: ["text"],
+				// Pricing/limits unknown; left at zero rather than guessing.
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 131072,
+				maxTokens: 65536,
+			},
 		],
 	});
 }
@@ -231,9 +288,17 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	const repl = new LispRepl();
-	let systemPrompt: string | null = null;
 	// Steps taken in the current REPL loop; reset when a new user task arrives.
 	let steps = 0;
+
+	// Refresh the read-only conversation globals from the live session before an
+	// eval, so `conversation`/`user-messages`/`assistant-messages` always reflect
+	// the current transcript.
+	function refreshConversation(ctx: {
+		sessionManager: { getEntries(): SessionEntry[] };
+	}): void {
+		repl.setConversationVars(snapshotConversation(ctx));
+	}
 
 	pi.on("session_start", async (_event, ctx) => {
 		// The agent has no tools at all — its text output IS the Lisp program.
@@ -243,6 +308,7 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
 			const editor = new LispEditor(tui, theme, keybindings);
 			editor.onLisp = async (code) => {
+				refreshConversation(ctx);
 				const { output, error } = evalCode(stripFences(code));
 				sendWhenIdle(ctx, {
 					customType: CODE_TYPE,
@@ -250,12 +316,7 @@ export default function (pi: ExtensionAPI) {
 					display: true,
 					details: {},
 				});
-				sendWhenIdle(ctx, {
-					customType: OUTPUT_TYPE,
-					content: output || "(no output)",
-					display: true,
-					details: { code, output, error },
-				});
+				sendWhenIdle(ctx, replResultMessage(stripFences(code), output, error));
 			};
 			return editor;
 		});
@@ -266,10 +327,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async () => {
-		if (systemPrompt === null) {
-			systemPrompt = POLICY + loadSource();
-		}
-		return { systemPrompt };
+		return { systemPrompt: SYSTEM_PROMPT };
 	});
 
 	// ReplSession renders Lisp errors into its output, so a throw here means an
@@ -318,6 +376,7 @@ export default function (pi: ExtensionAPI) {
 		const trimmed = stripFences(code);
 		if (trimmed === "") return;
 
+		refreshConversation(ctx);
 		const { output, error } = evalCode(trimmed);
 		steps += 1;
 
@@ -326,12 +385,7 @@ export default function (pi: ExtensionAPI) {
 		// runs again and emits the next step. Otherwise just display the result.
 		const halted = repl.takeHalted();
 		const keepLooping = !halted && steps < MAX_STEPS;
-		const resultMessage = {
-			customType: OUTPUT_TYPE,
-			content: output || "(no output)",
-			display: true,
-			details: { code: trimmed, output, error },
-		};
+		const resultMessage = replResultMessage(trimmed, output, error);
 		if (keepLooping) {
 			pi.sendMessage(resultMessage, { triggerTurn: true });
 		} else {
@@ -372,14 +426,19 @@ export default function (pi: ExtensionAPI) {
 		);
 	});
 
-	// REPL output gets its own background so it reads apart from the code.
+	// REPL output gets its own background so it reads apart from the code. The
+	// content is a JSON tool-result object (for the agent); display the raw
+	// output from `details` so the user sees clean output, not the JSON wrapper.
 	pi.registerMessageRenderer(OUTPUT_TYPE, (message, _options, theme) => {
-		const details = message.details as { error?: boolean } | undefined;
+		const details = message.details as
+			| { error?: boolean; output?: string }
+			| undefined;
 		const isError = details?.error === true;
 		const text =
-			typeof message.content === "string"
+			details?.output ??
+			(typeof message.content === "string"
 				? message.content
-				: JSON.stringify(message.content);
+				: JSON.stringify(message.content));
 		return new Text(
 			theme.fg(isError ? "error" : "toolOutput", text),
 			1,

@@ -151,3 +151,8 @@
 (cddr (4 (5 5)))
 
 (terpri)
+
+(load-mcp "playwright")
+(search-tools "navigate")
+
+(playwright/browser_navigate :url "hyko.ai")

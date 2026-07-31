@@ -12,13 +12,10 @@
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
 
-      # Shared topiary grammar/config — hermetic, independent of the working
-      # tree, so it never rebuilds on source edits.
+      # Hermetic topiary grammar/config, independent of the working tree.
       topiaryConfig = pkgs.callPackage ./nix/topiary-config.nix {};
 
-      # Hermetic packages, for `nix run .#…`, CI, and distribution. `src` is
-      # scoped so unrelated working-tree edits don't rebuild them: ptcfmt only
-      # needs its query file; ptcrepl needs the repo root for the workspace.
+      # Hermetic packages for `nix run .#…`, CI, and distribution; scoped src.
       ptcfmt = pkgs.callPackage ./nix/ptcfmt.nix {
         src = ./.topiary/queries/commonlisp.scm;
       };
@@ -27,9 +24,7 @@
         pnpm = pkgs.pnpm_10;
       };
 
-      # Dev-shell tools: run straight from the working tree. No rebuilds on
-      # source edits, and they reflect live changes — the whole point of the
-      # dev shell, unlike the packaged artifacts above.
+      # Dev-shell tools: run straight from the working tree, reflecting live edits.
       ptcrepl-dev = pkgs.writeShellScriptBin "ptcrepl" ''
         root=$(${pkgs.git}/bin/git rev-parse --show-toplevel)
         exec ${pkgs.nodejs}/bin/node --no-warnings --experimental-transform-types \
@@ -69,7 +64,18 @@
           git
           ptcrepl-dev
           ptcfmt-dev
+          # Nix-built browsers with system deps, used via PLAYWRIGHT_MCP_EXECUTABLE.
+          playwright-driver.browsers
         ];
+
+        # Use the Nix browsers instead of downloaded ones; skip host-dep validation.
+        PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+        PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
+
+        # Point @playwright/mcp at the Nix Chromium (globbed, rev-independent).
+        shellHook = ''
+          export PLAYWRIGHT_MCP_EXECUTABLE="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"
+        '';
       };
     });
 }

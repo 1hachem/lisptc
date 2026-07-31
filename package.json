@@ -14,12 +14,12 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
-    "pi": "pi --provider fireworks --model kimi-k3:off",
+    "pi": "pi --provider fireworks --model accounts/fireworks/models/kimi-k3:off",
     "prepare": "husky"
   },
   "pi": {
     "extensions": [
-      "./apps/pi/extensions"
+      "./apps/pi/extension/lisp-repl.ts"
     ],
     "skills": [
       "./apps/pi/skills"

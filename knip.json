@@ -7,8 +7,8 @@
       "project": ["src/**/*.ts"]
     },
     "apps/pi": {
-      "entry": ["extensions/*.ts"],
-      "project": ["extensions/**/*.ts"]
+      "entry": ["extension/*.ts"],
+      "project": ["extension/**/*.ts"]
     }
   }
 }

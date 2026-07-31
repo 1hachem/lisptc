@@ -1,0 +1,21 @@
+[
+  {
+    "name": "playwright",
+    "description": "Drive a real Chromium browser: navigate, click, type, snapshot the accessibility tree, screenshot, and read network requests.",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@playwright/mcp@latest",
+      "--browser",
+      "chromium",
+      "--executable-path",
+      "${PLAYWRIGHT_MCP_EXECUTABLE}"
+    ]
+  },
+  {
+    "name": "fs",
+    "description": "Read, write, and list files under the current working directory.",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+  }
+]
