@@ -4,6 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
+import * as dotenv from "dotenv";
 import { z } from "zod";
 import {
 	add,
@@ -495,9 +496,37 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
+// An opaque secret value. It carries its registry key and its real value, but
+// only ever prints as `#<secret:KEY>` (via `str`'s toString fallback) so the
+// LLM can see a secret *exists* without reading it. The real value is revealed
+// only when a secret is serialized into an outgoing MCP request (see the
+// `Secret` branch in `lispToJson`, src/mcp.ts).
+export class Secret {
+	constructor(
+		readonly key: string,
+		private readonly value: string,
+	) {}
+	reveal(): string {
+		return this.value;
+	}
+	toString(): string {
+		return `#<secret:${this.key}>`;
+	}
+}
+
+// Prefix for environment variables seeded into the secret registry, e.g.
+// `LISPTC_SECRET_LINEAR_API_KEY` becomes the secret keyed `LINEAR_API_KEY`.
+const SECRET_ENV_PREFIX = "LISPTC_SECRET_";
+
 export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
+
+	// Host-supplied secret registry: key -> real value. Keys are listable by the
+	// LLM (`(secrets)`); values are only obtainable as opaque `Secret` objects
+	// via `(secret "key")` and are never printed. Seeded from `LISPTC_SECRET_*`
+	// env vars at construction; `setSecrets` (from the host) overrides those.
+	private readonly secrets: Map<string, string> = new Map();
 
 	// Directories to resolve relative `import` paths against — one entry per
 	// file currently being loaded (the innermost import wins). Empty at the REPL,
@@ -942,6 +971,37 @@ export class Interp {
 			},
 		);
 
+		// --- Secret registry (see the `Secret` class). Keys are readable by the
+		// LLM; values are opaque and only usable inside outgoing MCP calls.
+		this.seedSecretsFromEnv();
+		this.def(
+			"secrets",
+			0,
+			"(secrets)",
+			"Return the list of available secret keys. Values are hidden — read a secret with `(secret key)`.",
+			z.tuple([]),
+			() => {
+				let list: List = null;
+				const keys = this.secretKeys();
+				for (let i = keys.length - 1; i >= 0; i--)
+					list = new Cell(keys[i], list);
+				return list;
+			},
+		);
+		this.def(
+			"secret",
+			1,
+			"(secret key)",
+			"Return the secret stored under `key` as an opaque value (prints as #<secret:key>). Its real value is never shown; it is only revealed when passed into a call such as an MCP tool or `:headers`. Errors if `key` is unknown.",
+			z.tuple([zString]),
+			([key]) => {
+				const value = this.secrets.get(key);
+				if (value === undefined)
+					throw new EvalException("unknown secret", key, false);
+				return new Secret(key, value);
+			},
+		);
+
 		// Install native MCP built-ins (load-mcp, unload-mcp, list-tools, ...).
 		registerMcp(this);
 	}
@@ -980,6 +1040,36 @@ export class Interp {
 
 	hasGlobal(sym: Sym): boolean {
 		return this.globals.has(sym);
+	}
+
+	// Merge host-supplied secrets into the registry, overriding any existing
+	// (e.g. env-seeded) entries with the same key.
+	setSecrets(record: Record<string, string>): void {
+		for (const [key, value] of Object.entries(record))
+			this.secrets.set(key, value);
+	}
+
+	// The registry keys the LLM is allowed to see (values stay hidden).
+	secretKeys(): string[] {
+		return [...this.secrets.keys()];
+	}
+
+	// Load secrets from a `.env`-style file (KEY=VALUE lines). Every entry is
+	// registered as a secret under its literal key, overriding existing entries.
+	// Later calls / `setSecrets` win. Returns the parsed entries (so a host can
+	// persist them); throws if the file cannot be read.
+	loadSecretsFromFile(path: string): Record<string, string> {
+		const record = dotenv.parse(readFileSync(path));
+		this.setSecrets(record);
+		return record;
+	}
+
+	// Seed the registry from `LISPTC_SECRET_*` environment variables.
+	private seedSecretsFromEnv(): void {
+		for (const [name, value] of Object.entries(process.env)) {
+			if (value !== undefined && name.startsWith(SECRET_ENV_PREFIX))
+				this.secrets.set(name.slice(SECRET_ENV_PREFIX.length), value);
+		}
 	}
 
 	// Build a BuiltInFunc without binding it (for wrappers stored elsewhere).

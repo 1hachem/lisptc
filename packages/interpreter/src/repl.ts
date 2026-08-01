@@ -129,6 +129,9 @@ export class AgentRepl extends MemoryRepl {
 	// The host-supplied conversation snapshot, kept so a post-error `reset()`
 	// can re-inject the globals until the next refresh.
 	private readonly conversationVars = new Map<string, unknown>();
+	// Host-supplied secrets, kept so a post-error `reset()` can re-inject them
+	// into the fresh interp's registry.
+	private readonly secrets = new Map<string, string>();
 
 	// Re-establish the halt built-in and the conversation globals on every fresh
 	// interp. Guards `conversationVars` because the base constructor calls this
@@ -137,6 +140,10 @@ export class AgentRepl extends MemoryRepl {
 		this.installHalt(interp);
 		const vars = this.conversationVars;
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
+		// Re-inject host secrets. Guarded because the base constructor calls
+		// setup() before this subclass's field initializers have run.
+		const secrets = this.secrets;
+		if (secrets?.size) interp.setSecrets(Object.fromEntries(secrets));
 	}
 
 	// Install `(halt [value])`: record that the program asked to stop and return
@@ -165,6 +172,24 @@ export class AgentRepl extends MemoryRepl {
 			this.conversationVars.set(name, value);
 			defineVar(this.interp, name, value);
 		}
+	}
+
+	// Register host-supplied secrets. Keys become listable by the agent via
+	// `(secrets)`; values stay opaque and are only usable inside calls (e.g. as
+	// MCP `:headers`). Merges into the registry; kept so `reset()` re-injects
+	// them. Env `LISPTC_SECRET_*` secrets are seeded by the interp itself.
+	setSecrets(record: Record<string, string>): void {
+		for (const [key, value] of Object.entries(record))
+			this.secrets.set(key, value);
+		this.interp.setSecrets(record);
+	}
+
+	// Load secrets from a `.env`-style file (KEY=VALUE lines) into the registry.
+	// Entries are kept so a post-error `reset()` re-injects them.
+	loadSecretsFromFile(path: string): void {
+		const record = this.interp.loadSecretsFromFile(path);
+		for (const [key, value] of Object.entries(record))
+			this.secrets.set(key, value);
 	}
 
 	// Whether the last-evaluated program called `(halt)`; reads and clears the
