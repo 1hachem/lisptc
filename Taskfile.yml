@@ -15,13 +15,21 @@ tasks:
       DIR: '{{.DIR | default "."}}'
     cmd: |
       set -eu
-      path_flags=""
+      # `infisical run --path` takes a single folder (the last flag wins), so to
+      # pull from several paths we export each one to dotenv, merge them into the
+      # environment, then exec the command. Later paths override earlier keys.
+      env_file="$(mktemp)"
+      trap 'rm -f "$env_file"' EXIT
       for p in {{.PATHS}}; do
-        path_flags="$path_flags --path=$p"
+        infisical export -e {{.ENV}} \
+          --projectId={{.PROJECTID}} \
+          --path="$p" --format=dotenv >> "$env_file"
       done
-      cd {{.DIR}} && infisical run -e {{.ENV}} \
-        --projectId={{.PROJECTID}} \
-        $path_flags -- {{.CMD}}
+      cd {{.DIR}}
+      set -a
+      . "$env_file"
+      set +a
+      exec {{.CMD}}
 
   test:
     desc: run all tests (interpreter + nix flake checks)
@@ -46,5 +54,8 @@ tasks:
       - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
   pi:
     desc: run pi agent with access to secrets
-    cmd: go-task _infisical-run  ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
+    cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
 
+  test-env:
+    desc: run pi agent with access to secrets
+    cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="printenv"
