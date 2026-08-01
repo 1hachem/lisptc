@@ -159,12 +159,11 @@ export class AgentRepl extends MemoryRepl {
 		this.installHalt(interp);
 		const vars = this.conversationVars;
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
-		// Seed secrets from a `.env` file (same behaviour as the standalone REPL),
-		// so an embedder like pi picks it up automatically.
-		seedSecretsFromEnvFile(interp);
-		// Re-inject explicitly-set host secrets last, so they win over the file.
-		// Guarded because the base constructor calls setup() before this
-		// subclass's field initializers have run.
+		// Note: unlike the standalone CLI, an embedded AgentRepl does NOT
+		// auto-load a `.env` file — a host embedding this REPL (e.g. the pi
+		// extension) supplies secrets explicitly via setSecrets/loadSecretsFromFile.
+		// Re-inject explicitly-set host secrets. Guarded because the base
+		// constructor calls setup() before this subclass's field initializers run.
 		const secrets = this.secrets;
 		if (secrets?.size) interp.setSecrets(Object.fromEntries(secrets));
 	}

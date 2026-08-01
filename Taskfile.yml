@@ -46,5 +46,5 @@ tasks:
       - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
   pi:
     desc: run pi agent with access to secrets
-    cmd: go-task _infisical-run  ENV=dev PATHS="/ai" CMD="pnpm run pi"
+    cmd: go-task _infisical-run  ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
 

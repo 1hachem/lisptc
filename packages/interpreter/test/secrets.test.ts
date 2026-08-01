@@ -100,24 +100,24 @@ describe("secret registry (.env file loading)", () => {
 		);
 	});
 
-	it("re-injects file-loaded secrets on AgentRepl reset()", () => {
+	it("re-injects explicitly-loaded secrets on AgentRepl reset()", () => {
 		const path = writeEnvFile("FOO=bar\n");
 		const repl = new AgentRepl();
+		// An embedder must opt in explicitly; AgentRepl does not auto-load .env.
 		repl.loadSecretsFromFile(path);
 		expect(repl.eval("(secrets)")).toContain("FOO");
 		repl.reset();
 		expect(repl.eval("(secrets)")).toContain("FOO");
 	});
 
-	it("auto-loads $LISPTC_SECRETS_FILE for an embedder (e.g. pi via AgentRepl)", () => {
+	it("does not auto-load $LISPTC_SECRETS_FILE for an embedded AgentRepl", () => {
 		const path = writeEnvFile("PI_TOKEN=t0ken\n");
 		const prev = process.env.LISPTC_SECRETS_FILE;
 		process.env.LISPTC_SECRETS_FILE = path;
 		try {
-			// A plain AgentRepl (no explicit setSecrets) picks the file up.
+			// A plain AgentRepl (the pi embedding) must NOT pick the file up.
 			const repl = new AgentRepl();
-			expect(repl.eval("(secrets)")).toContain("PI_TOKEN");
-			expect(repl.eval('(secret "PI_TOKEN")')).toContain("#<secret:PI_TOKEN>");
+			expect(repl.eval("(secrets)")).not.toContain("PI_TOKEN");
 		} finally {
 			if (prev === undefined) delete process.env.LISPTC_SECRETS_FILE;
 			else process.env.LISPTC_SECRETS_FILE = prev;
