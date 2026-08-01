@@ -42,7 +42,7 @@ const infisicalRun = command({
 			type: string,
 			long: "url",
 			description: "Base URL of the Infisical instance",
-			defaultValue: () => "https://infisical.bigmama.io",
+			defaultValue: () => "https://app.infisical.com",
 		}),
 		env: option({
 			type: oneOf(["dev", "stage", "prod"]),
