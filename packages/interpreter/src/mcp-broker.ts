@@ -74,14 +74,12 @@ const clients = new Map<string, { client: Client; tools: Tool[] }>();
 const errMsg = (e: unknown): string =>
 	e instanceof Error ? e.message : String(e);
 
-// A settled job outcome, tagged so it can be sent to the main thread and used
-// by the aggregate awaits without either side re-deriving success/failure.
+// A settled job outcome, tagged so success/failure isn't re-derived downstream.
 type Settled = { ok: true; v: unknown } | { ok: false; e: string };
 
-// Background jobs keyed by the jobId `start` mints. We hold the native operation
-// `promise` and a per-job `AbortController` (the standard cancellation
-// primitive, wired into the MCP SDK's RequestOptions.signal); `state` is a
-// synchronously-readable snapshot for `job-status`.
+// Background jobs keyed by the jobId `start` mints: the native `promise`, a
+// per-job `AbortController` (wired into the SDK's RequestOptions.signal), and a
+// synchronously-readable `state` snapshot for `job-status`.
 interface JobRec {
 	promise: Promise<unknown>;
 	controller: AbortController;
@@ -89,8 +87,8 @@ interface JobRec {
 }
 const jobs = new Map<string, JobRec>();
 
-// Tag a job's native promise as a never-rejecting Settled outcome. Used by the
-// aggregate awaits so a failing job doesn't reject the whole combinator.
+// Tag a job's native promise as a never-rejecting Settled outcome, so a failing
+// job doesn't reject the whole combinator.
 const tagged = (jobId: string): Promise<Settled & { jobId: string }> => {
 	const rec = jobs.get(jobId);
 	const p = rec
@@ -102,12 +100,10 @@ const tagged = (jobId: string): Promise<Settled & { jobId: string }> => {
 	);
 };
 
-// Register `dispatch(op, payload, signal)` as a background job and return its
-// id. The native promise is attached now but NOT awaited, so `start` can reply
-// immediately. A single `.then` tracks state, PUSHes a `job-settled` event to
-// the main thread (so the result applies as soon as its event loop turns), and
-// doubles as the rejection handler so a never-awaited failure never becomes an
-// unhandledRejection.
+// Register `dispatch(op, payload, signal)` as a background job and return its id
+// at once (the promise is not awaited here). The `.then` tracks state, pushes a
+// `job-settled` event, and absorbs rejections so a never-awaited failure never
+// becomes an unhandledRejection.
 function startJob(op: Op, payload: unknown): string {
 	const jobId = randomUUID();
 	const controller = new AbortController();
@@ -127,9 +123,8 @@ function startJob(op: Op, payload: unknown): string {
 	return jobId;
 }
 
-// Push a completion event to the main thread so it can apply the result (e.g.
-// install a server's tools) as soon as its event loop next turns — the
-// event-driven counterpart to `await`. Skipped if the job was cancelled.
+// Push a completion event to the main thread so it can apply the result once
+// its event loop turns. Skipped if the job was cancelled.
 function settleJob(jobId: string, settled: Settled): void {
 	if (!jobs.has(jobId)) return;
 	port.postMessage({ type: "job-settled", jobId, ...settled });
