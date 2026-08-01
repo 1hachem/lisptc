@@ -179,6 +179,24 @@ describe("async MCP jobs", () => {
 		expect(evalStr(interp, '(autofx/echo :message "yo")')).toBe('"yo"');
 	});
 
+	it("runs two loads concurrently, not sequentially", () => {
+		// Each fixture sleeps DELAY ms before it connects. Start both loads first
+		// (they run as background jobs in the broker) and only THEN await them.
+		// If the broker ran them concurrently, the total wall time is ~DELAY; if it
+		// ran them one after another it would be ~2*DELAY. Assert we're well under
+		// the sequential floor.
+		const DELAY = 500;
+		evalStr(interp, `(setq c1 ${loadForm("concA", DELAY)})`);
+		evalStr(interp, `(setq c2 ${loadForm("concB", DELAY)})`);
+		const start = performance.now();
+		expect(evalStr(interp, "(await c1)")).toContain("concA/echo");
+		expect(evalStr(interp, "(await c2)")).toContain("concB/echo");
+		const elapsed = performance.now() - start;
+		// Concurrent: bounded by the single slowest delay plus overhead, and
+		// comfortably below the 2*DELAY a sequential run would need.
+		expect(elapsed).toBeLessThan(DELAY * 1.8);
+	});
+
 	it("await-any returns the first job to settle", () => {
 		// anyFast (50ms) beats anySlow (600ms), so its bindings come back.
 		const out = evalStr(
