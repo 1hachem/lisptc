@@ -56,6 +56,21 @@ describe("secret registry", () => {
 	});
 });
 
+describe("secret registry (composition via concat)", () => {
+	it("concat of plain strings still returns a plain string", () => {
+		expect(ev('(concat "Bearer " "abc")')).toBe('"Bearer abc"');
+	});
+
+	it("concat with a secret yields an opaque, redacted secret", () => {
+		const interp = freshInterp();
+		interp.setSecrets({ FOO: "s3cr3t" });
+		// Building `Bearer <key>` must not throw and must stay redacted.
+		const out = ev('(concat "Bearer " (secret "FOO"))', interp);
+		expect(out).toBe("#<secret:FOO>");
+		expect(out).not.toContain("s3cr3t");
+	});
+});
+
 describe("secret registry (env seeding)", () => {
 	it("seeds secrets from REPL_* env vars, overridable by setSecrets", () => {
 		const prev = process.env.REPL_FOO;
@@ -146,6 +161,10 @@ describe("secret registry (reveal at the MCP call boundary)", () => {
 		expect(str(run(interp, '(fx/echo :message (secret "FOO"))'))).toBe(
 			'"s3cr3t"',
 		);
+		// A composed secret (e.g. `Bearer <key>`) also reveals its full value.
+		expect(
+			str(run(interp, '(fx/echo :message (concat "Bearer " (secret "FOO")))')),
+		).toBe('"Bearer s3cr3t"');
 		// But the secret itself still prints redacted.
 		expect(str(run(interp, '(secret "FOO")'))).toBe("#<secret:FOO>");
 	});

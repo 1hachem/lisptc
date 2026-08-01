@@ -863,16 +863,27 @@ export class Interp {
 			"concat",
 			-1,
 			"(concat s...)",
-			"Concatenate the string arguments into one string.",
+			'Concatenate the string arguments into one string. If any argument is a secret, the result is itself an opaque secret (redacted when printed, revealed only when passed into a call) so credentials like `(concat "Bearer " (secret "X"))` can be built without exposing the value.',
 			z.tuple([zList]),
 			([rest]) => {
 				let out = "";
+				const secretKeys: string[] = [];
 				for (let p = rest; p !== null; p = p.cdr as List) {
 					const s = (p as Cell).car;
-					if (typeof s !== "string") throw new EvalException("not a string", s);
-					out += s;
+					if (s instanceof Secret) {
+						secretKeys.push(s.key);
+						out += s.reveal();
+					} else if (typeof s === "string") {
+						out += s;
+					} else {
+						throw new EvalException("not a string", s);
+					}
 				}
-				return out;
+				// Composing with a secret yields a secret, so the joined value stays
+				// opaque everywhere except the outgoing-request serialization.
+				return secretKeys.length > 0
+					? new Secret(secretKeys.join("+"), out)
+					: out;
 			},
 		);
 		this.def(
