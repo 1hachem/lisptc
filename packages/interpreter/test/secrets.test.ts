@@ -11,9 +11,7 @@ const FIXTURE = fileURLToPath(
 	new URL("./fixture-mcp-server.ts", import.meta.url),
 );
 
-// Interpreter-level behaviour: secrets are ordinary strings; redaction is a
-// REPL concern (see the AgentRepl block below), so `ev` sees raw values.
-describe("secret registry (interpreter level)", () => {
+describe("secret registry", () => {
 	it("lists the keys of registered secrets (prefix kept)", () => {
 		const interp = freshInterp();
 		interp.setSecrets({ REPL_FOO: "bar", REPL_BAZ: "qux" });
@@ -33,62 +31,78 @@ describe("secret registry (interpreter level)", () => {
 		);
 	});
 
-	it("returns an empty list when no secrets are registered", () => {
-		expect(ev("(secrets)")).toBe("nil");
-	});
-
 	it("errors when reading an unknown secret", () => {
 		expect(() => ev('(secret "REPL_NOPE")')).toThrow(/unknown secret/);
 	});
 
-	it("is an ordinary string usable by any text function", () => {
+	it("always prints a secret redacted, never its value", () => {
 		const interp = freshInterp();
 		interp.setSecrets({ REPL_FOO: "s3cr3t" });
-		// A raw secret is just its value at the interpreter level.
-		expect(ev('(secret "REPL_FOO")', interp)).toBe('"s3cr3t"');
-		// Every string function works — concat, upcase, length, ...
-		expect(ev('(concat "Bearer " (secret "REPL_FOO"))', interp)).toBe(
-			'"Bearer s3cr3t"',
+		expect(ev('(secret "REPL_FOO")', interp)).toBe("#<secret:REPL_FOO>");
+		expect(ev('(list "a" (secret "REPL_FOO") "b")', interp)).toBe(
+			'("a" #<secret:REPL_FOO> "b")',
 		);
-		expect(ev('(string-upcase (secret "REPL_FOO"))', interp)).toBe('"S3CR3T"');
+	});
+
+	it("is a string: length and stringp work", () => {
+		const interp = freshInterp();
+		interp.setSecrets({ REPL_FOO: "s3cr3t" });
 		expect(ev('(length (secret "REPL_FOO"))', interp)).toBe("6");
+		expect(ev('(stringp (secret "REPL_FOO"))', interp)).toBe("t");
 	});
 });
 
-// The REPL redacts secret values out of everything it prints — returned
-// values and prin1/princ side-effect output alike.
-describe("secret registry (REPL redaction)", () => {
-	function replWithSecret(value: string): AgentRepl {
-		const repl = new AgentRepl();
-		repl.setSecrets({ REPL_FOO: value });
-		return repl;
+// Taint tracking: anything derived from a secret through a text function stays
+// a secret and prints redacted — so an agent cannot transform its way around
+// the redaction (upcase, reverse, substring, char, concat, ...).
+describe("secret registry (taint propagation)", () => {
+	function interpWith(value: string): Interp {
+		const interp = freshInterp();
+		interp.setSecrets({ REPL_FOO: value });
+		return interp;
 	}
 
-	it("redacts a returned secret value", () => {
-		const repl = replWithSecret("s3cr3t");
-		expect(repl.eval('(secret "REPL_FOO")').trim()).toBe(
-			'"#<secret:REPL_FOO>"',
+	it("stays redacted through string-upcase / string-downcase", () => {
+		const interp = interpWith("s3cr3t");
+		expect(ev('(string-upcase (secret "REPL_FOO"))', interp)).toBe(
+			"#<secret:REPL_FOO>",
+		);
+		expect(ev('(string-downcase (secret "REPL_FOO"))', interp)).toBe(
+			"#<secret:REPL_FOO>",
 		);
 	});
 
-	it("redacts side-effect (princ) output", () => {
-		const repl = replWithSecret("s3cr3t");
-		const out = repl.eval('(princ (secret "REPL_FOO"))');
-		expect(out).not.toContain("s3cr3t");
-		expect(out).toContain("#<secret:REPL_FOO>");
+	it("stays redacted through concat, char and substring", () => {
+		const interp = interpWith("s3cr3t");
+		expect(ev('(concat "Bearer " (secret "REPL_FOO"))', interp)).toBe(
+			"#<secret:REPL_FOO>",
+		);
+		expect(ev('(char (secret "REPL_FOO") 0)', interp)).toBe(
+			"#<secret:REPL_FOO>",
+		);
+		expect(ev('(substring (secret "REPL_FOO") 0 3)', interp)).toBe(
+			"#<secret:REPL_FOO>",
+		);
 	});
 
-	it("redacts a secret nested inside a composed string", () => {
-		const repl = replWithSecret("s3cr3t");
-		const out = repl.eval('(concat "Bearer " (secret "REPL_FOO"))').trim();
-		// The `Bearer ` text stays; only the secret value is masked.
-		expect(out).toBe('"Bearer #<secret:REPL_FOO>"');
-		expect(out).not.toContain("s3cr3t");
+	it("unions taint when two secrets are combined", () => {
+		const interp = freshInterp();
+		interp.setSecrets({ REPL_A: "aaa", REPL_B: "bbb" });
+		expect(ev('(concat (secret "REPL_A") (secret "REPL_B"))', interp)).toBe(
+			"#<secret:REPL_A+REPL_B>",
+		);
 	});
 
-	it("does not redact when nothing matches a secret value", () => {
-		const repl = replWithSecret("s3cr3t");
-		expect(repl.eval('(concat "a" "b")').trim()).toBe('"ab"');
+	it("still lets string predicates work on secrets (value compare)", () => {
+		const interp = interpWith("s3cr3t");
+		expect(ev('(string-prefix? "s3" (secret "REPL_FOO"))', interp)).toBe("t");
+		expect(ev('(string-contains? (secret "REPL_FOO") "cr")', interp)).toBe("t");
+	});
+
+	it("plain strings are untainted (no false redaction)", () => {
+		const interp = interpWith("s3cr3t");
+		expect(ev('(concat "a" "b")', interp)).toBe('"ab"');
+		expect(ev('(string-upcase "abc")', interp)).toBe('"ABC"');
 	});
 });
 
@@ -100,8 +114,9 @@ describe("secret registry (env seeding)", () => {
 			const interp = new Interp();
 			run(interp, prelude);
 			expect(str(run(interp, "(secrets)"))).toContain("REPL_FOO");
-			interp.setSecrets({ REPL_FOO: "from-host" });
-			expect(str(run(interp, '(secret "REPL_FOO")'))).toBe('"from-host"');
+			expect(str(run(interp, '(secret "REPL_FOO")'))).toBe(
+				"#<secret:REPL_FOO>",
+			);
 		} finally {
 			if (prev === undefined) delete process.env.REPL_FOO;
 			else process.env.REPL_FOO = prev;
@@ -151,7 +166,7 @@ describe("secret registry (.env file loading)", () => {
 	});
 });
 
-describe("secret registry (used in an MCP call)", () => {
+describe("secret registry (revealed only into an MCP call)", () => {
 	const interp = new Interp();
 	run(interp, prelude);
 	interp.setSecrets({ REPL_FOO: "s3cr3t" });
@@ -160,7 +175,7 @@ describe("secret registry (used in an MCP call)", () => {
 		run(interp, "(mcp-shutdown)");
 	});
 
-	it("passes the real value (and composed values) into an MCP tool call", () => {
+	it("passes the real (and composed) value into an MCP tool call", () => {
 		str(
 			run(
 				interp,
@@ -168,7 +183,7 @@ describe("secret registry (used in an MCP call)", () => {
 			),
 		);
 		// The echo fixture returns its :message argument verbatim, proving the
-		// real value (no redaction) reaches the tool.
+		// real value is revealed on the way into the call.
 		expect(str(run(interp, '(fx/echo :message (secret "REPL_FOO"))'))).toBe(
 			'"s3cr3t"',
 		);

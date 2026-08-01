@@ -213,6 +213,13 @@ const zString = z.custom<string>(
 	(x) => typeof x === "string",
 	"string expected",
 );
+// Accepts a plain string or a tainted secret (see the `Secret` class). Used by
+// the string primitives so secrets flow through them; read the underlying text
+// with `secretValue` and re-taint the result with `propagateTaint`.
+const zStringLike = z.custom<string | Secret>(
+	(x) => typeof x === "string" || x instanceof Secret,
+	"string expected",
+);
 const zSym = z.custom<Sym>((x) => x instanceof Sym, "symbol expected");
 
 // Validate a built-in's argument frame against a tuple schema, throwing an
@@ -496,6 +503,47 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
+// A tainted string: the value of a secret, or anything derived from one. It
+// behaves like a string everywhere in the interpreter (the string primitives
+// accept it and propagate the taint into their results), but `str` renders it
+// redacted as `#<secret:KEY>` — so a secret and everything computed from it is
+// never printed, while the real value is still usable (revealed by `lispToJson`
+// when passed into an outgoing MCP call). `keys` records which registry secrets
+// it descends from (more than one after e.g. concatenating two secrets).
+export class Secret {
+	readonly keys: readonly string[];
+	constructor(
+		readonly value: string,
+		keys: Iterable<string>,
+	) {
+		this.keys = [...new Set(keys)];
+	}
+	// Length so the `length` primitive treats a secret like a string.
+	get length(): number {
+		return this.value.length;
+	}
+	toString(): string {
+		return `#<secret:${this.keys.join("+")}>`;
+	}
+}
+
+// The underlying string of a plain string or a tainted secret.
+function secretValue(x: string | Secret): string {
+	return x instanceof Secret ? x.value : x;
+}
+
+// Wrap `value` as a tainted secret if any source was tainted, unioning the
+// source keys; otherwise return the plain string. This is how the string
+// primitives propagate taint through to their results.
+function propagateTaint(
+	value: string,
+	sources: readonly unknown[],
+): string | Secret {
+	const keys: string[] = [];
+	for (const s of sources) if (s instanceof Secret) keys.push(...s.keys);
+	return keys.length > 0 ? new Secret(value, keys) : value;
+}
+
 // Required prefix for every registry key. Only `REPL_*` names become secrets,
 // and the prefix is kept, so `REPL_LINEAR_API_KEY` is read back as the secret
 // keyed `REPL_LINEAR_API_KEY` (both from env vars and host-supplied records).
@@ -612,8 +660,12 @@ export class Interp {
 			"(length x)",
 			"Return the length of a list or string.",
 			z.tuple([
-				z.custom<Cell | string | null>(
-					(x) => x === null || x instanceof Cell || typeof x === "string",
+				z.custom<Cell | string | Secret | null>(
+					(x) =>
+						x === null ||
+						x instanceof Cell ||
+						typeof x === "string" ||
+						x instanceof Secret,
 					"list or string expected",
 				),
 			]),
@@ -625,7 +677,7 @@ export class Interp {
 			"(stringp x)",
 			"Return t if `x` is a string.",
 			z.tuple([zAny]),
-			([x]) => (typeof x === "string" ? true : null),
+			([x]) => (typeof x === "string" || x instanceof Secret ? true : null),
 		);
 		this.def(
 			"numberp",
@@ -643,11 +695,14 @@ export class Interp {
 			"Return t if `x` and `y` are identical or numerically equal. Alias: `=`.",
 			z.tuple([zAny, zAny]),
 			([x, y]) => {
-				return x === y
-					? true
-					: isNumeric(x) && isNumeric(y) && compare(x, y) === 0
-						? true
-						: null;
+				if (x === y) return true;
+				if (isNumeric(x) && isNumeric(y) && compare(x, y) === 0) return true;
+				// Strings compare by value, so a tainted secret is equal to the
+				// plain string it holds (lets string predicates work on secrets).
+				const xs = typeof x === "string" || x instanceof Secret;
+				const ys = typeof y === "string" || y instanceof Secret;
+				if (xs && ys && secretValue(x) === secretValue(y)) return true;
+				return null;
 			},
 		);
 
@@ -836,26 +891,30 @@ export class Interp {
 			2,
 			"(char s i)",
 			"Return the character at index `i` of `s` as a one-character string, or nil if `i` is out of range.",
-			z.tuple([zString, zNumeric]),
+			z.tuple([zStringLike, zNumeric]),
 			([s, i]) => {
+				const v = secretValue(s);
 				const n = Number(i);
-				return n >= 0 && n < s.length ? s[n] : null;
+				return n >= 0 && n < v.length ? propagateTaint(v[n], [s]) : null;
 			},
 		);
 		this.def(
 			"concat",
 			-1,
 			"(concat s...)",
-			"Concatenate the string arguments into one string.",
+			"Concatenate the string arguments into one string. If any argument is a secret, the result is a secret too (its taint is carried through).",
 			z.tuple([zList]),
 			([rest]) => {
 				let out = "";
+				const sources: unknown[] = [];
 				for (let p = rest; p !== null; p = p.cdr as List) {
 					const s = (p as Cell).car;
-					if (typeof s !== "string") throw new EvalException("not a string", s);
-					out += s;
+					if (typeof s !== "string" && !(s instanceof Secret))
+						throw new EvalException("not a string", s);
+					sources.push(s);
+					out += secretValue(s);
 				}
-				return out;
+				return propagateTaint(out, sources);
 			},
 		);
 		this.def(
@@ -863,16 +922,16 @@ export class Interp {
 			1,
 			"(string-upcase s)",
 			"Return `s` with all letters converted to upper case.",
-			z.tuple([zString]),
-			([s]) => s.toUpperCase(),
+			z.tuple([zStringLike]),
+			([s]) => propagateTaint(secretValue(s).toUpperCase(), [s]),
 		);
 		this.def(
 			"string-downcase",
 			1,
 			"(string-downcase s)",
 			"Return `s` with all letters converted to lower case.",
-			z.tuple([zString]),
-			([s]) => s.toLowerCase(),
+			z.tuple([zStringLike]),
+			([s]) => propagateTaint(secretValue(s).toLowerCase(), [s]),
 		);
 
 		this.def(
@@ -975,13 +1034,13 @@ export class Interp {
 			"secret",
 			1,
 			"(secret key)",
-			"Return the secret stored under `key`. It is an ordinary string, so any text function works on it; the REPL redacts its value (as #<secret:key>) when printing results, so it is never shown. Errors if `key` is unknown.",
+			"Return the secret stored under `key` as a tainted string: every text function works on it and the taint follows into the result, but it always prints redacted (as #<secret:key>) and is only revealed when passed into a call such as an MCP tool or `:headers`. Errors if `key` is unknown.",
 			z.tuple([zString]),
 			([key]) => {
 				const value = this.secrets.get(key);
 				if (value === undefined)
 					throw new EvalException("unknown secret", key, false);
-				return value;
+				return new Secret(value, [key]);
 			},
 		);
 
@@ -1037,22 +1096,6 @@ export class Interp {
 	// The registry keys the LLM is allowed to see (values stay hidden).
 	secretKeys(): string[] {
 		return [...this.secrets.keys()];
-	}
-
-	// Redact secret values out of REPL-bound text. Secrets are ordinary strings
-	// inside the interpreter (so every text function works on them naturally);
-	// redaction is a presentation concern applied once, here, when the REPL is
-	// about to show output — replacing any occurrence of a secret's value with
-	// `#<secret:KEY>`. Longest values first so overlapping values mask fully.
-	redactSecrets(text: string): string {
-		let out = text;
-		const entries = [...this.secrets.entries()].sort(
-			(a, b) => b[1].length - a[1].length,
-		);
-		for (const [key, value] of entries) {
-			if (value.length > 0) out = out.split(value).join(`#<secret:${key}>`);
-		}
-		return out;
 	}
 
 	// Load secrets from a `.env`-style file (KEY=VALUE lines). Only `REPL_`-prefixed
