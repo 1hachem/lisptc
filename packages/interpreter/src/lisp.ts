@@ -544,6 +544,10 @@ function propagateTaint(
 	return keys.length > 0 ? new Secret(value, keys) : value;
 }
 
+// How a host supplies a secret: either just its value, or its value plus a
+// human-readable description shown by `(secrets)` so the LLM knows what it is.
+export type SecretSpec = string | { value: string; description?: string };
+
 // Required prefix for every registry key. Only `REPL_*` names become secrets,
 // and the prefix is kept, so `REPL_LINEAR_API_KEY` is read back as the secret
 // keyed `REPL_LINEAR_API_KEY` (both from env vars and host-supplied records).
@@ -553,11 +557,15 @@ export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
 
-	// Host-supplied secret registry: key -> real value. Keys are listable by the
-	// LLM (`(secrets)`); values are only obtainable as opaque `Secret` objects
-	// via `(secret "key")` and are never printed. Seeded from `REPL_*` env vars
-	// at construction; `setSecrets` (from the host) overrides those.
-	private readonly secrets: Map<string, string> = new Map();
+	// Host-supplied secret registry: key -> { value, description }. Keys and
+	// descriptions are listable by the LLM (`(secrets)`); values are only
+	// obtainable as tainted `Secret` strings via `(secret "key")` and are never
+	// printed. Seeded from `REPL_*` env vars at construction (no description);
+	// `setSecrets` (from the host) overrides those and can attach descriptions.
+	private readonly secrets: Map<
+		string,
+		{ value: string; description: string }
+	> = new Map();
 
 	// Directories to resolve relative `import` paths against — one entry per
 	// file currently being loaded (the innermost import wins). Empty at the REPL,
@@ -1020,13 +1028,15 @@ export class Interp {
 			"secrets",
 			0,
 			"(secrets)",
-			"Return the list of available secret keys. Values are hidden — read a secret with `(secret key)`.",
+			"Return an alist of (key . description) for every available secret. Values are hidden — read one with `(secret key)`.",
 			z.tuple([]),
 			() => {
 				let list: List = null;
-				const keys = this.secretKeys();
-				for (let i = keys.length - 1; i >= 0; i--)
-					list = new Cell(keys[i], list);
+				const entries = [...this.secrets.entries()];
+				for (let i = entries.length - 1; i >= 0; i--) {
+					const [key, { description }] = entries[i];
+					list = new Cell(new Cell(key, description), list);
+				}
 				return list;
 			},
 		);
@@ -1037,10 +1047,10 @@ export class Interp {
 			"Return the secret stored under `key` as a tainted string: every text function works on it and the taint follows into the result, but it always prints redacted (as #<secret:key>) and is only revealed when passed into a call such as an MCP tool or `:headers`. Errors if `key` is unknown.",
 			z.tuple([zString]),
 			([key]) => {
-				const value = this.secrets.get(key);
-				if (value === undefined)
+				const entry = this.secrets.get(key);
+				if (entry === undefined)
 					throw new EvalException("unknown secret", key, false);
-				return new Secret(value, [key]);
+				return new Secret(entry.value, [key]);
 			},
 		);
 
@@ -1088,9 +1098,15 @@ export class Interp {
 	// (e.g. env-seeded) entries with the same key. Only keys starting with the
 	// `REPL_` prefix are accepted; the prefix is kept as part of the key, so a
 	// secret is read back with its full name, e.g. `(secret "REPL_LINEAR_API_KEY")`.
-	setSecrets(record: Record<string, string>): void {
-		for (const [key, value] of Object.entries(record))
-			if (key.startsWith(SECRET_ENV_PREFIX)) this.secrets.set(key, value);
+	// Each spec is either a bare value or `{ value, description }`.
+	setSecrets(record: Record<string, SecretSpec>): void {
+		for (const [key, spec] of Object.entries(record)) {
+			if (!key.startsWith(SECRET_ENV_PREFIX)) continue;
+			const value = typeof spec === "string" ? spec : spec.value;
+			const description =
+				typeof spec === "string" ? "" : (spec.description ?? "");
+			this.secrets.set(key, { value, description });
+		}
 	}
 
 	// The registry keys the LLM is allowed to see (values stay hidden).
@@ -1113,7 +1129,7 @@ export class Interp {
 	private seedSecretsFromEnv(): void {
 		for (const [name, value] of Object.entries(process.env)) {
 			if (value !== undefined && name.startsWith(SECRET_ENV_PREFIX))
-				this.secrets.set(name, value);
+				this.secrets.set(name, { value, description: "" });
 		}
 	}
 

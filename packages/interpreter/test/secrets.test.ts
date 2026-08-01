@@ -12,12 +12,25 @@ const FIXTURE = fileURLToPath(
 );
 
 describe("secret registry", () => {
-	it("lists the keys of registered secrets (prefix kept)", () => {
+	it("lists (key . description) pairs for each secret", () => {
 		const interp = freshInterp();
-		interp.setSecrets({ REPL_FOO: "bar", REPL_BAZ: "qux" });
-		const out = ev("(secrets)", interp);
-		expect(out).toContain("REPL_FOO");
-		expect(out).toContain("REPL_BAZ");
+		interp.setSecrets({
+			REPL_API_KEY: { value: "lin_abc", description: "Linear API key" },
+			REPL_DB_PASS: "hunter2", // bare value => empty description
+		});
+		expect(ev("(secrets)", interp)).toBe(
+			'(("REPL_API_KEY" . "Linear API key") ("REPL_DB_PASS" . ""))',
+		);
+	});
+
+	it("reads a description out of the alist with assoc", () => {
+		const interp = freshInterp();
+		interp.setSecrets({
+			REPL_API_KEY: { value: "lin_abc", description: "Linear API key" },
+		});
+		expect(ev('(cdr (assoc "REPL_API_KEY" (secrets)))', interp)).toBe(
+			'"Linear API key"',
+		);
 	});
 
 	it("only registers keys starting with REPL_", () => {
@@ -107,13 +120,13 @@ describe("secret registry (taint propagation)", () => {
 });
 
 describe("secret registry (env seeding)", () => {
-	it("seeds secrets from REPL_* env vars, keeping the prefix", () => {
+	it("seeds secrets from REPL_* env vars, keeping the prefix (no description)", () => {
 		const prev = process.env.REPL_FOO;
 		process.env.REPL_FOO = "from-env";
 		try {
 			const interp = new Interp();
 			run(interp, prelude);
-			expect(str(run(interp, "(secrets)"))).toContain("REPL_FOO");
+			expect(str(run(interp, "(secrets)"))).toBe('(("REPL_FOO" . ""))');
 			expect(str(run(interp, '(secret "REPL_FOO")'))).toBe(
 				"#<secret:REPL_FOO>",
 			);
@@ -152,6 +165,16 @@ describe("secret registry (.env file loading)", () => {
 		expect(repl.eval("(secrets)")).toContain("REPL_FOO");
 	});
 
+	it("keeps descriptions across an AgentRepl reset()", () => {
+		const repl = new AgentRepl();
+		repl.setSecrets({
+			REPL_FOO: { value: "bar", description: "the foo token" },
+		});
+		expect(repl.eval("(secrets)")).toContain("the foo token");
+		repl.reset();
+		expect(repl.eval("(secrets)")).toContain("the foo token");
+	});
+
 	it("does not auto-load $LISPTC_SECRETS_FILE for an embedded AgentRepl", () => {
 		const path = writeEnvFile("REPL_PI_TOKEN=t0ken\n");
 		const prev = process.env.LISPTC_SECRETS_FILE;
@@ -182,8 +205,6 @@ describe("secret registry (revealed only into an MCP call)", () => {
 				`(await (load-mcp :name "fx" :command "node" :args (quote ("--experimental-transform-types" "${FIXTURE}"))))`,
 			),
 		);
-		// The echo fixture returns its :message argument verbatim, proving the
-		// real value is revealed on the way into the call.
 		expect(str(run(interp, '(fx/echo :message (secret "REPL_FOO"))'))).toBe(
 			'"s3cr3t"',
 		);

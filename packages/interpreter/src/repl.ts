@@ -23,6 +23,7 @@ import {
 	newSym,
 	prelude,
 	run,
+	type SecretSpec,
 	setWriter,
 	str,
 } from "./lisp.ts";
@@ -150,7 +151,7 @@ export class AgentRepl extends MemoryRepl {
 	private readonly conversationVars = new Map<string, unknown>();
 	// Host-supplied secrets, kept so a post-error `reset()` can re-inject them
 	// into the fresh interp's registry.
-	private readonly secrets = new Map<string, string>();
+	private readonly secrets = new Map<string, SecretSpec>();
 
 	// Re-establish the halt built-in and the conversation globals on every fresh
 	// interp. Guards `conversationVars` because the base constructor calls this
@@ -196,13 +197,14 @@ export class AgentRepl extends MemoryRepl {
 		}
 	}
 
-	// Register host-supplied secrets. Keys become listable by the agent via
-	// `(secrets)`; values stay opaque and are only usable inside calls (e.g. as
-	// MCP `:headers`). Merges into the registry; kept so `reset()` re-injects
-	// them. Env `LISPTC_SECRET_*` secrets are seeded by the interp itself.
-	setSecrets(record: Record<string, string>): void {
-		for (const [key, value] of Object.entries(record))
-			this.secrets.set(key, value);
+	// Register host-supplied secrets. Keys (and descriptions) become listable by
+	// the agent via `(secrets)`; values stay opaque and are only usable inside
+	// calls (e.g. as MCP `:headers`). Each spec is a bare value or
+	// `{ value, description }`. Merges into the registry; kept so `reset()`
+	// re-injects them. `REPL_*` env secrets are seeded by the interp itself.
+	setSecrets(record: Record<string, SecretSpec>): void {
+		for (const [key, spec] of Object.entries(record))
+			this.secrets.set(key, spec);
 		this.interp.setSecrets(record);
 	}
 
