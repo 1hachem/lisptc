@@ -116,7 +116,7 @@
 ;;
 ;; Load a server ad-hoc. Here we boot the repo's fixture stdio server,
 ;; which exposes a single tool, `echo`.
-(load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp"))
+(await (load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp")))
 
 (fs/read_file "/tmp/test")
 
@@ -124,7 +124,7 @@
 (list-mcps)
 ; => ((fx :loaded 1))
 ;; Enumerate tools: (symbol param-count doc)
-(print (list-tools "fs"))
+(list-tools "fs")
 
 ;; Full documentation for one tool, including per-parameter docs.
 (princ (mcp-doc 'fs/echo))
@@ -136,10 +136,11 @@
 ;; Each tool is an ordinary global binding named <server>/<tool>,
 ;; called with native keyword syntax. The synchronous interpreter
 ;; blocks on the async broker under the hood.
-(print (fs/echo :message "hello from lisptc"))
+(fs/echo :message "hello from lisptc")
+
 ; => "hello from lisptc"
 ;; Unload releases the tool bindings; shutdown tears down the broker.
-(print (unload-mcp "fs"))
+(unload-mcp "fs")
 
 ; => (fx/echo)
 (mcp-shutdown)
@@ -152,7 +153,13 @@
 
 (terpri)
 
+(await (load-mcp "playwright"))
+
 (load-mcp "playwright")
+(await j)
+
 (search-tools "navigate")
 
-(playwright/browser_navigate :url "hyko.ai")
+(playwright/browser_navigate :url "yourscrib.ai")
+
+(unload-mcp "playwright")
