@@ -18,6 +18,21 @@ import {
 } from "./lisp.ts";
 import type { Repl } from "./repl.ts";
 
+// Seed the secret registry from a `.env` file for the standalone REPL: the path
+// in $LISPTC_SECRETS_FILE, or `.env` in the working directory if it exists.
+// (Named without the `REPL_` prefix so it isn't itself seeded as a secret;
+// `REPL_*` env vars are seeded by the Interp constructor regardless.)
+function loadSecretsFile(interp: Interp): void {
+	const explicit = process.env.LISPTC_SECRETS_FILE;
+	const path = explicit ?? ".env";
+	try {
+		interp.loadSecretsFromFile(path);
+	} catch {
+		// A missing default `.env` is fine; only warn if one was named explicitly.
+		if (explicit) write(`warning: could not read secrets file ${explicit}\n`);
+	}
+}
+
 // Read a line as a string (displaying the given prompt), or null on EOF.
 // Wired to a readline interface by main().
 let readLine: (prompt: string) => Promise<string | null>;
@@ -44,6 +59,7 @@ class InteractiveRepl implements Repl {
 	private freshInterp(): Interp {
 		const interp = new Interp();
 		run(interp, prelude);
+		loadSecretsFile(interp);
 		return interp;
 	}
 

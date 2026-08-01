@@ -57,9 +57,9 @@ describe("secret registry", () => {
 });
 
 describe("secret registry (env seeding)", () => {
-	it("seeds secrets from LISPTC_SECRET_* env vars, overridable by setSecrets", () => {
-		const prev = process.env.LISPTC_SECRET_FOO;
-		process.env.LISPTC_SECRET_FOO = "from-env";
+	it("seeds secrets from REPL_* env vars, overridable by setSecrets", () => {
+		const prev = process.env.REPL_FOO;
+		process.env.REPL_FOO = "from-env";
 		try {
 			const interp = new Interp();
 			run(interp, prelude);
@@ -71,8 +71,8 @@ describe("secret registry (env seeding)", () => {
 			interp.setSecrets({ FOO: "from-host" });
 			expect(str(run(interp, '(secret "FOO")'))).toBe("#<secret:FOO>");
 		} finally {
-			if (prev === undefined) delete process.env.LISPTC_SECRET_FOO;
-			else process.env.LISPTC_SECRET_FOO = prev;
+			if (prev === undefined) delete process.env.REPL_FOO;
+			else process.env.REPL_FOO = prev;
 		}
 	});
 });

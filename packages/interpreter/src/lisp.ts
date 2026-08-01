@@ -515,8 +515,8 @@ export class Secret {
 }
 
 // Prefix for environment variables seeded into the secret registry, e.g.
-// `LISPTC_SECRET_LINEAR_API_KEY` becomes the secret keyed `LINEAR_API_KEY`.
-const SECRET_ENV_PREFIX = "LISPTC_SECRET_";
+// `REPL_LINEAR_API_KEY` becomes the secret keyed `LINEAR_API_KEY`.
+const SECRET_ENV_PREFIX = "REPL_";
 
 export class Interp {
 	// Table of the global values of symbols
@@ -524,8 +524,8 @@ export class Interp {
 
 	// Host-supplied secret registry: key -> real value. Keys are listable by the
 	// LLM (`(secrets)`); values are only obtainable as opaque `Secret` objects
-	// via `(secret "key")` and are never printed. Seeded from `LISPTC_SECRET_*`
-	// env vars at construction; `setSecrets` (from the host) overrides those.
+	// via `(secret "key")` and are never printed. Seeded from `REPL_*` env vars
+	// at construction; `setSecrets` (from the host) overrides those.
 	private readonly secrets: Map<string, string> = new Map();
 
 	// Directories to resolve relative `import` paths against — one entry per
