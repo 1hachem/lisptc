@@ -496,26 +496,9 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
-// An opaque secret value. It carries its registry key and its real value, but
-// only ever prints as `#<secret:KEY>` (via `str`'s toString fallback) so the
-// LLM can see a secret *exists* without reading it. The real value is revealed
-// only when a secret is serialized into an outgoing MCP request (see the
-// `Secret` branch in `lispToJson`, src/mcp.ts).
-export class Secret {
-	constructor(
-		readonly key: string,
-		private readonly value: string,
-	) {}
-	reveal(): string {
-		return this.value;
-	}
-	toString(): string {
-		return `#<secret:${this.key}>`;
-	}
-}
-
-// Prefix for environment variables seeded into the secret registry, e.g.
-// `REPL_LINEAR_API_KEY` becomes the secret keyed `LINEAR_API_KEY`.
+// Required prefix for every registry key. Only `REPL_*` names become secrets,
+// and the prefix is kept, so `REPL_LINEAR_API_KEY` is read back as the secret
+// keyed `REPL_LINEAR_API_KEY` (both from env vars and host-supplied records).
 const SECRET_ENV_PREFIX = "REPL_";
 
 export class Interp {
@@ -863,27 +846,16 @@ export class Interp {
 			"concat",
 			-1,
 			"(concat s...)",
-			'Concatenate the string arguments into one string. If any argument is a secret, the result is itself an opaque secret (redacted when printed, revealed only when passed into a call) so credentials like `(concat "Bearer " (secret "X"))` can be built without exposing the value.',
+			"Concatenate the string arguments into one string.",
 			z.tuple([zList]),
 			([rest]) => {
 				let out = "";
-				const secretKeys: string[] = [];
 				for (let p = rest; p !== null; p = p.cdr as List) {
 					const s = (p as Cell).car;
-					if (s instanceof Secret) {
-						secretKeys.push(s.key);
-						out += s.reveal();
-					} else if (typeof s === "string") {
-						out += s;
-					} else {
-						throw new EvalException("not a string", s);
-					}
+					if (typeof s !== "string") throw new EvalException("not a string", s);
+					out += s;
 				}
-				// Composing with a secret yields a secret, so the joined value stays
-				// opaque everywhere except the outgoing-request serialization.
-				return secretKeys.length > 0
-					? new Secret(secretKeys.join("+"), out)
-					: out;
+				return out;
 			},
 		);
 		this.def(
@@ -1003,13 +975,13 @@ export class Interp {
 			"secret",
 			1,
 			"(secret key)",
-			"Return the secret stored under `key` as an opaque value (prints as #<secret:key>). Its real value is never shown; it is only revealed when passed into a call such as an MCP tool or `:headers`. Errors if `key` is unknown.",
+			"Return the secret stored under `key`. It is an ordinary string, so any text function works on it; the REPL redacts its value (as #<secret:key>) when printing results, so it is never shown. Errors if `key` is unknown.",
 			z.tuple([zString]),
 			([key]) => {
 				const value = this.secrets.get(key);
 				if (value === undefined)
 					throw new EvalException("unknown secret", key, false);
-				return new Secret(key, value);
+				return value;
 			},
 		);
 
@@ -1054,10 +1026,12 @@ export class Interp {
 	}
 
 	// Merge host-supplied secrets into the registry, overriding any existing
-	// (e.g. env-seeded) entries with the same key.
+	// (e.g. env-seeded) entries with the same key. Only keys starting with the
+	// `REPL_` prefix are accepted; the prefix is kept as part of the key, so a
+	// secret is read back with its full name, e.g. `(secret "REPL_LINEAR_API_KEY")`.
 	setSecrets(record: Record<string, string>): void {
 		for (const [key, value] of Object.entries(record))
-			this.secrets.set(key, value);
+			if (key.startsWith(SECRET_ENV_PREFIX)) this.secrets.set(key, value);
 	}
 
 	// The registry keys the LLM is allowed to see (values stay hidden).
@@ -1065,21 +1039,38 @@ export class Interp {
 		return [...this.secrets.keys()];
 	}
 
-	// Load secrets from a `.env`-style file (KEY=VALUE lines). Every entry is
-	// registered as a secret under its literal key, overriding existing entries.
-	// Later calls / `setSecrets` win. Returns the parsed entries (so a host can
-	// persist them); throws if the file cannot be read.
+	// Redact secret values out of REPL-bound text. Secrets are ordinary strings
+	// inside the interpreter (so every text function works on them naturally);
+	// redaction is a presentation concern applied once, here, when the REPL is
+	// about to show output — replacing any occurrence of a secret's value with
+	// `#<secret:KEY>`. Longest values first so overlapping values mask fully.
+	redactSecrets(text: string): string {
+		let out = text;
+		const entries = [...this.secrets.entries()].sort(
+			(a, b) => b[1].length - a[1].length,
+		);
+		for (const [key, value] of entries) {
+			if (value.length > 0) out = out.split(value).join(`#<secret:${key}>`);
+		}
+		return out;
+	}
+
+	// Load secrets from a `.env`-style file (KEY=VALUE lines). Only `REPL_`-prefixed
+	// keys are registered (see setSecrets), and the prefix is kept as part of the
+	// key. Later calls / `setSecrets` win. Returns the parsed entries (so a host
+	// can persist them); throws if the file cannot be read.
 	loadSecretsFromFile(path: string): Record<string, string> {
 		const record = dotenv.parse(readFileSync(path));
 		this.setSecrets(record);
 		return record;
 	}
 
-	// Seed the registry from `LISPTC_SECRET_*` environment variables.
+	// Seed the registry from `REPL_*` environment variables, keeping the prefix
+	// as part of the key (e.g. `REPL_LINEAR_API_KEY`).
 	private seedSecretsFromEnv(): void {
 		for (const [name, value] of Object.entries(process.env)) {
 			if (value !== undefined && name.startsWith(SECRET_ENV_PREFIX))
-				this.secrets.set(name.slice(SECRET_ENV_PREFIX.length), value);
+				this.secrets.set(name, value);
 		}
 	}
 

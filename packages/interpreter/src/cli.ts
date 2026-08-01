@@ -86,9 +86,10 @@ class InteractiveRepl implements Repl {
 					return;
 				}
 				const result = this.currentInterp.eval(exp, null);
-				write(`${str(result)}\n`);
+				write(this.currentInterp.redactSecrets(`${str(result)}\n`));
 			} catch (ex) {
-				if (ex instanceof EvalException) write(`${ex}\n`);
+				if (ex instanceof EvalException)
+					write(this.currentInterp.redactSecrets(`${ex}\n`));
 				else throw ex;
 			}
 		}
@@ -189,10 +190,11 @@ async function main(): Promise<void> {
 		return line;
 	};
 
-	setWriter(write);
-	setExit(process.exit);
-
 	const repl = new InteractiveRepl();
+	// Redact secret values from side-effect output (prin1/princ) too, using the
+	// current interp's registry.
+	setWriter((s) => write(repl.interp.redactSecrets(s)));
+	setExit(process.exit);
 	let started = false;
 	let fs: typeof import("node:fs") | undefined;
 	let argv = process.argv as string[];

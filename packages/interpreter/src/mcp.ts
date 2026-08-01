@@ -24,7 +24,6 @@ import {
 	type List,
 	newLispKeyword,
 	newSym,
-	Secret,
 	Sym,
 	zList,
 } from "./lisp.ts";
@@ -310,9 +309,6 @@ function lispToJson(x: unknown): unknown {
 	if (isNumeric(x)) return x;
 	if (x instanceof LispKeyword) return x.name;
 	if (x instanceof Sym) return x.name;
-	// A secret reveals its real value only here, on the way out into an MCP
-	// request/config (tool args, :headers, :env) — never through `str`.
-	if (x instanceof Secret) return x.reveal();
 	if (x instanceof Cell) {
 		if (isAlist(x)) {
 			const obj: Record<string, unknown> = {};

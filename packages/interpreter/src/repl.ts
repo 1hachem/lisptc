@@ -129,7 +129,9 @@ export class MemoryRepl implements InMemoryRepl {
 		} finally {
 			setWriter(prev);
 		}
-		return out;
+		// Redact secret values here, at the single output boundary, so secrets
+		// behave as ordinary strings during evaluation but are never shown.
+		return this.currentInterp.redactSecrets(out);
 	}
 
 	// Discard all definitions; start from a fresh prelude-loaded interp.
