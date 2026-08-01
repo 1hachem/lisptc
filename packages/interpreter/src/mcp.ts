@@ -46,6 +46,9 @@ const STATE_SPILL = 3;
 const CTRL_BYTES = 8; // Int32Array [state, length]
 const DATA_BYTES = 1 << 20; // 1 MiB inline reply buffer
 const DEFAULT_TIMEOUT_MS = 30_000;
+// How long (await …) blocks before giving up. Kept under the pi extension's 60s
+// EVAL_TIMEOUT_MS so a stuck await surfaces as a Lisp error, not a REPL restart.
+const AWAIT_TIMEOUT_MS = 50_000;
 
 // --- Types -------------------------------------------------------------------
 interface Tool {
@@ -79,9 +82,43 @@ interface ServerRec {
 	tools: Map<string, Tool>;
 }
 
+// An async job handle: an opaque Lisp atom returned by lifecycle ops like
+// load-mcp. It carries the broker jobId plus an optional main-thread finalizer
+// that runs once when the job is first collected (e.g. installing a server's
+// tool bindings — a side effect that must happen on the main thread, not in the
+// broker). Prints via toString() using the #<...> idiom (see str() in lisp.ts).
+class Job {
+	finalized = false;
+	cached: unknown;
+	constructor(
+		readonly jobId: string,
+		readonly label: string,
+		readonly finalize?: (raw: unknown) => unknown,
+	) {}
+
+	toString(): string {
+		return `#<job ${this.label} ${this.jobId.slice(0, 8)}>`;
+	}
+}
+
+// A job handle argument.
+const zJob = z.custom<Job>((x) => x instanceof Job, "job expected");
+
+// Coerce a Lisp list of job handles into a Job[]; rejects non-jobs.
+function toJobs(x: unknown): Job[] {
+	const arr = x === null || x instanceof Cell ? listToArray(x as List) : [x];
+	return arr.map((j) => {
+		if (!(j instanceof Job)) throw new EvalException("not a job", j);
+		return j;
+	});
+}
+
 // --- Module state ------------------------------------------------------------
 const servers = new Map<string, ServerRec>();
 const predefined = new Map<string, ConnConfig>();
+// Jobs the interpreter still holds a handle to; used by (jobs) and cleared on
+// shutdown. Broker-side job state lives in the worker and dies with it.
+const liveJobs = new Set<Job>();
 let worker: Worker | null = null;
 
 // --- The synchronous bridge --------------------------------------------------
@@ -90,6 +127,11 @@ function ensureWorker(): Worker {
 	worker = new Worker(new URL("./mcp-broker.ts", import.meta.url), {
 		execArgv: ["--no-warnings", "--experimental-transform-types"],
 	});
+	// Apply `job-settled` push events: when a background job resolves, the broker
+	// posts here and we run its finalizer (e.g. install a server's tools) as soon
+	// as the event loop turns — so a loaded server's tools appear automatically,
+	// without an explicit (await job). Idempotent with await via job.finalized.
+	worker.on("message", onJobSettled);
 	// Keep the worker from holding the process open on its own.
 	worker.unref();
 	return worker;
@@ -137,6 +179,69 @@ function mcpRequest(
 		throw new EvalException(`MCP error: ${msg}`, op, false);
 	}
 	return parsed;
+}
+
+// --- Async job bridge --------------------------------------------------------
+// Kick off `op` as a background job in the broker; returns immediately with the
+// jobId (a fast round-trip: the broker registers the job without awaiting it).
+function mcpStart(op: string, payload: unknown): string {
+	const res = mcpRequest("start", { op, payload }) as { jobId: string };
+	return res.jobId;
+}
+
+// Block until the job settles (or times out); returns its raw result or throws.
+function mcpAwait(jobId: string, timeoutMs = AWAIT_TIMEOUT_MS): unknown {
+	return mcpRequest("await", { jobId }, timeoutMs);
+}
+
+// Non-blocking status snapshot: "pending" | "done" | "error" | "unknown".
+function mcpStatus(jobId: string): string {
+	return (mcpRequest("job-status", { jobId }) as { status: string }).status;
+}
+
+// A settled job result as reported by await-all / await-any.
+type SettledReply = { jobId: string; ok: boolean; v?: unknown; e?: string };
+
+// Collect a job on the main thread: run its finalizer once (caching the result)
+// so repeated awaits are idempotent, or translate a plain result to Lisp.
+function collect(job: Job, raw: unknown): unknown {
+	if (job.finalized) return job.cached;
+	const value = job.finalize ? job.finalize(raw) : jsonToLisp(raw);
+	job.finalized = true;
+	job.cached = value;
+	return value;
+}
+
+// Turn a broker SettledReply into the collected Lisp value, throwing on error.
+function collectSettled(job: Job, r: SettledReply): unknown {
+	if (!r.ok) throw new EvalException(`MCP error: ${r.e}`, job.label, false);
+	return collect(job, r.v);
+}
+
+// Handle a `job-settled` push from the broker: find the job and apply its
+// result (runs the finalizer, e.g. installing a server's tools) so it lands
+// automatically once the event loop turns — no polling. Runs on the main
+// thread's event loop, only between evals, so it never interleaves with an
+// in-progress evaluation. Idempotent: a job already collected via (await job)
+// is skipped; errored jobs are left as-is (job-status reports :error).
+function onJobSettled(msg: {
+	type?: string;
+	jobId?: string;
+	ok?: boolean;
+	v?: unknown;
+}): void {
+	if (msg?.type !== "job-settled" || !msg.ok) return;
+	for (const job of liveJobs) {
+		if (job.jobId !== msg.jobId) continue;
+		if (!job.finalized) {
+			try {
+				collect(job, msg.v);
+			} catch {
+				// Finalizer failed (e.g. server vanished): leave it uninstalled.
+			}
+		}
+		return;
+	}
 }
 
 // --- Lisp <-> JS/JSON conversion ---------------------------------------------
@@ -342,54 +447,185 @@ function doUnload(interp: Interp, name: string): Sym[] {
 	return rec.toolSyms;
 }
 
+// Install a connected server's tools as global `server/tool` bindings and
+// record the server. Runs on the main thread (defineGlobal is main-thread
+// state), so it is the finalizer body of a load-mcp job. Returns the list of
+// installed tool symbols — the value (await load-job) yields.
+function installServer(
+	interp: Interp,
+	name: string,
+	res: { serverId: string; tools: Tool[] },
+): List {
+	const toolMap = new Map<string, Tool>();
+	const toolSyms: Sym[] = [];
+	for (const tool of res.tools) {
+		toolMap.set(tool.name, tool);
+		const sym = newSym(`${name}/${tool.name}`);
+		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
+			const args = plistToJson(f[0] as List);
+			validate(tool, args);
+			const result = mcpRequest("call-tool", {
+				serverId: res.serverId,
+				tool: tool.name,
+				args,
+			});
+			return jsonToLisp(result);
+		});
+		interp.defineGlobal(sym, wrapper, {
+			signature: `(${sym.name} :arg value...)`,
+			doc: tool.description ?? "MCP tool (no description provided).",
+		});
+		toolSyms.push(sym);
+	}
+	servers.set(name, { name, serverId: res.serverId, toolSyms, tools: toolMap });
+	return arrayToList(toolSyms);
+}
+
 // --- Built-in installation ---------------------------------------------------
 export function registerMcp(interp: Interp): void {
 	parsePredefined();
 
 	// (load-mcp "name") | (load-mcp :name "x" :url "..." [:headers al])
 	//                   | (load-mcp :name "x" :command "cmd" [:args (...)])
+	// Async: returns a job immediately. The connect runs in the background; the
+	// server's `server/tool` bindings are installed when the job is awaited, so
+	// (await (load-mcp ...)) yields the tool list and calling a tool before
+	// awaiting raises a void-variable error.
 	interp.def(
 		"load-mcp",
 		-1,
 		'(load-mcp "server" [:config "path"])',
-		"Load an MCP server from the config file; each of its tools becomes a global function named `server/tool` called with keyword arguments.",
+		"Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns the tool list.",
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest);
 			if (servers.has(conf.name)) doUnload(interp, conf.name); // clean reload
+			const jobId = mcpStart("connect", conf);
+			const job = new Job(jobId, `load-mcp:${conf.name}`, (raw) =>
+				installServer(
+					interp,
+					conf.name,
+					raw as { serverId: string; tools: Tool[] },
+				),
+			);
+			liveJobs.add(job);
+			return job;
+		},
+	);
 
-			const res = mcpRequest("connect", conf) as {
-				serverId: string;
-				tools: Tool[];
-			};
-			const toolMap = new Map<string, Tool>();
-			const toolSyms: Sym[] = [];
-			for (const tool of res.tools) {
-				toolMap.set(tool.name, tool);
-				const sym = newSym(`${conf.name}/${tool.name}`);
-				const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
-					const args = plistToJson(f[0] as List);
-					validate(tool, args);
-					const result = mcpRequest("call-tool", {
-						serverId: res.serverId,
-						tool: tool.name,
-						args,
-					});
-					return jsonToLisp(result);
-				});
-				interp.defineGlobal(sym, wrapper, {
-					signature: `(${sym.name} :arg value...)`,
-					doc: tool.description ?? "MCP tool (no description provided).",
-				});
-				toolSyms.push(sym);
-			}
-			servers.set(conf.name, {
-				name: conf.name,
-				serverId: res.serverId,
-				toolSyms,
-				tools: toolMap,
-			});
-			return arrayToList(toolSyms);
+	// (await job [timeout-ms]) -> the job's result (blocks until it settles).
+	// For a load-mcp job this installs the tool bindings and returns the tool
+	// list. Idempotent: a second await returns the cached value. On timeout it
+	// raises but leaves the job awaitable.
+	interp.def(
+		"await",
+		-1,
+		"(await job [timeout-ms])",
+		"Block until an async job settles and return its result; re-raises the job's error. Optional timeout in milliseconds.",
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const job = args[0];
+			if (!(job instanceof Job)) throw new EvalException("not a job", job);
+			if (job.finalized) return job.cached;
+			const timeout = args[1] === undefined ? undefined : Number(args[1]);
+			return collect(job, mcpAwait(job.jobId, timeout));
+		},
+	);
+
+	// (await-all (list job ...) [timeout-ms]) -> list of results, in input order.
+	interp.def(
+		"await-all",
+		-1,
+		"(await-all jobs [timeout-ms])",
+		"Block until every job in the list settles; return their results in order.",
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const jobList = toJobs(args[0]);
+			if (jobList.length === 0) return null;
+			const timeout = args[1] === undefined ? undefined : Number(args[1]);
+			const byId = new Map(jobList.map((j) => [j.jobId, j]));
+			const res = mcpRequest(
+				"await-all",
+				{ jobIds: jobList.map((j) => j.jobId) },
+				timeout,
+			) as { results: SettledReply[] };
+			return arrayToList(
+				res.results.map((r) => {
+					const job = byId.get(r.jobId);
+					if (!job)
+						throw new EvalException("unknown job in await-all", r.jobId);
+					return collectSettled(job, r);
+				}),
+			);
+		},
+	);
+
+	// (await-any (list job ...) [timeout-ms]) -> the first result to settle.
+	interp.def(
+		"await-any",
+		-1,
+		"(await-any jobs [timeout-ms])",
+		"Block until the first job in the list settles; return that one result.",
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const jobList = toJobs(args[0]);
+			if (jobList.length === 0)
+				throw new EvalException("await-any: no jobs", null);
+			const timeout = args[1] === undefined ? undefined : Number(args[1]);
+			const byId = new Map(jobList.map((j) => [j.jobId, j]));
+			const r = mcpRequest(
+				"await-any",
+				{ jobIds: jobList.map((j) => j.jobId) },
+				timeout,
+			) as SettledReply;
+			const job = byId.get(r.jobId);
+			if (!job) throw new EvalException("unknown job in await-any", r.jobId);
+			return collectSettled(job, r);
+		},
+	);
+
+	// (job-status job) -> :pending | :done | :error
+	interp.def(
+		"job-status",
+		1,
+		"(job-status job)",
+		"Return the status of an async job as a keyword: :pending, :done, or :error.",
+		z.tuple([zJob]),
+		([job]) => newLispKeyword(job.finalized ? "done" : mcpStatus(job.jobId)),
+	);
+
+	// (jobs) -> ((job :status) ...) for every live job.
+	interp.def(
+		"jobs",
+		0,
+		"(jobs)",
+		"Return the live async jobs, each as (job :status).",
+		z.tuple([]),
+		() =>
+			arrayToList(
+				[...liveJobs].map((job) =>
+					arrayToList([
+						job,
+						newLispKeyword(job.finalized ? "done" : mcpStatus(job.jobId)),
+					]),
+				),
+			),
+	);
+
+	// (cancel job) -> t ; stop tracking the job (best-effort).
+	interp.def(
+		"cancel",
+		1,
+		"(cancel job)",
+		"Cancel an async job (best-effort) and stop tracking it.",
+		z.tuple([zJob]),
+		([job]) => {
+			mcpRequest("cancel", { jobId: job.jobId });
+			liveJobs.delete(job);
+			return true;
 		},
 	);
 
@@ -569,6 +805,7 @@ export function registerMcp(interp: Interp): void {
 		z.tuple([]),
 		() => {
 			servers.clear();
+			liveJobs.clear();
 			if (worker) {
 				void worker.terminate();
 				worker = null;
