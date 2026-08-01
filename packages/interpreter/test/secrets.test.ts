@@ -108,6 +108,21 @@ describe("secret registry (.env file loading)", () => {
 		repl.reset();
 		expect(repl.eval("(secrets)")).toContain("FOO");
 	});
+
+	it("auto-loads $LISPTC_SECRETS_FILE for an embedder (e.g. pi via AgentRepl)", () => {
+		const path = writeEnvFile("PI_TOKEN=t0ken\n");
+		const prev = process.env.LISPTC_SECRETS_FILE;
+		process.env.LISPTC_SECRETS_FILE = path;
+		try {
+			// A plain AgentRepl (no explicit setSecrets) picks the file up.
+			const repl = new AgentRepl();
+			expect(repl.eval("(secrets)")).toContain("PI_TOKEN");
+			expect(repl.eval('(secret "PI_TOKEN")')).toContain("#<secret:PI_TOKEN>");
+		} finally {
+			if (prev === undefined) delete process.env.LISPTC_SECRETS_FILE;
+			else process.env.LISPTC_SECRETS_FILE = prev;
+		}
+	});
 });
 
 describe("secret registry (reveal at the MCP call boundary)", () => {

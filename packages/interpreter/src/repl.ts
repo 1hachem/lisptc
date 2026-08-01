@@ -27,6 +27,25 @@ import {
 	str,
 } from "./lisp.ts";
 
+// Seed an interp's secret registry from a `.env` file: the path in
+// $LISPTC_SECRETS_FILE, or `.env` in the working directory if it exists. Shared
+// by every REPL front-end (the CLI and the embeddable AgentRepl) so a `.env`
+// works the same everywhere. (REPL_* env vars are seeded by the Interp
+// constructor regardless; the file-path var is deliberately not REPL_-prefixed
+// so it isn't itself picked up as a secret.) Returns the loaded entries.
+export function seedSecretsFromEnvFile(interp: Interp): Record<string, string> {
+	const explicit = process.env.LISPTC_SECRETS_FILE;
+	const path = explicit ?? ".env";
+	try {
+		return interp.loadSecretsFromFile(path);
+	} catch {
+		// A missing default `.env` is fine; only warn if one was named explicitly.
+		if (explicit)
+			console.error(`warning: could not read secrets file ${explicit}`);
+		return {};
+	}
+}
+
 // A REPL owns an interpreter and can be reset to a fresh one.
 export interface Repl {
 	readonly interp: Interp;
@@ -140,8 +159,12 @@ export class AgentRepl extends MemoryRepl {
 		this.installHalt(interp);
 		const vars = this.conversationVars;
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
-		// Re-inject host secrets. Guarded because the base constructor calls
-		// setup() before this subclass's field initializers have run.
+		// Seed secrets from a `.env` file (same behaviour as the standalone REPL),
+		// so an embedder like pi picks it up automatically.
+		seedSecretsFromEnvFile(interp);
+		// Re-inject explicitly-set host secrets last, so they win over the file.
+		// Guarded because the base constructor calls setup() before this
+		// subclass's field initializers have run.
 		const secrets = this.secrets;
 		if (secrets?.size) interp.setSecrets(Object.fromEntries(secrets));
 	}
