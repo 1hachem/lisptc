@@ -166,3 +166,7 @@
 
 (await (load-mcp :name "linear" :url "https://mcp.linear.app/mcp" :headers (list (cons "Authorization" (concat "Bearer " (secret "LINEAR_API_KEY"))))))
 (secrets)
+
+(concat (secret "REPL_LINEAR_API_KEY") "--test")
+
+(length (secret "REPL_LINEAR_API_KEY"))
