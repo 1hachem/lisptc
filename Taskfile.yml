@@ -14,22 +14,9 @@ tasks:
     vars:
       DIR: '{{.DIR | default "."}}'
     cmd: |
-      set -eu
-      # `infisical run --path` takes a single folder (the last flag wins), so to
-      # pull from several paths we export each one to dotenv, merge them into the
-      # environment, then exec the command. Later paths override earlier keys.
-      env_file="$(mktemp)"
-      trap 'rm -f "$env_file"' EXIT
-      for p in {{.PATHS}}; do
-        infisical export -e {{.ENV}} \
-          --projectId={{.PROJECTID}} \
-          --path="$p" --format=dotenv >> "$env_file"
-      done
-      cd {{.DIR}}
-      set -a
-      . "$env_file"
-      set +a
-      exec {{.CMD}}
+      pnpm tsx ./scripts/infisical-run.ts -e {{.ENV}} \
+       --projectId={{.PROJECTID}} \
+       --paths="{{.PATHS}}" --dir={{.DIR}} "{{.CMD}}"
 
   test:
     desc: run all tests (interpreter + nix flake checks)

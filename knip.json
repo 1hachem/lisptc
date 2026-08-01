@@ -2,6 +2,10 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": ["pi"],
   "workspaces": {
+    ".": {
+      "entry": ["scripts/*.ts"],
+      "project": ["scripts/**/*.ts"]
+    },
     "packages/interpreter": {
       "entry": ["test/**/*.test.ts"],
       "project": ["src/**/*.ts"]
