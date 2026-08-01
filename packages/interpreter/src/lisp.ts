@@ -2,6 +2,8 @@
   Lisptc — derived from Nukata Lisp 2.1.0 in TypeScript 4.6 by SUZUKI Hisao (H28.02.08/R04.03.28)
 */
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve as resolvePath } from "node:path";
 import { z } from "zod";
 import {
 	add,
@@ -497,6 +499,14 @@ export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
 
+	// Directories to resolve relative `import` paths against — one entry per
+	// file currently being loaded (the innermost import wins). Empty at the REPL,
+	// where paths resolve against process.cwd(). See evalImport.
+	readonly importStack: string[] = [];
+	// Absolute paths currently being imported, to break circular imports: a file
+	// that (transitively) imports itself is skipped rather than looping forever.
+	private readonly importing: Set<string> = new Set();
+
 	// Documentation of global bindings, keyed by name. Populated alongside
 	// each definition (def / defineGlobal / the _set-doc built-in) so docs
 	// cannot drift from the bindings they describe.
@@ -871,6 +881,14 @@ export class Interp {
 			([code]) => exit(Number(code)),
 		);
 		this.def(
+			"import",
+			1,
+			'(import "path")',
+			"Read the Lisp file at `path` and evaluate it in the current environment, so its definitions become available here (import * from the file). Relative paths resolve against the importing file's directory. Circular imports are skipped. Returns nil.",
+			z.tuple([zString]),
+			([path]) => this.importFile(path),
+		);
+		this.def(
 			"dump",
 			0,
 			"(dump)",
@@ -1073,6 +1091,35 @@ export class Interp {
 			}
 		}
 		return null; // No clause holds.
+	}
+
+	// (import "path") => Read the Lisp file at `path` and evaluate its whole
+	// program in *this* interpreter, so its definitions land in the current
+	// globals (import * from the file). Relative paths resolve against the
+	// importing file's directory; circular imports are skipped. Returns nil.
+	private importFile(path: string): null {
+		const baseDir =
+			this.importStack.length > 0
+				? this.importStack[this.importStack.length - 1]
+				: process.cwd();
+		const abs = resolvePath(baseDir, path);
+		// Already loading this file (a cycle): skip to avoid infinite recursion.
+		if (this.importing.has(abs)) return null;
+		let text: string;
+		try {
+			text = readFileSync(abs, "utf8");
+		} catch {
+			throw new EvalException("cannot read import file", abs);
+		}
+		this.importing.add(abs);
+		this.importStack.push(dirname(abs));
+		try {
+			run(this, text);
+		} finally {
+			this.importStack.pop();
+			this.importing.delete(abs);
+		}
+		return null;
 	}
 
 	// (setq V1 E1 ..) => Evaluate Ei and assign it to Vi; return the last.

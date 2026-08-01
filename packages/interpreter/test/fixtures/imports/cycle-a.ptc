@@ -1,0 +1,3 @@
+; Mutually imports cycle-b — the import must not loop forever.
+(import "./cycle-b.ptc")
+(defun a-fn () 1)

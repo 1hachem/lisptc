@@ -206,8 +206,16 @@ async function main(): Promise<void> {
 				}
 			} else {
 				fs = fs || (await import("node:fs")).default;
-				const text = fs.readFileSync(fileName, "utf8");
-				run(repl.interp, text);
+				const path = await import("node:path");
+				const abs = path.resolve(fileName);
+				const text = fs.readFileSync(abs, "utf8");
+				// Let relative `import` paths in the script resolve against its dir.
+				repl.interp.importStack.push(path.dirname(abs));
+				try {
+					run(repl.interp, text);
+				} finally {
+					repl.interp.importStack.pop();
+				}
 			}
 		}
 	} catch (ex) {

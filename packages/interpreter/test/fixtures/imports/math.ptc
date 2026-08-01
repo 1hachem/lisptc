@@ -1,0 +1,4 @@
+; Imports a sibling by relative path, then builds on it.
+(import "./util.ptc")
+(defun square (x) (* x x))
+(defun quad (x) (double (square x)))
