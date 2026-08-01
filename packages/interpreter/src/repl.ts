@@ -9,7 +9,7 @@
  * - `MemoryRepl` — evaluate a program string, return what the interactive REPL
  *   would have printed (last value + side-effect output, errors rendered
  *   inline). No process I/O, so embedders can run Lisp without a subprocess.
- * - `AgentRepl` — `MemoryRepl` plus the two things the pi coding-agent needs:
+ * - `AgentRepl` — `MemoryRepl` plus two things an embedding agent needs:
  *   the `halt` built-in (a REPL feature, not part of the language) and
  *   read-only conversation-state globals refreshed from the host each step.
  */
@@ -119,7 +119,7 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 }
 
-// The REPL the pi extension embeds: adds `halt` and the read-only conversation
+// The embeddable agent REPL: adds `halt` and the read-only conversation
 // globals (`conversation`, `user-messages`, `assistant-messages`).
 export class AgentRepl extends MemoryRepl {
 	// Set by the `halt` built-in this REPL installs; read (and cleared) via

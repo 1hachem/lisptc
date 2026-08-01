@@ -28,4 +28,9 @@ server.registerTool(
 	}),
 );
 
+// Optional startup delay so async-job tests can deterministically observe a
+// load-mcp job in the :pending state before it connects.
+const delayMs = Number(process.env.LISPTC_FIXTURE_DELAY_MS);
+if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+
 await server.connect(new StdioServerTransport());
