@@ -180,21 +180,31 @@ describe("async MCP jobs", () => {
 	});
 
 	it("runs two loads concurrently, not sequentially", () => {
-		// Each fixture sleeps DELAY ms before it connects. Start both loads first
-		// (they run as background jobs in the broker) and only THEN await them.
-		// If the broker ran them concurrently, the total wall time is ~DELAY; if it
-		// ran them one after another it would be ~2*DELAY. Assert we're well under
-		// the sequential floor.
+		// Each fixture sleeps DELAY ms before it connects. First measure a single
+		// load (DELAY + fixed spawn/connect overhead), then two loads started
+		// together and awaited. If the broker runs them concurrently the two-load
+		// time is ~single; if it ran them one after another it would be ~single +
+		// DELAY + overhead. Comparing against the measured single-load baseline
+		// cancels out the (machine-dependent) overhead that an absolute threshold
+		// cannot account for.
 		const DELAY = 500;
+
+		const startSingle = performance.now();
+		expect(evalStr(interp, `(await ${loadForm("concBase", DELAY)})`)).toContain(
+			"concBase/echo",
+		);
+		const single = performance.now() - startSingle;
+
 		evalStr(interp, `(setq c1 ${loadForm("concA", DELAY)})`);
 		evalStr(interp, `(setq c2 ${loadForm("concB", DELAY)})`);
-		const start = performance.now();
+		const startBoth = performance.now();
 		expect(evalStr(interp, "(await c1)")).toContain("concA/echo");
 		expect(evalStr(interp, "(await c2)")).toContain("concB/echo");
-		const elapsed = performance.now() - start;
-		// Concurrent: bounded by the single slowest delay plus overhead, and
-		// comfortably below the 2*DELAY a sequential run would need.
-		expect(elapsed).toBeLessThan(DELAY * 1.8);
+		const both = performance.now() - startBoth;
+
+		// Concurrent: two loads together cost about the same as one. A sequential
+		// broker would add another full DELAY + overhead, i.e. > single + DELAY.
+		expect(both).toBeLessThan(single + DELAY);
 	});
 
 	it("await-any returns the first job to settle", () => {
