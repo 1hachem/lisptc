@@ -1364,8 +1364,6 @@ export class Reader {
 				if (result === null) break;
 				const s = result[1];
 				if (s !== undefined) this.tokens.push(s);
-				else if (result[0].startsWith(";"))
-					write(`Warning: comments are not allowed; ignored: ${result[0]}\n`);
 			}
 			this.tokens.push("\n");
 		}
