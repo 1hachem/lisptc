@@ -38,6 +38,12 @@ const infisicalRun = command({
 			long: "projectId",
 			description: "Infisical project identifier containing the secrets",
 		}),
+		url: option({
+			type: string,
+			long: "url",
+			description: "Base URL of the Infisical instance",
+			defaultValue: () => "https://app.infisical.com",
+		}),
 		env: option({
 			type: oneOf(["dev", "stage", "prod"]),
 			long: "env",
@@ -63,7 +69,7 @@ const infisicalRun = command({
 			description: "Command to execute with injected secrets",
 		}),
 	},
-	handler: async ({ env, projectId, paths, dir, cmd }) => {
+	handler: async ({ url, env, projectId, paths, dir, cmd }) => {
 		const processedPaths = paths.split(" ").filter((path) => path !== "");
 
 		const clientId = process.env.INFISICAL_CLIENT_ID;
@@ -81,7 +87,9 @@ const infisicalRun = command({
 			);
 		}
 
-		const client = new InfisicalSDK();
+		const client = new InfisicalSDK({
+			siteUrl: url,
+		});
 
 		try {
 			await client.auth().universalAuth.login({
