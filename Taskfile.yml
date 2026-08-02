@@ -42,7 +42,3 @@ tasks:
   pi:
     desc: run pi agent with access to secrets
     cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
-
-  test-env:
-    desc: run pi agent with access to secrets
-    cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="printenv"
