@@ -246,20 +246,13 @@ function registerFireworks(pi: ExtensionAPI): void {
 			{
 				id: "accounts/fireworks/models/kimi-k3",
 				name: "Kimi K3",
-				reasoning: true,
+				// Thinking off at the provider level: declaring the model
+				// non-reasoning makes pi clamp its thinking level to off, so no
+				// `:off` CLI suffix is needed.
+				reasoning: false,
+				// Kimi K3 is multimodal — it accepts image_url content parts.
 				input: ["text", "image"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 262144,
-				maxTokens: 131072,
-			},
-			{
-				id: "accounts/fireworks/models/kimi-k2p7-code",
-				name: "Kimi K2.7 Code",
-				// reasoning MUST be true: with false, pi treats the model as
-				// non-reasoning and never sends a thinking-control param, so the
-				// `:off` level is ignored and the model reasons anyway.
-				reasoning: true,
-				input: ["text", "image"],
+				// Pricing unknown for K3; left at zero rather than guessing.
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 262144,
 				maxTokens: 131072,
@@ -267,17 +260,9 @@ function registerFireworks(pi: ExtensionAPI): void {
 			{
 				id: "accounts/fireworks/models/glm-5p2",
 				name: "GLM 5.2",
-				reasoning: true,
+				reasoning: false,
 				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 131072,
-				maxTokens: 65536,
-			},
-			{
-				id: "accounts/fireworks/models/gpt-oss-120b",
-				name: "GPT-OSS 120B",
-				reasoning: true,
-				input: ["text"],
+				// Pricing/limits unknown; left at zero rather than guessing.
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 131072,
 				maxTokens: 65536,
@@ -299,22 +284,6 @@ export default function (pi: ExtensionAPI) {
 			type: "grammar",
 			grammar: LISP_GRAMMAR,
 		};
-		// Set LISP_DEBUG=1 to confirm the grammar actually reaches the wire and
-		// see what model/reasoning fields pi built.
-		if (process.env.LISP_DEBUG) {
-			const p = payload as Record<string, unknown>;
-			console.error(
-				"[lisp-repl] request:",
-				JSON.stringify({
-					model: p.model,
-					stream: p.stream,
-					response_format: (p.response_format as { type?: string })?.type,
-					grammarLen: LISP_GRAMMAR.length,
-					reasoning_effort: p.reasoning_effort,
-					chat_template_kwargs: p.chat_template_kwargs,
-				}),
-			);
-		}
 		return payload;
 	});
 
@@ -400,20 +369,6 @@ export default function (pi: ExtensionAPI) {
 		// task — reset the step budget so each request gets a fresh loop.
 		if (msg.role === "user" && msg.customType === undefined) steps = 0;
 		if (event.message.role !== "assistant") return;
-		// LISP_DEBUG: show which channels the model used. If `text` is empty and
-		// the content is all `thinking`, the grammar constrained an empty answer
-		// while the real (unconstrained) output went to the reasoning channel.
-		if (process.env.LISP_DEBUG) {
-			console.error(
-				"[lisp-repl] reply parts:",
-				JSON.stringify(
-					event.message.content.map((c) => ({
-						type: c.type,
-						head: ("text" in c ? c.text : "").slice(0, 60),
-					})),
-				),
-			);
-		}
 		const code = event.message.content
 			.filter((c): c is { type: "text"; text: string } => c.type === "text")
 			.map((c) => c.text)
