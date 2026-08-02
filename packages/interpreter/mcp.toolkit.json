@@ -24,5 +24,35 @@
     "url": "https://mcp.linear.app/mcp",
     "oauth": true,
     "scopes": ["read", "write"]
+  },
+  {
+    "name": "posthog",
+    "description": "PostHog product analytics over OAuth: query insights, dashboards, feature flags, experiments, error tracking, events, and SQL. First (load-mcp \"posthog\") returns an authorization link; approve it, run (mcp-authorize \"posthog\" \"<code>\"), then load again. Edit `scopes` to grant more.",
+    "url": "https://mcp.posthog.com/mcp",
+    "oauth": true,
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "insight:read",
+      "insight:write",
+      "dashboard:read",
+      "dashboard:write",
+      "feature_flag:read",
+      "feature_flag:write",
+      "experiment:read",
+      "experiment:write",
+      "error_tracking:read",
+      "error_tracking:write",
+      "query:read",
+      "event_definition:read",
+      "property_definition:read",
+      "person:read",
+      "cohort:read",
+      "survey:read",
+      "session_recording:read",
+      "organization:read",
+      "project:read"
+    ]
   }
 ]

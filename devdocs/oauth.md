@@ -14,8 +14,13 @@ In `mcp.toolkit.json`, an HTTP server opts in with `oauth` and optional `scopes`
 { "name": "linear", "url": "https://mcp.linear.app/mcp", "oauth": true, "scopes": ["read", "write"] }
 ```
 
-`scopes` become the space-separated `scope` on the authorization request. No
-`client_id`/secret is needed — DCR registers a client on the fly.
+`scopes` become the space-separated `scope` on the authorization request. The
+broker drives authorization itself (`auth(provider, { scope })`) so exactly these
+scopes are requested — otherwise the SDK would request the server's entire
+advertised `scopes_supported`, which some servers (PostHog) reject as
+`invalid_scope`. Pick scopes the server actually grants. No `client_id`/secret is
+needed — DCR registers a client on the fly, and the provider sends an OAuth
+`state` (required by some servers, e.g. PostHog).
 
 ## Flow from the REPL
 

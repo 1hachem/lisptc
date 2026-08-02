@@ -342,15 +342,22 @@ async function connect(
 		const transport = new StreamableHTTPClientTransport(new URL(conf.url), {
 			authProvider: provider,
 		});
+		// Begin authorization ourselves so our (valid, curated) `scope` is sent —
+		// the transport's own auth would request the server's entire
+		// scopes_supported list, which some servers reject as invalid_scope.
+		const beginAuth = async (): Promise<never> => {
+			await auth(provider, { serverUrl: conf.url, scope });
+			const authUrl = provider.authorizationUrl;
+			if (!authUrl) throw new Error("no authorization URL produced");
+			void startCallbackCapture(conf.url, scope, authUrl);
+			throw new NeedsAuthError(conf.name, authUrl.href);
+		};
+		if (!provider.tokens()) await beginAuth();
 		try {
 			await client.connect(transport, { signal });
 		} catch (e) {
-			if (!(e instanceof UnauthorizedError)) throw e;
-			const authUrl = provider.authorizationUrl;
-			if (!authUrl) throw e;
-			// Start the callback server to auto-capture the code (both modes).
-			void startCallbackCapture(conf.url, scope, authUrl);
-			throw new NeedsAuthError(conf.name, authUrl.href);
+			if (e instanceof UnauthorizedError) await beginAuth();
+			throw e;
 		}
 	} else {
 		const transport =

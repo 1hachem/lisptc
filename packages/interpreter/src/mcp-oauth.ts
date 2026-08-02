@@ -4,6 +4,7 @@
  * implements the protocol itself. See devdocs/oauth.md.
  */
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -77,6 +78,13 @@ export class FileOAuthStore implements OAuthStore {
 export class StoredOAuthProvider implements OAuthClientProvider {
 	// Captured (not opened) so the broker can surface it to the user.
 	authorizationUrl?: URL;
+	// OAuth `state`, stable per instance. Some servers (PostHog) reject an
+	// authorize request without one; the callback validates the returned value.
+	private _state?: string;
+	state(): string {
+		if (!this._state) this._state = randomUUID();
+		return this._state;
+	}
 
 	private constructor(
 		private readonly store: OAuthStore,
