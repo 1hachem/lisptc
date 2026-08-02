@@ -282,9 +282,9 @@ export class LoopbackAuthCallback extends BaseAuthCallback {
 				}
 				const code = url.searchParams.get("code");
 				const state = url.searchParams.get("state") ?? undefined;
-				res.writeHead(200, { "content-type": "text/html" });
+				res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
 				res.end(
-					"<!doctype html><p>Authorization complete — you can close this tab and return to the REPL.</p>",
+					"<!doctype html><meta charset=utf-8><p>Authorization complete — you can close this tab and return to the REPL.</p>",
 				);
 				if (code) cb.submitCode({ code, state });
 			});
