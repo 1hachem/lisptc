@@ -122,6 +122,7 @@ async function startCallbackCapture(
 type Op =
 	| "connect"
 	| "authorize"
+	| "logout"
 	| "list-tools"
 	| "call-tool"
 	| "disconnect"
@@ -242,6 +243,8 @@ async function dispatch(
 			return authorize(
 				payload as { url: string; code: string; scopes?: string[] },
 			);
+		case "logout":
+			return logout(payload as { url: string });
 		case "list-tools":
 			return listTools((payload as { serverId: string }).serverId);
 		case "call-tool":
@@ -412,6 +415,13 @@ async function authorize(payload: {
 	});
 	if (result !== "AUTHORIZED")
 		throw new Error("authorization did not complete (unexpected redirect)");
+	return { ok: true };
+}
+
+// Delete a server's saved OAuth session (tokens, client registration, verifier)
+// via the store's clear(), so the next connect re-authorizes from scratch.
+async function logout(payload: { url: string }): Promise<{ ok: true }> {
+	await oauthStore.clear(new URL(payload.url).origin);
 	return { ok: true };
 }
 

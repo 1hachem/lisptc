@@ -52,7 +52,8 @@
       "survey:read",
       "session_recording:read",
       "organization:read",
-      "project:read"
+      "project:read",
+      "user:read"
     ]
   }
 ]

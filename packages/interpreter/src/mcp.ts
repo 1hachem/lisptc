@@ -679,6 +679,25 @@ export function registerMcp(interp: Interp): void {
 		},
 	);
 
+	// (logout "server") -> :logged-out. See devdocs/oauth.md.
+	interp.def(
+		"logout",
+		-1,
+		'(logout "server")',
+		'Log out of an OAuth MCP server: unload it if loaded and delete its saved tokens, so the next (load-mcp "server") re-authorizes.',
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
+			const conf = predefined.get(name);
+			if (!conf || !("url" in conf))
+				throw new EvalException("unknown OAuth MCP server", name, false);
+			if (servers.has(name)) doUnload(interp, name);
+			mcpRequest("logout", { url: conf.url });
+			return newLispKeyword("logged-out");
+		},
+	);
+
 	// (list-mcps) -> ((name :loaded|:unloaded count) ...)
 	interp.def(
 		"list-mcps",

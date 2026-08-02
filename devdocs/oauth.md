@@ -72,6 +72,12 @@ background; then a subsequent `(load-mcp "server")` connects. It binds on-demand
 `(mcp-authorize "server" "<code>")` completes the exchange with a code obtained
 out-of-band — for headless sessions or if the callback port is busy.
 
+### Logout
+
+`(logout "server")` unloads the server (if loaded) and deletes its saved session
+via `OAuthStore.clear`, so the next `(load-mcp "server")` re-authorizes from
+scratch — e.g. after widening `scopes`.
+
 ## Storage (`OAuthStore`)
 
 Persistence is behind the `OAuthStore` interface (async `load`/`save`/`clear`,
