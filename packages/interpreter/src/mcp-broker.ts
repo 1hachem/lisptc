@@ -343,6 +343,17 @@ async function connect(
 			redirectUri(),
 			scope,
 		);
+		// Self-heal a stale dynamic-client registration: if the cached client was
+		// registered for a different redirect URI (e.g. the callback host/port
+		// changed), drop it so the SDK re-registers for the current one — otherwise
+		// the server rejects the authorize request with "invalid redirect URI".
+		const registered = provider.clientInformation();
+		if (
+			registered?.redirect_uris &&
+			!registered.redirect_uris.includes(redirectUri())
+		) {
+			await provider.invalidateCredentials("all");
+		}
 		const transport = new StreamableHTTPClientTransport(new URL(conf.url), {
 			authProvider: provider,
 		});
