@@ -4,7 +4,8 @@ Remote MCP servers (e.g. Linear) authenticate with OAuth 2.1 — PKCE, dynamic
 client registration (DCR), and metadata discovery. The MCP SDK implements the
 whole protocol; lisptc only supplies **token persistence** and **redirect
 capture**. Code lives in `src/mcp-oauth.ts` (provider + storage + callback) and
-`src/mcp-broker.ts` (`connect` / `authorize`).
+`src/mcp-broker.ts` (`ensureAuthorized` + the `connect` / `login` / `authorize` /
+`logout` ops), surfaced as the `login` / `logout` / `mcp-authorize` built-ins.
 
 ## Marking a server as OAuth
 
@@ -18,29 +19,37 @@ In `mcp.toolkit.json`, an HTTP server opts in with `oauth` and optional `scopes`
 broker drives authorization itself (`auth(provider, { scope })`) so exactly these
 scopes are requested — otherwise the SDK would request the server's entire
 advertised `scopes_supported`, which some servers (PostHog) reject as
-`invalid_scope`. Pick scopes the server actually grants. No `client_id`/secret is
-needed — DCR registers a client on the fly, and the provider sends an OAuth
-`state` (required by some servers, e.g. PostHog).
+`invalid_scope`. Pick scopes the **authorization server** actually grants (which
+may be a subset of what the resource advertises). No `client_id`/secret is needed
+— DCR registers a client on the fly, and the provider sends an OAuth `state`
+(required by some servers, e.g. PostHog).
+
+Examples in `mcp.toolkit.json`: `linear` (`read`, `write`) and `posthog` (a
+curated subset including `openid`, `insight:read/write`, …, `user:read`).
 
 ## Flow from the REPL
 
 ```lisp
-(await (load-mcp "linear"))
-;=> authorization required for "linear": open https://mcp.linear.app/authorize?…
-;   — after approving it will be captured automatically — then run (load-mcp "linear") again
+(login "linear")               ; or: (await (load-mcp "linear"))
+;=> "https://linear.app/oauth/authorize?…"   (or :logged-in if already authed)
+;;  approve in the browser → the code is captured automatically
+(await (load-mcp "linear"))    ;=> connects; linear/* tools bind
 ```
 
-1. **connect** attaches a `StoredOAuthProvider` to the transport. A stored token
-   connects directly (refreshed silently via the refresh token). With no usable
-   token the SDK runs discovery + DCR + PKCE, saves the PKCE verifier, captures
-   the authorization URL, and throws `UnauthorizedError`.
-2. The broker surfaces the URL (a `NeedsAuthError` whose message carries it) and,
-   in **local mode**, starts the loopback callback server.
-3. The user approves in a browser and is redirected to the callback with `?code`.
+1. **`ensureAuthorized`** (used by both `connect` and `login`) creates a
+   `StoredOAuthProvider`. A stored token means connect proceeds directly
+   (refreshed silently via the refresh token). With no token it runs discovery +
+   DCR + PKCE (`auth(provider, { scope })`), saves the PKCE verifier, and captures
+   the authorization URL.
+2. The URL is surfaced — as `login`'s return value, or as the `NeedsAuthError`
+   message on the `load-mcp` job — and, on the needs-auth path, the callback
+   server is started.
+3. The user approves and is redirected to the callback with `?code`.
 4. The code is exchanged for tokens (`auth(provider, { authorizationCode })`),
-   which are saved. A subsequent `(load-mcp "linear")` connects; `linear/*` tools
-   bind.
-5. **Later sessions** reconnect silently from the stored refresh token.
+   saved to the store. A subsequent `(load-mcp "linear")` connects.
+5. **Later sessions** reconnect silently from the stored refresh token; if a
+   stored token is rejected (`UnauthorizedError`), `connect` drops it and
+   re-authorizes.
 
 The code exchange is a **separate step** from the authorization request; they are
 bridged by the persisted PKCE verifier + client registration, so no live
@@ -107,9 +116,14 @@ Reset a server's OAuth by deleting its file.
 
 - **Redirect URI must stay stable.** A DCR registration pins the redirect URI it
   was created with. If it changes (host/port), the authorization request is
-  rejected with *"invalid redirect URI"*. `connect` self-heals by dropping a
-  stored registration whose `redirect_uris` don't include the current one, so the
-  SDK re-registers.
+  rejected with *"invalid redirect URI"*. `ensureAuthorized` self-heals by
+  dropping a stored registration whose `redirect_uris` don't include the current
+  one, so the SDK re-registers.
+- **Insufficient scope (403).** If a server needs a scope you didn't request, a
+  tool call returns `403 insufficient_scope` naming it (e.g. PostHog needs
+  `user:read`). The SDK can't re-consent mid-connect — add the scope to the
+  server's `scopes` in `mcp.toolkit.json`, then `(logout "server")` and
+  `(login "server")` again.
 - **Callback page** is served as `text/html; charset=utf-8` (otherwise the em-dash
   renders as mojibake).
 - **Loopback is same-machine only.** For SSH/remote, either port-forward the
