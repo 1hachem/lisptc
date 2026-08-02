@@ -679,6 +679,27 @@ export function registerMcp(interp: Interp): void {
 		},
 	);
 
+	// (login "server") -> auth URL | :logged-in. See devdocs/oauth.md.
+	interp.def(
+		"login",
+		-1,
+		'(login "server")',
+		'Log in to an OAuth MCP server: begin authorization and return the login URL to open (or :logged-in if already authenticated). After approving, (load-mcp "server") connects.',
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
+			const conf = predefined.get(name);
+			if (!conf || !("url" in conf))
+				throw new EvalException("unknown OAuth MCP server", name, false);
+			const res = mcpRequest("login", {
+				url: conf.url,
+				scopes: conf.scopes,
+			}) as { authUrl: string | null };
+			return res.authUrl ?? newLispKeyword("logged-in");
+		},
+	);
+
 	// (logout "server") -> :logged-out. See devdocs/oauth.md.
 	interp.def(
 		"logout",

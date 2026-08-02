@@ -121,6 +121,7 @@ async function startCallbackCapture(
 
 type Op =
 	| "connect"
+	| "login"
 	| "authorize"
 	| "logout"
 	| "list-tools"
@@ -239,6 +240,8 @@ async function dispatch(
 	switch (op) {
 		case "connect":
 			return connect(payload as ConnConfig, signal);
+		case "login":
+			return login(payload as { url: string; scopes?: string[] });
 		case "authorize":
 			return authorize(
 				payload as { url: string; code: string; scopes?: string[] },
@@ -324,43 +327,21 @@ async function connect(
 	// slow connect/list mid-flight.
 	if ("url" in conf && conf.oauth) {
 		// OAuth path: a stored token connects directly (auto-refreshed); with none
-		// the SDK runs discovery + registration + PKCE and throws
-		// UnauthorizedError. See devdocs/oauth.md.
+		// ensureAuthorized begins authorization and returns the login URL.
 		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
-		const provider = await StoredOAuthProvider.create(
-			oauthStore,
-			conf.url,
-			redirectUri(),
-			scope,
-		);
-		// Drop a stale client registration bound to a different redirect URI so the
-		// SDK re-registers (else the server rejects "invalid redirect URI").
-		const registered = provider.clientInformation();
-		if (
-			registered?.redirect_uris &&
-			!registered.redirect_uris.includes(redirectUri())
-		) {
-			await provider.invalidateCredentials("all");
-		}
+		const { provider, authUrl } = await ensureAuthorized(conf.url, scope);
+		if (authUrl) throw new NeedsAuthError(conf.name, authUrl);
 		const transport = new StreamableHTTPClientTransport(new URL(conf.url), {
 			authProvider: provider,
 		});
-		// Begin authorization ourselves so our (valid, curated) `scope` is sent —
-		// the transport's own auth would request the server's entire
-		// scopes_supported list, which some servers reject as invalid_scope.
-		const beginAuth = async (): Promise<never> => {
-			await auth(provider, { serverUrl: conf.url, scope });
-			const authUrl = provider.authorizationUrl;
-			if (!authUrl) throw new Error("no authorization URL produced");
-			void startCallbackCapture(conf.url, scope, authUrl);
-			throw new NeedsAuthError(conf.name, authUrl.href);
-		};
-		if (!provider.tokens()) await beginAuth();
 		try {
 			await client.connect(transport, { signal });
 		} catch (e) {
-			if (e instanceof UnauthorizedError) await beginAuth();
-			throw e;
+			if (!(e instanceof UnauthorizedError)) throw e;
+			// Stored token rejected: drop it and re-authorize.
+			await provider.invalidateCredentials("tokens");
+			const retry = await ensureAuthorized(conf.url, scope);
+			throw new NeedsAuthError(conf.name, retry.authUrl ?? conf.url);
 		}
 	} else {
 		const transport =
@@ -416,6 +397,48 @@ async function authorize(payload: {
 	if (result !== "AUTHORIZED")
 		throw new Error("authorization did not complete (unexpected redirect)");
 	return { ok: true };
+}
+
+// Prepare an OAuth provider and, if there's no usable token, begin authorization
+// (with our curated `scope`, not the server's full scopes_supported which some
+// reject as invalid_scope) and start the callback capture. Returns the provider
+// and the login URL to open — or authUrl null if already authenticated.
+async function ensureAuthorized(
+	serverUrl: string,
+	scope: string | undefined,
+): Promise<{ provider: StoredOAuthProvider; authUrl: string | null }> {
+	const provider = await StoredOAuthProvider.create(
+		oauthStore,
+		serverUrl,
+		redirectUri(),
+		scope,
+	);
+	// Drop a stale client registration bound to a different redirect URI.
+	const registered = provider.clientInformation();
+	if (
+		registered?.redirect_uris &&
+		!registered.redirect_uris.includes(redirectUri())
+	) {
+		await provider.invalidateCredentials("all");
+	}
+	if (provider.tokens()) return { provider, authUrl: null };
+	await auth(provider, { serverUrl, scope });
+	const authUrl = provider.authorizationUrl;
+	if (!authUrl) throw new Error("no authorization URL produced");
+	void startCallbackCapture(serverUrl, scope, authUrl);
+	return { provider, authUrl: authUrl.href };
+}
+
+// Log in to an OAuth server: begin authorization and return the login URL to
+// open (null if already authenticated). The callback capture completes it in
+// the background, then (load-mcp) connects.
+async function login(payload: {
+	url: string;
+	scopes?: string[];
+}): Promise<{ authUrl: string | null }> {
+	const scope = payload.scopes?.length ? payload.scopes.join(" ") : undefined;
+	const { authUrl } = await ensureAuthorized(payload.url, scope);
+	return { authUrl };
 }
 
 // Delete a server's saved OAuth session (tokens, client registration, verifier)

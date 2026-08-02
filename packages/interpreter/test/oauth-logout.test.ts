@@ -35,3 +35,27 @@ describe("logout", () => {
 		expect(() => run(interp, '(logout "nope")')).toThrow(/unknown/);
 	});
 });
+
+describe("login", () => {
+	const interp = new Interp();
+	run(interp, prelude);
+
+	afterAll(() => {
+		run(interp, "(mcp-shutdown)");
+	});
+
+	it("returns :logged-in when a token is already stored", () => {
+		// A stored token means no network / no authorization is needed.
+		const file = join(dir, "https___mcp.linear.app.json");
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(
+			file,
+			JSON.stringify({ tokens: { access_token: "x", token_type: "Bearer" } }),
+		);
+		expect(str(run(interp, '(login "linear")'))).toBe(":logged-in");
+	});
+
+	it("errors for an unknown server", () => {
+		expect(() => run(interp, '(login "nope")')).toThrow(/unknown/);
+	});
+});
