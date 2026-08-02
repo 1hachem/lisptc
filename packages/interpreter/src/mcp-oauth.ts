@@ -16,6 +16,7 @@ import type {
 	OAuthClientMetadata,
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { oauthEnv } from "@repo/env/oauth.ts";
 
 // Everything persisted for one MCP server's OAuth session.
 export interface OAuthRecord {
@@ -35,8 +36,8 @@ export interface OAuthStore {
 // Default directory for the file store: $LISPTC_OAUTH_DIR, else
 // $XDG_CONFIG_HOME/lisptc/oauth, else ~/.config/lisptc/oauth.
 function defaultOAuthDir(): string {
-	if (process.env.LISPTC_OAUTH_DIR) return process.env.LISPTC_OAUTH_DIR;
-	const configHome = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+	if (oauthEnv.LISPTC_OAUTH_DIR) return oauthEnv.LISPTC_OAUTH_DIR;
+	const configHome = oauthEnv.XDG_CONFIG_HOME ?? join(homedir(), ".config");
 	return join(configHome, "lisptc", "oauth");
 }
 
@@ -291,19 +292,15 @@ export class CallbackServer extends BaseAuthCallback {
 	}
 }
 
-// Start the callback server for the current config on `port`. Behind an ingress
-// ($LISPTC_OAUTH_REDIRECT_URL) it binds 0.0.0.0 and advertises the public URL;
-// locally it binds 127.0.0.1.
-export function createAuthCallback(port: number): Promise<CallbackServer> {
-	const external = process.env.LISPTC_OAUTH_REDIRECT_URL;
-	if (external) {
-		const path = new URL(external).pathname || "/callback";
-		return CallbackServer.start({
-			host: "0.0.0.0",
-			port,
-			path,
-			redirectUrl: external,
-		});
+// With a public `redirectUrl` (an ingress) bind 0.0.0.0 and advertise it; else
+// loopback on 127.0.0.1. The broker passes the URL from the validated env.
+export function createAuthCallback(
+	port: number,
+	redirectUrl?: string,
+): Promise<CallbackServer> {
+	if (redirectUrl) {
+		const path = new URL(redirectUrl).pathname || "/callback";
+		return CallbackServer.start({ host: "0.0.0.0", port, path, redirectUrl });
 	}
 	return CallbackServer.start({ host: "127.0.0.1", port, path: "/callback" });
 }

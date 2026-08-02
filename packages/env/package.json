@@ -1,0 +1,27 @@
+{
+  "name": "@repo/env",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./ai.ts": "./src/ai.ts",
+    "./repl.ts": "./src/repl.ts",
+    "./oauth.ts": "./src/oauth.ts",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@t3-oss/env-core": "^0.13.11",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -33,6 +33,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { oauthEnv } from "@repo/env/oauth.ts";
 import {
 	createAuthCallback,
 	FileOAuthStore,
@@ -65,13 +66,13 @@ const oauthStore = new FileOAuthStore();
 
 // Loopback callback port (local mode); fixed so the redirect URI is stable.
 function callbackPort(): number {
-	return Number(process.env.LISPTC_OAUTH_CALLBACK_PORT ?? 8909);
+	return oauthEnv.LISPTC_OAUTH_CALLBACK_PORT ?? 8909;
 }
 
 // Registered redirect_uri: cloud ingress URL, else the local loopback callback.
 function redirectUri(): string {
 	return (
-		process.env.LISPTC_OAUTH_REDIRECT_URL ??
+		oauthEnv.LISPTC_OAUTH_REDIRECT_URL ??
 		`http://127.0.0.1:${callbackPort()}/callback`
 	);
 }
@@ -96,7 +97,10 @@ async function startCallbackCapture(
 ): Promise<void> {
 	let cb: Awaited<ReturnType<typeof createAuthCallback>>;
 	try {
-		cb = await createAuthCallback(callbackPort());
+		cb = await createAuthCallback(
+			callbackPort(),
+			oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
+		);
 	} catch {
 		return; // port busy: fall back to manual (mcp-authorize)
 	}

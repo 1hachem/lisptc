@@ -14,6 +14,7 @@
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
+import { replEnv } from "@repo/env/repl.ts";
 import {
 	Cell,
 	EndOfFile,
@@ -35,7 +36,7 @@ import {
 // constructor regardless; the file-path var is deliberately not REPL_-prefixed
 // so it isn't itself picked up as a secret.) Returns the loaded entries.
 export function seedSecretsFromEnvFile(interp: Interp): Record<string, string> {
-	const explicit = process.env.LISPTC_SECRETS_FILE;
+	const explicit = replEnv.LISPTC_SECRETS_FILE;
 	const path = explicit ?? ".env";
 	try {
 		return interp.loadSecretsFromFile(path);

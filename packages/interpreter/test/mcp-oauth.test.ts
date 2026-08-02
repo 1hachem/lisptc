@@ -218,31 +218,26 @@ describe("CallbackServer (ingress)", () => {
 });
 
 describe("createAuthCallback", () => {
-	it("binds 0.0.0.0 and advertises the ingress URL when configured", async () => {
-		const prev = process.env.LISPTC_OAUTH_REDIRECT_URL;
-		process.env.LISPTC_OAUTH_REDIRECT_URL =
-			"https://mcp.example.com/oauth/callback";
+	it("binds 0.0.0.0 and advertises a given ingress URL", async () => {
+		const cb = await createAuthCallback(
+			8919,
+			"https://mcp.example.com/oauth/callback",
+		);
 		try {
-			const cb = await createAuthCallback(8919);
 			expect(cb).toBeInstanceOf(CallbackServer);
 			expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
-			await cb.close();
 		} finally {
-			if (prev === undefined) delete process.env.LISPTC_OAUTH_REDIRECT_URL;
-			else process.env.LISPTC_OAUTH_REDIRECT_URL = prev;
+			await cb.close();
 		}
 	});
 
-	it("binds a local loopback server when no ingress URL is set", async () => {
-		const prev = process.env.LISPTC_OAUTH_REDIRECT_URL;
-		delete process.env.LISPTC_OAUTH_REDIRECT_URL;
+	it("binds a local loopback server when no ingress URL is given", async () => {
+		const cb = await createAuthCallback(8920);
 		try {
-			const cb = await createAuthCallback(8920);
 			expect(cb).toBeInstanceOf(CallbackServer);
 			expect(cb.redirectUrl()).toBe("http://127.0.0.1:8920/callback");
-			await cb.close();
 		} finally {
-			if (prev !== undefined) process.env.LISPTC_OAUTH_REDIRECT_URL = prev;
+			await cb.close();
 		}
 	});
 });
