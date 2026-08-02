@@ -213,9 +213,8 @@ const zString = z.custom<string>(
 	(x) => typeof x === "string",
 	"string expected",
 );
-// Accepts a plain string or a tainted secret (see the `Secret` class). Used by
-// the string primitives so secrets flow through them; read the underlying text
-// with `secretValue` and re-taint the result with `propagateTaint`.
+// A plain string or a tainted secret; used by the string primitives so secrets
+// flow through (read with `secretValue`, re-taint with `propagateTaint`).
 const zStringLike = z.custom<string | Secret>(
 	(x) => typeof x === "string" || x instanceof Secret,
 	"string expected",
@@ -503,13 +502,10 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
-// A tainted string: the value of a secret, or anything derived from one. It
-// behaves like a string everywhere in the interpreter (the string primitives
-// accept it and propagate the taint into their results), but `str` renders it
-// redacted as `#<secret:KEY>` — so a secret and everything computed from it is
-// never printed, while the real value is still usable (revealed by `lispToJson`
-// when passed into an outgoing MCP call). `keys` records which registry secrets
-// it descends from (more than one after e.g. concatenating two secrets).
+// A tainted string: a secret's value, or anything derived from one. Behaves like
+// a string but `str` renders it redacted as `#<secret:KEY>`; the value is
+// revealed only by `lispToJson` into an MCP call. `keys` are the source secrets
+// (>1 after combining). See devdocs/secrets.md.
 export class Secret {
 	readonly keys: readonly string[];
 	constructor(
@@ -532,9 +528,8 @@ function secretValue(x: string | Secret): string {
 	return x instanceof Secret ? x.value : x;
 }
 
-// Wrap `value` as a tainted secret if any source was tainted, unioning the
-// source keys; otherwise return the plain string. This is how the string
-// primitives propagate taint through to their results.
+// Re-taint: if any source was a secret, wrap the result as a secret (unioning
+// keys); else return the plain string. How the string primitives propagate taint.
 function propagateTaint(
 	value: string,
 	sources: readonly unknown[],
@@ -544,24 +539,20 @@ function propagateTaint(
 	return keys.length > 0 ? new Secret(value, keys) : value;
 }
 
-// How a host supplies a secret: either just its value, or its value plus a
-// human-readable description shown by `(secrets)` so the LLM knows what it is.
+// A host-supplied secret: a bare value, or a value plus a description shown by
+// `(secrets)`.
 export type SecretSpec = string | { value: string; description?: string };
 
-// Required prefix for every registry key. Only `REPL_*` names become secrets,
-// and the prefix is kept, so `REPL_LINEAR_API_KEY` is read back as the secret
-// keyed `REPL_LINEAR_API_KEY` (both from env vars and host-supplied records).
+// Required prefix for every registry key; kept as part of the key. See
+// devdocs/secrets.md.
 const SECRET_ENV_PREFIX = "REPL_";
 
 export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
 
-	// Host-supplied secret registry: key -> { value, description }. Keys and
-	// descriptions are listable by the LLM (`(secrets)`); values are only
-	// obtainable as tainted `Secret` strings via `(secret "key")` and are never
-	// printed. Seeded from `REPL_*` env vars at construction (no description);
-	// `setSecrets` (from the host) overrides those and can attach descriptions.
+	// Host-supplied secret registry: key -> { value, description }. Seeded from
+	// `REPL_*` env vars; `setSecrets` overrides. See devdocs/secrets.md.
 	private readonly secrets: Map<
 		string,
 		{ value: string; description: string }
@@ -1021,8 +1012,7 @@ export class Interp {
 			},
 		);
 
-		// --- Secret registry (see the `Secret` class). Keys are readable by the
-		// LLM; values are opaque and only usable inside outgoing MCP calls.
+		// --- Secret registry. See devdocs/secrets.md.
 		this.seedSecretsFromEnv();
 		this.def(
 			"secrets",
@@ -1094,11 +1084,8 @@ export class Interp {
 		return this.globals.has(sym);
 	}
 
-	// Merge host-supplied secrets into the registry, overriding any existing
-	// (e.g. env-seeded) entries with the same key. Only keys starting with the
-	// `REPL_` prefix are accepted; the prefix is kept as part of the key, so a
-	// secret is read back with its full name, e.g. `(secret "REPL_LINEAR_API_KEY")`.
-	// Each spec is either a bare value or `{ value, description }`.
+	// Merge host secrets into the registry (later wins). Only `REPL_`-prefixed
+	// keys are accepted; each spec is a bare value or `{ value, description }`.
 	setSecrets(record: Record<string, SecretSpec>): void {
 		for (const [key, spec] of Object.entries(record)) {
 			if (!key.startsWith(SECRET_ENV_PREFIX)) continue;
@@ -1114,18 +1101,15 @@ export class Interp {
 		return [...this.secrets.keys()];
 	}
 
-	// Load secrets from a `.env`-style file (KEY=VALUE lines). Only `REPL_`-prefixed
-	// keys are registered (see setSecrets), and the prefix is kept as part of the
-	// key. Later calls / `setSecrets` win. Returns the parsed entries (so a host
-	// can persist them); throws if the file cannot be read.
+	// Load `REPL_*` secrets from a `.env` file; returns the parsed entries (so a
+	// host can persist them). Throws if the file cannot be read.
 	loadSecretsFromFile(path: string): Record<string, string> {
 		const record = dotenv.parse(readFileSync(path));
 		this.setSecrets(record);
 		return record;
 	}
 
-	// Seed the registry from `REPL_*` environment variables, keeping the prefix
-	// as part of the key (e.g. `REPL_LINEAR_API_KEY`).
+	// Seed the registry from `REPL_*` environment variables.
 	private seedSecretsFromEnv(): void {
 		for (const [name, value] of Object.entries(process.env)) {
 			if (value !== undefined && name.startsWith(SECRET_ENV_PREFIX))

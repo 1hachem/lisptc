@@ -60,18 +60,15 @@ type ConnConfig =
 			env?: Record<string, string>;
 	  };
 
-// OAuth token store shared across connections; swap in a DB-backed OAuthStore
-// here to persist tokens elsewhere.
+// OAuth token store (swap for a DB-backed OAuthStore here). See devdocs/oauth.md.
 const oauthStore = new FileOAuthStore();
 
-// Loopback callback port (local mode). Fixed so the redirect URI is stable and
-// the loopback server catches the redirect; override with env if 8909 clashes.
+// Loopback callback port (local mode); fixed so the redirect URI is stable.
 function callbackPort(): number {
 	return Number(process.env.LISPTC_OAUTH_CALLBACK_PORT ?? 8909);
 }
 
-// The redirect_uri registered with the authorization server: a real ingress URL
-// in the cloud ($LISPTC_OAUTH_REDIRECT_URL), else the local loopback callback.
+// Registered redirect_uri: cloud ingress URL, else the local loopback callback.
 function redirectUri(): string {
 	return (
 		process.env.LISPTC_OAUTH_REDIRECT_URL ??
@@ -79,14 +76,12 @@ function redirectUri(): string {
 	);
 }
 
-// Whether we run the local loopback flow (no external ingress configured).
 function isLocalCallback(): boolean {
 	return !process.env.LISPTC_OAUTH_REDIRECT_URL;
 }
 
-// Thrown by connect() when a server needs interactive OAuth: its message carries
-// the authorization URL and the next step. In local mode the loopback captures
-// the code automatically (just re-run load-mcp); otherwise paste it back.
+// Thrown by connect() when a server needs interactive OAuth; the message carries
+// the authorization URL and the next step.
 class NeedsAuthError extends Error {
 	constructor(server: string, authUrl: string, local: boolean) {
 		const next = local
@@ -96,11 +91,8 @@ class NeedsAuthError extends Error {
 	}
 }
 
-// Start the local loopback server and, in the background, exchange the code it
-// captures for tokens (saved for reuse). Fire-and-forget: the connect job has
-// already surfaced the URL; when the user approves, this completes the flow so a
-// subsequent (load-mcp) connects. Silent on a busy port / timeout — the manual
-// (mcp-authorize) path still works.
+// Start the loopback server and, in the background, exchange the captured code
+// for tokens. Fire-and-forget; silent on busy port / timeout (manual path works).
 async function startLoopbackCapture(
 	serverUrl: string,
 	scope: string | undefined,
@@ -332,10 +324,9 @@ async function connect(
 	// AbortSignal (from the job's AbortController) lets (cancel job) abort a
 	// slow connect/list mid-flight.
 	if ("url" in conf && conf.oauth) {
-		// OAuth 2.1 path. The provider supplies stored tokens (silently refreshing
-		// via the refresh token) so a returning session connects directly. With no
-		// usable token the SDK runs discovery + registration + PKCE, saves the code
-		// verifier, captures the authorization URL, and throws UnauthorizedError.
+		// OAuth path: a stored token connects directly (auto-refreshed); with none
+		// the SDK runs discovery + registration + PKCE and throws
+		// UnauthorizedError. See devdocs/oauth.md.
 		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
 		const provider = await StoredOAuthProvider.create(
 			oauthStore,
@@ -343,10 +334,8 @@ async function connect(
 			redirectUri(),
 			scope,
 		);
-		// Self-heal a stale dynamic-client registration: if the cached client was
-		// registered for a different redirect URI (e.g. the callback host/port
-		// changed), drop it so the SDK re-registers for the current one — otherwise
-		// the server rejects the authorize request with "invalid redirect URI".
+		// Drop a stale client registration bound to a different redirect URI so the
+		// SDK re-registers (else the server rejects "invalid redirect URI").
 		const registered = provider.clientInformation();
 		if (
 			registered?.redirect_uris &&
@@ -400,11 +389,8 @@ async function connect(
 	return { serverId, tools };
 }
 
-// Complete an OAuth authorization: exchange the code the user brought back for
-// tokens (saved by the provider for reuse). Uses the PKCE verifier + client
-// registration persisted during connect(), so no live transport is needed —
-// which is what lets the code arrive out-of-band (loopback, manual paste, or a
-// cloud ingress). Afterwards a plain (load-mcp name) connects with the tokens.
+// Exchange an authorization code for tokens using the persisted PKCE verifier +
+// client registration (no live transport needed). Then (load-mcp name) connects.
 async function authorize(payload: {
 	url: string;
 	code: string;

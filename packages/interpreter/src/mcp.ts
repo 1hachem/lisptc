@@ -70,9 +70,8 @@ type ConnConfig = { description?: string } & (
 			name: string;
 			url: string;
 			headers?: Record<string, string>;
-			// Remote servers that speak OAuth 2.1 (e.g. Linear). When set, the broker
-			// attaches an OAuth provider that stores/refreshes tokens; `scopes` are the
-			// space-separated scopes requested at authorization time.
+			// OAuth 2.1 servers (e.g. Linear); `scopes` are requested at auth time.
+			// See devdocs/oauth.md.
 			oauth?: boolean;
 			scopes?: string[];
 	  }
@@ -319,8 +318,7 @@ function lispToJson(x: unknown): unknown {
 	if (isNumeric(x)) return x;
 	if (x instanceof LispKeyword) return x.name;
 	if (x instanceof Sym) return x.name;
-	// A secret reveals its real (tainted) value here, on the way out into an MCP
-	// request/config (tool args, :headers, :env) — never through `str`.
+	// A secret reveals its value only here, into the outgoing MCP request.
 	if (x instanceof Secret) return x.value;
 	if (x instanceof Cell) {
 		if (isAlist(x)) {
@@ -656,9 +654,7 @@ export function registerMcp(interp: Interp): void {
 		([name]) => arrayToList(doUnload(interp, name)),
 	);
 
-	// (mcp-authorize "server" "code") -> :authorized
-	// Completes the OAuth flow for a server: hand back the authorization code
-	// from the login link, which is exchanged for tokens and saved for reuse.
+	// (mcp-authorize "server" "code") -> :authorized. See devdocs/oauth.md.
 	interp.def(
 		"mcp-authorize",
 		-1,

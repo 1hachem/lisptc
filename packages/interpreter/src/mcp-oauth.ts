@@ -1,19 +1,7 @@
 /*
- * OAuth 2.1 support for remote (HTTP) MCP servers.
- *
- * Remote servers such as Linear speak OAuth 2.1 (PKCE + dynamic client
- * registration + metadata discovery). The MCP SDK implements the whole protocol
- * (`auth()` / the transport's `authProvider`); all we provide is:
- *
- *   1. persistence — where the client registration, tokens and PKCE verifier
- *      live between requests and sessions (so a token, once obtained, is reused
- *      and silently refreshed);
- *   2. redirect capture — grabbing the authorization URL the SDK builds so the
- *      broker can surface it to the user instead of opening a browser here.
- *
- * Persistence is behind the `OAuthStore` interface so the backing store is
- * swappable: a file-backed store ships now; a database-backed one can implement
- * the same interface later without touching the provider or the broker.
+ * OAuth 2.1 for remote MCP servers: token persistence (`OAuthStore` +
+ * `StoredOAuthProvider`) and redirect capture (`AuthCallback`). The MCP SDK
+ * implements the protocol itself. See devdocs/oauth.md.
  */
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -30,20 +18,13 @@ import type {
 
 // Everything persisted for one MCP server's OAuth session.
 export interface OAuthRecord {
-	// Result of dynamic client registration (client_id, and client_secret for
-	// confidential clients).
-	clientInformation?: OAuthClientInformationFull;
-	// Access + refresh tokens (with expiry). The refresh token is what lets a
-	// later session reconnect without sending the user through the browser again.
-	tokens?: OAuthTokens;
-	// PKCE code verifier, kept only for the brief window between building the
-	// authorization URL and exchanging the returned code.
-	codeVerifier?: string;
+	clientInformation?: OAuthClientInformationFull; // dynamic client registration
+	tokens?: OAuthTokens; // access + refresh (with expiry)
+	codeVerifier?: string; // PKCE, transient between auth URL and code exchange
 }
 
-// Swappable persistence for OAuth records, keyed by a stable per-server key
-// (the server origin). Async so a database-backed implementation fits the same
-// shape as the file-backed one.
+// Swappable persistence for OAuth records, keyed by server origin. Async so a
+// database-backed store fits the same shape as the file one.
 export interface OAuthStore {
 	load(serverKey: string): Promise<OAuthRecord | undefined>;
 	save(serverKey: string, record: OAuthRecord): Promise<void>;
@@ -63,9 +44,7 @@ function keyToFileName(serverKey: string): string {
 	return `${serverKey.replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
 }
 
-// A file-backed OAuthStore: one JSON file per server under a private directory
-// (0700 dir, 0600 files). This is the ships-now implementation; swap in a
-// database-backed OAuthStore later without changing anything else.
+// Default OAuthStore: one 0600 JSON file per server under a 0700 dir.
 export class FileOAuthStore implements OAuthStore {
 	constructor(private readonly dir: string = defaultOAuthDir()) {}
 
@@ -93,13 +72,10 @@ export class FileOAuthStore implements OAuthStore {
 	}
 }
 
-// An OAuthClientProvider (the SDK's storage/redirect hook) backed by an
-// OAuthStore. The record is hydrated once via `create`, held in memory so the
-// SDK's synchronous getters are cheap, and written through to the store on every
-// save. Construct one per connection with the chosen loopback redirect URL.
+// The SDK's storage/redirect hook, backed by an OAuthStore: hydrated once, held
+// in memory for the SDK's sync getters, written through on every save.
 export class StoredOAuthProvider implements OAuthClientProvider {
-	// The authorization URL the SDK asks us to send the user to. Captured rather
-	// than opened, so the broker can surface it (the `:needs-auth` job state).
+	// Captured (not opened) so the broker can surface it to the user.
 	authorizationUrl?: URL;
 
 	private constructor(
@@ -110,8 +86,7 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 		private readonly scope: string | undefined,
 	) {}
 
-	// Hydrate the provider from the store for the given server + redirect URL.
-	// `scope` is the space-separated OAuth scopes to request (e.g. "read write").
+	// Hydrate from the store. `scope` is space-separated (e.g. "read write").
 	static async create(
 		store: OAuthStore,
 		serverUrl: string,
@@ -194,25 +169,13 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 }
 
 // --- Authorization callback --------------------------------------------------
-//
-// Where the authorization server redirects after the user approves, and how the
-// resulting `code` gets back to the broker. This is a swappable seam like
-// `OAuthStore`: a loopback server is the right default for local/desktop use,
-// while a cloud deployment (behind a Kubernetes ingress with a real domain)
-// uses a fixed public redirect URL and delivers the code out-of-band. Nothing
-// here assumes localhost — the strategy is chosen by `createAuthCallback`.
+// Where the server redirects after approval, and how the `code` gets back. A
+// swappable seam: loopback for local use, external for cloud. See devdocs/oauth.md.
 
 export interface AuthCallback {
-	// The redirect_uri to register with the authorization server.
-	redirectUrl(): string;
-	// Resolve with the authorization code once it arrives, checking it carries
-	// the expected OAuth `state`. Rejects on timeout or state mismatch.
-	waitForCode(state: string, timeoutMs?: number): Promise<string>;
-	// Deliver a code obtained out-of-band — an ingress handler that terminates
-	// the public redirect, or the user pasting it via `(mcp-authorize)`. Both
-	// strategies accept this; loopback also fills it in automatically.
-	submitCode(params: { code: string; state?: string }): void;
-	// Release any resources (e.g. stop the loopback server).
+	redirectUrl(): string; // redirect_uri to register
+	waitForCode(state: string, timeoutMs?: number): Promise<string>; // rejects on timeout / state mismatch
+	submitCode(params: { code: string; state?: string }): void; // deliver an out-of-band code
 	close(): Promise<void>;
 }
 
@@ -257,9 +220,7 @@ abstract class BaseAuthCallback implements AuthCallback {
 	async close(): Promise<void> {}
 }
 
-// Local default: a transient HTTP server bound to 127.0.0.1 on an ephemeral
-// port that captures the redirect. Only reachable from a browser on the same
-// machine (never the network), and shut down once the code arrives.
+// Local: a transient 127.0.0.1 HTTP server that captures the redirect.
 export class LoopbackAuthCallback extends BaseAuthCallback {
 	private port = 0;
 
@@ -270,8 +231,8 @@ export class LoopbackAuthCallback extends BaseAuthCallback {
 		super();
 	}
 
-	// `port` 0 picks an ephemeral port; pass a fixed port to match a stable
-	// redirect URI. Rejects (e.g. EADDRINUSE) so the caller can fall back.
+	// `port` 0 is ephemeral; a fixed port matches a stable redirect URI. Rejects
+	// on EADDRINUSE so the caller can fall back.
 	static start(path = "/callback", port = 0): Promise<LoopbackAuthCallback> {
 		return new Promise((resolve, reject) => {
 			const server = createServer((req, res) => {
@@ -306,10 +267,8 @@ export class LoopbackAuthCallback extends BaseAuthCallback {
 	}
 }
 
-// Cloud/ingress default: no local server. The redirect points at a real domain
-// (your Kubernetes ingress, e.g. https://mcp.example.com/oauth/callback); the
-// handler behind that ingress — or the user via `(mcp-authorize)` — delivers
-// the code with `submitCode`.
+// Cloud/ingress: no local server. The redirect points at a real domain; the
+// ingress handler (or `(mcp-authorize)`) delivers the code via `submitCode`.
 export class ExternalAuthCallback extends BaseAuthCallback {
 	constructor(private readonly url: string) {
 		super();
@@ -319,9 +278,7 @@ export class ExternalAuthCallback extends BaseAuthCallback {
 	}
 }
 
-// Choose the callback strategy from configuration. Set
-// `LISPTC_OAUTH_REDIRECT_URL` to your ingress callback URL for a cloud
-// deployment; otherwise a loopback server is started for local use.
+// External if $LISPTC_OAUTH_REDIRECT_URL is set (cloud), else loopback (local).
 export function createAuthCallback(): Promise<AuthCallback> {
 	const external = process.env.LISPTC_OAUTH_REDIRECT_URL;
 	if (external) return Promise.resolve(new ExternalAuthCallback(external));
