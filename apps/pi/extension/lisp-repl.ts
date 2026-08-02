@@ -299,6 +299,22 @@ export default function (pi: ExtensionAPI) {
 			type: "grammar",
 			grammar: LISP_GRAMMAR,
 		};
+		// Set LISP_DEBUG=1 to confirm the grammar actually reaches the wire and
+		// see what model/reasoning fields pi built.
+		if (process.env.LISP_DEBUG) {
+			const p = payload as Record<string, unknown>;
+			console.error(
+				"[lisp-repl] request:",
+				JSON.stringify({
+					model: p.model,
+					stream: p.stream,
+					response_format: (p.response_format as { type?: string })?.type,
+					grammarLen: LISP_GRAMMAR.length,
+					reasoning_effort: p.reasoning_effort,
+					chat_template_kwargs: p.chat_template_kwargs,
+				}),
+			);
+		}
 		return payload;
 	});
 
@@ -384,6 +400,20 @@ export default function (pi: ExtensionAPI) {
 		// task — reset the step budget so each request gets a fresh loop.
 		if (msg.role === "user" && msg.customType === undefined) steps = 0;
 		if (event.message.role !== "assistant") return;
+		// LISP_DEBUG: show which channels the model used. If `text` is empty and
+		// the content is all `thinking`, the grammar constrained an empty answer
+		// while the real (unconstrained) output went to the reasoning channel.
+		if (process.env.LISP_DEBUG) {
+			console.error(
+				"[lisp-repl] reply parts:",
+				JSON.stringify(
+					event.message.content.map((c) => ({
+						type: c.type,
+						head: ("text" in c ? c.text : "").slice(0, 60),
+					})),
+				),
+			);
+		}
 		const code = event.message.content
 			.filter((c): c is { type: "text"; text: string } => c.type === "text")
 			.map((c) => c.text)
