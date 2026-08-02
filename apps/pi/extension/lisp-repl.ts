@@ -246,7 +246,19 @@ function registerFireworks(pi: ExtensionAPI): void {
 			{
 				id: "accounts/fireworks/models/kimi-k3",
 				name: "Kimi K3",
-				reasoning: false,
+				reasoning: true,
+				input: ["text", "image"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 262144,
+				maxTokens: 131072,
+			},
+			{
+				id: "accounts/fireworks/models/kimi-k2p7-code",
+				name: "Kimi K2.7 Code",
+				// reasoning MUST be true: with false, pi treats the model as
+				// non-reasoning and never sends a thinking-control param, so the
+				// `:off` level is ignored and the model reasons anyway.
+				reasoning: true,
 				input: ["text", "image"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 262144,
@@ -255,7 +267,7 @@ function registerFireworks(pi: ExtensionAPI): void {
 			{
 				id: "accounts/fireworks/models/glm-5p2",
 				name: "GLM 5.2",
-				reasoning: false,
+				reasoning: true,
 				input: ["text"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 131072,
@@ -264,7 +276,7 @@ function registerFireworks(pi: ExtensionAPI): void {
 			{
 				id: "accounts/fireworks/models/gpt-oss-120b",
 				name: "GPT-OSS 120B",
-				reasoning: false,
+				reasoning: true,
 				input: ["text"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 131072,

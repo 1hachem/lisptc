@@ -14,7 +14,7 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
-    "pi": "pi --provider fireworks --model accounts/fireworks/models/gpt-oss-120b",
+    "pi": "pi --provider fireworks --model accounts/fireworks/models/kimi-k2p7-code:off",
     "prepare": "husky"
   },
   "pi": {
