@@ -261,15 +261,15 @@ function registerFireworks(pi: ExtensionAPI): void {
 				contextWindow: 131072,
 				maxTokens: 65536,
 			},
-            {
-                id: "accounts/fireworks/models/gpt-oss-120b",
-				name: "GLM 5.2",
+			{
+				id: "accounts/fireworks/models/gpt-oss-120b",
+				name: "GPT-OSS 120B",
 				reasoning: false,
 				input: ["text"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 131072,
 				maxTokens: 65536,
-            }
+			},
 		],
 	});
 }
