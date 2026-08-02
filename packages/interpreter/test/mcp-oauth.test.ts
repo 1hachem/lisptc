@@ -176,6 +176,18 @@ describe("AuthCallback (loopback)", () => {
 		}
 	});
 
+	it("binds a fixed port and rejects a second bind on it", async () => {
+		const first = await LoopbackAuthCallback.start("/callback", 8917);
+		try {
+			expect(first.redirectUrl()).toBe("http://127.0.0.1:8917/callback");
+			await expect(
+				LoopbackAuthCallback.start("/callback", 8917),
+			).rejects.toMatchObject({ code: "EADDRINUSE" });
+		} finally {
+			await first.close();
+		}
+	});
+
 	it("times out if the code never arrives", async () => {
 		const cb = await LoopbackAuthCallback.start();
 		try {

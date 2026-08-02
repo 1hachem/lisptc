@@ -270,8 +270,10 @@ export class LoopbackAuthCallback extends BaseAuthCallback {
 		super();
 	}
 
-	static start(path = "/callback"): Promise<LoopbackAuthCallback> {
-		return new Promise((resolve) => {
+	// `port` 0 picks an ephemeral port; pass a fixed port to match a stable
+	// redirect URI. Rejects (e.g. EADDRINUSE) so the caller can fall back.
+	static start(path = "/callback", port = 0): Promise<LoopbackAuthCallback> {
+		return new Promise((resolve, reject) => {
 			const server = createServer((req, res) => {
 				const url = new URL(req.url ?? "/", "http://127.0.0.1");
 				if (url.pathname !== path) {
@@ -282,12 +284,13 @@ export class LoopbackAuthCallback extends BaseAuthCallback {
 				const state = url.searchParams.get("state") ?? undefined;
 				res.writeHead(200, { "content-type": "text/html" });
 				res.end(
-					"<!doctype html><p>Authorization complete — you can close this tab.</p>",
+					"<!doctype html><p>Authorization complete — you can close this tab and return to the REPL.</p>",
 				);
 				if (code) cb.submitCode({ code, state });
 			});
 			const cb = new LoopbackAuthCallback(server, path);
-			server.listen(0, "127.0.0.1", () => {
+			server.once("error", reject);
+			server.listen(port, "127.0.0.1", () => {
 				cb.port = (server.address() as AddressInfo).port;
 				resolve(cb);
 			});
