@@ -17,5 +17,12 @@
     "description": "Read, write, and list files under the current working directory.",
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+  },
+  {
+    "name": "linear",
+    "description": "Linear issue tracker over OAuth: search/list/create issues, projects, comments. First (load-mcp \"linear\") returns an authorization link; approve it, run (mcp-authorize \"linear\" \"<code>\"), then load again.",
+    "url": "https://mcp.linear.app/mcp",
+    "oauth": true,
+    "scopes": ["read", "write"]
   }
 ]

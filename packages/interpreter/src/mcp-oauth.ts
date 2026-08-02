@@ -107,17 +107,26 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 		private readonly serverKey: string,
 		private readonly redirect: string,
 		private readonly record: OAuthRecord,
+		private readonly scope: string | undefined,
 	) {}
 
-	// Hydrate the provider from the store for the given server + loopback URL.
+	// Hydrate the provider from the store for the given server + redirect URL.
+	// `scope` is the space-separated OAuth scopes to request (e.g. "read write").
 	static async create(
 		store: OAuthStore,
 		serverUrl: string,
 		redirectUrl: string,
+		scope?: string,
 	): Promise<StoredOAuthProvider> {
 		const serverKey = new URL(serverUrl).origin;
 		const record = (await store.load(serverKey)) ?? {};
-		return new StoredOAuthProvider(store, serverKey, redirectUrl, record);
+		return new StoredOAuthProvider(
+			store,
+			serverKey,
+			redirectUrl,
+			record,
+			scope,
+		);
 	}
 
 	get redirectUrl(): string {
@@ -131,6 +140,7 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 			grant_types: ["authorization_code", "refresh_token"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "none",
+			...(this.scope ? { scope: this.scope } : {}),
 		};
 	}
 

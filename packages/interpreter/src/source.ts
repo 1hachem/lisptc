@@ -11,6 +11,7 @@ const FILES = [
 	"grammar.ts",
 	"mcp.ts",
 	"mcp-broker.ts",
+	"mcp-oauth.ts",
 	"lisptc.gbnf",
 ] as const;
 

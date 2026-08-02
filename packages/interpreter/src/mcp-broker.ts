@@ -25,10 +25,15 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parentPort } from "node:worker_threads";
+import {
+	auth,
+	UnauthorizedError,
+} from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { FileOAuthStore, StoredOAuthProvider } from "./mcp-oauth.ts";
 
 // Reply states written into ctrl[0]. Must match src/mcp.ts.
 const STATE_DONE = 1;
@@ -37,7 +42,13 @@ const STATE_SPILL = 3; // reply too big for `data`; ctrl-length names a temp fil
 
 // A connection descriptor sent by the main thread.
 type ConnConfig =
-	| { name: string; url: string; headers?: Record<string, string> }
+	| {
+			name: string;
+			url: string;
+			headers?: Record<string, string>;
+			oauth?: boolean;
+			scopes?: string[];
+	  }
 	| {
 			name: string;
 			command: string;
@@ -45,8 +56,32 @@ type ConnConfig =
 			env?: Record<string, string>;
 	  };
 
+// OAuth token store shared across connections; swap in a DB-backed OAuthStore
+// here to persist tokens elsewhere.
+const oauthStore = new FileOAuthStore();
+
+// The redirect_uri registered with the authorization server. A fixed value (not
+// an ephemeral port) so the authorization request and the later code exchange
+// agree. Point it at your ingress callback in the cloud via env.
+function redirectUri(): string {
+	return (
+		process.env.LISPTC_OAUTH_REDIRECT_URL ?? "http://localhost:8909/callback"
+	);
+}
+
+// Thrown by connect() when a server needs interactive OAuth: its message carries
+// the authorization URL and the next step for the user.
+class NeedsAuthError extends Error {
+	constructor(server: string, authUrl: string) {
+		super(
+			`authorization required for "${server}": open ${authUrl} in a browser, approve, then run (mcp-authorize "${server}" "<code>")`,
+		);
+	}
+}
+
 type Op =
 	| "connect"
+	| "authorize"
 	| "list-tools"
 	| "call-tool"
 	| "disconnect"
@@ -163,6 +198,10 @@ async function dispatch(
 	switch (op) {
 		case "connect":
 			return connect(payload as ConnConfig, signal);
+		case "authorize":
+			return authorize(
+				payload as { url: string; code: string; scopes?: string[] },
+			);
 		case "list-tools":
 			return listTools((payload as { serverId: string }).serverId);
 		case "call-tool":
@@ -232,29 +271,54 @@ async function connect(
 	conf: ConnConfig,
 	signal?: AbortSignal,
 ): Promise<{ serverId: string; tools: Tool[] }> {
-	const transport =
-		"url" in conf
-			? new StreamableHTTPClientTransport(new URL(conf.url), {
-					requestInit: conf.headers ? { headers: conf.headers } : undefined,
-				})
-			: new StdioClientTransport({
-					command: conf.command,
-					args: conf.args ?? [],
-					// Inherit env so PATH etc. resolve; merge any explicit overrides.
-					env: {
-						...(process.env as Record<string, string>),
-						...(conf.env ?? {}),
-					},
-				});
-
 	const client = new Client(
 		{ name: "lisptc", version: "1.0.0" },
 		{ capabilities: {} },
 	);
+
 	// SDK performs the initialize + notifications/initialized handshake. The
 	// AbortSignal (from the job's AbortController) lets (cancel job) abort a
 	// slow connect/list mid-flight.
-	await client.connect(transport, { signal });
+	if ("url" in conf && conf.oauth) {
+		// OAuth 2.1 path. The provider supplies stored tokens (silently refreshing
+		// via the refresh token) so a returning session connects directly. With no
+		// usable token the SDK runs discovery + registration + PKCE, saves the code
+		// verifier, captures the authorization URL, and throws UnauthorizedError.
+		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
+		const provider = await StoredOAuthProvider.create(
+			oauthStore,
+			conf.url,
+			redirectUri(),
+			scope,
+		);
+		const transport = new StreamableHTTPClientTransport(new URL(conf.url), {
+			authProvider: provider,
+		});
+		try {
+			await client.connect(transport, { signal });
+		} catch (e) {
+			if (!(e instanceof UnauthorizedError)) throw e;
+			const url = provider.authorizationUrl?.href;
+			if (!url) throw e;
+			throw new NeedsAuthError(conf.name, url);
+		}
+	} else {
+		const transport =
+			"url" in conf
+				? new StreamableHTTPClientTransport(new URL(conf.url), {
+						requestInit: conf.headers ? { headers: conf.headers } : undefined,
+					})
+				: new StdioClientTransport({
+						command: conf.command,
+						args: conf.args ?? [],
+						// Inherit env so PATH etc. resolve; merge any explicit overrides.
+						env: {
+							...(process.env as Record<string, string>),
+							...(conf.env ?? {}),
+						},
+					});
+		await client.connect(transport, { signal });
+	}
 	const { tools } = await client.listTools(undefined, { signal });
 	// A server that handshakes but exposes no tools is useless to lisptc (whose
 	// MCP integration is tools-only) — this is the common shape of a degraded /
@@ -268,6 +332,33 @@ async function connect(
 	const serverId = randomUUID();
 	clients.set(serverId, { client, tools });
 	return { serverId, tools };
+}
+
+// Complete an OAuth authorization: exchange the code the user brought back for
+// tokens (saved by the provider for reuse). Uses the PKCE verifier + client
+// registration persisted during connect(), so no live transport is needed —
+// which is what lets the code arrive out-of-band (loopback, manual paste, or a
+// cloud ingress). Afterwards a plain (load-mcp name) connects with the tokens.
+async function authorize(payload: {
+	url: string;
+	code: string;
+	scopes?: string[];
+}): Promise<{ ok: true }> {
+	const scope = payload.scopes?.length ? payload.scopes.join(" ") : undefined;
+	const provider = await StoredOAuthProvider.create(
+		oauthStore,
+		payload.url,
+		redirectUri(),
+		scope,
+	);
+	const result = await auth(provider, {
+		serverUrl: payload.url,
+		authorizationCode: payload.code,
+		scope,
+	});
+	if (result !== "AUTHORIZED")
+		throw new Error("authorization did not complete (unexpected redirect)");
+	return { ok: true };
 }
 
 async function listTools(serverId: string): Promise<Tool[]> {

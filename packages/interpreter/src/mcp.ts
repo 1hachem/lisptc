@@ -66,7 +66,16 @@ interface JsonSchema {
 }
 
 type ConnConfig = { description?: string } & (
-	| { name: string; url: string; headers?: Record<string, string> }
+	| {
+			name: string;
+			url: string;
+			headers?: Record<string, string>;
+			// Remote servers that speak OAuth 2.1 (e.g. Linear). When set, the broker
+			// attaches an OAuth provider that stores/refreshes tokens; `scopes` are the
+			// space-separated scopes requested at authorization time.
+			oauth?: boolean;
+			scopes?: string[];
+	  }
 	| {
 			name: string;
 			command: string;
@@ -424,7 +433,11 @@ function connConfigFromArgs(rest: List): ConnConfig {
 		const headers = opts.has("headers")
 			? (lispToJson(opts.get("headers")) as Record<string, string>)
 			: undefined;
-		return { name, url, headers };
+		const oauth = opts.has("oauth") ? opts.get("oauth") !== null : undefined;
+		const scopes = opts.has("scopes")
+			? listToArray(opts.get("scopes") as List).map(String)
+			: undefined;
+		return { name, url, headers, oauth, scopes };
 	}
 	if (opts.has("command")) {
 		const command = opts.get("command");
@@ -641,6 +654,33 @@ export function registerMcp(interp: Interp): void {
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
 		([name]) => arrayToList(doUnload(interp, name)),
+	);
+
+	// (mcp-authorize "server" "code") -> :authorized
+	// Completes the OAuth flow for a server: hand back the authorization code
+	// from the login link, which is exchanged for tokens and saved for reuse.
+	interp.def(
+		"mcp-authorize",
+		-1,
+		'(mcp-authorize "server" "code")',
+		'Finish OAuth for a server: exchange the authorization `code` from its login link for tokens (saved for reuse). Then (load-mcp "server") connects directly.',
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
+			const code = args[1];
+			if (typeof code !== "string")
+				throw new EvalException(
+					"mcp-authorize requires an authorization code string",
+					code ?? null,
+					false,
+				);
+			const conf = predefined.get(name);
+			if (!conf || !("url" in conf))
+				throw new EvalException("unknown OAuth MCP server", name, false);
+			mcpRequest("authorize", { url: conf.url, code, scopes: conf.scopes });
+			return newLispKeyword("authorized");
+		},
 	);
 
 	// (list-mcps) -> ((name :loaded|:unloaded count) ...)
