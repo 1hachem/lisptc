@@ -34,8 +34,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import {
+	createAuthCallback,
 	FileOAuthStore,
-	LoopbackAuthCallback,
 	StoredOAuthProvider,
 } from "./mcp-oauth.ts";
 
@@ -76,31 +76,27 @@ function redirectUri(): string {
 	);
 }
 
-function isLocalCallback(): boolean {
-	return !process.env.LISPTC_OAUTH_REDIRECT_URL;
-}
-
 // Thrown by connect() when a server needs interactive OAuth; the message carries
 // the authorization URL and the next step.
 class NeedsAuthError extends Error {
-	constructor(server: string, authUrl: string, local: boolean) {
-		const next = local
-			? `after approving it will be captured automatically — then run (load-mcp "${server}") again`
-			: `approve, then run (mcp-authorize "${server}" "<code>")`;
-		super(`authorization required for "${server}": open ${authUrl} — ${next}`);
+	constructor(server: string, authUrl: string) {
+		super(
+			`authorization required for "${server}": open ${authUrl} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "<code>"))`,
+		);
 	}
 }
 
-// Start the loopback server and, in the background, exchange the captured code
-// for tokens. Fire-and-forget; silent on busy port / timeout (manual path works).
-async function startLoopbackCapture(
+// Start the callback server (loopback locally, 0.0.0.0 behind an ingress) and,
+// in the background, exchange the captured code for tokens. Fire-and-forget;
+// silent on busy port / timeout (the manual mcp-authorize path still works).
+async function startCallbackCapture(
 	serverUrl: string,
 	scope: string | undefined,
 	authUrl: URL,
 ): Promise<void> {
-	let cb: LoopbackAuthCallback;
+	let cb: Awaited<ReturnType<typeof createAuthCallback>>;
 	try {
-		cb = await LoopbackAuthCallback.start("/callback", callbackPort());
+		cb = await createAuthCallback(callbackPort());
 	} catch {
 		return; // port busy: fall back to manual (mcp-authorize)
 	}
@@ -352,10 +348,9 @@ async function connect(
 			if (!(e instanceof UnauthorizedError)) throw e;
 			const authUrl = provider.authorizationUrl;
 			if (!authUrl) throw e;
-			// Local mode: start the loopback server to auto-capture the code.
-			if (isLocalCallback())
-				void startLoopbackCapture(conf.url, scope, authUrl);
-			throw new NeedsAuthError(conf.name, authUrl.href, isLocalCallback());
+			// Start the callback server to auto-capture the code (both modes).
+			void startCallbackCapture(conf.url, scope, authUrl);
+			throw new NeedsAuthError(conf.name, authUrl.href);
 		}
 	} else {
 		const transport =

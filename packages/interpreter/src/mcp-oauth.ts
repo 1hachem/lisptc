@@ -169,10 +169,9 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 }
 
 // --- Authorization callback --------------------------------------------------
-// Where the server redirects after approval, and how the `code` gets back. A
-// swappable seam: loopback for local use, external for cloud. See devdocs/oauth.md.
+// Captures the redirect and hands the `code` back. See devdocs/oauth.md.
 
-export interface AuthCallback {
+interface AuthCallback {
 	redirectUrl(): string; // redirect_uri to register
 	waitForCode(state: string, timeoutMs?: number): Promise<string>; // rejects on timeout / state mismatch
 	submitCode(params: { code: string; state?: string }): void; // deliver an out-of-band code
@@ -220,20 +219,37 @@ abstract class BaseAuthCallback implements AuthCallback {
 	async close(): Promise<void> {}
 }
 
-// Local: a transient 127.0.0.1 HTTP server that captures the redirect.
-export class LoopbackAuthCallback extends BaseAuthCallback {
-	private port = 0;
+// An HTTP server that captures the redirect. The same server handles both
+// modes; only where it binds and the URL it advertises differ:
+//   - local:   bind 127.0.0.1, advertise http://127.0.0.1:<port>/callback
+//   - ingress: bind 0.0.0.0 (reachable via the ingress), advertise the public
+//              domain URL ($LISPTC_OAUTH_REDIRECT_URL)
+// The advertised redirect URL can differ from the bind host:port (the ingress
+// bridges the public URL to the pod's 0.0.0.0:<port>).
+export class CallbackServer extends BaseAuthCallback {
+	private boundPort = 0;
 
 	private constructor(
 		private readonly server: Server,
 		private readonly path: string,
+		private readonly advertised: string | undefined,
 	) {
 		super();
 	}
 
-	// `port` 0 is ephemeral; a fixed port matches a stable redirect URI. Rejects
-	// on EADDRINUSE so the caller can fall back.
-	static start(path = "/callback", port = 0): Promise<LoopbackAuthCallback> {
+	// Rejects on EADDRINUSE so the caller can fall back to (mcp-authorize).
+	static start(opts: {
+		host?: string;
+		port?: number;
+		path?: string;
+		redirectUrl?: string;
+	}): Promise<CallbackServer> {
+		const {
+			host = "127.0.0.1",
+			port = 0,
+			path = "/callback",
+			redirectUrl,
+		} = opts;
 		return new Promise((resolve, reject) => {
 			const server = createServer((req, res) => {
 				const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -249,17 +265,17 @@ export class LoopbackAuthCallback extends BaseAuthCallback {
 				);
 				if (code) cb.submitCode({ code, state });
 			});
-			const cb = new LoopbackAuthCallback(server, path);
+			const cb = new CallbackServer(server, path, redirectUrl);
 			server.once("error", reject);
-			server.listen(port, "127.0.0.1", () => {
-				cb.port = (server.address() as AddressInfo).port;
+			server.listen(port, host, () => {
+				cb.boundPort = (server.address() as AddressInfo).port;
 				resolve(cb);
 			});
 		});
 	}
 
 	redirectUrl(): string {
-		return `http://127.0.0.1:${this.port}${this.path}`;
+		return this.advertised ?? `http://127.0.0.1:${this.boundPort}${this.path}`;
 	}
 
 	override close(): Promise<void> {
@@ -267,20 +283,19 @@ export class LoopbackAuthCallback extends BaseAuthCallback {
 	}
 }
 
-// Cloud/ingress: no local server. The redirect points at a real domain; the
-// ingress handler (or `(mcp-authorize)`) delivers the code via `submitCode`.
-export class ExternalAuthCallback extends BaseAuthCallback {
-	constructor(private readonly url: string) {
-		super();
-	}
-	redirectUrl(): string {
-		return this.url;
-	}
-}
-
-// External if $LISPTC_OAUTH_REDIRECT_URL is set (cloud), else loopback (local).
-export function createAuthCallback(): Promise<AuthCallback> {
+// Start the callback server for the current config on `port`. Behind an ingress
+// ($LISPTC_OAUTH_REDIRECT_URL) it binds 0.0.0.0 and advertises the public URL;
+// locally it binds 127.0.0.1.
+export function createAuthCallback(port: number): Promise<CallbackServer> {
 	const external = process.env.LISPTC_OAUTH_REDIRECT_URL;
-	if (external) return Promise.resolve(new ExternalAuthCallback(external));
-	return LoopbackAuthCallback.start();
+	if (external) {
+		const path = new URL(external).pathname || "/callback";
+		return CallbackServer.start({
+			host: "0.0.0.0",
+			port,
+			path,
+			redirectUrl: external,
+		});
+	}
+	return CallbackServer.start({ host: "127.0.0.1", port, path: "/callback" });
 }

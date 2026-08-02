@@ -42,21 +42,30 @@ bridged by the persisted PKCE verifier + client registration, so no live
 transport has to stay open. This is what lets the code arrive by loopback, manual
 paste, or a cloud ingress.
 
-## Callback strategies (`AuthCallback`)
+## Callback server (`CallbackServer`)
 
-Swappable, chosen by `createAuthCallback()`:
+The **same** application serves the callback and saves the tokens in both modes;
+only where it binds and the URL it advertises differ (`createAuthCallback(port)`):
 
-- **Loopback** (default, local): a transient HTTP server on `127.0.0.1:<port>`
-  (fixed, default `8909`) that auto-captures the redirect. Only reachable from a
-  browser on the same machine; shut down once the code arrives.
-- **External** (cloud): set `LISPTC_OAUTH_REDIRECT_URL` to a real callback URL
-  (your Kubernetes ingress). No local server; the ingress handler — or the user
-  via `(mcp-authorize "server" "<code>")` — delivers the code.
+- **Local** (default): binds `127.0.0.1:<port>` (default `8909`) and advertises
+  `http://127.0.0.1:<port>/callback`. Reachable only from a browser on the same
+  machine.
+- **Ingress** (cloud): set `LISPTC_OAUTH_REDIRECT_URL` to your public callback
+  (e.g. `https://mcp.example.com/oauth/callback`). The server then binds
+  `0.0.0.0:<port>` (reachable via the ingress) and advertises the public URL.
+  The ingress routes `https://…/oauth/callback` to the pod's `0.0.0.0:<port>`
+  at the same path; the server captures the code and exchanges it, exactly as
+  local mode does. The advertised redirect URL may differ from the bind
+  `host:port` — the ingress bridges them.
+
+On the needs-auth path the server auto-captures the code and exchanges it in the
+background; then a subsequent `(load-mcp "server")` connects. It binds on-demand
+(during the auth window) and shuts down once the code arrives.
 
 ### Manual fallback
 
 `(mcp-authorize "server" "<code>")` completes the exchange with a code obtained
-out-of-band. Used for headless/remote sessions and the external strategy.
+out-of-band — for headless sessions or if the callback port is busy.
 
 ## Storage (`OAuthStore`)
 

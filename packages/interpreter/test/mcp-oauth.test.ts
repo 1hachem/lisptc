@@ -3,10 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	CallbackServer,
 	createAuthCallback,
-	ExternalAuthCallback,
 	FileOAuthStore,
-	LoopbackAuthCallback,
 	type OAuthRecord,
 	type OAuthStore,
 	StoredOAuthProvider,
@@ -147,14 +146,13 @@ describe("StoredOAuthProvider", () => {
 	});
 });
 
-describe("AuthCallback (loopback)", () => {
+describe("CallbackServer (loopback)", () => {
 	it("captures the code from a same-machine redirect and returns it", async () => {
-		const cb = await LoopbackAuthCallback.start();
+		const cb = await CallbackServer.start({ host: "127.0.0.1" });
 		try {
 			const url = cb.redirectUrl();
 			expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/callback$/);
 			const waiting = cb.waitForCode("st4te");
-			// Simulate the browser hitting the loopback redirect.
 			await fetch(`${url}?code=the-code&state=st4te`);
 			expect(await waiting).toBe("the-code");
 		} finally {
@@ -163,7 +161,7 @@ describe("AuthCallback (loopback)", () => {
 	});
 
 	it("rejects on a state mismatch", async () => {
-		const cb = await LoopbackAuthCallback.start();
+		const cb = await CallbackServer.start({ host: "127.0.0.1" });
 		try {
 			// Attach the rejection handler before triggering the callback.
 			const assertion = expect(cb.waitForCode("expected")).rejects.toThrow(
@@ -177,11 +175,11 @@ describe("AuthCallback (loopback)", () => {
 	});
 
 	it("binds a fixed port and rejects a second bind on it", async () => {
-		const first = await LoopbackAuthCallback.start("/callback", 8917);
+		const first = await CallbackServer.start({ host: "127.0.0.1", port: 8917 });
 		try {
 			expect(first.redirectUrl()).toBe("http://127.0.0.1:8917/callback");
 			await expect(
-				LoopbackAuthCallback.start("/callback", 8917),
+				CallbackServer.start({ host: "127.0.0.1", port: 8917 }),
 			).rejects.toMatchObject({ code: "EADDRINUSE" });
 		} finally {
 			await first.close();
@@ -189,7 +187,7 @@ describe("AuthCallback (loopback)", () => {
 	});
 
 	it("times out if the code never arrives", async () => {
-		const cb = await LoopbackAuthCallback.start();
+		const cb = await CallbackServer.start({ host: "127.0.0.1" });
 		try {
 			await expect(cb.waitForCode("s", 20)).rejects.toThrow(/timed out/);
 		} finally {
@@ -198,27 +196,35 @@ describe("AuthCallback (loopback)", () => {
 	});
 });
 
-describe("AuthCallback (external / ingress)", () => {
-	it("registers the configured public redirect and resolves via submitCode", async () => {
-		const cb = new ExternalAuthCallback(
-			"https://mcp.example.com/oauth/callback",
-		);
-		expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
-		const waiting = cb.waitForCode("state-1");
-		// An ingress handler (or (mcp-authorize)) delivers the code out-of-band.
-		cb.submitCode({ code: "ingress-code", state: "state-1" });
-		expect(await waiting).toBe("ingress-code");
+describe("CallbackServer (ingress)", () => {
+	it("binds 0.0.0.0, advertises the public URL, and captures via that path", async () => {
+		const cb = await CallbackServer.start({
+			host: "0.0.0.0",
+			port: 8918,
+			path: "/oauth/callback",
+			redirectUrl: "https://mcp.example.com/oauth/callback",
+		});
+		try {
+			// The auth server sees the public domain URL...
+			expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
+			// ...while the ingress reaches the pod on 0.0.0.0:port at the same path.
+			const waiting = cb.waitForCode("s");
+			await fetch(`http://127.0.0.1:8918/oauth/callback?code=ingress&state=s`);
+			expect(await waiting).toBe("ingress");
+		} finally {
+			await cb.close();
+		}
 	});
 });
 
 describe("createAuthCallback", () => {
-	it("uses the ingress redirect URL when LISPTC_OAUTH_REDIRECT_URL is set", async () => {
+	it("binds 0.0.0.0 and advertises the ingress URL when configured", async () => {
 		const prev = process.env.LISPTC_OAUTH_REDIRECT_URL;
 		process.env.LISPTC_OAUTH_REDIRECT_URL =
 			"https://mcp.example.com/oauth/callback";
 		try {
-			const cb = await createAuthCallback();
-			expect(cb).toBeInstanceOf(ExternalAuthCallback);
+			const cb = await createAuthCallback(8919);
+			expect(cb).toBeInstanceOf(CallbackServer);
 			expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
 			await cb.close();
 		} finally {
@@ -227,13 +233,13 @@ describe("createAuthCallback", () => {
 		}
 	});
 
-	it("falls back to a loopback server for local use", async () => {
+	it("binds a local loopback server when no ingress URL is set", async () => {
 		const prev = process.env.LISPTC_OAUTH_REDIRECT_URL;
 		delete process.env.LISPTC_OAUTH_REDIRECT_URL;
 		try {
-			const cb = await createAuthCallback();
-			expect(cb).toBeInstanceOf(LoopbackAuthCallback);
-			expect(cb.redirectUrl()).toMatch(/^http:\/\/127\.0\.0\.1:\d+/);
+			const cb = await createAuthCallback(8920);
+			expect(cb).toBeInstanceOf(CallbackServer);
+			expect(cb.redirectUrl()).toBe("http://127.0.0.1:8920/callback");
 			await cb.close();
 		} finally {
 			if (prev !== undefined) process.env.LISPTC_OAUTH_REDIRECT_URL = prev;
