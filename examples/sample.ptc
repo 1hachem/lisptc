@@ -170,3 +170,10 @@
 (concat (secret "REPL_LINEAR_API_KEY") "--test")
 
 (length (secret "REPL_LINEAR_API_KEY"))
+
+(defmacro swap (a b) `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
+(setq p 1)
+(setq q 2)
+
+(swap p q)
+(list q p)
