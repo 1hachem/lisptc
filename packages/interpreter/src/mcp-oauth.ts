@@ -17,6 +17,8 @@
  */
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
@@ -179,4 +181,136 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 	private async persist(): Promise<void> {
 		await this.store.save(this.serverKey, this.record);
 	}
+}
+
+// --- Authorization callback --------------------------------------------------
+//
+// Where the authorization server redirects after the user approves, and how the
+// resulting `code` gets back to the broker. This is a swappable seam like
+// `OAuthStore`: a loopback server is the right default for local/desktop use,
+// while a cloud deployment (behind a Kubernetes ingress with a real domain)
+// uses a fixed public redirect URL and delivers the code out-of-band. Nothing
+// here assumes localhost — the strategy is chosen by `createAuthCallback`.
+
+export interface AuthCallback {
+	// The redirect_uri to register with the authorization server.
+	redirectUrl(): string;
+	// Resolve with the authorization code once it arrives, checking it carries
+	// the expected OAuth `state`. Rejects on timeout or state mismatch.
+	waitForCode(state: string, timeoutMs?: number): Promise<string>;
+	// Deliver a code obtained out-of-band — an ingress handler that terminates
+	// the public redirect, or the user pasting it via `(mcp-authorize)`. Both
+	// strategies accept this; loopback also fills it in automatically.
+	submitCode(params: { code: string; state?: string }): void;
+	// Release any resources (e.g. stop the loopback server).
+	close(): Promise<void>;
+}
+
+const DEFAULT_AUTH_TIMEOUT_MS = 300_000; // 5 min for the user to authorize
+
+// Shared waiting logic: a single pending authorization resolved by `submitCode`.
+abstract class BaseAuthCallback implements AuthCallback {
+	private pending?: {
+		state: string;
+		resolve: (code: string) => void;
+		reject: (err: Error) => void;
+		timer: ReturnType<typeof setTimeout>;
+	};
+
+	abstract redirectUrl(): string;
+
+	waitForCode(
+		state: string,
+		timeoutMs: number = DEFAULT_AUTH_TIMEOUT_MS,
+	): Promise<string> {
+		return new Promise<string>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.pending = undefined;
+				reject(new Error("authorization timed out"));
+			}, timeoutMs);
+			this.pending = { state, resolve, reject, timer };
+		});
+	}
+
+	submitCode({ code, state }: { code: string; state?: string }): void {
+		const pending = this.pending;
+		if (!pending) return; // nothing waiting (late or duplicate callback)
+		this.pending = undefined;
+		clearTimeout(pending.timer);
+		if (state !== undefined && state !== pending.state) {
+			pending.reject(new Error("authorization state mismatch"));
+			return;
+		}
+		pending.resolve(code);
+	}
+
+	async close(): Promise<void> {}
+}
+
+// Local default: a transient HTTP server bound to 127.0.0.1 on an ephemeral
+// port that captures the redirect. Only reachable from a browser on the same
+// machine (never the network), and shut down once the code arrives.
+export class LoopbackAuthCallback extends BaseAuthCallback {
+	private port = 0;
+
+	private constructor(
+		private readonly server: Server,
+		private readonly path: string,
+	) {
+		super();
+	}
+
+	static start(path = "/callback"): Promise<LoopbackAuthCallback> {
+		return new Promise((resolve) => {
+			const server = createServer((req, res) => {
+				const url = new URL(req.url ?? "/", "http://127.0.0.1");
+				if (url.pathname !== path) {
+					res.writeHead(404).end();
+					return;
+				}
+				const code = url.searchParams.get("code");
+				const state = url.searchParams.get("state") ?? undefined;
+				res.writeHead(200, { "content-type": "text/html" });
+				res.end(
+					"<!doctype html><p>Authorization complete — you can close this tab.</p>",
+				);
+				if (code) cb.submitCode({ code, state });
+			});
+			const cb = new LoopbackAuthCallback(server, path);
+			server.listen(0, "127.0.0.1", () => {
+				cb.port = (server.address() as AddressInfo).port;
+				resolve(cb);
+			});
+		});
+	}
+
+	redirectUrl(): string {
+		return `http://127.0.0.1:${this.port}${this.path}`;
+	}
+
+	override close(): Promise<void> {
+		return new Promise((resolve) => this.server.close(() => resolve()));
+	}
+}
+
+// Cloud/ingress default: no local server. The redirect points at a real domain
+// (your Kubernetes ingress, e.g. https://mcp.example.com/oauth/callback); the
+// handler behind that ingress — or the user via `(mcp-authorize)` — delivers
+// the code with `submitCode`.
+export class ExternalAuthCallback extends BaseAuthCallback {
+	constructor(private readonly url: string) {
+		super();
+	}
+	redirectUrl(): string {
+		return this.url;
+	}
+}
+
+// Choose the callback strategy from configuration. Set
+// `LISPTC_OAUTH_REDIRECT_URL` to your ingress callback URL for a cloud
+// deployment; otherwise a loopback server is started for local use.
+export function createAuthCallback(): Promise<AuthCallback> {
+	const external = process.env.LISPTC_OAUTH_REDIRECT_URL;
+	if (external) return Promise.resolve(new ExternalAuthCallback(external));
+	return LoopbackAuthCallback.start();
 }

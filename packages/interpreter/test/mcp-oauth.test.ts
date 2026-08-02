@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	createAuthCallback,
+	ExternalAuthCallback,
 	FileOAuthStore,
+	LoopbackAuthCallback,
 	type OAuthRecord,
 	type OAuthStore,
 	StoredOAuthProvider,
@@ -141,5 +144,87 @@ describe("StoredOAuthProvider", () => {
 		await p.invalidateCredentials("tokens");
 		expect(p.tokens()).toBeUndefined();
 		expect(p.clientInformation()?.client_id).toBe("cid"); // client kept
+	});
+});
+
+describe("AuthCallback (loopback)", () => {
+	it("captures the code from a same-machine redirect and returns it", async () => {
+		const cb = await LoopbackAuthCallback.start();
+		try {
+			const url = cb.redirectUrl();
+			expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/callback$/);
+			const waiting = cb.waitForCode("st4te");
+			// Simulate the browser hitting the loopback redirect.
+			await fetch(`${url}?code=the-code&state=st4te`);
+			expect(await waiting).toBe("the-code");
+		} finally {
+			await cb.close();
+		}
+	});
+
+	it("rejects on a state mismatch", async () => {
+		const cb = await LoopbackAuthCallback.start();
+		try {
+			// Attach the rejection handler before triggering the callback.
+			const assertion = expect(cb.waitForCode("expected")).rejects.toThrow(
+				/state mismatch/,
+			);
+			await fetch(`${cb.redirectUrl()}?code=x&state=wrong`);
+			await assertion;
+		} finally {
+			await cb.close();
+		}
+	});
+
+	it("times out if the code never arrives", async () => {
+		const cb = await LoopbackAuthCallback.start();
+		try {
+			await expect(cb.waitForCode("s", 20)).rejects.toThrow(/timed out/);
+		} finally {
+			await cb.close();
+		}
+	});
+});
+
+describe("AuthCallback (external / ingress)", () => {
+	it("registers the configured public redirect and resolves via submitCode", async () => {
+		const cb = new ExternalAuthCallback(
+			"https://mcp.example.com/oauth/callback",
+		);
+		expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
+		const waiting = cb.waitForCode("state-1");
+		// An ingress handler (or (mcp-authorize)) delivers the code out-of-band.
+		cb.submitCode({ code: "ingress-code", state: "state-1" });
+		expect(await waiting).toBe("ingress-code");
+	});
+});
+
+describe("createAuthCallback", () => {
+	it("uses the ingress redirect URL when LISPTC_OAUTH_REDIRECT_URL is set", async () => {
+		const prev = process.env.LISPTC_OAUTH_REDIRECT_URL;
+		process.env.LISPTC_OAUTH_REDIRECT_URL =
+			"https://mcp.example.com/oauth/callback";
+		try {
+			const cb = await createAuthCallback();
+			expect(cb).toBeInstanceOf(ExternalAuthCallback);
+			expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
+			await cb.close();
+		} finally {
+			if (prev === undefined) delete process.env.LISPTC_OAUTH_REDIRECT_URL;
+			else process.env.LISPTC_OAUTH_REDIRECT_URL = prev;
+		}
+	});
+
+	it("falls back to a loopback server for local use", async () => {
+		const prev = process.env.LISPTC_OAUTH_REDIRECT_URL;
+		delete process.env.LISPTC_OAUTH_REDIRECT_URL;
+		try {
+			const cb = await createAuthCallback();
+			expect(cb).toBeInstanceOf(LoopbackAuthCallback);
+			expect(cb.redirectUrl()).toMatch(/^http:\/\/127\.0\.0\.1:\d+/);
+			await cb.close();
+		} finally {
+			if (prev !== undefined) process.env.LISPTC_OAUTH_REDIRECT_URL = prev;
+		}
 	});
 });
