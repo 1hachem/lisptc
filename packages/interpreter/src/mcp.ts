@@ -963,7 +963,10 @@ function renderDoc(name: string, tool: Tool): string {
 			const req = required.has(key) ? " (required)" : "";
 			const type = spec.type ? `:${spec.type}` : "";
 			const desc = spec.description ? ` — ${spec.description}` : "";
-			lines.push(`  ${key}${type}${req}${desc}`);
+			const allowed = spec.enum?.length
+				? ` (one of ${JSON.stringify(spec.enum)})`
+				: "";
+			lines.push(`  ${key}${type}${req}${allowed}${desc}`);
 		}
 	}
 	return lines.join("\n");
