@@ -1,13 +1,4 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true
-  },
+  "extends": "@repo/tsconfigs/base.json",
   "include": ["src"]
 }

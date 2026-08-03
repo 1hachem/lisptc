@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lisptc-repl": {
+      "command": "node",
+      "args": [
+        "--no-warnings",
+        "--experimental-transform-types",
+        "apps/mcp/src/server.ts"
+      ]
+    }
+  }
+}

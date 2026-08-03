@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ev, freshInterp } from "./helpers.ts";
+import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
 describe("documentation coverage", () => {
 	const interp = freshInterp();
@@ -29,5 +29,34 @@ describe("documentation coverage", () => {
 			signature: "(double x)",
 			doc: "Return x times two.",
 		});
+	});
+});
+
+describe("(doc name)", () => {
+	it("prints a built-in's signature and description and returns the symbol", () => {
+		const { value, output } = evWithOutput("(doc 'car)");
+		expect(value).toBe("car");
+		expect(output).toBe(
+			"(car list)\n  Return the first element of `list`, or nil for nil.\n",
+		);
+	});
+
+	it("documents special forms", () => {
+		const { output } = evWithOutput("(doc 'cond)");
+		expect(output).toContain("(cond (test expr...)...)");
+	});
+
+	it("returns nil and reports undocumented names", () => {
+		const { value, output } = evWithOutput("(doc 'no-such-binding)");
+		expect(value).toBe("nil");
+		expect(output).toBe("no-such-binding: undocumented\n");
+	});
+
+	it("lists every documented name when called with no argument", () => {
+		const { output } = evWithOutput("(doc)");
+		const names = output.trim().split("\n");
+		expect(names).toContain("car");
+		expect(names).toContain("cond");
+		expect(names).toContain("defun");
 	});
 });

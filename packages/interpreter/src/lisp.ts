@@ -837,6 +837,30 @@ export class Interp {
 				return true;
 			},
 		);
+		this.def(
+			"doc",
+			-1,
+			"(doc [name])",
+			"With a symbol, print that binding's signature and description; return the symbol (nil if undocumented). With no argument, print every documented name.",
+			z.tuple([zList]),
+			([rest]) => {
+				const docs = this.docs();
+				if (rest === null) {
+					for (const key of [...docs.keys()].sort()) write(`${key}\n`);
+					return true;
+				}
+				const name = rest.car;
+				if (!(name instanceof Sym))
+					throw new EvalException("symbol expected", name);
+				const entry = docs.get(name.name);
+				if (entry === undefined) {
+					write(`${name.name}: undocumented\n`);
+					return null;
+				}
+				write(`${entry.signature}\n  ${entry.doc}\n`);
+				return name;
+			},
+		);
 
 		const gensymCounter = newSym("*gensym-counter*");
 		this.globals.set(gensymCounter, ONE);
