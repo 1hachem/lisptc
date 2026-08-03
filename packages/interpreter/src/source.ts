@@ -6,8 +6,6 @@ import { readFileSync } from "node:fs";
 const FILES = [
 	"arith.ts",
 	"lisp.ts",
-	"repl.ts",
-	"cli.ts",
 	"grammar.ts",
 	"mcp.ts",
 	"mcp-broker.ts",

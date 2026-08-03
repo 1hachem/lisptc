@@ -47,6 +47,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/repl':
+        specifier: workspace:*
+        version: link:../../packages/repl
       vscode-languageserver:
         specifier: ^9.0.1
         version: 9.0.1
@@ -72,6 +75,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/repl':
+        specifier: workspace:*
+        version: link:../../packages/repl
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*
@@ -103,6 +109,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/repl':
+        specifier: workspace:*
+        version: link:../../packages/repl
       '@sinclair/typebox':
         specifier: '*'
         version: 0.34.52
@@ -163,6 +172,28 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  packages/repl:
+    dependencies:
+      '@repo/env':
+        specifier: workspace:*
+        version: link:../env
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/tsconfigs: {}
 

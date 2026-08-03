@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "@repo/interpreter": "workspace:*"
+    "@repo/interpreter": "workspace:*",
+    "@repo/repl": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

@@ -2,7 +2,8 @@
  * Interactive command-line REPL for the Lisptc interpreter (the `pnpm repl`
  * entry point). Reads expressions from stdin, evaluates them, prints results to
  * stdout. Everything here is process I/O plumbing on top of the pure language
- * in `./lisp.ts`; the embeddable string-in/string-out REPLs live in `./repl.ts`.
+ * in `@repo/interpreter`; the embeddable string-in/string-out REPLs live in
+ * `./repl.ts`.
  */
 
 import {
@@ -15,8 +16,9 @@ import {
 	setExit,
 	setWriter,
 	str,
-} from "./lisp.ts";
+} from "@repo/interpreter/lisp.ts";
 import { type Repl, seedSecretsFromEnvFile } from "./repl.ts";
+import { connectOrSpawn, socketPathFor } from "./session-server.ts";
 
 // Read a line as a string (displaying the given prompt), or null on EOF.
 // Wired to a readline interface by main().
@@ -92,6 +94,47 @@ class InteractiveRepl implements Repl {
 				else throw ex;
 			}
 		}
+	}
+}
+
+// Does `text` contain only complete top-level forms (nothing left mid-parse)?
+// Used by the attach loop to decide when to ship input to the shared session,
+// so multi-line forms typed (or sent by Iron) aren't split across evals.
+function isComplete(text: string): boolean {
+	const reader = new Reader();
+	reader.push(text);
+	try {
+		for (;;) reader.read();
+	} catch (ex) {
+		// Incomplete form: more input needed. A genuine parse error is "complete"
+		// enough to send — the session renders it inline.
+		if (ex === EndOfFile) return reader.isEmpty();
+		return true;
+	}
+}
+
+// Attach loop (`--attach`): forward each complete form to the SHARED session
+// REPL rather than evaluating locally, so this terminal and the editor's LSP
+// operate on one interpreter. `connectOrSpawn` boots a session for the project
+// if none is running.
+async function attachLoop(): Promise<void> {
+	const client = await connectOrSpawn(socketPathFor());
+	let accum = "";
+	for (;;) {
+		const line = await readLine(accum === "" ? "> " : "  ");
+		if (line === null) {
+			write("Goodbye\n");
+			client.close();
+			return;
+		}
+		accum += `${line}\n`;
+		if (accum.trim() === "") {
+			accum = "";
+			continue;
+		}
+		if (!isComplete(accum)) continue;
+		write(await client.eval(accum));
+		accum = "";
 	}
 }
 
@@ -191,6 +234,12 @@ async function main(): Promise<void> {
 
 	setWriter(write);
 	setExit(process.exit);
+
+	// `--attach`: forward to the shared session instead of a local interpreter.
+	if (process.argv.includes("--attach")) {
+		await attachLoop();
+		return;
+	}
 
 	const repl = new InteractiveRepl();
 	let started = false;

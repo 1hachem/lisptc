@@ -14,6 +14,10 @@
       "entry": ["test/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
+    "packages/repl": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
     "apps/pi": {
       "entry": ["extension/*.ts"],
       "project": ["extension/**/*.ts"]

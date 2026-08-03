@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/lisp.ts",
     "./lisp.ts": "./src/lisp.ts",
-    "./repl.ts": "./src/repl.ts",
     "./grammar.ts": "./src/grammar.ts",
     "./source.ts": "./src/source.ts",
     "./arith.ts": "./src/arith.ts",
@@ -21,8 +20,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "repl": "node --no-warnings --experimental-transform-types src/cli.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

@@ -154,13 +154,12 @@
 (terpri)
 
 (await (load-mcp "playwright"))
-
-(load-mcp "playwright")
-(await j)
+(await (load-mcp "linear"))
+(playwright/browser_navigate :url "yourscrib.ai")
 
 (search-tools "navigate")
 
-(playwright/browser_navigate :url "yourscrib.ai")
+(playwright/browser_navigate :url "hyko.ai")
 
 (unload-mcp "playwright")
 
