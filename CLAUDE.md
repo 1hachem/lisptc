@@ -6,11 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 this repo is a Lisp interpreter designed to be the deterministic "brain" of an AI agent in a neuro-symbolic architecture. 
 The idea (see `README`): the LLM writes Lisp code into a REPL, and the REPL's state/output steers the LLM's context back. 
-This is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`, workspaces = `packages/*` + `apps/*`) shipping three workspaces:
+This is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`, workspaces = `packages/*` + `apps/*`):
 
-1. `packages/interpreter` (`@repo/interpreter`) — the standalone interpreter (`src/`) plus its tests (`test/`). Pure TypeScript, **no `pi` dependency**. Exposes its `.ts` sources directly via the `exports` map (no build step), e.g. `@repo/interpreter/repl.ts`, `@repo/interpreter/grammar.ts`.
-2. `apps/pi` (`@lisptc/extension`) — a `pi` coding-agent extension (`extension/lisp-repl.ts`) that wires the interpreter into a pi session. Depends on `@repo/interpreter` (`workspace:*`) and runs it **in-process** via the `AgentRepl` binding (imported from `@repo/interpreter/repl.ts`) — no subprocess, no stdout scraping.
-3. `apps/lsp` (`@lisptc/lsp`) — a stdio language server (`src/server.ts`) for the lisptc dialect (completion/diagnostics via the interpreter's `checkSyntax`); analysis only, it never evaluates the buffer.
+1. `packages/interpreter` (`@repo/interpreter`) — the standalone interpreter (`src/`) plus its tests (`test/`). Pure TypeScript, **no `pi` dependency**. Exposes its `.ts` sources directly via the `exports` map (no build step), e.g. `@repo/interpreter/lisp.ts`, `@repo/interpreter/grammar.ts`, `@repo/interpreter/source.ts`. **The MCP integration lives here** (`src/mcp*.ts`), so it carries the `@modelcontextprotocol/sdk` dependency.
+2. `packages/repl` (`@repo/repl`) — REPL front-ends *on top of* the interpreter: `repl.ts` (`MemoryRepl`/`AgentRepl`, the embeddable string-in/string-out REPLs), `cli.ts` (the interactive stdin/stdout REPL, `pnpm repl` / `repl:attach`), and `session-server.ts` (a shared-session server over a unix socket so the editor's LSP and a terminal REPL share ONE interpreter). Depends on `@repo/interpreter`. Consumers import `@repo/repl/repl.ts` / `@repo/repl/session-server.ts`.
+3. `apps/pi` (`@lisptc/extension`) — a `pi` coding-agent extension (`extension/lisp-repl.ts`) that wires the interpreter into a pi session. Runs it **in-process** via the `AgentRepl` binding (imported from `@repo/repl/repl.ts`) — no subprocess, no stdout scraping. Also uses `@repo/interpreter/source.ts` (system prompt) and `@repo/interpreter/grammar.ts` (structured output).
+4. `apps/lsp` (`@lisptc/lsp`) — a stdio language server (`src/server.ts`) for the lisptc dialect. Diagnostics via the interpreter's `checkSyntax` (analysis only, never evaluates the buffer); completion/hover query the live shared session (`@repo/repl/session-server.ts`) when one is reachable, falling back to a local prelude-only interpreter.
+5. `apps/mcp` (`@lisptc/mcp-repl`) — a stdio MCP server (`src/server.ts`) exposing the REPL to an MCP client via one persistent `MemoryRepl` (`@repo/repl/repl.ts`).
 
 The repo root is itself the published `pi-package` (see the `pi` field in the root `package.json`) exposing `extensions` (pointing at `./apps/pi/extension/lisp-repl.ts`) and `skills` (`./apps/pi/skills`).
 
@@ -55,7 +57,7 @@ The synchronous main thread posts a request and blocks on a `SharedArrayBuffer` 
 - Predefined servers come exclusively from the bundled `mcp.toolkit.json` (stdio `command`/`args` servers and HTTP `url`/`headers` servers) — a curated, ready-to-use set loaded at `registerMcp` time. Each is callable by bare name, e.g. `(await (load-mcp "playwright"))`. There is no env-var config; edit `mcp.toolkit.json` to add servers.
 
 ### pi extension (`apps/pi/extension/lisp-repl.ts`)
-Runs the interpreter **in-process** via the `AgentRepl` binding (`@repo/interpreter/repl.ts`) and mediates between it and a pi session:
+Runs the interpreter **in-process** via the `AgentRepl` binding (`@repo/repl/repl.ts`) and mediates between it and a pi session:
 - Replaces the agent's system prompt (`apps/pi/extension/system-prompt.ts`) with a lisp-only policy plus the full interpreter source (so the LLM knows the exact language it's programming).
 - The agent has **no tools**: assistant text is sent verbatim to the REPL, evaluated, and the result injected back as a custom message. A `!`-prefixed user line (via `LispEditor`) is sent straight to the REPL.
 - Constrains every model reply to valid lisptc source via Fireworks grammar-based structured output (`before_provider_request` + `LISP_GRAMMAR`).
