@@ -1,6 +1,11 @@
 // Language server for lisptc, driven over stdio (e.g. by nvim's built-in LSP
-// client). Analysis only — it never evaluates the buffer.
+// client). Diagnostics are analysis-only (it never evaluates the buffer), but
+// completion and hover query the SHARED session REPL when one is reachable, so
+// they reflect live state — definitions you typed into the side REPL (Iron) and
+// loaded MCP tools — not just the static prelude. Falls back to a local
+// prelude-only interpreter when no session server is running.
 import {
+	type CompletionItem,
 	CompletionItemKind,
 	createConnection,
 	DiagnosticSeverity,
@@ -11,39 +16,82 @@ import {
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { checkSyntax, Interp, prelude, run } from "@repo/interpreter";
+import {
+	type CompletionEntry,
+	connectOrSpawn,
+	type SessionClient,
+	socketPathFor,
+} from "@repo/interpreter/session-server.ts";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-// One prelude-loaded interpreter: the source of global names and their docs
-// (which the interpreter registers alongside each definition). docs() also
-// covers special forms and t/nil, which are not globals.
+// Local prelude-loaded interpreter: the fallback source of names/docs when the
+// shared session is unreachable. docs() also covers special forms and t/nil.
 const interp = new Interp();
 run(interp, prelude);
-const docs = interp.docs();
+const localDocs = interp.docs();
 
-function markdownFor(name: string): string | undefined {
-	const d = docs.get(name);
-	if (d === undefined) return undefined;
-	return `\`\`\`lisp\n${d.signature}\n\`\`\`\n${d.doc}`;
+// The shared session, connected lazily. `connectOrSpawn` boots a server for
+// this project if none is running, so the LSP and the terminal REPL converge on
+// one interpreter. Best-effort: on failure we serve the local fallback.
+let session: SessionClient | undefined;
+connectOrSpawn(socketPathFor())
+	.then((client) => {
+		session = client;
+	})
+	.catch(() => {
+		// No session available; local fallback stands in.
+	});
+
+function markdownFor(sig?: string, doc?: string): string | undefined {
+	if (sig === undefined && (doc === undefined || doc === "")) return undefined;
+	const body = doc ?? "";
+	return sig === undefined ? body : `\`\`\`lisp\n${sig}\n\`\`\`\n${body}`;
 }
 
-const names = new Set([...interp.globalNames(), ...docs.keys()]);
+function completionItem(entry: CompletionEntry): CompletionItem {
+	const markdown = markdownFor(entry.signature, entry.doc);
+	return {
+		label: entry.name,
+		kind: CompletionItemKind.Function,
+		detail: entry.signature,
+		documentation:
+			markdown === undefined
+				? undefined
+				: { kind: MarkupKind.Markdown, value: markdown },
+	};
+}
 
-const completions = [...names]
-	.filter((name) => !name.startsWith("_"))
-	.map((name) => {
-		const markdown = markdownFor(name);
-		return {
-			label: name,
-			kind: CompletionItemKind.Function,
-			detail: docs.get(name)?.signature,
-			documentation:
-				markdown === undefined
-					? undefined
-					: { kind: MarkupKind.Markdown, value: markdown },
-		};
-	});
+// Local fallback completions from the prelude-only interpreter.
+function localCompletions(): CompletionItem[] {
+	const names = new Set([...interp.globalNames(), ...localDocs.keys()]);
+	return [...names]
+		.filter((name) => !name.startsWith("_"))
+		.map((name) => {
+			const d = localDocs.get(name);
+			return completionItem({ name, signature: d?.signature, doc: d?.doc });
+		});
+}
+
+// Completions are read live per request; a short-lived cache absorbs the burst
+// of keystroke-driven requests without spamming the socket. The session query
+// only reads globalNames/docs — it never evaluates.
+let cache: { at: number; items: CompletionItem[] } | undefined;
+const CACHE_MS = 400;
+
+async function currentCompletions(): Promise<CompletionItem[]> {
+	if (session === undefined) return localCompletions();
+	const now = Date.now();
+	if (cache && now - cache.at < CACHE_MS) return cache.items;
+	try {
+		const items = (await session.completions()).map(completionItem);
+		cache = { at: now, items };
+		return items;
+	} catch {
+		return localCompletions();
+	}
+}
 
 connection.onInitialize(() => ({
 	capabilities: {
@@ -69,7 +117,7 @@ documents.onDidChangeContent(({ document }) => {
 	connection.sendDiagnostics({ uri: document.uri, diagnostics });
 });
 
-connection.onCompletion(() => completions);
+connection.onCompletion(() => currentCompletions());
 
 // A symbol is any run of characters the reader doesn't treat as delimiters.
 const symbolChar = /[^()'`~"; \t]/;
@@ -93,12 +141,28 @@ function symbolAt(document: TextDocument, line: number, character: number) {
 	};
 }
 
-connection.onHover(({ textDocument, position }) => {
+connection.onHover(async ({ textDocument, position }) => {
 	const document = documents.get(textDocument.uri);
 	if (document === undefined) return null;
 	const sym = symbolAt(document, position.line, position.character);
 	if (sym === undefined) return null;
-	const markdown = markdownFor(sym.name);
+
+	let sig: string | undefined;
+	let doc: string | undefined;
+	if (session !== undefined) {
+		try {
+			const d = await session.doc(sym.name);
+			if (d) ({ signature: sig, doc } = d);
+		} catch {
+			// fall through to local
+		}
+	}
+	if (sig === undefined && doc === undefined) {
+		const d = localDocs.get(sym.name);
+		if (d) ({ signature: sig, doc } = d);
+	}
+
+	const markdown = markdownFor(sig, doc);
 	if (markdown === undefined) return null;
 	return {
 		contents: { kind: MarkupKind.Markdown, value: markdown },

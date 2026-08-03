@@ -7,6 +7,7 @@
     ".": "./src/lisp.ts",
     "./lisp.ts": "./src/lisp.ts",
     "./repl.ts": "./src/repl.ts",
+    "./session-server.ts": "./src/session-server.ts",
     "./grammar.ts": "./src/grammar.ts",
     "./source.ts": "./src/source.ts",
     "./arith.ts": "./src/arith.ts",
@@ -22,7 +23,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "repl": "node --no-warnings --experimental-transform-types src/cli.ts"
+    "repl": "node --no-warnings --experimental-transform-types src/cli.ts",
+    "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

@@ -7,6 +7,7 @@ const FILES = [
 	"arith.ts",
 	"lisp.ts",
 	"repl.ts",
+	"session-server.ts",
 	"cli.ts",
 	"grammar.ts",
 	"mcp.ts",
