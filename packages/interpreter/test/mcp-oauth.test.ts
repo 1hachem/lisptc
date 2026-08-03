@@ -160,15 +160,78 @@ describe("CallbackServer (loopback)", () => {
 		}
 	});
 
-	it("rejects on a state mismatch", async () => {
+	it("ignores a callback for an unknown state without disturbing a pending flow", async () => {
 		const cb = await CallbackServer.start({ host: "127.0.0.1" });
 		try {
-			// Attach the rejection handler before triggering the callback.
-			const assertion = expect(cb.waitForCode("expected")).rejects.toThrow(
-				/state mismatch/,
+			const waiting = cb.waitForCode("expected", 200);
+			// A stray callback for a different state must not resolve/reject ours.
+			const res = await fetch(`${cb.redirectUrl()}?code=x&state=wrong`);
+			expect(res.status).toBe(400);
+			expect(await res.text()).toMatch(/unknown or has expired/);
+			// The right callback still completes the pending flow.
+			await fetch(`${cb.redirectUrl()}?code=the-code&state=expected`);
+			expect(await waiting).toBe("the-code");
+		} finally {
+			await cb.close();
+		}
+	});
+
+	it("routes concurrent flows to their own state", async () => {
+		const cb = await CallbackServer.start({ host: "127.0.0.1" });
+		try {
+			const a = cb.waitForCode("aaa");
+			const b = cb.waitForCode("bbb");
+			await fetch(`${cb.redirectUrl()}?code=code-b&state=bbb`);
+			await fetch(`${cb.redirectUrl()}?code=code-a&state=aaa`);
+			expect(await a).toBe("code-a");
+			expect(await b).toBe("code-b");
+		} finally {
+			await cb.close();
+		}
+	});
+
+	it("reflects the exchange outcome in the browser page and the wait", async () => {
+		const cb = await CallbackServer.start({ host: "127.0.0.1" });
+		try {
+			// A failing exchange yields an error page and a rejected wait, never a
+			// misleading "complete" page.
+			const failing = expect(
+				cb.waitForCode("bad", undefined, async () => {
+					throw new Error("PKCE mismatch");
+				}),
+			).rejects.toThrow(/PKCE mismatch/);
+			const res = await fetch(`${cb.redirectUrl()}?code=c&state=bad`);
+			expect(res.status).toBe(400);
+			expect(await res.text()).toMatch(/PKCE mismatch/);
+			await failing;
+
+			// A succeeding exchange runs before the success page is shown.
+			let exchanged = "";
+			const ok = cb.waitForCode("good", undefined, async (code) => {
+				exchanged = code;
+			});
+			const okRes = await fetch(`${cb.redirectUrl()}?code=c2&state=good`);
+			expect(okRes.status).toBe(200);
+			expect(await okRes.text()).toMatch(/Authorization complete/);
+			expect(await ok).toBe("c2");
+			expect(exchanged).toBe("c2");
+		} finally {
+			await cb.close();
+		}
+	});
+
+	it("surfaces an OAuth error redirect instead of hanging", async () => {
+		const cb = await CallbackServer.start({ host: "127.0.0.1" });
+		try {
+			const waiting = expect(cb.waitForCode("st")).rejects.toThrow(
+				/access_denied/,
 			);
-			await fetch(`${cb.redirectUrl()}?code=x&state=wrong`);
-			await assertion;
+			const res = await fetch(
+				`${cb.redirectUrl()}?error=access_denied&state=st`,
+			);
+			expect(res.status).toBe(400);
+			expect(await res.text()).toMatch(/access_denied/);
+			await waiting;
 		} finally {
 			await cb.close();
 		}

@@ -129,6 +129,21 @@ function parseTimeout(x: unknown): number {
 	return ms;
 }
 
+// Pull the authorization `code` out of a pasted callback link, or accept a bare
+// code as-is. Users tend to copy the whole redirect URL (…/callback?code=…&state=…)
+// rather than just the code, which otherwise fails the token exchange.
+function extractAuthCode(raw: string): string {
+	const value = raw.trim();
+	try {
+		// A URL yields its `code` param (empty string if the redirect carried an
+		// error instead), never the raw URL as a bogus code.
+		return new URL(value).searchParams.get("code") ?? "";
+	} catch {
+		// not a URL: treat it as a bare code
+		return value;
+	}
+}
+
 // --- Module state ------------------------------------------------------------
 const servers = new Map<string, ServerRec>();
 const predefined = new Map<string, ConnConfig>();
@@ -659,16 +674,25 @@ export function registerMcp(interp: Interp): void {
 		"mcp-authorize",
 		-1,
 		'(mcp-authorize "server" "code")',
-		'Finish OAuth for a server: exchange the authorization `code` from its login link for tokens (saved for reuse). Then (load-mcp "server") connects directly.',
+		'Finish OAuth for a server: exchange the authorization `code` for tokens (saved for reuse). Accepts either the bare code or the whole pasted callback link. Then (load-mcp "server") connects directly.',
 		z.tuple([zList]),
 		([rest]) => {
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
-			const code = args[1];
-			if (typeof code !== "string")
+			const raw = args[1];
+			if (typeof raw !== "string")
 				throw new EvalException(
 					"mcp-authorize requires an authorization code string",
-					code ?? null,
+					raw ?? null,
+					false,
+				);
+			// Accept either a bare code or the whole pasted callback link
+			// (e.g. http://127.0.0.1:.../callback?code=…&state=…).
+			const code = extractAuthCode(raw);
+			if (!code)
+				throw new EvalException(
+					"no authorization code found in the pasted value",
+					raw,
 					false,
 				);
 			const conf = predefined.get(name);

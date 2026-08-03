@@ -1,12 +1,12 @@
 /*
  * OAuth 2.1 for remote MCP servers: token persistence (`OAuthStore` +
- * `StoredOAuthProvider`) and redirect capture (`AuthCallback`). The MCP SDK
+ * `StoredOAuthProvider`) and redirect capture (`CallbackServer`). The MCP SDK
  * implements the protocol itself. See devdocs/oauth.md.
  */
 
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -178,54 +178,29 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 }
 
 // --- Authorization callback --------------------------------------------------
-// Captures the redirect and hands the `code` back. See devdocs/oauth.md.
-
-interface AuthCallback {
-	redirectUrl(): string; // redirect_uri to register
-	waitForCode(state: string, timeoutMs?: number): Promise<string>; // rejects on timeout / state mismatch
-	submitCode(params: { code: string; state?: string }): void; // deliver an out-of-band code
-	close(): Promise<void>;
-}
+// Captures the redirect, runs the caller's token exchange, and reports the real
+// outcome to both the REPL and the browser tab. See devdocs/oauth.md.
 
 const DEFAULT_AUTH_TIMEOUT_MS = 300_000; // 5 min for the user to authorize
 
-// Shared waiting logic: a single pending authorization resolved by `submitCode`.
-abstract class BaseAuthCallback implements AuthCallback {
-	private pending?: {
-		state: string;
-		resolve: (code: string) => void;
-		reject: (err: Error) => void;
-		timer: ReturnType<typeof setTimeout>;
-	};
+// The caller's completion for one flow: exchange `code` for tokens. It runs
+// BEFORE the browser page is rendered, so the page never claims success for a
+// code that fails to exchange. Throwing produces an error page + a rejected wait.
+type CodeExchange = (code: string) => Promise<void>;
 
-	abstract redirectUrl(): string;
+interface Pending {
+	resolve: (code: string) => void;
+	reject: (err: Error) => void;
+	timer: ReturnType<typeof setTimeout>;
+	exchange?: CodeExchange;
+}
 
-	waitForCode(
-		state: string,
-		timeoutMs: number = DEFAULT_AUTH_TIMEOUT_MS,
-	): Promise<string> {
-		return new Promise<string>((resolve, reject) => {
-			const timer = setTimeout(() => {
-				this.pending = undefined;
-				reject(new Error("authorization timed out"));
-			}, timeoutMs);
-			this.pending = { state, resolve, reject, timer };
-		});
-	}
-
-	submitCode({ code, state }: { code: string; state?: string }): void {
-		const pending = this.pending;
-		if (!pending) return; // nothing waiting (late or duplicate callback)
-		this.pending = undefined;
-		clearTimeout(pending.timer);
-		if (state !== undefined && state !== pending.state) {
-			pending.reject(new Error("authorization state mismatch"));
-			return;
-		}
-		pending.resolve(code);
-	}
-
-	async close(): Promise<void> {}
+// Minimal HTML-escape for embedding an error message in the callback page.
+function escapeHtml(s: string): string {
+	return s.replace(
+		/[&<>]/g,
+		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] as string,
+	);
 }
 
 // An HTTP server that captures the redirect. The same server handles both
@@ -235,16 +210,22 @@ abstract class BaseAuthCallback implements AuthCallback {
 //              domain URL ($LISPTC_OAUTH_REDIRECT_URL)
 // The advertised redirect URL can differ from the bind host:port (the ingress
 // bridges the public URL to the pod's 0.0.0.0:<port>).
-export class CallbackServer extends BaseAuthCallback {
+//
+// A single long-lived server multiplexes concurrent authorizations, routing each
+// callback to the flow that owns its OAuth `state`. This is why several
+// outstanding login links (e.g. one per background `load-mcp`) can each complete
+// independently instead of clobbering a single shared slot.
+export class CallbackServer {
 	private boundPort = 0;
+	// Pending authorizations keyed by OAuth `state` (a per-flow nonce). Routing by
+	// state keeps a stray or superseded callback from resolving the wrong flow.
+	private readonly pending = new Map<string, Pending>();
 
 	private constructor(
 		private readonly server: Server,
 		private readonly path: string,
 		private readonly advertised: string | undefined,
-	) {
-		super();
-	}
+	) {}
 
 	// Rejects on EADDRINUSE so the caller can fall back to (mcp-authorize).
 	static start(opts: {
@@ -266,13 +247,7 @@ export class CallbackServer extends BaseAuthCallback {
 					res.writeHead(404).end();
 					return;
 				}
-				const code = url.searchParams.get("code");
-				const state = url.searchParams.get("state") ?? undefined;
-				res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-				res.end(
-					"<!doctype html><meta charset=utf-8><p>Authorization complete — you can close this tab and return to the REPL.</p>",
-				);
-				if (code) cb.submitCode({ code, state });
+				void cb.handle(url, res);
 			});
 			const cb = new CallbackServer(server, path, redirectUrl);
 			server.once("error", reject);
@@ -283,11 +258,89 @@ export class CallbackServer extends BaseAuthCallback {
 		});
 	}
 
+	private page(res: ServerResponse, status: number, body: string): void {
+		res.writeHead(status, { "content-type": "text/html; charset=utf-8" });
+		res.end(`<!doctype html><meta charset=utf-8><p>${body}</p>`);
+	}
+
+	private async handle(url: URL, res: ServerResponse): Promise<void> {
+		const code = url.searchParams.get("code");
+		const state = url.searchParams.get("state") ?? "";
+		const oauthError = url.searchParams.get("error");
+		const entry = this.pending.get(state);
+		if (!entry) {
+			// No flow owns this state: an expired, unknown, or superseded link. Do
+			// NOT disturb any other pending flow.
+			this.page(
+				res,
+				400,
+				"This authorization link is unknown or has expired — start a new login from the REPL and open the latest link.",
+			);
+			return;
+		}
+		this.pending.delete(state);
+		clearTimeout(entry.timer);
+		if (oauthError || !code) {
+			const msg = oauthError ?? "the redirect carried no authorization code";
+			entry.reject(new Error(`authorization failed: ${msg}`));
+			this.page(res, 400, `Authorization failed: ${escapeHtml(msg)}.`);
+			return;
+		}
+		// Run the exchange BEFORE reporting success, so a code that fails to
+		// exchange (e.g. a superseded link) shows an error rather than a misleading
+		// "complete" page.
+		try {
+			if (entry.exchange) await entry.exchange(code);
+			entry.resolve(code);
+			this.page(
+				res,
+				200,
+				"Authorization complete — you can close this tab and return to the REPL.",
+			);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			entry.reject(e instanceof Error ? e : new Error(msg));
+			this.page(
+				res,
+				400,
+				`Authorization failed: ${escapeHtml(msg)} — start a new login from the REPL and open the latest link.`,
+			);
+		}
+	}
+
+	// Register a flow. Resolves with the captured code once it arrives (and, if
+	// given, `exchange` has succeeded); rejects on timeout, OAuth error, or a
+	// failed exchange. A second registration for the same state supersedes the
+	// first (should not happen — state is a fresh nonce — but never leak a timer).
+	waitForCode(
+		state: string,
+		timeoutMs: number = DEFAULT_AUTH_TIMEOUT_MS,
+		exchange?: CodeExchange,
+	): Promise<string> {
+		return new Promise<string>((resolve, reject) => {
+			const prev = this.pending.get(state);
+			if (prev) {
+				clearTimeout(prev.timer);
+				prev.reject(new Error("authorization superseded"));
+			}
+			const timer = setTimeout(() => {
+				this.pending.delete(state);
+				reject(new Error("authorization timed out"));
+			}, timeoutMs);
+			this.pending.set(state, { resolve, reject, timer, exchange });
+		});
+	}
+
 	redirectUrl(): string {
 		return this.advertised ?? `http://127.0.0.1:${this.boundPort}${this.path}`;
 	}
 
-	override close(): Promise<void> {
+	close(): Promise<void> {
+		for (const p of this.pending.values()) {
+			clearTimeout(p.timer);
+			p.reject(new Error("callback server closed"));
+		}
+		this.pending.clear();
 		return new Promise((resolve) => this.server.close(() => resolve()));
 	}
 }

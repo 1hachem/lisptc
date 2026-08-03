@@ -35,6 +35,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { oauthEnv } from "@repo/env/oauth.ts";
 import {
+	type CallbackServer,
 	createAuthCallback,
 	FileOAuthStore,
 	StoredOAuthProvider,
@@ -87,40 +88,43 @@ class NeedsAuthError extends Error {
 	}
 }
 
-// Start the callback server (loopback locally, 0.0.0.0 behind an ingress) and,
-// in the background, exchange the captured code for tokens. Fire-and-forget;
-// silent on busy port / timeout (the manual mcp-authorize path still works).
-async function startCallbackCapture(
-	serverUrl: string,
-	scope: string | undefined,
-	authUrl: URL,
-): Promise<void> {
-	let cb: Awaited<ReturnType<typeof createAuthCallback>>;
+// A single long-lived callback server multiplexes every OAuth flow, so several
+// outstanding login links (e.g. from concurrent background `load-mcp` jobs) can
+// each complete independently. Lazily started; stays open (holding the fixed
+// redirect port) for the life of the broker.
+let callbackServer: CallbackServer | undefined;
+async function sharedCallbackServer(): Promise<CallbackServer | undefined> {
+	if (callbackServer) return callbackServer;
 	try {
-		cb = await createAuthCallback(
+		callbackServer = await createAuthCallback(
 			callbackPort(),
 			oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		);
 	} catch {
-		return; // port busy: fall back to manual (mcp-authorize)
+		return undefined; // port busy (e.g. another lisptc): manual mcp-authorize
 	}
+	return callbackServer;
+}
+
+// Register this flow's callback capture. Fire-and-forget; silent on busy port /
+// timeout (the manual mcp-authorize path still works). The exchange uses THIS
+// flow's `provider` — whose in-memory PKCE verifier survives even after a later
+// login for the same server overwrites the stored one — so an earlier link's
+// code still exchanges correctly instead of failing PKCE.
+async function startCallbackCapture(
+	serverUrl: string,
+	scope: string | undefined,
+	authUrl: URL,
+	provider: StoredOAuthProvider,
+): Promise<void> {
+	const cb = await sharedCallbackServer();
+	if (!cb) return; // port busy: fall back to manual (mcp-authorize)
 	const state = authUrl.searchParams.get("state") ?? "";
-	cb.waitForCode(state)
-		.then(async (code) => {
-			const provider = await StoredOAuthProvider.create(
-				oauthStore,
-				serverUrl,
-				redirectUri(),
-				scope,
-			);
-			await auth(provider, {
-				serverUrl,
-				authorizationCode: code,
-				scope,
-			});
-		})
-		.catch(() => {}) // timeout / mismatch / exchange error: user can retry
-		.finally(() => cb.close());
+	cb.waitForCode(state, undefined, (code) =>
+		auth(provider, { serverUrl, authorizationCode: code, scope }).then(
+			() => {},
+		),
+	).catch(() => {}); // timeout / superseded / exchange error: surfaced in the browser page; user can retry
 }
 
 type Op =
@@ -429,7 +433,7 @@ async function ensureAuthorized(
 	await auth(provider, { serverUrl, scope });
 	const authUrl = provider.authorizationUrl;
 	if (!authUrl) throw new Error("no authorization URL produced");
-	void startCallbackCapture(serverUrl, scope, authUrl);
+	void startCallbackCapture(serverUrl, scope, authUrl, provider);
 	return { provider, authUrl: authUrl.href };
 }
 

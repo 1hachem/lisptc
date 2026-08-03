@@ -73,13 +73,27 @@ only where it binds and the URL it advertises differ (`createAuthCallback(port)`
   `host:port` — the ingress bridges them.
 
 On the needs-auth path the server auto-captures the code and exchanges it in the
-background; then a subsequent `(load-mcp "server")` connects. It binds on-demand
-(during the auth window) and shuts down once the code arrives.
+background; then a subsequent `(load-mcp "server")` connects. A single long-lived
+server (bound on first need) multiplexes every flow, routing each callback to the
+authorization that owns its OAuth `state`. This is why several outstanding login
+links — e.g. one per concurrent background `load-mcp` — each complete
+independently: each flow's exchange runs against the **originating provider** (its
+in-memory PKCE verifier), so a later login for the same server overwriting the
+stored verifier doesn't break an earlier link.
+
+The browser page reflects the **real** outcome: the token exchange runs *before*
+the page is rendered, so a code that fails to exchange (or an `?error=` redirect,
+or a callback for an unknown/expired `state`) shows an error page rather than a
+misleading "Authorization complete".
 
 ### Manual fallback
 
 `(mcp-authorize "server" "<code>")` completes the exchange with a code obtained
-out-of-band — for headless sessions or if the callback port is busy.
+out-of-band — for headless sessions or if the callback port is busy. It accepts
+either the bare code or the whole pasted callback link
+(`…/callback?code=…&state=…`), pulling the `code` out of the URL. Unlike the
+auto-capture path it rebuilds the provider from the store, so it uses the
+**latest** stored PKCE verifier — paste the code from the most recent login link.
 
 ### Login / logout
 
