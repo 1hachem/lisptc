@@ -71,6 +71,8 @@ describe("MCP integration (stdio fixture)", () => {
 		const doc = evalStr(interp, "(mcp-doc 'fx/echo)");
 		expect(doc).toContain("Echo back the given message");
 		expect(doc).toContain("message");
+		// Usage signature shows arg name, type and call order.
+		expect(doc).toContain("Usage: (fx/echo :message :string)");
 	});
 
 	it("searches tools by keyword", () => {

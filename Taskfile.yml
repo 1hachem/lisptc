@@ -42,3 +42,28 @@ tasks:
   pi:
     desc: run pi agent with access to secrets
     cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
+
+  repl:
+    desc: run the interactive REPL against a local (private) interpreter
+    cmd: pnpm repl
+
+  repl:attach:
+    desc: attach an interactive REPL to the shared session (spawns the server if needed)
+    cmd: pnpm repl:attach
+
+  repl:status:
+    desc: list running shared REPL session servers and their sockets
+    cmd: |
+      pgrep -af "session-server.ts --serve" || echo "no session server running"
+
+  repl:kill:
+    desc: kill the shared REPL session server(s) so the next client spawns a fresh one
+    cmd: |
+      pkill -f "session-server.ts --serve" || true
+      rm -f "${XDG_RUNTIME_DIR:-/tmp}"/lisptc-*.sock
+
+  repl:restart:
+    desc: kill the shared session server(s) then attach a fresh REPL
+    cmds:
+      - task: repl:kill
+      - task: repl:attach

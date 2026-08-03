@@ -55,6 +55,7 @@ interface Tool {
 	name: string;
 	description?: string;
 	inputSchema?: JsonSchema;
+	outputSchema?: JsonSchema;
 }
 
 interface JsonSchema {
@@ -63,6 +64,9 @@ interface JsonSchema {
 	required?: string[];
 	enum?: unknown[];
 	description?: string;
+	items?: JsonSchema;
+	default?: unknown;
+	examples?: unknown[];
 }
 
 type ConnConfig = { description?: string } & (
@@ -508,8 +512,8 @@ function installServer(
 			return jsonToLisp(result);
 		});
 		interp.defineGlobal(sym, wrapper, {
-			signature: `(${sym.name} :arg value...)`,
-			doc: tool.description ?? "MCP tool (no description provided).",
+			signature: toolSignature(sym.name, tool),
+			doc: toolDocBody(tool) || "MCP tool (no description provided).",
 		});
 		toolSyms.push(sym);
 	}
@@ -952,24 +956,101 @@ function firstLine(s: string | undefined): string {
 	return s.split("\n")[0];
 }
 
-function renderDoc(name: string, tool: Tool): string {
-	const lines = [name];
-	if (tool.description) lines.push("", tool.description);
+// Render a JSON-schema type as a short Lisp-facing type tag, e.g. `:string`,
+// `:list<:number>`, `:object`. Used in both the usage signature and per-arg docs.
+function schemaType(spec: JsonSchema): string {
+	if (!spec.type) return "";
+	if (spec.type === "array") {
+		const item = spec.items ? schemaType(spec.items) : "";
+		return item ? `:list<${item}>` : ":list";
+	}
+	return `:${spec.type}`;
+}
+
+// Property entries sorted so required args come first — the call order the
+// usage signature and argument list both read left-to-right.
+function orderedProps(tool: Tool): [string, JsonSchema][] {
 	const props = tool.inputSchema?.properties;
+	if (!props) return [];
 	const required = new Set(tool.inputSchema?.required ?? []);
-	if (props && Object.keys(props).length) {
-		lines.push("", "Arguments:");
-		for (const [key, spec] of Object.entries(props)) {
+	return Object.entries(props).sort(
+		(a, b) => (required.has(a[0]) ? 0 : 1) - (required.has(b[0]) ? 0 : 1),
+	);
+}
+
+// The keyword-call usage signature, e.g. `(fx/echo :message :string [:n :number])`.
+// Optional args are wrapped in `[...]`. Reused for the `signature` metadata on
+// each tool binding so the LSP hover shows the same call shape as `mcp-doc`.
+function toolSignature(name: string, tool: Tool): string {
+	const entries = orderedProps(tool);
+	if (!entries.length) return `(${name})`;
+	const required = new Set(tool.inputSchema?.required ?? []);
+	const sig = entries
+		.map(([key, spec]) => {
+			const pair = `:${key} ${schemaType(spec) || "<value>"}`;
+			return required.has(key) ? pair : `[${pair}]`;
+		})
+		.join(" ");
+	return `(${name} ${sig})`;
+}
+
+// The prose body: description, per-argument docs, and example inputs/outputs
+// when the schema advertises them. Shared by `mcp-doc` and the hover `doc`.
+function toolDocBody(tool: Tool): string {
+	const lines: string[] = [];
+	if (tool.description) lines.push(tool.description);
+	const entries = orderedProps(tool);
+	const required = new Set(tool.inputSchema?.required ?? []);
+
+	if (entries.length) {
+		if (lines.length) lines.push("");
+		lines.push("Arguments:");
+		for (const [key, spec] of entries) {
 			const req = required.has(key) ? " (required)" : "";
-			const type = spec.type ? `:${spec.type}` : "";
+			const type = schemaType(spec);
 			const desc = spec.description ? ` — ${spec.description}` : "";
 			const allowed = spec.enum?.length
 				? ` (one of ${JSON.stringify(spec.enum)})`
 				: "";
-			lines.push(`  ${key}${type}${req}${allowed}${desc}`);
+			const dflt =
+				spec.default !== undefined
+					? ` (default ${JSON.stringify(spec.default)})`
+					: "";
+			const example = spec.examples?.length
+				? ` (e.g. ${JSON.stringify(spec.examples[0])})`
+				: "";
+			lines.push(`  ${key}${type}${req}${allowed}${dflt}${example}${desc}`);
 		}
 	}
+
+	const inputEx = tool.inputSchema?.examples;
+	if (inputEx?.length) {
+		lines.push("", "Example inputs:");
+		for (const ex of inputEx) lines.push(`  ${JSON.stringify(ex)}`);
+	}
+	if (tool.outputSchema) {
+		const out = tool.outputSchema;
+		const outType = schemaType(out);
+		if (outType || out.description) {
+			lines.push(
+				"",
+				`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
+			);
+		}
+		if (out.examples?.length) {
+			lines.push("", "Example outputs:");
+			for (const ex of out.examples) lines.push(`  ${JSON.stringify(ex)}`);
+		}
+	}
+
 	return lines.join("\n");
+}
+
+function renderDoc(name: string, tool: Tool): string {
+	const parts = [name, `Usage: ${toolSignature(name, tool)}`];
+	const body = toolDocBody(tool);
+	if (body) parts.push(body);
+	return parts.join("\n\n");
 }
 
 // Expand ${VAR} references against process.env so the toolkit can point at
