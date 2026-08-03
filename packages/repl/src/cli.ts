@@ -2,7 +2,8 @@
  * Interactive command-line REPL for the Lisptc interpreter (the `pnpm repl`
  * entry point). Reads expressions from stdin, evaluates them, prints results to
  * stdout. Everything here is process I/O plumbing on top of the pure language
- * in `./lisp.ts`; the embeddable string-in/string-out REPLs live in `./repl.ts`.
+ * in `@repo/interpreter`; the embeddable string-in/string-out REPLs live in
+ * `./repl.ts`.
  */
 
 import {
@@ -15,7 +16,7 @@ import {
 	setExit,
 	setWriter,
 	str,
-} from "./lisp.ts";
+} from "@repo/interpreter/lisp.ts";
 import { type Repl, seedSecretsFromEnvFile } from "./repl.ts";
 import { connectOrSpawn, socketPathFor } from "./session-server.ts";
 

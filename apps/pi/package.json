@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@repo/interpreter": "workspace:*"
+    "@repo/interpreter": "workspace:*",
+    "@repo/repl": "workspace:*"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "*",

@@ -21,7 +21,7 @@ import {
 	connectOrSpawn,
 	type SessionClient,
 	socketPathFor,
-} from "@repo/interpreter/session-server.ts";
+} from "@repo/repl/session-server.ts";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);

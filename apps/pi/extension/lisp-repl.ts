@@ -19,7 +19,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
 import { LISP_GRAMMAR } from "@repo/interpreter/grammar.ts";
-import { AgentRepl } from "@repo/interpreter/repl.ts";
+import { AgentRepl } from "@repo/repl/repl.ts";
 import {
 	CODE_TYPE,
 	MAX_STEPS,

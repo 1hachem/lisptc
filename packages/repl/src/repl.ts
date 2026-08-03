@@ -1,10 +1,10 @@
 /**
  * Reusable REPL front-ends for the Lisptc interpreter.
  *
- * The interpreter (`./lisp.ts`) is pure language: `Interp`, `run`, `str`,
- * `prelude`, the reader. A REPL is a driver on top of it. This module hosts the
- * embeddable (string-in / string-out) REPLs; the interactive stdin/stdout loop
- * lives in `./cli.ts`.
+ * The interpreter (`@repo/interpreter`) is pure language: `Interp`, `run`,
+ * `str`, `prelude`, the reader. A REPL is a driver on top of it. This module
+ * hosts the embeddable (string-in / string-out) REPLs; the interactive
+ * stdin/stdout loop lives in `./cli.ts`.
  *
  * - `MemoryRepl` — evaluate a program string, return what the interactive REPL
  *   would have printed (last value + side-effect output, errors rendered
@@ -27,7 +27,7 @@ import {
 	type SecretSpec,
 	setWriter,
 	str,
-} from "./lisp.ts";
+} from "@repo/interpreter/lisp.ts";
 
 // Seed an interp's secret registry from a `.env` file: the path in
 // $LISPTC_SECRETS_FILE, or `.env` in the working directory if it exists. Shared
