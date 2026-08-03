@@ -7,7 +7,6 @@
 ;;;   2. (mcp-authorize "linear" "<code>")
 ;;;   3. (await (load-mcp "linear"))  -> tools installed
 ;;; =====================================================================
-
 (princ "=== authorize & load ===")
 (terpri)
 
@@ -16,7 +15,6 @@
 
 ;; After approving in the browser, paste the code back:
 ;; (mcp-authorize "linear" "<code-from-browser>")
-
 ;; Then connect and install the linear/<tool> bindings.
 (await (load-mcp "linear"))
 
@@ -27,8 +25,9 @@
 (terpri)
 
 ;; Tools are ordinary bindings called with keyword syntax.
-(print (linear/list-issues :query "auth bug"))
-(print (linear/list-teams))
+(linear/list_issues :query "auth bug")
+
+(linear/list_teams)
 
 (princ "=== teardown ===")
 (terpri)
