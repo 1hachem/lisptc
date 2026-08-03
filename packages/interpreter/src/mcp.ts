@@ -908,6 +908,10 @@ export function registerMcp(interp: Interp): void {
 		"Shut down the MCP broker worker and unload all servers.",
 		z.tuple([]),
 		() => {
+			// Undefine every installed <server>/<tool> global so stale bindings
+			// don't linger with a closure capturing a now-dead serverId.
+			for (const rec of servers.values())
+				for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 			servers.clear();
 			liveJobs.clear();
 			if (worker) {

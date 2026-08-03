@@ -88,6 +88,30 @@ describe("MCP integration (stdio fixture)", () => {
 	});
 });
 
+describe("mcp-shutdown undefines tool bindings", () => {
+	const interp = new Interp();
+	run(interp, prelude);
+
+	it("removes <server>/<tool> globals so they error as void, not stale", () => {
+		// Load the fixture and confirm its tool symbol is bound and callable.
+		expect(
+			evalStr(
+				interp,
+				`(await (load-mcp :name "sfx" :command "node" :args (quote ("--experimental-transform-types" "${FIXTURE}"))))`,
+			),
+		).toContain("sfx/echo");
+		expect(evalStr(interp, '(sfx/echo :message "hi")')).toBe('"hi"');
+
+		// Shut down the broker: the tool binding must be gone entirely.
+		expect(evalStr(interp, "(mcp-shutdown)")).toBe("t");
+		expect(() => run(interp, "sfx/echo")).toThrow(/void variable|undefined/);
+		// And it must NOT surface as a stale "no such server" MCP error.
+		expect(() => run(interp, '(sfx/echo :message "hi")')).not.toThrow(
+			/no such server/,
+		);
+	});
+});
+
 // Build a load-mcp form for the fixture with an optional startup delay (ms).
 function loadForm(name: string, delayMs = 0): string {
 	const env =
