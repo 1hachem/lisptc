@@ -152,6 +152,12 @@ describe("async MCP jobs", () => {
 		expect(evalStr(interp, "(await j)")).toContain("afx/echo");
 	});
 
+	it("rejects an invalid timeout even on a finalized job", () => {
+		// `j` is already finalized (awaited above); an invalid timeout must still
+		// be rejected, matching the behavior on a fresh job.
+		expect(() => run(interp, "(await j -5)")).toThrow(/invalid await timeout/);
+	});
+
 	it("await honors a timeout and leaves the job awaitable", () => {
 		evalStr(interp, `(setq slow ${loadForm("slowfx", 2000)})`);
 		expect(() => run(interp, "(await slow 1)")).toThrow(/timed out/);
