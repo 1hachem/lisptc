@@ -239,6 +239,10 @@ function collect(job: Job, raw: unknown): unknown {
 	const value = job.finalize ? job.finalize(raw) : jsonToLisp(raw);
 	job.finalized = true;
 	job.cached = value;
+	// Reap the settled job: its result is cached on the handle, so a later
+	// (await job) still returns job.cached and the caller keeps their variable.
+	// This bounds liveJobs (and onJobSettled's iteration) to in-flight jobs.
+	liveJobs.delete(job);
 	return value;
 }
 
@@ -630,12 +634,13 @@ export function registerMcp(interp: Interp): void {
 		([job]) => newLispKeyword(job.finalized ? "done" : mcpStatus(job.jobId)),
 	);
 
-	// (jobs) -> ((job :status) ...) for every live job.
+	// (jobs) -> ((job :status) ...) for every in-flight job. Settled jobs are
+	// reaped when collected, so they do not appear here.
 	interp.def(
 		"jobs",
 		0,
 		"(jobs)",
-		"Return the live async jobs, each as (job :status).",
+		"Return the in-flight async jobs, each as (job :status). Settled jobs are reaped.",
 		z.tuple([]),
 		() =>
 			arrayToList(
