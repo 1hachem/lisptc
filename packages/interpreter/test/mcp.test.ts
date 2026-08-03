@@ -216,3 +216,33 @@ describe("async MCP jobs", () => {
 		expect(out).toContain("anyFast/echo");
 	});
 });
+
+describe("liveJobs reaping", () => {
+	const interp = new Interp();
+	run(interp, prelude);
+
+	afterAll(() => {
+		run(interp, "(mcp-shutdown)");
+	});
+
+	it("does not retain a job in (jobs) after it is awaited, and stays flat across cycles", () => {
+		// Baseline: no jobs before any load.
+		expect(evalStr(interp, "(length (jobs))")).toBe("0");
+
+		for (let i = 0; i < 3; i++) {
+			evalStr(interp, `(setq rj ${loadForm(`reap${i}`)})`);
+			expect(evalStr(interp, "(await rj)")).toContain(`reap${i}/echo`);
+			// Settled job is reaped, so (jobs) returns to baseline each cycle.
+			expect(evalStr(interp, "(length (jobs))")).toBe("0");
+		}
+	});
+
+	it("keeps the cached result awaitable after reaping (idempotency preserved)", () => {
+		evalStr(interp, `(setq cj ${loadForm("cachefx")})`);
+		const first = evalStr(interp, "(await cj)");
+		expect(first).toContain("cachefx/echo");
+		// The handle is gone from (jobs) but a second await still returns cached.
+		expect(evalStr(interp, "(length (jobs))")).toBe("0");
+		expect(evalStr(interp, "(await cj)")).toBe(first);
+	});
+});
