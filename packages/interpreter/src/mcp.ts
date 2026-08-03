@@ -556,8 +556,11 @@ export function registerMcp(interp: Interp): void {
 			const args = listToArray(rest);
 			const job = args[0];
 			if (!(job instanceof Job)) throw new EvalException("not a job", job);
+			// Validate the timeout before short-circuiting so an invalid timeout is
+			// rejected regardless of whether the job has already finalized.
+			const timeout = parseTimeout(args[1]);
 			if (job.finalized) return job.cached;
-			return collect(job, mcpAwait(job.jobId, parseTimeout(args[1])));
+			return collect(job, mcpAwait(job.jobId, timeout));
 		},
 	);
 
