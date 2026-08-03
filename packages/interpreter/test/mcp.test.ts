@@ -13,6 +13,9 @@ const FIXTURE = fileURLToPath(
 const EMPTY_FIXTURE = fileURLToPath(
 	new URL("./fixture-empty-mcp-server.ts", import.meta.url),
 );
+const ENUM_FIXTURE = fileURLToPath(
+	new URL("./fixture-enum-mcp-server.ts", import.meta.url),
+);
 
 describe("self-evaluating keywords", () => {
 	const interp = new Interp();
@@ -109,6 +112,27 @@ describe("mcp-shutdown undefines tool bindings", () => {
 		expect(() => run(interp, '(sfx/echo :message "hi")')).not.toThrow(
 			/no such server/,
 		);
+	});
+});
+
+describe("mcp-doc enum rendering (stdio fixture)", () => {
+	const interp = new Interp();
+	run(interp, prelude);
+
+	afterAll(() => {
+		run(interp, "(mcp-shutdown)");
+	});
+
+	it("surfaces an argument's enum allowed values", () => {
+		evalStr(
+			interp,
+			`(await (load-mcp :name "en" :command "node" :args (quote ("--experimental-transform-types" "${ENUM_FIXTURE}"))))`,
+		);
+		const doc = evalStr(interp, "(mcp-doc 'en/render)");
+		expect(doc).toContain("format");
+		expect(doc).toContain("one of");
+		expect(doc).toContain("png");
+		expect(doc).toContain("jpeg");
 	});
 });
 
