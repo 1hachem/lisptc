@@ -5,7 +5,6 @@
 ;;;   pnpm --filter @repo/interpreter exec \
 ;;;     node --experimental-transform-types src/lisp.ts ../../examples/macros-and-functions.ptc
 ;;; =====================================================================
-
 (princ "=== 1. lambdas, closures & higher order ===")
 (terpri)
 
@@ -16,14 +15,11 @@
 ; => 15
 (print (mapcar add10 (list 1 2 3)))
 ; => (11 12 13)
-
 ;; fold via recursion
-(defun reduce (f acc lst)
-  (if (null lst) acc
-      (reduce f (f acc (car lst)) (cdr lst))))
+(defun reduce (f acc lst) (if (null lst) acc
+    (reduce f (f acc (car lst)) (cdr lst))))
 (print (reduce + 0 (list 1 2 3 4 5)))
 ; => 15
-
 (princ "=== 2. recursion ===")
 (terpri)
 
@@ -35,7 +31,6 @@
 (defun fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
 (print (fib 15))
 ; => 610
-
 (princ "=== 3. macros & quasiquotation ===")
 (terpri)
 
@@ -43,7 +38,6 @@
 (defmacro unless (test &rest body) `(cond ((not ,test) ,@body)))
 (print (unless nil 'ran 'ok))
 ; => ok
-
 ;; a macro that builds code at expansion time
 (defmacro swap (a b) `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
 (setq p 1)
@@ -51,6 +45,5 @@
 (swap p q)
 (print (list p q))
 ; => (2 1)
-
 (princ "=== done ===")
 (terpri)

@@ -10,7 +10,6 @@
 ;;; runs with no OAuth / credentials. See playwright.ptc and linear.ptc
 ;;; for server-specific demos.
 ;;; =====================================================================
-
 (princ "=== 1. discover the bundled toolkit ===")
 (terpri)
 
@@ -29,7 +28,6 @@
 ;; What servers are loaded, and how many tools each has?
 (print (list-mcps))
 ; => ((fs :loaded N))
-
 ;; Enumerate one server's tools: (symbol param-count doc)
 (print (list-tools "fs"))
 
