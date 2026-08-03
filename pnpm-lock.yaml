@@ -54,6 +54,9 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12
     devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../../packages/tsconfigs
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -70,6 +73,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/interpreter
     devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../../packages/tsconfigs
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -101,6 +107,9 @@ importers:
         specifier: '*'
         version: 0.34.52
     devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../../packages/tsconfigs
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -117,6 +126,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -136,6 +148,9 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
     devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -148,6 +163,8 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  packages/tsconfigs: {}
 
 packages:
 
