@@ -16,7 +16,7 @@ import {
 	setWriter,
 	str,
 } from "./lisp.ts";
-import type { Repl } from "./repl.ts";
+import { type Repl, seedSecretsFromEnvFile } from "./repl.ts";
 
 // Read a line as a string (displaying the given prompt), or null on EOF.
 // Wired to a readline interface by main().
@@ -44,6 +44,7 @@ class InteractiveRepl implements Repl {
 	private freshInterp(): Interp {
 		const interp = new Interp();
 		run(interp, prelude);
+		seedSecretsFromEnvFile(interp);
 		return interp;
 	}
 

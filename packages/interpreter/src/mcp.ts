@@ -24,6 +24,7 @@ import {
 	type List,
 	newLispKeyword,
 	newSym,
+	Secret,
 	Sym,
 	zList,
 } from "./lisp.ts";
@@ -65,7 +66,15 @@ interface JsonSchema {
 }
 
 type ConnConfig = { description?: string } & (
-	| { name: string; url: string; headers?: Record<string, string> }
+	| {
+			name: string;
+			url: string;
+			headers?: Record<string, string>;
+			// OAuth 2.1 servers (e.g. Linear); `scopes` are requested at auth time.
+			// See devdocs/oauth.md.
+			oauth?: boolean;
+			scopes?: string[];
+	  }
 	| {
 			name: string;
 			command: string;
@@ -118,6 +127,21 @@ function parseTimeout(x: unknown): number {
 	if (!Number.isFinite(ms) || ms < 0)
 		throw new EvalException("invalid await timeout", x);
 	return ms;
+}
+
+// Pull the authorization `code` out of a pasted callback link, or accept a bare
+// code as-is. Users tend to copy the whole redirect URL (…/callback?code=…&state=…)
+// rather than just the code, which otherwise fails the token exchange.
+function extractAuthCode(raw: string): string {
+	const value = raw.trim();
+	try {
+		// A URL yields its `code` param (empty string if the redirect carried an
+		// error instead), never the raw URL as a bogus code.
+		return new URL(value).searchParams.get("code") ?? "";
+	} catch {
+		// not a URL: treat it as a bare code
+		return value;
+	}
 }
 
 // --- Module state ------------------------------------------------------------
@@ -309,6 +333,8 @@ function lispToJson(x: unknown): unknown {
 	if (isNumeric(x)) return x;
 	if (x instanceof LispKeyword) return x.name;
 	if (x instanceof Sym) return x.name;
+	// A secret reveals its value only here, into the outgoing MCP request.
+	if (x instanceof Secret) return x.value;
 	if (x instanceof Cell) {
 		if (isAlist(x)) {
 			const obj: Record<string, unknown> = {};
@@ -420,7 +446,11 @@ function connConfigFromArgs(rest: List): ConnConfig {
 		const headers = opts.has("headers")
 			? (lispToJson(opts.get("headers")) as Record<string, string>)
 			: undefined;
-		return { name, url, headers };
+		const oauth = opts.has("oauth") ? opts.get("oauth") !== null : undefined;
+		const scopes = opts.has("scopes")
+			? listToArray(opts.get("scopes") as List).map(String)
+			: undefined;
+		return { name, url, headers, oauth, scopes };
 	}
 	if (opts.has("command")) {
 		const command = opts.get("command");
@@ -637,6 +667,80 @@ export function registerMcp(interp: Interp): void {
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
 		([name]) => arrayToList(doUnload(interp, name)),
+	);
+
+	// (mcp-authorize "server" "code") -> :authorized. See devdocs/oauth.md.
+	interp.def(
+		"mcp-authorize",
+		-1,
+		'(mcp-authorize "server" "code")',
+		'Finish OAuth for a server: exchange the authorization `code` for tokens (saved for reuse). Accepts either the bare code or the whole pasted callback link. Then (load-mcp "server") connects directly.',
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
+			const raw = args[1];
+			if (typeof raw !== "string")
+				throw new EvalException(
+					"mcp-authorize requires an authorization code string",
+					raw ?? null,
+					false,
+				);
+			// Accept either a bare code or the whole pasted callback link
+			// (e.g. http://127.0.0.1:.../callback?code=…&state=…).
+			const code = extractAuthCode(raw);
+			if (!code)
+				throw new EvalException(
+					"no authorization code found in the pasted value",
+					raw,
+					false,
+				);
+			const conf = predefined.get(name);
+			if (!conf || !("url" in conf))
+				throw new EvalException("unknown OAuth MCP server", name, false);
+			mcpRequest("authorize", { url: conf.url, code, scopes: conf.scopes });
+			return newLispKeyword("authorized");
+		},
+	);
+
+	// (login "server") -> auth URL | :logged-in. See devdocs/oauth.md.
+	interp.def(
+		"login",
+		-1,
+		'(login "server")',
+		'Log in to an OAuth MCP server: begin authorization and return the login URL to open (or :logged-in if already authenticated). After approving, (load-mcp "server") connects.',
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
+			const conf = predefined.get(name);
+			if (!conf || !("url" in conf))
+				throw new EvalException("unknown OAuth MCP server", name, false);
+			const res = mcpRequest("login", {
+				url: conf.url,
+				scopes: conf.scopes,
+			}) as { authUrl: string | null };
+			return res.authUrl ?? newLispKeyword("logged-in");
+		},
+	);
+
+	// (logout "server") -> :logged-out. See devdocs/oauth.md.
+	interp.def(
+		"logout",
+		-1,
+		'(logout "server")',
+		'Log out of an OAuth MCP server: unload it if loaded and delete its saved tokens, so the next (load-mcp "server") re-authorizes.',
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listToArray(rest);
+			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
+			const conf = predefined.get(name);
+			if (!conf || !("url" in conf))
+				throw new EvalException("unknown OAuth MCP server", name, false);
+			if (servers.has(name)) doUnload(interp, name);
+			mcpRequest("logout", { url: conf.url });
+			return newLispKeyword("logged-out");
+		},
 	);
 
 	// (list-mcps) -> ((name :loaded|:unloaded count) ...)

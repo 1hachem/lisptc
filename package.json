@@ -14,7 +14,7 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
-    "pi": "pi --provider fireworks --model accounts/fireworks/models/kimi-k3:off",
+    "pi": "pi --provider fireworks --model accounts/fireworks/models/kimi-k3:low",
     "prepare": "husky"
   },
   "pi": {
@@ -32,8 +32,11 @@
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@commitlint/types": "^21.2.0",
+    "@infisical/sdk": "^5.0.2",
+    "cmd-ts": "^0.15.0",
     "husky": "^9.1.7",
     "knip": "^6.27.0",
+    "tsx": "^4.23.1",
     "turbo": "^2.5.0",
     "typescript": "^5.9.3"
   }

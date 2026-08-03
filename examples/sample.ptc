@@ -163,3 +163,17 @@
 (playwright/browser_navigate :url "yourscrib.ai")
 
 (unload-mcp "playwright")
+
+(await (load-mcp :name "linear" :url "https://mcp.linear.app/mcp" :headers (list (cons "Authorization" (concat "Bearer " (secret "LINEAR_API_KEY"))))))
+(secrets)
+
+(concat (secret "REPL_LINEAR_API_KEY") "--test")
+
+(length (secret "REPL_LINEAR_API_KEY"))
+
+(defmacro swap (a b) `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
+(setq p 1)
+(setq q 2)
+
+(swap p q)
+(list q p)

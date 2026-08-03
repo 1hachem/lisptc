@@ -14,14 +14,9 @@ tasks:
     vars:
       DIR: '{{.DIR | default "."}}'
     cmd: |
-      set -eu
-      path_flags=""
-      for p in {{.PATHS}}; do
-        path_flags="$path_flags --path=$p"
-      done
-      cd {{.DIR}} && infisical run -e {{.ENV}} \
-        --projectId={{.PROJECTID}} \
-        $path_flags -- {{.CMD}}
+      pnpm tsx ./scripts/infisical-run.ts -e {{.ENV}} \
+       --projectId={{.PROJECTID}} \
+       --paths="{{.PATHS}}" --dir={{.DIR}} "{{.CMD}}"
 
   test:
     desc: run all tests (interpreter + nix flake checks)
@@ -46,5 +41,4 @@ tasks:
       - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
   pi:
     desc: run pi agent with access to secrets
-    cmd: go-task _infisical-run  ENV=dev PATHS="/ai" CMD="pnpm run pi"
-
+    cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
