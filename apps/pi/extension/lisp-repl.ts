@@ -11,6 +11,7 @@
  * - /lisp-reset clears all definitions (fresh interpreter).
  */
 
+import { readFileSync } from "node:fs";
 import {
 	CustomEditor,
 	type ExtensionAPI,
@@ -19,6 +20,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, Text } from "@earendil-works/pi-tui";
 import { LISP_GRAMMAR } from "@repo/interpreter/grammar.ts";
+import {
+	FileJournal,
+	type Journal,
+	NullJournal,
+} from "@repo/repl/journal.ts";
 import { AgentRepl } from "@repo/repl/repl.ts";
 import {
 	CODE_TYPE,
@@ -109,38 +115,23 @@ class LispEditor extends CustomEditor {
 	}
 }
 
-// `(print x)` writes x AND returns it, and the REPL prints the value of every
-// expression — so the same text appears twice. Collapse that duplication here
-// so the user sees it once.
-function dedupePrintedValue(out: string): string {
-	// Duplicated string value: print emits `"s"` and the REPL appends `"s"`
-	// right after (possibly separated by a newline).
-	const m = out.match(/^([\s\S]*?)(?:\n?)\1$/);
-	if (m && m[1].trim() !== "") return m[1].trim();
-	return out;
+// Where a session's Lisp is journaled. A local `.ptc` file by default (path
+// from $LISPTC_SAVE_FILE, else `.lisptc/session.ptc`); persistence is disabled
+// with LISPTC_SAVE_FILE=off. Swap in another Journal (S3, JuiceFS, …) here.
+function defaultJournal(): Journal {
+	const path = process.env.LISPTC_SAVE_FILE ?? ".lisptc/session.ptc";
+	return path === "off" ? new NullJournal() : new FileJournal(path);
 }
 
-class LispRepl {
-	private session = new AgentRepl();
-
-	reset(): void {
-		this.session.reset();
-	}
-
-	// Refresh the read-only conversation globals from a host snapshot; called
-	// before every eval so the agent always sees the current transcript.
-	setConversationVars(vars: Record<string, unknown>): void {
-		this.session.setConversationVars(vars);
-	}
-
-	eval(code: string): string {
-		return dedupePrintedValue(this.session.eval(code.trim()).trim());
-	}
-
-	// Did the just-evaluated program call `(halt)`? The REPL session owns the
-	// `halt` built-in and its flag; this just surfaces it (see message_end).
-	takeHalted(): boolean {
-		return this.session.takeHalted();
+// The session prelude: durable `.ptc` memory loaded and evaluated at startup
+// (identity/goal context via `(context! …)`, MCP loads, reusable defs). Path is
+// $LISPTC_PRELUDE_FILE, else `.lisptc/prelude.ptc`. A missing file is fine.
+function readSessionPrelude(): string {
+	const path = process.env.LISPTC_PRELUDE_FILE ?? ".lisptc/prelude.ptc";
+	try {
+		return readFileSync(path, "utf8");
+	} catch {
+		return "";
 	}
 }
 
@@ -287,7 +278,10 @@ export default function (pi: ExtensionAPI) {
 		return payload;
 	});
 
-	const repl = new LispRepl();
+	const repl = new AgentRepl(defaultJournal());
+	// Load durable memory: runs `(context! …)`/`(load-mcp …)`/defs at startup so
+	// the agent boots with its identity, capabilities, and reusable functions.
+	repl.loadSessionPrelude(readSessionPrelude());
 	// Steps taken in the current REPL loop; reset when a new user task arrives.
 	let steps = 0;
 
@@ -327,14 +321,20 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async () => {
-		return { systemPrompt: SYSTEM_PROMPT };
+		// Fold in any identity/goal context the session prelude contributed via
+		// `(context! …)`, so durable memory shapes the agent's system prompt.
+		const context = repl.systemContext();
+		const systemPrompt = context
+			? `${SYSTEM_PROMPT}\n\n${context}`
+			: SYSTEM_PROMPT;
+		return { systemPrompt };
 	});
 
 	// ReplSession renders Lisp errors into its output, so a throw here means an
 	// unexpected host error; reset so corrupt state doesn't persist.
 	function evalCode(code: string): { output: string; error: boolean } {
 		try {
-			return { output: repl.eval(code), error: false };
+			return { output: repl.eval(code.trim()).trim(), error: false };
 		} catch (ex) {
 			repl.reset();
 			const msg = ex instanceof Error ? ex.message : String(ex);
