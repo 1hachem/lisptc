@@ -10,7 +10,6 @@ const FILES = [
 	"mcp.ts",
 	"mcp-broker.ts",
 	"mcp-oauth.ts",
-	"lisptc.gbnf",
 ] as const;
 
 function read(file: string): string {
