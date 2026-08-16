@@ -28,6 +28,7 @@ import {
 	setWriter,
 	str,
 } from "@repo/interpreter/lisp.ts";
+import { type Journal, NullJournal } from "./journal.ts";
 
 // Seed an interp's secret registry from a `.env` file: the path in
 // $LISPTC_SECRETS_FILE, or `.env` in the working directory if it exists. Shared
@@ -89,8 +90,13 @@ function arrayToList(arr: unknown[]): List {
 // interactive REPL would have printed. State persists across calls.
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
+	// Append-only record of every evaluated program. Defaults to a no-op; an
+	// embedder passes a FileJournal (or a remote-backed one) to persist the
+	// session's Lisp as `.ptc`.
+	private readonly journal: Journal;
 
-	constructor() {
+	constructor(journal: Journal = new NullJournal()) {
+		this.journal = journal;
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -114,6 +120,7 @@ export class MemoryRepl implements InMemoryRepl {
 	// Evaluate a program; Lisp errors are rendered into the returned output
 	// rather than thrown.
 	eval(code: string): string {
+		this.journal.append(code);
 		let out = "";
 		const prev = setWriter((s) => {
 			out += s;
@@ -153,12 +160,22 @@ export class AgentRepl extends MemoryRepl {
 	// Host-supplied secrets, kept so a post-error `reset()` can re-inject them
 	// into the fresh interp's registry.
 	private readonly secrets = new Map<string, SecretSpec>();
+	// System-prompt context contributed by the session prelude via `(context! …)`.
+	// The host reads systemContext() and folds it into the agent's system prompt,
+	// so the prelude can inject identity/goal/capability text at startup.
+	private readonly systemContextBlocks: string[] = [];
+	// The session prelude: `.ptc` source run at startup (after the language
+	// prelude and the agent built-ins) and re-run on reset. This is the durable
+	// memory that restores identity/context and reloads MCP capabilities — it can
+	// call `(context! …)`, `(await (load-mcp …))`, define functions, etc.
+	private sessionPreludeSource = "";
 
 	// Re-establish the halt built-in and the conversation globals on every fresh
 	// interp. Guards `conversationVars` because the base constructor calls this
 	// before this subclass's field initializers have run.
 	protected override setup(interp: Interp): void {
 		this.installHalt(interp);
+		this.installContext(interp);
 		const vars = this.conversationVars;
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 		// Note: unlike the standalone CLI, an embedded AgentRepl does NOT
@@ -183,6 +200,52 @@ export class AgentRepl extends MemoryRepl {
 			signature: "(halt [value])",
 			doc: "Signal the REPL to stop after this program; return `value` (or t).",
 		});
+	}
+
+	// Install `(context! text)`: append a block of text to the system-prompt
+	// context the host will inject. Returns the text. Meant to be called from the
+	// session prelude at startup (e.g. identity/goal memories), but usable any
+	// time. The closure reads `systemContextBlocks` at call time (never during the
+	// base constructor's setup()), so the field is always initialized by then.
+	private installContext(interp: Interp): void {
+		const context = interp.makeBuiltIn("context!", 1, (frame) => {
+			const text = frame[0];
+			if (typeof text !== "string")
+				throw new EvalException("context! requires a string", text, false);
+			this.systemContextBlocks.push(text);
+			return text;
+		});
+		interp.defineGlobal(newSym("context!"), context, {
+			signature: "(context! text)",
+			doc: "Append `text` to the agent's system-prompt context; return `text`.",
+		});
+	}
+
+	// The accumulated system-prompt context (blocks joined by blank lines). A host
+	// folds this into the system prompt after loading the session prelude.
+	systemContext(): string {
+		return this.systemContextBlocks.join("\n\n");
+	}
+
+	// Set and run the session prelude — durable `.ptc` memory loaded at startup.
+	// Clears any prior context, then evaluates the source on the live interp so
+	// its `(context! …)` / `(load-mcp …)` / definitions take effect. Re-run on
+	// reset(). Best-effort: a prelude error is reported, not thrown, so a bad
+	// prelude never prevents the session from starting.
+	loadSessionPrelude(source: string): void {
+		this.sessionPreludeSource = source;
+		this.runSessionPrelude();
+	}
+
+	private runSessionPrelude(): void {
+		this.systemContextBlocks.length = 0;
+		if (this.sessionPreludeSource.trim() === "") return;
+		try {
+			run(this.interp, this.sessionPreludeSource);
+		} catch (ex) {
+			const msg = ex instanceof Error ? ex.message : String(ex);
+			console.error(`warning: session prelude failed: ${msg}`);
+		}
 	}
 
 	// Replace the read-only conversation globals from a fresh host snapshot. Each
@@ -228,6 +291,9 @@ export class AgentRepl extends MemoryRepl {
 	override reset(): void {
 		super.reset();
 		this.halted = false;
+		// Re-run the session prelude on the fresh interp so identity/context and
+		// MCP capabilities are restored after a reset.
+		this.runSessionPrelude();
 	}
 }
 

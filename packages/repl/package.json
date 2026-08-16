@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     "./repl.ts": "./src/repl.ts",
+    "./journal.ts": "./src/journal.ts",
     "./session-server.ts": "./src/session-server.ts",
     "./cli.ts": "./src/cli.ts",
     "./package.json": "./package.json"
