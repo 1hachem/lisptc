@@ -1,4 +1,4 @@
-import { INTERPRETER_SOURCE } from "@repo/interpreter/source.ts";
+// import { INTERPRETER_SOURCE } from "@repo/interpreter/source.ts";
 
 // Custom message types used by the REPL extension. Shared with the extension so
 // the policy text can reference the exact result-message type name.
@@ -39,4 +39,5 @@ Below is the full source code of the interpreter you are running on:
 // The complete system prompt: the lisp-only policy followed by the full
 // interpreter source (every `src/` file), so the LLM knows the exact language
 // it is programming.
-export const SYSTEM_PROMPT: string = POLICY + INTERPRETER_SOURCE;
+// export const SYSTEM_PROMPT: string = POLICY + INTERPRETER_SOURCE;
+export const SYSTEM_PROMPT: string = POLICY ;
