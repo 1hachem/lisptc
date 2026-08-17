@@ -29,6 +29,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
       - name: Typecheck
         run: pnpm typecheck
 

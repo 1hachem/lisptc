@@ -1,0 +1,5 @@
+describe("lisptc.session", function()
+	it("is the shared key used by both the LSP client and the Iron REPL", function()
+		assert.are.equal("lisptc", require("lisptc.session"))
+	end)
+end)
