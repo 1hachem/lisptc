@@ -12,9 +12,4 @@ return {
 	},
 	filetypes = { "lisptc" },
 	root_markers = { ".git" },
-	handlers = {
-		["lisptc/mcpsChanged"] = function(_, result)
-			require("lisptc.mcps").set(result.mcps)
-		end,
-	},
 }
