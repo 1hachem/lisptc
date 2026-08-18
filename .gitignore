@@ -9,3 +9,5 @@ node_modules/
 .playwright-mcp/
 
 .claude/worktrees/
+
+editors/nvim/.vendor/

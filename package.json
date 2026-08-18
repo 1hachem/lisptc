@@ -10,6 +10,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
+    "test:nvim": "bash editors/nvim/tests/run.sh",
     "repl": "pnpm --filter @repo/repl repl",
     "repl:attach": "pnpm --silent --filter @repo/repl repl:attach",
     "lint": "biome ci",
