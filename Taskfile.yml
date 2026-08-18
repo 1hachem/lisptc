@@ -23,6 +23,7 @@ tasks:
     cmds:
       - task: test:pnpm
       - task: test:nix
+      - task: test:nvim
 
   test:pnpm:
     desc: run the interpreter test suite (vitest via turbo)
@@ -39,6 +40,11 @@ tasks:
       # ptcfmt test summary so the pass count is always visible.
       - nix build --no-warn-dirty --no-link ".#checks.{{.SYSTEM}}.ptcfmt"
       - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
+
+  test:nvim:
+    desc: run the nvim integration test
+    cmd: bash editors/nvim/tests/run.sh
+
   pi:
     desc: run pi agent with access to secrets
     cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
