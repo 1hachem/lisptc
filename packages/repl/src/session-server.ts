@@ -239,7 +239,17 @@ export class SessionClient {
 // Connect to the session server for `path`, starting one (detached) if none is
 // running. The first client in a project boots the server; the rest attach.
 // A stale socket file (server crashed) is cleared and re-spawned.
-export async function connectOrSpawn(path: string): Promise<SessionClient> {
+//
+// `ownerPid`, when given, ties the newly-spawned server's life to that pid
+// (e.g. nvim's): the server polls it and exits + unlinks its socket once it's
+// gone, rather than surviving indefinitely as an orphaned daemon. It's a no-op
+// if the server already exists (that server keeps whatever owner it booted
+// with) and defaults to `$LISPTC_OWNER_PID` so callers need not thread it
+// through explicitly.
+export async function connectOrSpawn(
+	path: string,
+	ownerPid: number | undefined = envPid(),
+): Promise<SessionClient> {
 	try {
 		return await SessionClient.connect(path);
 	} catch (ex) {
@@ -253,13 +263,19 @@ export async function connectOrSpawn(path: string): Promise<SessionClient> {
 			throw ex;
 		}
 	}
-	await spawnServer(path);
+	await spawnServer(path, ownerPid);
 	return connectWithRetry(path);
+}
+
+function envPid(): number | undefined {
+	const raw = process.env.LISPTC_OWNER_PID;
+	const pid = raw ? Number(raw) : NaN;
+	return Number.isInteger(pid) ? pid : undefined;
 }
 
 const selfPath = fileURLToPath(import.meta.url);
 
-function spawnServer(path: string): Promise<void> {
+function spawnServer(path: string, ownerPid?: number): Promise<void> {
 	const child: ChildProcess = spawn(
 		process.execPath,
 		[
@@ -269,11 +285,45 @@ function spawnServer(path: string): Promise<void> {
 			"--serve",
 			"--socket",
 			path,
+			...(ownerPid !== undefined ? ["--owner-pid", String(ownerPid)] : []),
 		],
 		{ detached: true, stdio: "ignore" },
 	);
 	child.unref();
 	return Promise.resolve();
+}
+
+// True while `pid` still refers to a live process (signal 0 sends nothing, it
+// only probes permissions/existence).
+export function pidAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+// Poll `ownerPid` and tear the server down once it exits, so a session started
+// by an editor doesn't outlive it as an unreachable daemon holding the socket.
+// `intervalMs`/`exit` are test seams; production always uses the defaults.
+export function watchOwner(
+	ownerPid: number,
+	path: string,
+	server: ReturnType<typeof createServer>,
+	options: { intervalMs?: number; exit?: (code: number) => void } = {},
+): void {
+	const { intervalMs = 2000, exit = process.exit } = options;
+	const interval = setInterval(() => {
+		if (pidAlive(ownerPid)) return;
+		clearInterval(interval);
+		server.close();
+		try {
+			unlinkSync(path);
+		} catch {}
+		exit(0);
+	}, intervalMs);
+	interval.unref();
 }
 
 // Poll for the socket to accept connections after a spawn (the detached server
@@ -305,8 +355,13 @@ async function main(): Promise<void> {
 	if (!process.argv.includes("--serve")) return;
 	const i = process.argv.indexOf("--socket");
 	const path = i !== -1 ? process.argv[i + 1] : socketPathFor();
-	await serve(path);
+	const server = await serve(path);
 	// Keep the process alive; the detached parent has unref'd us.
+	const o = process.argv.indexOf("--owner-pid");
+	const ownerPid = o !== -1 ? Number(process.argv[o + 1]) : undefined;
+	if (ownerPid !== undefined && Number.isInteger(ownerPid)) {
+		watchOwner(ownerPid, path, server);
+	}
 }
 
 main();

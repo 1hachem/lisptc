@@ -17,6 +17,7 @@ describe("lisptc.repl", function()
 		assert.are.same({
 			"env",
 			"LISPTC_SESSION=lisptc",
+			"LISPTC_OWNER_PID=" .. vim.fn.getpid(),
 			"pnpm",
 			"--silent",
 			"-C",

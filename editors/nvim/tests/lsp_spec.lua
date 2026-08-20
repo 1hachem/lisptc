@@ -10,6 +10,7 @@ describe("lisptc.lsp", function()
 		assert.are.same({
 			"env",
 			"LISPTC_SESSION=lisptc",
+			"LISPTC_OWNER_PID=" .. vim.fn.getpid(),
 			"node",
 			"--no-warnings",
 			"--experimental-transform-types",
