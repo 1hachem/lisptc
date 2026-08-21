@@ -8,6 +8,7 @@ import {
 	type CompletionItem,
 	CompletionItemKind,
 	createConnection,
+	type Diagnostic,
 	DiagnosticSeverity,
 	MarkupKind,
 	ProposedFeatures,
@@ -66,6 +67,15 @@ function completionItem(entry: CompletionEntry): CompletionItem {
 			markdown === undefined
 				? undefined
 				: { kind: MarkupKind.Markdown, value: markdown },
+		// Explicit (not just the label-as-default): some clients' sortText
+		// comparator only kicks in when BOTH competing items set one — e.g.
+		// nvim-cmp's compare.sort_text is a no-op unless both sides have it, so
+		// without this, comparing an unset-sortText name against a keyword-arg
+		// completion (which does set sortText — see keywordCompletions) falls
+		// through to a kind-based comparator that ranks Function above Field
+		// regardless of intent. Prefixed with "2" so it also sorts after
+		// keywordCompletions' "0"/"1" prefixes.
+		sortText: `2${entry.name}`,
 	};
 }
 
@@ -107,8 +117,8 @@ connection.onInitialize(() => ({
 	},
 }));
 
-documents.onDidChangeContent(({ document }) => {
-	const diagnostics = checkSyntax(document.getText()).map((err) => {
+documents.onDidChangeContent(async ({ document }) => {
+	const syntaxErrors = checkSyntax(document.getText()).map((err) => {
 		const line = Math.min(err.line, document.lineCount) - 1;
 		return {
 			severity: DiagnosticSeverity.Error,
@@ -120,7 +130,18 @@ documents.onDidChangeContent(({ document }) => {
 			source: "lisptc",
 		};
 	});
-	connection.sendDiagnostics({ uri: document.uri, diagnostics });
+	// A syntax error leaves the rest of the token stream unreliable, so skip
+	// the required-arg check until it's fixed (matches checkSyntax's own
+	// "stop at the first error" behavior).
+	const argErrors =
+		syntaxErrors.length === 0 ? await requiredArgDiagnostics(document) : [];
+	// The doc lookups above are async; bail if a newer edit already landed —
+	// that change's own onDidChangeContent call will produce fresh diagnostics.
+	if (documents.get(document.uri)?.version !== document.version) return;
+	connection.sendDiagnostics({
+		uri: document.uri,
+		diagnostics: [...syntaxErrors, ...argErrors],
+	});
 });
 
 // A symbol is any run of characters the reader doesn't treat as delimiters.
@@ -157,24 +178,30 @@ function enclosingCallHead(
 	return undefined;
 }
 
-// Keyword-arg completions for a call whose head is `headName`, e.g. `:url` for
-// `playwright/browser_navigate`. Reads the structured `Doc.args` populated for
+// The structured `Doc.args` for a binding named `name`, populated for
 // keyword-call bindings (currently just MCP tools; see toolArgs in
-// packages/interpreter/src/mcp.ts) rather than re-parsing the rendered
-// signature/doc text. Returns undefined when the head isn't a known binding
-// or has no such args, so the caller falls back to plain name completion.
-async function keywordCompletions(
-	headName: string,
-): Promise<CompletionItem[] | undefined> {
-	let args: DocArg[] | undefined;
+// packages/interpreter/src/mcp.ts) — undefined for anything else (built-ins,
+// macros, plain user defuns).
+async function docArgsFor(name: string): Promise<DocArg[] | undefined> {
 	if (session !== undefined) {
 		try {
-			args = (await session.doc(headName))?.args;
+			const args = (await session.doc(name))?.args;
+			if (args !== undefined) return args;
 		} catch {
 			// fall through to local
 		}
 	}
-	if (args === undefined) args = localDocs.get(headName)?.args;
+	return localDocs.get(name)?.args;
+}
+
+// Keyword-arg completions for a call whose head is `headName`, e.g. `:url` for
+// `playwright/browser_navigate`. Returns undefined when the head isn't a known
+// binding or has no such args, so the caller falls back to plain name
+// completion.
+async function keywordCompletions(
+	headName: string,
+): Promise<CompletionItem[] | undefined> {
+	const args = await docArgsFor(headName);
 	if (!args?.length) return undefined;
 	return args.map((arg) => ({
 		label: `:${arg.name}`,
@@ -184,15 +211,158 @@ async function keywordCompletions(
 			arg.description === undefined
 				? undefined
 				: { kind: MarkupKind.Markdown, value: arg.description },
+		// Force these above the ~100+ plain-name completions regardless of
+		// client sort behavior: required args first, then alphabetical within
+		// each group. Sorts before any name completion (those default to their
+		// label, and "0"/"1" precede every identifier character) even though a
+		// client that ignores sortText and just keeps server order would still
+		// see them first from the array order below.
+		sortText: `${arg.required ? 0 : 1}${arg.name}`,
 	}));
 }
 
+// --- Required keyword-argument diagnostics ----------------------------------
+//
+// Flags calls like `(playwright/browser_navigate)` that omit a required
+// keyword arg, mirroring the runtime check in packages/interpreter/src/mcp.ts
+// (`validate`) but statically, without evaluating the buffer.
+
+interface Atom {
+	kind: "atom";
+	text: string;
+	line: number;
+	char: number;
+}
+interface ListForm {
+	kind: "list";
+	items: Node[];
+	openLine: number;
+	openChar: number;
+	closeLine: number;
+	closeChar: number;
+}
+type Node = Atom | ListForm;
+
+// Tokenize with (line, char) positions, using the same token pattern as the
+// interpreter's own Reader so forms line up with what it would actually read.
+function tokenizeWithPositions(text: string): Atom[] {
+	const tokenPat = /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g;
+	const tokens: Atom[] = [];
+	const lines = text.split("\n");
+	for (let line = 0; line < lines.length; line++) {
+		const s = lines[line];
+		for (;;) {
+			const m = tokenPat.exec(s);
+			if (m === null) break;
+			if (m[1] !== undefined)
+				tokens.push({ kind: "atom", text: m[1], line, char: m.index });
+		}
+	}
+	return tokens;
+}
+
+// Parse tokens into a tree of lists/atoms with positions. Best-effort: quote
+// syntax (', `, , ,@) and stray unmatched parens aren't specially handled —
+// this only needs to find call forms `(head ...)` and their direct `:keyword`
+// children, which is enough for a static, non-evaluating check.
+function parseForms(tokens: Atom[]): Node[] {
+	let i = 0;
+	function parseOne(): Node | undefined {
+		const t = tokens[i];
+		if (t === undefined || t.text === ")") {
+			if (t !== undefined) i++;
+			return undefined;
+		}
+		if (t.text !== "(") {
+			i++;
+			return t;
+		}
+		i++;
+		const items: Node[] = [];
+		while (tokens[i] !== undefined && tokens[i].text !== ")") {
+			const item = parseOne();
+			if (item !== undefined) items.push(item);
+		}
+		const close = tokens[i];
+		if (close !== undefined) i++;
+		return {
+			kind: "list",
+			items,
+			openLine: t.line,
+			openChar: t.char,
+			closeLine: close?.line ?? t.line,
+			closeChar: close?.char ?? t.char,
+		};
+	}
+	const forms: Node[] = [];
+	for (let f = parseOne(); f !== undefined; f = parseOne()) forms.push(f);
+	return forms;
+}
+
+// Every call form `(head ...)` found anywhere in the program (including
+// nested), with the head symbol's position and the `:keyword` names passed
+// directly to it — not through a nested form, since those belong to a
+// different call.
+function collectCalls(
+	nodes: Node[],
+	out: { name: string; head: Atom; keywords: Set<string> }[] = [],
+) {
+	for (const n of nodes) {
+		if (n.kind !== "list") continue;
+		const [head, ...rest] = n.items;
+		if (head?.kind === "atom" && !head.text.startsWith(":")) {
+			const keywords = new Set(
+				rest
+					.filter(
+						(item): item is Atom =>
+							item.kind === "atom" && item.text.startsWith(":"),
+					)
+					.map((item) => item.text.slice(1)),
+			);
+			out.push({ name: head.text, head, keywords });
+		}
+		collectCalls(n.items, out);
+	}
+	return out;
+}
+
+async function requiredArgDiagnostics(
+	document: TextDocument,
+): Promise<Diagnostic[]> {
+	const calls = collectCalls(parseForms(tokenizeWithPositions(document.getText())));
+	const names = [...new Set(calls.map((c) => c.name))];
+	const argsByName = new Map(
+		await Promise.all(
+			names.map(async (name) => [name, await docArgsFor(name)] as const),
+		),
+	);
+	const diagnostics: Diagnostic[] = [];
+	for (const call of calls) {
+		for (const arg of argsByName.get(call.name) ?? []) {
+			if (!arg.required || call.keywords.has(arg.name)) continue;
+			diagnostics.push({
+				severity: DiagnosticSeverity.Error,
+				range: {
+					start: { line: call.head.line, character: call.head.char },
+					end: {
+						line: call.head.line,
+						character: call.head.char + call.name.length,
+					},
+				},
+				message: `${call.name}: missing required argument ":${arg.name}"`,
+				source: "lisptc",
+			});
+		}
+	}
+	return diagnostics;
+}
+
 connection.onCompletion(async ({ textDocument, position }) => {
-	const base = await currentCompletions();
 	const document = documents.get(textDocument.uri);
 	const head = document && enclosingCallHead(document, position);
 	const keywords = head ? await keywordCompletions(head) : undefined;
-	return keywords ? [...base, ...keywords] : base;
+	const base = await currentCompletions();
+	return keywords ? [...keywords, ...base] : base;
 });
 
 function symbolAt(document: TextDocument, line: number, character: number) {
