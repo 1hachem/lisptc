@@ -16,6 +16,7 @@
  *   - `completions {}`       -> [{name, signature, doc}] (LSP completion), LIVE
  *   - `doc    {symbol}`      -> {signature, doc} | null       (LSP hover), LIVE
  *   - `reset  {}`            -> "" ; discards all definitions
+ *   - `shutdown {}`          -> "" ; then the server closes its socket and exits
  * `completions`/`doc` only READ the interp (globalNames/docs); they never eval.
  */
 
@@ -46,7 +47,7 @@ export interface DocEntry {
 
 interface Request {
 	id: number;
-	op: "eval" | "completions" | "doc" | "reset";
+	op: "eval" | "completions" | "doc" | "reset" | "shutdown";
 	code?: string;
 	symbol?: string;
 }
@@ -81,6 +82,11 @@ function handle(repl: MemoryRepl, req: Request): unknown {
 			return repl.eval(req.code ?? "");
 		case "reset":
 			repl.reset();
+			return "";
+		case "shutdown":
+			// The actual teardown (closing the server, exiting the process) is a
+			// side effect handled by the caller once this reply is flushed — see
+			// the `shutdown` branch in `serve()`.
 			return "";
 		case "completions": {
 			const docs = repl.interp.docs();
@@ -127,19 +133,34 @@ export function serve(path: string): Promise<ReturnType<typeof createServer>> {
 				buffer = buffer.slice(nl + 1);
 				if (line.trim() !== "") {
 					let reply: Reply;
+					let req: Request | undefined;
 					try {
-						const req = JSON.parse(line) as Request;
+						req = JSON.parse(line) as Request;
 						reply = { id: req.id, ok: true, result: handle(repl, req) };
 					} catch (ex) {
 						reply = { id: safeId(line), ok: false, error: String(ex) };
 					}
-					socket.write(`${JSON.stringify(reply)}\n`);
+					socket.write(`${JSON.stringify(reply)}\n`, () => {
+						if (req?.op === "shutdown") shutdown();
+					});
 				}
 				nl = buffer.indexOf("\n");
 			}
 		});
 		socket.on("error", () => socket.destroy());
 	});
+
+	// Tears the process down once a shutdown request's reply has flushed, so the
+	// client sees the ack before the socket goes away.
+	const shutdown = (): void => {
+		server.close();
+		try {
+			unlinkSync(path);
+		} catch {
+			// Already gone; nothing to clean up.
+		}
+		process.exit(0);
+	};
 
 	return new Promise((resolve, reject) => {
 		server.once("error", reject);
@@ -231,9 +252,62 @@ export class SessionClient {
 	doc(symbol: string): Promise<DocEntry | null> {
 		return this.send({ op: "doc", symbol }) as Promise<DocEntry | null>;
 	}
+	shutdown(): Promise<string> {
+		return this.send({ op: "shutdown" }) as Promise<string>;
+	}
 
 	close(): void {
 		this.socket.end();
+	}
+
+	// Immediately release the socket without waiting for a graceful FIN/FIN-ACK
+	// handshake, unlike `close`. Use when the remote might never cooperate —
+	// e.g. `killSession` cleaning up after a server that rejected (or never
+	// answered) the shutdown request; otherwise the handle lingers and the
+	// caller's process hangs forever waiting for a "close" that never comes.
+	destroy(): void {
+		this.socket.destroy();
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Kill: stop a running session server, given its name
+// ---------------------------------------------------------------------------
+
+// Shut down the session server for `session` (the same name passed to
+// `socketPathFor`/`LISPTC_SESSION`; omit for the default cwd-keyed session),
+// so it releases its socket and exits instead of lingering as an orphaned
+// detached process. Returns false if no server was running for it — either no
+// socket file, or a stale one left behind by a server that already died, in
+// which case it's cleaned up here since there's no live server left to do it.
+export async function killSession(session?: string): Promise<boolean> {
+	const path = socketPathFor(session);
+	let client: SessionClient;
+	try {
+		client = await SessionClient.connect(path);
+	} catch (ex) {
+		const code = (ex as NodeJS.ErrnoException).code;
+		if (code === "ECONNREFUSED" && existsSync(path)) {
+			try {
+				unlinkSync(path);
+			} catch {}
+		}
+		return false;
+	}
+	try {
+		// The server writes this reply BEFORE closing/exiting (see `serve`), so a
+		// resolved promise here means it genuinely shut down — not just that the
+		// connection happened to drop. A rejection (e.g. "unknown op: shutdown"
+		// from a server started before this op existed) means it's still up.
+		await client.shutdown();
+		return true;
+	} catch {
+		return false;
+	} finally {
+		// Always drop our end, win or lose — otherwise a server that rejects the
+		// request (or never replies) leaves this socket open and the caller's
+		// process hanging on a handle nothing will ever close.
+		client.destroy();
 	}
 }
 
