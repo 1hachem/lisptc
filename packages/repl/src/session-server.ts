@@ -26,6 +26,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { DocArg } from "@repo/interpreter/lisp.ts";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {
@@ -37,6 +38,10 @@ export interface CompletionEntry {
 export interface DocEntry {
 	signature: string;
 	doc: string;
+	// Structured keyword args (set only for keyword-call bindings, e.g. MCP
+	// tools), so the LSP's argument completion doesn't have to re-parse
+	// `signature`/`doc`.
+	args?: DocArg[];
 }
 
 interface Request {
@@ -90,7 +95,7 @@ function handle(repl: MemoryRepl, req: Request): unknown {
 		}
 		case "doc": {
 			const d = repl.interp.docs().get(req.symbol ?? "");
-			return d ? { signature: d.signature, doc: d.doc } : null;
+			return d ? { signature: d.signature, doc: d.doc, args: d.args } : null;
 		}
 		default:
 			throw new Error(`unknown op: ${(req as Request).op}`);

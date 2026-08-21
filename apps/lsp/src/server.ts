@@ -15,7 +15,13 @@ import {
 	TextDocumentSyncKind,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { checkSyntax, Interp, prelude, run } from "@repo/interpreter";
+import {
+	checkSyntax,
+	type DocArg,
+	Interp,
+	prelude,
+	run,
+} from "@repo/interpreter";
 import {
 	type CompletionEntry,
 	connectOrSpawn,
@@ -117,10 +123,77 @@ documents.onDidChangeContent(({ document }) => {
 	connection.sendDiagnostics({ uri: document.uri, diagnostics });
 });
 
-connection.onCompletion(() => currentCompletions());
-
 // A symbol is any run of characters the reader doesn't treat as delimiters.
 const symbolChar = /[^()'`~"; \t]/;
+
+// Walk backward from `position` tracking paren depth to find the call this
+// position is nested in, then read the symbol right after its opening paren,
+// e.g. `(playwright/browser_navigate :u|)` -> "playwright/browser_navigate".
+// Ignores string/comment contents, same simplification as `symbolAt` below.
+function enclosingCallHead(
+	document: TextDocument,
+	position: { line: number; character: number },
+): string | undefined {
+	const text = document.getText({
+		start: { line: 0, character: 0 },
+		end: position,
+	});
+	let depth = 0;
+	for (let i = text.length - 1; i >= 0; i--) {
+		const c = text[i];
+		if (c === ")") {
+			depth++;
+		} else if (c === "(") {
+			if (depth === 0) {
+				let j = i + 1;
+				while (j < text.length && /\s/.test(text[j])) j++;
+				let k = j;
+				while (k < text.length && symbolChar.test(text[k])) k++;
+				return k > j ? text.slice(j, k) : undefined;
+			}
+			depth--;
+		}
+	}
+	return undefined;
+}
+
+// Keyword-arg completions for a call whose head is `headName`, e.g. `:url` for
+// `playwright/browser_navigate`. Reads the structured `Doc.args` populated for
+// keyword-call bindings (currently just MCP tools; see toolArgs in
+// packages/interpreter/src/mcp.ts) rather than re-parsing the rendered
+// signature/doc text. Returns undefined when the head isn't a known binding
+// or has no such args, so the caller falls back to plain name completion.
+async function keywordCompletions(
+	headName: string,
+): Promise<CompletionItem[] | undefined> {
+	let args: DocArg[] | undefined;
+	if (session !== undefined) {
+		try {
+			args = (await session.doc(headName))?.args;
+		} catch {
+			// fall through to local
+		}
+	}
+	if (args === undefined) args = localDocs.get(headName)?.args;
+	if (!args?.length) return undefined;
+	return args.map((arg) => ({
+		label: `:${arg.name}`,
+		kind: CompletionItemKind.Field,
+		detail: `${arg.type}${arg.required ? " (required)" : ""}`,
+		documentation:
+			arg.description === undefined
+				? undefined
+				: { kind: MarkupKind.Markdown, value: arg.description },
+	}));
+}
+
+connection.onCompletion(async ({ textDocument, position }) => {
+	const base = await currentCompletions();
+	const document = documents.get(textDocument.uri);
+	const head = document && enclosingCallHead(document, position);
+	const keywords = head ? await keywordCompletions(head) : undefined;
+	return keywords ? [...base, ...keywords] : base;
+});
 
 function symbolAt(document: TextDocument, line: number, character: number) {
 	const text = document.getText({

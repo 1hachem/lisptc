@@ -457,10 +457,23 @@ export const EndOfFile = { toString: () => "EOF" };
 //----------------------------------------------------------------------
 
 // Core of the interpreter
+// A single keyword argument of a Doc, e.g. `:url` on an MCP tool. Structured
+// so consumers (the LSP's argument completion) don't have to re-parse the
+// rendered `signature`/`doc` strings.
+export interface DocArg {
+	name: string;
+	type: string;
+	required: boolean;
+	description?: string;
+}
+
 // Documentation of a binding: a call signature and a one-line description.
+// `args` is set only for keyword-call bindings (currently just MCP tools);
+// positional bindings (built-ins, macros, user defuns) leave it undefined.
 export interface Doc {
 	signature: string;
 	doc: string;
+	args?: DocArg[];
 }
 
 // Docs for the special forms (keywords handled directly by the evaluator)
