@@ -27,7 +27,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { DocArg } from "@repo/interpreter/lisp.ts";
+import type { Arity, DocArg } from "@repo/interpreter/lisp.ts";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {
@@ -43,6 +43,10 @@ export interface DocEntry {
 	// tools), so the LSP's argument completion doesn't have to re-parse
 	// `signature`/`doc`.
 	args?: DocArg[];
+	// Positional-argument count (set only for the OTHER kind of binding —
+	// built-ins/macros/defuns that call positionally rather than by
+	// keyword), so the LSP's arity check doesn't have to re-parse `signature`.
+	arity?: Arity;
 }
 
 interface Request {
@@ -100,24 +104,64 @@ function handle(repl: MemoryRepl, req: Request): unknown {
 			return out;
 		}
 		case "doc": {
-			const d = repl.interp.docs().get(req.symbol ?? "");
-			return d ? { signature: d.signature, doc: d.doc, args: d.args } : null;
+			const symbol = req.symbol ?? "";
+			const d = repl.interp.docs().get(symbol);
+			return d
+				? {
+						signature: d.signature,
+						doc: d.doc,
+						args: d.args,
+						arity: repl.interp.arityOf(symbol),
+					}
+				: null;
 		}
 		default:
 			throw new Error(`unknown op: ${(req as Request).op}`);
 	}
 }
 
+// Probe whether a live server is listening at `path`, distinguishing a
+// leftover socket file (from a server that crashed without cleaning up, safe
+// to delete) from one with a live listener behind it (NOT safe to delete —
+// unlinking it out from under a running server orphans it, since a new bind
+// at the same path silently steals the name without the old process ever
+// knowing). ECONNREFUSED means nobody is listening; anything else (including
+// a successful connect) means treat it as live and leave it alone.
+function isListening(path: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		const socket = createConnection(path);
+		socket.once("connect", () => {
+			socket.destroy();
+			resolve(true);
+		});
+		socket.once("error", (ex) => {
+			resolve((ex as NodeJS.ErrnoException).code !== "ECONNREFUSED");
+		});
+	});
+}
+
 // Start a session server listening on `path`. Owns one MemoryRepl for the
 // process lifetime; every connection shares it. Resolves once listening.
-export function serve(path: string): Promise<ReturnType<typeof createServer>> {
-	// A leftover socket file from a crashed server would block bind; a live one
-	// means someone beat us to it (surfaced as EADDRINUSE to the caller).
+export async function serve(
+	path: string,
+): Promise<ReturnType<typeof createServer>> {
 	if (existsSync(path)) {
+		if (await isListening(path)) {
+			// Someone beat us to it — most likely another spawn racing to bind
+			// this same path. Back off rather than steal the name.
+			throw Object.assign(
+				new Error(
+					`EADDRINUSE: a session server is already listening on ${path}`,
+				),
+				{ code: "EADDRINUSE" },
+			);
+		}
+		// No live listener behind it — a stale file left by a server that
+		// crashed without cleaning up. Safe to clear before binding.
 		try {
 			unlinkSync(path);
 		} catch {
-			// If it's actually live, listen() below fails with EADDRINUSE.
+			// Already gone; nothing to clean up.
 		}
 	}
 
@@ -384,7 +428,16 @@ async function main(): Promise<void> {
 	if (!process.argv.includes("--serve")) return;
 	const i = process.argv.indexOf("--socket");
 	const path = i !== -1 ? process.argv[i + 1] : socketPathFor();
-	await serve(path);
+	try {
+		await serve(path);
+	} catch (ex) {
+		if ((ex as NodeJS.ErrnoException).code === "EADDRINUSE") {
+			// Lost a spawn race to another server that already claimed this
+			// socket; exit quietly rather than linger as an unreachable orphan.
+			process.exit(0);
+		}
+		throw ex;
+	}
 	// Keep the process alive; the detached parent has unref'd us.
 }
 
