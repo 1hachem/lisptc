@@ -15,7 +15,8 @@
       "*.ts",
       "packages/*/*.json",
       "apps/*/*.json",
-      "!**/node_modules"
+      "!**/node_modules",
+      "!**/.claude"
     ]
   },
   "formatter": {
