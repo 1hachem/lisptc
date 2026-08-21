@@ -457,10 +457,29 @@ export const EndOfFile = { toString: () => "EOF" };
 //----------------------------------------------------------------------
 
 // Core of the interpreter
+// A single keyword argument of a Doc, e.g. `:url` on an MCP tool. Structured
+// so consumers (the LSP's argument completion) don't have to re-parse the
+// rendered `signature`/`doc` strings.
+export interface DocArg {
+	name: string;
+	type: string;
+	required: boolean;
+	description?: string;
+}
+
+// The positional-argument count of a callable binding; see `Interp.arityOf`.
+export interface Arity {
+	min: number;
+	max?: number;
+}
+
 // Documentation of a binding: a call signature and a one-line description.
+// `args` is set only for keyword-call bindings (currently just MCP tools);
+// positional bindings (built-ins, macros, user defuns) leave it undefined.
 export interface Doc {
 	signature: string;
 	doc: string;
+	args?: DocArg[];
 }
 
 // Docs for the special forms (keywords handled directly by the evaluator)
@@ -579,6 +598,21 @@ export class Interp {
 	// Documentation for every documented binding plus the special forms.
 	docs(): Map<string, Doc> {
 		return new Map([...Object.entries(specialFormDocs), ...this.docTable]);
+	}
+
+	// The (min, max) positional-argument count for a callable global binding,
+	// read straight off its Func.carity — used by the LSP to flag arity
+	// mismatches statically, for the built-ins/macros/defuns that call
+	// positionally rather than by keyword (see Doc.args for the other kind).
+	// `max` is undefined for a variadic (&rest) function. undefined entirely
+	// for anything that isn't a Func (unbound names, special forms, data).
+	arityOf(name: string): Arity | undefined {
+		const value = this.globals.get(newSym(name));
+		if (!(value instanceof Func)) return undefined;
+		return {
+			min: value.fixedArgs,
+			max: value.hasRest ? undefined : value.arity,
+		};
 	}
 
 	constructor() {

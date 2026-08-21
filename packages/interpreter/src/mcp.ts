@@ -18,6 +18,7 @@ import { z } from "zod";
 import { isNumeric } from "./arith.ts";
 import {
 	Cell,
+	type DocArg,
 	EvalException,
 	type Interp,
 	LispKeyword,
@@ -514,6 +515,7 @@ function installServer(
 		interp.defineGlobal(sym, wrapper, {
 			signature: toolSignature(sym.name, tool),
 			doc: toolDocBody(tool) || "MCP tool (no description provided).",
+			args: toolArgs(tool),
 		});
 		toolSyms.push(sym);
 	}
@@ -992,6 +994,19 @@ function toolSignature(name: string, tool: Tool): string {
 		})
 		.join(" ");
 	return `(${name} ${sig})`;
+}
+
+// Structured per-argument info for a tool's Doc.args, e.g. for the LSP's
+// keyword-argument completion. Same order/content as the usage signature and
+// the "Arguments:" doc section, just not rendered to text.
+function toolArgs(tool: Tool): DocArg[] {
+	const required = new Set(tool.inputSchema?.required ?? []);
+	return orderedProps(tool).map(([key, spec]) => ({
+		name: key,
+		type: schemaType(spec),
+		required: required.has(key),
+		description: spec.description,
+	}));
 }
 
 // The prose body: description, per-argument docs, and example inputs/outputs

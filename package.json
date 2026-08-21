@@ -13,6 +13,7 @@
     "test:nvim": "bash editors/nvim/tests/run.sh",
     "repl": "pnpm --filter @repo/repl repl",
     "repl:attach": "pnpm --silent --filter @repo/repl repl:attach",
+    "repl:kill": "pnpm --silent --filter @repo/repl repl:kill",
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
