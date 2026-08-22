@@ -1,48 +1,95 @@
+lisptc
 
-A lisp interpreter that is desgined to be the brain of an AI agent in a neuro-symbolic cognitive architecture
-or as called today "harness"
+A Lisp interpreter designed to be the deterministic "brain" of an AI agent in
+a neuro-symbolic architecture. The LLM writes Lisp code into a REPL; the
+REPL's state and output steer the LLM's context back. Two sides of one
+system:
 
-the llm writes code into the REPL and the REPL influnces the context of the agent, with event based hooks,
-builtin mcp tools and helpers that get called with PTC
+- the LLM: creative, inspired, encodes tacit knowledge
+- the Lisp runtime: logical, deterministic, experience-driven, holds memory
 
-the llm is the programmer and bespoke person, the runtime is the program, and the steerer of the llm
+They both write to each other.
 
-you can think of this agent as having 2 sides of the brain:
+REPO LAYOUT (pnpm + Turborepo monorepo)
 
-- llm which is the creative, inspired, encoding tacit knowledge
-- lisp runtime which is the logical, deterministic, experince driven, memory holding part of the brain
+packages/interpreter  @repo/interpreter — the interpreter core (src/lisp.ts),
+                       arithmetic (arith.ts), grammar for structured output
+                       (grammar.ts), and the MCP integration (mcp.ts,
+                       mcp-broker.ts, mcp-oauth.ts). Pure TypeScript, no
+                       build step (run directly via Node's type-stripping).
+packages/repl          @repo/repl — REPL front-ends on top of the
+                       interpreter: an embeddable string-in/string-out REPL
+                       (repl.ts), the interactive CLI (cli.ts), and a
+                       shared-session server over a unix socket so an
+                       editor's LSP and a terminal REPL can share one
+                       interpreter (session-server.ts).
+packages/env           @repo/env — small env/secret loading helpers shared
+                       across apps.
+apps/pi                A pi coding-agent extension that runs the interpreter
+                       in-process: the agent has no tools, its replies are
+                       lisp source evaluated straight into the REPL, and
+                       replies are constrained to valid lisptc via
+                       grammar-based structured output.
+apps/lsp               A stdio language server for the lisptc dialect:
+                       diagnostics from static syntax/arity checking, plus
+                       completion and hover against a live shared session
+                       when one is reachable.
+apps/mcp               A stdio MCP server exposing the REPL itself as an MCP
+                       tool, backed by one persistent interpreter.
+editors/nvim           A Neovim plugin: filetype detection, LSP client
+                       wiring, and a REPL client against the shared session.
+examples/              Runnable .ptc walkthroughs: language basics, macros
+                       and closures, MCP usage, and Linear/Playwright over
+                       MCP.
+devdocs/               Design notes for internals kept out of code comments:
+                       OAuth for remote MCP servers, the secret registry.
 
-they both write to each other
+WHAT'S WORKING
 
-- [x] basic lisp interpreter
-- [x] setup tests, commitlint
-- [x] setup pi for testing the setup in cli
-- [x] add clear and ctrl-l commands to the repl
-- [x] mcp intergraion with:
-    - [x] load_mcp: (e.g. `(load-mcp "linear")`) which loades the tools as symboles, 
-    the become a real binding in the interpreter's global environment (e.g. `(linear/list-issues :query "x")`)
-    - [x] helpers such as: list-mcps, list-tools, search-tools (which uses a search api on docs and names of tools)
-- [ ] add memory and hooks macros and helpers
-- [ ] setup a web client for the agent
-- [ ] add a vizualization tool that goes from the lisp script into a 3d force graph
-- [x] monorepo setup for a web interface, pi extension, interpreter, mcp adapter
-- [ ] kubernetes charts to deploy agent as CRD with its sandbox where the interpreter runs
+- core interpreter: reader, evaluator, tail-call optimization, macros,
+  closures, a small prelude (lists, strings, control flow)
+- docstrings on defun/defmacro, full doc coverage for every global binding
+- a module system: (import "path") with cycle detection
+- MCP integration: load-mcp/unload-mcp/list-tools/search-tools, loaded
+  tools become callable bindings (server/tool), async job model (load/unload
+  don't block; results apply automatically between evals or via explicit
+  await) over a worker_threads broker, since the interpreter itself is
+  synchronous
+- OAuth for remote MCP servers (e.g. Linear, PostHog) and a secret registry
+  with taint-tracked redaction so secrets never print in the clear
+- structured-output grammar so an LLM can be constrained to valid lisptc
+- LSP (diagnostics, completion, hover) and a Neovim client
+- CLI REPL with a shared session server so multiple clients (editor, pi
+  extension, terminal) can use one interpreter
 
-- [ ] messaging gateway (heremes)
-- [ ] heremes/claude exetension
+NOT YET BUILT (see AI-suggested language extensions, still open)
 
+- pattern matching (match/case with destructuring)
+- hash tables and vectors (currently only cons lists and alists)
+- lazy evaluation (delay/force)
+- exception handling (try/catch/finally) — errors currently just throw
+- multiple return values
+- reader macros, deeper meta-programming/reflection
+- async/await as a language feature (MCP already runs async under the hood)
+- optional static type annotations
 
-- AI suggestions
-- [ ] pattern-matching: destructuring with match/case macros                                            
-- [ ] module-system: require/import for code organization                                               
-- [ ] hash-tables: efficient key-value storage beyond alists                                            
-- [ ] vectors/arrays: O(1) indexed access vs lists                                                      
-- [ ] lazy-evaluation: delay and force for streams                                                      
-- [ ] error-handling: try/catch/finally exception handling                                              
-- [ ] multiple-return-values: values/call-with-values                                                   
-- [ ] tail-call-optimization: already present but worth noting                                          
-- [ ] reader-macros: custom syntax extensions                                                           
-- [ ] meta-programming: stronger reflection/introspection                                               
-- [ ] async/await: seamless async operations                                                            
-- [ ] type-checking: optional static type annotations                                                   
-- [ ] documentation-strings: docstrings in defun/defmacro
+ALSO ON THE ROADMAP
+
+- memory and hooks macros/helpers
+- a web client for the agent
+- a visualization tool: lisp script -> 3D force graph
+- kubernetes charts to deploy the agent as a CRD with its sandbox
+- a messaging gateway ("hermes") and hermes/claude extension
+
+COMMANDS
+
+pnpm test              turbo run test (vitest per package)
+pnpm typecheck          turbo run typecheck (tsc --noEmit per package)
+pnpm lint               biome ci (matches CI)
+pnpm knip               dead-code / unused-dependency check
+pnpm repl               run the interactive REPL
+pnpm repl:attach        attach to (or spawn) the shared session server
+task test               everything: pnpm tests + nix flake checks + nvim tests
+
+Requires Node >= 22.6.0. .ts files run directly via
+--experimental-transform-types, no build step.
