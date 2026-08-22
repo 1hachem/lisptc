@@ -9,6 +9,7 @@
 import {
 	EndOfFile,
 	EvalException,
+	evalTopLevel,
 	Interp,
 	prelude,
 	Reader,
@@ -87,7 +88,7 @@ class InteractiveRepl implements Repl {
 					write("Goodbye\n");
 					return;
 				}
-				const result = this.currentInterp.eval(exp, null);
+				const result = evalTopLevel(this.currentInterp, exp);
 				write(`${str(result)}\n`);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);

@@ -168,6 +168,7 @@ const rightParenSym = newSym(")");
 const singleQuoteSym = newSym("'");
 
 const appendSym = newSym("append");
+const catchSym = newSym("catch");
 const consSym = newSym("cons");
 const listSym = newSym("list");
 const restSym = newSym("&rest");
@@ -181,6 +182,7 @@ const prognSym = newKeyword("progn");
 const quasiquoteSym = newKeyword("quasiquote");
 const quoteSym = newKeyword("quote");
 const setqSym = newKeyword("setq");
+const trySym = newKeyword("try");
 
 //----------------------------------------------------------------------
 
@@ -395,7 +397,7 @@ class BuiltInFunc extends Func {
 		try {
 			return this.body(frame);
 		} catch (ex) {
-			if (ex instanceof EvalException) throw ex;
+			if (ex instanceof EvalException || ex instanceof LoopSignal) throw ex;
 			else throw new EvalException(`${ex} -- ${this.name}`, frame);
 		}
 	}
@@ -429,9 +431,14 @@ class Arg {
 // Exception in evaluation
 export class EvalException extends Error {
 	readonly trace: string[] = [];
+	// The raw Lisp-level value associated with this error (the offending/
+	// relevant value passed as `x`), so `try`/`catch` can bind a handler
+	// variable to something meaningful.
+	readonly value: unknown;
 
 	constructor(msg: string, x: unknown, quoteString = true) {
 		super(`${msg}: ${str(x, quoteString)}`);
+		this.value = x;
 	}
 
 	toString(): string {
@@ -439,6 +446,16 @@ export class EvalException extends Error {
 		for (const line of this.trace) s += `\n\t${line}`;
 		return s;
 	}
+}
+
+// Internal signal thrown by (break)/(return value) to unwind to the nearest
+// enclosing while/dolist/dotimes loop. Deliberately NOT an EvalException
+// subclass, so a try/catch never intercepts it (evalTry only checks
+// `instanceof EvalException`) and a genuine EvalException is never
+// swallowed by a loop's own guard (which only checks `instanceof
+// LoopSignal`).
+class LoopSignal {
+	constructor(readonly value: unknown) {}
 }
 
 // Exception which indicates an absence of a variable
@@ -490,6 +507,10 @@ const specialFormDocs: Record<string, Doc> = {
 	macro: {
 		signature: "(macro (arg...) body...)",
 		doc: "Create a macro (only at the top level). Prefer `defmacro`.",
+	},
+	try: {
+		signature: "(try body-form (catch (var) handler-form...))",
+		doc: "Evaluate body-form. If it signals a catchable error (a built-in runtime error or a user `(error value)` call), bind var to the error's value and evaluate the handler forms, returning the last one; with no error, returns body-form's value directly. Does not catch break/return loop signals.",
 	},
 	t: { signature: "t", doc: "The canonical true value." },
 	nil: { signature: "nil", doc: "The empty list / false value." },
@@ -1068,6 +1089,54 @@ export class Interp {
 			},
 		);
 
+		// --- User-signalled, catchable errors and loop control. ---
+		this.def(
+			"error",
+			1,
+			"(error value)",
+			"Signal a catchable error carrying `value`. A `(try ... (catch (e) ...))` wrapping the call binds `e` to `value` exactly (any Lisp value, not just a string).",
+			z.tuple([zAny]),
+			([value]) => {
+				throw new EvalException("error", value, true);
+			},
+		);
+		this.def(
+			"break",
+			0,
+			"(break)",
+			"Exit the nearest enclosing while/dolist/dotimes loop immediately; the loop evaluates to nil.",
+			z.tuple([]),
+			() => {
+				throw new LoopSignal(null);
+			},
+		);
+		this.def(
+			"return",
+			1,
+			"(return value)",
+			"Exit the nearest enclosing while/dolist/dotimes loop immediately; the loop evaluates to value.",
+			z.tuple([zAny]),
+			([value]) => {
+				throw new LoopSignal(value);
+			},
+		);
+		this.def(
+			"_run-loop-body",
+			1,
+			"(_run-loop-body thunk)",
+			"Internal: call the 0-arg thunk, catching only a break/return loop signal (any other exception, including a genuine Lisp error, propagates unchanged). Returns (signalled? . value): signalled? is t iff break/return fired.",
+			z.tuple([zAny]),
+			([thunk]) => {
+				try {
+					this.eval(new Cell(thunk, null), null);
+					return new Cell(null, null);
+				} catch (ex) {
+					if (ex instanceof LoopSignal) return new Cell(true, ex.value);
+					throw ex;
+				}
+			},
+		);
+
 		// Install native MCP built-ins (load-mcp, unload-mcp, list-tools, ...).
 		registerMcp(this);
 	}
@@ -1173,6 +1242,12 @@ export class Interp {
 								break;
 							case setqSym:
 								return this.evalSetQ(arg, env);
+							case trySym: {
+								const [nx, nenv] = this.evalTry(arg, env);
+								x = nx;
+								env = nenv;
+								break;
+							}
 							case lambdaSym:
 								return this.compile(arg, env, Closure.make);
 							case macroSym:
@@ -1250,6 +1325,53 @@ export class Interp {
 			}
 		}
 		return null; // No clause holds.
+	}
+
+	// (try BODY-FORM (catch (VAR) HANDLER...)) => Evaluate BODY-FORM. If it
+	// signals an EvalException, bind VAR to the exception's `.value` (via a
+	// synthetic Closure, reusing the normal Closure-application machinery for
+	// proper lexical binding and TCO in the handler) and evaluate the HANDLER
+	// forms as a progn. Non-EvalException throws (in particular LoopSignal,
+	// see break/return) are never caught here and propagate unchanged.
+	// Returns [x, env] for the caller to continue trampolining: only
+	// BODY-FORM's evaluation costs a non-tail JS stack frame (unavoidable,
+	// since we must synchronously observe whether it threw); the handler
+	// body is handed back to the trampoline for proper tail calls.
+	private evalTry(arg: List, env: List): [unknown, List] {
+		if (arg === null) throw new EvalException("bad try", arg);
+		const bodyForm = arg.car;
+		const rest = cdrCell(arg);
+		if (rest === null || rest.cdr !== null)
+			throw new EvalException("try: exactly one catch clause expected", arg);
+		const clause = rest.car;
+		if (!(clause instanceof Cell) || clause.car !== catchSym)
+			throw new EvalException("try: catch clause expected", clause);
+		const catchRest = cdrCell(clause); // ((VAR) HANDLER...)
+		if (catchRest === null)
+			throw new EvalException("try: catch variable expected", clause);
+		const params = catchRest.car; // (VAR)
+		if (!(params instanceof Cell) || params.cdr !== null)
+			throw new EvalException(
+				"try: catch expects exactly one variable",
+				params,
+			);
+		const handlerBody = cdrCell(catchRest);
+
+		try {
+			return [qqQuote(this.eval(bodyForm, env)), env];
+		} catch (ex) {
+			if (!(ex instanceof EvalException)) throw ex; // e.g. LoopSignal: not ours
+			const handler = this.compile(
+				new Cell(params, handlerBody),
+				env,
+				Closure.make,
+			);
+			if (!(handler instanceof Closure))
+				throw new EvalException("bad try", clause);
+			const callArg = new Cell(qqQuote(ex.value), null);
+			const newEnv = handler.makeEnv(this, callArg, env);
+			return [this.evalProgN(handler.body, newEnv), newEnv];
+		}
 	}
 
 	// (import "path") => Read the Lisp file at `path` and evaluate its whole
@@ -1330,6 +1452,39 @@ export class Interp {
 						return this.expandMacros(z, count);
 					}
 					throw new EvalException("bad quasiquote", j);
+				}
+				case trySym: {
+					// (try BODY-FORM (catch (VAR) HANDLER...)) — expand BODY-FORM
+					// and each HANDLER-FORM, but never treat the catch clause's
+					// (VAR) list as a potential macro call: it's a binding form,
+					// not code (else a catch-variable name colliding with an
+					// existing macro, e.g. `or`, would be misexpanded as a
+					// zero-arg call to that macro).
+					const argPart = cdrCell(j); // (BODY-FORM (catch (VAR) HANDLER...))
+					const clauseCell = argPart === null ? null : cdrCell(argPart);
+					const clause = clauseCell === null ? null : clauseCell.car;
+					if (
+						argPart === null ||
+						clauseCell === null ||
+						clauseCell.cdr !== null ||
+						!(clause instanceof Cell) ||
+						clause.car !== catchSym
+					)
+						throw new EvalException("bad try", j);
+					const bodyForm = this.expandMacros(argPart.car, count);
+					const catchRest = cdrCell(clause);
+					if (catchRest === null) throw new EvalException("bad try", j);
+					const params = catchRest.car; // left untouched
+					const handlers = mapcar(cdrCell(catchRest), (h) =>
+						this.expandMacros(h, count),
+					);
+					return new Cell(
+						trySym,
+						new Cell(
+							bodyForm,
+							new Cell(new Cell(catchSym, new Cell(params, handlers)), null),
+						),
+					);
 				}
 				default:
 					if (k instanceof Sym) k = this.globals.get(k);
@@ -1822,13 +1977,33 @@ function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 //----------------------------------------------------------------------
 
 // Evaluate a string as a list of Lisp exps; return the result of the last exp.
+// Evaluate a single already-read top-level expression. A stray break/return
+// loop signal (no enclosing while/dolist/dotimes) is converted into an
+// ordinary EvalException here rather than left as an unrecognized exception
+// type — every top-level entry point (run(), and any REPL that reads one
+// expression at a time and evals it directly) should go through this rather
+// than calling interp.eval() itself.
+export function evalTopLevel(interp: Interp, exp: unknown): unknown {
+	try {
+		return interp.eval(exp, null);
+	} catch (ex) {
+		if (ex instanceof LoopSignal)
+			throw new EvalException(
+				"break/return used outside of a loop",
+				null,
+				false,
+			);
+		throw ex;
+	}
+}
+
 export function run(interp: Interp, text: string): unknown {
 	const tokens = new Reader();
 	tokens.push(text);
 	let result: unknown;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
-		result = interp.eval(exp, null);
+		result = evalTopLevel(interp, exp);
 	}
 	return result;
 }
@@ -1948,6 +2123,10 @@ export const prelude = `
   "If test is non-nil, evaluate body and return its last value."
   \`(cond (,test ,@body)))
 
+(defmacro unless (test &rest body)
+  "If test is nil, evaluate body and return its last value."
+  \`(cond ((not ,test) ,@body)))
+
 (defmacro let (args &rest body)
   "Bind variables in parallel, then evaluate body. A bare name binds to nil."
   ((lambda (vars vals)
@@ -2059,36 +2238,71 @@ export const prelude = `
       (car lists))))
 
 (defmacro while (test &rest body)
-  "Loop: evaluate body while test is non-nil; return nil."
-  (let ((loop (gensym)))
-    \`(letrec ((,loop (lambda () (cond (,test ,@body (,loop))))))
+  "Loop: evaluate body while test is non-nil; return nil, or (return value)'s value if given; (break) also ends the loop early, returning nil."
+  (let ((loop (gensym))
+        (signal (gensym)))
+    \`(letrec ((,loop (lambda ()
+                        (cond (,test
+                               (let ((,signal (_run-loop-body (lambda () ,@body))))
+                                 (if (car ,signal)
+                                     (cdr ,signal)
+                                   (,loop))))))))
        (,loop))))
 
 (defmacro dolist (spec &rest body)
-  "Evaluate body with name (car of spec) bound to each element of the list (cadr of spec); return the optional third element of spec."
+  "Evaluate body with name (car of spec) bound to each element of the list (cadr of spec); return the optional third element of spec, or a (break)/(return value)'s outcome if the loop is interrupted (skipping the result form)."
   (let ((name (car spec))
-        (list (gensym)))
+        (list (gensym))
+        (loop (gensym))
+        (signal (gensym)))
     \`(let (,name
            (,list ,(cadr spec)))
-       (while ,list
-         (setq ,name (car ,list))
-         ,@body
-         (setq ,list (cdr ,list)))
-       ,@(if (cddr spec)
-             \`((setq ,name nil)
-               ,(caddr spec))))))
+       (letrec ((,loop (lambda ()
+                          (cond (,list
+                                 (setq ,name (car ,list))
+                                 (let ((,signal (_run-loop-body (lambda () ,@body))))
+                                   (if (car ,signal)
+                                       (cdr ,signal)
+                                     (progn (setq ,list (cdr ,list))
+                                            (,loop)))))
+                                (t ,@(if (cddr spec)
+                                         \`((setq ,name nil) ,(caddr spec))
+                                       '(nil)))))))
+         (,loop)))))
 
 (defmacro dotimes (spec &rest body)
-  "Evaluate body with name (car of spec) bound to 0..count-1; return the optional third element of spec."
+  "Evaluate body with name (car of spec) bound to 0..count-1; return the optional third element of spec, or a (break)/(return value)'s outcome if the loop is interrupted (skipping the result form)."
   (let ((name (car spec))
-        (count (gensym)))
+        (count (gensym))
+        (loop (gensym))
+        (signal (gensym)))
     \`(let ((,name 0)
            (,count ,(cadr spec)))
-       (while (< ,name ,count)
-         ,@body
-         (setq ,name (+ ,name 1)))
-       ,@(if (cddr spec)
-             \`(,(caddr spec))))))
+       (letrec ((,loop (lambda ()
+                          (cond ((< ,name ,count)
+                                 (let ((,signal (_run-loop-body (lambda () ,@body))))
+                                   (if (car ,signal)
+                                       (cdr ,signal)
+                                     (progn (setq ,name (+ ,name 1))
+                                            (,loop)))))
+                                (t ,@(if (cddr spec)
+                                         \`(,(caddr spec))
+                                       '(nil)))))))
+         (,loop)))))
+
+(defmacro case (key-expr &rest clauses)
+  "CL-style case: (case key-expr (keylist forms...)... (t forms...)). Evaluates key-expr once and runs the forms of the first clause whose keylist (a list of keys, or a single non-list key) contains a value equal to it; a clause headed by the symbol t is the default and always matches (wrap it in a list, e.g. ((t) ...), to use t as a literal key instead). Returns nil if no clause matches."
+  (let ((key (gensym))
+        expand)
+    (defun expand (cls)
+      (cond ((null cls) nil)
+            (t (cons (if (eq (caar cls) t)
+                         \`(t ,@(cdar cls))
+                       \`((member ,key ',(if (consp (caar cls)) (caar cls) (list (caar cls))))
+                         ,@(cdar cls)))
+                     (expand (cdr cls))))))
+    \`(let ((,key ,key-expr))
+       (cond ,@(expand clauses)))))
 
 ;; --- String library ---
 ;; Built on the native primitives char, concat, string-upcase and
