@@ -99,6 +99,52 @@ describe("diagnosticsForCalls", () => {
 		const calls = callsFor("(mystery-fn)");
 		expect(diagnosticsForCalls(calls, new Map())).toEqual([]);
 	});
+
+	// load-mcp accepts either a bare toolkit-name string (no keywords at all)
+	// or the :key plist form checked above — a real MCP tool never has a
+	// valid all-positional call, so this shape only arises for a hybrid
+	// binding like this. Doc shape mirrors what Interp.docs() actually
+	// returns for "load-mcp" (args from LOAD_MCP_ARGS, variadic arity).
+	describe("a binding with both a keyword-plist and a bare positional form", () => {
+		const loadMcpDoc: CallDoc = {
+			args: [
+				{ name: "name", type: "string", required: true },
+				{ name: "url", type: "string", required: false },
+			],
+			arity: { min: 0 },
+		};
+
+		it("does not flag the bare positional form as missing a required :arg", () => {
+			const calls = callsFor('(load-mcp "playwright")');
+			expect(
+				diagnosticsForCalls(calls, new Map([["load-mcp", loadMcpDoc]])),
+			).toEqual([]);
+		});
+
+		it("still flags a plist call missing a required :arg", () => {
+			const calls = callsFor('(load-mcp :url "x")');
+			const diagnostics = diagnosticsForCalls(
+				calls,
+				new Map([["load-mcp", loadMcpDoc]]),
+			);
+			expect(diagnostics).toHaveLength(1);
+			expect(diagnostics[0].message).toBe(
+				'load-mcp: missing required argument ":name"',
+			);
+		});
+
+		it("still flags a call with no arguments at all", () => {
+			const calls = callsFor("(load-mcp)");
+			const diagnostics = diagnosticsForCalls(
+				calls,
+				new Map([["load-mcp", loadMcpDoc]]),
+			);
+			expect(diagnostics).toHaveLength(1);
+			expect(diagnostics[0].message).toBe(
+				'load-mcp: missing required argument ":name"',
+			);
+		});
+	});
 });
 
 describe("callDiagnostics", () => {

@@ -51,7 +51,16 @@ export function diagnosticsForCalls(
 			},
 		};
 		const { args, arity } = docByName.get(call.name) ?? {};
-		if (args?.length) {
+		// A call with no `:keyword`s at all but at least one positional
+		// argument never attempts the keyword-plist form — a real MCP tool's
+		// call is always all-keyword, so this shape only arises for a
+		// binding like load-mcp that *also* accepts a bare positional call
+		// (e.g. `(load-mcp "playwright")`). Required-keyword checking would
+		// otherwise misread that valid alternate form as an omitted `:name`.
+		// A call with zero arguments at all is unambiguous either way, so it
+		// still gets checked.
+		const attemptsKeywordForm = call.keywords.size > 0 || call.argCount === 0;
+		if (args?.length && attemptsKeywordForm) {
 			for (const arg of args) {
 				if (!arg.required || call.keywords.has(arg.name)) continue;
 				diagnostics.push({
