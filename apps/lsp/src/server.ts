@@ -31,6 +31,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { type CallDoc, callDiagnostics } from "./call-diagnostics.ts";
 import { argCompletionItems } from "./doc-args.ts";
+import { cachedResolver } from "./doc-cache.ts";
 import { loadMcpCompletions } from "./load-mcp.ts";
 import { enclosingCallHead, markdownFor, symbolAt } from "./symbols.ts";
 
@@ -144,7 +145,7 @@ documents.onDidChangeContent(async ({ document }) => {
 	});
 });
 
-async function callDocFor(name: string): Promise<CallDoc> {
+async function resolveCallDoc(name: string): Promise<CallDoc> {
 	if (session !== undefined) {
 		try {
 			const d = await session.doc(name);
@@ -155,6 +156,12 @@ async function callDocFor(name: string): Promise<CallDoc> {
 	}
 	return { args: localDocs.get(name)?.args, arity: interp.arityOf(name) };
 }
+
+// Absorbs the same keystroke burst as `currentCompletions`'s cache above,
+// but keyed per name: `callDiagnostics` resolves every distinct call name in
+// the buffer on every `onDidChangeContent`, so without this an N-call-name
+// buffer round-trips the session socket N times per keystroke.
+const callDocFor = cachedResolver(resolveCallDoc, CACHE_MS);
 
 // The structured `Doc.args` for a binding named `name` — undefined for
 // anything without keyword args (built-ins, macros, plain user defuns).
