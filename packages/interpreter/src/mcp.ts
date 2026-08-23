@@ -480,6 +480,67 @@ function connConfigFromArgs(rest: List): ConnConfig {
 	);
 }
 
+// Structured args for load-mcp's ad-hoc-plist calling convention, mirroring
+// what connConfigFromArgs above actually accepts — for the LSP's keyword-arg
+// completion/diagnostics (see toolArgs below for the equivalent on MCP
+// tools). `required` only marks `:name`: the url/command choice is a branch
+// (either `:url` + optional :headers/:oauth/:scopes, or `:command` +
+// optional :args/:env), and a flat DocArg list can't express "one of", so
+// marking both `:url` and `:command` required would make every valid call
+// look like it's missing the other one.
+const LOAD_MCP_ARGS: DocArg[] = [
+	{
+		name: "name",
+		type: "string",
+		required: true,
+		description: "A name for this server; its tools install as `name/tool`.",
+	},
+	{
+		name: "command",
+		type: "string",
+		required: false,
+		description: "Spawn a stdio server by running this command.",
+	},
+	{
+		name: "args",
+		type: "list",
+		required: false,
+		description: "Arguments to `:command`.",
+	},
+	{
+		name: "env",
+		type: "alist",
+		required: false,
+		description: "Extra environment variables for `:command`.",
+	},
+	{
+		name: "url",
+		type: "string",
+		required: false,
+		description:
+			"Connect to an HTTP server at this URL instead of spawning one.",
+	},
+	{
+		name: "headers",
+		type: "alist",
+		required: false,
+		description: "Extra HTTP headers for the `:url` connection.",
+	},
+	{
+		name: "oauth",
+		type: "boolean",
+		required: false,
+		description:
+			"Treat the `:url` server as OAuth 2.1; load-mcp then returns an authorization link.",
+	},
+	{
+		name: "scopes",
+		type: "list",
+		required: false,
+		description: "OAuth scopes to request when `:oauth` is set.",
+	},
+];
+
 function doUnload(interp: Interp, name: string): Sym[] {
 	const rec = servers.get(name);
 	if (!rec) throw new EvalException("MCP server not loaded", name, false);
@@ -551,6 +612,7 @@ export function registerMcp(interp: Interp): void {
 			liveJobs.add(job);
 			return job;
 		},
+		LOAD_MCP_ARGS,
 	);
 
 	// (await job [timeout-ms]) -> the job's result (blocks until it settles).

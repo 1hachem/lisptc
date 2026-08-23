@@ -1110,7 +1110,11 @@ export class Interp {
 	// (a call signature and a one-line description), a zod schema for the
 	// argument frame, and a body. The frame is validated against the schema
 	// before the body runs, so the body receives typed arguments. Docs are a
-	// required argument so a built-in cannot be added without them.
+	// required argument so a built-in cannot be added without them. `args` is
+	// for a built-in whose single positional argument is itself a keyword
+	// plist (currently just `load-mcp`'s ad-hoc-plist form; see
+	// connConfigFromArgs in src/mcp.ts) — the LSP renders it the same way it
+	// renders an MCP tool's `DocArg`s, so the two need no separate handling.
 	def<T extends z.ZodType>(
 		name: string,
 		carity: number,
@@ -1118,10 +1122,11 @@ export class Interp {
 		doc: string,
 		schema: T,
 		body: (a: z.infer<T>) => unknown,
+		args?: DocArg[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
 		this.globals.set(newSym(name), new BuiltInFunc(name, carity, wrapped));
-		this.docTable.set(name, { signature, doc });
+		this.docTable.set(name, { signature, doc, args });
 	}
 
 	// Define/undefine a global binding. Used by the MCP layer to install and
