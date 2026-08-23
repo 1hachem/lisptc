@@ -1588,6 +1588,19 @@ function qqExpand2(y: unknown, level: number): unknown {
 
 //----------------------------------------------------------------------
 
+// The reader's token grammar: whitespace, a `;` comment, or a single token —
+// a quoted string, quote/quasiquote/unquote sugar, a run of non-delimiter
+// characters, or any other single (delimiter) character. Exported as a
+// factory, not a shared RegExp, since exec() advances a regex's own
+// lastIndex and callers loop it to exhaustion — sharing one instance across
+// callers (e.g. the LSP tokenizing alongside a running interpreter) would
+// corrupt each other's scan position. Consumers needing (line, char)
+// positions (see apps/lsp/src/server.ts) tokenize with this same grammar
+// rather than re-deriving their own, so the two can't drift apart.
+export function tokenPattern(): RegExp {
+	return /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g;
+}
+
 // A list of tokens, which works as a reader of Lisp expressions
 export class Reader {
 	private token: unknown;
@@ -1597,7 +1610,7 @@ export class Reader {
 	// Split a text into a list of tokens and append it to this.tokens.
 	// For "(a \n 1)" it appends ["(", "a", "\n", "1", ")", "\n"] to tokens.
 	push(text: string): void {
-		const tokenPat = /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g;
+		const tokenPat = tokenPattern();
 		for (const line of text.split("\n")) {
 			for (;;) {
 				const result = tokenPat.exec(line);
