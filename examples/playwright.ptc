@@ -26,6 +26,17 @@
 ;; Navigate somewhere else.
 (playwright/browser_navigate :url "https://yourscrib.ai")
 
+(princ "=== handle a failing tool call ===")
+(terpri)
+
+;; A domain that can't resolve makes the tool call signal an error;
+;; `try`/`catch` binds the handler variable to that error's value instead
+;; of letting it propagate.
+(try
+  (playwright/browser_navigate :url "https://this-domain-does-not-exist-lisptc.invalid")
+  (catch (e)
+    (princ "navigation failed: ") (princ e) (terpri)))
+
 (princ "=== teardown ===")
 (terpri)
 (unload-mcp "playwright")
