@@ -1,10 +1,25 @@
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { Interp, prelude, run, str } from "../src/lisp.ts";
+import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
 
 // Evaluate one or more Lisp forms and return the printed value of the last.
 function evalStr(interp: Interp, code: string): string {
 	return str(run(interp, code));
+}
+
+// Evaluate a program on an existing (possibly stateful) interp and return
+// everything written by prin1/princ/terpri/print, e.g. `(doc 'name)`.
+function evalOutput(interp: Interp, code: string): string {
+	let output = "";
+	const prev = setWriter((s) => {
+		output += s;
+	});
+	try {
+		run(interp, code);
+		return output;
+	} finally {
+		setWriter(prev);
+	}
 }
 
 const FIXTURE = fileURLToPath(
@@ -68,11 +83,11 @@ describe("MCP integration (stdio fixture)", () => {
 	});
 
 	it("renders documentation", () => {
-		const doc = evalStr(interp, "(mcp-doc 'fx/echo)");
+		const doc = evalOutput(interp, "(doc 'fx/echo)");
 		expect(doc).toContain("Echo back the given message");
 		expect(doc).toContain("message");
 		// Usage signature shows arg name, type and call order.
-		expect(doc).toContain("Usage: (fx/echo :message :string)");
+		expect(doc).toContain("(fx/echo :message :string)");
 	});
 
 	it("searches tools by keyword", () => {
@@ -117,7 +132,7 @@ describe("mcp-shutdown undefines tool bindings", () => {
 	});
 });
 
-describe("mcp-doc enum rendering (stdio fixture)", () => {
+describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 	const interp = new Interp();
 	run(interp, prelude);
 
@@ -130,7 +145,7 @@ describe("mcp-doc enum rendering (stdio fixture)", () => {
 			interp,
 			`(await (load-mcp :name "en" :command "node" :args (quote ("--experimental-transform-types" "${ENUM_FIXTURE}"))))`,
 		);
-		const doc = evalStr(interp, "(mcp-doc 'en/render)");
+		const doc = evalOutput(interp, "(doc 'en/render)");
 		expect(doc).toContain("format");
 		expect(doc).toContain("one of");
 		expect(doc).toContain("png");

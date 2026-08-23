@@ -474,10 +474,29 @@ export const EndOfFile = { toString: () => "EOF" };
 //----------------------------------------------------------------------
 
 // Core of the interpreter
+// A single keyword argument of a Doc, e.g. `:url` on an MCP tool. Structured
+// so consumers (the LSP's argument completion) don't have to re-parse the
+// rendered `signature`/`doc` strings.
+export interface DocArg {
+	name: string;
+	type: string;
+	required: boolean;
+	description?: string;
+}
+
+// The positional-argument count of a callable binding; see `Interp.arityOf`.
+export interface Arity {
+	min: number;
+	max?: number;
+}
+
 // Documentation of a binding: a call signature and a one-line description.
+// `args` is set only for keyword-call bindings (currently just MCP tools);
+// positional bindings (built-ins, macros, user defuns) leave it undefined.
 export interface Doc {
 	signature: string;
 	doc: string;
+	args?: DocArg[];
 }
 
 // Docs for the special forms (keywords handled directly by the evaluator)
@@ -600,6 +619,21 @@ export class Interp {
 	// Documentation for every documented binding plus the special forms.
 	docs(): Map<string, Doc> {
 		return new Map([...Object.entries(specialFormDocs), ...this.docTable]);
+	}
+
+	// The (min, max) positional-argument count for a callable global binding,
+	// read straight off its Func.carity — used by the LSP to flag arity
+	// mismatches statically, for the built-ins/macros/defuns that call
+	// positionally rather than by keyword (see Doc.args for the other kind).
+	// `max` is undefined for a variadic (&rest) function. undefined entirely
+	// for anything that isn't a Func (unbound names, special forms, data).
+	arityOf(name: string): Arity | undefined {
+		const value = this.globals.get(newSym(name));
+		if (!(value instanceof Func)) return undefined;
+		return {
+			min: value.fixedArgs,
+			max: value.hasRest ? undefined : value.arity,
+		};
 	}
 
 	constructor() {
@@ -878,7 +912,13 @@ export class Interp {
 					write(`${name.name}: undocumented\n`);
 					return null;
 				}
-				write(`${entry.signature}\n  ${entry.doc}\n`);
+				// Indent every line so multi-paragraph docs (e.g. an MCP tool's
+				// "Arguments:"/"Returns:" sections) stay legible, not just the first.
+				const body = entry.doc
+					.split("\n")
+					.map((line) => (line ? `  ${line}` : line))
+					.join("\n");
+				write(`${entry.signature}\n${body}\n`);
 				return name;
 			},
 		);
@@ -1145,7 +1185,11 @@ export class Interp {
 	// (a call signature and a one-line description), a zod schema for the
 	// argument frame, and a body. The frame is validated against the schema
 	// before the body runs, so the body receives typed arguments. Docs are a
-	// required argument so a built-in cannot be added without them.
+	// required argument so a built-in cannot be added without them. `args` is
+	// for a built-in whose single positional argument is itself a keyword
+	// plist (currently just `load-mcp`'s ad-hoc-plist form; see
+	// connConfigFromArgs in src/mcp.ts) — the LSP renders it the same way it
+	// renders an MCP tool's `DocArg`s, so the two need no separate handling.
 	def<T extends z.ZodType>(
 		name: string,
 		carity: number,
@@ -1153,10 +1197,11 @@ export class Interp {
 		doc: string,
 		schema: T,
 		body: (a: z.infer<T>) => unknown,
+		args?: DocArg[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
 		this.globals.set(newSym(name), new BuiltInFunc(name, carity, wrapped));
-		this.docTable.set(name, { signature, doc });
+		this.docTable.set(name, { signature, doc, args });
 	}
 
 	// Define/undefine a global binding. Used by the MCP layer to install and
@@ -1709,6 +1754,19 @@ function qqExpand2(y: unknown, level: number): unknown {
 
 //----------------------------------------------------------------------
 
+// The reader's token grammar: whitespace, a `;` comment, or a single token —
+// a quoted string, quote/quasiquote/unquote sugar, a run of non-delimiter
+// characters, or any other single (delimiter) character. Exported as a
+// factory, not a shared RegExp, since exec() advances a regex's own
+// lastIndex and callers loop it to exhaustion — sharing one instance across
+// callers (e.g. the LSP tokenizing alongside a running interpreter) would
+// corrupt each other's scan position. Consumers needing (line, char)
+// positions (see apps/lsp/src/server.ts) tokenize with this same grammar
+// rather than re-deriving their own, so the two can't drift apart.
+export function tokenPattern(): RegExp {
+	return /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g;
+}
+
 // A list of tokens, which works as a reader of Lisp expressions
 export class Reader {
 	private token: unknown;
@@ -1718,7 +1776,7 @@ export class Reader {
 	// Split a text into a list of tokens and append it to this.tokens.
 	// For "(a \n 1)" it appends ["(", "a", "\n", "1", ")", "\n"] to tokens.
 	push(text: string): void {
-		const tokenPat = /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g;
+		const tokenPat = tokenPattern();
 		for (const line of text.split("\n")) {
 			for (;;) {
 				const result = tokenPat.exec(line);

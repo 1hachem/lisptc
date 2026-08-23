@@ -4,6 +4,20 @@
 // they reflect live state — definitions you typed into the side REPL (Iron) and
 // loaded MCP tools — not just the static prelude. Falls back to a local
 // prelude-only interpreter when no session server is running.
+
+import {
+	checkSyntax,
+	type DocArg,
+	Interp,
+	prelude,
+	run,
+} from "@repo/interpreter";
+import {
+	type CompletionEntry,
+	connectOrSpawn,
+	type SessionClient,
+	socketPathFor,
+} from "@repo/repl/session-server.ts";
 import {
 	type CompletionItem,
 	CompletionItemKind,
@@ -11,17 +25,15 @@ import {
 	DiagnosticSeverity,
 	MarkupKind,
 	ProposedFeatures,
-	TextDocuments,
 	TextDocumentSyncKind,
+	TextDocuments,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { checkSyntax, Interp, prelude, run } from "@repo/interpreter";
-import {
-	type CompletionEntry,
-	connectOrSpawn,
-	type SessionClient,
-	socketPathFor,
-} from "@repo/repl/session-server.ts";
+import { type CallDoc, callDiagnostics } from "./call-diagnostics.ts";
+import { argCompletionItems } from "./doc-args.ts";
+import { cachedResolver } from "./doc-cache.ts";
+import { loadMcpCompletions } from "./load-mcp.ts";
+import { enclosingCallHead, markdownFor, symbolAt } from "./symbols.ts";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -44,12 +56,6 @@ connectOrSpawn(socketPathFor())
 		// No session available; local fallback stands in.
 	});
 
-function markdownFor(sig?: string, doc?: string): string | undefined {
-	if (sig === undefined && (doc === undefined || doc === "")) return undefined;
-	const body = doc ?? "";
-	return sig === undefined ? body : `\`\`\`lisp\n${sig}\n\`\`\`\n${body}`;
-}
-
 function completionItem(entry: CompletionEntry): CompletionItem {
 	const markdown = markdownFor(entry.signature, entry.doc);
 	return {
@@ -60,6 +66,15 @@ function completionItem(entry: CompletionEntry): CompletionItem {
 			markdown === undefined
 				? undefined
 				: { kind: MarkupKind.Markdown, value: markdown },
+		// Explicit (not just the label-as-default): some clients' sortText
+		// comparator only kicks in when BOTH competing items set one — e.g.
+		// nvim-cmp's compare.sort_text is a no-op unless both sides have it, so
+		// without this, comparing an unset-sortText name against a keyword-arg
+		// completion (which does set sortText — see keywordCompletions) falls
+		// through to a kind-based comparator that ranks Function above Field
+		// regardless of intent. Prefixed with "2" so it also sorts after
+		// keywordCompletions' "0"/"1" prefixes.
+		sortText: `2${entry.name}`,
 	};
 }
 
@@ -101,8 +116,8 @@ connection.onInitialize(() => ({
 	},
 }));
 
-documents.onDidChangeContent(({ document }) => {
-	const diagnostics = checkSyntax(document.getText()).map((err) => {
+documents.onDidChangeContent(async ({ document }) => {
+	const syntaxErrors = checkSyntax(document.getText()).map((err) => {
 		const line = Math.min(err.line, document.lineCount) - 1;
 		return {
 			severity: DiagnosticSeverity.Error,
@@ -114,32 +129,69 @@ documents.onDidChangeContent(({ document }) => {
 			source: "lisptc",
 		};
 	});
-	connection.sendDiagnostics({ uri: document.uri, diagnostics });
+	// A syntax error leaves the rest of the token stream unreliable, so skip
+	// the call-site checks until it's fixed (matches checkSyntax's own
+	// "stop at the first error" behavior).
+	const callErrors =
+		syntaxErrors.length === 0
+			? await callDiagnostics(document.getText(), callDocFor)
+			: [];
+	// The doc lookups above are async; bail if a newer edit already landed —
+	// that change's own onDidChangeContent call will produce fresh diagnostics.
+	if (documents.get(document.uri)?.version !== document.version) return;
+	connection.sendDiagnostics({
+		uri: document.uri,
+		diagnostics: [...syntaxErrors, ...callErrors],
+	});
 });
 
-connection.onCompletion(() => currentCompletions());
-
-// A symbol is any run of characters the reader doesn't treat as delimiters.
-const symbolChar = /[^()'`~"; \t]/;
-
-function symbolAt(document: TextDocument, line: number, character: number) {
-	const text = document.getText({
-		start: { line, character: 0 },
-		end: { line: line + 1, character: 0 },
-	});
-	let start = character;
-	let end = character;
-	while (start > 0 && symbolChar.test(text[start - 1])) start--;
-	while (end < text.length && symbolChar.test(text[end])) end++;
-	if (start === end) return undefined;
-	return {
-		name: text.slice(start, end),
-		range: {
-			start: { line, character: start },
-			end: { line, character: end },
-		},
-	};
+async function resolveCallDoc(name: string): Promise<CallDoc> {
+	if (session !== undefined) {
+		try {
+			const d = await session.doc(name);
+			if (d !== null) return { args: d.args, arity: d.arity };
+		} catch {
+			// fall through to local
+		}
+	}
+	return { args: localDocs.get(name)?.args, arity: interp.arityOf(name) };
 }
+
+// Absorbs the same keystroke burst as `currentCompletions`'s cache above,
+// but keyed per name: `callDiagnostics` resolves every distinct call name in
+// the buffer on every `onDidChangeContent`, so without this an N-call-name
+// buffer round-trips the session socket N times per keystroke.
+const callDocFor = cachedResolver(resolveCallDoc, CACHE_MS);
+
+// The structured `Doc.args` for a binding named `name` — undefined for
+// anything without keyword args (built-ins, macros, plain user defuns).
+async function docArgsFor(name: string): Promise<DocArg[] | undefined> {
+	return (await callDocFor(name)).args;
+}
+
+// Keyword-arg completions for a call whose head is `headName`. Returns
+// undefined when the head isn't a known binding or has no such args, so the
+// caller falls back to plain name completion.
+async function keywordCompletions(
+	headName: string,
+): Promise<CompletionItem[] | undefined> {
+	const args = await docArgsFor(headName);
+	return args?.length ? argCompletionItems(args) : undefined;
+}
+
+connection.onCompletion(async ({ textDocument, position }) => {
+	const document = documents.get(textDocument.uri);
+	const head = document && enclosingCallHead(document, position);
+	// (load-mcp "name")'s string argument is one of the bundled toolkit's
+	// predefined names, never a general Lisp expression, so it gets its own
+	// completions instead of the usual name/keyword path (which the ad-hoc
+	// `:key` plist form falls through to below, same as any other binding).
+	const loadMcp = document && loadMcpCompletions(head, document, position);
+	if (loadMcp) return loadMcp;
+	const keywords = head ? await keywordCompletions(head) : undefined;
+	const base = await currentCompletions();
+	return keywords ? [...keywords, ...base] : base;
+});
 
 connection.onHover(async ({ textDocument, position }) => {
 	const document = documents.get(textDocument.uri);
