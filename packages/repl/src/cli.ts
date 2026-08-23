@@ -17,6 +17,7 @@ import {
 	setExit,
 	setWriter,
 	str,
+	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { type Repl, seedSecretsFromEnvFile } from "./repl.ts";
 import {
@@ -93,7 +94,9 @@ class InteractiveRepl implements Repl {
 					return;
 				}
 				const result = evalTopLevel(this.currentInterp, exp);
-				write(`${str(result)}\n`);
+				// A printing function (prin1/princ/terpri/print) returns
+				// Unspecified, meaning "already shown" — don't echo it too.
+				if (result !== Unspecified) write(`${str(result)}\n`);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else throw ex;

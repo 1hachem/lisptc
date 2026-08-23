@@ -9,6 +9,8 @@
 (princ "=== 1. cond / if / when / unless ===")
 (terpri)
 
+(print "hello")
+
 ;; cond: first non-nil test wins; a single-element clause returns the test
 ;; value itself.
 (print (cond ((< 3 1) 'a) ((< 1 3) 'b) (t 'c)))

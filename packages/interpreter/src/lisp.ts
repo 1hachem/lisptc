@@ -471,6 +471,13 @@ class FormatException extends Error {}
 // Singleton for end-of-file
 export const EndOfFile = { toString: () => "EOF" };
 
+// Singleton returned by output functions (prin1/princ/terpri/print) whose
+// result carries no information beyond "I already wrote my output" — as
+// opposed to nil, which is a meaningful Lisp value (false / empty list).
+// A REPL compares its top-level result against this by identity to decide
+// whether to echo it, so a printed value isn't shown a second time.
+export const Unspecified = { toString: () => "#<unspecified>" };
+
 //----------------------------------------------------------------------
 
 // Core of the interpreter
@@ -852,33 +859,33 @@ export class Interp {
 			"prin1",
 			1,
 			"(prin1 x)",
-			"Print `x` in re-readable form (strings quoted); return `x`.",
+			"Print `x` in re-readable form (strings quoted); returns an unspecified value (a REPL does not echo it, since `x` was already printed).",
 			z.tuple([zAny]),
 			([x]) => {
 				write(str(x, true));
-				return x;
+				return Unspecified;
 			},
 		);
 		this.def(
 			"princ",
 			1,
 			"(princ x)",
-			"Print `x` in human-readable form (strings unquoted); return `x`.",
+			"Print `x` in human-readable form (strings unquoted); returns an unspecified value (a REPL does not echo it, since `x` was already printed).",
 			z.tuple([zAny]),
 			([x]) => {
 				write(str(x, false));
-				return x;
+				return Unspecified;
 			},
 		);
 		this.def(
 			"terpri",
 			0,
 			"(terpri)",
-			"Print a newline; return t.",
+			"Print a newline; returns an unspecified value (a REPL does not echo it).",
 			z.tuple([]),
 			() => {
 				write("\n");
-				return true;
+				return Unspecified;
 			},
 		);
 		this.def(
@@ -2141,7 +2148,7 @@ export const prelude = `
 (defun consp (x)
   "Return t if x is a cons cell (a non-empty list)." (not (atom x)))
 (defun print (x)
-  "Print x via prin1 followed by a newline; return x." (prin1 x) (terpri) x)
+  "Print x via prin1 followed by a newline; returns an unspecified value (a REPL does not echo it, since x was already printed)." (prin1 x) (terpri))
 (defun identity (x)
   "Return x unchanged." x)
 

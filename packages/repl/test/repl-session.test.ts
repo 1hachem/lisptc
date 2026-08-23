@@ -18,6 +18,18 @@ describe("AgentRepl (in-process REPL binding)", () => {
 		expect(r.eval('(progn (princ "hi") 42)')).toBe("hi42\n");
 	});
 
+	it("does not echo a printed value a second time", () => {
+		const r = new AgentRepl();
+		expect(r.eval('(print "hi")')).toBe('"hi"\n');
+		expect(r.eval('(princ "hi")')).toBe("hi");
+		expect(r.eval("(terpri)")).toBe("\n");
+	});
+
+	it("still echoes nil — only the printing sentinel is suppressed", () => {
+		const r = new AgentRepl();
+		expect(r.eval("(= 1 2)")).toBe("nil\n");
+	});
+
 	it("renders a Lisp error instead of throwing", () => {
 		const r = new AgentRepl();
 		expect(r.eval("(car 1)")).toContain("EvalException");
