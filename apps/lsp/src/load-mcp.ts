@@ -39,8 +39,11 @@ const toolkitCompletions: CompletionItem[] = (
 }));
 
 // True if `position` is inside an unterminated string literal -- an odd
-// number of unescaped `"` between the start of the document and the cursor.
-// Distinguishes `(load-mcp "pl|")`'s toolkit-name completion from
+// number of unescaped `"` between the start of the document and the cursor,
+// ignoring any `"` inside a `;` comment (a comment runs to end of line, same
+// as tokenPattern's `;.*$` alternative, and a quote inside one isn't a string
+// delimiter -- counting it would desync `inString` for the rest of the
+// document). Distinguishes `(load-mcp "pl|")`'s toolkit-name completion from
 // `(load-mcp :na|`'s keyword completion; both have "load-mcp" as their head.
 function insideString(
 	document: TextDocument,
@@ -51,12 +54,24 @@ function insideString(
 		end: position,
 	});
 	let inString = false;
+	let inComment = false;
 	for (let i = 0; i < text.length; i++) {
-		if (text[i] === "\\" && inString) {
-			i++;
+		const c = text[i];
+		if (c === "\n") {
+			inComment = false;
 			continue;
 		}
-		if (text[i] === '"') inString = !inString;
+		if (inComment) continue;
+		if (inString) {
+			if (c === "\\") {
+				i++;
+				continue;
+			}
+			if (c === '"') inString = false;
+			continue;
+		}
+		if (c === ";") inComment = true;
+		else if (c === '"') inString = true;
 	}
 	return inString;
 }

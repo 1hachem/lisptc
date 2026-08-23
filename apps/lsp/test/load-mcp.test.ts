@@ -27,4 +27,15 @@ describe("loadMcpCompletions", () => {
 		const position = { line: 0, character: document.getText().length };
 		expect(loadMcpCompletions("load-mcp", document, position)).toBeUndefined();
 	});
+
+	it("still offers toolkit-name completions when an earlier ; comment contains a quote", () => {
+		const line0 = '; say "hello to the user';
+		const line1 = '(load-mcp "pl';
+		const document = doc(`${line0}\n${line1}`);
+		const position = { line: 1, character: line1.length };
+		const items = loadMcpCompletions("load-mcp", document, position);
+		expect(items?.map((i) => i.label)).toEqual(
+			expect.arrayContaining(["playwright", "fs", "linear", "posthog"]),
+		);
+	});
 });
