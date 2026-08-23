@@ -17,6 +17,7 @@
  *   - `doc    {symbol}`      -> {signature, doc} | null       (LSP hover), LIVE
  *   - `reset  {}`            -> "" ; discards all definitions
  *   - `shutdown {}`          -> "" ; then the server closes its socket and exits
+ *   - `version {}`           -> PROTOCOL_VERSION (number)
  * `completions`/`doc` only READ the interp (globalNames/docs); they never eval.
  */
 
@@ -51,10 +52,18 @@ export interface DocEntry {
 
 interface Request {
 	id: number;
-	op: "eval" | "completions" | "doc" | "reset" | "shutdown";
+	op: "eval" | "completions" | "doc" | "reset" | "shutdown" | "version";
 	code?: string;
 	symbol?: string;
 }
+
+// Bump whenever a change to the request/reply shape means an older server
+// process could keep answering successfully but with data a newer client
+// can't rely on (e.g. `doc`'s `args`/`arity` fields, added alongside this
+// constant) — lets `connectOrSpawn` notice a server left running from before
+// the bump (e.g. across a `git pull`) instead of silently treating its
+// replies as complete.
+export const PROTOCOL_VERSION = 1;
 
 interface Reply {
 	id: number;
@@ -92,6 +101,8 @@ function handle(repl: MemoryRepl, req: Request): unknown {
 			// side effect handled by the caller once this reply is flushed — see
 			// the `shutdown` branch in `serve()`.
 			return "";
+		case "version":
+			return PROTOCOL_VERSION;
 		case "completions": {
 			const docs = repl.interp.docs();
 			const names = new Set([...repl.interp.globalNames(), ...docs.keys()]);
@@ -299,6 +310,9 @@ export class SessionClient {
 	shutdown(): Promise<string> {
 		return this.send({ op: "shutdown" }) as Promise<string>;
 	}
+	version(): Promise<number> {
+		return this.send({ op: "version" }) as Promise<number>;
+	}
 
 	close(): void {
 		this.socket.end();
@@ -315,17 +329,19 @@ export class SessionClient {
 }
 
 // ---------------------------------------------------------------------------
-// Kill: stop a running session server, given its name
+// Kill: stop a running session server, given its socket path
 // ---------------------------------------------------------------------------
 
-// Shut down the session server for `session` (the same name passed to
-// `socketPathFor`/`LISPTC_SESSION`; omit for the default cwd-keyed session),
-// so it releases its socket and exits instead of lingering as an orphaned
-// detached process. Returns false if no server was running for it — either no
-// socket file, or a stale one left behind by a server that already died, in
-// which case it's cleaned up here since there's no live server left to do it.
-export async function killSession(session?: string): Promise<boolean> {
-	const path = socketPathFor(session);
+// Shut down whatever server (if any) is listening at `path`, so it releases
+// its socket and exits instead of lingering as an orphaned detached process.
+// Returns false if no server was running there — either no socket file, a
+// stale one left behind by a server that already died (cleaned up here since
+// there's no live server left to do it), or a live server too old to
+// understand `shutdown` at all (nothing more we can do over the wire; see
+// `connectOrSpawn`'s protocol-version check for why that's rare in practice).
+// Shared by `killSession` (explicit CLI/editor request) and `connectOrSpawn`
+// (replacing a server left running from before a protocol bump).
+async function shutdownAt(path: string): Promise<boolean> {
 	let client: SessionClient;
 	try {
 		client = await SessionClient.connect(path);
@@ -355,15 +371,49 @@ export async function killSession(session?: string): Promise<boolean> {
 	}
 }
 
+// Shut down the session server for `session` (the same name passed to
+// `socketPathFor`/`LISPTC_SESSION`; omit for the default cwd-keyed session).
+// See `shutdownAt` for what "false" covers.
+export function killSession(session?: string): Promise<boolean> {
+	return shutdownAt(socketPathFor(session));
+}
+
+// True if `client`'s server understands the current wire protocol. A server
+// predating a protocol bump either rejects the (also newly added) `version`
+// op outright or answers with a stale number — either way its other replies
+// can't be trusted to have the shape this client expects (see
+// PROTOCOL_VERSION).
+async function speaksCurrentProtocol(client: SessionClient): Promise<boolean> {
+	try {
+		return (await client.version()) === PROTOCOL_VERSION;
+	} catch {
+		return false;
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Connect-or-spawn: the "one by default" glue
 // ---------------------------------------------------------------------------
 
 // Connect to the session server for `path`, starting one (detached) if none is
 // running. The first client in a project boots the server; the rest attach.
-// A stale socket file (server crashed) is cleared and re-spawned.
+// A stale socket file (server crashed) is cleared and re-spawned. A live
+// server that predates a protocol bump (e.g. left running across a `git
+// pull`) is replaced rather than silently kept — otherwise its replies would
+// quietly lack fields a newer client relies on (see PROTOCOL_VERSION).
 export async function connectOrSpawn(path: string): Promise<SessionClient> {
 	try {
+		const client = await SessionClient.connect(path);
+		if (await speaksCurrentProtocol(client)) return client;
+		client.destroy();
+		if (await shutdownAt(path)) {
+			await spawnServer(path);
+			return connectWithRetry(path);
+		}
+		// Couldn't stop it (e.g. it predates `shutdown` too) — nothing more we
+		// can do over the wire; hand back a fresh connection to the same stale
+		// server rather than get stuck retrying a spawn that can only ever lose
+		// the bind race to it.
 		return await SessionClient.connect(path);
 	} catch (ex) {
 		const code = (ex as NodeJS.ErrnoException).code;
