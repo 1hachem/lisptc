@@ -10,7 +10,9 @@
     "includes": [
       "packages/*/src/**",
       "packages/*/test/**",
-      "apps/*/extensions/**",
+      "apps/*/src/**",
+      "apps/*/test/**",
+      "apps/*/extension/**",
       "*.json",
       "*.ts",
       "packages/*/*.json",
