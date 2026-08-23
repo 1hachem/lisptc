@@ -28,6 +28,18 @@ server.registerTool(
 	}),
 );
 
+// A tool that always fails, so tests can exercise the error path (e.g. that
+// (try ... (catch (e) ...)) binds `e` to the descriptive message, not just an
+// internal op code).
+server.registerTool(
+	"boom",
+	{ description: "Always fails with a descriptive error.", inputSchema: {} },
+	async () => ({
+		content: [{ type: "text", text: "boom: something specific broke" }],
+		isError: true,
+	}),
+);
+
 // Optional startup delay so async-job tests can deterministically observe a
 // load-mcp job in the :pending state before it connects.
 const delayMs = Number(process.env.LISPTC_FIXTURE_DELAY_MS);
