@@ -1,8 +1,9 @@
 /*
  * MCP integration for Lisptc (main-thread side).
  *
- * Installs the load-mcp / unload-mcp / list-mcps / list-toolkit / list-tools / mcp-doc /
- * search-tools / search-mcps / mcp-shutdown built-ins into an Interp. All async MCP work is
+ * Installs the load-mcp / unload-mcp / list-mcps / list-toolkit / list-tools /
+ * search-tools / search-mcps / mcp-shutdown built-ins into an Interp (tool docs surface
+ * through the generic `doc` built-in — see defineGlobal below). All async MCP work is
  * delegated to a worker_threads broker (src/mcp-broker.ts); the synchronous
  * interpreter blocks on it through a SharedArrayBuffer + Atomics.wait bridge,
  * which is the only way to call async code from Node's synchronous main thread
@@ -18,6 +19,7 @@ import { z } from "zod";
 import { isNumeric } from "./arith.ts";
 import {
 	Cell,
+	type DocArg,
 	EvalException,
 	type Interp,
 	LispKeyword,
@@ -479,6 +481,67 @@ function connConfigFromArgs(rest: List): ConnConfig {
 	);
 }
 
+// Structured args for load-mcp's ad-hoc-plist calling convention, mirroring
+// what connConfigFromArgs above actually accepts — for the LSP's keyword-arg
+// completion/diagnostics (see toolArgs below for the equivalent on MCP
+// tools). `required` only marks `:name`: the url/command choice is a branch
+// (either `:url` + optional :headers/:oauth/:scopes, or `:command` +
+// optional :args/:env), and a flat DocArg list can't express "one of", so
+// marking both `:url` and `:command` required would make every valid call
+// look like it's missing the other one.
+const LOAD_MCP_ARGS: DocArg[] = [
+	{
+		name: "name",
+		type: "string",
+		required: true,
+		description: "A name for this server; its tools install as `name/tool`.",
+	},
+	{
+		name: "command",
+		type: "string",
+		required: false,
+		description: "Spawn a stdio server by running this command.",
+	},
+	{
+		name: "args",
+		type: "list",
+		required: false,
+		description: "Arguments to `:command`.",
+	},
+	{
+		name: "env",
+		type: "alist",
+		required: false,
+		description: "Extra environment variables for `:command`.",
+	},
+	{
+		name: "url",
+		type: "string",
+		required: false,
+		description:
+			"Connect to an HTTP server at this URL instead of spawning one.",
+	},
+	{
+		name: "headers",
+		type: "alist",
+		required: false,
+		description: "Extra HTTP headers for the `:url` connection.",
+	},
+	{
+		name: "oauth",
+		type: "boolean",
+		required: false,
+		description:
+			"Treat the `:url` server as OAuth 2.1; load-mcp then returns an authorization link.",
+	},
+	{
+		name: "scopes",
+		type: "list",
+		required: false,
+		description: "OAuth scopes to request when `:oauth` is set.",
+	},
+];
+
 function doUnload(interp: Interp, name: string): Sym[] {
 	const rec = servers.get(name);
 	if (!rec) throw new EvalException("MCP server not loaded", name, false);
@@ -514,6 +577,7 @@ function installServer(
 		interp.defineGlobal(sym, wrapper, {
 			signature: toolSignature(sym.name, tool),
 			doc: toolDocBody(tool) || "MCP tool (no description provided).",
+			args: toolArgs(tool),
 		});
 		toolSyms.push(sym);
 	}
@@ -549,6 +613,7 @@ export function registerMcp(interp: Interp): void {
 			liveJobs.add(job);
 			return job;
 		},
+		LOAD_MCP_ARGS,
 	);
 
 	// (await job [timeout-ms]) -> the job's result (blocks until it settles).
@@ -870,20 +935,6 @@ export function registerMcp(interp: Interp): void {
 		},
 	);
 
-	// (mcp-doc 'server/tool) -> full description + per-parameter docs (string)
-	interp.def(
-		"mcp-doc",
-		1,
-		'(mcp-doc "server/tool")',
-		"Return the documentation (description and input schema) of an MCP tool.",
-		z.tuple([zName]),
-		([name]) => {
-			const tool = findTool(name);
-			if (!tool) throw new EvalException("unknown tool", name, false);
-			return renderDoc(name, tool);
-		},
-	);
-
 	// (search-tools "query") -> ((sym score doc) ...) ranked, best first
 	interp.def(
 		"search-tools",
@@ -943,14 +994,6 @@ function asName(x: unknown): string {
 	throw new EvalException("string or symbol expected", x);
 }
 
-function findTool(qualified: string): Tool | undefined {
-	const slash = qualified.indexOf("/");
-	if (slash < 0) return undefined;
-	const server = qualified.slice(0, slash);
-	const toolName = qualified.slice(slash + 1);
-	return servers.get(server)?.tools.get(toolName);
-}
-
 function firstLine(s: string | undefined): string {
 	if (!s) return "";
 	return s.split("\n")[0];
@@ -980,7 +1023,8 @@ function orderedProps(tool: Tool): [string, JsonSchema][] {
 
 // The keyword-call usage signature, e.g. `(fx/echo :message :string [:n :number])`.
 // Optional args are wrapped in `[...]`. Reused for the `signature` metadata on
-// each tool binding so the LSP hover shows the same call shape as `mcp-doc`.
+// each tool binding so the LSP hover and the generic `doc` built-in show the
+// same call shape.
 function toolSignature(name: string, tool: Tool): string {
 	const entries = orderedProps(tool);
 	if (!entries.length) return `(${name})`;
@@ -994,8 +1038,23 @@ function toolSignature(name: string, tool: Tool): string {
 	return `(${name} ${sig})`;
 }
 
+// Structured per-argument info for a tool's Doc.args, e.g. for the LSP's
+// keyword-argument completion. Same order/content as the usage signature and
+// the "Arguments:" doc section, just not rendered to text.
+function toolArgs(tool: Tool): DocArg[] {
+	const required = new Set(tool.inputSchema?.required ?? []);
+	return orderedProps(tool).map(([key, spec]) => ({
+		name: key,
+		type: schemaType(spec),
+		required: required.has(key),
+		description: spec.description,
+	}));
+}
+
 // The prose body: description, per-argument docs, and example inputs/outputs
-// when the schema advertises them. Shared by `mcp-doc` and the hover `doc`.
+// when the schema advertises them. Stored as the binding's `doc` metadata via
+// defineGlobal, so it's what both the generic `doc` built-in and the LSP
+// hover render.
 function toolDocBody(tool: Tool): string {
 	const lines: string[] = [];
 	if (tool.description) lines.push(tool.description);
@@ -1044,13 +1103,6 @@ function toolDocBody(tool: Tool): string {
 	}
 
 	return lines.join("\n");
-}
-
-function renderDoc(name: string, tool: Tool): string {
-	const parts = [name, `Usage: ${toolSignature(name, tool)}`];
-	const body = toolDocBody(tool);
-	if (body) parts.push(body);
-	return parts.join("\n\n");
 }
 
 // Expand ${VAR} references against process.env so the toolkit can point at

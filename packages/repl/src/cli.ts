@@ -18,7 +18,11 @@ import {
 	str,
 } from "@repo/interpreter/lisp.ts";
 import { type Repl, seedSecretsFromEnvFile } from "./repl.ts";
-import { connectOrSpawn, socketPathFor } from "./session-server.ts";
+import {
+	connectOrSpawn,
+	killSession,
+	socketPathFor,
+} from "./session-server.ts";
 
 // Read a line as a string (displaying the given prompt), or null on EOF.
 // Wired to a readline interface by main().
@@ -150,6 +154,20 @@ async function main(): Promise<void> {
 	const { pathToFileURL } = await import("node:url");
 	const entry = process.argv[1];
 	if (!entry || import.meta.url !== pathToFileURL(entry).href) return;
+
+	// `--kill [name]`: stop the named (or default, cwd-keyed) session server
+	// and exit, without starting a REPL of any kind.
+	if (process.argv.includes("--kill")) {
+		const i = process.argv.indexOf("--kill");
+		const name = process.argv[i + 1];
+		const killed = await killSession(name);
+		console.log(
+			killed
+				? `killed session${name ? ` "${name}"` : ""}`
+				: `no session running${name ? ` for "${name}"` : ""}`,
+		);
+		return;
+	}
 
 	// Clear screen + scrollback and home the cursor.
 	const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";

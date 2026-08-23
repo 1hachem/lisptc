@@ -16,6 +16,8 @@
  *   - `completions {}`       -> [{name, signature, doc}] (LSP completion), LIVE
  *   - `doc    {symbol}`      -> {signature, doc} | null       (LSP hover), LIVE
  *   - `reset  {}`            -> "" ; discards all definitions
+ *   - `shutdown {}`          -> "" ; then the server closes its socket and exits
+ *   - `version {}`           -> PROTOCOL_VERSION (number)
  * `completions`/`doc` only READ the interp (globalNames/docs); they never eval.
  */
 
@@ -26,6 +28,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { Arity, DocArg } from "@repo/interpreter/lisp.ts";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {
@@ -37,14 +40,30 @@ export interface CompletionEntry {
 export interface DocEntry {
 	signature: string;
 	doc: string;
+	// Structured keyword args (set only for keyword-call bindings, e.g. MCP
+	// tools), so the LSP's argument completion doesn't have to re-parse
+	// `signature`/`doc`.
+	args?: DocArg[];
+	// Positional-argument count (set only for the OTHER kind of binding —
+	// built-ins/macros/defuns that call positionally rather than by
+	// keyword), so the LSP's arity check doesn't have to re-parse `signature`.
+	arity?: Arity;
 }
 
 interface Request {
 	id: number;
-	op: "eval" | "completions" | "doc" | "reset";
+	op: "eval" | "completions" | "doc" | "reset" | "shutdown" | "version";
 	code?: string;
 	symbol?: string;
 }
+
+// Bump whenever a change to the request/reply shape means an older server
+// process could keep answering successfully but with data a newer client
+// can't rely on (e.g. `doc`'s `args`/`arity` fields, added alongside this
+// constant) — lets `connectOrSpawn` notice a server left running from before
+// the bump (e.g. across a `git pull`) instead of silently treating its
+// replies as complete.
+export const PROTOCOL_VERSION = 1;
 
 interface Reply {
 	id: number;
@@ -77,6 +96,13 @@ function handle(repl: MemoryRepl, req: Request): unknown {
 		case "reset":
 			repl.reset();
 			return "";
+		case "shutdown":
+			// The actual teardown (closing the server, exiting the process) is a
+			// side effect handled by the caller once this reply is flushed — see
+			// the `shutdown` branch in `serve()`.
+			return "";
+		case "version":
+			return PROTOCOL_VERSION;
 		case "completions": {
 			const docs = repl.interp.docs();
 			const names = new Set([...repl.interp.globalNames(), ...docs.keys()]);
@@ -89,24 +115,64 @@ function handle(repl: MemoryRepl, req: Request): unknown {
 			return out;
 		}
 		case "doc": {
-			const d = repl.interp.docs().get(req.symbol ?? "");
-			return d ? { signature: d.signature, doc: d.doc } : null;
+			const symbol = req.symbol ?? "";
+			const d = repl.interp.docs().get(symbol);
+			return d
+				? {
+						signature: d.signature,
+						doc: d.doc,
+						args: d.args,
+						arity: repl.interp.arityOf(symbol),
+					}
+				: null;
 		}
 		default:
 			throw new Error(`unknown op: ${(req as Request).op}`);
 	}
 }
 
+// Probe whether a live server is listening at `path`, distinguishing a
+// leftover socket file (from a server that crashed without cleaning up, safe
+// to delete) from one with a live listener behind it (NOT safe to delete —
+// unlinking it out from under a running server orphans it, since a new bind
+// at the same path silently steals the name without the old process ever
+// knowing). ECONNREFUSED means nobody is listening; anything else (including
+// a successful connect) means treat it as live and leave it alone.
+function isListening(path: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		const socket = createConnection(path);
+		socket.once("connect", () => {
+			socket.destroy();
+			resolve(true);
+		});
+		socket.once("error", (ex) => {
+			resolve((ex as NodeJS.ErrnoException).code !== "ECONNREFUSED");
+		});
+	});
+}
+
 // Start a session server listening on `path`. Owns one MemoryRepl for the
 // process lifetime; every connection shares it. Resolves once listening.
-export function serve(path: string): Promise<ReturnType<typeof createServer>> {
-	// A leftover socket file from a crashed server would block bind; a live one
-	// means someone beat us to it (surfaced as EADDRINUSE to the caller).
+export async function serve(
+	path: string,
+): Promise<ReturnType<typeof createServer>> {
 	if (existsSync(path)) {
+		if (await isListening(path)) {
+			// Someone beat us to it — most likely another spawn racing to bind
+			// this same path. Back off rather than steal the name.
+			throw Object.assign(
+				new Error(
+					`EADDRINUSE: a session server is already listening on ${path}`,
+				),
+				{ code: "EADDRINUSE" },
+			);
+		}
+		// No live listener behind it — a stale file left by a server that
+		// crashed without cleaning up. Safe to clear before binding.
 		try {
 			unlinkSync(path);
 		} catch {
-			// If it's actually live, listen() below fails with EADDRINUSE.
+			// Already gone; nothing to clean up.
 		}
 	}
 
@@ -122,19 +188,34 @@ export function serve(path: string): Promise<ReturnType<typeof createServer>> {
 				buffer = buffer.slice(nl + 1);
 				if (line.trim() !== "") {
 					let reply: Reply;
+					let req: Request | undefined;
 					try {
-						const req = JSON.parse(line) as Request;
+						req = JSON.parse(line) as Request;
 						reply = { id: req.id, ok: true, result: handle(repl, req) };
 					} catch (ex) {
 						reply = { id: safeId(line), ok: false, error: String(ex) };
 					}
-					socket.write(`${JSON.stringify(reply)}\n`);
+					socket.write(`${JSON.stringify(reply)}\n`, () => {
+						if (req?.op === "shutdown") shutdown();
+					});
 				}
 				nl = buffer.indexOf("\n");
 			}
 		});
 		socket.on("error", () => socket.destroy());
 	});
+
+	// Tears the process down once a shutdown request's reply has flushed, so the
+	// client sees the ack before the socket goes away.
+	const shutdown = (): void => {
+		server.close();
+		try {
+			unlinkSync(path);
+		} catch {
+			// Already gone; nothing to clean up.
+		}
+		process.exit(0);
+	};
 
 	return new Promise((resolve, reject) => {
 		server.once("error", reject);
@@ -226,9 +307,87 @@ export class SessionClient {
 	doc(symbol: string): Promise<DocEntry | null> {
 		return this.send({ op: "doc", symbol }) as Promise<DocEntry | null>;
 	}
+	shutdown(): Promise<string> {
+		return this.send({ op: "shutdown" }) as Promise<string>;
+	}
+	version(): Promise<number> {
+		return this.send({ op: "version" }) as Promise<number>;
+	}
 
 	close(): void {
 		this.socket.end();
+	}
+
+	// Immediately release the socket without waiting for a graceful FIN/FIN-ACK
+	// handshake, unlike `close`. Use when the remote might never cooperate —
+	// e.g. `killSession` cleaning up after a server that rejected (or never
+	// answered) the shutdown request; otherwise the handle lingers and the
+	// caller's process hangs forever waiting for a "close" that never comes.
+	destroy(): void {
+		this.socket.destroy();
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Kill: stop a running session server, given its socket path
+// ---------------------------------------------------------------------------
+
+// Shut down whatever server (if any) is listening at `path`, so it releases
+// its socket and exits instead of lingering as an orphaned detached process.
+// Returns false if no server was running there — either no socket file, a
+// stale one left behind by a server that already died (cleaned up here since
+// there's no live server left to do it), or a live server too old to
+// understand `shutdown` at all (nothing more we can do over the wire; see
+// `connectOrSpawn`'s protocol-version check for why that's rare in practice).
+// Shared by `killSession` (explicit CLI/editor request) and `connectOrSpawn`
+// (replacing a server left running from before a protocol bump).
+async function shutdownAt(path: string): Promise<boolean> {
+	let client: SessionClient;
+	try {
+		client = await SessionClient.connect(path);
+	} catch (ex) {
+		const code = (ex as NodeJS.ErrnoException).code;
+		if (code === "ECONNREFUSED" && existsSync(path)) {
+			try {
+				unlinkSync(path);
+			} catch {}
+		}
+		return false;
+	}
+	try {
+		// The server writes this reply BEFORE closing/exiting (see `serve`), so a
+		// resolved promise here means it genuinely shut down — not just that the
+		// connection happened to drop. A rejection (e.g. "unknown op: shutdown"
+		// from a server started before this op existed) means it's still up.
+		await client.shutdown();
+		return true;
+	} catch {
+		return false;
+	} finally {
+		// Always drop our end, win or lose — otherwise a server that rejects the
+		// request (or never replies) leaves this socket open and the caller's
+		// process hanging on a handle nothing will ever close.
+		client.destroy();
+	}
+}
+
+// Shut down the session server for `session` (the same name passed to
+// `socketPathFor`/`LISPTC_SESSION`; omit for the default cwd-keyed session).
+// See `shutdownAt` for what "false" covers.
+export function killSession(session?: string): Promise<boolean> {
+	return shutdownAt(socketPathFor(session));
+}
+
+// True if `client`'s server understands the current wire protocol. A server
+// predating a protocol bump either rejects the (also newly added) `version`
+// op outright or answers with a stale number — either way its other replies
+// can't be trusted to have the shape this client expects (see
+// PROTOCOL_VERSION).
+async function speaksCurrentProtocol(client: SessionClient): Promise<boolean> {
+	try {
+		return (await client.version()) === PROTOCOL_VERSION;
+	} catch {
+		return false;
 	}
 }
 
@@ -238,9 +397,23 @@ export class SessionClient {
 
 // Connect to the session server for `path`, starting one (detached) if none is
 // running. The first client in a project boots the server; the rest attach.
-// A stale socket file (server crashed) is cleared and re-spawned.
+// A stale socket file (server crashed) is cleared and re-spawned. A live
+// server that predates a protocol bump (e.g. left running across a `git
+// pull`) is replaced rather than silently kept — otherwise its replies would
+// quietly lack fields a newer client relies on (see PROTOCOL_VERSION).
 export async function connectOrSpawn(path: string): Promise<SessionClient> {
 	try {
+		const client = await SessionClient.connect(path);
+		if (await speaksCurrentProtocol(client)) return client;
+		client.destroy();
+		if (await shutdownAt(path)) {
+			await spawnServer(path);
+			return connectWithRetry(path);
+		}
+		// Couldn't stop it (e.g. it predates `shutdown` too) — nothing more we
+		// can do over the wire; hand back a fresh connection to the same stale
+		// server rather than get stuck retrying a spawn that can only ever lose
+		// the bind race to it.
 		return await SessionClient.connect(path);
 	} catch (ex) {
 		const code = (ex as NodeJS.ErrnoException).code;
@@ -305,7 +478,16 @@ async function main(): Promise<void> {
 	if (!process.argv.includes("--serve")) return;
 	const i = process.argv.indexOf("--socket");
 	const path = i !== -1 ? process.argv[i + 1] : socketPathFor();
-	await serve(path);
+	try {
+		await serve(path);
+	} catch (ex) {
+		if ((ex as NodeJS.ErrnoException).code === "EADDRINUSE") {
+			// Lost a spawn race to another server that already claimed this
+			// socket; exit quietly rather than linger as an unreachable orphan.
+			process.exit(0);
+		}
+		throw ex;
+	}
 	// Keep the process alive; the detached parent has unref'd us.
 }
 

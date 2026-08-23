@@ -5,9 +5,10 @@
 // an MCP client instead of a pi session.
 //
 // Run over stdio: `node --experimental-transform-types src/server.ts`.
-import { checkSyntax } from "@repo/interpreter";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { checkSyntax } from "@repo/interpreter";
 import { MemoryRepl } from "@repo/repl/repl.ts";
 import { z } from "zod";
 

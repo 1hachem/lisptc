@@ -11,7 +11,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "start": "node --no-warnings --experimental-transform-types src/server.ts --stdio"
+    "start": "node --no-warnings --experimental-transform-types src/server.ts --stdio",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   }
 }

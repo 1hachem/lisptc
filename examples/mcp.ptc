@@ -3,8 +3,11 @@
 ;;;
 ;;; MCP built-ins installed on every Interp:
 ;;;   load-mcp / unload-mcp / list-mcps / list-toolkit / list-tools
-;;;   mcp-doc / search-tools / search-mcps / mcp-shutdown
+;;;   search-tools / search-mcps / mcp-shutdown
 ;;;   await / await-all / await-any / job-status / jobs / cancel
+;;;
+;;; Tool docs surface through the generic `doc` built-in — no separate
+;;; mcp-doc command.
 ;;;
 ;;; This file uses the repo's bundled filesystem server (`fs`) so it
 ;;; runs with no OAuth / credentials. See playwright.ptc and linear.ptc
@@ -35,8 +38,7 @@
 (terpri)
 
 ;; Full documentation for one tool, including per-parameter docs.
-(princ (mcp-doc 'fs/read_file))
-(terpri)
+(doc 'fs/read_file)
 
 ;; Fuzzy search across all *loaded* tools, ranked best-first.
 (print (search-tools "write a file"))

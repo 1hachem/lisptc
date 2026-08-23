@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "repl": "node --no-warnings --experimental-transform-types src/cli.ts",
-    "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach"
+    "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach",
+    "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
   },
   "dependencies": {
     "@repo/env": "workspace:*",
