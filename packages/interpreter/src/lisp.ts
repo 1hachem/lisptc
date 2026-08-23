@@ -891,7 +891,13 @@ export class Interp {
 					write(`${name.name}: undocumented\n`);
 					return null;
 				}
-				write(`${entry.signature}\n  ${entry.doc}\n`);
+				// Indent every line so multi-paragraph docs (e.g. an MCP tool's
+				// "Arguments:"/"Returns:" sections) stay legible, not just the first.
+				const body = entry.doc
+					.split("\n")
+					.map((line) => (line ? `  ${line}` : line))
+					.join("\n");
+				write(`${entry.signature}\n${body}\n`);
 				return name;
 			},
 		);

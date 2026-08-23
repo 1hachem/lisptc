@@ -1,8 +1,9 @@
 /*
  * MCP integration for Lisptc (main-thread side).
  *
- * Installs the load-mcp / unload-mcp / list-mcps / list-toolkit / list-tools / mcp-doc /
- * search-tools / search-mcps / mcp-shutdown built-ins into an Interp. All async MCP work is
+ * Installs the load-mcp / unload-mcp / list-mcps / list-toolkit / list-tools /
+ * search-tools / search-mcps / mcp-shutdown built-ins into an Interp (tool docs surface
+ * through the generic `doc` built-in — see defineGlobal below). All async MCP work is
  * delegated to a worker_threads broker (src/mcp-broker.ts); the synchronous
  * interpreter blocks on it through a SharedArrayBuffer + Atomics.wait bridge,
  * which is the only way to call async code from Node's synchronous main thread
@@ -934,20 +935,6 @@ export function registerMcp(interp: Interp): void {
 		},
 	);
 
-	// (mcp-doc 'server/tool) -> full description + per-parameter docs (string)
-	interp.def(
-		"mcp-doc",
-		1,
-		'(mcp-doc "server/tool")',
-		"Return the documentation (description and input schema) of an MCP tool.",
-		z.tuple([zName]),
-		([name]) => {
-			const tool = findTool(name);
-			if (!tool) throw new EvalException("unknown tool", name, false);
-			return renderDoc(name, tool);
-		},
-	);
-
 	// (search-tools "query") -> ((sym score doc) ...) ranked, best first
 	interp.def(
 		"search-tools",
@@ -1007,14 +994,6 @@ function asName(x: unknown): string {
 	throw new EvalException("string or symbol expected", x);
 }
 
-function findTool(qualified: string): Tool | undefined {
-	const slash = qualified.indexOf("/");
-	if (slash < 0) return undefined;
-	const server = qualified.slice(0, slash);
-	const toolName = qualified.slice(slash + 1);
-	return servers.get(server)?.tools.get(toolName);
-}
-
 function firstLine(s: string | undefined): string {
 	if (!s) return "";
 	return s.split("\n")[0];
@@ -1044,7 +1023,8 @@ function orderedProps(tool: Tool): [string, JsonSchema][] {
 
 // The keyword-call usage signature, e.g. `(fx/echo :message :string [:n :number])`.
 // Optional args are wrapped in `[...]`. Reused for the `signature` metadata on
-// each tool binding so the LSP hover shows the same call shape as `mcp-doc`.
+// each tool binding so the LSP hover and the generic `doc` built-in show the
+// same call shape.
 function toolSignature(name: string, tool: Tool): string {
 	const entries = orderedProps(tool);
 	if (!entries.length) return `(${name})`;
@@ -1072,7 +1052,9 @@ function toolArgs(tool: Tool): DocArg[] {
 }
 
 // The prose body: description, per-argument docs, and example inputs/outputs
-// when the schema advertises them. Shared by `mcp-doc` and the hover `doc`.
+// when the schema advertises them. Stored as the binding's `doc` metadata via
+// defineGlobal, so it's what both the generic `doc` built-in and the LSP
+// hover render.
 function toolDocBody(tool: Tool): string {
 	const lines: string[] = [];
 	if (tool.description) lines.push(tool.description);
@@ -1121,13 +1103,6 @@ function toolDocBody(tool: Tool): string {
 	}
 
 	return lines.join("\n");
-}
-
-function renderDoc(name: string, tool: Tool): string {
-	const parts = [name, `Usage: ${toolSignature(name, tool)}`];
-	const body = toolDocBody(tool);
-	if (body) parts.push(body);
-	return parts.join("\n\n");
 }
 
 // Expand ${VAR} references against process.env so the toolkit can point at

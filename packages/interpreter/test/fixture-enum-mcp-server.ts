@@ -1,7 +1,7 @@
 /*
  * Minimal stdio MCP server used by the test suite to exercise enum rendering.
  * Exposes one tool, `render`, whose required `format` argument is constrained to
- * an enum (["png", "jpeg"]) so tests can assert that mcp-doc surfaces the
+ * an enum (["png", "jpeg"]) so tests can assert that `doc` surfaces the
  * allowed values.
  *
  * Run manually:

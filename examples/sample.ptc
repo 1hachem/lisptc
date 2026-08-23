@@ -21,7 +21,7 @@
 ; => 5
 (print (expt 2 100))
 ; => bigint, exact
-(print (< 1 2 3))
+(print (< 1 2))
 ; chained comparison via prelude
 (princ "=== 2. lists & cons cells ===")
 (terpri)
@@ -33,8 +33,6 @@
 (print (cdr xs))
 ; => (2 3 4 5)
 (print (cadr xs))
-
-(caadr)
 
 ; => 2
 (print (append xs (list 6 7)))
@@ -112,7 +110,8 @@
 
 ;; MCP built-ins are installed on every Interp:
 ;;   load-mcp / unload-mcp / list-mcps / list-tools
-;;   mcp-doc / search-tools / mcp-shutdown
+;;   search-tools / mcp-shutdown
+;; Tool docs surface through the generic `doc` built-in.
 ;;
 ;; Load a server ad-hoc. Here we boot the repo's fixture stdio server,
 ;; which exposes a single tool, `echo`.
@@ -127,8 +126,7 @@
 (list-tools "fs")
 
 ;; Full documentation for one tool, including per-parameter docs.
-(princ (mcp-doc 'fs/echo))
-(terpri)
+(doc 'fs/echo)
 
 ;; Fuzzy search across all loaded tools, ranked best-first.
 (print (search-tools "echo text back"))
