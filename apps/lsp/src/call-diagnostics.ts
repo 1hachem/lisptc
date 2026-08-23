@@ -51,16 +51,16 @@ export function diagnosticsForCalls(
 			},
 		};
 		const { args, arity } = docByName.get(call.name) ?? {};
-		// A call with no `:keyword`s at all but at least one positional
-		// argument never attempts the keyword-plist form — a real MCP tool's
-		// call is always all-keyword, so this shape only arises for a
-		// binding like load-mcp that *also* accepts a bare positional call
-		// (e.g. `(load-mcp "playwright")`). Required-keyword checking would
-		// otherwise misread that valid alternate form as an omitted `:name`.
-		// A call with zero arguments at all is unambiguous either way, so it
-		// still gets checked.
-		const attemptsKeywordForm = call.keywords.size > 0 || call.argCount === 0;
-		if (args?.length && attemptsKeywordForm) {
+		// A binding with BOTH `args` and `arity` (only load-mcp, currently) also
+		// accepts a bare positional call as an alternative to its `:key` plist
+		// form (e.g. `(load-mcp "playwright")`) — that shape should skip the
+		// required-keyword check and fall to the arity check below instead. A
+		// keyword-only binding (args, no arity — every real MCP tool) has no
+		// such alternative, so a bare positional call to one is still checked
+		// as a keyword call rather than silently passing.
+		const bareFormOfHybrid =
+			arity !== undefined && call.keywords.size === 0 && call.argCount > 0;
+		if (args?.length && !bareFormOfHybrid) {
 			for (const arg of args) {
 				if (!arg.required || call.keywords.has(arg.name)) continue;
 				diagnostics.push({

@@ -100,6 +100,21 @@ describe("diagnosticsForCalls", () => {
 		expect(diagnosticsForCalls(calls, new Map())).toEqual([]);
 	});
 
+	// A real MCP tool (args, no arity — unlike load-mcp below) has no valid
+	// all-positional call at all, so a bare positional call to one is always
+	// wrong, not an alternate valid form to tolerate.
+	it("flags a positional call to a keyword-only binding missing a required :arg", () => {
+		const calls = callsFor('(fs/read_file "x")');
+		const diagnostics = diagnosticsForCalls(
+			calls,
+			new Map([["fs/read_file", argsDoc]]),
+		);
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0].message).toBe(
+			'fs/read_file: missing required argument ":name"',
+		);
+	});
+
 	// load-mcp accepts either a bare toolkit-name string (no keywords at all)
 	// or the :key plist form checked above — a real MCP tool never has a
 	// valid all-positional call, so this shape only arises for a hybrid
