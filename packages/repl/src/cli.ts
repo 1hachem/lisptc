@@ -105,17 +105,26 @@ class InteractiveRepl implements Repl {
 // Does `text` contain only complete top-level forms (nothing left mid-parse)?
 // Used by the attach loop to decide when to ship input to the shared session,
 // so multi-line forms typed (or sent by Iron) aren't split across evals.
-function isComplete(text: string): boolean {
+export function isComplete(text: string): boolean {
 	const reader = new Reader();
 	reader.push(text);
-	try {
-		for (;;) reader.read();
-	} catch (ex) {
-		// Incomplete form: more input needed. A genuine parse error is "complete"
-		// enough to send — the session renders it inline.
-		if (ex === EndOfFile) return reader.isEmpty();
-		return true;
+	// Checking isEmpty() before each read (rather than after a failed one) is
+	// the only way to tell "ran out mid-form" from "nothing left to read": once
+	// read() throws, readToken() has already shifted every token off the
+	// reader — including the ones from an unterminated form — so the reader
+	// looks equally empty in both cases if checked afterward.
+	while (!reader.isEmpty()) {
+		try {
+			reader.read();
+		} catch (ex) {
+			// Ran out of input mid-form: more is needed before sending.
+			if (ex === EndOfFile) return false;
+			// A genuine parse error is "complete" enough to send — the session
+			// renders it inline.
+			return true;
+		}
 	}
+	return true;
 }
 
 // Attach loop (`--attach`): forward each complete form to the SHARED session
