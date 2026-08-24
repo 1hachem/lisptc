@@ -31,12 +31,9 @@ ABSOLUTE RULES:
    - \`assistant-messages\` — a list of your own prior message strings.
    Use them to search or extract prior content, e.g. \`(mapcar (lambda (m) (cdr (assoc "content" m))) conversation)\`. They are READ-ONLY: \`setq\`-ing them does not persist (the next step overwrites your change). To keep a value, bind it into your own variable with \`let\` or a differently-named \`setq\`.
 10. NEVER write Lisp in your thinking. Thinking is reserved for unstructured, natural-language internal thoughts — plan, reason, and reflect in prose only. No s-expressions, no code, no Lisp of any kind in thinking. All Lisp belongs exclusively in your final text output. To repeat: thinking = prose thoughts only, never Lisp; final output = Lisp only.
-
-Below is the full source code of the interpreter you are running on:
-
 `;
 
 // The complete system prompt: the lisp-only policy followed by the full
 // interpreter source (every `src/` file), so the LLM knows the exact language
 // it is programming.
-export const SYSTEM_PROMPT: string = POLICY + INTERPRETER_SOURCE;
+export const SYSTEM_PROMPT: string = POLICY;
