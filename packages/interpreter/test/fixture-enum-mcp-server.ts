@@ -5,11 +5,15 @@
  * allowed values.
  *
  * Run manually:
- *   node --experimental-transform-types test/fixture-enum-mcp-server.ts
+ *   node --no-warnings --experimental-transform-types test/fixture-enum-mcp-server.ts
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+
+// See fixture-mcp-server.ts: guards against an EPIPE crash if the parent
+// tears down the pipe mid-write.
+process.stdout.on("error", () => {});
 
 const server = new McpServer({ name: "fixture-enum", version: "1.0.0" });
 

@@ -4,7 +4,6 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
-import * as dotenv from "dotenv";
 import { z } from "zod";
 import {
 	add,
@@ -21,7 +20,6 @@ import {
 	tryToParse,
 	ZERO,
 } from "./arith.ts";
-import { registerMcp } from "./mcp.ts";
 
 // An inefficient substitution of assert statement in Dart
 function assert(x: boolean, message?: string): asserts x {
@@ -48,16 +46,6 @@ export function setWriter(fn: (s: string) => void): (s: string) => void {
 export function setExit(fn: (n: number) => void): void {
 	exit = fn;
 }
-
-// REPL usage text, printed by the (help) built-in on demand.
-const HELP_TEXT = `Lisptc REPL — special keystrokes & commands:
-  Up/Down arrows : browse input history (previous / next line)
-  :up            : re-enter the previous input line (works when piped, too)
-  :clear / clear : clear the screen and re-prompt
-  Ctrl-C         : cancel the current input line
-  Ctrl-D (EOF)   : exit the REPL`;
-
-//----------------------------------------------------------------------
 
 // Lisp cons cell
 export class Cell {
@@ -558,24 +546,15 @@ function propagateTaint(
 	return keys.length > 0 ? new Secret(value, keys) : value;
 }
 
-// A host-supplied secret: a bare value, or a value plus a description shown by
-// `(secrets)`.
-export type SecretSpec = string | { value: string; description?: string };
+export type InterpExtension = (interp: Interp) => void;
 
-// Required prefix for every registry key; kept as part of the key. See
-// devdocs/secrets.md.
-const SECRET_ENV_PREFIX = "REPL_";
+export interface InterpOptions {
+	extensions?: InterpExtension[];
+}
 
 export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
-
-	// Host-supplied secret registry: key -> { value, description }. Seeded from
-	// `REPL_*` env vars; `setSecrets` overrides. See devdocs/secrets.md.
-	private readonly secrets: Map<
-		string,
-		{ value: string; description: string }
-	> = new Map();
 
 	// Directories to resolve relative `import` paths against — one entry per
 	// file currently being loaded (the innermost import wins). Empty at the REPL,
@@ -615,7 +594,7 @@ export class Interp {
 		};
 	}
 
-	constructor() {
+	constructor(options: InterpOptions = {}) {
 		this.def(
 			"car",
 			1,
@@ -861,17 +840,6 @@ export class Interp {
 			},
 		);
 		this.def(
-			"help",
-			0,
-			"(help)",
-			"Print the REPL usage text.",
-			z.tuple([]),
-			() => {
-				write(`${HELP_TEXT}\n`);
-				return true;
-			},
-		);
-		this.def(
 			"doc",
 			-1,
 			"(doc [name])",
@@ -1076,40 +1044,11 @@ export class Interp {
 			},
 		);
 
-		// --- Secret registry. See devdocs/secrets.md.
-		this.seedSecretsFromEnv();
-		this.def(
-			"secrets",
-			0,
-			"(secrets)",
-			"Return an alist of (key . description) for every available secret. Values are hidden — read one with `(secret key)`.",
-			z.tuple([]),
-			() => {
-				let list: List = null;
-				const entries = [...this.secrets.entries()];
-				for (let i = entries.length - 1; i >= 0; i--) {
-					const [key, { description }] = entries[i];
-					list = new Cell(new Cell(key, description), list);
-				}
-				return list;
-			},
-		);
-		this.def(
-			"secret",
-			1,
-			"(secret key)",
-			"Return the secret stored under `key` as a tainted string: every text function works on it and the taint follows into the result, but it always prints redacted (as #<secret:key>) and is only revealed when passed into a call such as an MCP tool or `:headers`. Errors if `key` is unknown.",
-			z.tuple([zString]),
-			([key]) => {
-				const entry = this.secrets.get(key);
-				if (entry === undefined)
-					throw new EvalException("unknown secret", key, false);
-				return new Secret(entry.value, [key]);
-			},
-		);
-
-		// Install native MCP built-ins (load-mcp, unload-mcp, list-tools, ...).
-		registerMcp(this);
+		// The secret registry and its `(secret …)` / `(secrets)` built-ins are an
+		// opt-in extension — see src/secrets.ts and devdocs/secrets.md. (The
+		// `Secret` taint type and its string-primitive propagation stay here,
+		// since they are language machinery.)
+		for (const extension of options.extensions ?? []) extension(this);
 	}
 
 	// Define a built-in function by giving a name, a carity, documentation
@@ -1151,39 +1090,6 @@ export class Interp {
 
 	hasGlobal(sym: Sym): boolean {
 		return this.globals.has(sym);
-	}
-
-	// Merge host secrets into the registry (later wins). Only `REPL_`-prefixed
-	// keys are accepted; each spec is a bare value or `{ value, description }`.
-	setSecrets(record: Record<string, SecretSpec>): void {
-		for (const [key, spec] of Object.entries(record)) {
-			if (!key.startsWith(SECRET_ENV_PREFIX)) continue;
-			const value = typeof spec === "string" ? spec : spec.value;
-			const description =
-				typeof spec === "string" ? "" : (spec.description ?? "");
-			this.secrets.set(key, { value, description });
-		}
-	}
-
-	// The registry keys the LLM is allowed to see (values stay hidden).
-	secretKeys(): string[] {
-		return [...this.secrets.keys()];
-	}
-
-	// Load `REPL_*` secrets from a `.env` file; returns the parsed entries (so a
-	// host can persist them). Throws if the file cannot be read.
-	loadSecretsFromFile(path: string): Record<string, string> {
-		const record = dotenv.parse(readFileSync(path));
-		this.setSecrets(record);
-		return record;
-	}
-
-	// Seed the registry from `REPL_*` environment variables.
-	private seedSecretsFromEnv(): void {
-		for (const [name, value] of Object.entries(process.env)) {
-			if (value !== undefined && name.startsWith(SECRET_ENV_PREFIX))
-				this.secrets.set(name, { value, description: "" });
-		}
 	}
 
 	// Build a BuiltInFunc without binding it (for wrappers stored elsewhere).
@@ -2147,6 +2053,14 @@ export const prelude = `
          (setq ,name (+ ,name 1)))
        ,@(if (cddr spec)
              \`(,(caddr spec))))))
+
+(defmacro think (&rest body)
+  "(think part...) Print reasoning as narration: each part prints literally, except a comma-unquoted part (or a ,@ splice), which is evaluated first so the trace is grounded in real values instead of guesses. Ends with a newline and returns nil -- put your actual answer in a separate expression, not inside think."
+  (list 'progn
+        (list 'dolist (list 'part (list 'quasiquote body))
+              '(princ part) '(princ " "))
+        '(terpri)
+        nil))
 
 ;; --- String library ---
 ;; Built on the native primitives char, concat, string-upcase and

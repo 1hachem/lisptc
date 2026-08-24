@@ -1,30 +1,19 @@
 /*
- * MCP broker — runs inside a worker_threads Worker.
+ * MCP broker — the domain half of an async worker, runs inside a worker_threads
+ * Worker.
  *
  * The Lisp interpreter (src/lisp.ts) is fully synchronous; MCP is async. A
  * single Node thread cannot block on its own event loop without deadlocking,
  * so all async MCP work happens here, on a separate thread with its own event
- * loop. The main thread posts a request and blocks on a SharedArrayBuffer via
- * Atomics.wait (see src/mcp.ts); this worker performs the SDK call and writes
- * the result back into shared memory, then Atomics.notify wakes the main
- * thread.
- *
- * Protocol (per request):
- *   main -> worker : postMessage({ id, op, payload, ctrl, data })
- *                    ctrl  = Int32Array-backed SharedArrayBuffer [state, length]
- *                    data  = SharedArrayBuffer for the UTF-8 JSON reply
- *   worker -> main : write reply bytes into `data` (or spill to a temp file),
- *                    Atomics.store(ctrl, 0, DONE|SPILL|ERROR),
- *                    Atomics.store(ctrl, 1, byteLength),
- *                    Atomics.notify(ctrl, 0)
+ * loop. This file owns ONLY the MCP operations (connect, call-tool, login, …);
+ * the generic machinery — the SharedArrayBuffer reply bridge and the
+ * background-job scheduler — lives in src/jobs-broker.ts, which this module
+ * drives via `runWorker(dispatch)`. The main-thread side is src/jobs.ts +
+ * src/mcp.ts.
  *
  * All MCP typing comes from the official SDK — no hand-rolled JSON-RPC.
  */
 import { randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { parentPort } from "node:worker_threads";
 import {
 	auth,
 	UnauthorizedError,
@@ -34,17 +23,13 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { oauthEnv } from "@repo/env/oauth.ts";
+import { runWorker } from "./jobs-broker.ts";
 import {
 	type CallbackServer,
 	createAuthCallback,
 	FileOAuthStore,
 	StoredOAuthProvider,
 } from "./mcp-oauth.ts";
-
-// Reply states written into ctrl[0]. Must match src/mcp.ts.
-const STATE_DONE = 1;
-const STATE_ERROR = 2;
-const STATE_SPILL = 3; // reply too big for `data`; ctrl-length names a temp file
 
 // A connection descriptor sent by the main thread.
 type ConnConfig =
@@ -127,121 +112,14 @@ async function startCallbackCapture(
 	).catch(() => {}); // timeout / superseded / exchange error: surfaced in the browser page; user can retry
 }
 
-type Op =
-	| "connect"
-	| "login"
-	| "authorize"
-	| "logout"
-	| "list-tools"
-	| "call-tool"
-	| "disconnect"
-	| "search"
-	// Async job meta-ops: `start` kicks off any inner op as a background job and
-	// returns its id immediately; the rest collect/inspect that job later.
-	| "start"
-	| "await"
-	| "job-status"
-	| "cancel"
-	| "await-all"
-	| "await-any";
-
-interface Request {
-	id: string;
-	op: Op;
-	payload: unknown;
-	ctrl: SharedArrayBuffer;
-	data: SharedArrayBuffer;
-}
-
 // Live MCP clients keyed by the serverId the broker mints on connect.
 const clients = new Map<string, { client: Client; tools: Tool[] }>();
 
-const errMsg = (e: unknown): string =>
-	e instanceof Error ? e.message : String(e);
-
-// A settled job outcome, tagged so success/failure isn't re-derived downstream.
-type Settled = { ok: true; v: unknown } | { ok: false; e: string };
-
-// Background jobs keyed by the jobId `start` mints: the native `promise`, a
-// per-job `AbortController` (wired into the SDK's RequestOptions.signal), and a
-// synchronously-readable `state` snapshot for `job-status`.
-interface JobRec {
-	promise: Promise<unknown>;
-	controller: AbortController;
-	state: "pending" | "done" | "error";
-}
-const jobs = new Map<string, JobRec>();
-
-// Tag a job's native promise as a never-rejecting Settled outcome, so a failing
-// job doesn't reject the whole combinator.
-const tagged = (jobId: string): Promise<Settled & { jobId: string }> => {
-	const rec = jobs.get(jobId);
-	const p = rec
-		? rec.promise
-		: Promise.reject(new Error(`no such job: ${jobId}`));
-	return p.then(
-		(v) => ({ jobId, ok: true as const, v }),
-		(e) => ({ jobId, ok: false as const, e: errMsg(e) }),
-	);
-};
-
-// Register `dispatch(op, payload, signal)` as a background job and return its id
-// at once (the promise is not awaited here). The `.then` tracks state, pushes a
-// `job-settled` event, and absorbs rejections so a never-awaited failure never
-// becomes an unhandledRejection.
-function startJob(op: Op, payload: unknown): string {
-	const jobId = randomUUID();
-	const controller = new AbortController();
-	const promise = dispatch(op, payload, controller.signal);
-	const rec: JobRec = { promise, controller, state: "pending" };
-	jobs.set(jobId, rec);
-	promise.then(
-		(v) => {
-			rec.state = "done";
-			settleJob(jobId, { ok: true, v });
-		},
-		(e) => {
-			rec.state = "error";
-			settleJob(jobId, { ok: false, e: errMsg(e) });
-		},
-	);
-	return jobId;
-}
-
-// Push a completion event to the main thread so it can apply the result once
-// its event loop turns. Skipped if the job was cancelled.
-function settleJob(jobId: string, settled: Settled): void {
-	if (!jobs.has(jobId)) return;
-	port.postMessage({ type: "job-settled", jobId, ...settled });
-}
-
-// Await one job's native result, re-throwing its error so `handle()` turns it
-// into a STATE_ERROR reply. Unknown ids are treated as an error.
-function awaitJob(jobId: string): Promise<unknown> {
-	const rec = jobs.get(jobId);
-	if (!rec) throw new Error(`no such job: ${jobId}`);
-	return rec.promise;
-}
-
-if (!parentPort) throw new Error("mcp-broker must run as a worker thread");
-const port = parentPort;
-
-port.on("message", (req: Request) => {
-	void handle(req);
-});
-
-async function handle(req: Request): Promise<void> {
-	try {
-		const result = await dispatch(req.op, req.payload);
-		reply(req, STATE_DONE, JSON.stringify(result ?? null));
-	} catch (ex) {
-		const message = ex instanceof Error ? ex.message : String(ex);
-		reply(req, STATE_ERROR, JSON.stringify({ error: message }));
-	}
-}
-
+// The MCP operations. The generic scheduler (src/jobs-broker.ts) forwards every
+// non-meta op here; when run via `start`, `signal` is the job's AbortController
+// signal so a slow connect / tool call can be cancelled mid-flight.
 async function dispatch(
-	op: Op,
+	op: string,
 	payload: unknown,
 	signal?: AbortSignal,
 ): Promise<unknown> {
@@ -272,54 +150,12 @@ async function dispatch(
 		case "search":
 			// v2 semantic search backend hook — reserved. See src/mcp.ts search-tools.
 			throw new Error("semantic search backend not implemented");
-		case "start": {
-			const { op: innerOp, payload: innerPayload } = payload as {
-				op: Op;
-				payload: unknown;
-			};
-			return { jobId: startJob(innerOp, innerPayload) };
-		}
-		case "await":
-			return awaitJob((payload as { jobId: string }).jobId);
-		case "job-status": {
-			const rec = jobs.get((payload as { jobId: string }).jobId);
-			return { status: rec ? rec.state : "unknown" };
-		}
-		case "cancel": {
-			// Real cancellation via AbortController: abort the in-flight SDK
-			// request (RequestOptions.signal), then stop tracking the job.
-			const { jobId } = payload as { jobId: string };
-			jobs.get(jobId)?.controller.abort();
-			jobs.delete(jobId);
-			return { ok: true };
-		}
-		case "await-all": {
-			// Promise.allSettled: collect every job's outcome, in input order,
-			// without one failure rejecting the batch.
-			const ids = (payload as { jobIds: string[] }).jobIds;
-			const settled = await Promise.allSettled(
-				ids.map((id) => Promise.resolve().then(() => awaitJob(id))),
-			);
-			return {
-				results: ids.map((jobId, i) => {
-					const s = settled[i];
-					return s.status === "fulfilled"
-						? { jobId, ok: true, v: s.value }
-						: { jobId, ok: false, e: errMsg(s.reason) };
-				}),
-			};
-		}
-		case "await-any": {
-			// Promise.race over never-rejecting tagged outcomes: the first job to
-			// settle (success OR failure) wins.
-			const ids = (payload as { jobIds: string[] }).jobIds;
-			if (ids.length === 0) throw new Error("await-any: no jobs");
-			return Promise.race(ids.map(tagged));
-		}
 		default:
 			throw new Error(`unknown op: ${op}`);
 	}
 }
+
+runWorker(dispatch);
 
 async function connect(
 	conf: ConnConfig,
@@ -512,28 +348,4 @@ function extractText(content: unknown): string {
 		.filter((c): c is { type: "text"; text: string } => c?.type === "text")
 		.map((c) => c.text)
 		.join("\n");
-}
-
-// Write the JSON reply into shared memory (or spill a large reply to a temp
-// file), then wake the blocked main thread.
-function reply(req: Request, state: number, json: string): void {
-	const ctrl = new Int32Array(req.ctrl);
-	const bytes = new TextEncoder().encode(json);
-	const dataView = new Uint8Array(req.data);
-
-	if (bytes.byteLength <= dataView.byteLength) {
-		dataView.set(bytes);
-		Atomics.store(ctrl, 1, bytes.byteLength);
-		Atomics.store(ctrl, 0, state);
-	} else {
-		// Too large for the shared buffer: spill to a temp file and hand back
-		// its path (length field is repurposed as the path byte length).
-		const path = join(tmpdir(), `lisptc-mcp-${req.id}.json`);
-		writeFileSync(path, json, "utf8");
-		const pathBytes = new TextEncoder().encode(path);
-		dataView.set(pathBytes);
-		Atomics.store(ctrl, 1, pathBytes.byteLength);
-		Atomics.store(ctrl, 0, state === STATE_ERROR ? STATE_ERROR : STATE_SPILL);
-	}
-	Atomics.notify(ctrl, 0);
 }

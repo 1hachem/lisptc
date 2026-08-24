@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import { mcpExtension } from "../src/mcp.ts";
 
 // Evaluate one or more Lisp forms and return the printed value of the last.
 function evalStr(interp: Interp, code: string): string {
@@ -20,6 +21,10 @@ function evalOutput(interp: Interp, code: string): string {
 	} finally {
 		setWriter(prev);
 	}
+}
+
+function mcpInterp(): Interp {
+	return new Interp({ extensions: [mcpExtension()] });
 }
 
 const FIXTURE = fileURLToPath(
@@ -52,7 +57,7 @@ describe("self-evaluating keywords", () => {
 });
 
 describe("MCP integration (stdio fixture)", () => {
-	const interp = new Interp();
+	const interp = mcpInterp();
 	run(interp, prelude);
 
 	afterAll(() => {
@@ -62,7 +67,7 @@ describe("MCP integration (stdio fixture)", () => {
 	it("loads a stdio server and expands its tools into bindings", () => {
 		const out = evalStr(
 			interp,
-			`(await (load-mcp :name "fx" :command "node" :args (quote ("--experimental-transform-types" "${FIXTURE}"))))`,
+			`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
 		);
 		expect(out).toContain("fx/echo");
 	});
@@ -109,7 +114,7 @@ describe("MCP integration (stdio fixture)", () => {
 });
 
 describe("mcp-shutdown undefines tool bindings", () => {
-	const interp = new Interp();
+	const interp = mcpInterp();
 	run(interp, prelude);
 
 	it("removes <server>/<tool> globals so they error as void, not stale", () => {
@@ -117,7 +122,7 @@ describe("mcp-shutdown undefines tool bindings", () => {
 		expect(
 			evalStr(
 				interp,
-				`(await (load-mcp :name "sfx" :command "node" :args (quote ("--experimental-transform-types" "${FIXTURE}"))))`,
+				`(await (load-mcp :name "sfx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
 			),
 		).toContain("sfx/echo");
 		expect(evalStr(interp, '(sfx/echo :message "hi")')).toBe('"hi"');
@@ -133,7 +138,7 @@ describe("mcp-shutdown undefines tool bindings", () => {
 });
 
 describe("doc enum rendering for MCP tools (stdio fixture)", () => {
-	const interp = new Interp();
+	const interp = mcpInterp();
 	run(interp, prelude);
 
 	afterAll(() => {
@@ -143,7 +148,7 @@ describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 	it("surfaces an argument's enum allowed values", () => {
 		evalStr(
 			interp,
-			`(await (load-mcp :name "en" :command "node" :args (quote ("--experimental-transform-types" "${ENUM_FIXTURE}"))))`,
+			`(await (load-mcp :name "en" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${ENUM_FIXTURE}"))))`,
 		);
 		const doc = evalOutput(interp, "(doc 'en/render)");
 		expect(doc).toContain("format");
@@ -159,11 +164,11 @@ function loadForm(name: string, delayMs = 0): string {
 		delayMs > 0
 			? ` :env (quote (("LISPTC_FIXTURE_DELAY_MS" . "${delayMs}")))`
 			: "";
-	return `(load-mcp :name "${name}" :command "node"${env} :args (quote ("--experimental-transform-types" "${FIXTURE}")))`;
+	return `(load-mcp :name "${name}" :command "node"${env} :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`;
 }
 
 describe("async MCP jobs", () => {
-	const interp = new Interp();
+	const interp = mcpInterp();
 	run(interp, prelude);
 
 	afterAll(() => {
@@ -226,7 +231,7 @@ describe("async MCP jobs", () => {
 	});
 
 	it("treats a connected server with no tools as a failure, not :loaded", () => {
-		const load = `(load-mcp :name "degraded" :command "node" :args (quote ("--experimental-transform-types" "${EMPTY_FIXTURE}")))`;
+		const load = `(load-mcp :name "degraded" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${EMPTY_FIXTURE}")))`;
 		expect(() => run(interp, `(await ${load})`)).toThrow(/no tools/);
 		// It must NOT linger as a loaded server, and must expose no tools.
 		expect(evalStr(interp, "(list-mcps)")).not.toContain("degraded");
@@ -289,7 +294,7 @@ describe("async MCP jobs", () => {
 });
 
 describe("liveJobs reaping", () => {
-	const interp = new Interp();
+	const interp = mcpInterp();
 	run(interp, prelude);
 
 	afterAll(() => {

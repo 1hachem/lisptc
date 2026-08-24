@@ -4,14 +4,20 @@
  * Uses the SDK's high-level `McpServer` (the low-level `Server` is deprecated).
  *
  * Run manually:
- *   node --experimental-transform-types test/fixture-mcp-server.ts
+ *   node --no-warnings --experimental-transform-types test/fixture-mcp-server.ts
  * or from Lisp:
  *   (load-mcp :name "fx" :command "node"
- *             :args ("--experimental-transform-types" "test/fixture-mcp-server.ts"))
+ *             :args ("--no-warnings" "--experimental-transform-types" "test/fixture-mcp-server.ts"))
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+
+// A cancelled load-mcp job can kill this process mid-write (the parent tears
+// down the stdio pipe while a response is in flight); without this, the
+// resulting EPIPE is an unhandled 'error' event that crashes the process and
+// dumps a stack trace onto inherited stderr.
+process.stdout.on("error", () => {});
 
 const server = new McpServer({ name: "fixture", version: "1.0.0" });
 

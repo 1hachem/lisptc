@@ -1,8 +1,9 @@
 import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import { secretsExtension } from "../src/secrets.ts";
 
-/** A fresh interpreter with the standard prelude loaded. */
+/** A fresh interpreter with the standard prelude and secret registry loaded. */
 export function freshInterp(): Interp {
-	const interp = new Interp();
+	const interp = new Interp({ extensions: [secretsExtension()] });
 	run(interp, prelude);
 	return interp;
 }

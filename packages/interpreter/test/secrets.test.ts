@@ -4,16 +4,31 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, run, str } from "../src/lisp.ts";
-import { ev, freshInterp } from "./helpers.ts";
+import { mcpExtension } from "../src/mcp.ts";
+import {
+	EnvSecretsStore,
+	loadSecretsFromFile,
+	type SecretSpec,
+	secretsExtension,
+} from "../src/secrets.ts";
+import { ev } from "./helpers.ts";
 
 const FIXTURE = fileURLToPath(
 	new URL("./fixture-mcp-server.ts", import.meta.url),
 );
 
+// A prelude-loaded interp whose secret registry is preloaded with `record`.
+function interpWithSecrets(record: Record<string, SecretSpec>): Interp {
+	const store = new EnvSecretsStore();
+	store.set(record);
+	const interp = new Interp({ extensions: [secretsExtension({ store })] });
+	run(interp, prelude);
+	return interp;
+}
+
 describe("secret registry", () => {
 	it("lists (key . description) pairs for each secret", () => {
-		const interp = freshInterp();
-		interp.setSecrets({
+		const interp = interpWithSecrets({
 			REPL_API_KEY: { value: "lin_abc", description: "Linear API key" },
 			REPL_DB_PASS: "hunter2", // bare value => empty description
 		});
@@ -23,8 +38,7 @@ describe("secret registry", () => {
 	});
 
 	it("reads a description out of the alist with assoc", () => {
-		const interp = freshInterp();
-		interp.setSecrets({
+		const interp = interpWithSecrets({
 			REPL_API_KEY: { value: "lin_abc", description: "Linear API key" },
 		});
 		expect(ev('(cdr (assoc "REPL_API_KEY" (secrets)))', interp)).toBe(
@@ -33,8 +47,7 @@ describe("secret registry", () => {
 	});
 
 	it("only registers keys starting with REPL_", () => {
-		const interp = freshInterp();
-		interp.setSecrets({ REPL_FOO: "bar", NOT_A_SECRET: "nope" });
+		const interp = interpWithSecrets({ REPL_FOO: "bar", NOT_A_SECRET: "nope" });
 		const out = ev("(secrets)", interp);
 		expect(out).toContain("REPL_FOO");
 		expect(out).not.toContain("NOT_A_SECRET");
@@ -48,8 +61,7 @@ describe("secret registry", () => {
 	});
 
 	it("always prints a secret redacted, never its value", () => {
-		const interp = freshInterp();
-		interp.setSecrets({ REPL_FOO: "s3cr3t" });
+		const interp = interpWithSecrets({ REPL_FOO: "s3cr3t" });
 		expect(ev('(secret "REPL_FOO")', interp)).toBe("#<secret:REPL_FOO>");
 		expect(ev('(list "a" (secret "REPL_FOO") "b")', interp)).toBe(
 			'("a" #<secret:REPL_FOO> "b")',
@@ -57,8 +69,7 @@ describe("secret registry", () => {
 	});
 
 	it("is a string: length and stringp work", () => {
-		const interp = freshInterp();
-		interp.setSecrets({ REPL_FOO: "s3cr3t" });
+		const interp = interpWithSecrets({ REPL_FOO: "s3cr3t" });
 		expect(ev('(length (secret "REPL_FOO"))', interp)).toBe("6");
 		expect(ev('(stringp (secret "REPL_FOO"))', interp)).toBe("t");
 	});
@@ -69,9 +80,7 @@ describe("secret registry", () => {
 // the redaction (upcase, reverse, substring, char, concat, ...).
 describe("secret registry (taint propagation)", () => {
 	function interpWith(value: string): Interp {
-		const interp = freshInterp();
-		interp.setSecrets({ REPL_FOO: value });
-		return interp;
+		return interpWithSecrets({ REPL_FOO: value });
 	}
 
 	it("stays redacted through string-upcase / string-downcase", () => {
@@ -98,8 +107,7 @@ describe("secret registry (taint propagation)", () => {
 	});
 
 	it("unions taint when two secrets are combined", () => {
-		const interp = freshInterp();
-		interp.setSecrets({ REPL_A: "aaa", REPL_B: "bbb" });
+		const interp = interpWithSecrets({ REPL_A: "aaa", REPL_B: "bbb" });
 		expect(ev('(concat (secret "REPL_A") (secret "REPL_B"))', interp)).toBe(
 			"#<secret:REPL_A+REPL_B>",
 		);
@@ -123,7 +131,8 @@ describe("secret registry (env seeding)", () => {
 		const prev = process.env.REPL_FOO;
 		process.env.REPL_FOO = "from-env";
 		try {
-			const interp = new Interp();
+			// The default store (EnvSecretsStore) seeds from process.env at build.
+			const interp = new Interp({ extensions: [secretsExtension()] });
 			run(interp, prelude);
 			expect(str(run(interp, "(secrets)"))).toBe('(("REPL_FOO" . ""))');
 			expect(str(run(interp, '(secret "REPL_FOO")'))).toBe(
@@ -148,8 +157,10 @@ describe("secret registry (.env file loading)", () => {
 		const path = writeEnvFile(
 			"# a comment\nREPL_LINEAR_API_KEY=lin_abc123\nNOT_A_SECRET=nope\n",
 		);
-		const interp = freshInterp();
-		interp.loadSecretsFromFile(path);
+		const store = new EnvSecretsStore();
+		loadSecretsFromFile(store, path);
+		const interp = new Interp({ extensions: [secretsExtension({ store })] });
+		run(interp, prelude);
 		const keys = ev("(secrets)", interp);
 		expect(keys).toContain("REPL_LINEAR_API_KEY");
 		expect(keys).not.toContain("NOT_A_SECRET");
@@ -157,9 +168,12 @@ describe("secret registry (.env file loading)", () => {
 });
 
 describe("secret registry (revealed only into an MCP call)", () => {
-	const interp = new Interp();
+	const store = new EnvSecretsStore();
+	store.set({ REPL_FOO: "s3cr3t" });
+	const interp = new Interp({
+		extensions: [secretsExtension({ store }), mcpExtension()],
+	});
 	run(interp, prelude);
-	interp.setSecrets({ REPL_FOO: "s3cr3t" });
 
 	afterAll(() => {
 		run(interp, "(mcp-shutdown)");
@@ -169,7 +183,7 @@ describe("secret registry (revealed only into an MCP call)", () => {
 		str(
 			run(
 				interp,
-				`(await (load-mcp :name "fx" :command "node" :args (quote ("--experimental-transform-types" "${FIXTURE}"))))`,
+				`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
 			),
 		);
 		expect(str(run(interp, '(fx/echo :message (secret "REPL_FOO"))'))).toBe(
