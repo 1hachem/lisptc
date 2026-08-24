@@ -14,7 +14,6 @@
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
-import { replEnv } from "@repo/env/repl.ts";
 import {
 	Cell,
 	EndOfFile,
@@ -24,29 +23,11 @@ import {
 	newSym,
 	prelude,
 	run,
-	type SecretSpec,
 	setWriter,
 	str,
 } from "@repo/interpreter/lisp.ts";
-
-// Seed an interp's secret registry from a `.env` file: the path in
-// $LISPTC_SECRETS_FILE, or `.env` in the working directory if it exists. Shared
-// by every REPL front-end (the CLI and the embeddable AgentRepl) so a `.env`
-// works the same everywhere. (REPL_* env vars are seeded by the Interp
-// constructor regardless; the file-path var is deliberately not REPL_-prefixed
-// so it isn't itself picked up as a secret.) Returns the loaded entries.
-export function seedSecretsFromEnvFile(interp: Interp): Record<string, string> {
-	const explicit = replEnv.LISPTC_SECRETS_FILE;
-	const path = explicit ?? ".env";
-	try {
-		return interp.loadSecretsFromFile(path);
-	} catch {
-		// A missing default `.env` is fine; only warn if one was named explicitly.
-		if (explicit)
-			console.error(`warning: could not read secrets file ${explicit}`);
-		return {};
-	}
-}
+import { mcpExtension } from "@repo/interpreter/mcp.ts";
+import { secretsExtension } from "@repo/interpreter/secrets.ts";
 
 // A REPL owns an interpreter and can be reset to a fresh one.
 export interface Repl {
@@ -99,7 +80,11 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private freshInterp(): Interp {
-		const interp = new Interp();
+		// The secrets addon owns loading (from `REPL_*` env vars here — an embedded
+		// REPL does not auto-load a `.env` file); the REPL just installs it.
+		const interp = new Interp({
+			extensions: [secretsExtension(), mcpExtension()],
+		});
 		run(interp, prelude);
 		this.setup(interp);
 		return interp;
@@ -150,24 +135,15 @@ export class AgentRepl extends MemoryRepl {
 	// The host-supplied conversation snapshot, kept so a post-error `reset()`
 	// can re-inject the globals until the next refresh.
 	private readonly conversationVars = new Map<string, unknown>();
-	// Host-supplied secrets, kept so a post-error `reset()` can re-inject them
-	// into the fresh interp's registry.
-	private readonly secrets = new Map<string, SecretSpec>();
 
 	// Re-establish the halt built-in and the conversation globals on every fresh
 	// interp. Guards `conversationVars` because the base constructor calls this
-	// before this subclass's field initializers have run.
+	// before this subclass's field initializers have run. (Secrets need no
+	// handling here — the secretsExtension re-seeds them on each fresh interp.)
 	protected override setup(interp: Interp): void {
 		this.installHalt(interp);
 		const vars = this.conversationVars;
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
-		// Note: unlike the standalone CLI, an embedded AgentRepl does NOT
-		// auto-load a `.env` file — a host embedding this REPL (e.g. the pi
-		// extension) supplies secrets explicitly via setSecrets/loadSecretsFromFile.
-		// Re-inject explicitly-set host secrets. Guarded because the base
-		// constructor calls setup() before this subclass's field initializers run.
-		const secrets = this.secrets;
-		if (secrets?.size) interp.setSecrets(Object.fromEntries(secrets));
 	}
 
 	// Install `(halt [value])`: record that the program asked to stop and return
@@ -196,25 +172,6 @@ export class AgentRepl extends MemoryRepl {
 			this.conversationVars.set(name, value);
 			defineVar(this.interp, name, value);
 		}
-	}
-
-	// Register host-supplied secrets. Keys (and descriptions) become listable by
-	// the agent via `(secrets)`; values stay opaque and are only usable inside
-	// calls (e.g. as MCP `:headers`). Each spec is a bare value or
-	// `{ value, description }`. Merges into the registry; kept so `reset()`
-	// re-injects them. `REPL_*` env secrets are seeded by the interp itself.
-	setSecrets(record: Record<string, SecretSpec>): void {
-		for (const [key, spec] of Object.entries(record))
-			this.secrets.set(key, spec);
-		this.interp.setSecrets(record);
-	}
-
-	// Load secrets from a `.env`-style file (KEY=VALUE lines) into the registry.
-	// Entries are kept so a post-error `reset()` re-injects them.
-	loadSecretsFromFile(path: string): void {
-		const record = this.interp.loadSecretsFromFile(path);
-		for (const [key, value] of Object.entries(record))
-			this.secrets.set(key, value);
 	}
 
 	// Whether the last-evaluated program called `(halt)`; reads and clears the
