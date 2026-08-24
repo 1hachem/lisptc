@@ -6,6 +6,7 @@
   "exports": {
     "./repl.ts": "./src/repl.ts",
     "./session-server.ts": "./src/session-server.ts",
+    "./host-bridge.ts": "./src/host-bridge.ts",
     "./cli.ts": "./src/cli.ts",
     "./package.json": "./package.json"
   },

@@ -7,6 +7,14 @@
  */
 
 import {
+	existsSync,
+	readFileSync,
+	renameSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
+import {
 	EndOfFile,
 	EvalException,
 	Interp,
@@ -17,6 +25,7 @@ import {
 	setWriter,
 	str,
 } from "@repo/interpreter/lisp.ts";
+import { type HostToolSpec, installHostTools } from "./host-bridge.ts";
 import { type Repl, seedSecretsFromEnvFile } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -39,7 +48,7 @@ class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
 	private readonly stdInTokens: Reader = new Reader();
 
-	constructor() {
+	constructor(private readonly loadEnvSecrets = true) {
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -50,7 +59,7 @@ class InteractiveRepl implements Repl {
 	private freshInterp(): Interp {
 		const interp = new Interp();
 		run(interp, prelude);
-		seedSecretsFromEnvFile(interp);
+		if (this.loadEnvSecrets) seedSecretsFromEnvFile(interp);
 		return interp;
 	}
 
@@ -166,6 +175,51 @@ async function main(): Promise<void> {
 				? `killed session${name ? ` "${name}"` : ""}`
 				: `no session running${name ? ` for "${name}"` : ""}`,
 		);
+		return;
+	}
+
+	if (process.argv[2] === "--host-rpc") {
+		const fileName = process.argv[3];
+		const rpcDir = process.env.LISPTC_HOST_RPC_DIR;
+		const token = process.env.LISPTC_HOST_RPC_TOKEN;
+		if (!fileName || !rpcDir || !token)
+			throw new Error(
+				"--host-rpc requires a program file, LISPTC_HOST_RPC_DIR, and LISPTC_HOST_RPC_TOKEN",
+			);
+		let sequence = 0;
+		const repl = new InteractiveRepl(false);
+		const tools = JSON.parse(
+			process.env.LISPTC_HOST_RPC_TOOLS ?? "[]",
+		) as HostToolSpec[];
+		installHostTools(repl.interp, tools, (tool, args) => {
+			sequence += 1;
+			const seq = String(sequence).padStart(6, "0");
+			const request = join(rpcDir, `req_${seq}`);
+			const pendingRequest = join(rpcDir, `.req_${seq}.tmp`);
+			const response = join(rpcDir, `res_${seq}`);
+			writeFileSync(
+				pendingRequest,
+				JSON.stringify({ tool, args, seq: sequence, token }),
+				"utf8",
+			);
+			// Publish atomically only after the complete JSON payload is on disk.
+			renameSync(pendingRequest, request);
+			const deadline = Date.now() + 300_000;
+			while (!existsSync(response)) {
+				if (Date.now() > deadline)
+					throw new Error(`Host RPC timeout calling ${tool}`);
+				Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+			}
+			const raw = JSON.parse(readFileSync(response, "utf8")) as unknown;
+			unlinkSync(response);
+			if (typeof raw !== "string") return raw;
+			try {
+				return JSON.parse(raw) as unknown;
+			} catch {
+				return raw;
+			}
+		});
+		write(`${str(run(repl.interp, readFileSync(fileName, "utf8")))}\n`);
 		return;
 	}
 
