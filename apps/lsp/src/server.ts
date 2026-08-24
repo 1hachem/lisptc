@@ -12,6 +12,7 @@ import {
 	prelude,
 	run,
 } from "@repo/interpreter";
+import { mcpExtension } from "@repo/interpreter/mcp.ts";
 import {
 	type CompletionEntry,
 	connectOrSpawn,
@@ -39,8 +40,9 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 // Local prelude-loaded interpreter: the fallback source of names/docs when the
-// shared session is unreachable. docs() also covers special forms and t/nil.
-const interp = new Interp();
+// shared session is unreachable. The MCP extension contributes load-mcp docs
+// without connecting to any server until code explicitly evaluates it.
+const interp = new Interp({ extensions: [mcpExtension()] });
 run(interp, prelude);
 const localDocs = interp.docs();
 

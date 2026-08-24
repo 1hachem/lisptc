@@ -19,7 +19,9 @@ import {
 	str,
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
-import { type Repl, seedSecretsFromEnvFile } from "./repl.ts";
+import { mcpExtension } from "@repo/interpreter/mcp.ts";
+import { secretsExtension } from "@repo/interpreter/secrets.ts";
+import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
 	killSession,
@@ -50,9 +52,12 @@ class InteractiveRepl implements Repl {
 	}
 
 	private freshInterp(): Interp {
-		const interp = new Interp();
+		// The standalone CLI auto-loads a `.env` file (env vars + `$LISPTC_SECRETS_FILE`
+		// / nearest `.env`); the secretsExtension owns that loading via `envFile`.
+		const interp = new Interp({
+			extensions: [secretsExtension({ envFile: true }), mcpExtension()],
+		});
 		run(interp, prelude);
-		seedSecretsFromEnvFile(interp);
 		return interp;
 	}
 

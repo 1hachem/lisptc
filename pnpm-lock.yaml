@@ -178,9 +178,6 @@ importers:
 
   packages/repl:
     dependencies:
-      '@repo/env':
-        specifier: workspace:*
-        version: link:../env
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter

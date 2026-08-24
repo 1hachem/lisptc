@@ -5,8 +5,6 @@ import { z } from "zod";
 // prefix scan of process.env (arbitrary names), so it stays outside this schema.
 export const replEnv = createEnv({
 	server: {
-		// `.env` file the standalone CLI seeds secrets from.
-		LISPTC_SECRETS_FILE: z.string().optional(),
 		// Truthy => extra debug logging in the pi extension.
 		LISP_DEBUG: z.string().optional(),
 	},

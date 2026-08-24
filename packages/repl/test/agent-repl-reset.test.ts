@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AgentRepl } from "../src/repl.ts";
 
-// How the embeddable AgentRepl treats the secret registry across a reset() and
-// what it does (and doesn't) auto-load. The secret registry itself is covered
-// by the interpreter package; these cases exercise the REPL front-end, which
-// lives here.
+// How the embeddable AgentRepl treats the secret registry: it exposes `REPL_*`
+// env-var secrets (seeded by the addon) but does NOT auto-load a `.env` file —
+// that is CLI-only. The registry itself is covered by the interpreter package;
+// these cases exercise the REPL front-end.
 
 function writeEnvFile(contents: string): string {
 	const dir = mkdtempSync(join(tmpdir(), "lisptc-secrets-"));
@@ -17,23 +17,16 @@ function writeEnvFile(contents: string): string {
 }
 
 describe("AgentRepl secret handling", () => {
-	it("re-injects explicitly-loaded secrets on reset()", () => {
-		const path = writeEnvFile("REPL_FOO=bar\n");
-		const repl = new AgentRepl();
-		repl.loadSecretsFromFile(path);
-		expect(repl.eval("(secrets)")).toContain("REPL_FOO");
-		repl.reset();
-		expect(repl.eval("(secrets)")).toContain("REPL_FOO");
-	});
-
-	it("keeps descriptions across a reset()", () => {
-		const repl = new AgentRepl();
-		repl.setSecrets({
-			REPL_FOO: { value: "bar", description: "the foo token" },
-		});
-		expect(repl.eval("(secrets)")).toContain("the foo token");
-		repl.reset();
-		expect(repl.eval("(secrets)")).toContain("the foo token");
+	it("exposes REPL_* env-var secrets", () => {
+		const prev = process.env.REPL_ENV_TOKEN;
+		process.env.REPL_ENV_TOKEN = "tok";
+		try {
+			const repl = new AgentRepl();
+			expect(repl.eval("(secrets)")).toContain("REPL_ENV_TOKEN");
+		} finally {
+			if (prev === undefined) delete process.env.REPL_ENV_TOKEN;
+			else process.env.REPL_ENV_TOKEN = prev;
+		}
 	});
 
 	it("does not auto-load $LISPTC_SECRETS_FILE for an embedded AgentRepl", () => {

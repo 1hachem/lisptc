@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, run, str } from "../src/lisp.ts";
+import { mcpExtension } from "../src/mcp.ts";
 
 // Point the broker's file store at a temp dir before it starts (the worker
 // inherits process.env when spawned on the first MCP call).
@@ -10,7 +11,7 @@ const dir = mkdtempSync(join(tmpdir(), "lisptc-logout-"));
 process.env.LISPTC_OAUTH_DIR = dir;
 
 describe("logout", () => {
-	const interp = new Interp();
+	const interp = new Interp({ extensions: [mcpExtension()] });
 	run(interp, prelude);
 
 	afterAll(() => {
@@ -37,7 +38,7 @@ describe("logout", () => {
 });
 
 describe("login", () => {
-	const interp = new Interp();
+	const interp = new Interp({ extensions: [mcpExtension()] });
 	run(interp, prelude);
 
 	afterAll(() => {

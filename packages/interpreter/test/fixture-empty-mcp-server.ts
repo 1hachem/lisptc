@@ -11,6 +11,10 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
+// See fixture-mcp-server.ts: guards against an EPIPE crash if the parent
+// tears down the pipe mid-write.
+process.stdout.on("error", () => {});
+
 const server = new Server(
 	{ name: "empty-fixture", version: "1.0.0" },
 	{ capabilities: { tools: {} } },
