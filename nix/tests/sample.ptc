@@ -9,3 +9,5 @@
 (if (< i 1) acc (go (- i 1) (cons i acc))))))
 (go n nil)))
 (defmacro unless (test &rest body) (list 'if test nil (cons 'progn body)))
+
+(try (risky) (catch (e) (princ e)))

@@ -109,17 +109,6 @@ class LispEditor extends CustomEditor {
 	}
 }
 
-// `(print x)` writes x AND returns it, and the REPL prints the value of every
-// expression — so the same text appears twice. Collapse that duplication here
-// so the user sees it once.
-function dedupePrintedValue(out: string): string {
-	// Duplicated string value: print emits `"s"` and the REPL appends `"s"`
-	// right after (possibly separated by a newline).
-	const m = out.match(/^([\s\S]*?)(?:\n?)\1$/);
-	if (m && m[1].trim() !== "") return m[1].trim();
-	return out;
-}
-
 class LispRepl {
 	private session = new AgentRepl();
 
@@ -134,7 +123,7 @@ class LispRepl {
 	}
 
 	eval(code: string): string {
-		return dedupePrintedValue(this.session.eval(code.trim()).trim());
+		return this.session.eval(code.trim()).trim();
 	}
 
 	// Did the just-evaluated program call `(halt)`? The REPL session owns the

@@ -105,6 +105,12 @@ describe("MCP integration (stdio fixture)", () => {
 		expect(out).toContain(":unloaded");
 	});
 
+	it("binds a catch handler to the tool's descriptive error, not an internal op code", () => {
+		const out = evalStr(interp, "(try (fx/boom) (catch (e) e))");
+		expect(out).toContain("something specific broke");
+		expect(out).not.toBe('"call-tool"');
+	});
+
 	it("unloads a server and removes its bindings", () => {
 		expect(evalStr(interp, '(unload-mcp "fx")')).toContain("fx/echo");
 		expect(() => run(interp, '(fx/echo :message "hi")')).toThrow(

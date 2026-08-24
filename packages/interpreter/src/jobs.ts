@@ -167,7 +167,10 @@ export class WorkerJobsRuntime implements JobsRuntime {
 				parsed && typeof parsed === "object" && "error" in parsed
 					? String((parsed as { error: unknown }).error)
 					: json;
-			throw new EvalException(msg, op, false);
+			// Bind the handler variable (the EvalException value) to the actual
+			// error text, so `(try … (catch (e) …))` gets something meaningful —
+			// not `op`, an internal op-code like "call-tool" a catch couldn't act on.
+			throw new EvalException("job error", msg, false);
 		}
 		return parsed;
 	}
@@ -279,7 +282,10 @@ export class Jobs {
 
 	// Turn a runtime SettledReply into the collected Lisp value, throwing on error.
 	private collectSettled(job: Job, r: SettledReply): unknown {
-		if (!r.ok) throw new EvalException(r.e ?? "job failed", job.label, false);
+		// Bind the handler variable to the actual error text (matching `(:error msg)`
+		// in await-all and the request() error path) — not `job.label`, which a
+		// `catch` couldn't act on.
+		if (!r.ok) throw new EvalException("job error", r.e ?? "unknown", false);
 		return this.collect(job, r.v);
 	}
 

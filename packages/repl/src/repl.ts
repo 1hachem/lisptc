@@ -25,6 +25,7 @@ import {
 	run,
 	setWriter,
 	str,
+	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
 import { secretsExtension } from "@repo/interpreter/secrets.ts";
@@ -104,10 +105,12 @@ export class MemoryRepl implements InMemoryRepl {
 			out += s;
 		});
 		try {
-			// Bind value before appending: `out += str(run(...))` reads `out`
-			// before run() writes side-effect output into it, clobbering it.
-			const value = str(run(this.currentInterp, code));
-			out += `${value}\n`;
+			// Evaluate before appending: run() writes side-effect output into
+			// `out` first. A printing function (prin1/princ/terpri/print)
+			// returns Unspecified — a sentinel meaning "already shown, don't
+			// echo the value too" — so a printed value isn't shown twice.
+			const value = run(this.currentInterp, code);
+			if (value !== Unspecified) out += `${str(value)}\n`;
 		} catch (ex) {
 			if (ex instanceof EvalException) out += `${ex}\n`;
 			else if (ex === EndOfFile)

@@ -13,7 +13,15 @@ describe("documentation coverage", () => {
 	});
 
 	it("documents the special forms", () => {
-		for (const name of ["quote", "progn", "cond", "setq", "lambda", "macro"])
+		for (const name of [
+			"quote",
+			"progn",
+			"cond",
+			"setq",
+			"lambda",
+			"macro",
+			"try",
+		])
 			expect(docs.has(name), name).toBe(true);
 	});
 
