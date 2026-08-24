@@ -115,11 +115,24 @@ async function startCallbackCapture(
 // Live MCP clients keyed by the serverId the broker mints on connect.
 const clients = new Map<string, { client: Client; tools: Tool[] }>();
 
+// The MCP operations this broker understands.
+type McpOp =
+	| "connect"
+	| "login"
+	| "authorize"
+	| "logout"
+	| "list-tools"
+	| "call-tool"
+	| "disconnect"
+	| "search";
+
 // The MCP operations. The generic scheduler (src/jobs-broker.ts) forwards every
 // non-meta op here; when run via `start`, `signal` is the job's AbortController
-// signal so a slow connect / tool call can be cancelled mid-flight.
+// signal so a slow connect / tool call can be cancelled mid-flight. Typing `op`
+// as McpOp keeps the switch exhaustively checked; the scheduler casts the raw
+// wire string to McpOp, so an unknown op still reaches the `default` at runtime.
 async function dispatch(
-	op: string,
+	op: McpOp,
 	payload: unknown,
 	signal?: AbortSignal,
 ): Promise<unknown> {

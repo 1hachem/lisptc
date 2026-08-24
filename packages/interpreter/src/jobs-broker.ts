@@ -34,8 +34,11 @@ import {
 
 // Performs one domain operation. `signal` is present only for ops run as a
 // background job (via `start`), so a long-running op can honor cancellation.
-export type DomainDispatch = (
-	op: string,
+// `Op` is the domain's own op union (e.g. mcp-broker's McpOp), so its dispatch
+// keeps a typed, exhaustively-checked switch; the scheduler does the single cast
+// from the raw wire string at the boundary below.
+export type DomainDispatch<Op extends string = string> = (
+	op: Op,
 	payload: unknown,
 	signal?: AbortSignal,
 ) => Promise<unknown>;
@@ -66,7 +69,9 @@ const META_OPS = new Set([
 ]);
 
 // Wire the domain dispatch to the parent port. Call once, at worker startup.
-export function runWorker(dispatch: DomainDispatch): void {
+export function runWorker<Op extends string>(
+	dispatch: DomainDispatch<Op>,
+): void {
 	if (!parentPort) throw new Error("jobs-broker must run as a worker thread");
 	const port = parentPort;
 	const jobs = new Map<string, JobRec>();
@@ -98,7 +103,9 @@ export function runWorker(dispatch: DomainDispatch): void {
 	function startJob(op: string, payload: unknown): string {
 		const jobId = randomUUID();
 		const controller = new AbortController();
-		const promise = dispatch(op, payload, controller.signal);
+		// `op` is a raw wire string; trust it as a domain op (an unknown one hits
+		// the domain dispatch's `default` and throws).
+		const promise = dispatch(op as Op, payload, controller.signal);
 		const rec: JobRec = { promise, controller, state: "pending" };
 		jobs.set(jobId, rec);
 		promise.then(
@@ -170,7 +177,7 @@ export function runWorker(dispatch: DomainDispatch): void {
 				return Promise.race(ids.map(tagged));
 			}
 			default:
-				return dispatch(op, payload);
+				return dispatch(op as Op, payload);
 		}
 	}
 
@@ -178,7 +185,7 @@ export function runWorker(dispatch: DomainDispatch): void {
 		try {
 			const result = META_OPS.has(req.op)
 				? await metaDispatch(req.op, req.payload)
-				: await dispatch(req.op, req.payload);
+				: await dispatch(req.op as Op, req.payload);
 			reply(req, STATE_DONE, JSON.stringify(result ?? null));
 		} catch (ex) {
 			reply(req, STATE_ERROR, JSON.stringify({ error: errMsg(ex) }));
