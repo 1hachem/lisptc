@@ -235,13 +235,8 @@ function registerFireworks(pi: ExtensionAPI): void {
 			{
 				id: "accounts/fireworks/models/kimi-k3",
 				name: "Kimi K3",
-				// Thinking off at the provider level: declaring the model
-				// non-reasoning makes pi clamp its thinking level to off, so no
-				// `:off` CLI suffix is needed.
-				reasoning: false,
-				// Kimi K3 is multimodal — it accepts image_url content parts.
+				reasoning: true,
 				input: ["text", "image"],
-				// Pricing unknown for K3; left at zero rather than guessing.
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 262144,
 				maxTokens: 131072,
@@ -249,9 +244,17 @@ function registerFireworks(pi: ExtensionAPI): void {
 			{
 				id: "accounts/fireworks/models/glm-5p2",
 				name: "GLM 5.2",
-				reasoning: false,
+				reasoning: true,
 				input: ["text"],
-				// Pricing/limits unknown; left at zero rather than guessing.
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 131072,
+				maxTokens: 65536,
+			},
+			{
+				id: "accounts/fireworks/models/qwen3p7-plus",
+				name: "Qwen",
+				reasoning: true,
+				input: ["text"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 131072,
 				maxTokens: 65536,
