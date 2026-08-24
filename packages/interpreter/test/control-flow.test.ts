@@ -28,6 +28,43 @@ describe("cond / if / when", () => {
 		expect(ev("(when t 1 2 3)")).toBe("3");
 		expect(ev("(when nil 1)")).toBe("nil");
 	});
+
+	it("unless runs the body only when the test fails", () => {
+		expect(ev("(unless nil 1 2 3)")).toBe("3");
+		expect(ev("(unless t 1)")).toBe("nil");
+	});
+});
+
+describe("case", () => {
+	it("matches a clause whose keylist contains the key", () => {
+		expect(ev("(case 2 ((1 2 3) 'a) ((4 5) 'b) (t 'c))")).toBe("a");
+		expect(ev("(case 5 ((1 2 3) 'a) ((4 5) 'b) (t 'c))")).toBe("b");
+	});
+
+	it("matches a single non-list key", () => {
+		expect(ev("(case 'x (x 'matched) (t 'default))")).toBe("matched");
+	});
+
+	it("falls through to the t default clause", () => {
+		expect(ev("(case 99 ((1 2) 'a) (t 'default))")).toBe("default");
+	});
+
+	it("returns nil when nothing matches and there is no default", () => {
+		expect(ev("(case 99 ((1 2) 'a))")).toBe("nil");
+	});
+
+	it("disambiguates a literal t key from the default clause", () => {
+		expect(ev("(case t ((t) 'literal) (t 'default))")).toBe("literal");
+		expect(ev("(case 99 ((t) 'literal) (t 'default))")).toBe("default");
+	});
+
+	it("evaluates key-expr exactly once", () => {
+		expect(
+			ev(
+				"(setq n 0) (defun next () (setq n (+ n 1)) n) (case (next) (1 'ok) (t 'bad)) n",
+			),
+		).toBe("1");
+	});
 });
 
 describe("and / or short-circuiting", () => {

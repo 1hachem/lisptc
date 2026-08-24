@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { ev, evWithOutput } from "./helpers.ts";
 
 describe("output functions", () => {
-	it("princ prints without quoting; returns its argument", () => {
+	it("princ prints without quoting; returns an unspecified value", () => {
 		const { value, output } = evWithOutput('(princ "hello")');
 		expect(output).toBe("hello");
-		expect(value).toBe('"hello"');
+		expect(value).toBe("#<unspecified>");
 	});
 
 	it("prin1 prints the readable (quoted) form", () => {
@@ -13,16 +13,16 @@ describe("output functions", () => {
 		expect(output).toBe('"hi"');
 	});
 
-	it("print adds a trailing newline and returns its argument", () => {
+	it("print adds a trailing newline; returns an unspecified value", () => {
 		const { value, output } = evWithOutput("(print 42)");
 		expect(output).toBe("42\n");
-		expect(value).toBe("42");
+		expect(value).toBe("#<unspecified>");
 	});
 
-	it("terpri writes a newline and returns t", () => {
+	it("terpri writes a newline; returns an unspecified value", () => {
 		const { value, output } = evWithOutput("(terpri)");
 		expect(output).toBe("\n");
-		expect(value).toBe("t");
+		expect(value).toBe("#<unspecified>");
 	});
 
 	it("princ prints floats with .0", () => {

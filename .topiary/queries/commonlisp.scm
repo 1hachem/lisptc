@@ -71,6 +71,51 @@
   (_)
 )
 
+; --- try / catch -------------------------------------------------------------
+
+; `try`/`catch` are ordinary lists in this grammar (no dedicated node, unlike
+; `defun`), so unlike everything else here we force their layout rather than
+; just following the author's softline: `try`, the tried form, and the catch
+; clause each always get their own line, regardless of how the source was
+; written. `#eq?` on a capture doubles as both the predicate check and the
+; formatting directive, since Topiary requires every capture name in a query
+; to be a real directive — there's no predicate-only capture.
+(list_lit
+  .
+  "("
+  .
+  (sym_lit) @append_hardline
+  .
+  (_)
+  .
+  (list_lit
+    .
+    "("
+    .
+    (sym_lit) @append_space
+    (#eq? @append_space "catch")
+  ) @prepend_hardline
+  .
+  ")"
+  .
+  (#eq? @append_hardline "try")
+)
+
+; Inside `catch`, keep `catch (var)` glued together (like defun_header) and
+; put the first handler form on its own line — but only when a handler form
+; is actually present, so `(catch (e))` doesn't get a dangling blank line.
+(list_lit
+  .
+  "("
+  .
+  (sym_lit) @append_space
+  .
+  (list_lit) @append_hardline
+  .
+  (_)
+  (#eq? @append_space "catch")
+)
+
 ; --- Comments --------------------------------------------------------------
 
 ; Standalone comments sit on their own line; allow the author's blank lines

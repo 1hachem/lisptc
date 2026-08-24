@@ -213,7 +213,9 @@ function mcpRequest(
 			parsed && typeof parsed === "object" && "error" in parsed
 				? String((parsed as { error: unknown }).error)
 				: json;
-		throw new EvalException(`MCP error: ${msg}`, op, false);
+		// Bind the handler variable to the actual error text (not `op`, an
+		// internal op-code like "call-tool" a `catch` couldn't act on).
+		throw new EvalException("MCP error", msg, false);
 	}
 	return parsed;
 }
@@ -254,7 +256,10 @@ function collect(job: Job, raw: unknown): unknown {
 
 // Turn a broker SettledReply into the collected Lisp value, throwing on error.
 function collectSettled(job: Job, r: SettledReply): unknown {
-	if (!r.ok) throw new EvalException(`MCP error: ${r.e}`, job.label, false);
+	// Bind the handler variable to the actual error text, matching (:error msg)
+	// in await-all and the mcpRequest error path above — not `job.label`, which
+	// a `catch` couldn't act on.
+	if (!r.ok) throw new EvalException("MCP error", r.e ?? "unknown", false);
 	return collect(job, r.v);
 }
 
