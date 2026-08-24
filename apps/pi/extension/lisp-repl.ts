@@ -250,6 +250,15 @@ function registerFireworks(pi: ExtensionAPI): void {
 				contextWindow: 131072,
 				maxTokens: 65536,
 			},
+			{
+				id: "accounts/fireworks/models/qwen3p7-plus",
+				name: "Qwen",
+				reasoning: true,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 131072,
+				maxTokens: 65536,
+			},
 		],
 	});
 }
