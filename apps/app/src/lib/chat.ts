@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 
-export interface ChatMessage {
+interface ChatMessage {
 	id: string;
 	role: "user" | "assistant";
 	text: string;
