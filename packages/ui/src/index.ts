@@ -15,6 +15,7 @@ export {
 // shadcn primitives (scaffolded via the shadcn CLI)
 export { Button, buttonVariants } from "./components/ui/button.tsx";
 export { Input } from "./components/ui/input.tsx";
+export * from "./components/ui/sidebar.tsx";
 export { Switch } from "./components/ui/switch.tsx";
 
 export { cn } from "./lib/utils.ts";

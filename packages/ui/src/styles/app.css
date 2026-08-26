@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "./theme.css";
 
+@custom-variant dark (&:is(.dark *));
+
 /* Shared package ships .tsx source (no build step), and the app lives outside
  * this package's tree, so scan both explicitly for class candidates. */
 @source "../";
@@ -42,4 +44,27 @@
 	::selection {
 		background: var(--bg2);
 	}
+}
+
+/* Map the shadcn sidebar tokens onto the terminal palette. */
+:root {
+	--sidebar: var(--bg1);
+	--sidebar-foreground: var(--fg);
+	--sidebar-primary: var(--fg);
+	--sidebar-primary-foreground: var(--bg);
+	--sidebar-accent: var(--bg2);
+	--sidebar-accent-foreground: var(--fg);
+	--sidebar-border: var(--bg2);
+	--sidebar-ring: var(--dim);
+}
+
+@theme inline {
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
 }
