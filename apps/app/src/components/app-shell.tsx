@@ -22,7 +22,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 			<SidebarProvider
 				open={rightOpen}
 				onOpenChange={setRightOpen}
-				style={{ "--sidebar-width": "268px" } as React.CSSProperties}
+				style={
+					{
+						"--sidebar-width": "268px",
+						"--sidebar-width-icon": "34px",
+					} as React.CSSProperties
+				}
 				className="min-h-0 min-w-0 flex-1"
 			>
 				<main className="flex min-w-0 flex-1 flex-col">{children}</main>

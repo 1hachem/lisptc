@@ -11,17 +11,21 @@ export interface Command {
 export const commands: Command[] = [
 	{ name: "/clear", desc: "start a fresh session" },
 	{ name: "/panel", desc: "toggle the side panel" },
+	{ name: "/sidebar", desc: "toggle the sidebar" },
 ];
 
 /** Runs a `/` command picked from the input menu. */
 export function useCommandRunner() {
-	const { toggleRight } = useUI();
+	const { toggleLeft, toggleRight } = useUI();
 
 	return useCallback(
 		(name: string) => {
 			switch (name) {
 				case "/clear":
 					clearMessages();
+					break;
+				case "/sidebar":
+					toggleLeft();
 					break;
 				case "/panel":
 					toggleRight();
@@ -30,6 +34,6 @@ export function useCommandRunner() {
 					break;
 			}
 		},
-		[toggleRight],
+		[toggleLeft, toggleRight],
 	);
 }

@@ -1,10 +1,8 @@
 import { Sidebar, useSidebar } from "@repo/ui";
 import { clearMessages } from "../lib/chat.ts";
-import { useUI } from "../lib/ui.tsx";
 
 export function LeftSidebar() {
 	const { state, toggleSidebar } = useSidebar();
-	const { toggleRight, rightOpen } = useUI();
 	const collapsed = state === "collapsed";
 
 	return (
@@ -55,15 +53,6 @@ export function LeftSidebar() {
 					</div>
 
 					<div className="flex items-baseline gap-2 px-2.5 text-[11px] text-dim">
-						<button
-							type="button"
-							onClick={toggleRight}
-							className={`flex-none whitespace-nowrap hover:text-fg ${
-								rightOpen ? "text-aqua" : "text-dim"
-							}`}
-						>
-							panel
-						</button>
 						<button
 							type="button"
 							onClick={toggleSidebar}
