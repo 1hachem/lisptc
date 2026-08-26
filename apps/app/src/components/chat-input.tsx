@@ -10,7 +10,7 @@ import {
 	MenuOption,
 	useBasicTypeaheadTriggerMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
-import { cn } from "@repo/ui";
+import { cn, useIsMobile } from "@repo/ui";
 import {
 	$getRoot,
 	CLEAR_EDITOR_COMMAND,
@@ -98,7 +98,7 @@ function Editor({ placeholder = "", onSubmit, onCommand }: ChatInputProps) {
 							<ContentEditable
 								aria-placeholder={placeholder}
 								placeholder={
-									<div className="pointer-events-none absolute inset-0 py-1 text-dim">
+									<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
 										{placeholder}
 									</div>
 								}
@@ -172,14 +172,16 @@ function CommandMenuPlugin({
 }) {
 	const [editor] = useLexicalComposerContext();
 	const [query, setQuery] = useState<string | null>(null);
+	const isMobile = useIsMobile();
 	const triggerFn = useBasicTypeaheadTriggerMatch("/", { minLength: 0 });
 
 	const options = useMemo(() => {
 		const q = (query ?? "").toLowerCase();
 		return commands
+			.filter((c) => !(isMobile && c.desktopOnly))
 			.filter((c) => c.name.slice(1).startsWith(q))
 			.map((c) => new CommandOption(c));
-	}, [query]);
+	}, [query, isMobile]);
 
 	const onSelectOption = useCallback(
 		(

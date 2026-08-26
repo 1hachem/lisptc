@@ -6,12 +6,14 @@ export interface Command {
 	name: string;
 	desc: string;
 	hint?: string;
+	/** hidden on phone-sized screens (e.g. sidebar toggles) */
+	desktopOnly?: boolean;
 }
 
 export const commands: Command[] = [
 	{ name: "/clear", desc: "start a fresh session" },
-	{ name: "/panel", desc: "toggle the side panel" },
-	{ name: "/sidebar", desc: "toggle the sidebar" },
+	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
+	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
 ];
 
 /** Runs a `/` command picked from the input menu. */
