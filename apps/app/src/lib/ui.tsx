@@ -1,28 +1,28 @@
 import { createContext, useContext, useMemo, useState } from "react";
 
 interface UIContextValue {
-	navCollapsed: boolean;
-	toggleNav: () => void;
+	leftOpen: boolean;
+	setLeftOpen: (open: boolean) => void;
 	rightOpen: boolean;
+	setRightOpen: (open: boolean) => void;
 	toggleRight: () => void;
-	closeRight: () => void;
 }
 
 const UIContext = createContext<UIContextValue | null>(null);
 
 export function UIProvider({ children }: { children: React.ReactNode }) {
-	const [navCollapsed, setNavCollapsed] = useState(false);
+	const [leftOpen, setLeftOpen] = useState(true);
 	const [rightOpen, setRightOpen] = useState(false);
 
 	const value = useMemo<UIContextValue>(
 		() => ({
-			navCollapsed,
-			toggleNav: () => setNavCollapsed((c) => !c),
+			leftOpen,
+			setLeftOpen,
 			rightOpen,
+			setRightOpen,
 			toggleRight: () => setRightOpen((o) => !o),
-			closeRight: () => setRightOpen(false),
 		}),
-		[navCollapsed, rightOpen],
+		[leftOpen, rightOpen],
 	);
 
 	return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
