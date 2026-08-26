@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@import "./theme.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Shared package ships .tsx source (no build step), and the app lives outside
+ * this package's tree, so scan both explicitly for class candidates. */
+@source "../";
+@source "../../../../apps/app/src";
+
+@layer base {
+	html,
+	body,
+	#root {
+		height: 100%;
+	}
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--fg);
+		font-family: var(--font-mono);
+		font-size: 13px;
+		line-height: 1.7;
+		font-weight: 400;
+		-webkit-font-smoothing: antialiased;
+	}
+	a {
+		color: var(--blue);
+		text-decoration: none;
+	}
+	a:hover {
+		color: var(--aqua);
+	}
+	::-webkit-scrollbar {
+		width: 7px;
+		height: 7px;
+	}
+	::-webkit-scrollbar-thumb {
+		background: var(--bg2);
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::selection {
+		background: var(--bg2);
+	}
+}
+
+/* Map the shadcn sidebar tokens onto the terminal palette. */
+:root {
+	--sidebar: var(--bg1);
+	--sidebar-foreground: var(--fg);
+	--sidebar-primary: var(--fg);
+	--sidebar-primary-foreground: var(--bg);
+	--sidebar-accent: var(--bg2);
+	--sidebar-accent-foreground: var(--fg);
+	--sidebar-border: var(--bg2);
+	--sidebar-ring: var(--dim);
+}
+
+@theme inline {
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+}

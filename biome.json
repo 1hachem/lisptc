@@ -18,7 +18,11 @@
       "packages/*/*.json",
       "apps/*/*.json",
       "!**/node_modules",
-      "!**/.claude"
+      "!**/.claude",
+      "!packages/ui/src/components/ui",
+      "!packages/ui/src/components/ai-elements",
+      "!packages/ui/src/styles",
+      "!apps/app/src/routeTree.gen.ts"
     ]
   },
   "formatter": {
