@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@import "./theme.css";
+
+/* Shared package ships .tsx source (no build step), and the app lives outside
+ * this package's tree, so scan both explicitly for class candidates. */
+@source "../";
+@source "../../../../apps/app/src";
+
+@layer base {
+	html,
+	body,
+	#root {
+		height: 100%;
+	}
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--fg);
+		font-family: var(--font-mono);
+		font-size: 13px;
+		line-height: 1.7;
+		font-weight: 400;
+		-webkit-font-smoothing: antialiased;
+	}
+	a {
+		color: var(--blue);
+		text-decoration: none;
+	}
+	a:hover {
+		color: var(--aqua);
+	}
+	::-webkit-scrollbar {
+		width: 7px;
+		height: 7px;
+	}
+	::-webkit-scrollbar-thumb {
+		background: var(--bg2);
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::selection {
+		background: var(--bg2);
+	}
+}

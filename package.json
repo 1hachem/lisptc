@@ -7,6 +7,7 @@
     "node": ">=22.6.0"
   },
   "scripts": {
+    "dev": "turbo run dev",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
@@ -19,6 +20,12 @@
     "knip": "knip",
     "pi": "pi --provider fireworks --model accounts/fireworks/models/kimi-k3:low",
     "prepare": "husky"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.2.2",
+      "@types/react-dom": "^19.2.2"
+    }
   },
   "pi": {
     "extensions": [
