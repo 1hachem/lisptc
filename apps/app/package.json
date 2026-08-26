@@ -10,9 +10,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "start": "node .output/server/index.mjs",
-    "typecheck": "tsc --noEmit",
-    "routes:generate": "tsr generate",
-    "routes:watch": "tsr watch"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@lexical/react": "^0.49.0",
@@ -27,7 +25,6 @@
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@tailwindcss/vite": "^4.1.16",
-    "@tanstack/router-cli": "^1.167.33",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.0.4",
