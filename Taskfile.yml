@@ -46,7 +46,7 @@ tasks:
     cmd: bash editors/nvim/tests/run.sh
   
   dev:
-    deps: [dev-app, dev-api]
+    deps: [dev-app, dev-api, serve-gemma]
 
   dev-app:
     desc: run pi agent with access to secrets
@@ -59,6 +59,92 @@ tasks:
   pi:
     desc: run pi agent with access to secrets
     cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
+
+  serve-gemma:
+    desc: serve the local gemma-4 model; restores the saved system-prompt KV cache if present
+    vars:
+      HOST: '{{.HOST | default "127.0.0.1"}}'
+      PORT: '{{.PORT | default "8080"}}'
+      # KV cache on disk. --swa-full is required for gemma: its sliding-window
+      # attention otherwise discards the prefix KV, so nothing is reusable.
+      CACHE_DIR: '{{.CACHE_DIR | default ".llama-cache"}}'
+    cmd: |
+      # Always start fresh: stop whatever is already bound to the port so a stale
+      # server (or a leftover from a prior `task dev`) never blocks the new one.
+      old=$(ss -ltnpH "sport = :{{.PORT}}" 2>/dev/null | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)
+      if [ -n "$old" ]; then
+        echo "stopping existing server (pid $old) on {{.PORT}}"
+        kill "$old" 2>/dev/null
+        for i in $(seq 1 20); do ss -ltn 2>/dev/null | grep -q ":{{.PORT}} " && sleep 0.5 || break; done
+      fi
+      mkdir -p {{.CACHE_DIR}}
+      # The cache is keyed to the prompt's content hash: edit the prompt and the
+      # old file is simply not found, so a stale cache can never be restored.
+      hash=$(node --experimental-transform-types packages/ai/scripts/prompt-hash.ts 2>/dev/null)
+      slot="system-$hash.bin"
+      # Once the server is listening, either restore the cache or, if it's missing
+      # (first run, or the prompt changed), build it via serve-gemma:warm — so the
+      # cache always ends up populated without a separate manual step. Runs in the
+      # background; `exec` then hands the foreground to llama-server so Ctrl-C
+      # stops it directly.
+      (
+        until curl -sf http://{{.HOST}}:{{.PORT}}/health >/dev/null 2>&1; do sleep 1; done
+        if [ -n "$hash" ] && [ -f "{{.CACHE_DIR}}/$slot" ]; then
+          echo "restoring system-prompt KV from {{.CACHE_DIR}}/$slot"
+          if curl -sf -X POST "http://{{.HOST}}:{{.PORT}}/slots/0?action=restore" \
+               -H 'content-type: application/json' -d "{\"filename\":\"$slot\"}" >/dev/null; then
+            echo "KV restored — system prompt won't be re-evaluated"
+          else
+            echo "KV restore failed (stale cache?); rebuilding via serve-gemma:warm"
+            rm -f "{{.CACHE_DIR}}/$slot"
+            HOST={{.HOST}} PORT={{.PORT}} CACHE_DIR={{.CACHE_DIR}} task serve-gemma:warm
+          fi
+        else
+          echo "no KV cache for the current prompt — building it now (one-time, slow)"
+          HOST={{.HOST}} PORT={{.PORT}} CACHE_DIR={{.CACHE_DIR}} task serve-gemma:warm
+        fi
+      ) &
+      # --no-mmproj: serve text-only (the agent has no vision). Slot save/restore
+      # is disabled for multimodal models, so this is required for the KV cache.
+      # --no-warmup: skip the empty warmup run through the default chat template.
+      # --ctx-size 16384: fits the distilled ~4.6k-token system prompt with plenty
+      # of headroom for the conversation. The default 131072 makes the (full-size,
+      # for SWA) KV cache large enough to OOM this box.
+      # -ngl 99: offload all layers to the Vulkan (Radeon iGPU) backend. The
+      # E2B model is small enough to fit entirely, so there's no reason to keep
+      # any layers on the CPU.
+      exec llama-server \
+        -hf ggml-org/gemma-4-E2B-it-GGUF --no-mmproj --no-warmup \
+        --host {{.HOST}} --port {{.PORT}} \
+        --ctx-size 16384 --parallel 1 --swa-full \
+        -ngl 99 \
+        --slot-save-path {{.CACHE_DIR}}
+
+  serve-gemma:warm:
+    desc: build the system-prompt KV cache on disk (idempotent; auto-run by serve-gemma)
+    vars:
+      HOST: '{{.HOST | default "127.0.0.1"}}'
+      PORT: '{{.PORT | default "8080"}}'
+      CACHE_DIR: '{{.CACHE_DIR | default ".llama-cache"}}'
+    cmd: |
+      hash=$(node --experimental-transform-types packages/ai/scripts/prompt-hash.ts 2>/dev/null)
+      [ -n "$hash" ] || { echo "failed to compute prompt hash"; exit 1; }
+      # Idempotent: if the cache for the current prompt already exists, do nothing.
+      if [ -f "{{.CACHE_DIR}}/system-$hash.bin" ]; then
+        echo "cache already warm for current prompt (system-$hash.bin) — nothing to do"
+        exit 0
+      fi
+      # Needs a running server (serve-gemma calls this once its own is healthy;
+      # standalone, wait a bit in case it's still loading).
+      for i in $(seq 1 60); do
+        curl -sf http://{{.HOST}}:{{.PORT}}/health >/dev/null 2>&1 && break
+        [ "$i" = 60 ] && { echo "no server on {{.HOST}}:{{.PORT}} — start 'task serve-gemma' first"; exit 1; }
+        sleep 1
+      done
+      # Drop caches for older prompt versions — only the current one is useful.
+      rm -f {{.CACHE_DIR}}/system-*.bin
+      LLAMACPP_BASE_URL="http://{{.HOST}}:{{.PORT}}/v1" LLAMACPP_SLOT_FILE="system-$hash.bin" \
+        pnpm --filter @repo/ai exec node --experimental-transform-types scripts/warm-llama.ts
 
   repl:
     desc: run the interactive REPL against a local (private) interpreter

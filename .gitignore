@@ -11,3 +11,6 @@ node_modules/
 .claude/worktrees/
 
 editors/nvim/.vendor/
+
+# llama.cpp on-disk KV cache (task serve-gemma)
+.llama-cache/
