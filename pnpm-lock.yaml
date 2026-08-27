@@ -227,6 +227,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
+      '@repo/repl':
+        specifier: workspace:*
+        version: link:../repl
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*
