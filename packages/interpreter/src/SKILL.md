@@ -281,6 +281,18 @@ earlier step, then write it into the halt string literal.
     `(search-tools "navigate")`; to list them use `(list-tools "playwright")`.
 - `(unload-mcp "name")`, `(login "name")`, `(logout "name")`,
   `(mcp-authorize "name" "code")`, `(mcp-shutdown)`.
+- **OAuth login/logout lifecycle** (only for `:oauth t` servers):
+  - `(login "name")` begins authorization and returns the login URL to open (or
+    `:logged-in` if already authenticated). After approving, `(load-mcp "name")`
+    connects.
+  - `(logout "name")` → `:logged-out`. Unloads the server if it's loaded AND
+    deletes its saved tokens, so the next `(load-mcp "name")` / `(login "name")`
+    re-authorizes from scratch. Use it to sign out, or to force a fresh consent
+    after widening a server's `:scopes` (e.g. a tool call returned
+    `403 insufficient_scope`): `(logout "name")` then `(login "name")` again.
+  - Both `login` and `logout` only accept a **predefined OAuth server name**;
+    calling them on an unknown/non-OAuth server errors. `logout` is a no-op-safe
+    sign-out — it doesn't error if the server isn't currently loaded.
 - Each loaded tool becomes a global `<server>/<tool>` called with keyword args and
   **blocking** (returns the result directly), e.g.
   `(linear/list-issues :query "auth bug")`. Inspect one with `(doc 'linear/list-issues)`.
