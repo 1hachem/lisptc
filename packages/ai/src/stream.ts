@@ -1,3 +1,5 @@
+//TODO: check if langchain has builtin functions to support these helpers
+// for sure they have a funtion for use-stream since its a native
 import { type AgentConfig, type AgentMessage, streamAgent } from "./agent.ts";
 
 /** A message as it arrives from the client (LangChain message-like dict). */

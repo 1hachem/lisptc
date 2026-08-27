@@ -1,10 +1,11 @@
-// A small GBNF (llama.cpp / Fireworks flavour) recogniser, used by the tests to
+// A small GBNF (llama.cpp) recogniser, used by the tests to
 // check that a `.gbnf` grammar accepts / rejects a given string. It supports the
 // subset the project's grammars use: rules (`name ::= …`), alternation `|`,
 // sequencing, postfix `* + ?`, grouping `( … )`, string literals, character
 // classes (with `^` negation, ranges and `\t \r \n \" \\ \uXXXX \UXXXXXXXX \xXX`
 // escapes) and the `.` any-char wildcard. Matching is over Unicode code points,
 // so astral characters (e.g. emoji) count as one.
+// TODO: add link to llama.cpp test where this was translated from C to js
 
 type Node =
 	| { t: "ref"; id: number; name: string }
