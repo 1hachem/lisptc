@@ -5,9 +5,9 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./ai.ts": "./src/ai.ts",
-    "./repl.ts": "./src/repl.ts",
-    "./oauth.ts": "./src/oauth.ts",
+    "./ai": "./src/ai.ts",
+    "./repl": "./src/repl.ts",
+    "./oauth": "./src/oauth.ts",
     "./package.json": "./package.json"
   },
   "engines": {
