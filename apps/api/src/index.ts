@@ -16,11 +16,18 @@ app.get("/health", (c) => c.json({ ok: true }));
 // The client's FetchStreamTransport posts `{ input, config, ... }`; the agent
 // stream + LangGraph SSE framing all live in @repo/ai — this only routes.
 app.post("/api/chat", async (c) => {
-	const { input } = await c.req.json<{ input?: ChatInput }>();
+	// The client's FetchStreamTransport carries the chat identity in
+	// `config.configurable.thread_id`; the REPL persists per thread so interpreter
+	// state survives across a chat's turns.
+	const { input, config } = await c.req.json<{
+		input?: ChatInput;
+		config?: { configurable?: { thread_id?: string } };
+	}>();
 	return streamChatResponse(
 		input ?? {},
-		{ system: LISP_SYSTEM_PROMPT },
+		{ provider: "llamacpp", system: LISP_SYSTEM_PROMPT },
 		c.req.raw.signal,
+		config?.configurable?.thread_id,
 	);
 });
 
