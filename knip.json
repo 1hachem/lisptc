@@ -6,6 +6,10 @@
       "entry": ["scripts/*.ts"],
       "project": ["scripts/**/*.ts"]
     },
+    "packages/ai": {
+      "entry": ["scripts/*.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts"]
+    },
     "packages/env": {
       "entry": ["src/*.ts"],
       "project": ["src/**/*.ts"]
