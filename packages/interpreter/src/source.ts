@@ -37,5 +37,6 @@ export const INTERPRETER_SOURCES: Record<string, string> = Object.fromEntries(
 // system prompt.
 export const INTERPRETER_SOURCE: string = FILES.map(
 	(file) =>
-		`### src/${file}\n\`\`\`${lang(file)}\n${INTERPRETER_SOURCES[file]}\n\`\`\``,
+		`Here is the source code of the interpreter:
+        ### src/${file}\n\`\`\`${lang(file)}\n${INTERPRETER_SOURCES[file]}\n\`\`\``,
 ).join("\n\n");
