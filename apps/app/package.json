@@ -22,7 +22,8 @@
     "@tanstack/react-start": "^1.168.49",
     "lexical": "^0.49.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "streamdown": "^2.6.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

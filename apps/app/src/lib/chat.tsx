@@ -80,6 +80,37 @@ export function messageReasoning(message: ChatMessage): string {
 	return typeof reasoning === "string" ? reasoning : "";
 }
 
+export function isToolMessage(message: ChatMessage): boolean {
+	return message.type === "tool";
+}
+
+/**
+ * A REPL result rides as a JSON tool-result object (so the model never mistakes
+ * it for a human turn). Unwrap it for display: show the printed `output`, and
+ * flag failures. Falls back to the raw content if it isn't the expected shape.
+ */
+export function toolResult(message: ChatMessage): {
+	output: string;
+	error: boolean;
+} {
+	const text = messageText(message);
+	try {
+		const parsed = JSON.parse(text) as {
+			source?: unknown;
+			output?: unknown;
+			error?: unknown;
+		};
+		if (parsed?.source === "lisp-repl")
+			return {
+				output: String(parsed.output ?? ""),
+				error: Boolean(parsed.error),
+			};
+	} catch {
+		// not JSON — fall through to raw text
+	}
+	return { output: text, error: false };
+}
+
 export function messageText(message: ChatMessage): string {
 	const { content } = message;
 	if (typeof content === "string") return content;
