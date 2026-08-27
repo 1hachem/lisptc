@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { clearMessages } from "./chat.ts";
+import { useChatSession } from "./chat.tsx";
 import { useUI } from "./ui.tsx";
 
 export interface Command {
@@ -19,12 +19,13 @@ export const commands: Command[] = [
 /** Runs a `/` command picked from the input menu. */
 export function useCommandRunner() {
 	const { toggleLeft, toggleRight } = useUI();
+	const { clear } = useChatSession();
 
 	return useCallback(
 		(name: string) => {
 			switch (name) {
 				case "/clear":
-					clearMessages();
+					clear();
 					break;
 				case "/sidebar":
 					toggleLeft();
@@ -36,6 +37,6 @@ export function useCommandRunner() {
 					break;
 			}
 		},
-		[toggleLeft, toggleRight],
+		[toggleLeft, toggleRight, clear],
 	);
 }

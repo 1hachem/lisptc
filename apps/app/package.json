@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@langchain/core": "^1.2.9",
+    "@langchain/langgraph-sdk": "^1.10.0",
     "@lexical/react": "^0.49.0",
     "@repo/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.5",

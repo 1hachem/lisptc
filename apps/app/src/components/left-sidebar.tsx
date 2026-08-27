@@ -1,8 +1,9 @@
 import { Sidebar, useSidebar } from "@repo/ui";
-import { clearMessages } from "../lib/chat.ts";
+import { useChatSession } from "../lib/chat.tsx";
 
 export function LeftSidebar() {
 	const { state, toggleSidebar } = useSidebar();
+	const { clear } = useChatSession();
 	const collapsed = state === "collapsed";
 
 	return (
@@ -11,7 +12,7 @@ export function LeftSidebar() {
 				<div className="flex h-full flex-col items-center gap-3.5 py-3.5">
 					<button
 						type="button"
-						onClick={clearMessages}
+						onClick={clear}
 						title="new session"
 						className="text-blue hover:brightness-125"
 					>
@@ -33,7 +34,7 @@ export function LeftSidebar() {
 					<div className="flex flex-col gap-[3px] px-1.5">
 						<button
 							type="button"
-							onClick={clearMessages}
+							onClick={clear}
 							className="flex items-baseline gap-2 border-b-2 border-b-bg bg-bg2 px-2.5 py-1 text-left text-blue transition hover:brightness-125 active:translate-y-0.5 active:border-b-0 active:pt-1.5"
 						>
 							<span className="w-[11px] flex-none text-center text-[11px]">
