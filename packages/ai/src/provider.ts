@@ -53,11 +53,38 @@ export const fireworks: Provider = (opts) => {
 	});
 };
 
-export const providers = { fireworks } satisfies Record<string, Provider>;
+const DEFAULT_LLAMACPP_MODEL = "gemma-4-E2B-it";
+const LLAMACPP_BASE_URL = "http://127.0.0.1:8080/v1";
+
+// Local llama.cpp `llama-server` (see `task serve-gemma`). Exposes an
+// OpenAI-compatible endpoint, so ChatOpenAI talks to it directly. It ignores
+// the API key but ChatOpenAI insists on a non-empty one.
+export const llamacpp: Provider = (opts) => {
+	const grammar = opts.grammar === undefined ? LISP_GRAMMAR : opts.grammar;
+	// llama-server takes a GBNF `grammar` as a top-level extension to the
+	// OpenAI body, so it rides through `modelKwargs`. (No `reasoning_effort` —
+	// gemma has no thinking channel.)
+	const modelKwargs: Record<string, unknown> = {};
+	if (grammar) modelKwargs.grammar = grammar;
+
+	return new ChatOpenAI({
+		apiKey: "llama.cpp",
+		model: opts.model ?? aiEnv.LLAMACPP_MODEL ?? DEFAULT_LLAMACPP_MODEL,
+		temperature: opts.temperature ?? undefined,
+		streaming: opts.streaming ?? true,
+		configuration: { baseURL: aiEnv.LLAMACPP_BASE_URL ?? LLAMACPP_BASE_URL },
+		modelKwargs,
+	});
+};
+
+export const providers = { fireworks, llamacpp } satisfies Record<
+	string,
+	Provider
+>;
 
 export type ProviderName = keyof typeof providers;
 
-export function getProvider(name: ProviderName = "fireworks"): Provider {
+export function getProvider(name: ProviderName = "llamacpp"): Provider {
 	const provider = providers[name];
 	if (!provider) throw new Error(`unknown AI provider: ${name}`);
 	return provider;
