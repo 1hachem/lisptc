@@ -36,4 +36,4 @@ ABSOLUTE RULES:
 // The complete system prompt: the lisp-only policy followed by the full
 // interpreter source (every `src/` file), so the LLM knows the exact language
 // it is programming.
-export const SYSTEM_PROMPT: string = POLICY;
+export const SYSTEM_PROMPT: string = `${POLICY}${"\n"}${INTERPRETER_SOURCE}`;
