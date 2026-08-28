@@ -47,22 +47,6 @@ function toLangChain(m: AgentMessage): BaseMessage {
 	}
 }
 
-function chunkText(content: unknown): string {
-	if (typeof content === "string") return content;
-	if (Array.isArray(content)) {
-		return content
-			.map((part) =>
-				typeof part === "string"
-					? part
-					: part && typeof part === "object" && "text" in part
-						? String((part as { text: unknown }).text)
-						: "",
-			)
-			.join("");
-	}
-	return "";
-}
-
 /** Fireworks streams thinking as `additional_kwargs.reasoning_content` (see the provider). */
 function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {
 	const kwargs = chunk.additional_kwargs as
@@ -96,7 +80,7 @@ export class Agent {
 		})) {
 			const reasoning = chunkReasoning(chunk);
 			if (reasoning) yield { reasoning };
-			const text = chunkText(chunk.content);
+			const text = chunk.text;
 			if (text) yield { text };
 		}
 	}
