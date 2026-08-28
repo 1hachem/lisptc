@@ -43,14 +43,8 @@ export function getThreadRepl(threadId: string | undefined): AgentRepl {
 	return repl;
 }
 
-// Drop a thread's REPL and release its MCP worker. Safe for a thread that never
-// loaded MCP — `(mcp-shutdown)` is a no-op there.
+// Drop a thread's REPL
+// TODO:: should check the release or its MCP worker.
 function evict(threadId: string): void {
-	const repl = repls.get(threadId);
 	repls.delete(threadId);
-	try {
-		repl?.eval("(mcp-shutdown)");
-	} catch {
-		// worker may already be gone; nothing to release
-	}
 }
