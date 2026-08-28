@@ -57,6 +57,9 @@ importers:
       hono:
         specifier: ^4.13.5
         version: 4.13.5
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*

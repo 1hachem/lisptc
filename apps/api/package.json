@@ -14,7 +14,8 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@repo/ai": "workspace:*",
-    "hono": "^4.13.5"
+    "hono": "^4.13.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
