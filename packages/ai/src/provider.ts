@@ -53,7 +53,7 @@ export const fireworks: Provider = (opts) => {
 	});
 };
 
-const DEFAULT_LLAMACPP_MODEL = "gemma-4-E2B-it";
+const DEFAULT_LLAMACPP_MODEL = "gemma-4-E4B-it";
 const LLAMACPP_BASE_URL = "http://127.0.0.1:8080/v1";
 
 // Local llama.cpp `llama-server` (see `task serve-gemma`). Exposes an

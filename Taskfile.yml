@@ -114,7 +114,7 @@ tasks:
       # E2B model is small enough to fit entirely, so there's no reason to keep
       # any layers on the CPU.
       exec llama-server \
-        -hf ggml-org/gemma-4-E2B-it-GGUF --no-mmproj --no-warmup \
+        -hf ggml-org/gemma-4-E4B-it-GGUF --no-mmproj --no-warmup \
         --host {{.HOST}} --port {{.PORT}} \
         --ctx-size 16384 --parallel 1 --swa-full \
         -ngl 99 \
