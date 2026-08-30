@@ -1,23 +1,20 @@
 {
-  "name": "@repo/env",
+  "name": "api",
   "version": "0.0.0",
   "type": "module",
   "private": true,
-  "exports": {
-    ".": "./src/index.ts",
-    "./ai": "./src/ai.ts",
-    "./repl": "./src/repl.ts",
-    "./oauth": "./src/oauth.ts",
-    "./package.json": "./package.json"
-  },
   "engines": {
     "node": ">=22.6.0"
   },
   "scripts": {
+    "dev": "node --no-warnings --experimental-transform-types --watch src/index.ts",
+    "start": "node --no-warnings --experimental-transform-types src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@t3-oss/env-core": "^0.13.11",
+    "@hono/node-server": "^2.1.1",
+    "@repo/ai": "workspace:*",
+    "hono": "^4.13.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

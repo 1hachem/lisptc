@@ -3,23 +3,42 @@
   "ignoreBinaries": ["pi"],
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts"],
+      "entry": ["scripts/**/*.ts"],
       "project": ["scripts/**/*.ts"]
     },
+    "packages/ai": {
+      "project": ["src/**/*.ts"]
+    },
     "packages/env": {
-      "entry": ["src/*.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/interpreter": {
-      "entry": ["test/**/*.test.ts"],
-      "project": ["src/**/*.ts"]
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "packages/repl": {
-      "entry": ["test/**/*.test.ts"],
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/ui": {
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/api": {
+      "project": ["src/**/*.ts"]
+    },
+    "apps/app": {
+      "entry": ["src/routes/**/*.tsx"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/lsp": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "apps/mcp": {
       "project": ["src/**/*.ts"]
     },
     "apps/pi": {
-      "entry": ["extension/*.ts"],
+      "entry": ["extension/lisp-repl.ts"],
       "project": ["extension/**/*.ts"]
     }
   }

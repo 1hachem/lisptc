@@ -12,7 +12,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@langchain/core": "^1.2.9",
+    "@langchain/openai": "^1.5.10",
+    "@repo/env": "workspace:*",
+    "@repo/interpreter": "workspace:*",
+    "@repo/repl": "workspace:*"
+  },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",

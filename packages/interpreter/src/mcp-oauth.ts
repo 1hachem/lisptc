@@ -16,7 +16,7 @@ import type {
 	OAuthClientMetadata,
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
-import { oauthEnv } from "@repo/env/oauth.ts";
+import { oauthEnv } from "@repo/env/oauth";
 
 // Everything persisted for one MCP server's OAuth session.
 export interface OAuthRecord {
