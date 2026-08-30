@@ -2,31 +2,59 @@ import { spawn } from "node:child_process";
 import { InfisicalSDK } from "@infisical/sdk";
 import { command, oneOf, option, positional, run, string } from "cmd-ts";
 
+const FORWARDED_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
+// How long the child gets to wind down after a forwarded signal before it is
+// killed outright. Without this the wrapper waits on `close` forever: installing
+// a SIGINT handler removes node's default exit, so a child that ignores the
+// signal (turbo, `node --watch`) hangs the whole task tree.
+const SHUTDOWN_GRACE_MS = 5000;
+
 // Helper to run a command with inherited stdio for interactive support
 function spawnWithSignal(
 	cmd: string,
 	options: { cwd: string; env: NodeJS.ProcessEnv },
 ): Promise<number> {
 	return new Promise((resolve, reject) => {
+		// Not `detached`: the child stays in this process group so an interactive
+		// command (`task pi`) keeps the terminal's foreground group and can read
+		// stdin without stopping on SIGTTIN.
 		const child = spawn(cmd, {
 			...options,
 			shell: true,
 			stdio: "inherit",
 		});
 
-		child.on("error", reject);
-		child.on("close", (code) => resolve(code ?? 0));
-
-		// forward termination signals to the child process
-		const forward = (sig: NodeJS.Signals) => {
-			if (!child.killed) {
-				child.kill(sig);
-			}
+		let killTimer: NodeJS.Timeout | undefined;
+		const forward = (sig: NodeJS.Signals) => () => {
+			if (child.pid === undefined) return;
+			// The command is a pipeline of supervisors (pnpm -> turbo -> node), so
+			// signal the child's group when it leads one; ESRCH just means it does
+			// not, and the direct signal below still applies.
+			try {
+				process.kill(-child.pid, sig);
+			} catch {}
+			child.kill(sig);
+			killTimer ??= setTimeout(() => {
+				child.kill("SIGKILL");
+			}, SHUTDOWN_GRACE_MS).unref();
+		};
+		const handlers = FORWARDED_SIGNALS.map(
+			(sig) => [sig, forward(sig)] as const,
+		);
+		for (const [sig, handler] of handlers) process.on(sig, handler);
+		const cleanup = () => {
+			clearTimeout(killTimer);
+			for (const [sig, handler] of handlers) process.off(sig, handler);
 		};
 
-		process.on("SIGINT", () => forward("SIGINT"));
-		process.on("SIGTERM", () => forward("SIGTERM"));
-		process.on("SIGQUIT", () => forward("SIGQUIT"));
+		child.on("error", (err) => {
+			cleanup();
+			reject(err);
+		});
+		child.on("close", (code) => {
+			cleanup();
+			resolve(code ?? 0);
+		});
 	});
 }
 

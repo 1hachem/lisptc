@@ -2,7 +2,10 @@
   "$schema": "https://turbo.build/schema.json",
   "envMode": "loose",
   "tasks": {
-    "dev": {},
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
     "build": {
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": ["dist/**"],
