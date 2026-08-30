@@ -30,7 +30,12 @@ server.registerTool(
 			"errors are rendered inline, not thrown). Definitions and loaded MCP " +
 			"servers persist across calls within a session.",
 		inputSchema: {
-			code: z.string().describe("Lisptc source program to evaluate."),
+			code: z
+				.string()
+				.describe(
+					"Lisptc source program to evaluate. Only the parenthesised forms " +
+						"are evaluated; text around them is prose the interpreter ignores.",
+				),
 		},
 	},
 	async ({ code }) => ({
@@ -59,8 +64,10 @@ server.registerTool(
 		title: "Check Lisptc syntax",
 		description:
 			"Parse Lisptc source WITHOUT evaluating it and report any syntax " +
-			"errors (with 1-based line numbers). Does not touch REPL state or run " +
-			"side effects — use it to validate a program before evaluating it.",
+			"errors (with 1-based line numbers). Only the parenthesised forms are " +
+			"parsed, so prose around them is never an error. Does not touch REPL " +
+			"state or run side effects — use it to validate a program before " +
+			"evaluating it.",
 		inputSchema: {
 			code: z.string().describe("Lisptc source program to parse."),
 		},

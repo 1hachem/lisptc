@@ -10,6 +10,13 @@ here, it does not exist — define it yourself.
 
 Source is s-expressions. `(f a b)` calls `f` with the evaluated `a` and `b`.
 
+Only the parenthesised top-level forms are program text: anything written around
+them is prose and is ignored, so a program can be prose with forms embedded in it
+(`Let me square it: (sq 5)` evaluates just `(sq 5)`). Two consequences: a bare
+value at top level (`42`, `"done"`, `my-var`) is prose, not an expression to
+evaluate — wrap it in a form; and a stray parenthesis in prose is still read as
+code, so never write one (no `:)`).
+
 - **Quote**: `'x` ≡ `(quote x)` — returns `x` unevaluated.
 - **Quasiquote**: `` `x `` ≡ `(quasiquote x)`. Inside it, `,x` (`unquote`) inserts
   the evaluated `x`, and `,@x` (`unquote-splicing`) splices a list. Example:
@@ -20,8 +27,8 @@ Source is s-expressions. `(f a b)` calls `f` with the evaluated `a` and `b`.
 - **Keywords**: `:foo` is a self-evaluating keyword (interned, so `(eq :a :a)` is `t`).
 - **Numbers**: see §4. `nil` and `()` are the same value (the empty list / false).
   `t` is canonical true.
-- **Comments** (`;`) are FORBIDDEN — the interpreter warns and ignores them. Write
-  self-explanatory code with no comments.
+- **Comments**: there is no comment syntax — prose around the forms is the comment.
+  `;` is an ordinary symbol character, so `; note` inside a form is read as code.
 - **Symbols**: any token that is not a number/string/keyword/`nil`/`t`. `/` and `-`
   are legal in names (e.g. `string-split`, `fs/read_file`).
 
@@ -329,6 +336,6 @@ A *job* is a handle for background work (currently just `load-mcp`).
 - No `nth`/`reduce`/`filter`/`mapc`/math library — write them or use `mapcar`/`dolist`/recursion.
 - No `let*`: use nested `let`, or `letrec` for mutually-referential bindings.
 - No character type: chars are one-character strings.
-- Comments are forbidden.
+- No comment syntax: remarks go in the prose around the forms, never inside one.
 - The REPL prints your last expression's value automatically — don't wrap final
   answers in `print`/`princ`.
