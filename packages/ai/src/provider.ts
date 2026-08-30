@@ -17,12 +17,21 @@ export interface ModelOptions {
 	/** Reasoning effort; `"none"` turns off thinking (qwen3p7-plus). */
 	// TODO: reasoning effort should be an enum
 	reasoningEffort?: string;
+	// Penalty on already-emitted tokens (1 = off). Under a grammar the model can
+	// satisfy the constraint by looping on whitespace forever, so a mild penalty
+	// is on by default; pass 1 to disable.
+	repeatPenalty?: number;
+	// How many recent tokens `repeatPenalty` looks back over (llama.cpp only).
+	// Left unset so the server's own default (64) stands.
+	repeatLastN?: number;
 }
 
 export type Provider = (opts: ModelOptions) => BaseChatModel;
 
 const DEFAULT_FIREWORKS_MODEL = "accounts/fireworks/models/kimi-k3";
 const FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1";
+
+const DEFAULT_REPEAT_PENALTY = 1.1;
 
 export const fireworks: Provider = (opts) => {
 	const apiKey = aiEnv.FIREWORKS_API_KEY;
@@ -38,6 +47,7 @@ export const fireworks: Provider = (opts) => {
 	// https://docs.fireworks.ai/structured-responses/structured-output-grammar-based
 	const modelKwargs: Record<string, unknown> = {
 		reasoning_effort: opts.reasoningEffort ?? "low",
+		repetition_penalty: opts.repeatPenalty ?? DEFAULT_REPEAT_PENALTY,
 	};
 	if (grammar) {
 		modelKwargs.response_format = { type: "grammar", grammar };
@@ -61,10 +71,14 @@ const LLAMACPP_BASE_URL = "http://127.0.0.1:8080/v1";
 // the API key but ChatOpenAI insists on a non-empty one.
 export const llamacpp: Provider = (opts) => {
 	const grammar = opts.grammar === undefined ? LISP_GRAMMAR : opts.grammar;
-	// llama-server takes a GBNF `grammar` as a top-level extension to the
-	// OpenAI body, so it rides through `modelKwargs`. (No `reasoning_effort` —
-	// gemma has no thinking channel.)
-	const modelKwargs: Record<string, unknown> = {};
+	// llama-server takes a GBNF `grammar` and the sampling penalties as top-level
+	// extensions to the OpenAI body, so they ride through `modelKwargs`. (No
+	// `reasoning_effort` — gemma has no thinking channel.)
+	const modelKwargs: Record<string, unknown> = {
+		repeat_penalty: opts.repeatPenalty ?? DEFAULT_REPEAT_PENALTY,
+	};
+	if (opts.repeatLastN !== undefined)
+		modelKwargs.repeat_last_n = opts.repeatLastN;
 	if (grammar) modelKwargs.grammar = grammar;
 
 	return new ChatOpenAI({
