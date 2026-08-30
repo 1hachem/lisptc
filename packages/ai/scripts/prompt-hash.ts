@@ -1,5 +1,5 @@
-// Prints a short content hash of the lisptc system prompt. Both `serve-gemma`
-// (restore) and `serve-gemma:warm` (save) name the KV cache file after this, so
+// Prints a short content hash of the lisptc system prompt. Both serve-llama.sh
+// (restore) and warm-llama.sh (save) name the KV cache file after this, so
 // editing the prompt (or the interpreter source it embeds) changes the hash and
 // the stale cache is simply never found — no manual invalidation needed.
 import { createHash } from "node:crypto";

@@ -2,7 +2,7 @@
 // resulting KV cache to disk (slot save), so a later `restore` skips re-evaluating
 // the whole prompt. Requires the server started with `--slot-save-path` and,
 // for gemma's sliding-window attention, `--swa-full` (otherwise the prefix KV is
-// discarded and can't be reused). See `task serve-gemma` / `task serve-gemma:warm`.
+// discarded and can't be reused). Driven by scripts/warm-llama.sh (`task serve-gemma`).
 //
 // The system prompt is tens of thousands of tokens; evaluating it on CPU takes
 // many minutes during which no response bytes flow, which trips `fetch`'s
