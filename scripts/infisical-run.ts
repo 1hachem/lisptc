@@ -3,11 +3,15 @@ import { InfisicalSDK } from "@infisical/sdk";
 import { command, oneOf, option, positional, run, string } from "cmd-ts";
 
 const FORWARDED_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
-// How long the child gets to wind down after a forwarded signal before it is
-// killed outright. Without this the wrapper waits on `close` forever: installing
-// a SIGINT handler removes node's default exit, so a child that ignores the
-// signal (turbo, `node --watch`) hangs the whole task tree.
-const SHUTDOWN_GRACE_MS = 5000;
+// A terminal delivers Ctrl-C to every process in the foreground group, so the
+// child usually already has the signal and is winding down. Wait before
+// forwarding our own copy: turbo reads a second interrupt as "force kill" and
+// says so loudly, when all that happened was a normal shutdown.
+const FORWARD_AFTER_MS = 5000;
+// Backstop for a child that ignores the signal (turbo, `node --watch`).
+// Installing a SIGINT handler removes node's default exit, so without this the
+// wrapper waits on a `close` that never comes and hangs the whole task tree.
+const KILL_AFTER_MS = 10000;
 
 // Helper to run a command with inherited stdio for interactive support
 function spawnWithSignal(
@@ -24,26 +28,32 @@ function spawnWithSignal(
 			stdio: "inherit",
 		});
 
-		let killTimer: NodeJS.Timeout | undefined;
-		const forward = (sig: NodeJS.Signals) => () => {
+		let interrupted = false;
+		const timers: NodeJS.Timeout[] = [];
+		const signalTree = (sig: NodeJS.Signals) => {
 			if (child.pid === undefined) return;
 			// The command is a pipeline of supervisors (pnpm -> turbo -> node), so
-			// signal the child's group when it leads one; ESRCH just means it does
-			// not, and the direct signal below still applies.
+			// prefer the child's group; ESRCH just means it does not lead one.
 			try {
 				process.kill(-child.pid, sig);
-			} catch {}
-			child.kill(sig);
-			killTimer ??= setTimeout(() => {
-				child.kill("SIGKILL");
-			}, SHUTDOWN_GRACE_MS).unref();
+			} catch {
+				child.kill(sig);
+			}
+		};
+		const forward = (sig: NodeJS.Signals) => () => {
+			if (interrupted) return;
+			interrupted = true;
+			timers.push(
+				setTimeout(() => signalTree(sig), FORWARD_AFTER_MS).unref(),
+				setTimeout(() => signalTree("SIGKILL"), KILL_AFTER_MS).unref(),
+			);
 		};
 		const handlers = FORWARDED_SIGNALS.map(
 			(sig) => [sig, forward(sig)] as const,
 		);
 		for (const [sig, handler] of handlers) process.on(sig, handler);
 		const cleanup = () => {
-			clearTimeout(killTimer);
+			for (const timer of timers) clearTimeout(timer);
 			for (const [sig, handler] of handlers) process.off(sig, handler);
 		};
 
@@ -51,9 +61,12 @@ function spawnWithSignal(
 			cleanup();
 			reject(err);
 		});
+		// An interrupt is how a dev server is meant to end, so report it as
+		// success: the 130 it exits with otherwise makes every task in the chain
+		// print "Failed to run task".
 		child.on("close", (code) => {
 			cleanup();
-			resolve(code ?? 0);
+			resolve(interrupted ? 0 : (code ?? 0));
 		});
 	});
 }

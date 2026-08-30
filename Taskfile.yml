@@ -13,8 +13,12 @@ tasks:
       vars: [ENV, PATHS, CMD]
     vars:
       DIR: '{{.DIR | default "."}}'
+    # node directly rather than `pnpm tsx`: pnpm exits 130 on the Ctrl-C that
+    # reaches the whole process group, which makes task report a failed task on
+    # every ordinary shutdown. Run the script as task's own child so its exit
+    # code is the one task sees.
     cmd: |
-      pnpm tsx ./scripts/infisical-run.ts -e {{.ENV}} \
+      node --no-warnings --experimental-transform-types ./scripts/infisical-run.ts -e {{.ENV}} \
        --projectId={{.PROJECTID}} \
        --paths="{{.PATHS}}" --dir={{.DIR}} "{{.CMD}}"
 
@@ -50,15 +54,21 @@ tasks:
 
   dev-app:
     desc: run pi agent with access to secrets
-    cmd: go-task _infisical-run ENV=dev PATHS="" CMD="pnpm run dev --filter app"
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: dev, PATHS: "", CMD: "pnpm run dev --filter app" }
     
   dev-api:
     desc: run api with access to secrets
-    cmd: go-task _infisical-run ENV=dev PATHS="/ai" CMD="pnpm run dev --filter api"
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: dev, PATHS: "/ai", CMD: "pnpm run dev --filter api" }
 
   pi:
     desc: run pi agent with access to secrets
-    cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: dev, PATHS: "/ai /repl", CMD: "pnpm run pi" }
 
   serve-gemma:
     desc: serve the local gemma model (the API primes its system-prompt KV cache)
