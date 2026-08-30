@@ -2,7 +2,7 @@ import {
 	FetchStreamTransport,
 	useStream,
 } from "@langchain/langgraph-sdk/react";
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -72,6 +72,51 @@ export function useChatSession(): ChatSession {
 		throw new Error("useChatSession must be used within a ChatProvider");
 	}
 	return ctx;
+}
+
+/** Mirrors `WarmStatus` in @repo/ai — the API reports it on /health. */
+export type WarmStatus =
+	| "pending"
+	| "restored"
+	| "saved"
+	| "unavailable"
+	| "failed";
+
+/**
+ * Polls the API until its llama.cpp KV warmup settles.
+ *
+ * Only an explicit `"pending"` counts as warming. An unreachable API stays
+ * `null` — locking the composer because the server is down would strand the
+ * user with no way to find out why; a send surfaces the real error instead.
+ */
+export function useWarmup(): { warming: boolean; status: WarmStatus | null } {
+	const [status, setStatus] = useState<WarmStatus | null>(null);
+
+	useEffect(() => {
+		let cancelled = false;
+		let timer: ReturnType<typeof setTimeout>;
+
+		const poll = async () => {
+			let warm: WarmStatus | null = null;
+			try {
+				const res = await fetch(`${API_URL}/health`);
+				warm = ((await res.json()) as { warm?: WarmStatus }).warm ?? null;
+			} catch {
+				// API not up yet — keep polling so the composer unlocks on its own
+			}
+			if (cancelled) return;
+			setStatus(warm);
+			if (warm === null || warm === "pending") timer = setTimeout(poll, 2000);
+		};
+		void poll();
+
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
+	}, []);
+
+	return { warming: status === "pending", status };
 }
 
 /** The model's thinking trace, accumulated client-side onto the AI message. */

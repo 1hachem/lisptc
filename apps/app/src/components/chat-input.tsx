@@ -31,6 +31,8 @@ export interface ChatInputProps {
 	isStreaming?: boolean;
 	/** abort the in-flight run */
 	onStop?: () => void;
+	/** the composer is locked (e.g. the model's KV cache is still warming) */
+	disabled?: boolean;
 }
 
 class CommandOption extends MenuOption {
@@ -47,6 +49,7 @@ export function ChatInput({
 	onCommand,
 	isStreaming,
 	onStop,
+	disabled,
 }: ChatInputProps) {
 	return (
 		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
@@ -66,6 +69,7 @@ export function ChatInput({
 					onCommand={onCommand}
 					isStreaming={isStreaming}
 					onStop={onStop}
+					disabled={disabled}
 				/>
 			</LexicalComposer>
 		</div>
@@ -78,12 +82,20 @@ function Editor({
 	onCommand,
 	isStreaming,
 	onStop,
+	disabled,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const menuOpen = useRef(false);
 	const menuHost = useRef<HTMLDivElement>(null);
 
+	// Lexical owns its own editable flag; toggling it is what actually stops
+	// keystrokes, paste and the typeahead menu, not just the button.
+	useEffect(() => {
+		editor.setEditable(!disabled);
+	}, [editor, disabled]);
+
 	const runText = useCallback(() => {
+		if (disabled) return;
 		const text = editor
 			.getEditorState()
 			.read(() => $getRoot().getTextContent())
@@ -91,7 +103,7 @@ function Editor({
 		if (!text) return;
 		onSubmit(text);
 		editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
-	}, [editor, onSubmit]);
+	}, [editor, onSubmit, disabled]);
 
 	const runCommand = useCallback(
 		(name: string) => {
@@ -104,8 +116,20 @@ function Editor({
 	return (
 		<>
 			<div ref={menuHost} />
-			<div className="flex w-full items-end gap-2.5 border-b border-bg2 bg-bg1 px-3 py-1">
-				<span className="flex-none self-start py-1 text-green">›</span>
+			<div
+				className={cn(
+					"flex w-full items-end gap-2.5 border-b border-bg2 bg-bg1 px-3 py-1",
+					disabled && "opacity-60",
+				)}
+			>
+				<span
+					className={cn(
+						"flex-none self-start py-1",
+						disabled ? "text-dim" : "text-green",
+					)}
+				>
+					{disabled ? "⋯" : "›"}
+				</span>
 				<div className="relative min-w-0 flex-1">
 					<PlainTextPlugin
 						contentEditable={
@@ -116,7 +140,12 @@ function Editor({
 										{placeholder}
 									</div>
 								}
-								className="max-h-40 min-h-0 overflow-y-auto py-1 text-yellow caret-yellow outline-none"
+								className={cn(
+									"max-h-40 min-h-0 overflow-y-auto py-1 outline-none",
+									disabled
+										? "cursor-not-allowed text-dim"
+										: "text-yellow caret-yellow",
+								)}
 							/>
 						}
 						ErrorBoundary={LexicalErrorBoundary}
@@ -135,7 +164,13 @@ function Editor({
 					<button
 						type="button"
 						onClick={runText}
-						className="flex h-auto flex-none items-center gap-[7px] self-center rounded-none bg-bg2 px-[9px] py-px text-[11.5px] text-green hover:brightness-125"
+						disabled={disabled}
+						className={cn(
+							"flex h-auto flex-none items-center gap-[7px] self-center rounded-none bg-bg2 px-[9px] py-px text-[11.5px]",
+							disabled
+								? "cursor-not-allowed text-dim"
+								: "text-green hover:brightness-125",
+						)}
 					>
 						<span>send</span>
 						<span className="text-dim">⏎</span>
@@ -154,6 +189,7 @@ function Editor({
 			/>
 			<EnterSubmitPlugin
 				onEnter={isStreaming ? (onStop ?? (() => {})) : runText}
+				disabled={disabled}
 				isMenuOpen={() => menuOpen.current}
 			/>
 		</>
@@ -164,9 +200,11 @@ function Editor({
 function EnterSubmitPlugin({
 	onEnter,
 	isMenuOpen,
+	disabled,
 }: {
 	onEnter: () => void;
 	isMenuOpen: () => boolean;
+	disabled?: boolean;
 }) {
 	const [editor] = useLexicalComposerContext();
 	useEffect(
@@ -174,6 +212,10 @@ function EnterSubmitPlugin({
 			editor.registerCommand(
 				KEY_ENTER_COMMAND,
 				(event) => {
+					if (disabled) {
+						event?.preventDefault();
+						return true;
+					}
 					if (isMenuOpen() || event?.shiftKey) return false;
 					event?.preventDefault();
 					onEnter();
@@ -181,7 +223,7 @@ function EnterSubmitPlugin({
 				},
 				COMMAND_PRIORITY_LOW,
 			),
-		[editor, onEnter, isMenuOpen],
+		[editor, onEnter, isMenuOpen, disabled],
 	);
 	return null;
 }
