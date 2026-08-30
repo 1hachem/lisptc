@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Start the local llama-server for the gemma model and make sure the
-# system-prompt KV cache is populated (restored from disk, or built once by
-# warm-llama.sh). Driven by `task serve-gemma`.
+# Start the local llama-server for the gemma model. The system-prompt KV cache
+# is not this script's business — the API primes it on startup (packages/ai/src/warm.ts)
+# via the server's own slot restore/save endpoints. Driven by `task serve-gemma`.
 set -euo pipefail
 
 HOST="${HOST:-127.0.0.1}"
@@ -24,33 +24,6 @@ if [ -n "$old" ]; then
 fi
 
 mkdir -p "$CACHE_DIR"
-# The cache is keyed to the prompt's content hash: edit the prompt and the
-# old file is simply not found, so a stale cache can never be restored.
-hash=$(node --experimental-transform-types packages/ai/scripts/prompt-hash.ts 2>/dev/null || true)
-slot="system-$hash.bin"
-
-# Once the server is listening, either restore the cache or, if it's missing
-# (first run, or the prompt changed), build it via warm-llama.sh — so the cache
-# always ends up populated without a separate manual step. Runs in the
-# background; `exec` then hands the foreground to llama-server so Ctrl-C stops
-# it directly.
-(
-  until curl -sf "http://$HOST:$PORT/health" >/dev/null 2>&1; do sleep 1; done
-  if [ -n "$hash" ] && [ -f "$CACHE_DIR/$slot" ]; then
-    echo "restoring system-prompt KV from $CACHE_DIR/$slot"
-    if curl -sf -X POST "http://$HOST:$PORT/slots/0?action=restore" \
-         -H 'content-type: application/json' -d "{\"filename\":\"$slot\"}" >/dev/null; then
-      echo "KV restored — system prompt won't be re-evaluated"
-    else
-      echo "KV restore failed (stale cache?); rebuilding"
-      rm -f "$CACHE_DIR/$slot"
-      HOST="$HOST" PORT="$PORT" CACHE_DIR="$CACHE_DIR" packages/ai/scripts/warm-llama.sh
-    fi
-  else
-    echo "no KV cache for the current prompt — building it now (one-time, slow)"
-    HOST="$HOST" PORT="$PORT" CACHE_DIR="$CACHE_DIR" packages/ai/scripts/warm-llama.sh
-  fi
-) &
 
 # --no-mmproj: serve text-only (the agent has no vision). Slot save/restore
 # is disabled for multimodal models, so this is required for the KV cache.

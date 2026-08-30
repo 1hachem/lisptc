@@ -23,3 +23,9 @@ export {
 	streamChatResponse,
 	toAgentMessages,
 } from "./stream.ts";
+export {
+	ensureWarm,
+	systemPromptSlotFile,
+	type WarmStatus,
+	warmStatus,
+} from "./warm.ts";

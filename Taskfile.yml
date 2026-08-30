@@ -61,7 +61,7 @@ tasks:
     cmd: go-task _infisical-run ENV=dev PATHS="/ai /repl" CMD="pnpm run pi"
 
   serve-gemma:
-    desc: serve the local gemma model; restores (or builds) the system-prompt KV cache
+    desc: serve the local gemma model (the API primes its system-prompt KV cache)
     cmd: packages/ai/scripts/serve-llama.sh
 
   repl:

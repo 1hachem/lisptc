@@ -7,8 +7,7 @@
       "project": ["scripts/**/*.ts"]
     },
     "packages/ai": {
-      "entry": ["scripts/**/*.ts"],
-      "project": ["src/**/*.ts", "scripts/**/*.ts"]
+      "project": ["src/**/*.ts"]
     },
     "packages/env": {
       "project": ["src/**/*.ts"]

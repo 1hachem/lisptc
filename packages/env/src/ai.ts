@@ -9,6 +9,7 @@ export const aiEnv = createEnv({
 		FIREWORKS_BASE_URL: z.string().optional(),
 		LLAMACPP_MODEL: z.string().optional(),
 		LLAMACPP_BASE_URL: z.string().optional(),
+		LLAMACPP_SLOT_DIR: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

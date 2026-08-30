@@ -1,4 +1,4 @@
-import { LISP_SYSTEM_PROMPT, streamChatResponse } from "@repo/ai";
+import { ensureWarm, LISP_SYSTEM_PROMPT, streamChatResponse } from "@repo/ai";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -38,6 +38,9 @@ chat.post("/", async (c) => {
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { input, config } = parsed.data;
+	// llama-server runs `--parallel 1`; going in before the system-prompt KV is
+	// saved would both re-evaluate the prompt and poison the slot being saved.
+	await ensureWarm();
 	return streamChatResponse(
 		input ?? {},
 		{ provider: "llamacpp", system: LISP_SYSTEM_PROMPT },
