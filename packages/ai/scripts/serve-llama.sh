@@ -8,6 +8,8 @@ HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
 CACHE_DIR="${CACHE_DIR:-.llama-cache}"
 MODEL="${MODEL:-ggml-org/gemma-4-E4B-it-GGUF}"
+NGL="${NGL:-0}"
+THREADS="${THREADS:-8}"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 cd "$root"
@@ -58,12 +60,15 @@ slot="system-$hash.bin"
 # for SWA) KV cache large enough to OOM this box.
 # --swa-full: gemma's sliding-window attention otherwise discards the prefix
 # KV, so nothing would be reusable.
-# -ngl 99: offload all layers to the Vulkan (Radeon iGPU) backend. The
-# E2B model is small enough to fit entirely, so there's no reason to keep
-# any layers on the CPU.
+# -ngl 0 (CPU): this box's GPU is an Intel UHD 620, and offloading to it hangs
+# the i915 engine — a single ubatch runs longer than the 640ms rcs0 preemption
+# timeout, so the kernel resets the GPU mid-decode and Vulkan aborts the server
+# with vk::DeviceLostError. Shrinking --ubatch-size to 32 avoids the reset but is
+# *slower* than the CPU (7.8 vs 10.8 tok/s prefill, 1.5 vs 1.8 tok/s generation),
+# so there is nothing to win here. Override with `NGL=99` on a real GPU.
 exec llama-server \
   -hf "$MODEL" --no-mmproj --no-warmup \
   --host "$HOST" --port "$PORT" \
   --ctx-size 16384 --parallel 1 --swa-full \
-  -ngl 99 \
+  -ngl "$NGL" --threads "$THREADS" \
   --slot-save-path "$CACHE_DIR"
