@@ -1,9 +1,20 @@
 # GBNF grammar for the lisptc (.ptc) Lisp dialect.
 # Derived from the reader in packages/interpreter/src/lisp.ts, whose tokeniser is
-#   /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g
-# Comments (;) are intentionally omitted: the REPL forbids them.
+#   /\s+|("(\\.?|.)*?"|,@?|[^()'`~" \t]+|.)/g
+# Only the parenthesised forms are program text; the free text around them is
+# prose the interpreter ignores (stripProse). Prose may not contain a paren,
+# which is exactly what keeps the model from emitting an unbalanced one: a lone
+# ")" — as in ":)" — is unsayable, and every "(" it opens must be closed as a
+# real form. The dialect has no comment syntax; prose replaces it.
 
-root    ::= ws form (ws form)* ws
+root    ::= prose topform (prose topform)* prose
+
+# Free text around the forms: anything but a parenthesis.
+prose   ::= [^()]*
+
+# Only a (possibly quoted) list is a top-level form — a bare atom out here
+# would be indistinguishable from prose.
+topform ::= (",@" | "'" | "`" | ",")* list
 
 form    ::= list | quoted | string | atom
 
@@ -15,12 +26,12 @@ list    ::= "(" ws (form ws)* ("." ws form ws)? ")"
 
 # Symbols, numbers (int/bigint/float), keywords (:kw), nil and t all share one
 # lexical class: a run of any char except whitespace, the structural chars
-# ( ) " ; the quote chars ' ` , and ~. A lone "." is excluded — the reader only
+# ( ) " the quote chars ' ` , and ~. A lone "." is excluded — the reader only
 # ever treats a bare "." as the dotted-pair marker, never as a symbol — while
 # atoms that merely contain "." (e.g. .30, 3.14, fs/read) stay valid.
 atom    ::= hchar achar* | "." achar+
-hchar   ::= [^ \t\r\n()'\"`;,~.]
-achar   ::= [^ \t\r\n()'\"`;,~]
+hchar   ::= [^ \t\r\n()'\"`,~.]
+achar   ::= [^ \t\r\n()'\"`,~]
 
 # Double-quoted string with backslash escapes.
 string  ::= "\"" schar* "\""

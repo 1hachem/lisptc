@@ -44,7 +44,7 @@ describe("AgentRepl (in-process REPL binding)", () => {
 		const r = new AgentRepl();
 		r.eval("(defun sq (x) (* x x))");
 		r.reset();
-		expect(r.eval("sq")).toContain("void variable");
+		expect(r.eval("(progn sq)")).toContain("void variable");
 	});
 
 	describe("halt", () => {

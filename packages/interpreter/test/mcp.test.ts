@@ -135,7 +135,9 @@ describe("mcp-shutdown undefines tool bindings", () => {
 
 		// Shut down the broker: the tool binding must be gone entirely.
 		expect(evalStr(interp, "(mcp-shutdown)")).toBe("t");
-		expect(() => run(interp, "sfx/echo")).toThrow(/void variable|undefined/);
+		expect(() => run(interp, "(progn sfx/echo)")).toThrow(
+			/void variable|undefined/,
+		);
 		// And it must NOT surface as a stale "no such server" MCP error.
 		expect(() => run(interp, '(sfx/echo :message "hi")')).not.toThrow(
 			/no such server/,

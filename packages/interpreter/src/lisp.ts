@@ -1670,17 +1670,84 @@ function qqExpand2(y: unknown, level: number): unknown {
 
 //----------------------------------------------------------------------
 
-// The reader's token grammar: whitespace, a `;` comment, or a single token —
-// a quoted string, quote/quasiquote/unquote sugar, a run of non-delimiter
-// characters, or any other single (delimiter) character. Exported as a
-// factory, not a shared RegExp, since exec() advances a regex's own
-// lastIndex and callers loop it to exhaustion — sharing one instance across
-// callers (e.g. the LSP tokenizing alongside a running interpreter) would
-// corrupt each other's scan position. Consumers needing (line, char)
-// positions (see apps/lsp/src/server.ts) tokenize with this same grammar
-// rather than re-deriving their own, so the two can't drift apart.
+// The reader's token grammar: whitespace or a single token — a quoted string,
+// quote/quasiquote/unquote sugar, a run of non-delimiter characters, or any
+// other single (delimiter) character. There is no comment syntax: `;` is an
+// ordinary symbol character, since prose outside the top-level forms (see
+// stripProse) is what comments used to be. Exported as a factory, not a shared
+// RegExp, since exec() advances a regex's own lastIndex and callers loop it to
+// exhaustion — sharing one instance across callers (e.g. the LSP tokenizing
+// alongside a running interpreter) would corrupt each other's scan position.
+// Consumers needing (line, char) positions (see apps/lsp/src/server.ts)
+// tokenize with this same grammar rather than re-deriving their own, so the
+// two can't drift apart.
 export function tokenPattern(): RegExp {
-	return /\s+|;.*$|("(\\.?|.)*?"|,@?|[^()'`~"; \t]+|.)/g;
+	return /\s+|("(\\.?|.)*?"|,@?|[^()'`~" \t]+|.)/g;
+}
+
+// Index just past the string literal opening at `i`, mirroring the reader's
+// own view of a string: it is bounded by the line it starts on (the tokeniser
+// matches strings per line), so an unterminated one ends at the newline and
+// the reader is left to report it.
+function endOfString(text: string, i: number): number {
+	for (let j = i + 1; j < text.length; j++) {
+		const c = text[j];
+		if (c === "\n") return j;
+		if (c === "\\") j++;
+		else if (c === '"') return j + 1;
+	}
+	return text.length;
+}
+
+// Index just past the form opening at `i`, or the end of the text if the form
+// is never closed — an unterminated form is kept verbatim so the reader still
+// reports it rather than silently swallowing half a program.
+function endOfForm(text: string, i: number): number {
+	let depth = 0;
+	for (let j = i; j < text.length; j++) {
+		const c = text[j];
+		if (c === '"') {
+			j = endOfString(text, j) - 1;
+		} else if (c === "(") {
+			depth++;
+		} else if (c === ")") {
+			depth--;
+			if (depth === 0) return j + 1;
+		}
+	}
+	return text.length;
+}
+
+// Start of the form opening at `i`, extended back over reader sugar written
+// directly against it (`'(a b)`, `` `(a ,b) ``, `,@(a)`) so a quoted top-level
+// form stays quoted. The sugar has to stand on its own, i.e. follow whitespace
+// — prose punctuation that happens to touch a form ("and then,(+ 1 2)") is
+// prose, not an unquote.
+function startOfForm(text: string, i: number): number {
+	let j = i;
+	while (j > 0 && "'`,@".includes(text[j - 1])) j--;
+	return j === 0 || /\s/.test(text[j - 1]) ? j : i;
+}
+
+// Blank out everything that is not part of a top-level form: only the
+// parenthesised forms are program text, and the free text around them is
+// prose (this dialect has no comment syntax — prose is the comment). Blanking
+// rather than deleting keeps every form at its original offset, so line
+// numbers in reader and evaluation errors still point into the source the
+// caller passed in.
+export function stripProse(text: string): string {
+	const out: string[] = Array.from(text, (c) => (c === "\n" ? "\n" : " "));
+	let i = 0;
+	while (i < text.length) {
+		if (text[i] !== "(") {
+			i++;
+			continue;
+		}
+		const end = endOfForm(text, i);
+		for (let j = startOfForm(text, i); j < end; j++) out[j] = text[j];
+		i = end;
+	}
+	return out.join("");
 }
 
 // A list of tokens, which works as a reader of Lisp expressions
@@ -1950,7 +2017,6 @@ function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 
 //----------------------------------------------------------------------
 
-// Evaluate a string as a list of Lisp exps; return the result of the last exp.
 // Evaluate a single already-read top-level expression. A stray break/return
 // loop signal (no enclosing while/dolist/dotimes) is converted into an
 // ordinary EvalException here rather than left as an unrecognized exception
@@ -1971,10 +2037,14 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 	}
 }
 
+// Evaluate a program: every top-level form in `text`, in order, returning the
+// value of the last one. Text outside those forms is prose and is ignored (see
+// stripProse), so a program with no form at all evaluates to Unspecified —
+// "nothing to show" — rather than to a value a REPL would echo.
 export function run(interp: Interp, text: string): unknown {
 	const tokens = new Reader();
-	tokens.push(text);
-	let result: unknown;
+	tokens.push(stripProse(text));
+	let result: unknown = Unspecified;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
 		result = evalTopLevel(interp, exp);
@@ -1989,10 +2059,12 @@ export interface SyntaxError_ {
 }
 
 // Parse (but do not evaluate) a whole program, returning any syntax errors.
-// Stops at the first error since the token stream is unreliable past it.
+// Stops at the first error since the token stream is unreliable past it. Only
+// the top-level forms are parsed — prose around them is not program text, so
+// it can never be a syntax error.
 export function checkSyntax(text: string): SyntaxError_[] {
 	const tokens = new Reader();
-	tokens.push(text);
+	tokens.push(stripProse(text));
 	while (!tokens.isEmpty()) {
 		try {
 			tokens.read();
@@ -2286,9 +2358,9 @@ export const prelude = `
         '(terpri)
         nil))
 
-;; --- String library ---
-;; Built on the native primitives char, concat, string-upcase and
-;; string-downcase (plus length, which works on strings).
+--- String library ---
+Built on the native primitives char, concat, string-upcase and
+string-downcase, plus length, which works on strings too.
 
 (defun substring (s start &rest end)
   "Return the substring of s from index start up to (but not including) end (default: end of s)."

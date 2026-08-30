@@ -16,12 +16,14 @@ describe("lisptc GBNF grammar", () => {
 		"`(cond ((not ,test) ,@body))",
 		'(load-mcp :name "fs" :command "npx" :args \'("-y" "/tmp"))',
 		'(fs/echo :message "hello from lisptc")',
-		'"a string with \\" an escaped quote"',
+		'(princ "a string with \\" an escaped quote")',
 		"(setq x 1)\n(print x)",
 		"'(1 . 2)",
-		"nil",
-		"t",
-		"-3.5e10",
+		"(print -3.5e10)",
+		// Prose around the forms is free text the interpreter ignores.
+		"Here we go: (+ 1 2) and that is the answer.",
+		"First define it.\n(defun sq (x) (* x x))\nThen use it: (sq 5)",
+		"the list is '(1 2 3)",
 	];
 	it.each(valid)("accepts %j", (src) => {
 		expect(accepts(g, src)).toBe(true);
@@ -36,6 +38,10 @@ describe("lisptc GBNF grammar", () => {
 		'"unterminated', // open string
 		"'", // quote with nothing to quote
 		"(a . )", // dotted pair with no tail
+		"just prose, no form at all", // a reply has to contain a form
+		"(+ 1 2) happy to help :)", // a stray close paren, even in prose
+		"nil", // a bare atom out here is prose, not a form
+		"t",
 	];
 	it.each(invalid)("rejects %j", (src) => {
 		expect(accepts(g, src)).toBe(false);

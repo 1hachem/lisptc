@@ -17,6 +17,7 @@ import {
 	setExit,
 	setWriter,
 	str,
+	stripProse,
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
@@ -112,10 +113,12 @@ class InteractiveRepl implements Repl {
 
 // Does `text` contain only complete top-level forms (nothing left mid-parse)?
 // Used by the attach loop to decide when to ship input to the shared session,
-// so multi-line forms typed (or sent by Iron) aren't split across evals.
+// so multi-line forms typed (or sent by Iron) aren't split across evals. Prose
+// around the forms is stripped first, the same as the session will do, so a
+// half-written sentence never reads as a half-written program.
 export function isComplete(text: string): boolean {
 	const reader = new Reader();
-	reader.push(text);
+	reader.push(stripProse(text));
 	// Checking isEmpty() before each read (rather than after a failed one) is
 	// the only way to tell "ran out mid-form" from "nothing left to read": once
 	// read() throws, readToken() has already shifted every token off the
