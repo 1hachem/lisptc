@@ -145,6 +145,44 @@ describe("mcp-shutdown undefines tool bindings", () => {
 	});
 });
 
+describe("loading a toolkit server by name", () => {
+	const toolkitJson = JSON.stringify([
+		{
+			name: "tk",
+			description: "toolkit fixture",
+			command: "node",
+			args: ["--no-warnings", "--experimental-transform-types", FIXTURE],
+		},
+	]);
+	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	run(interp, prelude);
+
+	afterAll(() => {
+		run(interp, "(mcp-shutdown)");
+	});
+
+	it("accepts :name alone, like the bare-name form", () => {
+		expect(evalStr(interp, '(await (load-mcp :name "tk"))')).toContain(
+			"tk/echo",
+		);
+		expect(evalStr(interp, '(tk/echo :message "hi")')).toBe('"hi"');
+	});
+
+	it("accepts a bare name as a string, symbol or keyword", () => {
+		expect(evalStr(interp, '(await (load-mcp "tk"))')).toContain("tk/echo");
+		expect(evalStr(interp, "(await (load-mcp :tk))")).toContain("tk/echo");
+	});
+
+	it("rejects an unknown name in either form", () => {
+		expect(() => run(interp, '(load-mcp "nope")')).toThrow(
+			/unknown predefined MCP server/,
+		);
+		expect(() => run(interp, '(load-mcp :name "nope")')).toThrow(
+			/unknown predefined MCP server/,
+		);
+	});
+});
+
 describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 	const interp = mcpInterp();
 	run(interp, prelude);
