@@ -13,11 +13,14 @@
       pkgs = nixpkgs.legacyPackages.${system};
 
       # Hermetic topiary grammar/config, independent of the working tree.
-      topiaryConfig = pkgs.callPackage ./nix/topiary-config.nix {};
+      topiaryConfig = pkgs.callPackage ./nix/topiary-config.nix {
+        grammarSrc = ./tree-sitter-lisptc;
+      };
 
       # Hermetic packages for `nix run .#…`, CI, and distribution; scoped src.
       ptcfmt = pkgs.callPackage ./nix/ptcfmt.nix {
-        src = ./.topiary/queries/commonlisp.scm;
+        inherit (topiaryConfig) languagesNcl;
+        src = ./.topiary/queries/lisptc.scm;
       };
       ptcrepl = pkgs.callPackage ./nix/ptcrepl.nix {
         src = ./.;
@@ -35,7 +38,7 @@
         export TOPIARY_CONFIG_FILE=${topiaryConfig.languagesNcl}
         export TOPIARY_LANGUAGE_DIR="$root/.topiary/queries"
         if [ "$#" -eq 0 ]; then
-          exec ${pkgs.topiary}/bin/topiary format --language commonlisp
+          exec ${pkgs.topiary}/bin/topiary format --language lisptc
         fi
         exec ${pkgs.topiary}/bin/topiary format "$@"
       '';
