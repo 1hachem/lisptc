@@ -65,8 +65,8 @@ describe("equality predicates on structures", () => {
 
 describe("destructive operations", () => {
 	it("rplaca / rplacd mutate cells in place", () => {
-		expect(ev("(setq l (list 1 2 3)) (rplaca l 9) l")).toBe("(9 2 3)");
-		expect(ev("(setq l (list 1 2 3)) (rplacd l '(8)) l")).toBe("(1 8)");
+		expect(ev("(setq l (list 1 2 3)) (rplaca l 9) (progn l)")).toBe("(9 2 3)");
+		expect(ev("(setq l (list 1 2 3)) (rplacd l '(8)) (progn l)")).toBe("(1 8)");
 	});
 
 	it("nreverse reverses in place", () => {

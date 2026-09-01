@@ -46,6 +46,8 @@ Arithmetic lives separately in `src/arith.ts` (`Numeric` = number | bigint, with
 
 **The interpreter is fully synchronous by design.** This is the central constraint that shapes the jobs runtime and MCP integration.
 
+**Prose around forms.** Only the parenthesised top-level forms are program text: `stripProse(text)` (same file) blanks everything else — keeping newlines so error line numbers still line up — and both `run` and `checkSyntax` push the stripped text into the `Reader`. So an LLM (or a `.ptc` file) can write freely around its code, a bare top-level atom is prose rather than an expression, and there is **no comment syntax** at all: `;` is an ordinary symbol character and prose is what a comment used to be. The `lisptc.gbnf` grammar mirrors this — prose may not contain a parenthesis, which is what stops the model emitting an unbalanced one (`:)`).
+
 ### Extensions (`InterpOptions.extensions`)
 `new Interp({ extensions: [...] })` runs each extension against the fresh interp to install optional built-ins — the interpreter core stays minimal and opt-in features layer on top. Two extensions ship: `mcpExtension()` (`src/mcp.ts`) and `secretsExtension()` (`src/secrets.ts`). The REPL front-ends compose both.
 

@@ -11,3 +11,8 @@
 (defmacro unless (test &rest body) (list 'if test nil (cons 'progn body)))
 
 (try (risky) (catch (e) (princ e)))
+
+Prose sits between the forms, and it keeps its punctuation: a comma,
+a semicolon; a `backtick`, an apostrophe's tail and a "quoted phrase".
+(princ (fact 5))
+Trailing thought.

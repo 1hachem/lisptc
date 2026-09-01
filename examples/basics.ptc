@@ -1,66 +1,66 @@
-;;; =====================================================================
-;;; lisptc — basics: atoms, arithmetic, lists, control flow
-;;;
-;;; Run me:
-;;;   pnpm --filter @repo/interpreter exec \
-;;;     node --experimental-transform-types src/lisp.ts ../../examples/basics.ptc
-;;; =====================================================================
+=====================================================================
+lisptc — basics: atoms, arithmetic, lists, control flow
+
+Run me:
+  pnpm --filter @repo/interpreter exec \
+    node --experimental-transform-types src/lisp.ts ../../examples/basics.ptc
+=====================================================================
 (princ "=== 1. atoms, arithmetic & big numbers ===")
 (terpri)
 
-;; numbers are number | bigint; arithmetic promotes automatically
+numbers are number | bigint; arithmetic promotes automatically
 (print (+ 1 2 3 4 5))
-; => 15
+=> 15
 (print (* 6 7))
-; => 42
+=> 42
 (print (/ 22 7))
 (print (- 10 3 2))
-; => 5
-;; arithmetic promotes to bigint automatically — exact, no overflow
+=> 5
+arithmetic promotes to bigint automatically — exact, no overflow
 (print (* 1000000000000 1000000000000))
-; => 1000000000000000000000000  (bigint, exact)
+=> 1000000000000000000000000 bigint, exact
 (print (< 1 2))
-; => t
+=> t
 (princ "=== 2. lists & cons cells ===")
 (terpri)
 
 (setq xs (list 1 2 3 4 5))
 (print xs)
 (print (car xs))
-; => 1
+=> 1
 (print (cdr xs))
-; => (2 3 4 5)
+=> 2 3 4 5
 (print (cadr xs))
-; => 2
+=> 2
 (print (append xs (list 6 7)))
-; => (1 2 3 4 5 6 7)
+=> 1 2 3 4 5 6 7
 (print (nreverse (list 1 2 3)))
-; => (3 2 1)
+=> 3 2 1
 (princ "=== 3. control flow: cond / when / let / while / dolist ===")
 (terpri)
 
 (defun classify (n) (cond ((< n 0) 'negative) ((= n 0) 'zero) (t 'positive)))
 (print (mapcar classify (list -3 0 7)))
-; => (negative zero positive)
+=> negative zero positive
 (let ((a 3) (b 4)) (print (+ (* a a) (* b b))))
-; => 25
-;; imperative loop with mutation
+=> 25
+imperative loop with mutation
 (setq sum 0)
 (dolist (x (list 10 20 30)) (setq sum (+ sum x)))
 (print sum)
-; => 60
+=> 60
 (setq i 0)
 (setq acc nil)
 (while (< i 5) (setq acc (cons i acc)) (setq i (+ i 1)))
 (print (nreverse acc))
-; => (0 1 2 3 4)
+=> 0 1 2 3 4
 (princ "=== 4. association lists (symbolic data) ===")
 (terpri)
 
 (setq db '((alice .30) (bob .25) (carol .35)))
 (print (assoc 'bob db))
-; => (bob . 25)
+=> bob . 25
 (print (cdr (assoc 'carol db)))
-; => 35
+=> 35
 (princ "=== done ===")
 (terpri)

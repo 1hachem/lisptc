@@ -37,6 +37,14 @@ each builds a different structure on top of it, for a different consumer:
 | Quote sugar (`'`/`` ` ``/`,`/`,@`) | Expanded into real `(quote x)`/`(quasiquote x)` cons structure | Collapsed away — just avoids inflating an arg count |
 | Malformed input | Throws (`EvalException`/`EndOfFile`) — about to be evaluated | Best-effort — a buffer mid-edit is routinely unbalanced |
 
+One thing they deliberately don't share is prose handling. The interpreter
+blanks everything outside the top-level forms (`stripProse`) before tokenizing;
+the LSP tokenizes the raw buffer. A prose word out there is just an atom no
+analysis looks at, while prose that *does* contain parentheses is real code the
+interpreter will run — so the call diagnostics should keep checking it.
+`checkSyntax` strips internally, which is what makes prose (and a smiley) never
+a syntax error in the editor.
+
 Fully merging them would mean either bloating `Reader` with position-tracking
 and error-tolerance it doesn't need for evaluation, or making the LSP build
 real `Cell`/`Sym` values and throw on every incomplete buffer a user is

@@ -23,10 +23,10 @@ describe("reader: lists and dotted pairs", () => {
 
 describe("reader: atoms", () => {
 	it("recognises nil and t", () => {
-		expect(ev("nil")).toBe("nil");
-		expect(ev("'nil")).toBe("nil");
-		expect(ev("t")).toBe("t");
-		expect(ev("'t")).toBe("t");
+		expect(ev("(progn nil)")).toBe("nil");
+		expect(ev("(progn 'nil)")).toBe("nil");
+		expect(ev("(progn t)")).toBe("t");
+		expect(ev("(progn 't)")).toBe("t");
 	});
 
 	it("interns symbols (eq identity)", () => {
@@ -44,34 +44,34 @@ describe("reader: atoms", () => {
 
 describe("reader: numeric tokens go through BigInt/Number", () => {
 	it("parses plain decimals", () => {
-		expect(ev("16")).toBe("16");
-		expect(ev("-42")).toBe("-42");
+		expect(ev("(progn 16)")).toBe("16");
+		expect(ev("(progn -42)")).toBe("-42");
 	});
 
 	// BigInt() accepts 0x/0o/0b prefixes, so these tokens parse as integers.
 	it("accepts radix-prefixed integer literals", () => {
-		expect(ev("0x10")).toBe("16");
-		expect(ev("0o17")).toBe("15");
-		expect(ev("0b1010")).toBe("10");
+		expect(ev("(progn 0x10)")).toBe("16");
+		expect(ev("(progn 0o17)")).toBe("15");
+		expect(ev("(progn 0b1010)")).toBe("10");
 	});
 });
 
 describe("reader: strings and escapes", () => {
 	it("round-trips simple strings", () => {
-		expect(ev('"hello"')).toBe('"hello"');
-		expect(ev('""')).toBe('""');
+		expect(ev('(progn "hello")')).toBe('"hello"');
+		expect(ev('(progn "")')).toBe('""');
 	});
 
 	it("unescapes on read and re-escapes on print", () => {
-		expect(ev('"a\\nb"')).toBe('"a\\nb"');
-		expect(ev('"tab\\there"')).toBe('"tab\\there"');
-		expect(ev('"quote\\"inside"')).toBe('"quote\\"inside"');
-		expect(ev('"back\\\\slash"')).toBe('"back\\\\slash"');
+		expect(ev('(progn "a\\nb")')).toBe('"a\\nb"');
+		expect(ev('(progn "tab\\there")')).toBe('"tab\\there"');
+		expect(ev('(progn "quote\\"inside")')).toBe('"quote\\"inside"');
+		expect(ev('(progn "back\\\\slash")')).toBe('"back\\\\slash"');
 	});
 
 	it("collapses (quote x) to shorthand when printing", () => {
 		expect(ev("(list 'quote 'a)")).toBe("'a");
 		expect(ev("(list 'quasiquote 'a)")).toBe("`a");
-		expect(ev("''a")).toBe("'a");
+		expect(ev("(progn ''a)")).toBe("'a");
 	});
 });

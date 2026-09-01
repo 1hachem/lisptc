@@ -36,8 +36,8 @@ describe("integer arithmetic (exact / bigint)", () => {
 
 describe("float arithmetic (inexact / number)", () => {
 	it("prints integer-valued floats with .0", () => {
-		expect(ev("2.0")).toBe("2.0");
-		expect(ev("1.5")).toBe("1.5");
+		expect(ev("(progn 2.0)")).toBe("2.0");
+		expect(ev("(progn 1.5)")).toBe("1.5");
 	});
 
 	it("division always produces a float", () => {

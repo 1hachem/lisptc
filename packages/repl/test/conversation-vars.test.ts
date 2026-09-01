@@ -35,7 +35,7 @@ describe("AgentRepl conversation variables", () => {
 		const r = new AgentRepl();
 		r.setConversationVars(sampleVars());
 		expect(r.eval("(setq conversation 1)")).toBe("1\n");
-		expect(r.eval("conversation")).toBe("1\n");
+		expect(r.eval("(progn conversation)")).toBe("1\n");
 		// The extension calls setConversationVars before every eval; that refresh
 		// overwrites the clobbered value.
 		r.setConversationVars(sampleVars());
@@ -52,15 +52,14 @@ describe("AgentRepl conversation variables", () => {
 	it("an empty snapshot yields nil lists", () => {
 		const r = new AgentRepl();
 		r.setConversationVars({ conversation: [], "user-messages": [] });
-		expect(r.eval("conversation")).toBe("nil\n");
+		expect(r.eval("(progn conversation)")).toBe("nil\n");
 		expect(r.eval("(length user-messages)")).toBe("0\n");
 	});
 });
 
 describe("MemoryRepl (language-only base)", () => {
-	it("has no halt binding — halt is an AgentRepl feature", () => {
+	it("has no conversation globals — they are an AgentRepl feature", () => {
 		const r = new MemoryRepl();
-		// Unbound in function position reports "undefined: halt".
-		expect(r.eval("(halt)")).toContain("undefined: halt");
+		expect(r.eval("(progn conversation)")).toContain("void variable");
 	});
 });

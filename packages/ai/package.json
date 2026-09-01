@@ -10,7 +10,9 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@langchain/core": "^1.2.9",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   }
 }

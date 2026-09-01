@@ -270,17 +270,17 @@ function connConfigFromArgs(
 ): ConnConfig {
 	const args = listToArray(rest);
 	// Bare predefined name: (load-mcp "linear")
-	if (args.length === 1 && typeof args[0] === "string") {
-		const conf = predefined.get(args[0]);
-		if (!conf)
-			throw new EvalException("unknown predefined MCP server", args[0], false);
-		return conf;
-	}
+	if (args.length === 1) return lookupPredefined(predefined, asName(args[0]));
 	// Ad-hoc plist: (load-mcp :name "x" :url "..." :headers (...)) etc.
 	const opts = parsePlist(rest);
-	const name = opts.get("name");
-	if (typeof name !== "string")
-		throw new EvalException("load-mcp requires a :name string", null, false);
+	const rawName = opts.get("name");
+	if (rawName === undefined || rawName === null)
+		throw new EvalException(
+			"load-mcp requires a :name",
+			rawName ?? null,
+			false,
+		);
+	const name = asName(rawName);
 	if (opts.has("url")) {
 		const url = opts.get("url");
 		if (typeof url !== "string")
@@ -306,11 +306,19 @@ function connConfigFromArgs(
 			: undefined;
 		return { name, command, args: cmdArgs, env };
 	}
-	throw new EvalException(
-		"load-mcp requires either :url or :command",
-		null,
-		false,
-	);
+	// Neither :url nor :command: `:name` names a toolkit server, so
+	// (load-mcp :name "playwright") means the same as (load-mcp "playwright").
+	return lookupPredefined(predefined, name);
+}
+
+function lookupPredefined(
+	predefined: Map<string, ConnConfig>,
+	name: string,
+): ConnConfig {
+	const conf = predefined.get(name);
+	if (!conf)
+		throw new EvalException("unknown predefined MCP server", name, false);
+	return conf;
 }
 
 // Structured args for load-mcp's ad-hoc-plist calling convention, mirroring
@@ -460,15 +468,16 @@ export function registerMcp(
 	const predefined = new Map<string, ConnConfig>();
 	parsePredefined(predefined, options.toolkitJson);
 
-	// (load-mcp "name") | (load-mcp :name "x" :url "..." [:headers al])
+	// (load-mcp "name") | (load-mcp :name "name")
+	//                   | (load-mcp :name "x" :url "..." [:headers al])
 	//                   | (load-mcp :name "x" :command "cmd" [:args (...)])
 	// Returns a job at once; the connect runs in the background and the server's
 	// `server/tool` bindings are installed when the job is collected.
 	interp.def(
 		"load-mcp",
 		-1,
-		'(load-mcp "server" [:config "path"])',
-		"Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns the tool list.",
+		'(load-mcp "server") | (load-mcp :name "server")',
+		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns the tool list. A toolkit server is loaded by name — (load-mcp "playwright") or (load-mcp :name "playwright"); pass :url or :command to load an ad-hoc server instead.',
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, predefined);

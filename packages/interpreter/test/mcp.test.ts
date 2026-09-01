@@ -135,10 +135,50 @@ describe("mcp-shutdown undefines tool bindings", () => {
 
 		// Shut down the broker: the tool binding must be gone entirely.
 		expect(evalStr(interp, "(mcp-shutdown)")).toBe("t");
-		expect(() => run(interp, "sfx/echo")).toThrow(/void variable|undefined/);
+		expect(() => run(interp, "(progn sfx/echo)")).toThrow(
+			/void variable|undefined/,
+		);
 		// And it must NOT surface as a stale "no such server" MCP error.
 		expect(() => run(interp, '(sfx/echo :message "hi")')).not.toThrow(
 			/no such server/,
+		);
+	});
+});
+
+describe("loading a toolkit server by name", () => {
+	const toolkitJson = JSON.stringify([
+		{
+			name: "tk",
+			description: "toolkit fixture",
+			command: "node",
+			args: ["--no-warnings", "--experimental-transform-types", FIXTURE],
+		},
+	]);
+	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	run(interp, prelude);
+
+	afterAll(() => {
+		run(interp, "(mcp-shutdown)");
+	});
+
+	it("accepts :name alone, like the bare-name form", () => {
+		expect(evalStr(interp, '(await (load-mcp :name "tk"))')).toContain(
+			"tk/echo",
+		);
+		expect(evalStr(interp, '(tk/echo :message "hi")')).toBe('"hi"');
+	});
+
+	it("accepts a bare name as a string, symbol or keyword", () => {
+		expect(evalStr(interp, '(await (load-mcp "tk"))')).toContain("tk/echo");
+		expect(evalStr(interp, "(await (load-mcp :tk))")).toContain("tk/echo");
+	});
+
+	it("rejects an unknown name in either form", () => {
+		expect(() => run(interp, '(load-mcp "nope")')).toThrow(
+			/unknown predefined MCP server/,
+		);
+		expect(() => run(interp, '(load-mcp :name "nope")')).toThrow(
+			/unknown predefined MCP server/,
 		);
 	});
 });
@@ -261,32 +301,25 @@ describe("async MCP jobs", () => {
 		expect(evalStr(interp, '(autofx/echo :message "yo")')).toBe('"yo"');
 	});
 
-	it("runs two loads concurrently, not sequentially", () => {
-		// Each fixture sleeps DELAY ms before it connects. First measure a single
-		// load (DELAY + fixed spawn/connect overhead), then two loads started
-		// together and awaited. If the broker runs them concurrently the two-load
-		// time is ~single; if it ran them one after another it would be ~single +
-		// DELAY + overhead. Comparing against the measured single-load baseline
-		// cancels out the (machine-dependent) overhead that an absolute threshold
-		// cannot account for.
-		const DELAY = 500;
+	it("runs two loads concurrently, not sequentially", async () => {
+		// A 4s load and a 50ms one, started together. A sequential broker would have
+		// to finish the first before starting the second, so the second could never
+		// settle while the first is still pending. Asserting on the two jobs' states
+		// rather than on elapsed time keeps this independent of how loaded the
+		// machine is: an earlier wall-clock version compared a two-load run against a
+		// single-load baseline, and flaked whenever CPU contention made the two
+		// simultaneous node spawns cost more than the one the baseline measured.
+		evalStr(interp, `(setq cSlow ${loadForm("concSlow", 4000)})`);
+		evalStr(interp, `(setq cFast ${loadForm("concFast", 50)})`);
 
-		const startSingle = performance.now();
-		expect(evalStr(interp, `(await ${loadForm("concBase", DELAY)})`)).toContain(
-			"concBase/echo",
-		);
-		const single = performance.now() - startSingle;
+		for (let i = 0; i < 100; i++) {
+			if (evalStr(interp, "(job-status cFast)") === ":done") break;
+			await new Promise((res) => setTimeout(res, 20));
+		}
 
-		evalStr(interp, `(setq c1 ${loadForm("concA", DELAY)})`);
-		evalStr(interp, `(setq c2 ${loadForm("concB", DELAY)})`);
-		const startBoth = performance.now();
-		expect(evalStr(interp, "(await c1)")).toContain("concA/echo");
-		expect(evalStr(interp, "(await c2)")).toContain("concB/echo");
-		const both = performance.now() - startBoth;
-
-		// Concurrent: two loads together cost about the same as one. A sequential
-		// broker would add another full DELAY + overhead, i.e. > single + DELAY.
-		expect(both).toBeLessThan(single + DELAY);
+		expect(evalStr(interp, "(job-status cFast)")).toBe(":done");
+		expect(evalStr(interp, "(job-status cSlow)")).toBe(":pending");
+		expect(evalStr(interp, "(cancel cSlow)")).toBe("t");
 	});
 
 	it("await-any returns the first job to settle", () => {

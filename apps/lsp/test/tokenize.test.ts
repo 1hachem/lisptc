@@ -36,12 +36,13 @@ describe("tokenizeWithPositions", () => {
 		]);
 	});
 
-	it("strips `;` comments to end of line", () => {
-		const tokens = tokenizeWithPositions("(foo) ; a comment\n(bar)");
+	it("reads `;` as an ordinary symbol char — there is no comment syntax", () => {
+		const tokens = tokenizeWithPositions("(foo) ;not-a-comment\n(bar)");
 		expect(tokens.map((t) => t.text)).toEqual([
 			"(",
 			"foo",
 			")",
+			";not-a-comment",
 			"(",
 			"bar",
 			")",
