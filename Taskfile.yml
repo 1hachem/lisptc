@@ -50,7 +50,7 @@ tasks:
     cmd: bash editors/nvim/tests/run.sh
   
   dev:
-    deps: [dev-app, dev-api, serve-gemma]
+    deps: [dev-app, dev-api]
 
   dev-app:
     desc: run pi agent with access to secrets

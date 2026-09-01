@@ -1,6 +1,7 @@
 import { ensureWarm, LISP_SYSTEM_PROMPT, streamChatResponse } from "@repo/ai";
 import { Hono } from "hono";
 import { z } from "zod";
+import { CHAT_MODEL, CHAT_PROVIDER, NEEDS_WARMUP } from "./model.ts";
 
 // Validates the wire shape of `ChatInput` (a LangChain message-like list).
 // `content` stays `unknown` to mirror the type — it can be a string or a rich
@@ -40,10 +41,14 @@ chat.post("/", async (c) => {
 	const { input, config } = parsed.data;
 	// llama-server runs `--parallel 1`; going in before the system-prompt KV is
 	// saved would both re-evaluate the prompt and poison the slot being saved.
-	await ensureWarm();
+	if (NEEDS_WARMUP) await ensureWarm();
 	return streamChatResponse(
 		input ?? {},
-		{ provider: "llamacpp", system: LISP_SYSTEM_PROMPT },
+		{
+			provider: CHAT_PROVIDER,
+			model: { model: CHAT_MODEL },
+			system: LISP_SYSTEM_PROMPT,
+		},
 		c.req.raw.signal,
 		config?.configurable?.thread_id,
 	);

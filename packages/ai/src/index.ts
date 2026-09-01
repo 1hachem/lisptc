@@ -13,6 +13,7 @@ export {
 	getProvider,
 	llamacpp,
 	type ModelOptions,
+	openrouter,
 	type Provider,
 	type ProviderName,
 	providers,

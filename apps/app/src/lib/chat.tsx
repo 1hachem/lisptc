@@ -80,7 +80,8 @@ export type WarmStatus =
 	| "restored"
 	| "saved"
 	| "unavailable"
-	| "failed";
+	| "failed"
+	| "skipped";
 
 /**
  * Polls the API until its llama.cpp KV warmup settles.

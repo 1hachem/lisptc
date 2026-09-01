@@ -21,7 +21,9 @@ export type WarmStatus =
 	| "restored"
 	| "saved"
 	| "unavailable"
-	| "failed";
+	| "failed"
+	// the chat runs on a hosted provider, so there is no local KV to prime
+	| "skipped";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1";
 const HEALTH_TIMEOUT_MS = 180_000;
