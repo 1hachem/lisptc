@@ -5,7 +5,10 @@ import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-	server: { port: 5173 },
+	// Pinned, and matching what `pnpm start` serves the built output on: fail
+	// loudly on a taken port rather than drift to the next one, since where the
+	// app answers is something you tell a browser and an OAuth callback.
+	server: { port: 3000, strictPort: true },
 	plugins: [
 		tailwindcss(),
 		tanstackStart({ srcDirectory: "src" }),

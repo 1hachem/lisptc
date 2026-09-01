@@ -7,19 +7,23 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "dev": "node --no-warnings --experimental-transform-types --watch src/index.ts",
-    "start": "node --no-warnings --experimental-transform-types src/index.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@repo/ai": "workspace:*",
+    "@repo/interpreter": "workspace:*",
     "hono": "^4.13.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@hono/vite-dev-server": "^0.26.1",
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6"
   }
 }

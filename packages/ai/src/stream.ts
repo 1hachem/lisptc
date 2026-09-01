@@ -137,12 +137,12 @@ export function streamChatResponse(
 				}),
 			);
 
+			let steps = 0;
 			try {
 				write(sse("values", { messages: wire }));
 
 				const repl = getThreadRepl(threadId);
 				const transcript = toTranscript(input);
-				let steps = 0;
 
 				while (!abort.signal.aborted) {
 					// Refresh the read-only conversation globals so each step sees the
@@ -213,6 +213,10 @@ export function streamChatResponse(
 				}
 			} catch (err) {
 				if (!abort.signal.aborted) {
+					// The response headers went out long ago, so this is the only place
+					// a failed model call is ever reported: without the log it reaches
+					// the browser as an SSE `error` event and the server says nothing.
+					console.error("[ai] chat stream failed:", err);
 					write(
 						sse("error", {
 							error: "AgentError",
@@ -221,6 +225,11 @@ export function streamChatResponse(
 					);
 				}
 			} finally {
+				// The SSE body outlives the request log line, so this is the only
+				// record of how (and whether) a chat turn actually finished.
+				console.log(
+					`[ai] chat stream closed after ${steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
+				);
 				closed = true;
 				try {
 					controller.close();
