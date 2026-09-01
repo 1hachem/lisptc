@@ -1,0 +1,3 @@
+# `tree-sitter generate` output — nix regenerates it at build time
+# (nix/topiary-config.nix, buildGrammar with generate = true).
+src/

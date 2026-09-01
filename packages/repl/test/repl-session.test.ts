@@ -44,46 +44,57 @@ describe("AgentRepl (in-process REPL binding)", () => {
 		const r = new AgentRepl();
 		r.eval("(defun sq (x) (* x x))");
 		r.reset();
-		expect(r.eval("sq")).toContain("void variable");
+		expect(r.eval("(progn sq)")).toContain("void variable");
 	});
 
-	describe("halt", () => {
-		it("(halt) returns t and raises the halted flag", () => {
+	describe("the finished signal", () => {
+		it("raises the flag on prose with no form in it, and prints nothing", () => {
 			const r = new AgentRepl();
-			expect(r.eval("(halt)")).toBe("t\n");
-			expect(r.takeHalted()).toBe(true);
+			expect(r.eval("the answer is 42")).toBe("");
+			expect(r.takeFinished()).toBe(true);
 		});
 
-		it("(halt value) returns the value", () => {
+		it("raises it on an empty program", () => {
 			const r = new AgentRepl();
-			expect(r.eval("(halt 42)")).toBe("42\n");
-			expect(r.takeHalted()).toBe(true);
+			r.eval("   \n  ");
+			expect(r.takeFinished()).toBe(true);
 		});
 
-		it("takeHalted() clears the flag after reading", () => {
+		it("takeFinished() clears the flag after reading", () => {
 			const r = new AgentRepl();
-			r.eval("(halt)");
-			expect(r.takeHalted()).toBe(true);
-			expect(r.takeHalted()).toBe(false);
+			r.eval("done");
+			expect(r.takeFinished()).toBe(true);
+			expect(r.takeFinished()).toBe(false);
 		});
 
-		it("is false when no (halt) was evaluated", () => {
+		it("is false when the program held a form", () => {
 			const r = new AgentRepl();
 			r.eval("(+ 1 2)");
-			expect(r.takeHalted()).toBe(false);
+			expect(r.takeFinished()).toBe(false);
 		});
 
-		it("only sets the flag when the (halt) branch actually runs", () => {
+		it("is false when prose merely surrounds a form", () => {
 			const r = new AgentRepl();
-			r.eval("(if nil (halt) 1)");
-			expect(r.takeHalted()).toBe(false);
+			expect(r.eval("first square it: (* 3 3) and there it is")).toBe("9\n");
+			expect(r.takeFinished()).toBe(false);
 		});
 
-		it("reset() clears a raised halted flag", () => {
+		it("stays down for a form that only errors", () => {
 			const r = new AgentRepl();
-			r.eval("(halt)");
+			r.eval("(car 1)");
+			expect(r.takeFinished()).toBe(false);
+		});
+
+		it("reset() clears a raised flag", () => {
+			const r = new AgentRepl();
+			r.eval("all done");
 			r.reset();
-			expect(r.takeHalted()).toBe(false);
+			expect(r.takeFinished()).toBe(false);
+		});
+
+		it("has no halt built-in — prose replaced it", () => {
+			const r = new AgentRepl();
+			expect(r.eval("(halt)")).toContain("undefined: halt");
 		});
 	});
 });

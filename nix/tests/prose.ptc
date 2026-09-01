@@ -1,0 +1,14 @@
+Prose is not program text, and not the formatter's business either: this file
+is already formatted, byte for byte.
+
+It keeps a comma, a semicolon; a `backtick`, an apostrophe's tail, a "quoted
+phrase" and a lone ' quote — none of which the formatter may touch. It also
+keeps its own shape:
+
+  an indented line,
+  a second one,
+
+  and a blank line between them.
+
+A form written mid-sentence — like (princ "hi") — still formats as a form,
+and prose that touches a paren is parted from it by exactly one space.

@@ -61,7 +61,7 @@ describe("case", () => {
 	it("evaluates key-expr exactly once", () => {
 		expect(
 			ev(
-				"(setq n 0) (defun next () (setq n (+ n 1)) n) (case (next) (1 'ok) (t 'bad)) n",
+				"(setq n 0) (defun next () (setq n (+ n 1)) n) (case (next) (1 'ok) (t 'bad)) (progn n)",
 			),
 		).toBe("1");
 	});

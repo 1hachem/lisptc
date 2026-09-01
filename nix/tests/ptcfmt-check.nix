@@ -46,6 +46,14 @@ runCommand "ptcfmt-check" {nativeBuildInputs = [ptcfmt];} ''
   run "collapses redundant whitespace" \
     bash -c '[ "$(printf "(a   b)\n" | ptcfmt)" = "(a b)" ]'
 
+  # 4. Prose around the forms is nobody's to reformat: a prose-only file is
+  #    already a fixed point, punctuation and all. Regression test for the
+  #    Common-Lisp grammar this formatter used to borrow, which read a "," as
+  #    an unquote, a ";" as a comment, and every word as its own top-level
+  #    form to put on its own line.
+  run "leaves prose untouched" \
+    bash -c 'diff -u "$0" <(ptcfmt < "$0")' ${src + "/nix/tests/prose.ptc"}
+
   echo "$passed/$total tests passed"
   if [ "$passed" -ne "$total" ]; then
     echo "ptcfmt tests failed" >&2

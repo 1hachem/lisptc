@@ -1,21 +1,21 @@
-;;; =====================================================================
-;;; lisptc — Linear MCP (issue tracker over OAuth)
-;;;
-;;; The `linear` server is bundled in the toolkit as an OAuth HTTP
-;;; server. First load returns an authorization link:
-;;;   1. (load-mcp "linear")  -> approve the printed link
-;;;   2. (mcp-authorize "linear" "<code>")
-;;;   3. (await (load-mcp "linear"))  -> tools installed
-;;; =====================================================================
+=====================================================================
+lisptc — Linear MCP issue tracker over OAuth
+
+The `linear` server is bundled in the toolkit as an OAuth HTTP
+server. First load returns an authorization link:
+  1. load-mcp "linear" -> approve the printed link
+  2. mcp-authorize "linear" "<code>"
+  3. await load-mcp "linear" -> tools installed
+=====================================================================
 (princ "=== authorize & load ===")
 (terpri)
 
-;; Kick off the OAuth flow — prints an authorization URL.
+Kick off the OAuth flow — prints an authorization URL.
 (load-mcp "linear")
 
-;; After approving in the browser, paste the code back:
-;; (mcp-authorize "linear" "<code-from-browser>")
-;; Then connect and install the linear/<tool> bindings.
+After approving in the browser, paste the code back:
+mcp-authorize "linear" "<code-from-browser>"
+Then connect and install the linear/<tool> bindings.
 (await (load-mcp "linear"))
 
 (print (list-mcps))
@@ -24,7 +24,7 @@
 (princ "=== query issues ===")
 (terpri)
 
-;; Tools are ordinary bindings called with keyword syntax.
+Tools are ordinary bindings called with keyword syntax.
 (linear/list_issues :query "auth bug")
 
 (linear/list_teams)

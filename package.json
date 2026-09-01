@@ -19,7 +19,6 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
-    "pi": "pi --provider fireworks --model accounts/fireworks/models/kimi-k3:low",
     "prepare": "husky"
   },
   "pnpm": {
@@ -27,16 +26,6 @@
       "@types/react": "^19.2.2",
       "@types/react-dom": "^19.2.2"
     }
-  },
-  "pi": {
-    "extensions": [
-      "./apps/pi/extension/lisp-repl.ts"
-    ],
-    "skills": [
-      "./apps/pi/skills"
-    ],
-    "prompts": [],
-    "themes": []
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",

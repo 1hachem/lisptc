@@ -27,7 +27,7 @@ describe("(import path)", () => {
 		run(interp, `(import "${fixture("util.ptc")}")`);
 		// Both the function and the top-level variable are now in scope.
 		expect(str(run(interp, "(double 21)"))).toBe("42");
-		expect(str(run(interp, "greeting"))).toBe('"hello from util"');
+		expect(str(run(interp, "(progn greeting)"))).toBe('"hello from util"');
 	});
 
 	it("resolves relative imports against the importing file's directory", () => {

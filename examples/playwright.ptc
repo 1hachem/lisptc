@@ -1,37 +1,37 @@
-;;; =====================================================================
-;;; lisptc — Playwright MCP (drive a real Chromium browser)
-;;;
-;;; The `playwright` server is bundled in the toolkit (stdio, no auth).
-;;; It can navigate, click, type, snapshot the accessibility tree,
-;;; screenshot, and read network requests.
-;;; =====================================================================
+=====================================================================
+lisptc — Playwright MCP drive a real Chromium browser
+
+The `playwright` server is bundled in the toolkit stdio, no auth.
+It can navigate, click, type, snapshot the accessibility tree,
+screenshot, and read network requests.
+=====================================================================
 (princ "=== load the browser server ===")
 (terpri)
 
-;; Boots @playwright/mcp and installs the playwright/<tool> bindings.
+Boots @playwright/mcp and installs the playwright/<tool> bindings.
 (await (load-mcp "playwright"))
 
-;; See what it exposes.
+See what it exposes.
 (print (list-tools "playwright"))
 (print (search-tools "navigate"))
 
 (princ "=== drive a page ===")
 (terpri)
 
-;; Navigate, then snapshot the accessibility tree of the loaded page.
+Navigate, then snapshot the accessibility tree of the loaded page.
 (playwright/browser_navigate :url "https://hyko.ai")
 (princ (playwright/browser_snapshot))
 (terpri)
 
-;; Navigate somewhere else.
+Navigate somewhere else.
 (playwright/browser_navigate :url "https://yourscrib.ai")
 
 (princ "=== handle a failing tool call ===")
 (terpri)
 
-;; A domain that can't resolve makes the tool call signal an error;
-;; `try`/`catch` binds the handler variable to that error's value instead
-;; of letting it propagate.
+A domain that can't resolve makes the tool call signal an error;
+`try`/`catch` binds the handler variable to that error's value instead
+of letting it propagate.
 (try
   (playwright/browser_navigate :url "https://this-domain-does-not-exist-lisptc.invalid")
   (catch (e)

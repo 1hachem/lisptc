@@ -1,11 +1,11 @@
 // Text-position helpers shared by completion and hover: finding the symbol
 // (or enclosing call) at a cursor position, and rendering a doc entry as
-// hover/completion markdown. Ignores string/comment contents — a
-// simplification both functions share.
+// hover/completion markdown. Ignores string contents — a simplification both
+// functions share.
 import type { TextDocument } from "vscode-languageserver-textdocument";
 
 // A symbol is any run of characters the reader doesn't treat as delimiters.
-const symbolChar = /[^()'`~"; \t]/;
+const symbolChar = /[^()'`~" \t]/;
 
 // Walk backward from `position` tracking paren depth to find the call this
 // position is nested in, then read the symbol right after its opening paren,

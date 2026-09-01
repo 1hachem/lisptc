@@ -1,13 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["pi"],
   "workspaces": {
     ".": {
       "entry": ["scripts/**/*.ts"],
       "project": ["scripts/**/*.ts"]
     },
     "packages/ai": {
-      "project": ["src/**/*.ts"]
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "packages/env": {
       "project": ["src/**/*.ts"]
@@ -36,10 +36,6 @@
     },
     "apps/mcp": {
       "project": ["src/**/*.ts"]
-    },
-    "apps/pi": {
-      "entry": ["extension/lisp-repl.ts"],
-      "project": ["extension/**/*.ts"]
     }
   }
 }

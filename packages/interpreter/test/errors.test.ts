@@ -3,7 +3,7 @@ import { ev } from "./helpers.ts";
 
 describe("evaluation errors that must be signalled", () => {
 	it("throws on an unbound variable", () => {
-		expect(() => ev("no-such-var")).toThrow(/void variable/);
+		expect(() => ev("(progn no-such-var)")).toThrow(/void variable/);
 	});
 
 	it("throws on an undefined function", () => {
@@ -33,7 +33,7 @@ describe("evaluation errors that must be signalled", () => {
 	});
 
 	it("throws on an unterminated string", () => {
-		expect(() => ev('"unterminated')).toThrow();
+		expect(() => ev('(progn "unterminated)')).toThrow();
 	});
 });
 
