@@ -429,13 +429,29 @@ export function mcpExtension(options: RegisterMcpOptions = {}) {
 	return (interp: Interp): void => registerMcp(interp, options);
 }
 
+// This module is loaded either as its own source (node runs the .ts directly)
+// or as part of a build, where it is JavaScript and its neighbours were emitted
+// beside it. A worker is a second entry point by definition, so it can never be
+// folded into a bundle — it is always a sibling file, under whichever extension
+// this module itself has.
+const FROM_SOURCE = import.meta.url.endsWith(".ts");
+const BROKER_URL = new URL(
+	FROM_SOURCE ? "./mcp-broker.ts" : "./mcp-broker.js",
+	import.meta.url,
+);
+
+// Same story for the toolkit: it sits at the package root next to `src/`, and a
+// build emits it beside the code instead.
+const TOOLKIT_URL = new URL(
+	FROM_SOURCE ? "../mcp.toolkit.json" : "./mcp.toolkit.json",
+	import.meta.url,
+);
+
 export function registerMcp(
 	interp: Interp,
 	options: RegisterMcpOptions = {},
 ): void {
-	const runtime =
-		options.runtime ??
-		new WorkerJobsRuntime(new URL("./mcp-broker.ts", import.meta.url));
+	const runtime = options.runtime ?? new WorkerJobsRuntime(BROKER_URL);
 	// The async capability (await/jobs/cancel/…) is generic; MCP just plugs in.
 	const jobs = new Jobs(runtime, jsonToLisp);
 	jobs.installBuiltins(interp);
@@ -868,9 +884,5 @@ function parsePredefined(
 	predefined: Map<string, ConnConfig>,
 	toolkitJson?: string,
 ): void {
-	registerConfigs(
-		toolkitJson ??
-			readFileSync(new URL("../mcp.toolkit.json", import.meta.url), "utf8"),
-		predefined,
-	);
+	registerConfigs(toolkitJson ?? readFileSync(TOOLKIT_URL, "utf8"), predefined);
 }
