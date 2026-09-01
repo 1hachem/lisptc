@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "node .output/server/index.mjs",
+    "start": "PORT=${PORT:-3000} node .output/server/index.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

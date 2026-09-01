@@ -64,6 +64,26 @@ tasks:
       - task: _infisical-run
         vars: { ENV: dev, PATHS: "/ai", CMD: "pnpm run dev --filter api" }
 
+  start:
+    desc: build and serve both the app and the api
+    deps: [start:app, start:api]
+
+  # `build` goes through the root script, so turbo caches it and builds whatever
+  # the workspace depends on first; `start` exists only on the workspace itself.
+  # Both halves run under the same secrets, since the build reads env too.
+  start:app:
+    desc: build the app and serve the built output with access to secrets
+    cmds:
+      - task: _infisical-run
+        # `ENV=prod task start:app` to serve against another Infisical environment.
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "", CMD: "pnpm run build --filter app && pnpm --filter app start" }
+
+  start:api:
+    desc: build the api and serve the built output with access to secrets
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai", CMD: "pnpm run build --filter api && pnpm --filter api start" }
+
   pi:
     desc: run pi agent with access to secrets
     cmds:
