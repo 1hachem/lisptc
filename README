@@ -10,6 +10,8 @@ system:
 
 They both write to each other.
 
+Write-up: https://d4shi.com/blog/lisptc/
+
 REPO LAYOUT (pnpm + Turborepo monorepo)
 
 packages/interpreter  @repo/interpreter — the interpreter core (src/lisp.ts),

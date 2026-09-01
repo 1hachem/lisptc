@@ -9,9 +9,7 @@ export {
 } from "./agent.ts";
 export { SYSTEM_PROMPT as LISP_SYSTEM_PROMPT } from "./prompts/lisp.ts";
 export {
-	fireworks,
 	getProvider,
-	llamacpp,
 	type ModelOptions,
 	type Provider,
 	type ProviderName,
