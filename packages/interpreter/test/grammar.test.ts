@@ -34,6 +34,11 @@ describe("lisptc GBNF grammar", () => {
 		"nil",
 		"t",
 		"",
+		// Only "(", ")", "<" and "[" are fenced out of prose. A lone quote or
+		// apostrophe carries no form with it, so it is prose like any other
+		// punctuation and stripProse blanks it.
+		'"unterminated',
+		"'",
 	];
 	it.each(valid)("accepts %j", (src) => {
 		expect(accepts(g, src)).toBe(true);
@@ -44,8 +49,6 @@ describe("lisptc GBNF grammar", () => {
 		")", // stray close
 		"(+ 1 2", // unterminated list
 		"foo)", // trailing close
-		'"unterminated', // open string
-		"'", // quote with nothing to quote
 		"(a . )", // dotted pair with no tail
 		"(+ 1 2) happy to help :)", // a stray close paren, even in prose
 		// No model may open a thinking channel or any other control tag. Every
