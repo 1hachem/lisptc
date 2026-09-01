@@ -154,11 +154,36 @@ describe("MCP", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(
 			/global named `<server>\/<tool>`, called with keyword args/,
 		);
-		expect(LISP_SYSTEM_PROMPT).toMatch(/\(fs\/read_file :path "\/tmp\/x"\)/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/\(acme\/get_widget :id "42"\)/);
+	});
+
+	// Every server and tool the examples name is invented. A real one (the
+	// toolkit ships `playwright`, `fs`, `linear`, `posthog`) would hand the model
+	// an answer it is supposed to reach by searching — and would quietly turn the
+	// navigate eval into a test of whether it can copy the prompt.
+	it.each([
+		"playwright",
+		"fs/",
+		"linear",
+		"posthog",
+	])("names no real toolkit server in its examples (%s)", (name) => {
+		expect(LISP_SYSTEM_PROMPT).not.toContain(name);
+	});
+
+	it("says the server and tool names have to be discovered, not invented", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/You are not told which servers exist or what they are called/,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/Never invent a server or tool name — read it out of one of those results/,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/start from\s+`search-mcps` and let each step tell you the next name/,
+		);
 	});
 
 	it("shows how to load a predefined server and an ad-hoc one", () => {
-		expect(LISP_SYSTEM_PROMPT).toMatch(/\(await \(load-mcp "linear"\)\)/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/\(await \(load-mcp "acme"\)\)/);
 		expect(LISP_SYSTEM_PROMPT).toMatch(/:url "https:\/\/\.\.\."/);
 		expect(LISP_SYSTEM_PROMPT).toMatch(/:command "npx"/);
 	});

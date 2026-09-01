@@ -31,7 +31,7 @@ code, so never write one (no `:)`); and prose cannot hold a `<` or a `[` at all
 - **Comments**: there is no comment syntax — prose around the forms is the comment.
   `;` is an ordinary symbol character, so `; note` inside a form is read as code.
 - **Symbols**: any token that is not a number/string/keyword/`nil`/`t`. `/` and `-`
-  are legal in names (e.g. `string-split`, `fs/read_file`).
+  are legal in names (e.g. `string-split`, `acme/get_widget`).
 
 ## 2. Data types
 
@@ -267,13 +267,13 @@ answer to the user, e.g. `the sum is 3`.
 - `(load-mcp "name")` — load a predefined server by name. **Asynchronous**: returns
   a *job* immediately; the tools install only when the job settles.
 - **To load and use in one step, wrap the SINGLE `load-mcp` call in `await`:**
-  `(await (load-mcp "playwright"))` blocks until ready and returns the tool list.
-  Do NOT call `(load-mcp "playwright")` and then `(await (load-mcp "playwright"))` —
+  `(await (load-mcp "acme"))` blocks until ready and returns the tool list.
+  Do NOT call `(load-mcp "acme")` and then `(await (load-mcp "acme"))` —
   that starts TWO separate connections. Either wrap it directly as above, or bind
-  the one job and await that: `(setq j (load-mcp "playwright")) … (await j)`.
+  the one job and await that: `(setq j (load-mcp "acme")) … (await j)`.
 - Ad-hoc servers (all still wrapped in `await` the same way):
   - Remote: `(load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))`
-  - Local stdio: `(load-mcp :name "fs" :command "npx" :args '("-y" "server-filesystem" "/tmp"))`
+  - Local stdio: `(load-mcp :name "acme" :command "npx" :args '("-y" "acme-mcp-server"))`
   - OAuth remote: add `:oauth t` (and optional `:scopes`); then use `login`/`mcp-authorize`.
 - Load several concurrently: `(await-all (list (load-mcp "a") (load-mcp "b")))`.
 - **Finding tools — two different searches, don't confuse them:**
@@ -281,9 +281,9 @@ answer to the user, e.g. `the sum is 3`.
     not) — use this to find a server to load. Also `(list-mcps)`, `(list-toolkit)`.
   - `(search-tools "query")` searches the tools of *already-loaded* servers by
     name/description, ranked best-first. It takes ONE query string and searches
-    ALL loaded servers — there is NO server argument. `(search-tools "playwright" "navigate")`
+    ALL loaded servers — there is NO server argument. `(search-tools "acme" "widget")`
     is WRONG (arity error). To search one server's tools, load it first, then
-    `(search-tools "navigate")`; to list them use `(list-tools "playwright")`.
+    `(search-tools "widget")`; to list them use `(list-tools "acme")`.
 - `(unload-mcp "name")`, `(login "name")`, `(logout "name")`,
   `(mcp-authorize "name" "code")`, `(mcp-shutdown)`.
 - **OAuth login/logout lifecycle** (only for `:oauth t` servers):
@@ -300,12 +300,15 @@ answer to the user, e.g. `the sum is 3`.
     sign-out — it doesn't error if the server isn't currently loaded.
 - Each loaded tool becomes a global `<server>/<tool>` called with keyword args and
   **blocking** (returns the result directly), e.g.
-  `(linear/list-issues :query "auth bug")`. Inspect one with `(doc 'linear/list-issues)`.
-- Full example — load, find the tool, call it:
+  `(acme/list_widgets :query "blue")`. Inspect one with `(doc 'acme/list_widgets)`.
+- Full example — find the server, load it, find the tool, call it. The server and
+  tool names below are made up: you never know them in advance, so start from
+  `search-mcps` and let each step tell you the next name.
   ```
-  (await (load-mcp "playwright"))
-  (search-tools "navigate")
-  (playwright/browser_navigate :url "https://hyko.ai")
+  (search-mcps "widget")
+  (await (load-mcp "acme"))
+  (search-tools "widget")
+  (acme/get_widget :id "42")
   ```
 
 ### 10.2 Async jobs
@@ -324,7 +327,7 @@ A *job* is a handle for background work (currently just `load-mcp`).
   string in all string functions and taint propagates through the result, but it
   prints redacted as `#<secret:KEY>` and is only revealed when serialized into an
   outgoing MCP call argument or header. Only `REPL_`-prefixed keys are visible.
-  Example: `(load-mcp :name "linear" :url "…" :headers (list (cons "Authorization" (secret "REPL_LINEAR_TOKEN"))))`.
+  Example: `(load-mcp :name "acme" :url "…" :headers (list (cons "Authorization" (secret "REPL_ACME_TOKEN"))))`.
 
 ## 11. Gotchas
 
