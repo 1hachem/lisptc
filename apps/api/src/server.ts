@@ -9,16 +9,14 @@ const CLOSE_TIMEOUT_MS = 2_000;
 export interface StartOptions {
 	fetch: FetchCallback;
 	port: number;
-	/**
-	 * Exit on an uncaught error. Production should die and be restarted; the dev
-	 * server logs and keeps the port, since the next edit probably fixes it.
-	 */
-	exitOnUncaught: boolean;
 }
 
-/** Bind the port and wire up every path an error can take out of the process. */
+/**
+ * Serve the app in production. In dev the socket belongs to vite (see
+ * `vite.config.ts`), so only the process-level handlers below are shared.
+ */
 export function startServer(options: StartOptions): ServerType {
-	installProcessHandlers(options.exitOnUncaught);
+	installProcessHandlers();
 
 	const server = serve({ fetch: options.fetch, port: options.port }, (info) =>
 		log.info(`@lisptc/api listening on http://localhost:${info.port}`),
@@ -37,31 +35,44 @@ export function startServer(options: StartOptions): ServerType {
 		log.error(`server error — ${formatError(err)}`);
 	});
 
-	installShutdown(server);
-	return server;
-}
-
-function installShutdown(server: ServerType): void {
 	for (const signal of ["SIGINT", "SIGTERM"] as const) {
 		process.once(signal, () => {
 			log.info(`${signal} — shutting down`);
 			// The listening socket keeps the event loop alive, so without this the
-			// process outlives `turbo run dev` and holds the port until it is killed
+			// process outlives its supervisor and holds the port until it is killed
 			// by hand.
 			server.close(() => process.exit(0));
 			// `close` only refuses *new* connections and then waits for the open ones
 			// — and an open SSE chat stream never ends on its own, so on its own this
-			// hangs forever and the next dev server dies on EADDRINUSE.
+			// hangs forever and the next server dies on EADDRINUSE.
 			if ("closeAllConnections" in server) server.closeAllConnections();
 			setTimeout(() => process.exit(0), CLOSE_TIMEOUT_MS).unref();
 		});
 	}
+
+	return server;
 }
 
-function installProcessHandlers(exitOnUncaught: boolean): void {
+// vite re-evaluates the module graph on every edit, so this would otherwise
+// stack up a fresh pair of listeners (and a duplicate log line) per reload.
+const INSTALLED = Symbol.for("lisptc.api.process-handlers");
+
+/**
+ * Report the two failures that otherwise escape every request-scoped handler.
+ * Production dies and gets restarted; the dev server logs and keeps serving,
+ * since the next edit probably fixes it.
+ */
+export function installProcessHandlers(): void {
+	const globals = globalThis as Record<symbol, unknown>;
+	if (globals[INSTALLED]) return;
+	globals[INSTALLED] = true;
+
+	// vite sets NODE_ENV itself; plain `node src/index.ts` leaves it unset.
+	const isDev = process.env.NODE_ENV === "development";
+
 	process.on("uncaughtException", (err) => {
 		log.error(`uncaught exception — ${formatError(err)}`);
-		if (exitOnUncaught) process.exit(1);
+		if (!isDev) process.exit(1);
 	});
 	process.on("unhandledRejection", (reason) => {
 		log.error(`unhandled rejection — ${formatError(reason)}`);
