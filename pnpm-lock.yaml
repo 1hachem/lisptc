@@ -51,6 +51,9 @@ importers:
       '@repo/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../../packages/interpreter
       hono:
         specifier: ^4.13.5
         version: 4.13.5
