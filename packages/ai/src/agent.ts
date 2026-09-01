@@ -4,11 +4,7 @@ import {
 	HumanMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
-import {
-	getProvider,
-	type ModelOptions,
-	type ProviderName,
-} from "./provider.ts";
+import { getProvider, type ProviderName } from "./provider.ts";
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"You are the reasoning core of a neuro-symbolic agent. Think step by step and answer clearly and concisely.";
@@ -32,7 +28,8 @@ export interface AgentDelta {
 
 export interface AgentConfig {
 	provider?: ProviderName;
-	model?: ModelOptions;
+	/** Model id; the provider falls back to its own default when unset. */
+	model?: string;
 	system?: string;
 }
 
@@ -68,7 +65,7 @@ export class Agent {
 		options?: { signal?: AbortSignal },
 	): AsyncGenerator<AgentDelta> {
 		const model = getProvider(this.config.provider)({
-			...this.config.model,
+			model: this.config.model,
 			streaming: true,
 		});
 		const history: BaseMessage[] = [
