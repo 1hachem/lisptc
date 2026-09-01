@@ -46,7 +46,7 @@ chat.post("/", async (c) => {
 		input ?? {},
 		{
 			provider: CHAT_PROVIDER,
-			model: { model: CHAT_MODEL },
+			model: CHAT_MODEL,
 			system: LISP_SYSTEM_PROMPT,
 		},
 		c.req.raw.signal,
