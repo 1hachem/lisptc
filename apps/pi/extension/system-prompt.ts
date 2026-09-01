@@ -1,4 +1,4 @@
-import { INTERPRETER_SOURCE } from "@repo/interpreter/source.ts";
+import { LANGUAGE_REFERENCE } from "@repo/interpreter/source.ts";
 
 // Custom message types used by the REPL extension. Shared with the extension so
 // the policy text can reference the exact result-message type name.
@@ -34,7 +34,6 @@ ABSOLUTE RULES:
 10. NEVER write Lisp in your thinking. Thinking is reserved for unstructured, natural-language internal thoughts — plan, reason, and reflect in prose only. No s-expressions, no code, no Lisp of any kind in thinking. All Lisp belongs exclusively in your final text output. To repeat: thinking = prose thoughts only, never Lisp; final output = Lisp only.
 `;
 
-// The complete system prompt: the lisp-only policy followed by the full
-// interpreter source (every `src/` file), so the LLM knows the exact language
-// it is programming.
-export const SYSTEM_PROMPT: string = `${POLICY}${"\n"}${INTERPRETER_SOURCE}`;
+// The complete system prompt: the lisp-only policy followed by the language
+// reference, so the LLM knows the exact dialect it is programming.
+export const SYSTEM_PROMPT: string = `${POLICY}${"\n"}${LANGUAGE_REFERENCE}`;
