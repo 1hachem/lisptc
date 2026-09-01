@@ -1,10 +1,6 @@
 import devServer from "@hono/vite-dev-server";
 import { defineConfig } from "vite";
 
-// Dev only: vite owns the socket and re-evaluates the module graph on save, so
-// an edit never rebinds the port (`node --watch` restarted the process, and a
-// shutdown blocked on open SSE streams regularly left the replacement dying on
-// EADDRINUSE). Production still runs the sources directly — `src/index.ts`.
 export default defineConfig({
 	server: {
 		port: Number(process.env.PORT ?? 3001),
@@ -13,4 +9,19 @@ export default defineConfig({
 		strictPort: true,
 	},
 	plugins: [devServer({ entry: "src/app.ts" })],
+	build: {
+		target: "node22",
+		ssr: "src/index.ts",
+		outDir: "dist",
+		rollupOptions: {
+			// The workspace packages ship .ts and have no build of their own — node
+			// runs their sources directly, which is why `start` keeps
+			// `--experimental-transform-types`. Bundling them would also rewrite the
+			// interpreter's `new Worker(new URL("./mcp-broker.ts", import.meta.url))`
+			// to a path inside dist/, where that worker file does not exist, and MCP
+			// would fail in production only.
+			external: [/^@repo\//],
+			output: { format: "esm" },
+		},
+	},
 });

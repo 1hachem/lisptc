@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "start": "node --no-warnings --experimental-transform-types src/index.ts",
+    "build": "vite build",
+    "start": "node --no-warnings --experimental-transform-types dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
