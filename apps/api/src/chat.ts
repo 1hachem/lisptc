@@ -1,6 +1,7 @@
 import { ensureWarm, LISP_SYSTEM_PROMPT, streamChatResponse } from "@repo/ai";
 import { Hono } from "hono";
 import { z } from "zod";
+import { log } from "./log.ts";
 import { CHAT_MODEL, CHAT_PROVIDER, NEEDS_WARMUP } from "./model.ts";
 
 // Validates the wire shape of `ChatInput` (a LangChain message-like list).
@@ -36,9 +37,16 @@ chat.post("/", async (c) => {
 		await c.req.json().catch(() => null),
 	);
 	if (!parsed.success) {
+		log.warn(
+			`rejected chat request — ${JSON.stringify(z.treeifyError(parsed.error))}`,
+		);
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { input, config } = parsed.data;
+	const threadId = config?.configurable?.thread_id;
+	log.info(
+		`chat thread=${threadId ?? "-"} messages=${input?.messages?.length ?? 0} ${CHAT_PROVIDER}/${CHAT_MODEL}`,
+	);
 	// llama-server runs `--parallel 1`; going in before the system-prompt KV is
 	// saved would both re-evaluate the prompt and poison the slot being saved.
 	if (NEEDS_WARMUP) await ensureWarm();
@@ -50,6 +58,6 @@ chat.post("/", async (c) => {
 			system: LISP_SYSTEM_PROMPT,
 		},
 		c.req.raw.signal,
-		config?.configurable?.thread_id,
+		threadId,
 	);
 });

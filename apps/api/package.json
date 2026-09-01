@@ -7,7 +7,7 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "dev": "node --no-warnings --experimental-transform-types --watch src/index.ts",
+    "dev": "node --no-warnings --experimental-transform-types src/dev.ts",
     "start": "node --no-warnings --experimental-transform-types src/index.ts",
     "typecheck": "tsc --noEmit"
   },
