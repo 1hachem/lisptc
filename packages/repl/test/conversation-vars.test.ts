@@ -58,9 +58,8 @@ describe("AgentRepl conversation variables", () => {
 });
 
 describe("MemoryRepl (language-only base)", () => {
-	it("has no halt binding — halt is an AgentRepl feature", () => {
+	it("has no conversation globals — they are an AgentRepl feature", () => {
 		const r = new MemoryRepl();
-		// Unbound in function position reports "undefined: halt".
-		expect(r.eval("(halt)")).toContain("undefined: halt");
+		expect(r.eval("(progn conversation)")).toContain("void variable");
 	});
 });

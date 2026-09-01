@@ -10,7 +10,7 @@
  *   would have printed (last value + side-effect output, errors rendered
  *   inline). No process I/O, so embedders can run Lisp without a subprocess.
  * - `AgentRepl` — `MemoryRepl` plus two things an embedding agent needs:
- *   the `halt` built-in (a REPL feature, not part of the language) and
+ *   the finished signal (a REPL feature, not part of the language) and
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
@@ -25,6 +25,7 @@ import {
 	run,
 	setWriter,
 	str,
+	stripProse,
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
@@ -128,40 +129,34 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 }
 
-// The embeddable agent REPL: adds `halt` and the read-only conversation
-// globals (`conversation`, `user-messages`, `assistant-messages`).
+// The embeddable agent REPL: adds the finished signal and the read-only
+// conversation globals (`conversation`, `user-messages`, `assistant-messages`).
 export class AgentRepl extends MemoryRepl {
-	// Set by the `halt` built-in this REPL installs; read (and cleared) via
-	// takeHalted(). `halt` is a REPL feature, not part of the language — a driver
-	// looping over eval() uses it to know when to stop.
-	private halted = false;
+	// Raised by an eval whose program held no forms at all; read (and cleared)
+	// via takeFinished(). A driver looping over eval() uses it to know when to
+	// stop — there is no stop built-in, see `eval`.
+	private finished = false;
 	// The host-supplied conversation snapshot, kept so a post-error `reset()`
 	// can re-inject the globals until the next refresh.
 	private readonly conversationVars = new Map<string, unknown>();
 
-	// Re-establish the halt built-in and the conversation globals on every fresh
-	// interp. Guards `conversationVars` because the base constructor calls this
-	// before this subclass's field initializers have run. (Secrets need no
-	// handling here — the secretsExtension re-seeds them on each fresh interp.)
+	// Re-establish the conversation globals on every fresh interp. Guards
+	// `conversationVars` because the base constructor calls this before this
+	// subclass's field initializers have run. (Secrets need no handling here —
+	// the secretsExtension re-seeds them on each fresh interp.)
 	protected override setup(interp: Interp): void {
-		this.installHalt(interp);
 		const vars = this.conversationVars;
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 	}
 
-	// Install `(halt [value])`: record that the program asked to stop and return
-	// `value` (or t). It only sets a flag — evaluation of any following forms
-	// continues — so it is meant as the final form of a program.
-	private installHalt(interp: Interp): void {
-		const halt = interp.makeBuiltIn("halt", -1, (frame) => {
-			this.halted = true;
-			const rest = frame[0] as List;
-			return rest === null ? true : rest.car;
-		});
-		interp.defineGlobal(newSym("halt"), halt, {
-			signature: "(halt [value])",
-			doc: "Signal the REPL to stop after this program; return `value` (or t).",
-		});
+	// Evaluate a program, raising the finished flag if it turned out to be pure
+	// prose. An agent that has nothing left to run answers in plain text, and
+	// text with no forms in it is a program that does nothing — so a form-less
+	// reply IS the end of the loop, and the REPL needs no stop built-in for the
+	// agent to call.
+	override eval(code: string): string {
+		if (stripProse(code).trim() === "") this.finished = true;
+		return super.eval(code);
 	}
 
 	// Replace the read-only conversation globals from a fresh host snapshot. Each
@@ -177,17 +172,17 @@ export class AgentRepl extends MemoryRepl {
 		}
 	}
 
-	// Whether the last-evaluated program called `(halt)`; reads and clears the
-	// flag so each check reflects only evaluations since the previous check.
-	takeHalted(): boolean {
-		const h = this.halted;
-		this.halted = false;
-		return h;
+	// Whether a program evaluated since the previous check was form-less prose;
+	// reads and clears the flag.
+	takeFinished(): boolean {
+		const f = this.finished;
+		this.finished = false;
+		return f;
 	}
 
 	override reset(): void {
 		super.reset();
-		this.halted = false;
+		this.finished = false;
 	}
 }
 

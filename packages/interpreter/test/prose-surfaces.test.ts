@@ -56,4 +56,11 @@ describe("the language reference teaches prose", () => {
 	it("says there is no comment syntax", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/there is no comment syntax/i);
 	});
+
+	// The GBNF fences "<" and "[" out of prose so no model can open a thinking
+	// channel there. A model that is never told will just spend tokens being
+	// masked, so the reference has to carry the rule too.
+	it("says prose cannot hold a < or a [", () => {
+		expect(LANGUAGE_REFERENCE).toMatch(/prose cannot hold a `<` or a `\[`/i);
+	});
 });

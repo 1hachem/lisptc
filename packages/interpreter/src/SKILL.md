@@ -12,10 +12,11 @@ Source is s-expressions. `(f a b)` calls `f` with the evaluated `a` and `b`.
 
 Only the parenthesised top-level forms are program text: anything written around
 them is prose and is ignored, so a program can be prose with forms embedded in it
-(`Let me square it: (sq 5)` evaluates just `(sq 5)`). Two consequences: a bare
+(`Let me square it: (sq 5)` evaluates just `(sq 5)`). Three consequences: a bare
 value at top level (`42`, `"done"`, `my-var`) is prose, not an expression to
-evaluate — wrap it in a form; and a stray parenthesis in prose is still read as
-code, so never write one (no `:)`).
+evaluate — wrap it in a form; a stray parenthesis in prose is still read as
+code, so never write one (no `:)`); and prose cannot hold a `<` or a `[` at all
+— write "less than", or put the comparison in a form, `(< 1 2)`.
 
 - **Quote**: `'x` ≡ `(quote x)` — returns `x` unevaluated.
 - **Quasiquote**: `` `x `` ≡ `(quasiquote x)`. Inside it, `,x` (`unquote`) inserts
@@ -241,26 +242,23 @@ Three read-only globals mirror the conversation and refresh every step:
 They are read-only (re-assigning them doesn't persist); copy into your own variable
 to keep a value.
 
-### Ending the loop: `halt`
+### Ending the loop: prose alone
 
-`(halt "message")` — signal the REPL to stop the loop once the current program
-finishes. It takes exactly ONE argument: a **double-quoted string literal** — your
-final answer or message to the user, e.g. `(halt "hello world")` or
-`(halt "the sum is 3")`. Never pass a bare value, symbol, or computed expression —
-always a quoted string. If your answer is a number or other value, compute it in an
-earlier step, then write it into the halt string literal.
+There is no `halt`, `exit` or `quit`. You end the loop by replying with **prose and
+no form at all** — a message with nothing to evaluate is a program that does
+nothing, and that is the signal that you are done. The prose you write is your final
+answer to the user, e.g. `the sum is 3`.
 
-- Call it ONLY when the user's request is FULLY satisfied. Do not halt early — if
-  you still need to inspect a result, branch, or take another step, just emit the
-  next form and you'll be asked to continue.
-- `halt` only sets a stop flag; any forms after it in the SAME program still
-  evaluate. So make `(halt "…")` the LAST form you emit — don't rely on it to
-  short-circuit the rest of a program.
-- If you never call `halt`, the loop stops on its own after a fixed number of steps
-  (a safety cap), but you should end deliberately with `halt` rather than relying on
-  that.
-- `halt` is a REPL/driver feature, not part of the core language, so it exists only
-  inside this agent loop.
+- Reply that way ONLY when the user's request is FULLY satisfied. Until then every
+  reply must carry at least one form — if you still need to inspect a result,
+  branch, or take another step, emit the next form and you'll be asked to continue.
+- The corollary of §1: prose around a form is ignored, but prose *instead of* a form
+  stops the loop. So never answer in bare prose mid-task, and never park a plan or a
+  note in a form-less message — put remarks around the form you are emitting.
+- The loop also stops on its own after a fixed number of steps (a safety cap), but
+  end deliberately with your answer rather than relying on that.
+- This is a REPL/driver behaviour, not part of the core language: outside the agent
+  loop a form-less program is simply a no-op.
 
 ## 10. MCP tools, async jobs, secrets
 

@@ -86,7 +86,9 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
  *   2. evaluates that program against a persistent `AgentRepl`,
  *   3. emits the REPL result as a `tool` message and feeds it back as the next
  *      turn's input,
- * repeating until the model calls `(halt)` or `MAX_STEPS` is reached. Each step
+ * repeating until the model answers in form-less prose (see `AgentRepl`) or
+ * `MAX_STEPS` is reached. That final prose turn is the answer to the user, so it
+ * is streamed like any other assistant turn but produces no REPL result. Each step
  * publishes an authoritative `values` event so the client reconciles the full
  * message list. Returns a standard SSE `Response` any web server (Hono) returns.
  *
@@ -191,7 +193,12 @@ export function streamChatResponse(
 
 					const { output, error } = evalCode(repl, code);
 					steps += 1;
-					const halted = repl.takeHalted();
+					// A form-less turn ran no code, so there is no result worth
+					// showing the user (or feeding back) — it is the final answer.
+					if (repl.takeFinished()) {
+						write(sse("values", { messages: wire }));
+						break;
+					}
 
 					const resultContent = replResultContent(output, error);
 					wire.push({
@@ -202,7 +209,7 @@ export function streamChatResponse(
 					transcript.push({ role: "tool", content: resultContent });
 
 					if (!write(sse("values", { messages: wire }))) break;
-					if (halted || steps >= MAX_STEPS) break;
+					if (steps >= MAX_STEPS) break;
 				}
 			} catch (err) {
 				if (!abort.signal.aborted) {

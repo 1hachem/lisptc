@@ -66,11 +66,36 @@ describe("the REPL loop protocol", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/The REPL session is persistent/i);
 	});
 
-	it("teaches the halt built-in that ends the loop", () => {
-		expect(LISP_SYSTEM_PROMPT).toMatch(/end the loop with `\(halt "…"\)`/);
+	it("teaches that form-less prose is what ends the loop", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/end the loop by replying with PROSE ALONE/,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/there is no halt or exit built-in/i);
 	});
 
-	// The cap is the model's other exit besides `halt`, so it has to know the
+	// Left to rule 4b alone the model treats stopping as failure and stalls the
+	// loop with no-op forms (`(identity "Standing by.")`) addressed to a user who
+	// cannot see them, burning every step up to the cap.
+	it("bans forms that only talk to the user or keep the loop alive", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/The user cannot see or reply to your intermediate steps/i,
+		);
+		expect(LISP_SYSTEM_PROMPT).toContain('(identity "Standing by.")');
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/Every form you write must do real work/i,
+		);
+	});
+
+	it("says a request needing no computation is answered in prose at once", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/Having nothing to compute is not a problem to be worked around/i,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/reply with prose alone on the FIRST turn/,
+		);
+	});
+
+	// The cap is the model's other exit besides a form-less reply, so it has to know the
 	// loop is bounded at all — that first assertion is the one that bites. The
 	// second only guards the coupling: the policy interpolates the same
 	// `MAX_STEPS` that stream.ts breaks on, so it cannot fail today, but it

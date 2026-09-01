@@ -7,10 +7,26 @@
 # ")" — as in ":)" — is unsayable, and every "(" it opens must be closed as a
 # real form. The dialect has no comment syntax; prose replaces it.
 
-root    ::= prose topform (prose topform)* prose
+# A reply may hold no form at all: pure prose is a program that does nothing, and
+# the agent loop reads that as "I am done, here is the answer" (see AgentRepl in
+# packages/repl/src/repl.ts). So the form count starts at zero, not one.
+root    ::= prose (topform prose)*
 
-# Free text around the forms: anything but a parenthesis.
-prose   ::= [^()]*
+# Free text around the forms: anything but a parenthesis, a "<" or a "[". Every
+# chat model brackets its control tags with one of those two: <think> </think>
+# (deepseek, qwen, seed-oss), <|channel>thought <channel|> (gemma-4), <|start|>
+# <|channel|> <|message|> (gpt-oss), [THINK] [TOOL_CALLS] (mistral). All of them
+# are paren-free, so all of them used to pass straight through here as prose —
+# and when a thinking model opens one, the whole reply is spent inside it: the
+# trace is decoded under this grammar so it comes out as strained pseudo-Lisp,
+# it eats the token budget, and the turn can end with the content empty and no
+# program at all. Banning the two characters every tag begins with makes the
+# whole family unsayable at decode time, whatever tokens a model spells them
+# with, and fails closed on models we have not met yet. The cost is that prose
+# cannot hold a literal "<" or "[": write "less than", or put the comparison in
+# a form, (< 1 2). The one gap is functionary's ">>>all" — ">" is too useful in
+# prose to spend on a model we do not run.
+prose   ::= [^()<\[]*
 
 # Only a (possibly quoted) list is a top-level form — a bare atom out here
 # would be indistinguishable from prose.

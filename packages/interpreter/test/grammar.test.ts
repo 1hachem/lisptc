@@ -24,13 +24,22 @@ describe("lisptc GBNF grammar", () => {
 		"Here we go: (+ 1 2) and that is the answer.",
 		"First define it.\n(defun sq (x) (* x x))\nThen use it: (sq 5)",
 		"the list is '(1 2 3)",
+		// ">" is still ordinary prose — only "<" is fenced out.
+		"3 > 2, so (+ 1 2)",
+		"thinking out loud (+ 1 2)",
+		// A form-less reply is how the agent ends the loop, so it has to be
+		// sayable under the grammar.
+		"just prose, no form at all",
+		"the answer is 42",
+		"nil",
+		"t",
+		"",
 	];
 	it.each(valid)("accepts %j", (src) => {
 		expect(accepts(g, src)).toBe(true);
 	});
 
 	const invalid = [
-		"", // programs need at least one form
 		"(", // unbalanced
 		")", // stray close
 		"(+ 1 2", // unterminated list
@@ -38,10 +47,19 @@ describe("lisptc GBNF grammar", () => {
 		'"unterminated', // open string
 		"'", // quote with nothing to quote
 		"(a . )", // dotted pair with no tail
-		"just prose, no form at all", // a reply has to contain a form
 		"(+ 1 2) happy to help :)", // a stray close paren, even in prose
-		"nil", // a bare atom out here is prose, not a form
-		"t",
+		// No model may open a thinking channel or any other control tag. Every
+		// family brackets them with "<" or "[", and both are fenced out of prose.
+		"<|channel>thought\nlet me see\n<channel|>(+ 1 2)", // gemma-4
+		"<|channel>thought\n(car xs)\n<channel|>(+ 1 2)",
+		"(+ 1 2)<channel|>",
+		"<think>let me see</think>(+ 1 2)", // deepseek, qwen, seed-oss
+		"(+ 1 2)</think>",
+		"<|start|>assistant<|channel|>analysis<|message|>(+ 1 2)", // gpt-oss
+		"[THINK]let me see[/THINK](+ 1 2)", // mistral
+		"(+ 1 2)[TOOL_CALLS]",
+		"a bare < in prose (+ 1 2)",
+		"a bare [ in prose (+ 1 2)",
 	];
 	it.each(invalid)("rejects %j", (src) => {
 		expect(accepts(g, src)).toBe(false);
