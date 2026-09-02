@@ -8,8 +8,8 @@ import {
 	type StateId,
 	YAW_MAX,
 } from "@repo/bloub";
-import { useEffect, useRef, useState } from "react";
-import { useChatSession } from "../lib/chat.tsx";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type Reaction, useChatSession } from "../lib/chat.tsx";
 
 /**
  * The agent's face, at the foot of the transcript, in place of the `…` that used
@@ -148,20 +148,52 @@ const MOOD_MS = 8000;
  * first paint, a cleared transcript — is `REST_FACE`, so a conversation always
  * opens on the same face.
  */
-function useRestingFace(isLoading: boolean, fresh: boolean): ExpressionId {
+function useRestingFace(
+	isLoading: boolean,
+	fresh: boolean,
+	reaction: Reaction | null,
+): ExpressionId {
 	const [face, setFace] = useState<ExpressionId>(REST_FACE);
 	const next = useRef(0);
 	const was = useRef(false);
+	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// A finished run and a vote both put a face on for a while, and a vote
+	// usually arrives while the run's own mood is still being worn. One timer
+	// between them, so whichever came last owns when the face comes off.
+	const wear = useCallback((expression: ExpressionId) => {
+		setFace(expression);
+		if (timer.current) clearTimeout(timer.current);
+		timer.current = setTimeout(() => setFace(REST_FACE), MOOD_MS);
+	}, []);
+
+	useEffect(
+		() => () => {
+			if (timer.current) clearTimeout(timer.current);
+		},
+		[],
+	);
 
 	useEffect(() => {
 		const finished = was.current && !isLoading;
 		was.current = isLoading;
 		if (!finished) return;
-		setFace(FACES[next.current % FACES.length]);
+		wear(FACES[next.current % FACES.length]);
 		next.current += 1;
-		const timer = setTimeout(() => setFace(REST_FACE), MOOD_MS);
-		return () => clearTimeout(timer);
-	}, [isLoading]);
+	}, [isLoading, wear]);
+
+	// An expression handed to the agent is worn as it came, any of the engine's
+	// sixteen, instead of the next face in the rotation: it was asked for, and
+	// the rotation is only what the agent does when nobody asked. The caller
+	// picks from the same vocabulary this file does, so there is no set of moods
+	// in between to keep in step (see `Reaction`).
+	//
+	// One constraint travels with it: the engine lands an expression only on a
+	// state that wears the resting face, so `idle` and `busy` show it and
+	// `thinking` and `failed` keep their own measured pose.
+	useEffect(() => {
+		if (reaction) wear(reaction.expression);
+	}, [reaction, wear]);
 
 	// `clear()` empties the transcript without remounting anything, so the reset
 	// has to be watched for rather than left to the initial state.
@@ -173,8 +205,8 @@ function useRestingFace(isLoading: boolean, fresh: boolean): ExpressionId {
 }
 
 export function AgentAvatar({ size = 28 }: { size?: number }) {
-	const { messages, isLoading, error, fresh } = useChatSession();
-	const face = useRestingFace(isLoading, fresh);
+	const { messages, isLoading, error, fresh, reaction } = useChatSession();
+	const face = useRestingFace(isLoading, fresh, reaction);
 
 	// Nothing has come back yet, so the agent is still deciding. Once anything
 	// has — a chunk of the reply, or a tool turn — the run is answering.
@@ -211,8 +243,11 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 					// of the three moods are squints. This is exactly the ceiling the package
 					// locks — measured across the gaze envelope for all sixteen expressions,
 					// and it is `surpris`, the widest and now the resting face, that sets
-					// it: at 1.45 the two eyes meet and leave the silhouette.
-					eyeScale={1.3}
+					// it: at 1.45 the two eyes meet and leave the silhouette. It read 1.3
+					// until the package started measuring an eye's outline at constant arc
+					// length, which is what finally caught `surpris` leaving the square by
+					// 4.3 units of 100 at that scale.
+					eyeScale={1.29}
 					state={state}
 					follow={mood === "idle"}
 					aim={ahead}

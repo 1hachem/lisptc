@@ -11,6 +11,7 @@
  * narrows a rating to the turn it was given for.
  */
 
+import type { ExpressionId } from "@repo/bloub";
 import { useEffect, useRef, useState } from "react";
 import { captureFeedback } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
@@ -20,6 +21,20 @@ type Thumb = "up" | "down";
 // PostHog's rating scale for a thumb survey: question 0, 1 up and 2 down.
 const RESPONSE: Record<Thumb, number> = { up: 1, down: 2 };
 
+/**
+ * The face the vote puts on the agent — the engine's own two, at their catalogue
+ * geometry, with nothing adjusted from here.
+ *
+ * `heureux` is the one expression whose ink is an arc rather than a filled
+ * capsule, so it smiles by shape and needs no tilt to suggest it. That matters
+ * because the tilt route is where the other happy faces live, and it is shared
+ * with anger: `fier` at +18° and `hilare` at +20° are only 10° from `colere`'s
+ * +30° over nearly identical eyes. `triste` is the far end of the same axis
+ * instead — tops splayed at −28° over tall eyes — where nothing else sits, so it
+ * is unambiguous.
+ */
+const FACE: Record<Thumb, ExpressionId> = { up: "heureux", down: "triste" };
+
 export function MessageFeedback({
 	messageId,
 	index,
@@ -27,7 +42,7 @@ export function MessageFeedback({
 	messageId?: string;
 	index: number;
 }) {
-	const { threadId } = useChatSession();
+	const { threadId, react } = useChatSession();
 	const [thumb, setThumb] = useState<Thumb | null>(null);
 	const submission = useRef<string | null>(null);
 	const [asking, setAsking] = useState(false);
@@ -47,6 +62,10 @@ export function MessageFeedback({
 		submission.current = id;
 		setThumb(value);
 		setAsking(true);
+		// The vote is aimed at the agent, so the agent answers it — see
+		// `AgentAvatar`. A verdict that lands in a dashboard and nowhere else is a
+		// verdict nobody feels they gave.
+		react(FACE[value]);
 		captureFeedback({
 			$survey_response: RESPONSE[value],
 			$ai_trace_id: threadId,
