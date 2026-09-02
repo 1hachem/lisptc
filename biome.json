@@ -10,19 +10,18 @@
     "includes": [
       "packages/*/src/**",
       "packages/*/test/**",
+      "packages/*/*.ts",
+      "packages/*/*.json",
       "apps/*/src/**",
       "apps/*/server/**",
       "apps/*/test/**",
       "apps/*/extension/**",
-      "*.json",
-      "*.ts",
-      "packages/*/*.json",
+      "apps/*/*.ts",
       "apps/*/*.json",
+      "*.ts",
+      "*.json",
       "!**/node_modules",
       "!**/.claude",
-      "!packages/ui/src/components/ui",
-      "!packages/ui/src/components/ai-elements",
-      "!packages/ui/src/styles",
       "!apps/app/src/routeTree.gen.ts"
     ]
   },
@@ -54,5 +53,42 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "packages/ui/src/components/ui/**",
+        "packages/ui/src/components/ai-elements/**"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useKeyWithClickEvents": "off"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          },
+          "suspicious": {
+            "noDocumentCookie": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/bloub/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    }
+  ]
 }

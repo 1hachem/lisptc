@@ -9,6 +9,10 @@
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
+    "packages/bloub": {
+      "entry": ["src/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
     "packages/env": {
       "project": ["src/**/*.ts"]
     },

@@ -1,4 +1,16 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useMemo,
+	useState,
+} from "react";
+import {
+	PANEL_COOKIE,
+	readBoolPref,
+	SIDEBAR_COOKIE,
+	writeBoolPref,
+} from "./prefs.ts";
 
 interface UIContextValue {
 	leftOpen: boolean;
@@ -12,19 +24,33 @@ interface UIContextValue {
 const UIContext = createContext<UIContextValue | null>(null);
 
 export function UIProvider({ children }: { children: React.ReactNode }) {
-	const [leftOpen, setLeftOpen] = useState(true);
-	const [rightOpen, setRightOpen] = useState(false);
+	const [leftOpen, setLeft] = useState(() =>
+		readBoolPref(SIDEBAR_COOKIE, false),
+	);
+	const [rightOpen, setRight] = useState(() =>
+		readBoolPref(PANEL_COOKIE, false),
+	);
+
+	const setLeftOpen = useCallback((open: boolean) => {
+		setLeft(open);
+		writeBoolPref(SIDEBAR_COOKIE, open);
+	}, []);
+
+	const setRightOpen = useCallback((open: boolean) => {
+		setRight(open);
+		writeBoolPref(PANEL_COOKIE, open);
+	}, []);
 
 	const value = useMemo<UIContextValue>(
 		() => ({
 			leftOpen,
 			setLeftOpen,
-			toggleLeft: () => setLeftOpen((o) => !o),
+			toggleLeft: () => setLeftOpen(!leftOpen),
 			rightOpen,
 			setRightOpen,
-			toggleRight: () => setRightOpen((o) => !o),
+			toggleRight: () => setRightOpen(!rightOpen),
 		}),
-		[leftOpen, rightOpen],
+		[leftOpen, rightOpen, setLeftOpen, setRightOpen],
 	);
 
 	return <UIContext.Provider value={value}>{children}</UIContext.Provider>;

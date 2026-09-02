@@ -1,0 +1,11 @@
+{
+  "extends": "@repo/tsconfigs/react.json",
+  "compilerOptions": {
+    "useDefineForClassFields": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src", "vitest.config.ts"]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@repo/bloub",
+  "version": "0.1.1",
+  "type": "module",
+  "private": true,
+  "description": "Avatar SVG anime : une forme qui morphe entre 14 etats, relevee image par image sur la video de reference.",
+  "license": "MIT",
+  "author": "Jérémy Perret",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./bot/*": "./src/bot/*",
+    "./gaze.ts": "./src/gaze.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@repo/tsconfigs": "workspace:*",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.5",
+    "happy-dom": "^20.13.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

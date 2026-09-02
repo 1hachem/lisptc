@@ -17,6 +17,7 @@
     "@langchain/langgraph-sdk": "^1.10.0",
     "@lexical/react": "^0.49.0",
     "@posthog/react": "^1.10.5",
+    "@repo/bloub": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.5",
