@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LISP_SYSTEM_PROMPT } from "../src/index.ts";
-import { MAX_STEPS } from "../src/prompts/lisp.ts";
+import { IDENTITY, MAX_STEPS } from "../src/prompts/lisp.ts";
 import { snapshotConversation } from "../src/repl.ts";
 
 // The system prompt is the whole contract between the model and this REPL: it
@@ -11,6 +11,12 @@ import { snapshotConversation } from "../src/repl.ts";
 // The prompt writes a built-in as bare prose (`load-mcp`) or inside a call
 // (`(car x)`), so match the name itself rather than any one of those shapes.
 const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
+
+describe("identity", () => {
+	it("opens with the identity constant", () => {
+		expect(LISP_SYSTEM_PROMPT).toContain(IDENTITY);
+	});
+});
 
 describe("prose around the forms", () => {
 	// Without these rules the model falls back on Common Lisp habits it was
