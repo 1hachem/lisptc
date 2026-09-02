@@ -8,9 +8,20 @@ export interface Command {
 	hint?: string;
 	/** hidden on phone-sized screens (e.g. sidebar toggles) */
 	desktopOnly?: boolean;
+	/**
+	 * The command is a prefix, not an action: picking it types the name into the
+	 * composer and waits for the rest of the line instead of running immediately.
+	 */
+	takesArgument?: boolean;
 }
 
 export const commands: Command[] = [
+	{
+		name: "/note",
+		desc: "comment on this conversation",
+		hint: "#tags",
+		takesArgument: true,
+	},
 	{ name: "/clear", desc: "start a fresh session" },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },

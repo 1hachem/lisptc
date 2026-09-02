@@ -22,6 +22,13 @@ export {
 	toAgentMessages,
 } from "./stream.ts";
 export {
+	captureNote,
+	isTelemetryEnabled,
+	type Note,
+	type NoteTarget,
+	shutdownTelemetry,
+} from "./telemetry.ts";
+export {
 	ensureWarm,
 	systemPromptSlotFile,
 	type WarmStatus,

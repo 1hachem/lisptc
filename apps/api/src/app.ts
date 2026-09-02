@@ -5,12 +5,18 @@ import { logger } from "hono/logger";
 import { chat } from "./chat.ts";
 import { errorHandler } from "./error.ts";
 import { NEEDS_WARMUP } from "./model.ts";
+import { note } from "./note.ts";
 
 const app = new Hono();
 
 // MIDDLEWARE
 // `*`, not `/api/*`: the app polls /health to know when the KV warmup is done.
-app.use("*", cors());
+app.use(
+	"*",
+	// `x-distinct-id` is a custom header, so it has to be named explicitly or the
+	// preflight rejects every chat and note request from the browser.
+	cors({ origin: "*", allowHeaders: ["content-type", "x-distinct-id"] }),
+);
 app.use(logger());
 
 // ROUTES
@@ -19,6 +25,7 @@ app.get("/health", (c) =>
 );
 
 app.route("/api/chat", chat);
+app.route("/api/note", note);
 
 // ERROR HANDLING
 app.onError(errorHandler);

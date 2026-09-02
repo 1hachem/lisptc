@@ -10,6 +10,9 @@ code comments stay short and point here for the detail.
   config.
 - [Secret registry](./secrets.md) — the `REPL_*` secret store, taint-tracked
   redaction, and how secrets reach MCP calls.
+- [Agent traces and notes](./telemetry.md) — the PostHog event shape for a chat
+  turn, `/note` and the per-message note button, identity, and the privacy
+  switch.
 - [The lisptc LSP's static analysis](./lsp.md) — module layout, the shared
   tokenizer grammar vs. the interpreter's `Reader`, and how `load-mcp`'s args
   reach the LSP from the interpreter.

@@ -11,6 +11,11 @@ import {
 	toLlmMessages,
 } from "./repl.ts";
 import { getThreadRepl } from "./repl-store.ts";
+import {
+	captureReplEval,
+	captureTurn,
+	type TraceContext,
+} from "./telemetry.ts";
 
 /** A message as it arrives from the client (LangChain message-like dict). */
 export interface ChatMessageInput {
@@ -104,6 +109,7 @@ export function streamChatResponse(
 	config?: AgentConfig,
 	signal?: AbortSignal,
 	threadId?: string,
+	distinctId?: string,
 ): Response {
 	// The client tears the fetch down (and re-issues it) whenever dev tools open
 	// or the tab reloads. Once that happens `controller.enqueue` throws, so every
@@ -112,6 +118,23 @@ export function streamChatResponse(
 	const abort = new AbortController();
 	if (signal)
 		signal.addEventListener("abort", () => abort.abort(), { once: true });
+
+	// A turn always gets a trace id, even without a chat identity: an ephemeral
+	// run is still worth measuring, it just groups only with itself.
+	const trace: TraceContext = {
+		threadId: threadId ?? crypto.randomUUID(),
+		turnId: crypto.randomUUID(),
+		distinctId,
+		provider: config?.provider,
+		model: config?.model,
+	};
+	const tracedConfig: AgentConfig = { ...config, trace };
+	const startedAt = Date.now();
+	const prompt = contentToText(
+		(input.messages ?? [])
+			.filter((m) => wireType(m.type ?? m.role) === "human")
+			.at(-1)?.content,
+	);
 
 	const body = new ReadableStream<Uint8Array>({
 		async start(controller) {
@@ -138,6 +161,11 @@ export function streamChatResponse(
 			);
 
 			let steps = 0;
+			// What the turn is judged on: the prose the user actually reads, and
+			// whether the loop stopped on its own instead of hitting MAX_STEPS.
+			let answer = "";
+			let halted = false;
+			let failure: string | undefined;
 			try {
 				write(sse("values", { messages: wire }));
 
@@ -159,7 +187,7 @@ export function streamChatResponse(
 					// thinking trace on the message.
 					for await (const delta of streamAgent(
 						toLlmMessages(transcript),
-						config,
+						tracedConfig,
 						{ signal: abort.signal },
 					)) {
 						const chunk: Record<string, unknown> = { type: "ai", id: aiId };
@@ -191,14 +219,24 @@ export function streamChatResponse(
 					wire.push(finalAi);
 					transcript.push({ role: "assistant", content: code });
 
+					const evalStartedAt = Date.now();
 					const { output, error } = evalCode(repl, code);
 					steps += 1;
 					// A form-less turn ran no code, so there is no result worth
 					// showing the user (or feeding back) — it is the final answer.
 					if (repl.takeFinished()) {
+						answer = code;
+						halted = true;
 						write(sse("values", { messages: wire }));
 						break;
 					}
+					captureReplEval(trace, {
+						step: steps,
+						source: code,
+						output,
+						error,
+						latencyMs: Date.now() - evalStartedAt,
+					});
 
 					const resultContent = replResultContent(output, error);
 					wire.push({
@@ -212,6 +250,7 @@ export function streamChatResponse(
 					if (steps >= MAX_STEPS) break;
 				}
 			} catch (err) {
+				failure = err instanceof Error ? err.message : String(err);
 				if (!abort.signal.aborted) {
 					// The response headers went out long ago, so this is the only place
 					// a failed model call is ever reported: without the log it reaches
@@ -230,6 +269,14 @@ export function streamChatResponse(
 				console.log(
 					`[ai] chat stream closed after ${steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);
+				captureTurn(trace, {
+					prompt,
+					answer,
+					steps,
+					halted,
+					latencyMs: Date.now() - startedAt,
+					error: failure,
+				});
 				closed = true;
 				try {
 					controller.close();

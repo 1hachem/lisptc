@@ -17,6 +17,8 @@
   "dependencies": {
     "@langchain/core": "^1.2.9",
     "@langchain/openai": "^1.5.10",
+    "@posthog/ai": "^8.9.3",
+    "posthog-node": "^5.51.6",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/repl": "workspace:*"

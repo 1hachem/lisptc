@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ai": "./src/ai.ts",
+    "./analytics": "./src/analytics.ts",
     "./repl": "./src/repl.ts",
     "./oauth": "./src/oauth.ts",
     "./package.json": "./package.json"

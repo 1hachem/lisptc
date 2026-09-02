@@ -2,7 +2,20 @@ import {
 	FetchStreamTransport,
 	useStream,
 } from "@langchain/langgraph-sdk/react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
+import {
+	apiHeaders,
+	type NoteInput,
+	type NoteResult,
+	postNote,
+} from "./notes.ts";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -13,9 +26,20 @@ export interface ChatMessage {
 	additional_kwargs?: { reasoning_content?: unknown };
 }
 
+/** A note written from the composer or from under a message. */
+export type NoteDraft = Omit<NoteInput, "threadId" | "target"> & {
+	target?: NoteInput["target"];
+};
+
 interface ChatSession {
 	messages: ChatMessage[];
 	isLoading: boolean;
+	/** the id every event of this conversation is traced under */
+	threadId: string;
+	/** send a note about this conversation (or one of its messages) to PostHog */
+	note: (draft: NoteDraft) => Promise<NoteResult>;
+	/** transient confirmation of the last note, shown under the transcript */
+	notice?: string;
 	/** set when the last run failed (e.g. the agent/provider errored) */
 	error?: string;
 	/** send a plain-text user turn */
@@ -30,16 +54,62 @@ const ChatContext = createContext<ChatSession | null>(null);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
 	const transport = useMemo(
-		() => new FetchStreamTransport({ apiUrl: `${API_URL}/api/chat` }),
+		() =>
+			new FetchStreamTransport({
+				apiUrl: `${API_URL}/api/chat`,
+				// Carries the browser-local id onto every chat request, so the turn's
+				// trace and the notes written about it land on the same person.
+				defaultHeaders: apiHeaders(),
+			}),
 		[],
 	);
-	const [threadId, setThreadId] = useState<string | null>(null);
-	const stream = useStream({ transport, threadId, onThreadId: setThreadId });
+	// Generated up front rather than left null until the server names one: the
+	// API keys the persistent AgentRepl (and now the trace) off this id, so a
+	// conversation without one loses its interpreter state between turns.
+	const [threadId, setThreadId] = useState<string>(() => crypto.randomUUID());
+	const stream = useStream({
+		transport,
+		threadId,
+		onThreadId: (id) => {
+			if (id) setThreadId(id);
+		},
+	});
 	const messages = stream.messages as ChatMessage[];
+	const [notice, setNotice] = useState<string | undefined>();
+
+	const note = useCallback(
+		async (draft: NoteDraft): Promise<NoteResult> => {
+			const result = await postNote({
+				...draft,
+				threadId,
+				target: draft.target ?? "conversation",
+			});
+			setNotice(
+				result.ok
+					? result.captured
+						? "note captured"
+						: "note dropped — the API has no POSTHOG_API_KEY"
+					: `note failed: ${result.error}`,
+			);
+			return result;
+		},
+		[threadId],
+	);
+
+	// The confirmation is an acknowledgement, not a message — it should not sit
+	// in the transcript once it has been read.
+	useEffect(() => {
+		if (!notice) return;
+		const timer = setTimeout(() => setNotice(undefined), 4000);
+		return () => clearTimeout(timer);
+	}, [notice]);
 
 	const value: ChatSession = {
 		messages,
 		isLoading: stream.isLoading,
+		threadId,
+		note,
+		notice,
 		error: stream.error
 			? stream.error instanceof Error
 				? stream.error.message
@@ -48,6 +118,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		send: (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
+			// `/note <text>` is a comment about the run, not a turn — it must never
+			// reach the model, or the thing being measured changes because it was
+			// measured.
+			if (/^\/note\b/.test(trimmed)) {
+				const body = trimmed.slice("/note".length).trim();
+				if (body) void note({ text: body, target: "conversation" });
+				else setNotice("/note needs something to say");
+				return;
+			}
 			// FetchStreamTransport is stateless, so replay the whole conversation
 			// each turn; the server echoes it back and streams the new reply.
 			const history = messages.map((m) => ({
@@ -60,7 +139,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			});
 		},
 		stop: () => stream.stop(),
-		clear: () => setThreadId(crypto.randomUUID()),
+		clear: () => {
+			setThreadId(crypto.randomUUID());
+			setNotice(undefined);
+		},
 	};
 
 	return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
