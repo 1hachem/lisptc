@@ -48,10 +48,19 @@ export function Greeting() {
 		setLine(pickGreeting(new Date()));
 	}, []);
 
-	if (!line) return null;
+	/*
+	 * The row is HERE from the very first paint, empty, one line tall.
+	 *
+	 * Without that, nothing at all was rendered until the effect had run, and the
+	 * avatar — which anchors itself to the bottom of the last row of text — sat at
+	 * the top of an empty column and then jumped a line down when the greeting
+	 * appeared. `1.7em` is the shell's own line height (13px at 1.7), so the box
+	 * the text lands in is exactly the box that was already standing there, on the
+	 * server's paint as much as the browser's.
+	 */
 	return (
-		<div className="min-w-0 break-words text-fg">
-			<Typewriter text={line} reveal="token" enabled={!reduced} />
+		<div className="min-h-[1.7em] min-w-0 break-words text-fg">
+			{line && <Typewriter text={line} reveal="token" enabled={!reduced} />}
 		</div>
 	);
 }
