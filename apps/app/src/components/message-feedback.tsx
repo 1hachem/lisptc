@@ -182,7 +182,9 @@ export function MessageFeedback({
 			)}
 
 			{thanked && (
-				<div className="mt-1 select-none text-[11px] text-dim">{feedbackText}</div>
+				<div className="mt-1 select-none text-[11px] text-dim">
+					{feedbackText}
+				</div>
 			)}
 		</>
 	);
