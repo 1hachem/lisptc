@@ -18,6 +18,34 @@ import { useChatSession } from "../lib/chat.tsx";
 
 type Thumb = "up" | "down";
 
+const POSITIVE_MESSAGES = [
+	"thanks for the nice words",
+	"thanks",
+	"maaa man",
+	"you're too kind",
+	"i'll be here all week",
+	"flattery will get you everywhere",
+	"much obliged, friend",
+	"you really know how to make a bot blush",
+];
+
+const NEGATIVE_MESSAGES = [
+	"sorry about that",
+	"copy that sir",
+	"my bad, fixing my circuits",
+	"i'll do better next time",
+	"back to the drawing board",
+	"noted, working on it",
+	"rough day at the office",
+	"i'll blame my training data",
+	"oops, that was my evil twin",
+];
+
+function randomMessage(thumb: Thumb): string {
+	const arr = thumb === "up" ? POSITIVE_MESSAGES : NEGATIVE_MESSAGES;
+	return arr[Math.floor(Math.random() * arr.length)];
+}
+
 // PostHog's rating scale for a thumb survey: question 0, 1 up and 2 down.
 const RESPONSE: Record<Thumb, number> = { up: 1, down: 2 };
 
@@ -48,6 +76,7 @@ export function MessageFeedback({
 	const [asking, setAsking] = useState(false);
 	const [draft, setDraft] = useState("");
 	const [thanked, setThanked] = useState(false);
+	const [feedbackText, setFeedbackText] = useState("");
 	const field = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
@@ -92,6 +121,7 @@ export function MessageFeedback({
 		});
 		setDraft("");
 		setAsking(false);
+		setFeedbackText(randomMessage(thumb));
 		setThanked(true);
 	};
 
@@ -152,7 +182,7 @@ export function MessageFeedback({
 			)}
 
 			{thanked && (
-				<div className="mt-1 select-none text-[11px] text-dim">thanks</div>
+				<div className="mt-1 select-none text-[11px] text-dim">{feedbackText}</div>
 			)}
 		</>
 	);
