@@ -34,9 +34,16 @@ interface Mood {
  *
  * `busy` and `idle` share a state on purpose: while the reply streams, the only
  * thing that changes is where the avatar looks (see `UPWARD`).
+ *
+ * The engine ships two exclamation marks and `failed` takes the UPRIGHT one.
+ * `exclaim` is its own measured silhouette — a bar tapering 1.76 : 1 from top to
+ * bottom, held still. `alert` is the other: a constant-width capsule leaning
+ * 17.7°, travelling across the frame and buzzing at 2.5 Hz. Standing that one up
+ * would give a uniform bar, since its width was measured for a lean, so this is a
+ * choice between two glyphs rather than an angle to zero out.
  */
 const MOODS = {
-	failed: { state: "alert", label: "the agent errored" },
+	failed: { state: "exclaim", label: "the agent errored" },
 	thinking: { state: "thinking", label: "the agent is thinking" },
 	busy: { state: "idle", label: "the agent is answering" },
 	idle: { state: "idle", label: "the agent is idle" },
