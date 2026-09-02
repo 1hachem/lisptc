@@ -1,0 +1,12 @@
+node_modules
+dist
+.DS_Store
+*.local
+
+# config Claude Code personnelle, non partagee
+CLAUDE.local.md
+.claude/settings.local.json
+
+# carnet de travail interne, en francais et decrivant des bugs non corriges :
+# il vit sur le disque, rien n'en sort
+tasks/

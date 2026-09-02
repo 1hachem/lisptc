@@ -22,7 +22,8 @@
       "!packages/ui/src/components/ui",
       "!packages/ui/src/components/ai-elements",
       "!packages/ui/src/styles",
-      "!apps/app/src/routeTree.gen.ts"
+      "!apps/app/src/routeTree.gen.ts",
+      "!packages/bloub"
     ]
   },
   "formatter": {
