@@ -50,7 +50,10 @@ export {
   type GazeScript,
   HUMEURS,
   lookTarget,
+  PITCH,
+  PITCH_MAX,
   TOUR_TIME,
   tourLook,
-  TURN_TIME
+  TURN_TIME,
+  YAW_MAX
 } from './gaze'

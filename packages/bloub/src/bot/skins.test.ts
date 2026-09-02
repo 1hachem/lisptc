@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BotEngine, type RenderedEye } from './engine'
+import { BotEngine, type Look, type RenderedEye } from './engine'
 import { decalageDesYeux, POUR_TESTS } from './eyefit'
 import { EXPRESSIONS } from './expressions'
 import { DEFAULT_SHAPE, SHAPES, SHAPE_BY_ID } from './skins'
@@ -103,8 +103,16 @@ const PAS = 1 / 20
  * `POSES[state]` que `capsule` + `effraye` est passe inapercu, alors qu'il sortait de
  * 4,4 unites une seconde plus tard.
  */
-function debordement(state: StateId, radii: number[], expr: (typeof EXPRESSIONS)[number] | null) {
+function debordement(
+  state: StateId,
+  radii: number[],
+  expr: (typeof EXPRESSIONS)[number] | null,
+  look?: Look
+) {
   const e = new BotEngine(R, state, radii, expr)
+  // date 0 et morph d'une image : la cible est pleinement appliquee des le premier
+  // echantillon, donc les 60 instants mesurent bien le regard demande et pas son arrivee
+  if (look) e.setLook(look, 0, 1 / 60)
   let pire = 0
   for (let i = 0; i < INSTANTS; i++) {
     const f = e.sample(i * PAS)
@@ -142,6 +150,42 @@ describe('formes du personnalisateur', () => {
     // Cinq couples etat x forme debordaient : `wide`+`capsule` de 14,5 unites sur une boule
     // de rayon 100, `wide`+`triangle` de 11,9, `idle`+`capsule` et `swirl`+`capsule` de 5,3,
     // `notify`+`goutte` de 3,3.
+    expect(fautifs).toEqual([])
+  }, 30_000)
+
+  /**
+   * Un regard PILOTE DE L'EXTERIEUR — le suivi du pointeur, ou un script pose par l'hote —
+   * sort de l'enveloppe que la table d'eyefit a resolue : elle couvre la derive au repos
+   * (+-7deg de lacet, +-5,5 de tangage), pas 16 de lacet et 26 de tangage. Au-dela, c'est
+   * la silhouette qui decide, et forme par forme.
+   *
+   * Mesure : sur `cercle`, `squircle` et `carre`, AUCUNE des seize expressions ne fait
+   * sortir un oeil dans toute cette enveloppe. Les six autres si, toutes au tangage haut :
+   * `capsule`+`effraye` de 30 unites sur une boule de rayon 100, `nuage`+`timide` de 21,
+   * `galet`+`triste` de 6,5, `triangle`+`curieux` de 5,7, `hexagone`+`confus` de 4,3,
+   * `goutte`+`excite` de 3,8.
+   *
+   * D'ou ce test : il dit sur quelles formes un hote peut poser un regard pilote sans rien
+   * mesurer. Sur les autres, c'est a lui de le faire — et c'est ecrit sur la prop `aim`.
+   */
+  const A_REGARD_LIBRE = ['cercle', 'squircle', 'carre']
+  const ENVELOPPE: Look[] = [-16, 0, 16].flatMap((yaw) =>
+    [-13, 0, 26].map((pitch) => ({ yaw, pitch, mix: 1, spin: 0, wander: 1 }))
+  )
+
+  it('un regard pilote tient sur les formes a regard libre', () => {
+    const fautifs: string[] = []
+    for (const id of A_REGARD_LIBRE) {
+      const radii = SHAPE_BY_ID.get(id)!.radii
+      for (const expr of EXPRESSIONS) {
+        for (const look of ENVELOPPE) {
+          const sortie = debordement('idle', radii, expr, look)
+          if (sortie > 0.05) {
+            fautifs.push(`${id}/${expr.id}/${look.yaw}:${look.pitch} ${sortie.toFixed(1)}`)
+          }
+        }
+      }
+    }
     expect(fautifs).toEqual([])
   }, 30_000)
 

@@ -1,13 +1,13 @@
 import { type Ref, useEffect, useId, useImperativeHandle, useRef, useState } from 'react'
 import { type Block, blockAt, defaultCycle, offsetOf } from './bot/cycles'
 import { NOTIF_BLUE } from './bot/decor'
-import { BotEngine, type BotFrame } from './bot/engine'
+import { BotEngine, type BotFrame, type Look } from './bot/engine'
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from './bot/expressions'
 import { clamp, easings } from './bot/math'
 import { DEMI_VIEWBOX, RAYON } from './bot/repere'
 import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, mixHex, SHAPE_BY_ID } from './bot/skins'
 import { STATE_BY_ID, type StateId } from './bot/states'
-import { type GazeScript, lookTarget, TURN_TIME } from './gaze'
+import { type Aim, type GazeScript, lookTarget, TURN_TIME } from './gaze'
 
 /**
  * Le montage par defaut est un module-constant et non une prop par defaut
@@ -36,7 +36,7 @@ export interface BloubBotProps {
    * Une variable CSS (`var(--fg)`) marche pour la meme raison qu'un mot-cle :
    * ces valeurs ne sont que recopiees dans un attribut `fill`. La seule chose
    * qui exige un `#rrggbb`, c'est la brume de profondeur des particules
-   * (`mixHex`), donc les etats qui en ont : `burst` et `comet`.
+   * (`mixHex`), donc le seul etat qui en a : `burst`.
    */
   ink?: string
   /**
@@ -58,9 +58,30 @@ export interface BloubBotProps {
    */
   follow?: boolean
   /**
-   * Regard scripte de l'arrivee : evalue a chaque image avec le temps ecoule
-   * depuis qu'il a ete pose. Independant de `follow`, qui vise le pointeur —
-   * ici c'est le script qui decide de tout, y compris de sa duree.
+   * La regle du suivi : recoit le pointeur deja normalise et rend la cible.
+   *
+   * Par defaut `lookTarget`, celle du projet — elle pose la tete a gauche
+   * (`TURN`) et fait tourner les yeux d'un tour a l'arrivee, parce qu'elle met
+   * en scene une VUE qui s'ouvre. Un hote qui veut un regard droit devant en
+   * fournit une autre ; `YAW_MAX`, `PITCH_MAX` et `PITCH` sont exportes pour ca.
+   *
+   * ATTENTION, et ca vaut aussi pour `gaze` : un regard pilote de l'exterieur
+   * sort de l'enveloppe que la table d'`eyefit` a resolue, qui ne couvre que la
+   * derive au repos. Sur une forme du personnalisateur il peut donc pousser un
+   * oeil hors de la silhouette, ou le masque l'ouvre — jusqu'a 30 unites de
+   * rayon sur `capsule`. `skins.test.ts` verrouille les trois formes ou aucune
+   * expression ne deborde dans une enveloppe large (`cercle`, `squircle`,
+   * `carre`) ; sur les six autres, c'est a mesurer.
+   */
+  aim?: (a: Aim) => Look
+  /**
+   * Regard scripte : evalue a chaque image avec le temps ecoule depuis qu'il a
+   * ete pose, et c'est lui qui decide de tout, y compris de sa duree.
+   *
+   * EXCLUSIF de `follow`, qui gagne : la boucle applique l'un ou l'autre. C'est
+   * ce qui permet de tenir un regard hors des etats a visage de repos, la ou le
+   * suivi se relache — mais la mise en garde de `aim` sur la silhouette
+   * s'applique de la meme facon.
    */
   gaze?: GazeScript | null
   /** l'etiquette du `role="img"` : elle est au consommateur, le paquet ne traduit pas */
@@ -148,6 +169,7 @@ export function BloubBot({
   frozenAt,
   cycle = CYCLE_PAR_DEFAUT,
   follow = false,
+  aim = lookTarget,
   gaze = null,
   ariaLabel = 'Avatar bloub anime',
   state,
@@ -226,8 +248,26 @@ export function BloubBot({
    * lit passe par ici. Les watchers ci-dessous, eux, lisent les props
    * directement — ce sont celles de leur propre rendu.
    */
-  const p = useRef({ cycle, playing, follow, gaze, onStateChange, onBlockChange, onElapsedChange })
-  p.current = { cycle, playing, follow, gaze, onStateChange, onBlockChange, onElapsedChange }
+  const p = useRef({
+    cycle,
+    playing,
+    follow,
+    aim,
+    gaze,
+    onStateChange,
+    onBlockChange,
+    onElapsedChange
+  })
+  p.current = {
+    cycle,
+    playing,
+    follow,
+    aim,
+    gaze,
+    onStateChange,
+    onBlockChange,
+    onElapsedChange
+  }
 
   function poseElapsed(v: number) {
     if (l.elapsed === v) return
@@ -345,7 +385,7 @@ export function BloubBot({
 
   /**
    * Vise le pointeur. Ne fait que la part DOM du travail — mesurer ou est la boule
-   * et ou est le curseur — la regle de regard elle-meme etant dans `./gaze`.
+   * et ou est le curseur — la regle de regard, elle, est la prop `aim`.
    *
    * Le rectangle est relu a chaque image plutot que memorise : l'avatar glisse et
    * grandit pendant une transition de vue, un centre garde en cache ferait viser a
@@ -353,7 +393,7 @@ export function BloubBot({
    * non sur la taille de l'avatar : le regard doit saturer quand le curseur atteint
    * le bord de l'ecran, quelle que soit la place que la boule occupe.
    */
-  function aim() {
+  function viser() {
     // Le regard ne se pilote que sur les etats a VISAGE DE REPOS. Ailleurs la pose
     // du regard EST l'animation relevee — l'orbite fait deja filer les yeux autour
     // de la sphere — et s'y superposer la brouillerait.
@@ -376,7 +416,7 @@ export function BloubBot({
     const demiHauteur = Math.max(1, window.innerHeight / 2)
     const pointer = l.pointer
     engine.setLook(
-      lookTarget({
+      p.current.aim({
         nx: pointer ? clamp((pointer.x - (box.left + box.width / 2)) / demiLargeur, -1, 1) : 0,
         ny: pointer ? clamp((pointer.y - (box.top + box.height / 2)) / demiHauteur, -1, 1) : 0,
         tour: easings.easeOutQuint(clamp((l.clock - l.turnSince) / TURN_TIME)),
@@ -419,7 +459,7 @@ export function BloubBot({
 
     // Le suivi prime : les deux ecrivent la meme cible, et l'arrivee est terminee
     // bien avant qu'une vue a suivi ne s'ouvre.
-    if (p.current.follow) aim()
+    if (p.current.follow) viser()
     else if (p.current.gaze) scriptedGaze(p.current.gaze)
 
     setFrame(engine.sample(l.clock))

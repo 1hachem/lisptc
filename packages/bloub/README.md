@@ -27,10 +27,13 @@ and the component renders one exact frame with no animation loop, which is how a
 thumbnail or a state board is drawn.
 
 Props: `size`, `shape`, `color`, `ink`, `expression`, `paper`, `frozenAt`,
-`cycle`, `follow`, `gaze`, `ariaLabel`, `state`, `block`, `playing`, plus
+`cycle`, `follow`, `aim`, `gaze`, `ariaLabel`, `state`, `block`, `playing`, plus
 `onStateChange`, `onBlockChange` and `onElapsedChange`. `ink` takes any CSS
 colour — `var(--fg)` included — for a host whose theme is none of the twelve in
-the catalogue. A `ref` exposes `seek(index, offset)` and
+the catalogue. `aim` replaces the rule the pointer-following uses, and `gaze`
+holds a scripted look; both aim the eyes outside what the eye-fitting table
+solved for, so read the warning on `aim` before using either on a shape other
+than `cercle`, `squircle` or `carre`. A `ref` exposes `seek(index, offset)` and
 `rendAt(t)` — see [src/BloubBot.tsx](src/BloubBot.tsx).
 
 The catalogues a picker needs (`SHAPES`, `COLORS`, `EXPRESSIONS`, `STATES`) come

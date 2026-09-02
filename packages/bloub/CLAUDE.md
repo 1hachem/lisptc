@@ -94,6 +94,13 @@ Details and the reasoning behind each are in [docs/](docs/):
   `ariaLabel` is a prop for the same reason.
 - **One state isn't measured: `swirl`**, an entry transition. It's deliberately outside
   `SEQUENCE` (a test locks that) and carries both `baseBody` and `baseFace`.
+- **A gaze driven from outside — `follow`/`aim`, or a `gaze` script — leaves the
+  envelope `eyefit` solved for**, which only covers the resting drift. On a
+  customiser shape it can push an eye out through the mask: 30 units of radius on
+  `capsule` + `effraye` at 26° of pitch. `skins.test.ts` locks the three shapes
+  where no expression overflows in a wide envelope — `cercle`, `squircle`,
+  `carre` — and the other six are the host's to measure. Don't widen that list
+  without the measurement.
 - **`Look` aims in ABSOLUTE terms on both axes, and the engine does the mixing**:
   only it knows the pose at instant t. `mix` and `wander` are distinct, and drift is
   added *after* the mix. **`setLook` refuses a non-finite target**: the engine keeps

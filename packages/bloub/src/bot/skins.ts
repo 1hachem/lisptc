@@ -28,6 +28,7 @@ export type ShapeId =
   | 'cercle'
   | 'galet'
   | 'squircle'
+  | 'carre'
   | 'capsule'
   | 'triangle'
   | 'hexagone'
@@ -82,6 +83,16 @@ export const SHAPES: BotShape[] = [
   // 1.15 et pas 1.02 : sur une superellipse le rayon maximal est la diagonale,
   // donc normaliser dessus donne une forme qui parait plus petite que le cercle.
   { id: 'squircle', radii: normalize(superellipseProfile(4.2), 1.15) },
+  /*
+   * Carre a coins VIFS : `rc` est juste assez grand pour que la somme de
+   * Minkowski ait un arc a poser, pas assez pour que le sommet s'arrondisse a
+   * l'oeil. Le rayon demande est la DIAGONALE, d'ou 1.25 pour un demi-cote de
+   * 0.9 : c'est ce qui donne au carre le poids visuel du cercle, comme 1.15 le
+   * donne au squircle. L'echantillonnage radial et le lissage de `closedPath`
+   * emoussent le sommet d'un poil de plus, ce qui ne se voit pas a la taille
+   * d'une icone.
+   */
+  { id: 'carre', radii: regularPolygonProfile(4, 1.25, 0.05, 45) },
   { id: 'capsule', radii: capsule },
   // -90deg : un sommet vers le haut de l'ecran (y est oriente vers le bas)
   { id: 'triangle', radii: regularPolygonProfile(3, 1.12, 0.34, -90) },
