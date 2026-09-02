@@ -103,20 +103,23 @@ function ahead({ nx, ny, pointer }: Aim): Look {
 }
 
 /**
- * While the reply streams the text is being written ABOVE the avatar, so it
- * watches it arrive.
+ * While the reply streams the text is being written above the avatar and to its
+ * RIGHT — the face stands in the left margin, so straight up is the margin, and
+ * a bot staring into the margin is a bot staring at nothing. Up and right is the
+ * text.
  *
- * 26° is chosen, not measured, and it is the top of the envelope the package
- * locks for this shape — the pitch where the other silhouettes start letting an
- * eye out. `wander: 1` keeps the resting drift on top, so looking up is a live
- * pose rather than a frozen one.
+ * `YAW_MAX` is the full amplitude the pointer-following uses, and 26° of pitch is
+ * chosen: together they aim about 31° off vertical, and both sit inside the
+ * envelope `skins.test.ts` locks for this shape at this eye scale. `wander: 1`
+ * keeps the resting drift on top, so looking up is a live pose and not a frozen
+ * one.
  *
  * It goes through `gaze` and not through `aim` because the engine only steers the
  * gaze of a state wearing the resting face, and because the two are exclusive:
  * `follow` wins, so it is off while busy.
  */
 const UPWARD: GazeScript = () => ({
-	yaw: 0,
+	yaw: YAW_MAX,
 	pitch: 26,
 	mix: 1,
 	spin: 0,
