@@ -13,6 +13,7 @@
       "packages/*/*.ts",
       "packages/*/*.json",
       "apps/*/src/**",
+      "apps/*/server/**",
       "apps/*/test/**",
       "apps/*/extension/**",
       "apps/*/*.ts",

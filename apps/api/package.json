@@ -15,6 +15,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@repo/ai": "workspace:*",
+    "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "hono": "^4.13.5",
     "zod": "^4.4.3"

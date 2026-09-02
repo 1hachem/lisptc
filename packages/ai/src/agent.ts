@@ -5,6 +5,7 @@ import {
 	SystemMessage,
 } from "@langchain/core/messages";
 import { getProvider, type ProviderName } from "./provider.ts";
+import { type TraceContext, traceCallbacks } from "./telemetry.ts";
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"You are the reasoning core of a neuro-symbolic agent. Think step by step and answer clearly and concisely.";
@@ -31,6 +32,8 @@ export interface AgentConfig {
 	/** Model id; the provider falls back to its own default when unset. */
 	model?: string;
 	system?: string;
+	/** When set, each model call is reported to PostHog as an `$ai_generation`. */
+	trace?: TraceContext;
 }
 
 function toLangChain(m: AgentMessage): BaseMessage {
@@ -72,8 +75,15 @@ export class Agent {
 			new SystemMessage(this.config.system ?? DEFAULT_SYSTEM_PROMPT),
 			...messages.map(toLangChain),
 		];
+		// The callback handler is what turns this call into an `$ai_generation`
+		// (tokens, cost, latency); with no trace it is an empty list and LangChain
+		// does nothing extra.
+		const callbacks = this.config.trace
+			? traceCallbacks(this.config.trace)
+			: [];
 		for await (const chunk of await model.stream(history, {
 			signal: options?.signal,
+			callbacks,
 		})) {
 			const reasoning = chunkReasoning(chunk);
 			if (reasoning) yield { reasoning };

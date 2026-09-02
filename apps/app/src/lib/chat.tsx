@@ -2,16 +2,27 @@ import {
 	FetchStreamTransport,
 	useStream,
 } from "@langchain/langgraph-sdk/react";
+import type { ExpressionId } from "@repo/bloub";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 export interface ChatMessage {
 	id?: string;
 	type: string;
 	content: unknown;
 	additional_kwargs?: { reasoning_content?: unknown };
+}
+
+/**
+ * A face handed to the agent, named in the avatar's own vocabulary — one of
+ * `@repo/bloub`'s sixteen expressions, with no intermediate set of moods to keep
+ * in step with it. Minted fresh on every call so asking for the same expression
+ * twice still reads as a new request: whoever wears it watches this object's
+ * identity, not its value.
+ */
+export interface Reaction {
+	expression: ExpressionId;
 }
 
 interface ChatSession {
@@ -25,6 +36,12 @@ interface ChatSession {
 	/** no turns yet — the greeting alone doesn't count as a conversation */
 	fresh: boolean;
 	isLoading: boolean;
+	/** the id every event of this conversation is traced under */
+	threadId: string;
+	/** the face the agent was last asked to wear */
+	reaction: Reaction | null;
+	/** put an expression on the agent, whatever prompted it */
+	react: (expression: ExpressionId) => void;
 	/** set when the last run failed (e.g. the agent/provider errored) */
 	error?: string;
 	/** send a plain-text user turn */
@@ -64,12 +81,28 @@ const ChatContext = createContext<ChatSession | null>(null);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
 	const transport = useMemo(
-		() => new FetchStreamTransport({ apiUrl: `${API_URL}/api/chat` }),
+		() =>
+			new FetchStreamTransport({
+				apiUrl: `${API_URL}/api/chat`,
+				// Carries the browser-local id onto every chat request, so the turn's
+				// trace and the feedback given on it land on the same person.
+				defaultHeaders: apiHeaders(),
+			}),
 		[],
 	);
-	const [threadId, setThreadId] = useState<string | null>(null);
-	const stream = useStream({ transport, threadId, onThreadId: setThreadId });
+	// Generated up front rather than left null until the server names one: the
+	// API keys the persistent AgentRepl (and now the trace) off this id, so a
+	// conversation without one loses its interpreter state between turns.
+	const [threadId, setThreadId] = useState<string>(() => crypto.randomUUID());
+	const stream = useStream({
+		transport,
+		threadId,
+		onThreadId: (id) => {
+			if (id) setThreadId(id);
+		},
+	});
 	const streamed = stream.messages as ChatMessage[];
+	const [reaction, setReaction] = useState<Reaction | null>(null);
 
 	// Picked in an effect, not in the initialiser: the page is server-rendered and
 	// both inputs disagree across that boundary — the die comes up differently and
@@ -92,6 +125,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		greeting: greeting ? messageText(greeting) : null,
 		fresh: streamed.length === 0,
 		isLoading: stream.isLoading,
+		threadId,
+		reaction,
+		react: (expression) => setReaction({ expression }),
 		error: stream.error
 			? stream.error instanceof Error
 				? stream.error.message
@@ -115,6 +151,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		stop: () => stream.stop(),
 		clear: () => {
 			setThreadId(crypto.randomUUID());
+			setReaction(null);
 			// a new conversation gets a new opening line, and a fresh look at the clock
 			setGreeting(greetingMessage());
 		},

@@ -12,6 +12,7 @@ import {
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { cn, useIsMobile } from "@repo/ui";
 import {
+	$createTextNode,
 	$getRoot,
 	CLEAR_EDITOR_COMMAND,
 	COMMAND_PRIORITY_LOW,
@@ -256,6 +257,20 @@ function CommandMenuPlugin({
 			nodeToRemove: TextNode | null,
 			closeMenu: () => void,
 		) => {
+			// A prefix command is completed in place and submitted like any other
+			// line — the argument IS the command, so running it on pick would throw
+			// the text away. Nothing declares `takesArgument` since `/note` went;
+			// the branch stays for the next command that takes one.
+			if (option.command.takesArgument) {
+				editor.update(() => {
+					const typed = $createTextNode(`${option.command.name} `);
+					if (nodeToRemove) nodeToRemove.replace(typed);
+					else $getRoot().getLastChild()?.insertAfter(typed);
+					typed.selectEnd();
+				});
+				closeMenu();
+				return;
+			}
 			editor.update(() => nodeToRemove?.remove());
 			closeMenu();
 			onPick(option.command.name);

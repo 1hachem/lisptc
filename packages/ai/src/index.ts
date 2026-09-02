@@ -21,6 +21,7 @@ export {
 	streamChatResponse,
 	toAgentMessages,
 } from "./stream.ts";
+export { shutdownTelemetry } from "./telemetry.ts";
 export {
 	ensureWarm,
 	systemPromptSlotFile,

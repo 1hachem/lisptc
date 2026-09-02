@@ -8,6 +8,11 @@ export interface Command {
 	hint?: string;
 	/** hidden on phone-sized screens (e.g. sidebar toggles) */
 	desktopOnly?: boolean;
+	/**
+	 * The command is a prefix, not an action: picking it types the name into the
+	 * composer and waits for the rest of the line instead of running immediately.
+	 */
+	takesArgument?: boolean;
 }
 
 export const commands: Command[] = [

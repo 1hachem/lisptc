@@ -13,7 +13,9 @@ export default defineConfig({
 		tailwindcss(),
 		tanstackStart({ srcDirectory: "src" }),
 		viteReact(),
-		nitro(),
+		// `serverDir` is off by default, and it is what makes `server/routes/**`
+		// filesystem routes exist at all — the PostHog proxy lives there.
+		nitro({ serverDir: "server" }),
 	],
 	// @repo/ui ships .tsx source; let Vite transpile it instead of prebundling.
 	optimizeDeps: {

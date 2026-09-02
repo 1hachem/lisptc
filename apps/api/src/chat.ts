@@ -40,6 +40,14 @@ chat.post("/", async (c) => {
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { input, config } = parsed.data;
+	// A browser-local id, so traces from one person group together in PostHog
+	// without any account system. A header, not a body field, because the
+	// client's transport owns the body shape.
+	const distinctId = c.req.header("x-distinct-id");
+	// Added by posthog-js `tracing_headers`. It is what joins this turn's trace
+	// to the session replay of the person who typed it. Absent whenever browser
+	// analytics is off, which the telemetry layer treats as simply unknown.
+	const sessionId = c.req.header("x-posthog-session-id");
 	const threadId = config?.configurable?.thread_id;
 	console.log(
 		`chat thread=${threadId ?? "-"} messages=${input?.messages?.length ?? 0} ${CHAT_PROVIDER}/${CHAT_MODEL}`,
@@ -56,5 +64,6 @@ chat.post("/", async (c) => {
 		},
 		c.req.raw.signal,
 		threadId,
+		{ distinctId, sessionId },
 	);
 });
