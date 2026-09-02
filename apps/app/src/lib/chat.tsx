@@ -3,6 +3,7 @@ import {
 	useStream,
 } from "@langchain/langgraph-sdk/react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { pickGreeting } from "./greeting.ts";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -15,6 +16,14 @@ export interface ChatMessage {
 
 interface ChatSession {
 	messages: ChatMessage[];
+	/**
+	 * The opening line, also `messages[0]` — `null` until the first effect runs
+	 * (see `greetingMessage`). Handed out separately so the view can hold its row
+	 * open before there is a line to put in it.
+	 */
+	greeting: string | null;
+	/** no turns yet — the greeting alone doesn't count as a conversation */
+	fresh: boolean;
 	isLoading: boolean;
 	/** set when the last run failed (e.g. the agent/provider errored) */
 	error?: string;
@@ -26,6 +35,31 @@ interface ChatSession {
 	clear: () => void;
 }
 
+/**
+ * The greeting is a real assistant turn: it leads the transcript and it is
+ * replayed to the model with every send, so the agent is answering a
+ * conversation it opened rather than one that starts mid-air.
+ *
+ * A fixed id is what keeps it single. `send` replays the whole list and the
+ * server echoes it back verbatim, ids included, so from the second turn on the
+ * greeting arrives in `stream.messages` like any other message — and prepending
+ * the local copy on top of it would show it twice.
+ *
+ * Prose, not Lisp, which is legal for an assistant turn: a form-less reply is how
+ * the policy spells "finished answering" (see `AgentRepl`), so the greeting reads
+ * to the model as a completed turn and not as code it should carry on from.
+ */
+const GREETING_ID = "greeting";
+
+/** The greeting draws itself (`<Greeting>`), so the message loop skips it. */
+export function isGreetingMessage(message: ChatMessage): boolean {
+	return message.id === GREETING_ID;
+}
+
+function greetingMessage(): ChatMessage {
+	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
+}
+
 const ChatContext = createContext<ChatSession | null>(null);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
@@ -35,10 +69,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 	);
 	const [threadId, setThreadId] = useState<string | null>(null);
 	const stream = useStream({ transport, threadId, onThreadId: setThreadId });
-	const messages = stream.messages as ChatMessage[];
+	const streamed = stream.messages as ChatMessage[];
+
+	// Picked in an effect, not in the initialiser: the page is server-rendered and
+	// both inputs disagree across that boundary — the die comes up differently and
+	// the server's clock is in the server's timezone.
+	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
+	useEffect(() => {
+		setGreeting(greetingMessage());
+	}, []);
+
+	const messages = useMemo(
+		() =>
+			!greeting || streamed.some((m) => m.id === GREETING_ID)
+				? streamed
+				: [greeting, ...streamed],
+		[greeting, streamed],
+	);
 
 	const value: ChatSession = {
 		messages,
+		greeting: greeting ? messageText(greeting) : null,
+		fresh: streamed.length === 0,
 		isLoading: stream.isLoading,
 		error: stream.error
 			? stream.error instanceof Error
@@ -49,7 +101,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			const trimmed = text.trim();
 			if (!trimmed) return;
 			// FetchStreamTransport is stateless, so replay the whole conversation
-			// each turn; the server echoes it back and streams the new reply.
+			// each turn — greeting included, it is `messages[0]`; the server echoes it
+			// back and streams the new reply.
 			const history = messages.map((m) => ({
 				type: m.type,
 				content: m.content,
@@ -60,7 +113,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			});
 		},
 		stop: () => stream.stop(),
-		clear: () => setThreadId(crypto.randomUUID()),
+		clear: () => {
+			setThreadId(crypto.randomUUID());
+			// a new conversation gets a new opening line, and a fresh look at the clock
+			setGreeting(greetingMessage());
+		},
 	};
 
 	return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

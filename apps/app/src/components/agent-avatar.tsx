@@ -111,9 +111,9 @@ function ahead({ nx, ny, pointer }: Aim): Look {
 
 /**
  * While the reply streams the text is being written above the avatar and to its
- * RIGHT — the face stands in the left margin, so straight up is the margin, and
- * a bot staring into the margin is a bot staring at nothing. Up and right is the
- * text.
+ * RIGHT — the face stands at the left edge of the column, under the turn it is
+ * answering, and that turn runs rightwards from directly overhead. Straight up
+ * is one word of it; up and right is the paragraph.
  *
  * `YAW_MAX` is the full amplitude the pointer-following uses, and 26° of pitch is
  * chosen: together they aim about 31° off vertical, and both sit inside the
@@ -173,8 +173,8 @@ function useRestingFace(isLoading: boolean, fresh: boolean): ExpressionId {
 }
 
 export function AgentAvatar({ size = 28 }: { size?: number }) {
-	const { messages, isLoading, error } = useChatSession();
-	const face = useRestingFace(isLoading, messages.length === 0);
+	const { messages, isLoading, error, fresh } = useChatSession();
+	const face = useRestingFace(isLoading, fresh);
 
 	// Nothing has come back yet, so the agent is still deciding. Once anything
 	// has — a chunk of the reply, or a tool turn — the run is answering.

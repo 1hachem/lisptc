@@ -1,6 +1,7 @@
 import { Conversation, ConversationContent } from "@repo/ui";
 import {
 	type ChatMessage,
+	isGreetingMessage,
 	isToolMessage,
 	messageReasoning,
 	messageText,
@@ -32,51 +33,53 @@ export function ChatView() {
 	const { messages, error } = useChatSession();
 
 	return (
-		// `@container` so the avatar below can ask about the width of the CHAT
-		// column, sidebars included, rather than the width of the window
-		<Conversation className="@container min-h-0 flex-1 px-8 pt-6">
+		<Conversation className="min-h-0 flex-1 px-8 pt-6">
 			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
-				{messages.map((m, i) => {
-					if (isToolMessage(m))
-						return <ToolMessage key={m.id ?? i} message={m} />;
-					const reasoning = isUser(m) ? "" : messageReasoning(m);
-					return (
-						<div key={m.id ?? i} className="min-w-0 break-words text-fg">
-							{reasoning && (
-								<div className="mb-2 whitespace-pre-wrap break-words border-dim/40 border-l pl-3 text-dim italic">
-									{reasoning}
-								</div>
-							)}
-							{isUser(m) ? (
-								<div className="flex min-w-0 gap-1">
-									<span className="select-none text-dim">›</span>
+				{/*
+				 * The opening line is a turn like any other, so it stays put once the
+				 * conversation starts rather than being swapped out for the first
+				 * message — a greeting that vanishes reads as a placeholder, and this
+				 * one is the agent talking.
+				 */}
+				<Greeting />
+				{messages
+					.filter((m) => !isGreetingMessage(m))
+					.map((m, i) => {
+						if (isToolMessage(m))
+							return <ToolMessage key={m.id ?? i} message={m} />;
+						const reasoning = isUser(m) ? "" : messageReasoning(m);
+						return (
+							<div key={m.id ?? i} className="min-w-0 break-words text-fg">
+								{reasoning && (
+									<div className="mb-2 whitespace-pre-wrap break-words border-dim/40 border-l pl-3 text-dim italic">
+										{reasoning}
+									</div>
+								)}
+								{isUser(m) ? (
+									<div className="flex min-w-0 gap-1">
+										<span className="select-none text-dim">›</span>
+										<Markdown>{messageText(m)}</Markdown>
+									</div>
+								) : (
 									<Markdown>{messageText(m)}</Markdown>
-								</div>
-							) : (
-								<Markdown>{messageText(m)}</Markdown>
-							)}
-						</div>
-					);
-				})}
-				{messages.length === 0 && <Greeting />}
+								)}
+							</div>
+						);
+					})}
 				{/*
 				 * The agent's face: its state is the run's state, `…` included.
 				 *
-				 * It sits in the left margin, level with the last row of text, and it
-				 * takes no width from the text to do it: the wrapper is a flex item of
-				 * ZERO height (with the flex gap cancelled) so `bottom-0` lands on the
-				 * bottom edge of the message above, and the avatar stands in the gutter
-				 * on its own.
+				 * It stands in the text column at the foot of the transcript, one blank
+				 * line under the turn above it — so the moment a request is sent, the
+				 * animation is on the SECOND line below what the user typed, which is
+				 * where the reply is about to appear.
 				 *
-				 * Only once there is a gutter to stand in, hence the container query:
-				 * 28px of avatar has to fit outside a 680px column inside 64px of
-				 * padding, which needs 832px of chat. Below that it drops back into the
-				 * flow, on its own row.
+				 * That line is measured, not spaced by the flex gap: `-mt-5` cancels the
+				 * gap so the box starts flush with the bottom of the text above, and
+				 * `1.7em` — the shell's own line height — is then exactly one empty row.
 				 */}
-				<div className="relative @min-[832px]:-mt-5 @min-[832px]:h-0">
-					<div className="@min-[832px]:-left-11 @min-[832px]:absolute @min-[832px]:bottom-0">
-						<AgentAvatar />
-					</div>
+				<div className="-mt-5 pt-[1.7em]">
+					<AgentAvatar />
 				</div>
 				{error && (
 					<div className="whitespace-pre-wrap break-words text-red">

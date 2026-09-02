@@ -1,16 +1,17 @@
 import { Typewriter } from "@repo/ui";
 import { useEffect, useState } from "react";
-import { pickGreeting } from "../lib/greeting.ts";
+import { useChatSession } from "../lib/chat.tsx";
 
 /**
- * The agent's opening line, shown while the transcript is empty.
+ * The agent's opening line: a real assistant turn (it is `messages[0]`, and it is
+ * replayed to the model — see `chat.tsx`) that stays in the transcript once the
+ * conversation fills up. This only draws it, which is why it is drawn here and
+ * not by the message loop: it is the one turn that arrives typed out rather than
+ * streamed.
  *
- * Picked in an effect and not in a `useState` initialiser, which is the part
- * worth knowing: the page is server-rendered, and both inputs disagree across
- * that boundary — the die comes up differently, and the server's clock is in the
- * server's timezone. Rendering it during the first pass would either tear at
- * hydration or greet a Californian with "good evening". So the first paint has no
- * greeting and the line lands a frame later, which nobody can see.
+ * The line is `null` for the first paint, because the session picks it in an
+ * effect — the page is server-rendered and both of its inputs disagree across
+ * that boundary. So the row lands a frame later, which nobody can see.
  *
  * It then arrives token by token — a word at a time, long words in pieces, on an
  * uneven beat — so a line that costs nothing reads like the turn the agent would
@@ -41,26 +42,24 @@ function usePrefersReducedMotion(): boolean {
 }
 
 export function Greeting() {
-	const [line, setLine] = useState<string | null>(null);
+	const { greeting } = useChatSession();
 	const reduced = usePrefersReducedMotion();
-
-	useEffect(() => {
-		setLine(pickGreeting(new Date()));
-	}, []);
 
 	/*
 	 * The row is HERE from the very first paint, empty, one line tall.
 	 *
 	 * Without that, nothing at all was rendered until the effect had run, and the
-	 * avatar — which anchors itself to the bottom of the last row of text — sat at
-	 * the top of an empty column and then jumped a line down when the greeting
+	 * avatar — which sits a fixed line below whatever the last turn is — sat at the
+	 * top of an empty column and then jumped a line down when the greeting
 	 * appeared. `1.7em` is the shell's own line height (13px at 1.7), so the box
 	 * the text lands in is exactly the box that was already standing there, on the
 	 * server's paint as much as the browser's.
 	 */
 	return (
 		<div className="min-h-[1.7em] min-w-0 break-words text-fg">
-			{line && <Typewriter text={line} reveal="token" enabled={!reduced} />}
+			{greeting && (
+				<Typewriter text={greeting} reveal="token" enabled={!reduced} />
+			)}
 		</div>
 	);
 }
