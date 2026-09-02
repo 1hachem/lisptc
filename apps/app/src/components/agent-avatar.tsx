@@ -153,6 +153,11 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 					// the catalogue's widest eyes, and they only land on the states wearing
 					// the resting face — `idle`, which is where we want them
 					expression="surpris"
+					// and grown a quarter on top of that: at 28px the video's own capsule is
+					// 1.7px wide, `surpris` takes it to 4, this to 5. 1.3 is the package's
+					// measured ceiling — past it the eyes meet and leave the silhouette — so
+					// a quarter keeps a margin.
+					eyeScale={1.25}
 					state={state}
 					follow={mood === "idle"}
 					aim={ahead}

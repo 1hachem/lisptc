@@ -26,14 +26,17 @@ montage can play the same state twice, so the index is what says where you are.
 and the component renders one exact frame with no animation loop, which is how a
 thumbnail or a state board is drawn.
 
-Props: `size`, `shape`, `color`, `ink`, `expression`, `paper`, `frozenAt`,
-`cycle`, `follow`, `aim`, `gaze`, `ariaLabel`, `state`, `block`, `playing`, plus
+Props: `size`, `shape`, `color`, `ink`, `expression`, `paper`, `eyeScale`,
+`frozenAt`, `cycle`, `follow`, `aim`, `gaze`, `ariaLabel`, `state`, `block`,
+`playing`, plus
 `onStateChange`, `onBlockChange` and `onElapsedChange`. `ink` takes any CSS
 colour — `var(--fg)` included — for a host whose theme is none of the twelve in
 the catalogue. `aim` replaces the rule the pointer-following uses, and `gaze`
 holds a scripted look; both aim the eyes outside what the eye-fitting table
 solved for, so read the warning on `aim` before using either on a shape other
-than `cercle`, `squircle` or `carre`. A `ref` exposes `seek(index, offset)` and
+than `cercle`, `squircle` or `carre`. `eyeScale` grows the eyes in place for a
+host drawing at icon size, and eats the same margin: its ceiling is measured and
+locked too. A `ref` exposes `seek(index, offset)` and
 `rendAt(t)` — see [src/BloubBot.tsx](src/BloubBot.tsx).
 
 The catalogues a picker needs (`SHAPES`, `COLORS`, `EXPRESSIONS`, `STATES`) come

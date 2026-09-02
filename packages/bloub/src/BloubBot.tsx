@@ -84,6 +84,18 @@ export interface BloubBotProps {
    * s'applique de la meme facon.
    */
   gaze?: GazeScript | null
+  /**
+   * Grossit les yeux sans les deplacer : la gelule est centree sur l'origine dans
+   * son repere, donc l'echelle s'applique avant la matrice et son centre ne bouge
+   * pas. A 1, la geometrie relevee, au byte.
+   *
+   * C'est un choix d'hote, comme `ink` : a la taille d'une icone la gelule fait
+   * deux pixels et ne se lit plus. Mais elle mange la marge que la table
+   * d'`eyefit` lui a laissee devant le bord, donc elle a un plafond, mesure et
+   * verrouille par `skins.test.ts` : 1,3 sur `carre` dans l'enveloppe de regard
+   * la plus large. A 1,45 les deux yeux se touchent et sortent de la silhouette.
+   */
+  eyeScale?: number
   /** l'etiquette du `role="img"` : elle est au consommateur, le paquet ne traduit pas */
   ariaLabel?: string
   /**
@@ -171,6 +183,7 @@ export function BloubBot({
   follow = false,
   aim = lookTarget,
   gaze = null,
+  eyeScale = 1,
   ariaLabel = 'Avatar bloub anime',
   state,
   block,
@@ -652,7 +665,13 @@ export function BloubBot({
         <mask id={maskId} maskUnits="userSpaceOnUse" x={-VB} y={-VB} width={VB * 2} height={VB * 2}>
           <path d={frame.bodyPath} fill="#fff" />
           {frame.eyes.map((eye, i) => (
-            <path key={i} d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill="#000" />
+            <path
+              key={i}
+              d={eye.d}
+              transform={eyeScale === 1 ? eye.matrix : `${eye.matrix} scale(${eyeScale})`}
+              opacity={eye.alpha}
+              fill="#000"
+            />
           ))}
           {frame.notch && (
             <circle cx={frame.notch.x} cy={frame.notch.y} r={frame.notch.r} fill="#000" />

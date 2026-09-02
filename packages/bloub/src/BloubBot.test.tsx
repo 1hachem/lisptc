@@ -130,6 +130,21 @@ describe('BloubBot', () => {
     }
   })
 
+  /*
+   * L'echelle passe par la liste de transformations et non par le `d` : la gelule est
+   * centree sur l'origine dans son repere, donc `scale` la grossit sur place, avant la
+   * matrice qui la pose et qui porte deja l'ecrasement du clignement.
+   */
+  it('grossit les yeux sur place quand l hote le demande', async () => {
+    const { svg, rendre } = await monter(<BloubBot frozenAt={0} />)
+    const pose = svg().querySelector('mask path + path')?.getAttribute('transform')
+    expect(pose).toMatch(/^matrix\(/)
+    await rendre(<BloubBot frozenAt={0} eyeScale={1.25} />)
+    expect(svg().querySelector('mask path + path')?.getAttribute('transform')).toBe(
+      `${pose} scale(1.25)`
+    )
+  })
+
   it('porte l etiquette qu on lui donne', async () => {
     const { svg } = await monter(<BloubBot frozenAt={0} ariaLabel="Bloub" />)
     expect(svg().getAttribute('role')).toBe('img')

@@ -100,7 +100,10 @@ Details and the reasoning behind each are in [docs/](docs/):
   `capsule` + `effraye` at 26° of pitch. `skins.test.ts` locks the three shapes
   where no expression overflows in a wide envelope — `cercle`, `squircle`,
   `carre` — and the other six are the host's to measure. Don't widen that list
-  without the measurement.
+  without the measurement. **`eyeScale` eats the same margin**, from the other
+  side: it grows the capsule in place, so the ceiling is 1.3 on `carre` in that
+  envelope, and at 1.45 the two eyes meet and leave the body. Both numbers are
+  tests, not prose.
 - **`Look` aims in ABSOLUTE terms on both axes, and the engine does the mixing**:
   only it knows the pose at instant t. `mix` and `wander` are distinct, and drift is
   added *after* the mix. **`setLook` refuses a non-finite target**: the engine keeps

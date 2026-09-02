@@ -59,7 +59,7 @@ function dedans(poly: Array<{ x: number; y: number }>, x: number, y: number) {
  * Trente-deux points suffisent : sur une gelule de 40 unites de long ils sont espaces de
  * moins de trois unites, la ou le plus petit debordement qu'on ait mesure en vaut trois.
  */
-function contourDeLOeil(eye: RenderedEye, N = 32) {
+function contourDeLOeil(eye: RenderedEye, N = 32, k = 1) {
   const g = eye.d.match(/-?\d+\.?\d*/g)!.map(Number)
   const hw = Math.abs(g[0]!)
   const r = Math.abs(g[2]!)
@@ -86,7 +86,9 @@ function contourDeLOeil(eye: RenderedEye, N = 32) {
       x = -hw
       y = droit - (u - 3) * 2 * droit
     }
-    out.push({ x: a * x + c * y + e, y: b * x + d * y + f })
+    // `k` est l'echelle que l'hote demande (`eyeScale`) : elle s'applique dans le repere
+    // de la gelule, donc AVANT la matrice, exactement comme le composant l'ecrit
+    out.push({ x: a * (x * k) + c * (y * k) + e, y: b * (x * k) + d * (y * k) + f })
   }
   return out
 }
@@ -107,7 +109,8 @@ function debordement(
   state: StateId,
   radii: number[],
   expr: (typeof EXPRESSIONS)[number] | null,
-  look?: Look
+  look?: Look,
+  echelle = 1
 ) {
   const e = new BotEngine(R, state, radii, expr)
   // date 0 et morph d'une image : la cible est pleinement appliquee des le premier
@@ -118,7 +121,7 @@ function debordement(
     const f = e.sample(i * PAS)
     const corps = contourDuCorps(f.bodyPath)
     for (const eye of f.eyes) {
-      for (const p of contourDeLOeil(eye)) {
+      for (const p of contourDeLOeil(eye, 32, echelle)) {
         if (dedans(corps, p.x, p.y)) continue
         pire = Math.max(pire, Math.min(...corps.map((q) => Math.hypot(q.x - p.x, q.y - p.y))))
       }
@@ -183,6 +186,33 @@ describe('formes du personnalisateur', () => {
           if (sortie > 0.05) {
             fautifs.push(`${id}/${expr.id}/${look.yaw}:${look.pitch} ${sortie.toFixed(1)}`)
           }
+        }
+      }
+    }
+    expect(fautifs).toEqual([])
+  }, 30_000)
+
+  /**
+   * L'echelle des yeux qu'un hote peut demander (`eyeScale`) grossit la gelule sans bouger
+   * son centre, donc elle mange la marge que la table lui a laissee devant le bord. Elle a
+   * donc un plafond, et il est ici.
+   *
+   * Mesure sur `carre`, dans l'enveloppe de regard ci-dessus et sur les seize expressions :
+   * rien ne sort jusqu'a 1,3 — et l'ecart entre les deux yeux tombe alors a 2,9 unites,
+   * contre 15,1 a l'echelle relevee. A 1,45 ils se touchent ET debordent de 5,4.
+   *
+   * `surpris` est le cas contraignant, c'est la plus large des seize.
+   */
+  const ECHELLE_MAX = 1.3
+
+  it("l'echelle des yeux tient jusqu'au plafond documente", () => {
+    const radii = SHAPE_BY_ID.get('carre')!.radii
+    const fautifs: string[] = []
+    for (const expr of EXPRESSIONS) {
+      for (const look of ENVELOPPE) {
+        const sortie = debordement('idle', radii, expr, look, ECHELLE_MAX)
+        if (sortie > 0.05) {
+          fautifs.push(`${expr.id}/${look.yaw}:${look.pitch} ${sortie.toFixed(1)}`)
         }
       }
     }
