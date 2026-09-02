@@ -10,11 +10,17 @@
  * and puts the client on context for `usePostHog()` in any component that wants
  * to capture something by hand.
  *
- * Off in dev. A local session is one person reloading the same page, and it
- * would land in the same project as the real traffic — the pageview and
- * bounce numbers this exists to answer are the ones it would distort. Agent
- * traces are not affected: those are captured server-side and are worth having
- * for a local run, which is the whole point of `POSTHOG_ENVIRONMENT`.
+ * Ambient capture is off in dev. A local session is one person reloading the
+ * same page, and it would land in the same project as the real traffic — the
+ * pageview and bounce numbers this exists to answer are the ones it would
+ * distort. Agent traces are not affected: those are captured server-side and
+ * are worth having for a local run, which is the whole point of
+ * `POSTHOG_ENVIRONMENT`.
+ *
+ * A vote is the exception, and initialises the client in dev to carry it. It is
+ * not ambient analytics — it is an annotation on a run, deliberate, one per
+ * click, and the runs most worth annotating are the local ones you are watching
+ * while you work. `environment` separates them from real traffic.
  */
 
 import { PostHogProvider } from "@posthog/react";
@@ -24,7 +30,7 @@ import type { ReactNode } from "react";
 import { API_URL, distinctId } from "./api.ts";
 
 const ENVIRONMENT = webEnv.VITE_ENVIRONMENT;
-const ENABLED = ENVIRONMENT !== "dev";
+const IS_DEV = ENVIRONMENT === "dev";
 
 // Same-origin, so content blockers have no analytics domain to match and our
 // own cookies are not sent to anyone (the proxy strips them). Kept in step with
@@ -42,7 +48,18 @@ const OPTIONS: Partial<PostHogConfig> = {
 	// change is the only pageview there is) and person profiles for identified
 	// users only.
 	defaults: "2026-05-30",
-	capture_exceptions: true,
+	// Everything automatic, off in dev — what stays is the explicit `capture` a
+	// vote makes. `defaults` turns pageviews on, so it has to be countermanded
+	// here rather than merely left unset.
+	...(IS_DEV
+		? {
+				autocapture: false,
+				capture_pageview: false,
+				capture_exceptions: false,
+				capture_performance: false,
+				disable_session_recording: true,
+			}
+		: { capture_exceptions: true }),
 	// Adds `X-POSTHOG-SESSION-ID` to requests to the API, which is what lets a
 	// server-side `$ai_trace` point at the session replay of the person who
 	// caused it. Hostname only — a value with a port in it matches nothing.
@@ -71,24 +88,17 @@ const OPTIONS: Partial<PostHogConfig> = {
  * about rather than in a table of its own; `$survey_submission_id` is what ties
  * a thumb and the sentence that follows it into one response.
  *
- * Goes through the module singleton rather than `usePostHog()` so the feedback
- * UI can render in dev, where the provider is not mounted and there is nothing
- * on context — the capture is what turns off, not the affordance.
+ * Goes through the module singleton rather than `usePostHog()` so a vote does
+ * not depend on where the component sits relative to the provider.
  */
 export function captureFeedback(properties: Record<string, unknown>): void {
-	if (!ENABLED) return;
 	posthog.capture("survey sent", {
 		$survey_id: webEnv.VITE_POSTHOG_SURVEY_ID,
 		...properties,
 	});
 }
 
-/**
- * Wraps the app in PostHog outside dev, and is the identity function inside it —
- * nothing initialises, so no request is made and no `posthog` lands on context.
- */
 export function Analytics({ children }: { children: ReactNode }) {
-	if (!ENABLED) return children;
 	return (
 		<PostHogProvider apiKey={webEnv.VITE_POSTHOG_KEY} options={OPTIONS}>
 			{children}

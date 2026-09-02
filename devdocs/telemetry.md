@@ -95,9 +95,9 @@ its exact turn would mean the server handing its `$ai_span_id` (`turnId` in
 ### Sent from the browser, unlike everything else here
 
 Every other event in this doc is captured server-side. This one cannot be: it is
-a survey event, and surveys are a posthog-js feature. So a vote is subject to
-the browser half's rules — it is off in dev, and it needs the proxy below to get
-past a content blocker.
+a survey event, and surveys are a posthog-js feature. So a vote needs the proxy
+below to get past a content blocker — and it is the one browser event that still
+sends in dev, which is what makes the affordance usable while you work.
 
 ## The browser half
 
@@ -107,12 +107,19 @@ Start. The provider initialises inside an effect, so nothing runs during SSR,
 and it puts the client on context for `usePostHog()` wherever a component wants
 to capture something by hand.
 
-It is off in dev, where it is the identity function: nothing initialises, so no
-request is made and no client lands on context. A local session is one person
-reloading the same page, and it would land in the same project as the real
-traffic — distorting exactly the pageview and bounce numbers this half exists to
-answer. Agent traces are unaffected: those come from the server, and a local run
-is worth tracing, which is what `POSTHOG_ENVIRONMENT` is for.
+Its *ambient* capture is off in dev — no pageviews, no autocapture, no
+exceptions, no web vitals. A local session is one person reloading the same
+page, and it would land in the same project as the real traffic, distorting
+exactly the pageview and bounce numbers this half exists to answer. Agent traces
+are unaffected either way: those come from the server, and a local run is worth
+tracing, which is what `POSTHOG_ENVIRONMENT` is for.
+
+A vote is the deliberate exception, and is why the client initialises in dev at
+all. It is not ambient analytics — it is an annotation on a run, one per click,
+and the runs most worth annotating are the local ones you are watching while you
+work. `defaults` switches pageviews on, so dev has to countermand it explicitly
+rather than leave it unset; `environment` is what separates a local vote from a
+real one afterwards.
 
 It is only product analytics — pageviews, sessions, web vitals, exceptions —
 and captures no traces of its own. It answers the questions the server cannot
@@ -199,8 +206,9 @@ host, `apps/api` reads it, and every event a turn produces carries it as
 `$session_id`. That is what lets a trace be *watched* rather than only read: the
 replay of the person who typed the prompt, joined to the run it caused.
 
-It only exists outside dev, since the header comes from a posthog-js that never
-initialises locally — a dev trace has no browser session to point at.
+In dev this is present but thin: posthog-js initialises, so there is a session
+id to forward, but with recording disabled there is no replay at the other end
+of it.
 
 Two things to know if you touch it. The header name has to be in the Hono
 `cors()` `allowHeaders` list (`apps/api/src/app.ts`) or the preflight rejects
@@ -246,7 +254,7 @@ where the values are stored, not just where they are read.
 | variable | required | meaning |
 | --- | --- | --- |
 | `VITE_API_URL` | yes | where the app posts chats; also the hostname `tracing_headers` matches |
-| `VITE_ENVIRONMENT` | yes | `dev` \| `staging` \| `prod`. Rides on browser events as `environment`, matching `POSTHOG_ENVIRONMENT` on the server, and `dev` switches the browser half off entirely |
+| `VITE_ENVIRONMENT` | yes | `dev` \| `staging` \| `prod`. Rides on browser events as `environment`, matching `POSTHOG_ENVIRONMENT` on the server, and `dev` turns off everything the browser captures automatically — votes still send |
 | `VITE_POSTHOG_KEY` | yes | the same `phc_` project key, which is publishable by design |
 | `VITE_POSTHOG_SURVEY_ID` | yes | the survey the `▲`/`▼` votes are answers to; create it in PostHog with the rating as question 0 and the open text as question 1 |
 
