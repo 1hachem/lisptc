@@ -62,21 +62,18 @@ const REST_FACE: ExpressionId = "surpris";
  * and `busy` — everything else has a pose measured off the video, and that pose
  * IS the state.
  *
- * Note what actually distinguishes them here: the gaze is driven from outside, so
- * each expression's own yaw and pitch are overruled and what's left is the SHAPE
- * of its eyes — squinting, half-shut, level, small. Three of the five also carry
- * a roll (`confus` +8°, `mefiant` −6°, `timide` −7°), which tilts the head, so the
- * eyes slide a little vertically as the face morphs. That's why the package's own
- * set is roll-free; here it reads as the avatar shifting its weight, which is
- * worth the slide.
+ * All three are SYMMETRIC, and that is the selection rule rather than a matter of
+ * taste. `confus` and `mefiant` were here and are not any more: both carry one eye
+ * measured nearly shut — 0.17 and 0.15 of the body tall against the other's 0.44
+ * and 0.40 — so landing on one at the end of a run read as a wink, which is the
+ * one beat this avatar is not supposed to have.
+ *
+ * What distinguishes what's left: the gaze is driven from outside, so each
+ * expression's own yaw and pitch are overruled and the SHAPE of its eyes is what
+ * carries it — narrow and level, small, flat. Only `timide` still has a roll
+ * (−7°), which tilts the head, so the eyes slide slightly as that face morphs in.
  */
-const FACES: readonly ExpressionId[] = [
-	"confus",
-	"mefiant",
-	"fier",
-	"timide",
-	"blase",
-];
+const FACES: readonly ExpressionId[] = ["fier", "timide", "blase"];
 
 /**
  * Where the eyes go while the agent is idle: at the pointer, and straight ahead
@@ -200,8 +197,8 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 					size={size}
 					shape="carre"
 					expression={face}
-					// grown a third: at 28px the video's own capsule is 1.7px wide, and four
-					// of the five moods are squints. This is exactly the ceiling the package
+					// grown a third: at 28px the video's own capsule is 1.7px wide, and two
+					// of the three moods are squints. This is exactly the ceiling the package
 					// locks — measured across the gaze envelope for all sixteen expressions,
 					// and it is `surpris`, the widest and now the resting face, that sets
 					// it: at 1.45 the two eyes meet and leave the silhouette.
