@@ -26,9 +26,11 @@ montage can play the same state twice, so the index is what says where you are.
 and the component renders one exact frame with no animation loop, which is how a
 thumbnail or a state board is drawn.
 
-Props: `size`, `shape`, `color`, `expression`, `paper`, `frozenAt`, `cycle`,
-`follow`, `gaze`, `ariaLabel`, `state`, `block`, `playing`, plus `onStateChange`,
-`onBlockChange` and `onElapsedChange`. A `ref` exposes `seek(index, offset)` and
+Props: `size`, `shape`, `color`, `ink`, `expression`, `paper`, `frozenAt`,
+`cycle`, `follow`, `gaze`, `ariaLabel`, `state`, `block`, `playing`, plus
+`onStateChange`, `onBlockChange` and `onElapsedChange`. `ink` takes any CSS
+colour — `var(--fg)` included — for a host whose theme is none of the twelve in
+the catalogue. A `ref` exposes `seek(index, offset)` and
 `rendAt(t)` — see [src/BloubBot.tsx](src/BloubBot.tsx).
 
 The catalogues a picker needs (`SHAPES`, `COLORS`, `EXPRESSIONS`, `STATES`) come

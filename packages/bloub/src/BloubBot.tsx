@@ -28,6 +28,18 @@ export interface BloubBotProps {
   /** couleur du fond, utilisee pour la brume de profondeur des particules */
   paper?: string
   /**
+   * Couleur du corps en CSS, quand aucune des douze du personnalisateur ne
+   * convient : un theme d'interface n'a aucune raison de tomber sur l'une
+   * d'elles. CHOISIE et non relevee — le noir de la video, lui, reste `encre`
+   * dans `skins.ts`, et c'est `color` qui le nomme.
+   *
+   * Une variable CSS (`var(--fg)`) marche pour la meme raison qu'un mot-cle :
+   * ces valeurs ne sont que recopiees dans un attribut `fill`. La seule chose
+   * qui exige un `#rrggbb`, c'est la brume de profondeur des particules
+   * (`mixHex`), donc les etats qui en ont : `burst` et `comet`.
+   */
+  ink?: string
+  /**
    * Fige le rendu a cette date (en secondes depuis le debut de l'etat).
    * Le moteur etant une fonction pure du temps, on obtient une image
    * reproductible au pixel pres, sans boucle d'animation : utile pour une
@@ -132,6 +144,7 @@ export function BloubBot({
   color = DEFAULT_COLOR,
   expression = DEFAULT_EXPRESSION,
   paper = '#f9f9f9',
+  ink: inkCss,
   frozenAt,
   cycle = CYCLE_PAR_DEFAUT,
   follow = false,
@@ -152,7 +165,7 @@ export function BloubBot({
   const VB = DEMI_VIEWBOX
 
   const shapeRadii = SHAPE_BY_ID.get(shape)?.radii ?? null
-  const ink = COLOR_BY_ID.get(color)?.hex ?? '#0a0a0c'
+  const ink = inkCss ?? COLOR_BY_ID.get(color)?.hex ?? '#0a0a0c'
   const expressionDef = EXPRESSION_BY_ID.get(expression) ?? null
 
   const svg = useRef<SVGSVGElement | null>(null)
@@ -420,8 +433,14 @@ export function BloubBot({
   const anime = frozenAt === undefined
   useEffect(() => {
     if (!anime) return
-    // le curseur peut arriver deja pose
-    apply(l.block, l.elapsed)
+    /*
+     * Le curseur peut arriver deja pose. Mais quand c'est la prop `state` qui
+     * commande et que rien ne joue, le montage n'a pas a poser son premier bloc :
+     * il ecraserait l'etat demande par `cycle[0]`, et l'appelant verrait sa boule
+     * revenir a `idle` au montage. `nextAt` reste alors a l'infini, ce que le
+     * watcher de `playing` recale des que la lecture demarre.
+     */
+    if (state === undefined || playing) apply(l.block, l.elapsed)
     l.raf = requestAnimationFrame(tick)
     return () => {
       cancelAnimationFrame(l.raf)

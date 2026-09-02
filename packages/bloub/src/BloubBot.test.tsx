@@ -41,6 +41,11 @@ async function monter(node: React.ReactNode) {
       await act(async () => {
         root.render(suivant)
       })
+    },
+    demonter: async () => {
+      await act(async () => {
+        root.unmount()
+      })
     }
   }
 }
@@ -92,6 +97,37 @@ describe('BloubBot', () => {
     const attendu = moteurTemoin('orbit').sample(0.5)
     expect(attendu.arcs.length).toBeGreaterThan(0)
     expect(svg().querySelectorAll('linearGradient')).toHaveLength(attendu.arcs.length)
+  })
+
+  it('accepte une couleur d interface a la place de celles du catalogue', async () => {
+    const { svg } = await monter(<BloubBot frozenAt={0} ink="var(--fg)" />)
+    // le corps est un rectangle plein rogne par le masque : c'est lui qui porte l'encre
+    expect(svg().querySelector('rect')?.getAttribute('fill')).toBe('var(--fg)')
+  })
+
+  /*
+   * Le montage par defaut commence par `idle`. Un appelant qui pose `state`
+   * sans jouer voulait cet etat-la, pas le premier bloc du cycle : la boule
+   * repartait a `idle` au montage, et le callback l'annoncait.
+   */
+  it('ne laisse pas le montage ecraser un etat pose a l arret', async () => {
+    const vus: StateId[] = []
+    /*
+     * La boucle est neutralisee pendant le montage : elle redessine a chaque
+     * image, donc `act` — qui attend que la file de rendu se vide — ne rendrait
+     * jamais la main. C'est le seul test qui monte le composant ANIME.
+     */
+    const vraiRaf = globalThis.requestAnimationFrame
+    globalThis.requestAnimationFrame = () => 0
+    try {
+      const { demonter } = await monter(
+        <BloubBot state="thinking" onStateChange={(id) => vus.push(id)} />
+      )
+      expect(vus).toEqual([])
+      await demonter()
+    } finally {
+      globalThis.requestAnimationFrame = vraiRaf
+    }
   })
 
   it('porte l etiquette qu on lui donne', async () => {
