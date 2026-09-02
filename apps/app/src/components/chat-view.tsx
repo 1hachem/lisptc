@@ -7,6 +7,7 @@ import {
 	toolResult,
 	useChatSession,
 } from "../lib/chat.tsx";
+import { AgentAvatar } from "./agent-avatar.tsx";
 import { Markdown } from "./markdown.tsx";
 
 function isUser(m: ChatMessage): boolean {
@@ -27,9 +28,7 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 }
 
 export function ChatView() {
-	const { messages, isLoading, error } = useChatSession();
-	const lastIsUser =
-		messages.length > 0 && isUser(messages[messages.length - 1]);
+	const { messages, error } = useChatSession();
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
@@ -56,9 +55,8 @@ export function ChatView() {
 						</div>
 					);
 				})}
-				{isLoading && lastIsUser && (
-					<div className="select-none text-dim">…</div>
-				)}
+				{/* the agent's face: its state is the run's state, `…` included */}
+				<AgentAvatar />
 				{error && (
 					<div className="whitespace-pre-wrap break-words text-red">
 						{error}

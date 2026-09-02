@@ -88,6 +88,9 @@ importers:
       '@lexical/react':
         specifier: ^0.49.0
         version: 0.49.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)(yjs@13.6.32)
+      '@repo/bloub':
+        specifier: workspace:*
+        version: link:../../packages/bloub
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -231,7 +234,7 @@ importers:
         specifier: ^19.2.2
         version: 19.2.18
       '@types/react-dom':
-        specifier: ^19.2.5
+        specifier: ^19.2.2
         version: 19.2.5(@types/react@19.2.18)
       happy-dom:
         specifier: ^20.13.0
