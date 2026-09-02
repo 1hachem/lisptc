@@ -12,10 +12,11 @@ import { pickGreeting } from "../lib/greeting.ts";
  * hydration or greet a Californian with "good evening". So the first paint has no
  * greeting and the line lands a frame later, which nobody can see.
  *
- * It then arrives character by character behind a block cursor, so a line that
- * costs nothing still reads like a turn the agent took. The reveal is
- * `@repo/ui`'s typewriter — the primitive this UI already owns — and not a second
- * one written here.
+ * It then arrives token by token — a word at a time, long words in pieces, on an
+ * uneven beat — so a line that costs nothing reads like the turn the agent would
+ * have taken. Letter by letter would read as a typewriter, which is a different
+ * thing pretending to be this one. The reveal is `@repo/ui`'s typewriter, the
+ * primitive this UI already owns, and not a second one written here.
  */
 
 /**
@@ -50,7 +51,7 @@ export function Greeting() {
 	if (!line) return null;
 	return (
 		<div className="min-w-0 break-words text-fg">
-			<Typewriter text={line} enabled={!reduced} />
+			<Typewriter text={line} reveal="token" enabled={!reduced} />
 		</div>
 	);
 }
