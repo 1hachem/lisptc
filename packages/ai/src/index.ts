@@ -21,13 +21,7 @@ export {
 	streamChatResponse,
 	toAgentMessages,
 } from "./stream.ts";
-export {
-	captureNote,
-	isTelemetryEnabled,
-	type Note,
-	type NoteTarget,
-	shutdownTelemetry,
-} from "./telemetry.ts";
+export { shutdownTelemetry } from "./telemetry.ts";
 export {
 	ensureWarm,
 	systemPromptSlotFile,

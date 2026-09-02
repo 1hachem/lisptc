@@ -5,7 +5,6 @@ import { logger } from "hono/logger";
 import { chat } from "./chat.ts";
 import { errorHandler } from "./error.ts";
 import { NEEDS_WARMUP } from "./model.ts";
-import { note } from "./note.ts";
 
 const app = new Hono();
 
@@ -35,7 +34,6 @@ app.get("/health", (c) =>
 );
 
 app.route("/api/chat", chat);
-app.route("/api/note", note);
 
 // ERROR HANDLING
 app.onError(errorHandler);

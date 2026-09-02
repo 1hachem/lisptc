@@ -73,8 +73,8 @@ async function drain(): Promise<CapturedEvent[]> {
 }
 
 describe("telemetry", () => {
-	test("a turn, its REPL evals and a note share one trace id", async () => {
-		const { captureNote, captureReplEval, captureTurn } = await import(
+	test("a turn and its REPL evals share one trace id", async () => {
+		const { captureReplEval, captureTurn } = await import(
 			"../src/telemetry.ts"
 		);
 
@@ -92,17 +92,6 @@ describe("telemetry", () => {
 			halted: true,
 			latencyMs: 8200,
 		});
-		await captureNote({
-			threadId: CTX.threadId,
-			distinctId: CTX.distinctId,
-			sessionId: CTX.sessionId,
-			text: "skipped the await #jobs",
-			target: "message",
-			messageId: "m-3",
-			messageIndex: 3,
-			tags: ["jobs"],
-		});
-
 		const captured = await drain();
 		const by = (name: string) => captured.find((e) => e.event === name);
 
@@ -111,13 +100,11 @@ describe("telemetry", () => {
 		expect(captured.map((e) => e.properties.$ai_trace_id)).toEqual([
 			"thread-abc",
 			"thread-abc",
-			"thread-abc",
 		]);
 
 		// The other join: PostHog links an event to a session replay by
 		// `$session_id`, so a trace can be watched rather than only read.
 		expect(captured.map((e) => e.properties.$session_id)).toEqual([
-			"session-xyz",
 			"session-xyz",
 			"session-xyz",
 		]);
@@ -141,15 +128,7 @@ describe("telemetry", () => {
 			halted: true,
 		});
 
-		const note = by("$ai_note");
-		expect(note?.properties).toMatchObject({
-			note: "skipped the await #jobs",
-			target: "message",
-			message_id: "m-3",
-			message_index: 3,
-			tags: ["jobs"],
-			environment: "test",
-		});
-		expect(note?.distinct_id).toBe("dev-1");
+		expect(trace?.properties).toMatchObject({ environment: "test" });
+		expect(trace?.distinct_id).toBe("dev-1");
 	});
 });

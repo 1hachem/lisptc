@@ -9,11 +9,11 @@
  *                                           callback — tokens, cost, latency)
  *     $ai_span        one per REPL eval    (the Lisp program and what it printed;
  *                                           LangChain cannot see this, we emit it)
- *   $ai_note        a human comment, joined to the trace by $ai_trace_id
  *
  * `$ai_trace_id` is the chat's `thread_id`, so every event a conversation ever
- * produced — across turns, and the notes written about it afterwards — shares
- * one id. That is the join key for both the trace view and any insight.
+ * produced shares one id — the turns, and the `survey sent` events the browser
+ * emits when a turn is rated. That is the join key for both the trace view and
+ * any insight.
  *
  * With no `POSTHOG_API_KEY` every export here is a no-op, so the agent runs
  * unchanged in a checkout with no PostHog project.
@@ -52,10 +52,6 @@ function posthog(): PostHog | null {
 		flushInterval: 5_000,
 	});
 	return client;
-}
-
-export function isTelemetryEnabled(): boolean {
-	return posthog() !== null;
 }
 
 /** Identity and grouping for everything one chat turn emits. */
@@ -200,61 +196,6 @@ export function captureTurn(
 				: { $ai_input_state: turn.prompt, $ai_output_state: turn.answer }),
 		},
 	});
-}
-
-/** What a note is attached to. */
-export type NoteTarget = "conversation" | "message";
-
-export interface Note {
-	threadId: string;
-	distinctId?: string;
-	text: string;
-	target: NoteTarget;
-	/** The browser session the note was written in, for the same replay join. */
-	sessionId?: string;
-	/** Set for a message note: the id of the message it hangs off. */
-	messageId?: string;
-	/** The message's index in the transcript, for ordering in an insight. */
-	messageIndex?: number;
-	/** The message text, so the note is readable in PostHog without the trace. */
-	messageExcerpt?: string;
-	/** Free tags, the cheap way to link one note to notes on other threads. */
-	tags?: string[];
-	environment?: string;
-}
-
-/**
- * A human comment about a run. Notes are always captured in full, PRIVACY_MODE
- * or not: a note is deliberately written to be read later, and an empty one is
- * worse than none. Flushed immediately rather than batched — a note is rare and
- * you want it in PostHog by the time you switch tabs.
- */
-export async function captureNote(note: Note): Promise<boolean> {
-	const ph = posthog();
-	if (!ph) return false;
-	const { distinctId, anonymous } = identify(note);
-	ph.capture({
-		distinctId,
-		event: "$ai_note",
-		properties: {
-			...anonymous,
-			$ai_trace_id: note.threadId,
-			thread_id: note.threadId,
-			...(note.sessionId ? { $session_id: note.sessionId } : {}),
-			environment:
-				note.environment ?? analyticsEnv.POSTHOG_ENVIRONMENT ?? "local",
-			note: note.text,
-			target: note.target,
-			...(note.messageId ? { message_id: note.messageId } : {}),
-			...(note.messageIndex !== undefined
-				? { message_index: note.messageIndex }
-				: {}),
-			...(note.messageExcerpt ? { message_excerpt: note.messageExcerpt } : {}),
-			...(note.tags?.length ? { tags: note.tags } : {}),
-		},
-	});
-	await ph.flush();
-	return true;
 }
 
 export async function shutdownTelemetry(): Promise<void> {

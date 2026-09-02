@@ -1,13 +1,12 @@
-# Agent traces and notes (PostHog)
+# Agent traces and feedback (PostHog)
 
-Every conversation through `apps/app` is traced to PostHog, and a note written
-about that conversation lands in the same trace. The point is a short loop: you
-notice the agent doing something worth acting on, you write it down without
-leaving the chat, and the note is already joined to the run that produced it.
+Every conversation through `apps/app` is traced to PostHog, and a rating given
+on one of its turns lands in the same trace. The point is a short loop: you
+notice the agent doing something worth acting on, you say so without leaving the
+chat, and the verdict is already joined to the run that produced it.
 
-Set `POSTHOG_API_KEY` and it turns on. Leave it unset and every export in
-`packages/ai/src/telemetry.ts` is a no-op — the agent behaves identically, and
-the app says `note dropped` instead of pretending a note landed.
+Set `POSTHOG_API_KEY` and the tracing turns on. Leave it unset and every export
+in `packages/ai/src/telemetry.ts` is a no-op — the agent behaves identically.
 
 ## The event shape
 
@@ -18,14 +17,13 @@ as loose custom events:
 $ai_trace        one per chat turn      the prompt in, the answer out, steps, halted
   $ai_generation   one per model step   tokens, cost, latency, the messages
   $ai_span         one per REPL eval    the Lisp program and what it printed
-$ai_note         a comment, joined by $ai_trace_id
+survey sent      a rating on a turn     joined by $ai_trace_id, sent by the browser
 ```
 
 The server client is a singleton in `telemetry.ts` built with `flushAt: 20` and
 a 5s interval, rather than the `flushAt: 1` PostHog's guides suggest — those are
 written for serverless handlers that die after a response, and this API is a
-long-lived process where per-event POSTs would be waste. Notes are the
-exception and flush immediately.
+long-lived process where per-event POSTs would be waste.
 
 `$ai_generation` is emitted by `@posthog/ai`'s `LangChainCallbackHandler`, wired
 in `agent.ts`. It reports token counts and cost correctly per provider, which is
@@ -41,7 +39,7 @@ not what the completion looked like.
 ### `$ai_trace_id` is the chat's `thread_id`
 
 Everything a conversation ever produced shares one id — across turns, and
-including the notes written about it afterwards. That is the join key for the
+including the votes given on it afterwards. That is the join key for the
 trace view and for any insight. `apps/app` now mints the thread id up front
 rather than waiting for the server to name one; the API already keyed the
 persistent `AgentRepl` off it, so a conversation without one was silently losing
@@ -53,26 +51,53 @@ its interpreter state between turns.
 never halted is the agent looping — it reads as a success in the transcript
 (there is always a plausible final message) and as a failure here.
 
-## Notes
+## Feedback
 
-Two ways in, both writing the same `$ai_note` event:
+`▲` / `▼` in the gutter beside every assistant turn
+(`components/message-feedback.tsx`), and a one-line input afterwards for the
+sentence that explains the vote. This replaced free-text notes, which were the
+right instinct and the wrong gesture: a comment is a paragraph nobody writes
+twice, while a vote is one keystroke and gives the rating a number to aggregate
+on. The sentence is asked for *after* the vote is already recorded, so the cheap
+gesture is never blocked on the expensive one.
 
-- **`/note <text>`** in the composer — a comment about the conversation. It is
-  intercepted client-side in `chat.tsx` and never reaches the model: the thing
-  being measured must not change because it was measured.
-- **`+ note`** under any message — a comment about that turn. Carries the
-  message id, its index, and an excerpt, so the note reads on its own in PostHog
-  without opening the trace.
+It goes out as PostHog **survey events**, not an event of our own. That is the
+one shape PostHog renders *inside* the trace, so a rating shows up on the run it
+is about instead of in a table somewhere else:
 
-`#tags` anywhere in the text become a `tags` property. Tags are the cheap
-version of "link this to the other conversations where the same thing happened":
-one note on one thread finds the rest by a property filter. Typing a tag inline
-is the only version of that gesture anyone actually performs.
+```
+survey sent  $survey_response: 1|2          the vote — 1 up, 2 down
+             $survey_response_1: "…"        the sentence, when there is one
+             $survey_submission_id: uuid    ties the two into one response
+             $survey_completed: true
+             $ai_trace_id: <thread id>      the join key
+             message_id, message_index      which turn was voted on
+```
 
-Notes are captured server-side (`apps/api/src/note.ts`) rather than from
-posthog-js, so a note cannot drift into a different project than the trace it
-annotates — the browser's posthog-js is a separate client with its own config,
-and the two agreeing is a thing you would have to keep true by hand.
+Two rules of PostHog's that the code is shaped around. The vote is sent
+`$survey_completed: true` on the click rather than held back for a sentence that
+may never be typed — a rating waiting on a follow-up is a rating lost when the
+tab closes. And a second event under the same submission id has to carry *every*
+answer collected so far, so the sentence event repeats `$survey_response`.
+
+The survey itself is created in PostHog and its id passed in as
+`VITE_POSTHOG_SURVEY_ID`. Question 0 must be the rating and question 1 the open
+text, because that ordering is what `$survey_response` and `$survey_response_1`
+mean.
+
+### It is the conversation's trace, not the turn's
+
+`$ai_trace_id` is the thread, so a vote joins the whole conversation rather than
+the single turn inside it — `message_id` is what narrows it. Pinning a vote to
+its exact turn would mean the server handing its `$ai_span_id` (`turnId` in
+`stream.ts`) to the client, which it does not do today.
+
+### Sent from the browser, unlike everything else here
+
+Every other event in this doc is captured server-side. This one cannot be: it is
+a survey event, and surveys are a posthog-js feature. So a vote is subject to
+the browser half's rules — it is off in dev, and it needs the proxy below to get
+past a content blocker.
 
 ## The browser half
 
@@ -80,11 +105,17 @@ and the two agreeing is a thing you would have to keep true by hand.
 `PostHogProvider` from the root route — PostHog's own prescription for TanStack
 Start. The provider initialises inside an effect, so nothing runs during SSR,
 and it puts the client on context for `usePostHog()` wherever a component wants
-to capture something by hand. With no key it is the identity function, the same
-no-key-no-op contract the server half has.
+to capture something by hand.
+
+It is off in dev, where it is the identity function: nothing initialises, so no
+request is made and no client lands on context. A local session is one person
+reloading the same page, and it would land in the same project as the real
+traffic — distorting exactly the pageview and bounce numbers this half exists to
+answer. Agent traces are unaffected: those come from the server, and a local run
+is worth tracing, which is what `POSTHOG_ENVIRONMENT` is for.
 
 It is only product analytics — pageviews, sessions, web vitals, exceptions —
-and captures no traces and no notes. It answers the questions the server cannot
+and captures no traces of its own. It answers the questions the server cannot
 see at all: who opened the app and never sent a message, and where they
 stopped. `defaults: '2026-05-30'` opts into the current default config, of which
 two things matter here: a pageview per history change, since in an SPA a route
@@ -132,9 +163,10 @@ The path itself is the half a blocklist can still learn. Renaming it means
 renaming the route directory and `PROXY_PATH` in `src/lib/analytics.ts`
 together.
 
-Note that this is only about the browser. The traces and notes in
+Note that this is only about the browser. The traces in
 `packages/ai/src/telemetry.ts` are sent from the server by `posthog-node` and
-were never blockable.
+were never blockable — a blocked browser costs you the votes and the pageviews,
+not the runs.
 
 `serverDir: "server"` in `vite.config.ts` is what makes `server/routes/**` a
 thing at all — Nitro's filesystem routing is off by default.
@@ -142,7 +174,7 @@ thing at all — Nitro's filesystem routing is off by default.
 ## Identity
 
 `x-distinct-id`, a uuid in the browser's `localStorage`, sent as a header on
-both chat and note requests. Not an account — it exists so one person's traces
+chat requests. Not an account — it exists so one person's traces
 group together, locally today and for real users later, without an auth system
 having to exist first. With no id the events set `$process_person_profile:
 false` rather than minting a phantom person per thread.
@@ -167,6 +199,9 @@ host, `apps/api` reads it, and every event a turn produces carries it as
 `$session_id`. That is what lets a trace be *watched* rather than only read: the
 replay of the person who typed the prompt, joined to the run it caused.
 
+It only exists outside dev, since the header comes from a posthog-js that never
+initialises locally — a dev trace has no browser session to point at.
+
 Two things to know if you touch it. The header name has to be in the Hono
 `cors()` `allowHeaders` list (`apps/api/src/app.ts`) or the preflight rejects
 every chat request — the failure is the chat breaking, not the telemetry going
@@ -184,8 +219,9 @@ does *not* cover is an MCP tool result carrying user data, which is not a secret
 and otherwise lands in `$ai_output_state` verbatim. Turn privacy mode on before
 pointing this at anyone's data but your own.
 
-Notes are always captured in full, privacy mode or not: a note is written to be
-read later, and an empty one is worse than none.
+Feedback is never redacted by privacy mode: it comes from the browser rather
+than from `telemetry.ts`, and a sentence written to be read later is worse than
+useless empty.
 
 ## Configuration
 
@@ -209,11 +245,12 @@ where the values are stored, not just where they are read.
 
 | variable | required | meaning |
 | --- | --- | --- |
-| `VITE_API_URL` | yes | where the app posts chats and notes; also the hostname `tracing_headers` matches |
-| `VITE_ENVIRONMENT` | yes | the `environment` property on browser events, so it lines up with `POSTHOG_ENVIRONMENT` on the server's |
-| `VITE_POSTHOG_KEY` | no | unset disables browser analytics; the same `phc_` project key, which is publishable by design |
+| `VITE_API_URL` | yes | where the app posts chats; also the hostname `tracing_headers` matches |
+| `VITE_ENVIRONMENT` | yes | `dev` \| `staging` \| `prod`. Rides on browser events as `environment`, matching `POSTHOG_ENVIRONMENT` on the server, and `dev` switches the browser half off entirely |
+| `VITE_POSTHOG_KEY` | yes | the same `phc_` project key, which is publishable by design |
+| `VITE_POSTHOG_SURVEY_ID` | yes | the survey the `▲`/`▼` votes are answers to; create it in PostHog with the rating as question 0 and the open text as question 1 |
 
-The first two are required, so nothing silently falls back to a default. Note
+All three are required, so nothing silently falls back to a default. Note
 *when* that fails, though: t3-env validates when the module first runs, not
 when the bundle is built, so a build with `/web` missing succeeds and then
 serves a 500 on the first render (`❌ Invalid environment variables` in the
@@ -253,6 +290,6 @@ once other people are using it. It is deliberately *not* the fixture store — a
 trace read back out of PostHog is a projection, not something you can replay
 deterministically into a test.
 
-When a note is worth turning into a regression test, the observer seam in
+When a downvote is worth turning into a regression test, the observer seam in
 [evals](./evals.md) is the recorder that produces a replayable run. The two
 share a producer (the agent loop) and nothing else, on purpose.

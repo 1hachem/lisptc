@@ -9,16 +9,22 @@
  * `PostHogProvider` initialises inside an effect, so it never runs during SSR,
  * and puts the client on context for `usePostHog()` in any component that wants
  * to capture something by hand.
+ *
+ * Off in dev. A local session is one person reloading the same page, and it
+ * would land in the same project as the real traffic — the pageview and
+ * bounce numbers this exists to answer are the ones it would distort. Agent
+ * traces are not affected: those are captured server-side and are worth having
+ * for a local run, which is the whole point of `POSTHOG_ENVIRONMENT`.
  */
 
 import { PostHogProvider } from "@posthog/react";
 import { webEnv } from "@repo/env/web";
-import type { PostHogConfig } from "posthog-js";
+import posthog, { type PostHogConfig } from "posthog-js";
 import type { ReactNode } from "react";
-import { API_URL, distinctId } from "./notes.ts";
+import { API_URL, distinctId } from "./api.ts";
 
-const KEY = webEnv.VITE_POSTHOG_KEY;
 const ENVIRONMENT = webEnv.VITE_ENVIRONMENT;
+const ENABLED = ENVIRONMENT !== "dev";
 
 // Same-origin, so content blockers have no analytics domain to match and our
 // own cookies are not sent to anyone (the proxy strips them). Kept in step with
@@ -60,14 +66,31 @@ const OPTIONS: Partial<PostHogConfig> = {
 };
 
 /**
- * Wraps the app in PostHog when there is a key to send to. With none, this is
- * the identity function — the same no-key-no-op contract as the server half, so
- * a checkout with no PostHog project runs unchanged.
+ * One question, two events. `survey sent` carrying `$ai_trace_id` is the shape
+ * PostHog renders *inside* the trace, so a rating shows up on the run it is
+ * about rather than in a table of its own; `$survey_submission_id` is what ties
+ * a thumb and the sentence that follows it into one response.
+ *
+ * Goes through the module singleton rather than `usePostHog()` so the feedback
+ * UI can render in dev, where the provider is not mounted and there is nothing
+ * on context — the capture is what turns off, not the affordance.
+ */
+export function captureFeedback(properties: Record<string, unknown>): void {
+	if (!ENABLED) return;
+	posthog.capture("survey sent", {
+		$survey_id: webEnv.VITE_POSTHOG_SURVEY_ID,
+		...properties,
+	});
+}
+
+/**
+ * Wraps the app in PostHog outside dev, and is the identity function inside it —
+ * nothing initialises, so no request is made and no `posthog` lands on context.
  */
 export function Analytics({ children }: { children: ReactNode }) {
-	if (!KEY) return children;
+	if (!ENABLED) return children;
 	return (
-		<PostHogProvider apiKey={KEY} options={OPTIONS}>
+		<PostHogProvider apiKey={webEnv.VITE_POSTHOG_KEY} options={OPTIONS}>
 			{children}
 		</PostHogProvider>
 	);

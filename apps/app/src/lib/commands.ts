@@ -16,12 +16,6 @@ export interface Command {
 }
 
 export const commands: Command[] = [
-	{
-		name: "/note",
-		desc: "comment on this conversation",
-		hint: "#tags",
-		takesArgument: true,
-	},
 	{ name: "/clear", desc: "start a fresh session" },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
