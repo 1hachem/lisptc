@@ -1,7 +1,6 @@
 import {
 	type Aim,
 	BloubBot,
-	DEFAULT_EXPRESSION,
 	type ExpressionId,
 	type GazeScript,
 	type Look,
@@ -44,9 +43,20 @@ const MOODS = {
 } satisfies Record<string, Mood>;
 
 /**
+ * The face the avatar wears when nothing is happening, and the one a conversation
+ * opens on.
+ *
+ * `surpris` and not the video's own resting pose: that one is a pair of narrow
+ * ovals, 0.19 of the body wide against 0.41 tall, which at icon size reads as two
+ * slits. `surpris` is the roundest of the sixteen — 0.45 by 0.47, so very nearly
+ * a circle — and it is one of the few with no roll, so the face doesn't sit
+ * tilted at rest.
+ */
+const REST_FACE: ExpressionId = "surpris";
+
+/**
  * The moods the avatar passes through, one per finished run. It always comes back
- * to `DEFAULT_EXPRESSION` — the pose measured off the video, eyes level and fully
- * open — and it always starts there.
+ * to `REST_FACE`, and it always starts there.
  *
  * An expression only lands on a state wearing the resting face, so this is `idle`
  * and `busy` — everything else has a pose measured off the video, and that pose
@@ -128,11 +138,11 @@ const MOOD_MS = 8000;
  *
  * A finished run puts on the next mood and hands it back after `MOOD_MS`; that is
  * what marks the end of a run now that there is no wink. Everything else — the
- * first paint, a cleared transcript — is the measured resting pose, so a
- * conversation always opens on the same face.
+ * first paint, a cleared transcript — is `REST_FACE`, so a conversation always
+ * opens on the same face.
  */
 function useRestingFace(isLoading: boolean, fresh: boolean): ExpressionId {
-	const [face, setFace] = useState<ExpressionId>(DEFAULT_EXPRESSION);
+	const [face, setFace] = useState<ExpressionId>(REST_FACE);
 	const next = useRef(0);
 	const was = useRef(false);
 
@@ -142,14 +152,14 @@ function useRestingFace(isLoading: boolean, fresh: boolean): ExpressionId {
 		if (!finished) return;
 		setFace(FACES[next.current % FACES.length]);
 		next.current += 1;
-		const timer = setTimeout(() => setFace(DEFAULT_EXPRESSION), MOOD_MS);
+		const timer = setTimeout(() => setFace(REST_FACE), MOOD_MS);
 		return () => clearTimeout(timer);
 	}, [isLoading]);
 
 	// `clear()` empties the transcript without remounting anything, so the reset
 	// has to be watched for rather than left to the initial state.
 	useEffect(() => {
-		if (fresh) setFace(DEFAULT_EXPRESSION);
+		if (fresh) setFace(REST_FACE);
 	}, [fresh]);
 
 	return face;
@@ -190,14 +200,12 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 					size={size}
 					shape="carre"
 					expression={face}
-					// half again as big: at 28px the video's own capsule is 1.7px wide and
-					// four of these five moods are squints, so unscaled they read as
-					// nothing. Measured for THIS list, resting face included, on `carre`
-					// across the gaze envelope — clean at 1.5 and 1.6, while `neutre` and
-					// `confus` leave the silhouette at 1.75. Changing `FACES` means
-					// measuring again; the package only locks 1.3, which holds for all
-					// sixteen expressions.
-					eyeScale={1.5}
+					// grown a third: at 28px the video's own capsule is 1.7px wide, and four
+					// of the five moods are squints. This is exactly the ceiling the package
+					// locks — measured across the gaze envelope for all sixteen expressions,
+					// and it is `surpris`, the widest and now the resting face, that sets
+					// it: at 1.45 the two eyes meet and leave the silhouette.
+					eyeScale={1.3}
 					state={state}
 					follow={mood === "idle"}
 					aim={ahead}
