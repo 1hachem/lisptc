@@ -279,11 +279,19 @@ the `import.meta.env` read is a cast with a comment instead.
 
 ### Which task gets which path
 
-`task dev-api` and `task start:api` run under `/ai /analytics`. `task dev-app`
-and `task start:app` run under `/web /analytics` — `/web` for the bundle, and
-`/analytics` as well because the app has a *server* half of its own now: the
-proxy resolves `POSTHOG_HOST` and `POSTHOG_ASSET_HOST` per request, at runtime,
-in the same process that serves the pages.
+`task dev-api` and `task start:api` run under `/ai /analytics /api`. `task
+dev-app` and `task start:app` run under `/web /analytics` — `/web` for the
+bundle, and `/analytics` as well because the app has a *server* half of its own
+now: the proxy resolves `POSTHOG_HOST` and `POSTHOG_ASSET_HOST` per request, at
+runtime, in the same process that serves the pages.
+
+`/api` holds `APP_URL`, the single browser origin the API answers to
+(`packages/env/src/api.ts`). It is required and has no wildcard fallback, so an
+API that has not been told where its app lives refuses to boot rather than
+accepting every origin there is. Note the shape of the pair: the app is told
+where the API is by `VITE_API_URL`, the API is told where the app is by
+`APP_URL`, and in a deployment those two have to agree or the browser is turned
+away by its own CORS check with nothing in the API log to show for it.
 
 Both halves have to be present for the **build**, not only for the process that
 serves it, since a `VITE_` value that is missing at build time is missing for

@@ -51,6 +51,9 @@ importers:
       '@repo/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@repo/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
