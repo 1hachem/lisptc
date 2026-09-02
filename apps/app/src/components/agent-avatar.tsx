@@ -1,6 +1,7 @@
 import {
 	type Aim,
 	BloubBot,
+	DEFAULT_EXPRESSION,
 	type ExpressionId,
 	type GazeScript,
 	type Look,
@@ -43,7 +44,9 @@ const MOODS = {
 } satisfies Record<string, Mood>;
 
 /**
- * The resting faces the avatar goes through, one per finished run.
+ * The moods the avatar passes through, one per finished run. It always comes back
+ * to `DEFAULT_EXPRESSION` — the pose measured off the video, eyes level and fully
+ * open — and it always starts there.
  *
  * An expression only lands on a state wearing the resting face, so this is `idle`
  * and `busy` — everything else has a pose measured off the video, and that pose
@@ -53,9 +56,9 @@ const MOODS = {
  * each expression's own yaw and pitch are overruled and what's left is the SHAPE
  * of its eyes — squinting, half-shut, level, small. Three of the five also carry
  * a roll (`confus` +8°, `mefiant` −6°, `timide` −7°), which tilts the head, so the
- * eyes slide a little vertically as one face morphs into the next. That's why the
- * package's own set is roll-free; here it reads as the avatar shifting its weight,
- * which is worth the slide.
+ * eyes slide a little vertically as the face morphs. That's why the package's own
+ * set is roll-free; here it reads as the avatar shifting its weight, which is
+ * worth the slide.
  */
 const FACES: readonly ExpressionId[] = [
 	"confus",
@@ -114,28 +117,47 @@ const UPWARD: GazeScript = () => ({
 });
 
 /**
- * A finished run moves the avatar on to the next face, in order.
- *
- * That is what marks the end of a run now that there is no wink: the beat is the
- * mood it settles into while you read the reply, and it lasts until the next
- * question rather than for a second and a half.
+ * How long a mood is worn before the face relaxes. Chosen: long enough to be read
+ * while the reply is, short enough that the avatar isn't still smirking at you an
+ * hour later. A mood is a reaction, and a reaction ends.
  */
-function useFacePerRun(isLoading: boolean): ExpressionId {
-	const [i, setI] = useState(0);
+const MOOD_MS = 8000;
+
+/**
+ * The face the avatar wears at rest.
+ *
+ * A finished run puts on the next mood and hands it back after `MOOD_MS`; that is
+ * what marks the end of a run now that there is no wink. Everything else — the
+ * first paint, a cleared transcript — is the measured resting pose, so a
+ * conversation always opens on the same face.
+ */
+function useRestingFace(isLoading: boolean, fresh: boolean): ExpressionId {
+	const [face, setFace] = useState<ExpressionId>(DEFAULT_EXPRESSION);
+	const next = useRef(0);
 	const was = useRef(false);
 
 	useEffect(() => {
 		const finished = was.current && !isLoading;
 		was.current = isLoading;
-		if (finished) setI((n) => (n + 1) % FACES.length);
+		if (!finished) return;
+		setFace(FACES[next.current % FACES.length]);
+		next.current += 1;
+		const timer = setTimeout(() => setFace(DEFAULT_EXPRESSION), MOOD_MS);
+		return () => clearTimeout(timer);
 	}, [isLoading]);
 
-	return FACES[i % FACES.length];
+	// `clear()` empties the transcript without remounting anything, so the reset
+	// has to be watched for rather than left to the initial state.
+	useEffect(() => {
+		if (fresh) setFace(DEFAULT_EXPRESSION);
+	}, [fresh]);
+
+	return face;
 }
 
 export function AgentAvatar({ size = 28 }: { size?: number }) {
 	const { messages, isLoading, error } = useChatSession();
-	const face = useFacePerRun(isLoading);
+	const face = useRestingFace(isLoading, messages.length === 0);
 
 	// Nothing has come back yet, so the agent is still deciding. Once anything
 	// has — a chunk of the reply, or a tool turn — the run is answering.
@@ -169,11 +191,12 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 					shape="carre"
 					expression={face}
 					// half again as big: at 28px the video's own capsule is 1.7px wide and
-					// four of these five faces are squints, so unscaled they read as
-					// nothing. Measured for THIS list on `carre` across the gaze envelope —
-					// clean at 1.5 with 5.1 units still between the two eyes, while `confus`
-					// leaves the silhouette at 1.75. Changing `FACES` means measuring again;
-					// the package only locks 1.3, which is what holds for all sixteen.
+					// four of these five moods are squints, so unscaled they read as
+					// nothing. Measured for THIS list, resting face included, on `carre`
+					// across the gaze envelope — clean at 1.5 and 1.6, while `neutre` and
+					// `confus` leave the silhouette at 1.75. Changing `FACES` means
+					// measuring again; the package only locks 1.3, which holds for all
+					// sixteen expressions.
 					eyeScale={1.5}
 					state={state}
 					follow={mood === "idle"}
