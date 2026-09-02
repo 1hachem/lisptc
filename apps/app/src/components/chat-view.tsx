@@ -32,7 +32,9 @@ export function ChatView() {
 	const { messages, error } = useChatSession();
 
 	return (
-		<Conversation className="min-h-0 flex-1 px-8 pt-6">
+		// `@container` so the avatar below can ask about the width of the CHAT
+		// column, sidebars included, rather than the width of the window
+		<Conversation className="@container min-h-0 flex-1 px-8 pt-6">
 			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
 				{messages.map((m, i) => {
 					if (isToolMessage(m))
@@ -57,8 +59,25 @@ export function ChatView() {
 					);
 				})}
 				{messages.length === 0 && <Greeting />}
-				{/* the agent's face: its state is the run's state, `…` included */}
-				<AgentAvatar />
+				{/*
+				 * The agent's face: its state is the run's state, `…` included.
+				 *
+				 * It sits in the left margin, level with the last row of text, and it
+				 * takes no width from the text to do it: the wrapper is a flex item of
+				 * ZERO height (with the flex gap cancelled) so `bottom-0` lands on the
+				 * bottom edge of the message above, and the avatar stands in the gutter
+				 * on its own.
+				 *
+				 * Only once there is a gutter to stand in, hence the container query:
+				 * 28px of avatar has to fit outside a 680px column inside 64px of
+				 * padding, which needs 832px of chat. Below that it drops back into the
+				 * flow, on its own row.
+				 */}
+				<div className="relative @min-[832px]:-mt-5 @min-[832px]:h-0">
+					<div className="@min-[832px]:-left-11 @min-[832px]:absolute @min-[832px]:bottom-0">
+						<AgentAvatar />
+					</div>
+				</div>
 				{error && (
 					<div className="whitespace-pre-wrap break-words text-red">
 						{error}
