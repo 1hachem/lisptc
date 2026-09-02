@@ -2,7 +2,8 @@
 // theta = 0 pointe vers la droite et croit dans le sens horaire (y vers le bas).
 // Unite : rayon de la boule au repos = 1.
 //
-// Genere par tools/extract-profiles.py — ne pas editer a la main.
+// Releve sur les images de la video par un script Python garde en amont : mesure
+// figee, ne pas editer a la main.
 
 export const PROFILE_SAMPLES = 64;
 

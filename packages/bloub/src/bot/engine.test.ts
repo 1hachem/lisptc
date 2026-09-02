@@ -336,8 +336,8 @@ describe("regard qui suit le pointeur", () => {
 	});
 
 	it("garde les deux yeux visibles aux amplitudes extremes", () => {
-		// au-dela, l oeil exterieur passe derriere le limbe de la sphere et le
-		// moteur le retire : la butee de BloubBot.vue doit rester en dessous
+		// au-dela, l oeil exterieur passe derriere le limbe de la sphere et le moteur
+		// le retire : les amplitudes de `gaze.ts` doivent rester en dessous
 		for (const yaw of [-42, -26, -10]) {
 			for (const pitch of [-3, 10, 23]) {
 				const e = new BotEngine(100, "idle");

@@ -21,7 +21,7 @@ import type { EyeCfg } from "./states";
  * eux la largeur va de 0,8 à 2,7 fois le neutre, la hauteur de 0,3 à 1,5, et
  * les angles jusqu'à ±80°. On reste dans cette enveloppe.
  */
-/** Enumeres pour que la couche i18n verifie leurs traductions a la compilation. */
+/** Enumeres et non deduits du tableau : l'hote resout ces ids en texte, a la compilation. */
 export type ExpressionId =
 	| "neutre"
 	| "attentif"

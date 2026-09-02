@@ -169,9 +169,13 @@ suite for one test.
 
 ## Generated files
 
-`src/bot/profiles.ts` is produced by `tools/extract-profiles.py` from the video's
-frames (see [docs/measurements.md](docs/measurements.md)). Don't edit it by hand;
-regenerate it.
+`src/bot/profiles.ts` was produced from the video's frames by a Python script that
+no longer ships here — it needed the reference video and `frames/`, neither of
+which is in the repository, so it could not be run anyway. The file is now a
+frozen measurement: don't edit it by hand, and if you ever need to re-derive it,
+the script is in the upstream `bloub` repository.
+[docs/measurements.md](docs/measurements.md) records how the numbers were
+obtained.
 
 ## Where to read more
 

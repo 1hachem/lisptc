@@ -246,9 +246,7 @@ describe("formes du personnalisateur", () => {
 	 * Le cercle est la forme relevee sur la video, et le corps par defaut : le choisir dans
 	 * le personnalisateur ne doit RIEN changer par rapport a ne rien choisir. C'est ce qui
 	 * garantit que la correction est neutre sur la reference — y compris son oeil exterieur,
-	 * qui frole deja le bord et doit continuer de le froler. C'est aussi ce qui protege
-	 * `public/favicon.svg`, dont les deux matrices d'yeux sont celles de `sample(1)` sur
-	 * `idle`, au byte.
+	 * qui frole deja le bord et doit continuer de le froler.
 	 */
 	it("choisir le cercle rend exactement la meme chose que ne rien choisir", () => {
 		expect(DEFAULT_SHAPE).toBe("cercle");

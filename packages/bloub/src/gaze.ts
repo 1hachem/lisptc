@@ -3,10 +3,10 @@ import type { ExpressionId } from "./bot/expressions";
 import { clamp, easings } from "./bot/math";
 
 /**
- * Ou le bot regarde quand il suit le curseur. Pur, comme `src/ui/timeline.ts` :
- * la position du pointeur entre en coordonnees deja normalisees, donc la regle
- * se teste sans DOM — et elle a besoin de l'etre, parce que deux signes s'y
- * trompent facilement.
+ * Ou le bot regarde quand il suit le curseur. Pur, comme tout ce qui est ici : la
+ * position du pointeur entre en coordonnees deja normalisees, donc la regle se
+ * teste sans DOM — et elle a besoin de l'etre, parce que deux signes s'y trompent
+ * facilement.
  */
 
 /**
@@ -120,7 +120,8 @@ export type GazeScript = (t: number) => Look;
  *
  * Corollaire indispensable : ce tour ne se joue que sur un CERCLE. Les yeux sont
  * recolles au contour reel (`radiusAtAngle`), donc sur une forme non circulaire
- * ils suivent le profil en tournant et sautillent. Voir `forme` dans `App.vue`.
+ * ils suivent le profil en tournant et sautillent : un hote qui pose une forme du
+ * personnalisateur ne doit pas jouer ce script.
  */
 export const TOUR_TIME = 1.5;
 

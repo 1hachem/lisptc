@@ -160,8 +160,7 @@ Each of these was written and measured, and each broke something visible:
 The margin aimed for is the one the **original profile** gave, not clearance: on the circle
 the outer eye already grazes the edge and that is deliberate, it is what gives the volume.
 Aiming for clearance left the eye exactly tangent, which shows. On the circle both outlines
-are the same, so the offset is `0, 0` by construction and the reference does not move —
-which is also what protects `public/favicon.svg`.
+are the same, so the offset is `0, 0` by construction and the reference does not move.
 
 `src/bot/skins.test.ts` locks all of it. It measures back-and-forths frame by frame rather
 than speed — a morph moves the eyes fast anyway, trembling is going *and coming back* — it

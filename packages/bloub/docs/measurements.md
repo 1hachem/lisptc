@@ -50,35 +50,16 @@ That's the morph-damping mechanism in the original, reproduced by `blinkIn` on t
 states concerned. The forced blink lasts 0.2 s; the scheduled idle blink is
 `BLINK_DUR = 0.18`.
 
-## Regenerating the profiles
+## Where the profiles come from
 
-`src/bot/profiles.ts` is generated from the video's frames. Don't edit it by hand.
+`src/bot/profiles.ts` holds three shapes that can't be built analytically — egg,
+hexagon, triangle — as radial profiles read off the video: the clip cut at 10 fps,
+one frame chosen per shape, the outline found by sub-pixel ray casting from the
+centre. The other eleven states are either the measured circle or constructed
+analytically in `skins.ts`.
 
-```bash
-mkdir -p frames
-ffmpeg -i reference.mp4 -vf fps=10 frames/h_%04d.png
-pip install numpy pillow
-python tools/extract-profiles.py frames/ > src/bot/profiles.ts
-pnpm --dir ../.. exec biome check --write packages/bloub/src/bot/profiles.ts
-```
-
-The last line is not optional: the script prints one long line per profile and no
-semicolons, and the repository's formatter has an opinion about both. Skip it and
-the next person to run `pnpm lint` gets the diff instead of you.
-
-The script composes exact filenames (`h_0164.png` and friends, zero-padded to
-four), so the `h_` prefix and the `fps=10` cut both matter. It extracts the three
-profiles that can't be built analytically (egg, hexagon, triangle), not all 14
-states; the rest are either the measured circle or constructed in `skins.ts`.
-
-`reference.mp4` and `frames/` are local inputs and are not in the repository.
-
-## The favicon is not an approximation
-
-`public/favicon.svg` is not a lookalike drawing: the circle and **both eye
-matrices** are what `engine.sample(1)` returns for `idle`, byte for byte. Hence the
-right eye being narrower than the left (0.64 against 0.87). That's depth
-compression, not a typo.
-
-`favicon.ico` and `apple-touch-icon.png` are rasterised from it. The `.ico` is
-still needed: Safari only reads the SVG from version 26, iOS not before 18.7.
+The Python script that did the reading is not in this package. It needed
+`reference.mp4` and an unpacked `frames/`, neither of which is in the repository,
+so it could not have been run from here; it lives in the upstream `bloub`
+repository if the numbers ever need re-deriving. Until then `profiles.ts` is a
+frozen measurement — don't edit it by hand, and don't round it.
