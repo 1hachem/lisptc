@@ -8,6 +8,7 @@ import {
 	useChatSession,
 } from "../lib/chat.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { Greeting } from "./greeting.tsx";
 import { Markdown } from "./markdown.tsx";
 
 function isUser(m: ChatMessage): boolean {
@@ -55,6 +56,7 @@ export function ChatView() {
 						</div>
 					);
 				})}
+				{messages.length === 0 && <Greeting />}
 				{/* the agent's face: its state is the run's state, `…` included */}
 				<AgentAvatar />
 				{error && (

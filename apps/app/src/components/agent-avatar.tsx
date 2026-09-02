@@ -1,6 +1,7 @@
 import {
 	type Aim,
 	BloubBot,
+	type ExpressionId,
 	type GazeScript,
 	type Look,
 	PITCH_MAX,
@@ -20,9 +21,6 @@ import { useChatSession } from "../lib/chat.tsx";
  * `thinking` are the clearest case: the body itself becomes the middle dot.
  */
 
-/** `wink`'s own measured duration: the beat it was drawn for. */
-const WINK_MS = 1600;
-
 interface Mood {
 	state: StateId;
 	label: string;
@@ -41,9 +39,31 @@ const MOODS = {
 	failed: { state: "alert", label: "the agent errored" },
 	thinking: { state: "thinking", label: "the agent is thinking" },
 	busy: { state: "idle", label: "the agent is answering" },
-	done: { state: "wink", label: "the agent is done" },
 	idle: { state: "idle", label: "the agent is idle" },
 } satisfies Record<string, Mood>;
+
+/**
+ * The resting faces the avatar goes through, one per finished run.
+ *
+ * An expression only lands on a state wearing the resting face, so this is `idle`
+ * and `busy` — everything else has a pose measured off the video, and that pose
+ * IS the state.
+ *
+ * Note what actually distinguishes them here: the gaze is driven from outside, so
+ * each expression's own yaw and pitch are overruled and what's left is the SHAPE
+ * of its eyes — squinting, half-shut, level, small. Three of the five also carry
+ * a roll (`confus` +8°, `mefiant` −6°, `timide` −7°), which tilts the head, so the
+ * eyes slide a little vertically as one face morphs into the next. That's why the
+ * package's own set is roll-free; here it reads as the avatar shifting its weight,
+ * which is worth the slide.
+ */
+const FACES: readonly ExpressionId[] = [
+	"confus",
+	"mefiant",
+	"fier",
+	"timide",
+	"blase",
+];
 
 /**
  * Where the eyes go while the agent is idle: at the pointer, and straight ahead
@@ -94,29 +114,28 @@ const UPWARD: GazeScript = () => ({
 });
 
 /**
- * A run that just finished gets one wink, held for the state's own duration and
- * not until the next event: the wink is a beat, not a status. Left up, it would
- * read as the agent still winking at you minutes after the reply landed.
+ * A finished run moves the avatar on to the next face, in order.
+ *
+ * That is what marks the end of a run now that there is no wink: the beat is the
+ * mood it settles into while you read the reply, and it lasts until the next
+ * question rather than for a second and a half.
  */
-function useFinishedBeat(isLoading: boolean, failed: boolean): boolean {
-	const [beat, setBeat] = useState(false);
+function useFacePerRun(isLoading: boolean): ExpressionId {
+	const [i, setI] = useState(0);
 	const was = useRef(false);
 
 	useEffect(() => {
 		const finished = was.current && !isLoading;
 		was.current = isLoading;
-		if (!finished || failed) return;
-		setBeat(true);
-		const timer = setTimeout(() => setBeat(false), WINK_MS);
-		return () => clearTimeout(timer);
-	}, [isLoading, failed]);
+		if (finished) setI((n) => (n + 1) % FACES.length);
+	}, [isLoading]);
 
-	return beat;
+	return FACES[i % FACES.length];
 }
 
 export function AgentAvatar({ size = 28 }: { size?: number }) {
 	const { messages, isLoading, error } = useChatSession();
-	const winking = useFinishedBeat(isLoading, Boolean(error));
+	const face = useFacePerRun(isLoading);
 
 	// Nothing has come back yet, so the agent is still deciding. Once anything
 	// has — a chunk of the reply, or a tool turn — the run is answering.
@@ -130,9 +149,7 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 			? "thinking"
 			: isLoading
 				? "busy"
-				: winking
-					? "done"
-					: "idle";
+				: "idle";
 	const { state, label } = MOODS[mood];
 
 	return (
@@ -150,14 +167,14 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 				<BloubBot
 					size={size}
 					shape="carre"
-					// the catalogue's widest eyes, and they only land on the states wearing
-					// the resting face — `idle`, which is where we want them
-					expression="surpris"
-					// and grown a quarter on top of that: at 28px the video's own capsule is
-					// 1.7px wide, `surpris` takes it to 4, this to 5. 1.3 is the package's
-					// measured ceiling — past it the eyes meet and leave the silhouette — so
-					// a quarter keeps a margin.
-					eyeScale={1.25}
+					expression={face}
+					// half again as big: at 28px the video's own capsule is 1.7px wide and
+					// four of these five faces are squints, so unscaled they read as
+					// nothing. Measured for THIS list on `carre` across the gaze envelope —
+					// clean at 1.5 with 5.1 units still between the two eyes, while `confus`
+					// leaves the silhouette at 1.75. Changing `FACES` means measuring again;
+					// the package only locks 1.3, which is what holds for all sixteen.
+					eyeScale={1.5}
 					state={state}
 					follow={mood === "idle"}
 					aim={ahead}
