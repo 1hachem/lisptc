@@ -343,12 +343,6 @@ importers:
       radix-ui:
         specifier: ^1.6.7
         version: 1.6.7(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.0.0
-        version: 19.2.8(react@19.2.8)
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.6.0
@@ -365,12 +359,24 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.2
         version: 19.2.5(@types/react@19.2.18)
+      happy-dom:
+        specifier: ^20.13.0
+        version: 20.13.0
+      react:
+        specifier: ^19.2.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
       tailwindcss:
         specifier: ^4.1.16
         version: 4.3.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0)
 
 packages:
 

@@ -15,7 +15,9 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "ai": "^7.0.79",
@@ -36,7 +38,11 @@
     "@repo/tsconfigs": "workspace:*",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "happy-dom": "^20.13.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.8",
     "tailwindcss": "^4.1.16",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   }
 }

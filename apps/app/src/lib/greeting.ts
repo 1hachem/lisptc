@@ -12,9 +12,9 @@
  */
 
 /** Local hour to a part of the day. The boundaries are ordinary, not measured. */
-export type Moment = "morning" | "afternoon" | "evening" | "night";
+type Moment = "morning" | "afternoon" | "evening" | "night";
 
-export function momentOf(hour: number): Moment {
+function momentOf(hour: number): Moment {
 	if (hour >= 5 && hour < 12) return "morning";
 	if (hour < 18) return "afternoon";
 	if (hour < 23) return "evening";
