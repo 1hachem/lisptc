@@ -7,11 +7,7 @@ import { defineConfig, type Plugin } from "vite";
 // see them. They are read as `new URL("./<name>", import.meta.url)`, which in a
 // build means "next to the emitted code" — so they belong in dist/. Paths are
 // relative to the interpreter package root.
-const RUNTIME_ASSETS = [
-	"src/SKILL.md",
-	"src/lisptc.gbnf",
-	"mcp.toolkit.json",
-];
+const RUNTIME_ASSETS = ["src/SKILL.md", "src/lisptc.gbnf", "mcp.toolkit.json"];
 
 function copyRuntimeAssets(): Plugin {
 	return {
