@@ -11,7 +11,9 @@
  * trace it annotates.
  */
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { webEnv } from "@repo/env/web";
+
+export const API_URL = webEnv.VITE_API_URL;
 
 const DISTINCT_ID_KEY = "lisptc.distinct-id";
 
@@ -20,7 +22,7 @@ const DISTINCT_ID_KEY = "lisptc.distinct-id";
  * group together in PostHog, locally today and for real users later, without
  * an auth system having to exist first.
  */
-function distinctId(): string | undefined {
+export function distinctId(): string | undefined {
 	if (typeof localStorage === "undefined") return undefined;
 	try {
 		const existing = localStorage.getItem(DISTINCT_ID_KEY);

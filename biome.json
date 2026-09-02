@@ -11,6 +11,7 @@
       "packages/*/src/**",
       "packages/*/test/**",
       "apps/*/src/**",
+      "apps/*/server/**",
       "apps/*/test/**",
       "apps/*/extension/**",
       "*.json",

@@ -7,6 +7,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { AppShell } from "../components/app-shell.tsx";
+import { Analytics } from "../lib/analytics.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
 import { UIProvider } from "../lib/ui.tsx";
 
@@ -41,13 +42,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootComponent() {
 	return (
 		<RootDocument>
-			<UIProvider>
-				<ChatProvider>
-					<AppShell>
-						<Outlet />
-					</AppShell>
-				</ChatProvider>
-			</UIProvider>
+			<Analytics>
+				<UIProvider>
+					<ChatProvider>
+						<AppShell>
+							<Outlet />
+						</AppShell>
+					</ChatProvider>
+				</UIProvider>
+			</Analytics>
 		</RootDocument>
 	);
 }

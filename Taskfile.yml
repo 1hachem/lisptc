@@ -56,7 +56,7 @@ tasks:
     desc: run pi agent with access to secrets
     cmds:
       - task: _infisical-run
-        vars: { ENV: dev, PATHS: "", CMD: "pnpm run dev --filter app" }
+        vars: { ENV: dev, PATHS: "/web /analytics", CMD: "pnpm run dev --filter app" }
     
   dev-api:
     desc: run api with access to secrets
@@ -76,7 +76,7 @@ tasks:
     cmds:
       - task: _infisical-run
         # `ENV=prod task start:app` to serve against another Infisical environment.
-        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "", CMD: "pnpm run build --filter app && pnpm --filter app start" }
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/web /analytics", CMD: "pnpm run build --filter app && pnpm --filter app start" }
 
   start:api:
     desc: build the api and serve the built output with access to secrets

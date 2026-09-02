@@ -11,13 +11,12 @@ import {
 	useState,
 } from "react";
 import {
+	API_URL,
 	apiHeaders,
 	type NoteInput,
 	type NoteResult,
 	postNote,
 } from "./notes.ts";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 export interface ChatMessage {
 	id?: string;

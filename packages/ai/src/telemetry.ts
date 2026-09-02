@@ -44,7 +44,7 @@ function posthog(): PostHog | null {
 		return null;
 	}
 	client = new PostHog(key, {
-		host: analyticsEnv.POSTHOG_HOST ?? "https://eu.i.posthog.com",
+		host: analyticsEnv.POSTHOG_HOST ?? "https://us.i.posthog.com",
 		// The API is long-lived, so the default batching is right; a short
 		// interval keeps a local run visible in PostHog while you are still
 		// looking at the conversation that produced it.
@@ -64,6 +64,12 @@ export interface TraceContext {
 	threadId: string;
 	/** The person. Absent (local, anonymous) => events carry no person profile. */
 	distinctId?: string;
+	/**
+	 * The browser's PostHog session, forwarded by posthog-js `tracing_headers`.
+	 * Joins the trace to the session replay it happened inside; absent whenever
+	 * browser analytics is off.
+	 */
+	sessionId?: string;
 	/** `$ai_span_id` of this turn's root, so steps hang off it. */
 	turnId: string;
 	provider?: string;
@@ -77,6 +83,7 @@ function common(ctx: TraceContext): Record<string, unknown> {
 		$ai_trace_id: ctx.threadId,
 		thread_id: ctx.threadId,
 		environment: analyticsEnv.POSTHOG_ENVIRONMENT ?? "local",
+		...(ctx.sessionId ? { $session_id: ctx.sessionId } : {}),
 		...(ctx.provider ? { $ai_provider: ctx.provider } : {}),
 		...(ctx.model ? { $ai_model: ctx.model } : {}),
 	};
@@ -203,6 +210,8 @@ export interface Note {
 	distinctId?: string;
 	text: string;
 	target: NoteTarget;
+	/** The browser session the note was written in, for the same replay join. */
+	sessionId?: string;
 	/** Set for a message note: the id of the message it hangs off. */
 	messageId?: string;
 	/** The message's index in the transcript, for ordering in an insight. */
@@ -231,6 +240,7 @@ export async function captureNote(note: Note): Promise<boolean> {
 			...anonymous,
 			$ai_trace_id: note.threadId,
 			thread_id: note.threadId,
+			...(note.sessionId ? { $session_id: note.sessionId } : {}),
 			environment:
 				note.environment ?? analyticsEnv.POSTHOG_ENVIRONMENT ?? "local",
 			note: note.text,

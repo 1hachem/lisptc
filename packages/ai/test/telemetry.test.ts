@@ -58,6 +58,7 @@ const CTX = {
 	threadId: "thread-abc",
 	turnId: "turn-1",
 	distinctId: "dev-1",
+	sessionId: "session-xyz",
 	provider: "digitalocean",
 	model: "gemma-4-31B-it",
 };
@@ -94,6 +95,7 @@ describe("telemetry", () => {
 		await captureNote({
 			threadId: CTX.threadId,
 			distinctId: CTX.distinctId,
+			sessionId: CTX.sessionId,
 			text: "skipped the await #jobs",
 			target: "message",
 			messageId: "m-3",
@@ -110,6 +112,14 @@ describe("telemetry", () => {
 			"thread-abc",
 			"thread-abc",
 			"thread-abc",
+		]);
+
+		// The other join: PostHog links an event to a session replay by
+		// `$session_id`, so a trace can be watched rather than only read.
+		expect(captured.map((e) => e.properties.$session_id)).toEqual([
+			"session-xyz",
+			"session-xyz",
+			"session-xyz",
 		]);
 
 		const span = by("$ai_span");

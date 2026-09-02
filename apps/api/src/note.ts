@@ -30,6 +30,7 @@ note.post("/", async (c) => {
 	const captured = await captureNote({
 		...parsed.data,
 		distinctId: c.req.header("x-distinct-id"),
+		sessionId: c.req.header("x-posthog-session-id"),
 	});
 	console.log(
 		`note thread=${parsed.data.threadId} target=${parsed.data.target}${captured ? "" : " (telemetry disabled — dropped)"}`,

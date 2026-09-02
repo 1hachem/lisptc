@@ -27,8 +27,8 @@
       "project": ["src/**/*.ts"]
     },
     "apps/app": {
-      "entry": ["src/routes/**/*.tsx"],
-      "project": ["src/**/*.{ts,tsx}"]
+      "entry": ["src/routes/**/*.tsx", "server/routes/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}", "server/**/*.ts"]
     },
     "apps/lsp": {
       "entry": ["test/**/*.ts"],

@@ -9,6 +9,7 @@
     "./analytics": "./src/analytics.ts",
     "./repl": "./src/repl.ts",
     "./oauth": "./src/oauth.ts",
+    "./web": "./src/web.ts",
     "./package.json": "./package.json"
   },
   "engines": {

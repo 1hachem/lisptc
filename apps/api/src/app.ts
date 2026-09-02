@@ -13,9 +13,19 @@ const app = new Hono();
 // `*`, not `/api/*`: the app polls /health to know when the KV warmup is done.
 app.use(
 	"*",
-	// `x-distinct-id` is a custom header, so it has to be named explicitly or the
-	// preflight rejects every chat and note request from the browser.
-	cors({ origin: "*", allowHeaders: ["content-type", "x-distinct-id"] }),
+	// Custom headers have to be named explicitly or the preflight rejects every
+	// chat and note request from the browser. The `x-posthog-*` pair is added by
+	// posthog-js `tracing_headers`, so leaving them out here breaks the chat
+	// itself, not just the telemetry that reads them.
+	cors({
+		origin: "*",
+		allowHeaders: [
+			"content-type",
+			"x-distinct-id",
+			"x-posthog-distinct-id",
+			"x-posthog-session-id",
+		],
+	}),
 );
 app.use(logger());
 

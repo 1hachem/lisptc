@@ -109,7 +109,7 @@ export function streamChatResponse(
 	config?: AgentConfig,
 	signal?: AbortSignal,
 	threadId?: string,
-	distinctId?: string,
+	identity?: { distinctId?: string; sessionId?: string },
 ): Response {
 	// The client tears the fetch down (and re-issues it) whenever dev tools open
 	// or the tab reloads. Once that happens `controller.enqueue` throws, so every
@@ -124,7 +124,8 @@ export function streamChatResponse(
 	const trace: TraceContext = {
 		threadId: threadId ?? crypto.randomUUID(),
 		turnId: crypto.randomUUID(),
-		distinctId,
+		distinctId: identity?.distinctId,
+		sessionId: identity?.sessionId,
 		provider: config?.provider,
 		model: config?.model,
 	};
