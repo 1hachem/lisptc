@@ -11,14 +11,36 @@ don't rebuild it here by accident.
 
 ```bash
 pnpm --filter @repo/bloub test        # vitest
-pnpm --filter @repo/bloub typecheck   # tsc --noEmit, the only gate
+pnpm --filter @repo/bloub typecheck   # tsc --noEmit
+pnpm lint                             # biome, at the root — this package included
+pnpm knip                             # dead code, at the root — included too
 ```
 
-Style: 2 spaces, single quotes, **no semicolons**, comments in French. The root
-`biome.json` and `knip.json` both **exclude this package** — the repo formats with
-tabs and double quotes, and adopting that here would rewrite every measured file
-for nothing. So nothing formats this code automatically: match what's around you,
-and run `typecheck` before concluding.
+Style is the repository's, applied by the repository's tools: **tabs, double
+quotes, semicolons**, and comments in French. `pnpm format` at the root rewrites
+this package like any other — it is in `biome.json` and in `knip.json`, and it
+stays there. The package once had its own style (2 spaces, single quotes, no
+semicolons); nothing of that survives except the French.
+
+Two rule carve-outs sit in `biome.json`'s `overrides`, and they are about rules,
+not files — every file here is still formatted and still linted:
+
+- `noNonNullAssertion` is off for this package. `noUncheckedIndexedAccess` is on
+  in its `tsconfig.json` and nowhere else in the repo, which makes `radii[i]!` the
+  way to read a slot you know is there. There are 196 of them and no fallback
+  would mean anything.
+- The rest is answered in place, with a `biome-ignore` carrying the reason —
+  `useExhaustiveDependencies` on the four hooks that read through refs by design,
+  `noArrayIndexKey` where the index IS the identity (eye 0 is the left eye).
+
+What knip cannot see is an export used only by its own test, and `cycles.ts` holds
+five in exactly that position (`parseCycles`, `uniqueName`, `nextCycleId`,
+`blocksWith`, `moveBlock`) — they served the timeline editor that left with the
+app.
+
+`src/bot/profiles.ts` is generated, and the generator does not know about the
+formatter: run `biome check --write` on it after regenerating (see
+[docs/measurements.md](docs/measurements.md)).
 
 ## The most important rule
 

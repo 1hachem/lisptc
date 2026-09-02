@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from "vitest/config";
 
 /*
  * Environnement `node`, sans DOM et sans plugin de rendu : le moteur (`src/bot/`)
@@ -8,9 +8,9 @@ import { defineConfig } from 'vitest/config'
  * fichier — un environnement global ralentirait tout le reste pour lui seul.
  */
 export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}']
-  }
-})
+	test: {
+		globals: true,
+		environment: "node",
+		include: ["src/**/*.test.{ts,tsx}"],
+	},
+});

@@ -59,7 +59,12 @@ mkdir -p frames
 ffmpeg -i reference.mp4 -vf fps=10 frames/h_%04d.png
 pip install numpy pillow
 python tools/extract-profiles.py frames/ > src/bot/profiles.ts
+pnpm --dir ../.. exec biome check --write packages/bloub/src/bot/profiles.ts
 ```
+
+The last line is not optional: the script prints one long line per profile and no
+semicolons, and the repository's formatter has an opinion about both. Skip it and
+the next person to run `pnpm lint` gets the diff instead of you.
 
 The script composes exact filenames (`h_0164.png` and friends, zero-padded to
 four), so the `h_` prefix and the `fps=10` cut both matter. It extracts the three

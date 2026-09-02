@@ -18,7 +18,7 @@
  * fractions de ce rayon, ce qui rend les mesures relevees sur la video independantes de la
  * taille d'affichage.
  */
-export const RAYON = 100
+export const RAYON = 100;
 
 /**
  * Demi-cote du viewBox affiche. La marge au-dela du rayon loge les anneaux.
@@ -28,4 +28,4 @@ export const RAYON = 100
  * des tableaux `RINGS` et `SWOOSH` (`decor.ts`) qui les tient sous 158, et un test le
  * verrouille.
  */
-export const DEMI_VIEWBOX = 158
+export const DEMI_VIEWBOX = 158;
