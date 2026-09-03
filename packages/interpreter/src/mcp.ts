@@ -32,6 +32,7 @@ import {
 	Sym,
 	zList,
 } from "./lisp.ts";
+import { keyName, parsePlist } from "./plist.ts";
 
 // A tool/server name argument: a string, symbol or keyword, coerced to string.
 const zName = z
@@ -121,33 +122,6 @@ function arrayToList(arr: unknown[]): List {
 	let out: List = null;
 	for (let i = arr.length - 1; i >= 0; i--) out = new Cell(arr[i], out);
 	return out;
-}
-
-// Parse a keyword plist (:k1 v1 :k2 v2 ...) into a Map of name -> raw Lisp value.
-function parsePlist(list: List): Map<string, unknown> {
-	const out = new Map<string, unknown>();
-	let j = list;
-	while (j !== null) {
-		const key = j.car;
-		const rest = j.cdr as List;
-		if (rest === null)
-			throw new EvalException(
-				"odd-length keyword list; missing value for",
-				key,
-			);
-		const name = keyName(key);
-		out.set(name, rest.car);
-		j = rest.cdr as List;
-	}
-	return out;
-}
-
-// Extract the string name from a :keyword, symbol, or string key.
-function keyName(key: unknown): string {
-	if (key instanceof LispKeyword) return key.name;
-	if (key instanceof Sym) return key.name;
-	if (typeof key === "string") return key;
-	throw new EvalException("keyword expected as key", key);
 }
 
 // Detect an alist: a proper list whose every element is a (key . value) pair.
