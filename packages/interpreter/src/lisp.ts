@@ -338,8 +338,19 @@ class Closure extends DefinedFunc {
 		return new Closure(x.carity, x.body, env);
 	}
 
+	/*
+	 * The captured environment is deliberately NOT printed.
+	 *
+	 * It can hold the closure itself — a loop macro binds its body to a local
+	 * that the body closes over — and `str`'s cycle guard does not survive the
+	 * hop out through this method, so rendering it recursed until the stack
+	 * gave out. Any error raised inside a multi-form `dotimes` body reached
+	 * that path, since an EvalException's trace prints the forms it unwound
+	 * through: the eval died with a RangeError instead of reporting the error.
+	 * An environment is interpreter internals in any case.
+	 */
 	toString(): string {
-		return `#<closure:${this.carity}:${str(this.env)}:${str(this.body)}>`;
+		return `#<closure:${this.carity}:${str(this.body)}>`;
 	}
 
 	// Make a new environment from a list of actual arguments.
