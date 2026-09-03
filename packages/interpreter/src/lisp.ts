@@ -1642,9 +1642,10 @@ function endOfString(text: string, i: number): number {
 	return text.length;
 }
 
-// Index just past the form opening at `i`, or the end of the text if the form
-// is never closed — an unterminated form is kept verbatim so the reader still
-// reports it rather than silently swallowing half a program.
+// Index just past the form opening at `i`, or -1 if the form is never closed.
+// What to do with an unclosed one is the caller's call (see `ProseMode`): it is
+// either half a program or a stray parenthesis in a sentence, and nothing here
+// can tell which.
 function endOfForm(text: string, i: number): number {
 	let depth = 0;
 	for (let j = i; j < text.length; j++) {
@@ -1658,7 +1659,7 @@ function endOfForm(text: string, i: number): number {
 			if (depth === 0) return j + 1;
 		}
 	}
-	return text.length;
+	return -1;
 }
 
 // Start of the form opening at `i`, extended back over reader sugar written
@@ -1672,13 +1673,31 @@ function startOfForm(text: string, i: number): number {
 	return j === 0 || /\s/.test(text[j - 1]) ? j : i;
 }
 
+/*
+ * What to make of text that opens a parenthesis but cannot be a program.
+ *
+ * - `strict` — it is program text, and the reader or the evaluator reports
+ *   what is wrong with it. Right for a hand-written `.ptc` script and for
+ *   editor diagnostics, where an unclosed paren is a mistake worth surfacing.
+ * - `tolerant` — it is prose. Right for an LLM's reply: a stray `(` in a
+ *   sentence is far likelier than a truncated program, and the grammar that
+ *   would have prevented it (`lisptc.gbnf`) only binds providers that support
+ *   grammars. Whatever is skipped is reported through `onProse`, so nothing
+ *   disappears silently.
+ */
+export type ProseMode = "strict" | "tolerant";
+
 // Blank out everything that is not part of a top-level form: only the
 // parenthesised forms are program text, and the free text around them is
 // prose (this dialect has no comment syntax — prose is the comment). Blanking
 // rather than deleting keeps every form at its original offset, so line
 // numbers in reader and evaluation errors still point into the source the
 // caller passed in.
-export function stripProse(text: string): string {
+export function stripProse(
+	text: string,
+	mode: ProseMode = "strict",
+	onProse?: (what: string) => void,
+): string {
 	const out: string[] = Array.from(text, (c) => (c === "\n" ? "\n" : " "));
 	let i = 0;
 	while (i < text.length) {
@@ -1687,10 +1706,31 @@ export function stripProse(text: string): string {
 			continue;
 		}
 		const end = endOfForm(text, i);
+		if (end < 0) {
+			// Never closed. Kept verbatim so the reader reports it — unless the
+			// caller would rather read it as prose, in which case only THIS
+			// parenthesis is prose: scanning resumes just after it, so a real
+			// form further along ("(roughly …\n(+ 1 2)") is still program text
+			// instead of being swallowed by the stray one.
+			if (mode === "tolerant") {
+				onProse?.(`unclosed "(" on line ${lineAt(text, i)}`);
+				i++;
+				continue;
+			}
+			for (let j = startOfForm(text, i); j < text.length; j++) out[j] = text[j];
+			break;
+		}
 		for (let j = startOfForm(text, i); j < end; j++) out[j] = text[j];
 		i = end;
 	}
 	return out.join("");
+}
+
+// The 1-based line character `at` falls on, for a message about it.
+function lineAt(text: string, at: number): number {
+	let line = 1;
+	for (let i = 0; i < at; i++) if (text[i] === "\n") line++;
+	return line;
 }
 
 // A list of tokens, which works as a reader of Lisp expressions
@@ -1980,19 +2020,68 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 	}
 }
 
+export interface RunOptions {
+	// How to read parenthesised text that cannot be a program (default `strict`).
+	prose?: ProseMode;
+	// Called once per fragment read as prose rather than evaluated. A host
+	// should surface these: under `tolerant` they are the only sign that
+	// something the caller wrote was not run.
+	onProse?: (what: string) => void;
+}
+
+/*
+ * The head symbol of a top-level form that names nothing this session knows.
+ *
+ * That is the mark of a sentence with parentheses in it — `(see below)`,
+ * `(one, two, three)`, `(next step)` — rather than a program: real code calls
+ * something that exists. Boundness is the test, not callability, so calling a
+ * variable that holds a list stays an ordinary "not applicable" error rather
+ * than being silently dismissed as prose.
+ *
+ * Checked per form as the program runs, not up front: an earlier form may be
+ * the `defun` that defines the head of a later one.
+ */
+function unboundHead(interp: Interp, form: unknown): string | undefined {
+	if (!(form instanceof Cell)) return undefined;
+	const head = form.car;
+	// A special form (`quote`, `setq`, …) is a Keyword, and a computed head
+	// (`((lambda (x) x) 1)`) is not a symbol at all; both are program text.
+	if (!(head instanceof Sym) || head instanceof Keyword) return undefined;
+	return interp.hasGlobal(head) ? undefined : head.name;
+}
+
 // Evaluate a program: every top-level form in `text`, in order, returning the
 // value of the last one. Text outside those forms is prose and is ignored (see
 // stripProse), so a program with no form at all evaluates to Unspecified —
 // "nothing to show" — rather than to a value a REPL would echo.
-export function run(interp: Interp, text: string): unknown {
+export function run(
+	interp: Interp,
+	text: string,
+	options: RunOptions = {},
+): unknown {
 	const tokens = new Reader();
-	tokens.push(stripProse(text));
+	tokens.push(stripProse(text, options.prose, options.onProse));
 	let result: unknown = Unspecified;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
+		if (options.prose === "tolerant") {
+			const unbound = unboundHead(interp, exp);
+			if (unbound !== undefined) {
+				options.onProse?.(
+					`${abbreviate(str(exp))} — "${unbound}" is not defined, so this was read as prose`,
+				);
+				continue;
+			}
+		}
 		result = evalTopLevel(interp, exp);
 	}
 	return result;
+}
+
+// Quote a fragment back to the caller without spending a screen on it.
+function abbreviate(text: string): string {
+	const oneLine = text.replace(/\s+/g, " ");
+	return oneLine.length <= 60 ? oneLine : `${oneLine.slice(0, 57)}...`;
 }
 
 // A syntax error found by checkSyntax, with the 1-based line it was found at.

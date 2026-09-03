@@ -98,10 +98,21 @@ export class MemoryRepl implements InMemoryRepl {
 	// fields still being undefined.
 	protected setup(_interp: Interp): void {}
 
-	// Evaluate a program; Lisp errors are rendered into the returned output
-	// rather than thrown.
+	/*
+	 * Evaluate a program; Lisp errors are rendered into the returned output
+	 * rather than thrown.
+	 *
+	 * Reads prose tolerantly (see `ProseMode`), because what this REPL is
+	 * handed is written by a model: a sentence with a parenthesis in it —
+	 * `(see below)`, or an unclosed `(` mid-sentence — is prose that happens
+	 * to look like code, and evaluating it costs the step either an error it
+	 * cannot act on or, for an unclosed paren, every form that followed. What
+	 * was skipped is appended to the output, so the caller can still tell a
+	 * misspelled function from a turn of phrase.
+	 */
 	eval(code: string): string {
 		let out = "";
+		const skipped: string[] = [];
 		const prev = setWriter((s) => {
 			out += s;
 		});
@@ -110,7 +121,12 @@ export class MemoryRepl implements InMemoryRepl {
 			// `out` first. A printing function (prin1/princ/terpri/print)
 			// returns Unspecified — a sentinel meaning "already shown, don't
 			// echo the value too" — so a printed value isn't shown twice.
-			const value = run(this.currentInterp, code);
+			const value = run(this.currentInterp, code, {
+				prose: "tolerant",
+				onProse: (what) => {
+					if (!skipped.includes(what)) skipped.push(what);
+				},
+			});
 			if (value !== Unspecified) out += `${str(value)}\n`;
 		} catch (ex) {
 			if (ex instanceof EvalException) out += `${ex}\n`;
@@ -120,6 +136,7 @@ export class MemoryRepl implements InMemoryRepl {
 		} finally {
 			setWriter(prev);
 		}
+		for (const what of skipped) out += `skipped ${what}\n`;
 		return out;
 	}
 
@@ -154,8 +171,13 @@ export class AgentRepl extends MemoryRepl {
 	// text with no forms in it is a program that does nothing — so a form-less
 	// reply IS the end of the loop, and the REPL needs no stop built-in for the
 	// agent to call.
+	//
+	// Deliberately asks the STRICT question: did the reply open a parenthesis
+	// at all? A reply cut off mid-form is nothing but prose to the tolerant
+	// reader, and treating a truncated turn as a finished answer would end the
+	// loop on it.
 	override eval(code: string): string {
-		if (stripProse(code).trim() === "") this.finished = true;
+		if (stripProse(code, "strict").trim() === "") this.finished = true;
 		return super.eval(code);
 	}
 

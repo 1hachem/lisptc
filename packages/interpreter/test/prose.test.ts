@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { checkSyntax, stripProse } from "../src/lisp.ts";
-import { ev, evWithOutput } from "./helpers.ts";
+import { checkSyntax, run, str, stripProse } from "../src/lisp.ts";
+import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
 describe("prose around forms", () => {
 	it("evaluates the forms and ignores the text between them", () => {
@@ -66,5 +66,83 @@ describe("no comment syntax", () => {
 
 	it("ignores a `;` line outside a form, like any other prose", () => {
 		expect(ev(";; a section header\n(+ 1 2)")).toBe("3");
+	});
+});
+
+/*
+ * A model writes prose with parentheses in it. The grammar that forbids that
+ * (`lisptc.gbnf`) only binds providers that support grammars, so the reader
+ * has to cope: under `tolerant`, text that cannot be a program is prose, and
+ * every skip is reported rather than silently dropped.
+ */
+describe("tolerant prose (an LLM's parentheses)", () => {
+	// What the model wrote, and what it should be read as.
+	function tolerantly(text: string): { value: string; skipped: string[] } {
+		const skipped: string[] = [];
+		const value = str(
+			run(freshInterp(), text, {
+				prose: "tolerant",
+				onProse: (what) => skipped.push(what),
+			}),
+		);
+		return { value, skipped };
+	}
+
+	it("reads a form whose head names nothing as prose", () => {
+		const { value, skipped } = tolerantly(
+			"Here is the plan (see below):\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual([
+			'(see below) — "see" is not defined, so this was read as prose',
+		]);
+	});
+
+	// Commas are unquote sugar, so a list written in prose is not even readable
+	// as a call — but it is still just a sentence.
+	it("reads a comma-separated aside as prose", () => {
+		expect(tolerantly("Steps (one, two, three) then:\n(+ 1 2)").value).toBe(
+			"3",
+		);
+	});
+
+	// The destructive case: `endOfForm` runs to the end of the text, so a stray
+	// "(" used to swallow every real form after it and lose the whole step.
+	it("recovers the forms after an unclosed parenthesis", () => {
+		const { value, skipped } = tolerantly(
+			"The result (roughly is fine\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual(['unclosed "(" on line 1']);
+	});
+
+	it("reports the line an unclosed parenthesis was on", () => {
+		expect(tolerantly("(+ 1 2)\none\ntwo (nearly\n").skipped).toEqual([
+			'unclosed "(" on line 3',
+		]);
+	});
+
+	// Boundness is decided per form as the program runs, so a definition
+	// earlier in the same program counts.
+	it("evaluates a form whose head an earlier form defined", () => {
+		expect(tolerantly("(defun see (x) 42)\n(see 1)").value).toBe("42");
+	});
+
+	it("leaves special forms and computed heads alone", () => {
+		expect(tolerantly("(setq x 7) (progn x)").value).toBe("7");
+		expect(tolerantly("((lambda (x) (* x 2)) 21)").value).toBe("42");
+	});
+
+	// Only the head of a TOP-LEVEL form is a prose candidate: a typo deeper in
+	// an expression is a real mistake and has to stay an error.
+	it("still reports an undefined name inside a form", () => {
+		expect(() => tolerantly("(+ 1 (nope 2))")).toThrow(/undefined: nope/);
+	});
+
+	it("changes nothing under the default strict mode", () => {
+		expect(() => ev("Here is the plan (see below)")).toThrow(/undefined: see/);
+		expect(() => ev("here it comes (+ 1 2")).toThrow();
+		expect(stripProse("a (b")).toBe("  (b");
+		expect(stripProse("a (b", "tolerant")).toBe("    ");
 	});
 });
