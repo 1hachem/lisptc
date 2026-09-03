@@ -21,7 +21,7 @@
       "*.ts",
       "*.json",
       "!**/node_modules",
-      "!**/.claude",
+      "!.claude",
       "!apps/app/src/routeTree.gen.ts"
     ]
   },
