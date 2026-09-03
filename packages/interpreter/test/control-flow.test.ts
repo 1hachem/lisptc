@@ -105,6 +105,24 @@ describe("let / lambda / lexical scope", () => {
 		expect(ev("(let (x) x)")).toBe("nil");
 	});
 
+	it("binds sequentially with let*, each binding seeing the previous", () => {
+		expect(ev("(let* ((x 1) (y (+ x 1)) (z (* y 3))) (list x y z))")).toBe(
+			"(1 2 6)",
+		);
+		expect(ev("(let* () 42)")).toBe("42");
+		expect(ev("(let* ((a 1) b) (list a b))")).toBe("(1 nil)");
+		expect(ev("(let ((x 1)) (let* ((x 2) (y x)) y))")).toBe("2");
+	});
+
+	it("let* nests deeply, past the macro-expansion limit", () => {
+		// The whole nest is built in ONE expansion step, so it is not capped by
+		// the 20-nesting limit expandMacros applies to a compiled body.
+		const bindings = Array.from({ length: 40 }, (_, i) => `(v${i} ${i})`).join(
+			" ",
+		);
+		expect(ev(`(defun f () (let* (${bindings}) v39)) (f)`)).toBe("39");
+	});
+
 	it("applies lambdas, including &rest", () => {
 		expect(ev("((lambda (x) (* x x)) 5)")).toBe("25");
 		expect(ev("((lambda (x &rest r) r) 1 2 3)")).toBe("(2 3)");

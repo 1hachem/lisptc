@@ -106,6 +106,17 @@ describe("secret registry (taint propagation)", () => {
 		);
 	});
 
+	it("converts a secret to itself, so string cannot launder the taint", () => {
+		const interp = interpWith("s3cr3t");
+		expect(ev('(string (secret "REPL_FOO"))', interp)).toBe(
+			"#<secret:REPL_FOO>",
+		);
+		expect(ev('(concat "Bearer " (string (secret "REPL_FOO")))', interp)).toBe(
+			"#<secret:REPL_FOO>",
+		);
+		expect(ev("(string 12)", interp)).toBe('"12"');
+	});
+
 	it("unions taint when two secrets are combined", () => {
 		const interp = interpWithSecrets({ REPL_A: "aaa", REPL_B: "bbb" });
 		expect(ev('(concat (secret "REPL_A") (secret "REPL_B"))', interp)).toBe(
