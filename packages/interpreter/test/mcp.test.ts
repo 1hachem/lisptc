@@ -361,3 +361,45 @@ describe("liveJobs reaping", () => {
 		expect(evalStr(interp, "(await cj)")).toBe(first);
 	});
 });
+
+// Without the extension the core knows nothing about MCPs: none of the
+// server/tool built-ins, nor the job built-ins the extension layers on top.
+describe("core interpreter (no mcp extension)", () => {
+	function coreInterp(): Interp {
+		const interp = new Interp();
+		run(interp, prelude);
+		return interp;
+	}
+
+	it("has no mcp built-ins", () => {
+		const interp = coreInterp();
+		for (const name of [
+			"load-mcp",
+			"unload-mcp",
+			"list-mcps",
+			"list-toolkit",
+			"list-tools",
+			"search-tools",
+			"search-mcps",
+			"mcp-shutdown",
+		])
+			expect(() => evalStr(interp, `(${name})`)).toThrow(
+				new RegExp(`undefined: ${name}`),
+			);
+	});
+
+	it("has no job built-ins", () => {
+		const interp = coreInterp();
+		for (const name of [
+			"await",
+			"await-all",
+			"await-any",
+			"job-status",
+			"jobs",
+			"cancel",
+		])
+			expect(() => evalStr(interp, `(${name})`)).toThrow(
+				new RegExp(`undefined: ${name}`),
+			);
+	});
+});

@@ -1,13 +1,20 @@
 /*
- * Secret registry for Lisptc.
+ * Secret registry + taint tracking for Lisptc.
  *
  * A host-supplied key→value store of secrets. Keys (and descriptions) are
  * listable by the LLM via `(secrets)`; values are read with `(secret key)` as a
- * tainted `Secret` string that prints redacted and is only revealed when
- * serialized into an outgoing call (see lispToJson in src/mcp.ts). The `Secret`
- * taint type and its string-primitive propagation live in src/lisp.ts (they are
- * language machinery); this module owns the *registry* and installs the two
- * built-ins on top of it.
+ * tainted `Secret` string that prints redacted (via its `toString`, which `str`
+ * duck-types on) and is revealed only when serialized into an outgoing call
+ * (via its `toJSON`, which lispToJson in src/mcp.ts duck-types on — mcp never
+ * imports this module; the extensions communicate only through those two JS
+ * conventions, mirroring display vs wire form).
+ *
+ * This module owns the whole taint story: the `Secret` type, plus overrides of
+ * the core string primitives (`interp.def` overwrites the global) so a secret
+ * flows through them and re-taints every derived string. The Lisp string
+ * library resolves those names at call time, so it becomes taint-aware for
+ * free. Without this extension no Secret value can exist and the core
+ * plain-string primitives are exactly right.
  *
  * Like the MCP integration, this is an opt-in extension: pass
  * `secretsExtension()` in `InterpOptions.extensions`. The backing store is an
@@ -19,14 +26,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as dotenv from "dotenv";
 import { z } from "zod";
+import { compare, isNumeric, type Numeric, quotient, ZERO } from "./arith.ts";
 import {
 	Cell,
 	EvalException,
 	type Interp,
 	type InterpExtension,
 	type List,
-	Secret,
+	zList,
 } from "./lisp.ts";
+import type { ToJson } from "./types.ts";
 
 // A host-supplied secret: a bare value, or a value plus a description shown by
 // `(secrets)`.
@@ -40,6 +49,14 @@ export const SECRET_ENV_PREFIX = "REPL_";
 // schemas) so the built-ins here don't widen the interpreter's public API.
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
+	"string expected",
+);
+const zNumeric = z.custom<Numeric>(isNumeric, "not a number");
+
+// A plain string or a tainted secret; used by the string primitives so secrets
+// flow through (read with `secretValue`, re-taint with `propagateTaint`).
+const zStringLike = z.custom<string | Secret>(
+	(x) => typeof x === "string" || x instanceof Secret,
 	"string expected",
 );
 
@@ -173,6 +190,48 @@ export function secretsExtension(
 	return (interp: Interp): void => registerSecrets(interp, store);
 }
 
+// A tainted string: a secret's value, or anything derived from one. Behaves
+// like a string but `str` renders it redacted as `#<secret:KEY>` (toString);
+// the value is revealed only through the toJSON wire form, which mcp's
+// lispToJson honors when serializing an outgoing call. `keys` are the source
+// secrets (>1 after combining).
+class Secret implements ToJson {
+	readonly keys: readonly string[];
+	constructor(
+		readonly value: string,
+		keys: Iterable<string>,
+	) {
+		this.keys = [...new Set(keys)];
+	}
+	// Length so the overridden `length` primitive treats a secret like a string.
+	get length(): number {
+		return this.value.length;
+	}
+	toString(): string {
+		return `#<secret:${this.keys.join("+")}>`;
+	}
+	// The wire form — the one path that reveals the value.
+	toJSON(): string {
+		return this.value;
+	}
+}
+
+// The underlying string of a plain string or a tainted secret.
+function secretValue(x: string | Secret): string {
+	return x instanceof Secret ? x.value : x;
+}
+
+// Re-taint: if any source was a secret, wrap the result as a secret (unioning
+// keys); else return the plain string. How the string primitives propagate taint.
+function propagateTaint(
+	value: string,
+	sources: readonly unknown[],
+): string | Secret {
+	const keys: string[] = [];
+	for (const s of sources) if (s instanceof Secret) keys.push(...s.keys);
+	return keys.length > 0 ? new Secret(value, keys) : value;
+}
+
 export function registerSecrets(interp: Interp, store: SecretsStore): void {
 	interp.def(
 		"secrets",
@@ -203,5 +262,102 @@ export function registerSecrets(interp: Interp, store: SecretsStore): void {
 				throw new EvalException("unknown secret", key, false);
 			return new Secret(entry.value, [key]);
 		},
+	);
+
+	// --- Tainted string primitives -------------------------------------------
+	//
+	// Overrides of the core built-ins (interp.def overwrites the global, docs
+	// included): each accepts a Secret wherever a string is expected, unwraps
+	// it for the operation and re-taints the result. The prelude's string
+	// library (substring, string-prefix?, …) calls these names, so taint
+	// propagates through all of Lisp's string functions for free.
+	interp.def(
+		"length",
+		1,
+		"(length x)",
+		"Return the length of a list or string.",
+		z.tuple([
+			z.custom<Cell | string | Secret | null>(
+				(x) =>
+					x === null ||
+					x instanceof Cell ||
+					typeof x === "string" ||
+					x instanceof Secret,
+				"list or string expected",
+			),
+		]),
+		([x]) => (x === null ? ZERO : quotient(x.length, 1)),
+	);
+	interp.def(
+		"stringp",
+		1,
+		"(stringp x)",
+		"Return t if `x` is a string.",
+		z.tuple([z.unknown()]),
+		([x]) => (typeof x === "string" || x instanceof Secret ? true : null),
+	);
+	interp.def(
+		"eql",
+		2,
+		"(eql x y)",
+		"Return t if `x` and `y` are identical or numerically equal. Alias: `=`.",
+		z.tuple([z.unknown(), z.unknown()]),
+		([x, y]) => {
+			if (x === y) return true;
+			if (isNumeric(x) && isNumeric(y) && compare(x, y) === 0) return true;
+			// Strings compare by value, so a tainted secret is equal to the
+			// plain string it holds (lets string predicates work on secrets).
+			const xs = typeof x === "string" || x instanceof Secret;
+			const ys = typeof y === "string" || y instanceof Secret;
+			if (xs && ys && secretValue(x) === secretValue(y)) return true;
+			return null;
+		},
+	);
+	interp.def(
+		"char",
+		2,
+		"(char s i)",
+		"Return the character at index `i` of `s` as a one-character string, or nil if `i` is out of range.",
+		z.tuple([zStringLike, zNumeric]),
+		([s, i]) => {
+			const v = secretValue(s);
+			const n = Number(i);
+			return n >= 0 && n < v.length ? propagateTaint(v[n], [s]) : null;
+		},
+	);
+	interp.def(
+		"concat",
+		-1,
+		"(concat s...)",
+		"Concatenate the string arguments into one string. If any argument is a secret, the result is a secret too (its taint is carried through).",
+		z.tuple([zList]),
+		([rest]) => {
+			let out = "";
+			const sources: unknown[] = [];
+			for (let p = rest; p !== null; p = p.cdr as List) {
+				const s = (p as Cell).car;
+				if (typeof s !== "string" && !(s instanceof Secret))
+					throw new EvalException("not a string", s);
+				sources.push(s);
+				out += secretValue(s);
+			}
+			return propagateTaint(out, sources);
+		},
+	);
+	interp.def(
+		"string-upcase",
+		1,
+		"(string-upcase s)",
+		"Return `s` with all letters converted to upper case.",
+		z.tuple([zStringLike]),
+		([s]) => propagateTaint(secretValue(s).toUpperCase(), [s]),
+	);
+	interp.def(
+		"string-downcase",
+		1,
+		"(string-downcase s)",
+		"Return `s` with all letters converted to lower case.",
+		z.tuple([zStringLike]),
+		([s]) => propagateTaint(secretValue(s).toLowerCase(), [s]),
 	);
 }
