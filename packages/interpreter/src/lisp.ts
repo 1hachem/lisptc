@@ -203,12 +203,6 @@ const zString = z.custom<string>(
 	(x) => typeof x === "string",
 	"string expected",
 );
-// A plain string or a tainted secret; used by the string primitives so secrets
-// flow through (read with `secretValue`, re-taint with `propagateTaint`).
-const zStringLike = z.custom<string | Secret>(
-	(x) => typeof x === "string" || x instanceof Secret,
-	"string expected",
-);
 const zSym = z.custom<Sym>((x) => x instanceof Sym, "symbol expected");
 
 // Validate a built-in's argument frame against a tuple schema, throwing an
@@ -537,43 +531,6 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
-// A tainted string: a secret's value, or anything derived from one. Behaves like
-// a string but `str` renders it redacted as `#<secret:KEY>`; the value is
-// revealed only by `lispToJson` into an MCP call. `keys` are the source secrets
-// (>1 after combining). See devdocs/secrets.md.
-export class Secret {
-	readonly keys: readonly string[];
-	constructor(
-		readonly value: string,
-		keys: Iterable<string>,
-	) {
-		this.keys = [...new Set(keys)];
-	}
-	// Length so the `length` primitive treats a secret like a string.
-	get length(): number {
-		return this.value.length;
-	}
-	toString(): string {
-		return `#<secret:${this.keys.join("+")}>`;
-	}
-}
-
-// The underlying string of a plain string or a tainted secret.
-function secretValue(x: string | Secret): string {
-	return x instanceof Secret ? x.value : x;
-}
-
-// Re-taint: if any source was a secret, wrap the result as a secret (unioning
-// keys); else return the plain string. How the string primitives propagate taint.
-function propagateTaint(
-	value: string,
-	sources: readonly unknown[],
-): string | Secret {
-	const keys: string[] = [];
-	for (const s of sources) if (s instanceof Secret) keys.push(...s.keys);
-	return keys.length > 0 ? new Secret(value, keys) : value;
-}
-
 export type InterpExtension = (interp: Interp) => void;
 
 export interface InterpOptions {
@@ -700,12 +657,8 @@ export class Interp {
 			"(length x)",
 			"Return the length of a list or string.",
 			z.tuple([
-				z.custom<Cell | string | Secret | null>(
-					(x) =>
-						x === null ||
-						x instanceof Cell ||
-						typeof x === "string" ||
-						x instanceof Secret,
+				z.custom<Cell | string | null>(
+					(x) => x === null || x instanceof Cell || typeof x === "string",
 					"list or string expected",
 				),
 			]),
@@ -717,7 +670,7 @@ export class Interp {
 			"(stringp x)",
 			"Return t if `x` is a string.",
 			z.tuple([zAny]),
-			([x]) => (typeof x === "string" || x instanceof Secret ? true : null),
+			([x]) => (typeof x === "string" ? true : null),
 		);
 		this.def(
 			"numberp",
@@ -737,11 +690,6 @@ export class Interp {
 			([x, y]) => {
 				if (x === y) return true;
 				if (isNumeric(x) && isNumeric(y) && compare(x, y) === 0) return true;
-				// Strings compare by value, so a tainted secret is equal to the
-				// plain string it holds (lets string predicates work on secrets).
-				const xs = typeof x === "string" || x instanceof Secret;
-				const ys = typeof y === "string" || y instanceof Secret;
-				if (xs && ys && secretValue(x) === secretValue(y)) return true;
 				return null;
 			},
 		);
@@ -950,30 +898,26 @@ export class Interp {
 			2,
 			"(char s i)",
 			"Return the character at index `i` of `s` as a one-character string, or nil if `i` is out of range.",
-			z.tuple([zStringLike, zNumeric]),
+			z.tuple([zString, zNumeric]),
 			([s, i]) => {
-				const v = secretValue(s);
 				const n = Number(i);
-				return n >= 0 && n < v.length ? propagateTaint(v[n], [s]) : null;
+				return n >= 0 && n < s.length ? s[n] : null;
 			},
 		);
 		this.def(
 			"concat",
 			-1,
 			"(concat s...)",
-			"Concatenate the string arguments into one string. If any argument is a secret, the result is a secret too (its taint is carried through).",
+			"Concatenate the string arguments into one string.",
 			z.tuple([zList]),
 			([rest]) => {
 				let out = "";
-				const sources: unknown[] = [];
 				for (let p = rest; p !== null; p = p.cdr as List) {
 					const s = (p as Cell).car;
-					if (typeof s !== "string" && !(s instanceof Secret))
-						throw new EvalException("not a string", s);
-					sources.push(s);
-					out += secretValue(s);
+					if (typeof s !== "string") throw new EvalException("not a string", s);
+					out += s;
 				}
-				return propagateTaint(out, sources);
+				return out;
 			},
 		);
 		this.def(
@@ -981,16 +925,16 @@ export class Interp {
 			1,
 			"(string-upcase s)",
 			"Return `s` with all letters converted to upper case.",
-			z.tuple([zStringLike]),
-			([s]) => propagateTaint(secretValue(s).toUpperCase(), [s]),
+			z.tuple([zString]),
+			([s]) => s.toUpperCase(),
 		);
 		this.def(
 			"string-downcase",
 			1,
 			"(string-downcase s)",
 			"Return `s` with all letters converted to lower case.",
-			z.tuple([zStringLike]),
-			([s]) => propagateTaint(secretValue(s).toLowerCase(), [s]),
+			z.tuple([zString]),
+			([s]) => s.toLowerCase(),
 		);
 
 		this.def(
@@ -1123,10 +1067,9 @@ export class Interp {
 			},
 		);
 
-		// The secret registry and its `(secret …)` / `(secrets)` built-ins are an
-		// opt-in extension — see src/secrets.ts and devdocs/secrets.md. (The
-		// `Secret` taint type and its string-primitive propagation stay here,
-		// since they are language machinery.)
+		// Opt-in extensions layer optional built-ins on top of the core — and may
+		// override core ones (the secrets extension teaches the string primitives
+		// taint; see src/secrets.ts and devdocs/secrets.md).
 		for (const extension of options.extensions ?? []) extension(this);
 	}
 

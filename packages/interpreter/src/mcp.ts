@@ -28,7 +28,6 @@ import {
 	type List,
 	newLispKeyword,
 	newSym,
-	Secret,
 	Sym,
 	zList,
 } from "./lisp.ts";
@@ -172,8 +171,6 @@ function lispToJson(x: unknown): unknown {
 	if (isNumeric(x)) return x;
 	if (x instanceof LispKeyword) return x.name;
 	if (x instanceof Sym) return x.name;
-	// A secret reveals its value only here, into the outgoing MCP request.
-	if (x instanceof Secret) return x.value;
 	if (x instanceof Cell) {
 		if (isAlist(x)) {
 			const obj: Record<string, unknown> = {};
@@ -185,6 +182,11 @@ function lispToJson(x: unknown): unknown {
 		}
 		return listToArray(x).map(lispToJson);
 	}
+	// The wire form: a value with a toJSON knows how to serialize itself — this
+	// is the one path that reveals a secret's value, into the outgoing call
+	// (its toString/display form stays redacted; see src/secrets.ts).
+	if (typeof (x as { toJSON?: unknown }).toJSON === "function")
+		return (x as { toJSON(): unknown }).toJSON();
 	return String(x);
 }
 
