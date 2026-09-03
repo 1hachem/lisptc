@@ -137,13 +137,12 @@ export function ChatView() {
 					</div>
 				)}
 				{/*
-				 * Room to scroll past the last turn: the tail of the conversation comes
-				 * to rest in the upper three quarters of the screen rather than hard
-				 * against the composer. It is a quarter of the viewport of real
+				 * Room to scroll past the last turn, so the tail of the conversation
+				 * does not come to rest hard against the composer. It is real
 				 * scrollable height, so a short conversation — which does not fill the
 				 * screen — is left where it is.
 				 */}
-				<div aria-hidden className="h-[25vh]" />
+				<div aria-hidden className="h-[10vh]" />
 			</ConversationContent>
 			<ScrollToLatest />
 		</Conversation>
