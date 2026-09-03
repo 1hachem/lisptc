@@ -449,18 +449,26 @@ function spawnServer(path: string): Promise<void> {
 	return Promise.resolve();
 }
 
-// Poll for the socket to accept connections after a spawn (the detached server
-// takes a moment to bind). Gives up after ~2s.
+// How long to wait for a freshly spawned server to bind its socket. Generous
+// because the child is a cold `node --experimental-transform-types` start that
+// has to type-strip the whole interpreter before it ever calls `listen` —
+// comfortably under a second idle, but several times that on a loaded machine
+// (a CI runner building every workspace at once), where a tighter budget gave
+// up on a server that was merely slow to boot.
+const SPAWN_TIMEOUT_MS = 20_000;
+
+// Poll for the socket to accept connections after a spawn.
 async function connectWithRetry(path: string): Promise<SessionClient> {
+	const deadline = Date.now() + SPAWN_TIMEOUT_MS;
 	let lastErr: unknown;
-	for (let i = 0; i < 40; i++) {
+	do {
 		try {
 			return await SessionClient.connect(path);
 		} catch (ex) {
 			lastErr = ex;
 			await delay(50);
 		}
-	}
+	} while (Date.now() < deadline);
 	throw lastErr instanceof Error
 		? lastErr
 		: new Error("could not start session");

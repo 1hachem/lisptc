@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { unlinkSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -39,12 +38,10 @@ function fakeServer(
 							? { id: req.id, ok: true, result: handler(req) }
 							: { id: req.id, ok: false, error: `unknown op: ${req.op}` };
 						socket.write(`${JSON.stringify(reply)}\n`, () => {
-							if (req.op === "shutdown" && handler) {
-								server.close();
-								try {
-									unlinkSync(path);
-								} catch {}
-							}
+							// `close()` unlinks the socket path itself -- doing it by hand
+							// here could delete the REPLACEMENT server's socket file, since
+							// by then the name may already belong to it.
+							if (req.op === "shutdown" && handler) server.close();
 						});
 					}
 					nl = buffer.indexOf("\n");
@@ -97,6 +94,9 @@ describe("connectOrSpawn", () => {
 		expect(await client.version()).toBe(PROTOCOL_VERSION);
 	});
 
+	// The generous timeout: this one really spawns a server, i.e. a cold `node
+	// --experimental-transform-types` start that type-strips the whole
+	// interpreter -- slower than vitest's 5s default on a loaded CI runner.
 	it("replaces a stale server that supports shutdown but predates the version op", async () => {
 		const path = tempPath();
 		let shutdownCalls = 0;
@@ -118,7 +118,7 @@ describe("connectOrSpawn", () => {
 		// The client is now talking to a freshly spawned, current-protocol
 		// server -- not the stale one (which only knows `eval`/`shutdown`).
 		expect(await client.version()).toBe(PROTOCOL_VERSION);
-	});
+	}, 30_000);
 
 	it("falls back to the stale server when it can't be shut down (predates shutdown too)", async () => {
 		const path = tempPath();
@@ -127,9 +127,6 @@ describe("connectOrSpawn", () => {
 		});
 		cleanups.push(() => {
 			ancient.close();
-			try {
-				unlinkSync(path);
-			} catch {}
 		});
 
 		const client = await connectOrSpawn(path);
