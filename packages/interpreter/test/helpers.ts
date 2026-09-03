@@ -4,7 +4,7 @@ import { secretsExtension } from "../src/secrets.ts";
 
 /**
  * A fresh interpreter with the standard prelude, secret registry and the
- * read-more built-ins (view/head/tail/grep) loaded.
+ * compression built-ins (echo/head/tail/grep) loaded.
  */
 export function freshInterp(): Interp {
 	const interp = new Interp({
@@ -23,8 +23,8 @@ export function ev(code: string, interp: Interp = freshInterp()): string {
 }
 
 /**
- * Evaluate a program while capturing everything written by prin1/princ/
- * terpri/print. Returns both the printed value and the captured output.
+ * Evaluate a program while capturing everything `echo` wrote. Returns both the
+ * printed representation of the last value and the captured output.
  */
 export function evWithOutput(code: string): { value: string; output: string } {
 	const interp = freshInterp();

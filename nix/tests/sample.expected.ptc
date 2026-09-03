@@ -11,9 +11,9 @@
 (try
   (risky)
   (catch (e)
-    (princ e)))
+    (echo e)))
 
 Prose sits between the forms, and it keeps its punctuation: a comma,
 a semicolon; a `backtick`, an apostrophe's tail and a "quoted phrase".
-(princ (fact 5))
+(echo (fact 5))
 Trailing thought.

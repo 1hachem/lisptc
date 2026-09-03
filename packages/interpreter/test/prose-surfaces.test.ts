@@ -17,7 +17,7 @@ const REPLIES: [source: string, value: string][] = [
 	["First define it.\n(defun sq (x) (* x x))\n\nNow use it: (sq 5)", "25"],
 	["step 1. (setq x 2) step 2. (* x 3)", "6"],
 	["don't worry about apostrophes (+ 1 2)", "3"],
-	['a remark; with a semicolon, then (princ "") (+ 1 2)', "3"],
+	['a remark; with a semicolon, then (echo "") (+ 1 2)', "3"],
 	['prose may hold a lone " quote (+ 1 2)', "3"],
 	["a 50% discount, path/to/file, 3 > 2 — all prose (+ 1 2)", "3"],
 	["emoji are prose too 🎉 (+ 1 2)", "3"],
@@ -66,20 +66,29 @@ describe("the language reference teaches prose", () => {
 });
 
 describe("the language reference teaches context compression", () => {
-	// Truncation is invisible unless the reference describes it: a model that is
-	// not told will read a `...` line as the end of the value, and will keep
+	// The silence is invisible unless the reference describes it: a model that
+	// is not told will wait for values it will never be shown, and will keep
 	// retyping data it could have referred to by name.
+	it("says the REPL prints nothing on its own", () => {
+		expect(LANGUAGE_REFERENCE).toMatch(/the ONLY thing that prints/);
+		expect(LANGUAGE_REFERENCE).toMatch(/reports? (one line|a result's name)/i);
+	});
+
 	it("says every result is bound to a name", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/never retype data the REPL/i);
 	});
 
-	it("says a truncated printout is not the whole value", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/truncated in the printout only/i);
-		expect(LANGUAGE_REFERENCE).toMatch(/read on with/i);
+	// The whole point of the split: reaching for `grep` instead of copying a
+	// URL out of a printout.
+	it("says the extraction commands return rather than print", () => {
+		expect(LANGUAGE_REFERENCE).toMatch(/RETURN a value/);
+		expect(LANGUAGE_REFERENCE).toMatch(/head`\/`tail`\/`grep` RETURN a value/);
 	});
 
-	// head/tail are the one name collision an LLM is likely to trip on.
-	it("says head and tail are not car and cdr", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/they are not `car`\/`cdr`/i);
+	it("says a truncated echo is not the whole output", () => {
+		expect(LANGUAGE_REFERENCE).toMatch(
+			/capped for you.{0,20}not for the user/i,
+		);
+		expect(LANGUAGE_REFERENCE).toMatch(/read on with/i);
 	});
 });

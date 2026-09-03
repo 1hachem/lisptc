@@ -10,5 +10,5 @@ keeps its own shape:
 
   and a blank line between them.
 
-A form written mid-sentence — like (princ "hi") — still formats as a form,
+A form written mid-sentence — like (echo "hi") — still formats as a form,
 and prose that touches a paren is parted from it by exactly one space.

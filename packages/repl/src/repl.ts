@@ -7,15 +7,16 @@
  * stdin/stdout loop lives in `./cli.ts`.
  *
  * - `MemoryRepl` — evaluate a program string, return what the interactive REPL
- *   would have printed (last value + side-effect output, errors rendered
- *   inline). No process I/O, so embedders can run Lisp without a subprocess.
+ *   would have printed (`echo` output plus a one-line report per top-level
+ *   form, errors rendered inline). No process I/O, so embedders can run Lisp
+ *   without a subprocess.
  * - `AgentRepl` — `MemoryRepl` plus two things an embedding agent needs:
  *   the finished signal (a REPL feature, not part of the language) and
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
 import {
-	alsoSaved,
+	type Bounded,
 	Compressor,
 	compressionExtension,
 	MAX_WORDS,
@@ -31,7 +32,6 @@ import {
 	run,
 	setWriter,
 	stripProse,
-	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
 import {
@@ -133,51 +133,47 @@ export class MemoryRepl implements InMemoryRepl {
 	 * Evaluate a program; Lisp errors are rendered into the returned output
 	 * rather than thrown.
 	 *
-	 * Everything the caller sees is bounded here (see @repo/interpreter's
-	 * compression.ts): each top-level result is bound to a name and echoed as
-	 * `name = value` truncated to the word limit, and the side-effect output is
-	 * capped the same way. Consumers — apps/mcp, packages/ai — pass this string
-	 * straight to a model, so this is the only place the cap has to hold.
+	 * Consumers — apps/mcp, packages/ai — pass the `model` string straight to a
+	 * model, so this is the only place the word cap has to hold. `user` is the
+	 * same content unbounded, for a human reading it once on screen (see
+	 * @repo/interpreter's compression.ts).
 	 */
-	eval(code: string): string {
-		// Side-effect output is buffered rather than capped as it is written:
-		// the cap applies to the whole of it, once, at the end.
+	evalOutput(code: string): Bounded {
+		// The writer gets the human's copy of everything `echo` wrote; the
+		// model's copy is capped against this step's word budget as each call
+		// runs, and collected on the compressor.
+		this.compressor.beginStep();
 		let printed = "";
 		const prev = setWriter((s) => {
 			printed += s;
 		});
-		let echo = "";
-		let error = "";
-		// Only the last form is echoed — the cap is per eval, not per form — but
-		// the earlier ones still bound names, so report those separately or the
-		// model has no way to learn they exist.
-		const bound: string[] = [];
-		let pending: string | undefined;
+		// One line per top-level form: `name: shape`. Nothing prints the values
+		// themselves — that is what `echo` is for.
+		let reports = "";
+		let error: Bounded = { model: "", user: "" };
 		try {
-			// A printing function (prin1/princ/terpri/print) returns
-			// Unspecified — a sentinel meaning "already shown, don't echo the
-			// value too" — so a printed value isn't shown twice.
 			run(this.currentInterp, code, (form, value) => {
-				if (value === Unspecified) return;
-				if (pending !== undefined) bound.push(pending);
-				const rendered = this.compressor.value(this.currentInterp, form, value);
-				pending = rendered.name;
-				echo = rendered.text;
+				reports += this.compressor.result(this.currentInterp, form, value);
 			});
 		} catch (ex) {
 			if (ex instanceof EvalException) error = this.compressor.error(`${ex}\n`);
-			else if (ex === EndOfFile)
-				error = "unbalanced expression (unexpected end of input)\n";
-			else throw ex;
+			else if (ex === EndOfFile) {
+				const text = "unbalanced expression (unexpected end of input)\n";
+				error = { model: text, user: text };
+			} else throw ex;
 		} finally {
 			setWriter(prev);
 		}
-		return (
-			this.compressor.output(this.currentInterp, printed) +
-			alsoSaved(bound) +
-			echo +
-			error
-		);
+		return {
+			model: this.compressor.takeEcho() + reports + error.model,
+			user: printed + reports + error.user,
+		};
+	}
+
+	// The model-facing output of one eval: capped, and the string every
+	// non-streaming consumer of this REPL has always received.
+	eval(code: string): string {
+		return this.evalOutput(code).model;
 	}
 
 	// Discard all definitions; start from a fresh prelude-loaded interp.
@@ -211,9 +207,12 @@ export class AgentRepl extends MemoryRepl {
 	// text with no forms in it is a program that does nothing — so a form-less
 	// reply IS the end of the loop, and the REPL needs no stop built-in for the
 	// agent to call.
-	override eval(code: string): string {
+	//
+	// Overridden on `evalOutput` rather than `eval`, so the flag is raised
+	// whichever entry point the driver uses.
+	override evalOutput(code: string): Bounded {
 		if (stripProse(code).trim() === "") this.finished = true;
-		return super.eval(code);
+		return super.evalOutput(code);
 	}
 
 	// Replace the read-only conversation globals from a fresh host snapshot. Each

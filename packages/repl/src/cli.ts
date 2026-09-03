@@ -21,7 +21,6 @@ import {
 	setExit,
 	setWriter,
 	stripProse,
-	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
 import {
@@ -39,7 +38,7 @@ import {
 // Wired to a readline interface by main().
 let readLine: (prompt: string) => Promise<string | null>;
 
-// Output sink shared with the interpreter (via setWriter) so prin1/princ and
+// Output sink shared with the interpreter (via setWriter) so `echo` and
 // the loop's own writes land on the same stdout.
 const write = (s: string): void => {
 	process.stdout.write(s);
@@ -115,17 +114,17 @@ class InteractiveRepl implements Repl {
 					write("Goodbye\n");
 					return;
 				}
+				// A form typed at a prompt is a step of its own, so each starts
+				// with the whole echo budget.
+				this.compressor.beginStep();
 				const result = evalTopLevel(this.currentInterp, exp);
-				// A printing function (prin1/princ/terpri/print) returns
-				// Unspecified, meaning "already shown" — don't echo it too.
-				//
-				// Only the value echo is capped here. Unlike MemoryRepl this
-				// loop points the interpreter's writer straight at stdout
-				// (see setWriter below), so princ output streams uncapped —
-				// buffering it to measure would break that, and a human at a
-				// terminal can scroll.
-				if (result !== Unspecified)
-					write(this.compressor.value(this.currentInterp, exp, result).text);
+				// The same silent contract the embedded REPLs have: no value is
+				// printed, only a `name: shape` line, so what a human sees here
+				// is what the model sees. `echo` is the way to see a value —
+				// and this loop points the interpreter's writer straight at
+				// stdout (see setWriter below), which is the human's uncapped
+				// copy; a terminal can scroll.
+				write(this.compressor.result(this.currentInterp, exp, result));
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else throw ex;

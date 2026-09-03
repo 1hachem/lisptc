@@ -2,20 +2,23 @@
  * Context compression for Lisptc.
  *
  * The REPL is an LLM's only interface, so everything it prints is spent
- * context. This module bounds that spend and makes the bound safe:
+ * context. This module spends as little of it as possible:
  *
- *  - Every top-level result is bound to a global named after the function that
- *    produced it — `linear/list-issues-1` — and echoed as `name = value`. The
- *    agent's next step refers to that name instead of retyping the data, which
- *    is both cheaper and the only way to be sure the value is exact.
- *  - What gets *printed* is capped at a word limit. Past the cap the text stops
- *    and a `...` line reports how much was shown, how much is left, and which
- *    name holds the whole thing.
- *  - `view` / `head` / `tail` / `grep` read into a value that was truncated (or
- *    into any other value — they take a value, not a handle).
+ *  - The REPL prints NOTHING on its own. Every top-level result is bound to a
+ *    global named after the function that produced it —
+ *    `linear/list-issues-1` — and reported as one line, `name: shape`, that
+ *    describes the value instead of showing it. Data the agent never saw is
+ *    data it cannot mis-copy, and the next step refers to the name.
+ *  - `echo` is the one command that writes, and what it writes is capped at a
+ *    word limit. Past the cap the text stops and a `...` line reports how much
+ *    was shown and how to read on.
+ *  - `head` / `tail` / `grep` do not print: they RETURN a value, which is
+ *    therefore reported and named like any other result. That is the pattern
+ *    the agent is meant to reach for — extract into a name, then `echo` a
+ *    rendering of it — instead of reading data off a printout and retyping it.
  *
- * Truncating is only safe because of the naming: nothing is ever lost by not
- * printing it. See devdocs/compression.md.
+ * Reporting a shape rather than a value is only safe because of the naming:
+ * nothing is ever lost by not printing it. See devdocs/compression.md.
  *
  * An opt-in extension, like src/secrets.ts: pass `compressionExtension()` in
  * `InterpOptions.extensions`. The `Compressor` holding the naming counters is
@@ -24,21 +27,34 @@
  */
 import { z } from "zod";
 import {
+	Cell,
+	callableKind,
 	type DocArg,
 	EvalException,
+	echoText,
 	type Interp,
 	type InterpExtension,
+	type List,
 	newSym,
 	Sym,
 	str,
+	Unspecified,
+	writeOut,
 	zAny,
 	zList,
 } from "./lisp.ts";
-import { plistOptions } from "./plist.ts";
+import { plistOptions, splitKeywordArgs } from "./plist.ts";
 
-// Words of a value the REPL will print before truncating. ~550 tokens, so a
-// 25-step agent loop spends at most ~14k tokens echoing results.
+// Words `echo` will write before truncating. ~550 tokens, so a 25-step agent
+// loop spends at most ~14k tokens on printed output.
 export const MAX_WORDS = 400;
+
+// A result of at most this many words is reported as itself rather than
+// described: below it, a shape costs more to read than the value it hides.
+const INLINE_WORDS = 10;
+
+// Elements `head`/`tail` take from a list when no count is given.
+const DEFAULT_ITEMS = 10;
 
 // Characters allowed per word of budget. A word cap alone does not bound
 // anything: minified JSON is a single megabyte-long "word". This backstop cuts
@@ -61,30 +77,14 @@ const zString = z.custom<string>(
 );
 
 /*
- * Text that prints as itself.
- *
- * `str`'s fallback branch renders an unrecognised object via `${x}`, so a
- * `toString` is all it takes to print verbatim — the same trick `Unspecified`
- * uses, and no change to the printer. `view`/`grep`/`head`/`tail` return this
- * rather than a plain string for two reasons: a string would come back
- * re-quoted and `\n`-escaped by `str` (destroying the marker), and it would
- * then be windowed a second time and given a nested marker of its own.
- */
-export class RawText {
-	constructor(readonly text: string) {}
-
-	toString(): string {
-		return this.text;
-	}
-}
-
-/*
  * The one text a value is measured, windowed and searched over.
  *
- * A word offset only means anything if truncation and `view` agree on the
- * string they are counting, so both go through here. Strings render raw rather
- * than through `str` because `str` escapes newlines as a literal `\n`, which
- * turns a long document into one unreadable line.
+ * A word offset only means anything if every command counting words agrees on
+ * the string it is counting, so they all go through here — and it is the same
+ * rendering `echo` writes (`echoText` in src/lisp.ts), so an offset `echo`
+ * reports can be fed straight back to it. Strings render raw rather than
+ * through `str` because `str` escapes newlines as a literal `\n`, which turns a
+ * long document into one unreadable line.
  */
 function canonical(x: unknown): string {
 	return typeof x === "string" ? x : str(x);
@@ -100,15 +100,16 @@ function wordSpans(text: string): [number, number][] {
 }
 
 /*
- * A rendered top-level result: what to print, and the name it was bound to.
+ * Text bounded two ways: `model` capped at the word limit, `user` as it was
+ * written.
  *
- * A host evaluating several forms echoes only the last of them — the cap is per
- * eval, not per form — but every form still bound a name, so it needs the names
- * of the ones it is not printing (see `alsoSaved`).
+ * A human reads output once, on screen, so capping it buys nothing; the model
+ * carries it for the rest of the loop, so the cap is what keeps 25 steps
+ * affordable. One eval produces both from the same write.
  */
-export interface Echo {
-	text: string;
-	name?: string;
+export interface Bounded {
+	model: string;
+	user: string;
 }
 
 interface Slice {
@@ -119,7 +120,7 @@ interface Slice {
 	total: number;
 	// The single word at `offset` exceeded the character budget on its own and
 	// was hard-cut. Word offsets cannot page past it, so the marker has to
-	// point at `substring` instead of `view`.
+	// point at `substring` instead of an `:offset`.
 	cut: boolean;
 	// Characters of `text` this window covers, and in the whole value.
 	chars: number;
@@ -194,40 +195,30 @@ function position(s: Slice): string {
 	return parts.join(", ");
 }
 
-// The `...` line closing a truncated top-level result or output buffer.
-function savedMarker(s: Slice, name: string, saved: boolean): string {
-	const where = saved
-		? `Full value saved in ${name}`
-		: `Full value is in ${name}`;
-	return `... ${position(s)}. ${where} — read on with ${readOn(s, name)}, or search it with (grep ${name} "pattern")`;
-}
-
-// The call that reads the next window. A hard-cut word has no next word offset
-// to jump to, so slice it by character with the prelude's `substring` instead.
-function readOn(s: Slice, name: string): string {
-	if (s.cut)
-		return `(substring ${name} ${s.chars} ${Math.min(s.totalChars, s.chars * 2)})`;
-	return `(view ${name} :offset ${s.above + s.shown})`;
-}
-
-// The `...` line closing a `view`/`head`/`tail` window. `name` is absent when
-// the value being viewed is not bound to any global, leaving nothing to name in
-// the follow-up call.
-function windowMarker(s: Slice, name: string | undefined): string {
+/*
+ * The `...` line closing a truncated `echo`.
+ *
+ * `name` is the global holding the value, when there is one: `(echo range-1
+ * :offset 40)` reads on, while an unnamed value — a literal the agent passed
+ * straight to `echo` — can only be given the offset to use.
+ */
+function echoMarker(s: Slice, name: string | undefined): string {
 	if (s.above === 0 && s.below === 0 && !s.cut) return "";
+	// A hard-cut word has no next word offset to jump to, so slice it by
+	// character with the prelude's `substring` instead.
 	if (s.cut)
 		return `... ${position(s)} — ${
 			name === undefined
 				? `slice it by character with substring, from ${s.chars}`
-				: `read on with ${readOn(s, name)}`
+				: `read on with (echo (substring ${name} ${s.chars} ${Math.min(s.totalChars, s.chars * 2)}))`
 		}`;
 	const atEnd = s.below === 0;
 	const next = atEnd ? 0 : s.above + s.shown;
-	const verb = atEnd ? "back to the start with" : "next";
+	const verb = atEnd ? "back to the start with" : "read on with";
 	const how =
 		name === undefined
 			? `${atEnd ? "back to the start at" : "read on from"} :offset ${next}`
-			: `${verb} (view ${name} :offset ${next})`;
+			: `${verb} (echo ${name} :offset ${next})`;
 	return `... ${position(s)} — ${how}`;
 }
 
@@ -256,14 +247,21 @@ function boolOption(
 }
 
 /*
- * Naming counters for one interpreter, plus every render entry point.
+ * Naming counters for one interpreter, the current step's output budget, and
+ * every render entry point.
  *
  * Holds no values: a named result is an ordinary global, which is what lets
- * `view`/`grep` take a value rather than a handle and work just as well on data
+ * `echo`/`grep` take a value rather than a handle and work just as well on data
  * the agent bound itself.
  */
 export class Compressor {
 	private readonly counters = new Map<string, number>();
+	// This step's `echo` output as the model will see it, the words of it
+	// already spent, and the words written that it was not shown. All three are
+	// reset by `beginStep`.
+	private echoed = "";
+	private spent = 0;
+	private dropped = 0;
 	readonly limit: number;
 
 	constructor(limit: number = MAX_WORDS) {
@@ -275,126 +273,170 @@ export class Compressor {
 	}
 
 	/*
-	 * Echo a top-level result as `name = value`, truncated if it overflows.
+	 * Bind a top-level result to a name and report it as `name: shape`.
 	 *
-	 * The name is the point of the exercise: an agent that can refer to
-	 * `linear/list-issues-1` never has to retype the data, which is where both
-	 * the token spend and the hallucinated-value risk live.
+	 * The line describes the value instead of showing it. That is the whole
+	 * bargain: the agent gets the handle and the structure — enough to write
+	 * the next form — and never sees data it could copy by hand, which is
+	 * where both the token spend and the hallucinated-value risk live. To see
+	 * a value it must ask, with `echo`.
 	 */
-	value(interp: Interp, form: unknown, value: unknown): Echo {
-		if (value instanceof RawText) return { text: `${value.text}\n` };
-		// `(defun f …)` returns the symbol it defined. Echoing `f = f` says
-		// nothing twice; the binding it made is the result.
+	result(interp: Interp, form: unknown, value: unknown): string {
+		// A step that ended in an `echo` has already said everything it has to
+		// say; a report on top would only announce that printing happened.
+		if (value === Unspecified) return "";
+		// nil and t are their own shape, and every side-effecting loop returns
+		// nil — naming those would bury the results that matter under
+		// `dotimes-1: nil`.
+		if (value === null || value === true) return `${str(value)}\n`;
+		// `(defun f …)` returns the symbol it defined; the binding it made is
+		// the result, so report it under that name rather than minting one.
 		if (value instanceof Sym && interp.hasGlobal(value))
-			return { text: `${str(value)}\n`, name: value.name };
-		// nil and t carry nothing a later step could want to refer to, and
-		// every side-effecting loop returns nil — naming those would bury the
-		// results that matter under `dotimes-1 = nil`.
-		if (value === null || value === true) return { text: `${str(value)}\n` };
+			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
-		const text = canonical(value);
-		const spans = wordSpans(text);
-		const { name, saved } = this.nameFor(interp, form, value);
-		const s = sliceWords(text, spans, 0, this.limit, this.charBudget);
-		// Under the cap the value prints through `str` as it always has, so a
-		// short string stays quoted and re-readable; only a truncated one falls
-		// back to its raw text (which is what `view` will show).
-		if (s.below === 0 && !s.cut)
-			return { text: `${name} = ${str(value)}\n`, name };
-		return {
-			text: `${name} = ${s.text}\n${savedMarker(s, name, saved)}\n`,
-			name,
-		};
+		return `${this.nameFor(interp, form, value)}: ${describe(value)}\n`;
 	}
 
 	/*
-	 * Cap the side-effect output a program printed via princ/print/terpri.
+	 * Start a step: the word budget is per eval, not per `echo` call.
 	 *
-	 * A print loop floods the context just as effectively as a large return
-	 * value. The full text is saved as a string global because the call that
-	 * produced it may not be repeatable.
+	 * An echo loop floods the context just as effectively as one huge echo, so
+	 * the limit is shared. Each call takes what is left (`this.spent`), and the
+	 * capping happens inside `window`/`search` — the only place that still
+	 * knows which value the text came from, and so the only place that can
+	 * point the agent back at it by name.
 	 */
-	output(interp: Interp, text: string): string {
-		if (text === "") return "";
-		const spans = wordSpans(text);
-		const s = sliceWords(text, spans, 0, this.limit, this.charBudget);
-		if (s.below === 0 && !s.cut) return text;
-		const name = this.bind(interp, "output", text, s.total);
-		return `${s.text}\n${savedMarker(s, name, true)}\n`;
+	beginStep(): void {
+		this.echoed = "";
+		this.spent = 0;
+		this.dropped = 0;
+	}
+
+	/*
+	 * This step's `echo` output as the model should see it, and a closing note
+	 * for anything it was not shown. Reads and does not clear: `beginStep`
+	 * does that, so a host that forgets to call it sees output accumulate
+	 * rather than vanish.
+	 */
+	takeEcho(): string {
+		if (this.dropped === 0) return this.echoed;
+		return `${this.echoed}... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
+	}
+
+	private get remaining(): number {
+		return Math.max(0, this.limit - this.spent);
+	}
+
+	// Keep the model's copy of one echo, charge it to the step's budget, and
+	// count what the model was not shown.
+	private echo(model: string, user: string, dropped: number): Bounded {
+		this.echoed += model;
+		this.spent += wordSpans(model).length;
+		this.dropped += dropped;
+		return { model, user };
 	}
 
 	// Cap a rendered error. Nothing is saved: an EvalException's message is
 	// derived from a value the program still has.
-	error(text: string): string {
+	error(text: string): Bounded {
 		const spans = wordSpans(text);
 		const s = sliceWords(text, spans, 0, this.limit, this.charBudget);
-		if (s.below === 0 && !s.cut) return text;
-		return `${s.text}\n... ${position(s)} (error message truncated)\n`;
-	}
-
-	// `view` / `head` / `tail`.
-	window(
-		interp: Interp,
-		value: unknown,
-		offset: number,
-		length: number,
-	): RawText {
-		const text = canonical(value);
-		const spans = wordSpans(text);
-		const s = sliceWords(
-			text,
-			spans,
-			offset,
-			Math.min(length, this.limit),
-			this.charBudget,
-		);
-		const name = this.existingName(interp, value);
-		const mark = windowMarker(s, name);
-		if (s.shown === 0)
-			return new RawText(
-				`(nothing at :offset ${offset}; ${s.total} words in total)`,
-			);
-		return new RawText(mark === "" ? s.text : `${s.text}\n${mark}`);
-	}
-
-	// `tail`: the last `length` words.
-	windowTail(interp: Interp, value: unknown, length: number): RawText {
-		const total = wordSpans(canonical(value)).length;
-		const take = Math.min(length, this.limit);
-		return this.window(interp, value, Math.max(0, total - take), take);
+		if (s.below === 0 && !s.cut) return { model: text, user: text };
+		return {
+			model: `${s.text}\n... ${position(s)} (error message truncated)\n`,
+			user: text,
+		};
 	}
 
 	/*
-	 * `grep`: report each hit as `@<word-offset>` plus surrounding words.
+	 * The window `(echo x :offset n :length n)` writes.
+	 *
+	 * `user` is what was asked for; `model` is as much of it as this step's
+	 * budget still allows, closing with a `...` line that names the value and
+	 * the offset to resume from. Both come out of one slicing pass, because the
+	 * offsets in that line are only meaningful in the whole value's
+	 * coordinates — capping the window a second time downstream would restart
+	 * them from zero and point the agent at the wrong place.
+	 */
+	window(
+		interp: Interp,
+		text: string,
+		value: unknown,
+		offset: number,
+		length: number,
+	): Bounded {
+		const spans = wordSpans(text);
+		// Nothing to window: `(echo)` is a blank line, and whitespace is itself.
+		if (spans.length === 0) return this.echo(`${text}\n`, `${text}\n`, 0);
+
+		const asked = sliceWords(
+			text,
+			spans,
+			offset,
+			length,
+			Number.MAX_SAFE_INTEGER,
+		);
+		if (asked.shown === 0) {
+			const nothing = `(nothing at :offset ${offset}; ${asked.total} words in total)\n`;
+			return this.echo(nothing, nothing, 0);
+		}
+		// The human's copy carries a marker too when the window they asked for
+		// is a partial view — `:length 2` of a longer value really does leave
+		// something below, and saying so costs one line. What it never carries
+		// is the step-budget truncation, which is the model's concern alone.
+		const name = this.existingName(interp, value);
+		const askedMark = echoMarker(asked, name);
+		const user =
+			askedMark === "" ? `${asked.text}\n` : `${asked.text}\n${askedMark}\n`;
+
+		const shown = sliceWords(
+			text,
+			spans,
+			offset,
+			Math.min(length, this.remaining),
+			this.charBudget,
+		);
+		// Nothing left in the budget: this call is invisible to the model, so
+		// its words are what `takeEcho`'s closing note has to account for.
+		if (shown.shown === 0) return this.echo("", user, asked.shown);
+		// A shorter window is not silent — its own `...` line says how much is
+		// below and how to read on — so it needs no note on top of that.
+		const mark = echoMarker(shown, name);
+		return this.echo(
+			mark === "" ? `${shown.text}\n` : `${shown.text}\n${mark}\n`,
+			user,
+			0,
+		);
+	}
+
+	/*
+	 * What `(echo x :match "…")` writes: each hit as `@<word-offset>` plus the
+	 * surrounding words.
 	 *
 	 * Offsets rather than line numbers because `str` of a large list is a single
-	 * line with no newlines in it at all — a line-oriented grep would report one
-	 * enormous match. A word window behaves the same on a one-line Lisp render
-	 * and on multi-line text, and the offset it prints feeds straight back into
-	 * `(view x :offset N)`.
+	 * line with no newlines in it at all — a line-oriented search would report
+	 * one enormous match. A word window behaves the same on a one-line Lisp
+	 * render and on multi-line text, and the offset it prints feeds straight
+	 * back into `(echo x :offset N)`.
+	 *
+	 * This is for reading a blob you cannot yet name a pattern for. To keep
+	 * what matched, use `grep`, which returns it.
 	 */
 	search(
 		interp: Interp,
+		text: string,
 		value: unknown,
 		pattern: string,
 		options: { context: number; max: number; ignoreCase: boolean },
-	): RawText {
-		const text = canonical(value);
+	): Bounded {
 		const spans = wordSpans(text);
 		const name = this.existingName(interp, value);
-
-		let re: RegExp;
-		try {
-			re = new RegExp(pattern, options.ignoreCase ? "gi" : "g");
-		} catch (ex) {
-			throw new EvalException(
-				`invalid regular expression (${ex instanceof Error ? ex.message : "unparseable"})`,
-				pattern,
-				false,
-			);
-		}
+		const re = compile(pattern, options.ignoreCase);
 
 		const lines: string[] = [];
+		// Hits past this step's remaining budget are still written for the
+		// human; the model is told how many it did not see.
+		let shownToModel = 0;
 		let found = 0;
 		let scanned = 0;
 		let skipped = 0;
@@ -413,7 +455,7 @@ export class Compressor {
 				skipped++;
 				continue;
 			}
-			if (lines.length >= options.max || printedWords >= this.limit) continue;
+			if (lines.length >= options.max) continue;
 
 			const from = Math.max(0, at - options.context);
 			const to = Math.min(spans.length - 1, at + options.context);
@@ -426,16 +468,17 @@ export class Compressor {
 			).replace(/\s+/g, " ");
 			lines.push(`@${at}  ${excerpt}`);
 			printedWords += to - from + 1;
+			if (printedWords <= this.remaining) shownToModel = lines.length;
 			coveredTo = to;
 		}
 
-		return new RawText(
-			[
-				...lines,
+		const render = (hits: readonly string[]): string =>
+			`${[
+				...hits,
 				searchSummary(
 					found,
 					skipped,
-					lines.length,
+					hits.length,
 					pattern,
 					spans.length,
 					name,
@@ -443,26 +486,25 @@ export class Compressor {
 				),
 			]
 				.filter((l) => l !== "")
-				.join("\n"),
-		);
+				.join("\n")}\n`;
+
+		// Both copies close with the same summary — "N matches …; showing M" —
+		// so a shorter list of hits reports itself and needs no closing note.
+		const user = render(lines);
+		return this.echo(render(lines.slice(0, shownToModel)), user, 0);
 	}
 
 	/*
-	 * The name to echo a result under, minting one if the value has none.
+	 * The name to report a result under, minting one if the value has none.
 	 *
 	 * A value that is already reachable by a name reuses it rather than getting
 	 * a second one. That is not a nicety: it is what makes `(setq issues (big))`
 	 * report `issues`, and `(defun f …)` report `f`, without either needing to
 	 * be special-cased by head symbol.
 	 */
-	private nameFor(
-		interp: Interp,
-		form: unknown,
-		value: unknown,
-	): { name: string; saved: boolean } {
+	private nameFor(interp: Interp, form: unknown, value: unknown): string {
 		// A form that defined a global returns its symbol.
-		if (value instanceof Sym && interp.hasGlobal(value))
-			return { name: value.name, saved: false };
+		if (value instanceof Sym && interp.hasGlobal(value)) return value.name;
 
 		const head = form instanceof Object && "car" in form ? form.car : undefined;
 
@@ -471,15 +513,15 @@ export class Compressor {
 		// lookup below would only find it for a Cell or a string.
 		if (head instanceof Sym && head.name === "setq") {
 			const assigned = lastAssignedSymbol(form);
-			if (assigned !== undefined) return { name: assigned, saved: false };
+			if (assigned !== undefined) return assigned;
 		}
 
 		const existing = this.existingName(interp, value);
-		if (existing !== undefined) return { name: existing, saved: false };
+		if (existing !== undefined) return existing;
 
 		const base = head instanceof Sym ? head.name : "result";
 		const total = wordSpans(canonical(value)).length;
-		return { name: this.bind(interp, base, value, total), saved: true };
+		return this.bind(interp, base, value, total);
 	}
 
 	/*
@@ -513,7 +555,7 @@ export class Compressor {
 		this.counters.set(base, n);
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			doc: `Saved result of a \`${base}\` call (${total} words). The REPL printed only part of it; this holds all of it. Read it with (view ${name}) or search it with (grep ${name} "pattern").`,
+			doc: `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`,
 		});
 		return name;
 	}
@@ -574,21 +616,190 @@ function searchSummary(
 	];
 	if (skipped > 0) parts.push(`${skipped} in a region already shown`);
 	const target = name === undefined ? "<value>" : name;
-	return `${parts.join(", ")}. Read a region with (view ${target} :offset <offset>)`;
+	return `${parts.join(", ")}. Read a region with (echo ${target} :offset <offset>), or keep what matched with (grep ${target} "${pattern}")`;
 }
 
 /*
- * The line telling the model about results it was not shown.
+ * A regular expression, or a Lisp error naming the problem.
  *
- * Without it a program of several forms silently binds names the model has no
- * way to learn short of `(dump)`.
+ * Shared by `echo :match` and `grep` so a bad pattern fails the same way in
+ * both, and never as a raw JS SyntaxError.
  */
-export function alsoSaved(names: readonly string[]): string {
-	if (names.length === 0) return "";
-	return `(also saved: ${names.join(", ")})\n`;
+function compile(pattern: string, ignoreCase: boolean): RegExp {
+	try {
+		return new RegExp(pattern, ignoreCase ? "gi" : "g");
+	} catch (ex) {
+		throw new EvalException(
+			`invalid regular expression (${ex instanceof Error ? ex.message : "unparseable"})`,
+			pattern,
+			false,
+		);
+	}
 }
 
-const VIEW_ARGS: DocArg[] = [
+// The elements of a proper list, or undefined for anything that is not one.
+// `nil` is the empty list, not a non-list.
+function listElements(x: unknown): unknown[] | undefined {
+	if (x === null) return [];
+	if (!(x instanceof Cell)) return undefined;
+	const out: unknown[] = [];
+	for (let p: unknown = x; p instanceof Cell; p = p.cdr) out.push(p.car);
+	return out;
+}
+
+function toList(items: readonly unknown[]): List {
+	let out: List = null;
+	for (let i = items.length - 1; i >= 0; i--) out = new Cell(items[i], out);
+	return out;
+}
+
+// The keys of an alist — a list of (string . value) pairs — or undefined if `x`
+// is not one. One non-pair is enough to disqualify it: a description promising
+// keys the agent can `assoc` has to be true of every element.
+function alistKeys(x: unknown): string[] | undefined {
+	const pairs = listElements(x);
+	if (pairs === undefined || pairs.length === 0) return undefined;
+	const keys: string[] = [];
+	for (const pair of pairs) {
+		if (!(pair instanceof Cell) || typeof pair.car !== "string")
+			return undefined;
+		keys.push(pair.car);
+	}
+	return keys;
+}
+
+// The character range of `count` words starting at word `from`, sliced out of
+// the original text so interior newlines and alignment survive.
+function wordWindow(
+	text: string,
+	spans: readonly [number, number][],
+	from: number,
+	count: number,
+): string {
+	if (count <= 0 || spans.length === 0) return "";
+	const start = spans[Math.min(from, spans.length - 1)]?.[0] ?? 0;
+	const last = spans[Math.min(from + count, spans.length) - 1];
+	return text.slice(start, last?.[1] ?? text.length);
+}
+
+/*
+ * `head` / `tail`: the first (or last) `n` of a value.
+ *
+ * Element-wise on a list, word-wise on anything else. That polymorphism is the
+ * point: `(head issues 4)` is the four rows an agent means by "the first four",
+ * while `(head doc 40)` is the opening of a document. Both RETURN, so the
+ * result is named and can be echoed, mapped or grepped in the next step.
+ */
+function headOf(value: unknown, n: number): unknown {
+	const items = listElements(value);
+	if (items !== undefined) return toList(items.slice(0, n));
+	const text = canonical(value);
+	return wordWindow(text, wordSpans(text), 0, n);
+}
+
+function tailOf(value: unknown, n: number): unknown {
+	const items = listElements(value);
+	if (items !== undefined)
+		return toList(n >= items.length ? items : items.slice(items.length - n));
+	const text = canonical(value);
+	const spans = wordSpans(text);
+	return wordWindow(text, spans, Math.max(0, spans.length - n), n);
+}
+
+/*
+ * `grep`: what matched, as a value.
+ *
+ * On a list, the elements whose printed form matches — so `(grep issues
+ * "auth")` is the issues about auth, ready to map over. On anything else, the
+ * matched substrings (or one capture group of each) — so `(grep page
+ * "https?://[^ ]+")` extracts the URLs instead of showing them to be copied by
+ * hand. Returns nil when nothing matched.
+ */
+function grepOf(
+	value: unknown,
+	pattern: string,
+	options: { group?: number; max: number; ignoreCase: boolean },
+): List {
+	const re = compile(pattern, options.ignoreCase);
+	const items = listElements(value);
+	if (items !== undefined) {
+		const hits: unknown[] = [];
+		for (const item of items) {
+			re.lastIndex = 0;
+			if (re.test(canonical(item))) hits.push(item);
+			if (hits.length >= options.max) break;
+		}
+		return toList(hits);
+	}
+
+	const text = canonical(value);
+	const hits: string[] = [];
+	let scanned = 0;
+	for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+		// A zero-length match (e.g. "a*") never advances lastIndex on its own,
+		// so the loop would not terminate.
+		if (m.index === re.lastIndex) re.lastIndex++;
+		if (++scanned > MAX_MATCHES_SCANNED) break;
+		const picked = options.group === undefined ? m[0] : m[options.group];
+		if (picked !== undefined) hits.push(picked);
+		if (hits.length >= options.max) break;
+	}
+	return toList(hits);
+}
+
+/*
+ * How a result is reported: its value if that is small, its shape if it is not.
+ *
+ * A shape tells the agent what it needs to write the next form — how many
+ * elements, which keys to `assoc` — without showing it data it could retype.
+ * Below the threshold that reasoning inverts: `(+ 1 2)` described as "a number"
+ * would cost an extra `echo` step to learn what every other REPL says outright,
+ * and three tokens of value cannot be mis-copied at scale.
+ */
+function describe(value: unknown): string {
+	const callable = callableKind(value);
+	if (callable !== undefined) return callable;
+
+	const text = canonical(value);
+	const spans = wordSpans(text);
+	if (
+		spans.length <= INLINE_WORDS &&
+		text.length <= INLINE_WORDS * MAX_CHARS_PER_WORD
+	)
+		return str(value);
+
+	const items = listElements(value);
+	if (items !== undefined && items.length > 0) {
+		const keys = alistKeys(items[0]);
+		if (keys !== undefined) {
+			const uniform = items.every(
+				(el) => alistKeys(el)?.join(" ") === keys.join(" "),
+			);
+			return `list of ${items.length} ${items.length === 1 ? "alist" : "alists"}, keys ${keys
+				.map((k) => JSON.stringify(k))
+				.join(" ")}${uniform ? "" : " (keys vary)"}`;
+		}
+		const own = alistKeys(value);
+		if (own !== undefined)
+			return `alist, keys ${own.map((k) => JSON.stringify(k)).join(" ")}`;
+		return `list of ${items.length} items, ${spans.length} words`;
+	}
+	// A blob with no whitespace in it — minified JSON, a base64 payload — has a
+	// word count of 1 however big it is, so measure that in characters.
+	if (spans.length <= INLINE_WORDS) return `${text.length} characters`;
+	return `${spans.length} words`;
+}
+
+const ECHO_OPTIONS = [
+	"offset",
+	"length",
+	"match",
+	"context",
+	"max",
+	"ignore-case",
+];
+
+const ECHO_ARGS: DocArg[] = [
 	{
 		name: "offset",
 		type: "integer",
@@ -601,20 +812,48 @@ const VIEW_ARGS: DocArg[] = [
 		required: false,
 		description: "words to show, capped at the output limit",
 	},
-];
-
-const GREP_ARGS: DocArg[] = [
+	{
+		name: "match",
+		type: "string",
+		required: false,
+		description:
+			"print only the regions matching this regular expression, each with its word offset",
+	},
 	{
 		name: "context",
 		type: "integer",
 		required: false,
-		description: `words of context shown either side of a hit (default ${DEFAULT_CONTEXT})`,
+		description: `with :match, words of context either side of a hit (default ${DEFAULT_CONTEXT})`,
 	},
 	{
 		name: "max",
 		type: "integer",
 		required: false,
-		description: `hits to print (default ${DEFAULT_MAX_HITS})`,
+		description: `with :match, hits to print (default ${DEFAULT_MAX_HITS})`,
+	},
+	{
+		name: "ignore-case",
+		type: "boolean",
+		required: false,
+		description: "with :match, pass nil to match case-sensitively (default t)",
+	},
+];
+
+const GREP_OPTIONS = ["group", "max", "ignore-case"];
+
+const GREP_ARGS: DocArg[] = [
+	{
+		name: "group",
+		type: "integer",
+		required: false,
+		description:
+			"on text, keep this capture group of each match instead of the whole match",
+	},
+	{
+		name: "max",
+		type: "integer",
+		required: false,
+		description: "keep at most this many matches (default: all of them)",
 	},
 	{
 		name: "ignore-case",
@@ -625,61 +864,87 @@ const GREP_ARGS: DocArg[] = [
 ];
 
 function registerCompression(interp: Interp, c: Compressor): void {
+	/*
+	 * `echo`, overriding the plain core version (src/lisp.ts) with the windowed,
+	 * searchable one — the same `interp.def` override idiom src/secrets.ts uses
+	 * on the string primitives.
+	 */
 	interp.def(
-		"view",
-		-2,
-		"(view x [:offset 0] [:length n])",
-		`Print a window of \`x\`, measured in whitespace-separated words: skip :offset words and show at most :length (default and maximum ${c.limit}). Ends with a \`...\` line saying how many words lie above and below and the offset to continue from. This is how you read a result the REPL truncated — the variable it named holds the whole value.`,
-		z.tuple([zAny, zList]),
-		([value, rest]) => {
-			const opts = plistOptions(rest, ["offset", "length"]);
-			return c.window(
-				interp,
-				value,
-				intOption(opts, "offset", 0),
-				intOption(opts, "length", c.limit),
+		"echo",
+		-1,
+		'(echo x... [:offset 0] [:length n] [:match "re"] [:context 8] [:max 10] [:ignore-case t])',
+		`Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. Output is measured in whitespace-separated words and stops after ${c.limit} of them, closing with a \`...\` line saying how much is left and the offset to continue from. :offset and :length choose the window. :match prints only the regions matching a JavaScript-syntax regular expression, each as @<word-offset> with the match wrapped in [[ ]] — that is how you read a value you cannot yet name a pattern for; to KEEP what matched rather than look at it, use \`grep\`, which returns it. Returns an unspecified value, so a step ending in an echo gets no result line: what was printed IS the report.`,
+		z.tuple([zList]),
+		([rest]) => {
+			const { values, options } = splitKeywordArgs(rest);
+			const opts = plistOptions(options, ECHO_OPTIONS);
+			const text = echoText(values);
+			// An offset or a name in the `...` line only means anything for a
+			// single value: with several, the text is a join of their renders and
+			// no global holds it.
+			const single =
+				values !== null && values.cdr === null ? values.car : undefined;
+			// The human gets what was asked for; the model gets as much of it as
+			// the step's budget allows. Only the writer is uncapped here — the
+			// model's copy is collected on the compressor (see `takeEcho`).
+			const pattern = opts.get("match");
+			if (pattern !== undefined) {
+				if (typeof pattern !== "string")
+					throw new EvalException("string expected for :match", pattern);
+				writeOut(
+					c.search(interp, text, single, pattern, {
+						context: intOption(opts, "context", DEFAULT_CONTEXT),
+						max: intOption(opts, "max", DEFAULT_MAX_HITS),
+						ignoreCase: boolOption(opts, "ignore-case", true),
+					}).user,
+				);
+				return Unspecified;
+			}
+			writeOut(
+				c.window(
+					interp,
+					text,
+					single,
+					intOption(opts, "offset", 0),
+					// No :length means the whole value: it is the STEP that is
+					// bounded, not the request.
+					intOption(opts, "length", Number.MAX_SAFE_INTEGER),
+				).user,
 			);
+			return Unspecified;
 		},
-		VIEW_ARGS,
+		ECHO_ARGS,
 	);
 
 	interp.def(
 		"head",
 		-2,
-		"(head x [:length n])",
-		`Print the FIRST :length words of \`x\` (default ${c.limit}). This windows TEXT: it is not \`car\`, and on a list it shows the beginning of the printed form, not the first element.`,
+		"(head x [n])",
+		`Return the first \`n\` of \`x\`: its first n ELEMENTS if it is a list, its first n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Returns the value rather than printing it, so the REPL names the result and you can echo, map or grep it from there.`,
 		z.tuple([zAny, zList]),
-		([value, rest]) => {
-			const opts = plistOptions(rest, ["length"]);
-			return c.window(interp, value, 0, intOption(opts, "length", c.limit));
-		},
-		[VIEW_ARGS[1] as DocArg],
+		([value, rest]) => headOf(value, countArg(rest, value, c.limit)),
 	);
 
 	interp.def(
 		"tail",
 		-2,
-		"(tail x [:length n])",
-		`Print the LAST :length words of \`x\` (default ${c.limit}). This windows TEXT: it is not \`cdr\`.`,
+		"(tail x [n])",
+		`Return the last \`n\` of \`x\`: its last n ELEMENTS if it is a list, its last n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Returns the value rather than printing it.`,
 		z.tuple([zAny, zList]),
-		([value, rest]) => {
-			const opts = plistOptions(rest, ["length"]);
-			return c.windowTail(interp, value, intOption(opts, "length", c.limit));
-		},
-		[VIEW_ARGS[1] as DocArg],
+		([value, rest]) => tailOf(value, countArg(rest, value, c.limit)),
 	);
 
 	interp.def(
 		"grep",
 		-3,
-		'(grep x "pattern" [:context 8] [:max 10] [:ignore-case t])',
-		`Search \`x\` with \`pattern\`, a JavaScript-syntax regular expression, and print each hit as @<word-offset> followed by the surrounding words, with the match wrapped in [[ ]]. Feed a reported offset straight into (view x :offset <offset>) to read that region. Prefer this over \`view\` when you know what you are looking for. Case-insensitive unless you pass :ignore-case nil.`,
+		'(grep x "pattern" [:group n] [:max n] [:ignore-case t])',
+		'Return what `pattern` — a JavaScript-syntax regular expression — matches in `x`, as a list, or nil if nothing did. On a list: the ELEMENTS whose printed form matches, so (grep issues "auth") is the issues about auth. On text: the matched substrings, so (grep page "https?://[^ ]+") extracts the URLs — use this instead of reading a URL off a printout and retyping it. Case-insensitive unless you pass :ignore-case nil. Returns the value rather than printing it, so the REPL names the result; to look at a region of a value instead, use (echo x :match "pattern").',
 		z.tuple([zAny, zString, zList]),
 		([value, pattern, rest]) => {
-			const opts = plistOptions(rest, ["context", "max", "ignore-case"]);
-			return c.search(interp, value, pattern, {
-				context: intOption(opts, "context", DEFAULT_CONTEXT),
-				max: intOption(opts, "max", DEFAULT_MAX_HITS),
+			const opts = plistOptions(rest, GREP_OPTIONS);
+			return grepOf(value, pattern, {
+				group: opts.has("group") ? intOption(opts, "group", 0) : undefined,
+				max: intOption(opts, "max", Number.MAX_SAFE_INTEGER),
 				ignoreCase: boolOption(opts, "ignore-case", true),
 			});
 		},
@@ -687,8 +952,20 @@ function registerCompression(interp: Interp, c: Compressor): void {
 	);
 }
 
+// The optional positional count of `head`/`tail`: elements for a list, words
+// for text, so the default depends on the argument's type.
+function countArg(rest: List, value: unknown, wordLimit: number): number {
+	if (rest === null)
+		return listElements(value) === undefined ? wordLimit : DEFAULT_ITEMS;
+	const raw = rest.car;
+	const n = typeof raw === "bigint" ? Number(raw) : raw;
+	if (typeof n !== "number" || !Number.isInteger(n) || n < 0)
+		throw new EvalException("non-negative integer expected", raw);
+	return n;
+}
+
 /*
- * Install the read-more built-ins over `compressor`.
+ * Install `echo`, `head`, `tail` and `grep` over `compressor`.
  *
  * The host passes the same `Compressor` it renders results with, and creates a
  * new one per interpreter: the naming counters must die with the globals they

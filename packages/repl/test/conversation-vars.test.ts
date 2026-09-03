@@ -18,47 +18,47 @@ describe("AgentRepl conversation variables", () => {
 		const r = new AgentRepl();
 		r.setConversationVars(sampleVars());
 		expect(r.eval('(cdr (assoc "role" (car conversation)))')).toBe(
-			'cdr-1 = "user"\n',
+			'cdr-1: "user"\n',
 		);
 		expect(r.eval('(cdr (assoc "content" (car conversation)))')).toBe(
-			'cdr-2 = "hi"\n',
+			'cdr-2: "hi"\n',
 		);
 	});
 
 	it("supports mapcar over a filtered message list", () => {
 		const r = new AgentRepl();
 		r.setConversationVars(sampleVars());
-		expect(r.eval("(length user-messages)")).toBe("length-1 = 1\n");
-		expect(r.eval("(car user-messages)")).toBe('car-1 = "hi"\n');
+		expect(r.eval("(length user-messages)")).toBe("length-1: 1\n");
+		expect(r.eval("(car user-messages)")).toBe('car-1: "hi"\n');
 		expect(
 			r.eval('(mapcar (lambda (m) (cdr (assoc "role" m))) conversation)'),
-		).toBe('mapcar-1 = ("user" "assistant")\n');
+		).toBe('mapcar-1: ("user" "assistant")\n');
 	});
 
 	it("re-injection restores a global the user reassigned (not hard read-only)", () => {
 		const r = new AgentRepl();
 		r.setConversationVars(sampleVars());
 		// setq is echoed under the name it assigned, not a minted one.
-		expect(r.eval("(setq conversation 1)")).toBe("conversation = 1\n");
-		expect(r.eval("(progn conversation)")).toBe("progn-1 = 1\n");
+		expect(r.eval("(setq conversation 1)")).toBe("conversation: 1\n");
+		expect(r.eval("(progn conversation)")).toBe("progn-1: 1\n");
 		// The extension calls setConversationVars before every eval; that refresh
 		// overwrites the clobbered value.
 		r.setConversationVars(sampleVars());
-		expect(r.eval("(length conversation)")).toBe("length-1 = 2\n");
+		expect(r.eval("(length conversation)")).toBe("length-1: 2\n");
 	});
 
 	it("reset() keeps the injected globals (post-error survival)", () => {
 		const r = new AgentRepl();
 		r.setConversationVars(sampleVars());
 		r.reset();
-		expect(r.eval("(length conversation)")).toBe("length-1 = 2\n");
+		expect(r.eval("(length conversation)")).toBe("length-1: 2\n");
 	});
 
 	it("an empty snapshot yields nil lists", () => {
 		const r = new AgentRepl();
 		r.setConversationVars({ conversation: [], "user-messages": [] });
 		expect(r.eval("(progn conversation)")).toBe("nil\n");
-		expect(r.eval("(length user-messages)")).toBe("length-1 = 0\n");
+		expect(r.eval("(length user-messages)")).toBe("length-1: 0\n");
 	});
 });
 

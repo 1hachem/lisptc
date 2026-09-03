@@ -7,108 +7,100 @@ Run me:
 
 the interpreter runs each non-"-" argv entry as a script file
 =====================================================================
-(princ "=== 1. atoms, arithmetic & big numbers ===")
-(terpri)
+(echo "=== 1. atoms, arithmetic & big numbers ===")
 
 numbers are number | bigint; arithmetic promotes automatically
-(print (+ 1 2 3 4 5))
+(echo (+ 1 2 3 4 5))
 => 15
-(print (* 6 7))
+(echo (* 6 7))
 => 42
-(print (/ 22 7))
+(echo (/ 22 7))
 => rational-ish float
-(print (- 10 3 2))
+(echo (- 10 3 2))
 => 5
 there is no expt in the prelude, so define one — the result is an exact bigint
 (defun expt (base n) (if (= n 0) 1 (* base (expt base (- n 1)))))
-(print (expt 2 100))
+(echo (expt 2 100))
 => 1267650600228229401496703205376, exact
-(print (< 1 2))
+(echo (< 1 2))
 chained comparison via prelude
-(princ "=== 2. lists & cons cells ===")
-(terpri)
+(echo "=== 2. lists & cons cells ===")
 
 (setq xs (list 1 2 3 4 5))
-(print xs)
-(print (car xs))
+(echo xs)
+(echo (car xs))
 => 1
-(print (cdr xs))
+(echo (cdr xs))
 => 2 3 4 5
-(print (cadr xs))
+(echo (cadr xs))
 
 => 2
-(print (append xs (list 6 7)))
+(echo (append xs (list 6 7)))
 => 1 .. 7
-(print (nreverse (list 1 2 3)))
+(echo (nreverse (list 1 2 3)))
 => 3 2 1
-(princ "=== 3. lambdas, closures & higher order ===")
-(terpri)
+(echo "=== 3. lambdas, closures & higher order ===")
 
 a closure capturing `n`
 (defun adder (n) (lambda (x) (+ x n)))
 (setq add10 (adder 10))
-(print (add10 5))
+(echo (add10 5))
 => 15
-(print (mapcar add10 (list 1 2 3)))
+(echo (mapcar add10 (list 1 2 3)))
 => 11 12 13
 fold via recursion
 (defun reduce (f acc lst) (if (null lst) acc
     (reduce f (f acc (car lst)) (cdr lst))))
-(print (reduce + 0 (list 1 2 3 4 5)))
+(echo (reduce + 0 (list 1 2 3 4 5)))
 => 15
-(princ "=== 4. recursion ===")
-(terpri)
+(echo "=== 4. recursion ===")
 
 (defun fact (n) (if (<= n 1) 1 (* n (fact (- n 1)))))
-(print (fact 20))
+(echo (fact 20))
 => 2432902008176640000
-(print (fact 30))
+(echo (fact 30))
 => big, exact bigint
 (defun fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
-(print (fib 15))
+(echo (fib 15))
 => 610
-(princ "=== 5. control flow: cond / when / let / while / dolist ===")
-(terpri)
+(echo "=== 5. control flow: cond / when / let / while / dolist ===")
 
 (defun classify (n) (cond ((< n 0) 'negative) ((= n 0) 'zero) (t 'positive)))
-(print (mapcar classify (list -3 0 7)))
+(echo (mapcar classify (list -3 0 7)))
 
-(let ((a 3) (b 4)) (print (+ (* a a) (* b b))))
+(let ((a 3) (b 4)) (echo (+ (* a a) (* b b))))
 => 25
 imperative loop with mutation
 (setq sum 0)
 (dolist (x (list 10 20 30)) (setq sum (+ sum x)))
-(print sum)
+(echo sum)
 => 60
 (setq i 0)
 (setq acc nil)
 (while (< i 5) (setq acc (cons i acc)) (setq i (+ i 1)))
-(print (nreverse acc))
+(echo (nreverse acc))
 => 0 1 2 3 4
-(princ "=== 6. macros & quasiquotation ===")
-(terpri)
+(echo "=== 6. macros & quasiquotation ===")
 
 define our own control macro with `,` unquote and `,@` splice
 (defmacro unless (test &rest body) `(cond ((not ,test) ,@body)))
-(print (unless nil 'ran 'ok))
+(echo (unless nil 'ran 'ok))
 => ok
 a macro that builds code at expansion time
 (defmacro swap (a b) `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
 (setq p 1)
 (setq q 2)
 (swap p q)
-(print (list p q))
+(echo (list p q))
 => 2 1
-(princ "=== 7. association lists (symbolic data) ===")
-(terpri)
+(echo "=== 7. association lists (symbolic data) ===")
 
 (setq db '((alice .30) (bob .25) (carol .35)))
-(print (assoc 'bob db))
+(echo (assoc 'bob db))
 => bob . 25
-(print (cdr (assoc 'carol db)))
+(echo (cdr (assoc 'carol db)))
 => 35
-(princ "=== 8. MCP support ===")
-(terpri)
+(echo "=== 8. MCP support ===")
 
 MCP built-ins are installed on every Interp:
   load-mcp / unload-mcp / list-mcps / list-tools
@@ -131,7 +123,7 @@ Full documentation for one tool, including per-parameter docs.
 (doc 'fs/echo)
 
 Fuzzy search across all loaded tools, ranked best-first.
-(print (search-tools "echo text back"))
+(echo (search-tools "echo text back"))
 
 Each tool is an ordinary global binding named <server>/<tool>,
 called with native keyword syntax. The synchronous interpreter
@@ -145,13 +137,13 @@ Unload releases the tool bindings; shutdown tears down the broker.
 => fx/echo
 (mcp-shutdown)
 
-(princ "=== done ===")
+(echo "=== done ===")
 
 (cddr '(1 4 5))
 
 (cddr (4 (5 5)))
 
-(terpri)
+(echo)
 
 (await (load-mcp "playwright"))
 (await (load-mcp "linear"))

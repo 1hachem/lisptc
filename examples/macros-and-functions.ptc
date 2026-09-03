@@ -5,45 +5,41 @@ Run me:
   pnpm --filter @repo/interpreter exec \
     node --experimental-transform-types src/lisp.ts ../../examples/macros-and-functions.ptc
 =====================================================================
-(princ "=== 1. lambdas, closures & higher order ===")
-(terpri)
+(echo "=== 1. lambdas, closures & higher order ===")
 
 a closure capturing `n`
 (defun adder (n) (lambda (x) (+ x n)))
 (setq add10 (adder 10))
-(print (add10 5))
+(echo (add10 5))
 => 15
-(print (mapcar add10 (list 1 2 3)))
+(echo (mapcar add10 (list 1 2 3)))
 => 11 12 13
 fold via recursion
 (defun reduce (f acc lst) (if (null lst) acc
     (reduce f (f acc (car lst)) (cdr lst))))
-(print (reduce + 0 (list 1 2 3 4 5)))
+(echo (reduce + 0 (list 1 2 3 4 5)))
 => 15
-(princ "=== 2. recursion ===")
-(terpri)
+(echo "=== 2. recursion ===")
 
 (defun fact (n) (if (<= n 1) 1 (* n (fact (- n 1)))))
-(print (fact 20))
+(echo (fact 20))
 => 2432902008176640000
-(print (fact 30))
+(echo (fact 30))
 => big, exact bigint
 (defun fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
-(print (fib 15))
+(echo (fib 15))
 => 610
-(princ "=== 3. macros & quasiquotation ===")
-(terpri)
+(echo "=== 3. macros & quasiquotation ===")
 
 define our own control macro with `,` unquote and `,@` splice
 (defmacro unless (test &rest body) `(cond ((not ,test) ,@body)))
-(print (unless nil 'ran 'ok))
+(echo (unless nil 'ran 'ok))
 => ok
 a macro that builds code at expansion time
 (defmacro swap (a b) `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
 (setq p 1)
 (setq q 2)
 (swap p q)
-(print (list p q))
+(echo (list p q))
 => 2 1
-(princ "=== done ===")
-(terpri)
+(echo "=== done ===")

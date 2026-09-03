@@ -36,8 +36,8 @@ describe("prose around forms", () => {
 	});
 
 	it("does not end a form at a paren inside a string", () => {
-		expect(evWithOutput('look: (princ "(not a form)") done').output).toBe(
-			"(not a form)",
+		expect(evWithOutput('look: (echo "(not a form)") done').output).toBe(
+			"(not a form)\n",
 		);
 	});
 

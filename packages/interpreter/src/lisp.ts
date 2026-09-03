@@ -33,12 +33,19 @@ function assert(x: boolean, message?: string): asserts x {
 let write: (s: string) => void = () => {};
 let exit: (n: number) => void = () => {}; // Terminate the process with exit code n.
 
-// Redirect interpreter output (used by prin1/princ/terpri). Returns the
+// Redirect interpreter output (used by `echo`). Returns the
 // previous writer so callers can restore it.
 export function setWriter(fn: (s: string) => void): (s: string) => void {
 	const prev = write;
 	write = fn;
 	return prev;
+}
+
+// Write through the current writer. Exported for the compression extension,
+// which overrides `echo` and so has to reach the same sink this file's built-ins
+// do — the writer itself stays private, since only setWriter may replace it.
+export function writeOut(s: string): void {
+	write(s);
 }
 
 // Wire the `(exit code)` built-in to a real process-exit. Defaults to a no-op
@@ -396,6 +403,20 @@ class BuiltInFunc extends Func {
 	}
 }
 
+/*
+ * What kind of callable `x` is, or undefined if it is not one.
+ *
+ * Exported for the compression extension, which reports what a result IS
+ * rather than printing it: a closure's printed form
+ * (`#<closure:1:nil:(#0:0:x)>`) is interpreter internals, and "function" is
+ * what a caller actually wanted to know.
+ */
+export function callableKind(x: unknown): "function" | "macro" | undefined {
+	if (x instanceof Macro) return "macro";
+	if (x instanceof Func) return "function";
+	return undefined;
+}
+
 // Bound variable in a compiled lambda/macro expression
 class Arg {
 	constructor(
@@ -464,11 +485,11 @@ class FormatException extends Error {}
 // Singleton for end-of-file
 export const EndOfFile = { toString: () => "EOF" };
 
-// Singleton returned by output functions (prin1/princ/terpri/print) whose
-// result carries no information beyond "I already wrote my output" — as
-// opposed to nil, which is a meaningful Lisp value (false / empty list).
+// Singleton returned by `echo`, whose result carries no information beyond "I
+// already wrote my output" — as opposed to nil, which is a meaningful Lisp
+// value (false / empty list).
 // A REPL compares its top-level result against this by identity to decide
-// whether to echo it, so a printed value isn't shown a second time.
+// whether to report it, so a step that printed gets no result line on top.
 export const Unspecified = { toString: () => "#<unspecified>" };
 
 //----------------------------------------------------------------------
@@ -793,36 +814,18 @@ export class Interp {
 			},
 		);
 
+		// The REPL prints nothing on its own, so this is the only way anything
+		// reaches the screen. The compression extension overrides it with a
+		// windowed, searchable version; this plain one is the fallback for an
+		// interpreter built without it.
 		this.def(
-			"prin1",
-			1,
-			"(prin1 x)",
-			"Print `x` in re-readable form (strings quoted); returns an unspecified value (a REPL does not echo it, since `x` was already printed).",
-			z.tuple([zAny]),
-			([x]) => {
-				write(str(x, true));
-				return Unspecified;
-			},
-		);
-		this.def(
-			"princ",
-			1,
-			"(princ x)",
-			"Print `x` in human-readable form (strings unquoted); returns an unspecified value (a REPL does not echo it, since `x` was already printed).",
-			z.tuple([zAny]),
-			([x]) => {
-				write(str(x, false));
-				return Unspecified;
-			},
-		);
-		this.def(
-			"terpri",
-			0,
-			"(terpri)",
-			"Print a newline; returns an unspecified value (a REPL does not echo it).",
-			z.tuple([]),
-			() => {
-				write("\n");
+			"echo",
+			-1,
+			"(echo x...)",
+			"Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. `(echo)` alone prints a blank line. Returns an unspecified value, so the REPL reports nothing for a step that ends in an echo — what was printed IS the report.",
+			z.tuple([zList]),
+			([rest]) => {
+				write(`${echoText(rest)}\n`);
 				return Unspecified;
 			},
 		);
@@ -1123,6 +1126,13 @@ export class Interp {
 
 	hasGlobal(sym: Sym): boolean {
 		return this.globals.has(sym);
+	}
+
+	// The value bound to a global, without the "void variable" error `eval`
+	// raises: a caller that already knows the binding exists (a REPL reporting
+	// what a `defun` just defined) wants the value, not an exception.
+	getGlobal(sym: Sym): unknown {
+		return this.globals.get(sym);
 	}
 
 	// Every global binding, for a reverse lookup by value: naming a result
@@ -1946,6 +1956,25 @@ export function str(
 	}
 }
 
+/*
+ * The text `(echo x...)` renders: each argument, space-separated. The newline
+ * `echo` ends on is added by the writer, not counted here — the compression
+ * extension measures this string in words and characters, and an offset that
+ * included a trailing newline would point one past the end of the value.
+ *
+ * Exported because that extension overrides `echo` to window and search the
+ * text, and an offset only means anything if both versions count the same
+ * string. Strings render raw (`quoteString` false) so a rendered document keeps
+ * its newlines instead of becoming one `\n`-escaped line; strings nested inside
+ * a list still print quoted, as `str` always does.
+ */
+export function echoText(args: List): string {
+	const parts: string[] = [];
+	for (let p = args; p !== null; p = p.cdr as List)
+		parts.push(str((p as Cell).car, false));
+	return parts.join(" ");
+}
+
 // Make a string representation of list, omitting its "(" and ")".
 function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 	if (printed === undefined) printed = [];
@@ -2099,8 +2128,6 @@ export const prelude = `
   "Return t if x is nil. Alias: null." (eq x nil))
 (defun consp (x)
   "Return t if x is a cons cell (a non-empty list)." (not (atom x)))
-(defun print (x)
-  "Print x via prin1 followed by a newline; returns an unspecified value (a REPL does not echo it, since x was already printed)." (prin1 x) (terpri))
 (defun identity (x)
   "Return x unchanged." x)
 
@@ -2324,9 +2351,7 @@ export const prelude = `
 (defmacro think (&rest body)
   "(think part...) Print reasoning as narration: each part prints literally, except a comma-unquoted part (or a ,@ splice), which is evaluated first so the trace is grounded in real values instead of guesses. Ends with a newline and returns nil -- put your actual answer in a separate expression, not inside think."
   (list 'progn
-        (list 'dolist (list 'part (list 'quasiquote body))
-              '(princ part) '(princ " "))
-        '(terpri)
+        (list 'apply 'echo (list 'quasiquote body))
         nil))
 
 --- String library ---

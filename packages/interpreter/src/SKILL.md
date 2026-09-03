@@ -132,19 +132,26 @@ Arithmetic built-ins:
 - `(error value)` raise a catchable error carrying `value` (see §9).
 - `(break)` exit the nearest loop; `(return value)` exit it with a value.
 
-**Output** (each prints as a side effect; the REPL already echoes the value of your
-last expression, so don't wrap final answers in these)
-- `(prin1 x)` print re-readable form (strings quoted) · `(princ x)` human-readable
-  (strings unquoted) · `(terpri)` newline · `(print x)` = `prin1` then newline.
+**Output** — `echo` is the ONLY thing that prints. The REPL prints nothing on its
+own (see §9), so nothing you compute is seen by anyone until you echo it.
+- `(echo x...)` print the arguments, space-separated, one newline at the end:
+  strings as they are, everything else re-readable. `(echo)` is a blank line.
+- `(echo x :offset 0 :length n)` print a window of `x`, counted in
+  whitespace-separated words; the `...` line it ends with gives the offset to
+  continue from.
+- `(echo x :match "re" :context 8 :max 10 :ignore-case t)` print only the
+  regions matching a regular expression, each as `@<word-offset>` plus the
+  surrounding words with the match in `[[ ]]`. Feed a reported offset back in as
+  `:offset`. Use this to READ a value; use `grep` to KEEP what matched.
 
-**Reading long results** (see §9 — the REPL truncates what it prints)
-- `(view x :offset 0 :length n)` show a window of `x`, counted in words; the
-  `...` line it ends with gives the offset to continue from.
-- `(head x :length n)` first `n` words · `(tail x :length n)` last `n` words.
-  These window TEXT — `head` is **not** `car`.
-- `(grep x "pattern" :context 8 :max 10 :ignore-case t)` search `x` with a
-  regular expression; each hit prints as `@<word-offset>` plus the surrounding
-  words, with the match in `[[ ]]`. Feed an offset it reports into `view`.
+**Extracting** — these RETURN a value (so the REPL names it, §9) instead of
+printing. Extract into a name, then `echo` a rendering of it.
+- `(head x [n])` the first `n` of `x`; `(tail x [n])` the last `n`. On a list,
+  `n` ELEMENTS — `(head issues 4)` is the first four rows. On text, `n` words.
+- `(grep x "pattern" :group n :max n :ignore-case t)` what `pattern` matched, as
+  a list, or `nil`. On a list, the ELEMENTS whose printed form matches:
+  `(grep issues "auth")` is the issues about auth. On text, the matched
+  substrings: `(grep page "https?://[^ ]+")` is the URLs in it.
 
 **Introspection**
 - `(doc name)` print a binding's signature+doc; `(doc)` lists all documented names.
@@ -207,7 +214,7 @@ cdaar cdadr cddar cdddr`. (`cadr` = 2nd, `caddr` = 3rd element, etc.)
 
 **Misc**
 - `(identity x)` return `x`.
-- `(think part...)` print reasoning as narration: parts print literally, but a
+- `(think part...)` echo reasoning as narration: parts print literally, but a
   `,x` part is evaluated first (e.g. `(think "sum is" ,(+ 1 2))`). Returns `nil`;
   put the real answer in a separate expression.
 
@@ -251,49 +258,89 @@ Three read-only globals mirror the conversation and refresh every step:
 They are read-only (re-assigning them doesn't persist); copy into your own variable
 to keep a value.
 
-### Every result gets a name — use it instead of retyping data
+### The REPL is silent: it names your result and describes its shape
 
-The REPL binds the value of each step to a variable and echoes it as
-`name = value`, named after the function that produced it:
-
-```
-(range 40)
-range-1 = (39 38 37 36 35 …
-```
-
-**Never retype data the REPL has already given you.** Refer to the variable: it
-holds the exact value, costs a handful of tokens, and cannot be misremembered.
-Re-emitting a list, an id, a title or a body by hand is wasted output and the
-main way you produce wrong data. Build on the name instead —
-`(mapcar (lambda (i) (cdr (assoc "id" i))) range-1)`.
-
-A `setq` or `defun` is echoed under the name it already bound, and `nil`/`t`
-print plainly — there is nothing to name.
-
-### Long results are truncated in the printout only
-
-Above a fixed word limit the REPL stops printing and closes with a `...` line:
+Nothing is printed unless you `echo` it. Every result is bound to a variable —
+named after the function that produced it — and reported as one line saying
+what is in it:
 
 ```
-range-1 = (39 38 37 36 35 34
-... 6 of 40 words shown, 34 below. Full value saved in range-1 — read on with
-(view range-1 :offset 6), or search it with (grep range-1 "pattern")
+(acme/list-issues :query "auth bug")
+acme/list-issues-1: list of 27 alists, keys "id" "identifier" "title" "state" "url"
+
+(+ 1 2)
++-1: 3
 ```
 
-The variable holds **all** of it. So when you see that line:
+A small value is reported as itself; a large one is described (`list of 27
+alists, keys …`, `3412 words`, `200 characters`). Either way **the variable
+holds the whole value.** A `setq` or `defun` is reported under the name it
+already bound, and `nil`/`t` report plainly — there is nothing to name.
 
-- Do not re-run the call, and do not answer from the fragment you saw — what
-  you were shown is not the whole value.
-- Prefer computing over reading. `(length range-1)`, `mapcar`, `assoc` and
-  friends work on the complete value, and one form that extracts what you need
-  beats paging through the text.
-- To read it: `(grep range-1 "pattern")` when you know what you are looking
-  for, `(view range-1 :offset N)` to page through it, taking `N` from the line
-  the REPL printed. The variable name is always shown to you — never invent one.
+**Never retype data the REPL produced.** Refer to the variable: it holds the
+exact value, costs a handful of tokens, and cannot be misremembered. Re-emitting
+a list, an id, a title or a body by hand is wasted output and the main way you
+produce wrong data. Build on the name —
+`(mapcar (lambda (i) (cdr (assoc "id" i))) acme/list-issues-1)`.
 
-Side-effect output from `princ`/`print` is capped the same way and saved as
-`output-1`, `output-2`, … Output that is one unbroken word (minified JSON, say)
-is cut by character instead, and the `...` line points at `substring`.
+### Extract into a name, then echo a rendering of it
+
+The shape line tells you what you need to write the next form. Two moves cover
+almost everything: `head`/`tail`/`grep` to pull out a value (which the REPL then
+names), and `echo` to show a rendering of it.
+
+To answer with something the REPL produced, compute the answer and echo THAT:
+
+```
+(grep page-1 "https?://[^ ]+")
+grep-1: ("https://x.dev/a")
+
+(echo (car grep-1))
+https://x.dev/a
+```
+
+```
+(head acme/list-issues-1 4)
+head-1: list of 4 alists, keys "id" "identifier" "title" "state" "url"
+
+(defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
+row: function
+
+(echo (string-join (mapcar row head-1) "\n"))
+| ENG-12 | Auth token refresh fails |
+| ENG-31 | OAuth callback drops the state param |
+```
+
+Both wrong versions look like this — never do either:
+
+```
+(echo "https://x.dev/a")                      the URL typed from a printout
+(echo "| ENG-12 | Auth token refresh fails |")   the rows typed out by hand
+```
+
+You cannot retype what you were never shown, which is why the REPL describes a
+result instead of printing it. Prefer computing over reading: `(length x)`,
+`mapcar`, `assoc` and `grep` work on the complete value, and one form that
+extracts what you need beats paging through text.
+
+### Echo output is capped for you, not for the user
+
+A step may echo a fixed number of words. Past that the text you see stops and a
+`...` line says how much is left and how to continue:
+
+```
+(echo range-1)
+(39 38 37 36 35 34
+... 6 of 40 words shown, 34 below — read on with (echo range-1 :offset 6)
+```
+
+The user reading the conversation sees the whole output; the cap is on your copy
+alone. So when you see that line: do not re-run the call, and do not answer from
+the fragment — page on with the offset it gave you, or `(echo range-1 :match
+"pattern")` when you know what you are looking for. Output that is one unbroken
+word (minified JSON, say) is cut by character instead, and the `...` line points
+at `substring`. Several echoes in one step share the budget; when it runs out you
+are told how many words you were not shown.
 
 ### Ending the loop: prose alone
 
@@ -391,10 +438,13 @@ A *job* is a handle for background work (currently just `load-mcp`).
 - No `let*`: use nested `let`, or `letrec` for mutually-referential bindings.
 - No character type: chars are one-character strings.
 - No comment syntax: remarks go in the prose around the forms, never inside one.
-- The REPL prints your last expression's value automatically — don't wrap final
-  answers in `print`/`princ`.
-- The printout is capped (§9). A result ending in a `...` line is NOT the whole
-  value — the variable it names is. Never conclude anything from a truncated
-  printout.
-- `head`/`tail` window text; they are not `car`/`cdr`. `(head '(1 2 3))` prints
-  the start of `(1 2 3)`, it does not return `1`.
+- The REPL prints NOTHING on its own (§9): it reports a result's name and shape.
+  `echo` is the only way to see a value, and the only way to show one to the user.
+- There is no `print`/`princ`/`terpri`/`view` — one `echo` does all of it, and
+  `:offset`/`:length`/`:match` are how you window and search what it prints.
+- Retyping data the REPL produced is the main way you produce wrong data (§9).
+  Extract it with `grep`/`head` and echo the variable instead.
+- `head`/`tail`/`grep` RETURN a value; only `echo` prints. `(head issues 4)`
+  hands you the first four rows to compute with, it does not show them.
+- Echo output is capped for you but not for the user (§9). Output ending in a
+  `...` line is not everything — page on with the offset it gives you.

@@ -7,6 +7,7 @@
  * args (src/compression.ts) must not pull the MCP SDK in behind it.
  */
 import {
+	Cell,
 	EvalException,
 	LispKeyword,
 	type List,
@@ -39,6 +40,33 @@ export function parsePlist(list: List): Map<string, unknown> {
 		j = rest.cdr as List;
 	}
 	return out;
+}
+
+/*
+ * Split a variadic argument list into leading values and a trailing option
+ * plist — what `(echo x y :offset 40)` needs.
+ *
+ * The split point is the first keyword of any kind, not the first *known* one,
+ * so that a misspelled option reaches `plistOptions` and is rejected. Splitting
+ * on known names only would leave `(echo big :ofset 40)` printing the literal
+ * `:ofset 40` after the whole value, which is precisely the silent-typo failure
+ * `plistOptions` exists to prevent. The cost is that a keyword cannot be echoed
+ * as a bare value — wrap it, `(echo (list :pending))`.
+ */
+export function splitKeywordArgs(list: List): {
+	values: List;
+	options: List;
+} {
+	const values: unknown[] = [];
+	let j = list;
+	while (j !== null) {
+		if (j.car instanceof LispKeyword) break;
+		values.push(j.car);
+		j = j.cdr as List;
+	}
+	let head: List = null;
+	for (let i = values.length - 1; i >= 0; i--) head = new Cell(values[i], head);
+	return { values: head, options: j };
 }
 
 /*

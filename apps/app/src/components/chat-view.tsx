@@ -1,4 +1,5 @@
 import { Conversation, ConversationContent } from "@repo/ui";
+import { useState } from "react";
 import {
 	type ChatMessage,
 	isGreetingMessage,
@@ -17,15 +18,37 @@ function isUser(m: ChatMessage): boolean {
 	return m.type === "human" || m.type === "user";
 }
 
+// Lines of REPL output shown before it is folded away. The model's own view of
+// a result is capped at a word limit; a human's is not (see `toolResult`), so
+// the one thing left to guard against is a long `echo` burying the turns around
+// it in a transcript nobody can scroll past.
+const FOLD_LINES = 25;
+
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { output, error } = toolResult(message);
+	const [expanded, setExpanded] = useState(false);
+	const lines = output.split("\n");
+	const folded = lines.length > FOLD_LINES && !expanded;
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
 				error ? "border-red/60 text-red" : "border-dim/40 text-dim"
 			}`}
 		>
-			<Markdown>{output}</Markdown>
+			<Markdown>
+				{folded ? lines.slice(0, FOLD_LINES).join("\n") : output}
+			</Markdown>
+			{lines.length > FOLD_LINES && (
+				<button
+					type="button"
+					onClick={() => setExpanded(!expanded)}
+					className="text-dim underline decoration-dim/40 hover:text-fg"
+				>
+					{folded
+						? `show ${lines.length - FOLD_LINES} more lines`
+						: "show less"}
+				</button>
+			)}
 		</div>
 	);
 }

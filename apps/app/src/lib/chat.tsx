@@ -11,7 +11,7 @@ export interface ChatMessage {
 	id?: string;
 	type: string;
 	content: unknown;
-	additional_kwargs?: { reasoning_content?: unknown };
+	additional_kwargs?: { reasoning_content?: unknown; display?: unknown };
 }
 
 /**
@@ -228,12 +228,18 @@ export function isToolMessage(message: ChatMessage): boolean {
  * A REPL result rides as a JSON tool-result object (so the model never mistakes
  * it for a human turn). Unwrap it for display: show the printed `output`, and
  * flag failures. Falls back to the raw content if it isn't the expected shape.
+ *
+ * `content` holds the output capped to the model's word limit; when the step
+ * printed more than that, the full text rides in `additional_kwargs.display`
+ * and is what a human should read — there is no reason to truncate a page the
+ * reader can simply scroll.
  */
 export function toolResult(message: ChatMessage): {
 	output: string;
 	error: boolean;
 } {
 	const text = messageText(message);
+	const display = message.additional_kwargs?.display;
 	try {
 		const parsed = JSON.parse(text) as {
 			source?: unknown;
@@ -242,7 +248,8 @@ export function toolResult(message: ChatMessage): {
 		};
 		if (parsed?.source === "lisp-repl")
 			return {
-				output: String(parsed.output ?? ""),
+				output:
+					typeof display === "string" ? display : String(parsed.output ?? ""),
 				error: Boolean(parsed.error),
 			};
 	} catch {

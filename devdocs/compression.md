@@ -5,38 +5,75 @@ Nothing bounded that: `MemoryRepl.eval` appended `str(value)` verbatim and
 `packages/ai` JSON-wrapped the whole string into the model's next turn, so one
 `(playwright/snapshot)` could swallow the window in a single step.
 
-Two mechanisms, and they only work together:
+Then a second problem surfaced, the opposite of the first: the model was
+*shown* data and copied it back by hand — re-typing a URL it had just seen,
+hand-writing a list of issues it already held in a variable. A printout is
+something to retype; a name is not.
 
-- **Every top-level result is bound to a name** — `<function>-<n>` — and echoed
-  as `name = value`. The next step refers to `linear/list-issues-1` instead of
-  retyping the data, which is both cheaper and the only way to be sure the value
-  is exact. Retyping is where hallucinated ids and titles come from.
-- **What gets printed is capped** at a word limit, closing with a `...` line
-  saying how much was shown, how much is left, and which name holds the rest.
+So the REPL prints **nothing** on its own. Three mechanisms:
 
-Truncating is only safe *because* of the naming: nothing is lost by not printing
-it. And naming is worth doing even when nothing is truncated, because the point
-is to stop the model re-emitting data it already has.
+- **Every top-level result is bound to a name** — `<function>-<n>` — and
+  reported as one line, `name: shape`. The next step refers to
+  `acme/list-issues-1` instead of retyping the data, which is both cheaper and
+  the only way to be sure the value is exact.
+- **A result is described, not shown**: `list of 27 alists, keys "id" "title" …`
+  tells the model what it needs to write the next form and gives it nothing to
+  mis-copy. Small values (≤ `INLINE_WORDS`) are reported as themselves, because
+  below that a shape costs more to read than the value it hides.
+- **`echo` is the only thing that writes**, and what the *model* sees of it is
+  capped per step. `head`/`tail`/`grep` do not print at all: they return a
+  value, which is therefore named like any other result. That is the pattern the
+  whole design is for — extract into a name, then echo a rendering of it.
+
+Describing instead of showing is only safe *because* of the naming: nothing is
+lost by not printing it.
 
 Everything lives in `packages/interpreter/src/compression.ts`, an **opt-in
 extension** like secrets and MCP.
 
 ## The pieces
 
-- `Compressor` — the naming counters for one interpreter, plus every render
-  entry point: `value` (a top-level echo), `output` (the `princ`/`print`
-  buffer), `error` (a rendered `EvalException`), `window` / `windowTail` /
-  `search` (the built-ins).
-- `compressionExtension(compressor?)` — installs `view` / `head` / `tail` /
-  `grep` over that compressor.
-- `RawText` — text that prints as itself. `str`'s fallback branch renders an
-  unknown object via `${x}`, so a `toString` is all it takes; the same trick
-  `Unspecified` uses, and no change to the printer.
+- `Compressor` — the naming counters for one interpreter, the current step's
+  echo budget, plus every render entry point: `result` (a top-level result's
+  report line), `window` / `search` (what `echo` writes), `error` (a rendered
+  `EvalException`).
+- `beginStep` / `takeEcho` — the step boundary. A host calls `beginStep` before
+  an eval and `takeEcho` after it for the model's copy of the output.
+- `describe` — value → shape line. Callables report their kind (`function`,
+  `macro`) rather than a closure's internals; a list of alists reports its keys;
+  a blob with no whitespace is measured in characters, since its word count is 1
+  however big it is.
+- `compressionExtension(compressor?)` — installs `head` / `tail` / `grep`, and
+  **overrides** the core `echo` with the windowed, searchable version (the same
+  `interp.def` idiom `secretsExtension` uses on the string primitives, so an
+  interpreter without this extension still has a plain `echo`).
 
 `Compressor` holds **no values**. A named result is an ordinary global, which is
-what lets `view`/`grep` take a *value* rather than a handle — so they work just
+what lets `echo`/`grep` take a *value* rather than a handle — so they work just
 as well on a `let` binding or anything the agent named itself, and `dump`/`doc`
 keep working with no special cases.
+
+## Two copies of every output
+
+A human reads output once, on screen; the model carries it for the rest of the
+loop. So each `echo` produces both, as `Bounded`:
+
+- `user` — what was asked for, uncapped. Written straight to the interpreter's
+  writer.
+- `model` — as much of it as the step's word budget still allows, closing with a
+  `...` line naming the value and the offset to resume from.
+
+The capping happens inside `window`/`search` because that is the only place that
+still knows *which value* the text came from, and so the only place that can
+point the agent back at it by name. Capping the buffer again downstream would
+restart the offsets from zero and send the agent to the wrong place — which is
+exactly the bug the earlier per-eval re-window had.
+
+The budget is **per step, not per call**: an echo loop floods the context just as
+effectively as one huge echo. When a call contributes nothing at all to the
+model's copy, `takeEcho` closes with a note saying how many words it did not
+see. A call that was merely *shortened* needs no such note — its own `...` line
+already says how much is below.
 
 ## Consuming from a host
 
@@ -52,15 +89,16 @@ private freshInterp(): Interp {
 }
 ```
 
-`MemoryRepl` is the choke point: it takes `{ wordLimit }`, names each top-level
-result through `run`'s `onTopLevel` callback, and caps the side-effect buffer
-once at the end. `apps/mcp` and `packages/ai` need no code of their own — they
-pass through `MemoryRepl.eval` and inherit the cap. An MCP client of `apps/mcp`
-therefore now gets truncated results too; that is intended.
+`MemoryRepl` is the choke point. `evalOutput` returns both copies; `eval`
+returns `model`, so `apps/mcp` and `session-server.ts` need no code of their own.
+`packages/ai` uses `evalOutput`: the capped copy goes in the tool message's
+`content` (which the client replays as the next request's input, so uncapped text
+there would re-enter the model's context on every later turn), and the uncapped
+copy rides in `additional_kwargs.display`, which only the UI reads.
 
-`cli.ts` caps only the value echo. It points the interpreter's writer straight
-at stdout, so `princ` output streams uncapped — buffering it to measure would
-break that, and a human at a terminal can scroll.
+`cli.ts` calls `beginStep` per form and writes only the report line. It points
+the interpreter's writer straight at stdout, so a human at a terminal sees the
+uncapped copy and can scroll.
 
 ## Why words, and the character backstop
 
@@ -70,37 +108,44 @@ single megabyte-long "word". `MAX_CHARS_PER_WORD` (12 × the word limit) is a
 hard character backstop that cuts such a blob mid-word.
 
 A cut word cannot be paged past by word offset, so its marker points at the
-prelude's `substring` instead of `view`:
+prelude's `substring` instead of an `:offset`:
 
 ```
-... 4800 of 3145728 characters shown (one unbroken word). Full value saved in
-concat-1 — read on with (substring concat-1 4800 9600)
+... 24 of 40 characters shown (one unbroken word) — read on with
+(echo (substring blob 24 40))
 ```
 
-## Why `grep` reports word offsets, not line numbers
+## Why `echo :match` reports word offsets, not line numbers
 
 `str` of a large list is a **single line** with no newlines in it at all, so a
-line-oriented grep would report one enormous match. Each hit is reported as
+line-oriented search would report one enormous match. Each hit is reported as
 `@<word-offset>` plus a `:context`-word window, which behaves the same on a
 one-line Lisp render and on multi-line text — and the offset feeds straight back
-into `(view x :offset N)`. Hits falling inside a window already printed are
+into `(echo x :offset N)`. Hits falling inside a window already printed are
 counted rather than repeated.
+
+`:match` is for *reading* a value you cannot yet name a pattern for. `grep` is
+for *keeping* what matched, and the summary line says so.
 
 ## Naming rules
 
-In order, `Compressor.nameFor`:
+In order, `Compressor.result` and `nameFor`:
 
-1. A value that is a symbol already bound as a global — what `defun`/`defmacro`
-   return — is echoed alone (`f`, not `f = f`).
-2. `nil` and `t` are echoed plainly. They carry nothing a later step could refer
-   to, and every side-effecting loop returns `nil`; naming those would bury the
-   results that matter under `dotimes-1 = nil`.
-3. A `setq` reports the symbol **it** assigned, read off the form (the last one,
+1. `Unspecified` — what `echo` returns — reports nothing at all. The step has
+   already said what it had to say; a line on top would only announce that
+   printing happened.
+2. `nil` and `t` are reported plainly. They carry nothing a later step could
+   refer to, and every side-effecting loop returns `nil`; naming those would
+   bury the results that matter under `dotimes-1: nil`.
+3. A value that is a symbol already bound as a global — what `defun`/`defmacro`
+   return — is reported under that name, describing what it now holds
+   (`f: function`).
+4. A `setq` reports the symbol **it** assigned, read off the form (the last one,
    for `(setq a 1 b 2)`). Reverse lookup alone would only find it for a `Cell`
    or a string, not for a number.
-4. A value an existing global already holds reuses that name — so a result the
+5. A value an existing global already holds reuses that name — so a result the
    agent bound itself is not given a second one.
-5. Otherwise the head symbol of the form plus a per-name counter, skipping any
+6. Otherwise the head symbol of the form plus a per-name counter, skipping any
    name already taken so an agent's own `foo-1` is never clobbered. A form with
    no symbol at its head (`((lambda …) 1)`) becomes `result-N`.
 
@@ -109,31 +154,37 @@ Every bound name carries a `Doc`, so `(doc range-1)` explains itself — and
 
 ## One canonical text per value
 
-A word offset only means something if truncation and `view` measure the same
-string, so both go through `canonical`: raw for a string, `str` otherwise.
-Strings bypass `str` because it escapes newlines as a literal `\n`, which turns
-a long document into one unreadable line whose offsets would not match what
-`view` shows.
+A word offset only means something if every command counting words measures the
+same string, so they all go through `canonical`: raw for a string, `str`
+otherwise. That is also what `echoText` (in `src/lisp.ts`) renders, so an offset
+`echo` reports can be fed straight back to it. Strings bypass `str` because it
+escapes newlines as a literal `\n`, which turns a long document into one
+unreadable line whose offsets would not match what was shown.
 
-The visible consequence is deliberate: a value **under** the cap prints through
-`str` exactly as before (a short string stays quoted and re-readable), while a
-truncated string falls back to its raw text — which is what `view` will show
-anyway, and the marker makes the difference unambiguous.
+`echoText` deliberately does **not** include the trailing newline `echo` ends
+on: it is measured in words and characters, and an offset that counted the
+newline would point one character past the end of the value — enough to make the
+`substring` hint in a hard-cut marker fail.
 
 ## Known limitations
 
 - `str(value)` is still materialised in full before slicing (as it always was),
   so a pathological shared structure can blow up before the cap applies.
-- A truncated list prints without its closing paren. The marker says so, but the
-  fragment is not readable Lisp.
-- Inner strings inside a truncated list are still `\n`-escaped by `str`; only a
-  top-level string renders raw. An unescaping printer is a separate change.
+- A truncated echo of a list prints without its closing paren. The marker says
+  so, but the fragment is not readable Lisp.
+- Inner strings inside a list are still `\n`-escaped by `str`; only a top-level
+  string renders raw. An unescaping printer is a separate change.
+- `describe` reads the keys off the first element of a list of alists and only
+  checks the rest for agreement (`(keys vary)`); it does not report the union.
 
 ## Teaching the model
 
-Half the feature is the prompt: a model that is not told reads a `...` line as
-the end of the value and keeps retyping data. `SKILL.md` §5 lists the built-ins
-and §9 explains the naming and the cap; POLICY rules 10 and 11 in
-`packages/ai/src/prompts/lisp.ts` say it outright. `test/prose-surfaces.test.ts`
-and `packages/ai/test/prompt.test.ts` pin both so the surface cannot silently
-regress.
+Half the feature is the prompt: a model that is not told waits for values it
+will never be shown, and keeps retyping data it could have named. `SKILL.md` §5
+lists the built-ins — `echo` under Output, `head`/`tail`/`grep` under Extracting
+— and §9 explains the silence, the report line, and the extract-then-echo
+pattern with a worked example of each failure. POLICY rules 2, 10, 11 and 11a in
+`packages/ai/src/prompts/lisp.ts` say it outright, and rule 4c corrects the one
+thing the model cannot observe: the user *does* read what a step echoes.
+`test/prose-surfaces.test.ts` and `packages/ai/test/prompt.test.ts` pin both
+surfaces so they cannot silently regress.
