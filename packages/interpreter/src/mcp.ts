@@ -24,6 +24,7 @@ import {
 	type DocArg,
 	EvalException,
 	type Interp,
+	jsonToLisp,
 	LispKeyword,
 	type List,
 	newLispKeyword,
@@ -187,22 +188,6 @@ function lispToJson(x: unknown): unknown {
 	// is the one path that reveals a secret's value, into the outgoing call
 	// (its toString/display form stays redacted; see src/secrets.ts).
 	if (typeof (x as ToJson).toJSON === "function") return (x as ToJson).toJSON();
-	return String(x);
-}
-
-function jsonToLisp(x: unknown): unknown {
-	if (x === null || x === undefined) return null;
-	if (x === true) return true;
-	if (x === false) return null; // Lisp has only nil for falsity
-	if (typeof x === "number" || typeof x === "bigint") return x;
-	if (typeof x === "string") return x;
-	if (Array.isArray(x)) return arrayToList(x.map(jsonToLisp));
-	if (typeof x === "object") {
-		const pairs = Object.entries(x as Record<string, unknown>).map(
-			([k, v]) => new Cell(k, jsonToLisp(v)),
-		);
-		return arrayToList(pairs);
-	}
 	return String(x);
 }
 

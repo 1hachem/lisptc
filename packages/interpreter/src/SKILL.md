@@ -67,10 +67,10 @@ list of core special forms:
 | `try` | `(try body (catch (e) handler...))` | Eval `body`; on error, bind `e` to the error value and run the handler. See §9. |
 
 Everything else that looks like a form — `if`, `when`, `unless`, `and`, `or`,
-`let`, `letrec`, `while`, `dolist`, `dotimes`, `case`, `defun`, `defmacro` — is a
-**prelude macro** (§8), not a core special form, but you use them the same way.
-There is no `let*`, `setf`, `block`/`return-from`, `unwind-protect`, or
-`throw`/`catch` pair.
+`let`, `let*`, `letrec`, `while`, `dolist`, `dotimes`, `case`, `defun`,
+`defmacro` — is a **prelude macro** (§8), not a core special form, but you use
+them the same way. There is no `setf`, `block`/`return-from`, `unwind-protect`,
+or `throw`/`catch` pair.
 
 Tail calls are optimized: deep recursion in tail position (and loop macros) does
 not overflow the stack. Prefer tail-recursive helpers or the loop macros for
@@ -127,6 +127,19 @@ Arithmetic built-ins:
 - `(char s i)` one-char string at index `i`, or `nil` · `(concat s...)` concatenate
   · `(string-upcase s)` · `(string-downcase s)`.
 
+**Parsing text into data**
+- `(read s)` parse the FIRST Lisp expression in the string `s` and return it as
+  data, unevaluated: `(read "(+ 1 2)")` → the list `(+ 1 2)`, not `3`. Text after
+  that expression is ignored; a string with no expression errors.
+- `(json-parse s)` parse a JSON document: object → alist with string keys, array
+  → list, `true` → `t`, `false` and `null` → `nil`. Numbers arrive as floats
+  (`7` reads back as `7.0`; `=` still compares them numerically).
+  `(cdr (assoc "title" (json-parse s)))` reads a field.
+- The two are different parsers, not aliases: JSON is not Lisp syntax, so `read`
+  on a JSON document returns junk (`{` is an ordinary symbol character, so
+  `{"a": 1}` reads as the symbol `{`) rather than erroring. Use `json-parse` for
+  JSON, `read` for Lisp.
+
 **Eval / control**
 - `(apply f args)` call `f` with the elements of list `args`.
 - `(error value)` raise a catchable error carrying `value` (see §9).
@@ -156,8 +169,9 @@ cdaar cdadr cddar cdddr`. (`cadr` = 2nd, `caddr` = 3rd element, etc.)
   `(nconc lists...)` destructive concat.
 - `(mapcar f list)` new list of `f` over each element. Example:
   `(mapcar (lambda (n) (* n n)) '(1 2 3))` → `(1 4 9)`.
-- NOTE: there is no `mapc`, `reduce`, `filter`, `remove`, `nth`, `elt`, or `sort`
-  in the prelude. Build them with recursion, `mapcar`, or `dolist`.
+- `(nth n list)` the element at index `n`, counting from 0; `nil` past the end.
+- NOTE: there is no `mapc`, `reduce`, `filter`, `remove`, `elt`, or `sort` in the
+  prelude. Build them with recursion, `mapcar`, or `dolist`.
 
 **Predicates**
 - `(not x)` / `(null x)` true if `nil` · `(consp x)` true if a cons ·
@@ -177,6 +191,9 @@ cdaar cdadr cddar cdddr`. (`cadr` = 2nd, `caddr` = 3rd element, etc.)
 
 **Binding macros**
 - `(let ((name val)...) body...)` parallel bindings (a bare `name` binds `nil`).
+- `(let* ((name val)...) body...)` sequential bindings — each `val` may use the
+  names bound before it, e.g.
+  `(let* ((issue (car issues)) (state (cdr (assoc "state" issue)))) …)`.
 - `(letrec ((name val)...) body...)` bindings may reference each other — use for
   local recursive functions.
 
@@ -301,6 +318,10 @@ answer to the user, e.g. `the sum is 3`.
 - Each loaded tool becomes a global `<server>/<tool>` called with keyword args and
   **blocking** (returns the result directly), e.g.
   `(acme/list_widgets :query "blue")`. Inspect one with `(doc 'acme/list_widgets)`.
+- A tool result arrives already converted to Lisp data (JSON object → alist with
+  string keys, array → list), so read it with `assoc`/`cdr`/`mapcar`/`nth` — no
+  parsing step. Only when a tool hands back a *string* that happens to contain
+  JSON do you need `(json-parse s)` (§5).
 - Full example — find the server, load it, find the tool, call it. The server and
   tool names below are made up: you never know them in advance, so start from
   `search-mcps` and let each step tell you the next name.
@@ -334,8 +355,11 @@ A *job* is a handle for background work (currently just `load-mcp`).
 - Only `nil` is false — `0`, `0.0`, and `""` are all TRUE.
 - Integer division: `/` gives a float; use `truncate` for an exact integer.
 - Integer vs float shows in output as `3` vs `3.0`.
-- No `nth`/`reduce`/`filter`/`mapc`/math library — write them or use `mapcar`/`dolist`/recursion.
-- No `let*`: use nested `let`, or `letrec` for mutually-referential bindings.
+- No `reduce`/`filter`/`mapc`/math library — write them or use `mapcar`/`dolist`/recursion.
+- `read` parses LISP text, `json-parse` parses JSON. `read` on JSON does not
+  error, it returns junk (§5).
+- JSON numbers come back as floats, so an integer id prints as `7.0`; `=` and
+  `eql` still compare it equal to `7`.
 - No character type: chars are one-character strings.
 - No comment syntax: remarks go in the prose around the forms, never inside one.
 - The REPL prints your last expression's value automatically — don't wrap final
