@@ -12,6 +12,27 @@ describe("string library", () => {
 		expect(ev(`(substring "hello world" 6)`)).toBe(`"world"`);
 		expect(ev(`(substring "hello world" 0 5)`)).toBe(`"hello"`);
 	});
+	test("string converts any value to its printed form", () => {
+		expect(ev("(string 12)")).toBe('"12"');
+		expect(ev("(string -7)")).toBe('"-7"');
+		expect(ev("(string 3.0)")).toBe('"3.0"');
+		expect(ev("(string (quote foo))")).toBe('"foo"');
+		expect(ev("(string nil)")).toBe('"nil"');
+		expect(ev("(string t)")).toBe('"t"');
+		expect(ev("(string (quote (1 2)))")).toBe('"(1 2)"');
+	});
+	test("string leaves a string as itself, unquoted", () => {
+		expect(ev('(string "hi")')).toBe('"hi"');
+		expect(ev('(string "say \\"hi\\"")')).toBe('"say \\"hi\\""');
+	});
+	test("string composes with concat, e.g. for a chapter number", () => {
+		expect(ev('(concat "Chapter " (string 3) ": intro")')).toBe(
+			'"Chapter 3: intro"',
+		);
+		expect(ev('(string-join (mapcar string (quote (1 2 3))) ", ")')).toBe(
+			'"1, 2, 3"',
+		);
+	});
 	test("case", () => {
 		expect(ev(`(string-upcase "Foo")`)).toBe(`"FOO"`);
 		expect(ev(`(string-downcase "Foo")`)).toBe(`"foo"`);

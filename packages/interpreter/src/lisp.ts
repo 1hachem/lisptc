@@ -563,6 +563,34 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
+// Build a list from an array, right to left.
+function fromArray(arr: unknown[]): List {
+	let list: List = null;
+	for (let i = arr.length - 1; i >= 0; i--) list = new Cell(arr[i], list);
+	return list;
+}
+
+// Parsed JSON as Lisp data: object -> alist with string keys (in the document's
+// own key order), array -> list, string/number unchanged, true -> t. Both false
+// and null become nil, since nil is Lisp's only falsity — a round trip through
+// Lisp cannot tell them apart. Used by `json-parse` and by the MCP layer, whose
+// tool results arrive as JSON (src/mcp.ts).
+export function jsonToLisp(x: unknown): unknown {
+	if (x === null || x === undefined) return null;
+	if (x === true) return true;
+	if (x === false) return null;
+	if (typeof x === "number" || typeof x === "bigint") return x;
+	if (typeof x === "string") return x;
+	if (Array.isArray(x)) return fromArray(x.map(jsonToLisp));
+	if (typeof x === "object")
+		return fromArray(
+			Object.entries(x as Record<string, unknown>).map(
+				([k, v]) => new Cell(k, jsonToLisp(v)),
+			),
+		);
+	return String(x);
+}
+
 export type InterpExtension = (interp: Interp) => void;
 
 export interface InterpOptions {
@@ -935,6 +963,14 @@ export class Interp {
 			},
 		);
 		this.def(
+			"string",
+			1,
+			"(string x)",
+			'Convert `x` to a string: its printed form, with a string left as itself rather than quoted. `(string 12)` is "12", `(string \'foo)` is "foo", `(string nil)` is "nil". Numbers keep the exact/inexact distinction, so `(string 3.0)` is "3.0", not "3".',
+			z.tuple([zAny]),
+			([x]) => str(x, false),
+		);
+		this.def(
 			"string-upcase",
 			1,
 			"(string-upcase s)",
@@ -949,6 +985,49 @@ export class Interp {
 			"Return `s` with all letters converted to lower case.",
 			z.tuple([zString]),
 			([s]) => s.toLowerCase(),
+		);
+
+		// --- Text into data. Two separate parsers because JSON is not Lisp
+		// syntax: {} objects and true/false/null have no reader syntax here, so
+		// `read` cannot parse a JSON document and `json-parse` cannot read Lisp.
+		this.def(
+			"read",
+			1,
+			"(read s)",
+			'Parse the first Lisp expression in the string `s` and return it as DATA, unevaluated: `(read "(+ 1 2)")` returns the list `(+ 1 2)`, not 3. Anything after that first expression is ignored. Errors if `s` holds no expression. JSON is not Lisp syntax — parse it with `json-parse`.',
+			z.tuple([zString]),
+			([s]) => {
+				const reader = new Reader();
+				reader.push(s);
+				try {
+					return reader.read();
+				} catch (ex) {
+					if (ex === EndOfFile)
+						throw new EvalException("read: no expression in", s);
+					throw ex;
+				}
+			},
+		);
+		this.def(
+			"json-parse",
+			1,
+			"(json-parse s)",
+			'Parse the JSON document in the string `s` into Lisp data: an object becomes an alist with string keys (`(cdr (assoc "title" x))` reads a field), an array becomes a list, `true` becomes t, and both `false` and `null` become nil. Errors on invalid JSON.',
+			z.tuple([zString]),
+			([s]) => {
+				try {
+					return jsonToLisp(JSON.parse(s));
+				} catch (ex) {
+					// The parser's own message (with its position) rather than the
+					// document: `s` can be a whole tool result, and an error is
+					// spent context like anything else the REPL reports.
+					throw new EvalException(
+						"json-parse: invalid JSON",
+						ex instanceof Error ? ex.message : String(ex),
+						false,
+					);
+				}
+			},
 		);
 
 		this.def(
@@ -2198,6 +2277,15 @@ export const prelude = `
                      (sets (cdr x))))))
     \`(let ,(vars args) ,@(sets args) ,@body)))
 
+(defmacro let* (args &rest body)
+  "Like let, but the bindings happen in sequence, so each one can use the values bound before it."
+  (let (nest)
+    (defun nest (bs)
+      (if (null bs)
+          \`(let () ,@body)
+        \`(let (,(car bs)) ,(nest (cdr bs)))))
+    (nest args)))
+
 (defun _append (x y)
   (if (null x)
       y
@@ -2217,6 +2305,13 @@ export const prelude = `
 (defun mapcar (f x)
   "Return a new list of f applied to each element of x."
   (and x (cons (f (car x)) (mapcar f (cdr x)))))
+
+(defun nth (n x)
+  "Return the element of the list x at index n, counting from 0; nil if n is past the end."
+  (cond ((null x) nil)
+        ((< n 0) nil)
+        ((< n 1) (car x))
+        (t (nth (- n 1) (cdr x)))))
 
 (defmacro or (x &rest y)
   "Evaluate left to right; return the first non-nil value, else nil."

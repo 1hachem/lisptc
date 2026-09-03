@@ -38,6 +38,20 @@ describe("append / mapcar / membership / assoc", () => {
 		expect(ev("(mapcar car '((1 a) (2 b)))")).toBe("(1 2)");
 	});
 
+	it("nth indexes a list from 0", () => {
+		expect(ev("(nth 0 '(a b c))")).toBe("a");
+		expect(ev("(nth 2 '(a b c))")).toBe("c");
+		expect(ev("(nth 3 '(a b c))")).toBe("nil");
+		expect(ev("(nth 0 nil)")).toBe("nil");
+		expect(ev("(nth -1 '(a b c))")).toBe("nil");
+	});
+
+	it("nth walks a long list without overflowing the stack", () => {
+		expect(
+			ev("(setq l nil) (dotimes (i 20000) (setq l (cons i l))) (nth 19999 l)"),
+		).toBe("0");
+	});
+
 	it("member / memq", () => {
 		expect(ev("(member 3 '(1 2 3 4))")).toBe("(3 4)");
 		expect(ev("(member 9 '(1 2 3))")).toBe("nil");

@@ -10,6 +10,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "start": "PORT=${PORT:-3000} node .output/server/index.mjs",
+    "favicon": "node --no-warnings --experimental-transform-types scripts/favicon.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

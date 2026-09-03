@@ -33,6 +33,7 @@ import {
 	type Interp,
 	type InterpExtension,
 	type List,
+	str,
 	zList,
 } from "./lisp.ts";
 import type { ToJson } from "./types.ts";
@@ -343,6 +344,17 @@ export function registerSecrets(interp: Interp, store: SecretsStore): void {
 			}
 			return propagateTaint(out, sources);
 		},
+	);
+	// A secret is already a string, so converting one is the identity — anything
+	// else would either launder the taint away or hand back the redaction as a
+	// plain string.
+	interp.def(
+		"string",
+		1,
+		"(string x)",
+		'Convert `x` to a string: its printed form, with a string left as itself rather than quoted. `(string 12)` is "12", `(string \'foo)` is "foo", `(string nil)` is "nil". A secret converts to itself, staying tainted.',
+		z.tuple([z.unknown()]),
+		([x]) => (x instanceof Secret ? x : str(x, false)),
 	);
 	interp.def(
 		"string-upcase",

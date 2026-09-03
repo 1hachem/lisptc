@@ -1,6 +1,6 @@
 import { Typewriter } from "@repo/ui";
-import { useEffect, useState } from "react";
 import { useChatSession } from "../lib/chat.tsx";
+import { usePrefersReducedMotion } from "../lib/motion.ts";
 
 /**
  * The agent's opening line: a real assistant turn (it is `messages[0]`, and it is
@@ -19,27 +19,6 @@ import { useChatSession } from "../lib/chat.tsx";
  * thing pretending to be this one. The reveal is `@repo/ui`'s typewriter, the
  * primitive this UI already owns, and not a second one written here.
  */
-
-/**
- * Someone who asked for less motion gets the line whole.
- *
- * The reveal is decoration: it carries no information the static line doesn't,
- * which is exactly the test for what this query should switch off. Read live
- * rather than once, because the setting can change under a running page.
- */
-function usePrefersReducedMotion(): boolean {
-	const [reduced, setReduced] = useState(false);
-
-	useEffect(() => {
-		const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-		const read = () => setReduced(query.matches);
-		read();
-		query.addEventListener("change", read);
-		return () => query.removeEventListener("change", read);
-	}, []);
-
-	return reduced;
-}
 
 export function Greeting() {
 	const { greeting } = useChatSession();

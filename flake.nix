@@ -65,6 +65,10 @@
           go-task
           infisical
           git
+          # `magick`, for `pnpm --filter app favicon`: the tab icon is generated
+          # from the bot engine and rasterised into a .ico. Only that script needs
+          # it — the icon is checked in, so no build or test does.
+          imagemagick
           ptcrepl-dev
           ptcfmt-dev
           # Nix-built browsers with system deps, used via PLAYWRIGHT_MCP_EXECUTABLE.

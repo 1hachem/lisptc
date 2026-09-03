@@ -2,7 +2,6 @@ import {
 	FetchStreamTransport,
 	useStream,
 } from "@langchain/langgraph-sdk/react";
-import type { ExpressionId } from "@repo/bloub";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
@@ -12,17 +11,6 @@ export interface ChatMessage {
 	type: string;
 	content: unknown;
 	additional_kwargs?: { reasoning_content?: unknown; display?: unknown };
-}
-
-/**
- * A face handed to the agent, named in the avatar's own vocabulary — one of
- * `@repo/bloub`'s sixteen expressions, with no intermediate set of moods to keep
- * in step with it. Minted fresh on every call so asking for the same expression
- * twice still reads as a new request: whoever wears it watches this object's
- * identity, not its value.
- */
-export interface Reaction {
-	expression: ExpressionId;
 }
 
 interface ChatSession {
@@ -38,10 +26,6 @@ interface ChatSession {
 	isLoading: boolean;
 	/** the id every event of this conversation is traced under */
 	threadId: string;
-	/** the face the agent was last asked to wear */
-	reaction: Reaction | null;
-	/** put an expression on the agent, whatever prompted it */
-	react: (expression: ExpressionId) => void;
 	/** set when the last run failed (e.g. the agent/provider errored) */
 	error?: string;
 	/** send a plain-text user turn */
@@ -102,7 +86,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		},
 	});
 	const streamed = stream.messages as ChatMessage[];
-	const [reaction, setReaction] = useState<Reaction | null>(null);
 
 	// Picked in an effect, not in the initialiser: the page is server-rendered and
 	// both inputs disagree across that boundary — the die comes up differently and
@@ -126,8 +109,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		fresh: streamed.length === 0,
 		isLoading: stream.isLoading,
 		threadId,
-		reaction,
-		react: (expression) => setReaction({ expression }),
 		error: stream.error
 			? stream.error instanceof Error
 				? stream.error.message
@@ -151,7 +132,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		stop: () => stream.stop(),
 		clear: () => {
 			setThreadId(crypto.randomUUID());
-			setReaction(null);
 			// a new conversation gets a new opening line, and a fresh look at the clock
 			setGreeting(greetingMessage());
 		},
