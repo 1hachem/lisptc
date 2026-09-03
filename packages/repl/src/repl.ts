@@ -34,7 +34,11 @@ import {
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+import {
+	EnvSecretsStore,
+	type SecretsStore,
+	secretsExtension,
+} from "@repo/interpreter/secrets.ts";
 
 // A REPL owns an interpreter and can be reset to a fresh one.
 export interface Repl {
@@ -80,13 +84,21 @@ export class MemoryRepl implements InMemoryRepl {
 	// Recreated with every interp: the naming counters must die with the globals
 	// they named, or a reset() leaves the count climbing past unbound names.
 	private compressor: Compressor;
+	// One store for the life of the REPL: freshInterp() re-installs the secrets
+	// extension over this same store on every reset, so a secret a host pushed
+	// into it (via `repl.secrets.set(...)`) survives the reset instead of dying
+	// with the interp. Env-seeded at construction from `REPL_*` vars.
+	readonly secrets: SecretsStore;
 	private readonly wordLimit: number;
 
-	constructor(options: { wordLimit?: number } = {}) {
+	constructor(
+		options: { wordLimit?: number; secretsStore?: SecretsStore } = {},
+	) {
 		// Assigned before freshInterp(), which reads it. (Same ordering trap the
 		// setup() hook below warns about.)
 		this.wordLimit = options.wordLimit ?? MAX_WORDS;
 		this.compressor = new Compressor(this.wordLimit);
+		this.secrets = options.secretsStore ?? new EnvSecretsStore();
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -96,11 +108,12 @@ export class MemoryRepl implements InMemoryRepl {
 
 	private freshInterp(): Interp {
 		this.compressor = new Compressor(this.wordLimit);
-		// The secrets addon owns loading (from `REPL_*` env vars here — an embedded
-		// REPL does not auto-load a `.env` file); the REPL just installs it.
+		// The secrets addon owns loading; an embedded REPL seeds its store from
+		// `REPL_*` env vars and does NOT auto-load a `.env` file — that is
+		// CLI-only. The store outlives the interp (see the field comment).
 		const interp = new Interp({
 			extensions: [
-				secretsExtension(),
+				secretsExtension({ store: this.secrets }),
 				mcpExtension(),
 				compressionExtension(this.compressor),
 			],

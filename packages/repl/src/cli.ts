@@ -24,7 +24,10 @@ import {
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+import {
+	EnvSecretsStore,
+	secretsExtension,
+} from "@repo/interpreter/secrets.ts";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -48,6 +51,9 @@ class InteractiveRepl implements Repl {
 	private readonly stdInTokens: Reader = new Reader();
 	// Recreated with every interp, so reset() restarts the result numbering.
 	private compressor: Compressor = new Compressor();
+	// One store for the process: freshInterp() re-seeds it from env/`.env` on
+	// every reset (merge, later wins), so a secret loaded once stays loaded.
+	private readonly secretsStore = new EnvSecretsStore();
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -63,7 +69,7 @@ class InteractiveRepl implements Repl {
 		// / nearest `.env`); the secretsExtension owns that loading via `envFile`.
 		const interp = new Interp({
 			extensions: [
-				secretsExtension({ envFile: true }),
+				secretsExtension({ store: this.secretsStore, envFile: true }),
 				mcpExtension(),
 				compressionExtension(this.compressor),
 			],
