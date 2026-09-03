@@ -125,9 +125,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 				content: m.content,
 				id: m.id,
 			}));
-			stream.submit({
-				messages: [...history, { type: "human", content: trimmed }],
-			});
+			// The id is named here rather than left to the server: it is this turn's
+			// React key, and the server echoes it back verbatim, so the message shown
+			// on send and the one that comes back are the same row.
+			const turn = [
+				...history,
+				{ type: "human", content: trimmed, id: crypto.randomUUID() },
+			];
+			// Shown optimistically because `submit` first resets the stream's values
+			// to `initialValues` — `{}` for a stateless transport — so without this
+			// the transcript blanks out until the server's opening `values` event
+			// echoes it back. That empty frame collapses the scroll container, which
+			// throws a reader who was part-way up the conversation to the top and
+			// then scrolls them back down once the messages return.
+			stream.submit(
+				{ messages: turn },
+				{ optimisticValues: { messages: turn } },
+			);
 		},
 		stop: () => stream.stop(),
 		clear: () => {

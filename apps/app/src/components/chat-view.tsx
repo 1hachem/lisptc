@@ -1,4 +1,9 @@
-import { Conversation, ConversationContent } from "@repo/ui";
+import {
+	Conversation,
+	ConversationContent,
+	useStickToBottomContext,
+} from "@repo/ui";
+import { useEffect } from "react";
 import {
 	type ChatMessage,
 	isGreetingMessage,
@@ -30,11 +35,47 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 	);
 }
 
+/**
+ * Sending is a jump to the bottom: the turn just typed, and the reply about to
+ * land under it, are what the sender wants in view. Instant, not animated —
+ * being carried down through the whole transcript is the thing worth avoiding.
+ */
+function StickOnSend({ turn }: { turn: string | undefined }) {
+	const { scrollToBottom } = useStickToBottomContext();
+	useEffect(() => {
+		if (turn) scrollToBottom("instant");
+	}, [turn, scrollToBottom]);
+	return null;
+}
+
+/**
+ * The way back down, for a reader who has travelled up the transcript. It rides
+ * at the foot of the conversation — directly above the composer — and shows
+ * itself only once the view has left the bottom, which the container reports
+ * with a 70px grace so it never flickers in on the last line.
+ */
+function ScrollToLatest() {
+	const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+	if (isAtBottom) return null;
+	return (
+		<button
+			type="button"
+			onClick={() => scrollToBottom("instant")}
+			className="absolute bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-[7px] rounded-none bg-bg2 px-[9px] py-px text-[11.5px] text-fg hover:brightness-125"
+		>
+			<span>latest</span>
+			<span className="text-dim">▼</span>
+		</button>
+	);
+}
+
 export function ChatView() {
 	const { messages, error } = useChatSession();
+	const lastSent = messages.filter(isUser).at(-1)?.id;
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
+			<StickOnSend turn={lastSent} />
 			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
 				{/*
 				 * The opening line is a turn like any other, so it stays put once the
@@ -95,7 +136,15 @@ export function ChatView() {
 						{error}
 					</div>
 				)}
+				{/*
+				 * Room to scroll past the last turn, so the tail of the conversation
+				 * does not come to rest hard against the composer. It is real
+				 * scrollable height, so a short conversation — which does not fill the
+				 * screen — is left where it is.
+				 */}
+				<div aria-hidden className="h-[10vh]" />
 			</ConversationContent>
+			<ScrollToLatest />
 		</Conversation>
 	);
 }
