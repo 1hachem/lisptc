@@ -36,6 +36,7 @@ import {
 	newLispKeyword,
 	zList,
 } from "./lisp.ts";
+import type { ToJson } from "./types.ts";
 
 export type { JobSettledMessage, SettledReply } from "./jobs-protocol.ts";
 
@@ -180,7 +181,7 @@ export class WorkerJobsRuntime implements JobsRuntime {
 // main-thread finalizer that runs once when the job is first collected (e.g.
 // installing an MCP server's tool bindings). Domain-agnostic: the finalizer is
 // supplied by whoever starts the job.
-export class Job {
+export class Job implements ToJson {
 	finalized = false;
 	cached: unknown;
 	constructor(
@@ -191,6 +192,12 @@ export class Job {
 
 	toString(): string {
 		return `#<job ${this.label} ${this.jobId.slice(0, 8)}>`;
+	}
+
+	// The wire form when a job handle reaches an outgoing call: its runtime id,
+	// so the handle stays addressable rather than baking in the display form.
+	toJSON(): string {
+		return this.jobId;
 	}
 }
 

@@ -31,6 +31,7 @@ import {
 	Sym,
 	zList,
 } from "./lisp.ts";
+import type { ToJson } from "./types.ts";
 
 // A tool/server name argument: a string, symbol or keyword, coerced to string.
 const zName = z
@@ -185,8 +186,7 @@ function lispToJson(x: unknown): unknown {
 	// The wire form: a value with a toJSON knows how to serialize itself — this
 	// is the one path that reveals a secret's value, into the outgoing call
 	// (its toString/display form stays redacted; see src/secrets.ts).
-	if (typeof (x as { toJSON?: unknown }).toJSON === "function")
-		return (x as { toJSON(): unknown }).toJSON();
+	if (typeof (x as ToJson).toJSON === "function") return (x as ToJson).toJSON();
 	return String(x);
 }
 

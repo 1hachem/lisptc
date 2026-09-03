@@ -35,6 +35,7 @@ import {
 	type List,
 	zList,
 } from "./lisp.ts";
+import type { ToJson } from "./types.ts";
 
 // A host-supplied secret: a bare value, or a value plus a description shown by
 // `(secrets)`.
@@ -194,7 +195,7 @@ export function secretsExtension(
 // the value is revealed only through the toJSON wire form, which mcp's
 // lispToJson honors when serializing an outgoing call. `keys` are the source
 // secrets (>1 after combining).
-class Secret {
+class Secret implements ToJson {
 	readonly keys: readonly string[];
 	constructor(
 		readonly value: string,

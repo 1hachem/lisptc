@@ -9,6 +9,7 @@
     "./grammar.ts": "./src/grammar.ts",
     "./source.ts": "./src/source.ts",
     "./arith.ts": "./src/arith.ts",
+    "./types.ts": "./src/types.ts",
     "./secrets.ts": "./src/secrets.ts",
     "./jobs.ts": "./src/jobs.ts",
     "./jobs-protocol.ts": "./src/jobs-protocol.ts",
