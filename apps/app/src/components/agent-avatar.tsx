@@ -5,11 +5,11 @@ import {
 	type GazeScript,
 	type Look,
 	PITCH_MAX,
-	type StateId,
 	YAW_MAX,
 } from "@repo/bloub";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Reaction, useChatSession } from "../lib/chat.tsx";
+import { useAgentMood } from "../lib/mood.ts";
 
 /**
  * The agent's face, at the foot of the transcript, in place of the `…` that used
@@ -20,34 +20,6 @@ import { type Reaction, useChatSession } from "../lib/chat.tsx";
  * Mounting it per run would replace every transition with a cut, and the dots of
  * `thinking` are the clearest case: the body itself becomes the middle dot.
  */
-
-interface Mood {
-	state: StateId;
-	label: string;
-}
-
-/**
- * One ink for every state, so the shape alone carries the status. That rules out
- * the engine's ring states (`orbit`, `comet`, `play`): they draw their strokes in
- * viewBox units — 6 of 316 — so at 28px they come out under a pixel wide and read
- * as nothing at all. Bodies, eyes and dots are what's left.
- *
- * `busy` and `idle` share a state on purpose: while the reply streams, the only
- * thing that changes is where the avatar looks (see `UPWARD`).
- *
- * The engine ships two exclamation marks and `failed` takes the UPRIGHT one.
- * `exclaim` is its own measured silhouette — a bar tapering 1.76 : 1 from top to
- * bottom, held still. `alert` is the other: a constant-width capsule leaning
- * 17.7°, travelling across the frame and buzzing at 2.5 Hz. Standing that one up
- * would give a uniform bar, since its width was measured for a lean, so this is a
- * choice between two glyphs rather than an angle to zero out.
- */
-const MOODS = {
-	failed: { state: "exclaim", label: "the agent errored" },
-	thinking: { state: "thinking", label: "the agent is thinking" },
-	busy: { state: "idle", label: "the agent is answering" },
-	idle: { state: "idle", label: "the agent is idle" },
-} satisfies Record<string, Mood>;
 
 /**
  * The face the avatar wears when nothing is happening, and the one a conversation
@@ -205,23 +177,9 @@ function useRestingFace(
 }
 
 export function AgentAvatar({ size = 28 }: { size?: number }) {
-	const { messages, isLoading, error, fresh, reaction } = useChatSession();
+	const { isLoading, fresh, reaction } = useChatSession();
 	const face = useRestingFace(isLoading, fresh, reaction);
-
-	// Nothing has come back yet, so the agent is still deciding. Once anything
-	// has — a chunk of the reply, or a tool turn — the run is answering.
-	const last = messages[messages.length - 1];
-	const deciding =
-		isLoading && (!last || last.type === "human" || last.type === "user");
-
-	const mood = error
-		? "failed"
-		: deciding
-			? "thinking"
-			: isLoading
-				? "busy"
-				: "idle";
-	const { state, label } = MOODS[mood];
+	const { mood, state, label } = useAgentMood();
 
 	return (
 		<div className="select-none">
