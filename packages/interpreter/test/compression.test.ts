@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Compressor, compressionExtension } from "../src/compression.ts";
-import { Interp, prelude, run, Secret, str } from "../src/lisp.ts";
+import { Interp, prelude, run, str } from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
@@ -269,7 +269,21 @@ describe("naming a result", () => {
 	});
 
 	it("leaves a Secret's printed form alone", () => {
-		expect(str(new Secret("shh", ["REPL_K"]))).toBe("#<secret:REPL_K>");
+		// `Secret` is unexported by design — no Secret value can exist without
+		// the extension — so mint one through the built-in and check `str` on it.
+		const interp = new Interp({
+			extensions: [
+				secretsExtension({
+					store: {
+						get: () => ({ value: "shh", description: "" }),
+						list: () => [["REPL_K", ""]],
+						set: () => {},
+					},
+				}),
+			],
+		});
+		run(interp, prelude);
+		expect(str(run(interp, '(secret "REPL_K")'))).toBe("#<secret:REPL_K>");
 	});
 });
 
