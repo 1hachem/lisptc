@@ -6,7 +6,9 @@ import {
 	Outlet,
 	Scripts,
 } from "@tanstack/react-router";
+import { AnimatedFavicon } from "../components/animated-favicon.tsx";
 import { AppShell } from "../components/app-shell.tsx";
+import { AgentProvider } from "../lib/agent.tsx";
 import { Analytics } from "../lib/analytics.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
 import { UIProvider } from "../lib/ui.tsx";
@@ -23,6 +25,22 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			{ title: "ptc agent" },
 		],
 		links: [
+			/*
+			 * The bot's face, drawn from the same engine as the avatar at the foot of
+			 * the transcript: `scripts/favicon.ts` writes both files, and is the thing
+			 * to run when the shape or the resting expression changes.
+			 *
+			 * Both formats: Safari still won't take an SVG icon, and `/favicon.ico` is
+			 * fetched by convention whether or not it is declared. Where the SVG is
+			 * taken it wins on merit — a browser that prefers it is one that rasterises
+			 * it at exactly the size it needs.
+			 *
+			 * These two are the icon the page LOADS with, and the one it falls back to:
+			 * `<AnimatedFavicon/>` takes the links over once it is mounted, and puts
+			 * them back if anything about that fails.
+			 */
+			{ rel: "icon", href: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+			{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
 			{ rel: "stylesheet", href: appCss },
 			{ rel: "preconnect", href: "https://fonts.googleapis.com" },
 			{
@@ -45,9 +63,17 @@ function RootComponent() {
 			<Analytics>
 				<UIProvider>
 					<ChatProvider>
-						<AppShell>
-							<Outlet />
-						</AppShell>
+						{/*
+						 * Inside the chat session, because what the agent is DOING is derived
+						 * from the run; everything that reads the agent — the avatar, the tab
+						 * icon — is inside this.
+						 */}
+						<AgentProvider>
+							<AnimatedFavicon />
+							<AppShell>
+								<Outlet />
+							</AppShell>
+						</AgentProvider>
 					</ChatProvider>
 				</UIProvider>
 			</Analytics>
