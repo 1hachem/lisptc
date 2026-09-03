@@ -7,6 +7,10 @@
  */
 
 import {
+	Compressor,
+	compressionExtension,
+} from "@repo/interpreter/compression.ts";
+import {
 	EndOfFile,
 	EvalException,
 	evalTopLevel,
@@ -16,7 +20,6 @@ import {
 	run,
 	setExit,
 	setWriter,
-	str,
 	stripProse,
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
@@ -43,6 +46,8 @@ const write = (s: string): void => {
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
 	private readonly stdInTokens: Reader = new Reader();
+	// Recreated with every interp, so reset() restarts the result numbering.
+	private compressor: Compressor = new Compressor();
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -53,10 +58,15 @@ class InteractiveRepl implements Repl {
 	}
 
 	private freshInterp(): Interp {
+		this.compressor = new Compressor();
 		// The standalone CLI auto-loads a `.env` file (env vars + `$LISPTC_SECRETS_FILE`
 		// / nearest `.env`); the secretsExtension owns that loading via `envFile`.
 		const interp = new Interp({
-			extensions: [secretsExtension({ envFile: true }), mcpExtension()],
+			extensions: [
+				secretsExtension({ envFile: true }),
+				mcpExtension(),
+				compressionExtension(this.compressor),
+			],
 		});
 		run(interp, prelude);
 		return interp;
@@ -102,7 +112,14 @@ class InteractiveRepl implements Repl {
 				const result = evalTopLevel(this.currentInterp, exp);
 				// A printing function (prin1/princ/terpri/print) returns
 				// Unspecified, meaning "already shown" — don't echo it too.
-				if (result !== Unspecified) write(`${str(result)}\n`);
+				//
+				// Only the value echo is capped here. Unlike MemoryRepl this
+				// loop points the interpreter's writer straight at stdout
+				// (see setWriter below), so princ output streams uncapped —
+				// buffering it to measure would break that, and a human at a
+				// terminal can scroll.
+				if (result !== Unspecified)
+					write(this.compressor.value(this.currentInterp, exp, result).text);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else throw ex;

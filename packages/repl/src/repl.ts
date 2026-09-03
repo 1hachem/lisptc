@@ -15,6 +15,12 @@
  */
 
 import {
+	alsoSaved,
+	Compressor,
+	compressionExtension,
+	MAX_WORDS,
+} from "@repo/interpreter/compression.ts";
+import {
 	Cell,
 	EndOfFile,
 	EvalException,
@@ -24,7 +30,6 @@ import {
 	prelude,
 	run,
 	setWriter,
-	str,
 	stripProse,
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
@@ -72,8 +77,16 @@ function arrayToList(arr: unknown[]): List {
 // interactive REPL would have printed. State persists across calls.
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
+	// Recreated with every interp: the naming counters must die with the globals
+	// they named, or a reset() leaves the count climbing past unbound names.
+	private compressor: Compressor;
+	private readonly wordLimit: number;
 
-	constructor() {
+	constructor(options: { wordLimit?: number } = {}) {
+		// Assigned before freshInterp(), which reads it. (Same ordering trap the
+		// setup() hook below warns about.)
+		this.wordLimit = options.wordLimit ?? MAX_WORDS;
+		this.compressor = new Compressor(this.wordLimit);
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -82,10 +95,15 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private freshInterp(): Interp {
+		this.compressor = new Compressor(this.wordLimit);
 		// The secrets addon owns loading (from `REPL_*` env vars here — an embedded
 		// REPL does not auto-load a `.env` file); the REPL just installs it.
 		const interp = new Interp({
-			extensions: [secretsExtension(), mcpExtension()],
+			extensions: [
+				secretsExtension(),
+				mcpExtension(),
+				compressionExtension(this.compressor),
+			],
 		});
 		run(interp, prelude);
 		this.setup(interp);
@@ -98,29 +116,55 @@ export class MemoryRepl implements InMemoryRepl {
 	// fields still being undefined.
 	protected setup(_interp: Interp): void {}
 
-	// Evaluate a program; Lisp errors are rendered into the returned output
-	// rather than thrown.
+	/*
+	 * Evaluate a program; Lisp errors are rendered into the returned output
+	 * rather than thrown.
+	 *
+	 * Everything the caller sees is bounded here (see @repo/interpreter's
+	 * compression.ts): each top-level result is bound to a name and echoed as
+	 * `name = value` truncated to the word limit, and the side-effect output is
+	 * capped the same way. Consumers — apps/mcp, packages/ai — pass this string
+	 * straight to a model, so this is the only place the cap has to hold.
+	 */
 	eval(code: string): string {
-		let out = "";
+		// Side-effect output is buffered rather than capped as it is written:
+		// the cap applies to the whole of it, once, at the end.
+		let printed = "";
 		const prev = setWriter((s) => {
-			out += s;
+			printed += s;
 		});
+		let echo = "";
+		let error = "";
+		// Only the last form is echoed — the cap is per eval, not per form — but
+		// the earlier ones still bound names, so report those separately or the
+		// model has no way to learn they exist.
+		const bound: string[] = [];
+		let pending: string | undefined;
 		try {
-			// Evaluate before appending: run() writes side-effect output into
-			// `out` first. A printing function (prin1/princ/terpri/print)
-			// returns Unspecified — a sentinel meaning "already shown, don't
-			// echo the value too" — so a printed value isn't shown twice.
-			const value = run(this.currentInterp, code);
-			if (value !== Unspecified) out += `${str(value)}\n`;
+			// A printing function (prin1/princ/terpri/print) returns
+			// Unspecified — a sentinel meaning "already shown, don't echo the
+			// value too" — so a printed value isn't shown twice.
+			run(this.currentInterp, code, (form, value) => {
+				if (value === Unspecified) return;
+				if (pending !== undefined) bound.push(pending);
+				const rendered = this.compressor.value(this.currentInterp, form, value);
+				pending = rendered.name;
+				echo = rendered.text;
+			});
 		} catch (ex) {
-			if (ex instanceof EvalException) out += `${ex}\n`;
+			if (ex instanceof EvalException) error = this.compressor.error(`${ex}\n`);
 			else if (ex === EndOfFile)
-				out += "unbalanced expression (unexpected end of input)\n";
+				error = "unbalanced expression (unexpected end of input)\n";
 			else throw ex;
 		} finally {
 			setWriter(prev);
 		}
-		return out;
+		return (
+			this.compressor.output(this.currentInterp, printed) +
+			alsoSaved(bound) +
+			echo +
+			error
+		);
 	}
 
 	// Discard all definitions; start from a fresh prelude-loaded interp.

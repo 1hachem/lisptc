@@ -12,6 +12,7 @@ import {
 	prelude,
 	run,
 } from "@repo/interpreter";
+import { compressionExtension } from "@repo/interpreter/compression.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
 import {
 	type CompletionEntry,
@@ -42,7 +43,9 @@ const documents = new TextDocuments(TextDocument);
 // Local prelude-loaded interpreter: the fallback source of names/docs when the
 // shared session is unreachable. The MCP extension contributes load-mcp docs
 // without connecting to any server until code explicitly evaluates it.
-const interp = new Interp({ extensions: [mcpExtension()] });
+const interp = new Interp({
+	extensions: [mcpExtension(), compressionExtension()],
+});
 run(interp, prelude);
 const localDocs = interp.docs();
 

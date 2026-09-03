@@ -4,18 +4,18 @@ import { AgentRepl } from "../src/repl.ts";
 describe("AgentRepl (in-process REPL binding)", () => {
 	it("returns the value of the last form", () => {
 		const r = new AgentRepl();
-		expect(r.eval("(+ 1 2)")).toBe("3\n");
+		expect(r.eval("(+ 1 2)")).toBe("+-1 = 3\n");
 	});
 
 	it("persists definitions across eval calls", () => {
 		const r = new AgentRepl();
 		r.eval("(defun sq (x) (* x x))");
-		expect(r.eval("(sq 5)")).toBe("25\n");
+		expect(r.eval("(sq 5)")).toBe("sq-1 = 25\n");
 	});
 
 	it("captures side-effect output before the value", () => {
 		const r = new AgentRepl();
-		expect(r.eval('(progn (princ "hi") 42)')).toBe("hi42\n");
+		expect(r.eval('(progn (princ "hi") 42)')).toBe("hiprogn-1 = 42\n");
 	});
 
 	it("does not echo a printed value a second time", () => {
@@ -75,7 +75,9 @@ describe("AgentRepl (in-process REPL binding)", () => {
 
 		it("is false when prose merely surrounds a form", () => {
 			const r = new AgentRepl();
-			expect(r.eval("first square it: (* 3 3) and there it is")).toBe("9\n");
+			expect(r.eval("first square it: (* 3 3) and there it is")).toBe(
+				"*-1 = 9\n",
+			);
 			expect(r.takeFinished()).toBe(false);
 		});
 
