@@ -16,6 +16,7 @@
 
 import {
 	Cell,
+	checkSyntax,
 	EndOfFile,
 	EvalException,
 	Interp,
@@ -40,6 +41,21 @@ export interface Repl {
 // A REPL driven by strings rather than process I/O.
 export interface InMemoryRepl extends Repl {
 	eval(code: string): string;
+}
+
+// What one evaluation produced: `output` is what the interactive REPL would
+// have printed (side-effect output, the last value, or a rendered error), and
+// `skipped` holds one note per fragment read as prose instead of evaluated.
+interface EvalResult {
+	output: string;
+	skipped: string[];
+}
+
+// Both halves as `eval` returns them: the skips read as trailing notes.
+function render({ output, skipped }: EvalResult): string {
+	let out = output;
+	for (const what of skipped) out += `skipped ${what}\n`;
+	return out;
 }
 
 // Convert a host JS value into the equivalent Lisp value. Mirrors `jsonToLisp`
@@ -111,6 +127,12 @@ export class MemoryRepl implements InMemoryRepl {
 	 * misspelled function from a turn of phrase.
 	 */
 	eval(code: string): string {
+		return render(this.evaluate(code));
+	}
+
+	// The two halves of an evaluation before they are rendered into one string,
+	// for a subclass that has to tell them apart (see `AgentRepl`).
+	protected evaluate(code: string): EvalResult {
 		let out = "";
 		const skipped: string[] = [];
 		const prev = setWriter((s) => {
@@ -136,8 +158,7 @@ export class MemoryRepl implements InMemoryRepl {
 		} finally {
 			setWriter(prev);
 		}
-		for (const what of skipped) out += `skipped ${what}\n`;
-		return out;
+		return { output: out, skipped };
 	}
 
 	// Discard all definitions; start from a fresh prelude-loaded interp.
@@ -149,10 +170,14 @@ export class MemoryRepl implements InMemoryRepl {
 // The embeddable agent REPL: adds the finished signal and the read-only
 // conversation globals (`conversation`, `user-messages`, `assistant-messages`).
 export class AgentRepl extends MemoryRepl {
-	// Raised by an eval whose program held no forms at all; read (and cleared)
-	// via takeFinished(). A driver looping over eval() uses it to know when to
+	// Raised by an eval whose program ran nothing; read (and cleared) via
+	// takeFinished(). A driver looping over eval() uses it to know when to
 	// stop — there is no stop built-in, see `eval`.
 	private finished = false;
+	// Skip notes withheld from a prose-only answer, waiting to be handed to the
+	// model with the next user message; read (and cleared) via
+	// takeProseFeedback().
+	private pendingProse: string[] = [];
 	// The host-supplied conversation snapshot, kept so a post-error `reset()`
 	// can re-inject the globals until the next refresh.
 	private readonly conversationVars = new Map<string, unknown>();
@@ -166,19 +191,23 @@ export class AgentRepl extends MemoryRepl {
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 	}
 
-	// Evaluate a program, raising the finished flag if it turned out to be pure
-	// prose. An agent that has nothing left to run answers in plain text, and
-	// text with no forms in it is a program that does nothing — so a form-less
-	// reply IS the end of the loop, and the REPL needs no stop built-in for the
-	// agent to call.
+	// Evaluate a program, raising the finished flag if it turned out to be an
+	// answer rather than a step (see `isAnswer`). An agent that has nothing left
+	// to run answers in plain text, and text that runs nothing is a program that
+	// does nothing — so such a reply IS the end of the loop, and the REPL needs
+	// no stop built-in for the agent to call.
 	//
-	// Deliberately asks the STRICT question: did the reply open a parenthesis
-	// at all? A reply cut off mid-form is nothing but prose to the tolerant
-	// reader, and treating a truncated turn as a finished answer would end the
-	// loop on it.
+	// An answer's skip notes are withheld from the output rather than returned:
+	// handing them back would make the host feed a result to a model that is
+	// done, buying the user an extra agent turn to be told what the last one
+	// already said. They wait for the next user message instead — late enough to
+	// cost nothing, early enough that the model does not write the aside again.
 	override eval(code: string): string {
-		if (stripProse(code, "strict").trim() === "") this.finished = true;
-		return super.eval(code);
+		const result = this.evaluate(code);
+		if (!isAnswer(code, result)) return render(result);
+		this.finished = true;
+		this.pendingProse.push(...result.skipped);
+		return result.output;
 	}
 
 	// Replace the read-only conversation globals from a fresh host snapshot. Each
@@ -194,18 +223,48 @@ export class AgentRepl extends MemoryRepl {
 		}
 	}
 
-	// Whether a program evaluated since the previous check was form-less prose;
-	// reads and clears the flag.
+	// Whether a program evaluated since the previous check was an answer rather
+	// than a step; reads and clears the flag.
 	takeFinished(): boolean {
 		const f = this.finished;
 		this.finished = false;
 		return f;
 	}
 
+	// The skip notes withheld from answers since the previous check, rendered as
+	// the lines `eval` would have returned (empty when there are none); reads and
+	// clears them. A host carries these to the model with the next user message,
+	// which is the whole point of withholding them: the model is told what it
+	// wrote as prose without the REPL having spent an agent turn saying so.
+	takeProseFeedback(): string {
+		const notes = this.pendingProse;
+		this.pendingProse = [];
+		return render({ output: "", skipped: notes });
+	}
+
 	override reset(): void {
 		super.reset();
 		this.finished = false;
+		this.pendingProse = [];
 	}
+}
+
+/*
+ * Was this reply the agent's answer rather than a step? It is when nothing in
+ * it ran:
+ *
+ * - it opened no parenthesis at all — plain prose, the way an agent answers;
+ * - or every parenthesis in it was prose (`all done (see above)`), so the
+ *   program did nothing and printed nothing.
+ *
+ * The second test is the tolerant reader's, but truncation is excluded with a
+ * STRICT one: a reply cut off mid-form also runs nothing, yet it is an
+ * interrupted step, and ending the loop on it would strand the task.
+ */
+function isAnswer(code: string, { output, skipped }: EvalResult): boolean {
+	if (stripProse(code, "strict").trim() === "") return true;
+	if (output !== "" || skipped.length === 0) return false;
+	return checkSyntax(code).length === 0;
 }
 
 // Define a single read-only conversation global on the given interp.

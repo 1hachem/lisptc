@@ -95,9 +95,13 @@ describe("AgentRepl (in-process REPL binding)", () => {
 			expect(r.takeFinished()).toBe(false);
 		});
 
+		// `(halt)` names nothing, so it is prose — which ends the loop just as
+		// prose does, though the note says the name was not recognised.
 		it("has no halt built-in — prose replaced it", () => {
 			const r = new AgentRepl();
-			expect(r.eval("(halt)")).toContain('"halt" is not defined');
+			r.eval("(halt)");
+			expect(r.takeFinished()).toBe(true);
+			expect(r.takeProseFeedback()).toContain('"halt" is not defined');
 		});
 	});
 });
@@ -123,15 +127,32 @@ describe("prose with parentheses in it", () => {
 		);
 	});
 
-	// The skip note is the only sign a name was wrong, so it has to name it.
+	// The skip note is the only sign a name was wrong, so it has to name it —
+	// wherever it is delivered. A reply that is nothing BUT the misspelled call
+	// ran nothing, so its note waits for the next user message (see "withheld
+	// prose feedback"); a reply that also ran something gets it straight back.
 	it("names the symbol it did not recognise", () => {
 		const r = new AgentRepl();
-		expect(r.eval('(prin "hi")')).toMatch(/"prin" is not defined/);
+		expect(r.eval('(princ "hi") (prin "hi")')).toMatch(/"prin" is not defined/);
+		const answered = new AgentRepl();
+		answered.eval('(prin "hi")');
+		expect(answered.takeProseFeedback()).toMatch(/"prin" is not defined/);
+	});
+
+	it("reports each aside it skipped", () => {
+		const r = new AgentRepl();
+		expect(r.eval('(princ "x") (see one) and (see two)').split("\n")).toEqual([
+			'xskipped (see one) — "see" is not defined, so this was read as prose',
+			'skipped (see two) — "see" is not defined, so this was read as prose',
+			"",
+		]);
 	});
 
 	it("reports a repeated aside once", () => {
 		const r = new AgentRepl();
-		expect(r.eval("(see one) and (see two)").split("\n").length).toBe(3);
+		expect(
+			r.eval('(princ "x") (see one) and (see one)').split("\n").length,
+		).toBe(2);
 	});
 
 	describe("the finished signal", () => {
@@ -151,10 +172,75 @@ describe("prose with parentheses in it", () => {
 			expect(r.takeFinished()).toBe(false);
 		});
 
-		it("is not raised for a reply that is only a prose aside", () => {
+		// A reply whose every parenthesis was prose ran nothing, so there is
+		// nothing to feed back: it is the answer, however many asides it holds.
+		it("is raised for a reply that is only a prose aside", () => {
+			const r = new AgentRepl();
+			expect(r.eval("all done (see above)")).toBe("");
+			expect(r.takeFinished()).toBe(true);
+		});
+
+		it("is not raised when a form ran alongside the aside", () => {
+			const r = new AgentRepl();
+			r.eval("almost (see above): (+ 1 2)");
+			expect(r.takeFinished()).toBe(false);
+		});
+	});
+
+	/*
+	 * The notes for an answer's asides are not returned to the host — feeding
+	 * them back would win the user an extra agent turn saying what the answer
+	 * already said. They are kept for the next user message instead, so the
+	 * model still learns not to write the aside again.
+	 */
+	describe("withheld prose feedback", () => {
+		it("keeps the notes an answer did not return", () => {
+			const r = new AgentRepl();
+			expect(r.eval("all done (see above)")).toBe("");
+			expect(r.takeProseFeedback()).toBe(
+				'skipped (see above) — "see" is not defined, so this was read as prose\n',
+			);
+		});
+
+		it("clears them once read", () => {
 			const r = new AgentRepl();
 			r.eval("all done (see above)");
-			expect(r.takeFinished()).toBe(false);
+			r.takeProseFeedback();
+			expect(r.takeProseFeedback()).toBe("");
+		});
+
+		it("accumulates the notes of several answers", () => {
+			const r = new AgentRepl();
+			r.eval("all done (see above)");
+			r.eval("truly done (see below)");
+			expect(r.takeProseFeedback().split("\n").filter(Boolean).length).toBe(2);
+		});
+
+		it("holds nothing back from a step that ran code", () => {
+			const r = new AgentRepl();
+			expect(r.eval("(+ 1 2) (see above)")).toContain("skipped (see above)");
+			expect(r.takeProseFeedback()).toBe("");
+		});
+
+		it("holds nothing back from prose with no parenthesis in it", () => {
+			const r = new AgentRepl();
+			r.eval("the sum is 3");
+			expect(r.takeProseFeedback()).toBe("");
+		});
+
+		// A truncated reply is a step to resume, not an answer, so its note goes
+		// straight back to the model.
+		it("returns the note for a reply truncated mid-form", () => {
+			const r = new AgentRepl();
+			expect(r.eval('(princ "hi"')).toContain('unclosed "("');
+			expect(r.takeProseFeedback()).toBe("");
+		});
+
+		it("reset() drops what was held", () => {
+			const r = new AgentRepl();
+			r.eval("all done (see above)");
+			r.reset();
+			expect(r.takeProseFeedback()).toBe("");
 		});
 	});
 });

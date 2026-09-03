@@ -4,6 +4,7 @@ import { type AgentConfig, type AgentMessage, streamAgent } from "./agent.ts";
 import { MAX_STEPS } from "./prompts/lisp.ts";
 import {
 	evalCode,
+	proseFeedbackContent,
 	replResultContent,
 	snapshotConversation,
 	stripFences,
@@ -91,8 +92,8 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
  *   2. evaluates that program against a persistent `AgentRepl`,
  *   3. emits the REPL result as a `tool` message and feeds it back as the next
  *      turn's input,
- * repeating until the model answers in form-less prose (see `AgentRepl`) or
- * `MAX_STEPS` is reached. That final prose turn is the answer to the user, so it
+ * repeating until the model answers in prose that runs nothing (see `AgentRepl`)
+ * or `MAX_STEPS` is reached. That final prose turn is the answer to the user, so it
  * is streamed like any other assistant turn but produces no REPL result. Each step
  * publishes an authoritative `values` event so the client reconciles the full
  * message list. Returns a standard SSE `Response` any web server (Hono) returns.
@@ -172,6 +173,19 @@ export function streamChatResponse(
 
 				const repl = getThreadRepl(threadId);
 				const transcript = toTranscript(input);
+
+				// A previous turn ended on an answer the REPL read as prose. Its
+				// notes were withheld then (see `AgentRepl.eval`) and ride along
+				// with this user message, so the model corrects itself without
+				// having been given a turn to say so. Deliberately not pushed to
+				// `wire`: it is a note to the model, not a message to the user,
+				// and it should not come back on the next replayed transcript.
+				const withheld = repl.takeProseFeedback();
+				if (withheld)
+					transcript.push({
+						role: "tool",
+						content: proseFeedbackContent(withheld),
+					});
 
 				while (!abort.signal.aborted) {
 					// Refresh the read-only conversation globals so each step sees the
