@@ -1171,6 +1171,13 @@ export class Interp {
 		return this.globals.has(sym);
 	}
 
+	// Every global binding, for a reverse lookup by value: naming a result
+	// reuses the name a value is already bound under rather than minting a
+	// second one (see src/compression.ts).
+	globalEntries(): IterableIterator<[Sym, unknown]> {
+		return this.globals.entries();
+	}
+
 	// Build a BuiltInFunc without binding it (for wrappers stored elsewhere).
 	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
 		return new BuiltInFunc(name, carity, body);
@@ -2041,13 +2048,23 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 // value of the last one. Text outside those forms is prose and is ignored (see
 // stripProse), so a program with no form at all evaluates to Unspecified —
 // "nothing to show" — rather than to a value a REPL would echo.
-export function run(interp: Interp, text: string): unknown {
+//
+// `onTopLevel` reports each form alongside the value it produced. A REPL needs
+// the form, not just the value, to name a result after the function that
+// computed it (see src/compression.ts); it is called only for forms that
+// evaluated without throwing.
+export function run(
+	interp: Interp,
+	text: string,
+	onTopLevel?: (form: unknown, value: unknown) => void,
+): unknown {
 	const tokens = new Reader();
 	tokens.push(stripProse(text));
 	let result: unknown = Unspecified;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
 		result = evalTopLevel(interp, exp);
+		onTopLevel?.(exp, result);
 	}
 	return result;
 }
