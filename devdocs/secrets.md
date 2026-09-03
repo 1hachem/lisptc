@@ -21,8 +21,11 @@ extension. There is one addon, `secretsExtension`; everything lives in
   the extension: installs `(secret)` / `(secrets)` over a store and, when
   `envFile` is set, seeds that store from a `.env` file. This IS the addon.
 
-The `Secret` taint type and its string-primitive propagation stay in `src/lisp.ts`
-(they are language machinery, not registry).
+The taint story lives here too: the `Secret` type, and overrides of the core
+string primitives (`interp.def` overwrites the global) that make every string
+function taint-aware. The extension is fully independent of MCP: the value is
+revealed only through the `toJSON` wire form, which `lispToJson` duck-types on —
+the mirror of the `toString` display form that `str` duck-types on.
 
 ## Consuming from a host (a REPL)
 
@@ -80,16 +83,19 @@ so they survive `reset()`.
 ## Redaction via taint tracking
 
 A secret is a `Secret` (value + source keys). `str()` renders it redacted as
-`#<secret:KEY>`, covering every print path (return value, `princ`, errors, nested
-lists) from one place. The value is revealed only by `lispToJson` when serialized
-into an outgoing MCP call (tool args, `:headers`, `:env`).
+`#<secret:KEY>` (via its `toString`), covering every print path (return value,
+`princ`, errors, nested lists) from one place. The value is revealed only by the
+`toJSON` wire form, honored by `lispToJson` when serializing an outgoing MCP call
+(tool args, `:headers`, `:env`).
 
-Taint **propagates**: the JS string primitives (`concat`, `char`,
-`string-upcase`/`downcase`) accept a `Secret`, and a result derived from one is
-itself a `Secret`. Because the Lisp string library is built on those primitives,
-transforms (`substring`, etc.) stay redacted for free — so an agent cannot
-upcase/slice its way around the redaction. `length`/`stringp`/`eql` treat a
-secret as its string, so predicates still work.
+Taint **propagates**: the extension overrides the string primitives (`concat`,
+`char`, `string-upcase`/`downcase`, plus `length`/`stringp`/`eql`) so they accept
+a `Secret`, unwrap it for the operation, and re-taint the result. Because the
+Lisp string library is built on those primitives, transforms (`substring`, etc.)
+stay redacted for free — so an agent cannot upcase/slice its way around the
+redaction. Predicates still work (`eql` compares by value). Without the
+extension no `Secret` value can exist, and the core plain-string primitives are
+exactly right.
 
 Combining secrets unions the taint: `(concat (secret "REPL_A") (secret "REPL_B"))`
 → `#<secret:REPL_A+REPL_B>`.
