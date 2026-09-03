@@ -75,3 +75,34 @@ describe("reader: strings and escapes", () => {
 		expect(ev("(progn ''a)")).toBe("'a");
 	});
 });
+
+describe("(read s): parsing text as Lisp data", () => {
+	it("returns the first expression unevaluated", () => {
+		expect(ev('(read "(+ 1 2)")')).toBe("(+ 1 2)");
+		expect(ev('(read "hello")')).toBe("hello");
+		expect(ev('(read "42")')).toBe("42");
+		expect(ev('(read "(1 2 . 3)")')).toBe("(1 2 . 3)");
+		expect(ev('(read "nil")')).toBe("nil");
+	});
+
+	it("ignores anything after the first expression", () => {
+		expect(ev('(read "(a b) (c d)")')).toBe("(a b)");
+	});
+
+	it("returns data, so evaluating it stays a separate step", () => {
+		expect(ev('(eql (read "(+ 1 2)") 3)')).toBe("nil");
+	});
+
+	it("errors on a string with no expression, or a malformed one", () => {
+		expect(() => ev('(read "")')).toThrow(/no expression/);
+		expect(() => ev('(read "   ")')).toThrow(/no expression/);
+		expect(() => ev('(read ")")')).toThrow(/syntax error/);
+	});
+
+	it("misreads JSON rather than erroring — hence json-parse", () => {
+		// "{" is an ordinary symbol character here, so a JSON object reads as a
+		// symbol and the rest of the document is silently dropped.
+		expect(ev('(read "{\\"a\\": 1}")')).toBe("{");
+		expect(ev('(read "[1,2]")')).toBe("[1,2]");
+	});
+});
