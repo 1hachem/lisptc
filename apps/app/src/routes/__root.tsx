@@ -23,6 +23,18 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			{ title: "ptc agent" },
 		],
 		links: [
+			/*
+			 * The bot's face, drawn from the same engine as the avatar at the foot of
+			 * the transcript: `scripts/favicon.ts` writes both files, and is the thing
+			 * to run when the shape or the resting expression changes.
+			 *
+			 * Both formats: Safari still won't take an SVG icon, and `/favicon.ico` is
+			 * fetched by convention whether or not it is declared. Where the SVG is
+			 * taken it wins on merit — a browser that prefers it is one that rasterises
+			 * it at exactly the size it needs.
+			 */
+			{ rel: "icon", href: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+			{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
 			{ rel: "stylesheet", href: appCss },
 			{ rel: "preconnect", href: "https://fonts.googleapis.com" },
 			{
