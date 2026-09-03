@@ -176,11 +176,19 @@ async function main(): Promise<void> {
 	const entry = process.argv[1];
 	if (!entry || import.meta.url !== pathToFileURL(entry).href) return;
 
+	const args = process.argv.slice(2);
+
+	// `--help` / `-h`: print usage and exit.
+	if (args.includes("--help") || args.includes("-h")) {
+		console.log(USAGE);
+		return;
+	}
+
 	// `--kill [name]`: stop the named (or default, cwd-keyed) session server
 	// and exit, without starting a REPL of any kind.
-	if (process.argv.includes("--kill")) {
-		const i = process.argv.indexOf("--kill");
-		const name = process.argv[i + 1];
+	if (args.includes("--kill")) {
+		const i = args.indexOf("--kill");
+		const name = args[i + 1];
 		const killed = await killSession(name);
 		console.log(
 			killed
@@ -275,7 +283,7 @@ async function main(): Promise<void> {
 	setExit(process.exit);
 
 	// `--attach`: forward to the shared session instead of a local interpreter.
-	if (process.argv.includes("--attach")) {
+	if (args.includes("--attach")) {
 		await attachLoop();
 		return;
 	}
@@ -283,8 +291,12 @@ async function main(): Promise<void> {
 	const repl = new InteractiveRepl();
 	let started = false;
 	let fs: typeof import("node:fs") | undefined;
-	let argv = process.argv as string[];
-	if (argv.length <= 2) argv = ["", "", "-"];
+	// A workspace script runs with cwd = the package dir (packages/repl), so a
+	// relative script path must resolve against the launch dir (INIT_CWD under
+	// a package-manager script, else cwd) — the same convention as the `.env`
+	// lookup in the secrets extension.
+	const launchDir = process.env.INIT_CWD || process.cwd();
+	const argv = args.length > 0 ? ["", "", ...args] : ["", "", "-"];
 	try {
 		for (let i = 2; i < argv.length; i++) {
 			const fileName = argv[i];
@@ -293,10 +305,13 @@ async function main(): Promise<void> {
 					started = true;
 					await repl.readEvalPrintLoop();
 				}
+			} else if (fileName.startsWith("--")) {
+				console.error(`unknown option "${fileName}" (try --help)`);
+				process.exit(1);
 			} else {
 				fs = fs || (await import("node:fs")).default;
 				const path = await import("node:path");
-				const abs = path.resolve(fileName);
+				const abs = path.resolve(launchDir, fileName);
 				const text = fs.readFileSync(abs, "utf8");
 				// Let relative `import` paths in the script resolve against its dir.
 				repl.interp.importStack.push(path.dirname(abs));
@@ -312,5 +327,28 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 }
+
+// The `--help` text. Documents the argument grammar main() implements.
+const USAGE = `lisptc REPL — the Lisp interpreter's interactive terminal
+
+Usage:
+  pnpm repl [options] [file.ptc ...] [-]
+
+With no arguments (or a bare "-") an interactive REPL starts. Each file
+argument is run in order on the same interpreter — so a trailing "-"
+keeps the files' state and drops you into a prompt afterwards. Secrets
+(REPL_* env vars / nearest .env) and MCP are wired in both modes.
+
+Arguments:
+  file.ptc        run a .ptc script; relative paths resolve against the
+                  directory pnpm was invoked from
+  -               start the interactive REPL (default with no arguments)
+
+Options:
+  -h, --help      show this help
+  --attach        forward input to the shared session REPL instead of a
+                  local interpreter (pnpm repl:attach)
+  --kill [name]   stop the named (or default, cwd-keyed) session server
+                  (pnpm repl:kill)`;
 
 main();
