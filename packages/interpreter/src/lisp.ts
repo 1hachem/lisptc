@@ -949,6 +949,14 @@ export class Interp {
 			},
 		);
 		this.def(
+			"string",
+			1,
+			"(string x)",
+			'Convert `x` to a string: its printed form, with a string left as itself rather than quoted. `(string 12)` is "12", `(string \'foo)` is "foo", `(string nil)` is "nil". Numbers keep the exact/inexact distinction, so `(string 3.0)` is "3.0", not "3".',
+			z.tuple([zAny]),
+			([x]) => str(x, false),
+		);
+		this.def(
 			"string-upcase",
 			1,
 			"(string-upcase s)",

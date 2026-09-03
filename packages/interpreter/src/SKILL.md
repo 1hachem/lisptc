@@ -126,6 +126,12 @@ Arithmetic built-ins:
 **Strings** (taint-aware, see §10.3)
 - `(char s i)` one-char string at index `i`, or `nil` · `(concat s...)` concatenate
   · `(string-upcase s)` · `(string-downcase s)`.
+- `(string x)` convert any value to a string — its printed form, with a string
+  left as itself rather than quoted: `(string 12)` → `"12"`, `(string 'foo)` →
+  `"foo"`, `(string nil)` → `"nil"`. Use it to put a number in text:
+  `(concat "Chapter " (string n))`. `concat` takes strings only, so a number has
+  to go through `string` first. A float keeps its `.0` (`(string 3.0)` → `"3.0"`),
+  so `(string (truncate x))` is the way to a bare integer.
 
 **Parsing text into data**
 - `(read s)` parse the FIRST Lisp expression in the string `s` and return it as
