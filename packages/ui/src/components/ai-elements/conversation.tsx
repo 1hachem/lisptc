@@ -8,6 +8,11 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 
+// The container only keeps a view that is *already* at the bottom stuck there,
+// so anything that should pull the reader down from further up — sending a turn,
+// for one — has to ask, and asks through this.
+export { useStickToBottomContext };
+
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
