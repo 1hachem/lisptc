@@ -137,6 +137,15 @@ last expression, so don't wrap final answers in these)
 - `(prin1 x)` print re-readable form (strings quoted) · `(princ x)` human-readable
   (strings unquoted) · `(terpri)` newline · `(print x)` = `prin1` then newline.
 
+**Reading long results** (see §9 — the REPL truncates what it prints)
+- `(view x :offset 0 :length n)` show a window of `x`, counted in words; the
+  `...` line it ends with gives the offset to continue from.
+- `(head x :length n)` first `n` words · `(tail x :length n)` last `n` words.
+  These window TEXT — `head` is **not** `car`.
+- `(grep x "pattern" :context 8 :max 10 :ignore-case t)` search `x` with a
+  regular expression; each hit prints as `@<word-offset>` plus the surrounding
+  words, with the match in `[[ ]]`. Feed an offset it reports into `view`.
+
 **Introspection**
 - `(doc name)` print a binding's signature+doc; `(doc)` lists all documented names.
 - `(dump)` list every global symbol · `(import "path")` load+eval a Lisp file.
@@ -242,6 +251,50 @@ Three read-only globals mirror the conversation and refresh every step:
 They are read-only (re-assigning them doesn't persist); copy into your own variable
 to keep a value.
 
+### Every result gets a name — use it instead of retyping data
+
+The REPL binds the value of each step to a variable and echoes it as
+`name = value`, named after the function that produced it:
+
+```
+(range 40)
+range-1 = (39 38 37 36 35 …
+```
+
+**Never retype data the REPL has already given you.** Refer to the variable: it
+holds the exact value, costs a handful of tokens, and cannot be misremembered.
+Re-emitting a list, an id, a title or a body by hand is wasted output and the
+main way you produce wrong data. Build on the name instead —
+`(mapcar (lambda (i) (cdr (assoc "id" i))) range-1)`.
+
+A `setq` or `defun` is echoed under the name it already bound, and `nil`/`t`
+print plainly — there is nothing to name.
+
+### Long results are truncated in the printout only
+
+Above a fixed word limit the REPL stops printing and closes with a `...` line:
+
+```
+range-1 = (39 38 37 36 35 34
+... 6 of 40 words shown, 34 below. Full value saved in range-1 — read on with
+(view range-1 :offset 6), or search it with (grep range-1 "pattern")
+```
+
+The variable holds **all** of it. So when you see that line:
+
+- Do not re-run the call, and do not answer from the fragment you saw — what
+  you were shown is not the whole value.
+- Prefer computing over reading. `(length range-1)`, `mapcar`, `assoc` and
+  friends work on the complete value, and one form that extracts what you need
+  beats paging through the text.
+- To read it: `(grep range-1 "pattern")` when you know what you are looking
+  for, `(view range-1 :offset N)` to page through it, taking `N` from the line
+  the REPL printed. The variable name is always shown to you — never invent one.
+
+Side-effect output from `princ`/`print` is capped the same way and saved as
+`output-1`, `output-2`, … Output that is one unbroken word (minified JSON, say)
+is cut by character instead, and the `...` line points at `substring`.
+
 ### Ending the loop: prose alone
 
 There is no `halt`, `exit` or `quit`. You end the loop by replying with **prose and
@@ -340,3 +393,8 @@ A *job* is a handle for background work (currently just `load-mcp`).
 - No comment syntax: remarks go in the prose around the forms, never inside one.
 - The REPL prints your last expression's value automatically — don't wrap final
   answers in `print`/`princ`.
+- The printout is capped (§9). A result ending in a `...` line is NOT the whole
+  value — the variable it names is. Never conclude anything from a truncated
+  printout.
+- `head`/`tail` window text; they are not `car`/`cdr`. `(head '(1 2 3))` prints
+  the start of `(1 2 3)`, it does not return `1`.

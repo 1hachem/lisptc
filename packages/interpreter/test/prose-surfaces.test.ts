@@ -64,3 +64,22 @@ describe("the language reference teaches prose", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/prose cannot hold a `<` or a `\[`/i);
 	});
 });
+
+describe("the language reference teaches context compression", () => {
+	// Truncation is invisible unless the reference describes it: a model that is
+	// not told will read a `...` line as the end of the value, and will keep
+	// retyping data it could have referred to by name.
+	it("says every result is bound to a name", () => {
+		expect(LANGUAGE_REFERENCE).toMatch(/never retype data the REPL/i);
+	});
+
+	it("says a truncated printout is not the whole value", () => {
+		expect(LANGUAGE_REFERENCE).toMatch(/truncated in the printout only/i);
+		expect(LANGUAGE_REFERENCE).toMatch(/read on with/i);
+	});
+
+	// head/tail are the one name collision an LLM is likely to trip on.
+	it("says head and tail are not car and cdr", () => {
+		expect(LANGUAGE_REFERENCE).toMatch(/they are not `car`\/`cdr`/i);
+	});
+});

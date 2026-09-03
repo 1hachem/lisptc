@@ -247,4 +247,20 @@ describe("the language reference", () => {
 		}
 		expect(LISP_SYSTEM_PROMPT).toMatch(/\*\*Quasiquote\*\*/);
 	});
+
+	// Truncation is a REPL behaviour, not a language feature, so the closed-world
+	// rule above does not cover it — POLICY has to say it outright or the model
+	// reads a `...` line as the end of the value.
+	it("tells the model to refer to the result variable, not retype data", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/NEVER retype data the REPL has already given you/,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/name = value/);
+	});
+
+	it("tells the model a truncated printout is not the whole result", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/TRUNCATED IN THE PRINTOUT ONLY/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(names("view"));
+		expect(LISP_SYSTEM_PROMPT).toMatch(names("grep"));
+	});
 });
