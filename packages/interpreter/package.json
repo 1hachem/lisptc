@@ -10,6 +10,7 @@
     "./source.ts": "./src/source.ts",
     "./arith.ts": "./src/arith.ts",
     "./secrets.ts": "./src/secrets.ts",
+    "./compression.ts": "./src/compression.ts",
     "./jobs.ts": "./src/jobs.ts",
     "./jobs-protocol.ts": "./src/jobs-protocol.ts",
     "./jobs-broker.ts": "./src/jobs-broker.ts",
