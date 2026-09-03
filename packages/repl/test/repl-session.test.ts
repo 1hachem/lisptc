@@ -127,16 +127,26 @@ describe("prose with parentheses in it", () => {
 		);
 	});
 
-	// The skip note is the only sign a name was wrong, so it has to name it —
+	// A misspelling with a literal in it is a call, not a turn of phrase, so it
+	// errors where the agent sees it immediately.
+	it("errors on a misspelled call that passes a value", () => {
+		const r = new AgentRepl();
+		expect(r.eval('(prin "hi")')).toContain("undefined: prin");
+	});
+
+	// A misspelling with nothing but words in it cannot be told from prose, so
+	// the skip note is the only sign the name was wrong — it has to name it,
 	// wherever it is delivered. A reply that is nothing BUT the misspelled call
 	// ran nothing, so its note waits for the next user message (see "withheld
 	// prose feedback"); a reply that also ran something gets it straight back.
 	it("names the symbol it did not recognise", () => {
 		const r = new AgentRepl();
-		expect(r.eval('(princ "hi") (prin "hi")')).toMatch(/"prin" is not defined/);
+		expect(r.eval('(princ "hi") (lenght lst)')).toMatch(
+			/"lenght" is not defined/,
+		);
 		const answered = new AgentRepl();
-		answered.eval('(prin "hi")');
-		expect(answered.takeProseFeedback()).toMatch(/"prin" is not defined/);
+		answered.eval("(lenght lst)");
+		expect(answered.takeProseFeedback()).toMatch(/"lenght" is not defined/);
 	});
 
 	it("reports each aside it skipped", () => {
@@ -153,6 +163,37 @@ describe("prose with parentheses in it", () => {
 		expect(
 			r.eval('(princ "x") (see one) and (see one)').split("\n").length,
 		).toBe(2);
+	});
+
+	/*
+	 * A call to an MCP tool whose server is not loaded is the case tolerance
+	 * must NOT swallow: skipping it would end the agent's turn on an answer it
+	 * never computed, and the note would not reach it until the user wrote
+	 * again. It is an error, so the loop goes on and the agent can load the
+	 * server and retry in the same task.
+	 */
+	describe("a call to a tool that is not loaded", () => {
+		it("errors instead of being skipped as prose", () => {
+			const r = new AgentRepl();
+			expect(r.eval('(playwright/browser_navigate :url "test")')).toContain(
+				"undefined: playwright/browser_navigate",
+			);
+		});
+
+		it("does not end the loop, and holds nothing back", () => {
+			const r = new AgentRepl();
+			r.eval('(playwright/browser_navigate :url "test")');
+			expect(r.takeFinished()).toBe(false);
+			expect(r.takeProseFeedback()).toBe("");
+		});
+
+		it("runs once its server defines the binding", () => {
+			const r = new AgentRepl();
+			r.eval('(defun playwright/browser_navigate (&rest args) "ok")');
+			expect(r.eval('(playwright/browser_navigate :url "test")')).toBe(
+				'"ok"\n',
+			);
+		});
 	});
 
 	describe("the finished signal", () => {

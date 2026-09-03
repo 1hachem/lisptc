@@ -139,6 +139,70 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		expect(() => tolerantly("(+ 1 (nope 2))")).toThrow(/undefined: nope/);
 	});
 
+	/*
+	 * Where tolerance stops, case by case. Both halves of the line cost
+	 * something to get wrong: an aside read as code spends the step on an error
+	 * the agent cannot act on, and a call read as prose vanishes into a skip
+	 * note — a tool whose server was never loaded has to say so, since silence
+	 * is the one failure the agent cannot debug.
+	 */
+	describe("telling an aside from a call", () => {
+		// Sentences contain punctuation, digits, emoji, URLs and parentheses of
+		// their own; none of that makes a form code.
+		const asides = [
+			"(see below)",
+			"(one, two, three)",
+			"(step 2)",
+			"(e.g. see below)",
+			"(i.e. the sum)",
+			"(cf. above)",
+			"(1, 2, 3)",
+			"(50% done)",
+			// A slash the sentence wrote, not a namespace: it is followed by a
+			// word, which no bare tool call is.
+			"(A/B test)",
+			"(TODO: fix this)",
+			"(don't panic)",
+			"(see https://example.com)",
+			"(🙂)",
+			"(note (details here))",
+		];
+		it.each(asides)("reads %s as prose", (text) => {
+			const { value, skipped } = tolerantly(text);
+			expect(value).toBe("#<unspecified>");
+			expect(skipped).toHaveLength(1);
+		});
+
+		// Each of these carries something a sentence never does: keyword call
+		// syntax, a literal being passed, a namespaced name with no words around
+		// it, or a call nested inside the call.
+		const calls: [string, string][] = [
+			['(server/tool :key "value")', "server/tool"],
+			["(server/tool)", "server/tool"],
+			['(navigate :key "value")', "navigate"],
+			["(step_two)", "step_two"],
+			["(status :ok)", "status"],
+			['(prin "hi")', "prin"],
+			['(string-splt "a,b" ",")', "string-splt"],
+			["(fetch (car urls))", "fetch"],
+		];
+		it.each(calls)("errors on %s, naming %s", (text, name) => {
+			expect(() => tolerantly(text)).toThrow(`undefined: ${name}`);
+		});
+
+		// The limit of the whole idea: a misspelled word and a written one are
+		// the same shape. With no literal, no keyword and no namespace to go on,
+		// a typo is read as prose — the skip note names it, and that is all the
+		// reader can honestly offer.
+		it.each([
+			"(lenght lst)",
+			"(sq 5)",
+			"(++ 1 2)",
+		])("cannot tell %s from a turn of phrase, and says so", (text) => {
+			expect(tolerantly(text).skipped[0]).toMatch(/is not defined/);
+		});
+	});
+
 	it("changes nothing under the default strict mode", () => {
 		expect(() => ev("Here is the plan (see below)")).toThrow(/undefined: see/);
 		expect(() => ev("here it comes (+ 1 2")).toThrow();
