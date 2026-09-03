@@ -1,23 +1,20 @@
 import {
 	type Aim,
 	BloubBot,
-	type ExpressionId,
 	type GazeScript,
 	type Look,
 	PITCH_MAX,
 	YAW_MAX,
 } from "@repo/bloub";
 import { Typewriter } from "@repo/ui";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { type Reaction, useChatSession } from "../lib/chat.tsx";
-import { useAgentMood } from "../lib/mood.ts";
+import { useCallback, useEffect, useRef } from "react";
+import { type Utterance, useAgent } from "../lib/agent.tsx";
 import { usePrefersReducedMotion } from "../lib/motion.ts";
 import {
 	pickBusyPoke,
 	pickDoublePoke,
 	pickEnoughPoke,
 	pickHoverPoke,
-	type Poke,
 	pickPoke,
 } from "../lib/poke.ts";
 
@@ -30,39 +27,6 @@ import {
  * Mounting it per run would replace every transition with a cut, and the dots of
  * `thinking` are the clearest case: the body itself becomes the middle dot.
  */
-
-/**
- * The face the avatar wears when nothing is happening, and the one a conversation
- * opens on.
- *
- * `surpris` and not the video's own resting pose: that one is a pair of narrow
- * ovals, 0.19 of the body wide against 0.41 tall, which at icon size reads as two
- * slits. `surpris` is the roundest of the sixteen — 0.45 by 0.47, so very nearly
- * a circle — and it is one of the few with no roll, so the face doesn't sit
- * tilted at rest.
- */
-const REST_FACE: ExpressionId = "surpris";
-
-/**
- * The moods the avatar passes through, one per finished run. It always comes back
- * to `REST_FACE`, and it always starts there.
- *
- * An expression only lands on a state wearing the resting face, so this is `idle`
- * and `busy` — everything else has a pose measured off the video, and that pose
- * IS the state.
- *
- * All three are SYMMETRIC, and that is the selection rule rather than a matter of
- * taste. `confus` and `mefiant` were here and are not any more: both carry one eye
- * measured nearly shut — 0.17 and 0.15 of the body tall against the other's 0.44
- * and 0.40 — so landing on one at the end of a run read as a wink, which is the
- * one beat this avatar is not supposed to have.
- *
- * What distinguishes what's left: the gaze is driven from outside, so each
- * expression's own yaw and pitch are overruled and the SHAPE of its eyes is what
- * carries it — narrow and level, small, flat. Only `timide` still has a roll
- * (−7°), which tilts the head, so the eyes slide slightly as that face morphs in.
- */
-const FACES: readonly ExpressionId[] = ["fier", "timide", "blase"];
 
 /**
  * Where the eyes go while the agent is idle: at the pointer, and straight ahead
@@ -116,97 +80,6 @@ const UPWARD: GazeScript = () => ({
 });
 
 /**
- * How long a mood is worn before the face relaxes. Chosen: long enough to be read
- * while the reply is, short enough that the avatar isn't still smirking at you an
- * hour later. A mood is a reaction, and a reaction ends.
- */
-const MOOD_MS = 8000;
-
-/**
- * The face the avatar wears at rest.
- *
- * A finished run puts on the next mood and hands it back after `MOOD_MS`; that is
- * what marks the end of a run now that there is no wink. Everything else — the
- * first paint, a cleared transcript — is `REST_FACE`, so a conversation always
- * opens on the same face.
- */
-function useRestingFace(
-	isLoading: boolean,
-	fresh: boolean,
-	reaction: Reaction | null,
-): ExpressionId {
-	const [face, setFace] = useState<ExpressionId>(REST_FACE);
-	const next = useRef(0);
-	const was = useRef(false);
-	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	// A finished run and a vote both put a face on for a while, and a vote
-	// usually arrives while the run's own mood is still being worn. One timer
-	// between them, so whichever came last owns when the face comes off.
-	const wear = useCallback((expression: ExpressionId) => {
-		setFace(expression);
-		if (timer.current) clearTimeout(timer.current);
-		timer.current = setTimeout(() => setFace(REST_FACE), MOOD_MS);
-	}, []);
-
-	useEffect(
-		() => () => {
-			if (timer.current) clearTimeout(timer.current);
-		},
-		[],
-	);
-
-	useEffect(() => {
-		const finished = was.current && !isLoading;
-		was.current = isLoading;
-		if (!finished) return;
-		wear(FACES[next.current % FACES.length]);
-		next.current += 1;
-	}, [isLoading, wear]);
-
-	// An expression handed to the agent is worn as it came, any of the engine's
-	// sixteen, instead of the next face in the rotation: it was asked for, and
-	// the rotation is only what the agent does when nobody asked. The caller
-	// picks from the same vocabulary this file does, so there is no set of moods
-	// in between to keep in step (see `Reaction`).
-	//
-	// One constraint travels with it: the engine lands an expression only on a
-	// state that wears the resting face, so `idle` and `busy` show it and
-	// `thinking` and `failed` keep their own measured pose.
-	useEffect(() => {
-		if (reaction) wear(reaction.expression);
-	}, [reaction, wear]);
-
-	// `clear()` empties the transcript without remounting anything, so the reset
-	// has to be watched for rather than left to the initial state.
-	useEffect(() => {
-		if (fresh) setFace(REST_FACE);
-	}, [fresh]);
-
-	return face;
-}
-
-/**
- * How long a poked line stays up after it has finished arriving. Chosen: long
- * enough to read twice, short enough that the bot isn't still complaining about a
- * poke you have forgotten giving it.
- */
-const POKE_HOLD_MS = 4000;
-
-/**
- * The line the agent is muttering, and the poke that puts one there.
- *
- * `at` is the click it belongs to and not the line itself: poking twice can draw
- * the same line, and the typewriter restarts on a change of `text` — so without
- * an identity of its own, a repeat would sit there already finished. It is also
- * what the hold timer is keyed on.
- */
-interface Muttering {
-	line: string;
-	at: number;
-}
-
-/**
  * Under this much between two pokes, the second one is a double click and gets
  * answered as one.
  *
@@ -244,9 +117,18 @@ const BURST_LIMIT = 6;
  */
 const HOVER_MS = 2500;
 
-function usePoke(react: (expression: ExpressionId) => void, working: boolean) {
-	const [muttering, setMuttering] = useState<Muttering | null>(null);
-	const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+/**
+ * The GESTURES: what counts as a poke, a double, a mash, a hover. They stay here
+ * rather than in `lib/agent.ts` because they describe a button being clicked and
+ * not an agent — the agent only ever learns that it was asked to say something.
+ *
+ * `said` is the line currently on screen, which every draw drops from its pool.
+ */
+function usePokeGestures(
+	say: (utterance: Utterance) => void,
+	said: string | undefined,
+	working: boolean,
+) {
 	const lastAt = useRef(0);
 	/** pokes in the current burst, this one included */
 	const burst = useRef(0);
@@ -254,23 +136,9 @@ function usePoke(react: (expression: ExpressionId) => void, working: boolean) {
 
 	useEffect(
 		() => () => {
-			if (hold.current) clearTimeout(hold.current);
 			if (linger.current) clearTimeout(linger.current);
 		},
 		[],
-	);
-
-	const say = useCallback(
-		({ line, face }: Poke) => {
-			if (hold.current) clearTimeout(hold.current);
-			setMuttering({ line, at: Date.now() });
-			// Same channel a thumbs-up goes through, so the face and the line are one
-			// reaction rather than two. The engine only lands an expression on a state
-			// wearing the resting face, so while the agent is still deciding — the one
-			// state that owns the whole drawing — the line goes out on its own.
-			react(face);
-		},
-		[react],
 	);
 
 	const poke = useCallback(() => {
@@ -299,11 +167,10 @@ function usePoke(react: (expression: ExpressionId) => void, working: boolean) {
 					: working
 						? pickBusyPoke
 						: pickPoke;
-		say(pick(Math.random(), muttering?.line));
-	}, [say, working, muttering?.line]);
+		say(pick(Math.random(), said));
+	}, [say, working, said]);
 
 	return {
-		muttering,
 		poke,
 		/**
 		 * Hovering is its own line, and it is armed on ENTER rather than checked on a
@@ -324,30 +191,27 @@ function usePoke(react: (expression: ExpressionId) => void, working: boolean) {
 						return;
 					}
 					linger.current = null;
-					say(pickHoverPoke(Math.random(), muttering?.line));
+					say(pickHoverPoke(Math.random(), said));
 				}, HOVER_MS);
 			},
-			[say, muttering?.line],
+			[say, said],
 		),
 		unhover: useCallback(() => {
 			if (linger.current) clearTimeout(linger.current);
 			linger.current = null;
 		}, []),
-		/** the line has arrived in full — now it can start timing out */
-		hide: useCallback(() => {
-			if (hold.current) clearTimeout(hold.current);
-			hold.current = setTimeout(() => setMuttering(null), POKE_HOLD_MS);
-		}, []),
 	};
 }
 
 export function AgentAvatar({ size = 28 }: { size?: number }) {
-	const { isLoading, fresh, reaction, react } = useChatSession();
-	const face = useRestingFace(isLoading, fresh, reaction);
-	const { mood, state, label } = useAgentMood();
+	const { mood, state, label, face, muttering, say, settle } = useAgent();
 	const reduced = usePrefersReducedMotion();
-	// `isLoading` is the whole run: deciding, and the reply streaming after it
-	const { muttering, poke, hover, unhover, hide } = usePoke(react, isLoading);
+	// `busy` and `thinking` are the whole run: deciding, and the reply after it
+	const { poke, hover, unhover } = usePokeGestures(
+		say,
+		muttering?.line,
+		mood === "thinking" || mood === "busy",
+	);
 
 	return (
 		<div className="flex select-none items-center gap-2">
@@ -411,7 +275,7 @@ export function AgentAvatar({ size = 28 }: { size?: number }) {
 							text={muttering.line}
 							reveal="token"
 							enabled={!reduced}
-							onDone={hide}
+							onDone={settle}
 						/>
 					</span>
 				</>

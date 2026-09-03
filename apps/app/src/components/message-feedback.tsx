@@ -14,6 +14,7 @@
 import type { ExpressionId } from "@repo/bloub";
 import { useEffect, useRef, useState } from "react";
 import { captureFeedback } from "../lib/analytics.tsx";
+import { useAgent } from "../lib/agent.tsx";
 import { useChatSession } from "../lib/chat.tsx";
 
 type Thumb = "up" | "down";
@@ -70,7 +71,8 @@ export function MessageFeedback({
 	messageId?: string;
 	index: number;
 }) {
-	const { threadId, react } = useChatSession();
+	const { threadId } = useChatSession();
+	const { say } = useAgent();
 	const [thumb, setThumb] = useState<Thumb | null>(null);
 	const submission = useRef<string | null>(null);
 	const [asking, setAsking] = useState(false);
@@ -92,9 +94,9 @@ export function MessageFeedback({
 		setThumb(value);
 		setAsking(true);
 		// The vote is aimed at the agent, so the agent answers it — see
-		// `AgentAvatar`. A verdict that lands in a dashboard and nowhere else is a
+		// `lib/agent.tsx`. A verdict that lands in a dashboard and nowhere else is a
 		// verdict nobody feels they gave.
-		react(FACE[value]);
+		say({ face: FACE[value] });
 		captureFeedback({
 			$survey_response: RESPONSE[value],
 			$ai_trace_id: threadId,

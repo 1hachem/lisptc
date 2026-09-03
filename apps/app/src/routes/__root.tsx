@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { AnimatedFavicon } from "../components/animated-favicon.tsx";
 import { AppShell } from "../components/app-shell.tsx";
+import { AgentProvider } from "../lib/agent.tsx";
 import { Analytics } from "../lib/analytics.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
 import { UIProvider } from "../lib/ui.tsx";
@@ -62,10 +63,17 @@ function RootComponent() {
 			<Analytics>
 				<UIProvider>
 					<ChatProvider>
-						<AnimatedFavicon />
-						<AppShell>
-							<Outlet />
-						</AppShell>
+						{/*
+						 * Inside the chat session, because what the agent is DOING is derived
+						 * from the run; everything that reads the agent — the avatar, the tab
+						 * icon — is inside this.
+						 */}
+						<AgentProvider>
+							<AnimatedFavicon />
+							<AppShell>
+								<Outlet />
+							</AppShell>
+						</AgentProvider>
 					</ChatProvider>
 				</UIProvider>
 			</Analytics>

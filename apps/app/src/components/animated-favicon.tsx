@@ -6,12 +6,12 @@ import {
 	type StateId,
 } from "@repo/bloub";
 import { useEffect, useRef } from "react";
+import { useAgent } from "../lib/agent.tsx";
 import { drawIcon, ICON_FACE, ICON_SHAPE, iconHalf } from "../lib/bot-icon.ts";
-import { useAgentMood } from "../lib/mood.ts";
 
 /**
  * The tab icon, alive: the same bot the transcript shows, blinking on the
- * engine's own schedule, wearing whatever the agent is doing (`lib/mood.ts`).
+ * engine's own schedule, wearing whatever the agent is doing (`lib/agent.tsx`).
  *
  * No file format animates a favicon by itself — an `.ico` is a bundle of stills,
  * and Chrome and Safari rasterise an SVG icon once and ignore any animation
@@ -202,7 +202,7 @@ function start(initial: StateId): Live | null {
 }
 
 export function AnimatedFavicon() {
-	const { state } = useAgentMood();
+	const { state } = useAgent();
 	const live = useRef<Live | null>(null);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: mounted once — `state` reaches the engine through the effect below, which is the point: the engine morphs between states and would lose that if it were rebuilt per state
