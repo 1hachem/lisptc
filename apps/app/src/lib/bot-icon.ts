@@ -90,7 +90,9 @@ export function iconSvg(frame: BotFrame): string {
 }
 
 /** The engine writes eye placement as an SVG `matrix(a,b,c,d,e,f)`. */
-function matrixOf(transform: string): [number, number, number, number, number, number] {
+function matrixOf(
+	transform: string,
+): [number, number, number, number, number, number] {
 	const n = transform.match(/-?\d+(?:\.\d+)?(?:e-?\d+)?/g)?.map(Number);
 	if (n?.length !== 6) throw new Error(`not an SVG matrix: ${transform}`);
 	return n as [number, number, number, number, number, number];

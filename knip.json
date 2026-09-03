@@ -31,7 +31,11 @@
       "project": ["src/**/*.ts"]
     },
     "apps/app": {
-      "entry": ["src/routes/**/*.tsx", "server/routes/**/*.ts", "scripts/**/*.ts"],
+      "entry": [
+        "src/routes/**/*.tsx",
+        "server/routes/**/*.ts",
+        "scripts/**/*.ts"
+      ],
       "project": ["src/**/*.{ts,tsx}", "server/**/*.ts", "scripts/**/*.ts"],
       "ignoreBinaries": ["magick"]
     },

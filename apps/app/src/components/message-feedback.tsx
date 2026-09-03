@@ -13,8 +13,8 @@
 
 import type { ExpressionId } from "@repo/bloub";
 import { useEffect, useRef, useState } from "react";
-import { captureFeedback } from "../lib/analytics.tsx";
 import { useAgent } from "../lib/agent.tsx";
+import { captureFeedback } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
 
 type Thumb = "up" | "down";
