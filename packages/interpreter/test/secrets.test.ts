@@ -199,3 +199,27 @@ describe("secret registry (revealed only into an MCP call)", () => {
 		).toBe('"Bearer s3cr3t"');
 	});
 });
+
+// Without the extension the core knows nothing about secrets: no (secret)
+// built-in, and the string primitives only handle plain strings.
+describe("core interpreter (no secrets extension)", () => {
+	function coreInterp(): Interp {
+		const interp = new Interp({});
+		run(interp, prelude);
+		return interp;
+	}
+
+	it("has no (secret) built-in", () => {
+		expect(() => ev('(secret "REPL_FOO")', coreInterp())).toThrow(
+			/undefined: secret/,
+		);
+	});
+
+	it("string primitives work on plain strings", () => {
+		const interp = coreInterp();
+		expect(ev('(concat "a" "b")', interp)).toBe('"ab"');
+		expect(ev('(length "abc")', interp)).toBe("3");
+		expect(ev('(stringp "abc")', interp)).toBe("t");
+		expect(ev('(eql "a" "a")', interp)).toBe("t");
+	});
+});
