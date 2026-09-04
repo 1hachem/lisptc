@@ -1,5 +1,6 @@
 //TODO: check if langchain has builtin functions to support these helpers
 // for sure they have a funtion for use-stream since its a native
+import { nodeToJson } from "@repo/interpreter/ui.ts";
 import { type AgentConfig, type AgentMessage, streamAgent } from "./agent.ts";
 import { MAX_STEPS } from "./prompts/lisp.ts";
 import {
@@ -23,6 +24,13 @@ export interface ChatMessageInput {
 	type?: string;
 	role?: string;
 	content?: unknown;
+	/**
+	 * The UI-only extras of an earlier turn — the uncapped `display` text, the
+	 * reasoning trace, a rendered widget. The client replays them so the
+	 * transcript still looks the way it did; nothing here reaches the model,
+	 * which is rebuilt from `content` alone (see `toTranscript`).
+	 */
+	additional_kwargs?: Record<string, unknown>;
 }
 
 export interface ChatInput {
@@ -158,6 +166,12 @@ export function streamChatResponse(
 					type: wireType(m.type ?? m.role),
 					content: contentToText(m.content),
 					id: m.id ?? `msg-${i}`,
+					// Echoed back untouched so a widget an earlier step rendered — and
+					// the full text under a folded result — survive into the next turn
+					// instead of blanking out the moment the user says anything else.
+					...(m.additional_kwargs
+						? { additional_kwargs: m.additional_kwargs }
+						: undefined),
 				}),
 			);
 
@@ -221,7 +235,7 @@ export function streamChatResponse(
 					transcript.push({ role: "assistant", content: code });
 
 					const evalStartedAt = Date.now();
-					const { output, display, error } = evalCode(repl, code);
+					const { output, display, error, view } = evalCode(repl, code);
 					steps += 1;
 					// A form-less turn ran no code, so there is no result worth
 					// showing the user (or feeding back) — it is the final answer.
@@ -246,12 +260,20 @@ export function streamChatResponse(
 					// output rides in `additional_kwargs` (as reasoning does), which
 					// only the UI reads.
 					const resultContent = replResultContent(output, error);
+					// Both extras are for the UI alone. `display` is the same text
+					// uncapped; `ui` is the widget tree the step rendered, which the
+					// model is told about only as the one-line summary `ui/render`
+					// returned — sending the tree back into its context would undo
+					// the reason for drawing it.
+					const extras: Record<string, unknown> = {};
+					if (display !== output) extras.display = display;
+					if (view) extras.ui = nodeToJson(view);
 					wire.push({
 						type: "tool",
 						content: resultContent,
 						id: crypto.randomUUID(),
-						...(display !== output
-							? { additional_kwargs: { display } }
+						...(Object.keys(extras).length > 0
+							? { additional_kwargs: extras }
 							: undefined),
 					});
 					transcript.push({ role: "tool", content: resultContent });

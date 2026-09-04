@@ -10,7 +10,11 @@ export interface ChatMessage {
 	id?: string;
 	type: string;
 	content: unknown;
-	additional_kwargs?: { reasoning_content?: unknown; display?: unknown };
+	additional_kwargs?: {
+		reasoning_content?: unknown;
+		display?: unknown;
+		ui?: unknown;
+	};
 }
 
 interface ChatSession {
@@ -120,10 +124,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			// FetchStreamTransport is stateless, so replay the whole conversation
 			// each turn — greeting included, it is `messages[0]`; the server echoes it
 			// back and streams the new reply.
+			// `additional_kwargs` rides along so the rendered widgets and untruncated
+			// output of earlier turns are still there after this one: the server
+			// echoes the list back verbatim, and anything left out of it here is
+			// gone from the transcript for good.
 			const history = messages.map((m) => ({
 				type: m.type,
 				content: m.content,
 				id: m.id,
+				additional_kwargs: m.additional_kwargs,
 			}));
 			// The id is named here rather than left to the server: it is this turn's
 			// React key, and the server echoes it back verbatim, so the message shown
@@ -250,6 +259,17 @@ export function toolResult(message: ChatMessage): {
 		// not JSON — fall through to raw text
 	}
 	return { output: text, error: false };
+}
+
+/**
+ * The widget tree a step rendered, if it rendered one.
+ *
+ * It rides beside the text rather than in it because it is not text — and the
+ * model never sees it at all: its own record of the step is the one-line summary
+ * `ui/render` returned, which is in `content` like any other result report.
+ */
+export function toolUi(message: ChatMessage): unknown {
+	return message.additional_kwargs?.ui;
 }
 
 export function messageText(message: ChatMessage): string {

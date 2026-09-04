@@ -285,3 +285,52 @@ describe("the language reference", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/page on with the offset/);
 	});
 });
+
+describe("interactive views", () => {
+	// A view is the one thing the model can build that keeps paying after the
+	// turn ends, so the prompt has to say both halves: that a handler runs
+	// without a model turn, and that the widget never comes back to it.
+	it("says an action runs in the REPL with no model turn", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/runs IN THIS REPL/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/NO model turn in between/);
+	});
+
+	it("says the widget is not sent back into its context", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/the widget is never sent back to you/i);
+	});
+
+	it("names the render entry point and the constructors", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(names("ui/render"));
+		for (const tag of [
+			"ui/stack",
+			"ui/row",
+			"ui/text",
+			"ui/table",
+			"ui/input",
+			"ui/button",
+			"ui/form",
+		])
+			expect(LISP_SYSTEM_PROMPT).toMatch(names(tag));
+	});
+
+	it("draws the line between echoing and rendering", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/Echo when the answer is something to read; render when it is something to use/,
+		);
+	});
+
+	// Without this the model builds views it cannot get out of: every branch has
+	// to be anticipated, because a handler has no way to ask.
+	it("says a handler can hand the turn back with ui/send", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(names("ui/send"));
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/joins the conversation as a message from the user/,
+		);
+	});
+
+	it("says which clicks are worth a turn and which are not", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/Send for judgement, handle it in Lisp for work/,
+		);
+	});
+});

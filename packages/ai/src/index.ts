@@ -22,6 +22,7 @@ export {
 	toAgentMessages,
 } from "./stream.ts";
 export { shutdownTelemetry } from "./telemetry.ts";
+export { runUiAction, type UiActionResult } from "./ui-action.ts";
 export {
 	ensureWarm,
 	systemPromptSlotFile,

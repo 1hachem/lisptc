@@ -11,6 +11,10 @@ const chatMessageSchema = z.object({
 	type: z.string().optional(),
 	role: z.string().optional(),
 	content: z.unknown().optional(),
+	// The UI-only extras the client replays (rendered widget, uncapped output,
+	// reasoning). Opaque here: the AI layer echoes them back to the client and
+	// never reads them into the model's context.
+	additional_kwargs: z.record(z.string(), z.unknown()).optional(),
 });
 
 const chatRequestSchema = z.object({

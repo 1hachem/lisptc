@@ -11,9 +11,11 @@ import {
 	messageReasoning,
 	messageText,
 	toolResult,
+	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { GenerativeUI, toUiNode } from "./generative-ui.tsx";
 import { Greeting } from "./greeting.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
@@ -30,7 +32,12 @@ const FOLD_LINES = 25;
 
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { output, error } = toolResult(message);
+	const view = toUiNode(toolUi(message));
 	const [expanded, setExpanded] = useState(false);
+	// A step that rendered a widget is answering in the widget: its text output
+	// is the `name: shape` report of the render itself, which says nothing the
+	// drawing in front of the reader does not.
+	if (view) return <GenerativeUI node={view} />;
 	const lines = output.split("\n");
 	const folded = lines.length > FOLD_LINES && !expanded;
 	return (

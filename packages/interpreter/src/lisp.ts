@@ -417,6 +417,20 @@ export function callableKind(x: unknown): "function" | "macro" | undefined {
 	return undefined;
 }
 
+/*
+ * The positional-argument count `x` accepts, or undefined if it is not
+ * callable.
+ *
+ * `Interp.arityOf` answers the same question for a global by name. A UI action
+ * (src/ui.ts) is an anonymous lambda the host holds by reference, so it has no
+ * name to ask under — and the host has to know whether to hand the handler the
+ * form's field values or call it with none.
+ */
+export function callableArity(x: unknown): Arity | undefined {
+	if (!(x instanceof Func)) return undefined;
+	return { min: x.fixedArgs, max: x.hasRest ? undefined : x.arity };
+}
+
 // Bound variable in a compiled lambda/macro expression
 class Arg {
 	constructor(

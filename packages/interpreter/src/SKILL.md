@@ -456,7 +456,87 @@ A *job* is a handle for background work (currently just `load-mcp`).
   outgoing MCP call argument or header. Only `REPL_`-prefixed keys are visible.
   Example: `(load-mcp :name "acme" :url "…" :headers (list (cons "Authorization" (secret "REPL_ACME_TOKEN"))))`.
 
-## 11. Gotchas
+## 11. Interactive views (`ui/*`)
+
+`echo` puts text on the user's screen. `ui/render` puts a **widget** there — one
+they can click, type into and submit, with each interaction running Lisp in this
+same REPL.
+
+```
+(defun panel ()
+  (ui/stack
+    (ui/heading "Open issues")
+    (ui/table (head issues-1 10))
+    (ui/form (lambda (values) (ui/render (results (cdr (assoc "q" values)))))
+      (ui/input :name "q" :label "filter" :placeholder "auth")
+      :submit "search")))
+(ui/render (panel))
+```
+
+**Constructors** (each returns a widget; none of them draws anything on its own)
+- `(ui/text s)` a line · `(ui/heading s)` · `(ui/markdown s)` a block of markdown.
+- `(ui/stack child...)` one above the next · `(ui/row child...)` side by side. A
+  bare string child becomes `ui/text`.
+- `(ui/table rows [:columns '("id" "title")])` — `rows` is a list of alists, the
+  shape an MCP tool result usually has. Without `:columns` the first row's keys
+  are the columns.
+- `(ui/input :name "q" [:label "…"] [:placeholder "…"] [:value "…"])` a text field
+  · `(ui/select options :name "n" [:label "…"] [:value "…"])` a dropdown over a
+  list of strings.
+- `(ui/button label action)` · `(ui/form action child... [:submit "Send"])`.
+
+**Actions** are ordinary functions, and they run **in this REPL with no model turn
+in between** — the user clicks, the closure runs, the view is replaced, and you
+are not asked anything. That is what makes a view worth building: every branch you
+anticipate becomes free.
+- A button's action takes no argument: `(lambda () (ui/render (panel)))`.
+- A form's action takes one: an alist of every enclosed field's `:name` and its
+  contents, read with `assoc`. A button INSIDE a form gets the same alist if it
+  takes an argument.
+- Field contents are always strings. `(read s)` turns one into a number.
+- An action answers by calling `ui/render`. Whatever it renders replaces the view
+  in place; an action that renders nothing leaves the view as it was.
+- Actions close over the environment where you wrote them, and the REPL is
+  persistent, so `(setq counter (+ counter 1))` inside a handler sticks — a later
+  step of yours reads the changed value like any other global.
+
+**Handing work back to you: `(ui/send text...)`**
+
+A handler that reaches something it cannot answer on its own calls `ui/send`. The
+arguments are joined like `echo`'s and the result joins the conversation **as a
+message from the user**, so you take the next turn and answer it normally:
+
+```
+(ui/form (lambda (values) (ui/send "search the issues for" (cdr (assoc "q" values))))
+  (ui/input :name "q" :label "search")
+  :submit "ask")
+```
+
+- Send when the click needs *judgement* — a request typed in prose, a decision, a
+  step you did not write code for. Handle it in Lisp when the click needs *work* —
+  filtering, paging, recomputing, calling a tool you already loaded. The first
+  costs a turn; the second is free.
+- A handler may render AND send: render the view the user should be looking at
+  while you think, then send.
+- Several sends in one handler join into ONE message, because one click is one
+  thing the user did.
+- Only handlers deliver. `ui/send` in your own step does nothing — you are already
+  taking a turn.
+- The message arrives as a user turn, so write it as a request, not as a note to
+  yourself: `"search the issues for auth"`, not `"user clicked search"`.
+
+**Rules of thumb**
+- `ui/render` is the ONLY thing that draws. Building a widget and not rendering it
+  shows nothing, exactly like computing a value and not echoing it.
+- A step that renders a view shows the user the view INSTEAD of its text output,
+  so put anything they should read inside the widget rather than in an `echo`.
+- Render when the answer has something to DO in it — a filter to change, a row to
+  act on, a choice to make. Echo when it is something to read.
+- You are told only that the render happened (`rendered stack, 8 elements, 3
+  actions`). The widget itself is not sent back to you: describing it to yourself
+  would spend exactly the context that drawing it saved.
+
+## 12. Gotchas
 
 - Only `nil` is false — `0`, `0.0`, and `""` are all TRUE.
 - Integer division: `/` gives a float; use `truncate` for an exact integer.
