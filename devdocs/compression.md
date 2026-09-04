@@ -21,9 +21,16 @@ So the REPL prints **nothing** on its own. Three mechanisms:
   mis-copy. Small values (≤ `INLINE_WORDS`) are reported as themselves, because
   below that a shape costs more to read than the value it hides.
 - **`echo` is the only thing that writes**, and what the *model* sees of it is
-  capped per step. `head`/`tail`/`grep` do not print at all: they return a
-  value, which is therefore named like any other result. That is the pattern the
-  whole design is for — extract into a name, then echo a rendering of it.
+  capped per step. `grep` does not print at all: it returns a value, which is
+  therefore named like any other result. That is the pattern the whole design is
+  for — extract into a name, then echo a rendering of it.
+- **A slice is the exception**, because it is asked for in order to be read: a
+  top-level `head`/`tail` form has its slice *printed* in place of a report,
+  and mints no name. Describing one back (`head-1: list of 5 items`) told the
+  model only what it already knew and cost it a second step on the `(echo
+  head-1)` it had meant all along. `result` decides this from the form, not the
+  built-in (see `isSliceForm`), so a slice nested in another form — `(mapcar f
+  (head x 5))`, `(setq top (head x 5))` — prints nothing and is just a value.
 
 Describing instead of showing is only safe *because* of the naming: nothing is
 lost by not printing it.
@@ -134,18 +141,21 @@ In order, `Compressor.result` and `nameFor`:
 1. `Unspecified` — what `echo` returns — reports nothing at all. The step has
    already said what it had to say; a line on top would only announce that
    printing happened.
-2. `nil` and `t` are reported plainly. They carry nothing a later step could
+2. A top-level `head`/`tail` form reports nothing either — its slice is
+   printed instead (see `isSliceForm`), and no name is minted for it: the
+   value it was sliced out of already has one.
+3. `nil` and `t` are reported plainly. They carry nothing a later step could
    refer to, and every side-effecting loop returns `nil`; naming those would
    bury the results that matter under `dotimes-1: nil`.
-3. A value that is a symbol already bound as a global — what `defun`/`defmacro`
+4. A value that is a symbol already bound as a global — what `defun`/`defmacro`
    return — is reported under that name, describing what it now holds
    (`f: function`).
-4. A `setq` reports the symbol **it** assigned, read off the form (the last one,
+5. A `setq` reports the symbol **it** assigned, read off the form (the last one,
    for `(setq a 1 b 2)`). Reverse lookup alone would only find it for a `Cell`
    or a string, not for a number.
-5. A value an existing global already holds reuses that name — so a result the
+6. A value an existing global already holds reuses that name — so a result the
    agent bound itself is not given a second one.
-6. Otherwise the head symbol of the form plus a per-name counter, skipping any
+7. Otherwise the head symbol of the form plus a per-name counter, skipping any
    name already taken so an agent's own `foo-1` is never clobbered. A form with
    no symbol at its head (`((lambda …) 1)`) becomes `result-N`.
 
@@ -182,7 +192,8 @@ newline would point one character past the end of the value — enough to make t
 Half the feature is the prompt: a model that is not told waits for values it
 will never be shown, and keeps retyping data it could have named. `SKILL.md` §5
 lists the built-ins — `echo` under Output, `head`/`tail`/`grep` under Extracting
-— and §9 explains the silence, the report line, and the extract-then-echo
+(where a bare slice's printing is spelled out) — and §9 explains the silence,
+the report line, and the extract-then-echo
 pattern with a worked example of each failure. POLICY rules 2, 10, 11 and 11a in
 `packages/ai/src/prompts/lisp.ts` say it outright, and rule 4c corrects the one
 thing the model cannot observe: the user *does* read what a step echoes.

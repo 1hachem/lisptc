@@ -176,6 +176,10 @@ own (see §9), so nothing you compute is seen by anyone until you echo it.
 printing. Extract into a name, then `echo` a rendering of it.
 - `(head x [n])` the first `n` of `x`; `(tail x [n])` the last `n`. On a list,
   `n` ELEMENTS — `(head issues 4)` is the first four rows. On text, `n` words.
+  A slice is taken to be read, so one written as a step of its own is PRINTED
+  and gets no name: `(head issues 4)` shows you the four rows, and there is no
+  `(echo …)` to write after it. Nested in another form it prints nothing and is
+  just the value — `(mapcar row (head issues 4))`, `(setq top (head issues 4))`.
 - `(grep x "pattern" :group n :max n :ignore-case t)` what `pattern` matched, as
   a list, or `nil`. On a list, the ELEMENTS whose printed form matches:
   `(grep issues "auth")` is the issues about auth. On text, the matched
@@ -319,7 +323,8 @@ produce wrong data. Build on the name —
 
 The shape line tells you what you need to write the next form. Two moves cover
 almost everything: `head`/`tail`/`grep` to pull out a value (which the REPL then
-names), and `echo` to show a rendering of it.
+names), and `echo` to show a rendering of it. A bare `head`/`tail` is the
+exception that needs neither: it prints its slice on the spot.
 
 To answer with something the REPL produced, compute the answer and echo THAT:
 
@@ -331,14 +336,22 @@ grep-1: ("https://x.dev/a")
 https://x.dev/a
 ```
 
-```
-(head acme/list-issues-1 4)
-head-1: list of 4 alists, keys "id" "identifier" "title" "state" "url"
+A bare slice is already the answer to "what is in there":
 
+```
+(head acme/list-issues-1 2)
+((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
+ (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
+```
+
+To render it for the user rather than read it yourself, keep the whole list and
+echo the rendering:
+
+```
 (defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
 row: function
 
-(echo (string-join (mapcar row head-1) "\n"))
+(echo (string-join (mapcar row (head acme/list-issues-1 4)) "\n"))
 | ENG-12 | Auth token refresh fails |
 | ENG-31 | OAuth callback drops the state param |
 ```
@@ -483,7 +496,8 @@ A *job* is a handle for background work (currently just `load-mcp`).
   `:offset`/`:length`/`:match` are how you window and search what it prints.
 - Retyping data the REPL produced is the main way you produce wrong data (§9).
   Extract it with `grep`/`head` and echo the variable instead.
-- `head`/`tail`/`grep` RETURN a value; only `echo` prints. `(head issues 4)`
-  hands you the first four rows to compute with, it does not show them.
+- `head`/`tail`/`grep` RETURN a value; only `echo` prints — except a bare
+  `head`/`tail`, whose slice the REPL prints instead of describing, because a
+  slice is asked for in order to be read.
 - Echo output is capped for you but not for the user (§9). Output ending in a
   `...` line is not everything — page on with the offset it gives you.

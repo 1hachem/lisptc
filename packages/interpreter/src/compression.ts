@@ -285,6 +285,14 @@ export class Compressor {
 		// A step that ended in an `echo` has already said everything it has to
 		// say; a report on top would only announce that printing happened.
 		if (value === Unspecified) return "";
+		// A slice is asked for in order to be READ, so the report for a
+		// top-level `head`/`tail` is the slice itself: describing it back as
+		// `head-1: list of 10 items` sends the agent for an `(echo head-1)` it
+		// should never have had to spend a step on.
+		if (isSliceForm(form)) {
+			this.print(interp, value);
+			return "";
+		}
 		// nil and t are their own shape, and every side-effecting loop returns
 		// nil — naming those would bury the results that matter under
 		// `dotimes-1: nil`.
@@ -334,6 +342,20 @@ export class Compressor {
 		this.spent += wordSpans(model).length;
 		this.dropped += dropped;
 		return { model, user };
+	}
+
+	// Write a value the way `echo` writes it: the human's copy straight out,
+	// the model's capped against what is left of this step's budget.
+	private print(interp: Interp, value: unknown): void {
+		writeOut(
+			this.window(
+				interp,
+				echoText(new Cell(value, null)),
+				value,
+				0,
+				Number.MAX_SAFE_INTEGER,
+			).user,
+		);
 	}
 
 	// Cap a rendered error. Nothing is saved: an EvalException's message is
@@ -561,6 +583,15 @@ export class Compressor {
 	}
 }
 
+// Was this top-level form a slice taken to be looked at? Only the bare form
+// counts: nested — `(mapcar f (head x 2))` — the slice is an argument to
+// someone else's computation and printing it would leak data the step never
+// asked to see.
+function isSliceForm(form: unknown): boolean {
+	if (!(form instanceof Cell) || !(form.car instanceof Sym)) return false;
+	return form.car.name === "head" || form.car.name === "tail";
+}
+
 // The symbol a `(setq a 1 b 2)` form assigned last — the one holding the value
 // the form returned.
 function lastAssignedSymbol(form: unknown): string | undefined {
@@ -687,8 +718,9 @@ function wordWindow(
  *
  * Element-wise on a list, word-wise on anything else. That polymorphism is the
  * point: `(head issues 4)` is the four rows an agent means by "the first four",
- * while `(head doc 40)` is the opening of a document. Both RETURN, so the
- * result is named and can be echoed, mapped or grepped in the next step.
+ * while `(head doc 40)` is the opening of a document. Both return the slice —
+ * it is `result` that prints it when the form was a step of its own (see
+ * `isSliceForm`), so a nested slice stays as silent as any other function.
  */
 function headOf(value: unknown, n: number): unknown {
 	const items = listElements(value);
@@ -920,7 +952,7 @@ function registerCompression(interp: Interp, c: Compressor): void {
 		"head",
 		-2,
 		"(head x [n])",
-		`Return the first \`n\` of \`x\`: its first n ELEMENTS if it is a list, its first n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Returns the value rather than printing it, so the REPL names the result and you can echo, map or grep it from there.`,
+		`The first \`n\` of \`x\`: its first n ELEMENTS if it is a list, its first n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Written as a step of its own the slice is PRINTED — it is what you came for, so there is no \`(echo head-1)\` to follow it with and no name is minted. The value is returned as well, so (setq first (head x 5)) keeps it under a name and (mapcar f (head x 5)) computes over it; inside another form it prints nothing.`,
 		z.tuple([zAny, zList]),
 		([value, rest]) => headOf(value, countArg(rest, value, c.limit)),
 	);
@@ -929,7 +961,7 @@ function registerCompression(interp: Interp, c: Compressor): void {
 		"tail",
 		-2,
 		"(tail x [n])",
-		`Return the last \`n\` of \`x\`: its last n ELEMENTS if it is a list, its last n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Returns the value rather than printing it.`,
+		`The last \`n\` of \`x\`: its last n ELEMENTS if it is a list, its last n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Printed when it is a step of its own, returned in every case — see \`head\`.`,
 		z.tuple([zAny, zList]),
 		([value, rest]) => tailOf(value, countArg(rest, value, c.limit)),
 	);
