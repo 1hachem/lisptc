@@ -9,7 +9,6 @@
 import {
 	EndOfFile,
 	EvalException,
-	evalTopLevel,
 	Interp,
 	prelude,
 	Reader,
@@ -21,6 +20,7 @@ import {
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
+import { proseExtension } from "@repo/interpreter/prose.ts";
 import { secretsExtension } from "@repo/interpreter/secrets.ts";
 import type { Repl } from "./repl.ts";
 import {
@@ -42,7 +42,6 @@ const write = (s: string): void => {
 // The interactive Read-Eval-Print Loop over stdin/stdout.
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
-	private readonly stdInTokens: Reader = new Reader();
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -56,7 +55,11 @@ class InteractiveRepl implements Repl {
 		// The standalone CLI auto-loads a `.env` file (env vars + `$LISPTC_SECRETS_FILE`
 		// / nearest `.env`); the secretsExtension owns that loading via `envFile`.
 		const interp = new Interp({
-			extensions: [secretsExtension({ envFile: true }), mcpExtension()],
+			extensions: [
+				secretsExtension({ envFile: true }),
+				mcpExtension(),
+				proseExtension(),
+			],
 		});
 		run(interp, prelude);
 		return interp;
@@ -66,45 +69,41 @@ class InteractiveRepl implements Repl {
 		this.currentInterp = this.freshInterp();
 	}
 
-	// Read an expression from the standard-in asynchronously.
-	private async readExpression(
-		prompt1: string,
-		prompt2: string,
-	): Promise<unknown> {
-		const oldTokens = new Reader();
-		for (;;) {
-			oldTokens.copyFrom(this.stdInTokens);
-			try {
-				return this.stdInTokens.read();
-			} catch (ex) {
-				if (ex === EndOfFile) {
-					const line = await readLine(oldTokens.isEmpty() ? prompt1 : prompt2);
-					if (line === null) return EndOfFile;
-					oldTokens.push(line);
-					this.stdInTokens.copyFrom(oldTokens);
-				} else {
-					this.stdInTokens.clear(); // Discard the erroneous tokens.
-					throw ex;
-				}
-			}
-		}
-	}
-
-	// Repeat Read-Eval-Print until End-Of-File asynchronously.
+	/*
+	 * Repeat Read-Eval-Print until End-Of-File asynchronously.
+	 *
+	 * A whole input is buffered before it is evaluated rather than read one
+	 * expression at a time, because prose is decided over complete text: `run`
+	 * blanks what is outside the forms and puts each form to the interp's
+	 * classifier (`proseExtension`, installed above), and neither can judge a
+	 * form still missing its closing paren. That is the attach loop's contract
+	 * too, so `pnpm repl` and `pnpm repl:attach` now answer identically.
+	 */
 	async readEvalPrintLoop(): Promise<void> {
+		let buffer = "";
 		for (;;) {
+			const line = await readLine(buffer === "" ? "> " : "  ");
+			if (line === null) {
+				write("Goodbye\n");
+				return;
+			}
+			buffer += `${line}\n`;
+			// A form left open at the end of the line wants the rest of itself.
+			if (!isComplete(buffer)) continue;
+			const text = buffer;
+			buffer = "";
 			try {
-				const exp = await this.readExpression("> ", "  ");
-				if (exp === EndOfFile) {
-					write("Goodbye\n");
-					return;
-				}
-				const result = evalTopLevel(this.currentInterp, exp);
+				const value = run(this.currentInterp, text, {
+					prose: "tolerant",
+					onProse: (what) => write(`skipped ${what}\n`),
+				});
 				// A printing function (prin1/princ/terpri/print) returns
 				// Unspecified, meaning "already shown" — don't echo it too.
-				if (result !== Unspecified) write(`${str(result)}\n`);
+				if (value !== Unspecified) write(`${str(value)}\n`);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
+				else if (ex === EndOfFile)
+					write("unbalanced expression (unexpected end of input)\n");
 				else throw ex;
 			}
 		}
@@ -337,7 +336,9 @@ Usage:
 With no arguments (or a bare "-") an interactive REPL starts. Each file
 argument is run in order on the same interpreter — so a trailing "-"
 keeps the files' state and drops you into a prompt afterwards. Secrets
-(REPL_* env vars / nearest .env) and MCP are wired in both modes.
+(REPL_* env vars / nearest .env) and MCP are wired in both modes. At the
+prompt, text around the forms is prose and a parenthesised aside is
+skipped with a note; a .ptc file argument is read strictly.
 
 Arguments:
   file.ptc        run a .ptc script; relative paths resolve against the

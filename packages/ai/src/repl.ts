@@ -67,6 +67,29 @@ export function replResultContent(output: string, error: boolean): string {
 	});
 }
 
+// The skip notes a prose-only answer withheld (see `AgentRepl.eval`), framed as
+// a REPL result so the model reads them the way it reads every other one. The
+// caller delivers this with the user's NEXT message rather than when it
+// happened: an answer full of parenthesised asides is still an answer, and
+// feeding the notes back at the time would have spent an agent turn restating
+// it. One turn later it is just a correction the model reads before writing
+// again.
+//
+// It rides in on the user's turn, so the note has to say out loud that it is
+// not from the user and not to be answered: the failure mode is a model that
+// opens its reply apologising for a mistake the user never saw.
+export function proseFeedbackContent(feedback: string): string {
+	return replResultContent(
+		[
+			"your previous reply ran nothing — a parenthesis in prose is read as prose:",
+			feedback.trimEnd(),
+			"put parentheses only around code you mean to run.",
+			"this note is private: it is not from the user and the user cannot see it. Do not mention it, apologise for it, or explain it — just answer the user's message without repeating that shape.",
+		].join("\n"),
+		false,
+	);
+}
+
 // Evaluate one program. A thrown error means an unexpected host error (the REPL
 // renders Lisp errors into its output rather than throwing), so reset the
 // interpreter to avoid persisting corrupt state — mirrors the pi extension.

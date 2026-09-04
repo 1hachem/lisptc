@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { checkSyntax, stripProse } from "../src/lisp.ts";
-import { ev, evWithOutput } from "./helpers.ts";
+import {
+	checkSyntax,
+	Interp,
+	prelude,
+	run,
+	str,
+	stripProse,
+} from "../src/lisp.ts";
+import { proseExtension } from "../src/prose.ts";
+import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
 describe("prose around forms", () => {
 	it("evaluates the forms and ignores the text between them", () => {
@@ -66,5 +74,195 @@ describe("no comment syntax", () => {
 
 	it("ignores a `;` line outside a form, like any other prose", () => {
 		expect(ev(";; a section header\n(+ 1 2)")).toBe("3");
+	});
+});
+
+/*
+ * A model writes prose with parentheses in it. The grammar that forbids that
+ * (`lisptc.gbnf`) only binds providers that support grammars, so the reader
+ * has to cope: under `tolerant`, text that cannot be a program is prose, and
+ * every skip is reported rather than silently dropped.
+ */
+describe("tolerant prose (an LLM's parentheses)", () => {
+	// What the model wrote, and what it should be read as. Skipping forms is the
+	// prose extension's job, not the core's, so the interp has to install it.
+	function tolerantly(text: string): { value: string; skipped: string[] } {
+		const interp = new Interp({ extensions: [proseExtension()] });
+		run(interp, prelude);
+		const skipped: string[] = [];
+		const value = str(
+			run(interp, text, {
+				prose: "tolerant",
+				onProse: (what) => skipped.push(what),
+			}),
+		);
+		return { value, skipped };
+	}
+
+	it("reads a form whose head names nothing as prose", () => {
+		const { value, skipped } = tolerantly(
+			"Here is the plan (see below):\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual([
+			'(see below) — "see" is not defined, so this was read as prose',
+		]);
+	});
+
+	// Commas are unquote sugar, so a list written in prose is not even readable
+	// as a call — but it is still just a sentence.
+	it("reads a comma-separated aside as prose", () => {
+		expect(tolerantly("Steps (one, two, three) then:\n(+ 1 2)").value).toBe(
+			"3",
+		);
+	});
+
+	// The destructive case: `endOfForm` runs to the end of the text, so a stray
+	// "(" used to swallow every real form after it and lose the whole step.
+	it("recovers the forms after an unclosed parenthesis", () => {
+		const { value, skipped } = tolerantly(
+			"The result (roughly is fine\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual(['unclosed "(" on line 1']);
+	});
+
+	it("reports the line an unclosed parenthesis was on", () => {
+		expect(tolerantly("(+ 1 2)\none\ntwo (nearly\n").skipped).toEqual([
+			'unclosed "(" on line 3',
+		]);
+	});
+
+	// Boundness is decided per form as the program runs, so a definition
+	// earlier in the same program counts.
+	it("evaluates a form whose head an earlier form defined", () => {
+		expect(tolerantly("(defun see (x) 42)\n(see 1)").value).toBe("42");
+	});
+
+	it("leaves special forms and computed heads alone", () => {
+		expect(tolerantly("(setq x 7) (progn x)").value).toBe("7");
+		expect(tolerantly("((lambda (x) (* x 2)) 21)").value).toBe("42");
+	});
+
+	// A comma is unquote sugar to the reader, but a string literal is one token,
+	// so the commas inside it never reach the reader as sugar.
+	it("reads commas inside a string as part of the string", () => {
+		expect(tolerantly('(string-split "a,b,c" ",")').value).toBe(
+			'("a" "b" "c")',
+		);
+		expect(tolerantly('(list "a, b, c")').value).toBe('("a, b, c")');
+	});
+
+	// Only the head of a TOP-LEVEL form is a prose candidate: a typo deeper in
+	// an expression is a real mistake and has to stay an error.
+	it("still reports an undefined name inside a form", () => {
+		expect(() => tolerantly("(+ 1 (nope 2))")).toThrow(/undefined: nope/);
+	});
+
+	/*
+	 * Where tolerance stops, case by case. Both halves of the line cost
+	 * something to get wrong: an aside read as code spends the step on an error
+	 * the agent cannot act on, and a call read as prose vanishes into a skip
+	 * note — a tool whose server was never loaded has to say so, since silence
+	 * is the one failure the agent cannot debug.
+	 */
+	describe("telling an aside from a call", () => {
+		// Sentences contain punctuation, digits, emoji, URLs and parentheses of
+		// their own; none of that makes a form code.
+		const asides = [
+			"(see below)",
+			"(one, two, three)",
+			"(step 2)",
+			"(e.g. see below)",
+			"(i.e. the sum)",
+			"(cf. above)",
+			"(1, 2, 3)",
+			"(50% done)",
+			// A slash the sentence wrote, not a namespace: it is followed by a
+			// word, which no bare tool call is.
+			"(A/B test)",
+			"(TODO: fix this)",
+			"(don't panic)",
+			"(see https://example.com)",
+			"(🙂)",
+			"(note (details here))",
+		];
+		it.each(asides)("reads %s as prose", (text) => {
+			const { value, skipped } = tolerantly(text);
+			expect(value).toBe("#<unspecified>");
+			expect(skipped).toHaveLength(1);
+		});
+
+		// Each of these carries something a sentence never does: keyword call
+		// syntax, a literal being passed, a namespaced name with no words around
+		// it, or a call nested inside the call.
+		const calls: [string, string][] = [
+			['(server/tool :key "value")', "server/tool"],
+			["(server/tool)", "server/tool"],
+			['(navigate :key "value")', "navigate"],
+			["(step_two)", "step_two"],
+			["(status :ok)", "status"],
+			['(prin "hi")', "prin"],
+			['(string-splt "a,b" ",")', "string-splt"],
+			// The same words as the aside `(one, two, three)` above — quoting
+			// them is what makes them an argument rather than a list of steps.
+			['(steps "one, two, three")', "steps"],
+			['(join "a" "," "b")', "join"],
+			["(fetch (car urls))", "fetch"],
+		];
+		it.each(calls)("errors on %s, naming %s", (text, name) => {
+			expect(() => tolerantly(text)).toThrow(`undefined: ${name}`);
+		});
+
+		// The limit of the whole idea: a misspelled word and a written one are
+		// the same shape. With no literal, no keyword and no namespace to go on,
+		// a typo is read as prose — the skip note names it, and that is all the
+		// reader can honestly offer.
+		it.each([
+			"(lenght lst)",
+			"(sq 5)",
+			"(++ 1 2)",
+		])("cannot tell %s from a turn of phrase, and says so", (text) => {
+			expect(tolerantly(text).skipped[0]).toMatch(/is not defined/);
+		});
+	});
+
+	/*
+	 * The classifier is an extension (src/prose.ts), so a host that did not ask
+	 * for it gets none of its guessing: tolerance is then only the reader's own
+	 * unclosed-paren rule, and a form that parses is code like any other.
+	 */
+	it("skips nothing without the prose extension", () => {
+		const bare = freshInterp();
+		const skipped: string[] = [];
+		const options = {
+			prose: "tolerant",
+			onProse: (what: string) => skipped.push(what),
+		} as const;
+		expect(() => run(bare, "(see below)", options)).toThrow(/undefined: see/);
+		expect(str(run(bare, "a stray (paren\n(+ 1 2)", options))).toBe("3");
+		expect(skipped).toEqual(['unclosed "(" on line 1']);
+	});
+
+	// A host that reads its model differently supplies its own policy rather
+	// than patching the core.
+	it("takes a host's own classifier in place of the bundled one", () => {
+		const interp = new Interp({
+			extensions: [proseExtension(() => "everything is prose here")],
+		});
+		const skipped: string[] = [];
+		const value = run(interp, "(+ 1 2)", {
+			prose: "tolerant",
+			onProse: (what) => skipped.push(what),
+		});
+		expect(str(value)).toBe("#<unspecified>");
+		expect(skipped).toEqual(["everything is prose here"]);
+	});
+
+	it("changes nothing under the default strict mode", () => {
+		expect(() => ev("Here is the plan (see below)")).toThrow(/undefined: see/);
+		expect(() => ev("here it comes (+ 1 2")).toThrow();
+		expect(stripProse("a (b")).toBe("  (b");
+		expect(stripProse("a (b", "tolerant")).toBe("    ");
 	});
 });

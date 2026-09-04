@@ -18,6 +18,15 @@ evaluate — wrap it in a form; a stray parenthesis in prose is still read as
 code, so never write one (no `:)`); and prose cannot hold a `<` or a `[` at all
 — write "less than", or put the comparison in a form, `(< 1 2)`.
 
+A parenthesised aside whose head names nothing — `(see below)`, `(one, two,
+three)` — is read as prose rather than run, and comes back as a `skipped …`
+note; a reply made only of those ran nothing, which ends the loop (see "Ending
+the loop"). That tolerance stops at anything shaped like a call: a keyword
+argument, a string literal, another call nested inside it, or a slashed or
+underscored name with no words around it — `(server/tool :key "value")`, dummy
+names — is code whatever is missing, so calling a tool whose server you have
+not loaded is an `undefined:` error you must fix, not a skip.
+
 - **Quote**: `'x` ≡ `(quote x)` — returns `x` unevaluated.
 - **Quasiquote**: `` `x `` ≡ `(quasiquote x)`. Inside it, `,x` (`unquote`) inserts
   the evaluated `x`, and `,@x` (`unquote-splicing`) splices a list. Example:
