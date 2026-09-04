@@ -16,10 +16,10 @@
 
 import {
 	Cell,
-	checkSyntax,
 	EndOfFile,
 	EvalException,
 	Interp,
+	isTruncated,
 	type List,
 	newSym,
 	prelude,
@@ -260,14 +260,16 @@ export class AgentRepl extends MemoryRepl {
  * - or every parenthesis in it was prose (`all done (see above)`), so the
  *   program did nothing and printed nothing.
  *
- * The second test is the tolerant reader's, but truncation is excluded with a
- * STRICT one: a reply cut off mid-form also runs nothing, yet it is an
- * interrupted step, and ending the loop on it would strand the task.
+ * The second test is the tolerant reader's, but truncation is excluded: a reply
+ * cut off mid-form also runs nothing, yet it is an interrupted step, and ending
+ * the loop on it would strand the task. Only an OPEN parenthesis says that —
+ * an aside the reader could not parse ("(a deprecated `read_file`)") is a
+ * finished sentence, and asking `checkSyntax` here would call it a truncation.
  */
 function isAnswer(code: string, { output, skipped }: EvalResult): boolean {
 	if (stripProse(code, "strict").trim() === "") return true;
 	if (output !== "" || skipped.length === 0) return false;
-	return checkSyntax(code).length === 0;
+	return !isTruncated(code);
 }
 
 // Define a single read-only conversation global on the given interp.
