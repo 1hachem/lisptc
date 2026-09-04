@@ -164,6 +164,9 @@ Arithmetic built-ins:
 own (see §9), so nothing you compute is seen by anyone until you echo it.
 - `(echo x...)` print the arguments, space-separated, one newline at the end:
   strings as they are, everything else re-readable. `(echo)` is a blank line.
+  A keyword prints as itself when nothing follows it — `(echo (job-status j))`
+  shows `:pending` — because only a keyword carrying a value after it is read
+  as an option. So put a keyword you mean to print LAST, or wrap it in a list.
 - `(echo x :offset 0 :length n)` print a window of `x`, counted in
   whitespace-separated words; the `...` line it ends with gives the offset to
   continue from.

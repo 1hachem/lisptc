@@ -905,10 +905,10 @@ function registerCompression(interp: Interp, c: Compressor): void {
 		"echo",
 		-1,
 		'(echo x... [:offset 0] [:length n] [:match "re"] [:context 8] [:max 10] [:ignore-case t])',
-		`Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. Output is measured in whitespace-separated words and stops after ${c.limit} of them, closing with a \`...\` line saying how much is left and the offset to continue from. :offset and :length choose the window. :match prints only the regions matching a JavaScript-syntax regular expression, each as @<word-offset> with the match wrapped in [[ ]] — that is how you read a value you cannot yet name a pattern for; to KEEP what matched rather than look at it, use \`grep\`, which returns it. Returns an unspecified value, so a step ending in an echo gets no result line: what was printed IS the report.`,
+		`Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. Output is measured in whitespace-separated words and stops after ${c.limit} of them, closing with a \`...\` line saying how much is left and the offset to continue from. :offset and :length choose the window. :match prints only the regions matching a JavaScript-syntax regular expression, each as @<word-offset> with the match wrapped in [[ ]] — that is how you read a value you cannot yet name a pattern for; to KEEP what matched rather than look at it, use \`grep\`, which returns it. A keyword prints as itself when it is the last argument — (echo (job-status job)) — since only a keyword carrying a value after it is read as an option. Returns an unspecified value, so a step ending in an echo gets no result line: what was printed IS the report.`,
 		z.tuple([zList]),
 		([rest]) => {
-			const { values, options } = splitKeywordArgs(rest);
+			const { values, options } = splitKeywordArgs(rest, ECHO_OPTIONS);
 			const opts = plistOptions(options, ECHO_OPTIONS);
 			const text = echoText(values);
 			// An offset or a name in the `...` line only means anything for a

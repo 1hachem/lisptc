@@ -50,6 +50,14 @@ extension** like secrets and MCP.
   `macro`) rather than a closure's internals; a list of alists reports its keys;
   a blob with no whitespace is measured in characters, since its word count is 1
   however big it is.
+- `splitKeywordArgs(args, ECHO_OPTIONS)` — values from trailing options. A
+  keyword only reads as an option when it carries a value after it (so a
+  misspelled `:ofset 40` is an error, not two printed words) or when it is one
+  of `ECHO_OPTIONS` left without its value; a trailing keyword is otherwise
+  data, which is what makes `(echo (job-status job))` print `:pending`.
+- `print` — writes a value the way `echo` does (human's copy out through the
+  writer, model's copy charged to the step's budget). What `result` calls for a
+  top-level slice.
 - `compressionExtension(compressor?)` — installs `head` / `tail` / `grep`, and
   **overrides** the core `echo` with the windowed, searchable version (the same
   `interp.def` idiom `secretsExtension` uses on the string primitives, so an

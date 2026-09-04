@@ -46,21 +46,34 @@ export function parsePlist(list: List): Map<string, unknown> {
  * Split a variadic argument list into leading values and a trailing option
  * plist — what `(echo x y :offset 40)` needs.
  *
- * The split point is the first keyword of any kind, not the first *known* one,
- * so that a misspelled option reaches `plistOptions` and is rejected. Splitting
- * on known names only would leave `(echo big :ofset 40)` printing the literal
- * `:ofset 40` after the whole value, which is precisely the silent-typo failure
- * `plistOptions` exists to prevent. The cost is that a keyword cannot be echoed
- * as a bare value — wrap it, `(echo (list :pending))`.
+ * A keyword starts the options as soon as it *could* be one, which is any
+ * keyword carrying a value after it — a misspelling included, so
+ * `(echo big :ofset 40)` reaches `plistOptions` and is rejected rather than
+ * printing the literal `:ofset 40` after the whole value. Splitting on known
+ * names alone is what would let that typo through silently.
+ *
+ * What cannot be an option is a keyword at the very end with no value to
+ * carry, and that one is data: `(echo (job-status job))` prints `:pending`,
+ * since a keyword is the natural way to hold a status and printing one must
+ * not need `(list …)` around it. `allowed` is the exception to the exception —
+ * a trailing `:offset` is an option whose value was forgotten, and saying so
+ * is more use than printing the word.
  */
-export function splitKeywordArgs(list: List): {
+export function splitKeywordArgs(
+	list: List,
+	allowed: readonly string[],
+): {
 	values: List;
 	options: List;
 } {
 	const values: unknown[] = [];
 	let j = list;
 	while (j !== null) {
-		if (j.car instanceof LispKeyword) break;
+		if (
+			j.car instanceof LispKeyword &&
+			(j.cdr !== null || allowed.includes(j.car.name))
+		)
+			break;
 		values.push(j.car);
 		j = j.cdr as List;
 	}
