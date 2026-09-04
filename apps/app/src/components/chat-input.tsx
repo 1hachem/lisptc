@@ -10,10 +10,12 @@ import {
 	MenuOption,
 	useBasicTypeaheadTriggerMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
-import { cn, useIsMobile } from "@repo/ui";
+import { cn, SpeechInput, useIsMobile } from "@repo/ui";
 import {
+	$createParagraphNode,
 	$createTextNode,
 	$getRoot,
+	$isElementNode,
 	CLEAR_EDITOR_COMMAND,
 	COMMAND_PRIORITY_LOW,
 	KEY_ENTER_COMMAND,
@@ -34,6 +36,8 @@ export interface ChatInputProps {
 	onStop?: () => void;
 	/** the composer is locked (e.g. the model's KV cache is still warming) */
 	disabled?: boolean;
+	/** the audio input failed (mic refused, no mic, network, …) */
+	onAudioError?: (message: string) => void;
 }
 
 class CommandOption extends MenuOption {
@@ -51,6 +55,7 @@ export function ChatInput({
 	isStreaming,
 	onStop,
 	disabled,
+	onAudioError,
 }: ChatInputProps) {
 	return (
 		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
@@ -71,6 +76,7 @@ export function ChatInput({
 					isStreaming={isStreaming}
 					onStop={onStop}
 					disabled={disabled}
+					onAudioError={onAudioError}
 				/>
 			</LexicalComposer>
 		</div>
@@ -84,6 +90,7 @@ function Editor({
 	isStreaming,
 	onStop,
 	disabled,
+	onAudioError,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const menuOpen = useRef(false);
@@ -112,6 +119,31 @@ function Editor({
 			editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
 		},
 		[editor, onCommand],
+	);
+
+	// Spoken turns land in the composer rather than being sent straight away:
+	// transcription is lossy, so the sender gets to read and correct it first.
+	const appendTranscript = useCallback(
+		(text: string) => {
+			editor.update(
+				() => {
+					const root = $getRoot();
+					const last = root.getLastChild();
+					const block = $isElementNode(last) ? last : $createParagraphNode();
+					if (block !== last) root.append(block);
+					const tail = block.getTextContent();
+					const node = $createTextNode(
+						tail && !tail.endsWith(" ") ? ` ${text}` : text,
+					);
+					block.append(node);
+					node.selectEnd();
+				},
+				// The mic button holds DOM focus, so the caret we just placed is only
+				// real once the editor takes it back.
+				{ onUpdate: () => editor.focus() },
+			);
+		},
+		[editor],
 	);
 
 	return (
@@ -152,6 +184,12 @@ function Editor({
 						ErrorBoundary={LexicalErrorBoundary}
 					/>
 				</div>
+				<SpeechInput
+					className="flex-none self-center"
+					disabled={disabled}
+					onTranscriptionChange={appendTranscript}
+					onError={onAudioError}
+				/>
 				{isStreaming ? (
 					<button
 						type="button"

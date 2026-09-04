@@ -6,6 +6,7 @@
 // if a consumer needs rich markdown/code rendering.
 export * from "./components/ai-elements/conversation.tsx";
 export * from "./components/ai-elements/prompt-input.tsx";
+export * from "./components/ai-elements/speech-input.tsx";
 export * from "./components/ai-elements/suggestion.tsx";
 export {
 	Typewriter,
