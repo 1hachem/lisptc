@@ -13,7 +13,6 @@ import {
 import {
 	EndOfFile,
 	EvalException,
-	evalTopLevel,
 	Interp,
 	prelude,
 	Reader,
@@ -23,6 +22,7 @@ import {
 	stripProse,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
+import { proseExtension } from "@repo/interpreter/prose.ts";
 import {
 	EnvSecretsStore,
 	secretsExtension,
@@ -47,7 +47,6 @@ const write = (s: string): void => {
 // The interactive Read-Eval-Print Loop over stdin/stdout.
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
-	private readonly stdInTokens: Reader = new Reader();
 	// Recreated with every interp, so reset() restarts the result numbering.
 	private compressor: Compressor = new Compressor();
 	// One store for the process: freshInterp() re-seeds it from env/`.env` on
@@ -71,6 +70,7 @@ class InteractiveRepl implements Repl {
 				secretsExtension({ store: this.secretsStore, envFile: true }),
 				mcpExtension(),
 				compressionExtension(this.compressor),
+				proseExtension(),
 			],
 		});
 		run(interp, prelude);
@@ -81,52 +81,50 @@ class InteractiveRepl implements Repl {
 		this.currentInterp = this.freshInterp();
 	}
 
-	// Read an expression from the standard-in asynchronously.
-	private async readExpression(
-		prompt1: string,
-		prompt2: string,
-	): Promise<unknown> {
-		const oldTokens = new Reader();
-		for (;;) {
-			oldTokens.copyFrom(this.stdInTokens);
-			try {
-				return this.stdInTokens.read();
-			} catch (ex) {
-				if (ex === EndOfFile) {
-					const line = await readLine(oldTokens.isEmpty() ? prompt1 : prompt2);
-					if (line === null) return EndOfFile;
-					oldTokens.push(line);
-					this.stdInTokens.copyFrom(oldTokens);
-				} else {
-					this.stdInTokens.clear(); // Discard the erroneous tokens.
-					throw ex;
-				}
-			}
-		}
-	}
-
-	// Repeat Read-Eval-Print until End-Of-File asynchronously.
+	/*
+	 * Repeat Read-Eval-Print until End-Of-File asynchronously.
+	 *
+	 * A whole input is buffered before it is evaluated rather than read one
+	 * expression at a time, because prose is decided over complete text: `run`
+	 * blanks what is outside the forms and puts each form to the interp's
+	 * classifier (`proseExtension`, installed above), and neither can judge a
+	 * form still missing its closing paren. That is the attach loop's contract
+	 * too, so `pnpm repl` and `pnpm repl:attach` now answer identically.
+	 */
 	async readEvalPrintLoop(): Promise<void> {
+		let buffer = "";
 		for (;;) {
+			const line = await readLine(buffer === "" ? "> " : "  ");
+			if (line === null) {
+				write("Goodbye\n");
+				return;
+			}
+			buffer += `${line}\n`;
+			// A form left open at the end of the line wants the rest of itself.
+			if (!isComplete(buffer)) continue;
+			const text = buffer;
+			buffer = "";
 			try {
-				const exp = await this.readExpression("> ", "  ");
-				if (exp === EndOfFile) {
-					write("Goodbye\n");
-					return;
-				}
-				// A form typed at a prompt is a step of its own, so each starts
-				// with the whole echo budget.
+				// An input typed at a prompt is a step of its own, so each
+				// starts with the whole echo budget.
 				this.compressor.beginStep();
-				const result = evalTopLevel(this.currentInterp, exp);
 				// The same silent contract the embedded REPLs have: no value is
 				// printed, only a `name: shape` line, so what a human sees here
 				// is what the model sees. `echo` is the way to see a value —
 				// and this loop points the interpreter's writer straight at
 				// stdout (see setWriter below), which is the human's uncapped
 				// copy; a terminal can scroll.
-				write(this.compressor.result(this.currentInterp, exp, result));
+				run(this.currentInterp, text, {
+					prose: "tolerant",
+					onProse: (what) => write(`skipped ${what}\n`),
+					onTopLevel: (form, value) => {
+						write(this.compressor.result(this.currentInterp, form, value));
+					},
+				});
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
+				else if (ex === EndOfFile)
+					write("unbalanced expression (unexpected end of input)\n");
 				else throw ex;
 			}
 		}
@@ -359,7 +357,9 @@ Usage:
 With no arguments (or a bare "-") an interactive REPL starts. Each file
 argument is run in order on the same interpreter — so a trailing "-"
 keeps the files' state and drops you into a prompt afterwards. Secrets
-(REPL_* env vars / nearest .env) and MCP are wired in both modes.
+(REPL_* env vars / nearest .env) and MCP are wired in both modes. At the
+prompt, text around the forms is prose and a parenthesised aside is
+skipped with a note; a .ptc file argument is read strictly.
 
 Arguments:
   file.ptc        run a .ptc script; relative paths resolve against the

@@ -264,8 +264,10 @@ describe("secret taint", () => {
 describe("reporting a result", () => {
 	function reportOf(interp: Interp, c: Compressor, code: string): string {
 		let form: unknown;
-		const value = run(interp, code, (f) => {
-			form = f;
+		const value = run(interp, code, {
+			onTopLevel: (f) => {
+				form = f;
+			},
 		});
 		return c.result(interp, form, value);
 	}

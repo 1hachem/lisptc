@@ -61,9 +61,11 @@ describe("reporting every result", () => {
 		expect(r.eval("(length range-1)")).toBe("length-1: 2\n");
 	});
 
+	// The literal argument is what makes the misspelling a call rather than a
+	// turn of phrase — a bare `(no-such-fn)` is read as prose (see src/prose.ts).
 	it("still reports what was bound before a later form threw", () => {
 		const r = repl();
-		const out = r.eval("(range 2) (no-such-fn)");
+		const out = r.eval('(range 2) (no-such-fn "x")');
 		expect(out).toContain("range-1: (1 0)");
 		expect(out).toMatch(/EvalException/);
 	});
@@ -133,7 +135,7 @@ describe("capping echo output", () => {
 describe("errors", () => {
 	it("still renders inline rather than throwing", () => {
 		const r = repl();
-		expect(r.eval("(no-such-fn)")).toMatch(/EvalException/);
+		expect(r.eval('(no-such-fn "x")')).toMatch(/EvalException/);
 	});
 
 	it("caps a huge error message", () => {
