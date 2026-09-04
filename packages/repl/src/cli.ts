@@ -7,6 +7,10 @@
  */
 
 import {
+	Compressor,
+	compressionExtension,
+} from "@repo/interpreter/compression.ts";
+import {
 	EndOfFile,
 	EvalException,
 	evalTopLevel,
@@ -16,12 +20,13 @@ import {
 	run,
 	setExit,
 	setWriter,
-	str,
 	stripProse,
-	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+import {
+	EnvSecretsStore,
+	secretsExtension,
+} from "@repo/interpreter/secrets.ts";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -33,7 +38,7 @@ import {
 // Wired to a readline interface by main().
 let readLine: (prompt: string) => Promise<string | null>;
 
-// Output sink shared with the interpreter (via setWriter) so prin1/princ and
+// Output sink shared with the interpreter (via setWriter) so `echo` and
 // the loop's own writes land on the same stdout.
 const write = (s: string): void => {
 	process.stdout.write(s);
@@ -43,6 +48,11 @@ const write = (s: string): void => {
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
 	private readonly stdInTokens: Reader = new Reader();
+	// Recreated with every interp, so reset() restarts the result numbering.
+	private compressor: Compressor = new Compressor();
+	// One store for the process: freshInterp() re-seeds it from env/`.env` on
+	// every reset (merge, later wins), so a secret loaded once stays loaded.
+	private readonly secretsStore = new EnvSecretsStore();
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -53,10 +63,15 @@ class InteractiveRepl implements Repl {
 	}
 
 	private freshInterp(): Interp {
+		this.compressor = new Compressor();
 		// The standalone CLI auto-loads a `.env` file (env vars + `$LISPTC_SECRETS_FILE`
 		// / nearest `.env`); the secretsExtension owns that loading via `envFile`.
 		const interp = new Interp({
-			extensions: [secretsExtension({ envFile: true }), mcpExtension()],
+			extensions: [
+				secretsExtension({ store: this.secretsStore, envFile: true }),
+				mcpExtension(),
+				compressionExtension(this.compressor),
+			],
 		});
 		run(interp, prelude);
 		return interp;
@@ -99,10 +114,17 @@ class InteractiveRepl implements Repl {
 					write("Goodbye\n");
 					return;
 				}
+				// A form typed at a prompt is a step of its own, so each starts
+				// with the whole echo budget.
+				this.compressor.beginStep();
 				const result = evalTopLevel(this.currentInterp, exp);
-				// A printing function (prin1/princ/terpri/print) returns
-				// Unspecified, meaning "already shown" — don't echo it too.
-				if (result !== Unspecified) write(`${str(result)}\n`);
+				// The same silent contract the embedded REPLs have: no value is
+				// printed, only a `name: shape` line, so what a human sees here
+				// is what the model sees. `echo` is the way to see a value —
+				// and this loop points the interpreter's writer straight at
+				// stdout (see setWriter below), which is the human's uncapped
+				// copy; a terminal can scroll.
+				write(this.compressor.result(this.currentInterp, exp, result));
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else throw ex;

@@ -43,6 +43,23 @@ export function getThreadRepl(threadId: string | undefined): AgentRepl {
 	return repl;
 }
 
+/*
+ * The REPL a thread already has, or undefined.
+ *
+ * Unlike `getThreadRepl` this never creates one. A UI action is a click on a
+ * widget some earlier turn rendered, so a thread with no live REPL means the
+ * handler behind that widget is gone — a fresh interpreter would have neither
+ * the action nor the state it closed over, and answering with one would run
+ * nothing while looking like it worked.
+ */
+export function peekThreadRepl(threadId: string): AgentRepl | undefined {
+	const existing = repls.get(threadId);
+	if (!existing) return undefined;
+	repls.delete(threadId);
+	repls.set(threadId, existing);
+	return existing;
+}
+
 // Drop a thread's REPL
 // TODO:: should check the release or its MCP worker.
 function evict(threadId: string): void {

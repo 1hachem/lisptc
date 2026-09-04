@@ -13,38 +13,34 @@ This file uses the repo's bundled filesystem server `fs` so it
 runs with no OAuth / credentials. See playwright.ptc and linear.ptc
 for server-specific demos.
 =====================================================================
-(princ "=== 1. discover the bundled toolkit ===")
-(terpri)
+(echo "=== 1. discover the bundled toolkit ===")
 
 What servers ship ready-to-use?
-(print (list-toolkit))
+(echo (list-toolkit))
 Fuzzy search across predefined servers, ranked best-first.
-(print (search-mcps "browser"))
+(echo (search-mcps "browser"))
 
-(princ "=== 2. load a server (async job + await) ===")
-(terpri)
+(echo "=== 2. load a server (async job + await) ===")
 
 `load-mcp` returns a Job handle immediately; `await` blocks until the
 connect settles and installs the <server>/<tool> bindings.
 (await (load-mcp "fs"))
 
 What servers are loaded, and how many tools each has?
-(print (list-mcps))
+(echo (list-mcps))
 => fs :loaded N
 Enumerate one server's tools: symbol param-count doc
-(print (list-tools "fs"))
+(echo (list-tools "fs"))
 
-(princ "=== 3. tool docs & search ===")
-(terpri)
+(echo "=== 3. tool docs & search ===")
 
 Full documentation for one tool, including per-parameter docs.
 (doc 'fs/read_file)
 
 Fuzzy search across all *loaded* tools, ranked best-first.
-(print (search-tools "write a file"))
+(echo (search-tools "write a file"))
 
-(princ "=== 4. call a tool ===")
-(terpri)
+(echo "=== 4. call a tool ===")
 
 Each tool is an ordinary global binding named <server>/<tool>,
 called with native keyword syntax. The synchronous interpreter
@@ -52,26 +48,22 @@ blocks on the async broker under the hood.
 NOTE: the fs server is sandboxed to its working directory, so use a
 relative path writing outside the cwd is denied.
 (fs/write_file :path "lisptc-mcp-demo.txt" :content "hello from lisptc")
-(princ (fs/read_file :path "lisptc-mcp-demo.txt"))
-(terpri)
+(echo (fs/read_file :path "lisptc-mcp-demo.txt"))
 
-(princ "=== 5. async jobs without an explicit await ===")
-(terpri)
+(echo "=== 5. async jobs without an explicit await ===")
 
 A load-mcp job settles in the background; its tools appear
 automatically between evals. `jobs` / `job-status` poll without
 blocking.
 (setq j (load-mcp "fs"))
-(print (job-status j))
+(echo (job-status j))
 => :pending or :done
-(print (jobs))
+(echo (jobs))
 
-(princ "=== 6. teardown ===")
-(terpri)
+(echo "=== 6. teardown ===")
 
 Unload releases the tool bindings; shutdown tears down the broker.
 (unload-mcp "fs")
 (mcp-shutdown)
 
-(princ "=== done ===")
-(terpri)
+(echo "=== done ===")

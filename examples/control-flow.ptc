@@ -6,116 +6,110 @@ Run me:
   pnpm --filter @repo/interpreter exec \
     node --experimental-transform-types src/lisp.ts ../../examples/control-flow.ptc
 =====================================================================
-(princ "=== 1. cond / if / when / unless ===")
-(terpri)
+(echo "=== 1. cond / if / when / unless ===")
 
-(print "hello")
+(echo "hello")
 
 cond: first non-nil test wins; a single-element clause returns the test
 value itself.
-(print (cond ((< 3 1) 'a) ((< 1 3) 'b) (t 'c)))
+(echo (cond ((< 3 1) 'a) ((< 1 3) 'b) (t 'c)))
 => b
-(print (cond (nil 1) (7)))
+(echo (cond (nil 1) (7)))
 => 7
-(print (cond))
+(echo (cond))
 => nil
 if/when/unless are all macros built on cond.
-(print (if (> 5 3) 'yes 'no))
+(echo (if (> 5 3) 'yes 'no))
 => yes
-(print (when (> 5 3) 'a 'b 'result))
+(echo (when (> 5 3) 'a 'b 'result))
 => result
-(print (unless (> 3 5) 'ran))
+(echo (unless (> 3 5) 'ran))
 => ran
-(princ "=== 2. case ===")
-(terpri)
+(echo "=== 2. case ===")
 
 CL-style case: evaluates key-expr once, then runs the first clause whose
 keylist contains a value eql/equal to it. A bare non-list key is treated
 as a one-element keylist.
 (defun day-kind (day) (case day
     ((sat sun) 'weekend) ((mon tue wed thu fri) 'weekday) (t 'unknown)))
-(print (mapcar day-kind (list 'sat 'wed 'xmas)))
+(echo (mapcar day-kind (list 'sat 'wed 'xmas)))
 => weekend weekday unknown
 a single non-list key still matches directly.
-(print (case 'x (x 'matched) (t 'default)))
+(echo (case 'x (x 'matched) (t 'default)))
 => matched
 the symbol `t` heading a clause is the default and always matches; wrap it
 in a list — t ... — to match the literal value t instead.
-(print (case 99 ((t) 'literal-t) (t 'fell-through)))
+(echo (case 99 ((t) 'literal-t) (t 'fell-through)))
 => fell-through
-(print (case t ((t) 'literal-t) (t 'fell-through)))
+(echo (case t ((t) 'literal-t) (t 'fell-through)))
 => literal-t
 no matching clause and no default -> nil.
-(print (case 'nope ((a b) 1)))
+(echo (case 'nope ((a b) 1)))
 => nil
-(princ "=== 3. and / or short-circuiting ===")
-(terpri)
+(echo "=== 3. and / or short-circuiting ===")
 
 and/or evaluate left to right and stop as soon as the result is known —
 the unevaluated tail is never touched.
-(print (and 1 2 3))
+(echo (and 1 2 3))
 => 3
-(print (and 1 nil (/ 1 0)))
+(echo (and 1 nil (/ 1 0)))
 => nil never reaches the division
-(print (or nil nil 5))
+(echo (or nil nil 5))
 => 5
-(print (or 1 (/ 1 0)))
+(echo (or 1 (/ 1 0)))
 => 1 never reaches the division
-(princ "=== 4. while, with break/return ===")
-(terpri)
+(echo "=== 4. while, with break/return ===")
 
 while loops until test is nil; break/return can end it early.
 (setq i 0)
 (setq acc nil)
 (while (< i 5) (setq acc (cons i acc)) (setq i (+ i 1)))
-(print (nreverse acc))
+(echo (nreverse acc))
 => 0 1 2 3 4
 break exits the loop immediately; the while form evaluates to nil.
 (setq n 0)
-(print (while t
+(echo (while t
     (setq n (+ n 1)) (if (= n 3) (break))))
 => nil
-(print n)
+(echo n)
 => 3
 return value exits the loop immediately with that value instead.
 (setq n 0)
-(print (while t
+(echo (while t
     (setq n (+ n 1)) (if (= n 3) (return 'stopped-at-3))))
 => stopped-at-3
-(princ "=== 5. dotimes / dolist, with a result form ===")
-(terpri)
+(echo "=== 5. dotimes / dolist, with a result form ===")
 
 dotimes: name bound to 0..count-1; the optional third spec element is the
 normal-completion result.
 (setq total 0)
-(print (dotimes (i 5 total) (setq total (+ total i))))
+(echo (dotimes (i 5 total) (setq total (+ total i))))
 => 10
 dolist: name bound to each element in turn.
 (setq longest nil)
 (dolist (w (list "a" "abc" "ab")) (if (or (null longest) (> (length w) (length longest))) (setq longest w)))
-(print longest)
-=> "abc"
+(echo longest)
+=> abc
 break skips the result form entirely the loop evaluates to nil;
 return skips it too, but supplies its own value.
-(print (dotimes (i 10 'completed) (if (= i 3) (break))))
+(echo (dotimes (i 10 'completed) (if (= i 3) (break))))
 => nil
-(print (dotimes (i 10 'completed) (if (= i 3) (return 'early-exit))))
+(echo (dotimes (i 10 'completed) (if (= i 3) (return 'early-exit))))
 => early-exit
-(print (dolist (x '(1 2 3 4 5) 'completed) (if (= x 3) (return 'early-exit))))
+(echo (dolist (x '(1 2 3 4 5) 'completed) (if (= x 3) (return 'early-exit))))
 => early-exit
 break/return only ever affects the nearest enclosing loop.
 (setq outer-runs 0)
 (setq inner-runs 0)
 (dotimes (i 3) (setq outer-runs (+ outer-runs 1)) (dotimes (j 10) (setq inner-runs (+ inner-runs 1)) (if (= j 2) (break))))
-(print (list outer-runs inner-runs))
+(echo (list outer-runs inner-runs))
 => 3 9 -- 3 outer iterations, each inner loop broken after j=0,1,2
-(princ "=== 6. try / catch / error ===")
-(terpri)
+(echo "=== 6. try / catch / error ===")
 
 try evaluates body-form; if it signals a catchable error a built-in
 runtime error, or a user error value call, the handler variable is
 bound to the error's value and the catch body runs instead.
-(print (try
+(echo (try
     (car 5)
     (catch (e)
       (list 'recovered e))))
@@ -126,9 +120,9 @@ handler variable is bound to that value exactly.
     (if (= b 0) (error 'divide-by-zero) (/ a b))
     (catch (e)
       (list 'error e))))
-(print (safe-div 10 2))
+(echo (safe-div 10 2))
 => 5.0
-(print (safe-div 10 0))
+(echo (safe-div 10 0))
 => error divide-by-zero
 break/return are loop signals, not catchable errors — try does not
 intercept them, so they still reach the enclosing loop.
@@ -137,14 +131,12 @@ intercept them, so they still reach the enclosing loop.
     (if (= i 1) (break))
     (catch (e)
       (setq caught t))))
-(print (list caught))
+(echo (list caught))
 => nil -- the catch clause never ran
-(princ "=== 7. progn (sequencing) ===")
-(terpri)
+(echo "=== 7. progn (sequencing) ===")
 
 progn evaluates forms in order and returns the last one; useful wherever
 the grammar expects a single form e.g. one cond clause's body.
-(print (progn (setq i 1) (setq i (+ i 1)) (setq i (* i 10)) i))
+(echo (progn (setq i 1) (setq i (+ i 1)) (setq i (* i 10)) i))
 => 20
-(princ "=== done ===")
-(terpri)
+(echo "=== done ===")

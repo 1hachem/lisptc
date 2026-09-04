@@ -7,13 +7,20 @@
  * stdin/stdout loop lives in `./cli.ts`.
  *
  * - `MemoryRepl` — evaluate a program string, return what the interactive REPL
- *   would have printed (last value + side-effect output, errors rendered
- *   inline). No process I/O, so embedders can run Lisp without a subprocess.
+ *   would have printed (`echo` output plus a one-line report per top-level
+ *   form, errors rendered inline). No process I/O, so embedders can run Lisp
+ *   without a subprocess.
  * - `AgentRepl` — `MemoryRepl` plus two things an embedding agent needs:
  *   the finished signal (a REPL feature, not part of the language) and
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
+import {
+	type Bounded,
+	Compressor,
+	compressionExtension,
+	MAX_WORDS,
+} from "@repo/interpreter/compression.ts";
 import {
 	Cell,
 	EndOfFile,
@@ -24,12 +31,36 @@ import {
 	prelude,
 	run,
 	setWriter,
-	str,
 	stripProse,
-	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+import {
+	EnvSecretsStore,
+	type SecretsStore,
+	secretsExtension,
+} from "@repo/interpreter/secrets.ts";
+import { type UiNode, UiSurface, uiExtension } from "@repo/interpreter/ui.ts";
+
+/*
+ * What one evaluation produced: the two copies of its printed output, plus the
+ * widget tree it rendered, if any.
+ *
+ * `view` rides alongside rather than inside the text because it is not text: a
+ * host that draws it (apps/app) draws it, and one that cannot (the CLI, the MCP
+ * server) simply ignores the field and still gets the same output it always
+ * did.
+ */
+export interface EvalResult extends Bounded {
+	view?: UiNode;
+	// What a handler asked to say to the agent (`ui/send`). Only a click can
+	// deliver one — a host driving an ordinary eval has no conversation to put it
+	// in and ignores the field.
+	message?: string;
+	// Whether the work raised a Lisp error. The message is already in the output
+	// (that is how this REPL reports one), so this only saves a caller from
+	// having to recognise it there.
+	error: boolean;
+}
 
 // A REPL owns an interpreter and can be reset to a fresh one.
 export interface Repl {
@@ -72,8 +103,28 @@ function arrayToList(arr: unknown[]): List {
 // interactive REPL would have printed. State persists across calls.
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
+	// Recreated with every interp: the naming counters must die with the globals
+	// they named, or a reset() leaves the count climbing past unbound names.
+	private compressor: Compressor;
+	// Recreated with every interp for the same reason: a registered ui action is
+	// a closure over the environment of the interp that made it.
+	private surface: UiSurface;
+	// One store for the life of the REPL: freshInterp() re-installs the secrets
+	// extension over this same store on every reset, so a secret a host pushed
+	// into it (via `repl.secrets.set(...)`) survives the reset instead of dying
+	// with the interp. Env-seeded at construction from `REPL_*` vars.
+	readonly secrets: SecretsStore;
+	private readonly wordLimit: number;
 
-	constructor() {
+	constructor(
+		options: { wordLimit?: number; secretsStore?: SecretsStore } = {},
+	) {
+		// Assigned before freshInterp(), which reads it. (Same ordering trap the
+		// setup() hook below warns about.)
+		this.wordLimit = options.wordLimit ?? MAX_WORDS;
+		this.compressor = new Compressor(this.wordLimit);
+		this.surface = new UiSurface();
+		this.secrets = options.secretsStore ?? new EnvSecretsStore();
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -81,11 +132,25 @@ export class MemoryRepl implements InMemoryRepl {
 		return this.currentInterp;
 	}
 
+	// The live widget surface: where a host reads the view an eval rendered and
+	// routes a click on it back into this interpreter (see `invokeUi`).
+	get ui(): UiSurface {
+		return this.surface;
+	}
+
 	private freshInterp(): Interp {
-		// The secrets addon owns loading (from `REPL_*` env vars here — an embedded
-		// REPL does not auto-load a `.env` file); the REPL just installs it.
+		this.compressor = new Compressor(this.wordLimit);
+		this.surface = new UiSurface();
+		// The secrets addon owns loading; an embedded REPL seeds its store from
+		// `REPL_*` env vars and does NOT auto-load a `.env` file — that is
+		// CLI-only. The store outlives the interp (see the field comment).
 		const interp = new Interp({
-			extensions: [secretsExtension(), mcpExtension()],
+			extensions: [
+				secretsExtension({ store: this.secrets }),
+				mcpExtension(),
+				compressionExtension(this.compressor),
+				uiExtension(this.surface),
+			],
 		});
 		run(interp, prelude);
 		this.setup(interp);
@@ -98,29 +163,90 @@ export class MemoryRepl implements InMemoryRepl {
 	// fields still being undefined.
 	protected setup(_interp: Interp): void {}
 
-	// Evaluate a program; Lisp errors are rendered into the returned output
-	// rather than thrown.
-	eval(code: string): string {
-		let out = "";
-		const prev = setWriter((s) => {
-			out += s;
+	/*
+	 * Evaluate a program; Lisp errors are rendered into the returned output
+	 * rather than thrown.
+	 *
+	 * Consumers — apps/mcp, packages/ai — pass the `model` string straight to a
+	 * model, so this is the only place the word cap has to hold. `user` is the
+	 * same content unbounded, for a human reading it once on screen (see
+	 * @repo/interpreter's compression.ts).
+	 */
+	evalOutput(code: string): EvalResult {
+		return this.capture((report) => {
+			// One line per top-level form: `name: shape`. Nothing prints the values
+			// themselves — that is what `echo` is for.
+			run(this.currentInterp, code, (form, value) => {
+				report(this.compressor.result(this.currentInterp, form, value));
+			});
 		});
+	}
+
+	/*
+	 * Run the handler behind an action id from a rendered widget.
+	 *
+	 * A click is a step of this REPL like any other — same interpreter, same
+	 * definitions — so it prints and renders through exactly the same machinery.
+	 * What it is NOT is a turn: the model neither asked for it nor hears about
+	 * it, so nothing here is bound to a name and only the `user` copy of the
+	 * output is ever read. The handler answers by rendering.
+	 */
+	invokeUi(action: string, values: Record<string, unknown> = {}): EvalResult {
+		return this.capture(() => this.surface.invoke(action, values));
+	}
+
+	/*
+	 * Run one unit of work with the REPL's output plumbing around it: a fresh
+	 * word budget, `echo` writing into a buffer rather than the process, Lisp
+	 * errors rendered instead of thrown, and any widget the work rendered picked
+	 * up on the way out.
+	 *
+	 * `body` is handed a `report` sink for the result lines that go after the
+	 * printed output — an eval reports one per top-level form, a click reports
+	 * nothing. It is a sink rather than a return value because a form part-way
+	 * through a program can throw, and the results of the forms BEFORE it were
+	 * still bound to names: dropping those lines would leave the agent holding
+	 * names it was never told.
+	 */
+	private capture(body: (report: (line: string) => void) => void): EvalResult {
+		// The writer gets the human's copy of everything `echo` wrote; the
+		// model's copy is capped against this step's word budget as each call
+		// runs, and collected on the compressor.
+		this.compressor.beginStep();
+		let printed = "";
+		const prev = setWriter((s) => {
+			printed += s;
+		});
+		let reports = "";
+		let error: Bounded = { model: "", user: "" };
+		let failed = false;
 		try {
-			// Evaluate before appending: run() writes side-effect output into
-			// `out` first. A printing function (prin1/princ/terpri/print)
-			// returns Unspecified — a sentinel meaning "already shown, don't
-			// echo the value too" — so a printed value isn't shown twice.
-			const value = run(this.currentInterp, code);
-			if (value !== Unspecified) out += `${str(value)}\n`;
+			body((line) => {
+				reports += line;
+			});
 		} catch (ex) {
-			if (ex instanceof EvalException) out += `${ex}\n`;
-			else if (ex === EndOfFile)
-				out += "unbalanced expression (unexpected end of input)\n";
-			else throw ex;
+			failed = true;
+			if (ex instanceof EvalException) error = this.compressor.error(`${ex}\n`);
+			else if (ex === EndOfFile) {
+				const text = "unbalanced expression (unexpected end of input)\n";
+				error = { model: text, user: text };
+			} else throw ex;
 		} finally {
 			setWriter(prev);
 		}
-		return out;
+		return {
+			model: this.compressor.takeEcho() + reports + error.model,
+			user: printed + reports + error.user,
+			view: this.surface.takeView(),
+			message: this.surface.takeMessage(),
+			error: failed,
+		};
+	}
+
+	// The model-facing output of one eval: capped, and the string every
+	// non-streaming consumer of this REPL has always received.
+	eval(code: string): string {
+		return this.evalOutput(code).model;
 	}
 
 	// Discard all definitions; start from a fresh prelude-loaded interp.
@@ -154,9 +280,12 @@ export class AgentRepl extends MemoryRepl {
 	// text with no forms in it is a program that does nothing — so a form-less
 	// reply IS the end of the loop, and the REPL needs no stop built-in for the
 	// agent to call.
-	override eval(code: string): string {
+	//
+	// Overridden on `evalOutput` rather than `eval`, so the flag is raised
+	// whichever entry point the driver uses.
+	override evalOutput(code: string): EvalResult {
 		if (stripProse(code).trim() === "") this.finished = true;
-		return super.eval(code);
+		return super.evalOutput(code);
 	}
 
 	// Replace the read-only conversation globals from a fresh host snapshot. Each

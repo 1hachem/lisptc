@@ -3,7 +3,7 @@ import {
 	ConversationContent,
 	useStickToBottomContext,
 } from "@repo/ui";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
 	type ChatMessage,
 	isGreetingMessage,
@@ -11,9 +11,11 @@ import {
 	messageReasoning,
 	messageText,
 	toolResult,
+	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { GenerativeUI, toUiNode } from "./generative-ui.tsx";
 import { Greeting } from "./greeting.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
@@ -22,15 +24,42 @@ function isUser(m: ChatMessage): boolean {
 	return m.type === "human" || m.type === "user";
 }
 
+// Lines of REPL output shown before it is folded away. The model's own view of
+// a result is capped at a word limit; a human's is not (see `toolResult`), so
+// the one thing left to guard against is a long `echo` burying the turns around
+// it in a transcript nobody can scroll past.
+const FOLD_LINES = 25;
+
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { output, error } = toolResult(message);
+	const view = toUiNode(toolUi(message));
+	const [expanded, setExpanded] = useState(false);
+	// A step that rendered a widget is answering in the widget: its text output
+	// is the `name: shape` report of the render itself, which says nothing the
+	// drawing in front of the reader does not.
+	if (view) return <GenerativeUI node={view} />;
+	const lines = output.split("\n");
+	const folded = lines.length > FOLD_LINES && !expanded;
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
 				error ? "border-red/60 text-red" : "border-dim/40 text-dim"
 			}`}
 		>
-			<Markdown>{output}</Markdown>
+			<Markdown>
+				{folded ? lines.slice(0, FOLD_LINES).join("\n") : output}
+			</Markdown>
+			{lines.length > FOLD_LINES && (
+				<button
+					type="button"
+					onClick={() => setExpanded(!expanded)}
+					className="text-dim underline decoration-dim/40 hover:text-fg"
+				>
+					{folded
+						? `show ${lines.length - FOLD_LINES} more lines`
+						: "show less"}
+				</button>
+			)}
 		</div>
 	);
 }

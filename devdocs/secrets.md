@@ -83,8 +83,8 @@ so they survive `reset()`.
 ## Redaction via taint tracking
 
 A secret is a `Secret` (value + source keys). `str()` renders it redacted as
-`#<secret:KEY>` (via its `toString`), covering every print path (return value,
-`princ`, errors, nested lists) from one place. The value is revealed only by the
+`#<secret:KEY>` (via its `toString`), covering every print path (`echo`, a
+result's shape report, errors, nested lists) from one place. The value is revealed only by the
 `toJSON` wire form, honored by `lispToJson` when serializing an outgoing MCP call
 (tool args, `:headers`, `:env`).
 
