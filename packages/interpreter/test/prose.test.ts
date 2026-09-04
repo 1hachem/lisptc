@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { checkSyntax, run, str, stripProse } from "../src/lisp.ts";
+import {
+	checkSyntax,
+	Interp,
+	prelude,
+	run,
+	str,
+	stripProse,
+} from "../src/lisp.ts";
+import { proseExtension } from "../src/prose.ts";
 import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
 describe("prose around forms", () => {
@@ -76,11 +84,14 @@ describe("no comment syntax", () => {
  * every skip is reported rather than silently dropped.
  */
 describe("tolerant prose (an LLM's parentheses)", () => {
-	// What the model wrote, and what it should be read as.
+	// What the model wrote, and what it should be read as. Skipping forms is the
+	// prose extension's job, not the core's, so the interp has to install it.
 	function tolerantly(text: string): { value: string; skipped: string[] } {
+		const interp = new Interp({ extensions: [proseExtension()] });
+		run(interp, prelude);
 		const skipped: string[] = [];
 		const value = str(
-			run(freshInterp(), text, {
+			run(interp, text, {
 				prose: "tolerant",
 				onProse: (what) => skipped.push(what),
 			}),
@@ -131,6 +142,15 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 	it("leaves special forms and computed heads alone", () => {
 		expect(tolerantly("(setq x 7) (progn x)").value).toBe("7");
 		expect(tolerantly("((lambda (x) (* x 2)) 21)").value).toBe("42");
+	});
+
+	// A comma is unquote sugar to the reader, but a string literal is one token,
+	// so the commas inside it never reach the reader as sugar.
+	it("reads commas inside a string as part of the string", () => {
+		expect(tolerantly('(string-split "a,b,c" ",")').value).toBe(
+			'("a" "b" "c")',
+		);
+		expect(tolerantly('(list "a, b, c")').value).toBe('("a, b, c")');
 	});
 
 	// Only the head of a TOP-LEVEL form is a prose candidate: a typo deeper in
@@ -184,6 +204,10 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			["(status :ok)", "status"],
 			['(prin "hi")', "prin"],
 			['(string-splt "a,b" ",")', "string-splt"],
+			// The same words as the aside `(one, two, three)` above — quoting
+			// them is what makes them an argument rather than a list of steps.
+			['(steps "one, two, three")', "steps"],
+			['(join "a" "," "b")', "join"],
 			["(fetch (car urls))", "fetch"],
 		];
 		it.each(calls)("errors on %s, naming %s", (text, name) => {
@@ -201,6 +225,38 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		])("cannot tell %s from a turn of phrase, and says so", (text) => {
 			expect(tolerantly(text).skipped[0]).toMatch(/is not defined/);
 		});
+	});
+
+	/*
+	 * The classifier is an extension (src/prose.ts), so a host that did not ask
+	 * for it gets none of its guessing: tolerance is then only the reader's own
+	 * unclosed-paren rule, and a form that parses is code like any other.
+	 */
+	it("skips nothing without the prose extension", () => {
+		const bare = freshInterp();
+		const skipped: string[] = [];
+		const options = {
+			prose: "tolerant",
+			onProse: (what: string) => skipped.push(what),
+		} as const;
+		expect(() => run(bare, "(see below)", options)).toThrow(/undefined: see/);
+		expect(str(run(bare, "a stray (paren\n(+ 1 2)", options))).toBe("3");
+		expect(skipped).toEqual(['unclosed "(" on line 1']);
+	});
+
+	// A host that reads its model differently supplies its own policy rather
+	// than patching the core.
+	it("takes a host's own classifier in place of the bundled one", () => {
+		const interp = new Interp({
+			extensions: [proseExtension(() => "everything is prose here")],
+		});
+		const skipped: string[] = [];
+		const value = run(interp, "(+ 1 2)", {
+			prose: "tolerant",
+			onProse: (what) => skipped.push(what),
+		});
+		expect(str(value)).toBe("#<unspecified>");
+		expect(skipped).toEqual(["everything is prose here"]);
 	});
 
 	it("changes nothing under the default strict mode", () => {

@@ -20,6 +20,7 @@ import {
 	tryToParse,
 	ZERO,
 } from "./arith.ts";
+import type { ProseClassifier } from "./prose.ts";
 
 // An inefficient substitution of assert statement in Dart
 function assert(x: boolean, message?: string): asserts x {
@@ -103,6 +104,13 @@ export class Sym {
 
 // Expression keyword
 class Keyword extends Sym {}
+
+// Is this symbol a special form (`quote`, `setq`, `lambda`, …) rather than an
+// ordinary name? Exported for readers that classify a form by its head without
+// evaluating it (see src/prose.ts); the class itself stays private.
+export function isSpecialForm(x: unknown): boolean {
+	return x instanceof Keyword;
+}
 
 // Self-evaluating keyword literal, e.g. `:query`. Distinct from the special-form
 // `Keyword` class above (which subclasses Sym and drives cond/lambda/setq/...).
@@ -568,6 +576,12 @@ export interface InterpOptions {
 export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
+
+	// How to tell a sentence from a call, installed by `proseExtension()` (see
+	// src/prose.ts) and consulted by `run` under `prose: "tolerant"`. Unset by
+	// default: whether a parenthesis is English is a guess about the writer, not
+	// a rule of the language, so the core never makes it.
+	prose?: ProseClassifier;
 
 	// Directories to resolve relative `import` paths against — one entry per
 	// file currently being loaded (the innermost import wins). Empty at the REPL,
@@ -2101,99 +2115,13 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 
 export interface RunOptions {
 	// How to read parenthesised text that cannot be a program (default `strict`).
+	// Under `tolerant` a form that parses is also put to the interp's prose
+	// classifier, if one was installed (`proseExtension()`, src/prose.ts).
 	prose?: ProseMode;
 	// Called once per fragment read as prose rather than evaluated. A host
 	// should surface these: under `tolerant` they are the only sign that
 	// something the caller wrote was not run.
 	onProse?: (what: string) => void;
-}
-
-/*
- * The head symbol of a top-level form to be read as prose rather than run.
- *
- * A head that names nothing this session knows is the mark of a sentence with
- * parentheses in it — `(see below)`, `(one, two, three)`, `(next step)` —
- * rather than a program: real code calls something that exists. Boundness is
- * the test, not callability, so calling a variable that holds a list stays an
- * ordinary "not applicable" error rather than being silently dismissed as
- * prose.
- *
- * But an unbound head only makes a form prose if the REST of the form could be
- * a sentence too, and two things say it could not:
- *
- * - it carries a mark of code (`marksCode`) — a keyword argument, a string
- *   literal, an argument that is itself a call to something defined;
- * - its head is namespaced (`isNamespaced`) and it hands that name no word to
- *   make a phrase of — `(server/tool)` is a call, `(A/B test)` is English.
- *
- * The case that forced this: a tool call whose server was never loaded,
- * `(server/tool :key "value")`. Reading that as a turn of phrase loses the
- * step in silence, and silence is the one failure the agent cannot debug — it
- * has to see that the name does not exist.
- *
- * What stays ambiguous is a misspelled word: `(lenght lst)` and `(step 2)` are
- * the same shape, so a typo with no literal in it is still read as prose and
- * reported as a skip rather than an error. Only a mark of code resolves it.
- *
- * Checked per form as the program runs, not up front: an earlier form may be
- * the `defun` that defines the head of a later one.
- */
-function proseHead(interp: Interp, form: unknown): string | undefined {
-	if (!(form instanceof Cell)) return undefined;
-	const head = form.car;
-	// A special form (`quote`, `setq`, …) is a Keyword, and a computed head
-	// (`((lambda (x) x) 1)`) is not a symbol at all; both are program text.
-	if (!(head instanceof Sym) || head instanceof Keyword) return undefined;
-	if (interp.hasGlobal(head)) return undefined;
-	if (marksCode(interp, form)) return undefined;
-	if (isNamespaced(head.name) && !hasWord(form)) return undefined;
-	return head.name;
-}
-
-/*
- * Does the form carry something only code carries?
- *
- * - a keyword argument (`:url "…"`) — this dialect's call syntax, and nothing
- *   a sentence contains;
- * - a string literal — a value being passed, not a word being written, which
- *   is what separates the misspelled call `(string-splt "a,b" ",")` from the
- *   aside `(see below)`;
- * - an argument that is itself a call to something defined — `(fetch (car
- *   urls))` is code however unknown `fetch` is. Reader sugar does not count:
- *   `'t` and `,x` expand to `quote`/`unquote` heads, neither of them bound.
- */
-function marksCode(interp: Interp, form: Cell): boolean {
-	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr) {
-		const arg = rest.car;
-		if (arg instanceof LispKeyword || typeof arg === "string") return true;
-		if (arg instanceof Cell) {
-			const inner = arg.car;
-			if (
-				inner instanceof Sym &&
-				!(inner instanceof Keyword) &&
-				interp.hasGlobal(inner)
-			)
-				return true;
-		}
-	}
-	return false;
-}
-
-// A name punctuated the way an identifier is and a word never is: a slash
-// namespacing it (`server/tool`) or an underscore joining it (`browser_close`).
-// Note how little else qualifies — `e.g.`, `50%`, `1,` and an emoji are all things
-// a sentence writes, so the head's shape alone is never enough to call a form
-// code (see `hasWord`).
-function isNamespaced(name: string): boolean {
-	return name.includes("/") || name.includes("_");
-}
-
-// Does the form hand its head a bare word rather than a value? That is what
-// makes `(A/B test)` a phrase and leaves `(server/tool)` a call.
-function hasWord(form: Cell): boolean {
-	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr)
-		if (rest.car instanceof Sym) return true;
-	return false;
 }
 
 // Evaluate a program: every top-level form in `text`, in order, returning the
@@ -2210,24 +2138,18 @@ export function run(
 	let result: unknown = Unspecified;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
+		// Only under `tolerant`, and only if a host installed a classifier: with
+		// none, every form that parses is program text (see src/prose.ts).
 		if (options.prose === "tolerant") {
-			const prose = proseHead(interp, exp);
-			if (prose !== undefined) {
-				options.onProse?.(
-					`${abbreviate(str(exp))} — "${prose}" is not defined, so this was read as prose`,
-				);
+			const note = interp.prose?.(interp, exp);
+			if (note !== undefined) {
+				options.onProse?.(note);
 				continue;
 			}
 		}
 		result = evalTopLevel(interp, exp);
 	}
 	return result;
-}
-
-// Quote a fragment back to the caller without spending a screen on it.
-function abbreviate(text: string): string {
-	const oneLine = text.replace(/\s+/g, " ");
-	return oneLine.length <= 60 ? oneLine : `${oneLine.slice(0, 57)}...`;
 }
 
 // A syntax error found by checkSyntax, with the 1-based line it was found at.

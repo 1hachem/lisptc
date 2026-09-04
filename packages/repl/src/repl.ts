@@ -30,6 +30,7 @@ import {
 	Unspecified,
 } from "@repo/interpreter/lisp.ts";
 import { mcpExtension } from "@repo/interpreter/mcp.ts";
+import { proseExtension } from "@repo/interpreter/prose.ts";
 import { secretsExtension } from "@repo/interpreter/secrets.ts";
 
 // A REPL owns an interpreter and can be reset to a fresh one.
@@ -99,9 +100,11 @@ export class MemoryRepl implements InMemoryRepl {
 
 	private freshInterp(): Interp {
 		// The secrets addon owns loading (from `REPL_*` env vars here — an embedded
-		// REPL does not auto-load a `.env` file); the REPL just installs it.
+		// REPL does not auto-load a `.env` file); the REPL just installs it. The
+		// prose addon is what makes `eval`'s tolerance more than an unclosed-paren
+		// rule — see the comment there.
 		const interp = new Interp({
-			extensions: [secretsExtension(), mcpExtension()],
+			extensions: [secretsExtension(), mcpExtension(), proseExtension()],
 		});
 		run(interp, prelude);
 		this.setup(interp);
