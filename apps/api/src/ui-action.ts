@@ -4,11 +4,13 @@ import { z } from "zod";
 
 // A click on a widget an earlier turn rendered. `action` is the opaque handler
 // id the frontend was given in the widget tree; `values` is the enclosing form's
-// fields, which a plain button sends empty.
+// fields, which a plain button sends empty. A field is a string, except a
+// checkbox, which sends a boolean so the handler receives `true`/`nil` rather
+// than a string that would be true either way.
 const uiActionSchema = z.object({
 	thread_id: z.string(),
 	action: z.string(),
-	values: z.record(z.string(), z.string()).optional(),
+	values: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
 });
 
 /*

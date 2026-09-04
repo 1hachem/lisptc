@@ -293,11 +293,45 @@ function withOptions(
 	return props;
 }
 
+// Props that name a live handler. `summarize` counts these, so a new
+// action-carrying prop has to be listed here or the model is told a view holds
+// fewer live actions than it does.
+const ACTION_PROPS = ["action", "on-change"] as const;
+
+// Tones a badge may carry. A closed set because the frontend maps each to one
+// colour: an unknown tone would draw as no colour at all, and a badge that
+// silently loses its meaning is worse than an error at the call site.
+const TONES = ["ok", "warn", "bad", "info", "muted"] as const;
+
+// A flag option, read with Lisp truthiness: `:checked nil` is false, anything
+// else present is true.
+function booleanOption(
+	opts: Map<string, unknown>,
+	name: string,
+): boolean | undefined {
+	if (!opts.has(name)) return undefined;
+	return opts.get(name) !== null;
+}
+
+// An option holding a callable, registered so only its id reaches the wire.
+// `surface.action` rejects a non-callable, so the mistake is reported where it
+// was made rather than on the click that cannot run.
+function actionOption(
+	surface: UiSurface,
+	opts: Map<string, unknown>,
+	name: string,
+): string | undefined {
+	if (!opts.has(name)) return undefined;
+	return surface.action(opts.get(name));
+}
+
 // How many widgets and how many live actions a tree holds — the whole of what
 // the model is told about a view it just rendered.
 function summarize(node: UiNode): { elements: number; actions: number } {
 	let elements = 1;
-	let actions = typeof node.props.action === "string" ? 1 : 0;
+	let actions = ACTION_PROPS.filter(
+		(prop) => typeof node.props[prop] === "string",
+	).length;
 	for (const child of node.children) {
 		const sub = summarize(child);
 		elements += sub.elements;
@@ -307,7 +341,8 @@ function summarize(node: UiNode): { elements: number; actions: number } {
 }
 
 const INPUT_OPTIONS = ["name", "label", "placeholder", "value"];
-const SELECT_OPTIONS = ["name", "label", "value"];
+const SELECT_OPTIONS = ["name", "label", "value", "on-change"];
+const CHECKBOX_OPTIONS = ["name", "label", "checked", "on-change"];
 
 const INPUT_ARGS: DocArg[] = [
 	{
@@ -368,6 +403,58 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 	);
 
 	interp.def(
+		"ui/link",
+		2,
+		"(ui/link text url)",
+		"A link, opened in a new tab. Nothing runs in the REPL — this is the one interactive widget with no handler. Use it for a URL a tool handed you (an issue, a PR, a dashboard) so the user can follow it instead of copying it out of a table.",
+		z.tuple([zString, zString]),
+		([text, url]) => new UiElement("link", { text, href: url }),
+	);
+
+	interp.def(
+		"ui/badge",
+		-2,
+		'(ui/badge text [:tone "ok"])',
+		`A short status label. \`:tone\` is one of ${TONES.join(" ")} and colours it; without one it draws plain. For the state of a thing — an issue's status, a check's result, a severity — where a whole sentence would be noise.`,
+		z.tuple([zString, zList]),
+		([text, rest]) => {
+			const opts = plistOptions(rest, ["tone"]);
+			const tone = stringOption(opts, "tone");
+			if (tone !== undefined && !(TONES as readonly string[]).includes(tone))
+				throw new EvalException(
+					`unknown tone; expected one of ${TONES.join(" ")}`,
+					tone,
+				);
+			return new UiElement(
+				"badge",
+				tone === undefined ? { text } : { text, tone },
+			);
+		},
+	);
+
+	interp.def(
+		"ui/kpi",
+		-3,
+		'(ui/kpi label value [:hint "…"])',
+		'One number, big. The most understanding per token of anything here: `(ui/kpi "open" 27)` says at a glance what a 27-row table says in a screenful. `:hint` is a smaller line under it — a comparison, a unit, a caveat.',
+		z.tuple([zString, zAny, zList]),
+		([label, value, rest]) => {
+			const opts = plistOptions(rest, ["hint"]);
+			return new UiElement(
+				"kpi",
+				withOptions(
+					{
+						label,
+						value: typeof value === "string" ? value : str(value, false),
+					},
+					opts,
+					["hint"],
+				),
+			);
+		},
+	);
+
+	interp.def(
 		"ui/stack",
 		-1,
 		"(ui/stack child...)",
@@ -383,6 +470,15 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		"Lay the widgets out side by side. A bare string child becomes `ui/text`.",
 		z.tuple([zList]),
 		([rest]) => new UiElement("row", {}, childNodes(rest)),
+	);
+
+	interp.def(
+		"ui/card",
+		-2,
+		"(ui/card title child...)",
+		"A titled box around the widgets. Use it to break a view into named parts — a long `ui/stack` with no cards reads as one wall of things.",
+		z.tuple([zString, zList]),
+		([title, rest]) => new UiElement("card", { title }, childNodes(rest)),
 	);
 
 	interp.def(
@@ -417,8 +513,8 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 	interp.def(
 		"ui/select",
 		-2,
-		'(ui/select options :name "n" [:label "…"] [:value "…"])',
-		"A dropdown over `options`, a list of strings. Its `:name` is the key the chosen option arrives under in the enclosing form's handler.",
+		'(ui/select options :name "n" [:label "…"] [:value "…"] [:on-change fn])',
+		"A dropdown over `options`, a list of strings. Its `:name` is the key the chosen option arrives under in a handler. `:on-change` is a function of one argument run the moment the user picks something — the way to build a filter that needs no submit button, since it receives the same alist a form's handler would and answers the same way, by rendering.",
 		z.tuple([zAny, zList]),
 		([options, rest]) => {
 			const opts = plistOptions(rest, SELECT_OPTIONS);
@@ -428,19 +524,41 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 			const items = listElements(options);
 			if (items === undefined)
 				throw new EvalException("list of options expected", options);
-			return new UiElement(
-				"select",
-				withOptions(
-					{
-						name,
-						options: items.map((i) =>
-							typeof i === "string" ? i : str(i, false),
-						),
-					},
-					opts,
-					["label", "value"],
-				),
+			const props = withOptions(
+				{
+					name,
+					options: items.map((i) =>
+						typeof i === "string" ? i : str(i, false),
+					),
+				},
+				opts,
+				["label", "value"],
 			);
+			const onChange = actionOption(surface, opts, "on-change");
+			if (onChange !== undefined) props["on-change"] = onChange;
+			return new UiElement("select", props);
+		},
+	);
+
+	interp.def(
+		"ui/checkbox",
+		-1,
+		'(ui/checkbox :name "open" [:label "…"] [:checked t] [:on-change fn])',
+		'A tick box. Unlike a text field its value arrives as a real boolean, so `(if (cdr (assoc "open" values)) …)` works — where a `ui/input` would hand you the string "false", which is TRUE in Lisp. `:on-change` acts the moment it is ticked; without one it is read at submit like any other field.',
+		z.tuple([zList]),
+		([rest]) => {
+			const opts = plistOptions(rest, CHECKBOX_OPTIONS);
+			const name = stringOption(opts, "name");
+			if (name === undefined)
+				throw new EvalException("ui/checkbox needs a :name", rest);
+			const props: Record<string, UiValue> = withOptions({ name }, opts, [
+				"label",
+			]);
+			const checked = booleanOption(opts, "checked");
+			if (checked !== undefined) props.checked = checked;
+			const onChange = actionOption(surface, opts, "on-change");
+			if (onChange !== undefined) props["on-change"] = onChange;
+			return new UiElement("checkbox", props);
 		},
 	);
 

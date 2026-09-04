@@ -304,13 +304,26 @@ describe("interactive views", () => {
 		for (const tag of [
 			"ui/stack",
 			"ui/row",
+			"ui/card",
 			"ui/text",
+			"ui/kpi",
+			"ui/badge",
+			"ui/link",
 			"ui/table",
 			"ui/input",
+			"ui/select",
+			"ui/checkbox",
 			"ui/button",
 			"ui/form",
 		])
 			expect(LISP_SYSTEM_PROMPT).toMatch(names(tag));
+	});
+
+	// The cheap half of the feature: a control that acts on change spends no
+	// turn AND no click, so the model has to know it exists to reach for it.
+	it("says a select or checkbox can act on change with no submit", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(names("on-change"));
+		expect(LISP_SYSTEM_PROMPT).toMatch(/no submit button/);
 	});
 
 	it("draws the line between echoing and rendering", () => {

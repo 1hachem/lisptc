@@ -105,6 +105,89 @@ describe("tables", () => {
 	});
 });
 
+describe("the display widgets", () => {
+	it("serialises a link as text and href", () => {
+		const { view } = render(
+			'(ui/render (ui/link "PR 12" "https://example.com/12"))',
+		);
+		expect(view).toEqual({
+			tag: "link",
+			props: { text: "PR 12", href: "https://example.com/12" },
+			children: [],
+		});
+	});
+
+	it("carries a badge's tone only when one was given", () => {
+		expect(
+			render('(ui/render (ui/badge "open" :tone "ok"))').view,
+		).toMatchObject({ tag: "badge", props: { text: "open", tone: "ok" } });
+		expect(render('(ui/render (ui/badge "open"))').view).toEqual({
+			tag: "badge",
+			props: { text: "open" },
+			children: [],
+		});
+	});
+
+	// The frontend maps a tone to one colour, so an unknown one would draw as no
+	// colour at all — a badge that silently lost its meaning.
+	it("rejects a tone the frontend cannot draw", () => {
+		const { interp } = fresh();
+		expect(() => run(interp, '(ui/badge "open" :tone "chartreuse")')).toThrow(
+			/unknown tone/,
+		);
+	});
+
+	// The model will reach for `(ui/kpi "open" (length rows))`, so a number has
+	// to arrive as the digits and not as a Lisp printed form.
+	it("renders a kpi's value as text, whatever it was", () => {
+		const { view } = render('(ui/render (ui/kpi "open" (+ 20 7)))');
+		expect(view).toEqual({
+			tag: "kpi",
+			props: { label: "open", value: "27" },
+			children: [],
+		});
+	});
+
+	it("carries a kpi's hint only when one was given", () => {
+		expect(
+			render('(ui/render (ui/kpi "open" "27" :hint "was 31"))').view,
+		).toMatchObject({ props: { hint: "was 31" } });
+	});
+
+	it("nests children under a card's title", () => {
+		const { view } = render(
+			'(ui/render (ui/card "Issues" (ui/text "two open")))',
+		);
+		expect(view).toMatchObject({
+			tag: "card",
+			props: { title: "Issues" },
+			children: [{ tag: "text", props: { text: "two open" } }],
+		});
+	});
+
+	it("needs a :name on a checkbox, as on every other field", () => {
+		const { interp } = fresh();
+		expect(() => run(interp, "(ui/checkbox)")).toThrow(
+			/ui\/checkbox needs a :name/,
+		);
+	});
+
+	it("reads :checked with lisp truthiness", () => {
+		expect(
+			render('(ui/render (ui/checkbox :name "o" :checked t))').view,
+		).toMatchObject({ props: { name: "o", checked: true } });
+		expect(
+			render('(ui/render (ui/checkbox :name "o" :checked nil))').view,
+		).toMatchObject({ props: { checked: false } });
+		// Absent, not false: the frontend can tell "no default" from "off".
+		expect(render('(ui/render (ui/checkbox :name "o"))').view).toEqual({
+			tag: "checkbox",
+			props: { name: "o" },
+			children: [],
+		});
+	});
+});
+
 describe("actions", () => {
 	it("serialises a handler as an opaque id, never as code", () => {
 		const { view } = render(
@@ -171,6 +254,59 @@ describe("actions", () => {
 	it("reports an id it does not know rather than doing nothing", () => {
 		const { surface } = render('(ui/render (ui/text "hi"))');
 		expect(() => surface.invoke("a99", {})).toThrow(/no such ui action/);
+	});
+
+	// A select or a checkbox that acts the moment it is used is how a view gets a
+	// filter with no submit button — and it is still one action id on the wire.
+	it("registers an :on-change as an action, like a button's", () => {
+		const { view } = render(`
+			(ui/render (ui/select '("7" "30") :name "d"
+				:on-change (lambda (values) (ui/render (ui/text (cdr (assoc "d" values)))))))
+		`);
+		expect(view).toMatchObject({
+			tag: "select",
+			props: { name: "d", options: ["7", "30"], "on-change": "a1" },
+		});
+	});
+
+	it("runs an :on-change against the live session", () => {
+		const { surface } = render(`
+			(ui/render (ui/select '("7" "30") :name "d"
+				:on-change (lambda (values) (ui/render (ui/text (cdr (assoc "d" values)))))))
+		`);
+		surface.invoke("a1", { d: "30" });
+		expect(nodeToJson(surface.takeView() as never)).toMatchObject({
+			props: { text: "30" },
+		});
+	});
+
+	// The whole reason a checkbox sends a boolean: `""` and `"false"` are both
+	// TRUE in Lisp, so a string-valued tick box could not be tested at all.
+	it("hands a checkbox's value over as a boolean a handler can test", () => {
+		const { surface, interp } = render(`
+			(ui/render (ui/form (lambda (values)
+				(setq seen (if (cdr (assoc "open" values)) "on" "off")))
+				(ui/checkbox :name "open")))
+		`);
+		surface.invoke("a1", { open: true });
+		expect(str(run(interp, "(identity seen)"))).toBe('"on"');
+		surface.invoke("a1", { open: false });
+		expect(str(run(interp, "(identity seen)"))).toBe('"off"');
+	});
+
+	// `summarize` reports the live action count to the model, so a prop it does
+	// not know about would under-report what the view can do.
+	it("counts an :on-change in the render summary", () => {
+		const { interp } = fresh();
+		expect(
+			str(
+				run(
+					interp,
+					`(ui/render (ui/row (ui/button "go" (lambda () nil))
+						(ui/checkbox :name "o" :on-change (lambda (v) nil))))`,
+				),
+			),
+		).toBe('"rendered row, 3 elements, 2 actions"');
 	});
 
 	// A handler is a step of the REPL like any other, so `echo` still writes.

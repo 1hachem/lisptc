@@ -59,17 +59,65 @@ function strings(props: Record<string, unknown>, key: string): string[] {
 	return Array.isArray(value) ? value.map((v) => String(v ?? "")) : [];
 }
 
+/**
+ * What a field is worth to a handler. Text fields are strings; a checkbox is a
+ * real boolean, because the server maps `false` to Lisp `nil` and a handler can
+ * then just test the value — where the string "false" would be TRUE.
+ */
+type FieldValue = string | boolean;
+
 // The fields of the form this control sits in, empty for a control outside one.
-function formValues(el: HTMLElement): Record<string, string> {
+function formValues(el: HTMLElement): Record<string, FieldValue> {
 	const form = el.closest("form");
 	if (!form) return {};
-	const out: Record<string, string> = {};
+	const out: Record<string, FieldValue> = {};
 	for (const [name, value] of new FormData(form).entries())
 		out[name] = String(value);
+	// FormData omits an unticked box entirely, so without this pass a checkbox
+	// reads as absent rather than as false.
+	for (const box of form.querySelectorAll<HTMLInputElement>(
+		'input[type="checkbox"]',
+	))
+		if (box.name) out[box.name] = box.checked;
 	return out;
 }
 
-type Fire = (action: string, values: Record<string, string>) => void;
+// What a change on this control should send: its form's fields, plus its own —
+// which is the entire payload when it sits outside a form, where `formValues`
+// finds nothing to read.
+function controlValues(
+	el: HTMLInputElement | HTMLSelectElement,
+): Record<string, FieldValue> {
+	const out = formValues(el);
+	if (el.name)
+		out[el.name] =
+			el instanceof HTMLInputElement && el.type === "checkbox"
+				? el.checked
+				: el.value;
+	return out;
+}
+
+type Fire = (action: string, values: Record<string, FieldValue>) => void;
+
+// A badge's tone is one of a closed set the server validates, so an unknown one
+// only arrives from a version skew — draw it plain rather than not at all.
+const TONE_CLASSES: Record<string, string> = {
+	ok: "border-green/50 text-green",
+	warn: "border-yellow/50 text-yellow",
+	bad: "border-red/50 text-red",
+	info: "border-blue/50 text-blue",
+	muted: "border-dim/50 text-dim",
+};
+
+// Fire a control's `:on-change`, if the server gave it one.
+function changed(
+	node: UiNode,
+	fire: Fire,
+	el: HTMLInputElement | HTMLSelectElement,
+): void {
+	const action = text(node.props, "on-change");
+	if (action) fire(action, controlValues(el));
+}
 
 function Node({
 	node,
@@ -94,6 +142,15 @@ function Node({
 			return (
 				<div className="flex min-w-0 flex-wrap items-end gap-3">{kids}</div>
 			);
+		case "card":
+			return (
+				<div className="flex min-w-0 flex-col gap-2 border border-dim/40 p-2">
+					<div className="font-bold text-accent">
+						{text(node.props, "title")}
+					</div>
+					{kids}
+				</div>
+			);
 		case "heading":
 			return (
 				<div className="font-bold text-accent">{text(node.props, "text")}</div>
@@ -106,6 +163,39 @@ function Node({
 			);
 		case "markdown":
 			return <Markdown>{text(node.props, "text")}</Markdown>;
+		case "link":
+			return (
+				<a
+					href={text(node.props, "href")}
+					target="_blank"
+					rel="noreferrer"
+					className="text-accent underline decoration-dim/50 hover:decoration-accent"
+				>
+					{text(node.props, "text") || text(node.props, "href")}
+				</a>
+			);
+		case "badge":
+			return (
+				<span
+					className={`w-fit border px-1 ${
+						TONE_CLASSES[text(node.props, "tone")] ?? "border-dim/50 text-dim"
+					}`}
+				>
+					{text(node.props, "text")}
+				</span>
+			);
+		case "kpi":
+			return (
+				<div className="flex min-w-0 flex-col">
+					<span className="text-dim">{text(node.props, "label")}</span>
+					<span className="font-bold text-2xl text-fg leading-tight">
+						{text(node.props, "value")}
+					</span>
+					{node.props.hint !== undefined && (
+						<span className="text-dim">{text(node.props, "hint")}</span>
+					)}
+				</div>
+			);
 		case "button":
 			return (
 				<button
@@ -144,6 +234,7 @@ function Node({
 						name={text(node.props, "name")}
 						defaultValue={text(node.props, "value")}
 						disabled={busy}
+						onChange={(e) => changed(node, fire, e.currentTarget)}
 						className="border border-dim/50 bg-bg px-2 py-px text-fg outline-none focus:border-accent"
 					>
 						{strings(node.props, "options").map((option) => (
@@ -152,6 +243,22 @@ function Node({
 							</option>
 						))}
 					</select>
+				</label>
+			);
+		case "checkbox":
+			return (
+				<label className="flex min-w-0 items-center gap-2">
+					<input
+						type="checkbox"
+						name={text(node.props, "name")}
+						defaultChecked={node.props.checked === true}
+						disabled={busy}
+						onChange={(e) => changed(node, fire, e.currentTarget)}
+						className="accent-accent"
+					/>
+					{node.props.label !== undefined && (
+						<span className="text-fg">{text(node.props, "label")}</span>
+					)}
 				</label>
 			);
 		case "form":

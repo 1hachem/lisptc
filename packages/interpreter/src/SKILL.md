@@ -477,12 +477,23 @@ same REPL.
 - `(ui/text s)` a line · `(ui/heading s)` · `(ui/markdown s)` a block of markdown.
 - `(ui/stack child...)` one above the next · `(ui/row child...)` side by side. A
   bare string child becomes `ui/text`.
+- `(ui/card title child...)` a titled box. Break a long view into named parts;
+  with no cards a big `ui/stack` reads as one wall of things.
+- `(ui/kpi label value [:hint "…"])` one number, big — `(ui/kpi "open" 27)`. The
+  most understanding per token of anything here: it says at a glance what a
+  27-row table says in a screenful. `:hint` is a smaller line under it.
+- `(ui/badge text [:tone "ok"])` a short status label, `:tone` one of `ok` `warn`
+  `bad` `info` `muted`. For the *state* of a thing — a status, a severity, a
+  check's result — where a sentence would be noise.
+- `(ui/link text url)` a link, opened in a new tab. Use it for a URL a tool
+  handed you so the user can follow it instead of copying it out of a table.
 - `(ui/table rows [:columns '("id" "title")])` — `rows` is a list of alists, the
   shape an MCP tool result usually has. Without `:columns` the first row's keys
   are the columns.
 - `(ui/input :name "q" [:label "…"] [:placeholder "…"] [:value "…"])` a text field
-  · `(ui/select options :name "n" [:label "…"] [:value "…"])` a dropdown over a
-  list of strings.
+  · `(ui/select options :name "n" [:label "…"] [:value "…"] [:on-change fn])` a
+  dropdown over a list of strings · `(ui/checkbox :name "o" [:label "…"]
+  [:checked t] [:on-change fn])` a tick box.
 - `(ui/button label action)` · `(ui/form action child... [:submit "Send"])`.
 
 **Actions** are ordinary functions, and they run **in this REPL with no model turn
@@ -493,7 +504,27 @@ anticipate becomes free.
 - A form's action takes one: an alist of every enclosed field's `:name` and its
   contents, read with `assoc`. A button INSIDE a form gets the same alist if it
   takes an argument.
-- Field contents are always strings. `(read s)` turns one into a number.
+- Field contents are always strings — except a `ui/checkbox`, whose value is a
+  real boolean, so `(if (cdr (assoc "o" values)) …)` works. `(read s)` turns a
+  string field into a number. Remember `""` and `"false"` are both TRUE, which
+  is exactly why the tick box does not hand you a string.
+- `:on-change` on a `ui/select` or a `ui/checkbox` is a one-argument function run
+  the moment the user picks or ticks — no submit button, no model turn. It gets
+  the same alist a form's handler would and answers the same way, by rendering.
+  That is how you build a filter that reacts:
+
+  ```
+  (defun panel (window)
+    (ui/stack
+      (ui/select '("7" "30" "90") :name "d" :value window
+        :on-change (lambda (values) (ui/render (panel (cdr (assoc "d" values))))))
+      (ui/table (issues-since window))))
+  (ui/render (panel "7"))
+  ```
+
+  Text fields have no `:on-change` on purpose: every keystroke would be a round
+  trip that redraws the field the user is typing into. Put a `ui/input` in a
+  `ui/form` and let the submit carry it.
 - An action answers by calling `ui/render`. Whatever it renders replaces the view
   in place; an action that renders nothing leaves the view as it was.
 - Actions close over the environment where you wrote them, and the REPL is
