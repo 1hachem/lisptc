@@ -448,8 +448,10 @@ answer to the user, e.g. `the sum is 3`.
   `(acme/list_widgets :query "blue")`. Inspect one with `(doc 'acme/list_widgets)`.
 - A tool result arrives already converted to Lisp data (JSON object → alist with
   string keys, array → list), so read it with `assoc`/`cdr`/`mapcar`/`nth` — no
-  parsing step. Only when a tool hands back a *string* that happens to contain
-  JSON do you need `(json-parse s)` (§5).
+  parsing step. This holds however the server sent it: a JSON document delivered
+  as text is parsed for you too, which is why a result's report names its keys.
+  Only when a tool hands back a *string* that is not itself a JSON document do
+  you need `(json-parse s)` (§5).
 - Full example — find the server, load it, find the tool, call it. The server and
   tool names below are made up: you never know them in advance, so start from
   `search-mcps` and let each step tell you the next name.

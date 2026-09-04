@@ -313,6 +313,30 @@ async function listTools(serverId: string): Promise<Tool[]> {
 	return tools;
 }
 
+/*
+ * A text result that is really a JSON document, parsed.
+ *
+ * Most servers put their JSON in a text block instead of setting
+ * `structuredContent`, and that difference must not reach the interpreter: a
+ * tool result arrives as lisptc data — an object as an alist, an array as a
+ * list — so the agent can `assoc` a field out of it and the REPL can report
+ * its keys instead of a word count.
+ *
+ * Only an object or an array counts. A tool that answered `42`, `null` or
+ * `"ok"` meant text, and parsing those would hand the agent a number, nil or a
+ * re-quoted string in place of the answer it actually gave.
+ */
+function asJsonDocument(text: string): unknown | undefined {
+	const trimmed = text.trim();
+	if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
+	try {
+		const parsed: unknown = JSON.parse(trimmed);
+		return typeof parsed === "object" && parsed !== null ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 async function callTool(
 	payload: {
 		serverId: string;
@@ -341,7 +365,8 @@ async function callTool(
 		content.length > 0 &&
 		content.every((c) => c?.type === "text")
 	) {
-		return content.map((c) => (c as { text: string }).text).join("\n");
+		const text = content.map((c) => (c as { text: string }).text).join("\n");
+		return asJsonDocument(text) ?? text;
 	}
 	return content ?? null;
 }

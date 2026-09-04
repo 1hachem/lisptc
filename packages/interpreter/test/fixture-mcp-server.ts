@@ -34,6 +34,28 @@ server.registerTool(
 	}),
 );
 
+// A tool whose answer is a JSON document inside a text block — what most real
+// servers return instead of setting `structuredContent`. The broker parses it,
+// so the agent gets data rather than a wall of JSON text.
+server.registerTool(
+	"issues",
+	{ description: "Return a JSON document in a text block.", inputSchema: {} },
+	async () => ({
+		content: [
+			{
+				type: "text" as const,
+				text: JSON.stringify({
+					issues: [
+						{ id: "a1f", title: "Auth token refresh fails" },
+						{ id: "b2c", title: "Flaky login test" },
+					],
+					hasMore: false,
+				}),
+			},
+		],
+	}),
+);
+
 // A tool that always fails, so tests can exercise the error path (e.g. that
 // (try ... (catch (e) ...)) binds `e` to the descriptive message, not just an
 // internal op code).

@@ -1,9 +1,10 @@
 =====================================================================
 lisptc — working with JSON data
 
-There is no JSON type, and no json-parse or json-stringify. JSON is
-converted at the edge — an MCP tool result arrives already as lisptc
-data — so "working with JSON" is just working with alists and lists:
+There is no JSON type. JSON is converted at the edge — an MCP tool
+result arrives already as lisptc data, whether the server sent
+structured output or a JSON document in a text block — so "working
+with JSON" is just working with alists and lists:
 
   JSON object    ->  alist: a list of pairs with STRING keys
   JSON array     ->  proper list
@@ -13,7 +14,8 @@ data — so "working with JSON" is just working with alists and lists:
 
 The reverse conversion happens when a value is serialized into an
 outgoing MCP call: an alist becomes an object, any other list becomes
-an array. See section 9.
+an array. See section 9. A string of JSON that reaches you some other
+way is what json-parse is for; there is no json-stringify.
 
 Run me:
   pnpm repl examples/json.ptc
