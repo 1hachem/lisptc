@@ -21,6 +21,12 @@ export interface AgentMessage {
 export interface TokenUsage {
 	input: number;
 	output: number;
+	/**
+	 * The part of `input` the provider served from its prompt cache rather than
+	 * reprocessing — a subset of it, not an extra. Absent when the provider says
+	 * nothing about caching, which is not the same as a cold prompt.
+	 */
+	cachedInput?: number;
 }
 
 /**
@@ -71,19 +77,32 @@ function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {
  * asks for them (`stream_options.include_usage`, on by default) and surfaces
  * them as `usage_metadata`. A backend that doesn't report any simply never
  * produces one, and the turn goes uncounted rather than counted wrong.
+ *
+ * `input_token_details.cache_read` is the cached slice of `input_tokens`
+ * (OpenAI's `prompt_tokens_details.cached_tokens`, normalised by LangChain).
+ * Providers that don't report it leave the field off entirely.
  */
 function chunkUsage(chunk: {
 	usage_metadata?: unknown;
 }): TokenUsage | undefined {
 	const usage = chunk.usage_metadata as
-		| { input_tokens?: unknown; output_tokens?: unknown }
+		| {
+				input_tokens?: unknown;
+				output_tokens?: unknown;
+				input_token_details?: { cache_read?: unknown };
+		  }
 		| undefined;
 	if (!usage) return undefined;
 	const input = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
 	const output =
 		typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
 	if (input === 0 && output === 0) return undefined;
-	return { input, output };
+	const cacheRead = usage.input_token_details?.cache_read;
+	return {
+		input,
+		output,
+		...(typeof cacheRead === "number" ? { cachedInput: cacheRead } : {}),
+	};
 }
 
 /**

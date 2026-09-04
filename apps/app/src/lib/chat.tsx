@@ -14,7 +14,7 @@ export interface ChatMessage {
 }
 
 /**
- * What one assistant turn cost, measured server-side (see `stream.ts` in
+ * What one model call cost, measured server-side (see `stream.ts` in
  * `@repo/ai`). Token counts are absent whenever the backend reported none.
  */
 export interface StepMeta {
@@ -23,17 +23,14 @@ export interface StepMeta {
 	durationMs: number;
 	inputTokens?: number;
 	outputTokens?: number;
+	/** the cached slice of `inputTokens`, when the provider reports one */
+	cachedInputTokens?: number;
 	/**
-	 * The whole question, as opposed to the one model call that ended it.
-	 * Present on the answer that ends the loop, and only there.
+	 * Model calls the loop made to reach the answer, the answer included. The one
+	 * figure that belongs to the whole turn rather than the call, so it is on the
+	 * message that ends the loop and only there.
 	 */
-	turn?: {
-		durationMs: number;
-		/** model calls the loop made, the closing answer included */
-		steps: number;
-		inputTokens?: number;
-		outputTokens?: number;
-	};
+	steps?: number;
 }
 
 function num(value: unknown): number | undefined {
@@ -47,23 +44,13 @@ function parseMeta(value: unknown): StepMeta | undefined {
 	const raw = value as Record<string, unknown>;
 	const durationMs = num(raw.durationMs);
 	if (durationMs === undefined) return undefined;
-	const turn = raw.turn as Record<string, unknown> | undefined;
-	const turnDuration = turn ? num(turn.durationMs) : undefined;
 	return {
 		at: typeof raw.at === "string" ? raw.at : undefined,
 		durationMs,
 		inputTokens: num(raw.inputTokens),
 		outputTokens: num(raw.outputTokens),
-		...(turn && turnDuration !== undefined
-			? {
-					turn: {
-						durationMs: turnDuration,
-						steps: num(turn.steps) ?? 0,
-						inputTokens: num(turn.inputTokens),
-						outputTokens: num(turn.outputTokens),
-					},
-				}
-			: {}),
+		cachedInputTokens: num(raw.cachedInputTokens),
+		steps: num(raw.steps),
 	};
 }
 

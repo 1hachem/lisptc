@@ -3,10 +3,12 @@ import type { AgentDelta } from "../src/agent.ts";
 
 // The loop's two turns, in order: one program to evaluate, then the prose that
 // ends the run. Each is streamed the way a backend streams it — the token
-// counts arrive last, in a chunk of their own.
+// counts arrive last, in a chunk of their own. The second call's input is the
+// first call's prompt plus what the loop added, which is why the two are never
+// summed.
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
-	[{ text: "three." }, { usage: { input: 20, output: 6 } }],
+	[{ text: "three." }, { usage: { input: 20, output: 6, cachedInput: 10 } }],
 ];
 
 let turn = 0;
@@ -26,7 +28,8 @@ interface WireMessage {
 			durationMs?: number;
 			inputTokens?: number;
 			outputTokens?: number;
-			turn?: Record<string, unknown>;
+			cachedInputTokens?: number;
+			steps?: number;
 		};
 	};
 }
@@ -51,7 +54,7 @@ describe("chat stream", () => {
 		turn = 0;
 	});
 
-	test("every assistant turn reports what it cost", async () => {
+	test("every model call reports what it cost, and only its own", async () => {
 		const { streamChatResponse } = await import("../src/stream.ts");
 		const messages = await finalMessages(
 			streamChatResponse({
@@ -66,17 +69,20 @@ describe("chat stream", () => {
 		expect(step).toMatchObject({ inputTokens: 10, outputTokens: 4 });
 		expect(typeof step?.durationMs).toBe("number");
 		expect(Date.parse(step?.at ?? "")).not.toBeNaN();
-		// A step in the middle of the loop accounts for itself only.
-		expect(step?.turn).toBeUndefined();
+		// Nothing was cached on the way in, so no cached count is claimed.
+		expect(step?.cachedInputTokens).toBeUndefined();
+		// A step in the middle of the loop doesn't yet know how long the loop ran.
+		expect(step?.steps).toBeUndefined();
 
-		// The answer carries the whole question: every model call added up, and
-		// the step count telemetry reports for the same turn.
+		// The closing answer reports that one call — 20 in, not 30: its input is
+		// the first call's prompt grown, not a separate charge.
 		const answer = assistant[1].additional_kwargs?.meta;
-		expect(answer).toMatchObject({ inputTokens: 20, outputTokens: 6 });
-		expect(answer?.turn).toMatchObject({
+		expect(answer).toMatchObject({
+			inputTokens: 20,
+			outputTokens: 6,
+			cachedInputTokens: 10,
+			// the one turn-wide figure: how many calls it took to get here
 			steps: 2,
-			inputTokens: 30,
-			outputTokens: 10,
 		});
 	});
 

@@ -167,10 +167,6 @@ export function streamChatResponse(
 			);
 
 			let steps = 0;
-			// Every model call the turn made, added up: what the answer at the foot
-			// of the transcript cost, which no single step's own count shows.
-			let turnInput = 0;
-			let turnOutput = 0;
 			// What the turn is judged on: the prose the user actually reads, and
 			// whether the loop stopped on its own instead of hitting MAX_STEPS.
 			let answer = "";
@@ -223,22 +219,28 @@ export function streamChatResponse(
 						}
 					}
 					if (disconnected) break;
-					if (usage) {
-						turnInput += usage.input;
-						turnOutput += usage.output;
-					}
 
 					const code = stripFences(full);
 					if (code === "") break;
 
-					// What this step cost. It rides along for the UI to show under the
-					// message and, like `reasoning_content`, never reaches the model —
-					// whose context is rebuilt from `content` alone.
+					// What this one model call cost. It rides along for the UI to show
+					// under the message and, like `reasoning_content`, never reaches the
+					// model — whose context is rebuilt from `content` alone.
+					//
+					// Deliberately per-call and never added up across the loop: a step's
+					// input is the whole conversation as it stood for that call, so each
+					// step's count already contains the ones before it.
 					const meta: Record<string, unknown> = {
 						at: new Date().toISOString(),
 						durationMs: Date.now() - stepStartedAt,
 						...(usage
-							? { inputTokens: usage.input, outputTokens: usage.output }
+							? {
+									inputTokens: usage.input,
+									outputTokens: usage.output,
+									...(usage.cachedInput !== undefined
+										? { cachedInputTokens: usage.cachedInput }
+										: {}),
+								}
 							: {}),
 					};
 					const finalAi: Record<string, unknown> = {
@@ -261,16 +263,10 @@ export function streamChatResponse(
 					if (repl.takeFinished()) {
 						answer = code;
 						halted = true;
-						// The answer is the message a reader looks at for what the whole
-						// question cost, so the turn's totals hang off it — every step
-						// that led here collapsed into one line.
-						meta.turn = {
-							durationMs: Date.now() - startedAt,
-							steps,
-							...(turnInput || turnOutput
-								? { inputTokens: turnInput, outputTokens: turnOutput }
-								: {}),
-						};
+						// How many model calls it took to get here. The one count that is
+						// genuinely the whole turn's rather than this call's, so it hangs
+						// off the message the reader ends on.
+						meta.steps = steps;
 						write(sse("values", { messages: wire }));
 						break;
 					}
