@@ -1,6 +1,11 @@
 //TODO: check if langchain has builtin functions to support these helpers
 // for sure they have a funtion for use-stream since its a native
-import { type AgentConfig, type AgentMessage, streamAgent } from "./agent.ts";
+import {
+	type AgentConfig,
+	type AgentMessage,
+	streamAgent,
+	type TokenUsage,
+} from "./agent.ts";
 import { MAX_STEPS } from "./prompts/lisp.ts";
 import {
 	evalCode,
@@ -162,6 +167,10 @@ export function streamChatResponse(
 			);
 
 			let steps = 0;
+			// Every model call the turn made, added up: what the answer at the foot
+			// of the transcript cost, which no single step's own count shows.
+			let turnInput = 0;
+			let turnOutput = 0;
 			// What the turn is judged on: the prose the user actually reads, and
 			// whether the loop stopped on its own instead of hitting MAX_STEPS.
 			let answer = "";
@@ -179,8 +188,10 @@ export function streamChatResponse(
 					repl.setConversationVars(snapshotConversation(transcript));
 
 					const aiId = crypto.randomUUID();
+					const stepStartedAt = Date.now();
 					let full = "";
 					let reasoning = "";
+					let usage: TokenUsage | undefined;
 					let disconnected = false;
 					// Reasoning rides in `additional_kwargs.reasoning_content`; the client's
 					// MessageTupleManager concatenates additional_kwargs across chunks (via
@@ -191,6 +202,12 @@ export function streamChatResponse(
 						tracedConfig,
 						{ signal: abort.signal },
 					)) {
+						// The accounting the backend appends once the completion is
+						// done: nothing to stream, and it supersedes any earlier count.
+						if (delta.usage) {
+							usage = delta.usage;
+							continue;
+						}
 						const chunk: Record<string, unknown> = { type: "ai", id: aiId };
 						if (delta.reasoning) {
 							reasoning += delta.reasoning;
@@ -206,17 +223,33 @@ export function streamChatResponse(
 						}
 					}
 					if (disconnected) break;
+					if (usage) {
+						turnInput += usage.input;
+						turnOutput += usage.output;
+					}
 
 					const code = stripFences(full);
 					if (code === "") break;
 
+					// What this step cost. It rides along for the UI to show under the
+					// message and, like `reasoning_content`, never reaches the model —
+					// whose context is rebuilt from `content` alone.
+					const meta: Record<string, unknown> = {
+						at: new Date().toISOString(),
+						durationMs: Date.now() - stepStartedAt,
+						...(usage
+							? { inputTokens: usage.input, outputTokens: usage.output }
+							: {}),
+					};
 					const finalAi: Record<string, unknown> = {
 						type: "ai",
 						content: code,
 						id: aiId,
+						additional_kwargs: {
+							...(reasoning ? { reasoning_content: reasoning } : {}),
+							meta,
+						},
 					};
-					if (reasoning)
-						finalAi.additional_kwargs = { reasoning_content: reasoning };
 					wire.push(finalAi);
 					transcript.push({ role: "assistant", content: code });
 
@@ -228,6 +261,16 @@ export function streamChatResponse(
 					if (repl.takeFinished()) {
 						answer = code;
 						halted = true;
+						// The answer is the message a reader looks at for what the whole
+						// question cost, so the turn's totals hang off it — every step
+						// that led here collapsed into one line.
+						meta.turn = {
+							durationMs: Date.now() - startedAt,
+							steps,
+							...(turnInput || turnOutput
+								? { inputTokens: turnInput, outputTokens: turnOutput }
+								: {}),
+						};
 						write(sse("values", { messages: wire }));
 						break;
 					}

@@ -10,7 +10,61 @@ export interface ChatMessage {
 	id?: string;
 	type: string;
 	content: unknown;
-	additional_kwargs?: { reasoning_content?: unknown };
+	additional_kwargs?: { reasoning_content?: unknown; meta?: unknown };
+}
+
+/**
+ * What one assistant turn cost, measured server-side (see `stream.ts` in
+ * `@repo/ai`). Token counts are absent whenever the backend reported none.
+ */
+export interface StepMeta {
+	/** ISO time the step finished */
+	at?: string;
+	durationMs: number;
+	inputTokens?: number;
+	outputTokens?: number;
+	/**
+	 * The whole question, as opposed to the one model call that ended it.
+	 * Present on the answer that ends the loop, and only there.
+	 */
+	turn?: {
+		durationMs: number;
+		/** model calls the loop made, the closing answer included */
+		steps: number;
+		inputTokens?: number;
+		outputTokens?: number;
+	};
+}
+
+function num(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value)
+		? value
+		: undefined;
+}
+
+function parseMeta(value: unknown): StepMeta | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const raw = value as Record<string, unknown>;
+	const durationMs = num(raw.durationMs);
+	if (durationMs === undefined) return undefined;
+	const turn = raw.turn as Record<string, unknown> | undefined;
+	const turnDuration = turn ? num(turn.durationMs) : undefined;
+	return {
+		at: typeof raw.at === "string" ? raw.at : undefined,
+		durationMs,
+		inputTokens: num(raw.inputTokens),
+		outputTokens: num(raw.outputTokens),
+		...(turn && turnDuration !== undefined
+			? {
+					turn: {
+						durationMs: turnDuration,
+						steps: num(turn.steps) ?? 0,
+						inputTokens: num(turn.inputTokens),
+						outputTokens: num(turn.outputTokens),
+					},
+				}
+			: {}),
+	};
 }
 
 interface ChatSession {
@@ -21,6 +75,13 @@ interface ChatSession {
 	 * open before there is a line to put in it.
 	 */
 	greeting: string | null;
+	/**
+	 * What each assistant turn cost, by message id. Held here rather than read
+	 * off the message because the transcript is replayed to the server on every
+	 * send and comes back carrying `content` alone — so a turn's numbers would
+	 * vanish the moment the user asked anything else.
+	 */
+	meta: Record<string, StepMeta>;
 	/** no turns yet — the greeting alone doesn't count as a conversation */
 	fresh: boolean;
 	isLoading: boolean;
@@ -103,8 +164,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		[greeting, streamed],
 	);
 
+	// A message arrives with its numbers already final — the server attaches them
+	// in the same `values` event that first carries the message — so an id that
+	// has been recorded once is never looked at again, and the effect settles.
+	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
+	useEffect(() => {
+		const found: Record<string, StepMeta> = {};
+		for (const m of streamed) {
+			if (!m.id || meta[m.id]) continue;
+			const parsed = parseMeta(m.additional_kwargs?.meta);
+			if (parsed) found[m.id] = parsed;
+		}
+		if (Object.keys(found).length > 0)
+			setMeta((prev) => ({ ...prev, ...found }));
+	}, [streamed, meta]);
+
 	const value: ChatSession = {
 		messages,
+		meta,
 		greeting: greeting ? messageText(greeting) : null,
 		fresh: streamed.length === 0,
 		isLoading: stream.isLoading,
@@ -146,6 +223,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		stop: () => stream.stop(),
 		clear: () => {
 			setThreadId(crypto.randomUUID());
+			setMeta({});
 			// a new conversation gets a new opening line, and a fresh look at the clock
 			setGreeting(greetingMessage());
 		},

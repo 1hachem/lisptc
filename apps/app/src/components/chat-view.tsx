@@ -17,6 +17,7 @@ import { AgentAvatar } from "./agent-avatar.tsx";
 import { Greeting } from "./greeting.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
+import { MessageMeta } from "./message-meta.tsx";
 
 function isUser(m: ChatMessage): boolean {
 	return m.type === "human" || m.type === "user";
@@ -70,7 +71,7 @@ function ScrollToLatest() {
 }
 
 export function ChatView() {
-	const { messages, error } = useChatSession();
+	const { messages, meta, error } = useChatSession();
 	const lastSent = messages.filter(isUser).at(-1)?.id;
 
 	return (
@@ -88,6 +89,7 @@ export function ChatView() {
 					.filter((m) => !isGreetingMessage(m))
 					.map((m, i) => {
 						const reasoning = isUser(m) ? "" : messageReasoning(m);
+						const stats = m.id ? meta[m.id] : undefined;
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
 								{isToolMessage(m) ? (
@@ -109,6 +111,7 @@ export function ChatView() {
 										)}
 									</div>
 								)}
+								{stats && <MessageMeta meta={stats} />}
 								{/* the agent's turns are the ones there is anything to say about */}
 								{!isUser(m) && !isToolMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
