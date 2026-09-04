@@ -43,25 +43,29 @@ describe("prose is allowed on every surface the model meets", () => {
 	});
 });
 
+// The reference is wrapped markdown, so a sentence can straddle a newline:
+// patterns run against a whitespace-flattened copy of it.
+const REFERENCE = LANGUAGE_REFERENCE.replace(/\s+/g, " ");
+
 describe("the language reference teaches prose", () => {
 	// The reference IS the system prompt's language section (source.ts embeds
 	// SKILL.md verbatim), so a model that never sees these two rules will keep
 	// writing `;` comments and bare top-level atoms.
 	it("says the text around the forms is ignored", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(
+		expect(REFERENCE).toMatch(
 			/only the parenthesised top-level forms are program text/i,
 		);
 	});
 
 	it("says there is no comment syntax", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/there is no comment syntax/i);
+		expect(REFERENCE).toMatch(/there is no comment syntax/i);
 	});
 
 	// The GBNF fences "<" and "[" out of prose so no model can open a thinking
 	// channel there. A model that is never told will just spend tokens being
 	// masked, so the reference has to carry the rule too.
 	it("says prose cannot hold a < or a [", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/prose cannot hold a `<` or a `\[`/i);
+		expect(REFERENCE).toMatch(/prose cannot hold a `<` or a `\[`/i);
 	});
 });
 
@@ -70,25 +74,27 @@ describe("the language reference teaches context compression", () => {
 	// is not told will wait for values it will never be shown, and will keep
 	// retyping data it could have referred to by name.
 	it("says the REPL prints nothing on its own", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/the ONLY thing that prints/);
-		expect(LANGUAGE_REFERENCE).toMatch(/reports? (one line|a result's name)/i);
+		expect(REFERENCE).toMatch(/the ONLY thing that prints/);
+		expect(REFERENCE).toMatch(/reports? (one line|a result's name)/i);
 	});
 
-	it("says every result is bound to a name", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/never retype data the REPL/i);
+	it("says every result is bound to a name it reports back", () => {
+		expect(REFERENCE).toMatch(/`name: shape`/);
+		expect(REFERENCE).toMatch(/never retype data the REPL/i);
 	});
 
 	// The whole point of the split: reaching for `grep` instead of copying a
 	// URL out of a printout.
 	it("says the extraction commands return rather than print", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/RETURN a value/);
-		expect(LANGUAGE_REFERENCE).toMatch(/head`\/`tail`\/`grep` RETURN a value/);
+		expect(REFERENCE).toMatch(/RETURN a value/);
+		expect(REFERENCE).toMatch(/head`\/`tail`\/`grep` RETURN a value/);
+		expect(REFERENCE).toMatch(
+			/never read a value off a printout and retype it/,
+		);
 	});
 
 	it("says a truncated echo is not the whole output", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(
-			/capped for you.{0,20}not for the user/i,
-		);
-		expect(LANGUAGE_REFERENCE).toMatch(/read on with/i);
+		expect(REFERENCE).toMatch(/capped for you.{0,20}not for the user/i);
+		expect(REFERENCE).toMatch(/read on with/i);
 	});
 });

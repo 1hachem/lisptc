@@ -183,8 +183,10 @@ Half the feature is the prompt: a model that is not told waits for values it
 will never be shown, and keeps retyping data it could have named. `SKILL.md` §5
 lists the built-ins — `echo` under Output, `head`/`tail`/`grep` under Extracting
 — and §9 explains the silence, the report line, and the extract-then-echo
-pattern with a worked example of each failure. POLICY rules 2, 10, 11 and 11a in
-`packages/ai/src/prompts/lisp.ts` say it outright, and rule 4c corrects the one
-thing the model cannot observe: the user *does* read what a step echoes.
-`test/prose-surfaces.test.ts` and `packages/ai/test/prompt.test.ts` pin both
-surfaces so they cannot silently regress.
+pattern with a worked example of each failure. That is the ONLY place the
+contract is written: POLICY in `packages/ai/src/prompts/lisp.ts` keeps only what
+the reference cannot tell the model, namely rule 6 — the user *does* read what a
+step echoes, so rendering for them is real work even though they cannot reply.
+`test/prose-surfaces.test.ts` pins the reference's wording and
+`packages/ai/test/prompt.test.ts` pins POLICY's, so neither can silently
+regress.
