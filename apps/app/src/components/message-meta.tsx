@@ -34,7 +34,7 @@ export type MetaField =
 	| "output";
 
 /** Which fields the line carries. Flip one to hide it everywhere. */
-export const META_FIELDS: Record<MetaField, boolean> = {
+const META_FIELDS: Record<MetaField, boolean> = {
 	time: true,
 	duration: true,
 	steps: true,
