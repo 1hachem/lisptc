@@ -226,6 +226,18 @@ describe("prose with parentheses in it", () => {
 			expect(r.takeFinished()).toBe(true);
 		});
 
+		// The reported case: a final answer listing tool names, one of them in
+		// markdown backticks inside parentheses. It parses as nothing at all, but
+		// it is a finished sentence, not a truncated step.
+		it("is raised for an answer whose aside could not be parsed", () => {
+			const r = new AgentRepl();
+			expect(r.eval("And others (including a deprecated `read_file`).")).toBe(
+				"",
+			);
+			expect(r.takeFinished()).toBe(true);
+			expect(r.takeProseFeedback()).toContain('unexpected ")" on line 1');
+		});
+
 		it("is not raised when a form ran alongside the aside", () => {
 			const r = new AgentRepl();
 			r.eval("almost (see above): (+ 1 2)");
