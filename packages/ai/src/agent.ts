@@ -17,14 +17,30 @@ export interface AgentMessage {
 	content: string;
 }
 
+/** Tokens one model call spent, as the provider reported them. */
+export interface TokenUsage {
+	input: number;
+	output: number;
+	/**
+	 * The part of `input` the provider served from its prompt cache rather than
+	 * reprocessing — a subset of it, not an extra. Absent when the provider says
+	 * nothing about caching, which is not the same as a cold prompt.
+	 */
+	cachedInput?: number;
+}
+
 /**
  * One streamed step. A chunk carries either visible answer `text` or a
  * `reasoning` token (the model's thinking, surfaced separately so the UI can
  * show it distinctly) — never mixed, so consumers can route each independently.
+ *
+ * A `usage` delta carries neither: it is the accounting the backend appends
+ * once the completion is done, so a consumer that only renders text ignores it.
  */
 export interface AgentDelta {
 	text?: string;
 	reasoning?: string;
+	usage?: TokenUsage;
 }
 
 export interface AgentConfig {
@@ -54,6 +70,39 @@ function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {
 		| undefined;
 	const reasoning = kwargs?.reasoning_content;
 	return typeof reasoning === "string" ? reasoning : "";
+}
+
+/**
+ * Token counts ride on the final chunk of an OpenAI-style stream — ChatOpenAI
+ * asks for them (`stream_options.include_usage`, on by default) and surfaces
+ * them as `usage_metadata`. A backend that doesn't report any simply never
+ * produces one, and the turn goes uncounted rather than counted wrong.
+ *
+ * `input_token_details.cache_read` is the cached slice of `input_tokens`
+ * (OpenAI's `prompt_tokens_details.cached_tokens`, normalised by LangChain).
+ * Providers that don't report it leave the field off entirely.
+ */
+function chunkUsage(chunk: {
+	usage_metadata?: unknown;
+}): TokenUsage | undefined {
+	const usage = chunk.usage_metadata as
+		| {
+				input_tokens?: unknown;
+				output_tokens?: unknown;
+				input_token_details?: { cache_read?: unknown };
+		  }
+		| undefined;
+	if (!usage) return undefined;
+	const input = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
+	const output =
+		typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+	if (input === 0 && output === 0) return undefined;
+	const cacheRead = usage.input_token_details?.cache_read;
+	return {
+		input,
+		output,
+		...(typeof cacheRead === "number" ? { cachedInput: cacheRead } : {}),
+	};
 }
 
 /**
@@ -89,6 +138,8 @@ export class Agent {
 			if (reasoning) yield { reasoning };
 			const text = chunk.text;
 			if (text) yield { text };
+			const usage = chunkUsage(chunk);
+			if (usage) yield { usage };
 		}
 	}
 }
