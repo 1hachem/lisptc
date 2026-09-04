@@ -414,6 +414,11 @@ answer to the user, e.g. `the sum is 3`.
 
 - `(load-mcp "name")` — load a predefined server by name. **Asynchronous**: returns
   a *job* immediately; the tools install only when the job settles.
+- **An unawaited load is finished code, not a loose end.** The job installs the
+  tools itself when it settles, so a step that reported
+  `load-mcp-1: load-mcp:acme started in the background …` needs no follow-up:
+  go on with the task and call the tools on a later step. `await` is for when
+  you want the tool list in the SAME step, nothing else.
 - **To load and use in one step, wrap the SINGLE `load-mcp` call in `await`:**
   `(await (load-mcp "acme"))` blocks until ready and returns the tool list.
   Do NOT call `(load-mcp "acme")` and then `(await (load-mcp "acme"))` —
@@ -467,7 +472,10 @@ answer to the user, e.g. `the sum is 3`.
 
 ### 10.2 Async jobs
 
-A *job* is a handle for background work (currently just `load-mcp`).
+A *job* is a handle for background work (currently just `load-mcp`). It is a live
+handle, so the only way to name one is the name the REPL reported it under
+(`load-mcp-1`) or one you bound yourself — never the `#<job …>` text, which is
+not something the reader can read back.
 - `(await job [timeout-ms])` block for the result (re-raises the job's error).
 - `(await-all jobs [ms])` list of results in order (a failed one → `(:error "msg")`).
 - `(await-any jobs [ms])` first result.
@@ -501,6 +509,10 @@ A *job* is a handle for background work (currently just `load-mcp`).
   `:offset`/`:length`/`:match` are how you window and search what it prints.
 - Retyping data the REPL produced is the main way you produce wrong data (§9).
   Extract it with `grep`/`head` and echo the variable instead.
+- A `#<…>` form — `#<job …>`, `#<secret:KEY>`, `#<closure …>` — is a printout of
+  a value that cannot be read back, so typing one is always an error. Use the
+  name the value was reported under. `(await #<job load-mcp:acme 8d12…>)` is the
+  common version of this mistake; `(await load-mcp-1)` is what it meant.
 - `head`/`tail`/`grep` RETURN a value; only `echo` prints — except a bare
   `head`/`tail`, whose slice the REPL prints instead of describing, because a
   slice is asked for in order to be read.

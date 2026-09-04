@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Compressor, compressionExtension } from "../src/compression.ts";
-import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import {
+	Cell,
+	Interp,
+	newSym,
+	prelude,
+	run,
+	setWriter,
+	str,
+} from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
@@ -257,6 +265,73 @@ describe("secret taint", () => {
 		expect(ev('(grep (secret "REPL_K") "sesame")', given.interp)).toBe("nil");
 		expect(ev('(grep (list (secret "REPL_K")) "sesame")', given.interp)).toBe(
 			"nil",
+		);
+	});
+});
+
+/*
+ * A job is the one value an agent must never be shown: its printed form
+ * (`#<job load-mcp:linear 8d12…>`) is not readable source, and four survey
+ * reports in two days were an agent typing one back — `(await #<job …>)` —
+ * after a step reported it. So the report gives the name, says the name is the
+ * handle, and says that an unawaited load owes nothing.
+ */
+describe("reporting a background job", () => {
+	// Duck-typed like the real `Job` (src/jobs.ts), which compression must not
+	// import: an extension knows nothing about the others.
+	function fakeJob(label = "load-mcp:linear") {
+		return {
+			jobId: "8d123124beefcafe",
+			label,
+			toString: () => `#<job ${label} 8d123124>`,
+		};
+	}
+
+	function reportOf(interp: Interp, c: Compressor, code: string): string {
+		let form: unknown;
+		const value = run(interp, code, { onTopLevel: (f) => (form = f) });
+		return c.result(interp, form, value);
+	}
+
+	function withJob(value: unknown): { interp: Interp; c: Compressor } {
+		const c = new Compressor(400);
+		const interp = new Interp({ extensions: [compressionExtension(c)] });
+		run(interp, prelude);
+		interp.defineGlobal(newSym("started"), value, {
+			signature: "started",
+			doc: "A job handed to the REPL by the host, as load-mcp would.",
+		});
+		return { interp, c };
+	}
+
+	it("reports the name and what to do with it, never the handle", () => {
+		const { interp, c } = withJob(fakeJob());
+		const line = reportOf(interp, c, "(identity started)");
+		expect(line).not.toContain("#<job");
+		expect(line).toContain("load-mcp:linear");
+		expect(line).toContain("(await started)");
+		expect(line).toContain("(job-status started)");
+		expect(line).toContain("(cancel started)");
+		// The correction that matters: an unawaited load is not a loose end.
+		expect(line).toContain("nothing is owed");
+	});
+
+	it("keeps the handle out of every other description of it", () => {
+		const { interp, c } = withJob(fakeJob());
+		// `(doc 'x)` and any report of a bound symbol describe the value too.
+		expect(reportOf(interp, c, "(quote started)")).toBe(
+			"started: job load-mcp:linear, running in the background\n",
+		);
+	});
+
+	it("describes a list of jobs as jobs, short as it looks", () => {
+		const both = new Cell(
+			fakeJob("load-mcp:a"),
+			new Cell(fakeJob("load-mcp:b"), null),
+		);
+		const { interp, c } = withJob(both);
+		expect(reportOf(interp, c, "(identity started)")).toBe(
+			"started: list of 2 background jobs\n",
 		);
 	});
 });

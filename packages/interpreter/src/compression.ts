@@ -302,7 +302,22 @@ export class Compressor {
 		if (value instanceof Sym && interp.hasGlobal(value))
 			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
-		return `${this.nameFor(interp, form, value)}: ${describe(value)}\n`;
+		const name = this.nameFor(interp, form, value);
+		/*
+		 * A job is a live handle whose printed form — `#<job load-mcp:linear
+		 * 8d12…>` — is the one thing an agent must never retype, and reporting
+		 * it invites exactly that: `(await #<job load-mcp:linear 8d12…>)`.
+		 *
+		 * So the handle is never shown. The line gives the name instead, and
+		 * says the thing the agent keeps getting wrong: nothing is owed. A
+		 * job applies its own result when it settles, so an unawaited
+		 * `load-mcp` is finished code, not a loose end to chase.
+		 */
+		const job = jobLabel(value);
+		if (job !== undefined)
+			return `${name}: ${job} running in the background. Its result applies itself when the job settles, so nothing is owed here; to act on it use the name — (job-status ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
+
+		return `${name}: ${describe(value)}\n`;
 	}
 
 	/*
@@ -575,12 +590,34 @@ export class Compressor {
 		// Never clobber a name the agent bound itself.
 		while (interp.hasGlobal(newSym(name))) name = `${base}-${++n}`;
 		this.counters.set(base, n);
+		const job = jobLabel(value);
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			doc: `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`,
+			// A job holds no data to compute over, so the generic "extract from
+			// it" advice would be nonsense: what it needs saying is that this
+			// name is the only way to address the job.
+			doc:
+				job === undefined
+					? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
+					: `Handle for the background job \`${job}\`. This name is how you address it — its printed form (#<job …>) cannot be read back. The job applies its own result when it settles, so awaiting is optional: (await ${name}) waits for it now and returns that result, (job-status ${name}) checks it without blocking (:pending / :done / :error), (cancel ${name}) aborts it.`,
 		});
 		return name;
 	}
+}
+
+/*
+ * A background job, recognised by its shape.
+ *
+ * Compression must not import the jobs layer — an extension knows nothing
+ * about the others (see `secretsExtension`, which `str` and `lispToJson` also
+ * duck-type rather than import). `jobId` plus `label` is the whole contract.
+ */
+function jobLabel(value: unknown): string | undefined {
+	if (value === null || typeof value !== "object") return undefined;
+	const { jobId, label } = value as { jobId?: unknown; label?: unknown };
+	return typeof jobId === "string" && typeof label === "string"
+		? label
+		: undefined;
 }
 
 // Was this top-level form a slice taken to be looked at? Only the bare form
@@ -791,6 +828,23 @@ function grepOf(
 function describe(value: unknown): string {
 	const callable = callableKind(value);
 	if (callable !== undefined) return callable;
+
+	// Never the handle itself: `#<job load-mcp:linear 8d12…>` is a printout no
+	// reader can read back, and an agent shown one retypes it. Every path that
+	// describes a value goes through here, `(doc 'load-mcp-1)` included — and
+	// ahead of the inline shortcut below, which would print a handle for being
+	// short. (A `Secret` is not the same case: `#<secret:KEY>` IS how a secret
+	// is meant to appear, and inlining it reveals nothing.)
+	const job = jobLabel(value);
+	if (job !== undefined) return `job ${job}, running in the background`;
+
+	const started = listElements(value);
+	if (
+		started !== undefined &&
+		started.length > 0 &&
+		started.every((j) => jobLabel(j) !== undefined)
+	)
+		return `list of ${started.length} background job${started.length === 1 ? "" : "s"}`;
 
 	const text = canonical(value);
 	const spans = wordSpans(text);

@@ -21,6 +21,31 @@ describe("reader: lists and dotted pairs", () => {
 	});
 });
 
+/*
+ * Every value the REPL cannot read back prints as `#<…>` — a job, a secret, a
+ * closure — so a `#<…>` in source is always a retyped printout. Left as an
+ * ordinary symbol it failed a step later as `void variable: #<job`, which
+ * named neither the mistake nor the fix.
+ */
+describe("reader: printed handles", () => {
+	it("refuses a retyped handle and says what to use instead", () => {
+		expect(() => ev("(await #<job load-mcp:acme 8d123124>)")).toThrow(
+			/printed handle/,
+		);
+		expect(() => ev("(await #<job load-mcp:acme 8d123124>)")).toThrow(
+			/name the REPL reported/,
+		);
+		expect(() => ev("(echo #<secret:REPL_TOKEN>)")).toThrow(/printed handle/);
+	});
+
+	// It is the `#<` opening that cannot be read, not the characters in it:
+	// `#` is an ordinary symbol character everywhere else.
+	it("leaves # alone as a symbol character", () => {
+		expect(ev("(quote a#b)")).toBe("a#b");
+		expect(ev("(quote |#|)")).toBe("|#|");
+	});
+});
+
 describe("reader: atoms", () => {
 	it("recognises nil and t", () => {
 		expect(ev("(progn nil)")).toBe("nil");

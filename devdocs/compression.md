@@ -152,18 +152,26 @@ In order, `Compressor.result` and `nameFor`:
 2. A top-level `head`/`tail` form reports nothing either — its slice is
    printed instead (see `isSliceForm`), and no name is minted for it: the
    value it was sliced out of already has one.
-3. `nil` and `t` are reported plainly. They carry nothing a later step could
+3. A **job** is reported by name plus what the name is for — `load-mcp-1:
+   load-mcp:linear running in the background … (await load-mcp-1) …` — and its
+   handle (`#<job …>`) is never shown, in this line or in `describe`. The
+   handle is not readable source, and an agent shown one types it back:
+   `(await #<job load-mcp:linear 8d12…>)` was four negative survey reports in
+   two days. The line also says that nothing is owed, since a job applies its
+   own result when it settles. Recognised by shape (`jobLabel`), because
+   compression may not import the jobs layer.
+4. `nil` and `t` are reported plainly. They carry nothing a later step could
    refer to, and every side-effecting loop returns `nil`; naming those would
    bury the results that matter under `dotimes-1: nil`.
-4. A value that is a symbol already bound as a global — what `defun`/`defmacro`
+5. A value that is a symbol already bound as a global — what `defun`/`defmacro`
    return — is reported under that name, describing what it now holds
    (`f: function`).
-5. A `setq` reports the symbol **it** assigned, read off the form (the last one,
+6. A `setq` reports the symbol **it** assigned, read off the form (the last one,
    for `(setq a 1 b 2)`). Reverse lookup alone would only find it for a `Cell`
    or a string, not for a number.
-6. A value an existing global already holds reuses that name — so a result the
+7. A value an existing global already holds reuses that name — so a result the
    agent bound itself is not given a second one.
-7. Otherwise the head symbol of the form plus a per-name counter, skipping any
+8. Otherwise the head symbol of the form plus a per-name counter, skipping any
    name already taken so an agent's own `foo-1` is never clobbered. A form with
    no symbol at its head (`((lambda …) 1)`) becomes `result-N`.
 

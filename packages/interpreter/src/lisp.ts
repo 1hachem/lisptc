@@ -1995,6 +1995,20 @@ export class Reader {
 				else if (t.length > 1 && t[0] === ":")
 					// Self-evaluating keyword literal, e.g. :query
 					this.token = newLispKeyword(t.slice(1));
+				// `#<…>` is how every value that cannot be read back prints —
+				// a job, a secret, a closure, a built-in. Typing one is always
+				// a retyped printout (`(await #<job load-mcp:linear 8d12…>)`),
+				// and left as an ordinary symbol it fails one step later as
+				// `void variable: #<job`, which says nothing about the real
+				// mistake. An EvalException rather than a FormatException
+				// because that is the error every layer above already renders
+				// inline and reports as a syntax error.
+				else if (t.startsWith("#<"))
+					throw new EvalException(
+						"a #<…> form is a printed handle, not something that can be read back; use the name the REPL reported the value under",
+						t,
+						false,
+					);
 				else this.token = newSym(t);
 				return;
 			}
