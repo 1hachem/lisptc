@@ -4,25 +4,26 @@ import { AgentRepl } from "../src/repl.ts";
 describe("AgentRepl (in-process REPL binding)", () => {
 	it("returns the value of the last form", () => {
 		const r = new AgentRepl();
-		expect(r.eval("(+ 1 2)")).toBe("3\n");
+		expect(r.eval("(+ 1 2)")).toBe("+-1: 3\n");
 	});
 
 	it("persists definitions across eval calls", () => {
 		const r = new AgentRepl();
 		r.eval("(defun sq (x) (* x x))");
-		expect(r.eval("(sq 5)")).toBe("25\n");
+		expect(r.eval("(sq 5)")).toBe("sq-1: 25\n");
 	});
 
-	it("captures side-effect output before the value", () => {
+	it("puts echoed output before the result report", () => {
 		const r = new AgentRepl();
-		expect(r.eval('(progn (princ "hi") 42)')).toBe("hi42\n");
+		expect(r.eval('(progn (echo "hi") 42)')).toBe("hi\nprogn-1: 42\n");
 	});
 
-	it("does not echo a printed value a second time", () => {
+	// `echo` is the only thing that prints, and a step ending in one is
+	// reported by what it printed rather than by a line about the echo itself.
+	it("reports nothing on top of what a step echoed", () => {
 		const r = new AgentRepl();
-		expect(r.eval('(print "hi")')).toBe('"hi"\n');
-		expect(r.eval('(princ "hi")')).toBe("hi");
-		expect(r.eval("(terpri)")).toBe("\n");
+		expect(r.eval('(echo "hi")')).toBe("hi\n");
+		expect(r.eval("(echo)")).toBe("\n");
 	});
 
 	it("still echoes nil — only the printing sentinel is suppressed", () => {
@@ -78,7 +79,9 @@ describe("AgentRepl (in-process REPL binding)", () => {
 
 		it("is false when prose merely surrounds a form", () => {
 			const r = new AgentRepl();
-			expect(r.eval("first square it: (* 3 3) and there it is")).toBe("9\n");
+			expect(r.eval("first square it: (* 3 3) and there it is")).toBe(
+				"*-1: 9\n",
+			);
 			expect(r.takeFinished()).toBe(false);
 		});
 
@@ -116,14 +119,14 @@ describe("prose with parentheses in it", () => {
 	it("runs the real form and reports the aside it skipped", () => {
 		const r = new AgentRepl();
 		expect(r.eval("Here is the plan (see below):\n(+ 1 2)")).toBe(
-			'3\nskipped (see below) — "see" is not defined, so this was read as prose\n',
+			'+-1: 3\nskipped (see below) — "see" is not defined, so this was read as prose\n',
 		);
 	});
 
 	it("recovers the form after an unclosed parenthesis", () => {
 		const r = new AgentRepl();
 		expect(r.eval("The result (roughly is fine\n(+ 1 2)")).toBe(
-			'3\nskipped unclosed "(" on line 1\n',
+			'+-1: 3\nskipped unclosed "(" on line 1\n',
 		);
 	});
 
@@ -141,7 +144,7 @@ describe("prose with parentheses in it", () => {
 	// prose feedback"); a reply that also ran something gets it straight back.
 	it("names the symbol it did not recognise", () => {
 		const r = new AgentRepl();
-		expect(r.eval('(princ "hi") (lenght lst)')).toMatch(
+		expect(r.eval('(echo "hi") (lenght lst)')).toMatch(
 			/"lenght" is not defined/,
 		);
 		const answered = new AgentRepl();
@@ -151,8 +154,9 @@ describe("prose with parentheses in it", () => {
 
 	it("reports each aside it skipped", () => {
 		const r = new AgentRepl();
-		expect(r.eval('(princ "x") (see one) and (see two)').split("\n")).toEqual([
-			'xskipped (see one) — "see" is not defined, so this was read as prose',
+		expect(r.eval('(echo "x") (see one) and (see two)').split("\n")).toEqual([
+			"x",
+			'skipped (see one) — "see" is not defined, so this was read as prose',
 			'skipped (see two) — "see" is not defined, so this was read as prose',
 			"",
 		]);
@@ -160,9 +164,10 @@ describe("prose with parentheses in it", () => {
 
 	it("reports a repeated aside once", () => {
 		const r = new AgentRepl();
-		expect(
-			r.eval('(princ "x") (see one) and (see one)').split("\n").length,
-		).toBe(2);
+		const out = r.eval('(echo "x") (see one) and (see one)');
+		expect(out.split("\n").filter((l) => l.startsWith("skipped"))).toHaveLength(
+			1,
+		);
 	});
 
 	/*
@@ -191,7 +196,7 @@ describe("prose with parentheses in it", () => {
 			const r = new AgentRepl();
 			r.eval('(defun playwright/browser_navigate (&rest args) "ok")');
 			expect(r.eval('(playwright/browser_navigate :url "test")')).toBe(
-				'"ok"\n',
+				'playwright/browser_navigate-1: "ok"\n',
 			);
 		});
 	});
@@ -219,6 +224,18 @@ describe("prose with parentheses in it", () => {
 			const r = new AgentRepl();
 			expect(r.eval("all done (see above)")).toBe("");
 			expect(r.takeFinished()).toBe(true);
+		});
+
+		// The reported case: a final answer listing tool names, one of them in
+		// markdown backticks inside parentheses. It parses as nothing at all, but
+		// it is a finished sentence, not a truncated step.
+		it("is raised for an answer whose aside could not be parsed", () => {
+			const r = new AgentRepl();
+			expect(r.eval("And others (including a deprecated `read_file`).")).toBe(
+				"",
+			);
+			expect(r.takeFinished()).toBe(true);
+			expect(r.takeProseFeedback()).toContain('unexpected ")" on line 1');
 		});
 
 		it("is not raised when a form ran alongside the aside", () => {

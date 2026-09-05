@@ -34,12 +34,19 @@ function assert(x: boolean, message?: string): asserts x {
 let write: (s: string) => void = () => {};
 let exit: (n: number) => void = () => {}; // Terminate the process with exit code n.
 
-// Redirect interpreter output (used by prin1/princ/terpri). Returns the
+// Redirect interpreter output (used by `echo`). Returns the
 // previous writer so callers can restore it.
 export function setWriter(fn: (s: string) => void): (s: string) => void {
 	const prev = write;
 	write = fn;
 	return prev;
+}
+
+// Write through the current writer. Exported for the compression extension,
+// which overrides `echo` and so has to reach the same sink this file's built-ins
+// do — the writer itself stays private, since only setWriter may replace it.
+export function writeOut(s: string): void {
+	write(s);
 }
 
 // Wire the `(exit code)` built-in to a real process-exit. Defaults to a no-op
@@ -346,8 +353,19 @@ class Closure extends DefinedFunc {
 		return new Closure(x.carity, x.body, env);
 	}
 
+	/*
+	 * The captured environment is deliberately NOT printed.
+	 *
+	 * It can hold the closure itself — a loop macro binds its body to a local
+	 * that the body closes over — and `str`'s cycle guard does not survive the
+	 * hop out through this method, so rendering it recursed until the stack
+	 * gave out. Any error raised inside a multi-form `dotimes` body reached
+	 * that path, since an EvalException's trace prints the forms it unwound
+	 * through: the eval died with a RangeError instead of reporting the error.
+	 * An environment is interpreter internals in any case.
+	 */
 	toString(): string {
-		return `#<closure:${this.carity}:${str(this.env)}:${str(this.body)}>`;
+		return `#<closure:${this.carity}:${str(this.body)}>`;
 	}
 
 	// Make a new environment from a list of actual arguments.
@@ -391,6 +409,20 @@ class BuiltInFunc extends Func {
 			else throw new EvalException(`${ex} -- ${this.name}`, frame);
 		}
 	}
+}
+
+/*
+ * What kind of callable `x` is, or undefined if it is not one.
+ *
+ * Exported for the compression extension, which reports what a result IS
+ * rather than printing it: a closure's printed form
+ * (`#<closure:1:nil:(#0:0:x)>`) is interpreter internals, and "function" is
+ * what a caller actually wanted to know.
+ */
+export function callableKind(x: unknown): "function" | "macro" | undefined {
+	if (x instanceof Macro) return "macro";
+	if (x instanceof Func) return "function";
+	return undefined;
 }
 
 // Bound variable in a compiled lambda/macro expression
@@ -458,14 +490,32 @@ class NotVariableException extends EvalException {
 // Exception thrown when something does not have an expected format
 class FormatException extends Error {}
 
+/*
+ * The reader's own failure: text it could not parse at all.
+ *
+ * Kept apart from the other EvalExceptions the reader raises — those are
+ * complaints about a token it understood perfectly well — because only a parse
+ * failure can turn out to be a sentence rather than a mistake (see
+ * `stripProse`). `reason` and `line` are the parts of the message back out
+ * again, so a caller can re-report it against its own text.
+ */
+class SyntaxException extends EvalException {
+	constructor(
+		readonly reason: string,
+		readonly line: number,
+	) {
+		super("syntax error", `${reason} at ${line}`, false);
+	}
+}
+
 // Singleton for end-of-file
 export const EndOfFile = { toString: () => "EOF" };
 
-// Singleton returned by output functions (prin1/princ/terpri/print) whose
-// result carries no information beyond "I already wrote my output" — as
-// opposed to nil, which is a meaningful Lisp value (false / empty list).
+// Singleton returned by `echo`, whose result carries no information beyond "I
+// already wrote my output" — as opposed to nil, which is a meaningful Lisp
+// value (false / empty list).
 // A REPL compares its top-level result against this by identity to decide
-// whether to echo it, so a printed value isn't shown a second time.
+// whether to report it, so a step that printed gets no result line on top.
 export const Unspecified = { toString: () => "#<unspecified>" };
 
 //----------------------------------------------------------------------
@@ -824,36 +874,18 @@ export class Interp {
 			},
 		);
 
+		// The REPL prints nothing on its own, so this is the only way anything
+		// reaches the screen. The compression extension overrides it with a
+		// windowed, searchable version; this plain one is the fallback for an
+		// interpreter built without it.
 		this.def(
-			"prin1",
-			1,
-			"(prin1 x)",
-			"Print `x` in re-readable form (strings quoted); returns an unspecified value (a REPL does not echo it, since `x` was already printed).",
-			z.tuple([zAny]),
-			([x]) => {
-				write(str(x, true));
-				return Unspecified;
-			},
-		);
-		this.def(
-			"princ",
-			1,
-			"(princ x)",
-			"Print `x` in human-readable form (strings unquoted); returns an unspecified value (a REPL does not echo it, since `x` was already printed).",
-			z.tuple([zAny]),
-			([x]) => {
-				write(str(x, false));
-				return Unspecified;
-			},
-		);
-		this.def(
-			"terpri",
-			0,
-			"(terpri)",
-			"Print a newline; returns an unspecified value (a REPL does not echo it).",
-			z.tuple([]),
-			() => {
-				write("\n");
+			"echo",
+			-1,
+			"(echo x...)",
+			"Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. `(echo)` alone prints a blank line. Returns an unspecified value, so the REPL reports nothing for a step that ends in an echo — what was printed IS the report.",
+			z.tuple([zList]),
+			([rest]) => {
+				write(`${echoText(rest)}\n`);
 				return Unspecified;
 			},
 		);
@@ -1205,6 +1237,20 @@ export class Interp {
 
 	hasGlobal(sym: Sym): boolean {
 		return this.globals.has(sym);
+	}
+
+	// The value bound to a global, without the "void variable" error `eval`
+	// raises: a caller that already knows the binding exists (a REPL reporting
+	// what a `defun` just defined) wants the value, not an exception.
+	getGlobal(sym: Sym): unknown {
+		return this.globals.get(sym);
+	}
+
+	// Every global binding, for a reverse lookup by value: naming a result
+	// reuses the name a value is already bound under rather than minting a
+	// second one (see src/compression.ts).
+	globalEntries(): IterableIterator<[Sym, unknown]> {
+		return this.globals.entries();
 	}
 
 	// Build a BuiltInFunc without binding it (for wrappers stored elsewhere).
@@ -1775,8 +1821,10 @@ function startOfForm(text: string, i: number): number {
  * - `tolerant` — it is prose. Right for an LLM's reply: a stray `(` in a
  *   sentence is far likelier than a truncated program, and the grammar that
  *   would have prevented it (`lisptc.gbnf`) only binds providers that support
- *   grammars. Whatever is skipped is reported through `onProse`, so nothing
- *   disappears silently.
+ *   grammars. Balanced parentheses do not settle it either — markdown inside
+ *   them is not an expression — so text that cannot be read is prose too.
+ *   Whatever is skipped is reported through `onProse`, so nothing disappears
+ *   silently.
  */
 export type ProseMode = "strict" | "tolerant";
 
@@ -1813,10 +1861,44 @@ export function stripProse(
 			for (let j = startOfForm(text, i); j < text.length; j++) out[j] = text[j];
 			break;
 		}
-		for (let j = startOfForm(text, i); j < end; j++) out[j] = text[j];
+		const start = startOfForm(text, i);
+		// Closed, but still not necessarily a program (see `unreadable`). The
+		// same call as the unclosed one above, and for the same reason: whether
+		// text PARSES is the reader's business, and only what parses ever
+		// reaches the prose classifier.
+		const bad = mode === "tolerant" ? unreadable(text, start, end) : undefined;
+		if (bad !== undefined) {
+			onProse?.(bad);
+			i = end;
+			continue;
+		}
+		for (let j = start; j < end; j++) out[j] = text[j];
 		i = end;
 	}
 	return out.join("");
+}
+
+/*
+ * Does the text break off mid-form?
+ *
+ * The one unreadable reply that is not a sentence: an LLM cut off by a token
+ * limit leaves a parenthesis open, and a host that ends its agent loop on
+ * whatever ran nothing (see `AgentRepl`) would strand the task there. Every
+ * other form that will not parse is prose under `tolerant`, so that host wants
+ * this question rather than `checkSyntax`'s — which cannot tell the two apart.
+ */
+export function isTruncated(text: string): boolean {
+	let i = 0;
+	while (i < text.length) {
+		if (text[i] !== "(") {
+			i++;
+			continue;
+		}
+		const end = endOfForm(text, i);
+		if (end < 0) return true;
+		i = end;
+	}
+	return false;
 }
 
 // The 1-based line character `at` falls on, for a message about it.
@@ -1824,6 +1906,50 @@ function lineAt(text: string, at: number): number {
 	let line = 1;
 	for (let i = 0; i < at; i++) if (text[i] === "\n") line++;
 	return line;
+}
+
+/*
+ * Why the balanced form spanning [start, end) cannot be read, as the note to
+ * report the skip with — or undefined if it reads fine.
+ *
+ * Matching parentheses do not make text a program. Markdown's backticks are
+ * quasiquote sugar here, so a model writing "(including a deprecated
+ * `read_file`)" hands the reader a quasiquote whose operand is the closing
+ * parenthesis, and the whole sentence dies as `unexpected ")"`. Nothing above
+ * the reader can rescue it: `proseExtension`'s classifier is consulted once per
+ * PARSED form, and this text never becomes one.
+ *
+ * Only a parse failure counts. An EvalException the reader raises about a token
+ * it did read — a `#<…>` handle typed back — is a real mistake in real code,
+ * and saying "read as prose" about it would bury the one message that explains
+ * it.
+ */
+function unreadable(
+	text: string,
+	start: number,
+	end: number,
+): string | undefined {
+	const source = text.slice(start, end);
+	const reader = new Reader();
+	reader.push(source);
+	let failure: SyntaxException | undefined;
+	try {
+		while (!reader.isEmpty()) reader.read();
+	} catch (ex) {
+		if (ex === EndOfFile)
+			failure = new SyntaxException("unexpected end of input", reader.line);
+		else if (ex instanceof SyntaxException) failure = ex;
+		else return undefined;
+	}
+	if (failure === undefined) return undefined;
+	const line = lineAt(text, start) + failure.line - 1;
+	return `${abbreviate(source)} — ${failure.reason} on line ${line}, so this was read as prose`;
+}
+
+// Quote a fragment back to the caller without spending a screen on it.
+export function abbreviate(text: string): string {
+	const oneLine = text.replace(/\s+/g, " ");
+	return oneLine.length <= 60 ? oneLine : `${oneLine.slice(0, 57)}...`;
 }
 
 // A list of tokens, which works as a reader of Lisp expressions
@@ -1876,11 +2002,7 @@ export class Reader {
 		} catch (ex) {
 			if (ex === EndOfFile) throw EndOfFile;
 			else if (ex instanceof FormatException)
-				throw new EvalException(
-					"syntax error",
-					`${ex.message} at ${this.lineNo}`,
-					false,
-				);
+				throw new SyntaxException(ex.message, this.lineNo);
 			else throw ex;
 		}
 	}
@@ -1967,6 +2089,20 @@ export class Reader {
 				else if (t.length > 1 && t[0] === ":")
 					// Self-evaluating keyword literal, e.g. :query
 					this.token = newLispKeyword(t.slice(1));
+				// `#<…>` is how every value that cannot be read back prints —
+				// a job, a secret, a closure, a built-in. Typing one is always
+				// a retyped printout (`(await #<job load-mcp:linear 8d12…>)`),
+				// and left as an ordinary symbol it fails one step later as
+				// `void variable: #<job`, which says nothing about the real
+				// mistake. An EvalException rather than a FormatException
+				// because that is the error every layer above already renders
+				// inline and reports as a syntax error.
+				else if (t.startsWith("#<"))
+					throw new EvalException(
+						"a #<…> form is a printed handle, not something that can be read back; use the name the REPL reported the value under",
+						t,
+						false,
+					);
 				else this.token = newSym(t);
 				return;
 			}
@@ -2061,6 +2197,25 @@ export function str(
 	}
 }
 
+/*
+ * The text `(echo x...)` renders: each argument, space-separated. The newline
+ * `echo` ends on is added by the writer, not counted here — the compression
+ * extension measures this string in words and characters, and an offset that
+ * included a trailing newline would point one past the end of the value.
+ *
+ * Exported because that extension overrides `echo` to window and search the
+ * text, and an offset only means anything if both versions count the same
+ * string. Strings render raw (`quoteString` false) so a rendered document keeps
+ * its newlines instead of becoming one `\n`-escaped line; strings nested inside
+ * a list still print quoted, as `str` always does.
+ */
+export function echoText(args: List): string {
+	const parts: string[] = [];
+	for (let p = args; p !== null; p = p.cdr as List)
+		parts.push(str((p as Cell).car, false));
+	return parts.join(" ");
+}
+
 // Make a string representation of list, omitting its "(" and ")".
 function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 	if (printed === undefined) printed = [];
@@ -2122,6 +2277,11 @@ export interface RunOptions {
 	// should surface these: under `tolerant` they are the only sign that
 	// something the caller wrote was not run.
 	onProse?: (what: string) => void;
+	// Called once per top-level form that evaluated without throwing, with the
+	// form alongside the value it produced. A REPL needs the form, not just the
+	// value, to name a result after the function that computed it (see
+	// src/compression.ts).
+	onTopLevel?: (form: unknown, value: unknown) => void;
 }
 
 // Evaluate a program: every top-level form in `text`, in order, returning the
@@ -2148,6 +2308,7 @@ export function run(
 			}
 		}
 		result = evalTopLevel(interp, exp);
+		options.onTopLevel?.(exp, result);
 	}
 	return result;
 }
@@ -2228,8 +2389,6 @@ export const prelude = `
   "Return t if x is nil. Alias: null." (eq x nil))
 (defun consp (x)
   "Return t if x is a cons cell (a non-empty list)." (not (atom x)))
-(defun print (x)
-  "Print x via prin1 followed by a newline; returns an unspecified value (a REPL does not echo it, since x was already printed)." (prin1 x) (terpri))
 (defun identity (x)
   "Return x unchanged." x)
 
@@ -2469,9 +2628,7 @@ export const prelude = `
 (defmacro think (&rest body)
   "(think part...) Print reasoning as narration: each part prints literally, except a comma-unquoted part (or a ,@ splice), which is evaluated first so the trace is grounded in real values instead of guesses. Ends with a newline and returns nil -- put your actual answer in a separate expression, not inside think."
   (list 'progn
-        (list 'dolist (list 'part (list 'quasiquote body))
-              '(princ part) '(princ " "))
-        '(terpri)
+        (list 'apply 'echo (list 'quasiquote body))
         nil))
 
 --- String library ---

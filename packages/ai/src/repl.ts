@@ -90,21 +90,25 @@ export function proseFeedbackContent(feedback: string): string {
 	);
 }
 
-// Evaluate one program. A thrown error means an unexpected host error (the REPL
-// renders Lisp errors into its output rather than throwing), so reset the
-// interpreter to avoid persisting corrupt state — mirrors the pi extension.
+/*
+ * Evaluate one program.
+ *
+ * `output` is the capped text fed back to the model; `display` is the same
+ * output unbounded, for the human reading the transcript. A thrown error means
+ * an unexpected host error (the REPL renders Lisp errors into its output rather
+ * than throwing), so reset the interpreter to avoid persisting corrupt state.
+ */
 export function evalCode(
 	repl: AgentRepl,
 	code: string,
-): { output: string; error: boolean } {
+): { output: string; display: string; error: boolean } {
 	try {
-		return { output: repl.eval(code), error: false };
+		const { model, user } = repl.evalOutput(code);
+		return { output: model, display: user, error: false };
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
-		return {
-			output: `REPL error: ${msg} (interpreter was reset, definitions lost)`,
-			error: true,
-		};
+		const text = `REPL error: ${msg} (interpreter was reset, definitions lost)`;
+		return { output: text, display: text, error: true };
 	}
 }

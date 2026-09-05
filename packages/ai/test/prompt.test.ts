@@ -56,10 +56,12 @@ describe("prose around the forms", () => {
 });
 
 describe("the REPL loop protocol", () => {
-	it("says the answer is the value of the last expression", () => {
-		expect(LISP_SYSTEM_PROMPT).toMatch(
-			/answer as the VALUE of the last expression/i,
-		);
+	// The silent REPL is the rule the model cannot guess: without it, it waits
+	// for values that are never printed and answers from what it never saw.
+	it("says the REPL prints nothing and reports a name and shape instead", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/The REPL prints nothing on its own/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/`name: shape`/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/the ONE command that prints/);
 	});
 
 	it("describes the tool_result envelope results actually come back in", () => {
@@ -80,12 +82,14 @@ describe("the REPL loop protocol", () => {
 	});
 
 	// Left to rule 4b alone the model treats stopping as failure and stalls the
-	// loop with no-op forms (`(identity "Standing by.")`) addressed to a user who
-	// cannot see them, burning every step up to the cap.
-	it("bans forms that only talk to the user or keep the loop alive", () => {
+	// loop with no-op forms (`(identity "Standing by.")`), burning every step up
+	// to the cap. The distinction that has to be exact: the user DOES read what
+	// a step echoes (rendering is real work), they just cannot answer mid-loop.
+	it("bans forms that only talk, while saying echoed output is read", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(
-			/The user cannot see or reply to your intermediate steps/i,
+			/The user READS everything the REPL echoes/,
 		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/What they cannot do is reply mid-loop/);
 		expect(LISP_SYSTEM_PROMPT).toContain('(identity "Standing by.")');
 		expect(LISP_SYSTEM_PROMPT).toMatch(
 			/Every form you write must do real work/i,
@@ -252,5 +256,32 @@ describe("the language reference", () => {
 			expect(LISP_SYSTEM_PROMPT).toMatch(names(form));
 		}
 		expect(LISP_SYSTEM_PROMPT).toMatch(/\*\*Quasiquote\*\*/);
+	});
+
+	// Truncation is a REPL behaviour, not a language feature, so the closed-world
+	// rule above does not cover it — POLICY has to say it outright or the model
+	// reads a `...` line as the end of the value.
+	it("tells the model to refer to the result variable, not retype data", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/NEVER retype data the REPL produced/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/`name: shape`/);
+	});
+
+	// The two moves that make retyping unnecessary. Naming the failure it
+	// replaces ("read it off a printout") is the part that has to survive.
+	it("tells the model to extract into a name, then echo it", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/EXTRACT, THEN ECHO/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/RETURN a value/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/never read it off a printout and retype it/,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(names("grep"));
+		expect(LISP_SYSTEM_PROMPT).toMatch(names("echo"));
+	});
+
+	it("tells the model a truncated echo is not the whole output", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/Your view of echo output is capped; the user's is not/,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/page on with the offset/);
 	});
 });

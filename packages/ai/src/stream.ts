@@ -270,7 +270,7 @@ export function streamChatResponse(
 					transcript.push({ role: "assistant", content: code });
 
 					const evalStartedAt = Date.now();
-					const { output, error } = evalCode(repl, code);
+					const { output, display, error } = evalCode(repl, code);
 					steps += 1;
 					// A form-less turn ran no code, so there is no result worth
 					// showing the user (or feeding back) — it is the final answer.
@@ -292,11 +292,20 @@ export function streamChatResponse(
 						latencyMs: Date.now() - evalStartedAt,
 					});
 
+					// `content` carries the CAPPED output, because the client replays
+					// the message list as the next request's input and the model's
+					// context is rebuilt from `content` alone — uncapped text here
+					// would re-enter that context on every later turn. The full
+					// output rides in `additional_kwargs` (as reasoning does), which
+					// only the UI reads.
 					const resultContent = replResultContent(output, error);
 					wire.push({
 						type: "tool",
 						content: resultContent,
 						id: crypto.randomUUID(),
+						...(display !== output
+							? { additional_kwargs: { display } }
+							: undefined),
 					});
 					transcript.push({ role: "tool", content: resultContent });
 

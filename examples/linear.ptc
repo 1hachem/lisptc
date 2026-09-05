@@ -7,8 +7,7 @@ server. First load returns an authorization link:
   2. mcp-authorize "linear" "<code>"
   3. await load-mcp "linear" -> tools installed
 =====================================================================
-(princ "=== authorize & load ===")
-(terpri)
+(echo "=== authorize & load ===")
 
 Kick off the OAuth flow — prints an authorization URL.
 (load-mcp "linear")
@@ -18,20 +17,18 @@ mcp-authorize "linear" "<code-from-browser>"
 Then connect and install the linear/<tool> bindings.
 (await (load-mcp "linear"))
 
-(print (list-mcps))
-(print (search-tools "list issues"))
+(echo (list-mcps))
+(echo (search-tools "list issues"))
 
-(princ "=== query issues ===")
-(terpri)
+(echo "=== query issues ===")
 
 Tools are ordinary bindings called with keyword syntax.
-(linear/list_issues :query "auth bug")
+(linear/list_issues :query "context")
+(echo linear/list_issues-2)
 
-(linear/list_teams)
+(echo (linear/list_teams))
 
-(princ "=== teardown ===")
-(terpri)
+(echo "=== teardown ===")
 (unload-mcp "linear")
 
-(princ "=== done ===")
-(terpri)
+(echo "=== done ===")

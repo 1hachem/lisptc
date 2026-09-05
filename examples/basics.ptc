@@ -5,62 +5,57 @@ Run me:
   pnpm --filter @repo/interpreter exec \
     node --experimental-transform-types src/lisp.ts ../../examples/basics.ptc
 =====================================================================
-(princ "=== 1. atoms, arithmetic & big numbers ===")
-(terpri)
+(echo "=== 1. atoms, arithmetic & big numbers ===")
 
 numbers are number | bigint; arithmetic promotes automatically
-(print (+ 1 2 3 4 5))
+(echo (+ 1 2 3 4 5))
 => 15
-(print (* 6 7))
+(echo (* 6 7))
 => 42
-(print (/ 22 7))
-(print (- 10 3 2))
+(echo (/ 22 7))
+(echo (- 10 3 2))
 => 5
 arithmetic promotes to bigint automatically — exact, no overflow
-(print (* 1000000000000 1000000000000))
+(echo (* 1000000000000 1000000000000))
 => 1000000000000000000000000 bigint, exact
-(print (< 1 2))
+(echo (< 1 2))
 => t
-(princ "=== 2. lists & cons cells ===")
-(terpri)
+(echo "=== 2. lists & cons cells ===")
 
 (setq xs (list 1 2 3 4 5))
-(print xs)
-(print (car xs))
+(echo xs)
+(echo (car xs))
 => 1
-(print (cdr xs))
+(echo (cdr xs))
 => 2 3 4 5
-(print (cadr xs))
+(echo (cadr xs))
 => 2
-(print (append xs (list 6 7)))
+(echo (append xs (list 6 7)))
 => 1 2 3 4 5 6 7
-(print (nreverse (list 1 2 3)))
+(echo (nreverse (list 1 2 3)))
 => 3 2 1
-(princ "=== 3. control flow: cond / when / let / while / dolist ===")
-(terpri)
+(echo "=== 3. control flow: cond / when / let / while / dolist ===")
 
 (defun classify (n) (cond ((< n 0) 'negative) ((= n 0) 'zero) (t 'positive)))
-(print (mapcar classify (list -3 0 7)))
+(echo (mapcar classify (list -3 0 7)))
 => negative zero positive
-(let ((a 3) (b 4)) (print (+ (* a a) (* b b))))
+(let ((a 3) (b 4)) (echo (+ (* a a) (* b b))))
 => 25
 imperative loop with mutation
 (setq sum 0)
 (dolist (x (list 10 20 30)) (setq sum (+ sum x)))
-(print sum)
+(echo sum)
 => 60
 (setq i 0)
 (setq acc nil)
 (while (< i 5) (setq acc (cons i acc)) (setq i (+ i 1)))
-(print (nreverse acc))
+(echo (nreverse acc))
 => 0 1 2 3 4
-(princ "=== 4. association lists (symbolic data) ===")
-(terpri)
+(echo "=== 4. association lists (symbolic data) ===")
 
 (setq db '((alice .30) (bob .25) (carol .35)))
-(print (assoc 'bob db))
+(echo (assoc 'bob db))
 => bob . 25
-(print (cdr (assoc 'carol db)))
+(echo (cdr (assoc 'carol db)))
 => 35
-(princ "=== done ===")
-(terpri)
+(echo "=== done ===")

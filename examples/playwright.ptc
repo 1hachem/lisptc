@@ -5,29 +5,25 @@ The `playwright` server is bundled in the toolkit stdio, no auth.
 It can navigate, click, type, snapshot the accessibility tree,
 screenshot, and read network requests.
 =====================================================================
-(princ "=== load the browser server ===")
-(terpri)
+(echo "=== load the browser server ===")
 
 Boots @playwright/mcp and installs the playwright/<tool> bindings.
 (await (load-mcp "playwright"))
 
 See what it exposes.
-(print (list-tools "playwright"))
-(print (search-tools "navigate"))
+(echo (list-tools "playwright"))
+(echo (search-tools "navigate"))
 
-(princ "=== drive a page ===")
-(terpri)
+(echo "=== drive a page ===")
 
 Navigate, then snapshot the accessibility tree of the loaded page.
 (playwright/browser_navigate :url "https://hyko.ai")
-(princ (playwright/browser_snapshot))
-(terpri)
+(echo (playwright/browser_snapshot))
 
 Navigate somewhere else.
 (playwright/browser_navigate :url "https://yourscrib.ai")
 
-(princ "=== handle a failing tool call ===")
-(terpri)
+(echo "=== handle a failing tool call ===")
 
 A domain that can't resolve makes the tool call signal an error;
 `try`/`catch` binds the handler variable to that error's value instead
@@ -35,11 +31,9 @@ of letting it propagate.
 (try
   (playwright/browser_navigate :url "https://this-domain-does-not-exist-lisptc.invalid")
   (catch (e)
-    (princ "navigation failed: ") (princ e) (terpri)))
+    (echo "navigation failed: ") (echo e) (echo)))
 
-(princ "=== teardown ===")
-(terpri)
+(echo "=== teardown ===")
 (unload-mcp "playwright")
 
-(princ "=== done ===")
-(terpri)
+(echo "=== done ===")

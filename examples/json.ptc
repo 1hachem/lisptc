@@ -1,0 +1,260 @@
+=====================================================================
+lisptc — working with JSON data
+
+There is no JSON type. JSON is converted at the edge — an MCP tool
+result arrives already as lisptc data, whether the server sent
+structured output or a JSON document in a text block — so "working
+with JSON" is just working with alists and lists:
+
+  JSON object    ->  alist: a list of pairs with STRING keys
+  JSON array     ->  proper list
+  string, number ->  string, number
+  true           ->  t
+  false, null    ->  nil
+
+The reverse conversion happens when a value is serialized into an
+outgoing MCP call: an alist becomes an object, any other list becomes
+an array. See section 9. A string of JSON that reaches you some other
+way is what json-parse is for; there is no json-stringify.
+
+Run me:
+  pnpm repl examples/json.ptc
+=====================================================================
+(echo "=== 1. what a JSON document looks like as data ===")
+
+A quoted literal is the clearest way to see the shape. This is the
+same structure a tool call would hand you.
+(setq issue '(("id" . "a1f")
+    ("identifier" . "ENG-12")
+    ("title" . "Auth token refresh fails")
+    ("open" . t)
+    ("state" . (("name" . "open") ("type" . "unstarted")))
+    ("labels" . ("auth" "backend"))
+    ("assignee" . (("name" . "Ada") ("email" . "ada@x.dev")))))
+The REPL reports its shape, not its contents. Echo it to see it.
+(echo issue)
+
+(echo "=== 2. reading one field ===")
+
+assoc finds the pair; cdr takes the value out of it.
+(echo (assoc "title" issue))
+=> the whole pair, key included
+(echo (cdr (assoc "title" issue)))
+=> Auth token refresh fails
+A missing key is nil, and cdr of nil is nil — so a lookup that fails
+is nil rather than an error. Beware: a key whose value is JSON null
+or false is ALSO nil, so nil does not tell you which happened.
+(echo (cdr (assoc "nope" issue)))
+=> nil
+assq is the same thing by eq instead of equal — use it for symbol or
+keyword keys, not for the string keys JSON gives you.
+
+(echo "=== 3. keys and values of an object ===")
+
+There is no keys built-in: an object is a list of pairs, so the keys
+are its cars and the values are its cdrs.
+(defun keys (obj) (mapcar car obj))
+(defun vals (obj) (mapcar cdr obj))
+(echo (keys issue))
+=> id identifier title open state labels assignee
+(echo (keys (cdr (assoc "assignee" issue))))
+=> name email
+(echo (vals (cdr (assoc "state" issue))))
+=> open unstarted
+Key order is the order the JSON had — the conversion preserves it.
+(echo (length (keys issue)))
+=> 7
+
+(echo "=== 4. sub-keys: reaching into nested objects ===")
+
+Nesting is just an alist whose value is another alist, so the lookups
+chain.
+(echo (cdr (assoc "name" (cdr (assoc "state" issue)))))
+=> open
+That gets unreadable fast, so define a path getter once. There is no
+deep-get in the prelude.
+(defun get-in (obj path)
+  "Follow a list of string keys into nested objects; nil if absent."
+  (if (null path)
+    obj
+    (get-in (cdr (assoc (car path) obj)) (cdr path))))
+(echo (get-in issue '("state" "name")))
+=> open
+(echo (get-in issue '("assignee" "email")))
+=> ada@x.dev
+A path that runs off the document is nil, not an error.
+(echo (get-in issue '("assignee" "manager" "email")))
+=> nil
+
+(echo "=== 5. every key at every depth ===")
+
+Walk the document: at an object, take its keys and recurse into each
+value; at an array, recurse into each element.
+(defun alistp (x)
+  "Return t if x is a non-empty list of pairs with string keys."
+  (and (consp x)
+    (let ((ok t))
+      (dolist (e x)
+        (unless (and (consp e) (stringp (car e))) (setq ok nil)))
+      ok)))
+
+(defun deep-keys (x)
+  "Every key in x and in everything nested inside it, in order."
+  (let ((out nil))
+    (cond ((alistp x)
+        (dolist (pair x)
+          (setq out (append out
+              (list (car pair))
+              (deep-keys (cdr pair))))))
+      ((consp x)
+        (dolist (item x) (setq out (append out (deep-keys item))))))
+    out))
+(echo (deep-keys issue))
+=> the outer keys plus name/type from state and name/email from assignee
+Repeats are kept, since a key can appear at several depths. Dedupe
+with member if you want the set.
+(defun distinct (xs)
+  "Drop later duplicates, keeping first appearance order."
+  (let ((out nil))
+    (dolist (x xs)
+      (unless (member x out) (setq out (append out (list x)))))
+    out))
+(echo (distinct (deep-keys issue)))
+
+(echo "=== 6. looping over an array of objects ===")
+
+An array of objects is a list of alists — the shape a list-style tool
+result usually has.
+(setq issues (list issue
+    '(("id" . "b2e")
+      ("identifier" . "ENG-31")
+      ("title" . "OAuth callback drops the state param")
+      ("open" . t)
+      ("state" . (("name" . "in progress") ("type" . "started")))
+      ("labels" . ("auth" "frontend"))
+      ("assignee" . (("name" . "Grace") ("email" . "grace@x.dev"))))
+    '(("id" . "c3d")
+      ("identifier" . "ENG-47")
+      ("title" . "Rotate the signing key")
+      ("open" . nil)
+      ("state" . (("name" . "done") ("type" . "completed")))
+      ("labels" . ("security"))
+      ("assignee" . nil))))
+You never have to print it to work with it: length and every accessor
+below read the whole value whether or not you have seen any of it.
+(echo (length issues))
+=> 3
+
+mapcar to pull one field out of every element.
+(echo (mapcar (lambda (i) (cdr (assoc "identifier" i))) issues))
+=> ENG-12 ENG-31 ENG-47
+Or a path, for a field one level down. A missing assignee is nil.
+(echo (mapcar (lambda (i) (get-in i '("assignee" "name"))) issues))
+=> Ada Grace nil
+
+dolist when you want a side effect per element rather than a new list.
+(dolist (i issues)
+  (echo (concat (cdr (assoc "identifier" i))
+      " -> "
+      (get-in i '("state" "name")))))
+
+Render a table for the user: one function for a row, string-join for
+the whole thing, one echo at the end.
+(defun row (i)
+  (concat "| " (cdr (assoc "identifier" i))
+    " | " (cdr (assoc "title" i))
+    " | " (get-in i '("state" "name")) " |"))
+(echo (string-join (cons "| id | title | state |"
+      (cons "|----|-------|-------|"
+        (mapcar row issues)))
+    "\n"))
+
+(echo "=== 7. selecting a subset ===")
+
+grep RETURNS the matching elements of a list, so it is the filter you
+already have. It matches against each element's printed form.
+(echo (mapcar (lambda (i) (cdr (assoc "identifier" i)))
+    (grep issues "auth")))
+=> ENG-12 ENG-31, the two whose text mentions auth
+head and tail take elements, so they page an array.
+(echo (mapcar (lambda (i) (cdr (assoc "identifier" i))) (head issues 2)))
+=> ENG-12 ENG-31
+
+For a predicate on a field rather than on text, write the filter —
+there is no filter or reduce in the prelude.
+(defun where (pred xs)
+  "The elements of xs for which pred returns non-nil."
+  (let ((out nil))
+    (dolist (x xs)
+      (when (pred x) (setq out (append out (list x)))))
+    out))
+(echo (mapcar (lambda (i) (cdr (assoc "identifier" i)))
+    (where (lambda (i) (equal "done" (get-in i '("state" "name"))))
+      issues)))
+=> ENG-47
+Counting is the same shape with a number instead of a list.
+(defun count-where (pred xs)
+  (let ((n 0))
+    (dolist (x xs) (when (pred x) (setq n (+ n 1))))
+    n))
+(echo (count-where (lambda (i) (cdr (assoc "open" i))) issues))
+=> 2
+
+Arrays inside an object are ordinary lists, so the same tools work on
+them. Collect every label used, without repeats.
+(echo (distinct (apply append (mapcar (lambda (i) (cdr (assoc "labels" i)))
+        issues))))
+=> auth backend frontend security
+
+(echo "=== 8. reading a document too big to print ===")
+
+Everything above fits on screen. A real tool result usually does not,
+and echoing it wastes context. Prefer computing over reading:
+  length, keys, mapcar, assoc and get-in all work on the whole value
+  whether or not you have ever seen it.
+When you do need to look, narrow first. :match prints only the regions
+that match, each tagged with its word offset.
+(echo issues :match "state" :context 4 :max 3)
+And :offset with :length pages through, continuing from an offset the
+REPL just gave you.
+(echo issues :offset 0 :length 12)
+
+(echo "=== 9. building JSON to send back out ===")
+
+Nothing to serialize by hand: build the alist and pass it to a tool
+call. An alist becomes a JSON object, any other list becomes an array,
+t becomes true, nil becomes null.
+(setq payload (list (cons "title" "Rotate the signing key")
+    (cons "labels" (list "security" "auth"))
+    (cons "priority" 2)
+    (cons "assignee" (list (cons "email" "ada@x.dev")))))
+(echo payload)
+That value, handed to a tool as a keyword argument, arrives at the
+other end as a JSON object with a nested object and an array inside
+it. Keyword arguments at the call site are converted the same way, so
+a call written with :title and :labels needs no JSON step of its own.
+
+One asymmetry to remember: nil on the way out is null, and both false
+and null on the way in are nil. A round trip turns false into null.
+(echo (cdr (assoc "assignee" (car (cdr (cdr issues))))))
+=> nil, which was JSON null here — the same value a false would give
+
+(echo "=== 10. a JSON string is not JSON data ===")
+
+If a tool hands you a STRING that happens to contain JSON, none of
+the above applies: it is text until something parses it, and there is
+no parser. Pull what you need out with grep, which returns the
+matches, or with the string library — substring, string-index,
+string-split, string-join.
+(setq blob "{\"id\":\"a1f\",\"title\":\"Auth token refresh fails\"}")
+(echo (grep blob "\"([a-z]+)\":" :group 1))
+=> id title, the keys, as a list of strings
+(echo (car (grep blob "\"title\":\"([^\"]*)\"" :group 1)))
+=> Auth token refresh fails
+
+Every helper this file defined — keys, vals, get-in, alistp,
+deep-keys, distinct, where, count-where — is an ordinary defun, not a
+built-in. The prelude ships none of them, so copy the ones you want
+into your own session and build on them.
+
+(echo "=== done ===")
