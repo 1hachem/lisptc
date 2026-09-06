@@ -124,3 +124,16 @@ Tests live in `test/`, grouped by language feature (`reader`, `numbers`, `lists`
 MCP tests exercise the real `worker_threads` broker (no SDK mock), driving stdio fixtures spawned as `node` subprocesses: `test/fixture-mcp-server.ts` (a one-tool `echo` server, with an optional `LISPTC_FIXTURE_DELAY_MS` startup delay so async-job tests can observe `:pending`) and `test/fixture-empty-mcp-server.ts` (handshakes but exposes zero tools, to test that a tool-less connect is a load failure).
 
 Other workspaces have their own suites: `packages/repl/test` (front-ends, compaction at the REPL boundary, session server, secret handling), `packages/ai/test` (prompt/policy surface, telemetry redaction), `apps/lsp/test` (diagnostics, doc cache).
+
+
+## Writing Style
+
+When writing any prose, documentation, commit messages, or code comments:
+
+- Do not use "It's not that X, it's that Y" constructions. Rewrite as a direct statement.
+- Do not open responses with affirmations ("Certainly!", "Of course!", "Absolutely!").
+- Do not use "It's worth noting", "it's important to mention", or similar throat-clearing.
+- Do not narrate your process ("Let me walk you through..."). Just do the thing.
+- Prefer active voice over passive voice.
+- Prefer short sentences. Break compound thoughts into separate sentences.
+- No em dashes. Use a comma, colon, or separate sentence instead.
