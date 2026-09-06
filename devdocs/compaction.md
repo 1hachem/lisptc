@@ -1,4 +1,4 @@
-# Context compression
+# Context compaction
 
 The REPL is an LLM's only interface, so everything it prints is spent context.
 Nothing bounded that: `MemoryRepl.eval` appended `str(value)` verbatim and
@@ -21,34 +21,54 @@ So the REPL prints **nothing** on its own. Three mechanisms:
   mis-copy. Small values (≤ `INLINE_WORDS`) are reported as themselves, because
   below that a shape costs more to read than the value it hides.
 - **`echo` is the only thing that writes**, and what the *model* sees of it is
-  capped per step. `head`/`tail`/`grep` do not print at all: they return a
-  value, which is therefore named like any other result. That is the pattern the
-  whole design is for — extract into a name, then echo a rendering of it.
+  capped per step. `grep` does not print at all: it returns a value, which is
+  therefore named like any other result. That is the pattern the whole design is
+  for — extract into a name, then echo a rendering of it.
+- **A slice is the exception**, because it is asked for in order to be read: a
+  top-level `head`/`tail` form has its slice *printed* in place of a report,
+  and mints no name. Describing one back (`head-1: list of 5 items`) told the
+  model only what it already knew and cost it a second step on the `(echo
+  head-1)` it had meant all along. `result` decides this from the form, not the
+  built-in (see `isSliceForm`), so a slice nested in another form — `(mapcar f
+  (head x 5))`, `(setq top (head x 5))` — prints nothing and is just a value.
 
 Describing instead of showing is only safe *because* of the naming: nothing is
 lost by not printing it.
 
-Everything lives in `packages/interpreter/src/compression.ts`, an **opt-in
+Everything lives in `packages/interpreter/src/compaction.ts`, an **opt-in
 extension** like secrets and MCP.
 
 ## The pieces
 
-- `Compressor` — the naming counters for one interpreter, the current step's
+- `Compactor` — the naming counters for one interpreter, the current step's
   echo budget, plus every render entry point: `result` (a top-level result's
   report line), `window` / `search` (what `echo` writes), `error` (a rendered
   `EvalException`).
-- `beginStep` / `takeEcho` — the step boundary. A host calls `beginStep` before
-  an eval and `takeEcho` after it for the model's copy of the output.
+- `beginStep` / `endStep` — the step boundary. A host calls `beginStep` before
+  an eval and `endStep` after it. The output itself does not come back from
+  either: both copies go out on the interpreter's channels as they are produced
+  (`user` uncapped, `model` capped), and `endStep` returns only the closing note
+  about what the budget hid — the one thing that cannot be known until the step
+  is over. `beginStep` is also what turns reporting on at all, so a bare `run`
+  (the prelude, a `.ptc` script, a test) gets no report lines.
 - `describe` — value → shape line. Callables report their kind (`function`,
   `macro`) rather than a closure's internals; a list of alists reports its keys;
   a blob with no whitespace is measured in characters, since its word count is 1
   however big it is.
-- `compressionExtension(compressor?)` — installs `head` / `tail` / `grep`, and
+- `splitKeywordArgs(args, ECHO_OPTIONS)` — values from trailing options. A
+  keyword only reads as an option when it carries a value after it (so a
+  misspelled `:ofset 40` is an error, not two printed words) or when it is one
+  of `ECHO_OPTIONS` left without its value; a trailing keyword is otherwise
+  data, which is what makes `(echo (job-status job))` print `:pending`.
+- `print` — writes a value the way `echo` does (human's copy out through the
+  writer, model's copy charged to the step's budget). What `result` calls for a
+  top-level slice.
+- `compactionExtension(compactor?)` — installs `head` / `tail` / `grep`, and
   **overrides** the core `echo` with the windowed, searchable version (the same
   `interp.def` idiom `secretsExtension` uses on the string primitives, so an
   interpreter without this extension still has a plain `echo`).
 
-`Compressor` holds **no values**. A named result is an ordinary global, which is
+`Compactor` holds **no values**. A named result is an ordinary global, which is
 what lets `echo`/`grep` take a *value* rather than a handle — so they work just
 as well on a `let` binding or anything the agent named itself, and `dump`/`doc`
 keep working with no special cases.
@@ -71,21 +91,21 @@ exactly the bug the earlier per-eval re-window had.
 
 The budget is **per step, not per call**: an echo loop floods the context just as
 effectively as one huge echo. When a call contributes nothing at all to the
-model's copy, `takeEcho` closes with a note saying how many words it did not
+model's copy, `endStep` returns a note saying how many words it did not
 see. A call that was merely *shortened* needs no such note — its own `...` line
 already says how much is below.
 
 ## Consuming from a host
 
 Unlike `secretsExtension`, whose store is host configuration that must survive a
-`reset()`, the host creates a **new `Compressor` per interpreter**: the counters
+`reset()`, the host creates a **new `Compactor` per interpreter**: the counters
 have to die with the globals they named, or a reset leaves the count climbing
 past names that are no longer bound.
 
 ```ts
 private freshInterp(): Interp {
-  this.compressor = new Compressor(this.wordLimit);
-  return new Interp({ extensions: [..., compressionExtension(this.compressor)] });
+  this.compactor = new Compactor(this.wordLimit);
+  return new Interp({ extensions: [..., compactionExtension(this.compactor)] });
 }
 ```
 
@@ -129,23 +149,34 @@ for *keeping* what matched, and the summary line says so.
 
 ## Naming rules
 
-In order, `Compressor.result` and `nameFor`:
+In order, `Compactor.result` and `nameFor`:
 
 1. `Unspecified` — what `echo` returns — reports nothing at all. The step has
    already said what it had to say; a line on top would only announce that
    printing happened.
-2. `nil` and `t` are reported plainly. They carry nothing a later step could
+2. A top-level `head`/`tail` form reports nothing either — its slice is
+   printed instead (see `isSliceForm`), and no name is minted for it: the
+   value it was sliced out of already has one.
+3. A **job** is reported by name plus what the name is for — `load-mcp-1:
+   load-mcp:linear running in the background … (await load-mcp-1) …` — and its
+   handle (`#<job …>`) is never shown, in this line or in `describe`. The
+   handle is not readable source, and an agent shown one types it back:
+   `(await #<job load-mcp:linear 8d12…>)` was four negative survey reports in
+   two days. The line also says that nothing is owed, since a job applies its
+   own result when it settles. Recognised by shape (`jobLabel`), because
+   compaction may not import the jobs layer.
+4. `nil` and `t` are reported plainly. They carry nothing a later step could
    refer to, and every side-effecting loop returns `nil`; naming those would
    bury the results that matter under `dotimes-1: nil`.
-3. A value that is a symbol already bound as a global — what `defun`/`defmacro`
+5. A value that is a symbol already bound as a global — what `defun`/`defmacro`
    return — is reported under that name, describing what it now holds
    (`f: function`).
-4. A `setq` reports the symbol **it** assigned, read off the form (the last one,
+6. A `setq` reports the symbol **it** assigned, read off the form (the last one,
    for `(setq a 1 b 2)`). Reverse lookup alone would only find it for a `Cell`
    or a string, not for a number.
-5. A value an existing global already holds reuses that name — so a result the
+7. A value an existing global already holds reuses that name — so a result the
    agent bound itself is not given a second one.
-6. Otherwise the head symbol of the form plus a per-name counter, skipping any
+8. Otherwise the head symbol of the form plus a per-name counter, skipping any
    name already taken so an agent's own `foo-1` is never clobbered. A form with
    no symbol at its head (`((lambda …) 1)`) becomes `result-N`.
 
@@ -182,11 +213,12 @@ newline would point one character past the end of the value — enough to make t
 Half the feature is the prompt: a model that is not told waits for values it
 will never be shown, and keeps retyping data it could have named. `SKILL.md` §5
 lists the built-ins — `echo` under Output, `head`/`tail`/`grep` under Extracting
-— and §9 explains the silence, the report line, and the extract-then-echo
-pattern with a worked example of each failure. That is the ONLY place the
-contract is written: POLICY in `packages/ai/src/prompts/lisp.ts` keeps only what
-the reference cannot tell the model, namely rule 6 — the user *does* read what a
-step echoes, so rendering for them is real work even though they cannot reply.
+(where a bare slice's printing is spelled out) — and §9 explains the silence,
+the report line, and the extract-then-echo pattern with a worked example of each
+failure. That is the ONLY place the contract is written: POLICY in
+`packages/ai/src/prompts/lisp.ts` keeps only what the reference cannot tell the
+model, namely the rule that the user *does* read what a step echoes, so
+rendering for them is real work even though they cannot reply.
 `test/prose-surfaces.test.ts` pins the reference's wording and
 `packages/ai/test/prompt.test.ts` pins POLICY's, so neither can silently
 regress.

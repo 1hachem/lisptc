@@ -1,12 +1,55 @@
 import { describe, expect, it } from "vitest";
 import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
-import { nodeToJson, UiSurface, type UiValue, uiExtension } from "../src/ui.ts";
+import {
+	joinMessages,
+	nodeToJson,
+	UI,
+	type UiEvent,
+	type UiNode,
+	UiSurface,
+	type UiValue,
+	uiExtension,
+} from "../src/ui.ts";
 
-function fresh(): { interp: Interp; surface: UiSurface } {
+/*
+ * What the extension drew and said, off its channel.
+ *
+ * The surface no longer holds either — both go out on `ui` as they happen (a
+ * host collects them per step, see `MemoryRepl.capture`). This is that host,
+ * reduced to what the tests assert on: the last view drawn, and the messages
+ * joined the way one step's sends are.
+ */
+function collector(interp: Interp) {
+	let view: UiNode | undefined;
+	let messages: string[] = [];
+	interp.channels.on(UI, (d) => {
+		const event = d.value as UiEvent;
+		if (event.kind === "view") view = event.node;
+		else messages.push(event.text);
+	});
+	return {
+		takeView(): UiNode | undefined {
+			const v = view;
+			view = undefined;
+			return v;
+		},
+		takeMessage(): string | undefined {
+			const m = joinMessages(messages);
+			messages = [];
+			return m;
+		},
+	};
+}
+
+function fresh(): {
+	interp: Interp;
+	surface: UiSurface;
+	ui: ReturnType<typeof collector>;
+} {
 	const surface = new UiSurface();
 	const interp = new Interp({ extensions: [uiExtension(surface)] });
 	run(interp, prelude);
-	return { interp, surface };
+	return { interp, surface, ui: collector(interp) };
 }
 
 // The tree as the frontend receives it — the only shape any of this is
@@ -15,18 +58,19 @@ function render(code: string): {
 	view: UiValue | undefined;
 	surface: UiSurface;
 	interp: Interp;
+	ui: ReturnType<typeof collector>;
 } {
-	const { interp, surface } = fresh();
+	const { interp, surface, ui } = fresh();
 	run(interp, code);
-	const node = surface.takeView();
-	return { view: node ? nodeToJson(node) : undefined, surface, interp };
+	const node = ui.takeView();
+	return { view: node ? nodeToJson(node) : undefined, surface, interp, ui };
 }
 
 describe("building a view", () => {
 	it("renders nothing until ui/render is called", () => {
-		const { interp, surface } = fresh();
+		const { interp, ui } = fresh();
 		run(interp, '(ui/stack (ui/text "hi"))');
-		expect(surface.takeView()).toBeUndefined();
+		expect(ui.takeView()).toBeUndefined();
 	});
 
 	it("serialises a tree of tags, props and children", () => {
@@ -65,10 +109,10 @@ describe("building a view", () => {
 	});
 
 	it("takeView reads and clears, so a later step does not redraw it", () => {
-		const { interp, surface } = fresh();
+		const { interp, ui } = fresh();
 		run(interp, '(ui/render (ui/text "once"))');
-		expect(surface.takeView()).toBeDefined();
-		expect(surface.takeView()).toBeUndefined();
+		expect(ui.takeView()).toBeDefined();
+		expect(ui.takeView()).toBeUndefined();
 	});
 
 	it("refuses to render anything that is not a widget", () => {
@@ -239,14 +283,14 @@ describe("actions", () => {
 	});
 
 	it("replaces the view with whatever the handler rendered", () => {
-		const { surface } = render(`
+		const { surface, ui } = render(`
 			(setq n 0)
 			(defun panel () (ui/stack (ui/text (string n))
 				(ui/button "+1" (lambda () (setq n (+ n 1)) (ui/render (panel))))))
 			(ui/render (panel))
 		`);
 		surface.invoke("a1", {});
-		expect(nodeToJson(surface.takeView() as never)).toMatchObject({
+		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
 			children: [{ tag: "text", props: { text: "1" } }, { tag: "button" }],
 		});
 	});
@@ -270,12 +314,12 @@ describe("actions", () => {
 	});
 
 	it("runs an :on-change against the live session", () => {
-		const { surface } = render(`
+		const { surface, ui } = render(`
 			(ui/render (ui/select '("7" "30") :name "d"
 				:on-change (lambda (values) (ui/render (ui/text (cdr (assoc "d" values)))))))
 		`);
 		surface.invoke("a1", { d: "30" });
-		expect(nodeToJson(surface.takeView() as never)).toMatchObject({
+		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
 			props: { text: "30" },
 		});
 	});
@@ -329,61 +373,61 @@ describe("actions", () => {
 
 describe("handing a turn back to the agent", () => {
 	it("carries a handler's message out, joining the arguments like echo", () => {
-		const { surface } = render(`
+		const { surface, ui } = render(`
 			(ui/render (ui/form (lambda (values) (ui/send "search for" (cdr (assoc "q" values))))
 				(ui/input :name "q")))
 		`);
 		surface.invoke("a1", { q: "auth" });
-		expect(surface.takeMessage()).toBe("search for auth");
+		expect(ui.takeMessage()).toBe("search for auth");
 	});
 
 	it("reads and clears, so a message is delivered once", () => {
-		const { surface } = render(
+		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "go"))))',
 		);
 		surface.invoke("a1", {});
-		expect(surface.takeMessage()).toBe("go");
-		expect(surface.takeMessage()).toBeUndefined();
+		expect(ui.takeMessage()).toBe("go");
+		expect(ui.takeMessage()).toBeUndefined();
 	});
 
 	// One click is one thing the user did, so it becomes one turn.
 	it("joins several sends in a handler into a single message", () => {
-		const { surface } = render(
+		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "first") (ui/send "second"))))',
 		);
 		surface.invoke("a1", {});
-		expect(surface.takeMessage()).toBe("first\n\nsecond");
+		expect(ui.takeMessage()).toBe("first\n\nsecond");
 	});
 
 	it("lets a handler render and send in the same click", () => {
-		const { surface } = render(`
+		const { surface, ui } = render(`
 			(ui/render (ui/button "go" (lambda () (ui/render (ui/text "working…")) (ui/send "do it"))))
 		`);
 		surface.invoke("a1", {});
-		expect(nodeToJson(surface.takeView() as never)).toMatchObject({
+		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
 			props: { text: "working…" },
 		});
-		expect(surface.takeMessage()).toBe("do it");
+		expect(ui.takeMessage()).toBe("do it");
 	});
 
 	// A sent message becomes a user turn, so it stays in the model's context on
 	// every later turn — the one place a runaway handler would keep costing.
 	it("caps a message rather than letting a handler post an essay", () => {
-		const { surface } = render(`
+		const { surface, ui } = render(`
 			(defun wide (n) (let ((s "")) (dotimes (i n) (setq s (concat s "abcdefghij"))) s))
 			(ui/render (ui/button "go" (lambda () (ui/send (wide 600)))))
 		`);
 		surface.invoke("a1", {});
-		const message = surface.takeMessage() ?? "";
+		const message = ui.takeMessage() ?? "";
 		expect(message.length).toBeLessThan(4100);
 		expect(message).toMatch(/message truncated/);
 	});
 
 	it("reports no message for a click that sent nothing", () => {
-		const { surface } = render(
+		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/render (ui/text "x")))))',
 		);
 		surface.invoke("a1", {});
-		expect(surface.takeMessage()).toBeUndefined();
+		expect(ui.takeMessage()).toBeUndefined();
 	});
 });

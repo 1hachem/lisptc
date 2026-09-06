@@ -1,10 +1,16 @@
 //TODO: check if langchain has builtin functions to support these helpers
 // for sure they have a funtion for use-stream since its a native
-import { nodeToJson } from "@repo/interpreter/ui.ts";
-import { type AgentConfig, type AgentMessage, streamAgent } from "./agent.ts";
+import { nodeToJson } from "@repo/interpreter/ui";
+import {
+	type AgentConfig,
+	type AgentMessage,
+	streamAgent,
+	type TokenUsage,
+} from "./agent.ts";
 import { MAX_STEPS } from "./prompts/lisp.ts";
 import {
 	evalCode,
+	proseFeedbackContent,
 	replResultContent,
 	snapshotConversation,
 	stripFences,
@@ -99,8 +105,8 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
  *   2. evaluates that program against a persistent `AgentRepl`,
  *   3. emits the REPL result as a `tool` message and feeds it back as the next
  *      turn's input,
- * repeating until the model answers in form-less prose (see `AgentRepl`) or
- * `MAX_STEPS` is reached. That final prose turn is the answer to the user, so it
+ * repeating until the model answers in prose that runs nothing (see `AgentRepl`)
+ * or `MAX_STEPS` is reached. That final prose turn is the answer to the user, so it
  * is streamed like any other assistant turn but produces no REPL result. Each step
  * publishes an authoritative `values` event so the client reconciles the full
  * message list. Returns a standard SSE `Response` any web server (Hono) returns.
@@ -187,14 +193,29 @@ export function streamChatResponse(
 				const repl = getThreadRepl(threadId);
 				const transcript = toTranscript(input);
 
+				// A previous turn ended on an answer the REPL read as prose. Its
+				// notes were withheld then (see `AgentRepl.eval`) and ride along
+				// with this user message, so the model corrects itself without
+				// having been given a turn to say so. Deliberately not pushed to
+				// `wire`: it is a note to the model, not a message to the user,
+				// and it should not come back on the next replayed transcript.
+				const withheld = repl.takeProseFeedback();
+				if (withheld)
+					transcript.push({
+						role: "tool",
+						content: proseFeedbackContent(withheld),
+					});
+
 				while (!abort.signal.aborted) {
 					// Refresh the read-only conversation globals so each step sees the
 					// current transcript, including prior REPL results.
 					repl.setConversationVars(snapshotConversation(transcript));
 
 					const aiId = crypto.randomUUID();
+					const stepStartedAt = Date.now();
 					let full = "";
 					let reasoning = "";
+					let usage: TokenUsage | undefined;
 					let disconnected = false;
 					// Reasoning rides in `additional_kwargs.reasoning_content`; the client's
 					// MessageTupleManager concatenates additional_kwargs across chunks (via
@@ -205,6 +226,12 @@ export function streamChatResponse(
 						tracedConfig,
 						{ signal: abort.signal },
 					)) {
+						// The accounting the backend appends once the completion is
+						// done: nothing to stream, and it supersedes any earlier count.
+						if (delta.usage) {
+							usage = delta.usage;
+							continue;
+						}
 						const chunk: Record<string, unknown> = { type: "ai", id: aiId };
 						if (delta.reasoning) {
 							reasoning += delta.reasoning;
@@ -224,13 +251,35 @@ export function streamChatResponse(
 					const code = stripFences(full);
 					if (code === "") break;
 
+					// What this one model call cost. It rides along for the UI to show
+					// under the message and, like `reasoning_content`, never reaches the
+					// model — whose context is rebuilt from `content` alone.
+					//
+					// Deliberately per-call and never added up across the loop: a step's
+					// input is the whole conversation as it stood for that call, so each
+					// step's count already contains the ones before it.
+					const meta: Record<string, unknown> = {
+						at: new Date().toISOString(),
+						durationMs: Date.now() - stepStartedAt,
+						...(usage
+							? {
+									inputTokens: usage.input,
+									outputTokens: usage.output,
+									...(usage.cachedInput !== undefined
+										? { cachedInputTokens: usage.cachedInput }
+										: {}),
+								}
+							: {}),
+					};
 					const finalAi: Record<string, unknown> = {
 						type: "ai",
 						content: code,
 						id: aiId,
+						additional_kwargs: {
+							...(reasoning ? { reasoning_content: reasoning } : {}),
+							meta,
+						},
 					};
-					if (reasoning)
-						finalAi.additional_kwargs = { reasoning_content: reasoning };
 					wire.push(finalAi);
 					transcript.push({ role: "assistant", content: code });
 
@@ -242,6 +291,10 @@ export function streamChatResponse(
 					if (repl.takeFinished()) {
 						answer = code;
 						halted = true;
+						// How many model calls it took to get here. The one count that is
+						// genuinely the whole turn's rather than this call's, so it hangs
+						// off the message the reader ends on.
+						meta.steps = steps;
 						write(sse("values", { messages: wire }));
 						break;
 					}

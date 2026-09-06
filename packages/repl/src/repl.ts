@@ -15,12 +15,13 @@
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
+import { MODEL, USER } from "@repo/interpreter/channels";
 import {
 	type Bounded,
-	Compressor,
-	compressionExtension,
+	Compactor,
+	compactionExtension,
 	MAX_WORDS,
-} from "@repo/interpreter/compression.ts";
+} from "@repo/interpreter/compaction";
 import {
 	Cell,
 	EndOfFile,
@@ -30,20 +31,27 @@ import {
 	newSym,
 	prelude,
 	run,
-	setWriter,
 	stripProse,
-} from "@repo/interpreter/lisp.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
+} from "@repo/interpreter/lisp";
+import { mcpExtension } from "@repo/interpreter/mcp";
+import { isTruncated, proseExtension } from "@repo/interpreter/prose";
 import {
 	EnvSecretsStore,
 	type SecretsStore,
 	secretsExtension,
-} from "@repo/interpreter/secrets.ts";
-import { type UiNode, UiSurface, uiExtension } from "@repo/interpreter/ui.ts";
+} from "@repo/interpreter/secrets";
+import {
+	joinMessages,
+	UI,
+	type UiNode,
+	UiSurface,
+	uiExtension,
+} from "@repo/interpreter/ui";
 
 /*
- * What one evaluation produced: the two copies of its printed output, plus the
- * widget tree it rendered, if any.
+ * What one evaluation produced: the two copies of its printed output, the
+ * fragments read as prose rather than run, plus the widget tree it rendered,
+ * if any.
  *
  * `view` rides alongside rather than inside the text because it is not text: a
  * host that draws it (apps/app) draws it, and one that cannot (the CLI, the MCP
@@ -51,6 +59,7 @@ import { type UiNode, UiSurface, uiExtension } from "@repo/interpreter/ui.ts";
  * did.
  */
 export interface EvalResult extends Bounded {
+	skipped: string[];
 	view?: UiNode;
 	// What a handler asked to say to the agent (`ui/send`). Only a click can
 	// deliver one — a host driving an ordinary eval has no conversation to put it
@@ -71,6 +80,23 @@ export interface Repl {
 // A REPL driven by strings rather than process I/O.
 export interface InMemoryRepl extends Repl {
 	eval(code: string): string;
+}
+
+function skipNotes(skipped: string[]): string {
+	return skipped.map((what) => `skipped ${what}\n`).join("");
+}
+
+// An evaluation as `evalOutput` returns it: the skips read as trailing notes on
+// both copies. Everything that is not text — the view, the message, whether it
+// failed — rides through untouched, since none of it is something a note can be
+// appended to.
+function render(result: EvalResult): EvalResult {
+	const notes = skipNotes(result.skipped);
+	return {
+		...result,
+		model: result.model + notes,
+		user: result.user + notes,
+	};
 }
 
 // Convert a host JS value into the equivalent Lisp value. Mirrors `jsonToLisp`
@@ -105,7 +131,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	// Recreated with every interp: the naming counters must die with the globals
 	// they named, or a reset() leaves the count climbing past unbound names.
-	private compressor: Compressor;
+	private compactor: Compactor;
 	// Recreated with every interp for the same reason: a registered ui action is
 	// a closure over the environment of the interp that made it.
 	private surface: UiSurface;
@@ -122,7 +148,7 @@ export class MemoryRepl implements InMemoryRepl {
 		// Assigned before freshInterp(), which reads it. (Same ordering trap the
 		// setup() hook below warns about.)
 		this.wordLimit = options.wordLimit ?? MAX_WORDS;
-		this.compressor = new Compressor(this.wordLimit);
+		this.compactor = new Compactor(this.wordLimit);
 		this.surface = new UiSurface();
 		this.secrets = options.secretsStore ?? new EnvSecretsStore();
 		this.currentInterp = this.freshInterp();
@@ -139,17 +165,20 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private freshInterp(): Interp {
-		this.compressor = new Compressor(this.wordLimit);
+		this.compactor = new Compactor(this.wordLimit);
 		this.surface = new UiSurface();
 		// The secrets addon owns loading; an embedded REPL seeds its store from
 		// `REPL_*` env vars and does NOT auto-load a `.env` file — that is
-		// CLI-only. The store outlives the interp (see the field comment).
+		// CLI-only. The store outlives the interp (see the field comment). The
+		// prose addon is what makes `evalOutput`'s tolerance more than an
+		// unclosed-paren rule — see the comment there.
 		const interp = new Interp({
 			extensions: [
 				secretsExtension({ store: this.secrets }),
 				mcpExtension(),
-				compressionExtension(this.compressor),
+				compactionExtension(this.compactor),
 				uiExtension(this.surface),
+				proseExtension(),
 			],
 		});
 		run(interp, prelude);
@@ -170,15 +199,25 @@ export class MemoryRepl implements InMemoryRepl {
 	 * Consumers — apps/mcp, packages/ai — pass the `model` string straight to a
 	 * model, so this is the only place the word cap has to hold. `user` is the
 	 * same content unbounded, for a human reading it once on screen (see
-	 * @repo/interpreter's compression.ts).
+	 * @repo/interpreter's compaction.ts).
+	 *
+	 * Reads prose tolerantly because what this REPL is
+	 * handed is written by a model: a sentence with a parenthesis in it —
+	 * `(see below)`, or an unclosed `(` mid-sentence — is prose that happens
+	 * to look like code, and evaluating it costs the step either an error it
+	 * cannot act on or, for an unclosed paren, every form that followed. What
+	 * was skipped is appended to the output, so the caller can still tell a
+	 * misspelled function from a turn of phrase.
 	 */
 	evalOutput(code: string): EvalResult {
-		return this.capture((report) => {
-			// One line per top-level form: `name: shape`. Nothing prints the values
-			// themselves — that is what `echo` is for.
-			run(this.currentInterp, code, (form, value) => {
-				report(this.compressor.result(this.currentInterp, form, value));
-			});
+		return render(this.evaluate(code));
+	}
+
+	// One evaluation before the skips are appended to it, for a subclass that
+	// has to tell the two apart (see `AgentRepl`).
+	protected evaluate(code: string): EvalResult {
+		return this.capture(() => {
+			run(this.currentInterp, code);
 		});
 	}
 
@@ -197,48 +236,70 @@ export class MemoryRepl implements InMemoryRepl {
 
 	/*
 	 * Run one unit of work with the REPL's output plumbing around it: a fresh
-	 * word budget, `echo` writing into a buffer rather than the process, Lisp
-	 * errors rendered instead of thrown, and any widget the work rendered picked
-	 * up on the way out.
+	 * word budget, and every channel of this interp subscribed for the duration.
 	 *
-	 * `body` is handed a `report` sink for the result lines that go after the
-	 * printed output — an eval reports one per top-level form, a click reports
-	 * nothing. It is a sink rather than a return value because a form part-way
-	 * through a program can throw, and the results of the forms BEFORE it were
-	 * still bound to names: dropping those lines would leave the agent holding
-	 * names it was never told.
+	 * Nothing is reassembled afterwards, because nothing was ever merged: the
+	 * compaction extension puts the uncapped copy of what the work printed on
+	 * `user` and the capped one on `model`, the ui extension puts what it drew on
+	 * `ui`, and a fragment read as prose arrives as a warning. Subscribing to
+	 * this interp rather than swapping the process-wide writer also means a
+	 * second REPL in the same process no longer captures this one's output.
 	 */
-	private capture(body: (report: (line: string) => void) => void): EvalResult {
-		// The writer gets the human's copy of everything `echo` wrote; the
-		// model's copy is capped against this step's word budget as each call
-		// runs, and collected on the compressor.
-		this.compressor.beginStep();
-		let printed = "";
-		const prev = setWriter((s) => {
-			printed += s;
-		});
-		let reports = "";
+	private capture(body: () => void): EvalResult {
+		this.compactor.beginStep();
+		let model = "";
+		let user = "";
+		const skipped: string[] = [];
+		// Last render wins: a step that drew nothing reports nothing, so the
+		// previous view stays on screen rather than being blanked by this step.
+		let view: UiNode | undefined;
+		const messages: string[] = [];
+		const { channels } = this.currentInterp;
+		const unsubscribe = [
+			channels.on(USER, (d) => {
+				user += d.text;
+			}),
+			channels.on(MODEL, (d) => {
+				// A skip is a note about a program that ran anyway.
+				if (d.severity === "warning") {
+					if (!skipped.includes(d.text)) skipped.push(d.text);
+					return;
+				}
+				// A fatal error is thrown as well as reported, and the catch
+				// below is what bounds it — taking it here too would report it
+				// twice, and would make `AgentRepl` read a failed reply as one
+				// that merely skipped something.
+				if (d.severity === undefined) model += d.text;
+			}),
+			channels.on(UI, (d) => {
+				const event = d.value;
+				if (event === undefined || event === null) return;
+				const ui = event as { kind: string; node?: UiNode; text?: string };
+				if (ui.kind === "view") view = ui.node;
+				else if (ui.kind === "message" && ui.text !== undefined)
+					messages.push(ui.text);
+			}),
+		];
 		let error: Bounded = { model: "", user: "" };
 		let failed = false;
 		try {
-			body((line) => {
-				reports += line;
-			});
+			body();
 		} catch (ex) {
 			failed = true;
-			if (ex instanceof EvalException) error = this.compressor.error(`${ex}\n`);
+			if (ex instanceof EvalException) error = this.compactor.error(`${ex}\n`);
 			else if (ex === EndOfFile) {
 				const text = "unbalanced expression (unexpected end of input)\n";
 				error = { model: text, user: text };
 			} else throw ex;
 		} finally {
-			setWriter(prev);
+			for (const off of unsubscribe) off();
 		}
 		return {
-			model: this.compressor.takeEcho() + reports + error.model,
-			user: printed + reports + error.user,
-			view: this.surface.takeView(),
-			message: this.surface.takeMessage(),
+			model: model + this.compactor.endStep() + error.model,
+			user: user + error.user,
+			skipped,
+			view,
+			message: joinMessages(messages),
 			error: failed,
 		};
 	}
@@ -249,8 +310,12 @@ export class MemoryRepl implements InMemoryRepl {
 		return this.evalOutput(code).model;
 	}
 
-	// Discard all definitions; start from a fresh prelude-loaded interp.
+	// Discard all definitions; start from a fresh prelude-loaded interp. The
+	// outgoing interp is disposed first, so an extension holding something the
+	// language cannot reclaim — the MCP broker worker — releases it rather than
+	// leaking one per reset.
 	reset(): void {
+		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
 	}
 }
@@ -258,10 +323,14 @@ export class MemoryRepl implements InMemoryRepl {
 // The embeddable agent REPL: adds the finished signal and the read-only
 // conversation globals (`conversation`, `user-messages`, `assistant-messages`).
 export class AgentRepl extends MemoryRepl {
-	// Raised by an eval whose program held no forms at all; read (and cleared)
-	// via takeFinished(). A driver looping over eval() uses it to know when to
+	// Raised by an eval whose program ran nothing; read (and cleared) via
+	// takeFinished(). A driver looping over eval() uses it to know when to
 	// stop — there is no stop built-in, see `eval`.
 	private finished = false;
+	// Skip notes withheld from a prose-only answer, waiting to be handed to the
+	// model with the next user message; read (and cleared) via
+	// takeProseFeedback().
+	private pendingProse: string[] = [];
 	// The host-supplied conversation snapshot, kept so a post-error `reset()`
 	// can re-inject the globals until the next refresh.
 	private readonly conversationVars = new Map<string, unknown>();
@@ -275,17 +344,28 @@ export class AgentRepl extends MemoryRepl {
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 	}
 
-	// Evaluate a program, raising the finished flag if it turned out to be pure
-	// prose. An agent that has nothing left to run answers in plain text, and
-	// text with no forms in it is a program that does nothing — so a form-less
-	// reply IS the end of the loop, and the REPL needs no stop built-in for the
-	// agent to call.
+	// Evaluate a program, raising the finished flag if it turned out to be an
+	// answer rather than a step (see `isAnswer`). An agent that has nothing left
+	// to run answers in plain text, and text that runs nothing is a program that
+	// does nothing — so such a reply IS the end of the loop, and the REPL needs
+	// no stop built-in for the agent to call.
+	//
+	// An answer's skip notes are withheld from the output rather than returned:
+	// handing them back would make the host feed a result to a model that is
+	// done, buying the user an extra agent turn to be told what the last one
+	// already said. They wait for the next user message instead — late enough to
+	// cost nothing, early enough that the model does not write the aside again.
 	//
 	// Overridden on `evalOutput` rather than `eval`, so the flag is raised
 	// whichever entry point the driver uses.
 	override evalOutput(code: string): EvalResult {
-		if (stripProse(code).trim() === "") this.finished = true;
-		return super.evalOutput(code);
+		const result = this.evaluate(code);
+		if (!isAnswer(code, result)) return render(result);
+		this.finished = true;
+		this.pendingProse.push(...result.skipped);
+		// An answer's skip notes are withheld from the output; everything else
+		// it produced still belongs to the caller.
+		return { ...result, skipped: [] };
 	}
 
 	// Replace the read-only conversation globals from a fresh host snapshot. Each
@@ -301,18 +381,52 @@ export class AgentRepl extends MemoryRepl {
 		}
 	}
 
-	// Whether a program evaluated since the previous check was form-less prose;
-	// reads and clears the flag.
+	// Whether a program evaluated since the previous check was an answer rather
+	// than a step; reads and clears the flag.
 	takeFinished(): boolean {
 		const f = this.finished;
 		this.finished = false;
 		return f;
 	}
 
+	// The skip notes withheld from answers since the previous check, rendered as
+	// the lines `eval` would have returned (empty when there are none); reads and
+	// clears them. A host carries these to the model with the next user message,
+	// which is the whole point of withholding them: the model is told what it
+	// wrote as prose without the REPL having spent an agent turn saying so.
+	takeProseFeedback(): string {
+		const notes = this.pendingProse;
+		this.pendingProse = [];
+		return skipNotes(notes);
+	}
+
 	override reset(): void {
 		super.reset();
 		this.finished = false;
+		this.pendingProse = [];
 	}
+}
+
+/*
+ * Was this reply the agent's answer rather than a step? It is when nothing in
+ * it ran:
+ *
+ * - it opened no parenthesis at all — plain prose, the way an agent answers;
+ * - or every parenthesis in it was prose (`all done (see above)`), so the
+ *   program did nothing and printed nothing.
+ *
+ * The second test is the tolerant reader's, but truncation is excluded: a reply
+ * cut off mid-form also runs nothing, yet it is an interrupted step, and ending
+ * the loop on it would strand the task. Only an OPEN parenthesis says that —
+ * an aside the reader could not parse ("(a deprecated `read_file`)") is a
+ * finished sentence, and asking `checkSyntax` here would call it a truncation.
+ */
+function isAnswer(code: string, { user, skipped }: EvalResult): boolean {
+	if (stripProse(code).trim() === "") return true;
+	// The unbounded copy: it is the complete record of what the program
+	// produced, where the model's is capped.
+	if (user !== "" || skipped.length === 0) return false;
+	return !isTruncated(code);
 }
 
 // Define a single read-only conversation global on the given interp.

@@ -1,4 +1,4 @@
-import { LANGUAGE_REFERENCE } from "@repo/interpreter/source.ts";
+import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
 
 export const MAX_STEPS = 25;
 

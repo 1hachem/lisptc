@@ -12,14 +12,14 @@ import {
 	prelude,
 	run,
 } from "@repo/interpreter";
-import { compressionExtension } from "@repo/interpreter/compression.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
+import { compactionExtension } from "@repo/interpreter/compaction";
+import { mcpExtension } from "@repo/interpreter/mcp";
 import {
 	type CompletionEntry,
 	connectOrSpawn,
 	type SessionClient,
 	socketPathFor,
-} from "@repo/repl/session-server.ts";
+} from "@repo/repl/session-server";
 import {
 	type CompletionItem,
 	CompletionItemKind,
@@ -44,7 +44,7 @@ const documents = new TextDocuments(TextDocument);
 // shared session is unreachable. The MCP extension contributes load-mcp docs
 // without connecting to any server until code explicitly evaluates it.
 const interp = new Interp({
-	extensions: [mcpExtension(), compressionExtension()],
+	extensions: [mcpExtension(), compactionExtension()],
 });
 run(interp, prelude);
 const localDocs = interp.docs();

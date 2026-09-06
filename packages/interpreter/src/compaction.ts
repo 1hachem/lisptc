@@ -1,5 +1,5 @@
 /*
- * Context compression for Lisptc.
+ * Context compaction for Lisptc.
  *
  * The REPL is an LLM's only interface, so everything it prints is spent
  * context. This module spends as little of it as possible:
@@ -18,14 +18,15 @@
  *    rendering of it — instead of reading data off a printout and retyping it.
  *
  * Reporting a shape rather than a value is only safe because of the naming:
- * nothing is ever lost by not printing it. See devdocs/compression.md.
+ * nothing is ever lost by not printing it. See devdocs/compaction.md.
  *
- * An opt-in extension, like src/secrets.ts: pass `compressionExtension()` in
- * `InterpOptions.extensions`. The `Compressor` holding the naming counters is
+ * An opt-in extension, like src/secrets.ts: pass `compactionExtension()` in
+ * `InterpOptions.extensions`. The `Compactor` holding the naming counters is
  * created by the host per interpreter, so `reset()` restarts numbering along
  * with the globals it named.
  */
 import { z } from "zod";
+import { type Channels, MODEL, USER } from "./channels.ts";
 import {
 	Cell,
 	callableKind,
@@ -39,7 +40,6 @@ import {
 	Sym,
 	str,
 	Unspecified,
-	writeOut,
 	zAny,
 	zList,
 } from "./lisp.ts";
@@ -254,14 +254,22 @@ function boolOption(
  * `echo`/`grep` take a value rather than a handle and work just as well on data
  * the agent bound itself.
  */
-export class Compressor {
+export class Compactor {
 	private readonly counters = new Map<string, number>();
-	// This step's `echo` output as the model will see it, the words of it
-	// already spent, and the words written that it was not shown. All three are
-	// reset by `beginStep`.
-	private echoed = "";
+	// The words of this step's `echo` budget already spent, and the words
+	// written that the model was not shown. Both reset by `beginStep`. The
+	// output itself is not held: it goes out on the channels as it is produced.
 	private spent = 0;
 	private dropped = 0;
+	// Where both copies go, set when the extension is installed. Undefined
+	// before that, so a Compactor built but never registered is inert rather
+	// than broken.
+	private channels?: Channels;
+	// Whether a host is driving steps. Reporting a result is a per-step
+	// discipline, not something the language does, so a bare `run` gets none of
+	// it — the prelude would otherwise describe all 200 of its own definitions
+	// before the first prompt appeared.
+	private stepping = false;
 	readonly limit: number;
 
 	constructor(limit: number = MAX_WORDS) {
@@ -282,9 +290,19 @@ export class Compressor {
 	 * a value it must ask, with `echo`.
 	 */
 	result(interp: Interp, form: unknown, value: unknown): string {
+		// Not inside a step: nobody asked for a report (see `stepping`).
+		if (!this.stepping) return "";
 		// A step that ended in an `echo` has already said everything it has to
 		// say; a report on top would only announce that printing happened.
 		if (value === Unspecified) return "";
+		// A slice is asked for in order to be READ, so the report for a
+		// top-level `head`/`tail` is the slice itself: describing it back as
+		// `head-1: list of 10 items` sends the agent for an `(echo head-1)` it
+		// should never have had to spend a step on.
+		if (isSliceForm(form)) {
+			this.print(interp, value);
+			return "";
+		}
 		// nil and t are their own shape, and every side-effecting loop returns
 		// nil — naming those would bury the results that matter under
 		// `dotimes-1: nil`.
@@ -294,7 +312,22 @@ export class Compressor {
 		if (value instanceof Sym && interp.hasGlobal(value))
 			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
-		return `${this.nameFor(interp, form, value)}: ${describe(value)}\n`;
+		const name = this.nameFor(interp, form, value);
+		/*
+		 * A job is a live handle whose printed form — `#<job load-mcp:linear
+		 * 8d12…>` — is the one thing an agent must never retype, and reporting
+		 * it invites exactly that: `(await #<job load-mcp:linear 8d12…>)`.
+		 *
+		 * So the handle is never shown. The line gives the name instead, and
+		 * says the thing the agent keeps getting wrong: nothing is owed. A
+		 * job applies its own result when it settles, so an unawaited
+		 * `load-mcp` is finished code, not a loose end to chase.
+		 */
+		const job = jobLabel(value);
+		if (job !== undefined)
+			return `${name}: ${job} running in the background. Its result applies itself when the job settles, so nothing is owed here; to act on it use the name — (job-status ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
+
+		return `${name}: ${describe(value)}\n`;
 	}
 
 	/*
@@ -307,33 +340,68 @@ export class Compressor {
 	 * point the agent back at it by name.
 	 */
 	beginStep(): void {
-		this.echoed = "";
+		this.stepping = true;
 		this.spent = 0;
 		this.dropped = 0;
 	}
 
+	// Send both copies where they belong: the human's uncapped, the model's
+	// already capped. Called once the extension is installed on an interp.
+	attach(channels: Channels): void {
+		this.channels = channels;
+	}
+
 	/*
-	 * This step's `echo` output as the model should see it, and a closing note
-	 * for anything it was not shown. Reads and does not clear: `beginStep`
-	 * does that, so a host that forgets to call it sees output accumulate
-	 * rather than vanish.
+	 * The closing note for whatever this step wrote that the model was not
+	 * shown, or "" if it saw everything.
+	 *
+	 * Only the note: the output itself has already gone out on the channels.
+	 * What is left is the one thing that cannot be said per call, because it
+	 * only exists once the whole step is over.
 	 */
-	takeEcho(): string {
-		if (this.dropped === 0) return this.echoed;
-		return `${this.echoed}... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
+	endStep(): string {
+		if (this.dropped === 0) return "";
+		return `... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
 	}
 
 	private get remaining(): number {
 		return Math.max(0, this.limit - this.spent);
 	}
 
-	// Keep the model's copy of one echo, charge it to the step's budget, and
-	// count what the model was not shown.
+	/*
+	 * Send one echo out, charge it to the step's budget, and count what the
+	 * model was not shown.
+	 *
+	 * The single funnel for both copies: everything `echo`, `head`/`tail` and
+	 * the slice reports produce comes through here, which is why this is the
+	 * only place that has to know about channels at all.
+	 */
 	private echo(model: string, user: string, dropped: number): Bounded {
-		this.echoed += model;
 		this.spent += wordSpans(model).length;
 		this.dropped += dropped;
+		this.say({ model, user });
 		return { model, user };
+	}
+
+	// Put the two copies on the two channels. Neither is a diagnostic — a
+	// program that echoes is working exactly as intended.
+	say(bounded: Bounded): void {
+		if (bounded.user !== "")
+			this.channels?.emit({ channel: USER, text: bounded.user });
+		if (bounded.model !== "")
+			this.channels?.emit({ channel: MODEL, text: bounded.model });
+	}
+
+	// Write a value the way `echo` writes it: the human's copy straight out,
+	// the model's capped against what is left of this step's budget.
+	private print(interp: Interp, value: unknown): void {
+		this.window(
+			interp,
+			echoText(new Cell(value, null)),
+			value,
+			0,
+			Number.MAX_SAFE_INTEGER,
+		);
 	}
 
 	// Cap a rendered error. Nothing is saved: an EvalException's message is
@@ -397,7 +465,7 @@ export class Compressor {
 			this.charBudget,
 		);
 		// Nothing left in the budget: this call is invisible to the model, so
-		// its words are what `takeEcho`'s closing note has to account for.
+		// its words are what `endStep`'s closing note has to account for.
 		if (shown.shown === 0) return this.echo("", user, asked.shown);
 		// A shorter window is not silent — its own `...` line says how much is
 		// below and how to read on — so it needs no note on top of that.
@@ -553,12 +621,43 @@ export class Compressor {
 		// Never clobber a name the agent bound itself.
 		while (interp.hasGlobal(newSym(name))) name = `${base}-${++n}`;
 		this.counters.set(base, n);
+		const job = jobLabel(value);
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			doc: `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`,
+			// A job holds no data to compute over, so the generic "extract from
+			// it" advice would be nonsense: what it needs saying is that this
+			// name is the only way to address the job.
+			doc:
+				job === undefined
+					? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
+					: `Handle for the background job \`${job}\`. This name is how you address it — its printed form (#<job …>) cannot be read back. The job applies its own result when it settles, so awaiting is optional: (await ${name}) waits for it now and returns that result, (job-status ${name}) checks it without blocking (:pending / :done / :error), (cancel ${name}) aborts it.`,
 		});
 		return name;
 	}
+}
+
+/*
+ * A background job, recognised by its shape.
+ *
+ * Compaction must not import the jobs layer — an extension knows nothing
+ * about the others (see `secretsExtension`, which `str` and `lispToJson` also
+ * duck-type rather than import). `jobId` plus `label` is the whole contract.
+ */
+function jobLabel(value: unknown): string | undefined {
+	if (value === null || typeof value !== "object") return undefined;
+	const { jobId, label } = value as { jobId?: unknown; label?: unknown };
+	return typeof jobId === "string" && typeof label === "string"
+		? label
+		: undefined;
+}
+
+// Was this top-level form a slice taken to be looked at? Only the bare form
+// counts: nested — `(mapcar f (head x 2))` — the slice is an argument to
+// someone else's computation and printing it would leak data the step never
+// asked to see.
+function isSliceForm(form: unknown): boolean {
+	if (!(form instanceof Cell) || !(form.car instanceof Sym)) return false;
+	return form.car.name === "head" || form.car.name === "tail";
 }
 
 // The symbol a `(setq a 1 b 2)` form assigned last — the one holding the value
@@ -637,13 +736,26 @@ function compile(pattern: string, ignoreCase: boolean): RegExp {
 	}
 }
 
-// The elements of a proper list, or undefined for anything that is not one.
-// `nil` is the empty list, not a non-list.
+/*
+ * The elements of a proper list, or undefined for anything that is not one.
+ * `nil` is the empty list, not a non-list.
+ *
+ * Stops at a cell it has already walked, the way `str` does: describing a
+ * result is not allowed to be the thing that hangs the step, and a circular
+ * list is something a program can build (`(setq l (list 1)) (setcdr l l)`)
+ * long before anyone tries to print it. What comes back is then the acyclic
+ * prefix, which is all a shape description needs.
+ */
 function listElements(x: unknown): unknown[] | undefined {
 	if (x === null) return [];
 	if (!(x instanceof Cell)) return undefined;
 	const out: unknown[] = [];
-	for (let p: unknown = x; p instanceof Cell; p = p.cdr) out.push(p.car);
+	const seen = new Set<Cell>();
+	for (let p: unknown = x; p instanceof Cell; p = p.cdr) {
+		if (seen.has(p)) break;
+		seen.add(p);
+		out.push(p.car);
+	}
 	return out;
 }
 
@@ -687,8 +799,9 @@ function wordWindow(
  *
  * Element-wise on a list, word-wise on anything else. That polymorphism is the
  * point: `(head issues 4)` is the four rows an agent means by "the first four",
- * while `(head doc 40)` is the opening of a document. Both RETURN, so the
- * result is named and can be echoed, mapped or grepped in the next step.
+ * while `(head doc 40)` is the opening of a document. Both return the slice —
+ * it is `result` that prints it when the form was a step of its own (see
+ * `isSliceForm`), so a nested slice stays as silent as any other function.
  */
 function headOf(value: unknown, n: number): unknown {
 	const items = listElements(value);
@@ -759,6 +872,23 @@ function grepOf(
 function describe(value: unknown): string {
 	const callable = callableKind(value);
 	if (callable !== undefined) return callable;
+
+	// Never the handle itself: `#<job load-mcp:linear 8d12…>` is a printout no
+	// reader can read back, and an agent shown one retypes it. Every path that
+	// describes a value goes through here, `(doc 'load-mcp-1)` included — and
+	// ahead of the inline shortcut below, which would print a handle for being
+	// short. (A `Secret` is not the same case: `#<secret:KEY>` IS how a secret
+	// is meant to appear, and inlining it reveals nothing.)
+	const job = jobLabel(value);
+	if (job !== undefined) return `job ${job}, running in the background`;
+
+	const started = listElements(value);
+	if (
+		started !== undefined &&
+		started.length > 0 &&
+		started.every((j) => jobLabel(j) !== undefined)
+	)
+		return `list of ${started.length} background job${started.length === 1 ? "" : "s"}`;
 
 	const text = canonical(value);
 	const spans = wordSpans(text);
@@ -863,7 +993,23 @@ const GREP_ARGS: DocArg[] = [
 	},
 ];
 
-function registerCompression(interp: Interp, c: Compressor): void {
+function registerCompaction(interp: Interp, c: Compactor): void {
+	c.attach(interp.channels);
+
+	/*
+	 * One line per top-level form: `name: shape`.
+	 *
+	 * A wrapping middleware rather than a callback the core had to carry: the
+	 * base evaluates the form, and what comes back is what gets named and
+	 * reported. Reporting on results is this extension's whole subject, so the
+	 * interpreter no longer has to know it is happening.
+	 */
+	interp.hooks.evalForm.use((interp, form, next) => {
+		const value = next(interp, form);
+		const report = c.result(interp, form, value);
+		if (report !== "") c.say({ model: report, user: report });
+		return value;
+	});
 	/*
 	 * `echo`, overriding the plain core version (src/lisp.ts) with the windowed,
 	 * searchable one — the same `interp.def` override idiom src/secrets.ts uses
@@ -873,10 +1019,10 @@ function registerCompression(interp: Interp, c: Compressor): void {
 		"echo",
 		-1,
 		'(echo x... [:offset 0] [:length n] [:match "re"] [:context 8] [:max 10] [:ignore-case t])',
-		`Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. Output is measured in whitespace-separated words and stops after ${c.limit} of them, closing with a \`...\` line saying how much is left and the offset to continue from. :offset and :length choose the window. :match prints only the regions matching a JavaScript-syntax regular expression, each as @<word-offset> with the match wrapped in [[ ]] — that is how you read a value you cannot yet name a pattern for; to KEEP what matched rather than look at it, use \`grep\`, which returns it. Returns an unspecified value, so a step ending in an echo gets no result line: what was printed IS the report.`,
+		`Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. Output is measured in whitespace-separated words and stops after ${c.limit} of them, closing with a \`...\` line saying how much is left and the offset to continue from. :offset and :length choose the window. :match prints only the regions matching a JavaScript-syntax regular expression, each as @<word-offset> with the match wrapped in [[ ]] — that is how you read a value you cannot yet name a pattern for; to KEEP what matched rather than look at it, use \`grep\`, which returns it. A keyword prints as itself when it is the last argument — (echo (job-status job)) — since only a keyword carrying a value after it is read as an option. Returns an unspecified value, so a step ending in an echo gets no result line: what was printed IS the report.`,
 		z.tuple([zList]),
 		([rest]) => {
-			const { values, options } = splitKeywordArgs(rest);
+			const { values, options } = splitKeywordArgs(rest, ECHO_OPTIONS);
 			const opts = plistOptions(options, ECHO_OPTIONS);
 			const text = echoText(values);
 			// An offset or a name in the `...` line only means anything for a
@@ -885,31 +1031,28 @@ function registerCompression(interp: Interp, c: Compressor): void {
 			const single =
 				values !== null && values.cdr === null ? values.car : undefined;
 			// The human gets what was asked for; the model gets as much of it as
-			// the step's budget allows. Only the writer is uncapped here — the
-			// model's copy is collected on the compressor (see `takeEcho`).
+			// the step's budget allows. Both go out on their own channel from
+			// inside the slicing pass, which is the only place that still knows
+			// which value the text came from.
 			const pattern = opts.get("match");
 			if (pattern !== undefined) {
 				if (typeof pattern !== "string")
 					throw new EvalException("string expected for :match", pattern);
-				writeOut(
-					c.search(interp, text, single, pattern, {
-						context: intOption(opts, "context", DEFAULT_CONTEXT),
-						max: intOption(opts, "max", DEFAULT_MAX_HITS),
-						ignoreCase: boolOption(opts, "ignore-case", true),
-					}).user,
-				);
+				c.search(interp, text, single, pattern, {
+					context: intOption(opts, "context", DEFAULT_CONTEXT),
+					max: intOption(opts, "max", DEFAULT_MAX_HITS),
+					ignoreCase: boolOption(opts, "ignore-case", true),
+				});
 				return Unspecified;
 			}
-			writeOut(
-				c.window(
-					interp,
-					text,
-					single,
-					intOption(opts, "offset", 0),
-					// No :length means the whole value: it is the STEP that is
-					// bounded, not the request.
-					intOption(opts, "length", Number.MAX_SAFE_INTEGER),
-				).user,
+			c.window(
+				interp,
+				text,
+				single,
+				intOption(opts, "offset", 0),
+				// No :length means the whole value: it is the STEP that is
+				// bounded, not the request.
+				intOption(opts, "length", Number.MAX_SAFE_INTEGER),
 			);
 			return Unspecified;
 		},
@@ -920,7 +1063,7 @@ function registerCompression(interp: Interp, c: Compressor): void {
 		"head",
 		-2,
 		"(head x [n])",
-		`Return the first \`n\` of \`x\`: its first n ELEMENTS if it is a list, its first n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Returns the value rather than printing it, so the REPL names the result and you can echo, map or grep it from there.`,
+		`The first \`n\` of \`x\`: its first n ELEMENTS if it is a list, its first n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Written as a step of its own the slice is PRINTED — it is what you came for, so there is no \`(echo head-1)\` to follow it with and no name is minted. The value is returned as well, so (setq first (head x 5)) keeps it under a name and (mapcar f (head x 5)) computes over it; inside another form it prints nothing.`,
 		z.tuple([zAny, zList]),
 		([value, rest]) => headOf(value, countArg(rest, value, c.limit)),
 	);
@@ -929,7 +1072,7 @@ function registerCompression(interp: Interp, c: Compressor): void {
 		"tail",
 		-2,
 		"(tail x [n])",
-		`Return the last \`n\` of \`x\`: its last n ELEMENTS if it is a list, its last n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Returns the value rather than printing it.`,
+		`The last \`n\` of \`x\`: its last n ELEMENTS if it is a list, its last n words if it is text (default ${DEFAULT_ITEMS} elements, ${c.limit} words). Printed when it is a step of its own, returned in every case — see \`head\`.`,
 		z.tuple([zAny, zList]),
 		([value, rest]) => tailOf(value, countArg(rest, value, c.limit)),
 	);
@@ -965,16 +1108,16 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 }
 
 /*
- * Install `echo`, `head`, `tail` and `grep` over `compressor`.
+ * Install `echo`, `head`, `tail` and `grep` over `compactor`.
  *
- * The host passes the same `Compressor` it renders results with, and creates a
+ * The host passes the same `Compactor` it renders results with, and creates a
  * new one per interpreter: the naming counters must die with the globals they
  * named, or a `reset()` leaves the count climbing past unbound names. (This is
  * the opposite of `secretsExtension`, whose store is host configuration and
  * must survive a reset.)
  */
-export function compressionExtension(
-	compressor: Compressor = new Compressor(),
+export function compactionExtension(
+	compactor: Compactor = new Compactor(),
 ): InterpExtension {
-	return (interp: Interp): void => registerCompression(interp, compressor);
+	return (interp: Interp): void => registerCompaction(interp, compactor);
 }

@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { checkSyntax, stripProse } from "../src/lisp.ts";
-import { ev, evWithOutput } from "./helpers.ts";
+import { MODEL } from "../src/channels.ts";
+import {
+	checkSyntax,
+	Interp,
+	prelude,
+	run,
+	str,
+	stripProse,
+} from "../src/lisp.ts";
+import { isTruncated, proseExtension } from "../src/prose.ts";
+import { ev, evWithOutput, freshInterp } from "./helpers.ts";
+
+// What an interp reports as not-run, in the order it says it. Skips are
+// warnings on the model's channel now, not a callback passed to `run` — and
+// the channel carries the model's errors too, so severity is what separates
+// "this was read as prose" from "this failed".
+function collectSkips(interp: Interp): string[] {
+	const skipped: string[] = [];
+	interp.channels.on(MODEL, (d) => {
+		if (d.severity === "warning") skipped.push(d.text);
+	});
+	return skipped;
+}
 
 describe("prose around forms", () => {
 	it("evaluates the forms and ignores the text between them", () => {
@@ -66,5 +87,251 @@ describe("no comment syntax", () => {
 
 	it("ignores a `;` line outside a form, like any other prose", () => {
 		expect(ev(";; a section header\n(+ 1 2)")).toBe("3");
+	});
+});
+
+/*
+ * A model writes prose with parentheses in it. The grammar that forbids that
+ * (`lisptc.gbnf`) only binds providers that support grammars, so the reader
+ * has to cope: under `tolerant`, text that cannot be a program is prose, and
+ * every skip is reported rather than silently dropped.
+ */
+describe("tolerant prose (an LLM's parentheses)", () => {
+	// What the model wrote, and what it should be read as. Skipping forms is the
+	// prose extension's job, not the core's, so the interp has to install it.
+	function tolerantly(text: string): { value: string; skipped: string[] } {
+		const interp = new Interp({ extensions: [proseExtension()] });
+		run(interp, prelude);
+		const skipped = collectSkips(interp);
+		const value = str(run(interp, text));
+		return { value, skipped };
+	}
+
+	it("reads a form whose head names nothing as prose", () => {
+		const { value, skipped } = tolerantly(
+			"Here is the plan (see below):\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual([
+			'(see below) — "see" is not defined, so this was read as prose',
+		]);
+	});
+
+	// Commas are unquote sugar, so a list written in prose is not even readable
+	// as a call — but it is still just a sentence.
+	it("reads a comma-separated aside as prose", () => {
+		expect(tolerantly("Steps (one, two, three) then:\n(+ 1 2)").value).toBe(
+			"3",
+		);
+	});
+
+	// The destructive case: `endOfForm` runs to the end of the text, so a stray
+	// "(" used to swallow every real form after it and lose the whole step.
+	it("recovers the forms after an unclosed parenthesis", () => {
+		const { value, skipped } = tolerantly(
+			"The result (roughly is fine\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual(['unclosed "(" on line 1']);
+	});
+
+	/*
+	 * Balanced parentheses are not enough. Markdown's backticks are quasiquote
+	 * sugar, so the closing one swallows the form's ")" — and the classifier
+	 * never sees the sentence, because it is consulted per PARSED form.
+	 */
+	it("reads a form it cannot parse as prose", () => {
+		const { value, skipped } = tolerantly(
+			"And others (including a deprecated `read_file`).\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual([
+			'(including a deprecated `read_file`) — unexpected ")" on line 1, so this was read as prose',
+		]);
+	});
+
+	it("reports the line an unparseable form was on", () => {
+		expect(
+			tolerantly("(+ 1 2)\nsome prose\nand more (an aside `x`) here").skipped,
+		).toEqual([
+			'(an aside `x`) — unexpected ")" on line 3, so this was read as prose',
+		]);
+	});
+
+	it("abbreviates a long unparseable form in its note", () => {
+		const [note] = tolerantly(`(${"word ".repeat(30)}\`x\`)`).skipped;
+		expect(note).toContain("...");
+		expect(note.length).toBeLessThan(120);
+	});
+
+	it("reports the line an unclosed parenthesis was on", () => {
+		expect(tolerantly("(+ 1 2)\none\ntwo (nearly\n").skipped).toEqual([
+			'unclosed "(" on line 3',
+		]);
+	});
+
+	// Boundness is decided per form as the program runs, so a definition
+	// earlier in the same program counts.
+	it("evaluates a form whose head an earlier form defined", () => {
+		expect(tolerantly("(defun see (x) 42)\n(see 1)").value).toBe("42");
+	});
+
+	it("leaves special forms and computed heads alone", () => {
+		expect(tolerantly("(setq x 7) (progn x)").value).toBe("7");
+		expect(tolerantly("((lambda (x) (* x 2)) 21)").value).toBe("42");
+	});
+
+	// A comma is unquote sugar to the reader, but a string literal is one token,
+	// so the commas inside it never reach the reader as sugar.
+	it("reads commas inside a string as part of the string", () => {
+		expect(tolerantly('(string-split "a,b,c" ",")').value).toBe(
+			'("a" "b" "c")',
+		);
+		expect(tolerantly('(list "a, b, c")').value).toBe('("a, b, c")');
+	});
+
+	// Only the head of a TOP-LEVEL form is a prose candidate: a typo deeper in
+	// an expression is a real mistake and has to stay an error.
+	it("still reports an undefined name inside a form", () => {
+		expect(() => tolerantly("(+ 1 (nope 2))")).toThrow(/undefined: nope/);
+	});
+
+	/*
+	 * Where tolerance stops, case by case. Both halves of the line cost
+	 * something to get wrong: an aside read as code spends the step on an error
+	 * the agent cannot act on, and a call read as prose vanishes into a skip
+	 * note — a tool whose server was never loaded has to say so, since silence
+	 * is the one failure the agent cannot debug.
+	 */
+	describe("telling an aside from a call", () => {
+		// Sentences contain punctuation, digits, emoji, URLs and parentheses of
+		// their own; none of that makes a form code.
+		const asides = [
+			"(see below)",
+			"(one, two, three)",
+			"(step 2)",
+			"(e.g. see below)",
+			"(i.e. the sum)",
+			"(cf. above)",
+			"(1, 2, 3)",
+			"(50% done)",
+			// A slash the sentence wrote, not a namespace: it is followed by a
+			// word, which no bare tool call is.
+			"(A/B test)",
+			"(TODO: fix this)",
+			"(don't panic)",
+			"(see https://example.com)",
+			"(🙂)",
+			"(note (details here))",
+		];
+		it.each(asides)("reads %s as prose", (text) => {
+			const { value, skipped } = tolerantly(text);
+			expect(value).toBe("#<unspecified>");
+			expect(skipped).toHaveLength(1);
+		});
+
+		// Each of these carries something a sentence never does: keyword call
+		// syntax, a literal being passed, a namespaced name with no words around
+		// it, or a call nested inside the call.
+		const calls: [string, string][] = [
+			['(server/tool :key "value")', "server/tool"],
+			["(server/tool)", "server/tool"],
+			['(navigate :key "value")', "navigate"],
+			["(step_two)", "step_two"],
+			["(status :ok)", "status"],
+			['(prin "hi")', "prin"],
+			['(string-splt "a,b" ",")', "string-splt"],
+			// The same words as the aside `(one, two, three)` above — quoting
+			// them is what makes them an argument rather than a list of steps.
+			['(steps "one, two, three")', "steps"],
+			['(join "a" "," "b")', "join"],
+			["(fetch (car urls))", "fetch"],
+		];
+		it.each(calls)("errors on %s, naming %s", (text, name) => {
+			expect(() => tolerantly(text)).toThrow(`undefined: ${name}`);
+		});
+
+		// The limit of the whole idea: a misspelled word and a written one are
+		// the same shape. With no literal, no keyword and no namespace to go on,
+		// a typo is read as prose — the skip note names it, and that is all the
+		// reader can honestly offer.
+		it.each([
+			"(lenght lst)",
+			"(sq 5)",
+			"(++ 1 2)",
+		])("cannot tell %s from a turn of phrase, and says so", (text) => {
+			expect(tolerantly(text).skipped[0]).toMatch(/is not defined/);
+		});
+	});
+
+	/*
+	 * Every one of the three rules is the extension's (src/prose.ts), so a host
+	 * that did not ask for it gets no tolerance at all — whatever it passes.
+	 * `tolerant: true` on a bare interp consults hooks nobody filled, and each
+	 * chain falls through to the language's own answer: an unclosed paren is a
+	 * truncated program, an unparseable one a syntax error, an unknown head an
+	 * undefined name.
+	 */
+	it("tolerates nothing without the prose extension", () => {
+		const bare = freshInterp();
+		const skipped = collectSkips(bare);
+		expect(() => run(bare, "(see below)")).toThrow(/undefined: see/);
+		expect(() => run(bare, "a stray (paren\n(+ 1 2)")).toThrow();
+		expect(() => run(bare, "an aside (see `x`)")).toThrow(/syntax error/);
+		expect(skipped).toEqual([]);
+	});
+
+	// A host that reads its model differently supplies its own policy rather
+	// than patching the core.
+	it("takes a host's own classifier in place of the bundled one", () => {
+		const interp = new Interp({
+			extensions: [proseExtension(() => "everything is prose here")],
+		});
+		const skipped = collectSkips(interp);
+		expect(str(run(interp, "(+ 1 2)"))).toBe("#<unspecified>");
+		expect(skipped).toEqual(["everything is prose here"]);
+	});
+
+	it("changes nothing on an interp without the extension", () => {
+		expect(() => ev("Here is the plan (see below)")).toThrow(/undefined: see/);
+		expect(() => ev("here it comes (+ 1 2")).toThrow();
+		expect(() => ev("an aside (see `x`)")).toThrow(/syntax error/);
+		expect(checkSyntax("an aside (see `x`)")).toEqual([
+			{ message: 'syntax error: unexpected ")" at 1', line: 1 },
+		]);
+		expect(stripProse("a (b")).toBe("  (b");
+		// Tolerance is the extension's, so it reaches `stripProse` only as the
+		// hooks of an interp that installed it.
+		const { hooks } = new Interp({ extensions: [proseExtension()] });
+		expect(stripProse("a (b", hooks)).toBe("    ");
+		expect(stripProse("a (see `x`)", hooks)).toBe("           ");
+	});
+});
+
+/*
+ * Telling a reply cut off by a token limit from one that simply will not parse.
+ * A host ending its agent loop on whatever ran nothing needs the difference:
+ * the first is a step to resume, the second is an answer.
+ */
+describe("truncation", () => {
+	it.each([
+		"(+ 1",
+		'(echo "hello',
+		"(defun sq (x)",
+		"prose first, then (+ 1",
+	])("sees %s as cut off mid-form", (text) => {
+		expect(isTruncated(text)).toBe(true);
+	});
+
+	it.each([
+		"",
+		"the sum is 3",
+		"(+ 1 2)",
+		"all done (see above)",
+		"And others (including a deprecated `read_file`).",
+		"a stray ) close paren is just text",
+		'(echo "a (b")',
+	])("sees %s as finished", (text) => {
+		expect(isTruncated(text)).toBe(false);
 	});
 });

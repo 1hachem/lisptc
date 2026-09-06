@@ -1,14 +1,14 @@
-import { compressionExtension } from "../src/compression.ts";
+import { compactionExtension } from "../src/compaction.ts";
 import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 
 /**
  * A fresh interpreter with the standard prelude, secret registry and the
- * compression built-ins (echo/head/tail/grep) loaded.
+ * compaction built-ins (echo/head/tail/grep) loaded.
  */
 export function freshInterp(): Interp {
 	const interp = new Interp({
-		extensions: [secretsExtension(), compressionExtension()],
+		extensions: [secretsExtension(), compactionExtension()],
 	});
 	run(interp, prelude);
 	return interp;

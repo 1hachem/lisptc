@@ -28,7 +28,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { Arity, DocArg } from "@repo/interpreter/lisp.ts";
+import type { Arity, DocArg } from "@repo/interpreter/lisp";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {

@@ -81,6 +81,26 @@ describe("MCP integration (stdio fixture)", () => {
 		expect(evalStr(interp, '(fx/echo :message "hi")')).toBe('"hi"');
 	});
 
+	// A server that answers with JSON in a text block is the common case, and
+	// the interpreter must not see the difference: the value is data, so a
+	// field comes out with `assoc` rather than a regex over a printout.
+	it("parses a JSON text result into data", () => {
+		expect(evalStr(interp, '(cdr (assoc "hasMore" (fx/issues)))')).toBe("nil");
+		expect(
+			evalStr(
+				interp,
+				'(cdr (assoc "title" (car (cdr (assoc "issues" (fx/issues))))))',
+			),
+		).toBe('"Auth token refresh fails"');
+	});
+
+	// Text that is not a JSON object or array is the tool's answer as it wrote
+	// it: `"42"` must not come back as the number 42.
+	it("leaves a plain text result alone", () => {
+		expect(evalStr(interp, '(fx/echo :message "42")')).toBe('"42"');
+		expect(evalStr(interp, '(fx/echo :message "null")')).toBe('"null"');
+	});
+
 	it("validates required arguments before calling", () => {
 		expect(() => run(interp, "(fx/echo)")).toThrow(
 			/required argument "message"/,

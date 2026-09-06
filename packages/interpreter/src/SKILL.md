@@ -18,9 +18,18 @@ evaluate — wrap it in a form; a stray parenthesis in prose is still read as co
 so never write one (no `:)`, no `(see below)`); and prose cannot hold a `<` or a
 `[` at all — write "less than", or put the comparison in a form, `(< 1 2)`.
 
-- **Quote**: `'x` = `(quote x)` — returns `x` unevaluated.
-- **Quasiquote**: `` `x `` = `(quasiquote x)`. Inside it `,x` (`unquote`) inserts
-  the evaluated `x` and `,@x` (`unquote-splicing`) splices a list:
+A parenthesised aside whose head names nothing — `(see below)`, `(one, two,
+three)` — is read as prose rather than run, and comes back as a `skipped …`
+note; a reply made only of those ran nothing, which ends the loop (see "Ending
+the loop"). That tolerance stops at anything shaped like a call: a keyword
+argument, a string literal, another call nested inside it, or a slashed or
+underscored name with no words around it — `(server/tool :key "value")`, dummy
+names — is code whatever is missing, so calling a tool whose server you have
+not loaded is an `undefined:` error you must fix, not a skip.
+
+- **Quote**: `'x` ≡ `(quote x)` — returns `x` unevaluated.
+- **Quasiquote**: `` `x `` ≡ `(quasiquote x)`. Inside it, `,x` (`unquote`) inserts
+  the evaluated `x`, and `,@x` (`unquote-splicing`) splices a list. Example:
   `` `(a ,(+ 1 2) ,@(list 3 4)) `` → `(a 3 3 4)`.
 - **Lists**: `(a b c)`. Dotted pair: `(a . b)` is a single cons cell.
 - **Strings**: `"..."` with escapes `\\ \" \n \r \f \b \t \v`. There is no
@@ -129,22 +138,28 @@ the nearest loop · `(return value)` exit it with a value.
 `terpri` or `view`, and the REPL prints nothing on its own (§9).
 - `(echo x...)` print the arguments space-separated with one trailing newline:
   strings as they are, everything else re-readable. `(echo)` is a blank line.
-- `(echo x :offset 0 :length n)` print a window of `x` counted in
+  A keyword prints as itself when nothing follows it — `(echo (job-status j))`
+  shows `:pending` — because only a keyword carrying a value after it is read
+  as an option. So put a keyword you mean to print LAST, or wrap it in a list.
+- `(echo x :offset 0 :length n)` print a window of `x`, counted in
   whitespace-separated words; the `...` line it ends with gives the offset to
   continue from.
 - `(echo x :match "re" :context 8 :max 10 :ignore-case t)` print only the regions
   matching a regular expression, each as `@<word-offset>` plus the surrounding
   words with the match in `[[ ]]`. Feed a reported offset back in as `:offset`.
 
-**Extracting** — `head`/`tail`/`grep` RETURN a value, which the REPL then names
-(§9), instead of printing it. Use `echo :match` to READ a region, `grep` to KEEP
-what matched.
-- `(head x [n])` the first `n`, `(tail x [n])` the last `n`. On a list that is `n`
-  ELEMENTS — `(head issues 4)` is the first four rows; on text it is `n` words.
-- `(grep x "pattern" :group n :max n :ignore-case t)` what `pattern` matched, as a
-  list, or `nil`. On a list, the ELEMENTS whose printed form matches
-  (`(grep issues "auth")` is the issues about auth); on text, the matched
-  substrings (`(grep page "https?://[^ ]+")` is the URLs in it).
+**Extracting** — these RETURN a value (so the REPL names it, §9) instead of
+printing. Extract into a name, then `echo` a rendering of it.
+- `(head x [n])` the first `n` of `x`; `(tail x [n])` the last `n`. On a list,
+  `n` ELEMENTS — `(head issues 4)` is the first four rows. On text, `n` words.
+  A slice is taken to be read, so one written as a step of its own is PRINTED
+  and gets no name: `(head issues 4)` shows you the four rows, and there is no
+  `(echo …)` to write after it. Nested in another form it prints nothing and is
+  just the value — `(mapcar row (head issues 4))`, `(setq top (head issues 4))`.
+- `(grep x "pattern" :group n :max n :ignore-case t)` what `pattern` matched, as
+  a list, or `nil`. On a list, the ELEMENTS whose printed form matches:
+  `(grep issues "auth")` is the issues about auth. On text, the matched
+  substrings: `(grep page "https?://[^ ]+")` is the URLs in it.
 
 **Introspection** — `(doc name)` print a binding's signature and doc, `(doc)` list
 all documented names · `(dump)` every global symbol · `(import "path")` load and
@@ -261,10 +276,12 @@ REPL always tells you the one it bound. Build on it:
 
 ### EXTRACT, THEN ECHO
 
-The shape line tells you what to write next. Two moves cover almost everything:
-`head`/`tail`/`grep` to pull out a value, which the REPL names, and `echo` to show
-a rendering of it. `(echo x...)` is the ONE command that prints, and the only way
-either you or the user sees a value.
+The shape line tells you what you need to write the next form. Two moves cover
+almost everything: `head`/`tail`/`grep` to pull out a value (which the REPL then
+names), and `echo` to show a rendering of it. A bare `head`/`tail` is the
+exception that needs neither: it prints its slice on the spot.
+
+To answer with something the REPL produced, compute the answer and echo THAT:
 
 ```
 (grep page-1 "https?://[^ ]+")
@@ -274,14 +291,22 @@ grep-1: ("https://x.dev/a")
 https://x.dev/a
 ```
 
-```
-(head acme/list-issues-1 4)
-head-1: list of 4 alists, keys "id" "identifier" "title" "state" "url"
+A bare slice is already the answer to "what is in there":
 
+```
+(head acme/list-issues-1 2)
+((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
+ (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
+```
+
+To render it for the user rather than read it yourself, keep the whole list and
+echo the rendering:
+
+```
 (defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
 row: function
 
-(echo (string-join (mapcar row head-1) "\n"))
+(echo (string-join (mapcar row (head acme/list-issues-1 4)) "\n"))
 | ENG-12 | Auth token refresh fails |
 | ENG-31 | OAuth callback drops the state param |
 ```
@@ -328,6 +353,11 @@ tool name — read it out of one of those results.
 
 - `(load-mcp "name")` loads a predefined server. It is **asynchronous**: it returns
   a job immediately and does NOT block; the tools install only when the job settles.
+- **An unawaited load is finished code, not a loose end.** The job installs the
+  tools itself when it settles, so a step that reported
+  `load-mcp-1: load-mcp:acme started in the background …` needs no follow-up:
+  go on with the task and call the tools on a later step. `await` is for when
+  you want the tool list in the SAME step, nothing else.
 - **To load and use in one step, wrap the SINGLE `load-mcp` call in `await`:**
   `(await (load-mcp "acme"))` blocks until ready and returns the tool list. Do NOT
   call `(load-mcp "acme")` and then `(await (load-mcp "acme"))` — that starts TWO
@@ -358,10 +388,13 @@ tool name — read it out of one of those results.
   `(acme/get_widget :id "42")`. Inspect one with `(doc 'acme/get_widget)`.
 - A tool result arrives already converted to Lisp data (JSON object → alist with
   string keys, array → list), so read it with `assoc`/`cdr`/`mapcar`/`nth` — no
-  parsing step. Only when a tool hands back a *string* that happens to contain
-  JSON do you need `(json-parse s)` (§5).
-- Full example. The server and tool names here are made up: you never know them in
-  advance, so start from `search-mcps` and let each step tell you the next name.
+  parsing step. This holds however the server sent it: a JSON document delivered
+  as text is parsed for you too, which is why a result's report names its keys.
+  Only when a tool hands back a *string* that is not itself a JSON document do
+  you need `(json-parse s)` (§5).
+- Full example — find the server, load it, find the tool, call it. The server and
+  tool names below are made up: you never know them in advance, so start from
+  `search-mcps` and let each step tell you the next name.
   ```
   (search-mcps "widget")
   (await (load-mcp "acme"))
@@ -371,7 +404,10 @@ tool name — read it out of one of those results.
 
 ### 10.2 Async jobs
 
-A *job* is a handle for background work (currently just `load-mcp`).
+A *job* is a handle for background work (currently just `load-mcp`). It is a live
+handle, so the only way to name one is the name the REPL reported it under
+(`load-mcp-1`) or one you bound yourself — never the `#<job …>` text, which is
+not something the reader can read back.
 `(await job [timeout-ms])` blocks for the result and re-raises the job's error ·
 `(await-all jobs [ms])` results in order, a failed one as `(:error "msg")` ·
 `(await-any jobs [ms])` the first result · `(job-status job)` checks progress
@@ -491,3 +527,31 @@ not as a note to yourself (`"user clicked search"`).
 - You are told only that the render happened (`rendered stack, 8 elements, 3
   actions`); the widget is never sent back to you, because describing it to
   yourself would spend exactly the context that drawing it saved.
+
+## 12. Gotchas
+
+- Only `nil` is false — `0`, `0.0`, and `""` are all TRUE.
+- Integer division: `/` gives a float; use `truncate` for an exact integer.
+- Integer vs float shows in output as `3` vs `3.0`.
+- No `reduce`/`filter`/`mapc`/math library — write them or use `mapcar`/`dolist`/recursion.
+- `read` parses LISP text, `json-parse` parses JSON. `read` on JSON does not
+  error, it returns junk (§5).
+- JSON numbers come back as floats, so an integer id prints as `7.0`; `=` and
+  `eql` still compare it equal to `7`.
+- No character type: chars are one-character strings.
+- No comment syntax: remarks go in the prose around the forms, never inside one.
+- The REPL prints NOTHING on its own (§9): it reports a result's name and shape.
+  `echo` is the only way to see a value, and the only way to show one to the user.
+- There is no `print`/`princ`/`terpri`/`view` — one `echo` does all of it, and
+  `:offset`/`:length`/`:match` are how you window and search what it prints.
+- Retyping data the REPL produced is the main way you produce wrong data (§9).
+  Extract it with `grep`/`head` and echo the variable instead.
+- A `#<…>` form — `#<job …>`, `#<secret:KEY>`, `#<closure …>` — is a printout of
+  a value that cannot be read back, so typing one is always an error. Use the
+  name the value was reported under. `(await #<job load-mcp:acme 8d12…>)` is the
+  common version of this mistake; `(await load-mcp-1)` is what it meant.
+- `head`/`tail`/`grep` RETURN a value; only `echo` prints — except a bare
+  `head`/`tail`, whose slice the REPL prints instead of describing, because a
+  slice is asked for in order to be read.
+- Echo output is capped for you but not for the user (§9). Output ending in a
+  `...` line is not everything — page on with the offset it gives you.

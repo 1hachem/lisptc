@@ -14,7 +14,7 @@
  * bundler-style; see the script).
  */
 
-import type { BotFrame } from "@repo/bloub/bot/engine.ts";
+import type { BotFrame } from "@repo/bloub/bot/engine";
 
 /** The avatar's own shape, face and eye scale — see `components/agent-avatar.tsx`. */
 export const ICON_SHAPE = "carre";

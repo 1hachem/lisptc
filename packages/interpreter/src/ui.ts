@@ -31,6 +31,7 @@
  * they must die with it, exactly as the `Compressor`'s counters do.
  */
 import { z } from "zod";
+import type { Channels, Diagnostic } from "./channels.ts";
 import {
 	Cell,
 	callableArity,
@@ -64,6 +65,45 @@ const MAX_ROWS = 200;
 // in this extension where a runaway handler would cost real tokens on every
 // subsequent turn. Roughly the echo cap's worth of text.
 const MAX_MESSAGE_CHARS = 4000;
+
+/*
+ * The channel a drawn view and a sent message go out on.
+ *
+ * Its own name rather than `user`, because what this extension produces is not
+ * text: a host that can draw subscribes here and gets a tree, and one that
+ * cannot (the CLI, the MCP server) never subscribes and is unaffected. The core
+ * knows nothing about it — a channel is not registered, only emitted on.
+ */
+export const UI = "ui";
+
+/*
+ * What arrives on that channel, in the `value` of the diagnostic.
+ *
+ * Two things, discriminated, because a click can do both: draw the next view
+ * AND hand the conversation a message. One channel rather than two keeps the
+ * order between them, which is what a host replaying a step needs.
+ */
+export type UiEvent =
+	| { kind: "view"; node: UiNode }
+	| { kind: "message"; text: string };
+
+/*
+ * The messages one step sent, as the single turn they become.
+ *
+ * Several `ui/send` calls in one handler join into one message rather than
+ * becoming several turns: a click is one thing the user did, and answering it
+ * as a conversation of its own would read as the widget talking to itself.
+ * The joining lives here, with the cap it has to respect, rather than in each
+ * host that collects the channel.
+ */
+export function joinMessages(parts: readonly string[]): string | undefined {
+	if (parts.length === 0) return undefined;
+	const text = parts.join("\n\n");
+	if (text.length <= MAX_MESSAGE_CHARS) return text;
+	// Truncated rather than refused: the click already happened, and a turn
+	// that says most of what was meant beats one that says nothing.
+	return `${text.slice(0, MAX_MESSAGE_CHARS)}\n… (message truncated)`;
+}
 
 /** A JSON-serialisable value, which is all a widget tree may contain. */
 export type UiValue =
@@ -104,15 +144,21 @@ class UiElement implements UiNode {
  */
 export class UiSurface {
 	private readonly handlers = new Map<string, unknown>();
-	private readonly outbox: string[] = [];
 	private interp: Interp | undefined;
-	private view: UiNode | undefined;
+	private channels: Channels | undefined;
 	private seq = 0;
 
 	// Called by the extension as it installs itself, so `invoke` has an
-	// interpreter to run the handler in.
+	// interpreter to run the handler in and `render`/`send` have somewhere to
+	// put what they produce.
 	bind(interp: Interp): void {
 		this.interp = interp;
+		this.channels = interp.channels;
+	}
+
+	private emit(event: UiEvent): void {
+		const text = event.kind === "view" ? `<ui ${event.node.tag}>` : event.text;
+		this.channels?.emit({ channel: UI, text, value: event } as Diagnostic);
 	}
 
 	/** Register a callable and return the id that stands for it on the wire. */
@@ -130,41 +176,11 @@ export class UiSurface {
 	}
 
 	render(node: UiNode): void {
-		this.view = node;
+		this.emit({ kind: "view", node });
 	}
 
 	send(text: string): void {
-		this.outbox.push(text);
-	}
-
-	/*
-	 * What this step asked to say to the agent, as one message.
-	 *
-	 * Several `ui/send` calls in one handler join into a single turn rather than
-	 * becoming several: a click is one thing the user did, and answering it as a
-	 * conversation of its own would read as the widget talking to itself. Reads
-	 * and clears, so a message is delivered once.
-	 */
-	takeMessage(): string | undefined {
-		if (this.outbox.length === 0) return undefined;
-		const text = this.outbox.join("\n\n");
-		this.outbox.length = 0;
-		if (text.length <= MAX_MESSAGE_CHARS) return text;
-		// Truncated rather than refused: the click already happened, and a turn
-		// that says most of what was meant beats one that says nothing.
-		return `${text.slice(0, MAX_MESSAGE_CHARS)}\n… (message truncated)`;
-	}
-
-	/*
-	 * The view rendered since the last call, if any.
-	 *
-	 * Reads and clears, so a step that rendered nothing reports nothing and the
-	 * previous view stays on screen rather than being redrawn as this step's.
-	 */
-	takeView(): UiNode | undefined {
-		const v = this.view;
-		this.view = undefined;
-		return v;
+		this.emit({ kind: "message", text });
 	}
 
 	hasAction(id: string): boolean {
@@ -569,7 +585,7 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		"A group of fields with a submit button. `action` is a function of ONE argument, run in this REPL when the user submits: it receives an alist of every enclosed field's `:name` and its current contents, read with `assoc`. Whatever it renders replaces the view.",
 		z.tuple([zAny, zList]),
 		([action, rest]) => {
-			const { values, options } = splitKeywordArgs(rest);
+			const { values, options } = splitKeywordArgs(rest, ["submit"]);
 			const opts = plistOptions(options, ["submit"]);
 			return new UiElement(
 				"form",

@@ -1,4 +1,4 @@
-import { LANGUAGE_REFERENCE } from "@repo/interpreter/source.ts";
+import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
 import { describe, expect, it } from "vitest";
 import { LISP_SYSTEM_PROMPT } from "../src/index.ts";
 import { IDENTITY, MAX_STEPS } from "../src/prompts/lisp.ts";

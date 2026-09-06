@@ -20,7 +20,7 @@
  * a run needs is held by the client, not here.
  */
 
-import { nodeToJson, type UiValue } from "@repo/interpreter/ui.ts";
+import { nodeToJson, type UiValue } from "@repo/interpreter/ui";
 import { peekThreadRepl } from "./repl-store.ts";
 
 export interface UiActionResult {

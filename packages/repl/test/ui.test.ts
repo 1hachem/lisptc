@@ -1,4 +1,4 @@
-import { nodeToJson } from "@repo/interpreter/ui.ts";
+import { nodeToJson } from "@repo/interpreter/ui";
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 

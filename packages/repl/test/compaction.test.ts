@@ -61,11 +61,69 @@ describe("reporting every result", () => {
 		expect(r.eval("(length range-1)")).toBe("length-1: 2\n");
 	});
 
+	// The literal argument is what makes the misspelling a call rather than a
+	// turn of phrase — a bare `(no-such-fn)` is read as prose (see src/prose.ts).
 	it("still reports what was bound before a later form threw", () => {
 		const r = repl();
-		const out = r.eval("(range 2) (no-such-fn)");
+		const out = r.eval('(range 2) (no-such-fn "x")');
 		expect(out).toContain("range-1: (1 0)");
 		expect(out).toMatch(/EvalException/);
+	});
+});
+
+/*
+ * A slice is asked for in order to be read, so `(head x 5)` on its own prints
+ * it. The alternative cost the agent a whole step: a report saying `head-1:
+ * list of 5 items` told it only what it already knew, and it had to write
+ * `(echo head-1)` to see what it had come for.
+ */
+describe("a slice taken as a step of its own", () => {
+	it("prints the slice rather than describing it", () => {
+		const r = repl();
+		r.eval("(range 20)");
+		expect(r.eval("(head range-1 3)")).toBe("(19 18 17)\n");
+		expect(r.eval("(tail range-1 2)")).toBe("(1 0)\n");
+	});
+
+	it("prints a text slice word-wise", () => {
+		const r = repl();
+		expect(r.eval('(head "the quick brown fox jumps" 3)')).toBe(
+			"the quick brown\n",
+		);
+	});
+
+	it("mints no name for it — the source already has one", () => {
+		const r = repl();
+		r.eval("(range 20)");
+		r.eval("(head range-1 3)");
+		expect(r.eval("(dump)")).not.toContain("head-1");
+	});
+
+	// Only the bare form prints: a slice handed to another function is that
+	// function's argument, and printing it would leak data the step never
+	// asked to see.
+	it("stays silent inside another form", () => {
+		const r = repl();
+		r.eval("(range 20)");
+		expect(r.eval("(length (head range-1 3))")).toBe("length-1: 3\n");
+	});
+
+	// The value comes back as well as being printed, so the agent can keep it.
+	it("is still a value a setq can bind", () => {
+		const r = repl();
+		r.eval("(range 20)");
+		expect(r.eval("(setq top (head range-1 3))")).toBe("top: (19 18 17)\n");
+		expect(r.eval("(length top)")).toBe("length-1: 3\n");
+	});
+
+	// The step's word budget bounds it like any other output: what the model
+	// sees stops, with the offset to read on from.
+	it("is capped against the step's budget", () => {
+		const r = repl();
+		r.eval("(range 20)");
+		const { model, user } = r.evalOutput("(head range-1 12)");
+		expect(model).toContain("6 of 12 words shown");
+		expect(user).not.toContain("words shown");
 	});
 });
 
@@ -78,12 +136,6 @@ describe("extracting, then echoing", () => {
 			'grep-1: ("https://x.dev/a")\n',
 		);
 		expect(r.eval("(echo (car grep-1))")).toBe("https://x.dev/a\n");
-	});
-
-	it("names what head took", () => {
-		const r = repl();
-		r.eval("(range 20)");
-		expect(r.eval("(head range-1 3)")).toBe("head-1: (19 18 17)\n");
 	});
 });
 
@@ -104,9 +156,14 @@ describe("capping echo output", () => {
 		expect(model).toContain("not shown to you");
 		expect(user).not.toContain("not shown to you");
 		expect(user).toContain("19\n");
-		// Both end with the same report line for the form itself.
-		expect(model.endsWith("nil\n")).toBe(true);
+		// Both carry the same report line for the form itself; the model's copy
+		// then closes with the step's dropped-words note, which is a summary of
+		// the whole step and so can only be written once it is over.
+		expect(model).toContain("nil\n");
 		expect(user.endsWith("nil\n")).toBe(true);
+		expect(model.endsWith("echo a named value you can page through\n")).toBe(
+			true,
+		);
 	});
 
 	it("leaves short output exactly as it was written", () => {
@@ -133,7 +190,7 @@ describe("capping echo output", () => {
 describe("errors", () => {
 	it("still renders inline rather than throwing", () => {
 		const r = repl();
-		expect(r.eval("(no-such-fn)")).toMatch(/EvalException/);
+		expect(r.eval('(no-such-fn "x")')).toMatch(/EvalException/);
 	});
 
 	it("caps a huge error message", () => {
