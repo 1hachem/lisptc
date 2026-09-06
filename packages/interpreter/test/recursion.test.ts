@@ -8,7 +8,6 @@ describe("recursion and tail-call optimisation", () => {
 		).toBe(((1000 * 1001) / 2).toString());
 	});
 
-	// A tail-recursive loop to 100k must NOT overflow the stack if TCO works.
 	it("handles deep tail recursion without overflowing", () => {
 		const expected = (100000n * 100001n) / 2n;
 		expect(
@@ -25,7 +24,6 @@ describe("recursion and tail-call optimisation", () => {
 		);
 	});
 
-	// Mutual recursion in tail position.
 	it("supports mutually tail-recursive predicates", () => {
 		const program = `
       (defun evenp (n) (if (= n 0) t (oddp (- n 1))))
@@ -35,7 +33,6 @@ describe("recursion and tail-call optimisation", () => {
 		expect(ev(program)).toBe("(t nil)");
 	});
 
-	// Deep NON-tail recursion is expected to exhaust the JS call stack.
 	it("overflows on very deep non-tail recursion", () => {
 		expect(() =>
 			ev(

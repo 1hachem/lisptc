@@ -74,7 +74,6 @@ describe("and / or short-circuiting", () => {
 	});
 
 	it("and does not evaluate past a nil", () => {
-		// If the tail were evaluated, the unbound function would throw.
 		expect(ev("(and nil (undefined-fn))")).toBe("nil");
 	});
 
@@ -115,8 +114,6 @@ describe("let / lambda / lexical scope", () => {
 	});
 
 	it("let* nests deeply, past the macro-expansion limit", () => {
-		// The whole nest is built in ONE expansion step, so it is not capped by
-		// the 20-nesting limit expandMacros applies to a compiled body.
 		const bindings = Array.from({ length: 40 }, (_, i) => `(v${i} ${i})`).join(
 			" ",
 		);

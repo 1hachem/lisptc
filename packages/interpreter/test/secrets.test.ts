@@ -17,7 +17,6 @@ const FIXTURE = fileURLToPath(
 	new URL("./fixture-mcp-server.ts", import.meta.url),
 );
 
-// A prelude-loaded interp whose secret registry is preloaded with `record`.
 function interpWithSecrets(record: Record<string, SecretSpec>): Interp {
 	const store = new EnvSecretsStore();
 	store.set(record);
@@ -30,7 +29,7 @@ describe("secret registry", () => {
 	it("lists (key . description) pairs for each secret", () => {
 		const interp = interpWithSecrets({
 			REPL_API_KEY: { value: "lin_abc", description: "Linear API key" },
-			REPL_DB_PASS: "hunter2", // bare value => empty description
+			REPL_DB_PASS: "hunter2",
 		});
 		expect(ev("(secrets)", interp)).toBe(
 			'(("REPL_API_KEY" . "Linear API key") ("REPL_DB_PASS" . ""))',
@@ -75,9 +74,6 @@ describe("secret registry", () => {
 	});
 });
 
-// Taint tracking: anything derived from a secret through a text function stays
-// a secret and prints redacted — so an agent cannot transform its way around
-// the redaction (upcase, reverse, substring, char, concat, ...).
 describe("secret registry (taint propagation)", () => {
 	function interpWith(value: string): Interp {
 		return interpWithSecrets({ REPL_FOO: value });
@@ -142,7 +138,6 @@ describe("secret registry (env seeding)", () => {
 		const prev = process.env.REPL_FOO;
 		process.env.REPL_FOO = "from-env";
 		try {
-			// The default store (EnvSecretsStore) seeds from process.env at build.
 			const interp = new Interp({ extensions: [secretsExtension()] });
 			run(interp, prelude);
 			expect(str(run(interp, "(secrets)"))).toBe('(("REPL_FOO" . ""))');
@@ -211,8 +206,6 @@ describe("secret registry (revealed only into an MCP call)", () => {
 	});
 });
 
-// Without the extension the core knows nothing about secrets: no (secret)
-// built-in, and the string primitives only handle plain strings.
 describe("core interpreter (no secrets extension)", () => {
 	function coreInterp(): Interp {
 		const interp = new Interp({});

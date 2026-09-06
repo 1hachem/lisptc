@@ -1,12 +1,3 @@
-// A small GBNF (llama.cpp) recogniser, used by the tests to
-// check that a `.gbnf` grammar accepts / rejects a given string. It supports the
-// subset the project's grammars use: rules (`name ::= …`), alternation `|`,
-// sequencing, postfix `* + ?`, grouping `( … )`, string literals, character
-// classes (with `^` negation, ranges and `\t \r \n \" \\ \uXXXX \UXXXXXXXX \xXX`
-// escapes) and the `.` any-char wildcard. Matching is over Unicode code points,
-// so astral characters (e.g. emoji) count as one.
-// TODO: add link to llama.cpp test where this was translated from C to js
-
 type Node =
 	| { t: "ref"; id: number; name: string }
 	| { t: "seq"; id: number; items: Node[] }
@@ -38,8 +29,6 @@ type Tok =
 
 const HEX = (s: string) => Number.parseInt(s, 16);
 
-// Decode one backslash escape starting at `s[i]` (which is the char after `\`).
-// Returns [codePoint, nextIndex].
 function decodeEscape(s: string, i: number): [number, number] {
 	const c = s[i];
 	const simple: Record<string, number> = {
@@ -193,7 +182,6 @@ export function parseGrammar(src: string): Grammar {
 		for (;;) {
 			const t = peek();
 			if (!t || t.k === "|" || t.k === ")") break;
-			// A `name ::=` ahead starts the next rule — stop this sequence.
 			if (t.k === "name" && toks[p + 1]?.k === "def") break;
 			items.push(parsePostfix());
 		}
@@ -261,7 +249,6 @@ export function parseGrammar(src: string): Grammar {
 	return { rules, start };
 }
 
-// Return the set of end positions reachable by matching `node` at `pos`.
 function matcher(g: Grammar, cps: number[]) {
 	const memo = new Map<string, Set<number>>();
 
@@ -269,7 +256,6 @@ function matcher(g: Grammar, cps: number[]) {
 		const key = `${node.id}:${pos}`;
 		const cached = memo.get(key);
 		if (cached) return cached;
-		// Guard against left-recursive cycles (our grammars have none, but be safe).
 		memo.set(key, new Set());
 		const out = compute(node, pos);
 		memo.set(key, out);
@@ -340,7 +326,6 @@ function matcher(g: Grammar, cps: number[]) {
 	return (node: Node, pos: number) => match(node, pos);
 }
 
-/** Does `grammar` accept the whole of `input`? */
 export function accepts(g: Grammar, input: string): boolean {
 	const cps = Array.from(input, (ch) => ch.codePointAt(0) as number);
 	const run = matcher(g, cps);

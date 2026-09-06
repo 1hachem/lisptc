@@ -32,8 +32,6 @@ describe("prelude", () => {
 	});
 
 	it("supports defun nested inside a lambda (letrec expansion)", () => {
-		// Regression check: the defun expansion calls _set-doc with the
-		// compiled local variable (an Arg, not a Sym) in this position.
 		expect(
 			ev(
 				"(letrec ((f (lambda (n) (cond ((eq n 0) 1) (t (* n (f (- n 1)))))))) (f 5))",

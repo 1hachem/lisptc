@@ -2,10 +2,6 @@ import { compactionExtension } from "../src/compaction.ts";
 import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 
-/**
- * A fresh interpreter with the standard prelude, secret registry and the
- * compaction built-ins (echo/head/tail/grep) loaded.
- */
 export function freshInterp(): Interp {
 	const interp = new Interp({
 		extensions: [secretsExtension(), compactionExtension()],
@@ -14,18 +10,10 @@ export function freshInterp(): Interp {
 	return interp;
 }
 
-/**
- * Evaluate a whole program (one or more top-level forms) and return the
- * printed representation (via `str`) of the value of the last form.
- */
 export function ev(code: string, interp: Interp = freshInterp()): string {
 	return str(run(interp, code));
 }
 
-/**
- * Evaluate a program while capturing everything `echo` wrote. Returns both the
- * printed representation of the last value and the captured output.
- */
 export function evWithOutput(code: string): { value: string; output: string } {
 	const interp = freshInterp();
 	let output = "";

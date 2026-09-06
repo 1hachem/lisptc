@@ -5,11 +5,6 @@ import { LANGUAGE_REFERENCE } from "../src/source.ts";
 import { accepts, parseGrammar } from "./gbnf.ts";
 import { ev } from "./helpers.ts";
 
-// Replies in the shape an agent actually writes them once the prompt tells it
-// prose is allowed: a sentence of explanation wrapped around the forms doing
-// the work. Each surface the model meets — the GBNF that constrains its
-// decoding, the syntax check the editor runs, and the evaluator itself — has
-// to agree on every one of them, which is what this corpus pins down.
 const REPLIES: [source: string, value: string][] = [
 	["Let me square it: (* 5 5)", "25"],
 	["(+ 1 2) and that is the answer.", "3"],
@@ -44,9 +39,6 @@ describe("prose is allowed on every surface the model meets", () => {
 });
 
 describe("the language reference teaches prose", () => {
-	// The reference IS the system prompt's language section (source.ts embeds
-	// SKILL.md verbatim), so a model that never sees these two rules will keep
-	// writing `;` comments and bare top-level atoms.
 	it("says the text around the forms is ignored", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(
 			/only the parenthesised top-level forms are program text/i,
@@ -57,18 +49,12 @@ describe("the language reference teaches prose", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/there is no comment syntax/i);
 	});
 
-	// The GBNF fences "<" and "[" out of prose so no model can open a thinking
-	// channel there. A model that is never told will just spend tokens being
-	// masked, so the reference has to carry the rule too.
 	it("says prose cannot hold a < or a [", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/prose cannot hold a `<` or a `\[`/i);
 	});
 });
 
 describe("the language reference teaches context compaction", () => {
-	// The silence is invisible unless the reference describes it: a model that
-	// is not told will wait for values it will never be shown, and will keep
-	// retyping data it could have referred to by name.
 	it("says the REPL prints nothing on its own", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/the ONLY thing that prints/);
 		expect(LANGUAGE_REFERENCE).toMatch(/reports? (one line|a result's name)/i);
@@ -78,8 +64,6 @@ describe("the language reference teaches context compaction", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/never retype data the REPL/i);
 	});
 
-	// The whole point of the split: reaching for `grep` instead of copying a
-	// URL out of a printout.
 	it("says the extraction commands return rather than print", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/RETURN a value/);
 		expect(LANGUAGE_REFERENCE).toMatch(/head`\/`tail`\/`grep` RETURN a value/);

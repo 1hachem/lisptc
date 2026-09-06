@@ -1,18 +1,3 @@
-/*
- * Async-jobs runtime — the main-thread half of the async capability.
- *
- * The interpreter is fully synchronous; this layer lets it (a) make a blocking
- * call into async work and (b) start background jobs it can await, poll, or
- * cancel later. It is deliberately domain-agnostic: it knows nothing about MCP.
- * A consumer (see src/mcp.ts) supplies a `JobsRuntime` and a `toLisp` result
- * converter, then installs the generic job built-ins with `Jobs.installBuiltins`.
- *
- * `JobsRuntime` is the swappable transport. The bundled `WorkerJobsRuntime`
- * offloads work to a `worker_threads` worker over a SharedArrayBuffer bridge
- * (`Atomics.wait`/`notify`); a different backend (e.g. a Redis-backed worker
- * queue) can implement the same interface without touching the built-ins or the
- * domain layer. The wire protocol is in src/jobs-protocol.ts.
- */
 import { randomUUID } from "node:crypto";
 import { readFileSync, unlinkSync } from "node:fs";
 import { Worker } from "node:worker_threads";
@@ -40,10 +25,6 @@ import type { ToJson } from "./types.ts";
 
 export type { JobSettledMessage, SettledReply } from "./jobs-protocol.ts";
 
-// The async capability behind the job built-ins. `call` runs a synchronous
-// (blocking) op; `start` kicks off a background job whose id the rest operate
-// on. Implement this to plug in a different backend (worker thread today, a
-// distributed queue later).
 export interface JobsRuntime {
 	call(op: string, payload: unknown, timeoutMs?: number): unknown;
 	start(op: string, payload: unknown): string;
@@ -56,11 +37,6 @@ export interface JobsRuntime {
 	shutdown(): void;
 }
 
-// A `worker_threads`-backed JobsRuntime. The synchronous main thread posts a
-// request and blocks on a SharedArrayBuffer via Atomics.wait; the worker (whose
-// module URL is given here) performs the work and writes the reply back, then
-// Atomics.notify wakes us. The worker itself runs the generic scheduler from
-// src/jobs-broker.ts wrapped around a domain dispatch.
 export class WorkerJobsRuntime implements JobsRuntime {
 	private worker: Worker | null = null;
 	private settledHandler: ((msg: JobSettledMessage) => void) | undefined;
@@ -77,7 +53,6 @@ export class WorkerJobsRuntime implements JobsRuntime {
 		if (this.worker) return this.worker;
 		this.worker = new Worker(this.workerUrl, { execArgv: this.execArgv });
 		if (this.settledHandler) this.worker.on("message", this.settledHandler);
-		// Keep the worker from holding the process open on its own.
 		this.worker.unref();
 		return this.worker;
 	}
@@ -129,7 +104,6 @@ export class WorkerJobsRuntime implements JobsRuntime {
 		this.worker = null;
 	}
 
-	// Post a request to the worker and block until it replies (or times out).
 	private request(
 		op: string,
 		payload: unknown,
@@ -155,9 +129,7 @@ export class WorkerJobsRuntime implements JobsRuntime {
 			json = readFileSync(path, "utf8");
 			try {
 				unlinkSync(path);
-			} catch {
-				// best-effort cleanup
-			}
+			} catch {}
 		} else {
 			json = new TextDecoder().decode(new Uint8Array(dataSab, 0, len));
 		}
@@ -168,19 +140,12 @@ export class WorkerJobsRuntime implements JobsRuntime {
 				parsed && typeof parsed === "object" && "error" in parsed
 					? String((parsed as { error: unknown }).error)
 					: json;
-			// Bind the handler variable (the EvalException value) to the actual
-			// error text, so `(try … (catch (e) …))` gets something meaningful —
-			// not `op`, an internal op-code like "call-tool" a catch couldn't act on.
 			throw new EvalException("job error", msg, false);
 		}
 		return parsed;
 	}
 }
 
-// A background-job handle. Carries the runtime jobId plus an optional
-// main-thread finalizer that runs once when the job is first collected (e.g.
-// installing an MCP server's tool bindings). Domain-agnostic: the finalizer is
-// supplied by whoever starts the job.
 export class Job implements ToJson {
 	finalized = false;
 	cached: unknown;
@@ -194,8 +159,6 @@ export class Job implements ToJson {
 		return `#<job ${this.label} ${this.jobId.slice(0, 8)}>`;
 	}
 
-	// The wire form when a job handle reaches an outgoing call: its runtime id,
-	// so the handle stays addressable rather than baking in the display form.
 	toJSON(): string {
 		return this.jobId;
 	}
@@ -203,7 +166,6 @@ export class Job implements ToJson {
 
 const zJob = z.custom<Job>((x) => x instanceof Job, "job expected");
 
-// Coerce a Lisp list of job handles into a Job[]; rejects non-jobs.
 function toJobs(x: unknown): Job[] {
 	const arr = x === null || x instanceof Cell ? listToArray(x as List) : [x];
 	return arr.map((j) => {
@@ -212,8 +174,6 @@ function toJobs(x: unknown): Job[] {
 	});
 }
 
-// Parse an optional `[timeout-ms]` await argument; absent -> AWAIT_TIMEOUT_MS.
-// A non-finite value would make Atomics.wait block forever, so it is rejected.
 function parseTimeout(x: unknown): number {
 	if (x === undefined) return AWAIT_TIMEOUT_MS;
 	const ms = Number(x);
@@ -234,25 +194,13 @@ function arrayToList(arr: unknown[]): List {
 	return out;
 }
 
-// Owns a JobsRuntime plus the set of in-flight job handles, and installs the
-// generic job built-ins (await, await-all, await-any, job-status, jobs, cancel).
-// A consumer creates one, calls `installBuiltins`, and mints `Job`s with
-// `runtime.start(...)` + `track(...)`.
 export class Jobs {
-	// In-flight job handles. A settled job is reaped when collected, so this (and
-	// the onSettled iteration) stays bounded to jobs still running.
 	readonly live = new Set<Job>();
 
 	constructor(
 		readonly runtime: JobsRuntime,
-		// Convert a plain (JSON-ish) job result into a Lisp value, for jobs with no
-		// finalizer of their own.
 		private readonly toLisp: (raw: unknown) => unknown,
 	) {
-		// Apply `job-settled` push events: when a background job resolves, run its
-		// finalizer as soon as the event loop turns — so a job's effect appears
-		// automatically, without an explicit await. Idempotent with await via
-		// job.finalized; errored jobs are left as-is.
 		runtime.onSettled((msg) => {
 			if (msg?.type !== "job-settled" || !msg.ok) return;
 			for (const job of this.live) {
@@ -260,24 +208,18 @@ export class Jobs {
 				if (!job.finalized) {
 					try {
 						this.collect(job, msg.v);
-					} catch {
-						// Finalizer failed (e.g. server vanished): leave it uncollected.
-					}
+					} catch {}
 				}
 				return;
 			}
 		});
 	}
 
-	// Start tracking a freshly-minted job handle.
 	track(job: Job): Job {
 		this.live.add(job);
 		return job;
 	}
 
-	// Collect a job's result on the main thread: run its finalizer once (caching
-	// the result) so repeated awaits are idempotent, or convert a plain result to
-	// Lisp. Reaps the handle from `live` once collected.
 	collect(job: Job, raw: unknown): unknown {
 		if (job.finalized) return job.cached;
 		const value = job.finalize ? job.finalize(raw) : this.toLisp(raw);
@@ -287,16 +229,11 @@ export class Jobs {
 		return value;
 	}
 
-	// Turn a runtime SettledReply into the collected Lisp value, throwing on error.
 	private collectSettled(job: Job, r: SettledReply): unknown {
-		// Bind the handler variable to the actual error text (matching `(:error msg)`
-		// in await-all and the request() error path) — not `job.label`, which a
-		// `catch` couldn't act on.
 		if (!r.ok) throw new EvalException("job error", r.e ?? "unknown", false);
 		return this.collect(job, r.v);
 	}
 
-	// Discard all in-flight handles and shut the runtime down.
 	shutdown(): void {
 		this.live.clear();
 		this.runtime.shutdown();
@@ -305,9 +242,6 @@ export class Jobs {
 	installBuiltins(interp: Interp): void {
 		const { runtime } = this;
 
-		// (await job [timeout-ms]) -> the job's result (blocks until it settles).
-		// A finalizing job (e.g. load-mcp) applies its effect here. Idempotent; on
-		// timeout it raises but leaves the job awaitable.
 		interp.def(
 			"await",
 			-1,
@@ -318,15 +252,12 @@ export class Jobs {
 				const args = listToArray(rest);
 				const job = args[0];
 				if (!(job instanceof Job)) throw new EvalException("not a job", job);
-				// Validate the timeout before short-circuiting so an invalid timeout is
-				// rejected regardless of whether the job has already finalized.
 				const timeout = parseTimeout(args[1]);
 				if (job.finalized) return job.cached;
 				return this.collect(job, runtime.awaitJob(job.jobId, timeout));
 			},
 		);
 
-		// (await-all (list job ...) [timeout-ms]) -> list of results, input order.
 		interp.def(
 			"await-all",
 			-1,
@@ -342,8 +273,6 @@ export class Jobs {
 					jobList.map((j) => j.jobId),
 					parseTimeout(args[1]),
 				);
-				// A failed job collects to (:error "message") in place, so it never
-				// discards its succeeded siblings.
 				return arrayToList(
 					res.results.map((r) => {
 						const job = byId.get(r.jobId);
@@ -357,7 +286,6 @@ export class Jobs {
 			},
 		);
 
-		// (await-any (list job ...) [timeout-ms]) -> the first result to settle.
 		interp.def(
 			"await-any",
 			-1,
@@ -380,7 +308,6 @@ export class Jobs {
 			},
 		);
 
-		// (job-status job) -> :pending | :done | :error
 		interp.def(
 			"job-status",
 			1,
@@ -391,8 +318,6 @@ export class Jobs {
 				newLispKeyword(job.finalized ? "done" : runtime.jobStatus(job.jobId)),
 		);
 
-		// (jobs) -> ((job :status) ...) for every in-flight job. Settled jobs are
-		// reaped when collected, so they do not appear here.
 		interp.def(
 			"jobs",
 			0,
@@ -412,7 +337,6 @@ export class Jobs {
 				),
 		);
 
-		// (cancel job) -> t ; abort and stop tracking the job (best-effort).
 		interp.def(
 			"cancel",
 			1,
