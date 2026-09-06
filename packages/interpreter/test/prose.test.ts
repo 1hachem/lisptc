@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	checkSyntax,
 	Interp,
+	isTruncated,
 	prelude,
 	run,
 	str,
@@ -127,6 +128,35 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		expect(skipped).toEqual(['unclosed "(" on line 1']);
 	});
 
+	/*
+	 * Balanced parentheses are not enough. Markdown's backticks are quasiquote
+	 * sugar, so the closing one swallows the form's ")" — and the classifier
+	 * never sees the sentence, because it is consulted per PARSED form.
+	 */
+	it("reads a form it cannot parse as prose", () => {
+		const { value, skipped } = tolerantly(
+			"And others (including a deprecated `read_file`).\n(+ 1 2)",
+		);
+		expect(value).toBe("3");
+		expect(skipped).toEqual([
+			'(including a deprecated `read_file`) — unexpected ")" on line 1, so this was read as prose',
+		]);
+	});
+
+	it("reports the line an unparseable form was on", () => {
+		expect(
+			tolerantly("(+ 1 2)\nsome prose\nand more (an aside `x`) here").skipped,
+		).toEqual([
+			'(an aside `x`) — unexpected ")" on line 3, so this was read as prose',
+		]);
+	});
+
+	it("abbreviates a long unparseable form in its note", () => {
+		const [note] = tolerantly(`(${"word ".repeat(30)}\`x\`)`).skipped;
+		expect(note).toContain("...");
+		expect(note.length).toBeLessThan(120);
+	});
+
 	it("reports the line an unclosed parenthesis was on", () => {
 		expect(tolerantly("(+ 1 2)\none\ntwo (nearly\n").skipped).toEqual([
 			'unclosed "(" on line 3',
@@ -244,6 +274,21 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		expect(skipped).toEqual(['unclosed "(" on line 1']);
 	});
 
+	// The unparseable-form rule is the reader's, like the unclosed one, so it
+	// applies with no classifier installed.
+	it("reads an unparseable form as prose without the extension", () => {
+		const bare = freshInterp();
+		const skipped: string[] = [];
+		const value = run(bare, "an aside (see `x`)\n(+ 1 2)", {
+			prose: "tolerant",
+			onProse: (what: string) => skipped.push(what),
+		});
+		expect(str(value)).toBe("3");
+		expect(skipped).toEqual([
+			'(see `x`) — unexpected ")" on line 1, so this was read as prose',
+		]);
+	});
+
 	// A host that reads its model differently supplies its own policy rather
 	// than patching the core.
 	it("takes a host's own classifier in place of the bundled one", () => {
@@ -262,7 +307,40 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 	it("changes nothing under the default strict mode", () => {
 		expect(() => ev("Here is the plan (see below)")).toThrow(/undefined: see/);
 		expect(() => ev("here it comes (+ 1 2")).toThrow();
+		expect(() => ev("an aside (see `x`)")).toThrow(/syntax error/);
+		expect(checkSyntax("an aside (see `x`)")).toEqual([
+			{ message: 'syntax error: unexpected ")" at 1', line: 1 },
+		]);
 		expect(stripProse("a (b")).toBe("  (b");
 		expect(stripProse("a (b", "tolerant")).toBe("    ");
+		expect(stripProse("a (see `x`)", "tolerant")).toBe("           ");
+	});
+});
+
+/*
+ * Telling a reply cut off by a token limit from one that simply will not parse.
+ * A host ending its agent loop on whatever ran nothing needs the difference:
+ * the first is a step to resume, the second is an answer.
+ */
+describe("truncation", () => {
+	it.each([
+		"(+ 1",
+		'(echo "hello',
+		"(defun sq (x)",
+		"prose first, then (+ 1",
+	])("sees %s as cut off mid-form", (text) => {
+		expect(isTruncated(text)).toBe(true);
+	});
+
+	it.each([
+		"",
+		"the sum is 3",
+		"(+ 1 2)",
+		"all done (see above)",
+		"And others (including a deprecated `read_file`).",
+		"a stray ) close paren is just text",
+		'(echo "a (b")',
+	])("sees %s as finished", (text) => {
+		expect(isTruncated(text)).toBe(false);
 	});
 });

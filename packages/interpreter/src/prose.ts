@@ -11,12 +11,15 @@
  * lives here as an opt-in extension rather than in the core: pass
  * `proseExtension()` in `InterpOptions.extensions` and `run(..., { prose:
  * "tolerant" })` consults it once per top-level form. Without the extension
- * `tolerant` still reads an unclosed `(` as prose (that much is the reader's
- * own business) but every form it can parse is code, which is exactly right
- * for a host whose input is not model-written. A host that reads its model
- * differently passes its own `ProseClassifier` instead of replacing the core.
+ * `tolerant` still reads text it cannot parse as prose — an unclosed `(`, or a
+ * balanced one holding something that is not an expression; that much is the
+ * reader's own business — but every form it CAN parse is code, which is exactly
+ * right for a host whose input is not model-written. A host that reads its
+ * model differently passes its own `ProseClassifier` instead of replacing the
+ * core.
  */
 import {
+	abbreviate,
 	Cell,
 	type Interp,
 	type InterpExtension,
@@ -140,10 +143,4 @@ function hasWord(form: Cell): boolean {
 	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr)
 		if (rest.car instanceof Sym) return true;
 	return false;
-}
-
-// Quote a fragment back to the caller without spending a screen on it.
-function abbreviate(text: string): string {
-	const oneLine = text.replace(/\s+/g, " ");
-	return oneLine.length <= 60 ? oneLine : `${oneLine.slice(0, 57)}...`;
 }

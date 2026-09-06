@@ -458,6 +458,24 @@ class NotVariableException extends EvalException {
 // Exception thrown when something does not have an expected format
 class FormatException extends Error {}
 
+/*
+ * The reader's own failure: text it could not parse at all.
+ *
+ * Kept apart from the other EvalExceptions the reader raises — those are
+ * complaints about a token it understood perfectly well — because only a parse
+ * failure can turn out to be a sentence rather than a mistake (see
+ * `stripProse`). `reason` and `line` are the parts of the message back out
+ * again, so a caller can re-report it against its own text.
+ */
+class SyntaxException extends EvalException {
+	constructor(
+		readonly reason: string,
+		readonly line: number,
+	) {
+		super("syntax error", `${reason} at ${line}`, false);
+	}
+}
+
 // Singleton for end-of-file
 export const EndOfFile = { toString: () => "EOF" };
 
@@ -1775,8 +1793,10 @@ function startOfForm(text: string, i: number): number {
  * - `tolerant` — it is prose. Right for an LLM's reply: a stray `(` in a
  *   sentence is far likelier than a truncated program, and the grammar that
  *   would have prevented it (`lisptc.gbnf`) only binds providers that support
- *   grammars. Whatever is skipped is reported through `onProse`, so nothing
- *   disappears silently.
+ *   grammars. Balanced parentheses do not settle it either — markdown inside
+ *   them is not an expression — so text that cannot be read is prose too.
+ *   Whatever is skipped is reported through `onProse`, so nothing disappears
+ *   silently.
  */
 export type ProseMode = "strict" | "tolerant";
 
@@ -1813,10 +1833,44 @@ export function stripProse(
 			for (let j = startOfForm(text, i); j < text.length; j++) out[j] = text[j];
 			break;
 		}
-		for (let j = startOfForm(text, i); j < end; j++) out[j] = text[j];
+		const start = startOfForm(text, i);
+		// Closed, but still not necessarily a program (see `unreadable`). The
+		// same call as the unclosed one above, and for the same reason: whether
+		// text PARSES is the reader's business, and only what parses ever
+		// reaches the prose classifier.
+		const bad = mode === "tolerant" ? unreadable(text, start, end) : undefined;
+		if (bad !== undefined) {
+			onProse?.(bad);
+			i = end;
+			continue;
+		}
+		for (let j = start; j < end; j++) out[j] = text[j];
 		i = end;
 	}
 	return out.join("");
+}
+
+/*
+ * Does the text break off mid-form?
+ *
+ * The one unreadable reply that is not a sentence: an LLM cut off by a token
+ * limit leaves a parenthesis open, and a host that ends its agent loop on
+ * whatever ran nothing (see `AgentRepl`) would strand the task there. Every
+ * other form that will not parse is prose under `tolerant`, so that host wants
+ * this question rather than `checkSyntax`'s — which cannot tell the two apart.
+ */
+export function isTruncated(text: string): boolean {
+	let i = 0;
+	while (i < text.length) {
+		if (text[i] !== "(") {
+			i++;
+			continue;
+		}
+		const end = endOfForm(text, i);
+		if (end < 0) return true;
+		i = end;
+	}
+	return false;
 }
 
 // The 1-based line character `at` falls on, for a message about it.
@@ -1824,6 +1878,50 @@ function lineAt(text: string, at: number): number {
 	let line = 1;
 	for (let i = 0; i < at; i++) if (text[i] === "\n") line++;
 	return line;
+}
+
+/*
+ * Why the balanced form spanning [start, end) cannot be read, as the note to
+ * report the skip with — or undefined if it reads fine.
+ *
+ * Matching parentheses do not make text a program. Markdown's backticks are
+ * quasiquote sugar here, so a model writing "(including a deprecated
+ * `read_file`)" hands the reader a quasiquote whose operand is the closing
+ * parenthesis, and the whole sentence dies as `unexpected ")"`. Nothing above
+ * the reader can rescue it: `proseExtension`'s classifier is consulted once per
+ * PARSED form, and this text never becomes one.
+ *
+ * Only a parse failure counts. An EvalException the reader raises about a token
+ * it did read — a `#<…>` handle typed back — is a real mistake in real code,
+ * and saying "read as prose" about it would bury the one message that explains
+ * it.
+ */
+function unreadable(
+	text: string,
+	start: number,
+	end: number,
+): string | undefined {
+	const source = text.slice(start, end);
+	const reader = new Reader();
+	reader.push(source);
+	let failure: SyntaxException | undefined;
+	try {
+		while (!reader.isEmpty()) reader.read();
+	} catch (ex) {
+		if (ex === EndOfFile)
+			failure = new SyntaxException("unexpected end of input", reader.line);
+		else if (ex instanceof SyntaxException) failure = ex;
+		else return undefined;
+	}
+	if (failure === undefined) return undefined;
+	const line = lineAt(text, start) + failure.line - 1;
+	return `${abbreviate(source)} — ${failure.reason} on line ${line}, so this was read as prose`;
+}
+
+// Quote a fragment back to the caller without spending a screen on it.
+export function abbreviate(text: string): string {
+	const oneLine = text.replace(/\s+/g, " ");
+	return oneLine.length <= 60 ? oneLine : `${oneLine.slice(0, 57)}...`;
 }
 
 // A list of tokens, which works as a reader of Lisp expressions
@@ -1876,11 +1974,7 @@ export class Reader {
 		} catch (ex) {
 			if (ex === EndOfFile) throw EndOfFile;
 			else if (ex instanceof FormatException)
-				throw new EvalException(
-					"syntax error",
-					`${ex.message} at ${this.lineNo}`,
-					false,
-				);
+				throw new SyntaxException(ex.message, this.lineNo);
 			else throw ex;
 		}
 	}
