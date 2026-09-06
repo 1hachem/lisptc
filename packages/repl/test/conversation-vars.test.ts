@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
-// A small transcript mirroring what the pi extension snapshots each step.
 function sampleVars() {
 	return {
 		conversation: [
@@ -38,11 +37,8 @@ describe("AgentRepl conversation variables", () => {
 	it("re-injection restores a global the user reassigned (not hard read-only)", () => {
 		const r = new AgentRepl();
 		r.setConversationVars(sampleVars());
-		// setq is echoed under the name it assigned, not a minted one.
 		expect(r.eval("(setq conversation 1)")).toBe("conversation: 1\n");
 		expect(r.eval("(progn conversation)")).toBe("progn-1: 1\n");
-		// The extension calls setConversationVars before every eval; that refresh
-		// overwrites the clobbered value.
 		r.setConversationVars(sampleVars());
 		expect(r.eval("(length conversation)")).toBe("length-1: 2\n");
 	});

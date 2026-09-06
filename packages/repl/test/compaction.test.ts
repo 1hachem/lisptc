@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 
-// A small limit keeps the fixtures readable. Builds a list of n descending ints.
 const RANGE =
 	"(defun range (n) (let ((out nil)) (dotimes (i n) (setq out (cons i out))) out))";
 
@@ -15,15 +14,11 @@ describe("reporting every result", () => {
 	it("reports a small result as its value and binds the name", () => {
 		const r = repl();
 		expect(r.eval("(+ 1 2)")).toBe("+-1: 3\n");
-		// The name is the whole point: a later step refers to it instead of
-		// retyping the value.
 		expect(r.eval("(* +-1 10)")).toBe("*-1: 30\n");
 	});
 
 	it("describes a long result instead of printing it", () => {
 		const r = repl();
-		// Nothing of the value itself reaches the caller — that is what stops it
-		// being copied back by hand — but the binding holds all of it.
 		expect(r.eval("(range 20)")).toBe("range-1: list of 20 items, 20 words\n");
 		expect(r.eval("(length range-1)")).toBe("length-1: 20\n");
 	});
@@ -51,8 +46,6 @@ describe("reporting every result", () => {
 		expect(r.eval("(setq mine (range 3))")).toBe("mine: (2 1 0)\n");
 	});
 
-	// One line per form, in order: the model wrote several forms, so it gets
-	// several reports and can refer to any of them.
 	it("reports each form of a multi-form program", () => {
 		const r = repl();
 		expect(r.eval("(range 2) (range 3)")).toBe(
@@ -61,8 +54,6 @@ describe("reporting every result", () => {
 		expect(r.eval("(length range-1)")).toBe("length-1: 2\n");
 	});
 
-	// The literal argument is what makes the misspelling a call rather than a
-	// turn of phrase — a bare `(no-such-fn)` is read as prose (see src/prose.ts).
 	it("still reports what was bound before a later form threw", () => {
 		const r = repl();
 		const out = r.eval('(range 2) (no-such-fn "x")');
@@ -71,12 +62,6 @@ describe("reporting every result", () => {
 	});
 });
 
-/*
- * A slice is asked for in order to be read, so `(head x 5)` on its own prints
- * it. The alternative cost the agent a whole step: a report saying `head-1:
- * list of 5 items` told it only what it already knew, and it had to write
- * `(echo head-1)` to see what it had come for.
- */
 describe("a slice taken as a step of its own", () => {
 	it("prints the slice rather than describing it", () => {
 		const r = repl();
@@ -99,16 +84,12 @@ describe("a slice taken as a step of its own", () => {
 		expect(r.eval("(dump)")).not.toContain("head-1");
 	});
 
-	// Only the bare form prints: a slice handed to another function is that
-	// function's argument, and printing it would leak data the step never
-	// asked to see.
 	it("stays silent inside another form", () => {
 		const r = repl();
 		r.eval("(range 20)");
 		expect(r.eval("(length (head range-1 3))")).toBe("length-1: 3\n");
 	});
 
-	// The value comes back as well as being printed, so the agent can keep it.
 	it("is still a value a setq can bind", () => {
 		const r = repl();
 		r.eval("(range 20)");
@@ -116,8 +97,6 @@ describe("a slice taken as a step of its own", () => {
 		expect(r.eval("(length top)")).toBe("length-1: 3\n");
 	});
 
-	// The step's word budget bounds it like any other output: what the model
-	// sees stops, with the offset to read on from.
 	it("is capped against the step's budget", () => {
 		const r = repl();
 		r.eval("(range 20)");
@@ -128,8 +107,6 @@ describe("a slice taken as a step of its own", () => {
 });
 
 describe("extracting, then echoing", () => {
-	// The pattern the whole design is for: pull what you need into a named
-	// value, then print a rendering of THAT — never read data off a printout.
 	it("names what grep extracted so the next form can use it", () => {
 		const r = repl();
 		expect(r.eval('(grep "see https://x.dev/a now" "https?://[^ ]+")')).toBe(
@@ -140,8 +117,6 @@ describe("extracting, then echoing", () => {
 });
 
 describe("capping echo output", () => {
-	// The budget is per step, so a loop of small echoes spends it as surely as
-	// one large echo — and the model is told how much it did not see.
 	it("stops a long echo loop for the model and says how much it dropped", () => {
 		const r = repl();
 		const out = r.eval("(dotimes (i 20) (echo i))");
@@ -156,9 +131,6 @@ describe("capping echo output", () => {
 		expect(model).toContain("not shown to you");
 		expect(user).not.toContain("not shown to you");
 		expect(user).toContain("19\n");
-		// Both carry the same report line for the form itself; the model's copy
-		// then closes with the step's dropped-words note, which is a summary of
-		// the whole step and so can only be written once it is over.
 		expect(model).toContain("nil\n");
 		expect(user.endsWith("nil\n")).toBe(true);
 		expect(model.endsWith("echo a named value you can page through\n")).toBe(
@@ -199,8 +171,6 @@ describe("errors", () => {
 		expect(out).toContain("(error message truncated)");
 	});
 
-	// An error inside a loop body unwinds through a closure that captures
-	// itself; rendering the trace used to recurse until the stack gave out.
 	it("renders an error raised inside a multi-form loop body", () => {
 		const r = repl();
 		expect(r.eval("(dotimes (i 20) (no-such-fn i) (no-such-fn 2))")).toMatch(

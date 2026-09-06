@@ -14,10 +14,6 @@ function tempPath(): string {
 	return join(tmpdir(), `lisptc-test-${randomUUID()}.sock`);
 }
 
-// A minimal hand-rolled server speaking the same newline-delimited JSON
-// protocol as the real one, but only the given `ops` -- used to stand in for
-// a session server built before a protocol change, without needing an actual
-// old build of session-server.ts to run against.
 function fakeServer(
 	path: string,
 	ops: Partial<Record<string, (req: { id: number }) => unknown>>,
@@ -38,9 +34,6 @@ function fakeServer(
 							? { id: req.id, ok: true, result: handler(req) }
 							: { id: req.id, ok: false, error: `unknown op: ${req.op}` };
 						socket.write(`${JSON.stringify(reply)}\n`, () => {
-							// `close()` unlinks the socket path itself -- doing it by hand
-							// here could delete the REPLACEMENT server's socket file, since
-							// by then the name may already belong to it.
 							if (req.op === "shutdown" && handler) server.close();
 						});
 					}
@@ -62,8 +55,6 @@ async function killClient(client: SessionClient): Promise<void> {
 	try {
 		await client.shutdown();
 	} catch {
-		// best-effort; the client might be talking to a server too old to
-		// understand `shutdown` at all (that's the point of some of these tests)
 	} finally {
 		client.destroy();
 	}
@@ -94,9 +85,6 @@ describe("connectOrSpawn", () => {
 		expect(await client.version()).toBe(PROTOCOL_VERSION);
 	});
 
-	// The generous timeout: this one really spawns a server, i.e. a cold `node
-	// --experimental-transform-types` start that type-strips the whole
-	// interpreter -- slower than vitest's 5s default on a loaded CI runner.
 	it("replaces a stale server that supports shutdown but predates the version op", async () => {
 		const path = tempPath();
 		let shutdownCalls = 0;
@@ -115,8 +103,6 @@ describe("connectOrSpawn", () => {
 		cleanups.push(() => killClient(client));
 
 		expect(shutdownCalls).toBe(1);
-		// The client is now talking to a freshly spawned, current-protocol
-		// server -- not the stale one (which only knows `eval`/`shutdown`).
 		expect(await client.version()).toBe(PROTOCOL_VERSION);
 	}, 30_000);
 
@@ -132,8 +118,6 @@ describe("connectOrSpawn", () => {
 		const client = await connectOrSpawn(path);
 		cleanups.push(() => client.destroy());
 
-		// No current-protocol server could be spawned in its place (the path is
-		// still held by the ancient one), so we're still talking to it.
 		await expect(client.version()).rejects.toThrow(/unknown op/);
 		expect(await client.eval("anything")).toBe("ancient-eval-result\n");
 	});
