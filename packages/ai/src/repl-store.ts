@@ -1,4 +1,4 @@
-import { AgentRepl } from "@repo/repl/repl.ts";
+import { AgentRepl } from "@repo/repl/repl";
 
 /**
  * Per-thread REPL persistence.

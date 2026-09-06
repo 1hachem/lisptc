@@ -20,7 +20,8 @@ import {
 	tryToParse,
 	ZERO,
 } from "./arith.ts";
-import type { ProseClassifier } from "./prose.ts";
+import { Channels, MODEL, USER } from "./channels.ts";
+import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
 
 // An inefficient substitution of assert statement in Dart
 function assert(x: boolean, message?: string): asserts x {
@@ -34,15 +35,18 @@ function assert(x: boolean, message?: string): asserts x {
 let write: (s: string) => void = () => {};
 let exit: (n: number) => void = () => {}; // Terminate the process with exit code n.
 
-// Redirect interpreter output (used by `echo`). Returns the
-// previous writer so callers can restore it.
+// Redirect interpreter output (used by `echo`). Returns the previous writer so
+// callers can restore it. This is the process-wide DEFAULT sink for the `user`
+// channel, which every interp subscribes to at birth — a host wanting output
+// from one interp rather than all of them subscribes to that interp's channel
+// instead (see `Interp.channels`).
 export function setWriter(fn: (s: string) => void): (s: string) => void {
 	const prev = write;
 	write = fn;
 	return prev;
 }
 
-// Write through the current writer. Exported for the compression extension,
+// Write through the current writer. Exported for the compaction extension,
 // which overrides `echo` and so has to reach the same sink this file's built-ins
 // do — the writer itself stays private, since only setWriter may replace it.
 export function writeOut(s: string): void {
@@ -414,7 +418,7 @@ class BuiltInFunc extends Func {
 /*
  * What kind of callable `x` is, or undefined if it is not one.
  *
- * Exported for the compression extension, which reports what a result IS
+ * Exported for the compaction extension, which reports what a result IS
  * rather than printing it: a closure's printed form
  * (`#<closure:1:nil:(#0:0:x)>`) is interpreter internals, and "function" is
  * what a caller actually wanted to know.
@@ -496,7 +500,7 @@ class FormatException extends Error {}
  * Kept apart from the other EvalExceptions the reader raises — those are
  * complaints about a token it understood perfectly well — because only a parse
  * failure can turn out to be a sentence rather than a mistake (see
- * `stripProse`). `reason` and `line` are the parts of the message back out
+ * `readFailure`). `reason` and `line` are the parts of the message back out
  * again, so a caller can re-report it against its own text.
  */
 class SyntaxException extends EvalException {
@@ -627,11 +631,15 @@ export class Interp {
 	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
 
-	// How to tell a sentence from a call, installed by `proseExtension()` (see
-	// src/prose.ts) and consulted by `run` under `prose: "tolerant"`. Unset by
-	// default: whether a parenthesis is English is a guess about the writer, not
-	// a rule of the language, so the core never makes it.
-	prose?: ProseClassifier;
+	// Every question this interp puts to its extensions (see src/hooks.ts). The
+	// core owns the questions and never the answers: with nothing registered
+	// each chain runs its base, which is the language's own behaviour.
+	readonly hooks: Hooks = newHooks();
+
+	// Everything this interp has to say (see src/channels.ts). Subscribed at
+	// birth to the process-wide writer, so `setWriter` keeps working for a host
+	// that never learns about channels.
+	readonly channels: Channels = new Channels();
 
 	// Directories to resolve relative `import` paths against — one entry per
 	// file currently being loaded (the innermost import wins). Empty at the REPL,
@@ -672,6 +680,7 @@ export class Interp {
 	}
 
 	constructor(options: InterpOptions = {}) {
+		this.channels.on(USER, (d) => write(d.text));
 		this.def(
 			"car",
 			1,
@@ -875,7 +884,7 @@ export class Interp {
 		);
 
 		// The REPL prints nothing on its own, so this is the only way anything
-		// reaches the screen. The compression extension overrides it with a
+		// reaches the screen. The compaction extension overrides it with a
 		// windowed, searchable version; this plain one is the fallback for an
 		// interpreter built without it.
 		this.def(
@@ -885,7 +894,7 @@ export class Interp {
 			"Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. `(echo)` alone prints a blank line. Returns an unspecified value, so the REPL reports nothing for a step that ends in an echo — what was printed IS the report.",
 			z.tuple([zList]),
 			([rest]) => {
-				write(`${echoText(rest)}\n`);
+				this.say(`${echoText(rest)}\n`);
 				return Unspecified;
 			},
 		);
@@ -898,7 +907,7 @@ export class Interp {
 			([rest]) => {
 				const docs = this.docs();
 				if (rest === null) {
-					for (const key of [...docs.keys()].sort()) write(`${key}\n`);
+					for (const key of [...docs.keys()].sort()) this.say(`${key}\n`);
 					return true;
 				}
 				const name = rest.car;
@@ -906,7 +915,7 @@ export class Interp {
 					throw new EvalException("symbol expected", name);
 				const entry = docs.get(name.name);
 				if (entry === undefined) {
-					write(`${name.name}: undocumented\n`);
+					this.say(`${name.name}: undocumented\n`);
 					return null;
 				}
 				// Indent every line so multi-paragraph docs (e.g. an MCP tool's
@@ -915,7 +924,7 @@ export class Interp {
 					.split("\n")
 					.map((line) => (line ? `  ${line}` : line))
 					.join("\n");
-				write(`${entry.signature}\n${body}\n`);
+				this.say(`${entry.signature}\n${body}\n`);
 				return name;
 			},
 		);
@@ -1246,11 +1255,29 @@ export class Interp {
 		return this.globals.get(sym);
 	}
 
-	// Every global binding, for a reverse lookup by value: naming a result
-	// reuses the name a value is already bound under rather than minting a
-	// second one (see src/compression.ts).
+	// Every global binding, for a reverse lookup by value — an extension that
+	// names results reuses the name a value is already bound under rather than
+	// minting a second one.
 	globalEntries(): IterableIterator<[Sym, unknown]> {
 		return this.globals.entries();
+	}
+
+	// Plain output, on the channel the human reads. Not a diagnostic: nothing
+	// is wrong with a program that prints.
+	private say(text: string): void {
+		this.channels.emit({ channel: USER, text });
+	}
+
+	/*
+	 * Release whatever the extensions hold, before dropping this interp.
+	 *
+	 * The language itself owns nothing that needs releasing — this exists
+	 * entirely so a host resetting a REPL does not strand an extension's worker
+	 * or socket. Safe to call more than once, and safe never to call: the
+	 * chain is empty unless something registered.
+	 */
+	dispose(): void {
+		this.hooks.dispose.run(() => {});
 	}
 
 	// Build a BuiltInFunc without binding it (for wrappers stored elsewhere).
@@ -1782,10 +1809,11 @@ function endOfString(text: string, i: number): number {
 }
 
 // Index just past the form opening at `i`, or -1 if the form is never closed.
-// What to do with an unclosed one is the caller's call (see `ProseMode`): it is
-// either half a program or a stray parenthesis in a sentence, and nothing here
-// can tell which.
-function endOfForm(text: string, i: number): number {
+// What to do with an unclosed one is the caller's call (see the `unclosedForm`
+// hook): it is either half a program or a stray parenthesis in a sentence, and
+// nothing here can tell which. Exported so a host reading an LLM's parentheses
+// scans for the same forms rather than growing a second idea of where one ends.
+export function endOfForm(text: string, i: number): number {
 	let depth = 0;
 	for (let j = i; j < text.length; j++) {
 		const c = text[j];
@@ -1813,31 +1841,25 @@ function startOfForm(text: string, i: number): number {
 }
 
 /*
- * What to make of text that opens a parenthesis but cannot be a program.
+ * Blank out everything that is not part of a top-level form: only the
+ * parenthesised forms are program text, and the free text around them is
+ * prose (this dialect has no comment syntax — prose is the comment). Blanking
+ * rather than deleting keeps every form at its original offset, so line
+ * numbers in reader and evaluation errors still point into the source the
+ * caller passed in.
  *
- * - `strict` — it is program text, and the reader or the evaluator reports
- *   what is wrong with it. Right for a hand-written `.ptc` script and for
- *   editor diagnostics, where an unclosed paren is a mistake worth surfacing.
- * - `tolerant` — it is prose. Right for an LLM's reply: a stray `(` in a
- *   sentence is far likelier than a truncated program, and the grammar that
- *   would have prevented it (`lisptc.gbnf`) only binds providers that support
- *   grammars. Balanced parentheses do not settle it either — markdown inside
- *   them is not an expression — so text that cannot be read is prose too.
- *   Whatever is skipped is reported through `onProse`, so nothing disappears
- *   silently.
+ * That much is the language, and the core settles it alone: whatever stands
+ * outside a parenthesis is not program text, whoever wrote it. The harder
+ * question — what to make of a parenthesis the reader cannot use, an unclosed
+ * one or a balanced one holding a sentence — is a guess about the writer, so
+ * it goes to the `unclosedForm` and `unreadableForm` hooks. Called with no
+ * `hooks` (as `checkSyntax` does), nobody answers and every such parenthesis
+ * stays program text for the reader to complain about.
  */
-export type ProseMode = "strict" | "tolerant";
-
-// Blank out everything that is not part of a top-level form: only the
-// parenthesised forms are program text, and the free text around them is
-// prose (this dialect has no comment syntax — prose is the comment). Blanking
-// rather than deleting keeps every form at its original offset, so line
-// numbers in reader and evaluation errors still point into the source the
-// caller passed in.
 export function stripProse(
 	text: string,
-	mode: ProseMode = "strict",
-	onProse?: (what: string) => void,
+	hooks?: Hooks,
+	onSkip?: (what: string) => void,
 ): string {
 	const out: string[] = Array.from(text, (c) => (c === "\n" ? "\n" : " "));
 	let i = 0;
@@ -1848,13 +1870,14 @@ export function stripProse(
 		}
 		const end = endOfForm(text, i);
 		if (end < 0) {
-			// Never closed. Kept verbatim so the reader reports it — unless the
-			// caller would rather read it as prose, in which case only THIS
-			// parenthesis is prose: scanning resumes just after it, so a real
-			// form further along ("(roughly …\n(+ 1 2)") is still program text
-			// instead of being swallowed by the stray one.
-			if (mode === "tolerant") {
-				onProse?.(`unclosed "(" on line ${lineAt(text, i)}`);
+			// Never closed. Kept verbatim so the reader reports it — unless a
+			// hook claims it, in which case only THIS parenthesis is prose:
+			// scanning resumes just after it, so a real form further along
+			// ("(roughly …\n(+ 1 2)") is still program text instead of being
+			// swallowed by the stray one.
+			const stray = hooks?.unclosedForm.run(noOpinion, text, i);
+			if (stray !== undefined) {
+				onSkip?.(stray);
 				i++;
 				continue;
 			}
@@ -1862,13 +1885,13 @@ export function stripProse(
 			break;
 		}
 		const start = startOfForm(text, i);
-		// Closed, but still not necessarily a program (see `unreadable`). The
-		// same call as the unclosed one above, and for the same reason: whether
-		// text PARSES is the reader's business, and only what parses ever
-		// reaches the prose classifier.
-		const bad = mode === "tolerant" ? unreadable(text, start, end) : undefined;
-		if (bad !== undefined) {
-			onProse?.(bad);
+		// Closed, but still not necessarily a program: what balanced parentheses
+		// hold may not parse. Put to the same kind of hook as the unclosed one
+		// above, and for the same reason — whether text PARSES is settled down
+		// here, and only what parses ever reaches `skipForm`.
+		const unreadable = hooks?.unreadableForm.run(noOpinion, text, start, end);
+		if (unreadable !== undefined) {
+			onSkip?.(unreadable);
 			i = end;
 			continue;
 		}
@@ -1878,78 +1901,36 @@ export function stripProse(
 	return out.join("");
 }
 
-/*
- * Does the text break off mid-form?
- *
- * The one unreadable reply that is not a sentence: an LLM cut off by a token
- * limit leaves a parenthesis open, and a host that ends its agent loop on
- * whatever ran nothing (see `AgentRepl`) would strand the task there. Every
- * other form that will not parse is prose under `tolerant`, so that host wants
- * this question rather than `checkSyntax`'s — which cannot tell the two apart.
- */
-export function isTruncated(text: string): boolean {
-	let i = 0;
-	while (i < text.length) {
-		if (text[i] !== "(") {
-			i++;
-			continue;
-		}
-		const end = endOfForm(text, i);
-		if (end < 0) return true;
-		i = end;
-	}
-	return false;
-}
-
-// The 1-based line character `at` falls on, for a message about it.
-function lineAt(text: string, at: number): number {
-	let line = 1;
-	for (let i = 0; i < at; i++) if (text[i] === "\n") line++;
-	return line;
+// The reader's own failure, handed back as data (see `SyntaxException`).
+export interface SyntaxFailure {
+	reason: string;
+	line: number;
 }
 
 /*
- * Why the balanced form spanning [start, end) cannot be read, as the note to
- * report the skip with — or undefined if it reads fine.
+ * Why the reader cannot parse `source` at all, or undefined if it reads fine.
  *
- * Matching parentheses do not make text a program. Markdown's backticks are
- * quasiquote sugar here, so a model writing "(including a deprecated
- * `read_file`)" hands the reader a quasiquote whose operand is the closing
- * parenthesis, and the whole sentence dies as `unexpected ")"`. Nothing above
- * the reader can rescue it: `proseExtension`'s classifier is consulted once per
- * PARSED form, and this text never becomes one.
+ * Only a parse failure counts. An EvalException the reader raises about a
+ * token it did read — a `#<…>` handle typed back — is a complaint about real
+ * code, not a sign that the text was never code, so it is not reported here
+ * and is left to be raised again where it matters.
  *
- * Only a parse failure counts. An EvalException the reader raises about a token
- * it did read — a `#<…>` handle typed back — is a real mistake in real code,
- * and saying "read as prose" about it would bury the one message that explains
- * it.
+ * Asking this of a fragment is how a caller tells text that is no program from
+ * a program with a mistake in it; what that difference MEANS is the caller's
+ * (see the `unreadableForm` hook, and src/prose.ts).
  */
-function unreadable(
-	text: string,
-	start: number,
-	end: number,
-): string | undefined {
-	const source = text.slice(start, end);
+export function readFailure(source: string): SyntaxFailure | undefined {
 	const reader = new Reader();
 	reader.push(source);
-	let failure: SyntaxException | undefined;
 	try {
 		while (!reader.isEmpty()) reader.read();
 	} catch (ex) {
 		if (ex === EndOfFile)
-			failure = new SyntaxException("unexpected end of input", reader.line);
-		else if (ex instanceof SyntaxException) failure = ex;
-		else return undefined;
+			return { reason: "unexpected end of input", line: reader.line };
+		if (ex instanceof SyntaxException)
+			return { reason: ex.reason, line: ex.line };
 	}
-	if (failure === undefined) return undefined;
-	const line = lineAt(text, start) + failure.line - 1;
-	return `${abbreviate(source)} — ${failure.reason} on line ${line}, so this was read as prose`;
-}
-
-// Quote a fragment back to the caller without spending a screen on it.
-export function abbreviate(text: string): string {
-	const oneLine = text.replace(/\s+/g, " ");
-	return oneLine.length <= 60 ? oneLine : `${oneLine.slice(0, 57)}...`;
+	return undefined;
 }
 
 // A list of tokens, which works as a reader of Lisp expressions
@@ -2199,7 +2180,7 @@ export function str(
 
 /*
  * The text `(echo x...)` renders: each argument, space-separated. The newline
- * `echo` ends on is added by the writer, not counted here — the compression
+ * `echo` ends on is added by the writer, not counted here — the compaction
  * extension measures this string in words and characters, and an offset that
  * included a trailing newline would point one past the end of the value.
  *
@@ -2258,57 +2239,63 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 	try {
 		return interp.eval(exp, null);
 	} catch (ex) {
-		if (ex instanceof LoopSignal)
-			throw new EvalException(
-				"break/return used outside of a loop",
-				null,
-				false,
-			);
-		throw ex;
+		const failure =
+			ex instanceof LoopSignal
+				? new EvalException("break/return used outside of a loop", null, false)
+				: ex;
+		/*
+		 * Report it, then raise it as before.
+		 *
+		 * Throwing is how the language reports a fatal error and is what `try`
+		 * catches, so that does not change. Emitting as well is what lets a host
+		 * read errors off a channel like everything else the interpreter says,
+		 * instead of catching them and re-rendering into the same string the
+		 * output went to — which is what forced `MemoryRepl` to reassemble the
+		 * two halves by hand.
+		 */
+		if (failure instanceof EvalException)
+			interp.channels.emit({
+				channel: MODEL,
+				severity: "critical",
+				text: String(failure),
+				value: failure.value,
+			});
+		throw failure;
 	}
-}
-
-export interface RunOptions {
-	// How to read parenthesised text that cannot be a program (default `strict`).
-	// Under `tolerant` a form that parses is also put to the interp's prose
-	// classifier, if one was installed (`proseExtension()`, src/prose.ts).
-	prose?: ProseMode;
-	// Called once per fragment read as prose rather than evaluated. A host
-	// should surface these: under `tolerant` they are the only sign that
-	// something the caller wrote was not run.
-	onProse?: (what: string) => void;
-	// Called once per top-level form that evaluated without throwing, with the
-	// form alongside the value it produced. A REPL needs the form, not just the
-	// value, to name a result after the function that computed it (see
-	// src/compression.ts).
-	onTopLevel?: (form: unknown, value: unknown) => void;
 }
 
 // Evaluate a program: every top-level form in `text`, in order, returning the
 // value of the last one. Text outside those forms is prose and is ignored (see
 // stripProse), so a program with no form at all evaluates to Unspecified —
 // "nothing to show" — rather than to a value a REPL would echo.
-export function run(
-	interp: Interp,
-	text: string,
-	options: RunOptions = {},
-): unknown {
+export function run(interp: Interp, text: string): unknown {
+	// Consulted twice over: on the text, for the parentheses no form can be read
+	// out of, then on each form that was (see src/hooks.ts). There is no flag
+	// for this — whether a stray parenthesis is English is settled by how the
+	// interp was composed, not by each caller. An interp with no reader
+	// extension has empty chains, so every one of these answers "no opinion"
+	// and the text is program text throughout.
+	const { hooks } = interp;
+	// A skip is a warning about a program that ran anyway, so it goes to the
+	// model — it is the only sign that something the caller wrote was not run,
+	// and the writer of that text is who needs to hear it.
+	const skipped = (what: string) =>
+		interp.channels.emit({
+			channel: MODEL,
+			severity: "warning",
+			text: what,
+		});
 	const tokens = new Reader();
-	tokens.push(stripProse(text, options.prose, options.onProse));
+	tokens.push(stripProse(text, hooks, skipped));
 	let result: unknown = Unspecified;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
-		// Only under `tolerant`, and only if a host installed a classifier: with
-		// none, every form that parses is program text (see src/prose.ts).
-		if (options.prose === "tolerant") {
-			const note = interp.prose?.(interp, exp);
-			if (note !== undefined) {
-				options.onProse?.(note);
-				continue;
-			}
+		const note = hooks.skipForm.run(noOpinion, interp, exp);
+		if (note !== undefined) {
+			skipped(note);
+			continue;
 		}
-		result = evalTopLevel(interp, exp);
-		options.onTopLevel?.(exp, result);
+		result = hooks.evalForm.run(evalTopLevel, interp, exp);
 	}
 	return result;
 }

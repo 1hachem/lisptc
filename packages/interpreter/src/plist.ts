@@ -4,7 +4,7 @@
  *
  * This lives apart from src/mcp.ts, which grew it first, because mcp.ts carries
  * the @modelcontextprotocol/sdk dependency: a consumer that only wants keyword
- * args (src/compression.ts) must not pull the MCP SDK in behind it.
+ * args (src/compaction.ts) must not pull the MCP SDK in behind it.
  */
 import {
 	Cell,

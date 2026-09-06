@@ -156,9 +156,14 @@ describe("capping echo output", () => {
 		expect(model).toContain("not shown to you");
 		expect(user).not.toContain("not shown to you");
 		expect(user).toContain("19\n");
-		// Both end with the same report line for the form itself.
-		expect(model.endsWith("nil\n")).toBe(true);
+		// Both carry the same report line for the form itself; the model's copy
+		// then closes with the step's dropped-words note, which is a summary of
+		// the whole step and so can only be written once it is over.
+		expect(model).toContain("nil\n");
 		expect(user.endsWith("nil\n")).toBe(true);
+		expect(model.endsWith("echo a named value you can page through\n")).toBe(
+			true,
+		);
 	});
 
 	it("leaves short output exactly as it was written", () => {

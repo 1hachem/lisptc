@@ -1,5 +1,5 @@
 /*
- * Context compression for Lisptc.
+ * Context compaction for Lisptc.
  *
  * The REPL is an LLM's only interface, so everything it prints is spent
  * context. This module spends as little of it as possible:
@@ -18,14 +18,15 @@
  *    rendering of it — instead of reading data off a printout and retyping it.
  *
  * Reporting a shape rather than a value is only safe because of the naming:
- * nothing is ever lost by not printing it. See devdocs/compression.md.
+ * nothing is ever lost by not printing it. See devdocs/compaction.md.
  *
- * An opt-in extension, like src/secrets.ts: pass `compressionExtension()` in
- * `InterpOptions.extensions`. The `Compressor` holding the naming counters is
+ * An opt-in extension, like src/secrets.ts: pass `compactionExtension()` in
+ * `InterpOptions.extensions`. The `Compactor` holding the naming counters is
  * created by the host per interpreter, so `reset()` restarts numbering along
  * with the globals it named.
  */
 import { z } from "zod";
+import { type Channels, MODEL, USER } from "./channels.ts";
 import {
 	Cell,
 	callableKind,
@@ -39,7 +40,6 @@ import {
 	Sym,
 	str,
 	Unspecified,
-	writeOut,
 	zAny,
 	zList,
 } from "./lisp.ts";
@@ -254,14 +254,22 @@ function boolOption(
  * `echo`/`grep` take a value rather than a handle and work just as well on data
  * the agent bound itself.
  */
-export class Compressor {
+export class Compactor {
 	private readonly counters = new Map<string, number>();
-	// This step's `echo` output as the model will see it, the words of it
-	// already spent, and the words written that it was not shown. All three are
-	// reset by `beginStep`.
-	private echoed = "";
+	// The words of this step's `echo` budget already spent, and the words
+	// written that the model was not shown. Both reset by `beginStep`. The
+	// output itself is not held: it goes out on the channels as it is produced.
 	private spent = 0;
 	private dropped = 0;
+	// Where both copies go, set when the extension is installed. Undefined
+	// before that, so a Compactor built but never registered is inert rather
+	// than broken.
+	private channels?: Channels;
+	// Whether a host is driving steps. Reporting a result is a per-step
+	// discipline, not something the language does, so a bare `run` gets none of
+	// it — the prelude would otherwise describe all 200 of its own definitions
+	// before the first prompt appeared.
+	private stepping = false;
 	readonly limit: number;
 
 	constructor(limit: number = MAX_WORDS) {
@@ -282,6 +290,8 @@ export class Compressor {
 	 * a value it must ask, with `echo`.
 	 */
 	result(interp: Interp, form: unknown, value: unknown): string {
+		// Not inside a step: nobody asked for a report (see `stepping`).
+		if (!this.stepping) return "";
 		// A step that ended in an `echo` has already said everything it has to
 		// say; a report on top would only announce that printing happened.
 		if (value === Unspecified) return "";
@@ -330,46 +340,67 @@ export class Compressor {
 	 * point the agent back at it by name.
 	 */
 	beginStep(): void {
-		this.echoed = "";
+		this.stepping = true;
 		this.spent = 0;
 		this.dropped = 0;
 	}
 
+	// Send both copies where they belong: the human's uncapped, the model's
+	// already capped. Called once the extension is installed on an interp.
+	attach(channels: Channels): void {
+		this.channels = channels;
+	}
+
 	/*
-	 * This step's `echo` output as the model should see it, and a closing note
-	 * for anything it was not shown. Reads and does not clear: `beginStep`
-	 * does that, so a host that forgets to call it sees output accumulate
-	 * rather than vanish.
+	 * The closing note for whatever this step wrote that the model was not
+	 * shown, or "" if it saw everything.
+	 *
+	 * Only the note: the output itself has already gone out on the channels.
+	 * What is left is the one thing that cannot be said per call, because it
+	 * only exists once the whole step is over.
 	 */
-	takeEcho(): string {
-		if (this.dropped === 0) return this.echoed;
-		return `${this.echoed}... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
+	endStep(): string {
+		if (this.dropped === 0) return "";
+		return `... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
 	}
 
 	private get remaining(): number {
 		return Math.max(0, this.limit - this.spent);
 	}
 
-	// Keep the model's copy of one echo, charge it to the step's budget, and
-	// count what the model was not shown.
+	/*
+	 * Send one echo out, charge it to the step's budget, and count what the
+	 * model was not shown.
+	 *
+	 * The single funnel for both copies: everything `echo`, `head`/`tail` and
+	 * the slice reports produce comes through here, which is why this is the
+	 * only place that has to know about channels at all.
+	 */
 	private echo(model: string, user: string, dropped: number): Bounded {
-		this.echoed += model;
 		this.spent += wordSpans(model).length;
 		this.dropped += dropped;
+		this.say({ model, user });
 		return { model, user };
+	}
+
+	// Put the two copies on the two channels. Neither is a diagnostic — a
+	// program that echoes is working exactly as intended.
+	say(bounded: Bounded): void {
+		if (bounded.user !== "")
+			this.channels?.emit({ channel: USER, text: bounded.user });
+		if (bounded.model !== "")
+			this.channels?.emit({ channel: MODEL, text: bounded.model });
 	}
 
 	// Write a value the way `echo` writes it: the human's copy straight out,
 	// the model's capped against what is left of this step's budget.
 	private print(interp: Interp, value: unknown): void {
-		writeOut(
-			this.window(
-				interp,
-				echoText(new Cell(value, null)),
-				value,
-				0,
-				Number.MAX_SAFE_INTEGER,
-			).user,
+		this.window(
+			interp,
+			echoText(new Cell(value, null)),
+			value,
+			0,
+			Number.MAX_SAFE_INTEGER,
 		);
 	}
 
@@ -434,7 +465,7 @@ export class Compressor {
 			this.charBudget,
 		);
 		// Nothing left in the budget: this call is invisible to the model, so
-		// its words are what `takeEcho`'s closing note has to account for.
+		// its words are what `endStep`'s closing note has to account for.
 		if (shown.shown === 0) return this.echo("", user, asked.shown);
 		// A shorter window is not silent — its own `...` line says how much is
 		// below and how to read on — so it needs no note on top of that.
@@ -608,7 +639,7 @@ export class Compressor {
 /*
  * A background job, recognised by its shape.
  *
- * Compression must not import the jobs layer — an extension knows nothing
+ * Compaction must not import the jobs layer — an extension knows nothing
  * about the others (see `secretsExtension`, which `str` and `lispToJson` also
  * duck-type rather than import). `jobId` plus `label` is the whole contract.
  */
@@ -705,13 +736,26 @@ function compile(pattern: string, ignoreCase: boolean): RegExp {
 	}
 }
 
-// The elements of a proper list, or undefined for anything that is not one.
-// `nil` is the empty list, not a non-list.
+/*
+ * The elements of a proper list, or undefined for anything that is not one.
+ * `nil` is the empty list, not a non-list.
+ *
+ * Stops at a cell it has already walked, the way `str` does: describing a
+ * result is not allowed to be the thing that hangs the step, and a circular
+ * list is something a program can build (`(setq l (list 1)) (setcdr l l)`)
+ * long before anyone tries to print it. What comes back is then the acyclic
+ * prefix, which is all a shape description needs.
+ */
 function listElements(x: unknown): unknown[] | undefined {
 	if (x === null) return [];
 	if (!(x instanceof Cell)) return undefined;
 	const out: unknown[] = [];
-	for (let p: unknown = x; p instanceof Cell; p = p.cdr) out.push(p.car);
+	const seen = new Set<Cell>();
+	for (let p: unknown = x; p instanceof Cell; p = p.cdr) {
+		if (seen.has(p)) break;
+		seen.add(p);
+		out.push(p.car);
+	}
 	return out;
 }
 
@@ -949,7 +993,23 @@ const GREP_ARGS: DocArg[] = [
 	},
 ];
 
-function registerCompression(interp: Interp, c: Compressor): void {
+function registerCompaction(interp: Interp, c: Compactor): void {
+	c.attach(interp.channels);
+
+	/*
+	 * One line per top-level form: `name: shape`.
+	 *
+	 * A wrapping middleware rather than a callback the core had to carry: the
+	 * base evaluates the form, and what comes back is what gets named and
+	 * reported. Reporting on results is this extension's whole subject, so the
+	 * interpreter no longer has to know it is happening.
+	 */
+	interp.hooks.evalForm.use((interp, form, next) => {
+		const value = next(interp, form);
+		const report = c.result(interp, form, value);
+		if (report !== "") c.say({ model: report, user: report });
+		return value;
+	});
 	/*
 	 * `echo`, overriding the plain core version (src/lisp.ts) with the windowed,
 	 * searchable one — the same `interp.def` override idiom src/secrets.ts uses
@@ -971,31 +1031,28 @@ function registerCompression(interp: Interp, c: Compressor): void {
 			const single =
 				values !== null && values.cdr === null ? values.car : undefined;
 			// The human gets what was asked for; the model gets as much of it as
-			// the step's budget allows. Only the writer is uncapped here — the
-			// model's copy is collected on the compressor (see `takeEcho`).
+			// the step's budget allows. Both go out on their own channel from
+			// inside the slicing pass, which is the only place that still knows
+			// which value the text came from.
 			const pattern = opts.get("match");
 			if (pattern !== undefined) {
 				if (typeof pattern !== "string")
 					throw new EvalException("string expected for :match", pattern);
-				writeOut(
-					c.search(interp, text, single, pattern, {
-						context: intOption(opts, "context", DEFAULT_CONTEXT),
-						max: intOption(opts, "max", DEFAULT_MAX_HITS),
-						ignoreCase: boolOption(opts, "ignore-case", true),
-					}).user,
-				);
+				c.search(interp, text, single, pattern, {
+					context: intOption(opts, "context", DEFAULT_CONTEXT),
+					max: intOption(opts, "max", DEFAULT_MAX_HITS),
+					ignoreCase: boolOption(opts, "ignore-case", true),
+				});
 				return Unspecified;
 			}
-			writeOut(
-				c.window(
-					interp,
-					text,
-					single,
-					intOption(opts, "offset", 0),
-					// No :length means the whole value: it is the STEP that is
-					// bounded, not the request.
-					intOption(opts, "length", Number.MAX_SAFE_INTEGER),
-				).user,
+			c.window(
+				interp,
+				text,
+				single,
+				intOption(opts, "offset", 0),
+				// No :length means the whole value: it is the STEP that is
+				// bounded, not the request.
+				intOption(opts, "length", Number.MAX_SAFE_INTEGER),
 			);
 			return Unspecified;
 		},
@@ -1051,16 +1108,16 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 }
 
 /*
- * Install `echo`, `head`, `tail` and `grep` over `compressor`.
+ * Install `echo`, `head`, `tail` and `grep` over `compactor`.
  *
- * The host passes the same `Compressor` it renders results with, and creates a
+ * The host passes the same `Compactor` it renders results with, and creates a
  * new one per interpreter: the naming counters must die with the globals they
  * named, or a `reset()` leaves the count climbing past unbound names. (This is
  * the opposite of `secretsExtension`, whose store is host configuration and
  * must survive a reset.)
  */
-export function compressionExtension(
-	compressor: Compressor = new Compressor(),
+export function compactionExtension(
+	compactor: Compactor = new Compactor(),
 ): InterpExtension {
-	return (interp: Interp): void => registerCompression(interp, compressor);
+	return (interp: Interp): void => registerCompaction(interp, compactor);
 }

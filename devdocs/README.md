@@ -13,7 +13,7 @@ code comments stay short and point here for the detail.
 - [Agent traces and feedback](./telemetry.md) — the PostHog event shape for a
   chat turn, the `▲`/`▼` vote on an assistant turn, the first-party proxy the
   browser half talks to, identity, and the privacy switch.
-- [Context compression](./compression.md) — naming every REPL result, the word
+- [Context compaction](./compaction.md) — naming every REPL result, the word
   cap on what gets printed, and the `view`/`head`/`tail`/`grep` built-ins that
   read the rest.
 - [The lisptc LSP's static analysis](./lsp.md) — module layout, the shared

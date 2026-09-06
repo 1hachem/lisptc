@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { EnvSecretsStore } from "@repo/interpreter/secrets.ts";
+import { EnvSecretsStore } from "@repo/interpreter/secrets";
 import { describe, expect, it } from "vitest";
 import { AgentRepl } from "../src/repl.ts";
 

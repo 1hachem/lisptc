@@ -1,63 +1,62 @@
 import { describe, expect, it } from "vitest";
-import { Compressor, compressionExtension } from "../src/compression.ts";
-import {
-	Cell,
-	Interp,
-	newSym,
-	prelude,
-	run,
-	setWriter,
-	str,
-} from "../src/lisp.ts";
+import { MODEL, USER } from "../src/channels.ts";
+import { Compactor, compactionExtension } from "../src/compaction.ts";
+import { Cell, Interp, newSym, prelude, run, str } from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
 // A small limit keeps the fixtures readable; the built-ins take theirs from the
-// Compressor the extension was built with.
-function interpWithLimit(limit: number): { interp: Interp; c: Compressor } {
-	const c = new Compressor(limit);
+// Compactor the extension was built with.
+function interpWithLimit(limit: number): { interp: Interp; c: Compactor } {
+	const c = new Compactor(limit);
 	const interp = new Interp({
-		extensions: [secretsExtension(), compressionExtension(c)],
+		extensions: [secretsExtension(), compactionExtension(c)],
 	});
 	run(interp, prelude);
 	return { interp, c };
 }
 
 /*
- * Run one step and return both copies of what `echo` wrote: `user` off the
- * writer, `model` off the compressor. They differ by design — the human's is
- * uncapped, the model's is bounded by the step's word budget.
+ * Run one step and return both copies of what `echo` wrote, each off its own
+ * channel. They differ by design — the human's is uncapped, the model's is
+ * bounded by the step's word budget, and the model's closes with a note for
+ * anything the budget hid.
  */
 function stepped(
 	code: string,
-	given?: { interp: Interp; c: Compressor },
+	given?: { interp: Interp; c: Compactor },
 ): { user: string; model: string } {
 	const { interp, c } = given ?? { interp: freshInterp(), c: undefined };
-	const compressor = c;
-	compressor?.beginStep();
+	c?.beginStep();
 	let user = "";
-	const prev = setWriter((s) => {
-		user += s;
-	});
+	let model = "";
+	const off = [
+		interp.channels.on(USER, (d) => {
+			user += d.text;
+		}),
+		interp.channels.on(MODEL, (d) => {
+			if (d.severity === undefined) model += d.text;
+		}),
+	];
 	try {
 		run(interp, code);
 	} finally {
-		setWriter(prev);
+		for (const stop of off) stop();
 	}
-	return { user, model: compressor?.takeEcho() ?? user };
+	return { user, model: c === undefined ? user : model + c.endStep() };
 }
 
 // What the human saw.
 function echoed(
 	code: string,
-	given?: { interp: Interp; c: Compressor },
+	given?: { interp: Interp; c: Compactor },
 ): string {
 	return stepped(code, given).user;
 }
 
 const words = '(setq w "a b c d e f g h i j k l")';
 
-describe("echo respects the compressor's limit", () => {
+describe("echo respects the compactor's limit", () => {
 	// The limit bounds the MODEL's copy: `:length 99` is honoured for the human.
 	it("caps the model's copy at the limit however much was asked for", () => {
 		const given = interpWithLimit(4);
@@ -233,8 +232,8 @@ describe("the character backstop", () => {
 });
 
 describe("secret taint", () => {
-	function withSecret(value: string): { interp: Interp; c: Compressor } {
-		const c = new Compressor();
+	function withSecret(value: string): { interp: Interp; c: Compactor } {
+		const c = new Compactor();
 		const interp = new Interp({
 			extensions: [
 				secretsExtension({
@@ -244,7 +243,7 @@ describe("secret taint", () => {
 						set: () => {},
 					},
 				}),
-				compressionExtension(c),
+				compactionExtension(c),
 			],
 		});
 		run(interp, prelude);
@@ -277,7 +276,7 @@ describe("secret taint", () => {
  * handle, and says that an unawaited load owes nothing.
  */
 describe("reporting a background job", () => {
-	// Duck-typed like the real `Job` (src/jobs.ts), which compression must not
+	// Duck-typed like the real `Job` (src/jobs.ts), which compaction must not
 	// import: an extension knows nothing about the others.
 	function fakeJob(label = "load-mcp:linear") {
 		return {
@@ -287,15 +286,13 @@ describe("reporting a background job", () => {
 		};
 	}
 
-	function reportOf(interp: Interp, c: Compressor, code: string): string {
-		let form: unknown;
-		const value = run(interp, code, { onTopLevel: (f) => (form = f) });
-		return c.result(interp, form, value);
+	function reportOf(interp: Interp, c: Compactor, code: string): string {
+		return stepped(code, { interp, c }).model;
 	}
 
-	function withJob(value: unknown): { interp: Interp; c: Compressor } {
-		const c = new Compressor(400);
-		const interp = new Interp({ extensions: [compressionExtension(c)] });
+	function withJob(value: unknown): { interp: Interp; c: Compactor } {
+		const c = new Compactor(400);
+		const interp = new Interp({ extensions: [compactionExtension(c)] });
 		run(interp, prelude);
 		interp.defineGlobal(newSym("started"), value, {
 			signature: "started",
@@ -337,19 +334,13 @@ describe("reporting a background job", () => {
 });
 
 describe("reporting a result", () => {
-	function reportOf(interp: Interp, c: Compressor, code: string): string {
-		let form: unknown;
-		const value = run(interp, code, {
-			onTopLevel: (f) => {
-				form = f;
-			},
-		});
-		return c.result(interp, form, value);
+	function reportOf(interp: Interp, c: Compactor, code: string): string {
+		return stepped(code, { interp, c }).model;
 	}
 
-	function fresh(limit = 400): { interp: Interp; c: Compressor } {
-		const c = new Compressor(limit);
-		const interp = new Interp({ extensions: [compressionExtension(c)] });
+	function fresh(limit = 400): { interp: Interp; c: Compactor } {
+		const c = new Compactor(limit);
+		const interp = new Interp({ extensions: [compactionExtension(c)] });
 		run(interp, prelude);
 		return { interp, c };
 	}
@@ -427,7 +418,8 @@ describe("reporting a result", () => {
 
 	it("says nothing at all for a step that ended in an echo", () => {
 		const { interp, c } = fresh();
-		expect(reportOf(interp, c, '(echo "hi")')).toBe("");
+		// The echo is all there is: no `name: shape` line on top of it.
+		expect(reportOf(interp, c, '(echo "hi")')).toBe("hi\n");
 	});
 
 	it("numbers per function name and never clobbers an existing global", () => {
@@ -484,50 +476,54 @@ describe("reporting a result", () => {
 });
 
 describe("the step's echo budget", () => {
-	function stepping(limit: number): { interp: Interp; c: Compressor } {
-		const c = new Compressor(limit);
-		const interp = new Interp({ extensions: [compressionExtension(c)] });
+	function stepping(limit: number): { interp: Interp; c: Compactor } {
+		const c = new Compactor(limit);
+		const interp = new Interp({ extensions: [compactionExtension(c)] });
 		run(interp, prelude);
-		c.beginStep();
 		return { interp, c };
 	}
 
 	it("caps the model's copy and leaves the human's whole", () => {
-		const { interp, c } = stepping(3);
-		run(interp, '(setq doc "a b c d e f") (echo doc)');
-		expect(c.takeEcho()).toBe(
-			"a b c\n... 3 of 6 words shown, 3 below — read on with (echo doc :offset 3)\n",
+		const given = stepping(3);
+		const { model, user } = stepped(
+			'(setq doc "a b c d e f") (echo doc)',
+			given,
 		);
+		// The model's stream is chronological: the `setq`'s report, then the
+		// echo it was asked for, capped.
+		expect(model).toBe(
+			'doc: "a b c d e f"\n' +
+				"a b c\n... 3 of 6 words shown, 3 below — read on with (echo doc :offset 3)\n",
+		);
+		expect(user).toContain("a b c d e f\n");
 	});
 
 	// The budget is per step, not per call: a loop of small echoes spends it
 	// just as surely as one large one.
 	it("is shared across the echoes of one step", () => {
-		const { interp, c } = stepping(4);
-		run(interp, '(progn (echo "a b c") (echo "d e f") (echo "g h i"))');
-		const echoed = c.takeEcho();
+		const echoed = stepped(
+			'(progn (echo "a b c") (echo "d e f") (echo "g h i"))',
+			stepping(4),
+		).model;
 		expect(echoed).toContain("a b c\n");
 		expect(echoed).toContain("not shown to you");
 		expect(echoed).not.toContain("g h i");
 	});
 
 	it("starts over on the next step", () => {
-		const { interp, c } = stepping(4);
-		run(interp, '(progn (echo "a b c d") (echo "e f"))');
-		expect(c.takeEcho()).toContain("not shown");
-		c.beginStep();
-		run(interp, '(echo "x y")');
-		expect(c.takeEcho()).toBe("x y\n");
+		const given = stepping(4);
+		expect(
+			stepped('(progn (echo "a b c d") (echo "e f"))', given).model,
+		).toContain("not shown");
+		expect(stepped('(echo "x y")', given).model).toBe("x y\n");
 	});
 
 	it("passes short output through untouched", () => {
-		const { interp, c } = stepping(400);
-		run(interp, '(echo "a b")');
-		expect(c.takeEcho()).toBe("a b\n");
+		expect(stepped('(echo "a b")', stepping(400)).model).toBe("a b\n");
 	});
 });
 
-describe("the compression built-ins are documented", () => {
+describe("the compaction built-ins are documented", () => {
 	it("carries a signature and doc for each", () => {
 		const docs = freshInterp().docs();
 		for (const name of ["echo", "head", "tail", "grep"]) {

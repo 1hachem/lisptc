@@ -1,4 +1,4 @@
-# Context compression
+# Context compaction
 
 The REPL is an LLM's only interface, so everything it prints is spent context.
 Nothing bounded that: `MemoryRepl.eval` appended `str(value)` verbatim and
@@ -35,17 +35,22 @@ So the REPL prints **nothing** on its own. Three mechanisms:
 Describing instead of showing is only safe *because* of the naming: nothing is
 lost by not printing it.
 
-Everything lives in `packages/interpreter/src/compression.ts`, an **opt-in
+Everything lives in `packages/interpreter/src/compaction.ts`, an **opt-in
 extension** like secrets and MCP.
 
 ## The pieces
 
-- `Compressor` — the naming counters for one interpreter, the current step's
+- `Compactor` — the naming counters for one interpreter, the current step's
   echo budget, plus every render entry point: `result` (a top-level result's
   report line), `window` / `search` (what `echo` writes), `error` (a rendered
   `EvalException`).
-- `beginStep` / `takeEcho` — the step boundary. A host calls `beginStep` before
-  an eval and `takeEcho` after it for the model's copy of the output.
+- `beginStep` / `endStep` — the step boundary. A host calls `beginStep` before
+  an eval and `endStep` after it. The output itself does not come back from
+  either: both copies go out on the interpreter's channels as they are produced
+  (`user` uncapped, `model` capped), and `endStep` returns only the closing note
+  about what the budget hid — the one thing that cannot be known until the step
+  is over. `beginStep` is also what turns reporting on at all, so a bare `run`
+  (the prelude, a `.ptc` script, a test) gets no report lines.
 - `describe` — value → shape line. Callables report their kind (`function`,
   `macro`) rather than a closure's internals; a list of alists reports its keys;
   a blob with no whitespace is measured in characters, since its word count is 1
@@ -58,12 +63,12 @@ extension** like secrets and MCP.
 - `print` — writes a value the way `echo` does (human's copy out through the
   writer, model's copy charged to the step's budget). What `result` calls for a
   top-level slice.
-- `compressionExtension(compressor?)` — installs `head` / `tail` / `grep`, and
+- `compactionExtension(compactor?)` — installs `head` / `tail` / `grep`, and
   **overrides** the core `echo` with the windowed, searchable version (the same
   `interp.def` idiom `secretsExtension` uses on the string primitives, so an
   interpreter without this extension still has a plain `echo`).
 
-`Compressor` holds **no values**. A named result is an ordinary global, which is
+`Compactor` holds **no values**. A named result is an ordinary global, which is
 what lets `echo`/`grep` take a *value* rather than a handle — so they work just
 as well on a `let` binding or anything the agent named itself, and `dump`/`doc`
 keep working with no special cases.
@@ -86,21 +91,21 @@ exactly the bug the earlier per-eval re-window had.
 
 The budget is **per step, not per call**: an echo loop floods the context just as
 effectively as one huge echo. When a call contributes nothing at all to the
-model's copy, `takeEcho` closes with a note saying how many words it did not
+model's copy, `endStep` returns a note saying how many words it did not
 see. A call that was merely *shortened* needs no such note — its own `...` line
 already says how much is below.
 
 ## Consuming from a host
 
 Unlike `secretsExtension`, whose store is host configuration that must survive a
-`reset()`, the host creates a **new `Compressor` per interpreter**: the counters
+`reset()`, the host creates a **new `Compactor` per interpreter**: the counters
 have to die with the globals they named, or a reset leaves the count climbing
 past names that are no longer bound.
 
 ```ts
 private freshInterp(): Interp {
-  this.compressor = new Compressor(this.wordLimit);
-  return new Interp({ extensions: [..., compressionExtension(this.compressor)] });
+  this.compactor = new Compactor(this.wordLimit);
+  return new Interp({ extensions: [..., compactionExtension(this.compactor)] });
 }
 ```
 
@@ -144,7 +149,7 @@ for *keeping* what matched, and the summary line says so.
 
 ## Naming rules
 
-In order, `Compressor.result` and `nameFor`:
+In order, `Compactor.result` and `nameFor`:
 
 1. `Unspecified` — what `echo` returns — reports nothing at all. The step has
    already said what it had to say; a line on top would only announce that
@@ -159,7 +164,7 @@ In order, `Compressor.result` and `nameFor`:
    `(await #<job load-mcp:linear 8d12…>)` was four negative survey reports in
    two days. The line also says that nothing is owed, since a job applies its
    own result when it settles. Recognised by shape (`jobLabel`), because
-   compression may not import the jobs layer.
+   compaction may not import the jobs layer.
 4. `nil` and `t` are reported plainly. They carry nothing a later step could
    refer to, and every side-effecting loop returns `nil`; naming those would
    bury the results that matter under `dotimes-1: nil`.

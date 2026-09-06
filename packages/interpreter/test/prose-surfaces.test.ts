@@ -65,7 +65,7 @@ describe("the language reference teaches prose", () => {
 	});
 });
 
-describe("the language reference teaches context compression", () => {
+describe("the language reference teaches context compaction", () => {
 	// The silence is invisible unless the reference describes it: a model that
 	// is not told will wait for values it will never be shown, and will keep
 	// retyping data it could have referred to by name.

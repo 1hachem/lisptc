@@ -4,9 +4,9 @@
   "type": "module",
   "private": true,
   "exports": {
-    "./repl.ts": "./src/repl.ts",
-    "./session-server.ts": "./src/session-server.ts",
-    "./cli.ts": "./src/cli.ts",
+    "./repl": "./src/repl.ts",
+    "./session-server": "./src/session-server.ts",
+    "./cli": "./src/cli.ts",
     "./package.json": "./package.json"
   },
   "engines": {

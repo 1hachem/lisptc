@@ -1,15 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { MODEL } from "../src/channels.ts";
 import {
 	checkSyntax,
 	Interp,
-	isTruncated,
 	prelude,
 	run,
 	str,
 	stripProse,
 } from "../src/lisp.ts";
-import { proseExtension } from "../src/prose.ts";
+import { isTruncated, proseExtension } from "../src/prose.ts";
 import { ev, evWithOutput, freshInterp } from "./helpers.ts";
+
+// What an interp reports as not-run, in the order it says it. Skips are
+// warnings on the model's channel now, not a callback passed to `run` — and
+// the channel carries the model's errors too, so severity is what separates
+// "this was read as prose" from "this failed".
+function collectSkips(interp: Interp): string[] {
+	const skipped: string[] = [];
+	interp.channels.on(MODEL, (d) => {
+		if (d.severity === "warning") skipped.push(d.text);
+	});
+	return skipped;
+}
 
 describe("prose around forms", () => {
 	it("evaluates the forms and ignores the text between them", () => {
@@ -90,13 +102,8 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 	function tolerantly(text: string): { value: string; skipped: string[] } {
 		const interp = new Interp({ extensions: [proseExtension()] });
 		run(interp, prelude);
-		const skipped: string[] = [];
-		const value = str(
-			run(interp, text, {
-				prose: "tolerant",
-				onProse: (what) => skipped.push(what),
-			}),
-		);
+		const skipped = collectSkips(interp);
+		const value = str(run(interp, text));
 		return { value, skipped };
 	}
 
@@ -258,35 +265,20 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 	});
 
 	/*
-	 * The classifier is an extension (src/prose.ts), so a host that did not ask
-	 * for it gets none of its guessing: tolerance is then only the reader's own
-	 * unclosed-paren rule, and a form that parses is code like any other.
+	 * Every one of the three rules is the extension's (src/prose.ts), so a host
+	 * that did not ask for it gets no tolerance at all — whatever it passes.
+	 * `tolerant: true` on a bare interp consults hooks nobody filled, and each
+	 * chain falls through to the language's own answer: an unclosed paren is a
+	 * truncated program, an unparseable one a syntax error, an unknown head an
+	 * undefined name.
 	 */
-	it("skips nothing without the prose extension", () => {
+	it("tolerates nothing without the prose extension", () => {
 		const bare = freshInterp();
-		const skipped: string[] = [];
-		const options = {
-			prose: "tolerant",
-			onProse: (what: string) => skipped.push(what),
-		} as const;
-		expect(() => run(bare, "(see below)", options)).toThrow(/undefined: see/);
-		expect(str(run(bare, "a stray (paren\n(+ 1 2)", options))).toBe("3");
-		expect(skipped).toEqual(['unclosed "(" on line 1']);
-	});
-
-	// The unparseable-form rule is the reader's, like the unclosed one, so it
-	// applies with no classifier installed.
-	it("reads an unparseable form as prose without the extension", () => {
-		const bare = freshInterp();
-		const skipped: string[] = [];
-		const value = run(bare, "an aside (see `x`)\n(+ 1 2)", {
-			prose: "tolerant",
-			onProse: (what: string) => skipped.push(what),
-		});
-		expect(str(value)).toBe("3");
-		expect(skipped).toEqual([
-			'(see `x`) — unexpected ")" on line 1, so this was read as prose',
-		]);
+		const skipped = collectSkips(bare);
+		expect(() => run(bare, "(see below)")).toThrow(/undefined: see/);
+		expect(() => run(bare, "a stray (paren\n(+ 1 2)")).toThrow();
+		expect(() => run(bare, "an aside (see `x`)")).toThrow(/syntax error/);
+		expect(skipped).toEqual([]);
 	});
 
 	// A host that reads its model differently supplies its own policy rather
@@ -295,16 +287,12 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		const interp = new Interp({
 			extensions: [proseExtension(() => "everything is prose here")],
 		});
-		const skipped: string[] = [];
-		const value = run(interp, "(+ 1 2)", {
-			prose: "tolerant",
-			onProse: (what) => skipped.push(what),
-		});
-		expect(str(value)).toBe("#<unspecified>");
+		const skipped = collectSkips(interp);
+		expect(str(run(interp, "(+ 1 2)"))).toBe("#<unspecified>");
 		expect(skipped).toEqual(["everything is prose here"]);
 	});
 
-	it("changes nothing under the default strict mode", () => {
+	it("changes nothing on an interp without the extension", () => {
 		expect(() => ev("Here is the plan (see below)")).toThrow(/undefined: see/);
 		expect(() => ev("here it comes (+ 1 2")).toThrow();
 		expect(() => ev("an aside (see `x`)")).toThrow(/syntax error/);
@@ -312,8 +300,11 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			{ message: 'syntax error: unexpected ")" at 1', line: 1 },
 		]);
 		expect(stripProse("a (b")).toBe("  (b");
-		expect(stripProse("a (b", "tolerant")).toBe("    ");
-		expect(stripProse("a (see `x`)", "tolerant")).toBe("           ");
+		// Tolerance is the extension's, so it reaches `stripProse` only as the
+		// hooks of an interp that installed it.
+		const { hooks } = new Interp({ extensions: [proseExtension()] });
+		expect(stripProse("a (b", hooks)).toBe("    ");
+		expect(stripProse("a (see `x`)", hooks)).toBe("           ");
 	});
 });
 

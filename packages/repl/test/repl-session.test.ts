@@ -111,7 +111,7 @@ describe("AgentRepl (in-process REPL binding)", () => {
 
 /*
  * The REPL is handed text a model wrote, so a sentence with a parenthesis in
- * it is prose that happens to look like code (see `ProseMode`). It must not
+ * it is prose that happens to look like code (see `proseExtension`). It must not
  * cost the step an error it cannot act on — nor, for an unclosed paren, every
  * form that followed.
  */

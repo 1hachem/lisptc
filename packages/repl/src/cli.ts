@@ -6,10 +6,8 @@
  * `./repl.ts`.
  */
 
-import {
-	Compressor,
-	compressionExtension,
-} from "@repo/interpreter/compression.ts";
+import { MODEL } from "@repo/interpreter/channels";
+import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
 import {
 	EndOfFile,
 	EvalException,
@@ -20,13 +18,10 @@ import {
 	setExit,
 	setWriter,
 	stripProse,
-} from "@repo/interpreter/lisp.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { proseExtension } from "@repo/interpreter/prose.ts";
-import {
-	EnvSecretsStore,
-	secretsExtension,
-} from "@repo/interpreter/secrets.ts";
+} from "@repo/interpreter/lisp";
+import { mcpExtension } from "@repo/interpreter/mcp";
+import { proseExtension } from "@repo/interpreter/prose";
+import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -48,7 +43,7 @@ const write = (s: string): void => {
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
 	// Recreated with every interp, so reset() restarts the result numbering.
-	private compressor: Compressor = new Compressor();
+	private compactor: Compactor = new Compactor();
 	// One store for the process: freshInterp() re-seeds it from env/`.env` on
 	// every reset (merge, later wins), so a secret loaded once stays loaded.
 	private readonly secretsStore = new EnvSecretsStore();
@@ -62,22 +57,30 @@ class InteractiveRepl implements Repl {
 	}
 
 	private freshInterp(): Interp {
-		this.compressor = new Compressor();
+		this.compactor = new Compactor();
 		// The standalone CLI auto-loads a `.env` file (env vars + `$LISPTC_SECRETS_FILE`
 		// / nearest `.env`); the secretsExtension owns that loading via `envFile`.
 		const interp = new Interp({
 			extensions: [
 				secretsExtension({ store: this.secretsStore, envFile: true }),
 				mcpExtension(),
-				compressionExtension(this.compressor),
+				compactionExtension(this.compactor),
 				proseExtension(),
 			],
 		});
 		run(interp, prelude);
+		// Notes about what was not run go to the model's channel; at an
+		// interactive prompt the human IS the model's reader, so show them.
+		// Warnings only — the channel carries errors too, and those are caught
+		// and printed by the eval loop below.
+		interp.channels.on(MODEL, (d) => {
+			if (d.severity === "warning") write(`skipped ${d.text}\n`);
+		});
 		return interp;
 	}
 
 	reset(): void {
+		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -107,20 +110,14 @@ class InteractiveRepl implements Repl {
 			try {
 				// An input typed at a prompt is a step of its own, so each
 				// starts with the whole echo budget.
-				this.compressor.beginStep();
+				this.compactor.beginStep();
 				// The same silent contract the embedded REPLs have: no value is
-				// printed, only a `name: shape` line, so what a human sees here
-				// is what the model sees. `echo` is the way to see a value —
-				// and this loop points the interpreter's writer straight at
-				// stdout (see setWriter below), which is the human's uncapped
+				// printed, only a `name: shape` line, which the compaction
+				// extension emits on the user channel as each form settles. This
+				// loop points the interpreter's writer straight at stdout (see
+				// setWriter below), so what arrives there is the human's uncapped
 				// copy; a terminal can scroll.
-				run(this.currentInterp, text, {
-					prose: "tolerant",
-					onProse: (what) => write(`skipped ${what}\n`),
-					onTopLevel: (form, value) => {
-						write(this.compressor.result(this.currentInterp, form, value));
-					},
-				});
+				run(this.currentInterp, text);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)

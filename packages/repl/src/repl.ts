@@ -15,32 +15,31 @@
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
+import { MODEL, USER } from "@repo/interpreter/channels";
 import {
 	type Bounded,
-	Compressor,
-	compressionExtension,
+	Compactor,
+	compactionExtension,
 	MAX_WORDS,
-} from "@repo/interpreter/compression.ts";
+} from "@repo/interpreter/compaction";
 import {
 	Cell,
 	EndOfFile,
 	EvalException,
 	Interp,
-	isTruncated,
 	type List,
 	newSym,
 	prelude,
 	run,
-	setWriter,
 	stripProse,
-} from "@repo/interpreter/lisp.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { proseExtension } from "@repo/interpreter/prose.ts";
+} from "@repo/interpreter/lisp";
+import { mcpExtension } from "@repo/interpreter/mcp";
+import { isTruncated, proseExtension } from "@repo/interpreter/prose";
 import {
 	EnvSecretsStore,
 	type SecretsStore,
 	secretsExtension,
-} from "@repo/interpreter/secrets.ts";
+} from "@repo/interpreter/secrets";
 
 // A REPL owns an interpreter and can be reset to a fresh one.
 export interface Repl {
@@ -103,7 +102,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	// Recreated with every interp: the naming counters must die with the globals
 	// they named, or a reset() leaves the count climbing past unbound names.
-	private compressor: Compressor;
+	private compactor: Compactor;
 	// One store for the life of the REPL: freshInterp() re-installs the secrets
 	// extension over this same store on every reset, so a secret a host pushed
 	// into it (via `repl.secrets.set(...)`) survives the reset instead of dying
@@ -117,7 +116,7 @@ export class MemoryRepl implements InMemoryRepl {
 		// Assigned before freshInterp(), which reads it. (Same ordering trap the
 		// setup() hook below warns about.)
 		this.wordLimit = options.wordLimit ?? MAX_WORDS;
-		this.compressor = new Compressor(this.wordLimit);
+		this.compactor = new Compactor(this.wordLimit);
 		this.secrets = options.secretsStore ?? new EnvSecretsStore();
 		this.currentInterp = this.freshInterp();
 	}
@@ -127,7 +126,7 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private freshInterp(): Interp {
-		this.compressor = new Compressor(this.wordLimit);
+		this.compactor = new Compactor(this.wordLimit);
 		// The secrets addon owns loading; an embedded REPL seeds its store from
 		// `REPL_*` env vars and does NOT auto-load a `.env` file — that is
 		// CLI-only. The store outlives the interp (see the field comment). The
@@ -137,7 +136,7 @@ export class MemoryRepl implements InMemoryRepl {
 			extensions: [
 				secretsExtension({ store: this.secrets }),
 				mcpExtension(),
-				compressionExtension(this.compressor),
+				compactionExtension(this.compactor),
 				proseExtension(),
 			],
 		});
@@ -159,9 +158,9 @@ export class MemoryRepl implements InMemoryRepl {
 	 * Consumers — apps/mcp, packages/ai — pass the `model` string straight to a
 	 * model, so this is the only place the word cap has to hold. `user` is the
 	 * same content unbounded, for a human reading it once on screen (see
-	 * @repo/interpreter's compression.ts).
+	 * @repo/interpreter's compaction.ts).
 	 *
-	 * Reads prose tolerantly (see `ProseMode`), because what this REPL is
+	 * Reads prose tolerantly because what this REPL is
 	 * handed is written by a model: a sentence with a parenthesis in it —
 	 * `(see below)`, or an unclosed `(` mid-sentence — is prose that happens
 	 * to look like code, and evaluating it costs the step either an error it
@@ -173,44 +172,61 @@ export class MemoryRepl implements InMemoryRepl {
 		return render(this.evaluate(code));
 	}
 
-	// One evaluation before the skips are appended to it, for a subclass that
-	// has to tell the two apart (see `AgentRepl`).
+	/*
+	 * One evaluation before the skips are appended to it, for a subclass that
+	 * has to tell the two apart (see `AgentRepl`).
+	 *
+	 * The two copies are two channels of this interp
+	 * (`@repo/interpreter/channels`) rather than a writer and a callback: the
+	 * compaction extension puts the uncapped copy on `user` and the capped one
+	 * on `model` as each form settles, so nothing here has to reassemble them
+	 * afterwards. Subscribing to this interp rather than swapping the
+	 * process-wide writer also means a second REPL in the same process no
+	 * longer captures this one's output.
+	 */
 	protected evaluate(code: string): EvalResult {
-		// The writer gets the human's copy of everything `echo` wrote; the
-		// model's copy is capped against this step's word budget as each call
-		// runs, and collected on the compressor.
-		this.compressor.beginStep();
-		let printed = "";
+		// Both copies arrive on channels of this interp. The compaction
+		// extension writes the human's copy of everything `echo` produced to
+		// `user` and the model's — capped against this step's word budget as
+		// each call runs — to `model`, so the two are already separated by the
+		// time they get here.
+		this.compactor.beginStep();
+		let model = "";
+		let user = "";
 		const skipped: string[] = [];
-		const prev = setWriter((s) => {
-			printed += s;
-		});
-		// One line per top-level form: `name: shape`. Nothing prints the values
-		// themselves — that is what `echo` is for.
-		let reports = "";
+		const { channels } = this.currentInterp;
+		const unsubscribe = [
+			channels.on(USER, (d) => {
+				user += d.text;
+			}),
+			channels.on(MODEL, (d) => {
+				// A skip is a note about a program that ran anyway.
+				if (d.severity === "warning") {
+					if (!skipped.includes(d.text)) skipped.push(d.text);
+					return;
+				}
+				// A fatal error is thrown as well as reported, and the catch
+				// below is what bounds it — taking it here too would report it
+				// twice, and would make `AgentRepl` read a failed reply as one
+				// that merely skipped something.
+				if (d.severity === undefined) model += d.text;
+			}),
+		];
 		let error: Bounded = { model: "", user: "" };
 		try {
-			run(this.currentInterp, code, {
-				prose: "tolerant",
-				onProse: (what) => {
-					if (!skipped.includes(what)) skipped.push(what);
-				},
-				onTopLevel: (form, value) => {
-					reports += this.compressor.result(this.currentInterp, form, value);
-				},
-			});
+			run(this.currentInterp, code);
 		} catch (ex) {
-			if (ex instanceof EvalException) error = this.compressor.error(`${ex}\n`);
+			if (ex instanceof EvalException) error = this.compactor.error(`${ex}\n`);
 			else if (ex === EndOfFile) {
 				const text = "unbalanced expression (unexpected end of input)\n";
 				error = { model: text, user: text };
 			} else throw ex;
 		} finally {
-			setWriter(prev);
+			for (const off of unsubscribe) off();
 		}
 		return {
-			model: this.compressor.takeEcho() + reports + error.model,
-			user: printed + reports + error.user,
+			model: model + this.compactor.endStep() + error.model,
+			user: user + error.user,
 			skipped,
 		};
 	}
@@ -221,8 +237,12 @@ export class MemoryRepl implements InMemoryRepl {
 		return this.evalOutput(code).model;
 	}
 
-	// Discard all definitions; start from a fresh prelude-loaded interp.
+	// Discard all definitions; start from a fresh prelude-loaded interp. The
+	// outgoing interp is disposed first, so an extension holding something the
+	// language cannot reclaim — the MCP broker worker — releases it rather than
+	// leaking one per reset.
 	reset(): void {
+		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
 	}
 }
@@ -327,7 +347,7 @@ export class AgentRepl extends MemoryRepl {
  * finished sentence, and asking `checkSyntax` here would call it a truncation.
  */
 function isAnswer(code: string, { user, skipped }: EvalResult): boolean {
-	if (stripProse(code, "strict").trim() === "") return true;
+	if (stripProse(code).trim() === "") return true;
 	// The unbounded copy: it is the complete record of what the program
 	// produced, where the model's is capped.
 	if (user !== "" || skipped.length === 0) return false;

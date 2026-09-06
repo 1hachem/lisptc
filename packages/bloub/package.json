@@ -5,14 +5,14 @@
   "private": true,
   "description": "Avatar SVG anime : une forme qui morphe entre 14 etats, relevee image par image sur la video de reference.",
   "license": "MIT",
-  "author": "Jérémy Perret",
+  "author": "J\u00e9r\u00e9my Perret",
   "engines": {
     "node": ">=22.6.0"
   },
   "exports": {
     ".": "./src/index.ts",
-    "./bot/*": "./src/bot/*",
-    "./gaze.ts": "./src/gaze.ts",
+    "./bot/*": "./src/bot/*.ts",
+    "./gaze": "./src/gaze.ts",
     "./package.json": "./package.json"
   },
   "scripts": {
