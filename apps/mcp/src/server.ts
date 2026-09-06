@@ -1,18 +1,9 @@
-// A stdio MCP server that exposes the Lisptc REPL to an MCP client (e.g. Claude
-// Code). It holds ONE persistent `MemoryRepl` for the whole process, so
-// definitions, imports, and loaded MCP servers survive across tool calls —
-// mirroring how the pi extension runs the interpreter in-process, but driven by
-// an MCP client instead of a pi session.
-//
-// Run over stdio: `node --experimental-transform-types src/server.ts`.
-
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { checkSyntax } from "@repo/interpreter";
 import { MemoryRepl } from "@repo/repl/repl";
 import { z } from "zod";
 
-// The single long-lived REPL. State persists for the lifetime of the server.
 const repl = new MemoryRepl();
 
 const server = new McpServer({

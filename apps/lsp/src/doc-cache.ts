@@ -1,9 +1,3 @@
-// Short-lived cache for a per-name doc resolver. `documents.onDidChangeContent`
-// re-runs call-diagnostics/keyword-completion lookups on every keystroke, each
-// resolving every distinct call name in the buffer -- without a cache this
-// round-trips the shared session socket once per name on every edit. Mirrors
-// the completions cache in server.ts (same CACHE_MS window), just keyed per
-// name instead of holding one cached list.
 import type { CallDoc } from "./call-diagnostics.ts";
 
 export function cachedResolver(

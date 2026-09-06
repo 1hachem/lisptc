@@ -89,8 +89,6 @@ describe("parseForms", () => {
 		const forms = parseForms(tokenizeWithPositions("(foo 'x ,@y)"));
 		const [call] = forms;
 		if (call.kind !== "list") throw new Error("expected a list");
-		// 'x and ,@y each collapse to one node, not two, so foo has 3 items total
-		// (itself plus the two collapsed args), not 5.
 		expect(call.items).toHaveLength(3);
 		expect(call.items.map((n) => (n.kind === "atom" ? n.text : n))).toEqual([
 			"foo",
