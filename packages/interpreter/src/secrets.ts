@@ -1,27 +1,3 @@
-/*
- * Secret registry + taint tracking for Lisptc.
- *
- * A host-supplied key→value store of secrets. Keys (and descriptions) are
- * listable by the LLM via `(secrets)`; values are read with `(secret key)` as a
- * tainted `Secret` string that prints redacted (via its `toString`, which `str`
- * duck-types on) and is revealed only when serialized into an outgoing call
- * (via its `toJSON`, which lispToJson in src/mcp.ts duck-types on — mcp never
- * imports this module; the extensions communicate only through those two JS
- * conventions, mirroring display vs wire form).
- *
- * This module owns the whole taint story: the `Secret` type, plus overrides of
- * the core string primitives (`interp.def` overwrites the global) so a secret
- * flows through them and re-taints every derived string. The Lisp string
- * library resolves those names at call time, so it becomes taint-aware for
- * free. Without this extension no Secret value can exist and the core
- * plain-string primitives are exactly right.
- *
- * Like the MCP integration, this is an opt-in extension: pass
- * `secretsExtension()` in `InterpOptions.extensions`. The backing store is an
- * interface (`SecretsStore`) so a host can swap the default process.env-seeded
- * in-memory store (`EnvSecretsStore`) for another source (a vault client, a
- * remote fetch, …) without touching the built-ins. See devdocs/secrets.md.
- */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as dotenv from "dotenv";
@@ -38,44 +14,27 @@ import {
 } from "./lisp.ts";
 import type { ToJson } from "./types.ts";
 
-// A host-supplied secret: a bare value, or a value plus a description shown by
-// `(secrets)`.
 export type SecretSpec = string | { value: string; description?: string };
 
-// Required prefix for every registry key; kept as part of the key. See
-// devdocs/secrets.md.
 export const SECRET_ENV_PREFIX = "REPL_";
 
-// A string argument. Local to this module (mirrors mcp.ts defining its own arg
-// schemas) so the built-ins here don't widen the interpreter's public API.
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
 	"string expected",
 );
 const zNumeric = z.custom<Numeric>(isNumeric, "not a number");
 
-// A plain string or a tainted secret; used by the string primitives so secrets
-// flow through (read with `secretValue`, re-taint with `propagateTaint`).
 const zStringLike = z.custom<string | Secret>(
 	(x) => typeof x === "string" || x instanceof Secret,
 	"string expected",
 );
 
-// The backing store behind `(secret …)` / `(secrets)`. Values stay hidden from
-// listing; only `get` exposes a value (to build the tainted `Secret`). Swap the
-// implementation to source secrets from somewhere other than process.env.
 export interface SecretsStore {
-	// The value + description for `key`, or undefined if unknown.
 	get(key: string): { value: string; description: string } | undefined;
-	// All `(key, description)` pairs, in a stable order (values hidden).
 	list(): Array<[string, string]>;
-	// Merge host-supplied secrets in (later wins). Implementations decide which
-	// keys they accept — the default enforces the `REPL_` prefix.
 	set(record: Record<string, SecretSpec>): void;
 }
 
-// The default store: an in-memory registry seeded from `REPL_*` environment
-// variables at construction, accepting only `REPL_`-prefixed keys thereafter.
 export class EnvSecretsStore implements SecretsStore {
 	private readonly secrets = new Map<
 		string,
@@ -110,8 +69,6 @@ export class EnvSecretsStore implements SecretsStore {
 	}
 }
 
-// Load `REPL_*` secrets from a `.env`-style file into `store`; returns the parsed
-// entries (so a host can persist them). Throws if the file cannot be read.
 export function loadSecretsFromFile(
 	store: SecretsStore,
 	path: string,
@@ -121,29 +78,19 @@ export function loadSecretsFromFile(
 	return record;
 }
 
-// Environment variable naming the `.env`-style secrets file to auto-load.
 const SECRETS_FILE_ENV = "LISPTC_SECRETS_FILE";
 
-// Find the nearest `.env`, searching upward from `start`. This matters because a
-// workspace script runs with cwd set to the package dir (e.g. `pnpm repl` runs
-// in packages/repl), so a project-root `.env` is only found by walking up.
 function findEnvFileUpwards(start: string): string | undefined {
 	let dir = start;
 	for (;;) {
 		const candidate = join(dir, ".env");
 		if (existsSync(candidate)) return candidate;
 		const parent = dirname(dir);
-		if (parent === dir) return undefined; // reached the filesystem root
+		if (parent === dir) return undefined;
 		dir = parent;
 	}
 }
 
-// Seed `store` from a `.env` file, choosing the path in order: an explicit
-// `path`, else $LISPTC_SECRETS_FILE, else the nearest `.env` searching up from
-// the launch directory (INIT_CWD under a package-manager script, else cwd). A
-// missing default file is silently ignored; a missing *explicitly-named* file
-// warns. Returns the loaded entries. This is the addon's single "load from a
-// file on disk" entry point, so a host (a REPL) never resolves paths itself.
 export function loadSecretsFromEnvFile(
 	store: SecretsStore,
 	path?: string,
@@ -151,11 +98,10 @@ export function loadSecretsFromEnvFile(
 	const explicit = (path ?? process.env[SECRETS_FILE_ENV]) || undefined;
 	const file =
 		explicit ?? findEnvFileUpwards(process.env.INIT_CWD || process.cwd());
-	if (!file) return {}; // no `.env` anywhere up the tree — fine
+	if (!file) return {};
 	try {
 		return loadSecretsFromFile(store, file);
 	} catch {
-		// A missing/unreadable file is fine unless it was named explicitly.
 		if (explicit)
 			console.error(`warning: could not read secrets file ${explicit}`);
 		return {};
@@ -163,22 +109,10 @@ export function loadSecretsFromEnvFile(
 }
 
 export interface SecretsOptions {
-	// Backing store; defaults to a fresh env-seeded `EnvSecretsStore`. Pass one to
-	// keep the registry across interp resets (a host holds it and injects into it
-	// via `store.set`) or to source secrets from somewhere other than the env.
 	store?: SecretsStore;
-	// Also seed from a `.env` file: `true` uses $LISPTC_SECRETS_FILE or the
-	// nearest `.env` up from the launch directory; a string uses that exact path.
 	envFile?: boolean | string;
 }
 
-// The secrets addon: it installs the `(secret)` / `(secrets)` built-ins over a
-// store and, when `envFile` is set, seeds that store from a `.env` file — so
-// loading lives here, not in the host. This IS the addon; a host just passes it
-// to `InterpOptions.extensions` (holding `options.store` if it needs to inject
-// more secrets or keep them across resets). Env-var secrets (`REPL_*`) are
-// seeded by the default `EnvSecretsStore`; the `.env` file is loaded here once,
-// when the extension is built.
 export function secretsExtension(
 	options: SecretsOptions = {},
 ): InterpExtension {
@@ -191,11 +125,6 @@ export function secretsExtension(
 	return (interp: Interp): void => registerSecrets(interp, store);
 }
 
-// A tainted string: a secret's value, or anything derived from one. Behaves
-// like a string but `str` renders it redacted as `#<secret:KEY>` (toString);
-// the value is revealed only through the toJSON wire form, which mcp's
-// lispToJson honors when serializing an outgoing call. `keys` are the source
-// secrets (>1 after combining).
 class Secret implements ToJson {
 	readonly keys: readonly string[];
 	constructor(
@@ -204,26 +133,21 @@ class Secret implements ToJson {
 	) {
 		this.keys = [...new Set(keys)];
 	}
-	// Length so the overridden `length` primitive treats a secret like a string.
 	get length(): number {
 		return this.value.length;
 	}
 	toString(): string {
 		return `#<secret:${this.keys.join("+")}>`;
 	}
-	// The wire form — the one path that reveals the value.
 	toJSON(): string {
 		return this.value;
 	}
 }
 
-// The underlying string of a plain string or a tainted secret.
 function secretValue(x: string | Secret): string {
 	return x instanceof Secret ? x.value : x;
 }
 
-// Re-taint: if any source was a secret, wrap the result as a secret (unioning
-// keys); else return the plain string. How the string primitives propagate taint.
 function propagateTaint(
 	value: string,
 	sources: readonly unknown[],
@@ -265,13 +189,6 @@ export function registerSecrets(interp: Interp, store: SecretsStore): void {
 		},
 	);
 
-	// --- Tainted string primitives -------------------------------------------
-	//
-	// Overrides of the core built-ins (interp.def overwrites the global, docs
-	// included): each accepts a Secret wherever a string is expected, unwraps
-	// it for the operation and re-taints the result. The prelude's string
-	// library (substring, string-prefix?, …) calls these names, so taint
-	// propagates through all of Lisp's string functions for free.
 	interp.def(
 		"length",
 		1,
@@ -306,8 +223,6 @@ export function registerSecrets(interp: Interp, store: SecretsStore): void {
 		([x, y]) => {
 			if (x === y) return true;
 			if (isNumeric(x) && isNumeric(y) && compare(x, y) === 0) return true;
-			// Strings compare by value, so a tainted secret is equal to the
-			// plain string it holds (lets string predicates work on secrets).
 			const xs = typeof x === "string" || x instanceof Secret;
 			const ys = typeof y === "string" || y instanceof Secret;
 			if (xs && ys && secretValue(x) === secretValue(y)) return true;
@@ -345,9 +260,6 @@ export function registerSecrets(interp: Interp, store: SecretsStore): void {
 			return propagateTaint(out, sources);
 		},
 	);
-	// A secret is already a string, so converting one is the identity — anything
-	// else would either launder the taint away or hand back the redaction as a
-	// plain string.
 	interp.def(
 		"string",
 		1,

@@ -1,30 +1,5 @@
-/**
- * What a model call cost, under the message it produced.
- *
- * Strictly per-call, never added up across the loop: the agent answers by
- * looping — model call, eval, model call — and every call is handed the whole
- * conversation so far, so each step's input already contains the ones before
- * it. Adding them would charge the same prompt several times over. The step
- * count is the one exception: it belongs to the turn, so it rides on the answer
- * that ends the loop and nowhere else.
- *
- * The numbers come from `meta` in `@repo/ai`'s `stream.ts`, so the timings are
- * the server's, not the browser's. A backend that reports no token usage simply
- * leaves the counts out; the line then carries the timing alone rather than a
- * confident zero.
- *
- * What the line shows is `META_FIELDS` — one flag per field, edit it to change
- * the line everywhere. `<MessageMeta show={…}>` overrides it for one message,
- * which is also where a runtime toggle would feed in.
- */
-
 import type { StepMeta } from "../lib/chat.tsx";
 
-/**
- * A field of the line. `cached` is the odd one out: it is a slice of the input
- * rather than a figure of its own, so it renders inside the `input` field and
- * its flag only says whether that parenthetical appears.
- */
 export type MetaField =
 	| "time"
 	| "duration"
@@ -33,7 +8,6 @@ export type MetaField =
 	| "cached"
 	| "output";
 
-/** Which fields the line carries. Flip one to hide it everywhere. */
 const META_FIELDS: Record<MetaField, boolean> = {
 	time: true,
 	duration: true,
@@ -61,10 +35,6 @@ function formatTime(at: string): string | null {
 		: date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-/**
- * The line, in reading order. A field returning `null` had nothing to report —
- * the server left it out — and drops out the same way a hidden one does.
- */
 const SEGMENTS: {
 	field: MetaField;
 	render: (meta: StepMeta, show: Record<MetaField, boolean>) => string | null;

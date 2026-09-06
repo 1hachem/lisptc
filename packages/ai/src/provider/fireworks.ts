@@ -1,10 +1,6 @@
 import { aiEnv } from "@repo/env/ai";
 import { defineProvider, repetitionPenaltyBody } from "./core.ts";
 
-// Grammar-based structured output and reasoning effort are Fireworks extensions
-// to the OpenAI body. The grammar `response_format` is the default spelling, so
-// this spec doesn't name one.
-// https://docs.fireworks.ai/structured-responses/structured-output-grammar-based
 export const fireworks = defineProvider({
 	label: "Fireworks",
 	apiKey: aiEnv.FIREWORKS_API_KEY,

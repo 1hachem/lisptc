@@ -1,15 +1,6 @@
-// Profils radiaux r(theta) releves au pixel sur la video de reference.
-// theta = 0 pointe vers la droite et croit dans le sens horaire (y vers le bas).
-// Unite : rayon de la boule au repos = 1.
-//
-// Releve sur les images de la video par un script Python garde en amont : mesure
-// figee, ne pas editer a la main.
-
 export const PROFILE_SAMPLES = 64;
 
 export const PROFILES = {
-	// oeuf : meme hauteur que la boule, retreci en largeur
-	// image 164, empreinte mesuree 1.647 x 2.000
 	egg: [
 		0.8369, 0.8424, 0.8497, 0.8585, 0.8674, 0.8775, 0.8878, 0.8983, 0.9089,
 		0.9185, 0.9288, 0.9374, 0.9445, 0.9504, 0.9543, 0.9559, 0.9555, 0.9519,
@@ -20,8 +11,6 @@ export const PROFILES = {
 		0.9169, 0.8949, 0.876, 0.8604, 0.849, 0.8394, 0.8337, 0.8314, 0.8305,
 		0.8326,
 	],
-	// hexagone pointe en haut, coins tres arrondis
-	// image 174, empreinte mesuree 1.826 x 2.011
 	hexagon: [
 		0.921, 0.9282, 0.9441, 0.9706, 0.9984, 1.0059, 0.9896, 0.9562, 0.929,
 		0.9124, 0.9047, 0.9058, 0.9157, 0.9349, 0.9642, 0.9873, 0.9882, 0.9665,
@@ -32,8 +21,6 @@ export const PROFILES = {
 		0.9351, 0.9485, 0.9711, 1.0026, 1.0213, 1.0155, 0.9863, 0.9547, 0.9347,
 		0.9232,
 	],
-	// triangle pointe en haut, coins tres arrondis
-	// image 190, empreinte mesuree 1.995 x 1.884
 	triangle: [
 		0.7819, 0.8211, 0.8747, 0.944, 1.0223, 1.096, 1.1401, 1.134, 1.0808, 1.0047,
 		0.9265, 0.8603, 0.8104, 0.773, 0.745, 0.7273, 0.7151, 0.7118, 0.7148,

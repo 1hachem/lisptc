@@ -1,6 +1,3 @@
-// Tokenizing/parsing lisptc source into a tree of positioned atoms and list
-// forms, and collecting the call sites within it. Static analysis only (the
-// buffer is never evaluated) — see call-diagnostics.ts for what consumes this.
 import { tokenPattern } from "@repo/interpreter";
 
 export interface Atom {
@@ -19,9 +16,6 @@ interface ListForm {
 }
 export type Node = Atom | ListForm;
 
-// Tokenize with (line, char) positions, using the interpreter's own reader
-// grammar (see tokenPattern in packages/interpreter/src/lisp.ts) so forms
-// line up with what it would actually read.
 export function tokenizeWithPositions(text: string): Atom[] {
 	const tokenPat = tokenPattern();
 	const tokens: Atom[] = [];
@@ -38,10 +32,6 @@ export function tokenizeWithPositions(text: string): Atom[] {
 	return tokens;
 }
 
-// Parse tokens into a tree of lists/atoms with positions. Best-effort: stray
-// unmatched parens aren't specially handled — this only needs to find call
-// forms `(head ...)` and their direct arguments, which is enough for a
-// static, non-evaluating check.
 export function parseForms(tokens: Atom[]): Node[] {
 	let i = 0;
 	function parseOne(): Node | undefined {
@@ -51,9 +41,6 @@ export function parseForms(tokens: Atom[]): Node[] {
 			return undefined;
 		}
 		if (t.text === "'" || t.text === "`" || t.text === "," || t.text === ",@") {
-			// Reader sugar for (quote x)/(quasiquote x)/etc: one logical argument,
-			// not two, so collapse into whatever it prefixes — otherwise e.g. 'x
-			// as an arg would inflate the caller's positional argument count.
 			i++;
 			return parseOne();
 		}
@@ -90,11 +77,6 @@ export interface Call {
 	argCount: number;
 }
 
-// Every call form `(head ...)` found anywhere in the program (including
-// nested), with the head symbol's position, the `:keyword` names passed
-// directly to it (not through a nested form, since those belong to a
-// different call), and the total count of direct arguments (for arity
-// checking; quote-prefixed forms already collapse to one node each).
 export function collectCalls(nodes: Node[], out: Call[] = []): Call[] {
 	for (const n of nodes) {
 		if (n.kind !== "list") continue;

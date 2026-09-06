@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 
-// The loop's two turns, in order: one program to evaluate, then the prose that
-// ends the run. Each is streamed the way a backend streams it — the token
-// counts arrive last, in a chunk of their own. The second call's input is the
-// first call's prompt plus what the loop added, which is why the two are never
-// summed.
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
 	[{ text: "three." }, { usage: { input: 20, output: 6, cachedInput: 10 } }],
@@ -34,7 +29,6 @@ interface WireMessage {
 	};
 }
 
-/** The message list of the last `values` event — the stream's final word. */
 async function finalMessages(response: Response): Promise<WireMessage[]> {
 	const text = await response.text();
 	const values = text
@@ -69,19 +63,14 @@ describe("chat stream", () => {
 		expect(step).toMatchObject({ inputTokens: 10, outputTokens: 4 });
 		expect(typeof step?.durationMs).toBe("number");
 		expect(Date.parse(step?.at ?? "")).not.toBeNaN();
-		// Nothing was cached on the way in, so no cached count is claimed.
 		expect(step?.cachedInputTokens).toBeUndefined();
-		// A step in the middle of the loop doesn't yet know how long the loop ran.
 		expect(step?.steps).toBeUndefined();
 
-		// The closing answer reports that one call — 20 in, not 30: its input is
-		// the first call's prompt grown, not a separate charge.
 		const answer = assistant[1].additional_kwargs?.meta;
 		expect(answer).toMatchObject({
 			inputTokens: 20,
 			outputTokens: 6,
 			cachedInputTokens: 10,
-			// the one turn-wide figure: how many calls it took to get here
 			steps: 2,
 		});
 	});

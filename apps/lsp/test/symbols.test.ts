@@ -9,7 +9,6 @@ function doc(content: string): TextDocument {
 describe("enclosingCallHead", () => {
 	it("finds the head of the call the cursor is nested in", () => {
 		const document = doc('(playwright/browser_navigate :url "x")');
-		// Cursor right after `:url`, still inside the call.
 		expect(enclosingCallHead(document, { line: 0, character: 34 })).toBe(
 			"playwright/browser_navigate",
 		);

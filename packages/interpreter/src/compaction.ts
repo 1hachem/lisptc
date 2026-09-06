@@ -1,30 +1,3 @@
-/*
- * Context compaction for Lisptc.
- *
- * The REPL is an LLM's only interface, so everything it prints is spent
- * context. This module spends as little of it as possible:
- *
- *  - The REPL prints NOTHING on its own. Every top-level result is bound to a
- *    global named after the function that produced it —
- *    `linear/list-issues-1` — and reported as one line, `name: shape`, that
- *    describes the value instead of showing it. Data the agent never saw is
- *    data it cannot mis-copy, and the next step refers to the name.
- *  - `echo` is the one command that writes, and what it writes is capped at a
- *    word limit. Past the cap the text stops and a `...` line reports how much
- *    was shown and how to read on.
- *  - `head` / `tail` / `grep` do not print: they RETURN a value, which is
- *    therefore reported and named like any other result. That is the pattern
- *    the agent is meant to reach for — extract into a name, then `echo` a
- *    rendering of it — instead of reading data off a printout and retyping it.
- *
- * Reporting a shape rather than a value is only safe because of the naming:
- * nothing is ever lost by not printing it. See devdocs/compaction.md.
- *
- * An opt-in extension, like src/secrets.ts: pass `compactionExtension()` in
- * `InterpOptions.extensions`. The `Compactor` holding the naming counters is
- * created by the host per interpreter, so `reset()` restarts numbering along
- * with the globals it named.
- */
 import { z } from "zod";
 import { type Channels, MODEL, USER } from "./channels.ts";
 import {
@@ -45,52 +18,28 @@ import {
 } from "./lisp.ts";
 import { plistOptions, splitKeywordArgs } from "./plist.ts";
 
-// Words `echo` will write before truncating. ~550 tokens, so a 25-step agent
-// loop spends at most ~14k tokens on printed output.
 export const MAX_WORDS = 400;
 
-// A result of at most this many words is reported as itself rather than
-// described: below it, a shape costs more to read than the value it hides.
 const INLINE_WORDS = 10;
 
-// Elements `head`/`tail` take from a list when no count is given.
 const DEFAULT_ITEMS = 10;
 
-// Characters allowed per word of budget. A word cap alone does not bound
-// anything: minified JSON is a single megabyte-long "word". This backstop cuts
-// such a blob mid-word rather than printing all of it.
 const MAX_CHARS_PER_WORD = 12;
 
-// Give up scanning for further regex matches after this many, so a pattern
-// matching every character on a huge value cannot hang the interpreter.
 const MAX_MATCHES_SCANNED = 10_000;
 
-// Words of context shown either side of a `grep` hit, and hits printed.
 const DEFAULT_CONTEXT = 8;
 const DEFAULT_MAX_HITS = 10;
 
-// A string argument. Local to this module, as in src/secrets.ts, so the
-// built-ins here don't widen the interpreter's public API.
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
 	"string expected",
 );
 
-/*
- * The one text a value is measured, windowed and searched over.
- *
- * A word offset only means anything if every command counting words agrees on
- * the string it is counting, so they all go through here — and it is the same
- * rendering `echo` writes (`echoText` in src/lisp.ts), so an offset `echo`
- * reports can be fed straight back to it. Strings render raw rather than
- * through `str` because `str` escapes newlines as a literal `\n`, which turns a
- * long document into one unreadable line.
- */
 function canonical(x: unknown): string {
 	return typeof x === "string" ? x : str(x);
 }
 
-// Character ranges of the whitespace-separated words in `text`.
 function wordSpans(text: string): [number, number][] {
 	const spans: [number, number][] = [];
 	const re = /\S+/g;
@@ -99,14 +48,6 @@ function wordSpans(text: string): [number, number][] {
 	return spans;
 }
 
-/*
- * Text bounded two ways: `model` capped at the word limit, `user` as it was
- * written.
- *
- * A human reads output once, on screen, so capping it buys nothing; the model
- * carries it for the rest of the loop, so the cap is what keeps 25 steps
- * affordable. One eval produces both from the same write.
- */
 export interface Bounded {
 	model: string;
 	user: string;
@@ -118,22 +59,11 @@ interface Slice {
 	shown: number;
 	below: number;
 	total: number;
-	// The single word at `offset` exceeded the character budget on its own and
-	// was hard-cut. Word offsets cannot page past it, so the marker has to
-	// point at `substring` instead of an `:offset`.
 	cut: boolean;
-	// Characters of `text` this window covers, and in the whole value.
 	chars: number;
 	totalChars: number;
 }
 
-/*
- * The window of `text` starting at word `offset`, at most `length` words long.
- *
- * Slices the original string between the first and last word's character
- * offsets rather than re-joining the words, so interior newlines and alignment
- * survive — tool output is often the thing being read.
- */
 function sliceWords(
 	text: string,
 	spans: readonly [number, number][],
@@ -169,8 +99,6 @@ function sliceWords(
 	}
 
 	let out = text.slice(startChar, endChar);
-	// Only reachable when the first word alone is over budget: the loop above
-	// stops before adding any later word that would cross it.
 	const cut = out.length > charBudget;
 	if (cut) out = out.slice(0, charBudget);
 	return {
@@ -185,7 +113,6 @@ function sliceWords(
 	};
 }
 
-// How many words lie above/below the window, phrased for the marker line.
 function position(s: Slice): string {
 	if (s.cut)
 		return `${s.chars} of ${s.totalChars} characters shown (one unbroken word)`;
@@ -195,17 +122,8 @@ function position(s: Slice): string {
 	return parts.join(", ");
 }
 
-/*
- * The `...` line closing a truncated `echo`.
- *
- * `name` is the global holding the value, when there is one: `(echo range-1
- * :offset 40)` reads on, while an unnamed value — a literal the agent passed
- * straight to `echo` — can only be given the offset to use.
- */
 function echoMarker(s: Slice, name: string | undefined): string {
 	if (s.above === 0 && s.below === 0 && !s.cut) return "";
-	// A hard-cut word has no next word offset to jump to, so slice it by
-	// character with the prelude's `substring` instead.
 	if (s.cut)
 		return `... ${position(s)} — ${
 			name === undefined
@@ -235,8 +153,6 @@ function intOption(
 	return n;
 }
 
-// Only `nil` is false in this dialect, so an absent option and an explicit nil
-// are different things: `:ignore-case nil` must turn matching case-sensitive.
 function boolOption(
 	opts: Map<string, unknown>,
 	name: string,
@@ -246,29 +162,11 @@ function boolOption(
 	return opts.get(name) !== null;
 }
 
-/*
- * Naming counters for one interpreter, the current step's output budget, and
- * every render entry point.
- *
- * Holds no values: a named result is an ordinary global, which is what lets
- * `echo`/`grep` take a value rather than a handle and work just as well on data
- * the agent bound itself.
- */
 export class Compactor {
 	private readonly counters = new Map<string, number>();
-	// The words of this step's `echo` budget already spent, and the words
-	// written that the model was not shown. Both reset by `beginStep`. The
-	// output itself is not held: it goes out on the channels as it is produced.
 	private spent = 0;
 	private dropped = 0;
-	// Where both copies go, set when the extension is installed. Undefined
-	// before that, so a Compactor built but never registered is inert rather
-	// than broken.
 	private channels?: Channels;
-	// Whether a host is driving steps. Reporting a result is a per-step
-	// discipline, not something the language does, so a bare `run` gets none of
-	// it — the prelude would otherwise describe all 200 of its own definitions
-	// before the first prompt appeared.
 	private stepping = false;
 	readonly limit: number;
 
@@ -280,49 +178,18 @@ export class Compactor {
 		return this.limit * MAX_CHARS_PER_WORD;
 	}
 
-	/*
-	 * Bind a top-level result to a name and report it as `name: shape`.
-	 *
-	 * The line describes the value instead of showing it. That is the whole
-	 * bargain: the agent gets the handle and the structure — enough to write
-	 * the next form — and never sees data it could copy by hand, which is
-	 * where both the token spend and the hallucinated-value risk live. To see
-	 * a value it must ask, with `echo`.
-	 */
 	result(interp: Interp, form: unknown, value: unknown): string {
-		// Not inside a step: nobody asked for a report (see `stepping`).
 		if (!this.stepping) return "";
-		// A step that ended in an `echo` has already said everything it has to
-		// say; a report on top would only announce that printing happened.
 		if (value === Unspecified) return "";
-		// A slice is asked for in order to be READ, so the report for a
-		// top-level `head`/`tail` is the slice itself: describing it back as
-		// `head-1: list of 10 items` sends the agent for an `(echo head-1)` it
-		// should never have had to spend a step on.
 		if (isSliceForm(form)) {
 			this.print(interp, value);
 			return "";
 		}
-		// nil and t are their own shape, and every side-effecting loop returns
-		// nil — naming those would bury the results that matter under
-		// `dotimes-1: nil`.
 		if (value === null || value === true) return `${str(value)}\n`;
-		// `(defun f …)` returns the symbol it defined; the binding it made is
-		// the result, so report it under that name rather than minting one.
 		if (value instanceof Sym && interp.hasGlobal(value))
 			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
 		const name = this.nameFor(interp, form, value);
-		/*
-		 * A job is a live handle whose printed form — `#<job load-mcp:linear
-		 * 8d12…>` — is the one thing an agent must never retype, and reporting
-		 * it invites exactly that: `(await #<job load-mcp:linear 8d12…>)`.
-		 *
-		 * So the handle is never shown. The line gives the name instead, and
-		 * says the thing the agent keeps getting wrong: nothing is owed. A
-		 * job applies its own result when it settles, so an unawaited
-		 * `load-mcp` is finished code, not a loose end to chase.
-		 */
 		const job = jobLabel(value);
 		if (job !== undefined)
 			return `${name}: ${job} running in the background. Its result applies itself when the job settles, so nothing is owed here; to act on it use the name — (job-status ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
@@ -330,35 +197,16 @@ export class Compactor {
 		return `${name}: ${describe(value)}\n`;
 	}
 
-	/*
-	 * Start a step: the word budget is per eval, not per `echo` call.
-	 *
-	 * An echo loop floods the context just as effectively as one huge echo, so
-	 * the limit is shared. Each call takes what is left (`this.spent`), and the
-	 * capping happens inside `window`/`search` — the only place that still
-	 * knows which value the text came from, and so the only place that can
-	 * point the agent back at it by name.
-	 */
 	beginStep(): void {
 		this.stepping = true;
 		this.spent = 0;
 		this.dropped = 0;
 	}
 
-	// Send both copies where they belong: the human's uncapped, the model's
-	// already capped. Called once the extension is installed on an interp.
 	attach(channels: Channels): void {
 		this.channels = channels;
 	}
 
-	/*
-	 * The closing note for whatever this step wrote that the model was not
-	 * shown, or "" if it saw everything.
-	 *
-	 * Only the note: the output itself has already gone out on the channels.
-	 * What is left is the one thing that cannot be said per call, because it
-	 * only exists once the whole step is over.
-	 */
 	endStep(): string {
 		if (this.dropped === 0) return "";
 		return `... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
@@ -368,14 +216,6 @@ export class Compactor {
 		return Math.max(0, this.limit - this.spent);
 	}
 
-	/*
-	 * Send one echo out, charge it to the step's budget, and count what the
-	 * model was not shown.
-	 *
-	 * The single funnel for both copies: everything `echo`, `head`/`tail` and
-	 * the slice reports produce comes through here, which is why this is the
-	 * only place that has to know about channels at all.
-	 */
 	private echo(model: string, user: string, dropped: number): Bounded {
 		this.spent += wordSpans(model).length;
 		this.dropped += dropped;
@@ -383,8 +223,6 @@ export class Compactor {
 		return { model, user };
 	}
 
-	// Put the two copies on the two channels. Neither is a diagnostic — a
-	// program that echoes is working exactly as intended.
 	say(bounded: Bounded): void {
 		if (bounded.user !== "")
 			this.channels?.emit({ channel: USER, text: bounded.user });
@@ -392,8 +230,6 @@ export class Compactor {
 			this.channels?.emit({ channel: MODEL, text: bounded.model });
 	}
 
-	// Write a value the way `echo` writes it: the human's copy straight out,
-	// the model's capped against what is left of this step's budget.
 	private print(interp: Interp, value: unknown): void {
 		this.window(
 			interp,
@@ -404,8 +240,6 @@ export class Compactor {
 		);
 	}
 
-	// Cap a rendered error. Nothing is saved: an EvalException's message is
-	// derived from a value the program still has.
 	error(text: string): Bounded {
 		const spans = wordSpans(text);
 		const s = sliceWords(text, spans, 0, this.limit, this.charBudget);
@@ -416,16 +250,6 @@ export class Compactor {
 		};
 	}
 
-	/*
-	 * The window `(echo x :offset n :length n)` writes.
-	 *
-	 * `user` is what was asked for; `model` is as much of it as this step's
-	 * budget still allows, closing with a `...` line that names the value and
-	 * the offset to resume from. Both come out of one slicing pass, because the
-	 * offsets in that line are only meaningful in the whole value's
-	 * coordinates — capping the window a second time downstream would restart
-	 * them from zero and point the agent at the wrong place.
-	 */
 	window(
 		interp: Interp,
 		text: string,
@@ -434,7 +258,6 @@ export class Compactor {
 		length: number,
 	): Bounded {
 		const spans = wordSpans(text);
-		// Nothing to window: `(echo)` is a blank line, and whitespace is itself.
 		if (spans.length === 0) return this.echo(`${text}\n`, `${text}\n`, 0);
 
 		const asked = sliceWords(
@@ -448,10 +271,6 @@ export class Compactor {
 			const nothing = `(nothing at :offset ${offset}; ${asked.total} words in total)\n`;
 			return this.echo(nothing, nothing, 0);
 		}
-		// The human's copy carries a marker too when the window they asked for
-		// is a partial view — `:length 2` of a longer value really does leave
-		// something below, and saying so costs one line. What it never carries
-		// is the step-budget truncation, which is the model's concern alone.
 		const name = this.existingName(interp, value);
 		const askedMark = echoMarker(asked, name);
 		const user =
@@ -464,11 +283,7 @@ export class Compactor {
 			Math.min(length, this.remaining),
 			this.charBudget,
 		);
-		// Nothing left in the budget: this call is invisible to the model, so
-		// its words are what `endStep`'s closing note has to account for.
 		if (shown.shown === 0) return this.echo("", user, asked.shown);
-		// A shorter window is not silent — its own `...` line says how much is
-		// below and how to read on — so it needs no note on top of that.
 		const mark = echoMarker(shown, name);
 		return this.echo(
 			mark === "" ? `${shown.text}\n` : `${shown.text}\n${mark}\n`,
@@ -477,19 +292,6 @@ export class Compactor {
 		);
 	}
 
-	/*
-	 * What `(echo x :match "…")` writes: each hit as `@<word-offset>` plus the
-	 * surrounding words.
-	 *
-	 * Offsets rather than line numbers because `str` of a large list is a single
-	 * line with no newlines in it at all — a line-oriented search would report
-	 * one enormous match. A word window behaves the same on a one-line Lisp
-	 * render and on multi-line text, and the offset it prints feeds straight
-	 * back into `(echo x :offset N)`.
-	 *
-	 * This is for reading a blob you cannot yet name a pattern for. To keep
-	 * what matched, use `grep`, which returns it.
-	 */
 	search(
 		interp: Interp,
 		text: string,
@@ -502,18 +304,14 @@ export class Compactor {
 		const re = compile(pattern, options.ignoreCase);
 
 		const lines: string[] = [];
-		// Hits past this step's remaining budget are still written for the
-		// human; the model is told how many it did not see.
 		let shownToModel = 0;
 		let found = 0;
 		let scanned = 0;
 		let skipped = 0;
 		let printedWords = 0;
-		let coveredTo = -1; // last word index already inside a printed window
+		let coveredTo = -1;
 
 		for (let m = re.exec(text); m !== null; m = re.exec(text)) {
-			// A zero-length match (e.g. "a*") never advances lastIndex on its
-			// own, so the loop would not terminate.
 			if (m.index === re.lastIndex) re.lastIndex++;
 			if (++scanned > MAX_MATCHES_SCANNED) break;
 			found++;
@@ -556,29 +354,15 @@ export class Compactor {
 				.filter((l) => l !== "")
 				.join("\n")}\n`;
 
-		// Both copies close with the same summary — "N matches …; showing M" —
-		// so a shorter list of hits reports itself and needs no closing note.
 		const user = render(lines);
 		return this.echo(render(lines.slice(0, shownToModel)), user, 0);
 	}
 
-	/*
-	 * The name to report a result under, minting one if the value has none.
-	 *
-	 * A value that is already reachable by a name reuses it rather than getting
-	 * a second one. That is not a nicety: it is what makes `(setq issues (big))`
-	 * report `issues`, and `(defun f …)` report `f`, without either needing to
-	 * be special-cased by head symbol.
-	 */
 	private nameFor(interp: Interp, form: unknown, value: unknown): string {
-		// A form that defined a global returns its symbol.
 		if (value instanceof Sym && interp.hasGlobal(value)) return value.name;
 
 		const head = form instanceof Object && "car" in form ? form.car : undefined;
 
-		// `(setq x …)` already put the value somewhere the agent can reach; the
-		// name it assigned is the answer, whatever the value's type. Reverse
-		// lookup below would only find it for a Cell or a string.
 		if (head instanceof Sym && head.name === "setq") {
 			const assigned = lastAssignedSymbol(form);
 			if (assigned !== undefined) return assigned;
@@ -592,14 +376,6 @@ export class Compactor {
 		return this.bind(interp, base, value, total);
 	}
 
-	/*
-	 * The name of an existing global bound to exactly this value, if any.
-	 *
-	 * Restricted to values worth naming: a reverse lookup on numbers or
-	 * booleans would match any unrelated global that happens to hold the same
-	 * one. Strings compare by value, so an unrelated global holding an equal
-	 * string can match — harmless, since the two are interchangeable to read.
-	 */
 	private existingName(interp: Interp, value: unknown): string | undefined {
 		if (!(value instanceof Object) && typeof value !== "string")
 			return undefined;
@@ -609,7 +385,6 @@ export class Compactor {
 		return undefined;
 	}
 
-	// Bind `value` to a fresh `<base>-<n>` global and return the name.
 	private bind(
 		interp: Interp,
 		base: string,
@@ -618,15 +393,11 @@ export class Compactor {
 	): string {
 		let n = (this.counters.get(base) ?? 0) + 1;
 		let name = `${base}-${n}`;
-		// Never clobber a name the agent bound itself.
 		while (interp.hasGlobal(newSym(name))) name = `${base}-${++n}`;
 		this.counters.set(base, n);
 		const job = jobLabel(value);
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			// A job holds no data to compute over, so the generic "extract from
-			// it" advice would be nonsense: what it needs saying is that this
-			// name is the only way to address the job.
 			doc:
 				job === undefined
 					? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
@@ -636,13 +407,6 @@ export class Compactor {
 	}
 }
 
-/*
- * A background job, recognised by its shape.
- *
- * Compaction must not import the jobs layer — an extension knows nothing
- * about the others (see `secretsExtension`, which `str` and `lispToJson` also
- * duck-type rather than import). `jobId` plus `label` is the whole contract.
- */
 function jobLabel(value: unknown): string | undefined {
 	if (value === null || typeof value !== "object") return undefined;
 	const { jobId, label } = value as { jobId?: unknown; label?: unknown };
@@ -651,17 +415,11 @@ function jobLabel(value: unknown): string | undefined {
 		: undefined;
 }
 
-// Was this top-level form a slice taken to be looked at? Only the bare form
-// counts: nested — `(mapcar f (head x 2))` — the slice is an argument to
-// someone else's computation and printing it would leak data the step never
-// asked to see.
 function isSliceForm(form: unknown): boolean {
 	if (!(form instanceof Cell) || !(form.car instanceof Sym)) return false;
 	return form.car.name === "head" || form.car.name === "tail";
 }
 
-// The symbol a `(setq a 1 b 2)` form assigned last — the one holding the value
-// the form returned.
 function lastAssignedSymbol(form: unknown): string | undefined {
 	let arg: unknown = form instanceof Object && "cdr" in form ? form.cdr : null;
 	let last: string | undefined;
@@ -672,7 +430,6 @@ function lastAssignedSymbol(form: unknown): string | undefined {
 	return last;
 }
 
-// The index of the word containing (or following) character `char`.
 function wordIndexAt(spans: readonly [number, number][], char: number): number {
 	let lo = 0;
 	let hi = spans.length - 1;
@@ -691,8 +448,6 @@ function wordIndexAt(spans: readonly [number, number][], char: number): number {
 	return best;
 }
 
-// Wrap the matched span in [[ ]]. Splices the closing pair first so the opening
-// index stays valid.
 function markMatch(excerpt: string, at: number, length: number): string {
 	if (at < 0 || at > excerpt.length) return excerpt;
 	const end = Math.min(excerpt.length, at + length);
@@ -718,12 +473,6 @@ function searchSummary(
 	return `${parts.join(", ")}. Read a region with (echo ${target} :offset <offset>), or keep what matched with (grep ${target} "${pattern}")`;
 }
 
-/*
- * A regular expression, or a Lisp error naming the problem.
- *
- * Shared by `echo :match` and `grep` so a bad pattern fails the same way in
- * both, and never as a raw JS SyntaxError.
- */
 function compile(pattern: string, ignoreCase: boolean): RegExp {
 	try {
 		return new RegExp(pattern, ignoreCase ? "gi" : "g");
@@ -736,16 +485,6 @@ function compile(pattern: string, ignoreCase: boolean): RegExp {
 	}
 }
 
-/*
- * The elements of a proper list, or undefined for anything that is not one.
- * `nil` is the empty list, not a non-list.
- *
- * Stops at a cell it has already walked, the way `str` does: describing a
- * result is not allowed to be the thing that hangs the step, and a circular
- * list is something a program can build (`(setq l (list 1)) (setcdr l l)`)
- * long before anyone tries to print it. What comes back is then the acyclic
- * prefix, which is all a shape description needs.
- */
 function listElements(x: unknown): unknown[] | undefined {
 	if (x === null) return [];
 	if (!(x instanceof Cell)) return undefined;
@@ -765,9 +504,6 @@ function toList(items: readonly unknown[]): List {
 	return out;
 }
 
-// The keys of an alist — a list of (string . value) pairs — or undefined if `x`
-// is not one. One non-pair is enough to disqualify it: a description promising
-// keys the agent can `assoc` has to be true of every element.
 function alistKeys(x: unknown): string[] | undefined {
 	const pairs = listElements(x);
 	if (pairs === undefined || pairs.length === 0) return undefined;
@@ -780,8 +516,6 @@ function alistKeys(x: unknown): string[] | undefined {
 	return keys;
 }
 
-// The character range of `count` words starting at word `from`, sliced out of
-// the original text so interior newlines and alignment survive.
 function wordWindow(
 	text: string,
 	spans: readonly [number, number][],
@@ -794,15 +528,6 @@ function wordWindow(
 	return text.slice(start, last?.[1] ?? text.length);
 }
 
-/*
- * `head` / `tail`: the first (or last) `n` of a value.
- *
- * Element-wise on a list, word-wise on anything else. That polymorphism is the
- * point: `(head issues 4)` is the four rows an agent means by "the first four",
- * while `(head doc 40)` is the opening of a document. Both return the slice —
- * it is `result` that prints it when the form was a step of its own (see
- * `isSliceForm`), so a nested slice stays as silent as any other function.
- */
 function headOf(value: unknown, n: number): unknown {
 	const items = listElements(value);
 	if (items !== undefined) return toList(items.slice(0, n));
@@ -819,15 +544,6 @@ function tailOf(value: unknown, n: number): unknown {
 	return wordWindow(text, spans, Math.max(0, spans.length - n), n);
 }
 
-/*
- * `grep`: what matched, as a value.
- *
- * On a list, the elements whose printed form matches — so `(grep issues
- * "auth")` is the issues about auth, ready to map over. On anything else, the
- * matched substrings (or one capture group of each) — so `(grep page
- * "https?://[^ ]+")` extracts the URLs instead of showing them to be copied by
- * hand. Returns nil when nothing matched.
- */
 function grepOf(
 	value: unknown,
 	pattern: string,
@@ -849,8 +565,6 @@ function grepOf(
 	const hits: string[] = [];
 	let scanned = 0;
 	for (let m = re.exec(text); m !== null; m = re.exec(text)) {
-		// A zero-length match (e.g. "a*") never advances lastIndex on its own,
-		// so the loop would not terminate.
 		if (m.index === re.lastIndex) re.lastIndex++;
 		if (++scanned > MAX_MATCHES_SCANNED) break;
 		const picked = options.group === undefined ? m[0] : m[options.group];
@@ -860,25 +574,10 @@ function grepOf(
 	return toList(hits);
 }
 
-/*
- * How a result is reported: its value if that is small, its shape if it is not.
- *
- * A shape tells the agent what it needs to write the next form — how many
- * elements, which keys to `assoc` — without showing it data it could retype.
- * Below the threshold that reasoning inverts: `(+ 1 2)` described as "a number"
- * would cost an extra `echo` step to learn what every other REPL says outright,
- * and three tokens of value cannot be mis-copied at scale.
- */
 function describe(value: unknown): string {
 	const callable = callableKind(value);
 	if (callable !== undefined) return callable;
 
-	// Never the handle itself: `#<job load-mcp:linear 8d12…>` is a printout no
-	// reader can read back, and an agent shown one retypes it. Every path that
-	// describes a value goes through here, `(doc 'load-mcp-1)` included — and
-	// ahead of the inline shortcut below, which would print a handle for being
-	// short. (A `Secret` is not the same case: `#<secret:KEY>` IS how a secret
-	// is meant to appear, and inlining it reveals nothing.)
 	const job = jobLabel(value);
 	if (job !== undefined) return `job ${job}, running in the background`;
 
@@ -914,8 +613,6 @@ function describe(value: unknown): string {
 			return `alist, keys ${own.map((k) => JSON.stringify(k)).join(" ")}`;
 		return `list of ${items.length} items, ${spans.length} words`;
 	}
-	// A blob with no whitespace in it — minified JSON, a base64 payload — has a
-	// word count of 1 however big it is, so measure that in characters.
 	if (spans.length <= INLINE_WORDS) return `${text.length} characters`;
 	return `${spans.length} words`;
 }
@@ -996,25 +693,12 @@ const GREP_ARGS: DocArg[] = [
 function registerCompaction(interp: Interp, c: Compactor): void {
 	c.attach(interp.channels);
 
-	/*
-	 * One line per top-level form: `name: shape`.
-	 *
-	 * A wrapping middleware rather than a callback the core had to carry: the
-	 * base evaluates the form, and what comes back is what gets named and
-	 * reported. Reporting on results is this extension's whole subject, so the
-	 * interpreter no longer has to know it is happening.
-	 */
 	interp.hooks.evalForm.use((interp, form, next) => {
 		const value = next(interp, form);
 		const report = c.result(interp, form, value);
 		if (report !== "") c.say({ model: report, user: report });
 		return value;
 	});
-	/*
-	 * `echo`, overriding the plain core version (src/lisp.ts) with the windowed,
-	 * searchable one — the same `interp.def` override idiom src/secrets.ts uses
-	 * on the string primitives.
-	 */
 	interp.def(
 		"echo",
 		-1,
@@ -1025,15 +709,8 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 			const { values, options } = splitKeywordArgs(rest, ECHO_OPTIONS);
 			const opts = plistOptions(options, ECHO_OPTIONS);
 			const text = echoText(values);
-			// An offset or a name in the `...` line only means anything for a
-			// single value: with several, the text is a join of their renders and
-			// no global holds it.
 			const single =
 				values !== null && values.cdr === null ? values.car : undefined;
-			// The human gets what was asked for; the model gets as much of it as
-			// the step's budget allows. Both go out on their own channel from
-			// inside the slicing pass, which is the only place that still knows
-			// which value the text came from.
 			const pattern = opts.get("match");
 			if (pattern !== undefined) {
 				if (typeof pattern !== "string")
@@ -1050,8 +727,6 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 				text,
 				single,
 				intOption(opts, "offset", 0),
-				// No :length means the whole value: it is the STEP that is
-				// bounded, not the request.
 				intOption(opts, "length", Number.MAX_SAFE_INTEGER),
 			);
 			return Unspecified;
@@ -1095,8 +770,6 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 	);
 }
 
-// The optional positional count of `head`/`tail`: elements for a list, words
-// for text, so the default depends on the argument's type.
 function countArg(rest: List, value: unknown, wordLimit: number): number {
 	if (rest === null)
 		return listElements(value) === undefined ? wordLimit : DEFAULT_ITEMS;
@@ -1107,15 +780,6 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 	return n;
 }
 
-/*
- * Install `echo`, `head`, `tail` and `grep` over `compactor`.
- *
- * The host passes the same `Compactor` it renders results with, and creates a
- * new one per interpreter: the naming counters must die with the globals they
- * named, or a `reset()` leaves the count climbing past unbound names. (This is
- * the opposite of `secretsExtension`, whose store is host configuration and
- * must survive a reset.)
- */
 export function compactionExtension(
 	compactor: Compactor = new Compactor(),
 ): InterpExtension {

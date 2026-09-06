@@ -1,16 +1,3 @@
-/**
- * A thumb on an assistant turn, and the sentence that explains the thumb.
- *
- * Replaces the notes it grew out of: a note was a free-text comment nobody
- * writes twice, a thumb is one click and gives the rating a number to aggregate
- * on. The sentence is optional and asked for after the fact, so the cheap
- * gesture is never blocked on the expensive one.
- *
- * Both events land on the conversation's trace — see `captureFeedback`. The
- * `$ai_trace_id` PostHog joins on is the *thread*, so `message_id` is what
- * narrows a rating to the turn it was given for.
- */
-
 import type { ExpressionId } from "@repo/bloub";
 import { useEffect, useRef, useState } from "react";
 import { useAgent } from "../lib/agent.tsx";
@@ -47,21 +34,8 @@ function randomMessage(thumb: Thumb): string {
 	return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// PostHog's rating scale for a thumb survey: question 0, 1 up and 2 down.
 const RESPONSE: Record<Thumb, number> = { up: 1, down: 2 };
 
-/**
- * The face the vote puts on the agent — the engine's own two, at their catalogue
- * geometry, with nothing adjusted from here.
- *
- * `heureux` is the one expression whose ink is an arc rather than a filled
- * capsule, so it smiles by shape and needs no tilt to suggest it. That matters
- * because the tilt route is where the other happy faces live, and it is shared
- * with anger: `fier` at +18° and `hilare` at +20° are only 10° from `colere`'s
- * +30° over nearly identical eyes. `triste` is the far end of the same axis
- * instead — tops splayed at −28° over tall eyes — where nothing else sits, so it
- * is unambiguous.
- */
 const FACE: Record<Thumb, ExpressionId> = { up: "heureux", down: "triste" };
 
 export function MessageFeedback({
@@ -85,17 +59,11 @@ export function MessageFeedback({
 		if (asking) field.current?.focus();
 	}, [asking]);
 
-	// The thumb is the answer. It is sent complete on the click rather than held
-	// back for a sentence that may never be typed — a rating waiting on a
-	// follow-up is a rating that gets lost when the tab closes.
 	const rate = (value: Thumb) => {
 		const id = crypto.randomUUID();
 		submission.current = id;
 		setThumb(value);
 		setAsking(true);
-		// The vote is aimed at the agent, so the agent answers it — see
-		// `lib/agent.tsx`. A verdict that lands in a dashboard and nowhere else is a
-		// verdict nobody feels they gave.
 		say({ face: FACE[value] });
 		captureFeedback({
 			$survey_response: RESPONSE[value],
@@ -107,8 +75,6 @@ export function MessageFeedback({
 		});
 	};
 
-	// PostHog's rule for a second event under one submission id: it has to carry
-	// every answer collected so far, so the thumb rides along with the sentence.
 	const explain = () => {
 		const text = draft.trim();
 		if (!text || !thumb || !submission.current) return;
@@ -129,11 +95,6 @@ export function MessageFeedback({
 
 	return (
 		<>
-			{/*
-			 * Out of flow, in the gutter beside the text column: an affordance on
-			 * every assistant turn must cost no vertical space, or the turns it hangs
-			 * off end up further apart than the conversation they make up.
-			 */}
 			<div className="absolute top-0 left-full ml-3 flex select-none gap-1.5 text-[11px] leading-[1.7]">
 				<button
 					type="button"

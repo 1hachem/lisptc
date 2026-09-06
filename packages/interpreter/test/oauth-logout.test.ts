@@ -5,8 +5,6 @@ import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, run, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
 
-// Point the broker's file store at a temp dir before it starts (the worker
-// inherits process.env when spawned on the first MCP call).
 const dir = mkdtempSync(join(tmpdir(), "lisptc-logout-"));
 process.env.LISPTC_OAUTH_DIR = dir;
 
@@ -19,7 +17,6 @@ describe("logout", () => {
 	});
 
 	it("deletes a server's saved OAuth session via the store", () => {
-		// The file the FileOAuthStore uses for the posthog origin.
 		const file = join(dir, "https___mcp.posthog.com.json");
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(
@@ -46,7 +43,6 @@ describe("login", () => {
 	});
 
 	it("returns :logged-in when a token is already stored", () => {
-		// A stored token means no network / no authorization is needed.
 		const file = join(dir, "https___mcp.linear.app.json");
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(

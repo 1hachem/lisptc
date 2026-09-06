@@ -19,6 +19,8 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
+    "check:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts",
+    "fix:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts --fix",
     "prepare": "husky"
   },
   "pnpm": {

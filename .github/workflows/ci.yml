@@ -35,6 +35,9 @@ jobs:
       - name: Lint & format check
         run: pnpm lint
 
+      - name: No comments
+        run: pnpm check:comments
+
       - name: Knip
         run: pnpm knip
 

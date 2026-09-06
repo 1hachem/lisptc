@@ -25,8 +25,6 @@ describe("Channels", () => {
 		expect(model).toEqual([]);
 	});
 
-	// A debug view wants everything without every emitter having to double-post
-	// to be visible.
 	it("delivers every record to an ALL subscriber", () => {
 		const channels = new Channels();
 		const everything = record(channels, ALL);
@@ -35,8 +33,6 @@ describe("Channels", () => {
 		expect(everything.map((d) => d.channel)).toEqual([USER, "compaction"]);
 	});
 
-	// A channel is not registered, only emitted on — which is what makes a new
-	// one (context compaction, say) cost nothing in the core.
 	it("carries a channel the core never heard of", () => {
 		const channels = new Channels();
 		const seen = record(channels, "compaction");
@@ -54,7 +50,6 @@ describe("Channels", () => {
 		expect(seen).toEqual(["first"]);
 	});
 
-	// Reporting must never change the outcome of the program that reported.
 	it("survives a listener that throws, and still reaches the others", () => {
 		const channels = new Channels();
 		channels.on(USER, () => {
@@ -77,8 +72,6 @@ describe("an interp's channels", () => {
 		expect(user.every((d) => d.severity === undefined)).toBe(true);
 	});
 
-	// Two interps in one process no longer share one sink: this is what the
-	// module-level writer could not express.
 	it("keeps one interp's output out of another's", () => {
 		const first = new Interp();
 		const second = new Interp();
@@ -87,8 +80,6 @@ describe("an interp's channels", () => {
 		expect(seen).toEqual([]);
 	});
 
-	// The process-wide writer stays the default sink, so a host that never
-	// learns about channels keeps working.
 	it("still feeds setWriter", () => {
 		let out = "";
 		const prev = setWriter((s) => {
@@ -102,8 +93,6 @@ describe("an interp's channels", () => {
 		expect(out).toBe("via the writer\n");
 	});
 
-	// Severity is the axis that separates a program that ran anyway from one
-	// that did not — both are addressed to the model.
 	it("reports a skip as a warning and a failure as critical", () => {
 		const interp = new Interp({ extensions: [proseExtension()] });
 		const model = record(interp.channels, MODEL);

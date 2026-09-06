@@ -1,18 +1,3 @@
-/*
- * MCP broker — the domain half of an async worker, runs inside a worker_threads
- * Worker.
- *
- * The Lisp interpreter (src/lisp.ts) is fully synchronous; MCP is async. A
- * single Node thread cannot block on its own event loop without deadlocking,
- * so all async MCP work happens here, on a separate thread with its own event
- * loop. This file owns ONLY the MCP operations (connect, call-tool, login, …);
- * the generic machinery — the SharedArrayBuffer reply bridge and the
- * background-job scheduler — lives in src/jobs-broker.ts, which this module
- * drives via `runWorker(dispatch)`. The main-thread side is src/jobs.ts +
- * src/mcp.ts.
- *
- * All MCP typing comes from the official SDK — no hand-rolled JSON-RPC.
- */
 import { randomUUID } from "node:crypto";
 import {
 	auth,
@@ -31,7 +16,6 @@ import {
 	StoredOAuthProvider,
 } from "./mcp-oauth.ts";
 
-// A connection descriptor sent by the main thread.
 type ConnConfig =
 	| {
 			name: string;
@@ -47,15 +31,12 @@ type ConnConfig =
 			env?: Record<string, string>;
 	  };
 
-// OAuth token store (swap for a DB-backed OAuthStore here). See devdocs/oauth.md.
 const oauthStore = new FileOAuthStore();
 
-// Loopback callback port (local mode); fixed so the redirect URI is stable.
 function callbackPort(): number {
 	return oauthEnv.LISPTC_OAUTH_CALLBACK_PORT ?? 8909;
 }
 
-// Registered redirect_uri: cloud ingress URL, else the local loopback callback.
 function redirectUri(): string {
 	return (
 		oauthEnv.LISPTC_OAUTH_REDIRECT_URL ??
@@ -63,8 +44,6 @@ function redirectUri(): string {
 	);
 }
 
-// Thrown by connect() when a server needs interactive OAuth; the message carries
-// the authorization URL and the next step.
 class NeedsAuthError extends Error {
 	constructor(server: string, authUrl: string) {
 		super(
@@ -73,10 +52,6 @@ class NeedsAuthError extends Error {
 	}
 }
 
-// A single long-lived callback server multiplexes every OAuth flow, so several
-// outstanding login links (e.g. from concurrent background `load-mcp` jobs) can
-// each complete independently. Lazily started; stays open (holding the fixed
-// redirect port) for the life of the broker.
 let callbackServer: CallbackServer | undefined;
 async function sharedCallbackServer(): Promise<CallbackServer | undefined> {
 	if (callbackServer) return callbackServer;
@@ -86,16 +61,11 @@ async function sharedCallbackServer(): Promise<CallbackServer | undefined> {
 			oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		);
 	} catch {
-		return undefined; // port busy (e.g. another lisptc): manual mcp-authorize
+		return undefined;
 	}
 	return callbackServer;
 }
 
-// Register this flow's callback capture. Fire-and-forget; silent on busy port /
-// timeout (the manual mcp-authorize path still works). The exchange uses THIS
-// flow's `provider` — whose in-memory PKCE verifier survives even after a later
-// login for the same server overwrites the stored one — so an earlier link's
-// code still exchanges correctly instead of failing PKCE.
 async function startCallbackCapture(
 	serverUrl: string,
 	scope: string | undefined,
@@ -103,19 +73,17 @@ async function startCallbackCapture(
 	provider: StoredOAuthProvider,
 ): Promise<void> {
 	const cb = await sharedCallbackServer();
-	if (!cb) return; // port busy: fall back to manual (mcp-authorize)
+	if (!cb) return;
 	const state = authUrl.searchParams.get("state") ?? "";
 	cb.waitForCode(state, undefined, (code) =>
 		auth(provider, { serverUrl, authorizationCode: code, scope }).then(
 			() => {},
 		),
-	).catch(() => {}); // timeout / superseded / exchange error: surfaced in the browser page; user can retry
+	).catch(() => {});
 }
 
-// Live MCP clients keyed by the serverId the broker mints on connect.
 const clients = new Map<string, { client: Client; tools: Tool[] }>();
 
-// The MCP operations this broker understands.
 type McpOp =
 	| "connect"
 	| "login"
@@ -126,11 +94,6 @@ type McpOp =
 	| "disconnect"
 	| "search";
 
-// The MCP operations. The generic scheduler (src/jobs-broker.ts) forwards every
-// non-meta op here; when run via `start`, `signal` is the job's AbortController
-// signal so a slow connect / tool call can be cancelled mid-flight. Typing `op`
-// as McpOp keeps the switch exhaustively checked; the scheduler casts the raw
-// wire string to McpOp, so an unknown op still reaches the `default` at runtime.
 async function dispatch(
 	op: McpOp,
 	payload: unknown,
@@ -161,7 +124,6 @@ async function dispatch(
 		case "disconnect":
 			return disconnect((payload as { serverId: string }).serverId);
 		case "search":
-			// v2 semantic search backend hook — reserved. See src/mcp.ts search-tools.
 			throw new Error("semantic search backend not implemented");
 		default:
 			throw new Error(`unknown op: ${op}`);
@@ -179,12 +141,7 @@ async function connect(
 		{ capabilities: {} },
 	);
 
-	// SDK performs the initialize + notifications/initialized handshake. The
-	// AbortSignal (from the job's AbortController) lets (cancel job) abort a
-	// slow connect/list mid-flight.
 	if ("url" in conf && conf.oauth) {
-		// OAuth path: a stored token connects directly (auto-refreshed); with none
-		// ensureAuthorized begins authorization and returns the login URL.
 		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
 		const { provider, authUrl } = await ensureAuthorized(conf.url, scope);
 		if (authUrl) throw new NeedsAuthError(conf.name, authUrl);
@@ -195,7 +152,6 @@ async function connect(
 			await client.connect(transport, { signal });
 		} catch (e) {
 			if (!(e instanceof UnauthorizedError)) throw e;
-			// Stored token rejected: drop it and re-authorize.
 			await provider.invalidateCredentials("tokens");
 			const retry = await ensureAuthorized(conf.url, scope);
 			throw new NeedsAuthError(conf.name, retry.authUrl ?? conf.url);
@@ -209,7 +165,6 @@ async function connect(
 				: new StdioClientTransport({
 						command: conf.command,
 						args: conf.args ?? [],
-						// Inherit env so PATH etc. resolve; merge any explicit overrides.
 						env: {
 							...(process.env as Record<string, string>),
 							...(conf.env ?? {}),
@@ -218,11 +173,6 @@ async function connect(
 		await client.connect(transport, { signal });
 	}
 	const { tools } = await client.listTools(undefined, { signal });
-	// A server that handshakes but exposes no tools is useless to lisptc (whose
-	// MCP integration is tools-only) — this is the common shape of a degraded /
-	// unauthenticated / wrong-URL connection, which returns an empty list rather
-	// than erroring. Treat it as a load failure so it surfaces as :error instead
-	// of a misleading :loaded server with no tools.
 	if (tools.length === 0) {
 		await client.close().catch(() => {});
 		throw new Error("connected but the server exposed no tools");
@@ -232,8 +182,6 @@ async function connect(
 	return { serverId, tools };
 }
 
-// Exchange an authorization code for tokens using the persisted PKCE verifier +
-// client registration (no live transport needed). Then (load-mcp name) connects.
 async function authorize(payload: {
 	url: string;
 	code: string;
@@ -256,10 +204,6 @@ async function authorize(payload: {
 	return { ok: true };
 }
 
-// Prepare an OAuth provider and, if there's no usable token, begin authorization
-// (with our curated `scope`, not the server's full scopes_supported which some
-// reject as invalid_scope) and start the callback capture. Returns the provider
-// and the login URL to open — or authUrl null if already authenticated.
 async function ensureAuthorized(
 	serverUrl: string,
 	scope: string | undefined,
@@ -270,7 +214,6 @@ async function ensureAuthorized(
 		redirectUri(),
 		scope,
 	);
-	// Drop a stale client registration bound to a different redirect URI.
 	const registered = provider.clientInformation();
 	if (
 		registered?.redirect_uris &&
@@ -286,9 +229,6 @@ async function ensureAuthorized(
 	return { provider, authUrl: authUrl.href };
 }
 
-// Log in to an OAuth server: begin authorization and return the login URL to
-// open (null if already authenticated). The callback capture completes it in
-// the background, then (load-mcp) connects.
 async function login(payload: {
 	url: string;
 	scopes?: string[];
@@ -298,8 +238,6 @@ async function login(payload: {
 	return { authUrl };
 }
 
-// Delete a server's saved OAuth session (tokens, client registration, verifier)
-// via the store's clear(), so the next connect re-authorizes from scratch.
 async function logout(payload: { url: string }): Promise<{ ok: true }> {
 	await oauthStore.clear(new URL(payload.url).origin);
 	return { ok: true };
@@ -313,19 +251,6 @@ async function listTools(serverId: string): Promise<Tool[]> {
 	return tools;
 }
 
-/*
- * A text result that is really a JSON document, parsed.
- *
- * Most servers put their JSON in a text block instead of setting
- * `structuredContent`, and that difference must not reach the interpreter: a
- * tool result arrives as lisptc data — an object as an alist, an array as a
- * list — so the agent can `assoc` a field out of it and the REPL can report
- * its keys instead of a word count.
- *
- * Only an object or an array counts. A tool that answered `42`, `null` or
- * `"ok"` meant text, and parsing those would hand the agent a number, nil or a
- * re-quoted string in place of the answer it actually gave.
- */
 function asJsonDocument(text: string): unknown | undefined {
 	const trimmed = text.trim();
 	if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
@@ -356,8 +281,6 @@ async function callTool(
 		const text = extractText(result.content);
 		throw new Error(text || `tool ${payload.tool} returned an error`);
 	}
-	// Prefer structured output when present. Otherwise, collapse an all-text
-	// content array to a plain string (the common case), else return it raw.
 	if (result.structuredContent !== undefined) return result.structuredContent;
 	const content = result.content;
 	if (
@@ -379,7 +302,6 @@ async function disconnect(serverId: string): Promise<{ ok: true }> {
 	return { ok: true };
 }
 
-// Concatenate the text parts of a CallToolResult content array (for errors).
 function extractText(content: unknown): string {
 	if (!Array.isArray(content)) return "";
 	return content

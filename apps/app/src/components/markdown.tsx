@@ -2,8 +2,6 @@ import { type Components, Streamdown } from "streamdown";
 import "streamdown/styles.css";
 
 const components: Components = {
-	// Links (e.g. OAuth authorization URLs the agent forwards to the user) render
-	// in the accent color, open in a new tab, and stay distinct from body text.
 	a: ({ children, ...props }) => (
 		<a
 			{...props}
@@ -14,8 +12,6 @@ const components: Components = {
 			{children}
 		</a>
 	),
-	// The chat is a monospace terminal; inherit its exact font + size and drop
-	// Streamdown's default inline-code box so snippets read as plain text.
 	code: ({ children, ...props }) => (
 		<code
 			{...props}

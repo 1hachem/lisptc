@@ -72,7 +72,7 @@ describe("equality predicates on structures", () => {
 	it("equal is deep, eq/eql are shallow", () => {
 		expect(ev("(equal '(1 (2 3)) '(1 (2 3)))")).toBe("t");
 		expect(ev("(equal '(1 2) '(1 2 3))")).toBe("nil");
-		expect(ev("(eq '(1 2) '(1 2))")).toBe("nil"); // distinct cons cells
+		expect(ev("(eq '(1 2) '(1 2))")).toBe("nil");
 		expect(ev('(equal "abc" "abc")')).toBe("t");
 	});
 });

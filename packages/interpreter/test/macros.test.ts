@@ -57,8 +57,6 @@ describe("gensym", () => {
 		expect(ev("(stringp (symbol-name (gensym)))")).toBe("t");
 	});
 
-	// The `while` macro binds its loop via a gensym; a user variable named
-	// `loop` must not be captured by it.
 	it("keeps macro-introduced bindings hygienic", () => {
 		expect(
 			ev(

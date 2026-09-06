@@ -1,15 +1,7 @@
-// Text-position helpers shared by completion and hover: finding the symbol
-// (or enclosing call) at a cursor position, and rendering a doc entry as
-// hover/completion markdown. Ignores string contents — a simplification both
-// functions share.
 import type { TextDocument } from "vscode-languageserver-textdocument";
 
-// A symbol is any run of characters the reader doesn't treat as delimiters.
 const symbolChar = /[^()'`~" \t]/;
 
-// Walk backward from `position` tracking paren depth to find the call this
-// position is nested in, then read the symbol right after its opening paren,
-// e.g. `(playwright/browser_navigate :u|)` -> "playwright/browser_navigate".
 export function enclosingCallHead(
 	document: TextDocument,
 	position: { line: number; character: number },

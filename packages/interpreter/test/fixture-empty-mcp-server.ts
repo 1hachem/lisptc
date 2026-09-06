@@ -1,18 +1,7 @@
-/*
- * Minimal stdio MCP server that completes the handshake but exposes ZERO tools.
- * It declares the `tools` capability and answers tools/list with an empty array
- * (rather than erroring), mimicking a degraded / unauthenticated / wrong-URL
- * connection. Used to test that load-mcp treats a tool-less connection as a
- * failure rather than a misleading `:loaded` server. Uses the low-level Server
- * because the high-level McpServer only advertises the tools capability once at
- * least one tool is registered.
- */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-// See fixture-mcp-server.ts: guards against an EPIPE crash if the parent
-// tears down the pipe mid-write.
 process.stdout.on("error", () => {});
 
 const server = new Server(

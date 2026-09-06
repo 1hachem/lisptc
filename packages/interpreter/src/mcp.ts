@@ -1,20 +1,3 @@
-/*
- * MCP integration for Lisptc (main-thread side).
- *
- * Installs the load-mcp / unload-mcp / list-mcps / list-toolkit / list-tools /
- * search-tools / search-mcps / mcp-shutdown built-ins into an Interp (tool docs
- * surface through the generic `doc` built-in — see defineGlobal below).
- *
- * The async capability is factored out into the generic jobs runtime
- * (src/jobs.ts): this module owns only the MCP domain. It builds a `Jobs` over a
- * `JobsRuntime` (default: a worker thread running the MCP broker, src/mcp-broker.ts),
- * installs the generic job built-ins (await/jobs/cancel/…) via that Jobs, and
- * adds the MCP built-ins on top — load-mcp starts a background job, tool calls
- * and lifecycle ops are blocking `runtime.call`s.
- *
- * Loaded tools become ordinary global bindings named "<server>/<tool>", called
- * with native keyword syntax, e.g. (linear/list-issues :query "auth bug").
- */
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { isNumeric } from "./arith.ts";
@@ -35,7 +18,6 @@ import {
 import { keyName, parsePlist } from "./plist.ts";
 import type { ToJson } from "./types.ts";
 
-// A tool/server name argument: a string, symbol or keyword, coerced to string.
 const zName = z
 	.custom<string | Sym | LispKeyword>(
 		(x) =>
@@ -44,7 +26,6 @@ const zName = z
 	)
 	.transform((x) => asName(x));
 
-// --- Types -------------------------------------------------------------------
 export interface Tool {
 	name: string;
 	description?: string;
@@ -68,8 +49,6 @@ export type ConnConfig = { description?: string } & (
 			name: string;
 			url: string;
 			headers?: Record<string, string>;
-			// OAuth 2.1 servers (e.g. Linear); `scopes` are requested at auth time.
-			// See devdocs/oauth.md.
 			oauth?: boolean;
 			scopes?: string[];
 	  }
@@ -88,31 +67,20 @@ interface ServerRec {
 	tools: Map<string, Tool>;
 }
 
-// MCP builds on the generic async-jobs runtime (src/jobs.ts): load-mcp starts a
-// background job, tool calls / lifecycle ops are blocking `runtime.call`s. The
-// runtime is swappable — the default offloads to a worker thread running the MCP
-// broker; a different backend (e.g. a Redis queue) can implement JobsRuntime.
 export interface RegisterMcpOptions {
 	runtime?: JobsRuntime;
 	toolkitJson?: string;
 }
 
-// Pull the authorization `code` out of a pasted callback link, or accept a bare
-// code as-is. Users tend to copy the whole redirect URL (…/callback?code=…&state=…)
-// rather than just the code, which otherwise fails the token exchange.
 function extractAuthCode(raw: string): string {
 	const value = raw.trim();
 	try {
-		// A URL yields its `code` param (empty string if the redirect carried an
-		// error instead), never the raw URL as a bogus code.
 		return new URL(value).searchParams.get("code") ?? "";
 	} catch {
-		// not a URL: treat it as a bare code
 		return value;
 	}
 }
 
-// --- Lisp <-> JS/JSON conversion ---------------------------------------------
 function listToArray(list: List): unknown[] {
 	const out: unknown[] = [];
 	for (let j = list; j !== null; j = j.cdr as List) out.push(j.car);
@@ -125,7 +93,6 @@ function arrayToList(arr: unknown[]): List {
 	return out;
 }
 
-// Detect an alist: a proper list whose every element is a (key . value) pair.
 function isAlist(x: Cell): boolean {
 	for (let j: List = x; j !== null; j = j.cdr as List) {
 		const e = j.car;
@@ -158,14 +125,10 @@ function lispToJson(x: unknown): unknown {
 		}
 		return listToArray(x).map(lispToJson);
 	}
-	// The wire form: a value with a toJSON knows how to serialize itself — this
-	// is the one path that reveals a secret's value, into the outgoing call
-	// (its toString/display form stays redacted; see src/secrets.ts).
 	if (typeof (x as ToJson).toJSON === "function") return (x as ToJson).toJSON();
 	return String(x);
 }
 
-// Build the outgoing arguments object from a call-site keyword plist.
 function plistToJson(list: List): Record<string, unknown> {
 	const plist = parsePlist(list);
 	const obj: Record<string, unknown> = {};
@@ -173,7 +136,6 @@ function plistToJson(list: List): Record<string, unknown> {
 	return obj;
 }
 
-// --- Validation --------------------------------------------------------------
 function validate(tool: Tool, args: Record<string, unknown>): void {
 	const schema = tool.inputSchema;
 	if (!schema) return;
@@ -188,7 +150,7 @@ function validate(tool: Tool, args: Record<string, unknown>): void {
 	const props = schema.properties ?? {};
 	for (const [key, value] of Object.entries(args)) {
 		const spec = props[key];
-		if (!spec) continue; // permit extra keys; server decides
+		if (!spec) continue;
 		if (spec.type && !typeMatches(spec.type, value))
 			throw new EvalException(
 				`${tool.name}: argument "${key}" expected ${spec.type}`,
@@ -220,19 +182,16 @@ function typeMatches(type: string, value: unknown): boolean {
 		case "null":
 			return value === null;
 		default:
-			return true; // unknown schema type: don't block
+			return true;
 	}
 }
 
-// --- Server lifecycle --------------------------------------------------------
 function connConfigFromArgs(
 	rest: List,
 	predefined: Map<string, ConnConfig>,
 ): ConnConfig {
 	const args = listToArray(rest);
-	// Bare predefined name: (load-mcp "linear")
 	if (args.length === 1) return lookupPredefined(predefined, asName(args[0]));
-	// Ad-hoc plist: (load-mcp :name "x" :url "..." :headers (...)) etc.
 	const opts = parsePlist(rest);
 	const rawName = opts.get("name");
 	if (rawName === undefined || rawName === null)
@@ -267,8 +226,6 @@ function connConfigFromArgs(
 			: undefined;
 		return { name, command, args: cmdArgs, env };
 	}
-	// Neither :url nor :command: `:name` names a toolkit server, so
-	// (load-mcp :name "playwright") means the same as (load-mcp "playwright").
 	return lookupPredefined(predefined, name);
 }
 
@@ -282,14 +239,6 @@ function lookupPredefined(
 	return conf;
 }
 
-// Structured args for load-mcp's ad-hoc-plist calling convention, mirroring
-// what connConfigFromArgs above actually accepts — for the LSP's keyword-arg
-// completion/diagnostics (see toolArgs below for the equivalent on MCP
-// tools). `required` only marks `:name`: the url/command choice is a branch
-// (either `:url` + optional :headers/:oauth/:scopes, or `:command` +
-// optional :args/:env), and a flat DocArg list can't express "one of", so
-// marking both `:url` and `:command` required would make every valid call
-// look like it's missing the other one.
 const LOAD_MCP_ARGS: DocArg[] = [
 	{
 		name: "name",
@@ -357,9 +306,6 @@ function doUnload(
 	return rec.toolSyms;
 }
 
-// Install a connected server's tools as global `server/tool` bindings and
-// record the server. The finalizer body of a load-mcp job; returns the list of
-// installed tool symbols.
 function installServer(
 	interp: Interp,
 	runtime: JobsRuntime,
@@ -393,24 +339,16 @@ function installServer(
 	return arrayToList(toolSyms);
 }
 
-// --- Built-in installation ---------------------------------------------------
 export function mcpExtension(options: RegisterMcpOptions = {}) {
 	return (interp: Interp): void => registerMcp(interp, options);
 }
 
-// This module is loaded either as its own source (node runs the .ts directly)
-// or as part of a build, where it is JavaScript and its neighbours were emitted
-// beside it. A worker is a second entry point by definition, so it can never be
-// folded into a bundle — it is always a sibling file, under whichever extension
-// this module itself has.
 const FROM_SOURCE = import.meta.url.endsWith(".ts");
 const BROKER_URL = new URL(
 	FROM_SOURCE ? "./mcp-broker.ts" : "./mcp-broker.js",
 	import.meta.url,
 );
 
-// Same story for the toolkit: it sits at the package root next to `src/`, and a
-// build emits it beside the code instead.
 const TOOLKIT_URL = new URL(
 	FROM_SOURCE ? "../mcp.toolkit.json" : "./mcp.toolkit.json",
 	import.meta.url,
@@ -421,7 +359,6 @@ export function registerMcp(
 	options: RegisterMcpOptions = {},
 ): void {
 	const runtime = options.runtime ?? new WorkerJobsRuntime(BROKER_URL);
-	// The async capability (await/jobs/cancel/…) is generic; MCP just plugs in.
 	const jobs = new Jobs(runtime, jsonToLisp);
 	jobs.installBuiltins(interp);
 
@@ -429,11 +366,6 @@ export function registerMcp(
 	const predefined = new Map<string, ConnConfig>();
 	parsePredefined(predefined, options.toolkitJson);
 
-	// (load-mcp "name") | (load-mcp :name "name")
-	//                   | (load-mcp :name "x" :url "..." [:headers al])
-	//                   | (load-mcp :name "x" :command "cmd" [:args (...)])
-	// Returns a job at once; the connect runs in the background and the server's
-	// `server/tool` bindings are installed when the job is collected.
 	interp.def(
 		"load-mcp",
 		-1,
@@ -459,7 +391,6 @@ export function registerMcp(
 		LOAD_MCP_ARGS,
 	);
 
-	// (unload-mcp "name") -> list of removed symbols
 	interp.def(
 		"unload-mcp",
 		1,
@@ -469,7 +400,6 @@ export function registerMcp(
 		([name]) => arrayToList(doUnload(interp, runtime, servers, name)),
 	);
 
-	// (mcp-authorize "server" "code") -> :authorized. See devdocs/oauth.md.
 	interp.def(
 		"mcp-authorize",
 		-1,
@@ -486,8 +416,6 @@ export function registerMcp(
 					raw ?? null,
 					false,
 				);
-			// Accept either a bare code or the whole pasted callback link
-			// (e.g. http://127.0.0.1:.../callback?code=…&state=…).
 			const code = extractAuthCode(raw);
 			if (!code)
 				throw new EvalException(
@@ -503,7 +431,6 @@ export function registerMcp(
 		},
 	);
 
-	// (login "server") -> auth URL | :logged-in. See devdocs/oauth.md.
 	interp.def(
 		"login",
 		-1,
@@ -524,7 +451,6 @@ export function registerMcp(
 		},
 	);
 
-	// (logout "server") -> :logged-out. See devdocs/oauth.md.
 	interp.def(
 		"logout",
 		-1,
@@ -543,7 +469,6 @@ export function registerMcp(
 		},
 	);
 
-	// (list-mcps) -> ((name :loaded|:unloaded count) ...)
 	interp.def(
 		"list-mcps",
 		0,
@@ -564,7 +489,6 @@ export function registerMcp(
 		},
 	);
 
-	// (list-toolkit) -> ((name description :loaded|:unloaded) ...)
 	interp.def(
 		"list-toolkit",
 		0,
@@ -583,7 +507,6 @@ export function registerMcp(
 		},
 	);
 
-	// (search-mcps "query") -> ((name score description :loaded|:unloaded) ...)
 	interp.def(
 		"search-mcps",
 		1,
@@ -625,7 +548,6 @@ export function registerMcp(
 		},
 	);
 
-	// (list-tools) | (list-tools "server") -> ((sym param-count doc) ...)
 	interp.def(
 		"list-tools",
 		-1,
@@ -658,7 +580,6 @@ export function registerMcp(
 		},
 	);
 
-	// (search-tools "query") -> ((sym score doc) ...) ranked, best first
 	interp.def(
 		"search-tools",
 		1,
@@ -686,25 +607,13 @@ export function registerMcp(
 		},
 	);
 
-	/*
-	 * Terminate the broker and unload every server.
-	 *
-	 * Reachable two ways, which is why it is a function rather than the body of
-	 * the built-in: the agent can release its own servers with `(mcp-shutdown)`,
-	 * and a host dropping the interp releases them through the `dispose` hook
-	 * below. Both may fire, so it is idempotent — the maps are cleared, and
-	 * `jobs.shutdown()` terminating an already-terminated worker is a no-op.
-	 */
 	const shutdown = (): void => {
-		// Undefine every installed <server>/<tool> global so stale bindings
-		// don't linger with a closure capturing a now-dead serverId.
 		for (const rec of servers.values())
 			for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 		servers.clear();
 		jobs.shutdown();
 	};
 
-	// (mcp-shutdown) -> t ; terminates the broker and clears all state
 	interp.def(
 		"mcp-shutdown",
 		0,
@@ -717,16 +626,12 @@ export function registerMcp(
 		},
 	);
 
-	// The same teardown the agent can ask for, for the host that never does:
-	// a REPL `reset()` drops this interp, and without this the worker it spun
-	// up would outlive it.
 	interp.hooks.dispose.use((next) => {
 		shutdown();
 		next();
 	});
 }
 
-// --- Helpers -----------------------------------------------------------------
 function asName(x: unknown): string {
 	if (typeof x === "string") return x;
 	if (x instanceof Sym) return x.name;
@@ -739,8 +644,6 @@ function firstLine(s: string | undefined): string {
 	return s.split("\n")[0];
 }
 
-// Render a JSON-schema type as a short Lisp-facing type tag, e.g. `:string`,
-// `:list<:number>`, `:object`. Used in both the usage signature and per-arg docs.
 function schemaType(spec: JsonSchema): string {
 	if (!spec.type) return "";
 	if (spec.type === "array") {
@@ -750,8 +653,6 @@ function schemaType(spec: JsonSchema): string {
 	return `:${spec.type}`;
 }
 
-// Property entries sorted so required args come first — the call order the
-// usage signature and argument list both read left-to-right.
 function orderedProps(tool: Tool): [string, JsonSchema][] {
 	const props = tool.inputSchema?.properties;
 	if (!props) return [];
@@ -761,10 +662,6 @@ function orderedProps(tool: Tool): [string, JsonSchema][] {
 	);
 }
 
-// The keyword-call usage signature, e.g. `(fx/echo :message :string [:n :number])`.
-// Optional args are wrapped in `[...]`. Reused for the `signature` metadata on
-// each tool binding so the LSP hover and the generic `doc` built-in show the
-// same call shape.
 function toolSignature(name: string, tool: Tool): string {
 	const entries = orderedProps(tool);
 	if (!entries.length) return `(${name})`;
@@ -778,9 +675,6 @@ function toolSignature(name: string, tool: Tool): string {
 	return `(${name} ${sig})`;
 }
 
-// Structured per-argument info for a tool's Doc.args, e.g. for the LSP's
-// keyword-argument completion. Same order/content as the usage signature and
-// the "Arguments:" doc section, just not rendered to text.
 function toolArgs(tool: Tool): DocArg[] {
 	const required = new Set(tool.inputSchema?.required ?? []);
 	return orderedProps(tool).map(([key, spec]) => ({
@@ -791,10 +685,6 @@ function toolArgs(tool: Tool): DocArg[] {
 	}));
 }
 
-// The prose body: description, per-argument docs, and example inputs/outputs
-// when the schema advertises them. Stored as the binding's `doc` metadata via
-// defineGlobal, so it's what both the generic `doc` built-in and the LSP
-// hover render.
 function toolDocBody(tool: Tool): string {
 	const lines: string[] = [];
 	if (tool.description) lines.push(tool.description);
@@ -845,14 +735,10 @@ function toolDocBody(tool: Tool): string {
 	return lines.join("\n");
 }
 
-// Expand ${VAR} references against process.env so the toolkit can point at
-// environment-provided paths (e.g. the Nix-built browser) without hardcoding
-// machine-specific store paths. Unset vars expand to the empty string.
 function expandEnv(s: string): string {
 	return s.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] ?? "");
 }
 
-// Register a JSON array of connection configs into the predefined table.
 function registerConfigs(
 	raw: string,
 	predefined: Map<string, ConnConfig>,
@@ -864,13 +750,9 @@ function registerConfigs(
 			if ("args" in conf && conf.args) conf.args = conf.args.map(expandEnv);
 			predefined.set(conf.name, conf);
 		}
-	} catch {
-		// Malformed config: ignore rather than crash the interpreter startup.
-	}
+	} catch {}
 }
 
-// Load predefined servers from the bundled mcp.toolkit.json — the single source
-// of ready-to-use servers, callable by bare name, e.g. (load-mcp "playwright").
 function parsePredefined(
 	predefined: Map<string, ConnConfig>,
 	toolkitJson?: string,
