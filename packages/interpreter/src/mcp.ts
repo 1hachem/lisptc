@@ -712,6 +712,24 @@ export function registerMcp(
 		},
 	);
 
+	/*
+	 * Terminate the broker and unload every server.
+	 *
+	 * Reachable two ways, which is why it is a function rather than the body of
+	 * the built-in: the agent can release its own servers with `(mcp-shutdown)`,
+	 * and a host dropping the interp releases them through the `dispose` hook
+	 * below. Both may fire, so it is idempotent — the maps are cleared, and
+	 * `jobs.shutdown()` terminating an already-terminated worker is a no-op.
+	 */
+	const shutdown = (): void => {
+		// Undefine every installed <server>/<tool> global so stale bindings
+		// don't linger with a closure capturing a now-dead serverId.
+		for (const rec of servers.values())
+			for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
+		servers.clear();
+		jobs.shutdown();
+	};
+
 	// (mcp-shutdown) -> t ; terminates the broker and clears all state
 	interp.def(
 		"mcp-shutdown",
@@ -720,15 +738,18 @@ export function registerMcp(
 		"Shut down the MCP broker worker and unload all servers.",
 		z.tuple([]),
 		() => {
-			// Undefine every installed <server>/<tool> global so stale bindings
-			// don't linger with a closure capturing a now-dead serverId.
-			for (const rec of servers.values())
-				for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
-			servers.clear();
-			jobs.shutdown();
+			shutdown();
 			return true;
 		},
 	);
+
+	// The same teardown the agent can ask for, for the host that never does:
+	// a REPL `reset()` drops this interp, and without this the worker it spun
+	// up would outlive it.
+	interp.hooks.dispose.use((next) => {
+		shutdown();
+		next();
+	});
 }
 
 // --- Helpers -----------------------------------------------------------------
