@@ -48,7 +48,7 @@ export default defineConfig({
 			// `dist/mcp-broker.js` here.
 			input: {
 				index: "src/index.ts",
-				"mcp-broker": "@repo/interpreter/mcp-broker.ts",
+				"mcp-broker": "@repo/interpreter/mcp-broker",
 			},
 			output: { format: "esm", entryFileNames: "[name].js" },
 		},

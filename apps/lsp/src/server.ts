@@ -12,13 +12,13 @@ import {
 	prelude,
 	run,
 } from "@repo/interpreter";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
+import { mcpExtension } from "@repo/interpreter/mcp";
 import {
 	type CompletionEntry,
 	connectOrSpawn,
 	type SessionClient,
 	socketPathFor,
-} from "@repo/repl/session-server.ts";
+} from "@repo/repl/session-server";
 import {
 	type CompletionItem,
 	CompletionItemKind,

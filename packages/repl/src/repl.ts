@@ -14,24 +14,23 @@
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
+import { MODEL, USER } from "@repo/interpreter/channels";
 import {
 	Cell,
 	EndOfFile,
 	EvalException,
 	Interp,
-	isTruncated,
 	type List,
 	newSym,
 	prelude,
 	run,
-	setWriter,
 	str,
 	stripProse,
 	Unspecified,
-} from "@repo/interpreter/lisp.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { proseExtension } from "@repo/interpreter/prose.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+} from "@repo/interpreter/lisp";
+import { mcpExtension } from "@repo/interpreter/mcp";
+import { isTruncated, proseExtension } from "@repo/interpreter/prose";
+import { secretsExtension } from "@repo/interpreter/secrets";
 
 // A REPL owns an interpreter and can be reset to a fresh one.
 export interface Repl {
@@ -121,7 +120,7 @@ export class MemoryRepl implements InMemoryRepl {
 	 * Evaluate a program; Lisp errors are rendered into the returned output
 	 * rather than thrown.
 	 *
-	 * Reads prose tolerantly (see `ProseMode`), because what this REPL is
+	 * Reads prose tolerantly (see `RunOptions.tolerant`), because what this REPL is
 	 * handed is written by a model: a sentence with a parenthesis in it —
 	 * `(see below)`, or an unclosed `(` mid-sentence — is prose that happens
 	 * to look like code, and evaluating it costs the step either an error it
@@ -133,25 +132,40 @@ export class MemoryRepl implements InMemoryRepl {
 		return render(this.evaluate(code));
 	}
 
-	// The two halves of an evaluation before they are rendered into one string,
-	// for a subclass that has to tell them apart (see `AgentRepl`).
+	/*
+	 * The two halves of an evaluation before they are rendered into one string,
+	 * for a subclass that has to tell them apart (see `AgentRepl`).
+	 *
+	 * The halves are two channels of this interp (`@repo/interpreter/channels.ts`)
+	 * rather than a writer and a callback: `user` is what the program printed,
+	 * `model` carries the notes about what was not run. Subscribing to this
+	 * interp rather than swapping the process-wide writer also means a second
+	 * REPL in the same process no longer captures this one's output.
+	 */
 	protected evaluate(code: string): EvalResult {
 		let out = "";
 		const skipped: string[] = [];
-		const prev = setWriter((s) => {
-			out += s;
-		});
+		const { channels } = this.currentInterp;
+		const unsubscribe = [
+			channels.on(USER, (d) => {
+				out += d.text;
+			}),
+			// Warnings only. The model's channel carries its errors too, but a
+			// fatal one is thrown as well and rendered into `out` by the catch
+			// below — collecting it here would report it twice, and would make
+			// `AgentRepl` read a failed reply as one that merely skipped
+			// something.
+			channels.on(MODEL, (d) => {
+				if (d.severity !== "warning") return;
+				if (!skipped.includes(d.text)) skipped.push(d.text);
+			}),
+		];
 		try {
-			// Evaluate before appending: run() writes side-effect output into
+			// Evaluate before appending: run() emits side-effect output into
 			// `out` first. A printing function (prin1/princ/terpri/print)
 			// returns Unspecified — a sentinel meaning "already shown, don't
 			// echo the value too" — so a printed value isn't shown twice.
-			const value = run(this.currentInterp, code, {
-				prose: "tolerant",
-				onProse: (what) => {
-					if (!skipped.includes(what)) skipped.push(what);
-				},
-			});
+			const value = run(this.currentInterp, code);
 			if (value !== Unspecified) out += `${str(value)}\n`;
 		} catch (ex) {
 			if (ex instanceof EvalException) out += `${ex}\n`;
@@ -159,13 +173,17 @@ export class MemoryRepl implements InMemoryRepl {
 				out += "unbalanced expression (unexpected end of input)\n";
 			else throw ex;
 		} finally {
-			setWriter(prev);
+			for (const off of unsubscribe) off();
 		}
 		return { output: out, skipped };
 	}
 
-	// Discard all definitions; start from a fresh prelude-loaded interp.
+	// Discard all definitions; start from a fresh prelude-loaded interp. The
+	// outgoing interp is disposed first, so an extension holding something the
+	// language cannot reclaim — the MCP broker worker — releases it rather than
+	// leaking one per reset.
 	reset(): void {
+		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
 	}
 }
@@ -267,7 +285,7 @@ export class AgentRepl extends MemoryRepl {
  * finished sentence, and asking `checkSyntax` here would call it a truncation.
  */
 function isAnswer(code: string, { output, skipped }: EvalResult): boolean {
-	if (stripProse(code, "strict").trim() === "") return true;
+	if (stripProse(code).trim() === "") return true;
 	if (output !== "" || skipped.length === 0) return false;
 	return !isTruncated(code);
 }

@@ -6,6 +6,7 @@
  * `./repl.ts`.
  */
 
+import { MODEL } from "@repo/interpreter/channels";
 import {
 	EndOfFile,
 	EvalException,
@@ -18,10 +19,10 @@ import {
 	str,
 	stripProse,
 	Unspecified,
-} from "@repo/interpreter/lisp.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { proseExtension } from "@repo/interpreter/prose.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+} from "@repo/interpreter/lisp";
+import { mcpExtension } from "@repo/interpreter/mcp";
+import { proseExtension } from "@repo/interpreter/prose";
+import { secretsExtension } from "@repo/interpreter/secrets";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -62,10 +63,14 @@ class InteractiveRepl implements Repl {
 			],
 		});
 		run(interp, prelude);
+		// Notes about what was not run go to the model's channel; at an
+		// interactive prompt the human IS the model's reader, so show them.
+		interp.channels.on(MODEL, (d) => write(`skipped ${d.text}\n`));
 		return interp;
 	}
 
 	reset(): void {
+		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -93,10 +98,7 @@ class InteractiveRepl implements Repl {
 			const text = buffer;
 			buffer = "";
 			try {
-				const value = run(this.currentInterp, text, {
-					prose: "tolerant",
-					onProse: (what) => write(`skipped ${what}\n`),
-				});
+				const value = run(this.currentInterp, text);
 				// A printing function (prin1/princ/terpri/print) returns
 				// Unspecified, meaning "already shown" — don't echo it too.
 				if (value !== Unspecified) write(`${str(value)}\n`);

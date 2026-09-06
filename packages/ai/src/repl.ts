@@ -9,7 +9,7 @@
  * fence-stripping, and the JSON tool-result the policy tells the model to read.
  */
 
-import type { AgentRepl } from "@repo/repl/repl.ts";
+import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 
 // One turn of the running transcript. Distinct from `AgentMessage` because a

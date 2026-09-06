@@ -9,7 +9,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { checkSyntax } from "@repo/interpreter";
-import { MemoryRepl } from "@repo/repl/repl.ts";
+import { MemoryRepl } from "@repo/repl/repl";
 import { z } from "zod";
 
 // The single long-lived REPL. State persists for the lifetime of the server.
