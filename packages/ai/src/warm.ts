@@ -1,14 +1,3 @@
-// Keeps llama-server's slot 0 primed with the lisptc system prompt, so a chat
-// request never pays for re-evaluating it (~21.8k chars, minutes on CPU).
-//
-// The KV is persisted by llama-server itself under `--slot-save-path`, in a file
-// named after the prompt's content hash: edit the prompt and the old file is
-// simply never asked for, so a stale cache can't be restored. gemma also needs
-// `--swa-full`, or its sliding-window attention discards the prefix KV and there
-// is nothing reusable to save.
-//
-// We never stat the cache file — we just ask the server to restore it and let it
-// answer. That keeps this working when llama-server isn't on the same host.
 import { createHash } from "node:crypto";
 import { readdirSync, unlinkSync } from "node:fs";
 import { request } from "node:http";
@@ -22,7 +11,6 @@ export type WarmStatus =
 	| "saved"
 	| "unavailable"
 	| "failed"
-	// the chat runs on a hosted provider, so there is no local KV to prime
 	| "skipped";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1";
@@ -35,9 +23,6 @@ export function systemPromptSlotFile(prompt: string = SYSTEM_PROMPT): string {
 	return `system-${hash}.bin`;
 }
 
-// The system prompt takes many minutes to evaluate, during which no response
-// bytes flow — that trips fetch's (undici) header/body timeouts. So: node:http
-// with every socket timeout disabled.
 function send(
 	method: "GET" | "POST",
 	path: string,
@@ -76,25 +61,18 @@ function send(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// `/health` and `/slots` live at the server root; only completions sit under
-// the base URL's `/v1` path.
 async function waitForHealth(): Promise<boolean> {
 	const deadline = Date.now() + HEALTH_TIMEOUT_MS;
 	while (Date.now() < deadline) {
 		try {
 			const res = await send("GET", "/health");
 			if (res.status === 200) return true;
-		} catch {
-			// server not listening yet
-		}
+		} catch {}
 		await sleep(1000);
 	}
 	return false;
 }
 
-// Each slot file is hundreds of MB, so drop the ones for prompts we no longer
-// serve. Best-effort: the directory is a llama-server flag and may not be
-// visible from here at all.
 function pruneStaleSlots(keep: string): void {
 	try {
 		const dir = aiEnv.LLAMACPP_SLOT_DIR ?? ".llama-cache";
@@ -107,9 +85,7 @@ function pruneStaleSlots(keep: string): void {
 				unlinkSync(join(dir, name));
 			}
 		}
-	} catch {
-		// not our filesystem, or nothing to prune
-	}
+	} catch {}
 }
 
 async function warm(): Promise<WarmStatus> {
@@ -131,7 +107,6 @@ async function warm(): Promise<WarmStatus> {
 	console.log(
 		`no KV cache for the current prompt — building ${slotFile} (slow)`,
 	);
-	// One decoded token is enough: we only want the cached prefix, not a completion.
 	const completions = `${base.pathname}/chat/completions`.replace("//", "/");
 	const evaluated = await send("POST", completions, {
 		messages: [{ role: "system", content: SYSTEM_PROMPT }],
@@ -163,16 +138,6 @@ async function warm(): Promise<WarmStatus> {
 let inFlight: Promise<WarmStatus> | undefined;
 let status: WarmStatus = "pending";
 
-/**
- * Prime slot 0 with the system prompt, once per process.
- *
- * Single-flight and memoized: startup kicks it off, and the chat handler awaits
- * the same promise. That gate matters — llama-server runs `--parallel 1`, so a
- * request landing mid-warm would queue ahead of the slot save and get its own
- * conversation persisted as the "system prompt" cache.
- *
- * Never rejects: a cold cache is slow, not broken.
- */
 export function ensureWarm(): Promise<WarmStatus> {
 	inFlight ??= warm()
 		.catch((err) => {

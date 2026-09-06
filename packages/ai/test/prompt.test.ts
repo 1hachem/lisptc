@@ -3,13 +3,6 @@ import { LISP_SYSTEM_PROMPT } from "../src/index.ts";
 import { IDENTITY, MAX_STEPS } from "../src/prompts/lisp.ts";
 import { snapshotConversation } from "../src/repl.ts";
 
-// The system prompt is the whole contract between the model and this REPL: it
-// is the only tool description, API reference and protocol spec the model gets.
-// Asserted through the package's public export, since that is what apps/api
-// hands the model.
-
-// The prompt writes a built-in as bare prose (`load-mcp`) or inside a call
-// (`(car x)`), so match the name itself rather than any one of those shapes.
 const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
 
 describe("identity", () => {
@@ -19,9 +12,6 @@ describe("identity", () => {
 });
 
 describe("prose around the forms", () => {
-	// Without these rules the model falls back on Common Lisp habits it was
-	// trained on — `;` comments and bare top-level atoms — both of which this
-	// dialect reads as something else entirely.
 	it("says the text around the forms is skipped, not evaluated", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(
 			/only the parenthesised forms in it are program text/i,
@@ -56,8 +46,6 @@ describe("prose around the forms", () => {
 });
 
 describe("the REPL loop protocol", () => {
-	// The silent REPL is the rule the model cannot guess: without it, it waits
-	// for values that are never printed and answers from what it never saw.
 	it("says the REPL prints nothing and reports a name and shape instead", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/The REPL prints nothing on its own/);
 		expect(LISP_SYSTEM_PROMPT).toMatch(/`name: shape`/);
@@ -81,10 +69,6 @@ describe("the REPL loop protocol", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/there is no halt or exit built-in/i);
 	});
 
-	// Left to rule 4b alone the model treats stopping as failure and stalls the
-	// loop with no-op forms (`(identity "Standing by.")`), burning every step up
-	// to the cap. The distinction that has to be exact: the user DOES read what
-	// a step echoes (rendering is real work), they just cannot answer mid-loop.
 	it("bans forms that only talk, while saying echoed output is read", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(
 			/The user READS everything the REPL echoes/,
@@ -105,11 +89,6 @@ describe("the REPL loop protocol", () => {
 		);
 	});
 
-	// The cap is the model's other exit besides a form-less reply, so it has to know the
-	// loop is bounded at all — that first assertion is the one that bites. The
-	// second only guards the coupling: the policy interpolates the same
-	// `MAX_STEPS` that stream.ts breaks on, so it cannot fail today, but it
-	// would if someone replaced that interpolation with a literal number.
 	it("tells the model the loop is capped, and quotes the driver's cap", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/The loop also stops automatically/i);
 		expect(LISP_SYSTEM_PROMPT).toContain(`after ${MAX_STEPS} steps`);
@@ -123,8 +102,6 @@ describe("the REPL loop protocol", () => {
 });
 
 describe("MCP", () => {
-	// Every MCP built-in the model is expected to reach for. The prompt is its
-	// only API reference, so a built-in missing from here is one it never calls.
 	const MCP_BUILTINS = [
 		"load-mcp",
 		"unload-mcp",
@@ -167,10 +144,6 @@ describe("MCP", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/\(acme\/get_widget :id "42"\)/);
 	});
 
-	// Every server and tool the examples name is invented. A real one (the
-	// toolkit ships `playwright`, `fs`, `linear`, `posthog`) would hand the model
-	// an answer it is supposed to reach by searching — and would quietly turn the
-	// navigate eval into a test of whether it can copy the prompt.
 	it.each([
 		"playwright",
 		"fs/",
@@ -204,8 +177,6 @@ describe("MCP", () => {
 });
 
 describe("the language reference", () => {
-	// The reference is a closed world: "if a name is not listed there, it does
-	// not exist", so it has to name both what exists and what pointedly does not.
 	const CORE_BUILTINS = [
 		"car",
 		"cdr",
@@ -228,8 +199,6 @@ describe("the language reference", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(names(n));
 	});
 
-	// Named in the reference only to say they are absent, so the model builds
-	// them itself instead of calling one and getting `undefined: expt`.
 	it.each([
 		"zerop",
 		"evenp",
@@ -258,16 +227,11 @@ describe("the language reference", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/\*\*Quasiquote\*\*/);
 	});
 
-	// Truncation is a REPL behaviour, not a language feature, so the closed-world
-	// rule above does not cover it — POLICY has to say it outright or the model
-	// reads a `...` line as the end of the value.
 	it("tells the model to refer to the result variable, not retype data", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/NEVER retype data the REPL produced/);
 		expect(LISP_SYSTEM_PROMPT).toMatch(/`name: shape`/);
 	});
 
-	// The two moves that make retyping unnecessary. Naming the failure it
-	// replaces ("read it off a printout") is the part that has to survive.
 	it("tells the model to extract into a name, then echo it", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/EXTRACT, THEN ECHO/);
 		expect(LISP_SYSTEM_PROMPT).toMatch(/RETURN a value/);

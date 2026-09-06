@@ -17,26 +17,12 @@ export interface AgentMessage {
 	content: string;
 }
 
-/** Tokens one model call spent, as the provider reported them. */
 export interface TokenUsage {
 	input: number;
 	output: number;
-	/**
-	 * The part of `input` the provider served from its prompt cache rather than
-	 * reprocessing — a subset of it, not an extra. Absent when the provider says
-	 * nothing about caching, which is not the same as a cold prompt.
-	 */
 	cachedInput?: number;
 }
 
-/**
- * One streamed step. A chunk carries either visible answer `text` or a
- * `reasoning` token (the model's thinking, surfaced separately so the UI can
- * show it distinctly) — never mixed, so consumers can route each independently.
- *
- * A `usage` delta carries neither: it is the accounting the backend appends
- * once the completion is done, so a consumer that only renders text ignores it.
- */
 export interface AgentDelta {
 	text?: string;
 	reasoning?: string;
@@ -45,10 +31,8 @@ export interface AgentDelta {
 
 export interface AgentConfig {
 	provider?: ProviderName;
-	/** Model id; the provider falls back to its own default when unset. */
 	model?: string;
 	system?: string;
-	/** When set, each model call is reported to PostHog as an `$ai_generation`. */
 	trace?: TraceContext;
 }
 
@@ -63,7 +47,6 @@ function toLangChain(m: AgentMessage): BaseMessage {
 	}
 }
 
-/** Fireworks streams thinking as `additional_kwargs.reasoning_content` (see the provider). */
 function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {
 	const kwargs = chunk.additional_kwargs as
 		| { reasoning_content?: unknown }
@@ -72,16 +55,6 @@ function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {
 	return typeof reasoning === "string" ? reasoning : "";
 }
 
-/**
- * Token counts ride on the final chunk of an OpenAI-style stream — ChatOpenAI
- * asks for them (`stream_options.include_usage`, on by default) and surfaces
- * them as `usage_metadata`. A backend that doesn't report any simply never
- * produces one, and the turn goes uncounted rather than counted wrong.
- *
- * `input_token_details.cache_read` is the cached slice of `input_tokens`
- * (OpenAI's `prompt_tokens_details.cached_tokens`, normalised by LangChain).
- * Providers that don't report it leave the field off entirely.
- */
 function chunkUsage(chunk: {
 	usage_metadata?: unknown;
 }): TokenUsage | undefined {
@@ -105,10 +78,6 @@ function chunkUsage(chunk: {
 	};
 }
 
-/**
- * A single agent turn. Kept as a small class so multiple agents can be composed
- * (routing, hand-offs) later without changing the streaming contract.
- */
 export class Agent {
 	constructor(private readonly config: AgentConfig = {}) {}
 
@@ -124,9 +93,6 @@ export class Agent {
 			new SystemMessage(this.config.system ?? DEFAULT_SYSTEM_PROMPT),
 			...messages.map(toLangChain),
 		];
-		// The callback handler is what turns this call into an `$ai_generation`
-		// (tokens, cost, latency); with no trace it is an empty list and LangChain
-		// does nothing extra.
 		const callbacks = this.config.trace
 			? traceCallbacks(this.config.trace)
 			: [];
