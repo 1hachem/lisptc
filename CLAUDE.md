@@ -28,6 +28,8 @@ pnpm typecheck               # turbo run typecheck (tsc --noEmit per package)
 pnpm lint                    # biome ci (lint + format check) — matches CI, run at root
 pnpm format                  # biome check --write (auto-fix)
 pnpm knip                    # dead-code / unused-dependency check (part of CI), run at root
+pnpm check:comments          # fails on any non-directive comment (part of CI), run at root
+pnpm fix:comments            # strip them; follow with `pnpm format`
 pnpm test:watch              # turbo run test:watch
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
@@ -36,16 +38,33 @@ pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts
 pnpm --filter @repo/interpreter exec vitest run -t "name of test"
 ```
 
-Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via `--experimental-transform-types` (no build step). CI (`.forgejo/workflows/ci.yml`) runs, in order: typecheck → lint → knip → test. `lint` and `knip` run once at the root; `typecheck` and `test` fan out through Turbo. Commits are linted by commitlint (conventional commits) via husky.
+Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via `--experimental-transform-types` (no build step). CI (`.github/workflows/ci.yml`) runs, in order: typecheck → lint → check:comments → knip → test. `lint`, `check:comments` and `knip` run once at the root; `typecheck` and `test` fan out through Turbo. Husky runs commitlint (conventional commits) on `commit-msg` and `pnpm check:comments` on `pre-push`.
 
 ## Comments
 
-**The code carries no comments.** The only ones left are directives a tool reads —
-`biome-ignore`, `/// <reference>`, `// @vitest-environment` — and those are not
-prose. Don't reintroduce explanatory comments: when something needs a reason (a
-hidden constraint, a subtle invariant, a trap that cost a bug), write it in
-`devdocs/` under the page for that area, and keep the code plain. `devdocs/README.md`
-is the index. `packages/bloub` is a package apart and keeps its own `docs/`.
+**The code carries no comments**, enforced twice: a husky `pre-push` hook, and
+`check:comments` in CI as the backstop. The only ones allowed are directives a
+tool reads — `biome-ignore`, `/// <reference>`, `// @vitest-environment`,
+`// @ts-expect-error` — and those are not prose.
+
+So: **do not write explanatory comments.** Not a header block, not a JSDoc on an
+exported function, not a `// why` above a tricky line. The types say what a thing
+is; the name says what it does; if neither is enough, the code is what to fix
+first.
+
+**When something genuinely needs a reason** — a hidden constraint, a subtle
+invariant, a trap that cost a bug, a number that was measured rather than chosen —
+that reason goes in `devdocs/`, on the page for that area, and the code stays
+plain. `devdocs/README.md` is the index; add to the page you'd have commented in,
+and start a new page only for an area that has none. This is not optional
+bookkeeping: it is the only place that knowledge now lives, so a change that
+invalidates a devdocs claim has to update it in the same commit.
+
+`packages/bloub` is a package apart and keeps its own `docs/` — same rule, different
+directory (see its `CLAUDE.md`).
+
+`pnpm check:comments` lists offenders; `pnpm fix:comments` strips them (then run
+`pnpm format`). Prefer moving a real reason to `devdocs/` over stripping it.
 
 ## Architecture
 
