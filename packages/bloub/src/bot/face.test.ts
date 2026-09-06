@@ -8,12 +8,6 @@ import {
 	REST_GAZE,
 } from "./face";
 
-/**
- * Valeurs relevees image par image sur la video de reference (unites : rayon de
- * la boule au repos = 1, y vers le bas). Le modele de sphere doit les
- * reproduire : c'est lui qui garantit que l'oeil proche du bord se comprime
- * exactement comme dans l'original.
- */
 const MESURES: Array<{
 	nom: string;
 	gaze: HeadGaze;
@@ -69,7 +63,6 @@ describe("yeux poses sur une sphere", () => {
 			for (let i = 0; i < 2; i++) {
 				const p = poses[i]!;
 				const attendu = m.yeux[i]!;
-				// 0.04 rayon = ~7 px sur la boule de 190 px de la video
 				expect(p.x).toBeCloseTo(attendu.x, 1);
 				expect(p.y).toBeCloseTo(attendu.y, 1);
 				expect(Math.abs(court(p, m.w) - attendu.court)).toBeLessThan(0.04);
@@ -79,14 +72,11 @@ describe("yeux poses sur une sphere", () => {
 	}
 
 	it("comprime l oeil exactement du facteur de profondeur de la sphere", () => {
-		// Invariant exact : le determinant du repere tangent projete vaut z. C'est
-		// lui qui fait que l'aire de l'oeil suit la courbure (mesure : 0.663).
 		for (const e of eyePoses(REST_GAZE, 1)) {
 			expect(e.a * e.d - e.b * e.c).toBeCloseTo(e.depth, 6);
 		}
 		const [proche, loin] = eyePoses(REST_GAZE, 1);
 		expect(loin.depth / proche.depth).toBeCloseTo(0.663, 1);
-		// mesure video de la largeur : 0.120 / 0.178 = 0.674
 		expect(court(loin, EYE_W) / court(proche, EYE_W)).toBeCloseTo(0.674, 1);
 	});
 

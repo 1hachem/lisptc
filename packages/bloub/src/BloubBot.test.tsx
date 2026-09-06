@@ -9,16 +9,6 @@ import { DEMI_VIEWBOX, RAYON } from "./bot/repere";
 import { DEFAULT_SHAPE, SHAPE_BY_ID } from "./bot/skins";
 import type { StateId } from "./bot/states";
 
-/*
- * Le seul fichier du paquet qui demande un DOM, et il le demande en tete de
- * fichier : le moteur, lui, se teste sans rien monter.
- *
- * Ce qu'il verrouille : le composant rend l'image DU MOTEUR, il ne redessine pas
- * la boule a cote. C'est le defaut que le portage React pouvait introduire sans
- * qu'aucun test de `src/bot/` ne le voie — ils ne passent jamais par le rendu.
- */
-
-/** Moteur de reference : les memes reglages que ceux que le composant se donne par defaut. */
 function moteurTemoin(state: StateId = "idle") {
 	return new BotEngine(
 		RAYON,
@@ -51,7 +41,6 @@ async function monter(node: React.ReactNode) {
 }
 
 beforeAll(() => {
-	// `act` refuse de s'executer sans ce drapeau, que seuls les harnais de test posent
 	(
 		globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 	).IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,18 +64,12 @@ describe("BloubBot", () => {
 	it("percerait les yeux dans le masque et non par-dessus le corps", async () => {
 		const { svg } = await monter(<BloubBot frozenAt={0} />);
 		const attendu = moteurTemoin().sample(0);
-		// le corps blanc, puis un trou noir par oeil
 		expect(svg().querySelectorAll("mask path")).toHaveLength(
 			1 + attendu.eyes.length,
 		);
 		expect(attendu.eyes.length).toBeGreaterThan(0);
 	});
 
-	/*
-	 * `frozenAt` n'etait bouge par personne au depart, et une image figee qui reste
-	 * sur la premiere date fait une animation exportee immobile. La prop doit donc
-	 * redessiner.
-	 */
 	it("redessine quand `frozenAt` bouge", async () => {
 		const { svg, rendre } = await monter(<BloubBot frozenAt={0} />);
 		const premier = svg().querySelector("mask > path")?.getAttribute("d");
@@ -109,22 +92,11 @@ describe("BloubBot", () => {
 
 	it("accepte une couleur d interface a la place de celles du catalogue", async () => {
 		const { svg } = await monter(<BloubBot frozenAt={0} ink="var(--fg)" />);
-		// le corps est un rectangle plein rogne par le masque : c'est lui qui porte l'encre
 		expect(svg().querySelector("rect")?.getAttribute("fill")).toBe("var(--fg)");
 	});
 
-	/*
-	 * Le montage par defaut commence par `idle`. Un appelant qui pose `state`
-	 * sans jouer voulait cet etat-la, pas le premier bloc du cycle : la boule
-	 * repartait a `idle` au montage, et le callback l'annoncait.
-	 */
 	it("ne laisse pas le montage ecraser un etat pose a l arret", async () => {
 		const vus: StateId[] = [];
-		/*
-		 * La boucle est neutralisee pendant le montage : elle redessine a chaque
-		 * image, donc `act` — qui attend que la file de rendu se vide — ne rendrait
-		 * jamais la main. C'est le seul test qui monte le composant ANIME.
-		 */
 		const vraiRaf = globalThis.requestAnimationFrame;
 		globalThis.requestAnimationFrame = () => 0;
 		try {
@@ -138,11 +110,6 @@ describe("BloubBot", () => {
 		}
 	});
 
-	/*
-	 * L'echelle passe par la liste de transformations et non par le `d` : la gelule est
-	 * centree sur l'origine dans son repere, donc `scale` la grossit sur place, avant la
-	 * matrice qui la pose et qui porte deja l'ecrasement du clignement.
-	 */
 	it("grossit les yeux sur place quand l hote le demande", async () => {
 		const { svg, rendre } = await monter(<BloubBot frozenAt={0} />);
 		const pose = svg()

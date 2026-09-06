@@ -1,12 +1,3 @@
-/**
- * Surface publique du paquet.
- *
- * Le composant et les CATALOGUES : de quoi afficher l'avatar, le piloter et
- * construire un selecteur de forme, de couleur ou d'humeur. Le reste du moteur
- * reste joignable par un chemin profond (`@repo/bloub/bot/shape.ts`) — c'est
- * pour ecrire une nouvelle silhouette, pas pour l'afficher.
- */
-
 export { BloubBot, type BloubBotHandle, type BloubBotProps } from "./BloubBot";
 export {
 	type Block,

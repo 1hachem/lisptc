@@ -6,7 +6,6 @@ import { SHAPE_BY_ID } from "./skins";
 
 const cercle = () => SHAPE_BY_ID.get("cercle")!.radii;
 
-/** Matrice de l'oeil rendu -> position, dimensions ecran et angle du grand axe. */
 function rendu(matrix: string, w: number, h: number) {
 	const [a, b, c, d, e, f] = /matrix\(([^)]+)\)/
 		.exec(matrix)![1]!
@@ -28,12 +27,6 @@ describe("catalogue des expressions", () => {
 		expect(EXPRESSION_BY_ID.size).toBe(16);
 	});
 
-	/**
-	 * Le piege sur lequel on est tombe : un oeil dont le rapport largeur/hauteur
-	 * approche 1 est un cercle, il a la meme allure a tout angle et son
-	 * inclinaison est invisible. Toute expression qui compte sur une inclinaison
-	 * doit donc avoir des yeux franchement allonges.
-	 */
 	it("n incline que des yeux assez allonges pour que ca se voie", () => {
 		for (const e of EXPRESSIONS) {
 			for (const oeil of e.eyes) {
@@ -64,10 +57,8 @@ describe("catalogue des expressions", () => {
 		};
 		const colere = angles("colere");
 		const triste = angles("triste");
-		// en miroir : les deux yeux penchent a l'oppose l'un de l'autre
 		expect(Math.sign(colere[0]!)).toBe(-Math.sign(colere[1]!));
 		expect(Math.sign(triste[0]!)).toBe(-Math.sign(triste[1]!));
-		// et les deux emotions sont inversees l'une par rapport a l'autre
 		expect(Math.sign(colere[0]!)).toBe(-Math.sign(triste[0]!));
 	});
 
@@ -77,7 +68,6 @@ describe("catalogue des expressions", () => {
 			expect(f.eyes, e.id).toHaveLength(2);
 			for (let i = 0; i < 2; i++) {
 				const r = rendu(f.eyes[i]!.matrix, e.eyes[i]!.w, e.eyes[i]!.h);
-				// demi-diagonale de l'oeil : le coin le plus lointain doit rester dedans
 				const demi = Math.hypot(r.largeur, r.hauteur) / 2;
 				const bord = radiusAtAngle(cercle(), Math.atan2(r.y, r.x)) * 100;
 				expect(Math.hypot(r.x, r.y) + demi, `${e.id} oeil ${i}`).toBeLessThan(
@@ -90,9 +80,6 @@ describe("catalogue des expressions", () => {
 
 describe("changement d expression", () => {
 	it("interpole la geometrie de facon monotone", () => {
-		// On mesure sur blendExpression, pas sur le rendu : la derive du regard au
-		// repos fait varier la projection, donc la hauteur a l'ecran n'est pas
-		// monotone meme quand l'interpolation, elle, l'est.
 		const de = EXPRESSION_BY_ID.get("neutre")!;
 		const vers = EXPRESSION_BY_ID.get("effraye")!;
 		const hauteurs = [0, 0.25, 0.5, 0.75, 1].map(
@@ -115,12 +102,10 @@ describe("changement d expression", () => {
 		);
 		e.setExpression(cible, 1);
 
-		// juste apres le changement, l'oeil n'a pas encore la forme de la cible...
 		const tot = e.sample(1.02).eyes[0]!.d;
 		const arrive = new BotEngine(100, "idle", cercle(), cible).sample(1)
 			.eyes[0]!.d;
 		expect(tot).not.toBe(arrive);
-		// ...et il l'a une fois le morph termine
 		expect(e.sample(1 + BotEngine.SHAPE_MORPH + 0.05).eyes[0]!.d).toBe(arrive);
 	});
 
@@ -139,7 +124,6 @@ describe("changement d expression", () => {
 
 	it("n applique l expression qu a l etat de repos", () => {
 		const expr = EXPRESSION_BY_ID.get("effraye")!;
-		// wink a son expression propre, relevee sur la video : elle doit survivre
 		const nu = new BotEngine(100, "wink", cercle()).sample(1);
 		const habille = new BotEngine(100, "wink", cercle(), expr).sample(1);
 		expect(habille.eyes[0]!.d).toBe(nu.eyes[0]!.d);
