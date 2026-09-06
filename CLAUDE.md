@@ -38,6 +38,15 @@ pnpm --filter @repo/interpreter exec vitest run -t "name of test"
 
 Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via `--experimental-transform-types` (no build step). CI (`.forgejo/workflows/ci.yml`) runs, in order: typecheck → lint → knip → test. `lint` and `knip` run once at the root; `typecheck` and `test` fan out through Turbo. Commits are linted by commitlint (conventional commits) via husky.
 
+## Comments
+
+**The code carries no comments.** The only ones left are directives a tool reads —
+`biome-ignore`, `/// <reference>`, `// @vitest-environment` — and those are not
+prose. Don't reintroduce explanatory comments: when something needs a reason (a
+hidden constraint, a subtle invariant, a trap that cost a bug), write it in
+`devdocs/` under the page for that area, and keep the code plain. `devdocs/README.md`
+is the index. `packages/bloub` is a package apart and keeps its own `docs/`.
+
 ## Architecture
 
 Paths below are relative to `packages/interpreter/` unless noted.
