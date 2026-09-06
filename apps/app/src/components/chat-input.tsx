@@ -26,13 +26,9 @@ import { type Command, commands } from "../lib/commands.ts";
 export interface ChatInputProps {
 	placeholder?: string;
 	onSubmit: (text: string) => void;
-	/** run when a `/` command is picked */
 	onCommand?: (name: string) => void;
-	/** a run is in flight — the send button becomes a stop button */
 	isStreaming?: boolean;
-	/** abort the in-flight run */
 	onStop?: () => void;
-	/** the composer is locked (e.g. the model's KV cache is still warming) */
 	disabled?: boolean;
 }
 
@@ -89,8 +85,6 @@ function Editor({
 	const menuOpen = useRef(false);
 	const menuHost = useRef<HTMLDivElement>(null);
 
-	// Lexical owns its own editable flag; toggling it is what actually stops
-	// keystrokes, paste and the typeahead menu, not just the button.
 	useEffect(() => {
 		editor.setEditable(!disabled);
 	}, [editor, disabled]);
@@ -197,7 +191,6 @@ function Editor({
 	);
 }
 
-/** Submits on Enter (Shift+Enter inserts a newline); yields to the command menu. */
 function EnterSubmitPlugin({
 	onEnter,
 	isMenuOpen,
@@ -257,10 +250,6 @@ function CommandMenuPlugin({
 			nodeToRemove: TextNode | null,
 			closeMenu: () => void,
 		) => {
-			// A prefix command is completed in place and submitted like any other
-			// line — the argument IS the command, so running it on pick would throw
-			// the text away. Nothing declares `takesArgument` since `/note` went;
-			// the branch stays for the next command that takes one.
 			if (option.command.takesArgument) {
 				editor.update(() => {
 					const typed = $createTextNode(`${option.command.name} `);

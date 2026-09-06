@@ -4,15 +4,6 @@ import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type Reveal, Typewriter } from "./typewriter.tsx";
 
-/*
- * Everything here is rendered under `StrictMode`, and that is the point.
- *
- * Strict Mode tears an effect down and sets it up again on the same instance,
- * which a reveal built on a timer has to survive — a hot reload does the same
- * thing. It didn't: the hook returned early on the second setup and left the text
- * at zero characters, which is exactly how it reached a user.
- */
-
 const TEXT = "morning, sunshine. what are we building?";
 
 beforeAll(() => {
@@ -42,7 +33,6 @@ async function shownAfter(
 	const outer = host.querySelector("span");
 	const seen = {
 		text: outer?.textContent ?? "",
-		// nothing else is drawn: the text arriving is the whole animation
 		extra: outer?.querySelector("span") !== null,
 	};
 	await act(async () => {
@@ -68,11 +58,6 @@ describe("Typewriter", () => {
 		expect((await shownAfter(0, { enabled: false })).text).toBe(TEXT);
 	});
 
-	/*
-	 * A model's stream carries the space at the FRONT of a word, so what is on
-	 * screen never ends in one. That is the visible difference between arriving by
-	 * token and arriving by letter, and the reason the greeting asks for it.
-	 */
 	it("streams by token without ever leaving a trailing space", async () => {
 		for (const ms of [100, 200, 300, 500, 800]) {
 			const { text } = await shownAfter(ms, { reveal: "token" });
