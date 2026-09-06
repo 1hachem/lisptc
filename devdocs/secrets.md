@@ -76,7 +76,7 @@ files, and host-supplied records.
 
 `.env` auto-loading is **CLI-only** (via `secretsExtension({ envFile: true })`,
 resolving `$LISPTC_SECRETS_FILE` or the nearest `.env` up-tree); the embedded
-`AgentRepl` (pi) does **not** auto-load — a host injects secrets explicitly via
+`AgentRepl` does **not** auto-load — a host injects secrets explicitly via
 the REPL's `setSecrets` / `loadSecretsFromFile` (which write into the held store),
 so they survive `reset()`.
 
