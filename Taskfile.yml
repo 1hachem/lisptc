@@ -53,7 +53,7 @@ tasks:
     deps: [dev-app, dev-api]
 
   dev-app:
-    desc: run pi agent with access to secrets
+    desc: run the web app with access to secrets
     cmds:
       - task: _infisical-run
         vars: { ENV: dev, PATHS: "/web /analytics", CMD: "pnpm run dev --filter app" }
@@ -83,12 +83,6 @@ tasks:
     cmds:
       - task: _infisical-run
         vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai /analytics /api", CMD: "pnpm run build --filter api && pnpm --filter api start" }
-
-  pi:
-    desc: run pi agent with access to secrets
-    cmds:
-      - task: _infisical-run
-        vars: { ENV: dev, PATHS: "/ai /repl", CMD: "pnpm run pi" }
 
   serve-gemma:
     desc: serve the local gemma model (the API primes its system-prompt KV cache)
