@@ -1,6 +1,6 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
-import { LISP_GRAMMAR } from "@repo/interpreter/grammar.ts";
+import { LISP_GRAMMAR } from "@repo/interpreter/grammar";
 
 export interface ModelOptions {
 	model?: string;

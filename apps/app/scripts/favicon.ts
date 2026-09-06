@@ -23,7 +23,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { BotFrame } from "@repo/bloub/bot/engine.ts";
+import type { BotFrame } from "@repo/bloub/bot/engine";
 import { createServer } from "vite";
 import { ICON_FACE, ICON_SHAPE, iconSvg } from "../src/lib/bot-icon.ts";
 
@@ -49,10 +49,10 @@ async function loadEngine() {
 	});
 	try {
 		const [engine, repere, skins, expressions] = await Promise.all([
-			vite.ssrLoadModule("@repo/bloub/bot/engine.ts"),
-			vite.ssrLoadModule("@repo/bloub/bot/repere.ts"),
-			vite.ssrLoadModule("@repo/bloub/bot/skins.ts"),
-			vite.ssrLoadModule("@repo/bloub/bot/expressions.ts"),
+			vite.ssrLoadModule("@repo/bloub/bot/engine"),
+			vite.ssrLoadModule("@repo/bloub/bot/repere"),
+			vite.ssrLoadModule("@repo/bloub/bot/skins"),
+			vite.ssrLoadModule("@repo/bloub/bot/expressions"),
 		]);
 		const shape = skins.SHAPE_BY_ID.get(ICON_SHAPE);
 		const face = expressions.EXPRESSION_BY_ID.get(ICON_FACE);

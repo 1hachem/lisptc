@@ -14,7 +14,7 @@
  *   read-only conversation-state globals refreshed from the host each step.
  */
 
-import { MODEL, USER } from "@repo/interpreter/channels.ts";
+import { MODEL, USER } from "@repo/interpreter/channels";
 import {
 	Cell,
 	EndOfFile,
@@ -27,10 +27,10 @@ import {
 	str,
 	stripProse,
 	Unspecified,
-} from "@repo/interpreter/lisp.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { isTruncated, proseExtension } from "@repo/interpreter/prose.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+} from "@repo/interpreter/lisp";
+import { mcpExtension } from "@repo/interpreter/mcp";
+import { isTruncated, proseExtension } from "@repo/interpreter/prose";
+import { secretsExtension } from "@repo/interpreter/secrets";
 
 // A REPL owns an interpreter and can be reset to a fresh one.
 export interface Repl {

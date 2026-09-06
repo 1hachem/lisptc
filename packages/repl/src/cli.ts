@@ -6,7 +6,7 @@
  * `./repl.ts`.
  */
 
-import { MODEL } from "@repo/interpreter/channels.ts";
+import { MODEL } from "@repo/interpreter/channels";
 import {
 	EndOfFile,
 	EvalException,
@@ -19,10 +19,10 @@ import {
 	str,
 	stripProse,
 	Unspecified,
-} from "@repo/interpreter/lisp.ts";
-import { mcpExtension } from "@repo/interpreter/mcp.ts";
-import { proseExtension } from "@repo/interpreter/prose.ts";
-import { secretsExtension } from "@repo/interpreter/secrets.ts";
+} from "@repo/interpreter/lisp";
+import { mcpExtension } from "@repo/interpreter/mcp";
+import { proseExtension } from "@repo/interpreter/prose";
+import { secretsExtension } from "@repo/interpreter/secrets";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
