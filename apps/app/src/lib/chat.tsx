@@ -18,23 +18,12 @@ export interface ChatMessage {
 	};
 }
 
-/**
- * What one model call cost, measured server-side (see `stream.ts` in
- * `@repo/ai`). Token counts are absent whenever the backend reported none.
- */
 export interface StepMeta {
-	/** ISO time the step finished */
 	at?: string;
 	durationMs: number;
 	inputTokens?: number;
 	outputTokens?: number;
-	/** the cached slice of `inputTokens`, when the provider reports one */
 	cachedInputTokens?: number;
-	/**
-	 * Model calls the loop made to reach the answer, the answer included. The one
-	 * figure that belongs to the whole turn rather than the call, so it is on the
-	 * message that ends the loop and only there.
-	 */
 	steps?: number;
 }
 
@@ -61,51 +50,19 @@ function parseMeta(value: unknown): StepMeta | undefined {
 
 interface ChatSession {
 	messages: ChatMessage[];
-	/**
-	 * The opening line, also `messages[0]` — `null` until the first effect runs
-	 * (see `greetingMessage`). Handed out separately so the view can hold its row
-	 * open before there is a line to put in it.
-	 */
 	greeting: string | null;
-	/**
-	 * What each assistant turn cost, by message id. Held here rather than read
-	 * off the message because the transcript is replayed to the server on every
-	 * send and comes back carrying `content` alone — so a turn's numbers would
-	 * vanish the moment the user asked anything else.
-	 */
 	meta: Record<string, StepMeta>;
-	/** no turns yet — the greeting alone doesn't count as a conversation */
 	fresh: boolean;
 	isLoading: boolean;
-	/** the id every event of this conversation is traced under */
 	threadId: string;
-	/** set when the last run failed (e.g. the agent/provider errored) */
 	error?: string;
-	/** send a plain-text user turn */
 	send: (text: string) => void;
-	/** abort the in-flight run — cancels the fetch, which aborts the model stream */
 	stop: () => void;
-	/** start a fresh session */
 	clear: () => void;
 }
 
-/**
- * The greeting is a real assistant turn: it leads the transcript and it is
- * replayed to the model with every send, so the agent is answering a
- * conversation it opened rather than one that starts mid-air.
- *
- * A fixed id is what keeps it single. `send` replays the whole list and the
- * server echoes it back verbatim, ids included, so from the second turn on the
- * greeting arrives in `stream.messages` like any other message — and prepending
- * the local copy on top of it would show it twice.
- *
- * Prose, not Lisp, which is legal for an assistant turn: a form-less reply is how
- * the policy spells "finished answering" (see `AgentRepl`), so the greeting reads
- * to the model as a completed turn and not as code it should carry on from.
- */
 const GREETING_ID = "greeting";
 
-/** The greeting draws itself (`<Greeting>`), so the message loop skips it. */
 export function isGreetingMessage(message: ChatMessage): boolean {
 	return message.id === GREETING_ID;
 }
@@ -121,15 +78,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		() =>
 			new FetchStreamTransport({
 				apiUrl: `${API_URL}/api/chat`,
-				// Carries the browser-local id onto every chat request, so the turn's
-				// trace and the feedback given on it land on the same person.
 				defaultHeaders: apiHeaders(),
 			}),
 		[],
 	);
-	// Generated up front rather than left null until the server names one: the
-	// API keys the persistent AgentRepl (and now the trace) off this id, so a
-	// conversation without one loses its interpreter state between turns.
 	const [threadId, setThreadId] = useState<string>(() => crypto.randomUUID());
 	const stream = useStream({
 		transport,
@@ -140,9 +92,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 	});
 	const streamed = stream.messages as ChatMessage[];
 
-	// Picked in an effect, not in the initialiser: the page is server-rendered and
-	// both inputs disagree across that boundary — the die comes up differently and
-	// the server's clock is in the server's timezone.
 	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
 	useEffect(() => {
 		setGreeting(greetingMessage());
@@ -156,9 +105,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		[greeting, streamed],
 	);
 
-	// A message arrives with its numbers already final — the server attaches them
-	// in the same `values` event that first carries the message — so an id that
-	// has been recorded once is never looked at again, and the effect settles.
 	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
 	useEffect(() => {
 		const found: Record<string, StepMeta> = {};
@@ -186,32 +132,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		send: (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
-			// FetchStreamTransport is stateless, so replay the whole conversation
-			// each turn — greeting included, it is `messages[0]`; the server echoes it
-			// back and streams the new reply.
-			// `additional_kwargs` rides along so the rendered widgets and untruncated
-			// output of earlier turns are still there after this one: the server
-			// echoes the list back verbatim, and anything left out of it here is
-			// gone from the transcript for good.
 			const history = messages.map((m) => ({
 				type: m.type,
 				content: m.content,
 				id: m.id,
 				additional_kwargs: m.additional_kwargs,
 			}));
-			// The id is named here rather than left to the server: it is this turn's
-			// React key, and the server echoes it back verbatim, so the message shown
-			// on send and the one that comes back are the same row.
 			const turn = [
 				...history,
 				{ type: "human", content: trimmed, id: crypto.randomUUID() },
 			];
-			// Shown optimistically because `submit` first resets the stream's values
-			// to `initialValues` — `{}` for a stateless transport — so without this
-			// the transcript blanks out until the server's opening `values` event
-			// echoes it back. That empty frame collapses the scroll container, which
-			// throws a reader who was part-way up the conversation to the top and
-			// then scrolls them back down once the messages return.
 			stream.submit(
 				{ messages: turn },
 				{ optimisticValues: { messages: turn } },
@@ -221,7 +151,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		clear: () => {
 			setThreadId(crypto.randomUUID());
 			setMeta({});
-			// a new conversation gets a new opening line, and a fresh look at the clock
 			setGreeting(greetingMessage());
 		},
 	};
@@ -237,7 +166,6 @@ export function useChatSession(): ChatSession {
 	return ctx;
 }
 
-/** Mirrors `WarmStatus` in @repo/ai — the API reports it on /health. */
 export type WarmStatus =
 	| "pending"
 	| "restored"
@@ -246,13 +174,6 @@ export type WarmStatus =
 	| "failed"
 	| "skipped";
 
-/**
- * Polls the API until its llama.cpp KV warmup settles.
- *
- * Only an explicit `"pending"` counts as warming. An unreachable API stays
- * `null` — locking the composer because the server is down would strand the
- * user with no way to find out why; a send surfaces the real error instead.
- */
 export function useWarmup(): { warming: boolean; status: WarmStatus | null } {
 	const [status, setStatus] = useState<WarmStatus | null>(null);
 
@@ -265,9 +186,7 @@ export function useWarmup(): { warming: boolean; status: WarmStatus | null } {
 			try {
 				const res = await fetch(`${API_URL}/health`);
 				warm = ((await res.json()) as { warm?: WarmStatus }).warm ?? null;
-			} catch {
-				// API not up yet — keep polling so the composer unlocks on its own
-			}
+			} catch {}
 			if (cancelled) return;
 			setStatus(warm);
 			if (warm === null || warm === "pending") timer = setTimeout(poll, 2000);
@@ -283,7 +202,6 @@ export function useWarmup(): { warming: boolean; status: WarmStatus | null } {
 	return { warming: status === "pending", status };
 }
 
-/** The model's thinking trace, accumulated client-side onto the AI message. */
 export function messageReasoning(message: ChatMessage): string {
 	const reasoning = message.additional_kwargs?.reasoning_content;
 	return typeof reasoning === "string" ? reasoning : "";
@@ -293,16 +211,6 @@ export function isToolMessage(message: ChatMessage): boolean {
 	return message.type === "tool";
 }
 
-/**
- * A REPL result rides as a JSON tool-result object (so the model never mistakes
- * it for a human turn). Unwrap it for display: show the printed `output`, and
- * flag failures. Falls back to the raw content if it isn't the expected shape.
- *
- * `content` holds the output capped to the model's word limit; when the step
- * printed more than that, the full text rides in `additional_kwargs.display`
- * and is what a human should read — there is no reason to truncate a page the
- * reader can simply scroll.
- */
 export function toolResult(message: ChatMessage): {
 	output: string;
 	error: boolean;
@@ -321,19 +229,10 @@ export function toolResult(message: ChatMessage): {
 					typeof display === "string" ? display : String(parsed.output ?? ""),
 				error: Boolean(parsed.error),
 			};
-	} catch {
-		// not JSON — fall through to raw text
-	}
+	} catch {}
 	return { output: text, error: false };
 }
 
-/**
- * The widget tree a step rendered, if it rendered one.
- *
- * It rides beside the text rather than in it because it is not text — and the
- * model never sees it at all: its own record of the step is the one-line summary
- * `ui/render` returned, which is in `content` like any other result report.
- */
 export function toolUi(message: ChatMessage): unknown {
 	return message.additional_kwargs?.ui;
 }

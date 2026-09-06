@@ -100,9 +100,6 @@ describe("diagnosticsForCalls", () => {
 		expect(diagnosticsForCalls(calls, new Map())).toEqual([]);
 	});
 
-	// A real MCP tool (args, no arity — unlike load-mcp below) has no valid
-	// all-positional call at all, so a bare positional call to one is always
-	// wrong, not an alternate valid form to tolerate.
 	it("flags a positional call to a keyword-only binding missing a required :arg", () => {
 		const calls = callsFor('(fs/read_file "x")');
 		const diagnostics = diagnosticsForCalls(
@@ -115,11 +112,6 @@ describe("diagnosticsForCalls", () => {
 		);
 	});
 
-	// load-mcp accepts either a bare toolkit-name string (no keywords at all)
-	// or the :key plist form checked above — a real MCP tool never has a
-	// valid all-positional call, so this shape only arises for a hybrid
-	// binding like this. Doc shape mirrors what Interp.docs() actually
-	// returns for "load-mcp" (args from LOAD_MCP_ARGS, variadic arity).
 	describe("a binding with both a keyword-plist and a bare positional form", () => {
 		const loadMcpDoc: CallDoc = {
 			args: [

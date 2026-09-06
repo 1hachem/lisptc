@@ -2,12 +2,6 @@ import { createServer, type Server } from "node:http";
 import { gunzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-// The wire format is the contract: PostHog renders a run as a trace only if the
-// `$ai_*` properties are exactly right, and a typo there fails silently — the
-// events arrive and the trace viewer shows nothing. So the assertion is made
-// against the real posthog-node client, batching and gzip included, pointed at
-// a local socket instead of at PostHog.
-
 interface CapturedEvent {
 	event: string;
 	distinct_id: string;
@@ -32,17 +26,13 @@ beforeAll(async () => {
 				events.push(
 					...((JSON.parse(text) as { batch?: CapturedEvent[] }).batch ?? []),
 				);
-			} catch {
-				// not an event batch (a flags/config call) — nothing to record
-			}
+			} catch {}
 			res.writeHead(200, { "content-type": "application/json" });
 			res.end("{}");
 		});
 	});
 	await new Promise<void>((resolve) => server.listen(PORT, resolve));
 
-	// Set before the module is imported: the client is built once, from the env
-	// as it stood at first use.
 	process.env.POSTHOG_API_KEY = "phc_test";
 	process.env.POSTHOG_HOST = `http://127.0.0.1:${PORT}`;
 	process.env.POSTHOG_ENVIRONMENT = "test";
@@ -66,8 +56,6 @@ const CTX = {
 async function drain(): Promise<CapturedEvent[]> {
 	const { shutdownTelemetry } = await import("../src/telemetry.ts");
 	await shutdownTelemetry();
-	// The flush resolves once the POST is issued; the batch still has to be read
-	// off the socket before it is in `events`.
 	await new Promise((resolve) => setTimeout(resolve, 100));
 	return events;
 }
@@ -95,15 +83,11 @@ describe("telemetry", () => {
 		const captured = await drain();
 		const by = (name: string) => captured.find((e) => e.event === name);
 
-		// The join key. Everything a conversation produces, including the comments
-		// written about it afterwards, hangs off the chat's thread id.
 		expect(captured.map((e) => e.properties.$ai_trace_id)).toEqual([
 			"thread-abc",
 			"thread-abc",
 		]);
 
-		// The other join: PostHog links an event to a session replay by
-		// `$session_id`, so a trace can be watched rather than only read.
 		expect(captured.map((e) => e.properties.$session_id)).toEqual([
 			"session-xyz",
 			"session-xyz",
@@ -111,7 +95,6 @@ describe("telemetry", () => {
 
 		const span = by("$ai_span");
 		expect(span?.properties).toMatchObject({
-			// The eval is a child of the turn, not a root of its own.
 			$ai_parent_id: "turn-1",
 			$ai_span_name: "repl eval 1",
 			$ai_latency: 0.012,

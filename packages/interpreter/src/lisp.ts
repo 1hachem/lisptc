@@ -1,7 +1,3 @@
-/*
-  Lisptc — derived from Nukata Lisp 2.1.0 in TypeScript 4.6 by SUZUKI Hisao (H28.02.08/R04.03.28)
-*/
-
 import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { z } from "zod";
@@ -23,43 +19,27 @@ import {
 import { Channels, MODEL, USER } from "./channels.ts";
 import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
 
-// An inefficient substitution of assert statement in Dart
 function assert(x: boolean, message?: string): asserts x {
 	if (!x) throw new Error(`Assertion Failure: ${message || ""}`);
 }
 
-// Output string s (a new line on \n char). Defaults to a no-op so the
-// interpreter can be imported (e.g. by tests) without a running REPL; the
-// CLI entry point (src/cli.ts) wires these to stdout/process.exit via
-// setWriter()/setExit() below.
 let write: (s: string) => void = () => {};
-let exit: (n: number) => void = () => {}; // Terminate the process with exit code n.
+let exit: (n: number) => void = () => {};
 
-// Redirect interpreter output (used by `echo`). Returns the previous writer so
-// callers can restore it. This is the process-wide DEFAULT sink for the `user`
-// channel, which every interp subscribes to at birth — a host wanting output
-// from one interp rather than all of them subscribes to that interp's channel
-// instead (see `Interp.channels`).
 export function setWriter(fn: (s: string) => void): (s: string) => void {
 	const prev = write;
 	write = fn;
 	return prev;
 }
 
-// Write through the current writer. Exported for the compaction extension,
-// which overrides `echo` and so has to reach the same sink this file's built-ins
-// do — the writer itself stays private, since only setWriter may replace it.
 export function writeOut(s: string): void {
 	write(s);
 }
 
-// Wire the `(exit code)` built-in to a real process-exit. Defaults to a no-op
-// so importing the interpreter never terminates the host; the CLI sets it.
 export function setExit(fn: (n: number) => void): void {
 	exit = fn;
 }
 
-// Lisp cons cell
 export class Cell {
 	constructor(
 		public car: unknown,
@@ -70,16 +50,13 @@ export class Cell {
 		return `(${this.car} . ${this.cdr})`;
 	}
 
-	// Length as a list
 	get length(): number {
 		return foldl(0, this, (i, _) => i + 1);
 	}
 }
 
-// Lisp's list
 export type List = Cell | null;
 
-// foldl(x, (a b c), fn) => fn(fn(fn(x, a), b), c)
 function foldl<T>(x: T, j: List, fn: (x: T, y: unknown) => T): T {
 	while (j !== null) {
 		x = fn(x, j.car);
@@ -88,7 +65,6 @@ function foldl<T>(x: T, j: List, fn: (x: T, y: unknown) => T): T {
 	return x;
 }
 
-// mapcar((a b c), fn) => (fn(a) fn(b) fn(c))
 function mapcar(j: List, fn: (x: unknown) => unknown): List {
 	if (j === null) return null;
 	const a = fn(j.car);
@@ -98,37 +74,25 @@ function mapcar(j: List, fn: (x: unknown) => unknown): List {
 	return new Cell(a, d);
 }
 
-// Lisp symbol
 export class Sym {
-	// Construct an uninterned symbol.
 	constructor(public readonly name: string) {}
 
 	toString(): string {
 		return this.name;
 	}
 
-	// Is it interned?
 	get isInterned(): boolean {
 		return symTable[this.name] === this;
 	}
 }
 
-// Expression keyword
 class Keyword extends Sym {}
 
-// Is this symbol a special form (`quote`, `setq`, `lambda`, …) rather than an
-// ordinary name? Exported for readers that classify a form by its head without
-// evaluating it (see src/prose.ts); the class itself stays private.
 export function isSpecialForm(x: unknown): boolean {
 	return x instanceof Keyword;
 }
 
-// Self-evaluating keyword literal, e.g. `:query`. Distinct from the special-form
-// `Keyword` class above (which subclasses Sym and drives cond/lambda/setq/...).
-// A LispKeyword evaluates to itself (like a number or string) and prints with a
-// leading colon. Used for ergonomic `(fn :key val ...)` call syntax.
 export class LispKeyword {
-	// name is stored WITHOUT the leading colon.
 	constructor(public readonly name: string) {}
 
 	toString(): string {
@@ -136,7 +100,6 @@ export class LispKeyword {
 	}
 }
 
-// Interned keyword literals so that `(eq :a :a)` holds.
 const keywordLiteralTable: { [key: string]: LispKeyword } = {};
 
 export function newLispKeyword(name: string): LispKeyword {
@@ -148,10 +111,8 @@ export function newLispKeyword(name: string): LispKeyword {
 	return k;
 }
 
-// The table of interned symbols
 const symTable: { [key: string]: Sym } = {};
 
-// Construct an interned symbol; construct a Keyword if isKeyword holds.
 export function newSym(name: string, isKeyword = false): Sym {
 	let result = symTable[name];
 	assert(result === undefined || !isKeyword, name);
@@ -191,9 +152,6 @@ const quoteSym = newKeyword("quote");
 const setqSym = newKeyword("setq");
 const trySym = newKeyword("try");
 
-//----------------------------------------------------------------------
-
-// Get cdr of list x as a Cell or null.
 function cdrCell(x: Cell): List {
 	const k = x.cdr;
 	if (k instanceof Cell) return k;
@@ -201,16 +159,11 @@ function cdrCell(x: Cell): List {
 	else throw new EvalException("proper list expected", x);
 }
 
-// Assert that x is a number, throwing an EvalException otherwise. Used to
-// guard the arithmetic/comparison built-ins against non-numeric arguments.
 function ensureNum(x: unknown): Numeric {
 	if (isNumeric(x)) return x;
 	throw new EvalException("not a number", x);
 }
 
-// Zod schemas for the arguments of built-in functions. Validation failures
-// are surfaced as EvalException via parseArgs, matching the historical
-// hand-written checks (e.g. "list expected", "not a number").
 export const zAny = z.unknown();
 export const zList = z.custom<List>(
 	(x) => x === null || x instanceof Cell,
@@ -224,8 +177,6 @@ const zString = z.custom<string>(
 );
 const zSym = z.custom<Sym>((x) => x instanceof Sym, "symbol expected");
 
-// Validate a built-in's argument frame against a tuple schema, throwing an
-// EvalException that names the offending argument on failure.
 function parseArgs<T extends z.ZodType>(schema: T, a: unknown[]): z.infer<T> {
 	const result = schema.safeParse(a);
 	if (result.success) return result.data;
@@ -237,9 +188,7 @@ function parseArgs<T extends z.ZodType>(schema: T, a: unknown[]): z.infer<T> {
 	);
 }
 
-// Common base class of Lisp functions
 abstract class Func {
-	// carity is a number of arguments, made negative if the func has &rest.
 	constructor(public readonly carity: number) {}
 
 	get arity(): number {
@@ -251,17 +200,14 @@ abstract class Func {
 	}
 
 	get fixedArgs(): number {
-		// Number of fixed arguments
 		return this.carity < 0 ? -this.carity - 1 : this.carity;
 	}
 
-	// Make a call-frame from a list of actual arguments.
 	makeFrame(arg: List): unknown[] {
 		const frame = new Array(this.arity);
 		const n = this.fixedArgs;
 		let i = 0;
 		for (; i < n && arg !== null; i++) {
-			// Set the list of fiexed args.
 			frame[i] = arg.car;
 			arg = cdrCell(arg);
 		}
@@ -271,7 +217,6 @@ abstract class Func {
 		return frame;
 	}
 
-	// Evaluate each expression of a frame.
 	evalFrame(frame: unknown[], interp: Interp, env: List): void {
 		const n = this.fixedArgs;
 		for (let i = 0; i < n; i++) frame[i] = interp.eval(frame[i], env);
@@ -294,9 +239,7 @@ abstract class Func {
 	}
 }
 
-// Common base class of functions which are defined with Lisp expressions
 abstract class DefinedFunc extends Func {
-	// body is a Lisp list as the function body.
 	constructor(
 		carity: number,
 		public readonly body: List,
@@ -305,16 +248,13 @@ abstract class DefinedFunc extends Func {
 	}
 }
 
-// Common function type which represents any factory methods of DefinedFunc
 type FuncFactory = (carity: number, body: List, env: List) => DefinedFunc;
 
-// Compiled macro expression
 class Macro extends DefinedFunc {
 	toString(): string {
 		return `#<macro:${this.carity}:${str(this.body)}>`;
 	}
 
-	// Expand the macro with a list of actual arguments.
 	expandWith(interp: Interp, arg: List): unknown {
 		const frame = this.makeFrame(arg);
 		const env = new Cell(frame, null);
@@ -330,7 +270,6 @@ class Macro extends DefinedFunc {
 	}
 }
 
-// Compiled lambda expression (within another function)
 class Lambda extends DefinedFunc {
 	toString(): string {
 		return `#<lambda:${this.carity}:${str(this.body)}>`;
@@ -342,9 +281,7 @@ class Lambda extends DefinedFunc {
 	}
 }
 
-// Compiled lambda expression (Closure with environment)
 class Closure extends DefinedFunc {
-	// env is the environment of the closure.
 	constructor(
 		carity: number,
 		body: List,
@@ -357,26 +294,14 @@ class Closure extends DefinedFunc {
 		return new Closure(x.carity, x.body, env);
 	}
 
-	/*
-	 * The captured environment is deliberately NOT printed.
-	 *
-	 * It can hold the closure itself — a loop macro binds its body to a local
-	 * that the body closes over — and `str`'s cycle guard does not survive the
-	 * hop out through this method, so rendering it recursed until the stack
-	 * gave out. Any error raised inside a multi-form `dotimes` body reached
-	 * that path, since an EvalException's trace prints the forms it unwound
-	 * through: the eval died with a RangeError instead of reporting the error.
-	 * An environment is interpreter internals in any case.
-	 */
 	toString(): string {
 		return `#<closure:${this.carity}:${str(this.body)}>`;
 	}
 
-	// Make a new environment from a list of actual arguments.
 	makeEnv(interp: Interp, arg: List, interpEnv: List): Cell {
 		const frame = this.makeFrame(arg);
 		this.evalFrame(frame, interp, interpEnv);
-		return new Cell(frame, this.env); // Prepend the frame to the env.
+		return new Cell(frame, this.env);
 	}
 
 	static make(carity: number, body: List, env: List): DefinedFunc {
@@ -384,12 +309,9 @@ class Closure extends DefinedFunc {
 	}
 }
 
-// Function type which represents any built-in function bodies
 type BuiltInFuncBody = (frame: unknown[]) => unknown;
 
-// Built-in function
 class BuiltInFunc extends Func {
-	// name is the function name; body is the function body.
 	constructor(
 		private readonly name: string,
 		carity: number,
@@ -402,7 +324,6 @@ class BuiltInFunc extends Func {
 		return `#<${this.name}:${this.carity}>`;
 	}
 
-	// Invoke the built-in function with a list of actual arguments.
 	evalWith(interp: Interp, arg: List, interpEnv: List): unknown {
 		const frame = this.makeFrame(arg);
 		this.evalFrame(frame, interp, interpEnv);
@@ -415,35 +336,17 @@ class BuiltInFunc extends Func {
 	}
 }
 
-/*
- * What kind of callable `x` is, or undefined if it is not one.
- *
- * Exported for the compaction extension, which reports what a result IS
- * rather than printing it: a closure's printed form
- * (`#<closure:1:nil:(#0:0:x)>`) is interpreter internals, and "function" is
- * what a caller actually wanted to know.
- */
 export function callableKind(x: unknown): "function" | "macro" | undefined {
 	if (x instanceof Macro) return "macro";
 	if (x instanceof Func) return "function";
 	return undefined;
 }
 
-/*
- * The positional-argument count `x` accepts, or undefined if it is not
- * callable.
- *
- * `Interp.arityOf` answers the same question for a global by name. A UI action
- * (src/ui.ts) is an anonymous lambda the host holds by reference, so it has no
- * name to ask under — and the host has to know whether to hand the handler the
- * form's field values or call it with none.
- */
 export function callableArity(x: unknown): Arity | undefined {
 	if (!(x instanceof Func)) return undefined;
 	return { min: x.fixedArgs, max: x.hasRest ? undefined : x.arity };
 }
 
-// Bound variable in a compiled lambda/macro expression
 class Arg {
 	constructor(
 		public readonly level: number,
@@ -455,25 +358,19 @@ class Arg {
 		return `#${this.level}:${this.offset}:${this.symbol}`;
 	}
 
-	// Set a value x to the location corresponding to the variable in env.
 	setValue(x: unknown, env: Cell): void {
 		for (let i = 0; i < this.level; i++) env = env.cdr as Cell;
 		(env.car as unknown[])[this.offset] = x;
 	}
 
-	// Get a value from the location corresponding to the variable in env.
 	getValue(env: Cell): unknown {
 		for (let i = 0; i < this.level; i++) env = env.cdr as Cell;
 		return (env.car as unknown[])[this.offset];
 	}
 }
 
-// Exception in evaluation
 export class EvalException extends Error {
 	readonly trace: string[] = [];
-	// The raw Lisp-level value associated with this error (the offending/
-	// relevant value passed as `x`), so `try`/`catch` can bind a handler
-	// variable to something meaningful.
 	readonly value: unknown;
 
 	constructor(msg: string, x: unknown, quoteString = true) {
@@ -488,35 +385,18 @@ export class EvalException extends Error {
 	}
 }
 
-// Internal signal thrown by (break)/(return value) to unwind to the nearest
-// enclosing while/dolist/dotimes loop. Deliberately NOT an EvalException
-// subclass, so a try/catch never intercepts it (evalTry only checks
-// `instanceof EvalException`) and a genuine EvalException is never
-// swallowed by a loop's own guard (which only checks `instanceof
-// LoopSignal`).
 class LoopSignal {
 	constructor(readonly value: unknown) {}
 }
 
-// Exception which indicates an absence of a variable
 class NotVariableException extends EvalException {
 	constructor(x: unknown) {
 		super("variable expected", x);
 	}
 }
 
-// Exception thrown when something does not have an expected format
 class FormatException extends Error {}
 
-/*
- * The reader's own failure: text it could not parse at all.
- *
- * Kept apart from the other EvalExceptions the reader raises — those are
- * complaints about a token it understood perfectly well — because only a parse
- * failure can turn out to be a sentence rather than a mistake (see
- * `readFailure`). `reason` and `line` are the parts of the message back out
- * again, so a caller can re-report it against its own text.
- */
 class SyntaxException extends EvalException {
 	constructor(
 		readonly reason: string,
@@ -526,22 +406,10 @@ class SyntaxException extends EvalException {
 	}
 }
 
-// Singleton for end-of-file
 export const EndOfFile = { toString: () => "EOF" };
 
-// Singleton returned by `echo`, whose result carries no information beyond "I
-// already wrote my output" — as opposed to nil, which is a meaningful Lisp
-// value (false / empty list).
-// A REPL compares its top-level result against this by identity to decide
-// whether to report it, so a step that printed gets no result line on top.
 export const Unspecified = { toString: () => "#<unspecified>" };
 
-//----------------------------------------------------------------------
-
-// Core of the interpreter
-// A single keyword argument of a Doc, e.g. `:url` on an MCP tool. Structured
-// so consumers (the LSP's argument completion) don't have to re-parse the
-// rendered `signature`/`doc` strings.
 export interface DocArg {
 	name: string;
 	type: string;
@@ -549,24 +417,17 @@ export interface DocArg {
 	description?: string;
 }
 
-// The positional-argument count of a callable binding; see `Interp.arityOf`.
 export interface Arity {
 	min: number;
 	max?: number;
 }
 
-// Documentation of a binding: a call signature and a one-line description.
-// `args` is set only for keyword-call bindings (currently just MCP tools);
-// positional bindings (built-ins, macros, user defuns) leave it undefined.
 export interface Doc {
 	signature: string;
 	doc: string;
 	args?: DocArg[];
 }
 
-// Docs for the special forms (keywords handled directly by the evaluator)
-// and reader constants. These are not global bindings, so they are kept
-// here, next to the evaluator that implements them.
 const specialFormDocs: Record<string, Doc> = {
 	quote: {
 		signature: "(quote x)",
@@ -600,25 +461,18 @@ const specialFormDocs: Record<string, Doc> = {
 	nil: { signature: "nil", doc: "The empty list / false value." },
 };
 
-// Printed representations of a list's elements (for building signatures).
 function listToStrings(list: List): string[] {
 	const out: string[] = [];
 	for (let c = list; c !== null; c = c.cdr as Cell | null) out.push(str(c.car));
 	return out;
 }
 
-// Build a list from an array, right to left.
 function fromArray(arr: unknown[]): List {
 	let list: List = null;
 	for (let i = arr.length - 1; i >= 0; i--) list = new Cell(arr[i], list);
 	return list;
 }
 
-// Parsed JSON as Lisp data: object -> alist with string keys (in the document's
-// own key order), array -> list, string/number unchanged, true -> t. Both false
-// and null become nil, since nil is Lisp's only falsity — a round trip through
-// Lisp cannot tell them apart. Used by `json-parse` and by the MCP layer, whose
-// tool results arrive as JSON (src/mcp.ts).
 export function jsonToLisp(x: unknown): unknown {
 	if (x === null || x === undefined) return null;
 	if (x === true) return true;
@@ -642,48 +496,25 @@ export interface InterpOptions {
 }
 
 export class Interp {
-	// Table of the global values of symbols
 	private readonly globals: Map<Sym, unknown> = new Map();
 
-	// Every question this interp puts to its extensions (see src/hooks.ts). The
-	// core owns the questions and never the answers: with nothing registered
-	// each chain runs its base, which is the language's own behaviour.
 	readonly hooks: Hooks = newHooks();
 
-	// Everything this interp has to say (see src/channels.ts). Subscribed at
-	// birth to the process-wide writer, so `setWriter` keeps working for a host
-	// that never learns about channels.
 	readonly channels: Channels = new Channels();
 
-	// Directories to resolve relative `import` paths against — one entry per
-	// file currently being loaded (the innermost import wins). Empty at the REPL,
-	// where paths resolve against process.cwd(). See evalImport.
 	readonly importStack: string[] = [];
-	// Absolute paths currently being imported, to break circular imports: a file
-	// that (transitively) imports itself is skipped rather than looping forever.
 	private readonly importing: Set<string> = new Set();
 
-	// Documentation of global bindings, keyed by name. Populated alongside
-	// each definition (def / defineGlobal / the _set-doc built-in) so docs
-	// cannot drift from the bindings they describe.
 	private readonly docTable: Map<string, Doc> = new Map();
 
-	// Names of all global bindings (built-ins, prelude defs, MCP tools).
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);
 	}
 
-	// Documentation for every documented binding plus the special forms.
 	docs(): Map<string, Doc> {
 		return new Map([...Object.entries(specialFormDocs), ...this.docTable]);
 	}
 
-	// The (min, max) positional-argument count for a callable global binding,
-	// read straight off its Func.carity — used by the LSP to flag arity
-	// mismatches statically, for the built-ins/macros/defuns that call
-	// positionally rather than by keyword (see Doc.args for the other kind).
-	// `max` is undefined for a variadic (&rest) function. undefined entirely
-	// for anything that isn't a Func (unbound names, special forms, data).
 	arityOf(name: string): Arity | undefined {
 		const value = this.globals.get(newSym(name));
 		if (!(value instanceof Func)) return undefined;
@@ -897,10 +728,6 @@ export class Interp {
 			},
 		);
 
-		// The REPL prints nothing on its own, so this is the only way anything
-		// reaches the screen. The compaction extension overrides it with a
-		// windowed, searchable version; this plain one is the fallback for an
-		// interpreter built without it.
 		this.def(
 			"echo",
 			-1,
@@ -932,8 +759,6 @@ export class Interp {
 					this.say(`${name.name}: undocumented\n`);
 					return null;
 				}
-				// Indent every line so multi-paragraph docs (e.g. an MCP tool's
-				// "Arguments:"/"Returns:" sections) stay legible, not just the first.
 				const body = entry.doc
 					.split("\n")
 					.map((line) => (line ? `  ${line}` : line))
@@ -958,7 +783,7 @@ export class Interp {
 			() => {
 				const i = this.globals.get(gensymCounter) as Numeric;
 				this.globals.set(gensymCounter, add(i, ONE));
-				return new Sym(`G${i}`); // an uninterned symbol
+				return new Sym(`G${i}`);
 			},
 		);
 
@@ -987,9 +812,6 @@ export class Interp {
 			([sym]) => sym.name,
 		);
 
-		// --- String primitives (the rest of the string library is Lisp; see
-		// the prelude). These require JS: character indexing, building strings
-		// from parts, and Unicode case mapping cannot be done in pure Lisp.
 		this.def(
 			"char",
 			2,
@@ -1042,9 +864,6 @@ export class Interp {
 			([s]) => s.toLowerCase(),
 		);
 
-		// --- Text into data. Two separate parsers because JSON is not Lisp
-		// syntax: {} objects and true/false/null have no reader syntax here, so
-		// `read` cannot parse a JSON document and `json-parse` cannot read Lisp.
 		this.def(
 			"read",
 			1,
@@ -1073,9 +892,6 @@ export class Interp {
 				try {
 					return jsonToLisp(JSON.parse(s));
 				} catch (ex) {
-					// The parser's own message (with its position) rather than the
-					// document: `s` can be a whole tool result, and an error is
-					// spent context like anything else the REPL reports.
 					throw new EvalException(
 						"json-parse: invalid JSON",
 						ex instanceof Error ? ex.message : String(ex),
@@ -1132,19 +948,12 @@ export class Interp {
 			doc: "The interpreter version: (number implementation-language name).",
 		});
 
-		// Register documentation for a Lisp-defined binding. Called by the
-		// defun/defmacro expansions in the prelude, so a definition and its
-		// docs always travel together. The second argument is either the
-		// argument list of the definition (the signature is derived from it)
-		// or a ready-made signature string (used for aliases).
 		this.def(
 			"_set-doc",
 			3,
 			"(_set-doc 'name args-or-signature docstring)",
 			"Register documentation for the binding `name`; return `name`.",
 			z.tuple([
-				// Usually a Sym, but a defun nested in a lambda passes the
-				// compiled local variable instead — tolerated and skipped below.
 				zAny,
 				z.custom<string | List>(
 					(x) => typeof x === "string" || x === null || x instanceof Cell,
@@ -1164,7 +973,6 @@ export class Interp {
 			},
 		);
 
-		// --- User-signalled, catchable errors and loop control. ---
 		this.def(
 			"error",
 			1,
@@ -1175,9 +983,6 @@ export class Interp {
 				throw new EvalException("error", value, true);
 			},
 		);
-		// Loop control (break/return) for while/dolist/dotimes, built on the
-		// LoopSignal exception. `_run-loop-body` runs a loop-body thunk catching
-		// only that signal, so the prelude loop macros can implement break/return.
 		this.def(
 			"break",
 			0,
@@ -1215,21 +1020,9 @@ export class Interp {
 			},
 		);
 
-		// Opt-in extensions layer optional built-ins on top of the core — and may
-		// override core ones (the secrets extension teaches the string primitives
-		// taint; see src/secrets.ts and devdocs/secrets.md).
 		for (const extension of options.extensions ?? []) extension(this);
 	}
 
-	// Define a built-in function by giving a name, a carity, documentation
-	// (a call signature and a one-line description), a zod schema for the
-	// argument frame, and a body. The frame is validated against the schema
-	// before the body runs, so the body receives typed arguments. Docs are a
-	// required argument so a built-in cannot be added without them. `args` is
-	// for a built-in whose single positional argument is itself a keyword
-	// plist (currently just `load-mcp`'s ad-hoc-plist form; see
-	// connConfigFromArgs in src/mcp.ts) — the LSP renders it the same way it
-	// renders an MCP tool's `DocArg`s, so the two need no separate handling.
 	def<T extends z.ZodType>(
 		name: string,
 		carity: number,
@@ -1244,16 +1037,12 @@ export class Interp {
 		this.docTable.set(name, { signature, doc, args });
 	}
 
-	// Define/undefine a global binding. Used by the MCP layer to install and
-	// remove per-tool wrapper functions at runtime (see src/mcp.ts).
 	defineGlobal(sym: Sym, value: unknown, doc?: Doc): void {
 		this.globals.set(sym, value);
 		if (doc !== undefined) this.docTable.set(sym.name, doc);
 	}
 
 	undefineGlobal(sym: Sym): void {
-		// A missing binding makes eval raise "void variable" (see below), so
-		// deletion cleanly unbinds the symbol.
 		this.globals.delete(sym);
 		this.docTable.delete(sym.name);
 	}
@@ -1262,44 +1051,26 @@ export class Interp {
 		return this.globals.has(sym);
 	}
 
-	// The value bound to a global, without the "void variable" error `eval`
-	// raises: a caller that already knows the binding exists (a REPL reporting
-	// what a `defun` just defined) wants the value, not an exception.
 	getGlobal(sym: Sym): unknown {
 		return this.globals.get(sym);
 	}
 
-	// Every global binding, for a reverse lookup by value — an extension that
-	// names results reuses the name a value is already bound under rather than
-	// minting a second one.
 	globalEntries(): IterableIterator<[Sym, unknown]> {
 		return this.globals.entries();
 	}
 
-	// Plain output, on the channel the human reads. Not a diagnostic: nothing
-	// is wrong with a program that prints.
 	private say(text: string): void {
 		this.channels.emit({ channel: USER, text });
 	}
 
-	/*
-	 * Release whatever the extensions hold, before dropping this interp.
-	 *
-	 * The language itself owns nothing that needs releasing — this exists
-	 * entirely so a host resetting a REPL does not strand an extension's worker
-	 * or socket. Safe to call more than once, and safe never to call: the
-	 * chain is empty unless something registered.
-	 */
 	dispose(): void {
 		this.hooks.dispose.run(() => {});
 	}
 
-	// Build a BuiltInFunc without binding it (for wrappers stored elsewhere).
 	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
 		return new BuiltInFunc(name, carity, body);
 	}
 
-	// Evaluate a Lisp expression in an environment.
 	eval(x: unknown, env: List): unknown {
 		try {
 			for (;;) {
@@ -1347,8 +1118,6 @@ export class Interp {
 								throw new EvalException("bad keyword", fn);
 						}
 					} else {
-						// Application of a function
-						// Expand fn = eval(fn, env) here on Sym for speed.
 						if (fn instanceof Sym) {
 							fn = this.globals.get(fn);
 							if (fn === undefined) throw new EvalException("undefined", x.car);
@@ -1370,7 +1139,7 @@ export class Interp {
 				} else if (x instanceof Lambda) {
 					return Closure.makeFrom(x, env);
 				} else {
-					return x; // numbers, strings, keywords (:foo), null etc.
+					return x;
 				}
 			}
 		} catch (ex) {
@@ -1381,25 +1150,22 @@ export class Interp {
 		}
 	}
 
-	// (progn E1 E2 .. En) => Evaluate E1, E2, .. except for En and return it.
 	private evalProgN(j: List, env: List): unknown {
 		if (j === null) return null;
 		for (;;) {
 			const x = j.car;
 			j = cdrCell(j);
-			if (j === null) return x; // The tail exp will be evaluated at the caller.
+			if (j === null) return x;
 			this.eval(x, env);
 		}
 	}
 
-	// Evaluate a conditional expression and return the selection unevaluated.
 	private evalCond(j: List, env: List): unknown {
 		for (; j !== null; j = cdrCell(j)) {
 			const clause = j.car;
 			if (clause instanceof Cell) {
 				const result = this.eval(clause.car, env);
 				if (result !== null) {
-					// If the condition holds
 					const body = cdrCell(clause);
 					if (body === null) return qqQuote(result);
 					else return this.evalProgN(body, env);
@@ -1408,19 +1174,9 @@ export class Interp {
 				throw new EvalException("cond test expected", clause);
 			}
 		}
-		return null; // No clause holds.
+		return null;
 	}
 
-	// (try BODY-FORM (catch (VAR) HANDLER...)) => Evaluate BODY-FORM. If it
-	// signals an EvalException, bind VAR to the exception's `.value` (via a
-	// synthetic Closure, reusing the normal Closure-application machinery for
-	// proper lexical binding and TCO in the handler) and evaluate the HANDLER
-	// forms as a progn. Non-EvalException throws (in particular LoopSignal,
-	// see break/return) are never caught here and propagate unchanged.
-	// Returns [x, env] for the caller to continue trampolining: only
-	// BODY-FORM's evaluation costs a non-tail JS stack frame (unavoidable,
-	// since we must synchronously observe whether it threw); the handler
-	// body is handed back to the trampoline for proper tail calls.
 	private evalTry(arg: List, env: List): [unknown, List] {
 		if (arg === null) throw new EvalException("bad try", arg);
 		const bodyForm = arg.car;
@@ -1430,10 +1186,10 @@ export class Interp {
 		const clause = rest.car;
 		if (!(clause instanceof Cell) || clause.car !== catchSym)
 			throw new EvalException("try: catch clause expected", clause);
-		const catchRest = cdrCell(clause); // ((VAR) HANDLER...)
+		const catchRest = cdrCell(clause);
 		if (catchRest === null)
 			throw new EvalException("try: catch variable expected", clause);
-		const params = catchRest.car; // (VAR)
+		const params = catchRest.car;
 		if (!(params instanceof Cell) || params.cdr !== null)
 			throw new EvalException(
 				"try: catch expects exactly one variable",
@@ -1444,7 +1200,7 @@ export class Interp {
 		try {
 			return [qqQuote(this.eval(bodyForm, env)), env];
 		} catch (ex) {
-			if (!(ex instanceof EvalException)) throw ex; // e.g. LoopSignal: not ours
+			if (!(ex instanceof EvalException)) throw ex;
 			const handler = this.compile(
 				new Cell(params, handlerBody),
 				env,
@@ -1458,17 +1214,12 @@ export class Interp {
 		}
 	}
 
-	// (import "path") => Read the Lisp file at `path` and evaluate its whole
-	// program in *this* interpreter, so its definitions land in the current
-	// globals (import * from the file). Relative paths resolve against the
-	// importing file's directory; circular imports are skipped. Returns nil.
 	private importFile(path: string): null {
 		const baseDir =
 			this.importStack.length > 0
 				? this.importStack[this.importStack.length - 1]
 				: process.cwd();
 		const abs = resolvePath(baseDir, path);
-		// Already loading this file (a cycle): skip to avoid infinite recursion.
 		if (this.importing.has(abs)) return null;
 		let text: string;
 		try {
@@ -1487,7 +1238,6 @@ export class Interp {
 		return null;
 	}
 
-	// (setq V1 E1 ..) => Evaluate Ei and assign it to Vi; return the last.
 	private evalSetQ(j: List, env: List): unknown {
 		let result: unknown = null;
 		for (; j !== null; j = cdrCell(j)) {
@@ -1507,20 +1257,17 @@ export class Interp {
 		return result;
 	}
 
-	// Compile a Lisp list (macro ..) or (lambda ..).
 	private compile(arg: List, env: List, make: FuncFactory): DefinedFunc {
 		if (arg === null) throw new EvalException("arglist and body expected", arg);
 		const table = new Map<Sym, Arg>();
 		const [hasRest, arity] = makeArgTable(arg.car, table);
 		let body = cdrCell(arg);
 		body = scanForArgs(body, table) as List;
-		// Expand macros up to 20 nestings
 		body = this.expandMacros(body, 20) as List;
 		body = this.compileInners(body) as List;
 		return make(hasRest ? -arity : arity, body, env);
 	}
 
-	// Expand macros and quasi-quotations in an expression.
 	private expandMacros(j: unknown, count: number): unknown {
 		if (count > 0 && j instanceof Cell) {
 			let k = j.car;
@@ -1538,13 +1285,7 @@ export class Interp {
 					throw new EvalException("bad quasiquote", j);
 				}
 				case trySym: {
-					// (try BODY-FORM (catch (VAR) HANDLER...)) — expand BODY-FORM
-					// and each HANDLER-FORM, but never treat the catch clause's
-					// (VAR) list as a potential macro call: it's a binding form,
-					// not code (else a catch-variable name colliding with an
-					// existing macro, e.g. `or`, would be misexpanded as a
-					// zero-arg call to that macro).
-					const argPart = cdrCell(j); // (BODY-FORM (catch (VAR) HANDLER...))
+					const argPart = cdrCell(j);
 					const clauseCell = argPart === null ? null : cdrCell(argPart);
 					const clause = clauseCell === null ? null : clauseCell.car;
 					if (
@@ -1558,7 +1299,7 @@ export class Interp {
 					const bodyForm = this.expandMacros(argPart.car, count);
 					const catchRest = cdrCell(clause);
 					if (catchRest === null) throw new EvalException("bad try", j);
-					const params = catchRest.car; // left untouched
+					const params = catchRest.car;
 					const handlers = mapcar(cdrCell(catchRest), (h) =>
 						this.expandMacros(h, count),
 					);
@@ -1584,7 +1325,6 @@ export class Interp {
 		}
 	}
 
-	// Replace inner lambda expressions with Lambda instances.
 	private compileInners(j: unknown): unknown {
 		if (j instanceof Cell) {
 			const k = j.car;
@@ -1606,21 +1346,17 @@ export class Interp {
 	}
 }
 
-//----------------------------------------------------------------------
-
-// Make an argument table; return a pair of rest-yes/no and the arity.
 function makeArgTable(arg: unknown, table: Map<Sym, Arg>): [boolean, number] {
 	if (arg === null) {
 		return [false, 0];
 	} else if (arg instanceof Cell) {
 		let ag = arg as List;
-		let offset = 0; // offset value within the call-frame
+		let offset = 0;
 		let hasRest = false;
 		for (; ag !== null; ag = cdrCell(ag)) {
 			let j = ag.car;
 			if (hasRest) throw new EvalException("2nd rest", j);
 			if (j === restSym) {
-				// &rest var
 				ag = cdrCell(ag);
 				if (ag === null) throw new NotVariableException(ag);
 				j = ag.car;
@@ -1642,8 +1378,6 @@ function makeArgTable(arg: unknown, table: Map<Sym, Arg>): [boolean, number] {
 	}
 }
 
-// Scan 'j' for formal arguments in 'table' and replace them with Args.
-// And scan 'j' for free Args not in 'table' and promote their levels.
 function scanForArgs(j: unknown, table: Map<Sym, Arg>): unknown {
 	if (j instanceof Sym) {
 		const k = table.get(j);
@@ -1664,7 +1398,6 @@ function scanForArgs(j: unknown, table: Map<Sym, Arg>): unknown {
 	}
 }
 
-// Scan for quasi-quotes and scanForArgs them depending on the nesting level.
 function scanForQQ(j: unknown, table: Map<Sym, Arg>, level: number): unknown {
 	if (j instanceof Cell) {
 		const k = j.car;
@@ -1685,19 +1418,14 @@ function scanForQQ(j: unknown, table: Map<Sym, Arg>, level: number): unknown {
 	}
 }
 
-//----------------------------------------------------------------------
-// Quasi-Quotation
-
-// Expand x of any quasi-quotation `x into the equivalent S-expression.
 function qqExpand(x: unknown): unknown {
-	return qqExpand0(x, 0); // Begin with the nesting level 0.
+	return qqExpand0(x, 0);
 }
 
 function qqExpand0(x: unknown, level: number): unknown {
 	if (x instanceof Cell) {
 		if (x.car === unquoteSym) {
-			// ,a
-			if (level === 0) return (x.cdr as Cell).car; // ,a => a
+			if (level === 0) return (x.cdr as Cell).car;
 		}
 		const t = qqExpand1(x, level);
 		if (t.car instanceof Cell && t.cdr === null) {
@@ -1710,28 +1438,22 @@ function qqExpand0(x: unknown, level: number): unknown {
 	}
 }
 
-// Quote x so that the result evaluates to x.
 function qqQuote(x: unknown): unknown {
 	if (x instanceof Sym || x instanceof Cell)
 		return new Cell(quoteSym, new Cell(x, null));
 	return x;
 }
 
-// Expand x of `x so that the result can be used as an argument of append.
-// Example 1: (,a b) => ((list a 'b))
-// Example 2: (,a ,@(cons 2 3)) => ((cons a (cons 2 3)))
 function qqExpand1(x: unknown, level: number): Cell {
 	if (x instanceof Cell) {
 		if (x.car === unquoteSym) {
-			// ,a
-			if (level === 0) return x.cdr as Cell; // ,a => (a)
+			if (level === 0) return x.cdr as Cell;
 			level--;
 		} else if (x.car === quasiquoteSym) {
-			// `a
 			level++;
 		}
 		const h = qqExpand2(x.car, level);
-		const t = qqExpand1(x.cdr, level); // !== null
+		const t = qqExpand1(x.cdr, level);
 		if (t.car === null && t.cdr === null) {
 			return new Cell(h, null);
 		} else if (h instanceof Cell) {
@@ -1755,13 +1477,11 @@ function qqExpand1(x: unknown, level: number): Cell {
 	}
 }
 
-// (1 2), (3 4) => (1 2 3 4)
 function qqConcat(x: Cell, y: unknown): unknown {
 	if (x === null) return y;
 	return new Cell(x.car, qqConcat(x.cdr as Cell, y));
 }
 
-// (1 2 3), "a" => (cons 1 (cons 2 (cons 3 "a")))
 function qqConsCons(x: Cell, y: unknown): unknown {
 	if (x === null) return y;
 	return new Cell(
@@ -1770,20 +1490,18 @@ function qqConsCons(x: Cell, y: unknown): unknown {
 	);
 }
 
-// Expand x.car (=y) of `x so that the result can be used as an arg of append.
-// Example: ,a => (list a); ,@(foo 1 2) => (foo 1 2); b => (list 'b)
 function qqExpand2(y: unknown, level: number): unknown {
 	if (y instanceof Cell) {
 		switch (y.car) {
-			case unquoteSym: // ,a
-				if (level === 0) return new Cell(listSym, y.cdr); // ,a => (list a)
+			case unquoteSym:
+				if (level === 0) return new Cell(listSym, y.cdr);
 				level--;
 				break;
-			case unquoteSplicingSym: // ,@a
-				if (level === 0) return (y.cdr as Cell).car; // ,@a => a
+			case unquoteSplicingSym:
+				if (level === 0) return (y.cdr as Cell).car;
 				level--;
 				break;
-			case quasiquoteSym: // `a
+			case quasiquoteSym:
 				level++;
 				break;
 		}
@@ -1791,27 +1509,10 @@ function qqExpand2(y: unknown, level: number): unknown {
 	return new Cell(listSym, new Cell(qqExpand0(y, level), null));
 }
 
-//----------------------------------------------------------------------
-
-// The reader's token grammar: whitespace or a single token — a quoted string,
-// quote/quasiquote/unquote sugar, a run of non-delimiter characters, or any
-// other single (delimiter) character. There is no comment syntax: `;` is an
-// ordinary symbol character, since prose outside the top-level forms (see
-// stripProse) is what comments used to be. Exported as a factory, not a shared
-// RegExp, since exec() advances a regex's own lastIndex and callers loop it to
-// exhaustion — sharing one instance across callers (e.g. the LSP tokenizing
-// alongside a running interpreter) would corrupt each other's scan position.
-// Consumers needing (line, char) positions (see apps/lsp/src/server.ts)
-// tokenize with this same grammar rather than re-deriving their own, so the
-// two can't drift apart.
 export function tokenPattern(): RegExp {
 	return /\s+|("(\\.?|.)*?"|,@?|[^()'`~" \t]+|.)/g;
 }
 
-// Index just past the string literal opening at `i`, mirroring the reader's
-// own view of a string: it is bounded by the line it starts on (the tokeniser
-// matches strings per line), so an unterminated one ends at the newline and
-// the reader is left to report it.
 function endOfString(text: string, i: number): number {
 	for (let j = i + 1; j < text.length; j++) {
 		const c = text[j];
@@ -1822,11 +1523,6 @@ function endOfString(text: string, i: number): number {
 	return text.length;
 }
 
-// Index just past the form opening at `i`, or -1 if the form is never closed.
-// What to do with an unclosed one is the caller's call (see the `unclosedForm`
-// hook): it is either half a program or a stray parenthesis in a sentence, and
-// nothing here can tell which. Exported so a host reading an LLM's parentheses
-// scans for the same forms rather than growing a second idea of where one ends.
 export function endOfForm(text: string, i: number): number {
 	let depth = 0;
 	for (let j = i; j < text.length; j++) {
@@ -1843,33 +1539,12 @@ export function endOfForm(text: string, i: number): number {
 	return -1;
 }
 
-// Start of the form opening at `i`, extended back over reader sugar written
-// directly against it (`'(a b)`, `` `(a ,b) ``, `,@(a)`) so a quoted top-level
-// form stays quoted. The sugar has to stand on its own, i.e. follow whitespace
-// — prose punctuation that happens to touch a form ("and then,(+ 1 2)") is
-// prose, not an unquote.
 function startOfForm(text: string, i: number): number {
 	let j = i;
 	while (j > 0 && "'`,@".includes(text[j - 1])) j--;
 	return j === 0 || /\s/.test(text[j - 1]) ? j : i;
 }
 
-/*
- * Blank out everything that is not part of a top-level form: only the
- * parenthesised forms are program text, and the free text around them is
- * prose (this dialect has no comment syntax — prose is the comment). Blanking
- * rather than deleting keeps every form at its original offset, so line
- * numbers in reader and evaluation errors still point into the source the
- * caller passed in.
- *
- * That much is the language, and the core settles it alone: whatever stands
- * outside a parenthesis is not program text, whoever wrote it. The harder
- * question — what to make of a parenthesis the reader cannot use, an unclosed
- * one or a balanced one holding a sentence — is a guess about the writer, so
- * it goes to the `unclosedForm` and `unreadableForm` hooks. Called with no
- * `hooks` (as `checkSyntax` does), nobody answers and every such parenthesis
- * stays program text for the reader to complain about.
- */
 export function stripProse(
 	text: string,
 	hooks?: Hooks,
@@ -1884,11 +1559,6 @@ export function stripProse(
 		}
 		const end = endOfForm(text, i);
 		if (end < 0) {
-			// Never closed. Kept verbatim so the reader reports it — unless a
-			// hook claims it, in which case only THIS parenthesis is prose:
-			// scanning resumes just after it, so a real form further along
-			// ("(roughly …\n(+ 1 2)") is still program text instead of being
-			// swallowed by the stray one.
 			const stray = hooks?.unclosedForm.run(noOpinion, text, i);
 			if (stray !== undefined) {
 				onSkip?.(stray);
@@ -1899,10 +1569,6 @@ export function stripProse(
 			break;
 		}
 		const start = startOfForm(text, i);
-		// Closed, but still not necessarily a program: what balanced parentheses
-		// hold may not parse. Put to the same kind of hook as the unclosed one
-		// above, and for the same reason — whether text PARSES is settled down
-		// here, and only what parses ever reaches `skipForm`.
 		const unreadable = hooks?.unreadableForm.run(noOpinion, text, start, end);
 		if (unreadable !== undefined) {
 			onSkip?.(unreadable);
@@ -1915,24 +1581,11 @@ export function stripProse(
 	return out.join("");
 }
 
-// The reader's own failure, handed back as data (see `SyntaxException`).
 export interface SyntaxFailure {
 	reason: string;
 	line: number;
 }
 
-/*
- * Why the reader cannot parse `source` at all, or undefined if it reads fine.
- *
- * Only a parse failure counts. An EvalException the reader raises about a
- * token it did read — a `#<…>` handle typed back — is a complaint about real
- * code, not a sign that the text was never code, so it is not reported here
- * and is left to be raised again where it matters.
- *
- * Asking this of a fragment is how a caller tells text that is no program from
- * a program with a mistake in it; what that difference MEANS is the caller's
- * (see the `unreadableForm` hook, and src/prose.ts).
- */
 export function readFailure(source: string): SyntaxFailure | undefined {
 	const reader = new Reader();
 	reader.push(source);
@@ -1947,14 +1600,11 @@ export function readFailure(source: string): SyntaxFailure | undefined {
 	return undefined;
 }
 
-// A list of tokens, which works as a reader of Lisp expressions
 export class Reader {
 	private token: unknown;
 	private tokens: string[] = [];
 	private lineNo = 1;
 
-	// Split a text into a list of tokens and append it to this.tokens.
-	// For "(a \n 1)" it appends ["(", "a", "\n", "1", ")", "\n"] to tokens.
 	push(text: string): void {
 		const tokenPat = tokenPattern();
 		for (const line of text.split("\n")) {
@@ -1968,28 +1618,23 @@ export class Reader {
 		}
 	}
 
-	// 1-based line number of the token last consumed.
 	get line(): number {
 		return this.lineNo;
 	}
 
-	// Make this be a clone of the other.
 	copyFrom(other: Reader): void {
 		this.tokens = other.tokens.slice();
 		this.lineNo = other.lineNo;
 	}
 
-	// Make this have no tokens.
 	clear(): void {
 		this.tokens.length = 0;
 	}
 
-	// Does this have no tokens?
 	isEmpty(): boolean {
 		return this.tokens.every((t: string) => t === "\n");
 	}
 
-	// Read a Lisp expression; throw EndOfFile if this.tokens run out.
 	read(): unknown {
 		try {
 			this.readToken();
@@ -2004,19 +1649,19 @@ export class Reader {
 
 	private parseExpression(): unknown {
 		switch (this.token) {
-			case leftParenSym: // (a b c)
+			case leftParenSym:
 				this.readToken();
 				return this.parseListBody();
-			case singleQuoteSym: // 'a => (quote a)
+			case singleQuoteSym:
 				this.readToken();
 				return new Cell(quoteSym, new Cell(this.parseExpression(), null));
-			case backQuoteSym: // `a => (quasiquote a)
+			case backQuoteSym:
 				this.readToken();
 				return new Cell(quasiquoteSym, new Cell(this.parseExpression(), null));
-			case commaSym: // ,a => (unquote a)
+			case commaSym:
 				this.readToken();
 				return new Cell(unquoteSym, new Cell(this.parseExpression(), null));
-			case commaAtSym: // ,@a => (unquote-splicing a)
+			case commaAtSym:
 				this.readToken();
 				return new Cell(
 					unquoteSplicingSym,
@@ -2038,7 +1683,6 @@ export class Reader {
 			this.readToken();
 			let e2: unknown;
 			if (this.token === dotSym) {
-				// (a . b)
 				this.readToken();
 				e2 = this.parseExpression();
 				this.readToken();
@@ -2051,7 +1695,6 @@ export class Reader {
 		}
 	}
 
-	// Read the next token and set it to this.token.
 	private readToken(): void {
 		for (;;) {
 			const t = this.tokens.shift();
@@ -2060,7 +1703,6 @@ export class Reader {
 			} else if (t === "\n") {
 				this.lineNo += 1;
 			} else if (t === "+" || t === "-") {
-				// N.B. BigInt("+") and BigInt("-") return 0n in Safari.
 				this.token = newSym(t);
 				return;
 			} else {
@@ -2082,16 +1724,7 @@ export class Reader {
 				else if (t === "nil") this.token = null;
 				else if (t === "t") this.token = true;
 				else if (t.length > 1 && t[0] === ":")
-					// Self-evaluating keyword literal, e.g. :query
 					this.token = newLispKeyword(t.slice(1));
-				// `#<…>` is how every value that cannot be read back prints —
-				// a job, a secret, a closure, a built-in. Typing one is always
-				// a retyped printout (`(await #<job load-mcp:linear 8d12…>)`),
-				// and left as an ordinary symbol it fails one step later as
-				// `void variable: #<job`, which says nothing about the real
-				// mistake. An EvalException rather than a FormatException
-				// because that is the error every layer above already renders
-				// inline and reports as a syntax error.
 				else if (t.startsWith("#<"))
 					throw new EvalException(
 						"a #<…> form is a printed handle, not something that can be read back; use the name the REPL reported the value under",
@@ -2116,9 +1749,6 @@ export class Reader {
 	};
 }
 
-//----------------------------------------------------------------------
-
-// Mapping from a quote symbol to its string representation
 const quotes: { [key: string]: string } = {
 	[quoteSym.name]: "'",
 	[quasiquoteSym.name]: "`",
@@ -2126,7 +1756,6 @@ const quotes: { [key: string]: string } = {
 	[unquoteSplicingSym.name]: ",@",
 };
 
-// Make a string representation of Lisp expression
 export function str(
 	x: unknown,
 	quoteString = true,
@@ -2192,18 +1821,6 @@ export function str(
 	}
 }
 
-/*
- * The text `(echo x...)` renders: each argument, space-separated. The newline
- * `echo` ends on is added by the writer, not counted here — the compaction
- * extension measures this string in words and characters, and an offset that
- * included a trailing newline would point one past the end of the value.
- *
- * Exported because that extension overrides `echo` to window and search the
- * text, and an offset only means anything if both versions count the same
- * string. Strings render raw (`quoteString` false) so a rendered document keeps
- * its newlines instead of becoming one `\n`-escaped line; strings nested inside
- * a list still print quoted, as `str` always does.
- */
 export function echoText(args: List): string {
 	const parts: string[] = [];
 	for (let p = args; p !== null; p = p.cdr as List)
@@ -2211,10 +1828,9 @@ export function echoText(args: List): string {
 	return parts.join(" ");
 }
 
-// Make a string representation of list, omitting its "(" and ")".
 function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 	if (printed === undefined) printed = [];
-	if (count === undefined) count = 4; // threshold of ellipsis for circular lists
+	if (count === undefined) count = 4;
 	const s: string[] = [];
 	let y: unknown;
 	for (y = x; y instanceof Cell; y = y.cdr) {
@@ -2224,7 +1840,7 @@ function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 		} else {
 			count--;
 			if (count < 0) {
-				s.push("..."); // an ellipsis for a circular list
+				s.push("...");
 				return s.join(" ");
 			}
 		}
@@ -2241,14 +1857,6 @@ function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 	return s.join(" ");
 }
 
-//----------------------------------------------------------------------
-
-// Evaluate a single already-read top-level expression. A stray break/return
-// loop signal (no enclosing while/dolist/dotimes) is converted into an
-// ordinary EvalException here rather than left as an unrecognized exception
-// type — every top-level entry point (run(), and any REPL that reads one
-// expression at a time and evals it directly) should go through this rather
-// than calling interp.eval() itself.
 export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 	try {
 		return interp.eval(exp, null);
@@ -2257,16 +1865,6 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 			ex instanceof LoopSignal
 				? new EvalException("break/return used outside of a loop", null, false)
 				: ex;
-		/*
-		 * Report it, then raise it as before.
-		 *
-		 * Throwing is how the language reports a fatal error and is what `try`
-		 * catches, so that does not change. Emitting as well is what lets a host
-		 * read errors off a channel like everything else the interpreter says,
-		 * instead of catching them and re-rendering into the same string the
-		 * output went to — which is what forced `MemoryRepl` to reassemble the
-		 * two halves by hand.
-		 */
 		if (failure instanceof EvalException)
 			interp.channels.emit({
 				channel: MODEL,
@@ -2278,21 +1876,8 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 	}
 }
 
-// Evaluate a program: every top-level form in `text`, in order, returning the
-// value of the last one. Text outside those forms is prose and is ignored (see
-// stripProse), so a program with no form at all evaluates to Unspecified —
-// "nothing to show" — rather than to a value a REPL would echo.
 export function run(interp: Interp, text: string): unknown {
-	// Consulted twice over: on the text, for the parentheses no form can be read
-	// out of, then on each form that was (see src/hooks.ts). There is no flag
-	// for this — whether a stray parenthesis is English is settled by how the
-	// interp was composed, not by each caller. An interp with no reader
-	// extension has empty chains, so every one of these answers "no opinion"
-	// and the text is program text throughout.
 	const { hooks } = interp;
-	// A skip is a warning about a program that ran anyway, so it goes to the
-	// model — it is the only sign that something the caller wrote was not run,
-	// and the writer of that text is who needs to hear it.
 	const skipped = (what: string) =>
 		interp.channels.emit({
 			channel: MODEL,
@@ -2314,16 +1899,11 @@ export function run(interp: Interp, text: string): unknown {
 	return result;
 }
 
-// A syntax error found by checkSyntax, with the 1-based line it was found at.
 export interface SyntaxError_ {
 	message: string;
 	line: number;
 }
 
-// Parse (but do not evaluate) a whole program, returning any syntax errors.
-// Stops at the first error since the token stream is unreliable past it. Only
-// the top-level forms are parsed — prose around them is not program text, so
-// it can never be a syntax error.
 export function checkSyntax(text: string): SyntaxError_[] {
 	const tokens = new Reader();
 	tokens.push(stripProse(text));
@@ -2346,7 +1926,6 @@ export function checkSyntax(text: string): SyntaxError_[] {
 	return [];
 }
 
-// Lisp initialization script
 export const prelude = `
 (setq defmacro
       (macro (name args &rest body)

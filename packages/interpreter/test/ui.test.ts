@@ -11,14 +11,6 @@ import {
 	uiExtension,
 } from "../src/ui.ts";
 
-/*
- * What the extension drew and said, off its channel.
- *
- * The surface no longer holds either — both go out on `ui` as they happen (a
- * host collects them per step, see `MemoryRepl.capture`). This is that host,
- * reduced to what the tests assert on: the last view drawn, and the messages
- * joined the way one step's sends are.
- */
 function collector(interp: Interp) {
 	let view: UiNode | undefined;
 	let messages: string[] = [];
@@ -52,8 +44,6 @@ function fresh(): {
 	return { interp, surface, ui: collector(interp) };
 }
 
-// The tree as the frontend receives it — the only shape any of this is
-// contracted on.
 function render(code: string): {
 	view: UiValue | undefined;
 	surface: UiSurface;
@@ -94,8 +84,6 @@ describe("building a view", () => {
 		});
 	});
 
-	// The model is told the render happened and nothing more: the widget is for
-	// the user, and echoing it back would spend the context drawing it saved.
 	it("reports only a one-line summary of what it drew", () => {
 		const { interp } = fresh();
 		expect(
@@ -172,8 +160,6 @@ describe("the display widgets", () => {
 		});
 	});
 
-	// The frontend maps a tone to one colour, so an unknown one would draw as no
-	// colour at all — a badge that silently lost its meaning.
 	it("rejects a tone the frontend cannot draw", () => {
 		const { interp } = fresh();
 		expect(() => run(interp, '(ui/badge "open" :tone "chartreuse")')).toThrow(
@@ -181,8 +167,6 @@ describe("the display widgets", () => {
 		);
 	});
 
-	// The model will reach for `(ui/kpi "open" (length rows))`, so a number has
-	// to arrive as the digits and not as a Lisp printed form.
 	it("renders a kpi's value as text, whatever it was", () => {
 		const { view } = render('(ui/render (ui/kpi "open" (+ 20 7)))');
 		expect(view).toEqual({
@@ -223,7 +207,6 @@ describe("the display widgets", () => {
 		expect(
 			render('(ui/render (ui/checkbox :name "o" :checked nil))').view,
 		).toMatchObject({ props: { checked: false } });
-		// Absent, not false: the frontend can tell "no default" from "off".
 		expect(render('(ui/render (ui/checkbox :name "o"))').view).toEqual({
 			tag: "checkbox",
 			props: { name: "o" },
@@ -250,8 +233,6 @@ describe("actions", () => {
 		);
 	});
 
-	// The whole point: the click runs in the same interpreter, so it sees — and
-	// changes — everything the turn that drew the widget built up.
 	it("runs the handler against the live session", () => {
 		const { surface, interp } = render(`
 			(setq clicks 0)
@@ -271,8 +252,6 @@ describe("actions", () => {
 		expect(str(run(interp, "(identity seen)"))).toBe('"auth"');
 	});
 
-	// `(lambda () …)` is the natural way to write a button that needs no input,
-	// and it must not become an arity error just because a form was submitted.
 	it("calls a zero-argument handler with no arguments", () => {
 		const { surface, interp } = render(`
 			(setq hits 0)
@@ -300,8 +279,6 @@ describe("actions", () => {
 		expect(() => surface.invoke("a99", {})).toThrow(/no such ui action/);
 	});
 
-	// A select or a checkbox that acts the moment it is used is how a view gets a
-	// filter with no submit button — and it is still one action id on the wire.
 	it("registers an :on-change as an action, like a button's", () => {
 		const { view } = render(`
 			(ui/render (ui/select '("7" "30") :name "d"
@@ -324,8 +301,6 @@ describe("actions", () => {
 		});
 	});
 
-	// The whole reason a checkbox sends a boolean: `""` and `"false"` are both
-	// TRUE in Lisp, so a string-valued tick box could not be tested at all.
 	it("hands a checkbox's value over as a boolean a handler can test", () => {
 		const { surface, interp } = render(`
 			(ui/render (ui/form (lambda (values)
@@ -338,8 +313,6 @@ describe("actions", () => {
 		expect(str(run(interp, "(identity seen)"))).toBe('"off"');
 	});
 
-	// `summarize` reports the live action count to the model, so a prop it does
-	// not know about would under-report what the view can do.
 	it("counts an :on-change in the render summary", () => {
 		const { interp } = fresh();
 		expect(
@@ -353,7 +326,6 @@ describe("actions", () => {
 		).toBe('"rendered row, 3 elements, 2 actions"');
 	});
 
-	// A handler is a step of the REPL like any other, so `echo` still writes.
 	it("lets a handler echo", () => {
 		const { surface } = render(
 			'(ui/render (ui/button "say" (lambda () (echo "from the click"))))',
@@ -390,7 +362,6 @@ describe("handing a turn back to the agent", () => {
 		expect(ui.takeMessage()).toBeUndefined();
 	});
 
-	// One click is one thing the user did, so it becomes one turn.
 	it("joins several sends in a handler into a single message", () => {
 		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "first") (ui/send "second"))))',
@@ -410,8 +381,6 @@ describe("handing a turn back to the agent", () => {
 		expect(ui.takeMessage()).toBe("do it");
 	});
 
-	// A sent message becomes a user turn, so it stays in the model's context on
-	// every later turn — the one place a runaway handler would keep costing.
 	it("caps a message rather than letting a handler post an essay", () => {
 		const { surface, ui } = render(`
 			(defun wide (n) (let ((s "")) (dotimes (i n) (setq s (concat s "abcdefghij"))) s))

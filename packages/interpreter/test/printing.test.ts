@@ -30,8 +30,6 @@ describe("echo", () => {
 		).toBe("a\nb\nc\n");
 	});
 
-	// A status is a keyword, so printing one must not need `(list …)` around
-	// it: a keyword with no value after it cannot be an option.
 	it("prints a trailing keyword as a value", () => {
 		expect(evWithOutput("(echo :pending)").output).toBe(":pending\n");
 		expect(evWithOutput('(echo "status:" :pending)').output).toBe(
@@ -44,17 +42,12 @@ describe("echo", () => {
 		expect(() => evWithOutput('(echo "x" :ofset 2)')).toThrow(/unknown option/);
 	});
 
-	// The other half of that trade: a keyword carrying a value IS an option,
-	// misspelled or not, which is what keeps `:ofset 2` an error instead of
-	// two words printed after the value. So a keyword mid-list still reads as
-	// one — put it last, or wrap it.
 	it("still reads a keyword with a value after it as an option", () => {
 		expect(() => evWithOutput('(echo :pending "and counting")')).toThrow(
 			/unknown option/,
 		);
 	});
 
-	// A known option at the end is a forgotten value, not something to print.
 	it("still reports a known option left without its value", () => {
 		expect(() => evWithOutput("(echo :offset)")).toThrow(
 			/odd-length keyword list/,
@@ -127,7 +120,6 @@ describe("printer: nested and shared structure", () => {
 		expect(ev("'(1 (2 (3 (4 (5)))))")).toBe("(1 (2 (3 (4 (5)))))");
 	});
 
-	// Building a cycle and printing it must terminate (ellipsis), not hang.
 	it("prints circular lists with an ellipsis instead of looping forever", () => {
 		const out = ev("(setq l (list 1 2 3)) (rplacd (cddr l) l) l");
 		expect(out).toContain("...");

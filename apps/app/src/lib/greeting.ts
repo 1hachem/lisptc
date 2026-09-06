@@ -1,17 +1,3 @@
-/**
- * The line the agent opens an empty transcript with.
- *
- * It is written here and not by the model: a greeting costs a round trip and a
- * cache warm-up, and it would be the one turn in the conversation that says
- * nothing. So it is local, instant, and free — and it can read the clock, which
- * the agent cannot.
- *
- * Pure, and the clock and the die are both arguments: that is what makes it
- * testable, and it is also what keeps the caller honest about WHERE it is called
- * from — the server and the browser disagree on both.
- */
-
-/** Local hour to a part of the day. The boundaries are ordinary, not measured. */
 type Moment = "morning" | "afternoon" | "evening" | "night";
 
 function momentOf(hour: number): Moment {
@@ -50,6 +36,5 @@ const LINES: Record<Moment, string[]> = {
 
 export function pickGreeting(now: Date, roll: number = Math.random()): string {
 	const lines = LINES[momentOf(now.getHours())];
-	// `roll` is in [0, 1) — the modulo is there for the caller who hands over a 1
 	return lines[Math.floor(roll * lines.length) % lines.length];
 }

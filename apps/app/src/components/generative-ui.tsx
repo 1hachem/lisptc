@@ -1,28 +1,3 @@
-/**
- * Drawing what the agent rendered, and driving it.
- *
- * A step that called `(ui/render …)` sends its widget tree along with the
- * REPL's text output (`additional_kwargs.ui`). The tree is data: tags, props,
- * and — where a button or a form was — an opaque `action` id standing in for a
- * Lisp closure that never left the server.
- *
- * Pressing one posts that id back to `/api/ui-action`, where it runs in the
- * thread's live interpreter and answers with a new tree, which replaces this one
- * in place. No model turn happens, so the exchange costs nothing and leaves no
- * mark on the transcript: what the reader sees change is the widget, not the
- * conversation.
- *
- * Unless the handler called `ui/send`. Then the reply also carries a `message`,
- * which goes into the composer's own `send` — so it lands in the transcript as a
- * user turn and the agent answers it, exactly as if the reader had typed it. That
- * is the one path by which a click costs a model turn, and the handler chose it.
- *
- * Field values ride on the native form. Each `ui/input` is an uncontrolled
- * `<input name=…>` inside a real `<form>`, so "the fields of the form this
- * control is in" is answered by `FormData` rather than by state we would have to
- * keep in step with a tree the server keeps replacing.
- */
-
 import { useState } from "react";
 import { API_URL, apiHeaders } from "../lib/api.ts";
 import { useChatSession } from "../lib/chat.tsx";
@@ -34,7 +9,6 @@ export interface UiNode {
 	children: UiNode[];
 }
 
-/** A tool message's `ui` payload, or undefined if the step rendered nothing. */
 export function toUiNode(value: unknown): UiNode | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const node = value as Partial<UiNode>;
@@ -45,7 +19,6 @@ interface ActionResponse {
 	output?: string;
 	error?: boolean;
 	view?: unknown;
-	/** a `ui/send` from the handler: post it as a user turn */
 	message?: string;
 }
 
@@ -59,22 +32,14 @@ function strings(props: Record<string, unknown>, key: string): string[] {
 	return Array.isArray(value) ? value.map((v) => String(v ?? "")) : [];
 }
 
-/**
- * What a field is worth to a handler. Text fields are strings; a checkbox is a
- * real boolean, because the server maps `false` to Lisp `nil` and a handler can
- * then just test the value — where the string "false" would be TRUE.
- */
 type FieldValue = string | boolean;
 
-// The fields of the form this control sits in, empty for a control outside one.
 function formValues(el: HTMLElement): Record<string, FieldValue> {
 	const form = el.closest("form");
 	if (!form) return {};
 	const out: Record<string, FieldValue> = {};
 	for (const [name, value] of new FormData(form).entries())
 		out[name] = String(value);
-	// FormData omits an unticked box entirely, so without this pass a checkbox
-	// reads as absent rather than as false.
 	for (const box of form.querySelectorAll<HTMLInputElement>(
 		'input[type="checkbox"]',
 	))
@@ -82,9 +47,6 @@ function formValues(el: HTMLElement): Record<string, FieldValue> {
 	return out;
 }
 
-// What a change on this control should send: its form's fields, plus its own —
-// which is the entire payload when it sits outside a form, where `formValues`
-// finds nothing to read.
 function controlValues(
 	el: HTMLInputElement | HTMLSelectElement,
 ): Record<string, FieldValue> {
@@ -99,8 +61,6 @@ function controlValues(
 
 type Fire = (action: string, values: Record<string, FieldValue>) => void;
 
-// A badge's tone is one of a closed set the server validates, so an unknown one
-// only arrives from a version skew — draw it plain rather than not at all.
 const TONE_CLASSES: Record<string, string> = {
 	ok: "border-green/50 text-green",
 	warn: "border-yellow/50 text-yellow",
@@ -109,7 +69,6 @@ const TONE_CLASSES: Record<string, string> = {
 	muted: "border-dim/50 text-dim",
 };
 
-// Fire a control's `:on-change`, if the server gave it one.
 function changed(
 	node: UiNode,
 	fire: Fire,
@@ -129,8 +88,6 @@ function Node({
 	busy: boolean;
 }) {
 	const kids = node.children.map((child, i) => (
-		// Position is the only identity a widget tree has: the server rebuilds it
-		// whole on every render, so there is no stable id to key on.
 		// biome-ignore lint/suspicious/noArrayIndexKey: no stable id in the tree
 		<Node key={i} node={child} fire={fire} busy={busy} />
 	));
@@ -327,8 +284,6 @@ function Table({ node }: { node: UiNode }) {
 
 export function GenerativeUI({ node }: { node: UiNode }) {
 	const { threadId, send } = useChatSession();
-	// The tree the server last sent. Seeded from the message and then owned
-	// locally, because every click answers with a whole new one.
 	const [view, setView] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
@@ -354,8 +309,6 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 				if (next) setView(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
-				// After the view, so the transcript grows under a widget already
-				// showing whatever the handler rendered on its way out.
 				if (data.message) send(data.message);
 			} catch (ex) {
 				setFailed(true);

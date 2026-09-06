@@ -6,8 +6,6 @@ const YEAR_SECONDS = 60 * 60 * 24 * 365;
 export const SIDEBAR_COOKIE = "ui.sidebar";
 export const PANEL_COOKIE = "ui.panel";
 
-// Read on both sides so SSR and the first client render agree: the server sees
-// the request's Cookie header, the browser its own jar.
 const readCookie = createIsomorphicFn()
 	.server((name: string) => getCookie(name))
 	.client((name: string) =>

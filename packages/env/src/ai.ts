@@ -1,8 +1,6 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
-// AI provider credentials (Fireworks, OpenRouter, DigitalOcean) + local
-// llama.cpp server config.
 export const aiEnv = createEnv({
 	server: {
 		FIREWORKS_API_KEY: z.string().optional(),

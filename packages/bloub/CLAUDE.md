@@ -17,10 +17,12 @@ pnpm knip                             # dead code, at the root — included too
 ```
 
 Style is the repository's, applied by the repository's tools: **tabs, double
-quotes, semicolons**, and comments in French. `pnpm format` at the root rewrites
-this package like any other — it is in `biome.json` and in `knip.json`, and it
-stays there. The package once had its own style (2 spaces, single quotes, no
-semicolons); nothing of that survives except the French.
+quotes, semicolons**, and **no comments**. `pnpm format` at the root rewrites this
+package like any other — it is in `biome.json` and in `knip.json`, and it stays
+there. The package once had its own style (2 spaces, single quotes, no semicolons)
+and its comments were in French; none of that survives. What those comments held
+is in [docs/](docs/), which is where a reason for a number or a shape belongs —
+the code carries none.
 
 Two rule carve-outs sit in `biome.json`'s `overrides`, and they are about rules,
 not files — every file here is still formatted and still linted:
@@ -31,7 +33,9 @@ not files — every file here is still formatted and still linted:
   would mean anything.
 - The rest is answered in place, with a `biome-ignore` carrying the reason —
   `useExhaustiveDependencies` on the four hooks that read through refs by design,
-  `noArrayIndexKey` where the index IS the identity (eye 0 is the left eye).
+  `noArrayIndexKey` where the index IS the identity (eye 0 is the left eye). These
+  are the only comments in the package: they are directives biome reads, not
+  prose.
 
 What knip cannot see is an export used only by its own test, and `cycles.ts` holds
 five in exactly that position (`parseCycles`, `uniqueName`, `nextCycleId`,
@@ -183,6 +187,7 @@ obtained.
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | The engine, morphing, mask eyes, `Look` |
 | [docs/measurements.md](docs/measurements.md) | What was measured, the traps, regenerating `profiles.ts` |
+| [docs/hosting.md](docs/hosting.md) | Gaze scripts, playback and the cursor, storage bounds, the render frame |
 
 The README is for someone arriving at the package: what it is and the component's
 API. Don't duplicate it here.

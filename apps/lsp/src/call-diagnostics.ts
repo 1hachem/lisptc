@@ -1,13 +1,3 @@
-// Static call-site diagnostics: flags two kinds of call error without
-// evaluating the buffer:
-//  - a keyword-call binding missing a required `:arg`, mirroring the
-//    runtime checks in packages/interpreter/src/mcp.ts (an MCP tool's
-//    `validate`, or a plist built-in's own argument parsing, e.g.
-//    connConfigFromArgs for load-mcp).
-//  - a positional binding (built-ins, macros, user defuns) called with the
-//    wrong number of arguments, mirroring Func.makeFrame's "arity not
-//    matched" runtime check.
-
 import type { Arity, DocArg } from "@repo/interpreter";
 import {
 	type Diagnostic,
@@ -20,23 +10,16 @@ import {
 	tokenizeWithPositions,
 } from "./tokenize.ts";
 
-// A binding's call-site shape: `args` for keyword-call bindings, `arity` for
-// everything else callable positionally — see Interp.arityOf. At most one is
-// ever set for a given name.
 export interface CallDoc {
 	args?: DocArg[];
 	arity?: Arity;
 }
 
-// How many arguments a call "expected" reads as, given a min/max arity.
 export function expectedArgs({ min, max }: Arity): string {
 	if (max === undefined) return `at least ${min}`;
 	return min === max ? `${min}` : `${min}-${max}`;
 }
 
-// Pure: given the calls found in a buffer and each call's resolved doc,
-// the diagnostics for missing required `:keyword`s or wrong positional
-// argument counts.
 export function diagnosticsForCalls(
 	calls: Call[],
 	docByName: Map<string, CallDoc>,
@@ -51,13 +34,6 @@ export function diagnosticsForCalls(
 			},
 		};
 		const { args, arity } = docByName.get(call.name) ?? {};
-		// A binding with BOTH `args` and `arity` (only load-mcp, currently) also
-		// accepts a bare positional call as an alternative to its `:key` plist
-		// form (e.g. `(load-mcp "playwright")`) — that shape should skip the
-		// required-keyword check and fall to the arity check below instead. A
-		// keyword-only binding (args, no arity — every real MCP tool) has no
-		// such alternative, so a bare positional call to one is still checked
-		// as a keyword call rather than silently passing.
 		const bareFormOfHybrid =
 			arity !== undefined && call.keywords.size === 0 && call.argCount > 0;
 		if (args?.length && !bareFormOfHybrid) {
@@ -88,9 +64,6 @@ export function diagnosticsForCalls(
 	return diagnostics;
 }
 
-// Tokenizes/parses `text`, resolves each call's doc via `resolve`, and
-// returns diagnostics. `resolve` is injected so callers can hit a live
-// session/interpreter (see server.ts's callDocFor) or a canned map (tests).
 export async function callDiagnostics(
 	text: string,
 	resolve: (name: string) => Promise<CallDoc>,

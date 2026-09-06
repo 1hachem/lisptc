@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ev } from "./helpers.ts";
 
-// Integers are exact (BigInt); floats are inexact (Number) and print with a
-// trailing ".0" when integer-valued. These tests pin down that contract and
-// the mixed-arithmetic coercion rules.
 describe("integer arithmetic (exact / bigint)", () => {
 	it("adds and folds", () => {
 		expect(ev("(+ 1 2)")).toBe("3");
@@ -90,7 +87,7 @@ describe("comparisons and numeric equality", () => {
 
 	it("eq is identity, eql is numeric value equality", () => {
 		expect(ev("(eq 1 1)")).toBe("t");
-		expect(ev("(eq 1 1.0)")).toBe("nil"); // bigint vs number: not identical
+		expect(ev("(eq 1 1.0)")).toBe("nil");
 		expect(ev("(eql 1 1.0)")).toBe("t");
 	});
 

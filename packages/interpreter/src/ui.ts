@@ -1,35 +1,3 @@
-/*
- * Generative UI for Lisptc.
- *
- * The compression extension's bargain is that the REPL describes values instead
- * of printing them, and `echo` is the one way anything reaches the screen. This
- * extension adds the other half: a way to put a value on the screen as an
- * *interactive* thing rather than as text.
- *
- * `(ui/render view)` publishes a widget tree the host serialises to JSON and a
- * frontend draws. The tree may carry Lisp callables — a button's action, a
- * form's submit handler — which never leave the interpreter: each one is
- * registered here under an opaque id (`a1`, `a2`, …) and only the id is
- * serialised. When the user clicks, the host calls `invoke` with that id, the
- * closure runs in this same interpreter with all its state intact, and whatever
- * it renders becomes the new view.
- *
- * So the loop is: the model writes Lisp that BUILDS a UI, the user drives that
- * UI, and driving it runs more Lisp — without another model turn. That is the
- * point: an interaction the model already anticipated costs no tokens at all.
- *
- * `(ui/send text)` is the way back out of that arrangement. A handler that hits
- * something it cannot answer on its own — the user typed a request rather than a
- * filter, the choice needs judgement — puts a message in the conversation and the
- * agent takes the next turn. The widget's actions are the cheap path; `ui/send`
- * is the escape hatch to the expensive one, chosen by the handler at click time
- * rather than by the model in advance.
- *
- * Like the compression and secrets extensions this one is opt-in and standalone
- * (no cross-imports between extensions). The `UiSurface` is created by the host
- * per interpreter — the handlers close over that interpreter's environment, so
- * they must die with it, exactly as the `Compressor`'s counters do.
- */
 import { z } from "zod";
 import type { Channels, Diagnostic } from "./channels.ts";
 import {
@@ -49,63 +17,25 @@ import {
 } from "./lisp.ts";
 import { plistOptions, splitKeywordArgs } from "./plist.ts";
 
-// Actions kept live at once. A handler is only reachable from a view the user
-// can still see, but nothing tells us when a view leaves the screen, so the map
-// would otherwise grow for the life of the interpreter. Oldest ids go first;
-// clicking a button in a very old view reports a dead action rather than
-// silently doing nothing.
 const MAX_HANDLERS = 500;
 
-// Rows `ui/table` will draw. A table is for looking at, not for paging through:
-// past this the view is unreadable and the JSON is large.
 const MAX_ROWS = 200;
 
-// Characters a click may send back into the conversation. A sent message becomes
-// a user turn, so it lands in the model's context and stays there — the one place
-// in this extension where a runaway handler would cost real tokens on every
-// subsequent turn. Roughly the echo cap's worth of text.
 const MAX_MESSAGE_CHARS = 4000;
 
-/*
- * The channel a drawn view and a sent message go out on.
- *
- * Its own name rather than `user`, because what this extension produces is not
- * text: a host that can draw subscribes here and gets a tree, and one that
- * cannot (the CLI, the MCP server) never subscribes and is unaffected. The core
- * knows nothing about it — a channel is not registered, only emitted on.
- */
 export const UI = "ui";
 
-/*
- * What arrives on that channel, in the `value` of the diagnostic.
- *
- * Two things, discriminated, because a click can do both: draw the next view
- * AND hand the conversation a message. One channel rather than two keeps the
- * order between them, which is what a host replaying a step needs.
- */
 export type UiEvent =
 	| { kind: "view"; node: UiNode }
 	| { kind: "message"; text: string };
 
-/*
- * The messages one step sent, as the single turn they become.
- *
- * Several `ui/send` calls in one handler join into one message rather than
- * becoming several turns: a click is one thing the user did, and answering it
- * as a conversation of its own would read as the widget talking to itself.
- * The joining lives here, with the cap it has to respect, rather than in each
- * host that collects the channel.
- */
 export function joinMessages(parts: readonly string[]): string | undefined {
 	if (parts.length === 0) return undefined;
 	const text = parts.join("\n\n");
 	if (text.length <= MAX_MESSAGE_CHARS) return text;
-	// Truncated rather than refused: the click already happened, and a turn
-	// that says most of what was meant beats one that says nothing.
 	return `${text.slice(0, MAX_MESSAGE_CHARS)}\n… (message truncated)`;
 }
 
-/** A JSON-serialisable value, which is all a widget tree may contain. */
 export type UiValue =
 	| string
 	| number
@@ -114,16 +44,12 @@ export type UiValue =
 	| UiValue[]
 	| { [key: string]: UiValue };
 
-/** One widget. `props.action` holds a handler id, never a closure. */
 export interface UiNode {
 	tag: string;
 	props: Record<string, UiValue>;
 	children: UiNode[];
 }
 
-// A widget as a Lisp value. Opaque on purpose: the model builds trees with the
-// constructors and never picks them apart, so there is nothing to gain from
-// making it an alist the agent could half-edit into an invalid shape.
 class UiElement implements UiNode {
 	constructor(
 		readonly tag: string,
@@ -136,21 +62,12 @@ class UiElement implements UiNode {
 	}
 }
 
-/*
- * The rendered view and the live action handlers for one interpreter.
- *
- * Held by the host (the REPL), not by the interpreter: the host is what reads
- * `takeView()` after an eval and what routes a click back to `invoke()`.
- */
 export class UiSurface {
 	private readonly handlers = new Map<string, unknown>();
 	private interp: Interp | undefined;
 	private channels: Channels | undefined;
 	private seq = 0;
 
-	// Called by the extension as it installs itself, so `invoke` has an
-	// interpreter to run the handler in and `render`/`send` have somewhere to
-	// put what they produce.
 	bind(interp: Interp): void {
 		this.interp = interp;
 		this.channels = interp.channels;
@@ -161,7 +78,6 @@ export class UiSurface {
 		this.channels?.emit({ channel: UI, text, value: event } as Diagnostic);
 	}
 
-	/** Register a callable and return the id that stands for it on the wire. */
 	action(fn: unknown): string {
 		if (callableArity(fn) === undefined)
 			throw new EvalException("function expected as a ui action", fn);
@@ -187,14 +103,6 @@ export class UiSurface {
 		return this.handlers.has(id);
 	}
 
-	/*
-	 * Run the handler behind `id` with the submitted field values.
-	 *
-	 * The values are passed only to a handler that takes an argument, so
-	 * `(lambda () …)` — the natural way to write a button that needs no input —
-	 * is not an arity error. Anything the handler renders is picked up by the
-	 * caller through `takeView`.
-	 */
 	invoke(id: string, values: Record<string, unknown>): unknown {
 		const fn = this.handlers.get(id);
 		if (fn === undefined)
@@ -204,8 +112,6 @@ export class UiSurface {
 			throw new EvalException("ui surface is not bound to an interpreter", id);
 		const arity = callableArity(fn);
 		const takesValues = arity !== undefined && (arity.max ?? 1) > 0;
-		// Quoted, because a call form's arguments are evaluated: the alist would
-		// otherwise be read as a function call on its first pair.
 		const args: List = takesValues
 			? new Cell(quoted(jsonToLisp(values)), null)
 			: null;
@@ -213,7 +119,6 @@ export class UiSurface {
 	}
 }
 
-// `(quote x)`, so `x` reaches a callee as data rather than as an expression.
 function quoted(x: unknown): unknown {
 	return new Cell(newSym("quote"), new Cell(x, null));
 }
@@ -223,7 +128,6 @@ const zString = z.custom<string>(
 	"string expected",
 );
 
-// The elements of a proper list, or undefined for anything that is not one.
 function listElements(x: unknown): unknown[] | undefined {
 	if (x === null) return [];
 	if (!(x instanceof Cell)) return undefined;
@@ -232,9 +136,6 @@ function listElements(x: unknown): unknown[] | undefined {
 	return out;
 }
 
-// A Lisp value as JSON for the wire. Deliberately narrower than the MCP layer's
-// conversion: a widget tree holds display data, so anything exotic is rendered
-// with `str` rather than given a structural encoding the frontend cannot draw.
 function toJson(x: unknown): UiValue {
 	if (x === null || x === undefined) return null;
 	if (x === true) return true;
@@ -244,8 +145,6 @@ function toJson(x: unknown): UiValue {
 	if (x instanceof UiElement) return nodeToJson(x);
 	const items = listElements(x);
 	if (items !== undefined) {
-		// An alist — every element a (string . value) pair — is an object; any
-		// other list is an array.
 		if (
 			items.length > 0 &&
 			items.every((i) => i instanceof Cell && typeof i.car === "string")
@@ -260,7 +159,6 @@ function toJson(x: unknown): UiValue {
 	return str(x, false);
 }
 
-/** A widget tree as plain JSON, ready to serialise to a frontend. */
 export function nodeToJson(node: UiNode): UiValue {
 	return {
 		tag: node.tag,
@@ -269,9 +167,6 @@ export function nodeToJson(node: UiNode): UiValue {
 	};
 }
 
-// Widget children: every non-keyword argument, each of which must be a widget.
-// A bare string is lifted into `ui/text`, since writing `(ui/stack "hello")` is
-// the obvious thing to reach for and failing it teaches nothing.
 function childNodes(values: List): UiNode[] {
 	const out: UiNode[] = [];
 	for (const child of listElements(values) ?? []) {
@@ -295,8 +190,6 @@ function stringOption(
 	return value;
 }
 
-// Only the options actually given become props, so the frontend can tell "no
-// placeholder" from "an empty placeholder" without a sentinel.
 function withOptions(
 	props: Record<string, UiValue>,
 	opts: Map<string, unknown>,
@@ -309,18 +202,10 @@ function withOptions(
 	return props;
 }
 
-// Props that name a live handler. `summarize` counts these, so a new
-// action-carrying prop has to be listed here or the model is told a view holds
-// fewer live actions than it does.
 const ACTION_PROPS = ["action", "on-change"] as const;
 
-// Tones a badge may carry. A closed set because the frontend maps each to one
-// colour: an unknown tone would draw as no colour at all, and a badge that
-// silently loses its meaning is worse than an error at the call site.
 const TONES = ["ok", "warn", "bad", "info", "muted"] as const;
 
-// A flag option, read with Lisp truthiness: `:checked nil` is false, anything
-// else present is true.
 function booleanOption(
 	opts: Map<string, unknown>,
 	name: string,
@@ -329,9 +214,6 @@ function booleanOption(
 	return opts.get(name) !== null;
 }
 
-// An option holding a callable, registered so only its id reaches the wire.
-// `surface.action` rejects a non-callable, so the mistake is reported where it
-// was made rather than on the click that cannot run.
 function actionOption(
 	surface: UiSurface,
 	opts: Map<string, unknown>,
@@ -341,8 +223,6 @@ function actionOption(
 	return surface.action(opts.get(name));
 }
 
-// How many widgets and how many live actions a tree holds — the whole of what
-// the model is told about a view it just rendered.
 function summarize(node: UiNode): { elements: number; actions: number } {
 	let elements = 1;
 	let actions = ACTION_PROPS.filter(
@@ -653,15 +533,6 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 	);
 }
 
-/*
- * Install the `ui/*` built-ins over `surface`.
- *
- * The host passes the same `UiSurface` it reads views and routes clicks
- * through, and creates a new one per interpreter: a registered action is a
- * closure over that interpreter's environment, so it must not outlive a
- * `reset()`. (Same rule as `compressionExtension`, the opposite of
- * `secretsExtension`, whose store is host configuration.)
- */
 export function uiExtension(
 	surface: UiSurface = new UiSurface(),
 ): InterpExtension {

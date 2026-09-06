@@ -4,7 +4,6 @@ import { fireworks } from "./fireworks.ts";
 import { llamacpp } from "./llamacpp.ts";
 import { openrouter } from "./openrouter.ts";
 
-// Adding a provider: one file in this directory, one entry here.
 export const providers = {
 	digitalocean,
 	fireworks,

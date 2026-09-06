@@ -3,25 +3,14 @@ import { InfisicalSDK } from "@infisical/sdk";
 import { command, oneOf, option, positional, run, string } from "cmd-ts";
 
 const FORWARDED_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
-// A terminal delivers Ctrl-C to every process in the foreground group, so the
-// child usually already has the signal and is winding down. Wait before
-// forwarding our own copy: turbo reads a second interrupt as "force kill" and
-// says so loudly, when all that happened was a normal shutdown.
 const FORWARD_AFTER_MS = 5000;
-// Backstop for a child that ignores the signal (turbo, `node --watch`).
-// Installing a SIGINT handler removes node's default exit, so without this the
-// wrapper waits on a `close` that never comes and hangs the whole task tree.
 const KILL_AFTER_MS = 10000;
 
-// Helper to run a command with inherited stdio for interactive support
 function spawnWithSignal(
 	cmd: string,
 	options: { cwd: string; env: NodeJS.ProcessEnv },
 ): Promise<number> {
 	return new Promise((resolve, reject) => {
-		// Not `detached`: the child stays in this process group so an interactive
-		// command (`task pi`) keeps the terminal's foreground group and can read
-		// stdin without stopping on SIGTTIN.
 		const child = spawn(cmd, {
 			...options,
 			shell: true,
@@ -32,8 +21,6 @@ function spawnWithSignal(
 		const timers: NodeJS.Timeout[] = [];
 		const signalTree = (sig: NodeJS.Signals) => {
 			if (child.pid === undefined) return;
-			// The command is a pipeline of supervisors (pnpm -> turbo -> node), so
-			// prefer the child's group; ESRCH just means it does not lead one.
 			try {
 				process.kill(-child.pid, sig);
 			} catch {
@@ -61,9 +48,6 @@ function spawnWithSignal(
 			cleanup();
 			reject(err);
 		});
-		// An interrupt is how a dev server is meant to end, so report it as
-		// success: the 130 it exits with otherwise makes every task in the chain
-		// print "Failed to run task".
 		child.on("close", (code) => {
 			cleanup();
 			resolve(interrupted ? 0 : (code ?? 0));
@@ -166,7 +150,6 @@ const infisicalRun = command({
 			{},
 		);
 		console.info(`${Object.keys(secrets).length} secrets loaded 👌`);
-		// Execute the provided command with inherited stdio for interactive support
 		const exitCode = await spawnWithSignal(cmd, {
 			env: { ...process.env, ...secrets },
 			cwd: dir,

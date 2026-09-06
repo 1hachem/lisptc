@@ -25,19 +25,12 @@ function isUser(m: ChatMessage): boolean {
 	return m.type === "human" || m.type === "user";
 }
 
-// Lines of REPL output shown before it is folded away. The model's own view of
-// a result is capped at a word limit; a human's is not (see `toolResult`), so
-// the one thing left to guard against is a long `echo` burying the turns around
-// it in a transcript nobody can scroll past.
 const FOLD_LINES = 25;
 
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { output, error } = toolResult(message);
 	const view = toUiNode(toolUi(message));
 	const [expanded, setExpanded] = useState(false);
-	// A step that rendered a widget is answering in the widget: its text output
-	// is the `name: shape` report of the render itself, which says nothing the
-	// drawing in front of the reader does not.
 	if (view) return <GenerativeUI node={view} />;
 	const lines = output.split("\n");
 	const folded = lines.length > FOLD_LINES && !expanded;
@@ -65,11 +58,6 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 	);
 }
 
-/**
- * Sending is a jump to the bottom: the turn just typed, and the reply about to
- * land under it, are what the sender wants in view. Instant, not animated —
- * being carried down through the whole transcript is the thing worth avoiding.
- */
 function StickOnSend({ turn }: { turn: string | undefined }) {
 	const { scrollToBottom } = useStickToBottomContext();
 	useEffect(() => {
@@ -78,12 +66,6 @@ function StickOnSend({ turn }: { turn: string | undefined }) {
 	return null;
 }
 
-/**
- * The way back down, for a reader who has travelled up the transcript. It rides
- * at the foot of the conversation — directly above the composer — and shows
- * itself only once the view has left the bottom, which the container reports
- * with a 70px grace so it never flickers in on the last line.
- */
 function ScrollToLatest() {
 	const { isAtBottom, scrollToBottom } = useStickToBottomContext();
 	if (isAtBottom) return null;
@@ -107,12 +89,6 @@ export function ChatView() {
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
 			<StickOnSend turn={lastSent} />
 			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
-				{/*
-				 * The opening line is a turn like any other, so it stays put once the
-				 * conversation starts rather than being swapped out for the first
-				 * message — a greeting that vanishes reads as a placeholder, and this
-				 * one is the agent talking.
-				 */}
 				<Greeting />
 				{messages
 					.filter((m) => !isGreetingMessage(m))
@@ -141,25 +117,12 @@ export function ChatView() {
 									</div>
 								)}
 								{stats && <MessageMeta meta={stats} />}
-								{/* the agent's turns are the ones there is anything to say about */}
 								{!isUser(m) && !isToolMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
 								)}
 							</div>
 						);
 					})}
-				{/*
-				 * The agent's face: its state is the run's state, `…` included.
-				 *
-				 * It stands in the text column at the foot of the transcript, one blank
-				 * line under the turn above it — so the moment a request is sent, the
-				 * animation is on the SECOND line below what the user typed, which is
-				 * where the reply is about to appear.
-				 *
-				 * That line is measured, not spaced by the flex gap: `-mt-5` cancels the
-				 * gap so the box starts flush with the bottom of the text above, and
-				 * `1.7em` — the shell's own line height — is then exactly one empty row.
-				 */}
 				<div className="-mt-5 pt-[1.7em]">
 					<AgentAvatar />
 				</div>
@@ -168,12 +131,6 @@ export function ChatView() {
 						{error}
 					</div>
 				)}
-				{/*
-				 * Room to scroll past the last turn, so the tail of the conversation
-				 * does not come to rest hard against the composer. It is real
-				 * scrollable height, so a short conversation — which does not fill the
-				 * screen — is left where it is.
-				 */}
 				<div aria-hidden className="h-[10vh]" />
 			</ConversationContent>
 			<ScrollToLatest />

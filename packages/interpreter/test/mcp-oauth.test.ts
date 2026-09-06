@@ -39,7 +39,6 @@ describe("FileOAuthStore", () => {
 		await store.save("https://mcp.example.com", {
 			tokens: { access_token: "at", token_type: "Bearer" },
 		});
-		// One 0600 file was created under the store dir.
 		const { readdirSync } = await import("node:fs");
 		const files = readdirSync(dir);
 		expect(files).toHaveLength(1);
@@ -48,8 +47,6 @@ describe("FileOAuthStore", () => {
 });
 
 describe("StoredOAuthProvider", () => {
-	// An in-memory OAuthStore, proving the interface is the seam a DB store would
-	// implement.
 	function memoryStore(): OAuthStore & { data: Map<string, OAuthRecord> } {
 		const data = new Map<string, OAuthRecord>();
 		return {
@@ -77,7 +74,6 @@ describe("StoredOAuthProvider", () => {
 			REDIRECT,
 		);
 		expect(p.tokens()?.access_token).toBe("cached");
-		// Keyed by origin, so the /mcp path does not matter.
 		expect(p.redirectUrl).toBe(REDIRECT);
 		expect(p.clientMetadata.redirect_uris).toEqual([REDIRECT]);
 	});
@@ -142,7 +138,7 @@ describe("StoredOAuthProvider", () => {
 		});
 		await p.invalidateCredentials("tokens");
 		expect(p.tokens()).toBeUndefined();
-		expect(p.clientInformation()?.client_id).toBe("cid"); // client kept
+		expect(p.clientInformation()?.client_id).toBe("cid");
 	});
 });
 
@@ -164,11 +160,9 @@ describe("CallbackServer (loopback)", () => {
 		const cb = await CallbackServer.start({ host: "127.0.0.1" });
 		try {
 			const waiting = cb.waitForCode("expected", 200);
-			// A stray callback for a different state must not resolve/reject ours.
 			const res = await fetch(`${cb.redirectUrl()}?code=x&state=wrong`);
 			expect(res.status).toBe(400);
 			expect(await res.text()).toMatch(/unknown or has expired/);
-			// The right callback still completes the pending flow.
 			await fetch(`${cb.redirectUrl()}?code=the-code&state=expected`);
 			expect(await waiting).toBe("the-code");
 		} finally {
@@ -193,8 +187,6 @@ describe("CallbackServer (loopback)", () => {
 	it("reflects the exchange outcome in the browser page and the wait", async () => {
 		const cb = await CallbackServer.start({ host: "127.0.0.1" });
 		try {
-			// A failing exchange yields an error page and a rejected wait, never a
-			// misleading "complete" page.
 			const failing = expect(
 				cb.waitForCode("bad", undefined, async () => {
 					throw new Error("PKCE mismatch");
@@ -205,7 +197,6 @@ describe("CallbackServer (loopback)", () => {
 			expect(await res.text()).toMatch(/PKCE mismatch/);
 			await failing;
 
-			// A succeeding exchange runs before the success page is shown.
 			let exchanged = "";
 			const ok = cb.waitForCode("good", undefined, async (code) => {
 				exchanged = code;
@@ -268,9 +259,7 @@ describe("CallbackServer (ingress)", () => {
 			redirectUrl: "https://mcp.example.com/oauth/callback",
 		});
 		try {
-			// The auth server sees the public domain URL...
 			expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
-			// ...while the ingress reaches the pod on 0.0.0.0:port at the same path.
 			const waiting = cb.waitForCode("s");
 			await fetch(`http://127.0.0.1:8918/oauth/callback?code=ingress&state=s`);
 			expect(await waiting).toBe("ingress");

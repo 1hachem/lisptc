@@ -43,18 +43,11 @@ describe("arithmetic error conditions", () => {
 		expect(() => ev("(truncate 1 0)")).toThrow();
 	});
 
-	// Float division by zero yields Infinity rather than an error.
 	it("float division by zero produces Infinity", () => {
 		expect(ev("(/ 1.0 0)")).toBe("Infinity");
 	});
 });
 
-/**
- * Robustness probes. These assert the behaviour a strict Lisp *should* have.
- * The current interpreter does little runtime type-checking, so some of these
- * may surface as failures — that is the point: they pin down where the
- * implementation is loose.
- */
 describe("robustness probes (weak typing)", () => {
 	it("car/cdr of a non-list should be an error", () => {
 		expect(() => ev("(car 5)")).toThrow();

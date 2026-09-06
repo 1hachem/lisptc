@@ -27,8 +27,6 @@ describe("a step that renders", () => {
 		const r = new MemoryRepl();
 		const { view, model } = r.evalOutput(PANEL);
 		expect(view).toBeDefined();
-		// The model's record of it is the summary line and nothing else — the
-		// tree itself never enters its context.
 		expect(model).toContain("rendered stack");
 		expect(model).not.toContain("ui/button");
 	});
@@ -45,8 +43,6 @@ describe("driving the view", () => {
 		expect(label(r.evalOutput(PANEL).view)).toBe("count 0");
 		const clicked = r.invokeUi("a1");
 		expect(label(clicked.view)).toBe("count 1");
-		// Every render mints fresh ids, so driving the view means following the
-		// tree the last click returned rather than reusing the id just used.
 		expect(label(r.invokeUi(buttonAction(clicked.view)).view)).toBe("count 2");
 	});
 
@@ -81,8 +77,6 @@ describe("driving the view", () => {
 		expect(r.invokeUi("a99").user).toMatch(/no such ui action/);
 	});
 
-	// The handlers close over the interp's environment, so they have to die with
-	// it — a surviving action would run against globals that no longer exist.
 	it("drops every action on reset", () => {
 		const r = new MemoryRepl();
 		r.evalOutput(PANEL);
@@ -109,8 +103,6 @@ describe("handing a turn back to the agent", () => {
 		expect(r.invokeUi("a1").message).toBeUndefined();
 	});
 
-	// An eval has no conversation to deliver into, so a stray send must not sit
-	// in the outbox waiting to ride out on the next unrelated click.
 	it("does not carry a send from an ordinary eval into the next click", () => {
 		const r = new MemoryRepl();
 		expect(r.evalOutput('(ui/send "stray")').message).toBe("stray");

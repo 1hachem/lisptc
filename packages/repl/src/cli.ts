@@ -1,11 +1,3 @@
-/**
- * Interactive command-line REPL for the Lisptc interpreter (the `pnpm repl`
- * entry point). Reads expressions from stdin, evaluates them, prints results to
- * stdout. Everything here is process I/O plumbing on top of the pure language
- * in `@repo/interpreter`; the embeddable string-in/string-out REPLs live in
- * `./repl.ts`.
- */
-
 import { MODEL } from "@repo/interpreter/channels";
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
 import {
@@ -29,23 +21,15 @@ import {
 	socketPathFor,
 } from "./session-server.ts";
 
-// Read a line as a string (displaying the given prompt), or null on EOF.
-// Wired to a readline interface by main().
 let readLine: (prompt: string) => Promise<string | null>;
 
-// Output sink shared with the interpreter (via setWriter) so `echo` and
-// the loop's own writes land on the same stdout.
 const write = (s: string): void => {
 	process.stdout.write(s);
 };
 
-// The interactive Read-Eval-Print Loop over stdin/stdout.
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
-	// Recreated with every interp, so reset() restarts the result numbering.
 	private compactor: Compactor = new Compactor();
-	// One store for the process: freshInterp() re-seeds it from env/`.env` on
-	// every reset (merge, later wins), so a secret loaded once stays loaded.
 	private readonly secretsStore = new EnvSecretsStore();
 
 	constructor() {
@@ -58,8 +42,6 @@ class InteractiveRepl implements Repl {
 
 	private freshInterp(): Interp {
 		this.compactor = new Compactor();
-		// The standalone CLI auto-loads a `.env` file (env vars + `$LISPTC_SECRETS_FILE`
-		// / nearest `.env`); the secretsExtension owns that loading via `envFile`.
 		const interp = new Interp({
 			extensions: [
 				secretsExtension({ store: this.secretsStore, envFile: true }),
@@ -69,10 +51,6 @@ class InteractiveRepl implements Repl {
 			],
 		});
 		run(interp, prelude);
-		// Notes about what was not run go to the model's channel; at an
-		// interactive prompt the human IS the model's reader, so show them.
-		// Warnings only — the channel carries errors too, and those are caught
-		// and printed by the eval loop below.
 		interp.channels.on(MODEL, (d) => {
 			if (d.severity === "warning") write(`skipped ${d.text}\n`);
 		});
@@ -84,16 +62,6 @@ class InteractiveRepl implements Repl {
 		this.currentInterp = this.freshInterp();
 	}
 
-	/*
-	 * Repeat Read-Eval-Print until End-Of-File asynchronously.
-	 *
-	 * A whole input is buffered before it is evaluated rather than read one
-	 * expression at a time, because prose is decided over complete text: `run`
-	 * blanks what is outside the forms and puts each form to the interp's
-	 * classifier (`proseExtension`, installed above), and neither can judge a
-	 * form still missing its closing paren. That is the attach loop's contract
-	 * too, so `pnpm repl` and `pnpm repl:attach` now answer identically.
-	 */
 	async readEvalPrintLoop(): Promise<void> {
 		let buffer = "";
 		for (;;) {
@@ -103,20 +71,11 @@ class InteractiveRepl implements Repl {
 				return;
 			}
 			buffer += `${line}\n`;
-			// A form left open at the end of the line wants the rest of itself.
 			if (!isComplete(buffer)) continue;
 			const text = buffer;
 			buffer = "";
 			try {
-				// An input typed at a prompt is a step of its own, so each
-				// starts with the whole echo budget.
 				this.compactor.beginStep();
-				// The same silent contract the embedded REPLs have: no value is
-				// printed, only a `name: shape` line, which the compaction
-				// extension emits on the user channel as each form settles. This
-				// loop points the interpreter's writer straight at stdout (see
-				// setWriter below), so what arrives there is the human's uncapped
-				// copy; a terminal can scroll.
 				run(this.currentInterp, text);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
@@ -128,37 +87,20 @@ class InteractiveRepl implements Repl {
 	}
 }
 
-// Does `text` contain only complete top-level forms (nothing left mid-parse)?
-// Used by the attach loop to decide when to ship input to the shared session,
-// so multi-line forms typed (or sent by Iron) aren't split across evals. Prose
-// around the forms is stripped first, the same as the session will do, so a
-// half-written sentence never reads as a half-written program.
 export function isComplete(text: string): boolean {
 	const reader = new Reader();
 	reader.push(stripProse(text));
-	// Checking isEmpty() before each read (rather than after a failed one) is
-	// the only way to tell "ran out mid-form" from "nothing left to read": once
-	// read() throws, readToken() has already shifted every token off the
-	// reader — including the ones from an unterminated form — so the reader
-	// looks equally empty in both cases if checked afterward.
 	while (!reader.isEmpty()) {
 		try {
 			reader.read();
 		} catch (ex) {
-			// Ran out of input mid-form: more is needed before sending.
 			if (ex === EndOfFile) return false;
-			// A genuine parse error is "complete" enough to send — the session
-			// renders it inline.
 			return true;
 		}
 	}
 	return true;
 }
 
-// Attach loop (`--attach`): forward each complete form to the SHARED session
-// REPL rather than evaluating locally, so this terminal and the editor's LSP
-// operate on one interpreter. `connectOrSpawn` boots a session for the project
-// if none is running.
 async function attachLoop(): Promise<void> {
 	const client = await connectOrSpawn(socketPathFor());
 	let accum = "";
@@ -180,14 +122,6 @@ async function attachLoop(): Promise<void> {
 	}
 }
 
-//----------------------------------------------------------------------
-// Main procedure for Node.js: a dedicated standalone REPL.
-// Run the REPL on the first '-' argument (or with no arguments);
-// run each script file for other arguments.
-//
-// Guarded so that importing this module does NOT start the REPL / attach to
-// stdin; it only runs when this file is the process entry point.
-
 async function main(): Promise<void> {
 	const { pathToFileURL } = await import("node:url");
 	const entry = process.argv[1];
@@ -195,14 +129,11 @@ async function main(): Promise<void> {
 
 	const args = process.argv.slice(2);
 
-	// `--help` / `-h`: print usage and exit.
 	if (args.includes("--help") || args.includes("-h")) {
 		console.log(USAGE);
 		return;
 	}
 
-	// `--kill [name]`: stop the named (or default, cwd-keyed) session server
-	// and exit, without starting a REPL of any kind.
 	if (args.includes("--kill")) {
 		const i = args.indexOf("--kill");
 		const name = args[i + 1];
@@ -215,14 +146,13 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	// Clear screen + scrollback and home the cursor.
 	const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
 
 	const isTTY = process.stdin.isTTY === true;
 	let rl: import("node:readline").Interface | null = null;
 	let closed = false;
-	let lastInput = ""; // for the :up recall command in non-TTY (piped) mode
-	const pending: string[] = []; // lines received while no reader was waiting
+	let lastInput = "";
+	const pending: string[] = [];
 	let waiter: ((line: string | null) => void) | null = null;
 
 	readLine = async (prompt) => {
@@ -231,7 +161,7 @@ async function main(): Promise<void> {
 			rl = createInterface({
 				input: process.stdin,
 				output: process.stdout,
-				terminal: isTTY, // enables arrow-key line editing & history on a TTY
+				terminal: isTTY,
 				historySize: 500,
 			});
 			rl.on("line", (l) => {
@@ -251,7 +181,6 @@ async function main(): Promise<void> {
 					w(null);
 				}
 			});
-			// Ctrl-C cancels the current input line instead of exiting.
 			rl.on("SIGINT", () => {
 				write("\n");
 				if (waiter) {
@@ -280,14 +209,10 @@ async function main(): Promise<void> {
 			}
 		});
 		if (line === null) return null;
-		// :clear (or "clear") wipes the screen and re-prompts. Works when piped,
-		// too, and complements the Ctrl-L keystroke on a TTY.
 		if (line.trim() === ":clear" || line.trim() === "clear") {
 			write(CLEAR_SCREEN);
 			return "";
 		}
-		// :up (or a raw up-arrow escape sequence, when there is no TTY to
-		// interpret it) recalls the previous input line.
 		if (line.trim() === ":up" || line.trim() === "\x1b[A") {
 			if (!isTTY && lastInput !== "") write(`${lastInput}\n`);
 			return lastInput;
@@ -299,7 +224,6 @@ async function main(): Promise<void> {
 	setWriter(write);
 	setExit(process.exit);
 
-	// `--attach`: forward to the shared session instead of a local interpreter.
 	if (args.includes("--attach")) {
 		await attachLoop();
 		return;
@@ -308,10 +232,6 @@ async function main(): Promise<void> {
 	const repl = new InteractiveRepl();
 	let started = false;
 	let fs: typeof import("node:fs") | undefined;
-	// A workspace script runs with cwd = the package dir (packages/repl), so a
-	// relative script path must resolve against the launch dir (INIT_CWD under
-	// a package-manager script, else cwd) — the same convention as the `.env`
-	// lookup in the secrets extension.
 	const launchDir = process.env.INIT_CWD || process.cwd();
 	const argv = args.length > 0 ? ["", "", ...args] : ["", "", "-"];
 	try {
@@ -330,7 +250,6 @@ async function main(): Promise<void> {
 				const path = await import("node:path");
 				const abs = path.resolve(launchDir, fileName);
 				const text = fs.readFileSync(abs, "utf8");
-				// Let relative `import` paths in the script resolve against its dir.
 				repl.interp.importStack.push(path.dirname(abs));
 				try {
 					run(repl.interp, text);
@@ -345,7 +264,6 @@ async function main(): Promise<void> {
 	}
 }
 
-// The `--help` text. Documents the argument grammar main() implements.
 const USAGE = `lisptc REPL — the Lisp interpreter's interactive terminal
 
 Usage:

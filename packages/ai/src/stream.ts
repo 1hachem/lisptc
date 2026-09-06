@@ -1,5 +1,3 @@
-//TODO: check if langchain has builtin functions to support these helpers
-// for sure they have a funtion for use-stream since its a native
 import { nodeToJson } from "@repo/interpreter/ui";
 import {
 	type AgentConfig,
@@ -24,18 +22,11 @@ import {
 	type TraceContext,
 } from "./telemetry.ts";
 
-/** A message as it arrives from the client (LangChain message-like dict). */
 export interface ChatMessageInput {
 	id?: string;
 	type?: string;
 	role?: string;
 	content?: unknown;
-	/**
-	 * The UI-only extras of an earlier turn — the uncapped `display` text, the
-	 * reasoning trace, a rendered widget. The client replays them so the
-	 * transcript still looks the way it did; nothing here reaches the model,
-	 * which is rebuilt from `content` alone (see `toTranscript`).
-	 */
 	additional_kwargs?: Record<string, unknown>;
 }
 
@@ -45,7 +36,6 @@ export interface ChatInput {
 
 const encoder = new TextEncoder();
 
-/** Frame one LangGraph stream event as an SSE record. */
 function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
@@ -73,7 +63,6 @@ function agentRole(type: string | undefined): TranscriptEntry["role"] {
 	return "user";
 }
 
-/** LangGraph uses `human`/`ai`/`system`/`tool` as the wire message types. */
 function wireType(
 	type: string | undefined,
 ): "human" | "ai" | "system" | "tool" {
@@ -87,9 +76,6 @@ export function toAgentMessages(input: ChatInput): AgentMessage[] {
 	return toLlmMessages(toTranscript(input));
 }
 
-// Build the running transcript from the client's replayed message list. A prior
-// `tool` message (a REPL result echoed back on the previous turn) keeps its
-// `tool` role so it stays out of `user-messages`.
 function toTranscript(input: ChatInput): TranscriptEntry[] {
 	return (input.messages ?? []).map((m) => ({
 		role: agentRole(m.type ?? m.role),
@@ -97,27 +83,6 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	}));
 }
 
-/**
- * Drive the REPL loop and bridge it to the LangGraph "messages-tuple" streaming
- * protocol that `useStream` (FetchStreamTransport) consumes. Each loop step:
- *   1. streams one grammar-constrained assistant turn (its text IS a Lisp
- *      program) as `messages` token deltas,
- *   2. evaluates that program against a persistent `AgentRepl`,
- *   3. emits the REPL result as a `tool` message and feeds it back as the next
- *      turn's input,
- * repeating until the model answers in prose that runs nothing (see `AgentRepl`)
- * or `MAX_STEPS` is reached. That final prose turn is the answer to the user, so it
- * is streamed like any other assistant turn but produces no REPL result. Each step
- * publishes an authoritative `values` event so the client reconciles the full
- * message list. Returns a standard SSE `Response` any web server (Hono) returns.
- *
- * The `AgentRepl` persists per chat: it is looked up by `threadId` (see
- * `repl-store.ts`), so definitions and loaded MCP servers built up on earlier
- * turns are still there on the next request. The transcript the client replays
- * each turn only supplies the model's *textual* context — the interpreter STATE
- * lives in the reused REPL. With no `threadId` the REPL is ephemeral (one
- * request), matching the old stateless behavior.
- */
 export function streamChatResponse(
 	input: ChatInput,
 	config?: AgentConfig,
@@ -125,16 +90,10 @@ export function streamChatResponse(
 	threadId?: string,
 	identity?: { distinctId?: string; sessionId?: string },
 ): Response {
-	// The client tears the fetch down (and re-issues it) whenever dev tools open
-	// or the tab reloads. Once that happens `controller.enqueue` throws, so every
-	// write is guarded and the abort is propagated to the upstream model call —
-	// otherwise the unhandled error would take the server process down.
 	const abort = new AbortController();
 	if (signal)
 		signal.addEventListener("abort", () => abort.abort(), { once: true });
 
-	// A turn always gets a trace id, even without a chat identity: an ephemeral
-	// run is still worth measuring, it just groups only with itself.
 	const trace: TraceContext = {
 		threadId: threadId ?? crypto.randomUUID(),
 		turnId: crypto.randomUUID(),
@@ -165,16 +124,11 @@ export function streamChatResponse(
 				}
 			};
 
-			// The authoritative message list, echoed to the client and grown as the
-			// loop produces assistant + tool messages.
 			const wire: Record<string, unknown>[] = (input.messages ?? []).map(
 				(m, i) => ({
 					type: wireType(m.type ?? m.role),
 					content: contentToText(m.content),
 					id: m.id ?? `msg-${i}`,
-					// Echoed back untouched so a widget an earlier step rendered — and
-					// the full text under a folded result — survive into the next turn
-					// instead of blanking out the moment the user says anything else.
 					...(m.additional_kwargs
 						? { additional_kwargs: m.additional_kwargs }
 						: undefined),
@@ -182,8 +136,6 @@ export function streamChatResponse(
 			);
 
 			let steps = 0;
-			// What the turn is judged on: the prose the user actually reads, and
-			// whether the loop stopped on its own instead of hitting MAX_STEPS.
 			let answer = "";
 			let halted = false;
 			let failure: string | undefined;
@@ -193,12 +145,6 @@ export function streamChatResponse(
 				const repl = getThreadRepl(threadId);
 				const transcript = toTranscript(input);
 
-				// A previous turn ended on an answer the REPL read as prose. Its
-				// notes were withheld then (see `AgentRepl.eval`) and ride along
-				// with this user message, so the model corrects itself without
-				// having been given a turn to say so. Deliberately not pushed to
-				// `wire`: it is a note to the model, not a message to the user,
-				// and it should not come back on the next replayed transcript.
 				const withheld = repl.takeProseFeedback();
 				if (withheld)
 					transcript.push({
@@ -207,8 +153,6 @@ export function streamChatResponse(
 					});
 
 				while (!abort.signal.aborted) {
-					// Refresh the read-only conversation globals so each step sees the
-					// current transcript, including prior REPL results.
 					repl.setConversationVars(snapshotConversation(transcript));
 
 					const aiId = crypto.randomUUID();
@@ -217,17 +161,11 @@ export function streamChatResponse(
 					let reasoning = "";
 					let usage: TokenUsage | undefined;
 					let disconnected = false;
-					// Reasoning rides in `additional_kwargs.reasoning_content`; the client's
-					// MessageTupleManager concatenates additional_kwargs across chunks (via
-					// AIMessageChunk.concat), so per-delta fragments reassemble into the full
-					// thinking trace on the message.
 					for await (const delta of streamAgent(
 						toLlmMessages(transcript),
 						tracedConfig,
 						{ signal: abort.signal },
 					)) {
-						// The accounting the backend appends once the completion is
-						// done: nothing to stream, and it supersedes any earlier count.
 						if (delta.usage) {
 							usage = delta.usage;
 							continue;
@@ -251,13 +189,6 @@ export function streamChatResponse(
 					const code = stripFences(full);
 					if (code === "") break;
 
-					// What this one model call cost. It rides along for the UI to show
-					// under the message and, like `reasoning_content`, never reaches the
-					// model — whose context is rebuilt from `content` alone.
-					//
-					// Deliberately per-call and never added up across the loop: a step's
-					// input is the whole conversation as it stood for that call, so each
-					// step's count already contains the ones before it.
 					const meta: Record<string, unknown> = {
 						at: new Date().toISOString(),
 						durationMs: Date.now() - stepStartedAt,
@@ -286,14 +217,9 @@ export function streamChatResponse(
 					const evalStartedAt = Date.now();
 					const { output, display, error, view } = evalCode(repl, code);
 					steps += 1;
-					// A form-less turn ran no code, so there is no result worth
-					// showing the user (or feeding back) — it is the final answer.
 					if (repl.takeFinished()) {
 						answer = code;
 						halted = true;
-						// How many model calls it took to get here. The one count that is
-						// genuinely the whole turn's rather than this call's, so it hangs
-						// off the message the reader ends on.
 						meta.steps = steps;
 						write(sse("values", { messages: wire }));
 						break;
@@ -306,18 +232,7 @@ export function streamChatResponse(
 						latencyMs: Date.now() - evalStartedAt,
 					});
 
-					// `content` carries the CAPPED output, because the client replays
-					// the message list as the next request's input and the model's
-					// context is rebuilt from `content` alone — uncapped text here
-					// would re-enter that context on every later turn. The full
-					// output rides in `additional_kwargs` (as reasoning does), which
-					// only the UI reads.
 					const resultContent = replResultContent(output, error);
-					// Both extras are for the UI alone. `display` is the same text
-					// uncapped; `ui` is the widget tree the step rendered, which the
-					// model is told about only as the one-line summary `ui/render`
-					// returned — sending the tree back into its context would undo
-					// the reason for drawing it.
 					const extras: Record<string, unknown> = {};
 					if (display !== output) extras.display = display;
 					if (view) extras.ui = nodeToJson(view);
@@ -337,9 +252,6 @@ export function streamChatResponse(
 			} catch (err) {
 				failure = err instanceof Error ? err.message : String(err);
 				if (!abort.signal.aborted) {
-					// The response headers went out long ago, so this is the only place
-					// a failed model call is ever reported: without the log it reaches
-					// the browser as an SSE `error` event and the server says nothing.
 					console.error("[ai] chat stream failed:", err);
 					write(
 						sse("error", {
@@ -349,8 +261,6 @@ export function streamChatResponse(
 					);
 				}
 			} finally {
-				// The SSE body outlives the request log line, so this is the only
-				// record of how (and whether) a chat turn actually finished.
 				console.log(
 					`[ai] chat stream closed after ${steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);
@@ -365,9 +275,7 @@ export function streamChatResponse(
 				closed = true;
 				try {
 					controller.close();
-				} catch {
-					// already closed by the client disconnect — nothing to do
-				}
+				} catch {}
 			}
 		},
 		cancel() {

@@ -4,26 +4,8 @@ import { LISP_SYSTEM_PROMPT } from "../src/index.ts";
 import { IDENTITY, MAX_STEPS } from "../src/prompts/lisp.ts";
 import { snapshotConversation } from "../src/repl.ts";
 
-// The system prompt is the whole contract between the model and this REPL: it
-// is the only tool description, API reference and protocol spec the model gets.
-// Asserted through the package's public export, since that is what apps/api
-// hands the model.
-//
-// It has two halves, and so does this file. POLICY (below, in `prompts/lisp.ts`)
-// owns the agent-loop behaviour: how a turn ends, what a result looks like
-// coming back, what never to emit. LANGUAGE_REFERENCE owns everything about the
-// language and the REPL itself, and its wording is pinned next to the file it
-// lives in — `@repo/interpreter`'s `prose-surfaces.test.ts`. So the language
-// rules are asserted here only as an INVENTORY (a built-in the reference forgets
-// to name is one the model never calls); their phrasing is not re-pinned.
-
-// The prompt writes a built-in as bare prose (`load-mcp`) or inside a call
-// (`(car x)`), so match the name itself rather than any one of those shapes.
 const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
 
-// Both halves are wrapped markdown, so any sentence can straddle a newline.
-// Patterns run against a whitespace-flattened copy, which pins the wording
-// without pinning where the wraps happen to fall.
 const PROMPT = LISP_SYSTEM_PROMPT.replace(/\s+/g, " ");
 
 describe("assembly", () => {
@@ -31,17 +13,12 @@ describe("assembly", () => {
 		expect(LISP_SYSTEM_PROMPT).toContain(IDENTITY);
 	});
 
-	// POLICY defers every language question to the reference, so the reference
-	// has to actually arrive: without this the model gets rules about a dialect
-	// it was never shown.
 	it("carries the language reference verbatim", () => {
 		expect(LISP_SYSTEM_PROMPT).toContain(LANGUAGE_REFERENCE);
 	});
 });
 
 describe("the REPL loop protocol", () => {
-	// Without this rule the model falls back on the Common Lisp habit of writing
-	// a parenthesised aside in prose, which this dialect reads as code.
 	it("says the text around the forms is skipped, not evaluated", () => {
 		expect(PROMPT).toMatch(
 			/only the parenthesised forms in it are program text/i,
@@ -68,11 +45,6 @@ describe("the REPL loop protocol", () => {
 		expect(PROMPT).toMatch(/there is no halt or exit built-in/i);
 	});
 
-	// Left to the ending rule alone the model treats stopping as failure and
-	// stalls the loop with no-op forms (`(identity "Standing by.")`), burning
-	// every step up to the cap. The distinction that has to be exact: the user
-	// DOES read what a step echoes (rendering is real work), they just cannot
-	// answer mid-loop.
 	it("bans forms that only talk, while saying echoed output is read", () => {
 		expect(PROMPT).toMatch(/The user READS everything the REPL echoes/);
 		expect(PROMPT).toMatch(/What they cannot do is reply mid-loop/);
@@ -87,18 +59,11 @@ describe("the REPL loop protocol", () => {
 		expect(PROMPT).toMatch(/reply with prose alone on the FIRST turn/);
 	});
 
-	// The cap is the model's other exit besides a form-less reply, so it has to know the
-	// loop is bounded at all — that first assertion is the one that bites. The
-	// second only guards the coupling: the policy interpolates the same
-	// `MAX_STEPS` that stream.ts breaks on, so it cannot fail today, but it
-	// would if someone replaced that interpolation with a literal number.
 	it("tells the model the loop is capped, and quotes the driver's cap", () => {
 		expect(PROMPT).toMatch(/The loop also stops automatically/i);
 		expect(LISP_SYSTEM_PROMPT).toContain(`after ${MAX_STEPS} steps`);
 	});
 
-	// Lisp in the thinking channel is decoded outside the grammar, so it is both
-	// wasted and unrunnable — and the model reliably writes it unless told not to.
 	it("reserves thinking for prose and Lisp for the output", () => {
 		expect(PROMPT).toMatch(/NEVER write Lisp in your thinking/);
 	});
@@ -111,8 +76,6 @@ describe("the REPL loop protocol", () => {
 });
 
 describe("MCP", () => {
-	// Every MCP built-in the model is expected to reach for. The prompt is its
-	// only API reference, so a built-in missing from here is one it never calls.
 	const MCP_BUILTINS = [
 		"load-mcp",
 		"unload-mcp",
@@ -153,10 +116,6 @@ describe("MCP", () => {
 		expect(PROMPT).toMatch(/\(acme\/get_widget :id "42"\)/);
 	});
 
-	// Every server and tool the examples name is invented. A real one (the
-	// toolkit ships `playwright`, `fs`, `linear`, `posthog`) would hand the model
-	// an answer it is supposed to reach by searching — and would quietly turn the
-	// navigate eval into a test of whether it can copy the prompt.
 	it.each([
 		"playwright",
 		"fs/",
@@ -190,8 +149,6 @@ describe("MCP", () => {
 });
 
 describe("the language reference", () => {
-	// The reference is a closed world: "if a name is not listed there, it does
-	// not exist", so it has to name both what exists and what pointedly does not.
 	const CORE_BUILTINS = [
 		"car",
 		"cdr",
@@ -214,8 +171,6 @@ describe("the language reference", () => {
 		expect(PROMPT).toMatch(names(n));
 	});
 
-	// Named in the reference only to say they are absent, so the model builds
-	// them itself instead of calling one and getting `undefined: expt`.
 	it.each([
 		"zerop",
 		"evenp",
@@ -244,9 +199,6 @@ describe("the language reference", () => {
 });
 
 describe("interactive views", () => {
-	// A view is the one thing the model can build that keeps paying after the
-	// turn ends, so the prompt has to say both halves: that a handler runs
-	// without a model turn, and that the widget never comes back to it.
 	it("says an action runs in the REPL with no model turn", () => {
 		expect(PROMPT).toMatch(/runs IN THIS REPL/);
 		expect(PROMPT).toMatch(/NO model turn in between/);
@@ -276,8 +228,6 @@ describe("interactive views", () => {
 			expect(PROMPT).toMatch(names(tag));
 	});
 
-	// The cheap half of the feature: a control that acts on change spends no
-	// turn AND no click, so the model has to know it exists to reach for it.
 	it("says a select or checkbox can act on change with no submit", () => {
 		expect(PROMPT).toMatch(names("on-change"));
 		expect(PROMPT).toMatch(/no submit button/);
@@ -289,8 +239,6 @@ describe("interactive views", () => {
 		);
 	});
 
-	// Without this the model builds views it cannot get out of: every branch has
-	// to be anticipated, because a handler has no way to ask.
 	it("says a handler can hand the turn back with ui/send", () => {
 		expect(PROMPT).toMatch(names("ui/send"));
 		expect(PROMPT).toMatch(/joins the conversation as a message from the user/);

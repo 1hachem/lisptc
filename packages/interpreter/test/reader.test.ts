@@ -21,12 +21,6 @@ describe("reader: lists and dotted pairs", () => {
 	});
 });
 
-/*
- * Every value the REPL cannot read back prints as `#<…>` — a job, a secret, a
- * closure — so a `#<…>` in source is always a retyped printout. Left as an
- * ordinary symbol it failed a step later as `void variable: #<job`, which
- * named neither the mistake nor the fix.
- */
 describe("reader: printed handles", () => {
 	it("refuses a retyped handle and says what to use instead", () => {
 		expect(() => ev("(await #<job load-mcp:acme 8d123124>)")).toThrow(
@@ -38,8 +32,6 @@ describe("reader: printed handles", () => {
 		expect(() => ev("(echo #<secret:REPL_TOKEN>)")).toThrow(/printed handle/);
 	});
 
-	// It is the `#<` opening that cannot be read, not the characters in it:
-	// `#` is an ordinary symbol character everywhere else.
 	it("leaves # alone as a symbol character", () => {
 		expect(ev("(quote a#b)")).toBe("a#b");
 		expect(ev("(quote |#|)")).toBe("|#|");
@@ -73,7 +65,6 @@ describe("reader: numeric tokens go through BigInt/Number", () => {
 		expect(ev("(progn -42)")).toBe("-42");
 	});
 
-	// BigInt() accepts 0x/0o/0b prefixes, so these tokens parse as integers.
 	it("accepts radix-prefixed integer literals", () => {
 		expect(ev("(progn 0x10)")).toBe("16");
 		expect(ev("(progn 0o17)")).toBe("15");
@@ -125,8 +116,6 @@ describe("(read s): parsing text as Lisp data", () => {
 	});
 
 	it("misreads JSON rather than erroring — hence json-parse", () => {
-		// "{" is an ordinary symbol character here, so a JSON object reads as a
-		// symbol and the rest of the document is silently dropped.
 		expect(ev('(read "{\\"a\\": 1}")')).toBe("{");
 		expect(ev('(read "[1,2]")')).toBe("[1,2]");
 	});
