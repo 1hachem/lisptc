@@ -53,12 +53,12 @@ export function proseFeedbackContent(feedback: string): string {
 	);
 }
 
-export function evalCode(
+export async function evalCode(
 	repl: AgentRepl,
 	code: string,
-): { output: string; display: string; error: boolean } {
+): Promise<{ output: string; display: string; error: boolean }> {
 	try {
-		const { model, user } = repl.evalOutput(code);
+		const { model, user } = await repl.evalOutput(code);
 		return { output: model, display: user, error: false };
 	} catch (ex) {
 		repl.reset();

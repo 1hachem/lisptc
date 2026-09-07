@@ -6,6 +6,7 @@ import {
 	Interp,
 	prelude,
 	Reader,
+	runAsync,
 	runSync,
 	setExit,
 	setWriter,
@@ -76,7 +77,7 @@ class InteractiveRepl implements Repl {
 			buffer = "";
 			try {
 				this.compactor.beginStep();
-				runSync(this.currentInterp, text);
+				await runAsync(this.currentInterp, text);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)
@@ -252,7 +253,7 @@ async function main(): Promise<void> {
 				const text = fs.readFileSync(abs, "utf8");
 				repl.interp.importStack.push(path.dirname(abs));
 				try {
-					runSync(repl.interp, text);
+					await runAsync(repl.interp, text);
 				} finally {
 					repl.interp.importStack.pop();
 				}

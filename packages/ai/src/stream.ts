@@ -210,7 +210,7 @@ export function streamChatResponse(
 					transcript.push({ role: "assistant", content: code });
 
 					const evalStartedAt = Date.now();
-					const { output, display, error } = evalCode(repl, code);
+					const { output, display, error } = await evalCode(repl, code);
 					steps += 1;
 					if (repl.takeFinished()) {
 						answer = code;

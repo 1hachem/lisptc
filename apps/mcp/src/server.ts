@@ -30,7 +30,7 @@ server.registerTool(
 		},
 	},
 	async ({ code }) => ({
-		content: [{ type: "text", text: repl.eval(code) }],
+		content: [{ type: "text", text: await repl.eval(code) }],
 	}),
 );
 

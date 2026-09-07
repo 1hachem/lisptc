@@ -313,6 +313,14 @@ class BuiltInFunc extends Func {
 		}
 	}
 
+	*settle(promise: Promise<unknown>, frame: unknown[]): Eval {
+		try {
+			return yield promise;
+		} catch (ex) {
+			throw this.failure(ex, frame);
+		}
+	}
+
 	*callGen(frame: unknown[]): Eval {
 		try {
 			return yield* (this.body as BuiltInFuncGen)(frame);
@@ -1170,7 +1178,10 @@ export class Interp {
 							}
 							if (fn instanceof BuiltInFunc) {
 								if (fn.isSuspending) return yield* fn.callGen(frame);
-								return fn.call(frame);
+								const value = fn.call(frame);
+								if (value instanceof Promise)
+									return yield* fn.settle(value, frame);
+								return value;
 							}
 							env = new Cell(frame, fn.env);
 							const { body } = fn;
@@ -1985,6 +1996,25 @@ export function driveSync<T>(gen: Eval<T>): T {
 
 export function runSync(interp: Interp, text: string): unknown {
 	return driveSync(runGen(interp, text));
+}
+
+export async function driveAsync<T>(gen: Eval<T>): Promise<T> {
+	let step = gen.next();
+	while (!step.done) {
+		let resumed: unknown;
+		try {
+			resumed = await step.value;
+		} catch (ex) {
+			step = gen.throw(ex);
+			continue;
+		}
+		step = gen.next(resumed);
+	}
+	return step.value;
+}
+
+export function runAsync(interp: Interp, text: string): Promise<unknown> {
+	return driveAsync(runGen(interp, text));
 }
 
 export interface SyntaxError_ {
