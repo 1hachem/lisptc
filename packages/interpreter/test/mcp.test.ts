@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
@@ -318,7 +320,20 @@ describe("async MCP jobs", () => {
 		);
 		expect(out).toContain("anyFast/echo");
 	});
+
+	it("returns a reply larger than the inline buffer through the spill file and cleans it up", () => {
+		const big = "x".repeat(1572864);
+		const before = spillFiles().length;
+		expect(evalStr(interp, `(length (afx/echo :message "${big}"))`)).toBe(
+			String(big.length),
+		);
+		expect(spillFiles()).toHaveLength(before);
+	});
 });
+
+function spillFiles(): string[] {
+	return readdirSync(tmpdir()).filter((f) => f.startsWith("lisptc-job-"));
+}
 
 describe("liveJobs reaping", () => {
 	const interp = mcpInterp();
