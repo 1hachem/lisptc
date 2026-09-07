@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { Interp, prelude, run, str } from "../src/lisp.ts";
+import { Interp, prelude, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
 import {
 	EnvSecretsStore,
@@ -21,7 +21,7 @@ function interpWithSecrets(record: Record<string, SecretSpec>): Interp {
 	const store = new EnvSecretsStore();
 	store.set(record);
 	const interp = new Interp({ extensions: [secretsExtension({ store })] });
-	run(interp, prelude);
+	runSync(interp, prelude);
 	return interp;
 }
 
@@ -139,9 +139,9 @@ describe("secret registry (env seeding)", () => {
 		process.env.REPL_FOO = "from-env";
 		try {
 			const interp = new Interp({ extensions: [secretsExtension()] });
-			run(interp, prelude);
-			expect(str(run(interp, "(secrets)"))).toBe('(("REPL_FOO" . ""))');
-			expect(str(run(interp, '(secret "REPL_FOO")'))).toBe(
+			runSync(interp, prelude);
+			expect(str(runSync(interp, "(secrets)"))).toBe('(("REPL_FOO" . ""))');
+			expect(str(runSync(interp, '(secret "REPL_FOO")'))).toBe(
 				"#<secret:REPL_FOO>",
 			);
 		} finally {
@@ -166,7 +166,7 @@ describe("secret registry (.env file loading)", () => {
 		const store = new EnvSecretsStore();
 		loadSecretsFromFile(store, path);
 		const interp = new Interp({ extensions: [secretsExtension({ store })] });
-		run(interp, prelude);
+		runSync(interp, prelude);
 		const keys = ev("(secrets)", interp);
 		expect(keys).toContain("REPL_LINEAR_API_KEY");
 		expect(keys).not.toContain("NOT_A_SECRET");
@@ -179,25 +179,25 @@ describe("secret registry (revealed only into an MCP call)", () => {
 	const interp = new Interp({
 		extensions: [secretsExtension({ store }), mcpExtension()],
 	});
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+		runSync(interp, "(mcp-shutdown)");
 	});
 
 	it("passes the real (and composed) value into an MCP tool call", () => {
 		str(
-			run(
+			runSync(
 				interp,
 				`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
 			),
 		);
-		expect(str(run(interp, '(fx/echo :message (secret "REPL_FOO"))'))).toBe(
+		expect(str(runSync(interp, '(fx/echo :message (secret "REPL_FOO"))'))).toBe(
 			'"s3cr3t"',
 		);
 		expect(
 			str(
-				run(
+				runSync(
 					interp,
 					'(fx/echo :message (concat "Bearer " (secret "REPL_FOO")))',
 				),
@@ -209,7 +209,7 @@ describe("secret registry (revealed only into an MCP call)", () => {
 describe("core interpreter (no secrets extension)", () => {
 	function coreInterp(): Interp {
 		const interp = new Interp({});
-		run(interp, prelude);
+		runSync(interp, prelude);
 		return interp;
 	}
 

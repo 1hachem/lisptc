@@ -1,10 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import { Interp, prelude, runSync, setWriter, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
 
 function evalStr(interp: Interp, code: string): string {
-	return str(run(interp, code));
+	return str(runSync(interp, code));
 }
 
 function evalOutput(interp: Interp, code: string): string {
@@ -13,7 +13,7 @@ function evalOutput(interp: Interp, code: string): string {
 		output += s;
 	});
 	try {
-		run(interp, code);
+		runSync(interp, code);
 		return output;
 	} finally {
 		setWriter(prev);
@@ -36,7 +36,7 @@ const ENUM_FIXTURE = fileURLToPath(
 
 describe("self-evaluating keywords", () => {
 	const interp = new Interp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	it("evaluates :keywords to themselves and prints with a colon", () => {
 		expect(evalStr(interp, "(list :query 1 :limit 2)")).toBe(
@@ -55,10 +55,10 @@ describe("self-evaluating keywords", () => {
 
 describe("MCP integration (stdio fixture)", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+		runSync(interp, "(mcp-shutdown)");
 	});
 
 	it("loads a stdio server and expands its tools into bindings", () => {
@@ -94,7 +94,7 @@ describe("MCP integration (stdio fixture)", () => {
 	});
 
 	it("validates required arguments before calling", () => {
-		expect(() => run(interp, "(fx/echo)")).toThrow(
+		expect(() => runSync(interp, "(fx/echo)")).toThrow(
 			/required argument "message"/,
 		);
 	});
@@ -124,7 +124,7 @@ describe("MCP integration (stdio fixture)", () => {
 
 	it("unloads a server and removes its bindings", () => {
 		expect(evalStr(interp, '(unload-mcp "fx")')).toContain("fx/echo");
-		expect(() => run(interp, '(fx/echo :message "hi")')).toThrow(
+		expect(() => runSync(interp, '(fx/echo :message "hi")')).toThrow(
 			/void variable|undefined/,
 		);
 	});
@@ -132,7 +132,7 @@ describe("MCP integration (stdio fixture)", () => {
 
 describe("mcp-shutdown undefines tool bindings", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	it("removes <server>/<tool> globals so they error as void, not stale", () => {
 		expect(
@@ -144,10 +144,10 @@ describe("mcp-shutdown undefines tool bindings", () => {
 		expect(evalStr(interp, '(sfx/echo :message "hi")')).toBe('"hi"');
 
 		expect(evalStr(interp, "(mcp-shutdown)")).toBe("t");
-		expect(() => run(interp, "(progn sfx/echo)")).toThrow(
+		expect(() => runSync(interp, "(progn sfx/echo)")).toThrow(
 			/void variable|undefined/,
 		);
-		expect(() => run(interp, '(sfx/echo :message "hi")')).not.toThrow(
+		expect(() => runSync(interp, '(sfx/echo :message "hi")')).not.toThrow(
 			/no such server/,
 		);
 	});
@@ -163,10 +163,10 @@ describe("loading a toolkit server by name", () => {
 		},
 	]);
 	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+		runSync(interp, "(mcp-shutdown)");
 	});
 
 	it("accepts :name alone, like the bare-name form", () => {
@@ -182,10 +182,10 @@ describe("loading a toolkit server by name", () => {
 	});
 
 	it("rejects an unknown name in either form", () => {
-		expect(() => run(interp, '(load-mcp "nope")')).toThrow(
+		expect(() => runSync(interp, '(load-mcp "nope")')).toThrow(
 			/unknown predefined MCP server/,
 		);
-		expect(() => run(interp, '(load-mcp :name "nope")')).toThrow(
+		expect(() => runSync(interp, '(load-mcp :name "nope")')).toThrow(
 			/unknown predefined MCP server/,
 		);
 	});
@@ -193,10 +193,10 @@ describe("loading a toolkit server by name", () => {
 
 describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+		runSync(interp, "(mcp-shutdown)");
 	});
 
 	it("surfaces an argument's enum allowed values", () => {
@@ -222,10 +222,10 @@ function loadForm(name: string, delayMs = 0): string {
 
 describe("async MCP jobs", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+		runSync(interp, "(mcp-shutdown)");
 	});
 
 	it("load-mcp returns a job immediately", () => {
@@ -252,19 +252,21 @@ describe("async MCP jobs", () => {
 	});
 
 	it("rejects an invalid timeout even on a finalized job", () => {
-		expect(() => run(interp, "(await j -5)")).toThrow(/invalid await timeout/);
+		expect(() => runSync(interp, "(await j -5)")).toThrow(
+			/invalid await timeout/,
+		);
 	});
 
 	it("await honors a timeout and leaves the job awaitable", () => {
 		evalStr(interp, `(setq slow ${loadForm("slowfx", 2000)})`);
-		expect(() => run(interp, "(await slow 1)")).toThrow(/timed out/);
+		expect(() => runSync(interp, "(await slow 1)")).toThrow(/timed out/);
 		expect(evalStr(interp, "(job-status slow)")).toBe(":pending");
 	});
 
 	it("cancel aborts an in-flight job and stops tracking it", () => {
 		evalStr(interp, `(setq killme ${loadForm("killme", 3000)})`);
 		expect(evalStr(interp, "(cancel killme)")).toBe("t");
-		expect(() => run(interp, "(await killme 2000)")).toThrow(/no such job/);
+		expect(() => runSync(interp, "(await killme 2000)")).toThrow(/no such job/);
 		expect(evalStr(interp, "(list-mcps)")).not.toContain("killme");
 	});
 
@@ -279,7 +281,7 @@ describe("async MCP jobs", () => {
 
 	it("treats a connected server with no tools as a failure, not :loaded", () => {
 		const load = `(load-mcp :name "degraded" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${EMPTY_FIXTURE}")))`;
-		expect(() => run(interp, `(await ${load})`)).toThrow(/no tools/);
+		expect(() => runSync(interp, `(await ${load})`)).toThrow(/no tools/);
 		expect(evalStr(interp, "(list-mcps)")).not.toContain("degraded");
 		expect(evalStr(interp, "(list-tools)")).not.toContain("degraded");
 	});
@@ -322,10 +324,10 @@ describe("async MCP jobs", () => {
 
 describe("liveJobs reaping", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
 	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+		runSync(interp, "(mcp-shutdown)");
 	});
 
 	it("does not retain a job in (jobs) after it is awaited, and stays flat across cycles", () => {
@@ -350,7 +352,7 @@ describe("liveJobs reaping", () => {
 describe("core interpreter (no mcp extension)", () => {
 	function coreInterp(): Interp {
 		const interp = new Interp();
-		run(interp, prelude);
+		runSync(interp, prelude);
 		return interp;
 	}
 

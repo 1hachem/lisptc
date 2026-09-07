@@ -3,7 +3,7 @@ import {
 	type DocArg,
 	Interp,
 	prelude,
-	run,
+	runSync,
 } from "@repo/interpreter";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { mcpExtension } from "@repo/interpreter/mcp";
@@ -36,7 +36,7 @@ const documents = new TextDocuments(TextDocument);
 const interp = new Interp({
 	extensions: [mcpExtension(), compactionExtension()],
 });
-run(interp, prelude);
+runSync(interp, prelude);
 const localDocs = interp.docs();
 
 let session: SessionClient | undefined;

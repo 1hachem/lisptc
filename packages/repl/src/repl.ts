@@ -13,7 +13,7 @@ import {
 	type List,
 	newSym,
 	prelude,
-	run,
+	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
 import { mcpExtension } from "@repo/interpreter/mcp";
@@ -97,7 +97,7 @@ export class MemoryRepl implements InMemoryRepl {
 				proseExtension(),
 			],
 		});
-		run(interp, prelude);
+		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
 	}
@@ -128,7 +128,7 @@ export class MemoryRepl implements InMemoryRepl {
 		];
 		let error: Bounded = { model: "", user: "" };
 		try {
-			run(this.currentInterp, code);
+			runSync(this.currentInterp, code);
 		} catch (ex) {
 			if (ex instanceof EvalException) error = this.compactor.error(`${ex}\n`);
 			else if (ex === EndOfFile) {

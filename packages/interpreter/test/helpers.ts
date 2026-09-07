@@ -1,17 +1,17 @@
 import { compactionExtension } from "../src/compaction.ts";
-import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import { Interp, prelude, runSync, setWriter, str } from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 
 export function freshInterp(): Interp {
 	const interp = new Interp({
 		extensions: [secretsExtension(), compactionExtension()],
 	});
-	run(interp, prelude);
+	runSync(interp, prelude);
 	return interp;
 }
 
 export function ev(code: string, interp: Interp = freshInterp()): string {
-	return str(run(interp, code));
+	return str(runSync(interp, code));
 }
 
 export function evWithOutput(code: string): { value: string; output: string } {
@@ -21,7 +21,7 @@ export function evWithOutput(code: string): { value: string; output: string } {
 		output += s;
 	});
 	try {
-		const value = str(run(interp, code));
+		const value = str(runSync(interp, code));
 		return { value, output };
 	} finally {
 		setWriter(prev);

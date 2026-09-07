@@ -105,6 +105,53 @@ A channel is not registered, only emitted on, so an extension adding one costs
 the core nothing. `setWriter` remains the process-wide default sink for `user`,
 so a host that never learns about channels still works.
 
+## The evaluator is a generator
+
+`Interp.evalGen` is a generator that yields a `Promise` when it needs to wait,
+and `driveSync` / `runSync` pump it. That is what lets a single thread await
+without blocking on its own event loop. Two drivers share one evaluator: a host
+that cannot turn the loop uses `runSync`, which throws `cannot suspend` rather
+than half-running a program.
+
+### Only a call form can suspend
+
+`evalNow` handles every non-`Cell` form (an `Arg`, a `Sym`, a literal, a
+`Lambda`) synchronously, and every hot site checks `x instanceof Cell` before
+delegating. Creating a generator to read a variable was most of the cost: with
+the check, the argument loop allocates nothing for the common case.
+
+For the same reason the **call protocol lives in `evalGen`**, not in the `Func`
+classes. `Func.evalFrame`, `Closure.makeEnv` and `BuiltInFunc.evalWith` used to
+own it, and each added a generator (and two JS stack frames) per Lisp call. A
+builtin call now costs **zero** generator frames: `BuiltInFunc.call` is a plain
+method, and only a builtin declared with `defGen` goes through `callGen`.
+
+### Macro expansion is driven synchronously
+
+`expandMacros` runs at *compile* time, inside `compile`, which is an ordinary
+method reached from `evalGen`, `evalTry` and `compileInners`. It drives the macro
+body with `driveSync`, so a macro that tries to await raises `cannot suspend`.
+Expansion builds a form; it has no reason to wait on the world, and making the
+whole compile path a generator would cost every call site for that.
+
+### What generators cost, measured
+
+`pnpm --filter @repo/interpreter bench` is the gate. Against the pre-generator
+evaluator on one dev machine:
+
+| case | before | after |
+| --- | --- | --- |
+| 300k tail-recursive calls | 361 ms | 467 ms |
+| 300k `dotimes` iterations | 674 ms | 950 ms |
+| non-tail `cons` recursion depth | 5624 | 3366 |
+| non-tail arithmetic recursion depth | 3183 | 3366 |
+
+A generator frame is bigger than a call frame, so **recursion depth is the real
+cost**, not speed. Prelude `mapcar`, `_append` and `assoc` recurse once per
+element, so the depth number is the longest list they can walk. It scales
+linearly with `--stack-size`: 4000 buys about 5300 frames, 8000 about 10700, if
+a host ever needs the old headroom back.
+
 ## Evaluator traps
 
 ### `Closure.toString` does not print its captured environment

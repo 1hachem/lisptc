@@ -6,7 +6,7 @@ import {
 	Interp,
 	prelude,
 	Reader,
-	run,
+	runSync,
 	setExit,
 	setWriter,
 	stripProse,
@@ -50,7 +50,7 @@ class InteractiveRepl implements Repl {
 				proseExtension(),
 			],
 		});
-		run(interp, prelude);
+		runSync(interp, prelude);
 		interp.channels.on(MODEL, (d) => {
 			if (d.severity === "warning") write(`skipped ${d.text}\n`);
 		});
@@ -76,7 +76,7 @@ class InteractiveRepl implements Repl {
 			buffer = "";
 			try {
 				this.compactor.beginStep();
-				run(this.currentInterp, text);
+				runSync(this.currentInterp, text);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)
@@ -252,7 +252,7 @@ async function main(): Promise<void> {
 				const text = fs.readFileSync(abs, "utf8");
 				repl.interp.importStack.push(path.dirname(abs));
 				try {
-					run(repl.interp, text);
+					runSync(repl.interp, text);
 				} finally {
 					repl.interp.importStack.pop();
 				}

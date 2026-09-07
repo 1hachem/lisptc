@@ -29,7 +29,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bench": "node --experimental-transform-types --no-warnings bench/eval.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

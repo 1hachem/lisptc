@@ -4,7 +4,7 @@ import {
 	checkSyntax,
 	Interp,
 	prelude,
-	run,
+	runSync,
 	str,
 	stripProse,
 } from "../src/lisp.ts";
@@ -89,9 +89,9 @@ describe("no comment syntax", () => {
 describe("tolerant prose (an LLM's parentheses)", () => {
 	function tolerantly(text: string): { value: string; skipped: string[] } {
 		const interp = new Interp({ extensions: [proseExtension()] });
-		run(interp, prelude);
+		runSync(interp, prelude);
 		const skipped = collectSkips(interp);
-		const value = str(run(interp, text));
+		const value = str(runSync(interp, text));
 		return { value, skipped };
 	}
 
@@ -220,9 +220,9 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 	it("tolerates nothing without the prose extension", () => {
 		const bare = freshInterp();
 		const skipped = collectSkips(bare);
-		expect(() => run(bare, "(see below)")).toThrow(/undefined: see/);
-		expect(() => run(bare, "a stray (paren\n(+ 1 2)")).toThrow();
-		expect(() => run(bare, "an aside (see `x`)")).toThrow(/syntax error/);
+		expect(() => runSync(bare, "(see below)")).toThrow(/undefined: see/);
+		expect(() => runSync(bare, "a stray (paren\n(+ 1 2)")).toThrow();
+		expect(() => runSync(bare, "an aside (see `x`)")).toThrow(/syntax error/);
 		expect(skipped).toEqual([]);
 	});
 
@@ -231,7 +231,7 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			extensions: [proseExtension(() => "everything is prose here")],
 		});
 		const skipped = collectSkips(interp);
-		expect(str(run(interp, "(+ 1 2)"))).toBe("#<unspecified>");
+		expect(str(runSync(interp, "(+ 1 2)"))).toBe("#<unspecified>");
 		expect(skipped).toEqual(["everything is prose here"]);
 	});
 

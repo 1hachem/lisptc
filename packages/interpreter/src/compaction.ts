@@ -693,8 +693,8 @@ const GREP_ARGS: DocArg[] = [
 function registerCompaction(interp: Interp, c: Compactor): void {
 	c.attach(interp.channels);
 
-	interp.hooks.evalForm.use((interp, form, next) => {
-		const value = next(interp, form);
+	interp.hooks.evalForm.use(function* (interp, form, next) {
+		const value = yield* next(interp, form);
 		const report = c.result(interp, form, value);
 		if (report !== "") c.say({ model: report, user: report });
 		return value;
