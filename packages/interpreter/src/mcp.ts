@@ -614,8 +614,12 @@ export function registerMcp(
 	);
 
 	const shutdown = (): void => {
-		for (const rec of servers.values())
+		for (const rec of servers.values()) {
+			void runtime
+				.call("disconnect", { serverId: rec.serverId })
+				.catch(() => {});
 			for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
+		}
 		servers.clear();
 		jobs.shutdown();
 	};

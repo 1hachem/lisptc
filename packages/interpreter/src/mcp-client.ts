@@ -137,7 +137,19 @@ async function connect(
 		{ name: "lisptc", version: "1.0.0" },
 		{ capabilities: {} },
 	);
+	try {
+		return await openClient(client, conf, signal);
+	} catch (e) {
+		await client.close().catch(() => {});
+		throw e;
+	}
+}
 
+async function openClient(
+	client: Client,
+	conf: ConnConfig,
+	signal?: AbortSignal,
+): Promise<{ serverId: string; tools: Tool[] }> {
 	if ("url" in conf && conf.oauth) {
 		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
 		const { provider, authUrl } = await ensureAuthorized(conf.url, scope);

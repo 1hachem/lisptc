@@ -133,8 +133,24 @@ installed `<server>/<tool>` global is undefined on the way out, so no stale
 binding lingers with a closure capturing a dead `serverId`.
 
 `dispose` is a synchronous broadcast, but disconnecting is async, so teardown
-aborts and lets the disconnect finish on its own. `(mcp-shutdown)` is the path
-that can be awaited.
+issues the disconnects and lets them finish on their own. `(mcp-shutdown)` is
+the path that can be awaited.
+
+**Shutdown has to close the clients, and it did not used to.** Under the worker,
+`runtime.shutdown()` was `worker.terminate()`, and killing the thread took every
+SDK client and every stdio child process with it. On the main thread there is no
+thread to kill: aborting a job's `AbortController` does nothing to a client that
+already connected. So `shutdown()` disconnects each of *this interp's* servers
+by hand, and `connect` closes its client if anything after `new Client` throws
+(an abort included), which is what releases a child spawned by a connect that
+was cancelled.
+
+It closes this interp's servers, never the whole `clients` map, because that map
+is process-wide: clearing it would kill another interp's servers.
+
+The symptom is worth recognising, because nothing fails: every test passes, and
+the host process simply never exits. `test/shutdown-exit.test.ts` is the guard,
+spawning a host that loads a server and asserting it exits on its own.
 
 ### `${VAR}` in the toolkit expands against `process.env`
 
