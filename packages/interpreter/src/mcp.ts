@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { isNumeric } from "./arith.ts";
-import { Job, Jobs, type JobsRuntime, WorkerJobsRuntime } from "./jobs.ts";
+import { Job, Jobs, type JobsRuntime, LocalJobsRuntime } from "./jobs.ts";
 import {
 	Cell,
 	type DocArg,
@@ -15,6 +15,7 @@ import {
 	Sym,
 	zList,
 } from "./lisp.ts";
+import { type McpOp, mcpDispatch } from "./mcp-client.ts";
 import { keyName, parsePlist } from "./plist.ts";
 import type { ToJson } from "./types.ts";
 
@@ -300,7 +301,7 @@ function doUnload(
 ): Sym[] {
 	const rec = servers.get(name);
 	if (!rec) throw new EvalException("MCP server not loaded", name, false);
-	runtime.call("disconnect", { serverId: rec.serverId });
+	void runtime.call("disconnect", { serverId: rec.serverId }).catch(() => {});
 	for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 	servers.delete(name);
 	return rec.toolSyms;
@@ -321,12 +322,13 @@ function installServer(
 		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
 			const args = plistToJson(f[0] as List);
 			validate(tool, args);
-			const result = runtime.call("call-tool", {
-				serverId: res.serverId,
-				tool: tool.name,
-				args,
-			});
-			return jsonToLisp(result);
+			return runtime
+				.call("call-tool", {
+					serverId: res.serverId,
+					tool: tool.name,
+					args,
+				})
+				.then(jsonToLisp);
 		});
 		interp.defineGlobal(sym, wrapper, {
 			signature: toolSignature(sym.name, tool),
@@ -344,10 +346,6 @@ export function mcpExtension(options: RegisterMcpOptions = {}) {
 }
 
 const FROM_SOURCE = import.meta.url.endsWith(".ts");
-const BROKER_URL = new URL(
-	FROM_SOURCE ? "./mcp-broker.ts" : "./mcp-broker.js",
-	import.meta.url,
-);
 
 const TOOLKIT_URL = new URL(
 	FROM_SOURCE ? "../mcp.toolkit.json" : "./mcp.toolkit.json",
@@ -358,7 +356,11 @@ export function registerMcp(
 	interp: Interp,
 	options: RegisterMcpOptions = {},
 ): void {
-	const runtime = options.runtime ?? new WorkerJobsRuntime(BROKER_URL);
+	const runtime =
+		options.runtime ??
+		new LocalJobsRuntime((op, payload, signal) =>
+			mcpDispatch(op as McpOp, payload, signal),
+		);
 	const jobs = new Jobs(runtime, jsonToLisp);
 	jobs.installBuiltins(interp);
 
@@ -426,8 +428,9 @@ export function registerMcp(
 			const conf = predefined.get(name);
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
-			runtime.call("authorize", { url: conf.url, code, scopes: conf.scopes });
-			return newLispKeyword("authorized");
+			return runtime
+				.call("authorize", { url: conf.url, code, scopes: conf.scopes })
+				.then(() => newLispKeyword("authorized"));
 		},
 	);
 
@@ -443,11 +446,13 @@ export function registerMcp(
 			const conf = predefined.get(name);
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
-			const res = runtime.call("login", {
-				url: conf.url,
-				scopes: conf.scopes,
-			}) as { authUrl: string | null };
-			return res.authUrl ?? newLispKeyword("logged-in");
+			return runtime
+				.call("login", { url: conf.url, scopes: conf.scopes })
+				.then(
+					(res) =>
+						(res as { authUrl: string | null }).authUrl ??
+						newLispKeyword("logged-in"),
+				);
 		},
 	);
 
@@ -464,8 +469,9 @@ export function registerMcp(
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
 			if (servers.has(name)) doUnload(interp, runtime, servers, name);
-			runtime.call("logout", { url: conf.url });
-			return newLispKeyword("logged-out");
+			return runtime
+				.call("logout", { url: conf.url })
+				.then(() => newLispKeyword("logged-out"));
 		},
 	);
 
@@ -618,7 +624,7 @@ export function registerMcp(
 		"mcp-shutdown",
 		0,
 		"(mcp-shutdown)",
-		"Shut down the MCP broker worker and unload all servers.",
+		"Disconnect every loaded MCP server and unload its bindings.",
 		z.tuple([]),
 		() => {
 			shutdown();

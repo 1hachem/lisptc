@@ -46,6 +46,17 @@ When you fix something non-obvious, add it to the page for that area.
   chat turn, the `▲`/`▼` vote on an assistant turn, the first-party proxy the
   browser half talks to, identity, and the privacy switch.
 
+### Proposals
+
+Pages under [proposals/](./proposals/) describe work not yet built, unlike every
+other page here. Each one is deleted or folded into the page above it once the
+change lands.
+
+- [Await without workers](./proposals/single-thread-async.md) — making
+  `Interp.eval` suspendable with a generator, so async work runs on Node's own
+  event loop and the worker thread, the `SharedArrayBuffer` bridge and the broker
+  protocol can be deleted.
+
 `packages/bloub` is a package apart, with its own
 [CLAUDE.md](../packages/bloub/CLAUDE.md) and
 [docs/](../packages/bloub/docs/): the engine, what was measured off the reference

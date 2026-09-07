@@ -1,34 +1,47 @@
 # The async jobs runtime, and MCP on top of it
 
-The interpreter is fully synchronous. This layer is how it (a) makes a blocking
-call into async work and (b) starts background jobs it can await, poll or cancel.
-It is deliberately domain-agnostic: `jobs.ts` and `jobs-broker.ts` know nothing
-about MCP. MCP is a *consumer*.
+The evaluator suspends rather than blocks (see
+[interpreter.md](./interpreter.md)), so async work runs on Node's own event
+loop. This layer is how the language (a) makes a call into async work that reads
+as ordinary and (b) starts background jobs it can await, poll or cancel. It is
+deliberately domain-agnostic: `jobs.ts` knows nothing about MCP. MCP is a
+*consumer*.
 
 ```
-main thread                          worker thread
-src/jobs.ts      ── SharedArrayBuffer ──  src/jobs-broker.ts   (generic scheduler)
-src/mcp.ts       ── postMessage      ──  src/mcp-broker.ts    (domain dispatch)
-                    src/jobs-protocol.ts  (shared wire constants)
+src/jobs.ts        JobsRuntime (interface) + LocalJobsRuntime + Job + Jobs
+src/mcp.ts         the built-ins, and the finalizer that installs tool bindings
+src/mcp-client.ts  the domain dispatch: connect, call-tool, login, ...
 ```
 
-## Why a worker at all
+## Why there is no worker any more
 
-A single Node thread cannot block on its own event loop without deadlocking. So
-all async work happens on a separate thread with its own event loop; the main
-thread posts a request and blocks on `Atomics.wait`, and the worker writes the
-reply back into shared memory and calls `Atomics.notify`.
+There used to be one, because a synchronous `Interp.eval` had to *return* a
+value, and a thread cannot block on its own event loop without deadlocking. So
+the work went to a second thread with its own loop, and the main thread waited
+on `Atomics.wait` over a `SharedArrayBuffer`, with a 1 MiB inline reply buffer,
+a spill-to-tempfile path for anything larger, JSON on the wire, timeouts as
+deadlock guards, and a broker file that had to sit beside its importer under
+whichever extension the importer had.
 
-`jobs-protocol.ts` is the single source of truth for reply states, buffer sizes,
-timeouts and message shapes, and is kept **import-free** so the worker can use it
-without dragging in the interpreter.
+All of it existed to serve that one signature. `evalGen` yields a promise
+instead, so the MCP SDK's own clients now run on the main thread and their
+promises reach Lisp directly. Nothing is serialized, nothing spills, and a
+result stays a live JS value instead of a JSON round-trip.
 
-A reply too large for the 1 MiB inline buffer **spills** to a temp file
-(`STATE_SPILL`); the length field is repurposed as the path's byte length.
+## A promise is a suspension, not a value
 
-Timeouts: `DEFAULT_TIMEOUT_MS` (30s) per blocking call, `AWAIT_TIMEOUT_MS` (50s)
-for `(await …)`. A non-finite `await` timeout is rejected, because it would make
-`Atomics.wait` block forever.
+The rule lives in the evaluator: a `Promise` returned from a builtin body is not
+a Lisp value, so `evalGen` yields it and resumes with its result. Lisp code
+cannot construct one, which is what makes the rule unambiguous.
+
+That is why `mcp.ts` reads as it does. A tool binding returns
+`runtime.call("call-tool", …).then(jsonToLisp)`, and `(linear/list-issues …)`
+still looks synchronous in Lisp while blocking nothing. `login`, `logout` and
+`mcp-authorize` are the same shape.
+
+A rejection surfaces as an `EvalException` whose **value is the error text**, so
+`(try … (catch (e) …))` binds something the agent can act on rather than an
+internal op code. `BuiltInFunc.settle` is where that happens.
 
 ## Job lifecycle
 
@@ -36,58 +49,40 @@ A producer starts a job with `runtime.start(op, payload)` and gets back a `Job`
 handle (tracked via `jobs.track`). Results apply through a **finalizer**, by two
 paths:
 
-1. **push** — when a job settles the worker `postMessage`s a `job-settled` event
-   that `Jobs` applies as soon as the main thread's event loop next turns. So an
-   effect appears **automatically between evals, with no explicit await**.
-2. **`(await job)`** — blocks on the `Atomics.wait` bridge and applies the
-   finalizer synchronously.
+1. **push** — the runtime's `promise.then` fires when the job settles and `Jobs`
+   applies the finalizer. So an effect appears **automatically between evals,
+   with no explicit await**, and now also mid-eval at any suspension point.
+2. **`(await job)`** — the built-in returns the job's promise, so the evaluator
+   suspends and the finalizer runs on the way back.
 
-The two are idempotent via `Job.finalized`. Because the push is delivered by the
-event loop, a purely synchronous embedder that never yields between evals must
-use `await`.
-
-`Jobs.live` holds only jobs still running: a settled job is reaped when collected.
+The two are idempotent via `Job.finalized`. `Jobs.live` holds only jobs still
+running: a settled job is reaped when collected.
 
 `(cancel job)` calls `AbortController.abort()`, wired into the op's `signal`, so
 it aborts the in-flight request rather than merely forgetting about it.
 
-## Two error-message traps, same shape
+## Timeouts are policy now, not a deadlock guard
 
-Both `request()`'s error path and `collectSettled` bind the handler variable to
-the **actual error text**, so `(try … (catch (e) …))` gets something meaningful —
-not `op` (an internal op-code like `"call-tool"`) and not `job.label`, neither of
-which a `catch` could act on. `await-all` matches, collecting a failure as
-`(:error "message")` in place so it never discards its succeeded siblings.
+`DEFAULT_TIMEOUT_MS` (30s) and `AWAIT_TIMEOUT_MS` (50s) used to exist because
+`Atomics.wait` with no bound would hang the thread forever. Nothing hangs any
+more: they stay only so one agent turn cannot wait on a dead server without end,
+and `(await job ms)` lets the agent choose. A non-finite timeout is rejected.
 
-In the worker, a job's promise is tagged as a **never-rejecting** `Settled`
-outcome, so a failing job cannot reject a combinator (`await-all` /
-`await-any`), and `.then` absorbs rejections so a never-awaited failure never
-becomes an `unhandledRejection`.
+`withTimeout` unrefs its timer, so a pending deadline cannot hold the process
+open by itself.
 
-## `JobsRuntime` is the swappable transport
+## `JobsRuntime` is still the swappable transport
 
-The bundled `WorkerJobsRuntime` offloads to a `worker_threads` worker. A
-different backend — a Redis-backed queue, say — can implement the same interface
-without touching the built-ins or the domain layer. The worker is `unref`'d so it
-cannot hold the process open on its own.
+`LocalJobsRuntime` is the only implementation, and it is deliberately not the
+interface: a different backend (a Redis-backed queue, say) can implement the same
+shape without touching the built-ins or the domain layer. It takes a
+`Dispatch`, which is what keeps `jobs.ts` free of MCP.
 
-A concrete worker supplies a `dispatch(op, payload, signal)` and calls
-`runWorker(dispatch)`. The scheduler handles the meta-ops
-(`start`/`await`/`await-all`/`await-any`/`job-status`/`cancel`) and forwards
-everything else. `Op` is the domain's own union so its dispatch keeps a typed,
-exhaustively-checked switch; the scheduler does the single cast from the raw wire
-string at the boundary, and an unknown op still reaches the `default` and throws.
+`mcp.ts` does the single cast from the wire string to `McpOp` at the boundary, so
+`mcpDispatch` keeps a typed, exhaustively-checked switch and an unknown op still
+reaches its `default` and throws.
 
 ## MCP specifics
-
-### The broker is a sibling file, always
-
-`src/mcp.ts` finds it by `new URL("./mcp-broker.<ext>", import.meta.url)`. A
-worker is a second entry point by definition, so it can never be folded into a
-bundle — it is always a sibling, under whichever extension `mcp.ts` itself has
-(`.ts` when node runs the source, `.js` after a build). The same is true of
-`mcp.toolkit.json`, which sits at the package root next to `src/` and is emitted
-beside the code in a build. See `apps/api/vite.config.ts`, which copies both.
 
 ### A tool-less connect is a load failure
 
@@ -99,21 +94,29 @@ tools.
 
 ### A tool result reaches Lisp as data
 
-The broker prefers `structuredContent`, but most servers put their JSON in a text
-block instead. `asJsonDocument` parses an all-text result **only when it is a
-JSON object or array**: an object becomes an alist the agent can `assoc`, and the
-REPL reports its keys rather than a word count.
+`mcp-client.ts` prefers `structuredContent`, but most servers put their JSON in a
+text block instead. `asJsonDocument` parses an all-text result **only when it is
+a JSON object or array**: an object becomes an alist the agent can `assoc`, and
+the REPL reports its keys rather than a word count.
 
 Only objects and arrays. A tool that answered `42`, `null` or `"ok"` meant text,
 and parsing those would replace its answer with a number, nil or a re-quoted
 string.
 
-### `load-mcp` is async, tool calls are not
+### `load-mcp` is a job, tool calls are not
 
-`load-mcp` returns a `Job` immediately and does not block; `(await job)` installs
-the server's `<server>/<tool>` bindings and returns the tool list. Tool calls
-themselves stay synchronous `runtime.call`s — the job infrastructure is generic,
-so they could opt in later.
+`load-mcp` returns a `Job` immediately and does not block, so two loads run
+concurrently; `(await job)` installs the server's `<server>/<tool>` bindings and
+returns the tool list. A tool call is an ordinary suspending call instead, since
+there is nothing to overlap it with.
+
+### The client module is process-wide
+
+`clients`, the shared OAuth callback server and the token store live in
+`mcp-client.ts` module scope, so **every interp in a process shares them**. Under
+the worker each interp got its own copy, one per broker. Two interps loading the
+same server now share nothing but that map, keyed by `serverId`, so they do not
+collide; but a test that expects isolation between interps will not get it.
 
 ### `LOAD_MCP_ARGS` marks only `:name` required
 
@@ -129,8 +132,9 @@ the interp releases them through the `dispose` hook. Both may fire. Every
 installed `<server>/<tool>` global is undefined on the way out, so no stale
 binding lingers with a closure capturing a dead `serverId`.
 
-Without the `dispose` hook, a REPL `reset()` stranded the broker worker it had
-spun up — one leaked per reset.
+`dispose` is a synchronous broadcast, but disconnecting is async, so teardown
+aborts and lets the disconnect finish on its own. `(mcp-shutdown)` is the path
+that can be awaited.
 
 ### `${VAR}` in the toolkit expands against `process.env`
 
@@ -138,6 +142,10 @@ So the bundled config can point at environment-provided paths (the Nix-built
 browser, say) without hardcoding machine-specific store paths. Unset vars expand
 to the empty string, and a malformed config entry is ignored rather than crashing
 interpreter startup.
+
+`mcp.toolkit.json` still sits at the package root next to `src/` and is emitted
+beside the code in a build (see `apps/api/vite.config.ts`, which copies it). It
+no longer has a broker entry point to keep it company.
 
 ## Test fixtures
 
@@ -159,3 +167,7 @@ The concurrency test asserts on the two jobs' **states** rather than on elapsed
 time. An earlier wall-clock version compared a two-load run against a single-load
 baseline and flaked whenever CPU contention made two simultaneous node spawns
 cost more than the one the baseline measured.
+
+Tests that touch MCP drive the interpreter with `runAsync` (or `evAsync` from
+`test/helpers.ts`); `runSync` raises `cannot suspend` the moment a tool call
+needs the loop.

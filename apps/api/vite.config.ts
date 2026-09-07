@@ -33,10 +33,7 @@ export default defineConfig({
 		ssr: true,
 		outDir: "dist",
 		rollupOptions: {
-			input: {
-				index: "src/index.ts",
-				"mcp-broker": "@repo/interpreter/mcp-broker",
-			},
+			input: { index: "src/index.ts" },
 			output: { format: "esm", entryFileNames: "[name].js" },
 		},
 	},

@@ -1,18 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync, unlinkSync } from "node:fs";
-import { Worker } from "node:worker_threads";
 import { z } from "zod";
-import {
-	AWAIT_TIMEOUT_MS,
-	CTRL_BYTES,
-	DATA_BYTES,
-	DEFAULT_TIMEOUT_MS,
-	type JobSettledMessage,
-	type SettledReply,
-	STATE_ERROR,
-	STATE_PENDING,
-	STATE_SPILL,
-} from "./jobs-protocol.ts";
 import {
 	Cell,
 	EvalException,
@@ -23,126 +10,175 @@ import {
 } from "./lisp.ts";
 import type { ToJson } from "./types.ts";
 
-export type { JobSettledMessage, SettledReply } from "./jobs-protocol.ts";
+export const DEFAULT_TIMEOUT_MS = 30_000;
+export const AWAIT_TIMEOUT_MS = 50_000;
+
+export type SettledReply = {
+	jobId: string;
+	ok: boolean;
+	v?: unknown;
+	e?: string;
+};
+
+export type JobSettledMessage = {
+	type?: string;
+	jobId?: string;
+	ok?: boolean;
+	v?: unknown;
+	e?: string;
+};
 
 export interface JobsRuntime {
-	call(op: string, payload: unknown, timeoutMs?: number): unknown;
+	call(op: string, payload: unknown, timeoutMs?: number): Promise<unknown>;
 	start(op: string, payload: unknown): string;
-	awaitJob(jobId: string, timeoutMs?: number): unknown;
-	awaitAll(jobIds: string[], timeoutMs?: number): { results: SettledReply[] };
-	awaitAny(jobIds: string[], timeoutMs?: number): SettledReply;
+	awaitJob(jobId: string, timeoutMs?: number): Promise<unknown>;
+	awaitAll(
+		jobIds: string[],
+		timeoutMs?: number,
+	): Promise<{ results: SettledReply[] }>;
+	awaitAny(jobIds: string[], timeoutMs?: number): Promise<SettledReply>;
 	jobStatus(jobId: string): string;
 	cancelJob(jobId: string): void;
 	onSettled(handler: (msg: JobSettledMessage) => void): void;
 	shutdown(): void;
 }
 
-export class WorkerJobsRuntime implements JobsRuntime {
-	private worker: Worker | null = null;
+export type Dispatch = (
+	op: string,
+	payload: unknown,
+	signal?: AbortSignal,
+) => Promise<unknown>;
+
+interface JobRecord {
+	promise: Promise<unknown>;
+	controller: AbortController;
+	state: "pending" | "done" | "error";
+}
+
+const message = (e: unknown): string =>
+	e instanceof Error ? e.message : String(e);
+
+function withTimeout<T>(
+	promise: Promise<T>,
+	timeoutMs: number,
+	what: string,
+): Promise<T> {
+	if (!Number.isFinite(timeoutMs)) return promise;
+	let timer: NodeJS.Timeout;
+	return Promise.race([
+		promise.finally(() => clearTimeout(timer)),
+		new Promise<never>((_, reject) => {
+			timer = setTimeout(
+				() => reject(new EvalException(`${what} timed out`, timeoutMs, false)),
+				timeoutMs,
+			);
+			timer.unref?.();
+		}),
+	]);
+}
+
+export class LocalJobsRuntime implements JobsRuntime {
+	private readonly records = new Map<string, JobRecord>();
 	private settledHandler: ((msg: JobSettledMessage) => void) | undefined;
 
-	constructor(
-		private readonly workerUrl: URL,
-		private readonly execArgv: string[] = [
-			"--no-warnings",
-			"--experimental-transform-types",
-		],
-	) {}
-
-	private ensureWorker(): Worker {
-		if (this.worker) return this.worker;
-		this.worker = new Worker(this.workerUrl, { execArgv: this.execArgv });
-		if (this.settledHandler) this.worker.on("message", this.settledHandler);
-		this.worker.unref();
-		return this.worker;
-	}
+	constructor(private readonly dispatch: Dispatch) {}
 
 	onSettled(handler: (msg: JobSettledMessage) => void): void {
-		if (this.worker && this.settledHandler)
-			this.worker.off("message", this.settledHandler);
 		this.settledHandler = handler;
-		if (this.worker) this.worker.on("message", handler);
 	}
 
-	call(op: string, payload: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): unknown {
-		return this.request(op, payload, timeoutMs);
+	call(
+		op: string,
+		payload: unknown,
+		timeoutMs = DEFAULT_TIMEOUT_MS,
+	): Promise<unknown> {
+		return withTimeout(this.dispatch(op, payload), timeoutMs, op);
 	}
 
 	start(op: string, payload: unknown): string {
-		const res = this.request("start", { op, payload }) as { jobId: string };
-		return res.jobId;
+		const jobId = randomUUID();
+		const controller = new AbortController();
+		const record: JobRecord = {
+			promise: this.dispatch(op, payload, controller.signal),
+			controller,
+			state: "pending",
+		};
+		this.records.set(jobId, record);
+		record.promise.then(
+			(v) => {
+				record.state = "done";
+				this.settledHandler?.({ type: "job-settled", jobId, ok: true, v });
+			},
+			(e) => {
+				record.state = "error";
+				this.settledHandler?.({
+					type: "job-settled",
+					jobId,
+					ok: false,
+					e: message(e),
+				});
+			},
+		);
+		return jobId;
 	}
 
-	awaitJob(jobId: string, timeoutMs = AWAIT_TIMEOUT_MS): unknown {
-		return this.request("await", { jobId }, timeoutMs);
+	private record(jobId: string): JobRecord {
+		const record = this.records.get(jobId);
+		if (!record) throw new EvalException("no such job", jobId, false);
+		return record;
+	}
+
+	awaitJob(jobId: string, timeoutMs = AWAIT_TIMEOUT_MS): Promise<unknown> {
+		return withTimeout(this.record(jobId).promise, timeoutMs, "await");
+	}
+
+	private settled(jobId: string): Promise<SettledReply> {
+		return this.record(jobId).promise.then(
+			(v) => ({ jobId, ok: true as const, v }),
+			(e) => ({ jobId, ok: false as const, e: message(e) }),
+		);
 	}
 
 	awaitAll(
 		jobIds: string[],
 		timeoutMs = AWAIT_TIMEOUT_MS,
-	): { results: SettledReply[] } {
-		return this.request("await-all", { jobIds }, timeoutMs) as {
-			results: SettledReply[];
-		};
+	): Promise<{ results: SettledReply[] }> {
+		return withTimeout(
+			Promise.all(jobIds.map((id) => this.settled(id))).then((results) => ({
+				results,
+			})),
+			timeoutMs,
+			"await-all",
+		);
 	}
 
-	awaitAny(jobIds: string[], timeoutMs = AWAIT_TIMEOUT_MS): SettledReply {
-		return this.request("await-any", { jobIds }, timeoutMs) as SettledReply;
+	awaitAny(
+		jobIds: string[],
+		timeoutMs = AWAIT_TIMEOUT_MS,
+	): Promise<SettledReply> {
+		if (jobIds.length === 0)
+			throw new EvalException("await-any: no jobs", null, false);
+		return withTimeout(
+			Promise.race(jobIds.map((id) => this.settled(id))),
+			timeoutMs,
+			"await-any",
+		);
 	}
 
 	jobStatus(jobId: string): string {
-		return (this.request("job-status", { jobId }) as { status: string }).status;
+		return this.records.get(jobId)?.state ?? "unknown";
 	}
 
 	cancelJob(jobId: string): void {
-		this.request("cancel", { jobId });
+		const record = this.records.get(jobId);
+		if (!record) return;
+		record.controller.abort();
+		this.records.delete(jobId);
 	}
 
 	shutdown(): void {
-		if (!this.worker) return;
-		void this.worker.terminate();
-		this.worker = null;
-	}
-
-	private request(
-		op: string,
-		payload: unknown,
-		timeoutMs = DEFAULT_TIMEOUT_MS,
-	): unknown {
-		const w = this.ensureWorker();
-		const ctrlSab = new SharedArrayBuffer(CTRL_BYTES);
-		const dataSab = new SharedArrayBuffer(DATA_BYTES);
-		const ctrl = new Int32Array(ctrlSab);
-		Atomics.store(ctrl, 0, STATE_PENDING);
-		const id = randomUUID();
-		w.postMessage({ id, op, payload, ctrl: ctrlSab, data: dataSab });
-
-		const waited = Atomics.wait(ctrl, 0, STATE_PENDING, timeoutMs);
-		if (waited === "timed-out")
-			throw new EvalException("async call timed out", op, false);
-
-		const state = Atomics.load(ctrl, 0);
-		const len = Atomics.load(ctrl, 1);
-		let json: string;
-		if (state === STATE_SPILL) {
-			const path = new TextDecoder().decode(new Uint8Array(dataSab, 0, len));
-			json = readFileSync(path, "utf8");
-			try {
-				unlinkSync(path);
-			} catch {}
-		} else {
-			json = new TextDecoder().decode(new Uint8Array(dataSab, 0, len));
-		}
-
-		const parsed = JSON.parse(json) as unknown;
-		if (state === STATE_ERROR) {
-			const msg =
-				parsed && typeof parsed === "object" && "error" in parsed
-					? String((parsed as { error: unknown }).error)
-					: json;
-			throw new EvalException("job error", msg, false);
-		}
-		return parsed;
+		for (const record of this.records.values()) record.controller.abort();
+		this.records.clear();
 	}
 }
 
@@ -254,7 +290,9 @@ export class Jobs {
 				if (!(job instanceof Job)) throw new EvalException("not a job", job);
 				const timeout = parseTimeout(args[1]);
 				if (job.finalized) return job.cached;
-				return this.collect(job, runtime.awaitJob(job.jobId, timeout));
+				return runtime
+					.awaitJob(job.jobId, timeout)
+					.then((raw) => this.collect(job, raw));
 			},
 		);
 
@@ -269,20 +307,26 @@ export class Jobs {
 				const jobList = toJobs(args[0]);
 				if (jobList.length === 0) return null;
 				const byId = new Map(jobList.map((j) => [j.jobId, j]));
-				const res = runtime.awaitAll(
-					jobList.map((j) => j.jobId),
-					parseTimeout(args[1]),
-				);
-				return arrayToList(
-					res.results.map((r) => {
-						const job = byId.get(r.jobId);
-						if (!job)
-							throw new EvalException("unknown job in await-all", r.jobId);
-						if (!r.ok)
-							return arrayToList([newLispKeyword("error"), r.e ?? "unknown"]);
-						return this.collect(job, r.v);
-					}),
-				);
+				return runtime
+					.awaitAll(
+						jobList.map((j) => j.jobId),
+						parseTimeout(args[1]),
+					)
+					.then(({ results }) =>
+						arrayToList(
+							results.map((r) => {
+								const job = byId.get(r.jobId);
+								if (!job)
+									throw new EvalException("unknown job in await-all", r.jobId);
+								if (!r.ok)
+									return arrayToList([
+										newLispKeyword("error"),
+										r.e ?? "unknown",
+									]);
+								return this.collect(job, r.v);
+							}),
+						),
+					);
 			},
 		);
 
@@ -298,13 +342,17 @@ export class Jobs {
 				if (jobList.length === 0)
 					throw new EvalException("await-any: no jobs", null);
 				const byId = new Map(jobList.map((j) => [j.jobId, j]));
-				const r = runtime.awaitAny(
-					jobList.map((j) => j.jobId),
-					parseTimeout(args[1]),
-				);
-				const job = byId.get(r.jobId);
-				if (!job) throw new EvalException("unknown job in await-any", r.jobId);
-				return this.collectSettled(job, r);
+				return runtime
+					.awaitAny(
+						jobList.map((j) => j.jobId),
+						parseTimeout(args[1]),
+					)
+					.then((r) => {
+						const job = byId.get(r.jobId);
+						if (!job)
+							throw new EvalException("unknown job in await-any", r.jobId);
+						return this.collectSettled(job, r);
+					});
 			},
 		);
 

@@ -8,7 +8,6 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { oauthEnv } from "@repo/env/oauth";
-import { runWorker } from "./jobs-broker.ts";
 import {
 	type CallbackServer,
 	createAuthCallback,
@@ -84,7 +83,7 @@ async function startCallbackCapture(
 
 const clients = new Map<string, { client: Client; tools: Tool[] }>();
 
-type McpOp =
+export type McpOp =
 	| "connect"
 	| "login"
 	| "authorize"
@@ -94,7 +93,7 @@ type McpOp =
 	| "disconnect"
 	| "search";
 
-async function dispatch(
+export async function mcpDispatch(
 	op: McpOp,
 	payload: unknown,
 	signal?: AbortSignal,
@@ -129,8 +128,6 @@ async function dispatch(
 			throw new Error(`unknown op: ${op}`);
 	}
 }
-
-runWorker(dispatch);
 
 async function connect(
 	conf: ConnConfig,

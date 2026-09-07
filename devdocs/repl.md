@@ -19,7 +19,7 @@ shared over a unix socket).
   configuration, the other is per-interpreter state.
 
 The outgoing interp is `dispose()`d first, so an extension holding something the
-language cannot reclaim — the MCP broker worker — releases it rather than leaking
+language cannot reclaim — a live MCP client — releases it rather than leaking
 one per reset.
 
 ### Construction ordering trap

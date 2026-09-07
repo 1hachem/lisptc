@@ -1,5 +1,12 @@
 import { compactionExtension } from "../src/compaction.ts";
-import { Interp, prelude, runSync, setWriter, str } from "../src/lisp.ts";
+import {
+	Interp,
+	prelude,
+	runAsync,
+	runSync,
+	setWriter,
+	str,
+} from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 
 export function freshInterp(): Interp {
@@ -12,6 +19,13 @@ export function freshInterp(): Interp {
 
 export function ev(code: string, interp: Interp = freshInterp()): string {
 	return str(runSync(interp, code));
+}
+
+export async function evAsync(
+	code: string,
+	interp: Interp = freshInterp(),
+): Promise<string> {
+	return str(await runAsync(interp, code));
 }
 
 export function evWithOutput(code: string): { value: string; output: string } {

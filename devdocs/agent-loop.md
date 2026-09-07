@@ -75,7 +75,7 @@ doubles as LRU recency: a touched thread is re-inserted at the end, so the
 least-recently-used is always `keys().next()`. No thread id means an ephemeral
 REPL, preserving the old stateless behaviour.
 
-Eviction does **not** yet release the thread's MCP broker worker (`TODO` in
+Eviction does **not** yet release the thread's MCP clients (`TODO` in
 `repl-store.ts`).
 
 A thrown error from `evalCode` means an unexpected *host* error — the REPL renders

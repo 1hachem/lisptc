@@ -5,9 +5,9 @@ through (`hooks.ts`, `channels.ts`) and the tolerant reader built on them
 (`prose.ts`). Derived from Nukata Lisp; what follows is only what a reader of the
 code cannot work out from the code.
 
-**The interpreter is fully synchronous by design.** That single constraint is
-what forces the jobs runtime and the MCP broker onto a worker thread — see
-[jobs.md](./jobs.md).
+**The evaluator suspends rather than blocks.** `Interp.evalGen` is a generator
+that yields a promise, so async work runs on Node's own event loop and needs no
+second thread — see [jobs.md](./jobs.md).
 
 ## Reader
 

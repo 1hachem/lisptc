@@ -313,11 +313,16 @@ class BuiltInFunc extends Func {
 		}
 	}
 
-	*settle(promise: Promise<unknown>, frame: unknown[]): Eval {
+	*settle(promise: Promise<unknown>): Eval {
 		try {
 			return yield promise;
 		} catch (ex) {
-			throw this.failure(ex, frame);
+			if (ex instanceof EvalException || ex instanceof LoopSignal) throw ex;
+			throw new EvalException(
+				`${this.name} failed`,
+				ex instanceof Error ? ex.message : String(ex),
+				false,
+			);
 		}
 	}
 
@@ -1179,8 +1184,7 @@ export class Interp {
 							if (fn instanceof BuiltInFunc) {
 								if (fn.isSuspending) return yield* fn.callGen(frame);
 								const value = fn.call(frame);
-								if (value instanceof Promise)
-									return yield* fn.settle(value, frame);
+								if (value instanceof Promise) return yield* fn.settle(value);
 								return value;
 							}
 							env = new Cell(frame, fn.env);
