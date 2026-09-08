@@ -281,6 +281,34 @@ nothing needs that difference — every other form that will not parse is prose 
 this reader, and `checkSyntax` cannot tell the two apart. It asks nothing of an
 interp, so a host can call it without having installed the extension.
 
+## The prelude's higher-order list functions
+
+`filter`, `reduce` and `get-in` were added because an agent without them wrote
+manual recursion or a `dolist` accumulator for every selection, and a
+`(cdr (assoc ...))` chain guarded by `or` for every field. Three decisions in
+them are not free choices:
+
+`reduce` takes its initial value **last** (`(reduce f list [initial])`), the CL
+argument order, and checks that its second argument is a list. The other order
+(`(reduce f initial list)`) is just as common in the wild, and a model that
+guesses wrong would otherwise fold over the initial value and return something
+plausible and wrong. The `listp` guard turns that into an error naming the
+order, which costs one turn instead of a wrong answer nobody checks. `_reduce`
+is tail-recursive, so it inherits the evaluator's TCO and does not grow the
+stack on a long list; `filter`, like `mapcar` beside it, is not.
+
+`get-in` guards **every** step, not just the last: a step whose value is not a
+cons returns nil rather than raising, so a path through a field that came back
+as a string or nil ends in nil like a missing key does. The point of the helper
+is that no step needs a guard of its own.
+
+`get-in` also falls back to matching a symbol or keyword key against the string
+of its name (`_key-name`, which strips the `:` that `str` prints, since
+`symbol-name` takes a `Sym` and a `LispKeyword` is not one). JSON and MCP
+results carry string keys, and `(get-in x :port)` is the spelling a model
+reaches for; the fallback runs only after an exact `assoc` misses, so an alist
+that really is keyed by symbols still behaves.
+
 ## Argument plists (`plist.ts`)
 
 Lives apart from `mcp.ts`, which grew it first, because `mcp.ts` carries the

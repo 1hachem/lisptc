@@ -208,8 +208,14 @@ cdaar cdadr cddar cdddr`. (`cadr` = 2nd, `caddr` = 3rd element, etc.)
 - `(mapcar f list)` new list of `f` over each element. Example:
   `(mapcar (lambda (n) (* n n)) '(1 2 3))` → `(1 4 9)`.
 - `(nth n list)` the element at index `n`, counting from 0; `nil` past the end.
-- NOTE: there is no `mapc`, `reduce`, `filter`, `remove`, `elt`, or `sort` in the
-  prelude. Build them with recursion, `mapcar`, or `dolist`.
+- `(filter f list)` the elements `f` says yes to. Example:
+  `(filter (lambda (n) (< 10 n)) '(3 12 7 40))` → `(12 40)`.
+- `(reduce f list [initial])` fold left into one value: `f` takes the
+  accumulator and each element. Without `initial` the first element starts it
+  and an empty list is `nil`. `(reduce + '(1 2 3))` → `6`. The list comes
+  SECOND, the initial value last.
+- NOTE: there is no `mapc`, `remove`, `elt`, or `sort` in the prelude. Build them
+  with `filter`, `mapcar`, or `dolist`.
 
 **Predicates**
 - `(not x)` / `(null x)` true if `nil` · `(consp x)` true if a cons ·
@@ -220,6 +226,11 @@ cdaar cdadr cddar cdddr`. (`cadr` = 2nd, `caddr` = 3rd element, etc.)
   match · `(assq key alist)` first pair with `eq` car · `(assoc key alist)` first
   pair with `equal` car. Read an alist field:
   `(cdr (assoc "content" msg))`.
+- `(get-in record key...)` read through nested alists and lists in one step, with
+  every step guarded: `(get-in config "server" "port")` is `nil` when there is no
+  `"server"` instead of an error, so no `or` guard and no `assoc` chain.
+  A number key indexes a list — `(get-in reply "results" 0 "url")` — and a
+  keyword key matches the string of its name, so `:port` finds `"port"`.
 
 **Control-flow macros**
 - `(if test then else...)` · `(when test body...)` · `(unless test body...)` ·
