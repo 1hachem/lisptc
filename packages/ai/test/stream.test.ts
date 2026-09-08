@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 
 const TURNS: AgentDelta[][] = [
@@ -44,12 +44,17 @@ async function finalMessages(response: Response): Promise<WireMessage[]> {
 }
 
 describe("chat stream", () => {
+	let streamChatResponse: typeof import("../src/stream.ts").streamChatResponse;
+
+	beforeAll(async () => {
+		({ streamChatResponse } = await import("../src/stream.ts"));
+	});
+
 	beforeEach(() => {
 		turn = 0;
 	});
 
 	test("every model call reports what it cost, and only its own", async () => {
-		const { streamChatResponse } = await import("../src/stream.ts");
 		const messages = await finalMessages(
 			streamChatResponse({
 				messages: [{ type: "human", content: "what is 1 + 2?" }],
@@ -76,7 +81,6 @@ describe("chat stream", () => {
 	});
 
 	test("a REPL result carries no cost of its own", async () => {
-		const { streamChatResponse } = await import("../src/stream.ts");
 		const messages = await finalMessages(
 			streamChatResponse({
 				messages: [{ type: "human", content: "what is 1 + 2?" }],
