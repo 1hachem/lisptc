@@ -563,22 +563,33 @@ block and restores it after:
   (summarize-each (head pages-1 3)))
 ```
 
-**Summarizing** is two macros over `llm/complete`, so `(doc 'summarize)` and the
-expansion are all there is to them:
+**Three macros over `llm/complete`** carry the prompt for you, so `(doc
+'summarize)` and the expansion are all there is to them. Each takes the same
+options as `llm/complete`, plus `:words`, which caps the length asked for and
+the token budget.
 
 - `(summarize value :words 60 [option...])` → the summary text. The value's
   printed form goes into the prompt, so it reads a list of records as well as a
-  page of text. `:words` sets the length asked for and the token budget; the
-  other options are passed on.
+  page of text.
 - `(summarize-each values :words 25 [option...])` → the list of summaries, one
   per element, in order. One call per element, run in sequence, so slice the
   list first (`(head x 5)`) rather than summarizing hundreds of rows.
+- `(llm/answer question context :words 60 [option...])` → the answer, drawn from
+  `context` and nothing else. The model is told to use the context alone, so a
+  question the context does not answer comes back as **nil** rather than a
+  guess. That is the point of it: `nil` means "not in there", never a failed
+  call, so branch on it instead of echoing it.
 
 ```
 (setq brief (summarize acme/list-issues-1 :words 40))
 brief: 39 words
 
 (echo brief)
+
+(setq owner (llm/answer "who is assigned to ENG-12?" acme/list-issues-1))
+owner: "Nadia"
+
+(echo (if owner owner "the issues do not say who is assigned"))
 ```
 
 

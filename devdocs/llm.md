@@ -109,10 +109,19 @@ root.
 
 ## The macros are Lisp, and run before the prelude
 
-`summarize`, `summarize-each` and `with-llm` are macros rather than built-ins so
-that the prompt they build is program text the agent can read with `(doc
-'summarize)` and step around if it wants something else. They live in the
+`summarize`, `summarize-each`, `llm/answer` and `with-llm` are macros rather than
+built-ins so that the prompt they build is program text the agent can read with
+`(doc 'summarize)` and step around if it wants something else. They live in the
 `MACROS` string at the bottom of `llm.ts`.
+
+`llm/answer` is the one with a contract beyond its prompt. Grounding a model in a
+context is half a feature without a defined answer for "the context does not
+say", so its system message names a sentinel (`NOT-IN-CONTEXT`) and the expansion
+turns that into **nil**. The alternative, handing the sentinel back as a string,
+puts a magic value in front of an agent that will echo it to the user; nil is the
+language's own "nothing", and `(if (llm/answer q ctx) ...)` reads the way the
+question does. The match is a prefix, not an equality, because a model asked for
+exactly one token still sometimes adds a full stop.
 
 The trap: an extension runs in the `Interp` constructor, and the prelude is
 loaded by the host *after* that. So `defmacro`, `defun`, `let` and `if` do not

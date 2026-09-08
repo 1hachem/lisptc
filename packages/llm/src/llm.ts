@@ -564,6 +564,23 @@ const MACROS = `
 (_set-doc 'summarize-each "(summarize-each values [:words n] [option...])"
           "Summarize every element of a list and return the list of summaries, in order. One model call per element, run in sequence, so :words (default 25) keeps each one short.")
 
+(setq llm/answer
+      (macro (question context &rest options)
+        \`(let ((_llm-answer
+                  (llm/complete
+                    (concat "Context:\\n" (string ,context)
+                            "\\n\\nQuestion: " (string ,question))
+                    :system ,(concat
+                               "Answer the question from the context alone. Use nothing you know from outside it, prefer its own words, and never guess or fill a gap. If the context does not contain the answer, reply with exactly NOT-IN-CONTEXT and nothing else. Answer in at most "
+                               (string (_llm-option options :words 60))
+                               " words, with no preamble.")
+                    :max-tokens ,(_llm-option options :max-tokens
+                                              (* 4 (_llm-option options :words 60)))
+                    ,@(_llm-drop (_llm-drop options :words) :max-tokens))))
+           (if (string-prefix? "NOT-IN-CONTEXT" _llm-answer) nil _llm-answer))))
+(_set-doc 'llm/answer "(llm/answer question context [:words n] [option...])"
+          "Answer a question from a context and nothing else, and return the answer text. The context is any value: its printed form goes into the prompt, so a list of records works as well as a page of text. The model is told to use the context alone, so when the context does not contain the answer this returns nil rather than a guess -- test it with (if (llm/answer q ctx) ...) and never treat nil as a failed call. :words (default 60) caps the length and the token budget; every other option is passed on to llm/complete, an explicit :system included, which replaces the grounding instruction and is rarely what you want.")
+
 (setq with-llm
       (macro (options &rest body)
         \`(let ((_llm-saved *llm-defaults*))

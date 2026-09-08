@@ -336,6 +336,72 @@ describe("the summarization macros", () => {
 	});
 });
 
+describe("llm/answer", () => {
+	it("asks the question against the context, and only the context", async () => {
+		const { interp, seen } = llmInterp(() => "Ada Lovelace");
+		expect(
+			await evalStr(
+				interp,
+				`(progn (setq page "Ada Lovelace wrote the first algorithm.")
+				        (llm/answer "Who wrote it?" page))`,
+			),
+		).toBe('"Ada Lovelace"');
+		expect(seen[0].messages[1].content).toBe(
+			"Context:\nAda Lovelace wrote the first algorithm.\n\nQuestion: Who wrote it?",
+		);
+		expect(seen[0].messages[0].role).toBe("system");
+		expect(seen[0].messages[0].content).toContain("from the context alone");
+		expect(seen[0].messages[0].content).toContain("at most 60 words");
+		expect(seen[0].maxTokens).toBe(240);
+	});
+
+	it("returns nil when the context does not answer it", async () => {
+		const { interp } = llmInterp(() => "NOT-IN-CONTEXT");
+		expect(await evalStr(interp, '(llm/answer "When?" "no dates here")')).toBe(
+			"nil",
+		);
+	});
+
+	it("still returns nil when the model punctuates the sentinel", async () => {
+		const { interp } = llmInterp(() => "NOT-IN-CONTEXT.");
+		expect(await evalStr(interp, '(llm/answer "When?" "no dates")')).toBe(
+			"nil",
+		);
+	});
+
+	it("reads a list of records as its context", async () => {
+		const { interp, seen } = llmInterp(() => "ENG-12");
+		await runAsync(
+			interp,
+			`(llm/answer "Which issue mentions auth?"
+			             (list (cons "id" "ENG-12") (cons "title" "auth token")))`,
+		);
+		expect(seen[0].messages[1].content).toContain(
+			'(("id" . "ENG-12") ("title" . "auth token"))',
+		);
+	});
+
+	it("passes its other options on, with :words setting the budget", async () => {
+		const { interp, seen } = llmInterp();
+		await runAsync(
+			interp,
+			'(llm/answer "q" "ctx" :words 10 :provider :llamacpp :temperature 0.0)',
+		);
+		expect(seen[0].messages[0].content).toContain("at most 10 words");
+		expect(seen[0]).toMatchObject({
+			provider: "llamacpp",
+			temperature: 0,
+			maxTokens: 40,
+		});
+	});
+
+	it("traces as the built-in that ran it", async () => {
+		const { interp, traced } = llmInterp();
+		await runAsync(interp, '(llm/answer "q" "ctx")');
+		expect(traced.map((call) => call.builtin)).toEqual(["llm/complete"]);
+	});
+});
+
 describe("llm/providers", () => {
 	it("reports each provider, its default model and whether it is usable", async () => {
 		const { interp } = llmInterp();
@@ -357,6 +423,7 @@ describe("documentation", () => {
 			"message",
 			"summarize",
 			"summarize-each",
+			"llm/answer",
 			"with-llm",
 			"*llm-defaults*",
 		])
