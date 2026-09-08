@@ -164,7 +164,7 @@ Arithmetic built-ins:
 own (see §9), so nothing you compute is seen by anyone until you echo it.
 - `(echo x...)` print the arguments, space-separated, one newline at the end:
   strings as they are, everything else re-readable. `(echo)` is a blank line.
-  A keyword prints as itself when nothing follows it — `(echo (job-status j))`
+  A keyword prints as itself when nothing follows it — `(echo (promise-state p))`
   shows `:pending` — because only a keyword carrying a value after it is read
   as an option. So put a keyword you mean to print LAST, or wrap it in a list.
 - `(echo x :offset 0 :length n)` print a window of `x`, counted in
@@ -408,27 +408,29 @@ answer to the user, e.g. `the sum is 3`.
 - This is a REPL/driver behaviour, not part of the core language: outside the agent
   loop a form-less program is simply a no-op.
 
-## 10. MCP tools, async jobs, secrets
+## 10. MCP tools, promises, secrets
 
 ### 10.1 MCP servers
 
 - `(load-mcp "name")` — load a predefined server by name. **Asynchronous**: returns
-  a *job* immediately; the tools install only when the job settles.
-- **An unawaited load is finished code, not a loose end.** The job installs the
+  a *promise* immediately; the tools install only when it settles.
+- **An unawaited load is finished code, not a loose end.** The promise installs the
   tools itself when it settles, so a step that reported
-  `load-mcp-1: load-mcp:acme started in the background …` needs no follow-up:
+  `load-mcp-1: a promise, still running …` needs no follow-up:
   go on with the task and call the tools on a later step. `await` is for when
   you want the tool list in the SAME step, nothing else.
 - **To load and use in one step, wrap the SINGLE `load-mcp` call in `await`:**
   `(await (load-mcp "acme"))` blocks until ready and returns the tool list.
   Do NOT call `(load-mcp "acme")` and then `(await (load-mcp "acme"))` —
   that starts TWO separate connections. Either wrap it directly as above, or bind
-  the one job and await that: `(setq j (load-mcp "acme")) … (await j)`.
+  the one promise and await that: `(setq p (load-mcp "acme")) … (await p)`.
 - Ad-hoc servers (all still wrapped in `await` the same way):
   - Remote: `(load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))`
   - Local stdio: `(load-mcp :name "acme" :command "npx" :args '("-y" "acme-mcp-server"))`
   - OAuth remote: add `:oauth t` (and optional `:scopes`); then use `login`/`mcp-authorize`.
-- Load several concurrently: `(await-all (list (load-mcp "a") (load-mcp "b")))`.
+- Load several concurrently:
+  `(await (promise-all-settled (list (load-mcp "a") (load-mcp "b"))))` — settled
+  rather than all, so one server failing does not discard the others.
 - **Finding tools — two different searches, don't confuse them:**
   - `(search-mcps "query")` searches the *toolkit* of predefined servers (loaded or
     not) — use this to find a server to load. Also `(list-mcps)`, `(list-toolkit)`.
@@ -470,17 +472,27 @@ answer to the user, e.g. `the sum is 3`.
   (acme/get_widget :id "42")
   ```
 
-### 10.2 Async jobs
+### 10.2 Promises
 
-A *job* is a handle for background work (currently just `load-mcp`). It is a live
-handle, so the only way to name one is the name the REPL reported it under
-(`load-mcp-1`) or one you bound yourself — never the `#<job …>` text, which is
-not something the reader can read back.
-- `(await job [timeout-ms])` block for the result (re-raises the job's error).
-- `(await-all jobs [ms])` list of results in order (a failed one → `(:error "msg")`).
-- `(await-any jobs [ms])` first result.
-- `(job-status job)` → `:pending` / `:done` / `:error` (non-blocking).
-- `(jobs)` list in-flight jobs · `(cancel job)` abort one.
+A *promise* stands for work still running (currently just `load-mcp`). These are
+the host runtime's own promises, so they behave the way JavaScript promises do:
+one settles once and keeps its result, awaiting it twice gives the same answer,
+and the combinators are the ones you already know. A promise is a live value, so
+the only way to name one is the name the REPL reported it under (`load-mcp-1`) or
+one you bound yourself — never the `#<promise>` text, which the reader refuses.
+- `(await promise [timeout-ms])` wait for it and return its value (re-raises its
+  error). Waiting again on a settled promise returns the same value at once.
+- `(promise-all promises)` → one promise for every value, in order; rejects as
+  soon as any of them does.
+- `(promise-all-settled promises)` → one promise for how each turned out, as
+  `(:fulfilled value)` or `(:rejected "message")`; never rejects, so one failure
+  keeps its siblings. This is the one to reach for when loading several servers.
+- `(promise-any promises)` → the first to succeed · `(promise-race promises)` →
+  the first to settle either way.
+- `(promise-state promise)` → `:pending` / `:fulfilled` / `:rejected`, without
+  waiting.
+- `(promises)` list what is still running · `(cancel promise)` abort the work
+  behind one.
 
 ### 10.3 Secrets
 
@@ -509,10 +521,10 @@ not something the reader can read back.
   `:offset`/`:length`/`:match` are how you window and search what it prints.
 - Retyping data the REPL produced is the main way you produce wrong data (§9).
   Extract it with `grep`/`head` and echo the variable instead.
-- A `#<…>` form — `#<job …>`, `#<secret:KEY>`, `#<closure …>` — is a printout of
-  a value that cannot be read back, so typing one is always an error. Use the
-  name the value was reported under. `(await #<job load-mcp:acme 8d12…>)` is the
-  common version of this mistake; `(await load-mcp-1)` is what it meant.
+- A `#<…>` form — `#<promise>`, `#<secret:KEY>`, `#<closure …>` — is a printout
+  of a value that cannot be read back, so typing one is always an error. Use the
+  name the value was reported under. `(await #<promise>)` is the common version
+  of this mistake; `(await load-mcp-1)` is what it meant.
 - `head`/`tail`/`grep` RETURN a value; only `echo` prints — except a bare
   `head`/`tail`, whose slice the REPL prints instead of describing, because a
   slice is asked for in order to be read.

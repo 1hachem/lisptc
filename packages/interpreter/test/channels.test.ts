@@ -6,7 +6,7 @@ import {
 	MODEL,
 	USER,
 } from "../src/channels.ts";
-import { Interp, run, setWriter, str } from "../src/lisp.ts";
+import { Interp, runSync, setWriter, str } from "../src/lisp.ts";
 import { proseExtension } from "../src/prose.ts";
 
 function record(channels: Channels, channel: string): Diagnostic[] {
@@ -67,7 +67,7 @@ describe("an interp's channels", () => {
 	it("puts printed output on the user channel", () => {
 		const interp = new Interp();
 		const user = record(interp.channels, USER);
-		run(interp, '(echo "hello")');
+		runSync(interp, '(echo "hello")');
 		expect(user.map((d) => d.text)).toEqual(["hello\n"]);
 		expect(user.every((d) => d.severity === undefined)).toBe(true);
 	});
@@ -76,7 +76,7 @@ describe("an interp's channels", () => {
 		const first = new Interp();
 		const second = new Interp();
 		const seen = record(first.channels, USER);
-		run(second, '(echo "not yours")');
+		runSync(second, '(echo "not yours")');
 		expect(seen).toEqual([]);
 	});
 
@@ -86,7 +86,7 @@ describe("an interp's channels", () => {
 			out += s;
 		});
 		try {
-			run(new Interp(), '(echo "via the writer")');
+			runSync(new Interp(), '(echo "via the writer")');
 		} finally {
 			setWriter(prev);
 		}
@@ -96,10 +96,10 @@ describe("an interp's channels", () => {
 	it("reports a skip as a warning and a failure as critical", () => {
 		const interp = new Interp({ extensions: [proseExtension()] });
 		const model = record(interp.channels, MODEL);
-		expect(str(run(interp, "an aside (see below)\n(+ 1 2)"))).toBe("3");
+		expect(str(runSync(interp, "an aside (see below)\n(+ 1 2)"))).toBe("3");
 		expect(model.map((d) => d.severity)).toEqual(["warning"]);
 
-		expect(() => run(interp, "(car 1 2 3)")).toThrow();
+		expect(() => runSync(interp, "(car 1 2 3)")).toThrow();
 		expect(model.at(-1)?.severity).toBe("critical");
 	});
 });

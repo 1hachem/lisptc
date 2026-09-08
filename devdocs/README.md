@@ -12,11 +12,12 @@ When you fix something non-obvious, add it to the page for that area.
 ### The interpreter
 
 - [The interpreter core](./interpreter.md) — reader invariants (no comment
-  syntax, `#<…>`, prose stripping), the hooks/channels extension vocabulary,
-  the evaluator's traps, and the prose classifier.
-- [Async jobs and MCP](./jobs.md) — why async work runs on a worker thread, the
-  `SharedArrayBuffer` bridge, job lifecycle and cancellation, and what MCP adds
-  on top.
+  syntax, `#<…>`, prose stripping), the generator evaluator and what it costs,
+  the hooks/channels extension vocabulary, the evaluator's traps, and the prose
+  classifier.
+- [Promises and MCP](./promises.md) — why a Lisp promise is the host's own
+  promise, the two things a promise cannot tell you, the builtin kinds, and what
+  MCP adds on top.
 - [Context compaction](./compaction.md) — naming every REPL result, the word cap
   on what gets printed, and the `echo`/`head`/`tail`/`grep` built-ins that read
   the rest.

@@ -19,7 +19,7 @@ shared over a unix socket).
   configuration, the other is per-interpreter state.
 
 The outgoing interp is `dispose()`d first, so an extension holding something the
-language cannot reclaim — the MCP broker worker — releases it rather than leaking
+language cannot reclaim — a live MCP client — releases it rather than leaking
 one per reset.
 
 ### Construction ordering trap
@@ -29,6 +29,28 @@ one per reset.
 calls it before a subclass's field initializers have run, so an override must
 tolerate its own fields still being `undefined`. `AgentRepl.setup` guards
 `conversationVars` for exactly this reason.
+
+### Evaluation is async, and serialized
+
+`MemoryRepl.eval` / `evalOutput` return promises, because the interpreter can
+now suspend on a promise and the event loop turns *during* an eval. That makes a
+second `eval()` reachable while the first is still running, which was
+structurally impossible before.
+
+So `evaluate` queues: each call chains onto `inFlight` and runs alone. Without
+it, `compactor.beginStep()` / `endStep()` and the channel subscriptions in
+`evaluateOne` interleave, and two turns' output lands in each other's report.
+The queue survives a failed eval, so one bad step does not strand the ones
+behind it.
+
+`reset()` stays synchronous and does not queue: it swaps the interp immediately,
+so a host must not reset while an eval is in flight. An eval already running
+holds its own interp and its own subscriptions, so it finishes against the
+interp it started on.
+
+Nothing may swap the process-wide `setWriter` sink across a suspension point for
+the same reason. A host that wants the output of one eval subscribes to that
+interp's `user` channel, which is what `evaluateOne` does.
 
 ### `evalOutput` is the choke point
 

@@ -44,7 +44,26 @@ export function socketPathFor(session?: string): string {
 	return join(dir, `lisptc-${hash}.sock`);
 }
 
-function handle(repl: MemoryRepl, req: Request): unknown {
+async function respond(
+	socket: Socket,
+	repl: MemoryRepl,
+	line: string,
+	shutdown: () => void,
+): Promise<void> {
+	let reply: Reply;
+	let req: Request | undefined;
+	try {
+		req = JSON.parse(line) as Request;
+		reply = { id: req.id, ok: true, result: await handle(repl, req) };
+	} catch (ex) {
+		reply = { id: safeId(line), ok: false, error: String(ex) };
+	}
+	socket.write(`${JSON.stringify(reply)}\n`, () => {
+		if (req?.op === "shutdown") shutdown();
+	});
+}
+
+async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 	switch (req.op) {
 		case "eval":
 			return repl.eval(req.code ?? "");
@@ -117,25 +136,15 @@ export async function serve(
 
 	const server = createServer((socket: Socket) => {
 		let buffer = "";
+		let pending: Promise<void> = Promise.resolve();
 		socket.on("data", (chunk) => {
 			buffer += chunk.toString("utf8");
 			let nl = buffer.indexOf("\n");
 			while (nl !== -1) {
 				const line = buffer.slice(0, nl);
 				buffer = buffer.slice(nl + 1);
-				if (line.trim() !== "") {
-					let reply: Reply;
-					let req: Request | undefined;
-					try {
-						req = JSON.parse(line) as Request;
-						reply = { id: req.id, ok: true, result: handle(repl, req) };
-					} catch (ex) {
-						reply = { id: safeId(line), ok: false, error: String(ex) };
-					}
-					socket.write(`${JSON.stringify(reply)}\n`, () => {
-						if (req?.op === "shutdown") shutdown();
-					});
-				}
+				if (line.trim() !== "")
+					pending = pending.then(() => respond(socket, repl, line, shutdown));
 				nl = buffer.indexOf("\n");
 			}
 		});

@@ -13,7 +13,8 @@ import {
 	type List,
 	newSym,
 	prelude,
-	run,
+	runAsync,
+	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
 import { mcpExtension } from "@repo/interpreter/mcp";
@@ -30,7 +31,7 @@ export interface Repl {
 }
 
 export interface InMemoryRepl extends Repl {
-	eval(code: string): string;
+	eval(code: string): Promise<string>;
 }
 
 interface EvalResult extends Bounded {
@@ -71,6 +72,7 @@ function arrayToList(arr: unknown[]): List {
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private compactor: Compactor;
+	private inFlight: Promise<void> = Promise.resolve();
 	readonly secrets: SecretsStore;
 	private readonly wordLimit: number;
 
@@ -97,18 +99,30 @@ export class MemoryRepl implements InMemoryRepl {
 				proseExtension(),
 			],
 		});
-		run(interp, prelude);
+		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
 	}
 
 	protected setup(_interp: Interp): void {}
 
-	evalOutput(code: string): Bounded {
-		return render(this.evaluate(code));
+	async evalOutput(code: string): Promise<Bounded> {
+		return render(await this.evaluate(code));
 	}
 
-	protected evaluate(code: string): EvalResult {
+	protected evaluate(code: string): Promise<EvalResult> {
+		const done = this.inFlight.then(
+			() => this.evaluateOne(code),
+			() => this.evaluateOne(code),
+		);
+		this.inFlight = done.then(
+			() => undefined,
+			() => undefined,
+		);
+		return done;
+	}
+
+	private async evaluateOne(code: string): Promise<EvalResult> {
 		this.compactor.beginStep();
 		let model = "";
 		let user = "";
@@ -128,7 +142,7 @@ export class MemoryRepl implements InMemoryRepl {
 		];
 		let error: Bounded = { model: "", user: "" };
 		try {
-			run(this.currentInterp, code);
+			await runAsync(this.currentInterp, code);
 		} catch (ex) {
 			if (ex instanceof EvalException) error = this.compactor.error(`${ex}\n`);
 			else if (ex === EndOfFile) {
@@ -145,8 +159,8 @@ export class MemoryRepl implements InMemoryRepl {
 		};
 	}
 
-	eval(code: string): string {
-		return this.evalOutput(code).model;
+	async eval(code: string): Promise<string> {
+		return (await this.evalOutput(code)).model;
 	}
 
 	reset(): void {
@@ -165,8 +179,8 @@ export class AgentRepl extends MemoryRepl {
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 	}
 
-	override evalOutput(code: string): Bounded {
-		const result = this.evaluate(code);
+	override async evalOutput(code: string): Promise<Bounded> {
+		const result = await this.evaluate(code);
 		if (!isAnswer(code, result)) return render(result);
 		this.finished = true;
 		this.pendingProse.push(...result.skipped);

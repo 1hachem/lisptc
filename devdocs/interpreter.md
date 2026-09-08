@@ -5,9 +5,9 @@ through (`hooks.ts`, `channels.ts`) and the tolerant reader built on them
 (`prose.ts`). Derived from Nukata Lisp; what follows is only what a reader of the
 code cannot work out from the code.
 
-**The interpreter is fully synchronous by design.** That single constraint is
-what forces the jobs runtime and the MCP broker onto a worker thread — see
-[jobs.md](./jobs.md).
+**The evaluator suspends rather than blocks.** `Interp.evalGen` is a generator
+that yields a promise, so async work runs on Node's own event loop and needs no
+second thread — see [promises.md](./promises.md).
 
 ## Reader
 
@@ -43,14 +43,14 @@ follow whitespace: prose punctuation that happens to touch a form
 
 ### `#<…>` is refused outright
 
-Every value that cannot be read back prints that way — a job, a secret, a
+Every value that cannot be read back prints that way — a promise, a secret, a
 closure, a built-in — so a `#<…>` in source is *always* a retyped printout.
-Left as an ordinary symbol it failed one step later as `void variable: #<job`,
+Left as an ordinary symbol it failed one step later as `void variable: #<promise`,
 which named neither the mistake nor the fix. `readToken` raises an
 `EvalException` (not a `FormatException`) because that is the error every layer
 above already renders inline as a syntax error.
 
-Four negative survey reports in two days were an agent typing a job handle back.
+Four negative survey reports in two days were an agent typing a promise's printed form back.
 
 ### `readFailure` reports only parse failures
 
@@ -104,6 +104,53 @@ never change the program's outcome.
 A channel is not registered, only emitted on, so an extension adding one costs
 the core nothing. `setWriter` remains the process-wide default sink for `user`,
 so a host that never learns about channels still works.
+
+## The evaluator is a generator
+
+`Interp.evalGen` is a generator that yields a `Promise` when it needs to wait,
+and `driveSync` / `runSync` pump it. That is what lets a single thread await
+without blocking on its own event loop. Two drivers share one evaluator: a host
+that cannot turn the loop uses `runSync`, which throws `cannot suspend` rather
+than half-running a program.
+
+### Only a call form can suspend
+
+`evalNow` handles every non-`Cell` form (an `Arg`, a `Sym`, a literal, a
+`Lambda`) synchronously, and every hot site checks `x instanceof Cell` before
+delegating. Creating a generator to read a variable was most of the cost: with
+the check, the argument loop allocates nothing for the common case.
+
+For the same reason the **call protocol lives in `evalGen`**, not in the `Func`
+classes. `Func.evalFrame`, `Closure.makeEnv` and `BuiltInFunc.evalWith` used to
+own it, and each added a generator (and two JS stack frames) per Lisp call. A
+builtin call now costs **zero** generator frames: `BuiltInFunc.call` is a plain
+method, and only a builtin declared with `defGen` goes through `callGen`.
+
+### Macro expansion is driven synchronously
+
+`expandMacros` runs at *compile* time, inside `compile`, which is an ordinary
+method reached from `evalGen`, `evalTry` and `compileInners`. It drives the macro
+body with `driveSync`, so a macro that tries to await raises `cannot suspend`.
+Expansion builds a form; it has no reason to wait on the world, and making the
+whole compile path a generator would cost every call site for that.
+
+### What generators cost, measured
+
+`pnpm --filter @repo/interpreter bench` is the gate. Against the pre-generator
+evaluator on one dev machine:
+
+| case | before | after |
+| --- | --- | --- |
+| 300k tail-recursive calls | 361 ms | 467 ms |
+| 300k `dotimes` iterations | 674 ms | 950 ms |
+| non-tail `cons` recursion depth | 5624 | 3366 |
+| non-tail arithmetic recursion depth | 3183 | 3366 |
+
+A generator frame is bigger than a call frame, so **recursion depth is the real
+cost**, not speed. Prelude `mapcar`, `_append` and `assoc` recurse once per
+element, so the depth number is the longest list they can walk. It scales
+linearly with `--stack-size`: 4000 buys about 5300 frames, 8000 about 10700, if
+a host ever needs the old headroom back.
 
 ## Evaluator traps
 
@@ -246,7 +293,7 @@ keyword carrying a value after it, **a misspelling included**, so
 printing the literal `:ofset 40` after the whole value.
 
 What cannot be an option is a keyword at the very end with no value to carry, and
-that one is data: `(echo (job-status job))` prints `:pending`. `allowed` is the
+that one is data: `(echo (promise-state p))` prints `:pending`. `allowed` is the
 exception to the exception — a trailing `:offset` is an option whose value was
 forgotten, and saying so is more use than printing the word.
 
