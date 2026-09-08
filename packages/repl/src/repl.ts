@@ -17,6 +17,7 @@ import {
 	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
+import { type LlmObserver, llmExtension } from "@repo/interpreter/llm";
 import { mcpExtension } from "@repo/interpreter/mcp";
 import { isTruncated, proseExtension } from "@repo/interpreter/prose";
 import {
@@ -74,6 +75,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private compactor: Compactor;
 	private inFlight: Promise<void> = Promise.resolve();
 	readonly secrets: SecretsStore;
+	llmObserver?: LlmObserver;
 	private readonly wordLimit: number;
 
 	constructor(
@@ -95,6 +97,7 @@ export class MemoryRepl implements InMemoryRepl {
 			extensions: [
 				secretsExtension({ store: this.secrets }),
 				mcpExtension(),
+				llmExtension({ observe: (call) => this.llmObserver?.(call) }),
 				compactionExtension(this.compactor),
 				proseExtension(),
 			],

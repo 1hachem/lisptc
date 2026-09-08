@@ -1,3 +1,4 @@
+import type { LlmCall } from "@repo/interpreter/llm";
 import { describe, expect, it } from "vitest";
 import { AgentRepl } from "../src/repl.ts";
 
@@ -260,5 +261,28 @@ describe("prose with parentheses in it", () => {
 			r.reset();
 			expect(r.takeProseFeedback()).toBe("");
 		});
+	});
+});
+
+describe("the llm observer", () => {
+	it("hands every model call the REPL's host installed observer, across a reset", async () => {
+		const calls: LlmCall[] = [];
+		const r = new AgentRepl();
+		r.llmObserver = (call) => calls.push(call);
+
+		await r.eval('(llm/complete "hi" :provider :nowhere)');
+		r.reset();
+		await r.eval('(llm/complete "again" :provider :nowhere)');
+
+		expect(calls.map((call) => [call.builtin, call.error])).toEqual([
+			[
+				"llm/complete",
+				'unknown provider "nowhere", expected one of digitalocean, fireworks, llamacpp, openrouter',
+			],
+			[
+				"llm/complete",
+				'unknown provider "nowhere", expected one of digitalocean, fireworks, llamacpp, openrouter',
+			],
+		]);
 	});
 });

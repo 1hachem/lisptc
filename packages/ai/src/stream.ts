@@ -16,6 +16,7 @@ import {
 } from "./repl.ts";
 import { getThreadRepl } from "./repl-store.ts";
 import {
+	captureLlmCall,
 	captureReplEval,
 	captureTurn,
 	type TraceContext,
@@ -138,6 +139,7 @@ export function streamChatResponse(
 				write(sse("values", { messages: wire }));
 
 				const repl = getThreadRepl(threadId);
+				repl.llmObserver = (call) => captureLlmCall(trace, call);
 				const transcript = toTranscript(input);
 
 				const withheld = repl.takeProseFeedback();

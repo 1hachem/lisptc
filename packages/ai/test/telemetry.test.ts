@@ -115,3 +115,63 @@ describe("telemetry", () => {
 		expect(trace?.distinct_id).toBe("dev-1");
 	});
 });
+
+describe("llm built-in calls", () => {
+	test("nest under the turn as a generation, with model, tokens and cost inputs", async () => {
+		const { captureLlmCall } = await import("../src/telemetry.ts");
+
+		captureLlmCall(CTX, {
+			builtin: "llm/extract",
+			provider: "llamacpp",
+			model: "a-small-one",
+			messages: [{ role: "user", content: "one and two" }],
+			structured: true,
+			latencyMs: 640,
+			output: '{"words":["one","two"]}',
+			inputTokens: 11,
+			outputTokens: 7,
+		});
+		const generation = (await drain()).find(
+			(e) => e.event === "$ai_generation",
+		);
+
+		expect(generation?.properties).toMatchObject({
+			$ai_trace_id: "thread-abc",
+			$ai_parent_id: "turn-1",
+			$ai_span_name: "llm/extract",
+			$ai_provider: "llamacpp",
+			$ai_model: "a-small-one",
+			$ai_input_tokens: 11,
+			$ai_output_tokens: 7,
+			$ai_latency: 0.64,
+			$ai_is_error: false,
+			structured: true,
+			$ai_input: [{ role: "user", content: "one and two" }],
+			$ai_output_choices: [
+				{ role: "assistant", content: '{"words":["one","two"]}' },
+			],
+		});
+	});
+
+	test("a failed call is a generation marked as an error", async () => {
+		const { captureLlmCall } = await import("../src/telemetry.ts");
+
+		captureLlmCall(CTX, {
+			builtin: "llm/complete",
+			messages: [{ role: "user", content: "hi" }],
+			structured: false,
+			latencyMs: 100,
+			error: "llm timed out",
+		});
+		const errored = (await drain()).filter(
+			(e) => e.event === "$ai_generation" && e.properties.$ai_is_error === true,
+		);
+
+		expect(errored).toHaveLength(1);
+		expect(errored[0].properties).toMatchObject({
+			$ai_span_name: "llm/complete",
+			$ai_error: "llm timed out",
+		});
+		expect(errored[0].properties.$ai_provider).toBeUndefined();
+	});
+});

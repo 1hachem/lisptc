@@ -17,6 +17,7 @@ as loose custom events:
 $ai_trace        one per chat turn      the prompt in, the answer out, steps, halted
   $ai_generation   one per model step   tokens, cost, latency, the messages
   $ai_span         one per REPL eval    the Lisp program and what it printed
+  $ai_generation   one per llm/ call    a model the Lisp itself called
 survey sent      a rating on a turn     joined by $ai_trace_id, sent by the browser
 ```
 
@@ -30,6 +31,14 @@ in `agent.ts`. It reports token counts and cost correctly per provider, which is
 not worth hand-rolling. `$ai_parent_id` has to be forced onto the handler's
 properties because the chat model is called directly rather than through a
 chain, so LangChain has no parent run of its own to report.
+
+The second kind of `$ai_generation` is a model call the agent's *program* made,
+`(llm/complete ...)` and friends (see [llm.md](./llm.md)). The interpreter has no
+analytics dependency, so the extension reports each call to an observer and
+`stream.ts` points that observer at `captureLlmCall` for the current turn. Its
+`$ai_provider`/`$ai_model` are the sub-call's own rather than the agent's, since
+that is what PostHog prices the event on, and a `summarize` sent to a cheap model
+is exactly the case worth seeing separately.
 
 `$ai_span` is emitted by hand from `stream.ts`, once per REPL evaluation. This
 is the half LangChain cannot see and the half that matters here: the model's
