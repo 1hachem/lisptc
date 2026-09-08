@@ -7,13 +7,13 @@ import {
 } from "@langchain/core/messages";
 import type { LLMResult } from "@langchain/core/outputs";
 import { ChatOpenAI } from "@langchain/openai";
+import { contentToText } from "@repo/shared/messages";
 import {
-	aiEnv,
-	DEFAULT_PROVIDER,
-	type ProviderName,
-	providerNames,
+	defaultProviderName,
+	PROVIDER_NAMES,
+	providerSpecFor,
 	providerSpecs,
-} from "@repo/env/ai";
+} from "@repo/shared/providers";
 import type {
 	Generate,
 	LlmMessage,
@@ -21,31 +21,9 @@ import type {
 	ProviderReport,
 } from "./llm.ts";
 
-function isProviderName(name: string): name is ProviderName {
-	return (providerNames as string[]).includes(name);
-}
-
-function defaultProviderName(): ProviderName {
-	const configured = aiEnv.LLM_PROVIDER;
-	if (configured === undefined) return DEFAULT_PROVIDER;
-	if (!isProviderName(configured))
-		throw new Error(
-			`LLM_PROVIDER is "${configured}", but expected one of ${providerNames.join(", ")}`,
-		);
-	return configured;
-}
-
-function specFor(name: string) {
-	if (!isProviderName(name))
-		throw new Error(
-			`unknown provider "${name}", expected one of ${providerNames.join(", ")}`,
-		);
-	return providerSpecs[name];
-}
-
 export function listProviders(): ProviderReport[] {
 	const first = defaultProviderName();
-	const order = [first, ...providerNames.filter((name) => name !== first)];
+	const order = [first, ...PROVIDER_NAMES.filter((name) => name !== first)];
 	return order.map((name) => ({
 		name,
 		model: providerSpecs[name].defaultModel,
@@ -53,22 +31,10 @@ export function listProviders(): ProviderReport[] {
 	}));
 }
 
-function toLangchain(message: LlmMessage): BaseMessage {
+export function toLangchain(message: LlmMessage): BaseMessage {
 	if (message.role === "system") return new SystemMessage(message.content);
 	if (message.role === "assistant") return new AIMessage(message.content);
 	return new HumanMessage(message.content);
-}
-
-function textOf(content: unknown): string {
-	if (typeof content === "string") return content;
-	if (!Array.isArray(content)) return String(content ?? "");
-	return content
-		.map((part) =>
-			typeof part === "string"
-				? part
-				: ((part as { text?: string }).text ?? ""),
-		)
-		.join("");
 }
 
 interface Usage {
@@ -102,7 +68,7 @@ interface Target {
 
 function chatModel(req: LlmRequest): Target {
 	const provider = req.provider ?? defaultProviderName();
-	const spec = specFor(provider);
+	const spec = providerSpecFor(provider);
 	if (spec.apiKey === undefined)
 		throw new Error(
 			`${spec.apiKeyEnv} is not set. Add it to your environment (.env) to talk to ${spec.label}.`,
@@ -138,5 +104,5 @@ export const langchainGenerate: Generate = async (req, signal) => {
 		return { text: JSON.stringify(value), value, ...target, ...usage };
 	}
 	const reply = await model.invoke(messages, options);
-	return { text: textOf(reply.content), ...target, ...usage };
+	return { text: contentToText(reply.content), ...target, ...usage };
 };

@@ -1,4 +1,4 @@
-import type { LlmCall } from "@repo/interpreter/llm";
+import type { LlmCall } from "@repo/llm/llm";
 import { describe, expect, it } from "vitest";
 import { AgentRepl } from "../src/repl.ts";
 

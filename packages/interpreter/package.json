@@ -11,12 +11,11 @@
     "./grammar": "./src/grammar.ts",
     "./hooks": "./src/hooks.ts",
     "./lisp": "./src/lisp.ts",
-    "./llm": "./src/llm.ts",
-    "./llm-client": "./src/llm-client.ts",
     "./mcp": "./src/mcp.ts",
     "./mcp-client": "./src/mcp-client.ts",
     "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./package.json": "./package.json",
+    "./plist": "./src/plist.ts",
     "./promises": "./src/promises.ts",
     "./prose": "./src/prose.ts",
     "./secrets": "./src/secrets.ts",
@@ -33,8 +32,6 @@
     "bench": "node --experimental-transform-types --no-warnings bench/eval.ts"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.9",
-    "@langchain/openai": "^1.5.10",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/env": "workspace:*",
     "dotenv": "^17.4.2"

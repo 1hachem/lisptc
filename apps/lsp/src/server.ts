@@ -7,6 +7,7 @@ import {
 } from "@repo/interpreter";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { mcpExtension } from "@repo/interpreter/mcp";
+import { llmExtension } from "@repo/llm/llm";
 import {
 	type CompletionEntry,
 	connectOrSpawn,
@@ -34,7 +35,7 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 const interp = new Interp({
-	extensions: [mcpExtension(), compactionExtension()],
+	extensions: [mcpExtension(), llmExtension(), compactionExtension()],
 });
 runSync(interp, prelude);
 const localDocs = interp.docs();

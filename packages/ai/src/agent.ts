@@ -1,21 +1,14 @@
-import {
-	AIMessage,
-	type BaseMessage,
-	HumanMessage,
-	SystemMessage,
-} from "@langchain/core/messages";
+import { toLangchain } from "@repo/llm/client";
+import type { ChatMessage } from "@repo/shared/messages";
 import { getProvider, type ProviderName } from "./provider.ts";
 import { type TraceContext, traceCallbacks } from "./telemetry.ts";
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"You are the reasoning core of a neuro-symbolic agent. Think step by step and answer clearly and concisely.";
 
-export type Role = "user" | "assistant" | "system";
+export type { Role } from "@repo/shared/messages";
 
-export interface AgentMessage {
-	role: Role;
-	content: string;
-}
+export type AgentMessage = ChatMessage;
 
 export interface TokenUsage {
 	input: number;
@@ -34,17 +27,6 @@ export interface AgentConfig {
 	model?: string;
 	system?: string;
 	trace?: TraceContext;
-}
-
-function toLangChain(m: AgentMessage): BaseMessage {
-	switch (m.role) {
-		case "assistant":
-			return new AIMessage(m.content);
-		case "system":
-			return new SystemMessage(m.content);
-		default:
-			return new HumanMessage(m.content);
-	}
 }
 
 function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {
@@ -89,10 +71,13 @@ export class Agent {
 			model: this.config.model,
 			streaming: true,
 		});
-		const history: BaseMessage[] = [
-			new SystemMessage(this.config.system ?? DEFAULT_SYSTEM_PROMPT),
-			...messages.map(toLangChain),
-		];
+		const history = [
+			{
+				role: "system" as const,
+				content: this.config.system ?? DEFAULT_SYSTEM_PROMPT,
+			},
+			...messages,
+		].map(toLangchain);
 		const callbacks = this.config.trace
 			? traceCallbacks(this.config.trace)
 			: [];

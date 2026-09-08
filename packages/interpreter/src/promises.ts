@@ -1,9 +1,11 @@
 import { z } from "zod";
 import {
+	arrayToList,
 	Cell,
 	EvalException,
 	type Interp,
 	type List,
+	listToArray,
 	newLispKeyword,
 	zList,
 } from "./lisp.ts";
@@ -33,18 +35,6 @@ const zPromise = z.custom<Promise<unknown>>(
 
 const message = (e: unknown): string =>
 	e instanceof Error ? e.message : String(e);
-
-function listToArray(list: List): unknown[] {
-	const out: unknown[] = [];
-	for (let j = list; j !== null; j = j.cdr as List) out.push(j.car);
-	return out;
-}
-
-function arrayToList(arr: unknown[]): List {
-	let out: List = null;
-	for (let i = arr.length - 1; i >= 0; i--) out = new Cell(arr[i], out);
-	return out;
-}
 
 function toPromises(x: unknown): Promise<unknown>[] {
 	const arr = x === null || x instanceof Cell ? listToArray(x as List) : [x];

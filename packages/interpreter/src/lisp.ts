@@ -464,10 +464,16 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
-function fromArray(arr: unknown[]): List {
+export function arrayToList(arr: unknown[]): List {
 	let list: List = null;
 	for (let i = arr.length - 1; i >= 0; i--) list = new Cell(arr[i], list);
 	return list;
+}
+
+export function listToArray(list: List): unknown[] {
+	const out: unknown[] = [];
+	for (let j = list; j !== null; j = j.cdr as List) out.push(j.car);
+	return out;
 }
 
 export function jsonToLisp(x: unknown): unknown {
@@ -476,9 +482,9 @@ export function jsonToLisp(x: unknown): unknown {
 	if (x === false) return null;
 	if (typeof x === "number" || typeof x === "bigint") return x;
 	if (typeof x === "string") return x;
-	if (Array.isArray(x)) return fromArray(x.map(jsonToLisp));
+	if (Array.isArray(x)) return arrayToList(x.map(jsonToLisp));
 	if (typeof x === "object")
-		return fromArray(
+		return arrayToList(
 			Object.entries(x as Record<string, unknown>).map(
 				([k, v]) => new Cell(k, jsonToLisp(v)),
 			),

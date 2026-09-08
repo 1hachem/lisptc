@@ -1,15 +1,31 @@
 # Language models from inside the REPL
 
 `llm/complete`, `llm/chat` and `llm/extract` let the Lisp the agent writes call a
-model of its own. The extension is `src/llm.ts`; `src/llm-client.ts` is the
-default backend, LangChain over the OpenAI-compatible providers the agent loop
-already uses.
+model of its own. It is an interpreter extension like any other, and it lives in
+its own package so that the interpreter does not have to know LangChain exists.
 
 ```
-src/llm.ts         the built-ins, the shape-to-JSON-Schema conversion, the macros
-src/llm-client.ts  the Generate port's default: ChatOpenAI per call
-packages/env/src/ai.ts   providerSpecs: the one table of base URLs, keys and default models
+packages/llm/src/llm.ts          the built-ins, the shape-to-JSON-Schema conversion, the macros
+packages/llm/src/llm-client.ts   the Generate port's default: ChatOpenAI per call, and toLangchain
+packages/shared/src/providers.ts providerSpecs: the one table of base URLs, keys and default models
+packages/shared/src/messages.ts  the chat-message shape, the roles, contentToText
 ```
+
+## Why it is a package and not a file in the interpreter
+
+The interpreter is the deterministic half of the system, and its dependency list
+is part of that claim: `@modelcontextprotocol/sdk` for MCP, `dotenv` for
+secrets, nothing else. LangChain pulls the OpenAI SDK and its transitive tree
+behind it, which is a lot of surface for a package the LSP, the MCP server and
+every test import. Because an extension is just `(interp) => void` and attaches
+through `def` / hooks / channels, moving it out cost nothing but import paths:
+`@repo/llm` depends on `@repo/interpreter`, never the other way round, and the
+"extensions do not cross-import each other" rule is now a fact of the package
+graph rather than a convention.
+
+What the move needed from the core was two exports it should have had anyway:
+`./plist` (the keyword-argument parser three extensions use) and the
+`arrayToList` / `listToArray` pair, which had been copied into four modules.
 
 ## Why the calls suspend instead of returning a promise
 
@@ -102,10 +118,10 @@ an MCP host that installs the extension gets no telemetry it never asked for.
 The chain is three links, each the shortest it can be:
 
 ```
-llm.ts        caller(): times the call, builds an LlmCall, never lets the observer throw
-repl.ts       MemoryRepl.llmObserver, a mutable field the extension reads at call time
-stream.ts     repl.llmObserver = (call) => captureLlmCall(trace, call)   per turn
-telemetry.ts  captureLlmCall(): one $ai_generation, $ai_parent_id = the turn
+packages/llm/src/llm.ts        caller(): times the call, builds an LlmCall, never lets the observer throw
+packages/repl/src/repl.ts      MemoryRepl.llmObserver, a mutable field the extension reads at call time
+packages/ai/src/stream.ts      repl.llmObserver = (call) => captureLlmCall(trace, call)   per turn
+packages/ai/src/telemetry.ts   captureLlmCall(): one $ai_generation, $ai_parent_id = the turn
 ```
 
 The field is mutable and read late on purpose. A REPL outlives the turn that
@@ -131,11 +147,16 @@ untraced paths are the same code.
 
 ## What is configured where
 
-`providerSpecs` in `@repo/env/ai` is the single table of provider label, API-key
-env var, base URL and default model. Both this extension and the agent loop's
-`provider/` modules read it, so the default model for a provider cannot drift
-between the two. `LLM_PROVIDER` names the provider a call with no `:provider`
-gets; without it the default is `digitalocean`, matching the chat app.
+`providerSpecs` in `@repo/shared/providers` is the single table of provider
+label, API-key env var, base URL and default model. This extension, the agent
+loop's `provider/` modules and the llama.cpp KV warmer all read it, so a base URL
+or default model cannot drift between them. It lives in `@repo/shared` rather
+than `@repo/env` because it is not environment: it is configuration that *reads*
+the environment, and it is built by `buildProviderSpecs(env)`, a pure function of
+a plain record, which is also how it is tested. `LLM_PROVIDER` names the provider
+a call with no `:provider` gets; without it the default is `digitalocean`,
+matching the chat app. `@repo/env/ai` keeps only what is genuinely env and
+genuinely not provider config (`LLAMACPP_SLOT_DIR`).
 
 The extension deliberately does not reuse `packages/ai`'s `defineProvider`: that
 builds a *streaming* model pinned to the `lisptc.gbnf` grammar, which is right

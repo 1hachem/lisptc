@@ -1,7 +1,7 @@
 import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { LangChainCallbackHandler } from "@posthog/ai/langchain";
 import { analyticsEnv } from "@repo/env/analytics";
-import type { LlmCall } from "@repo/interpreter/llm";
+import type { LlmCall } from "@repo/llm/llm";
 import { PostHog } from "posthog-node";
 
 const PRIVACY_MODE = process.env.POSTHOG_PRIVACY_MODE === "true";

@@ -1,5 +1,5 @@
 import { MODEL } from "@repo/interpreter/channels";
-import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
+import { Compactor } from "@repo/interpreter/compaction";
 import {
 	EndOfFile,
 	EvalException,
@@ -12,9 +12,8 @@ import {
 	setWriter,
 	stripProse,
 } from "@repo/interpreter/lisp";
-import { mcpExtension } from "@repo/interpreter/mcp";
-import { proseExtension } from "@repo/interpreter/prose";
-import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
+import { EnvSecretsStore } from "@repo/interpreter/secrets";
+import { modelFacingExtensions } from "./extensions.ts";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -44,12 +43,11 @@ class InteractiveRepl implements Repl {
 	private freshInterp(): Interp {
 		this.compactor = new Compactor();
 		const interp = new Interp({
-			extensions: [
-				secretsExtension({ store: this.secretsStore, envFile: true }),
-				mcpExtension(),
-				compactionExtension(this.compactor),
-				proseExtension(),
-			],
+			extensions: modelFacingExtensions({
+				compactor: this.compactor,
+				secrets: this.secretsStore,
+				envFile: true,
+			}),
 		});
 		runSync(interp, prelude);
 		interp.channels.on(MODEL, (d) => {

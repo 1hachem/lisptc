@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest";
 import {
 	EvalException,
 	Interp,
@@ -6,7 +5,8 @@ import {
 	runAsync,
 	runSync,
 	str,
-} from "../src/lisp.ts";
+} from "@repo/interpreter/lisp";
+import { describe, expect, it } from "vitest";
 import {
 	type Generate,
 	type LlmCall,

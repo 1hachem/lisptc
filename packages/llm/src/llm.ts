@@ -1,6 +1,6 @@
-import { z } from "zod";
-import { isNumeric } from "./arith.ts";
+import { isNumeric } from "@repo/interpreter/arith";
 import {
+	arrayToList,
 	Cell,
 	EvalException,
 	type Interp,
@@ -14,19 +14,20 @@ import {
 	Sym,
 	zAny,
 	zList,
-} from "./lisp.ts";
+} from "@repo/interpreter/lisp";
+import {
+	keyName,
+	plistOptions,
+	splitKeywordArgs,
+} from "@repo/interpreter/plist";
+import { withTimeout } from "@repo/interpreter/promises";
+import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
+import { z } from "zod";
 import { langchainGenerate, listProviders } from "./llm-client.ts";
-import { keyName, plistOptions, splitKeywordArgs } from "./plist.ts";
-import { withTimeout } from "./promises.ts";
 
 export const LLM_TIMEOUT_MS = 60_000;
 
-export type Role = "system" | "user" | "assistant";
-
-export interface LlmMessage {
-	role: Role;
-	content: string;
-}
+export type LlmMessage = ChatMessage;
 
 export interface LlmSchema {
 	name: string;
@@ -86,8 +87,6 @@ export interface LlmOptions {
 
 const DEFAULTS_VAR = "*llm-defaults*";
 
-const ROLES: Role[] = ["system", "user", "assistant"];
-
 const CALL_OPTIONS = [
 	"provider",
 	"model",
@@ -140,12 +139,6 @@ function elements(list: unknown, what: string): unknown[] {
 		if (!(j instanceof Cell)) throw new EvalException(what, list);
 		out.push(j.car);
 	}
-	return out;
-}
-
-function arrayToList(arr: unknown[]): List {
-	let out: List = null;
-	for (let i = arr.length - 1; i >= 0; i--) out = new Cell(arr[i], out);
 	return out;
 }
 

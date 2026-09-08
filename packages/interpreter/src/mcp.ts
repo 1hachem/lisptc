@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { isNumeric } from "./arith.ts";
 import {
+	arrayToList,
 	Cell,
 	type DocArg,
 	EvalException,
@@ -9,6 +10,7 @@ import {
 	jsonToLisp,
 	LispKeyword,
 	type List,
+	listToArray,
 	newLispKeyword,
 	newSym,
 	Sym,
@@ -80,18 +82,6 @@ function extractAuthCode(raw: string): string {
 	} catch {
 		return value;
 	}
-}
-
-function listToArray(list: List): unknown[] {
-	const out: unknown[] = [];
-	for (let j = list; j !== null; j = j.cdr as List) out.push(j.car);
-	return out;
-}
-
-function arrayToList(arr: unknown[]): List {
-	let out: List = null;
-	for (let i = arr.length - 1; i >= 0; i--) out = new Cell(arr[i], out);
-	return out;
 }
 
 function isAlist(x: Cell): boolean {

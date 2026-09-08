@@ -1,6 +1,12 @@
 import { createServer, type Server } from "node:http";
+import {
+	Interp,
+	prelude,
+	runAsync,
+	runSync,
+	str,
+} from "@repo/interpreter/lisp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 
 interface Seen {
 	url: string | undefined;
