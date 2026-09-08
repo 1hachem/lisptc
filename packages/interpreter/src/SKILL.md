@@ -540,14 +540,15 @@ per step, never in a loop over a long list.
   strip. This is how you turn a page, a comment or a mail into fields you can
   `assoc`.
   ```
-  (llm/extract page '(("title" . "the page title")
-                      ("stars" . :integer)
-                      ("state" . (:enum "open" "closed"))
-                      ("links" . (:list :string))
-                      ("author" . (:optional (:string "who wrote it")))))
+  (llm/extract page (shape (title "the page title")
+                           (stars :integer)
+                           (state (:enum "open" "closed"))
+                           (links (:list :string))
+                           (author (:optional (:string "who wrote it")))))
   llm/extract-1: alist, keys "title" "stars" "state" "links"
   ```
-  A **shape** is an alist of `(key . field)`. A field is one of:
+  A **shape** is an alist of `(key . field)`, which `(shape (name spec...)...)`
+  writes for you — no quote, no dotted pairs. A field is one of:
   `:string`, `:number`, `:integer`, `:boolean`, `:any`; a plain string, which
   means a string field whose text says what it means; `(:string "what it
   means")` and the same for the other scalars; `(:enum "a" "b")`;
@@ -555,6 +556,14 @@ per step, never in a loop over a long list.
   or a nested alist, for a nested object. An alist shape comes back as an alist,
   a `(:list ...)` shape as a list. Add `:instructions "..."` to say what to pull
   out of the text.
+  In `shape`, a nested group is a nested object, and `(:list ...)`/`(:optional
+  ...)` take a group too: `(shape (items (:list (id :number) (title :string))))`
+  is a list of objects. A `shape` is literal, built when the form is compiled,
+  so a computed enum needs the alist written by hand instead.
+- Everywhere a call takes text — the prompt, `:system`, `:instructions`, the text
+  `llm/extract` reads, a message's content — it takes any value: a list or an
+  alist goes in as its printed form. There is no `(string ...)` to write. A
+  promise is refused, so `await` it first.
 - `(llm/providers)` → one row per reachable provider, `(provider default-model
   status)`, status `:ready` or `:no-api-key`. The first row is what a call with
   no `:provider` uses.

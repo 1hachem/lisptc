@@ -92,13 +92,13 @@ describe("llm/complete", () => {
 		});
 	});
 
-	it("rejects an unknown option and a non-string prompt", async () => {
+	it("rejects an unknown option and a prompt that is not a value", async () => {
 		const { interp } = llmInterp();
 		expect(await failure(interp, '(llm/complete "hi" :temp 0.2)')).toContain(
 			"unknown option",
 		);
-		expect(await failure(interp, "(llm/complete 42)")).toContain(
-			"the prompt must be a string",
+		expect(await failure(interp, "(llm/complete (lambda (x) x))")).toContain(
+			"the prompt must be a string or Lisp data",
 		);
 	});
 
@@ -287,6 +287,102 @@ describe("llm/extract", () => {
 		expect(
 			await failure(interp, '(llm/extract "x" (list (cons "a" :date)))'),
 		).toContain("unknown field type");
+	});
+});
+
+describe("the shape macro", () => {
+	it("builds the extraction alist without quoting or dotted pairs", async () => {
+		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
+		await runAsync(
+			interp,
+			`(llm/extract "an issue"
+			   (shape (title "the issue title")
+			          (stars :integer)
+			          (state (:enum "open" "closed"))
+			          (links (:list :string))
+			          (author (:optional :string))))`,
+		);
+		expect(seen[0].schema?.schema).toEqual({
+			type: "object",
+			additionalProperties: false,
+			required: ["title", "stars", "state", "links"],
+			properties: {
+				title: { type: "string", description: "the issue title" },
+				stars: { type: "integer" },
+				state: { type: "string", enum: ["open", "closed"] },
+				links: { type: "array", items: { type: "string" } },
+				author: { type: "string" },
+			},
+		});
+	});
+
+	it("reads a nested group as an object, inside a :list too", async () => {
+		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
+		await runAsync(
+			interp,
+			`(llm/extract "issues"
+			   (shape (owner (name :string) (email (:optional :string)))
+			          (items (:list (id :number) (title :string)))))`,
+		);
+		expect(seen[0].schema?.schema).toMatchObject({
+			properties: {
+				owner: {
+					type: "object",
+					properties: { name: { type: "string" }, email: { type: "string" } },
+					required: ["name"],
+				},
+				items: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: { id: { type: "number" }, title: { type: "string" } },
+						required: ["id", "title"],
+					},
+				},
+			},
+		});
+	});
+
+	it("expands to a literal alist, keeping a string key as written", async () => {
+		const { interp } = llmInterp();
+		expect(await evalStr(interp, '(shape ("issue title" :string))')).toBe(
+			'(("issue title" . :string))',
+		);
+		expect(await failure(interp, "(shape)")).toContain(
+			"shape needs at least one field",
+		);
+	});
+});
+
+describe("a value that is not a string", () => {
+	it("goes into the prompt as its printed form", async () => {
+		const { interp, seen } = llmInterp();
+		await runAsync(
+			interp,
+			'(llm/complete (list (cons "id" 1) (cons "title" "auth bug")))',
+		);
+		expect(seen[0].messages[0].content).toBe(
+			'(("id" . 1) ("title" . "auth bug"))',
+		);
+	});
+
+	it("works for a message content, a :system and the text to read", async () => {
+		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
+		await runAsync(interp, "(llm/chat (list (message :user (list 1 2))))");
+		expect(seen[0].messages[0].content).toBe("(1 2)");
+		await runAsync(
+			interp,
+			'(llm/extract (list "a" "b") (shape (n :integer)) :system (list :terse))',
+		);
+		expect(seen[1].messages[0].content).toBe("(:terse)");
+		expect(seen[1].messages[1].content).toBe('("a" "b")');
+	});
+
+	it("still refuses nil, so a missing value is not sent as text", async () => {
+		const { interp } = llmInterp();
+		expect(await failure(interp, "(llm/complete nil)")).toContain(
+			"the prompt must not be nil",
+		);
 	});
 });
 

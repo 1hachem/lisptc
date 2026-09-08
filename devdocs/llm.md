@@ -70,11 +70,23 @@ a timed-out request stops rather than running on invisibly.
 
 The string primitives are taint-aware only when `secretsExtension` is installed,
 and a `Secret` is not a JS string. Every `llm/` built-in takes its text through
-`asText`, which accepts a plain string only, so a prompt built with `concat` out
-of `(secret "REPL_TOKEN")` is refused with `must be a string` rather than sent.
-That is deliberate, and it is why `llm.ts` needs no import from `secrets.ts`:
-the MCP reveal path (`toJSON`) is the only one, and this extension never takes
-it.
+`asContent`, which accepts a string or **Lisp data** (a cons, a symbol, a
+keyword, a number, `t`) and nothing else, so a prompt built with `concat` out of
+`(secret "REPL_TOKEN")` is refused rather than sent. A `Secret` is a class
+instance, so it fails that test the way a closure or a `Promise` does. That is
+deliberate, and it is why `llm.ts` needs no import from `secrets.ts`: the MCP
+reveal path (`toJSON`) is the only one, and this extension never takes it. A
+secret nested inside a list is not a leak either, because `asContent` renders
+with `str`, which prints a `Secret` redacted.
+
+`asContent` renders anything that is not already a string with `str(x, false)`,
+which is exactly what `(string x)` does, so passing an alist of records where a
+prompt goes needs no wrapping. Four values are refused rather than rendered, and
+each refusal is a bug caught early: **nil** (a variable that never got set,
+which would otherwise be sent as the word `nil`), a **promise** (with `await it
+first` in the message), a closure, and a `Secret`. `asText` survives for
+`:model`, where a non-string is a mistake and rendering one would send a model
+id nobody named.
 
 ## The shape language, and why it is not JSON Schema
 
@@ -96,6 +108,18 @@ rejects a request over. So the shape carries only what a caller decides:
 | `(:optional field)` | the field, left out of `required` |
 | an alist | an object, `additionalProperties: false` |
 
+`shape` is the same language with the quoting taken out: `(shape (title
+:string) (items (:list (id :number))))` expands to the quoted alist. It is a
+macro, so it builds the alist at compile time and can therefore hold no computed
+value — a caller with a runtime enum writes the alist itself, which still works
+and is the reason the shape language stays the primitive and `shape` stays sugar
+over it. Its one guess is where a group is a nested object rather than a field
+form: a spec list whose head is a cons whose own head is **not** a keyword is a
+group of `(name spec...)` clauses. That is what separates `(author (name
+:string))` from `(tags (:list :string))`, and it is why `(:list ...)` and
+`(:optional ...)` recurse through the same rule — `(items (:list (id :number)))`
+has to reach the nested-object branch to mean a list of objects.
+
 Every key is required unless wrapped in `(:optional ...)`: a model handed an
 optional field fills it with a guess more often than it leaves it out, and the
 whole point of extraction is that the answer is grounded in the text.
@@ -109,7 +133,7 @@ root.
 
 ## The macros are Lisp, and run before the prelude
 
-`summarize`, `summarize-each`, `llm/answer` and `with-llm` are macros rather than
+`summarize`, `summarize-each`, `llm/answer`, `shape` and `with-llm` are macros rather than
 built-ins so that the prompt they build is program text the agent can read with
 `(doc 'summarize)` and step around if it wants something else. They live in the
 `MACROS` string at the bottom of `llm.ts`.

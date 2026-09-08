@@ -12,6 +12,7 @@ import {
 	newSym,
 	runSync,
 	Sym,
+	str,
 	zAny,
 	zList,
 } from "@repo/interpreter/lisp";
@@ -122,6 +123,22 @@ function asText(x: unknown, what: string): string {
 	return x;
 }
 
+function asContent(x: unknown, what: string): string {
+	if (typeof x === "string") return x;
+	if (x === null) throw new EvalException(`${what} must not be nil`, x);
+	if (x instanceof Promise)
+		throw new EvalException(`${what} must not be a promise; await it first`, x);
+	if (
+		x === true ||
+		x instanceof Cell ||
+		x instanceof Sym ||
+		x instanceof LispKeyword ||
+		isNumeric(x)
+	)
+		return str(x, false);
+	throw new EvalException(`${what} must be a string or Lisp data`, x);
+}
+
 function asName(x: unknown, what: string): string {
 	if (typeof x === "string") return x;
 	if (x instanceof Sym || x instanceof LispKeyword) return x.name;
@@ -171,7 +188,10 @@ function requestFrom(
 		messages:
 			system === undefined
 				? messages
-				: [{ role: "system", content: asText(system, ":system") }, ...messages],
+				: [
+						{ role: "system", content: asContent(system, ":system") },
+						...messages,
+					],
 	};
 	if (options.has("provider"))
 		req.provider = asName(options.get("provider"), ":provider");
@@ -212,7 +232,7 @@ function messageFrom(x: unknown): LlmMessage {
 			);
 		const key = keyName(field.car);
 		if (key === "role") role = asName(field.cdr, '"role"');
-		else if (key === "content") content = asText(field.cdr, '"content"');
+		else if (key === "content") content = asContent(field.cdr, '"content"');
 	}
 	if (role === undefined || content === undefined)
 		throw new EvalException('a message needs both "role" and "content"', x);
@@ -410,7 +430,7 @@ export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
 		"llm/complete",
 		-1,
 		'(llm/complete "prompt" [:system "..."] [:provider :name] [:model "id"] [:max-tokens n] [:temperature x] [:reasoning-effort :low] [:timeout ms])',
-		"Send one prompt to a language model and return its reply as a string. The call waits for the reply, so the value is the text itself. Use `:system` for the model's instructions, `:provider`/`:model` to choose where it runs, `(llm/providers)` to see what is reachable, and `:max-tokens` to bound the answer. The reply is a value like any other: name it, `grep` it, `echo` it.",
+		"Send one prompt to a language model and return its reply as a string. The call waits for the reply, so the value is the text itself. The prompt is any value, not just a string: a list of records goes in as its printed form, so there is no `(string …)` to write around it. Use `:system` for the model's instructions, `:provider`/`:model` to choose where it runs, `(llm/providers)` to see what is reachable, and `:max-tokens` to bound the answer. The reply is a value like any other: name it, `grep` it, `echo` it.",
 		z.tuple([zList]),
 		([rest]) => {
 			const { values, options: given } = splitKeywordArgs(rest, CALL_OPTIONS);
@@ -421,7 +441,7 @@ export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
 			);
 			const opts = optionsFor(interp, given, CALL_OPTIONS);
 			const req = requestFrom(opts, [
-				{ role: "user", content: asText(prompt, "the prompt") },
+				{ role: "user", content: asContent(prompt, "the prompt") },
 			]);
 			return call("llm/complete", req, timeoutOf(opts)).then((res) => res.text);
 		},
@@ -450,7 +470,7 @@ export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
 		"llm/extract",
 		-1,
 		'(llm/extract text shape [:instructions "..."] [:provider :name] [:model "id"] ...)',
-		'Read `text` with a language model and return the data `shape` asks for, as ordinary Lisp data. The model is constrained to the shape, so there is no parsing step and no stray prose. A shape is an alist of `(key . field)`. A field is `:string`, `:number`, `:integer`, `:boolean`, `:any`, a plain string (a string field, the text being what it means), `(:string "what it means")`, `(:enum "open" "closed")`, `(:list field)`, `(:optional field)`, or a nested alist for a nested object. An object shape comes back as an alist, a `(:list ...)` shape as a list. Add `:instructions` to say what to pull out.',
+		'Read `text` with a language model and return the data `shape` asks for, as ordinary Lisp data. The model is constrained to the shape, so there is no parsing step and no stray prose. A shape is an alist of `(key . field)`, which `(shape (title :string) …)` builds for you. A field is `:string`, `:number`, `:integer`, `:boolean`, `:any`, a plain string (a string field, the text being what it means), `(:string "what it means")`, `(:enum "open" "closed")`, `(:list field)`, `(:optional field)`, or a nested alist for a nested object. An object shape comes back as an alist, a `(:list ...)` shape as a list. Add `:instructions` to say what to pull out. The `text` is any value: a list of records is read as its printed form.',
 		z.tuple([zList]),
 		([rest]) => {
 			const { values, options: given } = splitKeywordArgs(
@@ -466,13 +486,13 @@ export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
 			const opts = optionsFor(interp, given, EXTRACT_OPTIONS);
 			if (!opts.has("system")) opts.set("system", EXTRACT_SYSTEM);
 			const instructions = opts.has("instructions")
-				? `${asText(opts.get("instructions"), ":instructions")}\n\n`
+				? `${asContent(opts.get("instructions"), ":instructions")}\n\n`
 				: "";
 			const { schema, unwrap } = extractionSchema(args[1]);
 			const req = requestFrom(opts, [
 				{
 					role: "user",
-					content: `${instructions}${asText(args[0], "the text to read")}`,
+					content: `${instructions}${asContent(args[0], "the text to read")}`,
 				},
 			]);
 			req.schema = { name: "extraction", schema };
@@ -507,7 +527,7 @@ export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
 		"message",
 		2,
 		'(message :user "content")',
-		'Build one chat message for `llm/chat`: an alist with "role" and "content". The role is `:system`, `:user` or `:assistant`.',
+		'Build one chat message for `llm/chat`: an alist with "role" and "content". The role is `:system`, `:user` or `:assistant`, and the content is any value, a list of records included.',
 		z.tuple([zAny, zAny]),
 		([role, content]) => {
 			const name = asName(role, "a role");
@@ -518,7 +538,7 @@ export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
 				);
 			return arrayToList([
 				new Cell("role", name),
-				new Cell("content", asText(content, "the content")),
+				new Cell("content", asContent(content, "the content")),
 			]);
 		},
 	);
@@ -540,6 +560,38 @@ const MACROS = `
               (t (cons (car options)
                        (cons (car (cdr options))
                              (_llm-drop (cdr (cdr options)) key)))))))
+
+(setq _shape-keyword
+      (lambda (x) (string-prefix? ":" (string x))))
+
+(setq _shape-pair
+      (lambda (clause)
+        (cond ((not (consp clause))
+               (error "shape: every field is written (name spec...)"))
+              (t (cons (car clause) (_shape-field (cdr clause)))))))
+
+(setq _shape-group
+      (lambda (field)
+        (cond ((not (consp field)) field)
+              ((memq (car field) '(:list :optional))
+               (list (car field) (_shape-field (cdr field))))
+              (t field))))
+
+(setq _shape-field
+      (lambda (specs)
+        (cond ((null specs)
+               (error "shape: a field needs a type, as (name :string)"))
+              ((and (consp (car specs)) (not (_shape-keyword (car (car specs)))))
+               (mapcar _shape-pair specs))
+              ((null (cdr specs)) (_shape-group (car specs)))
+              (t (_shape-group specs)))))
+
+(setq shape
+      (macro (&rest fields)
+        (cond ((null fields) (error "shape needs at least one field"))
+              (t (list 'quote (mapcar _shape-pair fields))))))
+(_set-doc 'shape "(shape (name spec...)...)"
+          "Build a shape for llm/extract without the quoting and the dotted pairs: (shape (title :string) (stars :integer) (state (:enum \\"open\\" \\"closed\\")) (links (:list :string)) (author (:optional :string))) is the alist ((title . :string) (stars . :integer) ...), which is what llm/extract reads. A spec is a type keyword, a description string, (:string \\"what it means\\"), or a nested (name spec...) group for a nested object; (:list ...) and (:optional ...) take a group too, so (items (:list (id :number) (title :string))) is a list of objects. The name is a symbol -- write it as a string when the field name has a space. The shape is literal, built when the form is compiled, so a computed enum still needs the alist written by hand.")
 
 (setq summarize
       (macro (value &rest options)
