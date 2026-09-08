@@ -1,4 +1,4 @@
-import { toLangchain } from "@repo/llm/client";
+import { toLangchain } from "@repo/llm/langchain";
 import type { ChatMessage } from "@repo/shared/messages";
 import { getProvider, type ProviderName } from "./provider.ts";
 import { type TraceContext, traceCallbacks } from "./telemetry.ts";

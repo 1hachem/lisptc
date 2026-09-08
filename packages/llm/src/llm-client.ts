@@ -1,12 +1,6 @@
 import type { CallbackHandlerMethods } from "@langchain/core/callbacks/base";
-import {
-	AIMessage,
-	type BaseMessage,
-	HumanMessage,
-	SystemMessage,
-} from "@langchain/core/messages";
 import type { LLMResult } from "@langchain/core/outputs";
-import { ChatOpenAI } from "@langchain/openai";
+import type { ChatOpenAI } from "@langchain/openai";
 import { contentToText } from "@repo/shared/messages";
 import {
 	defaultProviderName,
@@ -14,12 +8,7 @@ import {
 	providerSpecFor,
 	providerSpecs,
 } from "@repo/shared/providers";
-import type {
-	Generate,
-	LlmMessage,
-	LlmRequest,
-	ProviderReport,
-} from "./llm.ts";
+import type { Generate, LlmRequest, ProviderReport } from "./llm.ts";
 
 export function listProviders(): ProviderReport[] {
 	const first = defaultProviderName();
@@ -29,12 +18,6 @@ export function listProviders(): ProviderReport[] {
 		model: providerSpecs[name].defaultModel,
 		ready: providerSpecs[name].apiKey !== undefined,
 	}));
-}
-
-export function toLangchain(message: LlmMessage): BaseMessage {
-	if (message.role === "system") return new SystemMessage(message.content);
-	if (message.role === "assistant") return new AIMessage(message.content);
-	return new HumanMessage(message.content);
 }
 
 interface Usage {
@@ -66,7 +49,7 @@ interface Target {
 	name: string;
 }
 
-function chatModel(req: LlmRequest): Target {
+async function chatModel(req: LlmRequest): Promise<Target> {
 	const provider = req.provider ?? defaultProviderName();
 	const spec = providerSpecFor(provider);
 	if (spec.apiKey === undefined)
@@ -74,6 +57,7 @@ function chatModel(req: LlmRequest): Target {
 			`${spec.apiKeyEnv} is not set. Add it to your environment (.env) to talk to ${spec.label}.`,
 		);
 	const name = req.model ?? spec.defaultModel;
+	const { ChatOpenAI } = await import("@langchain/openai");
 	const model = new ChatOpenAI({
 		apiKey: spec.apiKey,
 		model: name,
@@ -90,7 +74,8 @@ function chatModel(req: LlmRequest): Target {
 }
 
 export const langchainGenerate: Generate = async (req, signal) => {
-	const { model, provider, name } = chatModel(req);
+	const { model, provider, name } = await chatModel(req);
+	const { toLangchain } = await import("./langchain.ts");
 	const messages = req.messages.map(toLangchain);
 	const usage: Usage = {};
 	const options = { signal, callbacks: [usageCollector(usage)] };

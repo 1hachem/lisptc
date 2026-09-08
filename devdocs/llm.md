@@ -27,6 +27,27 @@ What the move needed from the core was two exports it should have had anyway:
 `./plist` (the keyword-argument parser three extensions use) and the
 `arrayToList` / `listToArray` pair, which had been copied into four modules.
 
+### The LangChain import is lazy, and that is load-bearing
+
+Moving the package did not by itself move the weight. `modelFacingExtensions()`
+installs `llmExtension()` for every host, so a static
+`import { ChatOpenAI } from "@langchain/openai"` in `llm-client.ts` made the LSP,
+the MCP server, the CLI and every REPL test load LangChain and the OpenAI SDK at
+startup, whether or not a model was ever called. Measured on a warm dev machine:
+importing `@repo/repl/repl` went from 204ms to 462ms, all of it that one import.
+
+So `llm-client.ts` holds only **type** imports of LangChain, which erase, and
+`chatModel()` does `await import("@langchain/openai")` on the first real call.
+`langchainGenerate` was already async, so nothing in the API changed. The
+message-to-LangChain seam sits in its own module (`langchain.ts`) for the same
+reason: `packages/ai` needs it eagerly, this package does not.
+
+That regression is what broke CI, and it broke it somewhere unrelated:
+`packages/ai/test/stream.test.ts` mocks `agent.ts`, which used to be the only
+path to the OpenAI SDK, so its first test paid the new import inside its own 5s
+timeout and went from 4773ms to 5232ms. Keep the load lazy, and keep an eye on
+anything that adds a static import under `MemoryRepl`.
+
 ## Why the calls suspend instead of returning a promise
 
 `load-mcp` returns a promise because a connect is worth overlapping with other

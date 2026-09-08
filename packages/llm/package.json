@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     "./client": "./src/llm-client.ts",
+    "./langchain": "./src/langchain.ts",
     "./llm": "./src/llm.ts",
     "./package.json": "./package.json"
   },
