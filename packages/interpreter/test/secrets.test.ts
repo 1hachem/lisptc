@@ -140,10 +140,10 @@ describe("secret registry (env seeding)", () => {
 		try {
 			const interp = new Interp({ extensions: [secretsExtension()] });
 			runSync(interp, prelude);
-			expect(str(await runAsync(interp, "(secrets)"))).toBe(
+			expect(str((await runAsync(interp, "(secrets)")).value)).toBe(
 				'(("REPL_FOO" . ""))',
 			);
-			expect(str(await runAsync(interp, '(secret "REPL_FOO")'))).toBe(
+			expect(str((await runAsync(interp, '(secret "REPL_FOO")')).value)).toBe(
 				"#<secret:REPL_FOO>",
 			);
 		} finally {
@@ -193,14 +193,19 @@ describe("secret registry (revealed only into an MCP call)", () => {
 			`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
 		);
 		expect(
-			str(await runAsync(interp, '(fx/echo :message (secret "REPL_FOO"))')),
+			str(
+				(await runAsync(interp, '(fx/echo :message (secret "REPL_FOO"))'))
+					.value,
+			),
 		).toBe('"s3cr3t"');
 		expect(
 			str(
-				await runAsync(
-					interp,
-					'(fx/echo :message (concat "Bearer " (secret "REPL_FOO")))',
-				),
+				(
+					await runAsync(
+						interp,
+						'(fx/echo :message (concat "Bearer " (secret "REPL_FOO")))',
+					)
+				).value,
 			),
 		).toBe('"Bearer s3cr3t"');
 	});

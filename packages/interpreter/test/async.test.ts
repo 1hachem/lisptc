@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+	Cell,
 	type Eval,
 	EvalException,
 	Interp,
@@ -9,6 +10,7 @@ import {
 	runSync,
 	str,
 } from "../src/lisp.ts";
+import { Promises } from "../src/promises.ts";
 
 function interpWithSlow(): Interp {
 	const interp = new Interp();
@@ -20,6 +22,17 @@ function interpWithSlow(): Interp {
 		"Return x after a turn of the event loop.",
 		z.tuple([z.any()]),
 		([x]) => new Promise((resolve) => setTimeout(() => resolve(x), 1)),
+	);
+	interp.defPromise(
+		"boom-later",
+		0,
+		"(boom-later)",
+		"Return a promise that rejects on the next turn of the loop.",
+		z.tuple([]),
+		() =>
+			new Promise((_, reject) =>
+				setTimeout(() => reject(new Error("nope")), 1),
+			),
 	);
 	interp.def(
 		"boom",
@@ -36,7 +49,7 @@ async function evAsync(
 	code: string,
 	interp = interpWithSlow(),
 ): Promise<string> {
-	return str(await runAsync(interp, code));
+	return str((await runAsync(interp, code)).value);
 }
 
 describe("a promise from a builtin suspends the evaluator", () => {
@@ -122,5 +135,111 @@ describe("runSync refuses to suspend", () => {
 		} catch (ex) {
 			expect(ex).toBeInstanceOf(EvalException);
 		}
+	});
+});
+
+describe("a promise is the host's own promise", () => {
+	function starter(): { interp: Interp; runs: () => number } {
+		const interp = interpWithSlow();
+		let runs = 0;
+		const promises = new Promises(
+			(op, payload) =>
+				new Promise((resolve, reject) =>
+					setTimeout(
+						() =>
+							op === "fail" ? reject(new Error("nope")) : resolve(payload),
+						1,
+					),
+				),
+			(raw) => raw,
+		);
+		promises.installBuiltins(interp);
+		interp.defPromise(
+			"start",
+			1,
+			"(start x)",
+			"Return a promise for x.",
+			z.tuple([z.any()]),
+			([x]) =>
+				promises.start("echo", x, (raw) => {
+					runs += 1;
+					return raw;
+				}),
+		);
+		interp.defPromise(
+			"start-failing",
+			0,
+			"(start-failing)",
+			"Return a promise that rejects.",
+			z.tuple([]),
+			() => promises.start("fail", null),
+		);
+		return { interp, runs: () => runs };
+	}
+
+	it("is a real Promise the host can await", async () => {
+		const interp = interpWithSlow();
+		const { value } = await runAsync(interp, "(list (slow 1))");
+		expect(value).toBeInstanceOf(Cell);
+		expect((value as Cell).car).toBe(1n);
+	});
+
+	it("does not suspend when the promise is the value", () => {
+		const { interp } = starter();
+		expect(str(runSync(interp, "(start 7)"))).toBe("#<promise>");
+	});
+
+	it("applies its result once, however many times it is awaited", async () => {
+		const { interp, runs } = starter();
+		expect(
+			await evAsync("(setq p (start 7)) (await p) (await p)", interp),
+		).toBe("7");
+		expect(runs()).toBe(1);
+	});
+
+	it("keeps its value with no cache of ours", async () => {
+		const { interp } = starter();
+		await evAsync("(setq p (start 7))", interp);
+		expect(await evAsync("(promise-state p)", interp)).toBe(":pending");
+		expect(await evAsync("(await p)", interp)).toBe("7");
+		expect(await evAsync("(promise-state p)", interp)).toBe(":fulfilled");
+		expect(await evAsync("(await p)", interp)).toBe("7");
+	});
+
+	it("applies its result with no await at all", async () => {
+		const { interp, runs } = starter();
+		await evAsync("(start 7)", interp);
+		await evAsync("(slow 1)", interp);
+		expect(runs()).toBe(1);
+	});
+
+	it("drops a settled promise from (promises)", async () => {
+		const { interp } = starter();
+		await evAsync("(setq p (start 7))", interp);
+		expect(await evAsync("(length (promises))", interp)).toBe("1");
+		await evAsync("(await p)", interp);
+		expect(await evAsync("(length (promises))", interp)).toBe("0");
+	});
+
+	it("combines the way the host combines", async () => {
+		const { interp } = starter();
+		expect(
+			await evAsync("(await (promise-all (list (start 1) (start 2))))", interp),
+		).toBe("(1 2)");
+		expect(
+			await evAsync("(await (promise-race (list (start 1))))", interp),
+		).toBe("1");
+		expect(
+			await evAsync(
+				"(await (promise-any (list (start-failing) (start 9))))",
+				interp,
+			),
+		).toBe("9");
+		expect(
+			await evAsync(
+				"(await (promise-all-settled (list (start 1) (start-failing))))",
+				interp,
+			),
+		).toContain(":rejected");
 	});
 });

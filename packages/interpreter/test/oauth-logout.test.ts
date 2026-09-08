@@ -25,7 +25,7 @@ describe("logout", () => {
 		);
 		expect(existsSync(file)).toBe(true);
 
-		expect(str(await runAsync(interp, '(logout "posthog")'))).toBe(
+		expect(str((await runAsync(interp, '(logout "posthog")')).value)).toBe(
 			":logged-out",
 		);
 		expect(existsSync(file)).toBe(false);
@@ -53,7 +53,9 @@ describe("login", () => {
 			file,
 			JSON.stringify({ tokens: { access_token: "x", token_type: "Bearer" } }),
 		);
-		expect(str(await runAsync(interp, '(login "linear")'))).toBe(":logged-in");
+		expect(str((await runAsync(interp, '(login "linear")')).value)).toBe(
+			":logged-in",
+		);
 	});
 
 	it("errors for an unknown server", async () => {

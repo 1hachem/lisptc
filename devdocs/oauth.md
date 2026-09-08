@@ -42,7 +42,7 @@ curated subset including `openid`, `insight:read/write`, …, `user:read`).
    DCR + PKCE (`auth(provider, { scope })`), saves the PKCE verifier, and captures
    the authorization URL.
 2. The URL is surfaced — as `login`'s return value, or as the `NeedsAuthError`
-   message on the `load-mcp` job — and, on the needs-auth path, the callback
+   message the `load-mcp` promise rejects with — and, on the needs-auth path, the callback
    server is started.
 3. The user approves and is redirected to the callback with `?code`.
 4. The code is exchanged for tokens (`auth(provider, { authorizationCode })`),

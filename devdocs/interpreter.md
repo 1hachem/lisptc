@@ -7,7 +7,7 @@ code cannot work out from the code.
 
 **The evaluator suspends rather than blocks.** `Interp.evalGen` is a generator
 that yields a promise, so async work runs on Node's own event loop and needs no
-second thread — see [jobs.md](./jobs.md).
+second thread — see [promises.md](./promises.md).
 
 ## Reader
 
@@ -43,14 +43,14 @@ follow whitespace: prose punctuation that happens to touch a form
 
 ### `#<…>` is refused outright
 
-Every value that cannot be read back prints that way — a job, a secret, a
+Every value that cannot be read back prints that way — a promise, a secret, a
 closure, a built-in — so a `#<…>` in source is *always* a retyped printout.
-Left as an ordinary symbol it failed one step later as `void variable: #<job`,
+Left as an ordinary symbol it failed one step later as `void variable: #<promise`,
 which named neither the mistake nor the fix. `readToken` raises an
 `EvalException` (not a `FormatException`) because that is the error every layer
 above already renders inline as a syntax error.
 
-Four negative survey reports in two days were an agent typing a job handle back.
+Four negative survey reports in two days were an agent typing a promise's printed form back.
 
 ### `readFailure` reports only parse failures
 
@@ -293,7 +293,7 @@ keyword carrying a value after it, **a misspelling included**, so
 printing the literal `:ofset 40` after the whole value.
 
 What cannot be an option is a keyword at the very end with no value to carry, and
-that one is data: `(echo (job-status job))` prints `:pending`. `allowed` is the
+that one is data: `(echo (promise-state p))` prints `:pending`. `allowed` is the
 exception to the exception — a trailing `:offset` is an option whose value was
 forgotten, and saying so is more use than printing the word.
 

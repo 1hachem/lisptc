@@ -25,7 +25,7 @@ export async function evAsync(
 	code: string,
 	interp: Interp = freshInterp(),
 ): Promise<string> {
-	return str(await runAsync(interp, code));
+	return str((await runAsync(interp, code)).value);
 }
 
 export function evWithOutput(code: string): { value: string; output: string } {

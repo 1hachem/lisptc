@@ -190,9 +190,8 @@ export class Compactor {
 			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
 		const name = this.nameFor(interp, form, value);
-		const job = jobLabel(value);
-		if (job !== undefined)
-			return `${name}: ${job} running in the background. Its result applies itself when the job settles, so nothing is owed here; to act on it use the name — (job-status ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
+		if (value instanceof Promise)
+			return `${name}: a promise, still running. Its result applies itself when the promise settles, so nothing is owed here; to act on it use the name — (promise-state ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
 
 		return `${name}: ${describe(value)}\n`;
 	}
@@ -395,24 +394,14 @@ export class Compactor {
 		let name = `${base}-${n}`;
 		while (interp.hasGlobal(newSym(name))) name = `${base}-${++n}`;
 		this.counters.set(base, n);
-		const job = jobLabel(value);
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			doc:
-				job === undefined
-					? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
-					: `Handle for the background job \`${job}\`. This name is how you address it — its printed form (#<job …>) cannot be read back. The job applies its own result when it settles, so awaiting is optional: (await ${name}) waits for it now and returns that result, (job-status ${name}) checks it without blocking (:pending / :done / :error), (cancel ${name}) aborts it.`,
+			doc: !(value instanceof Promise)
+				? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
+				: `The promise a \`${base}\` call returned. This name is how you address it — its printed form (#<promise>) cannot be read back. It applies its own result when it settles, so awaiting is optional: (await ${name}) waits for it now and returns that result, (promise-state ${name}) checks it without blocking (:pending / :fulfilled / :rejected), (cancel ${name}) aborts it.`,
 		});
 		return name;
 	}
-}
-
-function jobLabel(value: unknown): string | undefined {
-	if (value === null || typeof value !== "object") return undefined;
-	const { jobId, label } = value as { jobId?: unknown; label?: unknown };
-	return typeof jobId === "string" && typeof label === "string"
-		? label
-		: undefined;
 }
 
 function isSliceForm(form: unknown): boolean {
@@ -578,16 +567,15 @@ function describe(value: unknown): string {
 	const callable = callableKind(value);
 	if (callable !== undefined) return callable;
 
-	const job = jobLabel(value);
-	if (job !== undefined) return `job ${job}, running in the background`;
+	if (value instanceof Promise) return "a promise, still running";
 
 	const started = listElements(value);
 	if (
 		started !== undefined &&
 		started.length > 0 &&
-		started.every((j) => jobLabel(j) !== undefined)
+		started.every((p) => p instanceof Promise)
 	)
-		return `list of ${started.length} background job${started.length === 1 ? "" : "s"}`;
+		return `list of ${started.length} promise${started.length === 1 ? "" : "s"}, still running`;
 
 	const text = canonical(value);
 	const spans = wordSpans(text);
@@ -703,7 +691,7 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 		"echo",
 		-1,
 		'(echo x... [:offset 0] [:length n] [:match "re"] [:context 8] [:max 10] [:ignore-case t])',
-		`Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. Output is measured in whitespace-separated words and stops after ${c.limit} of them, closing with a \`...\` line saying how much is left and the offset to continue from. :offset and :length choose the window. :match prints only the regions matching a JavaScript-syntax regular expression, each as @<word-offset> with the match wrapped in [[ ]] — that is how you read a value you cannot yet name a pattern for; to KEEP what matched rather than look at it, use \`grep\`, which returns it. A keyword prints as itself when it is the last argument — (echo (job-status job)) — since only a keyword carrying a value after it is read as an option. Returns an unspecified value, so a step ending in an echo gets no result line: what was printed IS the report.`,
+		`Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. Output is measured in whitespace-separated words and stops after ${c.limit} of them, closing with a \`...\` line saying how much is left and the offset to continue from. :offset and :length choose the window. :match prints only the regions matching a JavaScript-syntax regular expression, each as @<word-offset> with the match wrapped in [[ ]] — that is how you read a value you cannot yet name a pattern for; to KEEP what matched rather than look at it, use \`grep\`, which returns it. A keyword prints as itself when it is the last argument — (echo (promise-state p)) — since only a keyword carrying a value after it is read as an option. Returns an unspecified value, so a step ending in an echo gets no result line: what was printed IS the report.`,
 		z.tuple([zList]),
 		([rest]) => {
 			const { values, options } = splitKeywordArgs(rest, ECHO_OPTIONS);

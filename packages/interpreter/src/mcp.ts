@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { isNumeric } from "./arith.ts";
-import { Job, Jobs, type JobsRuntime, LocalJobsRuntime } from "./jobs.ts";
 import {
 	Cell,
 	type DocArg,
@@ -17,6 +16,7 @@ import {
 } from "./lisp.ts";
 import { type McpOp, mcpDispatch } from "./mcp-client.ts";
 import { keyName, parsePlist } from "./plist.ts";
+import { type Dispatch, Promises } from "./promises.ts";
 import type { ToJson } from "./types.ts";
 
 const zName = z
@@ -69,7 +69,7 @@ interface ServerRec {
 }
 
 export interface RegisterMcpOptions {
-	runtime?: JobsRuntime;
+	dispatch?: Dispatch;
 	toolkitJson?: string;
 }
 
@@ -295,13 +295,13 @@ const LOAD_MCP_ARGS: DocArg[] = [
 
 function doUnload(
 	interp: Interp,
-	runtime: JobsRuntime,
+	promises: Promises,
 	servers: Map<string, ServerRec>,
 	name: string,
 ): Sym[] {
 	const rec = servers.get(name);
 	if (!rec) throw new EvalException("MCP server not loaded", name, false);
-	void runtime.call("disconnect", { serverId: rec.serverId }).catch(() => {});
+	void promises.call("disconnect", { serverId: rec.serverId }).catch(() => {});
 	for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 	servers.delete(name);
 	return rec.toolSyms;
@@ -309,7 +309,7 @@ function doUnload(
 
 function installServer(
 	interp: Interp,
-	runtime: JobsRuntime,
+	promises: Promises,
 	servers: Map<string, ServerRec>,
 	name: string,
 	res: { serverId: string; tools: Tool[] },
@@ -322,7 +322,7 @@ function installServer(
 		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
 			const args = plistToJson(f[0] as List);
 			validate(tool, args);
-			return runtime
+			return promises
 				.call("call-tool", {
 					serverId: res.serverId,
 					tool: tool.name,
@@ -356,19 +356,18 @@ export function registerMcp(
 	interp: Interp,
 	options: RegisterMcpOptions = {},
 ): void {
-	const runtime =
-		options.runtime ??
-		new LocalJobsRuntime((op, payload, signal) =>
-			mcpDispatch(op as McpOp, payload, signal),
-		);
-	const jobs = new Jobs(runtime, jsonToLisp);
-	jobs.installBuiltins(interp);
+	const dispatch: Dispatch =
+		options.dispatch ??
+		((op: string, payload: unknown, signal?: AbortSignal) =>
+			mcpDispatch(op as McpOp, payload, signal));
+	const promises = new Promises(dispatch, jsonToLisp);
+	promises.installBuiltins(interp);
 
 	const servers = new Map<string, ServerRec>();
 	const predefined = new Map<string, ConnConfig>();
 	parsePredefined(predefined, options.toolkitJson);
 
-	interp.def(
+	interp.defPromise(
 		"load-mcp",
 		-1,
 		'(load-mcp "server") | (load-mcp :name "server")',
@@ -376,19 +375,17 @@ export function registerMcp(
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, predefined);
-			if (servers.has(conf.name)) doUnload(interp, runtime, servers, conf.name);
-			const jobId = runtime.start("connect", conf);
-			const job = new Job(jobId, `load-mcp:${conf.name}`, (raw) =>
+			if (servers.has(conf.name))
+				doUnload(interp, promises, servers, conf.name);
+			return promises.start("connect", conf, (raw: unknown) =>
 				installServer(
 					interp,
-					runtime,
+					promises,
 					servers,
 					conf.name,
 					raw as { serverId: string; tools: Tool[] },
 				),
 			);
-			jobs.track(job);
-			return job;
 		},
 		LOAD_MCP_ARGS,
 	);
@@ -399,7 +396,7 @@ export function registerMcp(
 		'(unload-mcp "server")',
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
-		([name]) => arrayToList(doUnload(interp, runtime, servers, name)),
+		([name]) => arrayToList(doUnload(interp, promises, servers, name)),
 	);
 
 	interp.def(
@@ -428,7 +425,7 @@ export function registerMcp(
 			const conf = predefined.get(name);
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
-			return runtime
+			return promises
 				.call("authorize", { url: conf.url, code, scopes: conf.scopes })
 				.then(() => newLispKeyword("authorized"));
 		},
@@ -446,7 +443,7 @@ export function registerMcp(
 			const conf = predefined.get(name);
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
-			return runtime
+			return promises
 				.call("login", { url: conf.url, scopes: conf.scopes })
 				.then(
 					(res) =>
@@ -468,8 +465,8 @@ export function registerMcp(
 			const conf = predefined.get(name);
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
-			if (servers.has(name)) doUnload(interp, runtime, servers, name);
-			return runtime
+			if (servers.has(name)) doUnload(interp, promises, servers, name);
+			return promises
 				.call("logout", { url: conf.url })
 				.then(() => newLispKeyword("logged-out"));
 		},
@@ -615,13 +612,13 @@ export function registerMcp(
 
 	const shutdown = (): void => {
 		for (const rec of servers.values()) {
-			void runtime
+			void promises
 				.call("disconnect", { serverId: rec.serverId })
 				.catch(() => {});
 			for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 		}
 		servers.clear();
-		jobs.shutdown();
+		promises.shutdown();
 	};
 
 	interp.def(

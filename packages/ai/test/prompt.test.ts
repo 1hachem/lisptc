@@ -115,25 +115,27 @@ describe("MCP", () => {
 		"login",
 		"logout",
 	];
-	const JOB_BUILTINS = [
+	const PROMISE_BUILTINS = [
 		"await",
-		"await-all",
-		"await-any",
-		"job-status",
-		"jobs",
+		"promise-all",
+		"promise-all-settled",
+		"promise-any",
+		"promise-race",
+		"promise-state",
+		"promises",
 		"cancel",
 	];
 
-	it.each([...MCP_BUILTINS, ...JOB_BUILTINS])("names %s", (name) => {
+	it.each([...MCP_BUILTINS, ...PROMISE_BUILTINS])("names %s", (name) => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(names(name));
 	});
 
-	it("says load-mcp is async: it returns a job and does not block", () => {
+	it("says load-mcp is async: it returns a promise and does not block", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(
-			/`load-mcp` is asynchronous: it returns a job immediately and does NOT block/,
+			/`load-mcp` is asynchronous: it returns a promise immediately and does NOT block/,
 		);
 		expect(LISP_SYSTEM_PROMPT).toMatch(
-			/`\(job-status job\)` checks progress \(:pending\/:done\/:error\)/,
+			/`\(promise-state p\)` checks progress \(:pending\/:fulfilled\/:rejected\)/,
 		);
 	});
 
@@ -172,7 +174,7 @@ describe("MCP", () => {
 	});
 
 	it("shows how to load several servers concurrently", () => {
-		expect(LISP_SYSTEM_PROMPT).toMatch(/await-all \(list \(load-mcp/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/promise-all-settled \(list \(load-mcp/);
 	});
 });
 

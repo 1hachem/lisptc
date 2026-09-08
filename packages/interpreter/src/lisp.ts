@@ -287,22 +287,20 @@ class Closure extends DefinedFunc {
 type BuiltInFuncBody = (frame: unknown[]) => unknown;
 type BuiltInFuncGen = (frame: unknown[]) => Eval;
 
+type BuiltInKind = "plain" | "generator" | "promise";
+
 class BuiltInFunc extends Func {
 	constructor(
 		private readonly name: string,
 		carity: number,
 		private readonly body: BuiltInFuncBody | BuiltInFuncGen,
-		private readonly suspends = false,
+		readonly kind: BuiltInKind = "plain",
 	) {
 		super(carity);
 	}
 
 	toString(): string {
 		return `#<${this.name}:${this.carity}>`;
-	}
-
-	get isSuspending(): boolean {
-		return this.suspends;
 	}
 
 	call(frame: unknown[]): unknown {
@@ -1040,7 +1038,24 @@ export class Interp {
 		const wrapped: BuiltInFuncGen = (a) => body(parseArgs(schema, a));
 		this.globals.set(
 			newSym(name),
-			new BuiltInFunc(name, carity, wrapped, true),
+			new BuiltInFunc(name, carity, wrapped, "generator"),
+		);
+		this.docTable.set(name, { signature, doc, args });
+	}
+
+	defPromise<T extends z.ZodType>(
+		name: string,
+		carity: number,
+		signature: string,
+		doc: string,
+		schema: T,
+		body: (a: z.infer<T>) => Promise<unknown>,
+		args?: DocArg[],
+	) {
+		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
+		this.globals.set(
+			newSym(name),
+			new BuiltInFunc(name, carity, wrapped, "promise"),
 		);
 		this.docTable.set(name, { signature, doc, args });
 	}
@@ -1182,9 +1197,10 @@ export class Interp {
 								frame[fixed] = head;
 							}
 							if (fn instanceof BuiltInFunc) {
-								if (fn.isSuspending) return yield* fn.callGen(frame);
+								if (fn.kind === "generator") return yield* fn.callGen(frame);
 								const value = fn.call(frame);
-								if (value instanceof Promise) return yield* fn.settle(value);
+								if (fn.kind === "plain" && value instanceof Promise)
+									return yield* fn.settle(value);
 								return value;
 							}
 							env = new Cell(frame, fn.env);
@@ -1852,6 +1868,8 @@ export function str(
 		return "nil";
 	} else if (x === true) {
 		return "t";
+	} else if (x instanceof Promise) {
+		return "#<promise>";
 	} else if (x instanceof Cell) {
 		if (x.car instanceof Sym) {
 			const q = quotes[x.car.name];
@@ -2002,7 +2020,11 @@ export function runSync(interp: Interp, text: string): unknown {
 	return driveSync(runGen(interp, text));
 }
 
-export async function driveAsync<T>(gen: Eval<T>): Promise<T> {
+export interface Outcome<T = unknown> {
+	value: T;
+}
+
+export async function driveAsync<T>(gen: Eval<T>): Promise<Outcome<T>> {
 	let step = gen.next();
 	while (!step.done) {
 		let resumed: unknown;
@@ -2014,10 +2036,10 @@ export async function driveAsync<T>(gen: Eval<T>): Promise<T> {
 		}
 		step = gen.next(resumed);
 	}
-	return step.value;
+	return { value: step.value };
 }
 
-export function runAsync(interp: Interp, text: string): Promise<unknown> {
+export function runAsync(interp: Interp, text: string): Promise<Outcome> {
 	return driveAsync(runGen(interp, text));
 }
 

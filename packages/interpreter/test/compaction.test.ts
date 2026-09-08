@@ -249,56 +249,48 @@ describe("secret taint", () => {
 	});
 });
 
-describe("reporting a background job", () => {
-	function fakeJob(label = "load-mcp:linear") {
-		return {
-			jobId: "8d123124beefcafe",
-			label,
-			toString: () => `#<job ${label} 8d123124>`,
-		};
+describe("reporting a promise", () => {
+	function pending(): Promise<unknown> {
+		return new Promise(() => {});
 	}
 
 	function reportOf(interp: Interp, c: Compactor, code: string): string {
 		return stepped(code, { interp, c }).model;
 	}
 
-	function withJob(value: unknown): { interp: Interp; c: Compactor } {
+	function withPromise(value: unknown): { interp: Interp; c: Compactor } {
 		const c = new Compactor(400);
 		const interp = new Interp({ extensions: [compactionExtension(c)] });
 		runSync(interp, prelude);
 		interp.defineGlobal(newSym("started"), value, {
 			signature: "started",
-			doc: "A job handed to the REPL by the host, as load-mcp would.",
+			doc: "A promise handed to the REPL by the host, as load-mcp would.",
 		});
 		return { interp, c };
 	}
 
 	it("reports the name and what to do with it, never the handle", () => {
-		const { interp, c } = withJob(fakeJob());
+		const { interp, c } = withPromise(pending());
 		const line = reportOf(interp, c, "(identity started)");
-		expect(line).not.toContain("#<job");
-		expect(line).toContain("load-mcp:linear");
+		expect(line).not.toContain("#<promise");
 		expect(line).toContain("(await started)");
-		expect(line).toContain("(job-status started)");
+		expect(line).toContain("(promise-state started)");
 		expect(line).toContain("(cancel started)");
 		expect(line).toContain("nothing is owed");
 	});
 
 	it("keeps the handle out of every other description of it", () => {
-		const { interp, c } = withJob(fakeJob());
+		const { interp, c } = withPromise(pending());
 		expect(reportOf(interp, c, "(quote started)")).toBe(
-			"started: job load-mcp:linear, running in the background\n",
+			"started: a promise, still running\n",
 		);
 	});
 
-	it("describes a list of jobs as jobs, short as it looks", () => {
-		const both = new Cell(
-			fakeJob("load-mcp:a"),
-			new Cell(fakeJob("load-mcp:b"), null),
-		);
-		const { interp, c } = withJob(both);
+	it("describes a list of promises as promises, short as it looks", () => {
+		const both = new Cell(pending(), new Cell(pending(), null));
+		const { interp, c } = withPromise(both);
 		expect(reportOf(interp, c, "(identity started)")).toBe(
-			"started: list of 2 background jobs\n",
+			"started: list of 2 promises, still running\n",
 		);
 	});
 });
