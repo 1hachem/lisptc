@@ -1,3 +1,4 @@
+import { isNumeric } from "./arith.ts";
 import {
 	Cell,
 	endOfForm,
@@ -56,7 +57,8 @@ function proseReason(interp: Interp, form: unknown): string | undefined {
 	if (head instanceof Sym && (isSpecialForm(head) || interp.hasGlobal(head)))
 		return undefined;
 	if (readsAsSentence(form)) return "a comma-separated phrase";
-	if (!(head instanceof Sym)) return undefined;
+	if (!(head instanceof Sym))
+		return isLiteral(head) ? `${str(head)} is not a function` : undefined;
 	if (marksCode(interp, form)) return undefined;
 	if (isNamespaced(head.name) && !hasWord(form)) return undefined;
 	return `"${head.name}" is not defined`;
@@ -94,8 +96,14 @@ function marksCode(interp: Interp, form: Cell): boolean {
 	return false;
 }
 
+function isLiteral(head: unknown): boolean {
+	return isNumeric(head) || typeof head === "string";
+}
+
+const NAMESPACED = /^[a-z][a-z0-9-]*[/_][a-z0-9_/-]*$/i;
+
 function isNamespaced(name: string): boolean {
-	return name.includes("/") || name.includes("_");
+	return NAMESPACED.test(name);
 }
 
 function hasWord(form: Cell): boolean {

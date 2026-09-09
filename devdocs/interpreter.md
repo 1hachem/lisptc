@@ -297,6 +297,29 @@ still wins — `(list one, two, three, four)` is a call with a broken argument, 
 saying so is more useful than silently dropping it. What is left is a form no
 head could classify, judged by whether it is punctuated like a sentence.
 
+Two shorter phrases have no comma to offer, and are settled by the head after
+all:
+
+- **a literal head is prose**, `(10 MB)` and `("quoted")`. No number and no
+  string is ever applicable, so evaluating such a form can only ever raise `not
+  applicable`; reading it as a sentence loses nothing. A keyword head is left
+  alone — `(:status :ok)` is data a model meant, not a phrase.
+- **a namespaced head only counts as a call if it is shaped like a name**:
+  `[a-z][a-z0-9-]*` before the `/` or `_`. `browser_close` and `server/tool`
+  qualify, so a tool called before its server loaded is still an error;
+  `https://example.com` (a colon) and `€49.99/month` (a currency sign) do not,
+  and fall through to prose.
+
+`test/prose-corpus.test.ts` is the stress corpus behind all of this: asides,
+quantities, comma-separated clauses and sentences that must run nothing; replies
+whose lisptc reads like English that must run and skip nothing; and the shapes
+that must stay an `undefined:` call. Its last block is the frontier, written with
+`it.fails` — `(and so on)`, `(read the docs)`, `(last week)`: English whose first
+word happens to be bound, so the form is code and dies on a void variable.
+Reading them would mean overruling a bound head, which would also swallow the
+agent's own typo (`(echo reslt-1)`) in silence, so they stay errors and the
+corpus records that they do.
+
 ### `isTruncated` is not `checkSyntax`
 
 The one unreadable reply that is not a sentence: an LLM cut off by a token limit
