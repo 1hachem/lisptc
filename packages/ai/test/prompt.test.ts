@@ -163,7 +163,7 @@ describe("MCP", () => {
 			/Never invent a server or tool name — read it out of one of those results/,
 		);
 		expect(LISP_SYSTEM_PROMPT).toMatch(
-			/start from\s+`search-mcps` and let each step tell you the next name/,
+			/start from\s+search-mcps and let each step tell you the next name/,
 		);
 	});
 
@@ -212,7 +212,7 @@ describe("the language reference", () => {
 		"sqrt",
 	])("warns that %s does not exist", (name) => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(
-			new RegExp(`There are NO[^.]*\`${name}\``, "s"),
+			new RegExp(`There are NO[^.]*\\b${name}\\b`, "s"),
 		);
 	});
 
