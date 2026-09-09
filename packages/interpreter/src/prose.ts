@@ -45,19 +45,36 @@ function unreadable(
 }
 
 export const readsAsProse: ProseClassifier = (interp, form) => {
-	const head = proseHead(interp, form);
-	if (head === undefined) return undefined;
-	return `${abbreviate(str(form))} — "${head}" is not defined, so this was read as prose`;
+	const reason = proseReason(interp, form);
+	if (reason === undefined) return undefined;
+	return `${abbreviate(str(form))} — ${reason}, so this was read as prose`;
 };
 
-function proseHead(interp: Interp, form: unknown): string | undefined {
+function proseReason(interp: Interp, form: unknown): string | undefined {
 	if (!(form instanceof Cell)) return undefined;
 	const head = form.car;
-	if (!(head instanceof Sym) || isSpecialForm(head)) return undefined;
-	if (interp.hasGlobal(head)) return undefined;
+	if (head instanceof Sym && (isSpecialForm(head) || interp.hasGlobal(head)))
+		return undefined;
+	if (readsAsSentence(form)) return "a comma-separated phrase";
+	if (!(head instanceof Sym)) return undefined;
 	if (marksCode(interp, form)) return undefined;
 	if (isNamespaced(head.name) && !hasWord(form)) return undefined;
-	return head.name;
+	return `"${head.name}" is not defined`;
+}
+
+const SENTENCE_WORDS = 4;
+
+function readsAsSentence(form: Cell): boolean {
+	let words = 0;
+	let clauses = 0;
+	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr) {
+		const word = rest.car;
+		if (word instanceof Cell || word instanceof LispKeyword) return false;
+		if (typeof word === "string") return false;
+		if (word instanceof Sym && word.name.endsWith(",")) clauses++;
+		words++;
+	}
+	return clauses > 0 && words >= SENTENCE_WORDS;
 }
 
 function marksCode(interp: Interp, form: Cell): boolean {

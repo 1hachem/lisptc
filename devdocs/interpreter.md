@@ -273,6 +273,30 @@ Boundness is the test, not callability, so calling a variable that holds a list
 stays an ordinary "not applicable" error. It is checked per form as the program
 runs, since an earlier form may be the `defun` that defines a later one's head.
 
+### The shape of the whole form, when the head cannot say
+
+A head is not always the thing that tells. `(2 agents, 10 MB storage, 100
+credits)` — the parenthetical of a price list, a shape a model writes often — is
+headed by a number, and the head rules above have nothing to say about it: it is
+not an unbound symbol, so evaluation ran it and raised a `not applicable: 2` the
+user saw and the agent then spent a turn answering.
+
+So the classifier reads the form as a whole first, and calls it a sentence on
+three signals together, none of which is enough alone:
+
+- **a clause break** — at least one word ending in a comma. A comma glued to the
+  word before it and followed by a space is English punctuation; a comma the
+  reader would treat as unquote sugar (` ,x`) parses as a nested form instead and
+  fails the next test.
+- **no nested form**, of any kind. A call inside the parentheses is code.
+- **no string and no keyword**, the same marks of code the head rules use.
+- **at least four words**, so that a short call cannot trip it.
+
+This runs after the bound-head test and before every head rule, so a bound head
+still wins — `(list one, two, three, four)` is a call with a broken argument, and
+saying so is more useful than silently dropping it. What is left is a form no
+head could classify, judged by whether it is punctuated like a sentence.
+
 ### `isTruncated` is not `checkSyntax`
 
 The one unreadable reply that is not a sentence: an LLM cut off by a token limit

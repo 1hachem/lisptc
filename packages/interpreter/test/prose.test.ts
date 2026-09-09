@@ -178,6 +178,7 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			"(i.e. the sum)",
 			"(cf. above)",
 			"(1, 2, 3)",
+			"(2 agents, 10 MB storage, 100 credits)",
 			"(50% done)",
 			"(A/B test)",
 			"(TODO: fix this)",
@@ -206,6 +207,40 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		];
 		it.each(calls)("errors on %s, naming %s", (text, name) => {
 			expect(() => tolerantly(text)).toThrow(`undefined: ${name}`);
+		});
+
+		it("reads a phrase by its own shape, whatever heads it", () => {
+			const { value, skipped } = tolerantly(
+				"Free: €0 (2 agents, 10 MB storage, 100 credits)\n" +
+					"DIY: €49.99/month (5 agents, 5 GB storage, 1,000 credits)\n" +
+					"PRO: €199.99/month (Unlimited agents, 15 GB storage, 5,000 credits)",
+			);
+			expect(value).toBe("#<unspecified>");
+			expect(skipped).toEqual([
+				"(2 agents, 10 MB storage, 100 credits) — a comma-separated phrase, so this was read as prose",
+				"(5 agents, 5 GB storage, 1,000 credits) — a comma-separated phrase, so this was read as prose",
+				"(Unlimited agents, 15 GB storage, 5,000 credits) — a comma-separated phrase, so this was read as prose",
+			]);
+		});
+
+		it.each([
+			"(2 agents, 10 MB storage)",
+			"(car, cdr and cons return values)",
+			"(50 GB, 12 seats, no support)",
+		])("reads %s as a phrase, though no head could say so", (text) => {
+			expect(tolerantly(text).skipped[0]).toContain("a comma-separated phrase");
+		});
+
+		it("does not read a call with a comma in a string as a phrase", () => {
+			expect(() => tolerantly('(report "a, b, c" x y z)')).toThrow(
+				/undefined: report/,
+			);
+		});
+
+		it("leaves a phrase headed by something bound as code", () => {
+			expect(() => tolerantly("(list one, two, three, four)")).toThrow(
+				/void variable/,
+			);
 		});
 
 		it.each([
