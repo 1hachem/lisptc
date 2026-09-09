@@ -1,26 +1,34 @@
 import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { LangChainCallbackHandler } from "@posthog/ai/langchain";
 import { analyticsEnv } from "@repo/env/analytics";
+import type { LlmCall } from "@repo/llm/llm";
 import { PostHog } from "posthog-node";
 
 const PRIVACY_MODE = process.env.POSTHOG_PRIVACY_MODE === "true";
 
-let client: PostHog | null | undefined;
+const FLUSH_TIMEOUT_MS = 5_000;
+
+interface TelemetryGlobals {
+	__lisptcPosthog?: PostHog | null;
+	__lisptcFlushTelemetry?: () => Promise<void>;
+}
+
+const globals = globalThis as typeof globalThis & TelemetryGlobals;
 
 function posthog(): PostHog | null {
-	if (client !== undefined) return client;
+	if (globals.__lisptcPosthog !== undefined) return globals.__lisptcPosthog;
 	const key = analyticsEnv.POSTHOG_API_KEY;
 	if (!key) {
 		console.log("[telemetry] POSTHOG_API_KEY unset — agent traces disabled");
-		client = null;
+		globals.__lisptcPosthog = null;
 		return null;
 	}
-	client = new PostHog(key, {
+	globals.__lisptcPosthog = new PostHog(key, {
 		host: analyticsEnv.POSTHOG_HOST ?? "https://us.i.posthog.com",
 		flushAt: 20,
 		flushInterval: 5_000,
 	});
-	return client;
+	return globals.__lisptcPosthog;
 }
 
 export interface TraceContext {
@@ -32,12 +40,18 @@ export interface TraceContext {
 	model?: string;
 }
 
-function common(ctx: TraceContext): Record<string, unknown> {
+function turnCommon(ctx: TraceContext): Record<string, unknown> {
 	return {
 		$ai_trace_id: ctx.threadId,
 		thread_id: ctx.threadId,
 		environment: analyticsEnv.POSTHOG_ENVIRONMENT ?? "local",
 		...(ctx.sessionId ? { $session_id: ctx.sessionId } : {}),
+	};
+}
+
+function common(ctx: TraceContext): Record<string, unknown> {
+	return {
+		...turnCommon(ctx),
 		...(ctx.provider ? { $ai_provider: ctx.provider } : {}),
 		...(ctx.model ? { $ai_model: ctx.model } : {}),
 	};
@@ -136,7 +150,55 @@ export function captureTurn(
 	});
 }
 
-export async function shutdownTelemetry(): Promise<void> {
+export function captureLlmCall(ctx: TraceContext, span: LlmCall): void {
 	const ph = posthog();
-	if (ph) await ph.shutdown();
+	if (!ph) return;
+	const { distinctId, anonymous } = identify(ctx);
+	ph.capture({
+		distinctId,
+		event: "$ai_generation",
+		properties: {
+			...turnCommon(ctx),
+			...anonymous,
+			$ai_span_id: crypto.randomUUID(),
+			$ai_parent_id: ctx.turnId,
+			$ai_span_name: span.builtin,
+			$ai_latency: span.latencyMs / 1000,
+			$ai_is_error: Boolean(span.error),
+			...(span.provider ? { $ai_provider: span.provider } : {}),
+			...(span.model ? { $ai_model: span.model } : {}),
+			...(span.inputTokens === undefined
+				? {}
+				: { $ai_input_tokens: span.inputTokens }),
+			...(span.outputTokens === undefined
+				? {}
+				: { $ai_output_tokens: span.outputTokens }),
+			...(span.error ? { $ai_error: span.error } : {}),
+			structured: span.structured,
+			...(PRIVACY_MODE
+				? {}
+				: {
+						$ai_input: span.messages,
+						$ai_output_choices: [
+							{ role: "assistant", content: span.output ?? "" },
+						],
+					}),
+		},
+	});
 }
+
+export async function shutdownTelemetry(): Promise<void> {
+	const client = globals.__lisptcPosthog;
+	if (!client) return;
+	const startedAt = Date.now();
+	try {
+		await client.shutdown(FLUSH_TIMEOUT_MS);
+		console.log(
+			`[telemetry] flushed pending events (${Date.now() - startedAt}ms)`,
+		);
+	} catch (err) {
+		console.warn("[telemetry] flush failed:", err);
+	}
+}
+
+globals.__lisptcFlushTelemetry = shutdownTelemetry;

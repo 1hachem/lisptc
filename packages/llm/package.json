@@ -1,12 +1,12 @@
 {
-  "name": "@repo/repl",
+  "name": "@repo/llm",
   "version": "0.0.0",
   "type": "module",
   "private": true,
   "exports": {
-    "./repl": "./src/repl.ts",
-    "./session-server": "./src/session-server.ts",
-    "./cli": "./src/cli.ts",
+    "./client": "./src/llm-client.ts",
+    "./langchain": "./src/langchain.ts",
+    "./llm": "./src/llm.ts",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -15,14 +15,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "repl": "node --no-warnings --experimental-transform-types src/cli.ts",
-    "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach",
-    "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@langchain/core": "^1.2.9",
+    "@langchain/openai": "^1.5.10",
     "@repo/interpreter": "workspace:*",
-    "@repo/llm": "workspace:*"
+    "@repo/shared": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

@@ -273,6 +273,53 @@ Boundness is the test, not callability, so calling a variable that holds a list
 stays an ordinary "not applicable" error. It is checked per form as the program
 runs, since an earlier form may be the `defun` that defines a later one's head.
 
+### The shape of the whole form, when the head cannot say
+
+A head is not always the thing that tells. `(2 agents, 10 MB storage, 100
+credits)` — the parenthetical of a price list, a shape a model writes often — is
+headed by a number, and the head rules above have nothing to say about it: it is
+not an unbound symbol, so evaluation ran it and raised a `not applicable: 2` the
+user saw and the agent then spent a turn answering.
+
+So the classifier reads the form as a whole first, and calls it a sentence on
+three signals together, none of which is enough alone:
+
+- **a clause break** — at least one word ending in a comma. A comma glued to the
+  word before it and followed by a space is English punctuation; a comma the
+  reader would treat as unquote sugar (` ,x`) parses as a nested form instead and
+  fails the next test.
+- **no nested form**, of any kind. A call inside the parentheses is code.
+- **no string and no keyword**, the same marks of code the head rules use.
+- **at least four words**, so that a short call cannot trip it.
+
+This runs after the bound-head test and before every head rule, so a bound head
+still wins — `(list one, two, three, four)` is a call with a broken argument, and
+saying so is more useful than silently dropping it. What is left is a form no
+head could classify, judged by whether it is punctuated like a sentence.
+
+Two shorter phrases have no comma to offer, and are settled by the head after
+all:
+
+- **a literal head is prose**, `(10 MB)` and `("quoted")`. No number and no
+  string is ever applicable, so evaluating such a form can only ever raise `not
+  applicable`; reading it as a sentence loses nothing. A keyword head is left
+  alone — `(:status :ok)` is data a model meant, not a phrase.
+- **a namespaced head only counts as a call if it is shaped like a name**:
+  `[a-z][a-z0-9-]*` before the `/` or `_`. `browser_close` and `server/tool`
+  qualify, so a tool called before its server loaded is still an error;
+  `https://example.com` (a colon) and `€49.99/month` (a currency sign) do not,
+  and fall through to prose.
+
+`test/prose-corpus.test.ts` is the stress corpus behind all of this: asides,
+quantities, comma-separated clauses and sentences that must run nothing; replies
+whose lisptc reads like English that must run and skip nothing; and the shapes
+that must stay an `undefined:` call. Its last block is the frontier, written with
+`it.fails` — `(and so on)`, `(read the docs)`, `(last week)`: English whose first
+word happens to be bound, so the form is code and dies on a void variable.
+Reading them would mean overruling a bound head, which would also swallow the
+agent's own typo (`(echo reslt-1)`) in silence, so they stay errors and the
+corpus records that they do.
+
 ### `isTruncated` is not `checkSyntax`
 
 The one unreadable reply that is not a sentence: an LLM cut off by a token limit
@@ -280,6 +327,34 @@ leaves a parenthesis **open**. A host that ends its agent loop on whatever ran
 nothing needs that difference — every other form that will not parse is prose to
 this reader, and `checkSyntax` cannot tell the two apart. It asks nothing of an
 interp, so a host can call it without having installed the extension.
+
+## The prelude's higher-order list functions
+
+`filter`, `reduce` and `get-in` were added because an agent without them wrote
+manual recursion or a `dolist` accumulator for every selection, and a
+`(cdr (assoc ...))` chain guarded by `or` for every field. Three decisions in
+them are not free choices:
+
+`reduce` takes its initial value **last** (`(reduce f list [initial])`), the CL
+argument order, and checks that its second argument is a list. The other order
+(`(reduce f initial list)`) is just as common in the wild, and a model that
+guesses wrong would otherwise fold over the initial value and return something
+plausible and wrong. The `listp` guard turns that into an error naming the
+order, which costs one turn instead of a wrong answer nobody checks. `_reduce`
+is tail-recursive, so it inherits the evaluator's TCO and does not grow the
+stack on a long list; `filter`, like `mapcar` beside it, is not.
+
+`get-in` guards **every** step, not just the last: a step whose value is not a
+cons returns nil rather than raising, so a path through a field that came back
+as a string or nil ends in nil like a missing key does. The point of the helper
+is that no step needs a guard of its own.
+
+`get-in` also falls back to matching a symbol or keyword key against the string
+of its name (`_key-name`, which strips the `:` that `str` prints, since
+`symbol-name` takes a `Sym` and a `LispKeyword` is not one). JSON and MCP
+results carry string keys, and `(get-in x :port)` is the spelling a model
+reaches for; the fallback runs only after an exact `assoc` misses, so an alist
+that really is keyed by symbols still behaves.
 
 ## Argument plists (`plist.ts`)
 

@@ -15,6 +15,7 @@
     "./mcp-client": "./src/mcp-client.ts",
     "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./package.json": "./package.json",
+    "./plist": "./src/plist.ts",
     "./promises": "./src/promises.ts",
     "./prose": "./src/prose.ts",
     "./secrets": "./src/secrets.ts",

@@ -3,6 +3,7 @@ import { readdirSync, unlinkSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { aiEnv } from "@repo/env/ai";
+import { providerSpecs } from "@repo/shared/providers";
 import { SYSTEM_PROMPT } from "./prompts/lisp.ts";
 
 export type WarmStatus =
@@ -13,10 +14,9 @@ export type WarmStatus =
 	| "failed"
 	| "skipped";
 
-const DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1";
 const HEALTH_TIMEOUT_MS = 180_000;
 
-const base = new URL(aiEnv.LLAMACPP_BASE_URL ?? DEFAULT_BASE_URL);
+const base = new URL(providerSpecs.llamacpp.baseUrl);
 
 export function systemPromptSlotFile(prompt: string = SYSTEM_PROMPT): string {
 	const hash = createHash("sha256").update(prompt).digest("hex").slice(0, 12);

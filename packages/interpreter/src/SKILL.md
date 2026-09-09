@@ -208,8 +208,14 @@ cdaar cdadr cddar cdddr`. (`cadr` = 2nd, `caddr` = 3rd element, etc.)
 - `(mapcar f list)` new list of `f` over each element. Example:
   `(mapcar (lambda (n) (* n n)) '(1 2 3))` → `(1 4 9)`.
 - `(nth n list)` the element at index `n`, counting from 0; `nil` past the end.
-- NOTE: there is no `mapc`, `reduce`, `filter`, `remove`, `elt`, or `sort` in the
-  prelude. Build them with recursion, `mapcar`, or `dolist`.
+- `(filter f list)` the elements `f` says yes to. Example:
+  `(filter (lambda (n) (< 10 n)) '(3 12 7 40))` → `(12 40)`.
+- `(reduce f list [initial])` fold left into one value: `f` takes the
+  accumulator and each element. Without `initial` the first element starts it
+  and an empty list is `nil`. `(reduce + '(1 2 3))` → `6`. The list comes
+  SECOND, the initial value last.
+- NOTE: there is no `mapc`, `remove`, `elt`, or `sort` in the prelude. Build them
+  with `filter`, `mapcar`, or `dolist`.
 
 **Predicates**
 - `(not x)` / `(null x)` true if `nil` · `(consp x)` true if a cons ·
@@ -220,6 +226,11 @@ cdaar cdadr cddar cdddr`. (`cadr` = 2nd, `caddr` = 3rd element, etc.)
   match · `(assq key alist)` first pair with `eq` car · `(assoc key alist)` first
   pair with `equal` car. Read an alist field:
   `(cdr (assoc "content" msg))`.
+- `(get-in record key...)` read through nested alists and lists in one step, with
+  every step guarded: `(get-in config "server" "port")` is `nil` when there is no
+  `"server"` instead of an error, so no `or` guard and no `assoc` chain.
+  A number key indexes a list — `(get-in reply "results" 0 "url")` — and a
+  keyword key matches the string of its name, so `:port` finds `"port"`.
 
 **Control-flow macros**
 - `(if test then else...)` · `(when test body...)` · `(unless test body...)` ·
@@ -408,7 +419,7 @@ answer to the user, e.g. `the sum is 3`.
 - This is a REPL/driver behaviour, not part of the core language: outside the agent
   loop a form-less program is simply a no-op.
 
-## 10. MCP tools, promises, secrets
+## 10. MCP tools, promises, secrets, language models
 
 ### 10.1 MCP servers
 
@@ -503,6 +514,105 @@ one you bound yourself — never the `#<promise>` text, which the reader refuses
   outgoing MCP call argument or header. Only `REPL_`-prefixed keys are visible.
   Example: `(load-mcp :name "acme" :url "…" :headers (list (cons "Authorization" (secret "REPL_ACME_TOKEN"))))`.
 
+### 10.4 Language models
+
+A second model is available *from inside* the REPL, as ordinary calls. Use it for
+work only a model can do (summarize, rewrite, judge, pull fields out of prose),
+and keep everything else in Lisp: a call costs seconds and tokens, so one or two
+per step, never in a loop over a long list.
+
+- `(llm/complete "prompt")` → the reply as a **string**. It waits for the reply,
+  so the value is the text itself.
+  ```
+  (llm/complete "Name three risks in this plan" :system "Be blunt." :max-tokens 200)
+  llm/complete-1: 84 words
+  ```
+- `(llm/chat messages)` → the reply as a string, for a multi-turn prompt. A
+  message is `(message :system "...")` / `(message :user "...")`, which is an
+  alist with `"role"` and `"content"`, so the `conversation` global (§9) is a
+  valid message list as it stands. A bare string in the list counts as a user
+  message.
+  ```
+  (llm/chat (list (message :system "Answer in one sentence.") (message :user q)))
+  ```
+- `(llm/extract text shape)` → the data `shape` describes, as Lisp data. The
+  model is constrained to the shape, so there is no parsing step and no prose to
+  strip. This is how you turn a page, a comment or a mail into fields you can
+  `assoc`.
+  ```
+  (llm/extract page (shape (title "the page title")
+                           (stars :integer)
+                           (state (:enum "open" "closed"))
+                           (links (:list :string))
+                           (author (:optional (:string "who wrote it")))))
+  llm/extract-1: alist, keys "title" "stars" "state" "links"
+  ```
+  A **shape** is an alist of `(key . field)`, which `(shape (name spec...)...)`
+  writes for you — no quote, no dotted pairs. A field is one of:
+  `:string`, `:number`, `:integer`, `:boolean`, `:any`; a plain string, which
+  means a string field whose text says what it means; `(:string "what it
+  means")` and the same for the other scalars; `(:enum "a" "b")`;
+  `(:list field)`; `(:optional field)`, the only field the model may leave out;
+  or a nested alist, for a nested object. An alist shape comes back as an alist,
+  a `(:list ...)` shape as a list. Add `:instructions "..."` to say what to pull
+  out of the text.
+  In `shape`, a nested group is a nested object, and `(:list ...)`/`(:optional
+  ...)` take a group too: `(shape (items (:list (id :number) (title :string))))`
+  is a list of objects. A `shape` is literal, built when the form is compiled,
+  so a computed enum needs the alist written by hand instead.
+- Everywhere a call takes text — the prompt, `:system`, `:instructions`, the text
+  `llm/extract` reads, a message's content — it takes any value: a list or an
+  alist goes in as its printed form. There is no `(string ...)` to write. A
+  promise is refused, so `await` it first.
+- `(llm/providers)` → one row per reachable provider, `(provider default-model
+  status)`, status `:ready` or `:no-api-key`. The first row is what a call with
+  no `:provider` uses.
+
+**Options** (every call takes them, all optional): `:provider` (a keyword from
+`(llm/providers)`), `:model` (a string), `:system`, `:max-tokens`,
+`:temperature`, `:reasoning-effort` (`:low`/`:medium`/`:high`), `:timeout` in
+milliseconds (default 60000). A failed or timed-out call raises, so wrap one in
+`try` when you have a fallback.
+
+`*llm-defaults*` is the keyword list every call starts from; an option at the
+call site wins over it. `(with-llm (option...) body...)` extends it for one
+block and restores it after:
+
+```
+(with-llm (:provider :llamacpp :max-tokens 120)
+  (summarize-each (head pages-1 3)))
+```
+
+**Three macros over `llm/complete`** carry the prompt for you, so `(doc
+'summarize)` and the expansion are all there is to them. Each takes the same
+options as `llm/complete`, plus `:words`, which caps the length asked for and
+the token budget.
+
+- `(summarize value :words 60 [option...])` → the summary text. The value's
+  printed form goes into the prompt, so it reads a list of records as well as a
+  page of text.
+- `(summarize-each values :words 25 [option...])` → the list of summaries, one
+  per element, in order. One call per element, run in sequence, so slice the
+  list first (`(head x 5)`) rather than summarizing hundreds of rows.
+- `(llm/answer question context :words 60 [option...])` → the answer, drawn from
+  `context` and nothing else. The model is told to use the context alone, so a
+  question the context does not answer comes back as **nil** rather than a
+  guess. That is the point of it: `nil` means "not in there", never a failed
+  call, so branch on it instead of echoing it.
+
+```
+(setq brief (summarize acme/list-issues-1 :words 40))
+brief: 39 words
+
+(echo brief)
+
+(setq owner (llm/answer "who is assigned to ENG-12?" acme/list-issues-1))
+owner: "Nadia"
+
+(echo (if owner owner "the issues do not say who is assigned"))
+```
+
+
 ## 11. Gotchas
 
 - Only `nil` is false — `0`, `0.0`, and `""` are all TRUE.
@@ -530,3 +640,7 @@ one you bound yourself — never the `#<promise>` text, which the reader refuses
   slice is asked for in order to be read.
 - Echo output is capped for you but not for the user (§9). Output ending in a
   `...` line is not everything — page on with the offset it gives you.
+- A model call (§10.4) waits for the reply and can fail, so it is the one call
+  worth a `try` when you have a fallback, and never worth putting in a loop over
+  a long list. `llm/complete` and `llm/chat` return text; `llm/extract` returns
+  data.

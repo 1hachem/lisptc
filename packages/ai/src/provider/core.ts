@@ -1,6 +1,7 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
 import { LISP_GRAMMAR } from "@repo/interpreter/grammar";
+import type { ProviderSpec as SharedProviderSpec } from "@repo/shared/providers";
 
 export interface ModelOptions {
 	model?: string;
@@ -18,15 +19,10 @@ export const DEFAULT_REPEAT_PENALTY = 1.1;
 
 type Body = Record<string, unknown>;
 
-export interface ProviderSpec {
-	label: string;
-	apiKey: string | undefined;
-	apiKeyEnv: string;
-	baseUrl: string;
-	defaultModel: string;
+export type ProviderSpec = SharedProviderSpec & {
 	grammarBody?: ((grammar: string) => Body) | null;
 	extraBody?: (opts: ModelOptions) => Body;
-}
+};
 
 export const gbnfBody = (grammar: string): Body => ({ grammar });
 

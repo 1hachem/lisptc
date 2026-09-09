@@ -1,3 +1,4 @@
+import { contentToText } from "@repo/shared/messages";
 import {
 	type AgentConfig,
 	type AgentMessage,
@@ -16,6 +17,7 @@ import {
 } from "./repl.ts";
 import { getThreadRepl } from "./repl-store.ts";
 import {
+	captureLlmCall,
 	captureReplEval,
 	captureTurn,
 	type TraceContext,
@@ -36,22 +38,6 @@ const encoder = new TextEncoder();
 
 function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-function contentToText(content: unknown): string {
-	if (typeof content === "string") return content;
-	if (Array.isArray(content)) {
-		return content
-			.map((part) =>
-				typeof part === "string"
-					? part
-					: part && typeof part === "object" && "text" in part
-						? String((part as { text: unknown }).text)
-						: "",
-			)
-			.join("");
-	}
-	return "";
 }
 
 function agentRole(type: string | undefined): TranscriptEntry["role"] {
@@ -138,6 +124,7 @@ export function streamChatResponse(
 				write(sse("values", { messages: wire }));
 
 				const repl = getThreadRepl(threadId);
+				repl.llmObserver = (call) => captureLlmCall(trace, call);
 				const transcript = toTranscript(input);
 
 				const withheld = repl.takeProseFeedback();

@@ -464,10 +464,16 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
-function fromArray(arr: unknown[]): List {
+export function arrayToList(arr: unknown[]): List {
 	let list: List = null;
 	for (let i = arr.length - 1; i >= 0; i--) list = new Cell(arr[i], list);
 	return list;
+}
+
+export function listToArray(list: List): unknown[] {
+	const out: unknown[] = [];
+	for (let j = list; j !== null; j = j.cdr as List) out.push(j.car);
+	return out;
 }
 
 export function jsonToLisp(x: unknown): unknown {
@@ -476,9 +482,9 @@ export function jsonToLisp(x: unknown): unknown {
 	if (x === false) return null;
 	if (typeof x === "number" || typeof x === "bigint") return x;
 	if (typeof x === "string") return x;
-	if (Array.isArray(x)) return fromArray(x.map(jsonToLisp));
+	if (Array.isArray(x)) return arrayToList(x.map(jsonToLisp));
 	if (typeof x === "object")
-		return fromArray(
+		return arrayToList(
 			Object.entries(x as Record<string, unknown>).map(
 				([k, v]) => new Cell(k, jsonToLisp(v)),
 			),
@@ -2219,6 +2225,24 @@ export const prelude = `
         ((< n 1) (car x))
         (t (nth (- n 1) (cdr x)))))
 
+(defun filter (f x)
+  "Return a new list of the elements of x for which f returns non-nil."
+  (cond ((null x) nil)
+        ((f (car x)) (cons (car x) (filter f (cdr x))))
+        (t (filter f (cdr x)))))
+
+(defun _reduce (f acc x)
+  (if (null x)
+      acc
+    (_reduce f (f acc (car x)) (cdr x))))
+(defun reduce (f list &rest initial)
+  "Fold list left to right into one value: call f with the accumulator and each element in turn. Without an initial value the first element starts the fold, and an empty list gives nil. (reduce + '(1 2 3)) is 6."
+  (cond ((not (listp list))
+         (error "reduce: the list comes second and the initial value last, as (reduce f list [initial])"))
+        (initial (_reduce f (car initial) list))
+        ((null list) nil)
+        (t (_reduce f (car list) (cdr list)))))
+
 (defmacro or (x &rest y)
   "Evaluate left to right; return the first non-nil value, else nil."
   (if (null y)
@@ -2255,6 +2279,24 @@ export const prelude = `
                  (if (and (consp e) (equal key (car e)))
                      e
                    (assoc key (cdr alist)))))))
+
+(defun _key-name (key)
+  (let ((name (string key)))
+    (if (string-prefix? ":" name)
+        (substring name 1)
+      name)))
+(defun _alist-get (key alist)
+  (let ((hit (assoc key alist)))
+    (cond (hit (cdr hit))
+          ((stringp key) nil)
+          (t (cdr (assoc (_key-name key) alist))))))
+(defun get-in (record &rest keys)
+  "Read a value out of nested alists and lists: each key is an alist key, or a number to index a list. Every step is guarded, so a missing key or a nil along the way gives nil instead of an error: (get-in config \\"server\\" \\"port\\"), (get-in reply \\"results\\" 0 \\"url\\"). A symbol or keyword key also matches the string of its name, so :port finds \\"port\\"."
+  (let ((value record))
+    (dolist (key keys value)
+      (setq value (cond ((not (consp value)) nil)
+                        ((numberp key) (nth key value))
+                        (t (_alist-get key value)))))))
 
 (defun _nreverse (x prev)
   (let ((next (cdr x)))

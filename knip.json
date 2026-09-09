@@ -5,28 +5,6 @@
       "entry": ["scripts/**/*.ts"],
       "project": ["scripts/**/*.ts"]
     },
-    "packages/ai": {
-      "entry": ["test/**/*.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"]
-    },
-    "packages/bloub": {
-      "entry": ["src/**/*.test.{ts,tsx}"],
-      "project": ["src/**/*.{ts,tsx}"]
-    },
-    "packages/env": {
-      "project": ["src/**/*.ts"]
-    },
-    "packages/interpreter": {
-      "entry": ["test/**/*.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"]
-    },
-    "packages/repl": {
-      "entry": ["test/**/*.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"]
-    },
-    "packages/ui": {
-      "project": ["src/**/*.{ts,tsx}"]
-    },
     "apps/api": {
       "project": ["src/**/*.ts"]
     },
@@ -45,6 +23,36 @@
     },
     "apps/mcp": {
       "project": ["src/**/*.ts"]
+    },
+    "packages/ai": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/bloub": {
+      "entry": ["src/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/env": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/interpreter": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/llm": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/repl": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/shared": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/ui": {
+      "project": ["src/**/*.{ts,tsx}"]
     }
   }
 }

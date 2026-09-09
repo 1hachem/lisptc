@@ -2,28 +2,23 @@ import { MODEL, USER } from "@repo/interpreter/channels";
 import {
 	type Bounded,
 	Compactor,
-	compactionExtension,
 	MAX_WORDS,
 } from "@repo/interpreter/compaction";
 import {
-	Cell,
 	EndOfFile,
 	EvalException,
 	Interp,
-	type List,
+	jsonToLisp,
 	newSym,
 	prelude,
 	runAsync,
 	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
-import { mcpExtension } from "@repo/interpreter/mcp";
-import { isTruncated, proseExtension } from "@repo/interpreter/prose";
-import {
-	EnvSecretsStore,
-	type SecretsStore,
-	secretsExtension,
-} from "@repo/interpreter/secrets";
+import { isTruncated } from "@repo/interpreter/prose";
+import { EnvSecretsStore, type SecretsStore } from "@repo/interpreter/secrets";
+import type { LlmObserver } from "@repo/llm/llm";
+import { modelFacingExtensions } from "./extensions.ts";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -47,33 +42,12 @@ function render({ model, user, skipped }: EvalResult): Bounded {
 	return { model: model + notes, user: user + notes };
 }
 
-function jsToLisp(value: unknown): unknown {
-	if (value === null || value === undefined) return null;
-	if (value === true) return true;
-	if (value === false) return null;
-	if (typeof value === "number" || typeof value === "bigint") return value;
-	if (typeof value === "string") return value;
-	if (Array.isArray(value)) return arrayToList(value.map(jsToLisp));
-	if (typeof value === "object") {
-		const pairs = Object.entries(value as Record<string, unknown>).map(
-			([k, v]) => new Cell(k, jsToLisp(v)),
-		);
-		return arrayToList(pairs);
-	}
-	return String(value);
-}
-
-function arrayToList(arr: unknown[]): List {
-	let out: List = null;
-	for (let i = arr.length - 1; i >= 0; i--) out = new Cell(arr[i], out);
-	return out;
-}
-
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private compactor: Compactor;
 	private inFlight: Promise<void> = Promise.resolve();
 	readonly secrets: SecretsStore;
+	llmObserver?: LlmObserver;
 	private readonly wordLimit: number;
 
 	constructor(
@@ -92,12 +66,11 @@ export class MemoryRepl implements InMemoryRepl {
 	private freshInterp(): Interp {
 		this.compactor = new Compactor(this.wordLimit);
 		const interp = new Interp({
-			extensions: [
-				secretsExtension({ store: this.secrets }),
-				mcpExtension(),
-				compactionExtension(this.compactor),
-				proseExtension(),
-			],
+			extensions: modelFacingExtensions({
+				compactor: this.compactor,
+				secrets: this.secrets,
+				observe: (call) => this.llmObserver?.(call),
+			}),
 		});
 		runSync(interp, prelude);
 		this.setup(interp);
@@ -221,7 +194,7 @@ function isAnswer(code: string, { user, skipped }: EvalResult): boolean {
 }
 
 function defineVar(interp: Interp, name: string, value: unknown): void {
-	interp.defineGlobal(newSym(name), jsToLisp(value), {
+	interp.defineGlobal(newSym(name), jsonToLisp(value), {
 		signature: name,
 		doc: "Read-only live conversation state (auto-updated each step).",
 	});

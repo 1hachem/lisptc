@@ -1,10 +1,12 @@
 {
-  "name": "@repo/ai",
+  "name": "@repo/shared",
   "version": "0.0.0",
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    "./messages": "./src/messages.ts",
+    "./package.json": "./package.json",
+    "./providers": "./src/providers.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -13,17 +15,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@langchain/core": "^1.2.9",
-    "@langchain/openai": "^1.5.10",
-    "@posthog/ai": "^8.9.3",
-    "@repo/env": "workspace:*",
-    "@repo/interpreter": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/repl": "workspace:*",
-    "@repo/shared": "workspace:*",
-    "posthog-node": "^5.51.6"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

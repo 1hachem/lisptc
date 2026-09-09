@@ -5,6 +5,21 @@ it. Three of them: `MemoryRepl`/`AgentRepl` (embeddable, string in / string out)
 `cli.ts` (the interactive terminal), and `session-server.ts` (one interpreter
 shared over a unix socket).
 
+## One roster, four hosts
+
+`extensions.ts` exports `modelFacingExtensions()`, and it is the only place the
+language a model sees is spelled out: secrets, MCP, LLM, compaction, prose, in
+that order. `MemoryRepl` and the interactive CLI both build their interp from it,
+which is what stops the two drifting. They had drifted: the CLI was missing the
+LLM extension for exactly as long as the roster was written twice, so `pnpm repl`
+silently lacked `llm/complete` while the agent had it.
+
+The two callers differ in one argument each. The CLI passes `envFile: true`, so a
+terminal session loads secrets from the project `.env`; a hosted REPL does not,
+because its host injects secrets instead. `MemoryRepl` passes an `observe`
+indirection for LLM telemetry. Anything else that differs between hosts belongs
+in that options object rather than in a second list.
+
 ## `MemoryRepl`
 
 ### What lives across a `reset()`, and what dies with the interp

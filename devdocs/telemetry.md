@@ -17,6 +17,7 @@ as loose custom events:
 $ai_trace        one per chat turn      the prompt in, the answer out, steps, halted
   $ai_generation   one per model step   tokens, cost, latency, the messages
   $ai_span         one per REPL eval    the Lisp program and what it printed
+  $ai_generation   one per llm/ call    a model the Lisp itself called
 survey sent      a rating on a turn     joined by $ai_trace_id, sent by the browser
 ```
 
@@ -25,11 +26,92 @@ a 5s interval, rather than the `flushAt: 1` PostHog's guides suggest — those a
 written for serverless handlers that die after a response, and this API is a
 long-lived process where per-event POSTs would be waste.
 
+That buffer is why `apps/api/src/index.ts` traps `SIGTERM`/`SIGINT` and awaits
+`shutdownTelemetry()`. Without it a redeploy drops whatever has not reached the
+5s tick, which in practice is the last turn of every deploy: a turn that fails
+early captures its `$ai_trace` in tens of milliseconds and the default signal
+handler kills the process before the timer ever fires. The handler stops the
+server first, so no new turn starts, then flushes.
+
+The 5s drain before the flush is a bound, not a wait for the work to finish. An
+SSE chat stream holds its socket open, so `server.close()` alone would sit there
+until the agent ran out of steps — longer than a platform's own kill timeout,
+after which nothing is flushed at all. A turn still streaming when the signal
+lands therefore loses its `$ai_trace`, which is the right trade: that turn is
+about to be cut off mid-answer anyway, and everything already captured survives.
+
+### Dev needs its own hook, and the client has to be global for it
+
+`index.ts` is the *build* entry. `pnpm dev` runs Vite with
+`@hono/vite-dev-server`, whose entry is `src/app.ts`, so nothing in `index.ts`
+is ever loaded and a Ctrl+C in dev dropped the same events. Registering a
+`process.on("SIGTERM")` from inside the app would not fix it either: Vite
+installs its own listener, `await`s only `server.close()`, and then calls
+`process.exit()` — an async flush of ours would be racing that exit.
+
+The one hook Vite *does* await is a plugin's `closeBundle`, which
+`server.close()` runs through the plugin container. So `vite.config.ts` carries
+a serve-only `flush-telemetry-on-close` plugin. It cannot import
+`shutdownTelemetry` and expect the right one: the config runs in the Node
+process, the app runs in Vite's SSR module graph, and each would hold its own
+copy of the module. What they do share is `globalThis`, so `telemetry.ts` hangs
+the flush on `globalThis.__lisptcFlushTelemetry` and the plugin calls whatever
+is there.
+
+Keeping the PostHog client on `globalThis` too fixes a second dev-only bug.
+`@repo/ai` is inside the SSR module graph, not externalised, so editing
+`packages/ai/src/telemetry.ts` re-executes it — and a module-scoped `let client`
+meant a *new* `PostHog` every time, each with its own 5s timer, the previous one
+stranded for the life of the dev process. A long session of edits accumulated
+clients all POSTing on their own schedule. One global holder, one client.
+
+Production is unaffected by all of this and needs none of it: `node
+dist/index.js` is plain Node with no Vite in the runtime, which is why the
+signal handling lives in `index.ts` rather than in a plugin.
+
+The plugin keeps a `flushed` flag because `closeBundle` runs **once per Vite
+environment** — client and ssr each own a plugin container — so an unguarded
+hook flushes twice and prints twice.
+
+It also has to handle `SIGINT` itself. Vite installs a listener for `SIGTERM`
+only, so a Ctrl+C — which is what anyone actually stops `task dev` with — took
+Node's default path, killed the process outright, and never called
+`server.close()`, so `closeBundle` never ran. The plugin's `configureServer`
+registers `process.once("SIGINT")` and closes the server by hand. Nothing races
+it, because Vite has no handler of its own there, and `once` means a second
+Ctrl+C still kills immediately, which is what Turborepo's "press CTRL+C again to
+exit forcefully" promises. Unlike the API's own handler this needs no drain
+timeout: Vite's close destroys open sockets before closing, so a live SSE stream
+cannot hold it open. Exiting `0` also stops Turborepo reporting `ELIFECYCLE
+Command failed` on every ordinary shutdown.
+
+### The flush says how long it took, because that is the only honest signal
+
+`shutdownTelemetry` logs `flushed pending events (15ms)`, which is what tells
+you the hook fired at all. The duration is in there because `client.shutdown()`
+**resolves either way**: an unreachable PostHog gets retried until the deadline
+and then returns normally rather than throwing, so the log line cannot claim
+delivery. `(15ms)` is a real flush, `(5007ms)` is the timeout, and PostHog logs
+its own `Some events may not have been sent` warning right above it.
+
+That deadline is `FLUSH_TIMEOUT_MS`, passed explicitly because posthog-node's
+default is 30s — long enough for a dead analytics host to outlive the platform's
+kill timeout and take the whole shutdown down with it. 5s for the drain plus 5s
+for the flush is the worst case now, measured.
+
 `$ai_generation` is emitted by `@posthog/ai`'s `LangChainCallbackHandler`, wired
 in `agent.ts`. It reports token counts and cost correctly per provider, which is
 not worth hand-rolling. `$ai_parent_id` has to be forced onto the handler's
 properties because the chat model is called directly rather than through a
 chain, so LangChain has no parent run of its own to report.
+
+The second kind of `$ai_generation` is a model call the agent's *program* made,
+`(llm/complete ...)` and friends (see [llm.md](./llm.md)). The interpreter has no
+analytics dependency, so the extension reports each call to an observer and
+`stream.ts` points that observer at `captureLlmCall` for the current turn. Its
+`$ai_provider`/`$ai_model` are the sub-call's own rather than the agent's, since
+that is what PostHog prices the event on, and a `summarize` sent to a cheap model
+is exactly the case worth seeing separately.
 
 `$ai_span` is emitted by hand from `stream.ts`, once per REPL evaluation. This
 is the half LangChain cannot see and the half that matters here: the model's
