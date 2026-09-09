@@ -104,7 +104,7 @@ Each backend spells it differently, and each difference was measured:
 | --- | --- | --- |
 | **Fireworks** | default `response_format` | grammar output and `reasoning_effort` are Fireworks extensions to the OpenAI body |
 | **llama.cpp** | top-level `grammar` (`gbnfBody`) | `llama-server`'s chat endpoint implements `response_format` only for `json_object`/`json_schema` and **raises** on a type it doesn't know. No `reasoning_effort` — gemma has no thinking channel. It ignores the API key, but `ChatOpenAI` insists on a non-empty one. |
-| **OpenRouter** | default, rides through | it has no grammar field of its own: it forwards unknown body params upstream and silently drops the ones that provider doesn't accept, so the default takes effect only where the routed provider understands it |
+| **OpenRouter** | default, rides through | it has no grammar field of its own: it forwards unknown body params upstream and silently drops the ones that provider doesn't accept, so the default takes effect only where the routed provider understands it — which is why the spec's `body` pins routing to one upstream (see `devdocs/llm.md`) |
 | **DigitalOcean** | `null` — none | no grammar reaches the vLLM behind the gateway, whichever spelling is tried: `structured_outputs` (vLLM's current field) comes back "not a supported request field", a grammar `response_format` 400s against vLLM's closed union, and the pre-0.12 `guided_grammar` has no effect. Replies stay on-dialect by system prompt plus the chat loop's `checkSyntax` repair pass. |
 
 Under a grammar the model can satisfy the constraint by looping on whitespace

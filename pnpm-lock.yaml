@@ -57,6 +57,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       hono:
         specifier: ^4.13.5
         version: 4.13.5

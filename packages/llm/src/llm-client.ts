@@ -65,10 +65,12 @@ async function chatModel(req: LlmRequest): Promise<Target> {
 		maxTokens: req.maxTokens,
 		streaming: false,
 		configuration: { baseURL: spec.baseUrl },
-		modelKwargs:
-			req.reasoningEffort === undefined
+		modelKwargs: {
+			...spec.body,
+			...(req.reasoningEffort === undefined
 				? {}
-				: { reasoning_effort: req.reasoningEffort },
+				: { reasoning_effort: req.reasoningEffort }),
+		},
 	});
 	return { model, provider, name };
 }
