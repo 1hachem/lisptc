@@ -49,8 +49,12 @@ atom    ::= hchar achar* | "." achar+
 hchar   ::= [^ \t\r\n()'\"`,~.]
 achar   ::= [^ \t\r\n()'\"`,~]
 
-# Double-quoted string with backslash escapes.
+# Double-quoted string with the eight escapes the reader knows (Reader.escapes in
+# packages/interpreter/src/lisp.ts). GBNF's "." any-char would be shorter, but
+# xgrammar — the constrained-decoding engine behind vLLM, which AI Grid fronts —
+# has no wildcard and dies on it, and the wildcard was wrong anyway: it let a
+# model emit "\q", which the reader does not accept.
 string  ::= "\"" schar* "\""
-schar   ::= [^\"\\] | "\\" .
+schar   ::= [^\"\\] | "\\" [\"\\nrfbtv]
 
 ws      ::= [ \t\r\n]*

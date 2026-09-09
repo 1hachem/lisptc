@@ -38,7 +38,7 @@ export function buildProviderSpecs(
 			apiKeyEnv: "AI_GRID_API_KEY",
 			baseUrl: set(env, "AI_GRID_BASE_URL") ?? "",
 			baseUrlEnv: "AI_GRID_BASE_URL",
-			defaultModel: set(env, "AI_GRID_MODEL") ?? "google/gemma-4-31B",
+			defaultModel: set(env, "AI_GRID_MODEL") ?? "Qwen/Qwen3.8-27B",
 		},
 		digitalocean: {
 			label: "DigitalOcean inference",
