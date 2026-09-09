@@ -6,22 +6,29 @@ import { PostHog } from "posthog-node";
 
 const PRIVACY_MODE = process.env.POSTHOG_PRIVACY_MODE === "true";
 
-let client: PostHog | null | undefined;
+const FLUSH_TIMEOUT_MS = 5_000;
+
+interface TelemetryGlobals {
+	__lisptcPosthog?: PostHog | null;
+	__lisptcFlushTelemetry?: () => Promise<void>;
+}
+
+const globals = globalThis as typeof globalThis & TelemetryGlobals;
 
 function posthog(): PostHog | null {
-	if (client !== undefined) return client;
+	if (globals.__lisptcPosthog !== undefined) return globals.__lisptcPosthog;
 	const key = analyticsEnv.POSTHOG_API_KEY;
 	if (!key) {
 		console.log("[telemetry] POSTHOG_API_KEY unset — agent traces disabled");
-		client = null;
+		globals.__lisptcPosthog = null;
 		return null;
 	}
-	client = new PostHog(key, {
+	globals.__lisptcPosthog = new PostHog(key, {
 		host: analyticsEnv.POSTHOG_HOST ?? "https://us.i.posthog.com",
 		flushAt: 20,
 		flushInterval: 5_000,
 	});
-	return client;
+	return globals.__lisptcPosthog;
 }
 
 export interface TraceContext {
@@ -181,6 +188,17 @@ export function captureLlmCall(ctx: TraceContext, span: LlmCall): void {
 }
 
 export async function shutdownTelemetry(): Promise<void> {
-	const ph = posthog();
-	if (ph) await ph.shutdown();
+	const client = globals.__lisptcPosthog;
+	if (!client) return;
+	const startedAt = Date.now();
+	try {
+		await client.shutdown(FLUSH_TIMEOUT_MS);
+		console.log(
+			`[telemetry] flushed pending events (${Date.now() - startedAt}ms)`,
+		);
+	} catch (err) {
+		console.warn("[telemetry] flush failed:", err);
+	}
 }
+
+globals.__lisptcFlushTelemetry = shutdownTelemetry;
