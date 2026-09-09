@@ -13,6 +13,33 @@ OAuth resource server and MCP authorization is only defined for HTTP transports
 (see below) — but the interpreter starts that one too, so both are one
 `load-mcp` away.
 
+## Keywords
+
+Every entry in `mcp.toolkit.json` carries a `keywords` array, ours and the
+third-party ones alike, and `search-mcps` scores against it: an exact name or
+keyword hit is worth 3, a substring of either 2, a hit anywhere in the
+description 1.
+
+Keywords exist because an agent searches for the capability, not the product.
+Nothing in `ocr`'s description says "vision", and nothing in `sheets`'s says
+"csv" or "excel", so `(search-mcps "vision")` matched nothing before this, and an
+empty result looks exactly like a toolkit with nothing for the job. The keyword
+list is where the synonyms a model would reach for go, including the ones we would
+never write in prose.
+
+A term shorter than three characters only counts as an exact match. Without that
+rule a natural-language query poisons the ranking: `(search-mcps "read a
+receipt")` scored its `a` as a substring hit against `data-entry`, `linear`,
+`analytics` and most of the rest, so all six servers came back and the score
+stopped separating them. Short *names* still work, since an exact match is
+checked first and `fs` is a name.
+
+`search-mcps` rows deliberately do not include the keywords, while
+`list-toolkit` rows do. A search result is read to pick one server, and the
+description already answers that; twenty keywords per row would double what the
+model pays to learn nothing new. `list-toolkit` is the browse command, where the
+whole point is seeing what each server covers.
+
 ## Setup
 
 Secrets come from **Infisical**, one folder per provider, fetched by the repo's

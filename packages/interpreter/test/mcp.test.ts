@@ -119,6 +119,40 @@ describe("MCP integration (stdio fixture)", () => {
 		expect(out).toContain(":unloaded");
 	});
 
+	it("finds a toolkit server by a keyword its description never uses", async () => {
+		expect(await evalStr(interp, '(search-mcps "vision")')).toContain("ocr");
+		expect(await evalStr(interp, '(search-mcps "spreadsheet")')).toContain(
+			"sheets",
+		);
+		expect(await evalStr(interp, '(search-mcps "tickets")')).toContain(
+			"linear",
+		);
+	});
+
+	it("ranks a keyword hit above a passing mention in a description", async () => {
+		const out = await evalStr(interp, '(search-mcps "read")');
+		expect(out.indexOf("fs")).toBeGreaterThan(-1);
+		expect(out.indexOf("fs")).toBeLessThan(out.indexOf("ocr"));
+	});
+
+	it("returns every server a shared keyword fits", async () => {
+		const out = await evalStr(interp, '(search-mcps "screenshot")');
+		expect(out).toContain("playwright");
+		expect(out).toContain("ocr");
+	});
+
+	it("lists every toolkit server's keywords, so search has words to use", async () => {
+		const out = await evalStr(interp, "(list-toolkit)");
+		expect(out).toContain("vision");
+		expect(out).toContain("spreadsheet");
+	});
+
+	it("ignores a query's stopwords instead of matching them everywhere", async () => {
+		const out = await evalStr(interp, '(search-mcps "read a receipt")');
+		expect(out).toContain("ocr");
+		expect(out).not.toContain("posthog");
+	});
+
 	it("binds a catch handler to the tool's descriptive error, not an internal op code", async () => {
 		const out = await evalStr(interp, "(try (fx/boom) (catch (e) e))");
 		expect(out).toContain("something specific broke");

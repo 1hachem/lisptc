@@ -433,7 +433,11 @@ answer to the user, e.g. "the sum is 3".
   rather than all, so one server failing does not discard the others.
 - **Finding tools — two different searches, don't confuse them:**
   - (search-mcps "query") searches the *toolkit* of predefined servers, loaded or
-    not — use this to find a server to load. Also (list-mcps) and (list-toolkit).
+    not — use this to find a server to load. It matches each server's keywords as
+    well as its name and description, so search for the capability you want in
+    your own words: vision, spreadsheet, tickets, analytics. Don't guess a product
+    name. Also (list-mcps), and (list-toolkit), which reports every server's
+    keywords.
   - (search-tools "query") searches the tools of *already-loaded* servers by
     name and description, ranked best-first. It takes ONE query string and searches
     ALL loaded servers — there is NO server argument. (search-tools "acme" "widget")
