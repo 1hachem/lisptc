@@ -19,6 +19,20 @@
     "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
   },
   {
+    "name": "sheets",
+    "description": "Google Sheets over your Google account: list spreadsheets, describe a workbook's tabs and sizes, read a range (raw rows or header-keyed alists), overwrite a range, append rows, clear a range, add a tab, create a spreadsheet. (load-mcp \"sheets\") starts the server if it is not already up, then returns an authorization link; approve it and it is captured for you, then load again. (login \"sheets\") asks for the link on its own and (logout \"sheets\") forgets the account.",
+    "url": "http://localhost:8911/mcp",
+    "oauth": true,
+    "command": "task",
+    "args": ["--dir", "../..", "mcp:sheets"]
+  },
+  {
+    "name": "ocr",
+    "description": "Read a scanned PDF or image with Mistral OCR and get its text back as Markdown, one entry per page, tables included. Takes a public URL or a local file path. Its Mistral key comes from Infisical at /mcps/mistral.",
+    "command": "task",
+    "args": ["--dir", "../..", "mcp:ocr"]
+  },
+  {
     "name": "linear",
     "description": "Linear issue tracker over OAuth: search/list/create issues, projects, comments. First (load-mcp \"linear\") returns an authorization link; approve it, run (mcp-authorize \"linear\" \"<code>\"), then load again.",
     "url": "https://mcp.linear.app/mcp",

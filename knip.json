@@ -24,6 +24,9 @@
     "apps/mcp": {
       "project": ["src/**/*.ts"]
     },
+    "apps/mcp-toolkit": {
+      "project": ["src/**/*.ts"]
+    },
     "packages/ai": {
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]

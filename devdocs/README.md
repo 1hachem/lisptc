@@ -30,6 +30,10 @@ When you fix something non-obvious, add it to the page for that area.
 - [OAuth 2.1 for remote MCP servers](./oauth.md) — how `load-mcp` authenticates
   OAuth servers (Linear): flow, callback strategies, token storage, cloud/ingress
   config.
+- [The bundled MCP servers](./mcp-toolkit.md) — the servers we write ourselves
+  (`apps/mcp-toolkit`): how a toolkit entry finds a bundled stdio server, why
+  their tools return JSON, why their names are kebab-case, and how `sheets`
+  reaches a Google account through MCP's own OAuth flow.
 
 ### The drivers
 

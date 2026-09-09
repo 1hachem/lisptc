@@ -84,6 +84,20 @@ tasks:
       - task: _infisical-run
         vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai /analytics /api", CMD: "pnpm run build --filter api && pnpm --filter api start" }
 
+  mcp:sheets:
+    desc: serve the Google Sheets MCP server (OAuth resource server on :8911)
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/mcps/google", CMD: "pnpm --silent --filter @lisptc/mcp-toolkit run sheets" }
+
+  # The interpreter starts this itself, through the `ocr` entry in
+  # mcp.toolkit.json; run it by hand only to see its startup errors.
+  mcp:ocr:
+    desc: serve the Mistral OCR MCP server on stdio
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/mcps/mistral", CMD: "pnpm --silent --filter @lisptc/mcp-toolkit run ocr" }
+
   serve-gemma:
     desc: serve the local gemma model (the API primes its system-prompt KV cache)
     cmd: packages/ai/scripts/serve-llama.sh

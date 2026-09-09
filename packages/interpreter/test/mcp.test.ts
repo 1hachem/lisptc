@@ -198,6 +198,58 @@ describe("loading a toolkit server by name", () => {
 	});
 });
 
+describe("a url server the interpreter starts for you", () => {
+	const toolkitJson = JSON.stringify([
+		{
+			name: "managed",
+			description: "an http server with a start command",
+			url: "http://127.0.0.1:8998/mcp",
+			command: "node",
+			args: ["-e", "console.error('no secrets for you'); process.exit(3)"],
+		},
+	]);
+	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	runSync(interp, prelude);
+
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
+	});
+
+	it("reports the exit code and the server's own stderr", async () => {
+		await expect(
+			runAsync(interp, '(await (load-mcp "managed"))'),
+		).rejects.toThrow(/exited with code 3[\s\S]*no secrets for you/);
+	});
+});
+
+describe("a toolkit server bundled with the repo", () => {
+	const toolkitJson = JSON.stringify([
+		{
+			name: "bundled",
+			description: "reached by a path relative to the toolkit file",
+			command: "node",
+			args: [
+				"--no-warnings",
+				"--experimental-transform-types",
+				"./test/fixture-mcp-server.ts",
+			],
+		},
+	]);
+	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	runSync(interp, prelude);
+
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
+	});
+
+	it("resolves a relative arg against the toolkit file, not the cwd", async () => {
+		expect(await evalStr(interp, '(await (load-mcp "bundled"))')).toContain(
+			"bundled/echo",
+		);
+		expect(await evalStr(interp, '(bundled/echo :message "hi")')).toBe('"hi"');
+	});
+});
+
 describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 	const interp = mcpInterp();
 	runSync(interp, prelude);

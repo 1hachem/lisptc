@@ -11,7 +11,9 @@
     "./repl": "./src/repl.ts",
     "./oauth": "./src/oauth.ts",
     "./web": "./src/web.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
+    "./mcps/mistral/api": "./src/mcps/mistral/api.ts"
   },
   "engines": {
     "node": ">=22.6.0"

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { isNumeric } from "./arith.ts";
 import {
@@ -16,7 +17,7 @@ import {
 	Sym,
 	zList,
 } from "./lisp.ts";
-import { type McpOp, mcpDispatch } from "./mcp-client.ts";
+import { type McpOp, mcpDispatch, stopLocalServers } from "./mcp-client.ts";
 import { keyName, parsePlist } from "./plist.ts";
 import { type Dispatch, Promises } from "./promises.ts";
 import type { ToJson } from "./types.ts";
@@ -434,7 +435,13 @@ export function registerMcp(
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
 			return promises
-				.call("login", { url: conf.url, scopes: conf.scopes })
+				.call("login", {
+					name,
+					url: conf.url,
+					scopes: conf.scopes,
+					command: "command" in conf ? conf.command : undefined,
+					args: "args" in conf ? conf.args : undefined,
+				})
 				.then(
 					(res) =>
 						(res as { authUrl: string | null }).authUrl ??
@@ -609,6 +616,7 @@ export function registerMcp(
 		}
 		servers.clear();
 		promises.shutdown();
+		stopLocalServers();
 	};
 
 	interp.def(
@@ -736,6 +744,12 @@ function expandEnv(s: string): string {
 	return s.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] ?? "");
 }
 
+function resolveBundled(s: string): string {
+	return s.startsWith("./") || s.startsWith("../")
+		? fileURLToPath(new URL(s, TOOLKIT_URL))
+		: s;
+}
+
 function registerConfigs(
 	raw: string,
 	predefined: Map<string, ConnConfig>,
@@ -744,7 +758,8 @@ function registerConfigs(
 		const arr = JSON.parse(raw) as ConnConfig[];
 		for (const conf of arr) {
 			if (!conf?.name) continue;
-			if ("args" in conf && conf.args) conf.args = conf.args.map(expandEnv);
+			if ("args" in conf && conf.args)
+				conf.args = conf.args.map((a) => resolveBundled(expandEnv(a)));
 			predefined.set(conf.name, conf);
 		}
 	} catch {}

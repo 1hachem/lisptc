@@ -1,0 +1,24 @@
+{
+  "name": "@lisptc/mcp-toolkit",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "sheets": "node --no-warnings --experimental-transform-types src/sheets/server.ts",
+    "ocr": "node --no-warnings --experimental-transform-types src/ocr/server.ts"
+  },
+  "dependencies": {
+    "@repo/env": "workspace:*",
+    "fastmcp": "^4.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@repo/tsconfigs": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}
