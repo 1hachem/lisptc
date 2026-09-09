@@ -5,6 +5,21 @@ it. Three of them: `MemoryRepl`/`AgentRepl` (embeddable, string in / string out)
 `cli.ts` (the interactive terminal), and `session-server.ts` (one interpreter
 shared over a unix socket).
 
+## One roster, four hosts
+
+`extensions.ts` exports `modelFacingExtensions()`, and it is the only place the
+language a model sees is spelled out: secrets, MCP, LLM, compaction, prose, in
+that order. `MemoryRepl` and the interactive CLI both build their interp from it,
+which is what stops the two drifting. They had drifted: the CLI was missing the
+LLM extension for exactly as long as the roster was written twice, so `pnpm repl`
+silently lacked `llm/complete` while the agent had it.
+
+The two callers differ in one argument each. The CLI passes `envFile: true`, so a
+terminal session loads secrets from the project `.env`; a hosted REPL does not,
+because its host injects secrets instead. `MemoryRepl` passes an `observe`
+indirection for LLM telemetry. Anything else that differs between hosts belongs
+in that options object rather than in a second list.
+
 ## `MemoryRepl`
 
 ### What lives across a `reset()`, and what dies with the interp
@@ -19,7 +34,7 @@ shared over a unix socket).
   configuration, the other is per-interpreter state.
 
 The outgoing interp is `dispose()`d first, so an extension holding something the
-language cannot reclaim — the MCP broker worker — releases it rather than leaking
+language cannot reclaim — a live MCP client — releases it rather than leaking
 one per reset.
 
 ### Construction ordering trap
@@ -29,6 +44,28 @@ one per reset.
 calls it before a subclass's field initializers have run, so an override must
 tolerate its own fields still being `undefined`. `AgentRepl.setup` guards
 `conversationVars` for exactly this reason.
+
+### Evaluation is async, and serialized
+
+`MemoryRepl.eval` / `evalOutput` return promises, because the interpreter can
+now suspend on a promise and the event loop turns *during* an eval. That makes a
+second `eval()` reachable while the first is still running, which was
+structurally impossible before.
+
+So `evaluate` queues: each call chains onto `inFlight` and runs alone. Without
+it, `compactor.beginStep()` / `endStep()` and the channel subscriptions in
+`evaluateOne` interleave, and two turns' output lands in each other's report.
+The queue survives a failed eval, so one bad step does not strand the ones
+behind it.
+
+`reset()` stays synchronous and does not queue: it swaps the interp immediately,
+so a host must not reset while an eval is in flight. An eval already running
+holds its own interp and its own subscriptions, so it finishes against the
+interp it started on.
+
+Nothing may swap the process-wide `setWriter` sink across a suspension point for
+the same reason. A host that wants the output of one eval subscribes to that
+interp's `user` channel, which is what `evaluateOne` does.
 
 ### `evalOutput` is the choke point
 

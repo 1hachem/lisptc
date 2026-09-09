@@ -138,7 +138,7 @@ the nearest loop · `(return value)` exit it with a value.
 `terpri` or `view`, and the REPL prints nothing on its own (§9).
 - `(echo x...)` print the arguments space-separated with one trailing newline:
   strings as they are, everything else re-readable. `(echo)` is a blank line.
-  A keyword prints as itself when nothing follows it — `(echo (job-status j))`
+  A keyword prints as itself when nothing follows it — `(echo (promise-state p))`
   shows `:pending` — because only a keyword carrying a value after it is read
   as an option. So put a keyword you mean to print LAST, or wrap it in a list.
 - `(echo x :offset 0 :length n)` print a window of `x`, counted in
@@ -173,9 +173,14 @@ cdaar cdadr cddar cdddr` (`cadr` = 2nd element, `caddr` = 3rd).
 **Lists** — `(append list...)` non-destructive concat · `(nreverse list)` ·
 `(last list)` last cons cell · `(nconc lists...)` destructive concat ·
 `(mapcar f list)` — `(mapcar (lambda (n) (* n n)) '(1 2 3))` → `(1 4 9)` ·
-`(nth n list)` element at index `n` from 0, `nil` past the end. There is no
-`mapc`, `reduce`, `filter`, `remove`, `elt` or `sort` — build them with recursion,
-`mapcar` or `dolist`.
+`(nth n list)` element at index `n` from 0, `nil` past the end ·
+`(filter f list)` the elements `f` says yes to —
+`(filter (lambda (n) (< 10 n)) '(3 12 7 40))` → `(12 40)` ·
+`(reduce f list [initial])` fold left into one value, `f` taking the accumulator
+and each element; without `initial` the first element starts it and an empty list
+is `nil`, so `(reduce + '(1 2 3))` → `6`. The list comes SECOND, the initial
+value last. There is no `mapc`, `remove`, `elt` or `sort` — build them with
+`filter`, `mapcar` or `dolist`.
 
 **Predicates** — `(not x)` / `(null x)` · `(consp x)` · `(listp x)` nil or cons ·
 `(equal x y)` deep structural equality.
@@ -183,6 +188,11 @@ cdaar cdadr cddar cdddr` (`cadr` = 2nd element, `caddr` = 3rd).
 **Membership & alists** — `(memq key list)` / `(member key list)` tail from the
 first `eq` / `equal` match · `(assq key alist)` / `(assoc key alist)` first pair
 with an `eq` / `equal` car. Read a field: `(cdr (assoc "content" msg))`.
+`(get-in record key...)` reads through nested alists and lists in one step, every
+step guarded: `(get-in config "server" "port")` is `nil` when there is no
+`"server"` instead of an error, so no `or` guard and no `assoc` chain. A number
+key indexes a list — `(get-in reply "results" 0 "url")` — and a keyword key
+matches the string of its name, so `:port` finds `"port"`.
 
 **Control-flow macros** — `(if test then else...)` · `(when test body...)` ·
 `(unless test body...)` · `(and x...)` nil on the first nil, else the last ·
@@ -342,7 +352,7 @@ the fragment: page on with the offset it gave you, or narrow it with
 `(echo range-1 :match "pattern")`. Output that is one unbroken word (minified
 JSON, say) is cut by character instead, and the `...` line points at `substring`.
 
-## 10. MCP tools, async jobs, secrets
+## 10. MCP tools, promises, secrets, language models
 
 ### 10.1 MCP servers
 
@@ -352,17 +362,20 @@ You are not told which servers exist or what they are called. `(search-mcps
 tool name — read it out of one of those results.
 
 - `(load-mcp "name")` loads a predefined server. It is **asynchronous**: it returns
-  a job immediately and does NOT block; the tools install only when the job settles.
-- **An unawaited load is finished code, not a loose end.** The job installs the
+  a promise immediately and does NOT block; the tools install only when it settles.
+- **An unawaited load is finished code, not a loose end.** The promise installs the
   tools itself when it settles, so a step that reported
-  `load-mcp-1: load-mcp:acme started in the background …` needs no follow-up:
+  `load-mcp-1: a promise, still running …` needs no follow-up:
   go on with the task and call the tools on a later step. `await` is for when
   you want the tool list in the SAME step, nothing else.
 - **To load and use in one step, wrap the SINGLE `load-mcp` call in `await`:**
   `(await (load-mcp "acme"))` blocks until ready and returns the tool list. Do NOT
   call `(load-mcp "acme")` and then `(await (load-mcp "acme"))` — that starts TWO
-  connections. Either wrap it directly, or bind the one job and await that.
-- Load several concurrently: `(await-all (list (load-mcp "a") (load-mcp "b")))`.
+  connections. Either wrap it directly, or bind the one promise and await that:
+  `(setq p (load-mcp "acme")) … (await p)`.
+- Load several concurrently:
+  `(await (promise-all-settled (list (load-mcp "a") (load-mcp "b"))))` — settled
+  rather than all, so one server failing does not discard the others.
 - Ad-hoc servers, all awaited the same way:
   - Remote: `(load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer ...")))`
   - Local stdio: `(load-mcp :name "acme" :command "npx" :args '("-y" "acme-mcp-server"))`
@@ -402,17 +415,25 @@ tool name — read it out of one of those results.
   (acme/get_widget :id "42")
   ```
 
-### 10.2 Async jobs
+### 10.2 Promises
 
-A *job* is a handle for background work (currently just `load-mcp`). It is a live
-handle, so the only way to name one is the name the REPL reported it under
-(`load-mcp-1`) or one you bound yourself — never the `#<job …>` text, which is
-not something the reader can read back.
-`(await job [timeout-ms])` blocks for the result and re-raises the job's error ·
-`(await-all jobs [ms])` results in order, a failed one as `(:error "msg")` ·
-`(await-any jobs [ms])` the first result · `(job-status job)` checks progress
-(:pending/:done/:error) without blocking · `(jobs)` lists in-flight jobs ·
-`(cancel job)` aborts one.
+A *promise* stands for work still running (currently just `load-mcp`). These are
+the host runtime's own promises, so they behave the way JavaScript promises do:
+one settles once and keeps its result, and awaiting it twice gives the same
+answer. A promise is a live value, so the only way to name one is the name the
+REPL reported it under (`load-mcp-1`) or one you bound yourself — never the
+`#<promise>` text, which the reader refuses.
+`(await promise [timeout-ms])` waits for it and returns its value, re-raising its
+error; waiting again on a settled promise returns the same value at once ·
+`(promise-all promises)` one promise for every value, in order, rejecting as soon
+as any of them does · `(promise-all-settled promises)` one promise for how each
+turned out, as `(:fulfilled value)` or `(:rejected "message")`, never rejecting,
+so one failure keeps its siblings — this is the one to reach for when loading
+several servers · `(promise-any promises)` the first to succeed ·
+`(promise-race promises)` the first to settle either way ·
+`(promise-state promise)` checks `:pending` / `:fulfilled` / `:rejected` without
+waiting · `(promises)` lists what is still running · `(cancel promise)` aborts
+the work behind one.
 
 ### 10.3 Secrets
 
@@ -422,6 +443,104 @@ string in every string function and the taint propagates through the result, but
 it prints redacted as `#<secret:KEY>` and is revealed only when serialized into an
 outgoing MCP argument or header. Only `REPL_`-prefixed keys are visible. Example:
 `(load-mcp :name "acme" :url "..." :headers (list (cons "Authorization" (secret "REPL_ACME_TOKEN"))))`.
+
+### 10.4 Language models
+
+A second model is available *from inside* the REPL, as ordinary calls. Use it for
+work only a model can do (summarize, rewrite, judge, pull fields out of prose),
+and keep everything else in Lisp: a call costs seconds and tokens, so one or two
+per step, never in a loop over a long list.
+
+- `(llm/complete "prompt")` → the reply as a **string**. It waits for the reply,
+  so the value is the text itself.
+  ```
+  (llm/complete "Name three risks in this plan" :system "Be blunt." :max-tokens 200)
+  llm/complete-1: 84 words
+  ```
+- `(llm/chat messages)` → the reply as a string, for a multi-turn prompt. A
+  message is `(message :system "...")` / `(message :user "...")`, which is an
+  alist with `"role"` and `"content"`, so the `conversation` global (§9) is a
+  valid message list as it stands. A bare string in the list counts as a user
+  message.
+  ```
+  (llm/chat (list (message :system "Answer in one sentence.") (message :user q)))
+  ```
+- `(llm/extract text shape)` → the data `shape` describes, as Lisp data. The
+  model is constrained to the shape, so there is no parsing step and no prose to
+  strip. This is how you turn a page, a comment or a mail into fields you can
+  `assoc`.
+  ```
+  (llm/extract page (shape (title "the page title")
+                           (stars :integer)
+                           (state (:enum "open" "closed"))
+                           (links (:list :string))
+                           (author (:optional (:string "who wrote it")))))
+  llm/extract-1: alist, keys "title" "stars" "state" "links"
+  ```
+  A **shape** is an alist of `(key . field)`, which `(shape (name spec...)...)`
+  writes for you — no quote, no dotted pairs. A field is one of:
+  `:string`, `:number`, `:integer`, `:boolean`, `:any`; a plain string, which
+  means a string field whose text says what it means; `(:string "what it
+  means")` and the same for the other scalars; `(:enum "a" "b")`;
+  `(:list field)`; `(:optional field)`, the only field the model may leave out;
+  or a nested alist, for a nested object. An alist shape comes back as an alist,
+  a `(:list ...)` shape as a list. Add `:instructions "..."` to say what to pull
+  out of the text.
+  In `shape`, a nested group is a nested object, and `(:list ...)`/`(:optional
+  ...)` take a group too: `(shape (items (:list (id :number) (title :string))))`
+  is a list of objects. A `shape` is literal, built when the form is compiled,
+  so a computed enum needs the alist written by hand instead.
+- Everywhere a call takes text — the prompt, `:system`, `:instructions`, the text
+  `llm/extract` reads, a message's content — it takes any value: a list or an
+  alist goes in as its printed form. There is no `(string ...)` to write. A
+  promise is refused, so `await` it first.
+- `(llm/providers)` → one row per reachable provider, `(provider default-model
+  status)`, status `:ready` or `:no-api-key`. The first row is what a call with
+  no `:provider` uses.
+
+**Options** (every call takes them, all optional): `:provider` (a keyword from
+`(llm/providers)`), `:model` (a string), `:system`, `:max-tokens`,
+`:temperature`, `:reasoning-effort` (`:low`/`:medium`/`:high`), `:timeout` in
+milliseconds (default 60000). A failed or timed-out call raises, so wrap one in
+`try` when you have a fallback.
+
+`*llm-defaults*` is the keyword list every call starts from; an option at the
+call site wins over it. `(with-llm (option...) body...)` extends it for one
+block and restores it after:
+
+```
+(with-llm (:provider :llamacpp :max-tokens 120)
+  (summarize-each (head pages-1 3)))
+```
+
+**Three macros over `llm/complete`** carry the prompt for you, so `(doc
+'summarize)` and the expansion are all there is to them. Each takes the same
+options as `llm/complete`, plus `:words`, which caps the length asked for and
+the token budget.
+
+- `(summarize value :words 60 [option...])` → the summary text. The value's
+  printed form goes into the prompt, so it reads a list of records as well as a
+  page of text.
+- `(summarize-each values :words 25 [option...])` → the list of summaries, one
+  per element, in order. One call per element, run in sequence, so slice the
+  list first (`(head x 5)`) rather than summarizing hundreds of rows.
+- `(llm/answer question context :words 60 [option...])` → the answer, drawn from
+  `context` and nothing else. The model is told to use the context alone, so a
+  question the context does not answer comes back as **nil** rather than a
+  guess. That is the point of it: `nil` means "not in there", never a failed
+  call, so branch on it instead of echoing it.
+
+```
+(setq brief (summarize acme/list-issues-1 :words 40))
+brief: 39 words
+
+(echo brief)
+
+(setq owner (llm/answer "who is assigned to ENG-12?" acme/list-issues-1))
+owner: "Nadia"
+
+(echo (if owner owner "the issues do not say who is assigned"))
+```
 
 ## 11. Interactive views (`ui/*`)
 
@@ -546,12 +665,16 @@ not as a note to yourself (`"user clicked search"`).
   `:offset`/`:length`/`:match` are how you window and search what it prints.
 - Retyping data the REPL produced is the main way you produce wrong data (§9).
   Extract it with `grep`/`head` and echo the variable instead.
-- A `#<…>` form — `#<job …>`, `#<secret:KEY>`, `#<closure …>` — is a printout of
-  a value that cannot be read back, so typing one is always an error. Use the
-  name the value was reported under. `(await #<job load-mcp:acme 8d12…>)` is the
-  common version of this mistake; `(await load-mcp-1)` is what it meant.
+- A `#<…>` form — `#<promise>`, `#<secret:KEY>`, `#<closure …>` — is a printout
+  of a value that cannot be read back, so typing one is always an error. Use the
+  name the value was reported under. `(await #<promise>)` is the common version
+  of this mistake; `(await load-mcp-1)` is what it meant.
 - `head`/`tail`/`grep` RETURN a value; only `echo` prints — except a bare
   `head`/`tail`, whose slice the REPL prints instead of describing, because a
   slice is asked for in order to be read.
 - Echo output is capped for you but not for the user (§9). Output ending in a
   `...` line is not everything — page on with the offset it gives you.
+- A model call (§10.4) waits for the reply and can fail, so it is the one call
+  worth a `try` when you have a fallback, and never worth putting in a loop over
+  a long list. `llm/complete` and `llm/chat` return text; `llm/extract` returns
+  data.

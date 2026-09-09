@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MODEL, USER } from "../src/channels.ts";
 import { Compactor, compactionExtension } from "../src/compaction.ts";
-import { Cell, Interp, newSym, prelude, run, str } from "../src/lisp.ts";
+import { Cell, Interp, newSym, prelude, runSync, str } from "../src/lisp.ts";
 import { secretsExtension } from "../src/secrets.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
@@ -10,7 +10,7 @@ function interpWithLimit(limit: number): { interp: Interp; c: Compactor } {
 	const interp = new Interp({
 		extensions: [secretsExtension(), compactionExtension(c)],
 	});
-	run(interp, prelude);
+	runSync(interp, prelude);
 	return { interp, c };
 }
 
@@ -31,7 +31,7 @@ function stepped(
 		}),
 	];
 	try {
-		run(interp, code);
+		runSync(interp, code);
 	} finally {
 		for (const stop of off) stop();
 	}
@@ -50,7 +50,7 @@ const words = '(setq w "a b c d e f g h i j k l")';
 describe("echo respects the compactor's limit", () => {
 	it("caps the model's copy at the limit however much was asked for", () => {
 		const given = interpWithLimit(4);
-		run(given.interp, words);
+		runSync(given.interp, words);
 		const { user, model } = stepped("(echo w :length 99)", given);
 		expect(user).toBe("a b c d e f g h i j k l\n");
 		expect(model).toContain("a b c d\n");
@@ -59,7 +59,7 @@ describe("echo respects the compactor's limit", () => {
 
 	it("reports the end of the value rather than a next offset", () => {
 		const given = interpWithLimit(4);
-		run(given.interp, words);
+		runSync(given.interp, words);
 		expect(stepped("(echo w :offset 8)", given).model).toBe(
 			"i j k l\n... 4 of 12 words shown, 8 above — back to the start with (echo w :offset 0)\n",
 		);
@@ -67,7 +67,7 @@ describe("echo respects the compactor's limit", () => {
 
 	it("names the value in the marker only when a global holds it", () => {
 		const given = interpWithLimit(3);
-		run(given.interp, words);
+		runSync(given.interp, words);
 		expect(stepped("(echo w)", given).model).toContain("(echo w :offset 3)");
 		expect(stepped('(echo "a b c d e")', given).model).toContain(
 			"read on from :offset 3",
@@ -91,7 +91,7 @@ describe("echo respects the compactor's limit", () => {
 describe("echo :match", () => {
 	it("feeds its offset straight back into echo", () => {
 		const given = interpWithLimit(20);
-		run(given.interp, words);
+		runSync(given.interp, words);
 		expect(echoed('(echo w :match "g" :context 0)', given)).toContain(
 			"@6  [[g]]",
 		);
@@ -100,7 +100,7 @@ describe("echo :match", () => {
 
 	it("collapses hits that fall inside a window already shown", () => {
 		const given = interpWithLimit(20);
-		run(given.interp, words);
+		runSync(given.interp, words);
 		expect(echoed('(echo w :match "[a-l]" :context 3)', given)).toContain(
 			"in a region already shown",
 		);
@@ -203,7 +203,10 @@ describe("grep returns what matched", () => {
 describe("the character backstop", () => {
 	it("hard-cuts a single word past the character budget", () => {
 		const given = interpWithLimit(2);
-		run(given.interp, '(setq blob "0123456789012345678901234567890123456789")');
+		runSync(
+			given.interp,
+			'(setq blob "0123456789012345678901234567890123456789")',
+		);
 		const { user, model } = stepped("(echo blob)", given);
 		expect(user).toContain("0123456789012345678901234567890123456789");
 		expect(model).toContain("012345678901234567890123");
@@ -227,7 +230,7 @@ describe("secret taint", () => {
 				compactionExtension(c),
 			],
 		});
-		run(interp, prelude);
+		runSync(interp, prelude);
 		return { interp, c };
 	}
 
@@ -246,56 +249,48 @@ describe("secret taint", () => {
 	});
 });
 
-describe("reporting a background job", () => {
-	function fakeJob(label = "load-mcp:linear") {
-		return {
-			jobId: "8d123124beefcafe",
-			label,
-			toString: () => `#<job ${label} 8d123124>`,
-		};
+describe("reporting a promise", () => {
+	function pending(): Promise<unknown> {
+		return new Promise(() => {});
 	}
 
 	function reportOf(interp: Interp, c: Compactor, code: string): string {
 		return stepped(code, { interp, c }).model;
 	}
 
-	function withJob(value: unknown): { interp: Interp; c: Compactor } {
+	function withPromise(value: unknown): { interp: Interp; c: Compactor } {
 		const c = new Compactor(400);
 		const interp = new Interp({ extensions: [compactionExtension(c)] });
-		run(interp, prelude);
+		runSync(interp, prelude);
 		interp.defineGlobal(newSym("started"), value, {
 			signature: "started",
-			doc: "A job handed to the REPL by the host, as load-mcp would.",
+			doc: "A promise handed to the REPL by the host, as load-mcp would.",
 		});
 		return { interp, c };
 	}
 
 	it("reports the name and what to do with it, never the handle", () => {
-		const { interp, c } = withJob(fakeJob());
+		const { interp, c } = withPromise(pending());
 		const line = reportOf(interp, c, "(identity started)");
-		expect(line).not.toContain("#<job");
-		expect(line).toContain("load-mcp:linear");
+		expect(line).not.toContain("#<promise");
 		expect(line).toContain("(await started)");
-		expect(line).toContain("(job-status started)");
+		expect(line).toContain("(promise-state started)");
 		expect(line).toContain("(cancel started)");
 		expect(line).toContain("nothing is owed");
 	});
 
 	it("keeps the handle out of every other description of it", () => {
-		const { interp, c } = withJob(fakeJob());
+		const { interp, c } = withPromise(pending());
 		expect(reportOf(interp, c, "(quote started)")).toBe(
-			"started: job load-mcp:linear, running in the background\n",
+			"started: a promise, still running\n",
 		);
 	});
 
-	it("describes a list of jobs as jobs, short as it looks", () => {
-		const both = new Cell(
-			fakeJob("load-mcp:a"),
-			new Cell(fakeJob("load-mcp:b"), null),
-		);
-		const { interp, c } = withJob(both);
+	it("describes a list of promises as promises, short as it looks", () => {
+		const both = new Cell(pending(), new Cell(pending(), null));
+		const { interp, c } = withPromise(both);
 		expect(reportOf(interp, c, "(identity started)")).toBe(
-			"started: list of 2 background jobs\n",
+			"started: list of 2 promises, still running\n",
 		);
 	});
 });
@@ -308,7 +303,7 @@ describe("reporting a result", () => {
 	function fresh(limit = 400): { interp: Interp; c: Compactor } {
 		const c = new Compactor(limit);
 		const interp = new Interp({ extensions: [compactionExtension(c)] });
-		run(interp, prelude);
+		runSync(interp, prelude);
 		return { interp, c };
 	}
 
@@ -387,7 +382,7 @@ describe("reporting a result", () => {
 
 	it("numbers per function name and never clobbers an existing global", () => {
 		const { interp, c } = fresh();
-		run(interp, "(setq list-1 999)");
+		runSync(interp, "(setq list-1 999)");
 		expect(reportOf(interp, c, "(list 1 2 3 4)")).toContain("list-2:");
 		expect(reportOf(interp, c, "(list 1 2 3 4)")).toContain("list-3:");
 		expect(ev("(progn list-1)", interp)).toBe("999");
@@ -430,8 +425,8 @@ describe("reporting a result", () => {
 				}),
 			],
 		});
-		run(interp, prelude);
-		expect(str(run(interp, '(secret "REPL_K")'))).toBe("#<secret:REPL_K>");
+		runSync(interp, prelude);
+		expect(str(runSync(interp, '(secret "REPL_K")'))).toBe("#<secret:REPL_K>");
 	});
 });
 
@@ -439,7 +434,7 @@ describe("the step's echo budget", () => {
 	function stepping(limit: number): { interp: Interp; c: Compactor } {
 		const c = new Compactor(limit);
 		const interp = new Interp({ extensions: [compactionExtension(c)] });
-		run(interp, prelude);
+		runSync(interp, prelude);
 		return { interp, c };
 	}
 

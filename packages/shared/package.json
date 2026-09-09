@@ -1,0 +1,25 @@
+{
+  "name": "@repo/shared",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./messages": "./src/messages.ts",
+    "./package.json": "./package.json",
+    "./providers": "./src/providers.ts"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@repo/tsconfigs": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

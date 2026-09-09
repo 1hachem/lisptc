@@ -89,23 +89,27 @@ describe("MCP", () => {
 		"login",
 		"logout",
 	];
-	const JOB_BUILTINS = [
+	const PROMISE_BUILTINS = [
 		"await",
-		"await-all",
-		"await-any",
-		"job-status",
-		"jobs",
+		"promise-all",
+		"promise-all-settled",
+		"promise-any",
+		"promise-race",
+		"promise-state",
+		"promises",
 		"cancel",
 	];
 
-	it.each([...MCP_BUILTINS, ...JOB_BUILTINS])("names %s", (name) => {
+	it.each([...MCP_BUILTINS, ...PROMISE_BUILTINS])("names %s", (name) => {
 		expect(PROMPT).toMatch(names(name));
 	});
 
-	it("says load-mcp is async: it returns a job and does not block", () => {
-		expect(PROMPT).toMatch(/it returns a job immediately and does NOT block/);
+	it("says load-mcp is async: it returns a promise and does not block", () => {
 		expect(PROMPT).toMatch(
-			/`\(job-status job\)` checks progress \(:pending\/:done\/:error\)/,
+			/it returns a promise immediately and does NOT block/,
+		);
+		expect(PROMPT).toMatch(
+			/`\(promise-state promise\)` checks `:pending` \/ `:fulfilled` \/ `:rejected` without waiting/,
 		);
 	});
 
@@ -144,7 +148,7 @@ describe("MCP", () => {
 	});
 
 	it("shows how to load several servers concurrently", () => {
-		expect(PROMPT).toMatch(/await-all \(list \(load-mcp/);
+		expect(PROMPT).toMatch(/promise-all-settled \(list \(load-mcp/);
 	});
 });
 

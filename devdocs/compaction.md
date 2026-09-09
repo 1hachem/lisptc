@@ -59,7 +59,7 @@ extension** like secrets and MCP.
   keyword only reads as an option when it carries a value after it (so a
   misspelled `:ofset 40` is an error, not two printed words) or when it is one
   of `ECHO_OPTIONS` left without its value; a trailing keyword is otherwise
-  data, which is what makes `(echo (job-status job))` print `:pending`.
+  data, which is what makes `(echo (promise-state p))` print `:pending`.
 - `print` — writes a value the way `echo` does (human's copy out through the
   writer, model's copy charged to the step's budget). What `result` calls for a
   top-level slice.
@@ -157,14 +157,15 @@ In order, `Compactor.result` and `nameFor`:
 2. A top-level `head`/`tail` form reports nothing either — its slice is
    printed instead (see `isSliceForm`), and no name is minted for it: the
    value it was sliced out of already has one.
-3. A **job** is reported by name plus what the name is for — `load-mcp-1:
-   load-mcp:linear running in the background … (await load-mcp-1) …` — and its
-   handle (`#<job …>`) is never shown, in this line or in `describe`. The
-   handle is not readable source, and an agent shown one types it back:
+3. A **promise** is reported by name plus what the name is for — `load-mcp-1: a
+   promise, still running … (await load-mcp-1) …` — and its printed form
+   (`#<promise>`) is never shown, in this line or in `describe`. That form is
+   not readable source, and an agent shown one types it back: the old
    `(await #<job load-mcp:linear 8d12…>)` was four negative survey reports in
-   two days. The line also says that nothing is owed, since a job applies its
-   own result when it settles. Recognised by shape (`jobLabel`), because
-   compaction may not import the jobs layer.
+   two days. The line also says that nothing is owed, since a promise applies
+   its own result when it settles. Recognised with `instanceof Promise`, which
+   is a host type, so compaction still imports nothing from the promises
+   layer.
 4. `nil` and `t` are reported plainly. They carry nothing a later step could
    refer to, and every side-effecting loop returns `nil`; naming those would
    bury the results that matter under `dotimes-1: nil`.

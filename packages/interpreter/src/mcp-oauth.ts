@@ -25,7 +25,8 @@ export interface OAuthStore {
 }
 
 function defaultOAuthDir(): string {
-	if (oauthEnv.LISPTC_OAUTH_DIR) return oauthEnv.LISPTC_OAUTH_DIR;
+	const dir = process.env.LISPTC_OAUTH_DIR ?? oauthEnv.LISPTC_OAUTH_DIR;
+	if (dir) return dir;
 	const configHome = oauthEnv.XDG_CONFIG_HOME ?? join(homedir(), ".config");
 	return join(configHome, "lisptc", "oauth");
 }
@@ -35,10 +36,14 @@ function keyToFileName(serverKey: string): string {
 }
 
 export class FileOAuthStore implements OAuthStore {
-	constructor(private readonly dir: string = defaultOAuthDir()) {}
+	constructor(private readonly dir?: string) {}
+
+	private base(): string {
+		return this.dir ?? defaultOAuthDir();
+	}
 
 	private file(serverKey: string): string {
-		return join(this.dir, keyToFileName(serverKey));
+		return join(this.base(), keyToFileName(serverKey));
 	}
 
 	async load(serverKey: string): Promise<OAuthRecord | undefined> {
@@ -50,7 +55,7 @@ export class FileOAuthStore implements OAuthStore {
 	}
 
 	async save(serverKey: string, record: OAuthRecord): Promise<void> {
-		await mkdir(this.dir, { recursive: true, mode: 0o700 });
+		await mkdir(this.base(), { recursive: true, mode: 0o700 });
 		await writeFile(this.file(serverKey), JSON.stringify(record), {
 			mode: 0o600,
 		});

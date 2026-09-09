@@ -3,10 +3,11 @@ import {
 	type DocArg,
 	Interp,
 	prelude,
-	run,
+	runSync,
 } from "@repo/interpreter";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { mcpExtension } from "@repo/interpreter/mcp";
+import { llmExtension } from "@repo/llm/llm";
 import {
 	type CompletionEntry,
 	connectOrSpawn,
@@ -34,9 +35,9 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 const interp = new Interp({
-	extensions: [mcpExtension(), compactionExtension()],
+	extensions: [mcpExtension(), llmExtension(), compactionExtension()],
 });
-run(interp, prelude);
+runSync(interp, prelude);
 const localDocs = interp.docs();
 
 let session: SessionClient | undefined;

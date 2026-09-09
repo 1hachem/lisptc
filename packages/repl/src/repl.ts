@@ -2,27 +2,21 @@ import { MODEL, USER } from "@repo/interpreter/channels";
 import {
 	type Bounded,
 	Compactor,
-	compactionExtension,
 	MAX_WORDS,
 } from "@repo/interpreter/compaction";
 import {
-	Cell,
 	EndOfFile,
 	EvalException,
 	Interp,
-	type List,
+	jsonToLisp,
 	newSym,
 	prelude,
-	run,
+	runAsync,
+	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
-import { mcpExtension } from "@repo/interpreter/mcp";
-import { isTruncated, proseExtension } from "@repo/interpreter/prose";
-import {
-	EnvSecretsStore,
-	type SecretsStore,
-	secretsExtension,
-} from "@repo/interpreter/secrets";
+import { isTruncated } from "@repo/interpreter/prose";
+import { EnvSecretsStore, type SecretsStore } from "@repo/interpreter/secrets";
 import {
 	joinMessages,
 	UI,
@@ -30,6 +24,8 @@ import {
 	UiSurface,
 	uiExtension,
 } from "@repo/interpreter/ui";
+import type { LlmObserver } from "@repo/llm/llm";
+import { modelFacingExtensions } from "./extensions.ts";
 
 export interface EvalResult extends Bounded {
 	skipped: string[];
@@ -44,7 +40,7 @@ export interface Repl {
 }
 
 export interface InMemoryRepl extends Repl {
-	eval(code: string): string;
+	eval(code: string): Promise<string>;
 }
 
 function skipNotes(skipped: string[]): string {
@@ -60,33 +56,13 @@ function render(result: EvalResult): EvalResult {
 	};
 }
 
-function jsToLisp(value: unknown): unknown {
-	if (value === null || value === undefined) return null;
-	if (value === true) return true;
-	if (value === false) return null;
-	if (typeof value === "number" || typeof value === "bigint") return value;
-	if (typeof value === "string") return value;
-	if (Array.isArray(value)) return arrayToList(value.map(jsToLisp));
-	if (typeof value === "object") {
-		const pairs = Object.entries(value as Record<string, unknown>).map(
-			([k, v]) => new Cell(k, jsToLisp(v)),
-		);
-		return arrayToList(pairs);
-	}
-	return String(value);
-}
-
-function arrayToList(arr: unknown[]): List {
-	let out: List = null;
-	for (let i = arr.length - 1; i >= 0; i--) out = new Cell(arr[i], out);
-	return out;
-}
-
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private compactor: Compactor;
 	private surface: UiSurface;
+	private inFlight: Promise<void> = Promise.resolve();
 	readonly secrets: SecretsStore;
+	llmObserver?: LlmObserver;
 	private readonly wordLimit: number;
 
 	constructor(
@@ -112,35 +88,49 @@ export class MemoryRepl implements InMemoryRepl {
 		this.surface = new UiSurface();
 		const interp = new Interp({
 			extensions: [
-				secretsExtension({ store: this.secrets }),
-				mcpExtension(),
-				compactionExtension(this.compactor),
+				...modelFacingExtensions({
+					compactor: this.compactor,
+					secrets: this.secrets,
+					observe: (call) => this.llmObserver?.(call),
+				}),
 				uiExtension(this.surface),
-				proseExtension(),
 			],
 		});
-		run(interp, prelude);
+		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
 	}
 
 	protected setup(_interp: Interp): void {}
 
-	evalOutput(code: string): EvalResult {
-		return render(this.evaluate(code));
+	async evalOutput(code: string): Promise<EvalResult> {
+		return render(await this.evaluate(code));
 	}
 
-	protected evaluate(code: string): EvalResult {
-		return this.capture(() => {
-			run(this.currentInterp, code);
-		});
+	protected evaluate(code: string): Promise<EvalResult> {
+		return this.serialize(() => runAsync(this.currentInterp, code));
 	}
 
-	invokeUi(action: string, values: Record<string, unknown> = {}): EvalResult {
-		return this.capture(() => this.surface.invoke(action, values));
+	invokeUi(
+		action: string,
+		values: Record<string, unknown> = {},
+	): Promise<EvalResult> {
+		return this.serialize(async () => this.surface.invoke(action, values));
 	}
 
-	private capture(body: () => void): EvalResult {
+	private serialize(body: () => Promise<unknown>): Promise<EvalResult> {
+		const done = this.inFlight.then(
+			() => this.capture(body),
+			() => this.capture(body),
+		);
+		this.inFlight = done.then(
+			() => undefined,
+			() => undefined,
+		);
+		return done;
+	}
+
+	private async capture(body: () => Promise<unknown>): Promise<EvalResult> {
 		this.compactor.beginStep();
 		let model = "";
 		let user = "";
@@ -171,7 +161,7 @@ export class MemoryRepl implements InMemoryRepl {
 		let error: Bounded = { model: "", user: "" };
 		let failed = false;
 		try {
-			body();
+			await body();
 		} catch (ex) {
 			failed = true;
 			if (ex instanceof EvalException) error = this.compactor.error(`${ex}\n`);
@@ -192,8 +182,8 @@ export class MemoryRepl implements InMemoryRepl {
 		};
 	}
 
-	eval(code: string): string {
-		return this.evalOutput(code).model;
+	async eval(code: string): Promise<string> {
+		return (await this.evalOutput(code)).model;
 	}
 
 	reset(): void {
@@ -212,8 +202,8 @@ export class AgentRepl extends MemoryRepl {
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 	}
 
-	override evalOutput(code: string): EvalResult {
-		const result = this.evaluate(code);
+	override async evalOutput(code: string): Promise<EvalResult> {
+		const result = await this.evaluate(code);
 		if (!isAnswer(code, result)) return render(result);
 		this.finished = true;
 		this.pendingProse.push(...result.skipped);
@@ -254,7 +244,7 @@ function isAnswer(code: string, { user, skipped }: EvalResult): boolean {
 }
 
 function defineVar(interp: Interp, name: string, value: unknown): void {
-	interp.defineGlobal(newSym(name), jsToLisp(value), {
+	interp.defineGlobal(newSym(name), jsonToLisp(value), {
 		signature: name,
 		doc: "Read-only live conversation state (auto-updated each step).",
 	});

@@ -23,12 +23,8 @@ describe("reader: lists and dotted pairs", () => {
 
 describe("reader: printed handles", () => {
 	it("refuses a retyped handle and says what to use instead", () => {
-		expect(() => ev("(await #<job load-mcp:acme 8d123124>)")).toThrow(
-			/printed handle/,
-		);
-		expect(() => ev("(await #<job load-mcp:acme 8d123124>)")).toThrow(
-			/name the REPL reported/,
-		);
+		expect(() => ev("(await #<promise>)")).toThrow(/printed handle/);
+		expect(() => ev("(await #<promise>)")).toThrow(/name the REPL reported/);
 		expect(() => ev("(echo #<secret:REPL_TOKEN>)")).toThrow(/printed handle/);
 	});
 

@@ -10,19 +10,18 @@
     "./compaction": "./src/compaction.ts",
     "./grammar": "./src/grammar.ts",
     "./hooks": "./src/hooks.ts",
-    "./jobs-broker": "./src/jobs-broker.ts",
-    "./jobs-protocol": "./src/jobs-protocol.ts",
-    "./jobs": "./src/jobs.ts",
     "./lisp": "./src/lisp.ts",
-    "./mcp-broker": "./src/mcp-broker.ts",
-    "./ui": "./src/ui.ts",
-    "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./mcp": "./src/mcp.ts",
+    "./mcp-client": "./src/mcp-client.ts",
+    "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./package.json": "./package.json",
+    "./plist": "./src/plist.ts",
+    "./promises": "./src/promises.ts",
     "./prose": "./src/prose.ts",
     "./secrets": "./src/secrets.ts",
     "./source": "./src/source.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./ui": "./src/ui.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -30,7 +29,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bench": "node --experimental-transform-types --no-warnings bench/eval.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

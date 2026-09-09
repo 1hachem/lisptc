@@ -1,44 +1,57 @@
 import { describe, expect, it } from "vitest";
-import type { JobsRuntime } from "../src/jobs.ts";
-import { Interp } from "../src/lisp.ts";
+import { Interp, prelude, runSync } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
+import type { Dispatch } from "../src/promises.ts";
 
-function countingRuntime(): JobsRuntime & { shutdowns: number } {
-	const runtime = {
-		shutdowns: 0,
-		call: () => undefined,
-		start: () => "job-1",
-		awaitJob: () => undefined,
-		awaitAll: () => ({ results: [] }),
-		awaitAny: () => ({ jobId: "job-1", ok: true, value: null }),
-		jobStatus: () => "done",
-		cancelJob: () => {},
-		onSettled: () => {},
-		shutdown() {
-			runtime.shutdowns++;
-		},
-	} as unknown as JobsRuntime & { shutdowns: number };
-	return runtime;
+function hangingDispatch(): { dispatch: Dispatch; aborts: () => number } {
+	let aborts = 0;
+	return {
+		dispatch: (_op, _payload, signal) =>
+			new Promise(() => {
+				signal?.addEventListener("abort", () => {
+					aborts++;
+				});
+			}),
+		aborts: () => aborts,
+	};
+}
+
+function loading(dispatch: Dispatch): Interp {
+	const interp = new Interp({ extensions: [mcpExtension({ dispatch })] });
+	runSync(interp, prelude);
+	runSync(interp, '(load-mcp :name "x" :command "node")');
+	return interp;
 }
 
 describe("Interp.dispose", () => {
-	it("shuts the MCP runtime down when the host drops the interp", () => {
-		const runtime = countingRuntime();
-		const interp = new Interp({ extensions: [mcpExtension({ runtime })] });
-		expect(runtime.shutdowns).toBe(0);
+	it("aborts work still in flight when the host drops the interp", () => {
+		const { dispatch, aborts } = hangingDispatch();
+		const interp = loading(dispatch);
+		expect(aborts()).toBe(0);
 		interp.dispose();
-		expect(runtime.shutdowns).toBe(1);
+		expect(aborts()).toBe(1);
 	});
 
 	it("is idempotent, and composes with the agent's own (mcp-shutdown)", () => {
-		const runtime = countingRuntime();
-		const interp = new Interp({ extensions: [mcpExtension({ runtime })] });
+		const { dispatch, aborts } = hangingDispatch();
+		const interp = loading(dispatch);
 		interp.dispose();
 		interp.dispose();
-		expect(runtime.shutdowns).toBe(2);
+		expect(aborts()).toBe(1);
 	});
 
 	it("does nothing on an interp with no extensions", () => {
 		expect(() => new Interp().dispose()).not.toThrow();
+	});
+});
+
+describe("starting a promise does not suspend", () => {
+	it("lets a synchronous host begin background work", () => {
+		const { dispatch } = hangingDispatch();
+		const interp = new Interp({ extensions: [mcpExtension({ dispatch })] });
+		runSync(interp, prelude);
+		expect(
+			runSync(interp, '(promise-state (load-mcp :name "x" :command "node"))'),
+		).toEqual(expect.objectContaining({ name: "pending" }));
 	});
 });

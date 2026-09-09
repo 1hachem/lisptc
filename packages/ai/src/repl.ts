@@ -54,12 +54,12 @@ export function proseFeedbackContent(feedback: string): string {
 	);
 }
 
-export function evalCode(
+export async function evalCode(
 	repl: AgentRepl,
 	code: string,
-): { output: string; display: string; error: boolean; view?: UiNode } {
+): Promise<{ output: string; display: string; error: boolean; view?: UiNode }> {
 	try {
-		const { model, user, view } = repl.evalOutput(code);
+		const { model, user, view } = await repl.evalOutput(code);
 		return { output: model, display: user, error: false, view };
 	} catch (ex) {
 		repl.reset();

@@ -1,4 +1,4 @@
-import type { Interp } from "./lisp.ts";
+import type { Eval, Interp } from "./lisp.ts";
 
 export type Middleware<A extends unknown[], R> = (
 	...args: [...A, next: (...a: A) => R]
@@ -37,7 +37,7 @@ export interface Hooks {
 		string | undefined
 	>;
 	readonly skipForm: Chain<[interp: Interp, form: unknown], string | undefined>;
-	readonly evalForm: Chain<[interp: Interp, form: unknown], unknown>;
+	readonly evalForm: Chain<[interp: Interp, form: unknown], Eval>;
 	readonly dispose: Chain<[], void>;
 }
 

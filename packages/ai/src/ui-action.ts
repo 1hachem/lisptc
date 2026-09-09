@@ -8,15 +8,15 @@ export interface UiActionResult {
 	message?: string;
 }
 
-export function runUiAction(
+export async function runUiAction(
 	threadId: string,
 	action: string,
 	values: Record<string, unknown>,
-): UiActionResult | undefined {
+): Promise<UiActionResult | undefined> {
 	const repl = peekThreadRepl(threadId);
 	if (!repl) return undefined;
 	try {
-		const { user, view, message, error } = repl.invokeUi(action, values);
+		const { user, view, message, error } = await repl.invokeUi(action, values);
 		return {
 			output: user,
 			error,

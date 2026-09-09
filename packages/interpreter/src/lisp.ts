@@ -188,6 +188,8 @@ function parseArgs<T extends z.ZodType>(schema: T, a: unknown[]): z.infer<T> {
 	);
 }
 
+export type Eval<T = unknown> = Generator<Promise<unknown>, T, unknown>;
+
 abstract class Func {
 	constructor(public readonly carity: number) {}
 
@@ -216,27 +218,6 @@ abstract class Func {
 		if (this.hasRest) frame[n] = arg;
 		return frame;
 	}
-
-	evalFrame(frame: unknown[], interp: Interp, env: List): void {
-		const n = this.fixedArgs;
-		for (let i = 0; i < n; i++) frame[i] = interp.eval(frame[i], env);
-		if (this.hasRest && frame[n] instanceof Cell) {
-			let z: List = null;
-			let y: List = null;
-			for (let j = frame[n] as List; j !== null; j = cdrCell(j)) {
-				const e = interp.eval(j.car, env);
-				const x = new Cell(e, null);
-				if (z === null) {
-					z = x;
-				} else {
-					assert(y !== null);
-					y.cdr = x;
-				}
-				y = x;
-			}
-			frame[n] = z;
-		}
-	}
 }
 
 abstract class DefinedFunc extends Func {
@@ -255,12 +236,12 @@ class Macro extends DefinedFunc {
 		return `#<macro:${this.carity}:${str(this.body)}>`;
 	}
 
-	expandWith(interp: Interp, arg: List): unknown {
+	*expandWith(interp: Interp, arg: List): Eval {
 		const frame = this.makeFrame(arg);
 		const env = new Cell(frame, null);
 		let x: unknown = null;
 		for (let j = this.body; j !== null; j = cdrCell(j))
-			x = interp.eval(j.car, env);
+			x = yield* interp.evalGen(j.car, env);
 		return x;
 	}
 
@@ -285,7 +266,7 @@ class Closure extends DefinedFunc {
 	constructor(
 		carity: number,
 		body: List,
-		private readonly env: List,
+		readonly env: List,
 	) {
 		super(carity, body);
 	}
@@ -298,24 +279,22 @@ class Closure extends DefinedFunc {
 		return `#<closure:${this.carity}:${str(this.body)}>`;
 	}
 
-	makeEnv(interp: Interp, arg: List, interpEnv: List): Cell {
-		const frame = this.makeFrame(arg);
-		this.evalFrame(frame, interp, interpEnv);
-		return new Cell(frame, this.env);
-	}
-
 	static make(carity: number, body: List, env: List): DefinedFunc {
 		return new Closure(carity, body, env);
 	}
 }
 
 type BuiltInFuncBody = (frame: unknown[]) => unknown;
+type BuiltInFuncGen = (frame: unknown[]) => Eval;
+
+type BuiltInKind = "plain" | "generator" | "promise";
 
 class BuiltInFunc extends Func {
 	constructor(
 		private readonly name: string,
 		carity: number,
-		private readonly body: BuiltInFuncBody,
+		private readonly body: BuiltInFuncBody | BuiltInFuncGen,
+		readonly kind: BuiltInKind = "plain",
 	) {
 		super(carity);
 	}
@@ -324,15 +303,38 @@ class BuiltInFunc extends Func {
 		return `#<${this.name}:${this.carity}>`;
 	}
 
-	evalWith(interp: Interp, arg: List, interpEnv: List): unknown {
-		const frame = this.makeFrame(arg);
-		this.evalFrame(frame, interp, interpEnv);
+	call(frame: unknown[]): unknown {
 		try {
-			return this.body(frame);
+			return (this.body as BuiltInFuncBody)(frame);
+		} catch (ex) {
+			throw this.failure(ex, frame);
+		}
+	}
+
+	*settle(promise: Promise<unknown>): Eval {
+		try {
+			return yield promise;
 		} catch (ex) {
 			if (ex instanceof EvalException || ex instanceof LoopSignal) throw ex;
-			else throw new EvalException(`${ex} -- ${this.name}`, frame);
+			throw new EvalException(
+				`${this.name} failed`,
+				ex instanceof Error ? ex.message : String(ex),
+				false,
+			);
 		}
+	}
+
+	*callGen(frame: unknown[]): Eval {
+		try {
+			return yield* (this.body as BuiltInFuncGen)(frame);
+		} catch (ex) {
+			throw this.failure(ex, frame);
+		}
+	}
+
+	private failure(ex: unknown, frame: unknown[]): unknown {
+		if (ex instanceof EvalException || ex instanceof LoopSignal) return ex;
+		return new EvalException(`${ex} -- ${this.name}`, frame);
 	}
 }
 
@@ -467,10 +469,16 @@ function listToStrings(list: List): string[] {
 	return out;
 }
 
-function fromArray(arr: unknown[]): List {
+export function arrayToList(arr: unknown[]): List {
 	let list: List = null;
 	for (let i = arr.length - 1; i >= 0; i--) list = new Cell(arr[i], list);
 	return list;
+}
+
+export function listToArray(list: List): unknown[] {
+	const out: unknown[] = [];
+	for (let j = list; j !== null; j = j.cdr as List) out.push(j.car);
+	return out;
 }
 
 export function jsonToLisp(x: unknown): unknown {
@@ -479,9 +487,9 @@ export function jsonToLisp(x: unknown): unknown {
 	if (x === false) return null;
 	if (typeof x === "number" || typeof x === "bigint") return x;
 	if (typeof x === "string") return x;
-	if (Array.isArray(x)) return fromArray(x.map(jsonToLisp));
+	if (Array.isArray(x)) return arrayToList(x.map(jsonToLisp));
 	if (typeof x === "object")
-		return fromArray(
+		return arrayToList(
 			Object.entries(x as Record<string, unknown>).map(
 				([k, v]) => new Cell(k, jsonToLisp(v)),
 			),
@@ -901,13 +909,13 @@ export class Interp {
 			},
 		);
 
-		this.def(
+		this.defGen(
 			"apply",
 			2,
 			"(apply f args)",
 			"Call `f` with the elements of the list `args` as its arguments.",
 			z.tuple([zAny, zList]),
-			([f, args]) => this.eval(new Cell(f, mapcar(args, qqQuote)), null),
+			(a) => this.applyForm(a),
 		);
 
 		this.def(
@@ -918,7 +926,7 @@ export class Interp {
 			z.tuple([zNumeric]),
 			([code]) => exit(Number(code)),
 		);
-		this.def(
+		this.defGen(
 			"import",
 			1,
 			'(import "path")',
@@ -1003,21 +1011,13 @@ export class Interp {
 				throw new LoopSignal(value);
 			},
 		);
-		this.def(
+		this.defGen(
 			"_run-loop-body",
 			1,
 			"(_run-loop-body thunk)",
 			"Internal: call the 0-arg thunk, catching only a break/return loop signal (any other exception, including a genuine Lisp error, propagates unchanged). Returns (signalled? . value): signalled? is t iff break/return fired.",
 			z.tuple([zAny]),
-			([thunk]) => {
-				try {
-					this.eval(new Cell(thunk, null), null);
-					return new Cell(null, null);
-				} catch (ex) {
-					if (ex instanceof LoopSignal) return new Cell(true, ex.value);
-					throw ex;
-				}
-			},
+			(a) => this.runLoopBody(a),
 		);
 
 		for (const extension of options.extensions ?? []) extension(this);
@@ -1034,6 +1034,40 @@ export class Interp {
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
 		this.globals.set(newSym(name), new BuiltInFunc(name, carity, wrapped));
+		this.docTable.set(name, { signature, doc, args });
+	}
+
+	defGen<T extends z.ZodType>(
+		name: string,
+		carity: number,
+		signature: string,
+		doc: string,
+		schema: T,
+		body: (a: z.infer<T>) => Eval,
+		args?: DocArg[],
+	) {
+		const wrapped: BuiltInFuncGen = (a) => body(parseArgs(schema, a));
+		this.globals.set(
+			newSym(name),
+			new BuiltInFunc(name, carity, wrapped, "generator"),
+		);
+		this.docTable.set(name, { signature, doc, args });
+	}
+
+	defPromise<T extends z.ZodType>(
+		name: string,
+		carity: number,
+		signature: string,
+		doc: string,
+		schema: T,
+		body: (a: z.infer<T>) => Promise<unknown>,
+		args?: DocArg[],
+	) {
+		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
+		this.globals.set(
+			newSym(name),
+			new BuiltInFunc(name, carity, wrapped, "promise"),
+		);
 		this.docTable.set(name, { signature, doc, args });
 	}
 
@@ -1071,7 +1105,21 @@ export class Interp {
 		return new BuiltInFunc(name, carity, body);
 	}
 
-	eval(x: unknown, env: List): unknown {
+	evalNow(x: unknown, env: List): unknown {
+		if (x instanceof Arg) {
+			assert(env !== null);
+			return x.getValue(env);
+		}
+		if (x instanceof Sym) {
+			const value = this.globals.get(x);
+			if (value === undefined) throw new EvalException("void variable", x);
+			return value;
+		}
+		if (x instanceof Lambda) return Closure.makeFrom(x, env);
+		return x;
+	}
+
+	*evalGen(x: unknown, env: List): Eval {
 		try {
 			for (;;) {
 				if (x instanceof Arg) {
@@ -1090,15 +1138,18 @@ export class Interp {
 								if (arg !== null && arg.cdr === null) return arg.car;
 								throw new EvalException("bad quote", x);
 							case prognSym:
-								x = this.evalProgN(arg, env);
+								x =
+									arg !== null && arg.cdr === null
+										? arg.car
+										: yield* this.evalProgN(arg, env);
 								break;
 							case condSym:
-								x = this.evalCond(arg, env);
+								x = yield* this.evalCond(arg, env);
 								break;
 							case setqSym:
-								return this.evalSetQ(arg, env);
+								return yield* this.evalSetQ(arg, env);
 							case trySym: {
-								const [nx, nenv] = this.evalTry(arg, env);
+								const [nx, nenv] = yield* this.evalTry(arg, env);
 								x = nx;
 								env = nenv;
 								break;
@@ -1121,17 +1172,54 @@ export class Interp {
 						if (fn instanceof Sym) {
 							fn = this.globals.get(fn);
 							if (fn === undefined) throw new EvalException("undefined", x.car);
+						} else if (fn instanceof Cell) {
+							fn = yield* this.evalGen(fn, env);
 						} else {
-							fn = this.eval(fn, env);
+							fn = this.evalNow(fn, env);
 						}
 
-						if (fn instanceof Closure) {
-							env = fn.makeEnv(this, arg, env);
-							x = this.evalProgN(fn.body, env);
-						} else if (fn instanceof Macro) {
-							x = fn.expandWith(this, arg);
-						} else if (fn instanceof BuiltInFunc) {
-							return fn.evalWith(this, arg, env);
+						if (fn instanceof Macro) {
+							x = yield* fn.expandWith(this, arg);
+						} else if (fn instanceof Closure || fn instanceof BuiltInFunc) {
+							const frame = fn.makeFrame(arg);
+							const fixed = fn.fixedArgs;
+							for (let i = 0; i < fixed; i++) {
+								const a = frame[i];
+								frame[i] =
+									a instanceof Cell
+										? yield* this.evalGen(a, env)
+										: this.evalNow(a, env);
+							}
+							if (fn.hasRest && frame[fixed] instanceof Cell) {
+								let head: List = null;
+								let tail: List = null;
+								for (let j = frame[fixed] as List; j !== null; j = cdrCell(j)) {
+									const a = j.car;
+									const cell = new Cell(
+										a instanceof Cell
+											? yield* this.evalGen(a, env)
+											: this.evalNow(a, env),
+										null,
+									);
+									if (tail === null) head = cell;
+									else tail.cdr = cell;
+									tail = cell;
+								}
+								frame[fixed] = head;
+							}
+							if (fn instanceof BuiltInFunc) {
+								if (fn.kind === "generator") return yield* fn.callGen(frame);
+								const value = fn.call(frame);
+								if (fn.kind === "plain" && value instanceof Promise)
+									return yield* fn.settle(value);
+								return value;
+							}
+							env = new Cell(frame, fn.env);
+							const { body } = fn;
+							x =
+								body !== null && body.cdr === null
+									? body.car
+									: yield* this.evalProgN(body, env);
 						} else {
 							throw new EvalException("not applicable", fn);
 						}
@@ -1150,25 +1238,45 @@ export class Interp {
 		}
 	}
 
-	private evalProgN(j: List, env: List): unknown {
+	private *applyForm([f, args]: [unknown, List]): Eval {
+		return yield* this.evalGen(new Cell(f, mapcar(args, qqQuote)), null);
+	}
+
+	private *runLoopBody([thunk]: [unknown]): Eval {
+		try {
+			yield* this.evalGen(new Cell(thunk, null), null);
+			return new Cell(null, null);
+		} catch (ex) {
+			if (ex instanceof LoopSignal) return new Cell(true, ex.value);
+			throw ex;
+		}
+	}
+
+	private *evalProgN(j: List, env: List): Eval {
 		if (j === null) return null;
 		for (;;) {
 			const x = j.car;
 			j = cdrCell(j);
 			if (j === null) return x;
-			this.eval(x, env);
+			if (x instanceof Cell) yield* this.evalGen(x, env);
+			else this.evalNow(x, env);
 		}
 	}
 
-	private evalCond(j: List, env: List): unknown {
+	private *evalCond(j: List, env: List): Eval {
 		for (; j !== null; j = cdrCell(j)) {
 			const clause = j.car;
 			if (clause instanceof Cell) {
-				const result = this.eval(clause.car, env);
+				const test = clause.car;
+				const result =
+					test instanceof Cell
+						? yield* this.evalGen(test, env)
+						: this.evalNow(test, env);
 				if (result !== null) {
 					const body = cdrCell(clause);
 					if (body === null) return qqQuote(result);
-					else return this.evalProgN(body, env);
+					if (body.cdr === null) return body.car;
+					return yield* this.evalProgN(body, env);
 				}
 			} else if (clause !== null) {
 				throw new EvalException("cond test expected", clause);
@@ -1177,7 +1285,7 @@ export class Interp {
 		return null;
 	}
 
-	private evalTry(arg: List, env: List): [unknown, List] {
+	private *evalTry(arg: List, env: List): Eval<[unknown, List]> {
 		if (arg === null) throw new EvalException("bad try", arg);
 		const bodyForm = arg.car;
 		const rest = cdrCell(arg);
@@ -1198,7 +1306,7 @@ export class Interp {
 		const handlerBody = cdrCell(catchRest);
 
 		try {
-			return [qqQuote(this.eval(bodyForm, env)), env];
+			return [qqQuote(yield* this.evalGen(bodyForm, env)), env];
 		} catch (ex) {
 			if (!(ex instanceof EvalException)) throw ex;
 			const handler = this.compile(
@@ -1208,13 +1316,14 @@ export class Interp {
 			);
 			if (!(handler instanceof Closure))
 				throw new EvalException("bad try", clause);
-			const callArg = new Cell(qqQuote(ex.value), null);
-			const newEnv = handler.makeEnv(this, callArg, env);
-			return [this.evalProgN(handler.body, newEnv), newEnv];
+			const frame = handler.makeFrame(new Cell(null, null));
+			frame[0] = ex.value;
+			const newEnv = new Cell(frame, handler.env);
+			return [yield* this.evalProgN(handler.body, newEnv), newEnv];
 		}
 	}
 
-	private importFile(path: string): null {
+	private *importFile(path: string): Eval<null> {
 		const baseDir =
 			this.importStack.length > 0
 				? this.importStack[this.importStack.length - 1]
@@ -1230,7 +1339,7 @@ export class Interp {
 		this.importing.add(abs);
 		this.importStack.push(dirname(abs));
 		try {
-			run(this, text);
+			yield* runGen(this, text);
 		} finally {
 			this.importStack.pop();
 			this.importing.delete(abs);
@@ -1238,13 +1347,17 @@ export class Interp {
 		return null;
 	}
 
-	private evalSetQ(j: List, env: List): unknown {
+	private *evalSetQ(j: List, env: List): Eval {
 		let result: unknown = null;
 		for (; j !== null; j = cdrCell(j)) {
 			const lval = j.car;
 			j = cdrCell(j);
 			if (j === null) throw new EvalException("right value expected", lval);
-			result = this.eval(j.car, env);
+			const rval = j.car;
+			result =
+				rval instanceof Cell
+					? yield* this.evalGen(rval, env)
+					: this.evalNow(rval, env);
 			if (lval instanceof Arg) {
 				assert(env !== null);
 				lval.setValue(result, env);
@@ -1315,7 +1428,7 @@ export class Interp {
 					if (k instanceof Sym) k = this.globals.get(k);
 					if (k instanceof Macro) {
 						const d = cdrCell(j);
-						const z = k.expandWith(this, d);
+						const z = driveSync(k.expandWith(this, d));
 						return this.expandMacros(z, count - 1);
 					}
 					return mapcar(j, (x) => this.expandMacros(x, count));
@@ -1766,6 +1879,8 @@ export function str(
 		return "nil";
 	} else if (x === true) {
 		return "t";
+	} else if (x instanceof Promise) {
+		return "#<promise>";
 	} else if (x instanceof Cell) {
 		if (x.car instanceof Sym) {
 			const q = quotes[x.car.name];
@@ -1857,9 +1972,9 @@ function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 	return s.join(" ");
 }
 
-export function evalTopLevel(interp: Interp, exp: unknown): unknown {
+export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 	try {
-		return interp.eval(exp, null);
+		return yield* interp.evalGen(exp, null);
 	} catch (ex) {
 		const failure =
 			ex instanceof LoopSignal
@@ -1876,7 +1991,7 @@ export function evalTopLevel(interp: Interp, exp: unknown): unknown {
 	}
 }
 
-export function run(interp: Interp, text: string): unknown {
+export function* runGen(interp: Interp, text: string): Eval {
 	const { hooks } = interp;
 	const skipped = (what: string) =>
 		interp.channels.emit({
@@ -1894,9 +2009,49 @@ export function run(interp: Interp, text: string): unknown {
 			skipped(note);
 			continue;
 		}
-		result = hooks.evalForm.run(evalTopLevel, interp, exp);
+		result = yield* hooks.evalForm.run(evalTopLevel, interp, exp);
 	}
 	return result;
+}
+
+export function driveSync<T>(gen: Eval<T>): T {
+	let step = gen.next();
+	while (!step.done)
+		step = gen.throw(
+			new EvalException(
+				"cannot suspend",
+				"this host evaluates synchronously",
+				false,
+			),
+		);
+	return step.value;
+}
+
+export function runSync(interp: Interp, text: string): unknown {
+	return driveSync(runGen(interp, text));
+}
+
+export interface Outcome<T = unknown> {
+	value: T;
+}
+
+export async function driveAsync<T>(gen: Eval<T>): Promise<Outcome<T>> {
+	let step = gen.next();
+	while (!step.done) {
+		let resumed: unknown;
+		try {
+			resumed = await step.value;
+		} catch (ex) {
+			step = gen.throw(ex);
+			continue;
+		}
+		step = gen.next(resumed);
+	}
+	return { value: step.value };
+}
+
+export function runAsync(interp: Interp, text: string): Promise<Outcome> {
+	return driveAsync(runGen(interp, text));
 }
 
 export interface SyntaxError_ {
@@ -2075,6 +2230,24 @@ export const prelude = `
         ((< n 1) (car x))
         (t (nth (- n 1) (cdr x)))))
 
+(defun filter (f x)
+  "Return a new list of the elements of x for which f returns non-nil."
+  (cond ((null x) nil)
+        ((f (car x)) (cons (car x) (filter f (cdr x))))
+        (t (filter f (cdr x)))))
+
+(defun _reduce (f acc x)
+  (if (null x)
+      acc
+    (_reduce f (f acc (car x)) (cdr x))))
+(defun reduce (f list &rest initial)
+  "Fold list left to right into one value: call f with the accumulator and each element in turn. Without an initial value the first element starts the fold, and an empty list gives nil. (reduce + '(1 2 3)) is 6."
+  (cond ((not (listp list))
+         (error "reduce: the list comes second and the initial value last, as (reduce f list [initial])"))
+        (initial (_reduce f (car initial) list))
+        ((null list) nil)
+        (t (_reduce f (car list) (cdr list)))))
+
 (defmacro or (x &rest y)
   "Evaluate left to right; return the first non-nil value, else nil."
   (if (null y)
@@ -2111,6 +2284,24 @@ export const prelude = `
                  (if (and (consp e) (equal key (car e)))
                      e
                    (assoc key (cdr alist)))))))
+
+(defun _key-name (key)
+  (let ((name (string key)))
+    (if (string-prefix? ":" name)
+        (substring name 1)
+      name)))
+(defun _alist-get (key alist)
+  (let ((hit (assoc key alist)))
+    (cond (hit (cdr hit))
+          ((stringp key) nil)
+          (t (cdr (assoc (_key-name key) alist))))))
+(defun get-in (record &rest keys)
+  "Read a value out of nested alists and lists: each key is an alist key, or a number to index a list. Every step is guarded, so a missing key or a nil along the way gives nil instead of an error: (get-in config \\"server\\" \\"port\\"), (get-in reply \\"results\\" 0 \\"url\\"). A symbol or keyword key also matches the string of its name, so :port finds \\"port\\"."
+  (let ((value record))
+    (dolist (key keys value)
+      (setq value (cond ((not (consp value)) nil)
+                        ((numberp key) (nth key value))
+                        (t (_alist-get key value)))))))
 
 (defun _nreverse (x prev)
   (let ((next (cdr x)))

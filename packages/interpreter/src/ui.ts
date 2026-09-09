@@ -4,6 +4,7 @@ import {
 	Cell,
 	callableArity,
 	type DocArg,
+	driveAsync,
 	EvalException,
 	type Interp,
 	type InterpExtension,
@@ -103,7 +104,7 @@ export class UiSurface {
 		return this.handlers.has(id);
 	}
 
-	invoke(id: string, values: Record<string, unknown>): unknown {
+	async invoke(id: string, values: Record<string, unknown>): Promise<unknown> {
 		const fn = this.handlers.get(id);
 		if (fn === undefined)
 			throw new EvalException("no such ui action", id, false);
@@ -115,7 +116,10 @@ export class UiSurface {
 		const args: List = takesValues
 			? new Cell(quoted(jsonToLisp(values)), null)
 			: null;
-		return interp.eval(new Cell(fn, args), null);
+		const { value } = await driveAsync(
+			interp.evalGen(new Cell(fn, args), null),
+		);
+		return value;
 	}
 }
 

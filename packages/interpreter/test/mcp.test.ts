@@ -1,22 +1,23 @@
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import { USER } from "../src/channels.ts";
+import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
 
-function evalStr(interp: Interp, code: string): string {
-	return str(run(interp, code));
+async function evalStr(interp: Interp, code: string): Promise<string> {
+	return str((await runAsync(interp, code)).value);
 }
 
-function evalOutput(interp: Interp, code: string): string {
+async function evalOutput(interp: Interp, code: string): Promise<string> {
 	let output = "";
-	const prev = setWriter((s) => {
-		output += s;
+	const stop = interp.channels.on(USER, (d) => {
+		output += d.text;
 	});
 	try {
-		run(interp, code);
+		await runAsync(interp, code);
 		return output;
 	} finally {
-		setWriter(prev);
+		stop();
 	}
 }
 
@@ -36,95 +37,97 @@ const ENUM_FIXTURE = fileURLToPath(
 
 describe("self-evaluating keywords", () => {
 	const interp = new Interp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
-	it("evaluates :keywords to themselves and prints with a colon", () => {
-		expect(evalStr(interp, "(list :query 1 :limit 2)")).toBe(
+	it("evaluates :keywords to themselves and prints with a colon", async () => {
+		expect(await evalStr(interp, "(list :query 1 :limit 2)")).toBe(
 			"(:query 1 :limit 2)",
 		);
 	});
 
-	it("interns keywords so eq holds", () => {
-		expect(evalStr(interp, "(eq :a :a)")).toBe("t");
+	it("interns keywords so eq holds", async () => {
+		expect(await evalStr(interp, "(eq :a :a)")).toBe("t");
 	});
 
-	it("does not break existing symbol evaluation", () => {
-		expect(evalStr(interp, "(+ 1 2 3)")).toBe("6");
+	it("does not break existing symbol evaluation", async () => {
+		expect(await evalStr(interp, "(+ 1 2 3)")).toBe("6");
 	});
 });
 
 describe("MCP integration (stdio fixture)", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
-	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
 	});
 
-	it("loads a stdio server and expands its tools into bindings", () => {
-		const out = evalStr(
+	it("loads a stdio server and expands its tools into bindings", async () => {
+		const out = await evalStr(
 			interp,
 			`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
 		);
 		expect(out).toContain("fx/echo");
 	});
 
-	it("lists loaded servers", () => {
-		expect(evalStr(interp, "(list-mcps)")).toContain("fx");
-		expect(evalStr(interp, "(list-mcps)")).toContain(":loaded");
+	it("lists loaded servers", async () => {
+		expect(await evalStr(interp, "(list-mcps)")).toContain("fx");
+		expect(await evalStr(interp, "(list-mcps)")).toContain(":loaded");
 	});
 
-	it("calls a tool with native keyword syntax", () => {
-		expect(evalStr(interp, '(fx/echo :message "hi")')).toBe('"hi"');
+	it("calls a tool with native keyword syntax", async () => {
+		expect(await evalStr(interp, '(fx/echo :message "hi")')).toBe('"hi"');
 	});
 
-	it("parses a JSON text result into data", () => {
-		expect(evalStr(interp, '(cdr (assoc "hasMore" (fx/issues)))')).toBe("nil");
+	it("parses a JSON text result into data", async () => {
+		expect(await evalStr(interp, '(cdr (assoc "hasMore" (fx/issues)))')).toBe(
+			"nil",
+		);
 		expect(
-			evalStr(
+			await evalStr(
 				interp,
 				'(cdr (assoc "title" (car (cdr (assoc "issues" (fx/issues))))))',
 			),
 		).toBe('"Auth token refresh fails"');
 	});
 
-	it("leaves a plain text result alone", () => {
-		expect(evalStr(interp, '(fx/echo :message "42")')).toBe('"42"');
-		expect(evalStr(interp, '(fx/echo :message "null")')).toBe('"null"');
+	it("leaves a plain text result alone", async () => {
+		expect(await evalStr(interp, '(fx/echo :message "42")')).toBe('"42"');
+		expect(await evalStr(interp, '(fx/echo :message "null")')).toBe('"null"');
 	});
 
-	it("validates required arguments before calling", () => {
-		expect(() => run(interp, "(fx/echo)")).toThrow(
+	it("validates required arguments before calling", async () => {
+		await expect(runAsync(interp, "(fx/echo)")).rejects.toThrow(
 			/required argument "message"/,
 		);
 	});
 
-	it("renders documentation", () => {
-		const doc = evalOutput(interp, "(doc 'fx/echo)");
+	it("renders documentation", async () => {
+		const doc = await evalOutput(interp, "(doc 'fx/echo)");
 		expect(doc).toContain("Echo back the given message");
 		expect(doc).toContain("message");
 		expect(doc).toContain("(fx/echo :message :string)");
 	});
 
-	it("searches tools by keyword", () => {
-		expect(evalStr(interp, '(search-tools "echo")')).toContain("fx/echo");
+	it("searches tools by keyword", async () => {
+		expect(await evalStr(interp, '(search-tools "echo")')).toContain("fx/echo");
 	});
 
-	it("searches the toolkit's MCP servers by keyword", () => {
-		const out = evalStr(interp, '(search-mcps "browser")');
+	it("searches the toolkit's MCP servers by keyword", async () => {
+		const out = await evalStr(interp, '(search-mcps "browser")');
 		expect(out).toContain("playwright");
 		expect(out).toContain(":unloaded");
 	});
 
-	it("binds a catch handler to the tool's descriptive error, not an internal op code", () => {
-		const out = evalStr(interp, "(try (fx/boom) (catch (e) e))");
+	it("binds a catch handler to the tool's descriptive error, not an internal op code", async () => {
+		const out = await evalStr(interp, "(try (fx/boom) (catch (e) e))");
 		expect(out).toContain("something specific broke");
 		expect(out).not.toBe('"call-tool"');
 	});
 
-	it("unloads a server and removes its bindings", () => {
-		expect(evalStr(interp, '(unload-mcp "fx")')).toContain("fx/echo");
-		expect(() => run(interp, '(fx/echo :message "hi")')).toThrow(
+	it("unloads a server and removes its bindings", async () => {
+		expect(await evalStr(interp, '(unload-mcp "fx")')).toContain("fx/echo");
+		await expect(runAsync(interp, '(fx/echo :message "hi")')).rejects.toThrow(
 			/void variable|undefined/,
 		);
 	});
@@ -132,24 +135,24 @@ describe("MCP integration (stdio fixture)", () => {
 
 describe("mcp-shutdown undefines tool bindings", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
-	it("removes <server>/<tool> globals so they error as void, not stale", () => {
+	it("removes <server>/<tool> globals so they error as void, not stale", async () => {
 		expect(
-			evalStr(
+			await evalStr(
 				interp,
 				`(await (load-mcp :name "sfx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
 			),
 		).toContain("sfx/echo");
-		expect(evalStr(interp, '(sfx/echo :message "hi")')).toBe('"hi"');
+		expect(await evalStr(interp, '(sfx/echo :message "hi")')).toBe('"hi"');
 
-		expect(evalStr(interp, "(mcp-shutdown)")).toBe("t");
-		expect(() => run(interp, "(progn sfx/echo)")).toThrow(
+		expect(await evalStr(interp, "(mcp-shutdown)")).toBe("t");
+		await expect(runAsync(interp, "(progn sfx/echo)")).rejects.toThrow(
 			/void variable|undefined/,
 		);
-		expect(() => run(interp, '(sfx/echo :message "hi")')).not.toThrow(
-			/no such server/,
-		);
+		await expect(
+			runAsync(interp, '(sfx/echo :message "hi")'),
+		).rejects.not.toThrow(/no such server/);
 	});
 });
 
@@ -163,29 +166,33 @@ describe("loading a toolkit server by name", () => {
 		},
 	]);
 	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
-	run(interp, prelude);
+	runSync(interp, prelude);
 
-	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
 	});
 
-	it("accepts :name alone, like the bare-name form", () => {
-		expect(evalStr(interp, '(await (load-mcp :name "tk"))')).toContain(
+	it("accepts :name alone, like the bare-name form", async () => {
+		expect(await evalStr(interp, '(await (load-mcp :name "tk"))')).toContain(
 			"tk/echo",
 		);
-		expect(evalStr(interp, '(tk/echo :message "hi")')).toBe('"hi"');
+		expect(await evalStr(interp, '(tk/echo :message "hi")')).toBe('"hi"');
 	});
 
-	it("accepts a bare name as a string, symbol or keyword", () => {
-		expect(evalStr(interp, '(await (load-mcp "tk"))')).toContain("tk/echo");
-		expect(evalStr(interp, "(await (load-mcp :tk))")).toContain("tk/echo");
+	it("accepts a bare name as a string, symbol or keyword", async () => {
+		expect(await evalStr(interp, '(await (load-mcp "tk"))')).toContain(
+			"tk/echo",
+		);
+		expect(await evalStr(interp, "(await (load-mcp :tk))")).toContain(
+			"tk/echo",
+		);
 	});
 
-	it("rejects an unknown name in either form", () => {
-		expect(() => run(interp, '(load-mcp "nope")')).toThrow(
+	it("rejects an unknown name in either form", async () => {
+		await expect(runAsync(interp, '(load-mcp "nope")')).rejects.toThrow(
 			/unknown predefined MCP server/,
 		);
-		expect(() => run(interp, '(load-mcp :name "nope")')).toThrow(
+		await expect(runAsync(interp, '(load-mcp :name "nope")')).rejects.toThrow(
 			/unknown predefined MCP server/,
 		);
 	});
@@ -193,18 +200,18 @@ describe("loading a toolkit server by name", () => {
 
 describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
-	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
 	});
 
-	it("surfaces an argument's enum allowed values", () => {
-		evalStr(
+	it("surfaces an argument's enum allowed values", async () => {
+		await evalStr(
 			interp,
 			`(await (load-mcp :name "en" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${ENUM_FIXTURE}"))))`,
 		);
-		const doc = evalOutput(interp, "(doc 'en/render)");
+		const doc = await evalOutput(interp, "(doc 'en/render)");
 		expect(doc).toContain("format");
 		expect(doc).toContain("one of");
 		expect(doc).toContain("png");
@@ -220,141 +227,169 @@ function loadForm(name: string, delayMs = 0): string {
 	return `(load-mcp :name "${name}" :command "node"${env} :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`;
 }
 
-describe("async MCP jobs", () => {
+describe("MCP promises", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
-	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
 	});
 
-	it("load-mcp returns a job immediately", () => {
-		expect(evalStr(interp, `(setq j ${loadForm("afx", 300)})`)).toContain(
-			"#<job",
+	it("load-mcp returns a promise immediately", async () => {
+		expect(await evalStr(interp, `(setq j ${loadForm("afx", 300)})`)).toBe(
+			"#<promise>",
 		);
 	});
 
-	it("reports :pending before the job settles", () => {
-		expect(evalStr(interp, "(job-status j)")).toBe(":pending");
+	it("reports :pending before it settles", async () => {
+		expect(await evalStr(interp, "(promise-state j)")).toBe(":pending");
 	});
 
-	it("await installs the bindings and returns the tool list", () => {
-		expect(evalStr(interp, "(await j)")).toContain("afx/echo");
-		expect(evalStr(interp, "(job-status j)")).toBe(":done");
+	it("await installs the bindings and returns the tool list", async () => {
+		expect(await evalStr(interp, "(await j)")).toContain("afx/echo");
+		expect(await evalStr(interp, "(promise-state j)")).toBe(":fulfilled");
 	});
 
-	it("the tool works after await", () => {
-		expect(evalStr(interp, '(afx/echo :message "hi")')).toBe('"hi"');
+	it("the tool works after await", async () => {
+		expect(await evalStr(interp, '(afx/echo :message "hi")')).toBe('"hi"');
 	});
 
-	it("await is idempotent", () => {
-		expect(evalStr(interp, "(await j)")).toContain("afx/echo");
+	it("await is idempotent", async () => {
+		expect(await evalStr(interp, "(await j)")).toContain("afx/echo");
 	});
 
-	it("rejects an invalid timeout even on a finalized job", () => {
-		expect(() => run(interp, "(await j -5)")).toThrow(/invalid await timeout/);
+	it("rejects an invalid timeout even on a settled promise", async () => {
+		await expect(runAsync(interp, "(await j -5)")).rejects.toThrow(
+			/invalid await timeout/,
+		);
 	});
 
-	it("await honors a timeout and leaves the job awaitable", () => {
-		evalStr(interp, `(setq slow ${loadForm("slowfx", 2000)})`);
-		expect(() => run(interp, "(await slow 1)")).toThrow(/timed out/);
-		expect(evalStr(interp, "(job-status slow)")).toBe(":pending");
+	it("await honors a timeout and leaves the promise awaitable", async () => {
+		await evalStr(interp, `(setq slow ${loadForm("slowfx", 2000)})`);
+		await expect(runAsync(interp, "(await slow 1)")).rejects.toThrow(
+			/timed out/,
+		);
+		expect(await evalStr(interp, "(promise-state slow)")).toBe(":pending");
 	});
 
-	it("cancel aborts an in-flight job and stops tracking it", () => {
-		evalStr(interp, `(setq killme ${loadForm("killme", 3000)})`);
-		expect(evalStr(interp, "(cancel killme)")).toBe("t");
-		expect(() => run(interp, "(await killme 2000)")).toThrow(/no such job/);
-		expect(evalStr(interp, "(list-mcps)")).not.toContain("killme");
+	it("cancel aborts the work behind a promise, which then rejects", async () => {
+		await evalStr(interp, `(setq killme ${loadForm("killme", 3000)})`);
+		expect(await evalStr(interp, "(cancel killme)")).toBe("t");
+		await expect(runAsync(interp, "(await killme 2000)")).rejects.toThrow();
+		expect(await evalStr(interp, "(promise-state killme)")).toBe(":rejected");
+		expect(await evalStr(interp, "(list-mcps)")).not.toContain("killme");
 	});
 
-	it("await-all collects every job in order", () => {
-		const out = evalStr(
+	it("promise-all collects every value in order", async () => {
+		const out = await evalStr(
 			interp,
-			`(await-all (list ${loadForm("allA", 50)} ${loadForm("allB", 100)}))`,
+			`(await (promise-all (list ${loadForm("allA", 50)} ${loadForm("allB", 100)})))`,
 		);
 		expect(out).toContain("allA/echo");
 		expect(out).toContain("allB/echo");
 	});
 
-	it("treats a connected server with no tools as a failure, not :loaded", () => {
+	it("promise-all-settled keeps the ones that worked", async () => {
+		const bad = `(load-mcp :name "gone" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${EMPTY_FIXTURE}")))`;
+		const out = await evalStr(
+			interp,
+			`(await (promise-all-settled (list ${loadForm("settledOk", 50)} ${bad})))`,
+		);
+		expect(out).toContain(":fulfilled");
+		expect(out).toContain("settledOk/echo");
+		expect(out).toContain(":rejected");
+		expect(out).toContain("no tools");
+	});
+
+	it("treats a connected server with no tools as a failure, not :loaded", async () => {
 		const load = `(load-mcp :name "degraded" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${EMPTY_FIXTURE}")))`;
-		expect(() => run(interp, `(await ${load})`)).toThrow(/no tools/);
-		expect(evalStr(interp, "(list-mcps)")).not.toContain("degraded");
-		expect(evalStr(interp, "(list-tools)")).not.toContain("degraded");
+		await expect(runAsync(interp, `(await ${load})`)).rejects.toThrow(
+			/no tools/,
+		);
+		expect(await evalStr(interp, "(list-mcps)")).not.toContain("degraded");
+		expect(await evalStr(interp, "(list-tools)")).not.toContain("degraded");
 	});
 
 	it("auto-installs a finished load without an explicit await", async () => {
-		evalStr(interp, `(setq r ${loadForm("autofx")})`);
+		await evalStr(interp, `(setq r ${loadForm("autofx")})`);
 		let out = "";
 		for (let i = 0; i < 100; i++) {
-			out = evalStr(interp, '(search-tools "echo")');
+			out = await evalStr(interp, '(search-tools "echo")');
 			if (out.includes("autofx/echo")) break;
 			await new Promise((res) => setTimeout(res, 50));
 		}
 		expect(out).toContain("autofx/echo");
-		expect(evalStr(interp, "(list-mcps)")).toContain("autofx");
-		expect(evalStr(interp, '(autofx/echo :message "yo")')).toBe('"yo"');
+		expect(await evalStr(interp, "(list-mcps)")).toContain("autofx");
+		expect(await evalStr(interp, '(autofx/echo :message "yo")')).toBe('"yo"');
 	});
 
 	it("runs two loads concurrently, not sequentially", async () => {
-		evalStr(interp, `(setq cSlow ${loadForm("concSlow", 4000)})`);
-		evalStr(interp, `(setq cFast ${loadForm("concFast", 50)})`);
+		await evalStr(interp, `(setq cSlow ${loadForm("concSlow", 4000)})`);
+		await evalStr(interp, `(setq cFast ${loadForm("concFast", 50)})`);
 
 		for (let i = 0; i < 100; i++) {
-			if (evalStr(interp, "(job-status cFast)") === ":done") break;
+			if ((await evalStr(interp, "(promise-state cFast)")) === ":fulfilled")
+				break;
 			await new Promise((res) => setTimeout(res, 20));
 		}
 
-		expect(evalStr(interp, "(job-status cFast)")).toBe(":done");
-		expect(evalStr(interp, "(job-status cSlow)")).toBe(":pending");
-		expect(evalStr(interp, "(cancel cSlow)")).toBe("t");
+		expect(await evalStr(interp, "(promise-state cFast)")).toBe(":fulfilled");
+		expect(await evalStr(interp, "(promise-state cSlow)")).toBe(":pending");
+		expect(await evalStr(interp, "(cancel cSlow)")).toBe("t");
 	});
 
-	it("await-any returns the first job to settle", () => {
-		const out = evalStr(
+	it("promise-any returns the first one to succeed", async () => {
+		const out = await evalStr(
 			interp,
-			`(await-any (list ${loadForm("anySlow", 600)} ${loadForm("anyFast", 50)}))`,
+			`(await (promise-any (list ${loadForm("anySlow", 600)} ${loadForm("anyFast", 50)})))`,
 		);
 		expect(out).toContain("anyFast/echo");
 	});
+
+	it("promise-race returns whichever settles first", async () => {
+		const out = await evalStr(
+			interp,
+			`(await (promise-race (list ${loadForm("raceSlow", 600)} ${loadForm("raceFast", 50)})))`,
+		);
+		expect(out).toContain("raceFast/echo");
+	});
 });
 
-describe("liveJobs reaping", () => {
+describe("reaping settled promises", () => {
 	const interp = mcpInterp();
-	run(interp, prelude);
+	runSync(interp, prelude);
 
-	afterAll(() => {
-		run(interp, "(mcp-shutdown)");
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
 	});
 
-	it("does not retain a job in (jobs) after it is awaited, and stays flat across cycles", () => {
-		expect(evalStr(interp, "(length (jobs))")).toBe("0");
+	it("drops a settled promise from (promises), and stays flat across cycles", async () => {
+		expect(await evalStr(interp, "(length (promises))")).toBe("0");
 
 		for (let i = 0; i < 3; i++) {
-			evalStr(interp, `(setq rj ${loadForm(`reap${i}`)})`);
-			expect(evalStr(interp, "(await rj)")).toContain(`reap${i}/echo`);
-			expect(evalStr(interp, "(length (jobs))")).toBe("0");
+			await evalStr(interp, `(setq rj ${loadForm(`reap${i}`)})`);
+			expect(await evalStr(interp, "(await rj)")).toContain(`reap${i}/echo`);
+			expect(await evalStr(interp, "(length (promises))")).toBe("0");
 		}
 	});
 
-	it("keeps the cached result awaitable after reaping (idempotency preserved)", () => {
-		evalStr(interp, `(setq cj ${loadForm("cachefx")})`);
-		const first = evalStr(interp, "(await cj)");
+	it("still resolves to the same value once dropped, as a promise does", async () => {
+		await evalStr(interp, `(setq cj ${loadForm("cachefx")})`);
+		const first = await evalStr(interp, "(await cj)");
 		expect(first).toContain("cachefx/echo");
-		expect(evalStr(interp, "(length (jobs))")).toBe("0");
-		expect(evalStr(interp, "(await cj)")).toBe(first);
+		expect(await evalStr(interp, "(length (promises))")).toBe("0");
+		expect(await evalStr(interp, "(await cj)")).toBe(first);
 	});
 });
 
 describe("core interpreter (no mcp extension)", () => {
 	function coreInterp(): Interp {
 		const interp = new Interp();
-		run(interp, prelude);
+		runSync(interp, prelude);
 		return interp;
 	}
 
-	it("has no mcp built-ins", () => {
+	it("has no mcp built-ins", async () => {
 		const interp = coreInterp();
 		for (const name of [
 			"load-mcp",
@@ -366,22 +401,24 @@ describe("core interpreter (no mcp extension)", () => {
 			"search-mcps",
 			"mcp-shutdown",
 		])
-			expect(() => evalStr(interp, `(${name})`)).toThrow(
+			await expect(evalStr(interp, `(${name})`)).rejects.toThrow(
 				new RegExp(`undefined: ${name}`),
 			);
 	});
 
-	it("has no job built-ins", () => {
+	it("has no promise built-ins", async () => {
 		const interp = coreInterp();
 		for (const name of [
 			"await",
-			"await-all",
-			"await-any",
-			"job-status",
-			"jobs",
+			"promise-all",
+			"promise-all-settled",
+			"promise-any",
+			"promise-race",
+			"promise-state",
+			"promises",
 			"cancel",
 		])
-			expect(() => evalStr(interp, `(${name})`)).toThrow(
+			await expect(evalStr(interp, `(${name})`)).rejects.toThrow(
 				new RegExp(`undefined: ${name}`),
 			);
 	});

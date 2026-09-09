@@ -1,6 +1,3 @@
+export type { ProviderName } from "@repo/shared/providers";
 export type { ModelOptions, Provider } from "./provider/core.ts";
-export {
-	getProvider,
-	type ProviderName,
-	providers,
-} from "./provider/registry.ts";
+export { getProvider, providers } from "./provider/registry.ts";

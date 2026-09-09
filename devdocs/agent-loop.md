@@ -39,6 +39,15 @@ says nothing about caching, which is not the same as a cold prompt. A backend
 that reports no usage simply never produces a usage delta, and the turn goes
 uncounted rather than counted wrong.
 
+### The stream test imports in a hook, not in a test
+
+`test/stream.test.ts` drives the real `streamChatResponse` with `agent.ts`
+mocked, so its first test used to pay the whole module graph inside a test's 5s
+budget: 4773ms of 5000 on a CI runner, and a single new import under
+`MemoryRepl` tipped it over. The import now happens in `beforeAll`, which has
+its own 10s budget, and each test measures only what it is about (~60ms). Any
+test that pulls a heavy graph belongs in a hook for the same reason.
+
 ## Stream plumbing
 
 The client tears the fetch down (and re-issues it) whenever dev tools open or the
@@ -75,7 +84,7 @@ doubles as LRU recency: a touched thread is re-inserted at the end, so the
 least-recently-used is always `keys().next()`. No thread id means an ephemeral
 REPL, preserving the old stateless behaviour.
 
-Eviction does **not** yet release the thread's MCP broker worker (`TODO` in
+Eviction does **not** yet release the thread's MCP clients (`TODO` in
 `repl-store.ts`).
 
 A thrown error from `evalCode` means an unexpected *host* error — the REPL renders

@@ -4,7 +4,7 @@ Remote MCP servers (e.g. Linear) authenticate with OAuth 2.1 — PKCE, dynamic
 client registration (DCR), and metadata discovery. The MCP SDK implements the
 whole protocol; lisptc only supplies **token persistence** and **redirect
 capture**. Code lives in `src/mcp-oauth.ts` (provider + storage + callback) and
-`src/mcp-broker.ts` (`ensureAuthorized` + the `connect` / `login` / `authorize` /
+`src/mcp-client.ts` (`ensureAuthorized` + the `connect` / `login` / `authorize` /
 `logout` ops), surfaced as the `login` / `logout` / `mcp-authorize` built-ins.
 
 ## Marking a server as OAuth
@@ -16,7 +16,7 @@ In `mcp.toolkit.json`, an HTTP server opts in with `oauth` and optional `scopes`
 ```
 
 `scopes` become the space-separated `scope` on the authorization request. The
-broker drives authorization itself (`auth(provider, { scope })`) so exactly these
+client drives authorization itself (`auth(provider, { scope })`) so exactly these
 scopes are requested — otherwise the SDK would request the server's entire
 advertised `scopes_supported`, which some servers (PostHog) reject as
 `invalid_scope`. Pick scopes the **authorization server** actually grants (which
@@ -42,7 +42,7 @@ curated subset including `openid`, `insight:read/write`, …, `user:read`).
    DCR + PKCE (`auth(provider, { scope })`), saves the PKCE verifier, and captures
    the authorization URL.
 2. The URL is surfaced — as `login`'s return value, or as the `NeedsAuthError`
-   message on the `load-mcp` job — and, on the needs-auth path, the callback
+   message the `load-mcp` promise rejects with — and, on the needs-auth path, the callback
    server is started.
 3. The user approves and is redirected to the callback with `?code`.
 4. The code is exchanged for tokens (`auth(provider, { authorizationCode })`),
@@ -114,7 +114,7 @@ keyed by server origin) so the backing store is swappable.
   (dir `0700`, files `0600`). E.g. `~/.config/lisptc/oauth/https___mcp.linear.app.json`,
   holding `clientInformation`, `codeVerifier`, and (after approval) `tokens`.
 - **Database**: implement `OAuthStore` and change the single
-  `const oauthStore = new FileOAuthStore()` line in `src/mcp-broker.ts`.
+  `const oauthStore = new FileOAuthStore()` line in `src/mcp-client.ts`.
 
 Reset a server's OAuth by deleting its file.
 
@@ -142,3 +142,12 @@ Reset a server's OAuth by deleting its file.
   renders as mojibake).
 - **Loopback is same-machine only.** For SSH/remote, either port-forward the
   callback port or use the external strategy + `mcp-authorize`.
+
+## The token directory is resolved per call, not at import
+
+`FileOAuthStore` reads `LISPTC_OAUTH_DIR` when it loads or saves a token, not
+when it is constructed. It used to be constructed inside the broker worker,
+which was spawned late and re-read `process.env` on the way up; on the main
+thread the module is imported once at startup, so a constructor default would
+freeze whatever the directory was at import time. `@repo/env`'s typed env is a
+snapshot for the same reason, so this one key is read from `process.env` first.

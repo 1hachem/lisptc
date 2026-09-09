@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { Interp, prelude, run } from "../src/lisp.ts";
+import { Interp, prelude, runSync } from "../src/lisp.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
 describe("prelude", () => {
 	it("loads into a fresh interpreter without error", () => {
 		const interp = new Interp();
-		expect(() => run(interp, prelude)).not.toThrow();
+		expect(() => runSync(interp, prelude)).not.toThrow();
 	});
 
 	it("defines the standard bindings", () => {

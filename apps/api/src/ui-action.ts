@@ -17,7 +17,7 @@ uiAction.post("/", async (c) => {
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { thread_id, action, values } = parsed.data;
-	const result = runUiAction(thread_id, action, values ?? {});
+	const result = await runUiAction(thread_id, action, values ?? {});
 	if (!result) {
 		console.log(`ui action thread=${thread_id} action=${action} no-session`);
 		return c.json({ error: "session expired" }, 409);

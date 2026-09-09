@@ -94,6 +94,56 @@ describe("destructive operations", () => {
 	});
 });
 
+describe("filter / reduce", () => {
+	it("filter keeps the elements the predicate says yes to", () => {
+		expect(ev("(filter (lambda (n) (< 2 n)) '(1 2 3 4))")).toBe("(3 4)");
+		expect(ev("(filter consp '(1 (2) 3))")).toBe("((2))");
+		expect(ev("(filter identity nil)")).toBe("nil");
+	});
+
+	it("reduce folds left, with or without an initial value", () => {
+		expect(ev("(reduce + '(1 2 3))")).toBe("6");
+		expect(ev("(reduce + '(1 2 3) 10)")).toBe("16");
+		expect(ev('(reduce (lambda (a s) (concat a s)) \'("a" "b") "")')).toBe(
+			'"ab"',
+		);
+		expect(ev("(reduce + '(7))")).toBe("7");
+		expect(ev("(reduce + nil)")).toBe("nil");
+		expect(ev("(reduce + nil 5)")).toBe("5");
+	});
+
+	it("reduce names the argument order when the list is not one", () => {
+		expect(ev("(try (reduce + 0 '(1 2)) (catch (e) e))")).toContain(
+			"the list comes second",
+		);
+	});
+});
+
+describe("get-in", () => {
+	const config = `(setq c '(("server" . (("port" . 8080)
+	                                       ("hosts" . ("a.example" "b.example"))))))`;
+
+	it("reads through nested alists and lists", () => {
+		expect(ev(`${config} (get-in c "server" "port")`)).toBe("8080");
+		expect(ev(`${config} (get-in c "server" "hosts" 1)`)).toBe('"b.example"');
+		expect(ev(`${config} (get-in c "server")`)).toBe(
+			'(("port" . 8080) ("hosts" "a.example" "b.example"))',
+		);
+	});
+
+	it("gives nil for a missing step instead of erroring", () => {
+		expect(ev(`${config} (get-in c "server" "tls" "cert")`)).toBe("nil");
+		expect(ev(`${config} (get-in c "client" "port")`)).toBe("nil");
+		expect(ev(`${config} (get-in c "server" "port" "deeper")`)).toBe("nil");
+		expect(ev('(get-in nil "a")')).toBe("nil");
+	});
+
+	it("matches a string key with a keyword or symbol of the same name", () => {
+		expect(ev(`${config} (get-in c :server :port)`)).toBe("8080");
+		expect(ev(`${config} (get-in c 'server 'port)`)).toBe("8080");
+	});
+});
+
 describe("apply", () => {
 	it("applies functions to argument lists", () => {
 		expect(ev("(apply + '(1 2 3))")).toBe("6");

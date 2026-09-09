@@ -22,21 +22,42 @@ function copyRuntimeAssets(): Plugin {
 	};
 }
 
+function flushTelemetry(): Plugin {
+	let flushed = false;
+	return {
+		name: "flush-telemetry-on-close",
+		apply: "serve",
+		configureServer(server) {
+			process.once("SIGINT", () => {
+				void server.close().then(() => process.exit(0));
+			});
+		},
+		async closeBundle() {
+			if (flushed) return;
+			flushed = true;
+			await (
+				globalThis as { __lisptcFlushTelemetry?: () => Promise<void> }
+			).__lisptcFlushTelemetry?.();
+		},
+	};
+}
+
 export default defineConfig({
 	server: {
 		port: Number(process.env.PORT ?? 3001),
 		strictPort: true,
 	},
-	plugins: [devServer({ entry: "src/app.ts" }), copyRuntimeAssets()],
+	plugins: [
+		devServer({ entry: "src/app.ts" }),
+		flushTelemetry(),
+		copyRuntimeAssets(),
+	],
 	build: {
 		target: "node22",
 		ssr: true,
 		outDir: "dist",
 		rollupOptions: {
-			input: {
-				index: "src/index.ts",
-				"mcp-broker": "@repo/interpreter/mcp-broker",
-			},
+			input: { index: "src/index.ts" },
 			output: { format: "esm", entryFileNames: "[name].js" },
 		},
 	},

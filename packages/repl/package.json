@@ -21,7 +21,8 @@
     "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
   },
   "dependencies": {
-    "@repo/interpreter": "workspace:*"
+    "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

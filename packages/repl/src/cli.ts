@@ -1,19 +1,19 @@
 import { MODEL } from "@repo/interpreter/channels";
-import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
+import { Compactor } from "@repo/interpreter/compaction";
 import {
 	EndOfFile,
 	EvalException,
 	Interp,
 	prelude,
 	Reader,
-	run,
+	runAsync,
+	runSync,
 	setExit,
 	setWriter,
 	stripProse,
 } from "@repo/interpreter/lisp";
-import { mcpExtension } from "@repo/interpreter/mcp";
-import { proseExtension } from "@repo/interpreter/prose";
-import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
+import { EnvSecretsStore } from "@repo/interpreter/secrets";
+import { modelFacingExtensions } from "./extensions.ts";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -43,14 +43,13 @@ class InteractiveRepl implements Repl {
 	private freshInterp(): Interp {
 		this.compactor = new Compactor();
 		const interp = new Interp({
-			extensions: [
-				secretsExtension({ store: this.secretsStore, envFile: true }),
-				mcpExtension(),
-				compactionExtension(this.compactor),
-				proseExtension(),
-			],
+			extensions: modelFacingExtensions({
+				compactor: this.compactor,
+				secrets: this.secretsStore,
+				envFile: true,
+			}),
 		});
-		run(interp, prelude);
+		runSync(interp, prelude);
 		interp.channels.on(MODEL, (d) => {
 			if (d.severity === "warning") write(`skipped ${d.text}\n`);
 		});
@@ -76,7 +75,7 @@ class InteractiveRepl implements Repl {
 			buffer = "";
 			try {
 				this.compactor.beginStep();
-				run(this.currentInterp, text);
+				await runAsync(this.currentInterp, text);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)
@@ -252,7 +251,7 @@ async function main(): Promise<void> {
 				const text = fs.readFileSync(abs, "utf8");
 				repl.interp.importStack.push(path.dirname(abs));
 				try {
-					run(repl.interp, text);
+					await runAsync(repl.interp, text);
 				} finally {
 					repl.interp.importStack.pop();
 				}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Interp, prelude, run, setWriter, str } from "../src/lisp.ts";
+import { Interp, prelude, runSync, setWriter, str } from "../src/lisp.ts";
 import {
 	joinMessages,
 	nodeToJson,
@@ -40,7 +40,7 @@ function fresh(): {
 } {
 	const surface = new UiSurface();
 	const interp = new Interp({ extensions: [uiExtension(surface)] });
-	run(interp, prelude);
+	runSync(interp, prelude);
 	return { interp, surface, ui: collector(interp) };
 }
 
@@ -51,7 +51,7 @@ function render(code: string): {
 	ui: ReturnType<typeof collector>;
 } {
 	const { interp, surface, ui } = fresh();
-	run(interp, code);
+	runSync(interp, code);
 	const node = ui.takeView();
 	return { view: node ? nodeToJson(node) : undefined, surface, interp, ui };
 }
@@ -59,7 +59,7 @@ function render(code: string): {
 describe("building a view", () => {
 	it("renders nothing until ui/render is called", () => {
 		const { interp, ui } = fresh();
-		run(interp, '(ui/stack (ui/text "hi"))');
+		runSync(interp, '(ui/stack (ui/text "hi"))');
 		expect(ui.takeView()).toBeUndefined();
 	});
 
@@ -88,7 +88,7 @@ describe("building a view", () => {
 		const { interp } = fresh();
 		expect(
 			str(
-				run(
+				runSync(
 					interp,
 					'(ui/render (ui/row (ui/button "a" (lambda () nil)) (ui/button "b" (lambda () nil))))',
 				),
@@ -98,14 +98,14 @@ describe("building a view", () => {
 
 	it("takeView reads and clears, so a later step does not redraw it", () => {
 		const { interp, ui } = fresh();
-		run(interp, '(ui/render (ui/text "once"))');
+		runSync(interp, '(ui/render (ui/text "once"))');
 		expect(ui.takeView()).toBeDefined();
 		expect(ui.takeView()).toBeUndefined();
 	});
 
 	it("refuses to render anything that is not a widget", () => {
 		const { interp } = fresh();
-		expect(() => run(interp, '(ui/render "just text")')).toThrow(
+		expect(() => runSync(interp, '(ui/render "just text")')).toThrow(
 			/ui element expected/,
 		);
 	});
@@ -162,9 +162,9 @@ describe("the display widgets", () => {
 
 	it("rejects a tone the frontend cannot draw", () => {
 		const { interp } = fresh();
-		expect(() => run(interp, '(ui/badge "open" :tone "chartreuse")')).toThrow(
-			/unknown tone/,
-		);
+		expect(() =>
+			runSync(interp, '(ui/badge "open" :tone "chartreuse")'),
+		).toThrow(/unknown tone/);
 	});
 
 	it("renders a kpi's value as text, whatever it was", () => {
@@ -195,7 +195,7 @@ describe("the display widgets", () => {
 
 	it("needs a :name on a checkbox, as on every other field", () => {
 		const { interp } = fresh();
-		expect(() => run(interp, "(ui/checkbox)")).toThrow(
+		expect(() => runSync(interp, "(ui/checkbox)")).toThrow(
 			/ui\/checkbox needs a :name/,
 		);
 	});
@@ -228,55 +228,57 @@ describe("actions", () => {
 
 	it("rejects a non-callable action where the mistake was made", () => {
 		const { interp } = fresh();
-		expect(() => run(interp, '(ui/button "go" "not a function")')).toThrow(
+		expect(() => runSync(interp, '(ui/button "go" "not a function")')).toThrow(
 			/function expected as a ui action/,
 		);
 	});
 
-	it("runs the handler against the live session", () => {
+	it("runs the handler against the live session", async () => {
 		const { surface, interp } = render(`
 			(setq clicks 0)
 			(ui/render (ui/button "+1" (lambda () (setq clicks (+ clicks 1)) (ui/render (ui/text "ok")))))
 		`);
-		surface.invoke("a1", {});
-		surface.invoke("a1", {});
-		expect(str(run(interp, "(identity clicks)"))).toBe("2");
+		await surface.invoke("a1", {});
+		await surface.invoke("a1", {});
+		expect(str(runSync(interp, "(identity clicks)"))).toBe("2");
 	});
 
-	it("hands a handler that takes an argument the submitted fields", () => {
+	it("hands a handler that takes an argument the submitted fields", async () => {
 		const { surface, interp } = render(`
 			(ui/render (ui/form (lambda (values) (setq seen (cdr (assoc "q" values))))
 				(ui/input :name "q")))
 		`);
-		surface.invoke("a1", { q: "auth" });
-		expect(str(run(interp, "(identity seen)"))).toBe('"auth"');
+		await surface.invoke("a1", { q: "auth" });
+		expect(str(runSync(interp, "(identity seen)"))).toBe('"auth"');
 	});
 
-	it("calls a zero-argument handler with no arguments", () => {
+	it("calls a zero-argument handler with no arguments", async () => {
 		const { surface, interp } = render(`
 			(setq hits 0)
 			(ui/render (ui/button "go" (lambda () (setq hits (+ hits 1)))))
 		`);
-		expect(() => surface.invoke("a1", { q: "ignored" })).not.toThrow();
-		expect(str(run(interp, "(identity hits)"))).toBe("1");
+		await surface.invoke("a1", { q: "ignored" });
+		expect(str(runSync(interp, "(identity hits)"))).toBe("1");
 	});
 
-	it("replaces the view with whatever the handler rendered", () => {
+	it("replaces the view with whatever the handler rendered", async () => {
 		const { surface, ui } = render(`
 			(setq n 0)
 			(defun panel () (ui/stack (ui/text (string n))
 				(ui/button "+1" (lambda () (setq n (+ n 1)) (ui/render (panel))))))
 			(ui/render (panel))
 		`);
-		surface.invoke("a1", {});
+		await surface.invoke("a1", {});
 		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
 			children: [{ tag: "text", props: { text: "1" } }, { tag: "button" }],
 		});
 	});
 
-	it("reports an id it does not know rather than doing nothing", () => {
+	it("reports an id it does not know rather than doing nothing", async () => {
 		const { surface } = render('(ui/render (ui/text "hi"))');
-		expect(() => surface.invoke("a99", {})).toThrow(/no such ui action/);
+		await expect(surface.invoke("a99", {})).rejects.toThrow(
+			/no such ui action/,
+		);
 	});
 
 	it("registers an :on-change as an action, like a button's", () => {
@@ -290,34 +292,34 @@ describe("actions", () => {
 		});
 	});
 
-	it("runs an :on-change against the live session", () => {
+	it("runs an :on-change against the live session", async () => {
 		const { surface, ui } = render(`
 			(ui/render (ui/select '("7" "30") :name "d"
 				:on-change (lambda (values) (ui/render (ui/text (cdr (assoc "d" values)))))))
 		`);
-		surface.invoke("a1", { d: "30" });
+		await surface.invoke("a1", { d: "30" });
 		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
 			props: { text: "30" },
 		});
 	});
 
-	it("hands a checkbox's value over as a boolean a handler can test", () => {
+	it("hands a checkbox's value over as a boolean a handler can test", async () => {
 		const { surface, interp } = render(`
 			(ui/render (ui/form (lambda (values)
 				(setq seen (if (cdr (assoc "open" values)) "on" "off")))
 				(ui/checkbox :name "open")))
 		`);
-		surface.invoke("a1", { open: true });
-		expect(str(run(interp, "(identity seen)"))).toBe('"on"');
-		surface.invoke("a1", { open: false });
-		expect(str(run(interp, "(identity seen)"))).toBe('"off"');
+		await surface.invoke("a1", { open: true });
+		expect(str(runSync(interp, "(identity seen)"))).toBe('"on"');
+		await surface.invoke("a1", { open: false });
+		expect(str(runSync(interp, "(identity seen)"))).toBe('"off"');
 	});
 
 	it("counts an :on-change in the render summary", () => {
 		const { interp } = fresh();
 		expect(
 			str(
-				run(
+				runSync(
 					interp,
 					`(ui/render (ui/row (ui/button "go" (lambda () nil))
 						(ui/checkbox :name "o" :on-change (lambda (v) nil))))`,
@@ -326,7 +328,7 @@ describe("actions", () => {
 		).toBe('"rendered row, 3 elements, 2 actions"');
 	});
 
-	it("lets a handler echo", () => {
+	it("lets a handler echo", async () => {
 		const { surface } = render(
 			'(ui/render (ui/button "say" (lambda () (echo "from the click"))))',
 		);
@@ -335,7 +337,7 @@ describe("actions", () => {
 			written += s;
 		});
 		try {
-			surface.invoke("a1", {});
+			await surface.invoke("a1", {});
 		} finally {
 			setWriter(prev);
 		}
@@ -344,59 +346,59 @@ describe("actions", () => {
 });
 
 describe("handing a turn back to the agent", () => {
-	it("carries a handler's message out, joining the arguments like echo", () => {
+	it("carries a handler's message out, joining the arguments like echo", async () => {
 		const { surface, ui } = render(`
 			(ui/render (ui/form (lambda (values) (ui/send "search for" (cdr (assoc "q" values))))
 				(ui/input :name "q")))
 		`);
-		surface.invoke("a1", { q: "auth" });
+		await surface.invoke("a1", { q: "auth" });
 		expect(ui.takeMessage()).toBe("search for auth");
 	});
 
-	it("reads and clears, so a message is delivered once", () => {
+	it("reads and clears, so a message is delivered once", async () => {
 		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "go"))))',
 		);
-		surface.invoke("a1", {});
+		await surface.invoke("a1", {});
 		expect(ui.takeMessage()).toBe("go");
 		expect(ui.takeMessage()).toBeUndefined();
 	});
 
-	it("joins several sends in a handler into a single message", () => {
+	it("joins several sends in a handler into a single message", async () => {
 		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "first") (ui/send "second"))))',
 		);
-		surface.invoke("a1", {});
+		await surface.invoke("a1", {});
 		expect(ui.takeMessage()).toBe("first\n\nsecond");
 	});
 
-	it("lets a handler render and send in the same click", () => {
+	it("lets a handler render and send in the same click", async () => {
 		const { surface, ui } = render(`
 			(ui/render (ui/button "go" (lambda () (ui/render (ui/text "working…")) (ui/send "do it"))))
 		`);
-		surface.invoke("a1", {});
+		await surface.invoke("a1", {});
 		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
 			props: { text: "working…" },
 		});
 		expect(ui.takeMessage()).toBe("do it");
 	});
 
-	it("caps a message rather than letting a handler post an essay", () => {
+	it("caps a message rather than letting a handler post an essay", async () => {
 		const { surface, ui } = render(`
 			(defun wide (n) (let ((s "")) (dotimes (i n) (setq s (concat s "abcdefghij"))) s))
 			(ui/render (ui/button "go" (lambda () (ui/send (wide 600)))))
 		`);
-		surface.invoke("a1", {});
+		await surface.invoke("a1", {});
 		const message = ui.takeMessage() ?? "";
 		expect(message.length).toBeLessThan(4100);
 		expect(message).toMatch(/message truncated/);
 	});
 
-	it("reports no message for a click that sent nothing", () => {
+	it("reports no message for a click that sent nothing", async () => {
 		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/render (ui/text "x")))))',
 		);
-		surface.invoke("a1", {});
+		await surface.invoke("a1", {});
 		expect(ui.takeMessage()).toBeUndefined();
 	});
 });
