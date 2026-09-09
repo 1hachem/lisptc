@@ -105,13 +105,24 @@ Each backend spells it differently, and each difference was measured:
 | **Fireworks** | default `response_format` | grammar output and `reasoning_effort` are Fireworks extensions to the OpenAI body |
 | **llama.cpp** | top-level `grammar` (`gbnfBody`) | `llama-server`'s chat endpoint implements `response_format` only for `json_object`/`json_schema` and **raises** on a type it doesn't know. No `reasoning_effort` — gemma has no thinking channel. It ignores the API key, but `ChatOpenAI` insists on a non-empty one. |
 | **OpenRouter** | default, rides through | it has no grammar field of its own: it forwards unknown body params upstream and silently drops the ones that provider doesn't accept, so the default takes effect only where the routed provider understands it |
+| **AI Grid** | default `response_format` | untested against the gateway: the spelling is the one every OpenAI-compatible backend that implements grammars uses, so it is worth trying. If a reply comes back off-dialect, or the request 400s on the field, set `grammarBody: null` and lean on the system prompt the way DigitalOcean does |
 | **DigitalOcean** | `null` — none | no grammar reaches the vLLM behind the gateway, whichever spelling is tried: `structured_outputs` (vLLM's current field) comes back "not a supported request field", a grammar `response_format` 400s against vLLM's closed union, and the pre-0.12 `guided_grammar` has no effect. Replies stay on-dialect by system prompt plus the chat loop's `checkSyntax` repair pass. |
 
 Under a grammar the model can satisfy the constraint by looping on whitespace
 forever, so a mild `repeatPenalty` is on by default (1 disables it). `repeatLastN`
 is left unset so llama.cpp's own default (64) stands.
 
-Adding a provider: one file in `provider/`, one entry in `registry.ts`.
+Adding a provider: one file in `provider/`, one entry in `registry.ts`, one spec
+in `@repo/shared/providers`.
+
+AI Grid is the one provider with **no bundled base URL**: `AI_GRID_API_KEY` and
+`AI_GRID_BASE_URL` both come from Infisical (`/ai`), and there is no public
+default worth guessing. An unset base URL would otherwise reach the OpenAI SDK as
+`""`, which it treats as absent and replaces with `api.openai.com`, sending an AI
+Grid key to OpenAI. `assertReachable` (`@repo/shared/providers`) is what stops
+that: it names every variable a provider is missing, and both the agent's
+`defineProvider` and the in-language `llm/` client call it before building a
+model.
 
 ## Warming llama.cpp's KV cache
 

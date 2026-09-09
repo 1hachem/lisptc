@@ -277,11 +277,11 @@ describe("the llm observer", () => {
 		expect(calls.map((call) => [call.builtin, call.error])).toEqual([
 			[
 				"llm/complete",
-				'unknown provider "nowhere", expected one of digitalocean, fireworks, llamacpp, openrouter',
+				'unknown provider "nowhere", expected one of aigrid, digitalocean, fireworks, llamacpp, openrouter',
 			],
 			[
 				"llm/complete",
-				'unknown provider "nowhere", expected one of digitalocean, fireworks, llamacpp, openrouter',
+				'unknown provider "nowhere", expected one of aigrid, digitalocean, fireworks, llamacpp, openrouter',
 			],
 		]);
 	});

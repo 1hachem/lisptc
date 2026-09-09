@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { contentToText, isRole } from "../src/messages.ts";
 import {
+	assertReachable,
 	buildProviderSpecs,
 	defaultProviderName,
 	providerSpecFor,
@@ -27,6 +28,23 @@ describe("provider specs", () => {
 		});
 	});
 
+	it("has no bundled base url for AI Grid, since only Infisical carries it", () => {
+		const specs = buildProviderSpecs({});
+		expect(specs.aigrid.baseUrl).toBe("");
+		expect(specs.aigrid.defaultModel).toBe("google/gemma-4-31B");
+		expect(() => assertReachable(specs.aigrid)).toThrow(
+			"AI_GRID_API_KEY and AI_GRID_BASE_URL are not set. Add them to your environment (.env) to talk to AI Grid.",
+		);
+		expect(() =>
+			assertReachable(
+				buildProviderSpecs({
+					AI_GRID_API_KEY: "sk-test",
+					AI_GRID_BASE_URL: "https://grid.example/v1",
+				}).aigrid,
+			),
+		).not.toThrow();
+	});
+
 	it("reads an empty variable as unset, the way the typed env does", () => {
 		expect(
 			buildProviderSpecs({ DO_API_KEY: "" }).digitalocean.apiKey,
@@ -42,7 +60,7 @@ describe("provider specs", () => {
 			/LLM_PROVIDER is "nowhere", but expected one of/,
 		);
 		expect(() => providerSpecFor("nowhere")).toThrow(
-			/unknown provider "nowhere", expected one of digitalocean, fireworks, llamacpp, openrouter/,
+			/unknown provider "nowhere", expected one of aigrid, digitalocean, fireworks, llamacpp, openrouter/,
 		);
 	});
 });

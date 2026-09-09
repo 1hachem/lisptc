@@ -3,6 +3,7 @@ import type { LLMResult } from "@langchain/core/outputs";
 import type { ChatOpenAI } from "@langchain/openai";
 import { contentToText } from "@repo/shared/messages";
 import {
+	assertReachable,
 	defaultProviderName,
 	PROVIDER_NAMES,
 	providerSpecFor,
@@ -52,10 +53,7 @@ interface Target {
 async function chatModel(req: LlmRequest): Promise<Target> {
 	const provider = req.provider ?? defaultProviderName();
 	const spec = providerSpecFor(provider);
-	if (spec.apiKey === undefined)
-		throw new Error(
-			`${spec.apiKeyEnv} is not set. Add it to your environment (.env) to talk to ${spec.label}.`,
-		);
+	assertReachable(spec);
 	const name = req.model ?? spec.defaultModel;
 	const { ChatOpenAI } = await import("@langchain/openai");
 	const model = new ChatOpenAI({

@@ -1,7 +1,10 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
 import { LISP_GRAMMAR } from "@repo/interpreter/grammar";
-import type { ProviderSpec as SharedProviderSpec } from "@repo/shared/providers";
+import {
+	assertReachable,
+	type ProviderSpec as SharedProviderSpec,
+} from "@repo/shared/providers";
 
 export interface ModelOptions {
 	model?: string;
@@ -38,19 +41,14 @@ export const repetitionPenaltyBody = (opts: ModelOptions): Body => ({
 
 export function defineProvider(spec: ProviderSpec): Provider {
 	return (opts) => {
-		const { apiKey } = spec;
-		if (!apiKey) {
-			throw new Error(
-				`${spec.apiKeyEnv} is not set — add it to your environment (.env) to talk to ${spec.label}.`,
-			);
-		}
+		assertReachable(spec);
 
 		const grammar = opts.grammar === undefined ? LISP_GRAMMAR : opts.grammar;
 		const grammarBody =
 			spec.grammarBody === undefined ? defaultGrammarBody : spec.grammarBody;
 
 		return new ChatOpenAI({
-			apiKey,
+			apiKey: spec.apiKey,
 			model: opts.model ?? spec.defaultModel,
 			temperature: opts.temperature ?? undefined,
 			streaming: opts.streaming ?? true,

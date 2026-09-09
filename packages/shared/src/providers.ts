@@ -3,12 +3,14 @@ export interface ProviderSpec {
 	apiKey: string | undefined;
 	apiKeyEnv: string;
 	baseUrl: string;
+	baseUrlEnv: string;
 	defaultModel: string;
 }
 
 export type Env = Record<string, string | undefined>;
 
 export const PROVIDER_NAMES = [
+	"aigrid",
 	"digitalocean",
 	"fireworks",
 	"llamacpp",
@@ -30,11 +32,20 @@ export function buildProviderSpecs(
 	env: Env = process.env,
 ): Record<ProviderName, ProviderSpec> {
 	return {
+		aigrid: {
+			label: "AI Grid",
+			apiKey: set(env, "AI_GRID_API_KEY"),
+			apiKeyEnv: "AI_GRID_API_KEY",
+			baseUrl: set(env, "AI_GRID_BASE_URL") ?? "",
+			baseUrlEnv: "AI_GRID_BASE_URL",
+			defaultModel: set(env, "AI_GRID_MODEL") ?? "google/gemma-4-31B",
+		},
 		digitalocean: {
 			label: "DigitalOcean inference",
 			apiKey: set(env, "DO_API_KEY"),
 			apiKeyEnv: "DO_API_KEY",
 			baseUrl: set(env, "DO_BASE_URL") ?? "https://inference.do-ai.run/v1",
+			baseUrlEnv: "DO_BASE_URL",
 			defaultModel: set(env, "DO_MODEL") ?? "gemma-4-31B-it",
 		},
 		fireworks: {
@@ -44,6 +55,7 @@ export function buildProviderSpecs(
 			baseUrl:
 				set(env, "FIREWORKS_BASE_URL") ??
 				"https://api.fireworks.ai/inference/v1",
+			baseUrlEnv: "FIREWORKS_BASE_URL",
 			defaultModel:
 				set(env, "FIREWORKS_MODEL") ?? "accounts/fireworks/models/kimi-k3",
 		},
@@ -52,6 +64,7 @@ export function buildProviderSpecs(
 			apiKey: "llama.cpp",
 			apiKeyEnv: "LLAMACPP_API_KEY",
 			baseUrl: set(env, "LLAMACPP_BASE_URL") ?? "http://127.0.0.1:8080/v1",
+			baseUrlEnv: "LLAMACPP_BASE_URL",
 			defaultModel: set(env, "LLAMACPP_MODEL") ?? "gemma-4-E4B-it",
 		},
 		openrouter: {
@@ -60,6 +73,7 @@ export function buildProviderSpecs(
 			apiKeyEnv: "OPENROUTER_API_KEY",
 			baseUrl:
 				set(env, "OPENROUTER_BASE_URL") ?? "https://openrouter.ai/api/v1",
+			baseUrlEnv: "OPENROUTER_BASE_URL",
 			defaultModel:
 				set(env, "OPENROUTER_MODEL") ?? "google/gemma-4-31b-it:free",
 		},
@@ -96,4 +110,14 @@ export function providerSpecFor(
 			`unknown provider "${name}", expected one of ${expected()}`,
 		);
 	return specs[name];
+}
+
+export function assertReachable(spec: ProviderSpec): void {
+	const missing = spec.apiKey === undefined ? spec.apiKeyEnv : undefined;
+	const blank = spec.baseUrl === "" ? spec.baseUrlEnv : undefined;
+	const unset = [missing, blank].filter((name) => name !== undefined);
+	if (unset.length > 0)
+		throw new Error(
+			`${unset.join(" and ")} ${unset.length > 1 ? "are" : "is"} not set. Add ${unset.length > 1 ? "them" : "it"} to your environment (.env) to talk to ${spec.label}.`,
+		);
 }
