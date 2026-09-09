@@ -70,7 +70,7 @@ describe("the REPL loop protocol", () => {
 
 	it("promises exactly the conversation globals the host injects", () => {
 		for (const name of Object.keys(snapshotConversation([]))) {
-			expect(LISP_SYSTEM_PROMPT).toContain(`\`${name}\``);
+			expect(PROMPT).toMatch(names(name));
 		}
 	});
 });
@@ -106,16 +106,16 @@ describe("MCP", () => {
 
 	it("says load-mcp is async: it returns a promise and does not block", () => {
 		expect(PROMPT).toMatch(
-			/it returns a promise immediately and does NOT block/,
+			/\*\*Asynchronous\*\*: returns a \*promise\* immediately/,
 		);
 		expect(PROMPT).toMatch(
-			/`\(promise-state promise\)` checks `:pending` \/ `:fulfilled` \/ `:rejected` without waiting/,
+			/\(promise-state promise\) gives :pending, :fulfilled or :rejected, without waiting/,
 		);
 	});
 
-	it("teaches the <server>/<tool> keyword calling convention", () => {
+	it("teaches the server/tool keyword calling convention", () => {
 		expect(PROMPT).toMatch(
-			/global named `<server>\/<tool>`, called with keyword args/,
+			/global named server\/tool, called with keyword args/,
 		);
 		expect(PROMPT).toMatch(/\(acme\/get_widget :id "42"\)/);
 	});
@@ -131,13 +131,10 @@ describe("MCP", () => {
 
 	it("says the server and tool names have to be discovered, not invented", () => {
 		expect(PROMPT).toMatch(
-			/You are not told which servers exist or what they are called/,
+			/tool names below are made up: you never know them in advance/,
 		);
 		expect(PROMPT).toMatch(
-			/Never invent a server or tool name — read it out of one of those results/,
-		);
-		expect(PROMPT).toMatch(
-			/start from `search-mcps` and let each step tell you the next name/,
+			/start from search-mcps and let each step tell you the next name/,
 		);
 	});
 
@@ -185,7 +182,7 @@ describe("the language reference", () => {
 		"expt",
 		"sqrt",
 	])("warns that %s does not exist", (name) => {
-		expect(PROMPT).toMatch(new RegExp(`There are NO[^.]*\`${name}\``, "s"));
+		expect(PROMPT).toMatch(new RegExp(`There are NO[^.]*\\b${name}\\b`, "s"));
 	});
 
 	it("states the closed-world rule outright", () => {

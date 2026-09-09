@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import devServer from "@hono/vite-dev-server";
 import { defineConfig, type Plugin } from "vite";
 
-const RUNTIME_ASSETS = ["src/SKILL.md", "src/lisptc.gbnf", "mcp.toolkit.json"];
+const RUNTIME_ASSETS = ["src/SKILL.ptc", "src/lisptc.gbnf", "mcp.toolkit.json"];
 
 function copyRuntimeAssets(): Plugin {
 	return {

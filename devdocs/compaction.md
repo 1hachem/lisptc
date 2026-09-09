@@ -212,7 +212,7 @@ newline would point one character past the end of the value — enough to make t
 ## Teaching the model
 
 Half the feature is the prompt: a model that is not told waits for values it
-will never be shown, and keeps retyping data it could have named. `SKILL.md` §5
+will never be shown, and keeps retyping data it could have named. `SKILL.ptc` §5
 lists the built-ins — `echo` under Output, `head`/`tail`/`grep` under Extracting
 (where a bare slice's printing is spelled out) — and §9 explains the silence,
 the report line, and the extract-then-echo pattern with a worked example of each

@@ -52,7 +52,9 @@ describe("the language reference teaches prose", () => {
 	});
 
 	it("says prose cannot hold a < or a [", () => {
-		expect(REFERENCE).toMatch(/prose cannot hold a `<` or a `\[`/i);
+		expect(REFERENCE).toMatch(
+			/prose cannot hold a less-than sign or an opening square bracket/i,
+		);
 	});
 });
 
@@ -63,16 +65,14 @@ describe("the language reference teaches context compaction", () => {
 	});
 
 	it("says every result is bound to a name it reports back", () => {
-		expect(REFERENCE).toMatch(/`name: shape`/);
+		expect(REFERENCE).toMatch(/names your result and describes its shape/i);
 		expect(REFERENCE).toMatch(/never retype data the REPL/i);
 	});
 
 	it("says the extraction commands return rather than print", () => {
 		expect(REFERENCE).toMatch(/RETURN a value/);
-		expect(REFERENCE).toMatch(/head`\/`tail`\/`grep` RETURN a value/);
-		expect(REFERENCE).toMatch(
-			/never read a value off a printout and retype it/,
-		);
+		expect(REFERENCE).toMatch(/head, tail and grep built-ins RETURN a value/);
+		expect(REFERENCE).toMatch(/compute the answer and echo THAT/);
 	});
 
 	it("says a truncated echo is not the whole output", () => {
