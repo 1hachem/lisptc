@@ -115,7 +115,8 @@ is left unset so llama.cpp's own default (64) stands.
 Adding a provider: one file in `provider/`, one entry in `registry.ts`, one spec
 in `@repo/shared/providers`.
 
-AI Grid is the one provider with **no bundled base URL**: `AI_GRID_API_KEY` and
+AI Grid is what `/api/chat` runs on (`apps/api/src/model.ts`), and the one
+provider with **no bundled base URL**: `AI_GRID_API_KEY` and
 `AI_GRID_BASE_URL` both come from Infisical (`/ai`), and there is no public
 default worth guessing. An unset base URL would otherwise reach the OpenAI SDK as
 `""`, which it treats as absent and replaces with `api.openai.com`, sending an AI
