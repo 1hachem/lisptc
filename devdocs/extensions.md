@@ -13,3 +13,5 @@ here is a list of extensions added to the interpreter:
 - [ ] settings (model config)
 - [ ] budgetting and limits
 - [ ] triggers (cron, events)
+
+- [ ] scratch pad?? to test parsing and utility processing form, and lisp sheninegins away from the user
