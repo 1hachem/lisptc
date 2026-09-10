@@ -300,6 +300,26 @@ describe("without narrows a matcher by another", () => {
 	});
 });
 
+describe("called-any is how a check names more than one way to do a thing", () => {
+	const source =
+		'(defcheck it (before (called "playwright/browser_navigate") (called-any "list-tools" "search-tools")))';
+
+	test("either discovery built-in satisfies it", () => {
+		for (const how of ["list-tools", "search-tools"]) {
+			const f = new Fixture().watch(source);
+			f.tick().wrote(`(${how} "playwright")`).settle();
+			f.tick().tooled("playwright", "browser_navigate").settle();
+			expect(f.verdict("it")).toBe("true");
+		}
+	});
+
+	test("neither of them still fails it", () => {
+		const f = new Fixture().watch(source);
+		f.tick().tooled("playwright", "browser_navigate").settle();
+		expect(f.verdict("it")).toBe("false");
+	});
+});
+
 describe("the DSL refuses nonsense rather than answering it", () => {
 	test("a combinator fed another combinator's verdict", () => {
 		const f = new Fixture().watch(

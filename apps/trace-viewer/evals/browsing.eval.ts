@@ -10,8 +10,9 @@ evalCase("navigates to hyko.ai by the book", {
 (defcheck searches-before-loading
   (before (called "load-mcp") (called "search-mcps")))
 
-(defcheck lists-tools-before-navigating
-  (before (called "playwright/browser_navigate") (called "list-tools")))
+(defcheck looks-up-tools-before-navigating
+  (before (called "playwright/browser_navigate")
+          (called-any "list-tools" "search-tools")))
 
 (defcheck navigate-is-the-first-tool-it-reaches-for
   (requires (without (called-server "playwright")
