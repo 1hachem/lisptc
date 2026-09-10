@@ -1,3 +1,4 @@
+import { replEnv } from "@repo/env/repl";
 import { MODEL } from "@repo/interpreter/channels";
 import { Compactor } from "@repo/interpreter/compaction";
 import {
@@ -231,7 +232,7 @@ async function main(): Promise<void> {
 	const repl = new InteractiveRepl();
 	let started = false;
 	let fs: typeof import("node:fs") | undefined;
-	const launchDir = process.env.INIT_CWD || process.cwd();
+	const launchDir = replEnv.INIT_CWD || process.cwd();
 	const argv = args.length > 0 ? ["", "", ...args] : ["", "", "-"];
 	try {
 		for (let i = 2; i < argv.length; i++) {

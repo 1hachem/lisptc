@@ -77,6 +77,7 @@ function startLocalServer(conf: {
 		detached: true,
 		stdio: ["ignore", "ignore", "pipe"],
 		env: {
+			// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
 			...(process.env as Record<string, string>),
 			...(conf.env ?? {}),
 		},
@@ -275,6 +276,7 @@ async function openClient(
 						command: conf.command,
 						args: conf.args ?? [],
 						env: {
+							// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
 							...(process.env as Record<string, string>),
 							...(conf.env ?? {}),
 						},

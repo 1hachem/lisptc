@@ -331,6 +331,35 @@ rather than only `FAIL`, and the failure message names it before any check.
 A check line carries `(decided at step n)` only when it actually latched
 during the run; one that collapsed from pending at the end carries nothing.
 
+## The judge
+
+When `EVAL_JUDGE` names a `provider:model`, every finished run is handed to that
+model — the case setup, the check source, how each check came out, and the whole
+conversation — and asked for a short prose recap. It lands on the row as
+`recap`, prints under the transcript, and shows in the viewer.
+
+The judge is asked one thing the checks cannot answer: **when an assertion
+failed, was the agent at fault or was the assertion too narrow?** That question
+is the whole reason it exists. A check like "call `list-tools` before
+navigating" fails an agent that used `search-tools` instead, which is a fine
+strategy; the checks report a failure and only a reader can tell it is the
+eval's fault. The judge is that reader, at 3am, in a report nobody watched.
+
+**It must not be a model under test.** Grading with the same model shares its
+blind spots, so the Taskfile keeps `EVAL_JUDGE` separate from `EVAL_MATRIX`
+rather than defaulting one from the other. `EVAL_JUDGE=none` skips recaps
+entirely — an *empty* value cannot mean that, because Task's `default` filter
+treats empty as unset and hands back the default.
+
+It goes through `@repo/llm`'s `Generate` port, not `packages/ai`'s providers:
+those are streaming and pinned to `LISP_GRAMMAR`, which is right for the agent's
+own turns and exactly wrong for a reviewer who should answer in prose.
+
+**A judge never fails an eval.** An unreachable provider logs once and skips
+every recap; a call that errors or times out is recorded as the recap text
+itself. The grade is decided by the checks, and a broken reviewer must not turn
+a passing run red or a failing one green.
+
 ## Every run prints its transcript
 
 A failing eval is only actionable if you can read what the agent actually did,

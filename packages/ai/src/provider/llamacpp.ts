@@ -1,4 +1,4 @@
-import { providerSpecs } from "@repo/shared/providers";
+import { providerSpecs } from "@repo/env/providers";
 import { DEFAULT_REPEAT_PENALTY, defineProvider, gbnfBody } from "./core.ts";
 
 export const llamacpp = defineProvider({

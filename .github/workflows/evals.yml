@@ -54,6 +54,7 @@ jobs:
         run: pnpm test:evals
         env:
           EVAL_MATRIX: ${{ inputs.matrix || vars.EVAL_MATRIX }}
+          EVAL_JUDGE: ${{ vars.EVAL_JUDGE }}
 
       - name: Upload the report
         if: always()

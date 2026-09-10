@@ -1,6 +1,7 @@
 import { copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import devServer from "@hono/vite-dev-server";
+import { serverEnv } from "@repo/env/server";
 import { defineConfig, type Plugin } from "vite";
 
 const RUNTIME_ASSETS = ["src/SKILL.ptc", "src/lisptc.gbnf", "mcp.toolkit.json"];
@@ -44,7 +45,7 @@ function flushTelemetry(): Plugin {
 
 export default defineConfig({
 	server: {
-		port: Number(process.env.PORT ?? 3001),
+		port: serverEnv.PORT,
 		strictPort: true,
 	},
 	plugins: [

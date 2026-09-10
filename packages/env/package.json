@@ -8,8 +8,12 @@
     "./ai": "./src/ai.ts",
     "./analytics": "./src/analytics.ts",
     "./api": "./src/api.ts",
-    "./repl": "./src/repl.ts",
+    "./evals": "./src/evals.ts",
+    "./infisical": "./src/infisical.ts",
     "./oauth": "./src/oauth.ts",
+    "./providers": "./src/providers.ts",
+    "./repl": "./src/repl.ts",
+    "./server": "./src/server.ts",
     "./web": "./src/web.ts",
     "./package.json": "./package.json",
     "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
@@ -19,15 +23,19 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   }
 }

@@ -1,12 +1,13 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { evalsEnv } from "@repo/env/evals";
 import type { Grade, Report, ReportRow } from "@repo/evals/report";
 import { parseReport } from "@repo/evals/report";
 
 export type { CaseInfo, ReportRow } from "@repo/evals/report";
 export { GRADES } from "@repo/evals/report";
 
-const REPORT_DIR = process.env.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");
+const REPORT_DIR = evalsEnv.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");
 
 function emptyTally(): Record<Grade, number> {
 	return { pass: 0, degraded: 0, fail: 0 };

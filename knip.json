@@ -40,7 +40,8 @@
       "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/env": {
-      "project": ["src/**/*.ts"]
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "packages/evals": {
       "entry": ["test/**/*.ts"],

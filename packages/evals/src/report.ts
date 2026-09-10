@@ -38,6 +38,8 @@ export const reportRowSchema = z.object({
 	skips: z.number(),
 	checks: z.array(checkOutcomeSchema),
 	transcript: z.array(transcriptLineSchema),
+	recap: z.string().optional(),
+	judge: z.string().optional(),
 });
 
 export const seedTurnSchema = z.object({

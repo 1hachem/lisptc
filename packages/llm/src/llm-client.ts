@@ -1,17 +1,13 @@
 import type { CallbackHandlerMethods } from "@langchain/core/callbacks/base";
 import type { LLMResult } from "@langchain/core/outputs";
 import type { ChatOpenAI } from "@langchain/openai";
+import { defaultProvider, providerSpecs } from "@repo/env/providers";
 import { contentToText } from "@repo/shared/messages";
-import {
-	defaultProviderName,
-	PROVIDER_NAMES,
-	providerSpecFor,
-	providerSpecs,
-} from "@repo/shared/providers";
+import { PROVIDER_NAMES, providerSpecFor } from "@repo/shared/providers";
 import type { Generate, LlmRequest, ProviderReport } from "./llm.ts";
 
 export function listProviders(): ProviderReport[] {
-	const first = defaultProviderName();
+	const first = defaultProvider;
 	const order = [first, ...PROVIDER_NAMES.filter((name) => name !== first)];
 	return order.map((name) => ({
 		name,
@@ -50,8 +46,8 @@ interface Target {
 }
 
 async function chatModel(req: LlmRequest): Promise<Target> {
-	const provider = req.provider ?? defaultProviderName();
-	const spec = providerSpecFor(provider);
+	const provider = req.provider ?? defaultProvider;
+	const spec = providerSpecFor(provider, providerSpecs);
 	if (spec.apiKey === undefined)
 		throw new Error(
 			`${spec.apiKeyEnv} is not set. Add it to your environment (.env) to talk to ${spec.label}.`,

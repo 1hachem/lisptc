@@ -7,8 +7,9 @@ import {
 	runAgentTurn,
 	type TranscriptEntry,
 } from "@repo/ai";
+import { evalsEnv } from "@repo/env/evals";
+import { defaultProvider, providerSpecs } from "@repo/env/providers";
 import {
-	defaultProviderName,
 	isProviderName,
 	type ProviderName,
 	providerSpecFor,
@@ -16,6 +17,7 @@ import {
 import { test } from "vitest";
 import { Checks } from "./checks.ts";
 import { tracedRepl } from "./harness.ts";
+import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
 import type { MockSpec } from "./mocks.ts";
 import type {
 	CaseInfo,
@@ -66,7 +68,7 @@ export interface RunResult {
 	transcript: TranscriptLine[];
 }
 
-const REPORT_DIR = process.env.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");
+const REPORT_DIR = evalsEnv.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");
 
 const STARTED_AT = new Date()
 	.toISOString()
@@ -92,11 +94,30 @@ const rows: ReportRow[] = [];
 
 const cases: CaseInfo[] = [];
 
+let judge: Judge | undefined;
+let judgeChecked = false;
+
+function activeJudge(): Judge | undefined {
+	if (!judgeChecked) {
+		judgeChecked = true;
+		const wanted = judgeFrom(evalsEnv.EVAL_JUDGE);
+		if (wanted && !judgeReachable(wanted))
+			console.log(`[evals] no recaps: ${wanted.provider} has no API key set`);
+		else judge = wanted;
+	}
+	return judge;
+}
+
 export function evalMatrix(): Target[] {
-	const raw = process.env.EVAL_MATRIX;
+	const raw = evalsEnv.EVAL_MATRIX;
 	if (!raw) {
-		const provider = defaultProviderName();
-		return [{ provider, model: providerSpecFor(provider).defaultModel }];
+		const provider = defaultProvider;
+		return [
+			{
+				provider,
+				model: providerSpecFor(provider, providerSpecs).defaultModel,
+			},
+		];
 	}
 	return raw
 		.split(",")
@@ -110,13 +131,13 @@ export function evalMatrix(): Target[] {
 			const model = at === -1 ? "" : entry.slice(at + 1);
 			return {
 				provider: name,
-				model: model || providerSpecFor(name).defaultModel,
+				model: model || providerSpecFor(name, providerSpecs).defaultModel,
 			};
 		});
 }
 
 export function reachable(provider: ProviderName): boolean {
-	return Boolean(providerSpecFor(provider).apiKey);
+	return Boolean(providerSpecFor(provider, providerSpecs).apiKey);
 }
 
 export async function runCase(
@@ -231,7 +252,7 @@ function speaker(line: TranscriptLine): string {
 	return line.role === "assistant" ? "agent" : "repl";
 }
 
-export function formatRun(name: string, run: RunResult): string {
+export function formatRun(name: string, run: ReportRow): string {
 	const band = `optimal ${run.min}, budget ${run.max}`;
 	const ending = run.halted
 		? `answered at step ${run.steps} (${band})`
@@ -253,6 +274,11 @@ export function formatRun(name: string, run: RunResult): string {
 		const when =
 			check.step === undefined ? "" : ` (decided at step ${check.step})`;
 		out.push(`${mark} ${check.name}${when}`);
+	}
+	if (run.recap) {
+		out.push(RULE);
+		out.push(`recap by ${run.judge ?? "the judge"}:`);
+		out.push(run.recap);
 	}
 	out.push(RULE);
 	return out.join("\n");
@@ -314,9 +340,19 @@ export function evalCase(name: string, spec: EvalSpec): void {
 			const runs: RunResult[] = [];
 			for (let sample = 0; sample < samples; sample++) {
 				const run = await runCase(spec, target);
+				const row: ReportRow = { ...run, case: name, sample: sample + 1 };
+				const reviewer = activeJudge();
+				if (reviewer) {
+					row.judge = `${reviewer.provider} · ${reviewer.model}`;
+					row.recap = await recapOf(
+						reviewer,
+						cases.find((info) => info.name === name),
+						row,
+					);
+				}
 				runs.push(run);
-				rows.push({ ...run, case: name, sample: sample + 1 });
-				console.log(formatRun(name, run));
+				rows.push(row);
+				console.log(formatRun(name, row));
 			}
 			writeReport();
 
@@ -348,7 +384,7 @@ function writeReport(): void {
 	const targets = evalMatrix();
 	const report: Report = {
 		startedAt: STARTED_AT,
-		sha: process.env.GITHUB_SHA ?? "",
+		sha: evalsEnv.GITHUB_SHA,
 		targets,
 		cases,
 		rows,

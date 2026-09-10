@@ -1,5 +1,6 @@
 import type { ProviderName } from "@repo/ai";
-import { DEFAULT_PROVIDER, providerSpecs } from "@repo/shared/providers";
+import { providerSpecs } from "@repo/env/providers";
+import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 
 export const CHAT_PROVIDER: ProviderName = DEFAULT_PROVIDER;
 export const CHAT_MODEL = providerSpecs[CHAT_PROVIDER].defaultModel;

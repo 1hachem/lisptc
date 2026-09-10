@@ -25,7 +25,7 @@ export interface OAuthStore {
 }
 
 function defaultOAuthDir(): string {
-	const dir = process.env.LISPTC_OAUTH_DIR ?? oauthEnv.LISPTC_OAUTH_DIR;
+	const dir = oauthEnv.LISPTC_OAUTH_DIR;
 	if (dir) return dir;
 	const configHome = oauthEnv.XDG_CONFIG_HOME ?? join(homedir(), ".config");
 	return join(configHome, "lisptc", "oauth");

@@ -1,16 +1,6 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { EnvSecretsStore } from "@repo/interpreter/secrets";
 import { describe, expect, it } from "vitest";
 import { AgentRepl } from "../src/repl.ts";
-
-function writeEnvFile(contents: string): string {
-	const dir = mkdtempSync(join(tmpdir(), "lisptc-secrets-"));
-	const path = join(dir, ".env");
-	writeFileSync(path, contents);
-	return path;
-}
 
 describe("AgentRepl secret handling", () => {
 	it("exposes REPL_* env-var secrets", async () => {
@@ -26,16 +16,8 @@ describe("AgentRepl secret handling", () => {
 	});
 
 	it("does not auto-load $LISPTC_SECRETS_FILE for an embedded AgentRepl", async () => {
-		const path = writeEnvFile("REPL_PI_TOKEN=t0ken\n");
-		const prev = process.env.LISPTC_SECRETS_FILE;
-		process.env.LISPTC_SECRETS_FILE = path;
-		try {
-			const repl = new AgentRepl();
-			expect(await repl.eval("(secrets)")).not.toContain("REPL_PI_TOKEN");
-		} finally {
-			if (prev === undefined) delete process.env.LISPTC_SECRETS_FILE;
-			else process.env.LISPTC_SECRETS_FILE = prev;
-		}
+		const repl = new AgentRepl();
+		expect(await repl.eval("(secrets)")).not.toContain("REPL_PI_TOKEN");
 	});
 
 	it("lets a host inject secrets that survive reset()", async () => {

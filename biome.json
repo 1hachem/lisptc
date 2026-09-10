@@ -19,6 +19,7 @@
       "apps/*/extension/**",
       "apps/*/*.ts",
       "apps/*/*.json",
+      "scripts/**/*.ts",
       "*.ts",
       "*.json",
       "!**/node_modules",
@@ -34,7 +35,10 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "style": {
+        "noProcessEnv": "error"
+      }
     }
   },
   "javascript": {
@@ -62,6 +66,20 @@
     }
   },
   "overrides": [
+    {
+      "includes": [
+        "packages/env/src/**",
+        "packages/*/test/**",
+        "apps/*/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
     {
       "includes": [
         "packages/ui/src/components/ui/**",

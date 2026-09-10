@@ -48,6 +48,10 @@ When you fix something non-obvious, add it to the page for that area.
   latching check language (and why a pending `never` ends true), the zod report
   contract that keeps the runner and the viewer honest, and how runs are graded
   and scored across models.
+- [Environment variables](./env.md) — why every variable is declared in
+  `packages/env`, why the provider table is filled there rather than in
+  `@repo/shared`, the import-time snapshot that trips tests up, and the three
+  reads that are exempt.
 - [The lisptc LSP's static analysis](./lsp.md) — module layout, the shared
   tokenizer grammar vs. the interpreter's `Reader`, and how `load-mcp`'s args
   reach the LSP from the interpreter.

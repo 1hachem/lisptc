@@ -6,6 +6,7 @@
   "exports": {
     "./checks": "./src/checks.ts",
     "./harness": "./src/harness.ts",
+    "./judge": "./src/judge.ts",
     "./mocks": "./src/mocks.ts",
     "./package.json": "./package.json",
     "./report": "./src/report.ts",
@@ -22,7 +23,9 @@
   },
   "dependencies": {
     "@repo/ai": "workspace:*",
+    "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
     "zod": "^4.4.3"

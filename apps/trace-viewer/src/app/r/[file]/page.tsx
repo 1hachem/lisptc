@@ -68,6 +68,18 @@ function Run({ row }: { row: ReportRow }) {
 				))}
 			</ul>
 
+			{row.recap ? (
+				<div className="recap">
+					<span className="who">recap</span>
+					<p>
+						{row.recap}
+						{row.judge ? (
+							<span className="dim small mono"> — {row.judge}</span>
+						) : null}
+					</p>
+				</div>
+			) : null}
+
 			<details open={failed.length > 0 || !row.halted}>
 				<summary>
 					conversation — {row.transcript.length} turn
