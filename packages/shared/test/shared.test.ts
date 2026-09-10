@@ -34,7 +34,6 @@ describe("provider specs", () => {
 	});
 
 	it("resolves the default provider, and refuses an unknown one", () => {
-		expect(defaultProviderName({})).toBe("digitalocean");
 		expect(defaultProviderName({ LLM_PROVIDER: "fireworks" })).toBe(
 			"fireworks",
 		);

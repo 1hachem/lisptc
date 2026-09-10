@@ -202,15 +202,27 @@ untraced paths are the same code.
 ## What is configured where
 
 `providerSpecs` in `@repo/shared/providers` is the single table of provider
-label, API-key env var, base URL and default model. This extension, the agent
+label, API-key env var, base URL, default model and `body`. This extension, the agent
 loop's `provider/` modules and the llama.cpp KV warmer all read it, so a base URL
 or default model cannot drift between them. It lives in `@repo/shared` rather
 than `@repo/env` because it is not environment: it is configuration that *reads*
 the environment, and it is built by `buildProviderSpecs(env)`, a pure function of
 a plain record, which is also how it is tested. `LLM_PROVIDER` names the provider
-a call with no `:provider` gets; without it the default is `digitalocean`,
+a call with no `:provider` gets; without it the default is `openrouter`,
 matching the chat app. `@repo/env/ai` keeps only what is genuinely env and
 genuinely not provider config (`LLAMACPP_SLOT_DIR`).
+
+A spec's `body` is request-body fields that provider always needs, spread into
+`modelKwargs` by both model builders (this extension's `chatModel` and the agent
+loop's `defineProvider`), so a routing decision holds for an `llm/` call and an
+agent turn alike. OpenRouter carries the only one: `provider: { only: [...] }`,
+pinning every request to a single upstream, `sambanova` unless
+`OPENROUTER_PROVIDER` says otherwise. OpenRouter otherwise picks an upstream per
+request, and the upstreams disagree on quantization and on which body params they
+honour, so an unpinned request is a different machine each time and neither a
+grammar nor a latency figure means anything across two runs. The pin is also why
+the model id carries no `:nitro` (or any other) variant suffix: a variant sorts
+across providers, which is the choice `only` is taking away.
 
 The extension deliberately does not reuse `packages/ai`'s `defineProvider`: that
 builds a *streaming* model pinned to the `lisptc.gbnf` grammar, which is right

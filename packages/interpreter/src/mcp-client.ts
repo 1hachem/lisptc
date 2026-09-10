@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
 	auth,
@@ -22,6 +23,9 @@ type ConnConfig =
 			headers?: Record<string, string>;
 			oauth?: boolean;
 			scopes?: string[];
+			command?: string;
+			args?: string[];
+			env?: Record<string, string>;
 	  }
 	| {
 			name: string;
@@ -41,6 +45,101 @@ function redirectUri(): string {
 		oauthEnv.LISPTC_OAUTH_REDIRECT_URL ??
 		`http://127.0.0.1:${callbackPort()}/callback`
 	);
+}
+
+const LOCAL_START_TIMEOUT_MS = 60_000;
+const LOCAL_POLL_MS = 250;
+const LOCAL_STDERR_KEEP = 4096;
+
+interface LocalServer {
+	child: ReturnType<typeof spawn>;
+	stderr: string;
+}
+
+const started = new Map<string, LocalServer>();
+
+async function reachable(url: string): Promise<boolean> {
+	try {
+		await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(2000) });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function startLocalServer(conf: {
+	name: string;
+	command: string;
+	args?: string[];
+	env?: Record<string, string>;
+}): LocalServer {
+	const child = spawn(conf.command, conf.args ?? [], {
+		detached: true,
+		stdio: ["ignore", "ignore", "pipe"],
+		env: {
+			...(process.env as Record<string, string>),
+			...(conf.env ?? {}),
+		},
+	});
+	const server: LocalServer = { child, stderr: "" };
+	child.stderr?.on("data", (chunk: Buffer) => {
+		server.stderr = (server.stderr + chunk.toString()).slice(
+			-LOCAL_STDERR_KEEP,
+		);
+	});
+	child.on("error", (err) => {
+		server.stderr += `\n${err.message}`;
+	});
+	child.unref();
+	return server;
+}
+
+function whyItDied(server: LocalServer): string {
+	const tail = server.stderr.trim().split("\n").slice(-6).join("\n");
+	return tail ? `\n${tail}` : "";
+}
+
+async function ensureLocalServer(conf: {
+	name: string;
+	url: string;
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
+}): Promise<void> {
+	if (!conf.command) return;
+	const origin = new URL(conf.url).origin;
+	if (await reachable(origin)) return;
+	let server = started.get(conf.name);
+	if (!server || server.child.exitCode !== null) {
+		server = startLocalServer({ ...conf, command: conf.command });
+		started.set(conf.name, server);
+	}
+	const deadline = Date.now() + LOCAL_START_TIMEOUT_MS;
+	while (Date.now() < deadline) {
+		if (await reachable(origin)) return;
+		if (server.child.exitCode !== null) {
+			started.delete(conf.name);
+			throw new Error(
+				`${conf.name}: its server exited with code ${server.child.exitCode} before ${origin} answered.${whyItDied(server)}`,
+			);
+		}
+		await new Promise((resolve) => setTimeout(resolve, LOCAL_POLL_MS));
+	}
+	throw new Error(
+		`${conf.name}: started its server but ${origin} did not answer within ${LOCAL_START_TIMEOUT_MS / 1000}s.${whyItDied(server)}`,
+	);
+}
+
+export function stopLocalServers(): void {
+	for (const [name, server] of started) {
+		const { pid } = server.child;
+		try {
+			if (pid !== undefined) process.kill(-pid, "SIGTERM");
+		} catch {
+			server.child.kill("SIGTERM");
+		}
+		started.delete(name);
+	}
 }
 
 class NeedsAuthError extends Error {
@@ -150,6 +249,7 @@ async function openClient(
 	conf: ConnConfig,
 	signal?: AbortSignal,
 ): Promise<{ serverId: string; tools: Tool[] }> {
+	if ("url" in conf) await ensureLocalServer(conf);
 	if ("url" in conf && conf.oauth) {
 		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
 		const { provider, authUrl } = await ensureAuthorized(conf.url, scope);
@@ -239,9 +339,14 @@ async function ensureAuthorized(
 }
 
 async function login(payload: {
+	name?: string;
 	url: string;
 	scopes?: string[];
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
 }): Promise<{ authUrl: string | null }> {
+	await ensureLocalServer({ name: payload.name ?? payload.url, ...payload });
 	const scope = payload.scopes?.length ? payload.scopes.join(" ") : undefined;
 	const { authUrl } = await ensureAuthorized(payload.url, scope);
 	return { authUrl };

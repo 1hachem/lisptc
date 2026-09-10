@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { isNumeric } from "./arith.ts";
 import {
@@ -16,7 +17,7 @@ import {
 	Sym,
 	zList,
 } from "./lisp.ts";
-import { type McpOp, mcpDispatch } from "./mcp-client.ts";
+import { type McpOp, mcpDispatch, stopLocalServers } from "./mcp-client.ts";
 import { keyName, parsePlist } from "./plist.ts";
 import { type Dispatch, Promises } from "./promises.ts";
 import type { ToJson } from "./types.ts";
@@ -47,7 +48,7 @@ export interface JsonSchema {
 	examples?: unknown[];
 }
 
-export type ConnConfig = { description?: string } & (
+export type ConnConfig = { description?: string; keywords?: string[] } & (
 	| {
 			name: string;
 			url: string;
@@ -434,7 +435,13 @@ export function registerMcp(
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
 			return promises
-				.call("login", { url: conf.url, scopes: conf.scopes })
+				.call("login", {
+					name,
+					url: conf.url,
+					scopes: conf.scopes,
+					command: "command" in conf ? conf.command : undefined,
+					args: "args" in conf ? conf.args : undefined,
+				})
 				.then(
 					(res) =>
 						(res as { authUrl: string | null }).authUrl ??
@@ -486,13 +493,14 @@ export function registerMcp(
 		"list-toolkit",
 		0,
 		"(list-toolkit)",
-		"Return the ready-to-use MCP servers from the toolkit, each as (name description :loaded|:unloaded). Load one by bare name with (load-mcp name).",
+		'Return the ready-to-use MCP servers from the toolkit, each as (name description keywords :loaded|:unloaded). Load one by bare name with (load-mcp name); search the same keywords with (search-mcps "query").',
 		z.tuple([]),
 		() => {
 			const rows = [...predefined.entries()].map(([name, conf]) =>
 				arrayToList([
 					name,
 					conf.description ?? "",
+					arrayToList(conf.keywords ?? []),
 					newLispKeyword(servers.has(name) ? "loaded" : "unloaded"),
 				]),
 			);
@@ -504,37 +512,25 @@ export function registerMcp(
 		"search-mcps",
 		1,
 		'(search-mcps "query")',
-		"Search the toolkit's MCP servers by name/description; load a match by bare name with (load-mcp name).",
+		"Search the toolkit's MCP servers by name, keywords and description, best match first; each row is (name score description :loaded|:unloaded). Load a match by bare name with (load-mcp name); (list-toolkit) shows every server's keywords.",
 		z.tuple([zName]),
 		([rawQuery]) => {
-			const query = rawQuery.toLowerCase();
-			const terms = query.split(/\s+/).filter(Boolean);
-			const scored: {
-				name: string;
-				score: number;
-				description: string;
-				loaded: boolean;
-			}[] = [];
-			for (const [name, conf] of predefined.entries()) {
-				const hay = `${name} ${conf.description ?? ""}`.toLowerCase();
-				let score = 0;
-				for (const t of terms) if (hay.includes(t)) score++;
-				if (score > 0)
-					scored.push({
-						name,
-						score,
-						description: firstLine(conf.description),
-						loaded: servers.has(name),
-					});
+			const terms = rawQuery.toLowerCase().split(/\s+/).filter(Boolean);
+			const scored: { conf: ConnConfig; score: number }[] = [];
+			for (const conf of predefined.values()) {
+				const score = scoreToolkitEntry(terms, conf);
+				if (score > 0) scored.push({ conf, score });
 			}
-			scored.sort((a, b) => b.score - a.score);
+			scored.sort(
+				(a, b) => b.score - a.score || a.conf.name.localeCompare(b.conf.name),
+			);
 			return arrayToList(
-				scored.map((s) =>
+				scored.map(({ conf, score }) =>
 					arrayToList([
-						s.name,
-						BigInt(s.score),
-						s.description,
-						newLispKeyword(s.loaded ? "loaded" : "unloaded"),
+						conf.name,
+						BigInt(score),
+						firstLine(conf.description),
+						newLispKeyword(servers.has(conf.name) ? "loaded" : "unloaded"),
 					]),
 				),
 			);
@@ -609,6 +605,7 @@ export function registerMcp(
 		}
 		servers.clear();
 		promises.shutdown();
+		stopLocalServers();
 	};
 
 	interp.def(
@@ -639,6 +636,23 @@ function asName(x: unknown): string {
 function firstLine(s: string | undefined): string {
 	if (!s) return "";
 	return s.split("\n")[0];
+}
+
+const SUBSTRING_MIN = 3;
+
+function scoreToolkitEntry(terms: string[], conf: ConnConfig): number {
+	const name = conf.name.toLowerCase();
+	const keywords = (conf.keywords ?? []).map((k) => k.toLowerCase());
+	const description = (conf.description ?? "").toLowerCase();
+	let score = 0;
+	for (const term of terms) {
+		if (name === term || keywords.includes(term)) score += 3;
+		else if (term.length < SUBSTRING_MIN) continue;
+		else if (name.includes(term) || keywords.some((k) => k.includes(term)))
+			score += 2;
+		else if (description.includes(term)) score += 1;
+	}
+	return score;
 }
 
 function schemaType(spec: JsonSchema): string {
@@ -736,6 +750,12 @@ function expandEnv(s: string): string {
 	return s.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] ?? "");
 }
 
+function resolveBundled(s: string): string {
+	return s.startsWith("./") || s.startsWith("../")
+		? fileURLToPath(new URL(s, TOOLKIT_URL))
+		: s;
+}
+
 function registerConfigs(
 	raw: string,
 	predefined: Map<string, ConnConfig>,
@@ -744,7 +764,8 @@ function registerConfigs(
 		const arr = JSON.parse(raw) as ConnConfig[];
 		for (const conf of arr) {
 			if (!conf?.name) continue;
-			if ("args" in conf && conf.args) conf.args = conf.args.map(expandEnv);
+			if ("args" in conf && conf.args)
+				conf.args = conf.args.map((a) => resolveBundled(expandEnv(a)));
 			predefined.set(conf.name, conf);
 		}
 	} catch {}

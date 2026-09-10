@@ -4,7 +4,7 @@ import { analyticsEnv } from "@repo/env/analytics";
 import type { LlmCall } from "@repo/llm/llm";
 import { PostHog } from "posthog-node";
 
-const PRIVACY_MODE = process.env.POSTHOG_PRIVACY_MODE === "true";
+const PRIVACY_MODE = analyticsEnv.POSTHOG_PRIVACY_MODE;
 
 const FLUSH_TIMEOUT_MS = 5_000;
 

@@ -119,6 +119,40 @@ describe("MCP integration (stdio fixture)", () => {
 		expect(out).toContain(":unloaded");
 	});
 
+	it("finds a toolkit server by a keyword its description never uses", async () => {
+		expect(await evalStr(interp, '(search-mcps "vision")')).toContain("ocr");
+		expect(await evalStr(interp, '(search-mcps "spreadsheet")')).toContain(
+			"sheets",
+		);
+		expect(await evalStr(interp, '(search-mcps "tickets")')).toContain(
+			"linear",
+		);
+	});
+
+	it("ranks a keyword hit above a passing mention in a description", async () => {
+		const out = await evalStr(interp, '(search-mcps "read")');
+		expect(out.indexOf("fs")).toBeGreaterThan(-1);
+		expect(out.indexOf("fs")).toBeLessThan(out.indexOf("ocr"));
+	});
+
+	it("returns every server a shared keyword fits", async () => {
+		const out = await evalStr(interp, '(search-mcps "screenshot")');
+		expect(out).toContain("playwright");
+		expect(out).toContain("ocr");
+	});
+
+	it("lists every toolkit server's keywords, so search has words to use", async () => {
+		const out = await evalStr(interp, "(list-toolkit)");
+		expect(out).toContain("vision");
+		expect(out).toContain("spreadsheet");
+	});
+
+	it("ignores a query's stopwords instead of matching them everywhere", async () => {
+		const out = await evalStr(interp, '(search-mcps "read a receipt")');
+		expect(out).toContain("ocr");
+		expect(out).not.toContain("posthog");
+	});
+
 	it("binds a catch handler to the tool's descriptive error, not an internal op code", async () => {
 		const out = await evalStr(interp, "(try (fx/boom) (catch (e) e))");
 		expect(out).toContain("something specific broke");
@@ -195,6 +229,58 @@ describe("loading a toolkit server by name", () => {
 		await expect(runAsync(interp, '(load-mcp :name "nope")')).rejects.toThrow(
 			/unknown predefined MCP server/,
 		);
+	});
+});
+
+describe("a url server the interpreter starts for you", () => {
+	const toolkitJson = JSON.stringify([
+		{
+			name: "managed",
+			description: "an http server with a start command",
+			url: "http://127.0.0.1:8998/mcp",
+			command: "node",
+			args: ["-e", "console.error('no secrets for you'); process.exit(3)"],
+		},
+	]);
+	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	runSync(interp, prelude);
+
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
+	});
+
+	it("reports the exit code and the server's own stderr", async () => {
+		await expect(
+			runAsync(interp, '(await (load-mcp "managed"))'),
+		).rejects.toThrow(/exited with code 3[\s\S]*no secrets for you/);
+	});
+});
+
+describe("a toolkit server bundled with the repo", () => {
+	const toolkitJson = JSON.stringify([
+		{
+			name: "bundled",
+			description: "reached by a path relative to the toolkit file",
+			command: "node",
+			args: [
+				"--no-warnings",
+				"--experimental-transform-types",
+				"./test/fixture-mcp-server.ts",
+			],
+		},
+	]);
+	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	runSync(interp, prelude);
+
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
+	});
+
+	it("resolves a relative arg against the toolkit file, not the cwd", async () => {
+		expect(await evalStr(interp, '(await (load-mcp "bundled"))')).toContain(
+			"bundled/echo",
+		);
+		expect(await evalStr(interp, '(bundled/echo :message "hi")')).toBe('"hi"');
 	});
 });
 

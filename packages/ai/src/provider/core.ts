@@ -56,6 +56,7 @@ export function defineProvider(spec: ProviderSpec): Provider {
 			streaming: opts.streaming ?? true,
 			configuration: { baseURL: spec.baseUrl },
 			modelKwargs: {
+				...spec.body,
 				...spec.extraBody?.(opts),
 				...(grammar && grammarBody ? grammarBody(grammar) : {}),
 			},

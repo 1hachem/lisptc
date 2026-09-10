@@ -4,6 +4,7 @@ export interface ProviderSpec {
 	apiKeyEnv: string;
 	baseUrl: string;
 	defaultModel: string;
+	body?: Record<string, unknown>;
 }
 
 export type Env = Record<string, string | undefined>;
@@ -60,8 +61,7 @@ export function buildProviderSpecs(
 			apiKeyEnv: "OPENROUTER_API_KEY",
 			baseUrl:
 				set(env, "OPENROUTER_BASE_URL") ?? "https://openrouter.ai/api/v1",
-			defaultModel:
-				set(env, "OPENROUTER_MODEL") ?? "google/gemma-4-31b-it:free",
+			defaultModel: set(env, "OPENROUTER_MODEL") ?? "google/gemma-4-31b-it",
 		},
 	};
 }

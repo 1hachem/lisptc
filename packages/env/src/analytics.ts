@@ -7,6 +7,7 @@ export const analyticsEnv = createEnv({
 		POSTHOG_HOST: z.string().optional(),
 		POSTHOG_ASSET_HOST: z.string().optional(),
 		POSTHOG_ENVIRONMENT: z.string().optional(),
+		POSTHOG_PRIVACY_MODE: z.stringbool().default(false),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
