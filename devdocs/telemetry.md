@@ -329,7 +329,7 @@ where the values are stored, not just where they are read.
 | `POSTHOG_HOST` | `https://us.i.posthog.com` | where traces are sent, and the browser proxy's upstream; set for EU cloud or self-hosted |
 | `POSTHOG_ASSET_HOST` | `https://us-assets.i.posthog.com` | the proxy's upstream for `/static/*` |
 | `POSTHOG_ENVIRONMENT` | `local` | an `environment` property on every event, so one project separates local runs from deployed ones |
-| `POSTHOG_PRIVACY_MODE` | unset | `true` drops all prompt/completion/REPL content |
+| `POSTHOG_PRIVACY_MODE` | `false` | `true` drops all prompt/completion/REPL content |
 
 ### `/web` — the browser, `packages/env/src/web.ts`
 

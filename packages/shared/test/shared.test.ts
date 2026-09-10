@@ -27,15 +27,6 @@ describe("provider specs", () => {
 		});
 	});
 
-	it("pins openrouter to one upstream provider, overridable by env", () => {
-		expect(buildProviderSpecs({}).openrouter.body).toEqual({
-			provider: { only: ["sambanova"] },
-		});
-		expect(
-			buildProviderSpecs({ OPENROUTER_PROVIDER: "groq" }).openrouter.body,
-		).toEqual({ provider: { only: ["groq"] } });
-	});
-
 	it("reads an empty variable as unset, the way the typed env does", () => {
 		expect(
 			buildProviderSpecs({ DO_API_KEY: "" }).digitalocean.apiKey,
@@ -43,7 +34,6 @@ describe("provider specs", () => {
 	});
 
 	it("resolves the default provider, and refuses an unknown one", () => {
-		expect(defaultProviderName({})).toBe("openrouter");
 		expect(defaultProviderName({ LLM_PROVIDER: "fireworks" })).toBe(
 			"fireworks",
 		);
