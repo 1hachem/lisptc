@@ -49,33 +49,24 @@ function serverKeys(server: string): ServerKeys {
 }
 
 class GoogleOfflineProvider extends GoogleProvider {
-	constructor(
-		config: ConstructorParameters<typeof GoogleProvider>[0],
-		private readonly stateDirectory: string,
-	) {
-		super(config);
-	}
-
 	protected override createProxy(): OAuthProxy {
 		return new OAuthProxy({
+			allowedRedirectUriPatterns: this.config.allowedRedirectUriPatterns,
 			allowPlainPkce: false,
 			baseUrl: this.config.baseUrl,
-			consentRequired: false,
+			consentRequired: this.config.consentRequired ?? true,
 			encryptionKey: this.config.encryptionKey,
 			extraAuthorizationParams: {
 				access_type: "offline",
 				prompt: "consent",
 			},
 			jwtSigningKey: this.config.jwtSigningKey,
-			scopes: this.config.scopes ?? GOOGLE_SCOPES,
-			tokenStorage: new DiskStore({
-				directory: join(this.stateDirectory, "tokens"),
-			}),
-			upstreamAuthorizationEndpoint:
-				"https://accounts.google.com/o/oauth2/v2/auth",
-			upstreamClientId: googleSheetsEnv.GOOGLE_CLIENT_ID,
-			upstreamClientSecret: googleSheetsEnv.GOOGLE_CLIENT_SECRET,
-			upstreamTokenEndpoint: GOOGLE_TOKEN_ENDPOINT,
+			scopes: this.config.scopes ?? this.getDefaultScopes(),
+			tokenStorage: this.config.tokenStorage,
+			upstreamAuthorizationEndpoint: this.getAuthorizationEndpoint(),
+			upstreamClientId: this.config.clientId,
+			upstreamClientSecret: this.config.clientSecret,
+			upstreamTokenEndpoint: this.getTokenEndpoint(),
 		});
 	}
 }
@@ -86,17 +77,16 @@ export function googleProvider(params: {
 }): GoogleProvider {
 	const directory = stateDir(params.server);
 	const keys = serverKeys(params.server);
-	return new GoogleOfflineProvider(
-		{
-			baseUrl: params.baseUrl,
-			clientId: googleSheetsEnv.GOOGLE_CLIENT_ID,
-			clientSecret: googleSheetsEnv.GOOGLE_CLIENT_SECRET,
-			encryptionKey: keys.encryptionKey,
-			jwtSigningKey: keys.jwtSigningKey,
-			scopes: GOOGLE_SCOPES,
-		},
-		directory,
-	);
+	return new GoogleOfflineProvider({
+		baseUrl: params.baseUrl,
+		clientId: googleSheetsEnv.GOOGLE_CLIENT_ID,
+		clientSecret: googleSheetsEnv.GOOGLE_CLIENT_SECRET,
+		consentRequired: false,
+		encryptionKey: keys.encryptionKey,
+		jwtSigningKey: keys.jwtSigningKey,
+		scopes: GOOGLE_SCOPES,
+		tokenStorage: new DiskStore({ directory: join(directory, "tokens") }),
+	});
 }
 
 export function credentialsFrom(
