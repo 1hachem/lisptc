@@ -189,26 +189,18 @@ starting and answering every tool call with a 401:
 ```
 the sheets MCP server cannot start: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET are
 not set. They come from Infisical at /mcps/google, so start it with
-"task mcp:sheets" and check that path has them. A project .env is read as a
-fallback.
+"task mcp:sheets".
 ```
 
-That message is `missing()` in `packages/env/src/mcps/dotenv.ts`, wired in as
+That message is `missing()` in `packages/env/src/mcps/errors.ts`, wired in as
 t3-env's `onValidationError`.
 
-The same module holds `loadNearestEnvFile`, the `.env` fallback for a server
-started outside the Taskfile. Two details in it are load bearing:
-
-- It is **called as a statement** before `createEnv`, not imported for a side
-  effect. `createEnv` runs during module evaluation, and an `import` of the env
-  module would be hoisted above any loader call in the *server* file, so the
-  loading has to happen inside the env module itself, above the `createEnv` line.
-- Inherited variables are re-applied **after** the file, so the real environment
-  beats the file. `process.loadEnvFile` overwrites unconditionally, which would
-  otherwise let a stale `.env` shadow exactly the values Infisical just injected.
-
-No other `@repo/env` module reads a file, because no other one runs as a
-standalone process that might be started with a bare environment.
+Nothing reads a `.env` file: Infisical injects the keys into the process through
+the Taskfile's `_infisical-run`, and a server started outside that wrapper is
+meant to fail loudly rather than pick up a stale local file. The env module is
+also the only reader of these variables, `LISPTC_MCP_STATE_DIR` included, so
+every key a server needs is validated once at import instead of being read back
+off `process.env` deeper in.
 
 ## Why the tools return JSON strings
 

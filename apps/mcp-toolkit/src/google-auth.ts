@@ -23,7 +23,9 @@ export interface GoogleCredentials {
 }
 
 function stateDir(server: string): string {
-	return process.env.LISPTC_MCP_STATE_DIR ?? join(homedir(), ".lisptc", server);
+	return (
+		googleSheetsEnv.LISPTC_MCP_STATE_DIR ?? join(homedir(), ".lisptc", server)
+	);
 }
 
 interface ServerKeys {

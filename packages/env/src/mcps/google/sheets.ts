@@ -1,8 +1,6 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
-import { loadNearestEnvFile, missing } from "../dotenv.ts";
-
-loadNearestEnvFile();
+import { missing } from "../errors.ts";
 
 export const googleSheetsEnv = createEnv({
 	server: {
