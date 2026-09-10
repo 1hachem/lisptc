@@ -23,4 +23,33 @@ turn, each check should have 3 states: true, false, pending, if turns finish and
 
 - large number of turns is also a failure mode
 
+- eval suite:
+    check if somthing happend, before, after
 
+```
+(defcheck finds-the-server
+  (before (called-any "search-mcps" "list-toolkit") (called "load-mcp")))
+
+(defcheck waits-for-the-load
+  (before (awaited (called "load-mcp" "playwright")) (called-server "playwright")))
+
+(defcheck opens-the-site
+  (eventually (called "playwright/browser_navigate" :url (contains "hyko.ai"))))
+
+(defcheck stays-in-scope
+  (never (called-server-other-than "playwright")))
+
+(defcheck stops
+  (within 10 (halted)))
+```
+
+Combinators: eventually · never · always · before · after · within · once. 
+That's the scaling answer — new evals are s-expressions, not code.
+
+we can add also judge
+
+we should base it over the current test suite which vitest, just add the ability to make actual tool calls to online llms, these evals have to carry on a special `.eval.ts` extension
+
+
+since what the agent said is also prose that we can use in order to call llm judge on it, or even run 
+actual conditions on it (the agent never mentioned the word `lisp`) for example 
