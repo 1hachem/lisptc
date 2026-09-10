@@ -15,6 +15,7 @@
       "apps/*/src/**",
       "apps/*/server/**",
       "apps/*/test/**",
+      "apps/*/evals/**",
       "apps/*/extension/**",
       "apps/*/*.ts",
       "apps/*/*.json",
@@ -22,7 +23,8 @@
       "*.json",
       "!**/node_modules",
       "!.claude",
-      "!apps/app/src/routeTree.gen.ts"
+      "!apps/app/src/routeTree.gen.ts",
+      "!apps/trace-viewer/next-env.d.ts"
     ]
   },
   "formatter": {

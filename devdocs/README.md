@@ -43,6 +43,11 @@ When you fix something non-obvious, add it to the page for that area.
 - [The agent loop](./agent-loop.md) — the model-output-to-eval loop, per-call
   accounting, per-thread REPL persistence, provider grammar spellings, KV
   warming, and what the system prompt has to say.
+- [The eval suite](./evals.md) — how a case seeds both the transcript and the
+  interpreter, why the world is mocked at the `Dispatch`, the three-valued
+  latching check language (and why a pending `never` ends true), the zod report
+  contract that keeps the runner and the viewer honest, and how runs are graded
+  and scored across models.
 - [The lisptc LSP's static analysis](./lsp.md) — module layout, the shared
   tokenizer grammar vs. the interpreter's `Reader`, and how `load-mcp`'s args
   reach the LSP from the interpreter.

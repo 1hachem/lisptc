@@ -4,6 +4,7 @@ import {
 	Compactor,
 	MAX_WORDS,
 } from "@repo/interpreter/compaction";
+import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
 	EvalException,
@@ -15,6 +16,7 @@ import {
 	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
+import type { Dispatch } from "@repo/interpreter/promises";
 import { isTruncated } from "@repo/interpreter/prose";
 import { EnvSecretsStore, type SecretsStore } from "@repo/interpreter/secrets";
 import type { LlmObserver } from "@repo/llm/llm";
@@ -27,6 +29,14 @@ export interface Repl {
 
 export interface InMemoryRepl extends Repl {
 	eval(code: string): Promise<string>;
+}
+
+export interface ReplOptions {
+	wordLimit?: number;
+	secretsStore?: SecretsStore;
+	extensions?: InterpExtension[];
+	mcpDispatch?: Dispatch;
+	toolkitJson?: string;
 }
 
 interface EvalResult extends Bounded {
@@ -49,13 +59,17 @@ export class MemoryRepl implements InMemoryRepl {
 	readonly secrets: SecretsStore;
 	llmObserver?: LlmObserver;
 	private readonly wordLimit: number;
+	private readonly extensions: InterpExtension[];
+	private readonly mcpDispatch?: Dispatch;
+	private readonly toolkitJson?: string;
 
-	constructor(
-		options: { wordLimit?: number; secretsStore?: SecretsStore } = {},
-	) {
+	constructor(options: ReplOptions = {}) {
 		this.wordLimit = options.wordLimit ?? MAX_WORDS;
 		this.compactor = new Compactor(this.wordLimit);
 		this.secrets = options.secretsStore ?? new EnvSecretsStore();
+		this.extensions = options.extensions ?? [];
+		this.mcpDispatch = options.mcpDispatch;
+		this.toolkitJson = options.toolkitJson;
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -70,6 +84,9 @@ export class MemoryRepl implements InMemoryRepl {
 				compactor: this.compactor,
 				secrets: this.secrets,
 				observe: (call) => this.llmObserver?.(call),
+				extra: this.extensions,
+				...(this.mcpDispatch ? { mcpDispatch: this.mcpDispatch } : {}),
+				...(this.toolkitJson ? { toolkitJson: this.toolkitJson } : {}),
 			}),
 		});
 		runSync(interp, prelude);

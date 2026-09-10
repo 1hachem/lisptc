@@ -29,6 +29,16 @@ interface WireMessage {
 	};
 }
 
+function records(text: string): { event: string; data: unknown }[] {
+	return text
+		.split("\n\n")
+		.filter((record) => record.startsWith("event: "))
+		.map((record) => ({
+			event: record.slice(7, record.indexOf("\n")),
+			data: JSON.parse(record.slice(record.indexOf("data: ") + 6)),
+		}));
+}
+
 async function finalMessages(response: Response): Promise<WireMessage[]> {
 	const text = await response.text();
 	const values = text
@@ -89,5 +99,28 @@ describe("chat stream", () => {
 
 		const tool = messages.find((m) => m.type === "tool");
 		expect(tool?.additional_kwargs?.meta).toBeUndefined();
+	});
+	test("the wire contract the app reads", async () => {
+		const text = await streamChatResponse({
+			messages: [{ type: "human", content: "what is 1 + 2?" }],
+		}).text();
+		const seen = records(text);
+
+		expect(new Set(seen.map((r) => r.event))).toEqual(
+			new Set(["values", "messages"]),
+		);
+
+		const delta = seen.find((r) => r.event === "messages")?.data as unknown[];
+		expect(delta).toHaveLength(2);
+		expect(delta[1]).toEqual({});
+		expect(delta[0]).toMatchObject({ type: "ai", content: "(+ 1 2)" });
+
+		const snapshot = seen.at(-1)?.data as { messages: WireMessage[] };
+		expect(snapshot.messages.map((m) => m.type)).toEqual([
+			"human",
+			"ai",
+			"tool",
+			"ai",
+		]);
 	});
 });

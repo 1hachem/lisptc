@@ -48,6 +48,17 @@ tasks:
   test:nvim:
     desc: run the nvim integration test
     cmd: bash editors/nvim/tests/run.sh
+
+  test:evals:
+    desc: run the agent eval suite against real models
+    vars:
+      MATRIX: '{{.EVAL_MATRIX | default "digitalocean:gemma-4-31B-it"}}'
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: dev
+          PATHS: "/ai"
+          CMD: 'EVAL_MATRIX="{{.MATRIX}}" pnpm test:evals'
   
   dev:
     deps: [dev-app, dev-api]
