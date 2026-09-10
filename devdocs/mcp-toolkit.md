@@ -266,8 +266,8 @@ bearing:
   `GoogleProvider` does not send these, and without them Google issues no refresh
   token: the server works for an hour and fails overnight. `prompt=consent` is
   needed as well as `access_type=offline`, because a user who has approved the app
-  before otherwise gets an access token and nothing else. This is the reason
-  `createProxy()` is overridden instead of the provider being used as shipped.
+  before otherwise gets an access token and nothing else. `AuthProviderConfig`
+  has no field for it, which is the reason `createProxy()` is overridden at all.
 - **`tokenStorage: DiskStore`** under `~/.lisptc/sheets/tokens`, so restarting the
   server does not force everyone to authorize again. The default is in-memory.
 - **A persisted `jwtSigningKey` and `encryptionKey`**, written once to
@@ -280,6 +280,12 @@ bearing:
   the interpreter sends S256 anyway. The proxy's own consent screen is off because
   Google is already showing one; two consecutive approval pages for a local dev
   server is friction with nothing behind it.
+
+Only the first and `allowPlainPkce` need the subclass. `tokenStorage`, the two
+keys, `consentRequired` and `scopes` are ordinary `AuthProviderConfig` fields and
+are passed to the constructor in `googleProvider()`, so the override sets only
+what the config cannot reach and otherwise mirrors `GoogleProvider.createProxy()`
+field for field, `allowedRedirectUriPatterns` included.
 
 `allowedRedirectUriPatterns` is deliberately left unset: `fastmcp`'s default is
 `["http://localhost:*", "http://127.0.0.1:*"]`, which is exactly the loopback
