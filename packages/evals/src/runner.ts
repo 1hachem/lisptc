@@ -8,12 +8,7 @@ import {
 	type TranscriptEntry,
 } from "@repo/ai";
 import { evalsEnv } from "@repo/env/evals";
-import { defaultProvider, providerSpecs } from "@repo/env/providers";
-import {
-	isProviderName,
-	type ProviderName,
-	providerSpecFor,
-} from "@repo/shared/providers";
+import type { ProviderName } from "@repo/shared/providers";
 import { test } from "vitest";
 import { Checks } from "./checks.ts";
 import { tracedRepl } from "./harness.ts";
@@ -30,7 +25,11 @@ import type {
 	TranscriptLine,
 } from "./report.ts";
 import { reportSchema } from "./report.ts";
+import { evalMatrix, reachable, type Target } from "./targets.ts";
 import { Trace } from "./trace.ts";
+
+export type { Target } from "./targets.ts";
+export { evalConcurrency, evalMatrix, reachable } from "./targets.ts";
 
 export type SeedEntry = { user: string } | { assistant: string };
 
@@ -43,11 +42,6 @@ export interface EvalSpec {
 	samples?: number;
 	passRate?: number;
 	system?: string;
-}
-
-export interface Target {
-	provider: ProviderName;
-	model: string;
 }
 
 export interface RunResult {
@@ -106,38 +100,6 @@ function activeJudge(): Judge | undefined {
 		else judge = wanted;
 	}
 	return judge;
-}
-
-export function evalMatrix(): Target[] {
-	const raw = evalsEnv.EVAL_MATRIX;
-	if (!raw) {
-		const provider = defaultProvider;
-		return [
-			{
-				provider,
-				model: providerSpecFor(provider, providerSpecs).defaultModel,
-			},
-		];
-	}
-	return raw
-		.split(",")
-		.map((entry) => entry.trim())
-		.filter(Boolean)
-		.map((entry) => {
-			const at = entry.indexOf(":");
-			const name = at === -1 ? entry : entry.slice(0, at);
-			if (!isProviderName(name))
-				throw new Error(`EVAL_MATRIX names an unknown provider: ${name}`);
-			const model = at === -1 ? "" : entry.slice(at + 1);
-			return {
-				provider: name,
-				model: model || providerSpecFor(name, providerSpecs).defaultModel,
-			};
-		});
-}
-
-export function reachable(provider: ProviderName): boolean {
-	return Boolean(providerSpecFor(provider, providerSpecs).apiKey);
 }
 
 export async function runCase(

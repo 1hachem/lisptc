@@ -6,6 +6,7 @@ export const evalsEnv = createEnv({
 		EVAL_REPORT_DIR: z.string().optional(),
 		EVAL_JUDGE: z.string().optional(),
 		EVAL_MATRIX: z.string().optional(),
+		EVAL_CONCURRENCY: z.coerce.number().int().positive().default(4),
 		GITHUB_SHA: z.string().default(""),
 	},
 	runtimeEnv: process.env,
