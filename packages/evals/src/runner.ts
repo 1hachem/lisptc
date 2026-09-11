@@ -52,6 +52,7 @@ export interface RunResult {
 	min: number;
 	max: number;
 	halted: boolean;
+	silent: boolean;
 	answer: string;
 	inputTokens: number;
 	outputTokens: number;
@@ -116,6 +117,7 @@ export async function runCase(
 
 	let steps = 0;
 	let halted = false;
+	let silent = false;
 	let answer = "";
 	let inputTokens = 0;
 	let outputTokens = 0;
@@ -151,6 +153,10 @@ export async function runCase(
 			checks.evaluate(steps);
 			continue;
 		}
+		if (event.type === "silent") {
+			silent = true;
+			continue;
+		}
 		if (event.type === "failed") throw new Error(event.message);
 	}
 
@@ -163,6 +169,7 @@ export async function runCase(
 		min: spec.min,
 		max: spec.max,
 		halted,
+		silent,
 		answer,
 		inputTokens,
 		outputTokens,
@@ -203,7 +210,9 @@ export function formatRun(name: string, run: ReportRow): string {
 	const band = `optimal ${run.min}, budget ${run.max}`;
 	const ending = run.halted
 		? `answered at step ${run.steps} (${band})`
-		: `NEVER ANSWERED — ran to the ${run.steps}-step cap`;
+		: run.silent
+			? `NO REPLY — the model returned nothing at step ${run.steps + 1}`
+			: `NEVER ANSWERED — ran to the ${run.steps}-step cap`;
 	const out: string[] = [
 		RULE,
 		`${name}  [${run.provider} · ${run.model}]`,
@@ -237,7 +246,10 @@ function failures(runs: RunResult[]): string {
 			const named = run.checks
 				.filter((check) => check.verdict === "false")
 				.map((check) => check.name);
-			if (!run.halted) named.unshift(`never answered in ${run.steps} steps`);
+			if (run.silent)
+				named.unshift(`the model returned nothing at step ${run.steps + 1}`);
+			else if (!run.halted)
+				named.unshift(`never answered in ${run.steps} steps`);
 			return named.map((what) => `run ${sample + 1}: ${what}`);
 		})
 		.join(", ");

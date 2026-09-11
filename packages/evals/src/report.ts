@@ -30,6 +30,7 @@ export const reportRowSchema = z.object({
 	min: z.number(),
 	max: z.number(),
 	halted: z.boolean(),
+	silent: z.boolean().optional(),
 	answer: z.string(),
 	inputTokens: z.number(),
 	outputTokens: z.number(),

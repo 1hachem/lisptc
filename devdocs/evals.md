@@ -329,6 +329,16 @@ samples does not grow a turn each run.
 and it is also the loop's `maxSteps`, so a run that never answers is a fail
 rather than an overrun. Degraded is recorded, not failed.
 
+**A model that says nothing is not an agent that never answered.** An empty
+completion ends `runAgentTurn`'s loop, and for a while it did so silently: a run
+that stopped at step 3 of a 15-step budget was reported exactly like one that
+burned every step without concluding, and a provider hiccup read as the agent
+failing the case. The loop now yields `silent` before it breaks, the row carries
+it, and the summary line says `NO REPLY — the model returned nothing at step 4`.
+It still grades as a fail, since the run proved nothing, but it no longer reads
+as evidence about the model under test. Worth knowing when cases run as parallel
+shards against one provider.
+
 One run per case by default. `samples: k` with a `passRate` floor buys repeats
 where a case is known to be borderline; a model is stochastic and one run is a
 coin flip, so a single red case is evidence, not proof.
