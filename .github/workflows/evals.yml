@@ -2,7 +2,7 @@ name: Evals
 
 on:
   schedule:
-    - cron: "0 3 */2 * *"
+    - cron: "0 3 * * 1"
   workflow_dispatch:
     inputs:
       matrix:
