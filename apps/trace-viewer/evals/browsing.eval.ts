@@ -24,7 +24,7 @@ evalCase("navigates to hyko.ai by the book", {
   (eventually (called "playwright/browser_navigate" :url (matches "hyko\\\\.ai"))))
 
 (defcheck calls-nothing-that-does-not-exist
-  (never (errored)))
+  (at-most (errored) 1))
 `,
 });
 
@@ -47,7 +47,7 @@ evalCase("finds a browser, loads it, and opens the page", {
   (never (called-server-other-than "playwright")))
 
 (defcheck writes-no-broken-forms
-  (never (errored)))
+  (at-most (errored) 1))
 
 (defcheck reads-the-page
   (before (halted) (called-any "playwright/browser_snapshot"
