@@ -1,5 +1,5 @@
 import type { AgentRepl } from "@repo/repl/repl";
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { tracedRepl } from "../src/harness.ts";
 import type { MockSpec } from "../src/mocks.ts";
 import type { Trace } from "../src/trace.ts";
@@ -97,10 +97,15 @@ describe("a mocked MCP server", () => {
 		);
 	});
 
-	test("an unmocked server fails loudly", async () => {
-		expect(await repl.eval('(await (load-mcp "linear"))')).toContain(
-			"no mock for MCP server",
+	test("an unmocked server fails in-world, and warns its author", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const output = await repl.eval('(await (load-mcp "linear"))');
+		expect(output).toContain('cannot start MCP server "linear"');
+		expect(output).not.toContain("mock");
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("no mock for MCP server"),
 		);
+		warn.mockRestore();
 	});
 
 	test("a secret never lands in the trace", async () => {
