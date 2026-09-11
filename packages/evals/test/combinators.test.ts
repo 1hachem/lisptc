@@ -45,8 +45,8 @@ class Fixture {
 		return this;
 	}
 
-	stopped(): this {
-		this.trace.add({ kind: "halt", step: this.step });
+	stopped(answer = ""): this {
+		this.trace.add({ kind: "halt", step: this.step, answer });
 		return this;
 	}
 
@@ -333,5 +333,25 @@ describe("the DSL refuses nonsense rather than answering it", () => {
 		expect(() => f.tick().settle()).toThrow(
 			"a check's body must be a combinator",
 		);
+	});
+});
+
+describe("answered matches the final reply", () => {
+	test("true when the answer carries what was asked for", () => {
+		const f = new Fixture().watch(
+			'(defcheck it (eventually (answered (matches "Build AI workflows"))))',
+		);
+		f.tick()
+			.stopped("The main heading is Build AI workflows visually.")
+			.settle();
+		expect(f.verdict("it")).toBe("true");
+	});
+
+	test("false when the agent halted without it", () => {
+		const f = new Fixture().watch(
+			'(defcheck it (eventually (answered (matches "Build AI workflows"))))',
+		);
+		f.tick().stopped("I opened the page.").settle();
+		expect(f.verdict("it")).toBe("false");
 	});
 });

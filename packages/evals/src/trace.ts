@@ -26,7 +26,7 @@ export type TraceEvent =
 	  }
 	| { kind: "connect"; step: number; server: string; ok: boolean }
 	| { kind: "note"; step: number; severity: Severity; text: string }
-	| { kind: "halt"; step: number };
+	| { kind: "halt"; step: number; answer: string };
 
 interface ConnectResult {
 	serverId: string;
@@ -79,8 +79,8 @@ export class Trace {
 		this.add({ kind: "reply", step: this.step, code });
 	}
 
-	halt(): void {
-		this.add({ kind: "halt", step: this.step });
+	halt(answer = ""): void {
+		this.add({ kind: "halt", step: this.step, answer: clip(answer) });
 	}
 
 	extension(): InterpExtension {

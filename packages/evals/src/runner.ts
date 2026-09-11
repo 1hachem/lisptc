@@ -200,7 +200,7 @@ export async function runCase(
 		if (event.type === "halt") {
 			halted = true;
 			answer = event.answer;
-			trace.halt();
+			trace.halt(event.answer);
 			checks.evaluate(steps);
 			continue;
 		}

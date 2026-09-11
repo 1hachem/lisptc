@@ -337,6 +337,24 @@ export class Checks {
 		);
 
 		interp.def(
+			"answered",
+			-1,
+			"(answered &rest matchers)",
+			"Trace positions where the agent's final answer matched every matcher.",
+			z.tuple([zList]),
+			([args]) => {
+				const wanted = fromArgs(args);
+				return toList(
+					this.positions(
+						(event) =>
+							event.kind === "halt" &&
+							wanted.every((want) => testValue(event.answer, want)),
+					),
+				);
+			},
+		);
+
+		interp.def(
 			"errored",
 			0,
 			"(errored)",
