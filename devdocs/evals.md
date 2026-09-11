@@ -7,7 +7,7 @@ and better or worse than the last one.
 
 `@repo/evals` is the engine and holds no cases. The cases live in
 `apps/trace-viewer/evals/*.eval.ts`, next to the app that displays their
-results, and `pnpm test:evals` (or `task test:evals` for the Infisical-wrapped
+results, and `pnpm test:evals` (or `task evals:run` for the Infisical-wrapped
 local run) runs them there under their own vitest config. They are **not** part
 of `pnpm test`: turbo only runs a task where the script is declared, and only
 the app declares `test:evals`.

@@ -49,14 +49,14 @@ tasks:
     desc: run the nvim integration test
     cmd: bash editors/nvim/tests/run.sh
 
-  test:evals:
+  evals:run:
     desc: run the agent eval suite against real models
     vars:
-      MATRIX: '{{.EVAL_MATRIX | default "openrouter:z-ai/glm-5.3"}}'
+      MATRIX: '{{.EVAL_MATRIX | default "digitalocean:gemma-4-31B-it"}}'
       # A judge should not be a model under test — it shares that model's blind
       # spots. `EVAL_JUDGE=provider:model` picks another; `EVAL_JUDGE=none` skips
       # the recaps entirely (an empty value falls back to this default).
-      JUDGE: '{{.EVAL_JUDGE | default "openrouter:google/gemma-4-31b-it"}}'
+      JUDGE: '{{.EVAL_JUDGE | default "openrouter:z-ai/glm-5.3"}}'
       # Cases are independent, so they run concurrently. Drop to 1 when the
       # provider starts answering 429; a matrix naming llamacpp forces 1 anyway.
       CONCURRENCY: '{{.EVAL_CONCURRENCY | default "4"}}'
@@ -67,6 +67,29 @@ tasks:
           PATHS: "/ai"
           CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" EVAL_CONCURRENCY="{{.CONCURRENCY}}" pnpm test:evals'
   
+  evals:open:
+    desc: build the eval trace viewer, serve it, and open a browser on it
+    vars:
+      PORT: '{{.PORT | default "3200"}}'
+      URL: 'http://localhost:{{.PORT}}'
+    cmds:
+      - pnpm run build --filter @lisptc/trace-viewer
+      - |
+        (
+          for _ in $(seq 60); do
+            if curl -sf -o /dev/null "{{.URL}}"; then
+              if command -v xdg-open >/dev/null 2>&1; then xdg-open "{{.URL}}"
+              elif command -v open >/dev/null 2>&1; then open "{{.URL}}"
+              else echo "the tracer is at {{.URL}}"
+              fi
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "the tracer never answered on {{.URL}}"
+        ) >/dev/null 2>&1 &
+        PORT={{.PORT}} pnpm --filter @lisptc/trace-viewer start
+
   dev:
     deps: [dev-app, dev-api]
 
@@ -102,28 +125,6 @@ tasks:
       - task: _infisical-run
         vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai /analytics /api", CMD: "pnpm run build --filter api && pnpm --filter api start" }
 
-  open-tracer:
-    desc: build the eval trace viewer, serve it, and open a browser on it
-    vars:
-      PORT: '{{.PORT | default "3200"}}'
-      URL: 'http://localhost:{{.PORT}}'
-    cmds:
-      - pnpm run build --filter @lisptc/trace-viewer
-      - |
-        (
-          for _ in $(seq 60); do
-            if curl -sf -o /dev/null "{{.URL}}"; then
-              if command -v xdg-open >/dev/null 2>&1; then xdg-open "{{.URL}}"
-              elif command -v open >/dev/null 2>&1; then open "{{.URL}}"
-              else echo "the tracer is at {{.URL}}"
-              fi
-              exit 0
-            fi
-            sleep 0.5
-          done
-          echo "the tracer never answered on {{.URL}}"
-        ) >/dev/null 2>&1 &
-        PORT={{.PORT}} pnpm --filter @lisptc/trace-viewer start
 
   # The interpreter starts this itself, through the `ocr` entry in mcp.toolkit.json
   mcp:sheets:
