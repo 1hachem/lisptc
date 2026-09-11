@@ -1,9 +1,10 @@
 import { evalCase } from "@repo/evals/runner";
+import { linear } from "./fixtures/linear.ts";
 import { playwright } from "./fixtures/playwright.ts";
 
 evalCase("navigates to hyko.ai by the book", {
 	min: 5,
-	max: 12,
+	max: 10,
 	mocks: { servers: { playwright } },
 	seed: [{ user: "navigate to hyko.ai" }],
 	checks: `
@@ -24,16 +25,13 @@ evalCase("navigates to hyko.ai by the book", {
 
 (defcheck calls-nothing-that-does-not-exist
   (never (errored)))
-
-(defcheck stops
-  (within 12 (halted)))
 `,
 });
 
 evalCase("finds a browser, loads it, and opens the page", {
 	min: 4,
-	max: 10,
-	mocks: { servers: { playwright } },
+	max: 12,
+	mocks: { servers: { playwright, linear } },
 	seed: [{ user: "open hyko.ai and tell me the main heading" }],
 	checks: `
 (defcheck finds-the-server
@@ -51,14 +49,18 @@ evalCase("finds a browser, loads it, and opens the page", {
 (defcheck writes-no-broken-forms
   (never (errored)))
 
-(defcheck stops
-  (within 10 (halted)))
+(defcheck reads-the-page
+  (before (halted) (called-any "playwright/browser_snapshot"
+                               "playwright/browser_find")))
+
+(defcheck answers-with-the-heading
+  (eventually (answered (matches "Build AI workflows"))))
 `,
 });
 
 evalCase("recovers when the server it wants will not connect", {
 	min: 3,
-	max: 10,
+	max: 15,
 	mocks: {
 		servers: { playwright: { tools: [], fails: "chromium is not installed" } },
 	},
@@ -71,9 +73,6 @@ evalCase("recovers when the server it wants will not connect", {
   (at-most (called "load-mcp" "playwright") 3))
 
 (defcheck says-it-could-not
-  (eventually (halted)))
-
-(defcheck stops
-  (within 10 (halted)))
+  (eventually (answered (matches "[Cc]hromium|not installed|could not|unable|cannot"))))
 `,
 });

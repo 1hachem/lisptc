@@ -77,11 +77,38 @@ Hand-written schemas drift from the server and quietly stop catching the agent
 passing wrong arguments. Regenerate it by
 wrapping `mcpDispatch` and keeping the `tools` off a real connect.
 
+`linear.tools.json` is the exception, and a debt rather than a pattern.
+`mcp.linear.app` answers `401` to an unauthenticated `initialize`, so capturing
+it needs someone to complete the OAuth flow first; it was written from Linear's
+documented tool set instead. Recapture it the first time anyone has a Linear
+token in hand. Until then the risk is the ordinary one for a hand-written
+schema: `linear/list_issues` may accept an argument the real server rejects, so
+`calls-nothing-that-does-not-exist` is weaker than it reads.
+
 **A mocked connect is slow on purpose.** `load-mcp` returns a promise, and a
 connect that has already settled by the next step makes `waits-for-the-load`
 pass vacuously — the agent gets credit for an ordering it never had to
 respect. Hence `connectDelayMs`, the same trick `LISPTC_FIXTURE_DELAY_MS`
 plays for the interpreter's own fixture server.
+
+**A mock never tells the agent it is a mock.** An unmocked server or tool
+fails with `cannot start MCP server "pw"` or `pw/go is unavailable`, not with
+the old `add it to the case's mocks`, which taught a recovering agent that it
+was inside a test harness and gave it no in-world reason to stop. The hint the
+eval author needs is still printed, on `console.warn`, where the runner's own
+output is.
+
+**A server the case forbids still has to be mocked.**
+`(never (called-server-other-than "playwright"))` can only be falsified by a
+tool call on another server, and a server with no mock cannot connect, so
+without `linear` in the case's `mocks` the check passes on every run without
+ever being tested. The mock is what puts the temptation in the world.
+
+**A mock that always answers nothing is a trap.** `browser_find` returning
+`{matches: []}` made the cheapest correct path a dead end and pushed every
+agent onto the full snapshot, so the case measured the fixture's stinginess
+rather than the agent's judgement. A mocked tool should answer the way the real
+one would for the page the fixture describes.
 
 **Failure is a case, not an accident.** A server's `fails`, and a per-tool
 `error` result, are how the suite evals whether the agent recovers. Nothing
