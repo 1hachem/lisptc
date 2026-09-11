@@ -110,6 +110,29 @@ describe("a slice taken as a step of its own", () => {
 	});
 });
 
+describe("a discovery call is read, not described", () => {
+	it("prints what the toolkit search found", async () => {
+		const r = new MemoryRepl();
+		const out = await r.eval('(search-mcps "browser")');
+		expect(out).toContain("playwright");
+		expect(out).toContain("Chromium");
+		expect(out).not.toContain("search-mcps-1:");
+	});
+
+	it("prints the toolkit listing the same way", async () => {
+		const r = new MemoryRepl();
+		const out = await r.eval("(list-toolkit)");
+		expect(out).toContain("playwright");
+		expect(out).not.toContain("list-toolkit-1:");
+	});
+
+	it("mints no name, since the answer was the point", async () => {
+		const r = new MemoryRepl();
+		await r.eval('(search-mcps "browser")');
+		expect(await r.eval("(dump)")).not.toContain("search-mcps-1");
+	});
+});
+
 describe("extracting, then echoing", () => {
 	it("names what grep extracted so the next form can use it", async () => {
 		const r = await repl();

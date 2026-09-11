@@ -181,7 +181,7 @@ export class Compactor {
 	result(interp: Interp, form: unknown, value: unknown): string {
 		if (!this.stepping) return "";
 		if (value === Unspecified) return "";
-		if (isSliceForm(form)) {
+		if (isReadForm(form)) {
 			this.print(interp, value);
 			return "";
 		}
@@ -404,9 +404,19 @@ export class Compactor {
 	}
 }
 
-function isSliceForm(form: unknown): boolean {
+const READ_FORMS = new Set([
+	"head",
+	"tail",
+	"list-mcps",
+	"list-toolkit",
+	"list-tools",
+	"search-mcps",
+	"search-tools",
+]);
+
+function isReadForm(form: unknown): boolean {
 	if (!(form instanceof Cell) || !(form.car instanceof Sym)) return false;
-	return form.car.name === "head" || form.car.name === "tail";
+	return READ_FORMS.has(form.car.name);
 }
 
 function lastAssignedSymbol(form: unknown): string | undefined {

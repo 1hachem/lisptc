@@ -154,9 +154,18 @@ In order, `Compactor.result` and `nameFor`:
 1. `Unspecified` — what `echo` returns — reports nothing at all. The step has
    already said what it had to say; a line on top would only announce that
    printing happened.
-2. A top-level `head`/`tail` form reports nothing either — its slice is
-   printed instead (see `isSliceForm`), and no name is minted for it: the
-   value it was sliced out of already has one.
+2. A top-level **read form** reports nothing either — its value is printed
+   instead (see `isReadForm`), and no name is minted for it. `head`/`tail` are
+   there because the value they sliced already has a name; the five discovery
+   calls (`search-mcps`, `search-tools`, `list-tools`, `list-toolkit`,
+   `list-mcps`) are there because a shape line cannot answer the question they
+   were asked. `search-mcps-1: alist, keys "playwright" "ocr"` withholds the
+   descriptions the agent called it for, so every run paid a second step to
+   `(echo search-mcps-1)` — two to four steps of a ten-step budget across the
+   eval suite, and the reference's own four-step example was not followable as
+   written. The list of names is a coupling to `mcpExtension`'s built-ins, but
+   only by name: nothing is imported, and an interp without MCP simply never
+   sees those forms.
 3. A **promise** is reported by name plus what the name is for — `load-mcp-1: a
    promise, still running … (await load-mcp-1) …` — and its printed form
    (`#<promise>`) is never shown, in this line or in `describe`. That form is
