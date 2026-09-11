@@ -1,4 +1,6 @@
+import { MODEL } from "@repo/interpreter/channels";
 import { describe, expect, it } from "vitest";
+import { runSync } from "../src/lisp.ts";
 import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
 describe("documentation coverage", () => {
@@ -66,5 +68,29 @@ describe("(doc name)", () => {
 		expect(names).toContain("car");
 		expect(names).toContain("cond");
 		expect(names).toContain("defun");
+	});
+});
+
+describe("doc answers whoever asked, model included", () => {
+	it("emits the signature and description on the model channel", () => {
+		const interp = freshInterp();
+		let seen = "";
+		interp.channels.on(MODEL, (d) => {
+			seen += d.text;
+		});
+		runSync(interp, "(doc 'car)");
+		expect(seen).toBe(
+			"(car list)\n  Return the first element of `list`, or nil for nil.\n",
+		);
+	});
+
+	it("tells the model when a name is undocumented", () => {
+		const interp = freshInterp();
+		let seen = "";
+		interp.channels.on(MODEL, (d) => {
+			seen += d.text;
+		});
+		runSync(interp, "(doc 'no-such-binding)");
+		expect(seen).toBe("no-such-binding: undocumented\n");
 	});
 });

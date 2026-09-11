@@ -751,7 +751,7 @@ export class Interp {
 			([rest]) => {
 				const docs = this.docs();
 				if (rest === null) {
-					for (const key of [...docs.keys()].sort()) this.say(`${key}\n`);
+					for (const key of [...docs.keys()].sort()) this.tell(`${key}\n`);
 					return true;
 				}
 				const name = rest.car;
@@ -759,14 +759,14 @@ export class Interp {
 					throw new EvalException("symbol expected", name);
 				const entry = docs.get(name.name);
 				if (entry === undefined) {
-					this.say(`${name.name}: undocumented\n`);
+					this.tell(`${name.name}: undocumented\n`);
 					return null;
 				}
 				const body = entry.doc
 					.split("\n")
 					.map((line) => (line ? `  ${line}` : line))
 					.join("\n");
-				this.say(`${entry.signature}\n${body}\n`);
+				this.tell(`${entry.signature}\n${body}\n`);
 				return name;
 			},
 		);
@@ -1090,6 +1090,11 @@ export class Interp {
 
 	private say(text: string): void {
 		this.channels.emit({ channel: USER, text });
+	}
+
+	private tell(text: string): void {
+		this.channels.emit({ channel: USER, text });
+		this.channels.emit({ channel: MODEL, text });
 	}
 
 	dispose(): void {
