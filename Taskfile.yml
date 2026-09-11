@@ -53,12 +53,7 @@ tasks:
     desc: run the agent eval suite against real models
     vars:
       MATRIX: '{{.EVAL_MATRIX | default "digitalocean:gemma-4-31B-it"}}'
-      # A judge should not be a model under test — it shares that model's blind
-      # spots. `EVAL_JUDGE=provider:model` picks another; `EVAL_JUDGE=none` skips
-      # the recaps entirely (an empty value falls back to this default).
-      JUDGE: '{{.EVAL_JUDGE | default "openrouter:z-ai/glm-5.3"}}'
-      # Cases are independent, so they run concurrently. Drop to 1 when the
-      # provider starts answering 429; a matrix naming llamacpp forces 1 anyway.
+      JUDGE: '{{.EVAL_JUDGE | default "digitalocean:gemma-4-31B-it"}}'
       CONCURRENCY: '{{.EVAL_CONCURRENCY | default "4"}}'
     cmds:
       - task: _infisical-run
