@@ -98,6 +98,15 @@ was inside a test harness and gave it no in-world reason to stop. The hint the
 eval author needs is still printed, on `console.warn`, where the runner's own
 output is.
 
+**A tool the fixture lists has to answer.** The playwright descriptors are a
+real connect's 24 tools and the case mocks five of them, so `browser_evaluate`
+was searchable, documented, and failed with `is unavailable` — an agent that
+picked a reasonable tool spent three steps working out why a tool that visibly
+exists does not work. `MockServer.otherwise` answers anything the `calls` table
+does not, so discovery stays honest and a call never fails for a reason the
+world cannot explain. The author still gets the `console.warn` naming the
+unmocked tool.
+
 **A server the case forbids still has to be mocked.**
 `(never (called-server-other-than "playwright"))` can only be falsified by a
 tool call on another server, and a server with no mock cannot connect, so

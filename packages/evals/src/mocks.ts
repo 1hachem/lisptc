@@ -23,6 +23,7 @@ export interface MockServer {
 	connectDelayMs?: number;
 	fails?: string;
 	calls?: Record<string, MockResult>;
+	otherwise?: MockResult;
 }
 
 export interface MockSpec {
@@ -89,13 +90,14 @@ export function mockDispatch(spec: MockSpec): Dispatch {
 		};
 		const entry = live.get(serverId);
 		if (!entry) throw new Error(`no such server: ${serverId}`);
-		const result = entry.server.calls?.[tool];
-		if (result === undefined) {
+		const specific = entry.server.calls?.[tool];
+		const result = specific ?? entry.server.otherwise;
+		if (specific === undefined)
 			console.warn(
 				`[evals] no mock result for ${entry.name}/${tool} — add it to the case's mocks`,
 			);
+		if (result === undefined)
 			throw new Error(`${entry.name}/${tool} is unavailable`);
-		}
 		const value = typeof result === "function" ? result(args ?? {}) : result;
 		if (value !== null && typeof value === "object" && "error" in value)
 			throw new Error(String((value as { error: unknown }).error));

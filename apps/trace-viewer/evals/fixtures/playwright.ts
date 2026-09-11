@@ -28,6 +28,7 @@ function find(args: Record<string, unknown>): { matches: string[] } {
 export const playwright: MockServer = {
 	tools,
 	connectDelayMs: 40,
+	otherwise: { ok: true },
 	calls: {
 		browser_navigate: (args) => ({ url: args.url, title: PAGE.title }),
 		browser_snapshot: () => ({ url: PAGE.url, snapshot: PAGE.snapshot }),

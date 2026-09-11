@@ -99,6 +99,7 @@ function listIssues(args: Record<string, unknown>): Issue[] {
 export const linear: MockServer = {
 	tools,
 	connectDelayMs: 40,
+	otherwise: { ok: true },
 	calls: {
 		list_issues: listIssues,
 		get_issue: (args) =>

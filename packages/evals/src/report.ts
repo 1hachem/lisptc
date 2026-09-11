@@ -54,6 +54,7 @@ export const mockedServerSchema = z.object({
 	answers: z.array(z.string()),
 	connectDelayMs: z.number().optional(),
 	fails: z.string().optional(),
+	answersAnythingElse: z.boolean().optional(),
 });
 
 export const caseInfoSchema = z.object({

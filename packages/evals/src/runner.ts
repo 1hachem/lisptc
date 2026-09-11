@@ -264,6 +264,7 @@ function mockedServers(spec: EvalSpec): MockedServer[] {
 			? {}
 			: { connectDelayMs: server.connectDelayMs }),
 		...(server.fails === undefined ? {} : { fails: server.fails }),
+		...(server.otherwise === undefined ? {} : { answersAnythingElse: true }),
 	}));
 }
 
