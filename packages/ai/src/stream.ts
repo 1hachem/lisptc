@@ -132,6 +132,11 @@ export function streamChatResponse(
 						write(sse("values", { messages: wire }));
 					} else if (event.type === "capped") {
 						steps = event.steps;
+					} else if (event.type === "silent") {
+						steps = event.steps;
+						console.error(
+							`[ai] the model returned an empty reply after ${event.steps} step(s)`,
+						);
 					} else {
 						console.error("[ai] chat stream failed:", event.error);
 						write(

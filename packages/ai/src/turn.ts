@@ -53,6 +53,7 @@ export type TurnEvent =
 	  }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
+	| { type: "silent"; steps: number }
 	| { type: "failed"; message: string; error: unknown };
 
 function lastUserPrompt(transcript: TranscriptEntry[]): string {
@@ -138,7 +139,10 @@ export async function* runAgentTurn(
 			}
 
 			const code = stripFences(full);
-			if (code === "") break;
+			if (code === "") {
+				yield { type: "silent", steps };
+				break;
+			}
 
 			yield {
 				type: "assistant",
