@@ -126,6 +126,22 @@ and `extensions` on `MemoryRepl`, forwarded from `freshInterp` so a recorder
 cannot reach the `Dispatch`, which is captured in a closure at `registerMcp`
 time.
 
+### One call, two seams, one hit
+
+A call the agent wrote *and* the runtime ran shows up twice: once as the
+top-level `form` that contains it, once as the `connect` or `tool` event it
+dispatched. Ordering combinators do not care, but counting ones do, and
+`(at-most (called "load-mcp" "playwright") 3)` used to latch false at the
+**second** attempt: the check read as "stop retrying" and fired on an agent
+that had retried once. A run was graded against the agent for the harness's
+double vision.
+
+So `called` keeps every dispatch hit, and drops a written hit whose step
+already has one for that name. A call that never reached `Dispatch` (an
+undefined `server/tool`, a form that raised before it ran) still counts as
+written, which is what keeps `looks-up-tools-before-navigating` honest about a
+tool the agent reached for and missed.
+
 ## Checks: three-valued, and latched
 
 Every unresolved check is re-evaluated after each interaction against the trace
@@ -210,6 +226,40 @@ so a malformed check throws while the file is merely being collected — and
 `@repo/evals`'s ordinary `test` script ends with `vitest list` over the eval
 config, which collects every `.eval.ts` without running a single model. A
 malformed eval therefore fails on a PR rather than at 3am.
+
+### Halting is the band's job, not a check's
+
+`(within max (halted))` was in every case and asserted nothing the grade did
+not already. `max` *is* the loop's `maxSteps`, so `steps` can never exceed it,
+and the clock branch that makes `within` latch false never fires. The check
+ends pending-false exactly when the run ends unhalted, which is already a fail.
+The same goes for `(eventually (halted))`. Both are gone.
+
+`within` earns its place on a deadline the band cannot express: an intermediate
+call by step n, or `(within min (halted))` to make a late answer a hard fail
+instead of a degrade.
+
+The signal underneath is the loop's own. A reply that **runs nothing** is the
+answer (see [repl.md](./repl.md)), so a model that answers with
+`(echo "the heading is …")` instead of bare prose has run something, the loop
+keeps going, and it burns every step to the cap while the transcript's last
+lines read like a perfectly good answer. That is worth failing on, because
+those wasted steps are the user's tokens. The run has to say so plainly, hence
+the summary line reads `NEVER ANSWERED — ran to the 12-step cap` rather than
+only `FAIL`, and the failure message names it before any check.
+
+### `answered` is the only check on what the user gets
+
+Every other matcher reads the trace of what the agent *did*. `answered` reads
+the final reply itself: `(eventually (answered (matches "Build AI workflows")))`
+is how a case whose prompt asks a question checks that the question was
+answered. Without it a case can only assert that the agent called the tools
+that would have told it the answer, which is how
+`finds-a-browser-loads-it-and-opens-the-page` spent half its budget chasing a
+heading no check ever looked at.
+
+It takes the same argument matchers as `called` and ANDs them, and it matches
+against the halting reply verbatim, prose and all.
 
 ### `awaited` is syntactic
 
@@ -313,20 +363,6 @@ is DOM plus bundler resolution, while `evals/` pulls the interpreter and needs
 NodeNext with node types. One config cannot serve both — typechecking the eval
 cases under the UI's config reports phantom errors inside `mcp-client.ts`. So
 `typecheck` runs `tsc` twice, and `tsconfig.json` excludes `evals`.
-
-### A run that never stops looks like a broken `halted`
-
-`(within n (halted))` fires off the loop's own finished signal: a reply that
-**runs nothing** is the answer (see [repl.md](./repl.md)). A model that answers
-with `(echo "the heading is …")` instead of bare prose has run something, so
-the loop keeps going, burns every step to the cap, and `stops` reports false —
-while the transcript's last lines read like a perfectly good answer and the
-check looks broken.
-
-It is not broken; the agent genuinely never stopped. That is worth failing on,
-because those wasted steps are the user's tokens. But the run has to say so
-plainly, hence the summary line reads `NEVER ANSWERED — ran to the 12-step cap`
-rather than only `FAIL`, and the failure message names it before any check.
 
 A check line carries `(decided at step n)` only when it actually latched
 during the run; one that collapsed from pending at the end carries nothing.
