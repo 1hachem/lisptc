@@ -162,11 +162,11 @@ Tests live in `test/`, grouped by language feature (`reader`, `numbers`, `lists`
 - `evAsync(code, interp?)` — the same through `runAsync`; anything touching MCP needs it, since `runSync` raises `cannot suspend` the moment a tool call needs the loop.
 - `evWithOutput(code)` — eval while capturing printed output; returns `{ value, output }`.
 
-`packages/llm/test` inject a fake `Generate` (`llmExtension({ generate })`) to assert on the request the built-ins build, and drive the real LangChain client against a local OpenAI-compatible stub server (`llm-client.test.ts`) so the wire body, `response_format` and the timeout are covered without a key.
+`packages/llm/test` inject a fake `Generate` (`llmExtension({ generate })`) to assert on the request the built-ins build, and drive the real LangChain client against a stubbed global `fetch` (`llm-client.test.ts`) so the wire body, `response_format` and the timeout are covered without a key, a socket or a server.
 
 MCP tests exercise the real MCP SDK clients (no mock), driving stdio fixtures spawned as `node` subprocesses: `test/fixture-mcp-server.ts` (a one-tool `echo` server, with an optional `LISPTC_FIXTURE_DELAY_MS` startup delay so promise tests can observe `:pending`) and `test/fixture-empty-mcp-server.ts` (handshakes but exposes zero tools, to test that a tool-less connect is a load failure).
 
-Other workspaces have their own suites: `packages/evals/test` (combinator semantics off a hand-built trace, the recorder and mock through a real `AgentRepl`, and a whole case against a stub model; the `*.eval.ts` cases live in `apps/trace-viewer/evals` and run only under `pnpm test:evals`), `packages/llm/test` (the built-ins against a fake `Generate`, the client against a stub server), `packages/shared/test` (the provider table and the message helpers), `packages/repl/test` (front-ends, compaction at the REPL boundary, session server, secret handling), `packages/ai/test` (prompt/policy surface, telemetry redaction), `apps/lsp/test` (diagnostics, doc cache).
+Other workspaces have their own suites: `packages/evals/test` (combinator semantics off a hand-built trace, the recorder and mock through a real `AgentRepl`, and a whole case against a stub model; the `*.eval.ts` cases live in `apps/trace-viewer/evals` and run only under `pnpm test:evals`), `packages/llm/test` (the built-ins against a fake `Generate`, the client against a stubbed `fetch`), `packages/shared/test` (the provider table and the message helpers), `packages/repl/test` (front-ends, compaction at the REPL boundary, session server, secret handling), `packages/ai/test` (prompt/policy surface, telemetry redaction), `apps/lsp/test` (diagnostics, doc cache).
 
 
 ## Writing Style

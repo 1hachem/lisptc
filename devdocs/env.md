@@ -58,8 +58,10 @@ graph, `@repo/env` included, has been evaluated. `packages/interpreter` and
   than a variable nobody set.
 
 The other way out is a dynamic `import()` after the variables are set —
-`packages/evals/test/runner.test.ts` and `packages/llm/test/llm-client.test.ts`
-both point a provider at a local stub server that way.
+`packages/evals/test/runner.test.ts` points a provider at a local stub server
+that way, and `packages/llm/test/llm-client.test.ts` pins one at an unroutable
+host (`http://llamacpp.test/v1`) so the URL it asserts on is fixed and a stub
+that failed to install cannot reach a real llama-server.
 
 ## The exemptions
 
