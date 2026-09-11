@@ -1,6 +1,15 @@
 import Link from "next/link";
+import {
+	Masthead,
+	Pill,
+	ScorePill,
+	Shell,
+	Tag,
+	Tags,
+	Title,
+} from "@/components/ui.tsx";
 import { when } from "@/lib/format.ts";
-import { GRADES, listReports, reportDir } from "@/lib/reports.ts";
+import { listReports, reportDir } from "@/lib/reports.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -8,62 +17,56 @@ export default function Home() {
 	const runs = listReports();
 
 	return (
-		<main className="shell">
-			<header className="masthead">
-				<h1>eval traces</h1>
-				<span className="dim small mono">{reportDir()}</span>
-			</header>
+		<Shell>
+			<Masthead>
+				<Title>eval traces</Title>
+				<span className="text-[11.5px] text-dim">{reportDir()}</span>
+			</Masthead>
 
 			{runs.length === 0 ? (
-				<p className="empty">
-					No reports yet. Run <span className="mono">task test:evals</span> and
-					they will appear here.
+				<p className="border border-bg2 border-dashed p-7 text-center text-dim">
+					No reports yet. Run <span className="text-fg">task evals:run</span>{" "}
+					and they will appear here.
 				</p>
 			) : (
-				<div className="runs">
+				<div className="grid gap-2.5">
 					{runs.map((run) =>
 						run.ok ? (
 							<Link
-								className="run"
+								className="block border border-bg2 bg-bg1 px-4 py-3.5 transition-colors hover:border-dim/50"
 								href={`/r/${encodeURIComponent(run.file)}`}
 								key={run.file}
 							>
-								<div className="run-top">
-									<span className="run-when">{when(run.startedAt)}</span>
-									<span className="tally">
-										{GRADES.map((grade) => (
-											<span
-												className={`pill ${grade} ${run.tally[grade] === 0 ? "zero" : ""}`}
-												key={grade}
-											>
-												{run.tally[grade]} {grade}
-											</span>
-										))}
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<span className="text-[14px] text-fg">
+										{when(run.startedAt)}
 									</span>
+									<ScorePill score={run.score} />
 								</div>
-								<div className="targets">
+								<Tags>
 									{run.targets.map((target) => (
-										<span className="tag mono" key={target}>
-											{target}
-										</span>
+										<Tag key={target}>{target}</Tag>
 									))}
-									<span className="tag">
+									<Tag>
 										{run.cases} run{run.cases === 1 ? "" : "s"}
-									</span>
-								</div>
+									</Tag>
+								</Tags>
 							</Link>
 						) : (
-							<div className="run" key={run.file}>
-								<div className="run-top">
-									<span className="run-when mono small">{run.file}</span>
-									<span className="pill fail">unreadable</span>
+							<div
+								className="border border-bg2 bg-bg1 px-4 py-3.5"
+								key={run.file}
+							>
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<span className="text-[12px]">{run.file}</span>
+									<Pill tone="red">unreadable</Pill>
 								</div>
-								<p className="dim small mono">{run.why}</p>
+								<p className="mt-2 mb-0 text-[12px] text-dim">{run.why}</p>
 							</div>
 						),
 					)}
 				</div>
 			)}
-		</main>
+		</Shell>
 	);
 }

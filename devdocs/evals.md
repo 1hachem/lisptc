@@ -428,9 +428,21 @@ clears them.
 `apps/trace-viewer` is a Next.js app-router app, server components only — it
 reads the filesystem and renders; there is no client state and no API layer,
 because the data is a directory of JSON on the same machine. `/` lists runs
-newest-first with the date, the targets and a pass/degraded/fail tally; `/r/…`
-opens one and shows every row's grade, how it ended, its checks with the step
-each decided at, and the whole conversation.
+newest-first with the date, the targets and a checks score; `/r/…` opens one and
+shows every row's score, how it ended, its checks with the step each decided at,
+and the whole conversation.
+
+**The score is checks passed over checks run**, counted off the row's own
+verdicts rather than stored. It reads as a number where the grade read as a
+verdict: `4/5` says how close a model came, `fail` said only that it missed, and
+across a list of runs the numbers are comparable in a way three words were not.
+The colour comes from the score itself, not from the grade: **green above
+average, yellow at it, red below**, where average is half the checks. `6/10` is
+green and `5/10` is yellow, so the tint answers "did more pass than fail" and the
+number answers by how much. The pass/degraded/fail grade is still what gates the
+vitest run and still prints in the terminal; the viewer no longer shows it, so a
+run that never answered can read green when its checks held up, and the line
+under the score is what says it never answered.
 
 The app carries **two tsconfigs**, because it has two TypeScript worlds: the UI
 is DOM plus bundler resolution, while `evals/` pulls the interpreter and needs

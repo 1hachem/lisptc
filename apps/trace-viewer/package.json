@@ -17,12 +17,14 @@
   "dependencies": {
     "@repo/env": "workspace:*",
     "@repo/evals": "workspace:*",
+    "@repo/ui": "workspace:*",
     "next": "^15.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.16",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

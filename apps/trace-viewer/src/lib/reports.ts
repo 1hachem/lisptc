@@ -1,22 +1,36 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { evalsEnv } from "@repo/env/evals";
-import type { Grade, Report, ReportRow } from "@repo/evals/report";
+import type { Report, ReportRow, TranscriptLine } from "@repo/evals/report";
 import { parseReport } from "@repo/evals/report";
 
 export type { CaseInfo, ReportRow } from "@repo/evals/report";
-export { GRADES } from "@repo/evals/report";
+export type Role = TranscriptLine["role"];
 
 const REPORT_DIR = evalsEnv.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");
 
-function emptyTally(): Record<Grade, number> {
-	return { pass: 0, degraded: 0, fail: 0 };
+export type Tone = "green" | "yellow" | "red";
+
+export interface Score {
+	passed: number;
+	total: number;
+	tone: Tone;
 }
 
-export function tallyOf(rows: ReportRow[]): Record<Grade, number> {
-	const tally = emptyTally();
-	for (const row of rows) tally[row.grade] += 1;
-	return tally;
+function toneOf(passed: number, total: number): Tone {
+	const average = total / 2;
+	if (passed > average) return "green";
+	return passed === average ? "yellow" : "red";
+}
+
+export function scoreOf(rows: ReportRow[]): Score {
+	let passed = 0;
+	let total = 0;
+	for (const row of rows) {
+		passed += row.checks.filter((check) => check.verdict === "true").length;
+		total += row.checks.length;
+	}
+	return { passed, total, tone: toneOf(passed, total) };
 }
 
 function files(): string[] {
@@ -59,7 +73,7 @@ export type Listed =
 			startedAt: string;
 			targets: string[];
 			cases: number;
-			tally: Record<Grade, number>;
+			score: Score;
 	  }
 	| { ok: false; file: string; ranAt: number; why: string };
 
@@ -77,7 +91,7 @@ export function listReports(): Listed[] {
 				startedAt: report.startedAt,
 				targets: report.targets.map((t) => `${t.provider} · ${t.model}`),
 				cases: report.rows.length,
-				tally: tallyOf(report.rows),
+				score: scoreOf(report.rows),
 			};
 		})
 		.sort((a, b) => b.ranAt - a.ranAt);

@@ -255,3 +255,27 @@ re-poses on the state it is already in, which at 32px is a sub-pixel jump.
 
 Anyone who asked for reduced motion keeps the static icon, which is complete: this
 animation carries nothing the shape does not.
+
+## One design system, two front-ends
+
+`apps/app` and `apps/trace-viewer` are different stacks (TanStack Start on Vite,
+Next's app router) and they share every visual decision through `@repo/ui`:
+`styles/theme.css` holds the gruvbox palette and the shadcn token layer over it,
+`styles/app.css` holds the Tailwind entry and the base rules (mono body, 13px,
+no rounded corners), `themes.ts` names the default theme, and `fonts.ts` holds
+the JetBrains Mono `<link>` set both documents render. Changing a colour, the
+type scale or the webfont is one edit in that package.
+
+Tailwind v4 finds classes by scanning files, and a package that ships `.tsx`
+source cannot guess who imports it. So `app.css` carries an explicit `@source`
+line **per app**, pointing back out of `node_modules` at each consumer's `src`.
+A new front-end that imports this stylesheet renders unstyled until its line is
+added there, with nothing to say why.
+
+Each app reaches Tailwind its own way: the app through `@tailwindcss/vite`, the
+trace-viewer through `@tailwindcss/postcss` in `postcss.config.mjs`, both
+resolving `@import "@repo/ui/styles/app.css"` through the package's exports map.
+
+The trace-viewer renders server components only, so it imports `@repo/ui` by
+subpath (`@repo/ui/fonts.ts`, `@repo/ui/lib/utils`) rather than through the
+barrel, which re-exports the `"use client"` sidebar and its radix dependencies.

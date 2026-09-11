@@ -1,8 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+	Masthead,
+	Panel,
+	ScorePill,
+	Shell,
+	Summary,
+	Title,
+	Turn,
+} from "@/components/ui.tsx";
 import { duration, when } from "@/lib/format.ts";
 import type { CaseInfo, ReportRow } from "@/lib/reports.ts";
-import { GRADES, readReport, tallyOf } from "@/lib/reports.ts";
+import { readReport, scoreOf } from "@/lib/reports.ts";
 import { Setup } from "./setup.tsx";
 
 export const dynamic = "force-dynamic";
@@ -27,81 +36,79 @@ function grouped(
 
 function Run({ row }: { row: ReportRow }) {
 	const failed = row.checks.filter((check) => check.verdict === "false");
+	const score = scoreOf([row]);
 
 	return (
-		<section className={`row ${row.grade}`}>
-			<div className="row-head">
-				<span className="row-title mono">
+		<Panel className={`mb-3.5 ${score.tone === "red" ? "border-red/35" : ""}`}>
+			<div className="flex flex-wrap items-center justify-between gap-3 border-bg2 border-b bg-bg2/40 px-4 py-3">
+				<span className="text-fg">
 					{row.provider} · {row.model}
 					{row.sample > 1 ? ` · sample ${row.sample}` : ""}
 				</span>
-				<span className={`pill ${row.grade}`}>{row.grade}</span>
+				<ScorePill score={score} />
 			</div>
 
-			<div className="row-head">
-				<span className="row-meta dim small">
-					<span>{ending(row)}</span>
-					<span>
-						{row.inputTokens} in / {row.outputTokens} out
-					</span>
-					<span>{duration(row.durationMs)}</span>
-					<span>
-						{row.errors} error{row.errors === 1 ? "" : "s"}
-					</span>
-					<span>
-						{row.skips} skip{row.skips === 1 ? "" : "s"}
-					</span>
+			<div className="flex flex-wrap gap-3.5 border-bg2 border-b px-4 py-2.5 text-[12px] text-dim">
+				<span>{ending(row)}</span>
+				<span>
+					{row.inputTokens} in / {row.outputTokens} out
+				</span>
+				<span>{duration(row.durationMs)}</span>
+				<span>
+					{row.errors} error{row.errors === 1 ? "" : "s"}
+				</span>
+				<span>
+					{row.skips} skip{row.skips === 1 ? "" : "s"}
 				</span>
 			</div>
 
-			<ul className="checks">
+			<ul className="m-0 grid list-none gap-1.5 border-bg2 border-b px-4 py-3">
 				{row.checks.map((check) => (
-					<li key={check.name}>
-						<span className={`mark ${check.verdict === "true" ? "ok" : "no"}`}>
+					<li className="flex items-baseline gap-2.5" key={check.name}>
+						<span
+							className={check.verdict === "true" ? "text-green" : "text-red"}
+						>
 							{check.verdict === "true" ? "✓" : "✗"}
 						</span>
-						<span className="mono">{check.name}</span>
+						<span>{check.name}</span>
 						{check.step !== undefined ? (
-							<span className="dim small">decided at step {check.step}</span>
+							<span className="text-[12px] text-dim">
+								decided at step {check.step}
+							</span>
 						) : null}
 					</li>
 				))}
 			</ul>
 
 			{row.recap ? (
-				<div className="recap">
-					<span className="who">recap</span>
-					<p>
+				<div className="grid grid-cols-[54px_1fr] gap-3 border-bg2 border-b bg-blue/5 px-4 py-3">
+					<span className="text-[11px] text-dim uppercase tracking-[0.14em]">
+						recap
+					</span>
+					<p className="m-0">
 						{row.recap}
 						{row.judge ? (
-							<span className="dim small mono"> — {row.judge}</span>
+							<span className="text-[12px] text-dim"> — {row.judge}</span>
 						) : null}
 					</p>
 				</div>
 			) : null}
 
 			<details open={failed.length > 0 || !row.halted}>
-				<summary>
+				<Summary>
 					conversation — {row.transcript.length} turn
 					{row.transcript.length === 1 ? "" : "s"}
-				</summary>
-				<div className="turns">
+				</Summary>
+				<div className="pt-1 pb-2.5">
 					{row.transcript.map((line, i) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: a transcript is static and repeated identical turns are the signal, not a bug
-						<div className={`turn ${line.role}`} key={i}>
-							<span className={`who ${line.role}`}>
-								{line.role === "assistant"
-									? "agent"
-									: line.role === "tool"
-										? "repl"
-										: "user"}
-							</span>
-							<pre className="said">{line.content.trimEnd()}</pre>
-						</div>
+						<Turn key={i} role={line.role}>
+							{line.content.trimEnd()}
+						</Turn>
 					))}
 				</div>
 			</details>
-		</section>
+		</Panel>
 	);
 }
 
@@ -115,40 +122,33 @@ export default async function ReportPage({
 	if (!loaded.ok) notFound();
 
 	const { report } = loaded;
-	const tally = tallyOf(report.rows);
+	const score = scoreOf(report.rows);
 
 	return (
-		<main className="shell">
-			<header className="masthead">
-				<h1>
-					<Link className="dim" href="/">
+		<Shell>
+			<Masthead>
+				<Title>
+					<Link className="text-dim hover:text-fg" href="/">
 						eval traces
 					</Link>{" "}
 					/ {when(report.startedAt)}
-				</h1>
-				<span className="tally">
-					{GRADES.map((grade) => (
-						<span
-							className={`pill ${grade} ${tally[grade] === 0 ? "zero" : ""}`}
-							key={grade}
-						>
-							{tally[grade]} {grade}
-						</span>
-					))}
-				</span>
-			</header>
+				</Title>
+				<ScorePill score={score} />
+			</Masthead>
 
-			{report.sha ? <p className="dim small mono">sha {report.sha}</p> : null}
+			{report.sha ? (
+				<p className="mt-0 mb-4 text-[12px] text-dim">sha {report.sha}</p>
+			) : null}
 
 			{grouped(report.cases, report.rows).map(([name, info, rows]) => (
-				<section className="case" key={name}>
-					<h2 className="case-name">{name}</h2>
+				<section className="mb-7" key={name}>
+					<h2 className="m-0 mb-2 text-[14px] text-aqua">{name}</h2>
 					{info ? <Setup info={info} /> : null}
 					{rows.map((row) => (
 						<Run key={`${row.provider}-${row.model}-${row.sample}`} row={row} />
 					))}
 				</section>
 			))}
-		</main>
+		</Shell>
 	);
 }

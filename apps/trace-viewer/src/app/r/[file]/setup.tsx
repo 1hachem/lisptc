@@ -1,10 +1,11 @@
+import { Label, Panel, Summary, Tag, Tags, Turn } from "@/components/ui.tsx";
 import type { CaseInfo } from "@/lib/reports.ts";
 
 function Mock({ mock }: { mock: CaseInfo["mocks"][number] }) {
 	return (
 		<li>
-			<span className="mono">{mock.name}</span>{" "}
-			<span className="dim small">
+			<span>{mock.name}</span>{" "}
+			<span className="text-[12px] text-dim">
 				{mock.tools.length} tool{mock.tools.length === 1 ? "" : "s"},{" "}
 				{mock.answers.length} mocked
 				{mock.connectDelayMs === undefined
@@ -12,61 +13,65 @@ function Mock({ mock }: { mock: CaseInfo["mocks"][number] }) {
 					: `, ${mock.connectDelayMs}ms connect`}
 				{mock.fails === undefined ? "" : `, fails: ${mock.fails}`}
 			</span>
-			<div className="targets">
+			<Tags>
 				{mock.answers.map((tool) => (
-					<span className="tag mono" key={tool}>
-						{tool}
-					</span>
+					<Tag key={tool}>{tool}</Tag>
 				))}
-			</div>
+			</Tags>
 		</li>
 	);
 }
 
 export function Setup({ info }: { info: CaseInfo }) {
 	return (
-		<details className="setup">
-			<summary>
-				how this is set up — optimal {info.min}, budget {info.max},{" "}
-				{info.samples} sample{info.samples === 1 ? "" : "s"}
-				{info.passRate === undefined ? "" : `, pass rate ≥ ${info.passRate}`},{" "}
-				{info.systemPrompt} system prompt
-			</summary>
+		<Panel className="mb-3">
+			<details>
+				<Summary>
+					how this is set up — optimal {info.min}, budget {info.max},{" "}
+					{info.samples} sample{info.samples === 1 ? "" : "s"}
+					{info.passRate === undefined ? "" : `, pass rate ≥ ${info.passRate}`},{" "}
+					{info.systemPrompt} system prompt
+				</Summary>
 
-			<div className="setup-body">
-				<h3>seeded conversation</h3>
-				{info.seed.length === 0 ? (
-					<p className="dim small">nothing seeded — the agent starts cold</p>
-				) : (
-					<div className="turns">
-						{info.seed.map((turn) => (
-							<div
-								className={`turn ${turn.role}`}
-								key={`${turn.role}-${turn.content}`}
-							>
-								<span className={`who ${turn.role}`}>
-									{turn.role === "assistant" ? "agent" : "user"}
-								</span>
-								<pre className="said">{turn.content}</pre>
-							</div>
-						))}
-					</div>
-				)}
+				<div className="border-bg2 border-t px-4 pb-3.5">
+					<Label>seeded conversation</Label>
+					{info.seed.length === 0 ? (
+						<p className="text-[12px] text-dim">
+							nothing seeded — the agent starts cold
+						</p>
+					) : (
+						<div>
+							{info.seed.map((turn) => (
+								<Turn
+									className="px-0 py-1"
+									key={`${turn.role}-${turn.content}`}
+									role={turn.role}
+								>
+									{turn.content}
+								</Turn>
+							))}
+						</div>
+					)}
 
-				<h3>mocked servers</h3>
-				{info.mocks.length === 0 ? (
-					<p className="dim small">none — nothing is stubbed for this case</p>
-				) : (
-					<ul className="mocks">
-						{info.mocks.map((mock) => (
-							<Mock key={mock.name} mock={mock} />
-						))}
-					</ul>
-				)}
+					<Label>mocked servers</Label>
+					{info.mocks.length === 0 ? (
+						<p className="text-[12px] text-dim">
+							none — nothing is stubbed for this case
+						</p>
+					) : (
+						<ul className="m-0 grid list-none gap-2.5 p-0">
+							{info.mocks.map((mock) => (
+								<Mock key={mock.name} mock={mock} />
+							))}
+						</ul>
+					)}
 
-				<h3>checks</h3>
-				<pre className="said checks-src">{info.checks}</pre>
-			</div>
-		</details>
+					<Label>checks</Label>
+					<pre className="m-0 overflow-x-auto whitespace-pre-wrap break-words border border-bg2 bg-bg2/40 p-3 font-mono text-[12.5px]">
+						{info.checks}
+					</pre>
+				</div>
+			</details>
+		</Panel>
 	);
 }
