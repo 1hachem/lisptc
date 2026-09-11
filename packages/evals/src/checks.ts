@@ -218,23 +218,29 @@ export class Checks {
 	}
 
 	private hits(name: string, spec: CallArgs): number[] {
-		const out: number[] = [];
+		const ran: number[] = [];
+		const wrote: number[] = [];
 		this.trace.events.forEach((event, index) => {
 			if (event.kind === "tool" && `${event.server}/${event.tool}` === name) {
-				if (matchesArgs(eventArgs(event), spec)) out.push(index);
+				if (matchesArgs(eventArgs(event), spec)) ran.push(index);
 				return;
 			}
 			if (event.kind === "connect" && name === "load-mcp") {
-				if (matchesArgs(eventArgs(event), spec)) out.push(index);
+				if (matchesArgs(eventArgs(event), spec)) ran.push(index);
 				return;
 			}
 			if (event.kind === "form") {
 				const calls: CallArgs[] = [];
 				callsWithin(this.trace.sourceAt(index), name, calls);
-				if (calls.some((actual) => matchesArgs(actual, spec))) out.push(index);
+				if (calls.some((actual) => matchesArgs(actual, spec)))
+					wrote.push(index);
 			}
 		});
-		return out;
+		const dispatched = new Set(ran.map((index) => this.stepOf(index)));
+		return [
+			...ran,
+			...wrote.filter((index) => !dispatched.has(this.stepOf(index))),
+		].sort((a, b) => a - b);
 	}
 
 	private stepOf(index: number): number {

@@ -336,6 +336,54 @@ describe("the DSL refuses nonsense rather than answering it", () => {
 	});
 });
 
+describe("a call seen at both seams counts once", () => {
+	const source = '(defcheck it (at-most (called "load-mcp" "playwright") 2))';
+
+	test("two attempts written and dispatched stay under the cap", () => {
+		const f = new Fixture().watch(source);
+		f.tick()
+			.wrote('(await (load-mcp "playwright"))')
+			.connected("playwright", false)
+			.settle();
+		f.tick()
+			.wrote('(await (load-mcp "playwright"))')
+			.connected("playwright", false)
+			.settle();
+		expect(f.verdict("it")).toBe("true");
+	});
+
+	test("a third attempt falsifies it", () => {
+		const f = new Fixture().watch(source);
+		for (const _ of [1, 2, 3])
+			f.tick()
+				.wrote('(load-mcp "playwright")')
+				.connected("playwright", false)
+				.settle();
+		expect(f.verdict("it")).toBe("false");
+	});
+
+	test("a tool call is counted once per dispatch", () => {
+		const f = new Fixture().watch(
+			'(defcheck it (once (called "playwright/browser_navigate")))',
+		);
+		f.tick()
+			.wrote('(playwright/browser_navigate :url "https://hyko.ai")')
+			.tooled("playwright", "browser_navigate", { url: "https://hyko.ai" })
+			.settle();
+		expect(f.verdict("it")).toBe("true");
+	});
+
+	test("a call that never reached dispatch still counts as written", () => {
+		const f = new Fixture().watch(
+			'(defcheck it (eventually (called "playwright/browser_navigate")))',
+		);
+		f.tick()
+			.wrote('(playwright/browser_navigate :url "https://hyko.ai")')
+			.settle();
+		expect(f.verdict("it")).toBe("true");
+	});
+});
+
 describe("answered matches the final reply", () => {
 	test("true when the answer carries what was asked for", () => {
 		const f = new Fixture().watch(
