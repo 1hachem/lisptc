@@ -5,12 +5,14 @@
   "private": true,
   "exports": {
     "./checks": "./src/checks.ts",
+    "./global-setup": "./src/global-setup.ts",
     "./harness": "./src/harness.ts",
     "./judge": "./src/judge.ts",
     "./mocks": "./src/mocks.ts",
     "./package.json": "./package.json",
     "./report": "./src/report.ts",
     "./runner": "./src/runner.ts",
+    "./shards": "./src/shards.ts",
     "./targets": "./src/targets.ts",
     "./trace": "./src/trace.ts"
   },

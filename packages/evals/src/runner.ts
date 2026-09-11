@@ -1,5 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { writeFileSync } from "node:fs";
 import {
 	evalCode,
 	LISP_SYSTEM_PROMPT,
@@ -25,6 +24,7 @@ import type {
 	TranscriptLine,
 } from "./report.ts";
 import { reportSchema } from "./report.ts";
+import { shardPath } from "./shards.ts";
 import { evalMatrix, reachable, type Target } from "./targets.ts";
 import { Trace } from "./trace.ts";
 
@@ -62,27 +62,12 @@ export interface RunResult {
 	transcript: TranscriptLine[];
 }
 
-const REPORT_DIR = evalsEnv.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");
-
 const STARTED_AT = new Date()
 	.toISOString()
 	.replace(/\.\d+Z$/, "")
 	.replace(/:/g, "-");
 
-function slug(text: string): string {
-	return text
-		.replace(/[^A-Za-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "")
-		.slice(0, 60);
-}
-
-function reportName(targets: Target[]): string {
-	const named = targets
-		.slice(0, 3)
-		.map((t) => slug(`${t.provider}-${t.model}`));
-	if (targets.length > 3) named.push(`and-${targets.length - 3}-more`);
-	return `${STARTED_AT}__${named.join("__")}.json`;
-}
+const SHARD_ID = `${STARTED_AT}-${process.pid}`;
 
 const rows: ReportRow[] = [];
 
@@ -351,9 +336,8 @@ function writeReport(): void {
 		cases,
 		rows,
 	};
-	mkdirSync(REPORT_DIR, { recursive: true });
 	writeFileSync(
-		join(REPORT_DIR, reportName(targets)),
+		shardPath(SHARD_ID),
 		`${JSON.stringify(reportSchema.parse(report), null, 2)}\n`,
 	);
 }

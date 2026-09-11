@@ -376,6 +376,34 @@ The directory is `.evals` under the vitest project root, which puts reports
 beside the cases that produced them and under the app that reads them.
 `EVAL_REPORT_DIR` overrides it.
 
+### One report per invocation, out of one shard per worker
+
+`rows`, `cases` and `STARTED_AT` are module state in `runner.ts`, and a vitest
+worker gets its own module registry per test file — with `isolate` on that is
+true whether or not files run in parallel. So the obvious thing, each worker
+writing `<STARTED_AT>__<targets>.json` directly, silently turns one invocation
+into N reports the moment there is a second `.eval.ts`, each holding a slice of
+the cases and each listed by the viewer as its own run. That was the state of
+things while `browsing.eval.ts` was the only file, which is exactly why it went
+unnoticed.
+
+So a worker writes a **shard** instead: a whole, schema-valid `Report` at
+`.evals/parts/<startedAt>-<pid>.json`, rewritten after each of its cases so a
+long run is still watchable. `global-setup.ts` clears `parts/` before the run
+and merges it after: cases deduped by name, rows concatenated and sorted by
+case then sample, `startedAt` the earliest of the shards. The merged file is
+the only thing that lands in `.evals/` itself, and `parts/` is a subdirectory,
+so the viewer's `readdirSync(...).filter(endsWith(".json"))` never sees a shard.
+
+A shard carries `targets` and `startedAt` of its own rather than having them
+handed down from the main process. That is what keeps `global-setup.ts` free of
+any import from `runner.ts`, and so free of the whole agent stack, in the
+process vitest starts before any worker.
+
+The cost is that a run killed mid-flight leaves shards and no merged report.
+That is the right way round: a half-run is not a run, and the next invocation
+clears them.
+
 ## The viewer
 
 `apps/trace-viewer` is a Next.js app-router app, server components only — it
@@ -441,5 +469,30 @@ artifact. It needs `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET` as
 repository secrets and `INFISICAL_PROJECT_SLUG` as a variable.
 
 `retry: 0` is deliberate in the eval vitest config: a retry hides exactly what
-is being measured. `fileParallelism: false` because of rate limits, and because
-`llama-server` runs `--parallel 1`.
+is being measured.
+
+## Cases run in parallel
+
+Nothing connects one case to another: each builds its own `AgentRepl`, its own
+mocked dispatch and its own trace, and the only shared thing is the report,
+which is sharded per worker (above). So the suite runs concurrently — files
+across workers and cases within a file, since three of the four cases live in
+one file and per-file parallelism alone would leave them queued behind each
+other. Against a stub model the four cases finish in 2.9s rather than 8.2s.
+
+`evalConcurrency()` (`targets.ts`) is the one knob, and the config feeds it to
+`maxWorkers`, `maxConcurrency` and `sequence.concurrent` together.
+`EVAL_CONCURRENCY` sets it, default 4.
+
+Two things it is honest about. **1 means serial**, all three settings collapse
+and the suite runs exactly as it used to — that is the escape hatch for a
+provider answering 429. Above 1 the number is a **per-file cap, not a global
+one**: vitest has no cross-worker semaphore, so the true ceiling is workers
+times concurrency. For a suite of a handful of cases the burst is small enough
+that a real bound is not worth building; if that stops being true, the place to
+fix it is a semaphore in `runCase`, not more vitest settings.
+
+**`llamacpp` in the matrix forces 1**, wherever it appears in it, because
+`llama-server` runs `--parallel 1` and concurrent requests would queue behind
+each other and time out. That check lives in `evalConcurrency()` rather than in
+the config, so it cannot be forgotten by whoever writes the next config.

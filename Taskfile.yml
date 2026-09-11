@@ -57,12 +57,15 @@ tasks:
       # spots. `EVAL_JUDGE=provider:model` picks another; `EVAL_JUDGE=none` skips
       # the recaps entirely (an empty value falls back to this default).
       JUDGE: '{{.EVAL_JUDGE | default "openrouter:google/gemma-4-31b-it"}}'
+      # Cases are independent, so they run concurrently. Drop to 1 when the
+      # provider starts answering 429; a matrix naming llamacpp forces 1 anyway.
+      CONCURRENCY: '{{.EVAL_CONCURRENCY | default "4"}}'
     cmds:
       - task: _infisical-run
         vars:
           ENV: dev
           PATHS: "/ai"
-          CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" pnpm test:evals'
+          CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" EVAL_CONCURRENCY="{{.CONCURRENCY}}" pnpm test:evals'
   
   dev:
     deps: [dev-app, dev-api]
