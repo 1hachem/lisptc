@@ -156,6 +156,12 @@ survey sent  $survey_response: 1|2          the vote — 1 up, 2 down
              message_id, message_index      which turn was voted on
 ```
 
+The sentence also rides along as a plain `review_text` property. PostHog only
+keeps `$survey_response_1` when the survey actually has a question at index 1;
+point the config at a survey without one and the sentence is accepted and then
+dropped, with nothing to say so. The plain property is the copy that cannot be
+dropped, and the one to query when a rating's explanation is missing.
+
 Two rules of PostHog's that the code is shaped around. The vote is sent
 `$survey_completed: true` on the click rather than held back for a sentence that
 may never be typed — a rating waiting on a follow-up is a rating lost when the
@@ -190,21 +196,35 @@ opened it to do.
 **The viewer sends the trace itself**, which the chat app never has to. A chat's
 turns are already in PostHog — the vote joins them by `$ai_trace_id`. An eval run
 is not: `runner.ts` calls `runAgentTurn` without a `threadId`, so the turn mints a
-random one that no report records, and there is nothing on the other side of the
-join. So the event carries the conversation as data (`reviewProperties`,
-`packages/evals/src/review.ts`) and `eval_run` — report file, case, provider,
-model, sample — is the id every vote on one run shares. No `$ai_trace_id` is
-sent, deliberately: a synthetic one would mint an empty trace in LLM analytics
-for a run that has no generations there.
+random one that no report records, and the generations it captured (if the key
+was even set for that run) are joined to an id the report never saw.
 
-An event has to fit, so the trace is **fitted around the turn that was voted on**
-(`fitTrace`, `TRACE_BUDGET` 100k characters — well under PostHog's 1MB ingestion
-limit, with the survey properties and a long sentence to spare). The voted turn
-is kept first, truncated on its own if it alone overruns, and its neighbours are
-added outward, cheapest side first, until the budget is gone; `trace_from`,
-`trace_dropped` and `trace_turns` say what was left out. Sending the tail
-instead would be simpler and would lose the turn the vote is about whenever a
-run goes long, which is the run worth voting on.
+So a vote **replays the run as a trace** before it sends the rating
+(`traceEvents`, `packages/evals/src/review.ts`), mirroring the shape
+`packages/ai/telemetry.ts` captures live: one `$ai_trace` for the run, one
+`$ai_generation` per agent turn (its `$ai_input` the conversation up to that
+point, its `$ai_output_choices` the turn itself), one `$ai_span` per REPL result,
+all under the same `$ai_trace_id`. Then the survey event carries that id, so the
+rating renders **inside** the run it is about, which is the one thing PostHog
+does with survey events that a table of properties cannot.
+
+`eval_run` — report file, case, provider, model, sample — is that id, so it is
+stable across reloads and across reviewers: two people voting on the same run
+write to one trace instead of two. The span ids are derived from it the same way
+(`…/run`, `…/3`), which is what makes a re-send idempotent rather than duplicate.
+Within a page the client sends a run's trace **once**, before the first vote on
+it (`traced`, `src/lib/analytics.ts`); later votes on the same run send the
+rating alone.
+
+An event still has to fit, so a generation's `$ai_input` is **fitted around the
+turn** (`fitTrace`, `TRACE_BUDGET` 100k characters — well under PostHog's 1MB
+ingestion limit). The turn is kept first, truncated on its own if it alone
+overruns, and its neighbours are added outward, cheapest side first, until the
+budget is gone. Sending the tail instead would be simpler and would lose the turn
+in question whenever a run goes long, which is the run worth reviewing. The
+survey event itself carries only the run's identity, its checks and the voted
+message (clamped to `MESSAGE_BUDGET`), since the conversation is now in the trace
+beside it.
 
 ### Sent from the browser, unlike everything else here
 
@@ -397,7 +417,9 @@ the `import.meta.env` read is a cast with a comment instead.
 | --- | --- | --- |
 | `POSTHOG_KEY` | `VITE_POSTHOG_KEY`, then `POSTHOG_API_KEY` | the `phc_` project key; unset hides the vote entirely |
 | `POSTHOG_SURVEY_ID` | `VITE_POSTHOG_SURVEY_ID` | the survey the votes answer; unset hides the vote entirely |
-| `POSTHOG_HOST` | `https://us.i.posthog.com` | sent to directly, not through a proxy |
+| `POSTHOG_HOST` | `https://us.i.posthog.com` | what the `/ingest` middleware forwards events to |
+| `POSTHOG_ASSET_HOST` | `https://us-assets.i.posthog.com` | what it forwards `/ingest/static/*` to |
+| `POSTHOG_UI_HOST` | `https://us.posthog.com` | where posthog-js's "view in PostHog" links point, since a proxied `api_host` hides the region |
 
 The viewer needs **no secret of its own**: each name falls back to the one the
 app or the server already uses, so `task evals:open` picks the key and the
@@ -418,11 +440,21 @@ hands it to the transcript as a prop — the same `phc_` key the browser would
 have carried anyway, publishable by design. Changing the survey is then a
 restart, not a rebuild.
 
-The viewer talks to PostHog directly, with no `/ingest` proxy of its own. The
-proxy in `apps/app` exists to get past content blockers and is a dumb pipe with
-a list of headers it must not relay; standing a second one up in Next would
-duplicate exactly that, for an internal tool whose users can turn a blocker off.
-A blocked vote is a lost vote here, which is the trade.
+The viewer proxies PostHog too, at the same `/ingest` path, because a blocked
+vote is a lost vote and a reviewer should not have to know that. It needs none
+of the API-route machinery `apps/app` carries: Next runs it as **middleware**
+(`src/middleware.ts`, matcher `/ingest/:path*`), rewriting the request upstream
+with `NextResponse.rewrite` — `/ingest/static/*` to `POSTHOG_ASSET_HOST`, the
+rest to `POSTHOG_HOST` — and the platform does the fetch. `cookie` and
+`accept-encoding` are still deleted for the reasons the app's proxy deletes
+them.
+
+`skipTrailingSlashRedirect` in `next.config.ts` is **load-bearing**, not
+tidiness: posthog-js posts to `/e/?ip=1`, with the trailing slash, and Next's
+default is to answer a trailing slash with a 308 to the path without it. A
+redirected `fetch` survives that; a `navigator.sendBeacon` on page unload does
+not, so the votes most likely to be lost are exactly the ones sent as the tab
+closes.
 
 ### Which task gets which path
 

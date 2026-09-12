@@ -1,7 +1,7 @@
 "use client";
 
 import type { RunIdentity } from "@repo/evals/review";
-import { reviewProperties } from "@repo/evals/review";
+import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
 import { MessageFeedback } from "@repo/ui/components/message-feedback.tsx";
 import { Turn } from "@/components/ui.tsx";
 import { captureReview } from "@/lib/analytics.ts";
@@ -17,6 +17,8 @@ export function Transcript({
 	row: ReportRow;
 	target?: ReviewTarget;
 }) {
+	const run = runId(identity, row);
+
 	return (
 		<div className="pt-1 pb-2.5">
 			{row.transcript.map((line, i) => (
@@ -28,8 +30,12 @@ export function Transcript({
 							<MessageFeedback
 								capture={(properties) =>
 									captureReview(target, {
-										...properties,
-										...reviewProperties(identity, row, i),
+										runId: run,
+										trace: traceEvents(identity, row),
+										properties: {
+											...properties,
+											...reviewProperties(identity, row, i),
+										},
 									})
 								}
 								className="absolute top-1.5 right-3"

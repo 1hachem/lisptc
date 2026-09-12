@@ -6,6 +6,8 @@ export const viewerEnv = createEnv({
 		POSTHOG_KEY: z.string().optional(),
 		POSTHOG_SURVEY_ID: z.string().optional(),
 		POSTHOG_HOST: z.url().default("https://us.i.posthog.com"),
+		POSTHOG_ASSET_HOST: z.url().default("https://us-assets.i.posthog.com"),
+		POSTHOG_UI_HOST: z.url().default("https://us.posthog.com"),
 	},
 	runtimeEnv: {
 		POSTHOG_KEY:
@@ -15,6 +17,8 @@ export const viewerEnv = createEnv({
 		POSTHOG_SURVEY_ID:
 			process.env.POSTHOG_SURVEY_ID ?? process.env.VITE_POSTHOG_SURVEY_ID,
 		POSTHOG_HOST: process.env.POSTHOG_HOST,
+		POSTHOG_ASSET_HOST: process.env.POSTHOG_ASSET_HOST,
+		POSTHOG_UI_HOST: process.env.POSTHOG_UI_HOST,
 	},
 	emptyStringAsUndefined: true,
 });

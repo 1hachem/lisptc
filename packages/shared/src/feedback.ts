@@ -36,7 +36,9 @@ export function surveyResponse(review: Review): Record<string, unknown> {
 		$survey_response: RESPONSE[review.thumb],
 		$survey_submission_id: review.submissionId,
 		$survey_completed: true,
-		...(review.text ? { $survey_response_1: review.text } : {}),
+		...(review.text
+			? { $survey_response_1: review.text, review_text: review.text }
+			: {}),
 	};
 }
 

@@ -58,6 +58,7 @@ describe("a review of one agent message", () => {
 		).toEqual({
 			$survey_response: 2,
 			$survey_response_1: "looped",
+			review_text: "looped",
 			$survey_submission_id: "sub-1",
 			$survey_completed: true,
 		});

@@ -538,9 +538,10 @@ has nothing to filter.
 has, sending the run's trace along with the vote. That is `components/
 transcript.tsx`, and it is why `Turn` is imported rather than rendered by the
 page. Everything around it — the filters included — stays a server component.
-The gesture, the survey payload and the event shape are covered in
-[telemetry.md](./telemetry.md); nothing about them is a second implementation of
-what `apps/app` does. The PostHog key reaches the island as a **prop from the
+A vote replays the run as a trace in PostHog and then rates it, so the run reads
+there the way a live chat does. The gesture, the survey payload and the event
+shape are covered in [telemetry.md](./telemetry.md); nothing about them is a
+second implementation of what `apps/app` does. The PostHog key reaches the island as a **prop from the
 server**, so `task evals:open` — which builds the viewer before Infisical is in
 the picture and only then serves it under `/assets /analytics /web` — does not
 need the secret at build time.
