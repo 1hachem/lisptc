@@ -13,6 +13,7 @@
     "./lisp": "./src/lisp.ts",
     "./mcp": "./src/mcp.ts",
     "./mcp-client": "./src/mcp-client.ts",
+    "./mcp-runtime": "./src/mcp-runtime.ts",
     "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./package.json": "./package.json",
     "./plist": "./src/plist.ts",

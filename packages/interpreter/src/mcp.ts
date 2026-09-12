@@ -17,7 +17,13 @@ import {
 	Sym,
 	zList,
 } from "./lisp.ts";
-import { type McpOp, mcpDispatch, stopLocalServers } from "./mcp-client.ts";
+import { createMcpDispatch, type McpOp } from "./mcp-client.ts";
+import {
+	DEFAULT_SESSION,
+	localRuntime,
+	type McpRuntime,
+	type ServerSpec,
+} from "./mcp-runtime.ts";
 import { keyName, parsePlist } from "./plist.ts";
 import { type Dispatch, Promises } from "./promises.ts";
 import type { ToJson } from "./types.ts";
@@ -55,6 +61,9 @@ export type ConnConfig = { description?: string; keywords?: string[] } & (
 			headers?: Record<string, string>;
 			oauth?: boolean;
 			scopes?: string[];
+			command?: string;
+			args?: string[];
+			env?: Record<string, string>;
 	  }
 	| {
 			name: string;
@@ -74,6 +83,36 @@ interface ServerRec {
 export interface RegisterMcpOptions {
 	dispatch?: Dispatch;
 	toolkitJson?: string;
+	runtime?: McpRuntime;
+	sessionId?: string;
+}
+
+export function specFromConfig(conf: ConnConfig): ServerSpec {
+	if ("url" in conf) {
+		const http = {
+			name: conf.name,
+			url: conf.url,
+			headers: conf.headers,
+			oauth: conf.oauth,
+			scopes: conf.scopes,
+		};
+		return conf.command
+			? {
+					...http,
+					origin: "program",
+					command: conf.command,
+					args: conf.args,
+					env: conf.env,
+				}
+			: { ...http, origin: "remote" };
+	}
+	return {
+		origin: "program",
+		name: conf.name,
+		command: conf.command,
+		args: conf.args,
+		env: conf.env,
+	};
 }
 
 function extractAuthCode(raw: string): string {
@@ -347,6 +386,9 @@ export function registerMcp(
 	interp: Interp,
 	options: RegisterMcpOptions = {},
 ): void {
+	const runtime = options.runtime ?? localRuntime();
+	const sessionId = options.sessionId ?? DEFAULT_SESSION;
+	const mcpDispatch = createMcpDispatch({ runtime, sessionId });
 	const dispatch: Dispatch =
 		options.dispatch ??
 		((op: string, payload: unknown, signal?: AbortSignal) =>
@@ -368,7 +410,7 @@ export function registerMcp(
 			const conf = connConfigFromArgs(rest, predefined);
 			if (servers.has(conf.name))
 				doUnload(interp, promises, servers, conf.name);
-			return promises.start("connect", conf, (raw: unknown) =>
+			return promises.start("connect", specFromConfig(conf), (raw: unknown) =>
 				installServer(
 					interp,
 					promises,
@@ -435,13 +477,7 @@ export function registerMcp(
 			if (!conf || !("url" in conf))
 				throw new EvalException("unknown OAuth MCP server", name, false);
 			return promises
-				.call("login", {
-					name,
-					url: conf.url,
-					scopes: conf.scopes,
-					command: "command" in conf ? conf.command : undefined,
-					args: "args" in conf ? conf.args : undefined,
-				})
+				.call("login", specFromConfig(conf))
 				.then(
 					(res) =>
 						(res as { authUrl: string | null }).authUrl ??
@@ -605,7 +641,7 @@ export function registerMcp(
 		}
 		servers.clear();
 		promises.shutdown();
-		stopLocalServers();
+		void runtime.stopAll(sessionId).catch(() => {});
 	};
 
 	interp.def(

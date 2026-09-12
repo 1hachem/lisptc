@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
 	auth,
@@ -15,24 +14,14 @@ import {
 	FileOAuthStore,
 	StoredOAuthProvider,
 } from "./mcp-oauth.ts";
-
-type ConnConfig =
-	| {
-			name: string;
-			url: string;
-			headers?: Record<string, string>;
-			oauth?: boolean;
-			scopes?: string[];
-			command?: string;
-			args?: string[];
-			env?: Record<string, string>;
-	  }
-	| {
-			name: string;
-			command: string;
-			args?: string[];
-			env?: Record<string, string>;
-	  };
+import {
+	DEFAULT_SESSION,
+	type Endpoint,
+	type Instance,
+	localRuntime,
+	type McpRuntime,
+	type ServerSpec,
+} from "./mcp-runtime.ts";
 
 const oauthStore = new FileOAuthStore();
 
@@ -45,101 +34,6 @@ function redirectUri(): string {
 		oauthEnv.LISPTC_OAUTH_REDIRECT_URL ??
 		`http://127.0.0.1:${callbackPort()}/callback`
 	);
-}
-
-const LOCAL_START_TIMEOUT_MS = 60_000;
-const LOCAL_POLL_MS = 250;
-const LOCAL_STDERR_KEEP = 4096;
-
-interface LocalServer {
-	child: ReturnType<typeof spawn>;
-	stderr: string;
-}
-
-const started = new Map<string, LocalServer>();
-
-async function reachable(url: string): Promise<boolean> {
-	try {
-		await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(2000) });
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-function startLocalServer(conf: {
-	name: string;
-	command: string;
-	args?: string[];
-	env?: Record<string, string>;
-}): LocalServer {
-	const child = spawn(conf.command, conf.args ?? [], {
-		detached: true,
-		stdio: ["ignore", "ignore", "pipe"],
-		env: {
-			...(process.env as Record<string, string>),
-			...(conf.env ?? {}),
-		},
-	});
-	const server: LocalServer = { child, stderr: "" };
-	child.stderr?.on("data", (chunk: Buffer) => {
-		server.stderr = (server.stderr + chunk.toString()).slice(
-			-LOCAL_STDERR_KEEP,
-		);
-	});
-	child.on("error", (err) => {
-		server.stderr += `\n${err.message}`;
-	});
-	child.unref();
-	return server;
-}
-
-function whyItDied(server: LocalServer): string {
-	const tail = server.stderr.trim().split("\n").slice(-6).join("\n");
-	return tail ? `\n${tail}` : "";
-}
-
-async function ensureLocalServer(conf: {
-	name: string;
-	url: string;
-	command?: string;
-	args?: string[];
-	env?: Record<string, string>;
-}): Promise<void> {
-	if (!conf.command) return;
-	const origin = new URL(conf.url).origin;
-	if (await reachable(origin)) return;
-	let server = started.get(conf.name);
-	if (!server || server.child.exitCode !== null) {
-		server = startLocalServer({ ...conf, command: conf.command });
-		started.set(conf.name, server);
-	}
-	const deadline = Date.now() + LOCAL_START_TIMEOUT_MS;
-	while (Date.now() < deadline) {
-		if (await reachable(origin)) return;
-		if (server.child.exitCode !== null) {
-			started.delete(conf.name);
-			throw new Error(
-				`${conf.name}: its server exited with code ${server.child.exitCode} before ${origin} answered.${whyItDied(server)}`,
-			);
-		}
-		await new Promise((resolve) => setTimeout(resolve, LOCAL_POLL_MS));
-	}
-	throw new Error(
-		`${conf.name}: started its server but ${origin} did not answer within ${LOCAL_START_TIMEOUT_MS / 1000}s.${whyItDied(server)}`,
-	);
-}
-
-export function stopLocalServers(): void {
-	for (const [name, server] of started) {
-		const { pid } = server.child;
-		try {
-			if (pid !== undefined) process.kill(-pid, "SIGTERM");
-		} catch {
-			server.child.kill("SIGTERM");
-		}
-		started.delete(name);
-	}
 }
 
 class NeedsAuthError extends Error {
@@ -180,7 +74,7 @@ async function startCallbackCapture(
 	).catch(() => {});
 }
 
-const clients = new Map<string, { client: Client; tools: Tool[] }>();
+type ClientPool = Map<string, { client: Client; tools: Tool[] }>;
 
 export type McpOp =
 	| "connect"
@@ -192,44 +86,70 @@ export type McpOp =
 	| "disconnect"
 	| "search";
 
-export async function mcpDispatch(
+export type McpDispatch = (
 	op: McpOp,
 	payload: unknown,
 	signal?: AbortSignal,
-): Promise<unknown> {
-	switch (op) {
-		case "connect":
-			return connect(payload as ConnConfig, signal);
-		case "login":
-			return login(payload as { url: string; scopes?: string[] });
-		case "authorize":
-			return authorize(
-				payload as { url: string; code: string; scopes?: string[] },
-			);
-		case "logout":
-			return logout(payload as { url: string });
-		case "list-tools":
-			return listTools((payload as { serverId: string }).serverId);
-		case "call-tool":
-			return callTool(
-				payload as {
-					serverId: string;
-					tool: string;
-					args: Record<string, unknown>;
-				},
-				signal,
-			);
-		case "disconnect":
-			return disconnect((payload as { serverId: string }).serverId);
-		case "search":
-			throw new Error("semantic search backend not implemented");
-		default:
-			throw new Error(`unknown op: ${op}`);
-	}
+) => Promise<unknown>;
+
+export function createMcpDispatch(
+	options: { runtime?: McpRuntime; sessionId?: string } = {},
+): McpDispatch {
+	const runtime = options.runtime ?? localRuntime();
+	const sessionId = options.sessionId ?? DEFAULT_SESSION;
+	const clients: ClientPool = new Map();
+	const instanceFor = (spec: ServerSpec): Instance => ({
+		sessionId,
+		server: spec.name,
+	});
+
+	return async function dispatch(op, payload, signal) {
+		switch (op) {
+			case "connect": {
+				const spec = payload as ServerSpec;
+				return connect(
+					spec,
+					await runtime.start(spec, instanceFor(spec), signal),
+					clients,
+					signal,
+				);
+			}
+			case "login": {
+				const spec = payload as ServerSpec;
+				return login(spec, await runtime.start(spec, instanceFor(spec)));
+			}
+			case "authorize":
+				return authorize(
+					payload as { url: string; code: string; scopes?: string[] },
+				);
+			case "logout":
+				return logout(payload as { url: string });
+			case "list-tools":
+				return listTools(clients, (payload as { serverId: string }).serverId);
+			case "call-tool":
+				return callTool(
+					clients,
+					payload as {
+						serverId: string;
+						tool: string;
+						args: Record<string, unknown>;
+					},
+					signal,
+				);
+			case "disconnect":
+				return disconnect(clients, (payload as { serverId: string }).serverId);
+			case "search":
+				throw new Error("semantic search backend not implemented");
+			default:
+				throw new Error(`unknown op: ${op}`);
+		}
+	};
 }
 
 async function connect(
-	conf: ConnConfig,
+	spec: ServerSpec,
+	endpoint: Endpoint,
+	clients: ClientPool,
 	signal?: AbortSignal,
 ): Promise<{ serverId: string; tools: Tool[] }> {
 	const client = new Client(
@@ -237,7 +157,7 @@ async function connect(
 		{ capabilities: {} },
 	);
 	try {
-		return await openClient(client, conf, signal);
+		return await openClient(client, spec.name, endpoint, clients, signal);
 	} catch (e) {
 		await client.close().catch(() => {});
 		throw e;
@@ -246,15 +166,18 @@ async function connect(
 
 async function openClient(
 	client: Client,
-	conf: ConnConfig,
+	name: string,
+	endpoint: Endpoint,
+	clients: ClientPool,
 	signal?: AbortSignal,
 ): Promise<{ serverId: string; tools: Tool[] }> {
-	if ("url" in conf) await ensureLocalServer(conf);
-	if ("url" in conf && conf.oauth) {
-		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
-		const { provider, authUrl } = await ensureAuthorized(conf.url, scope);
-		if (authUrl) throw new NeedsAuthError(conf.name, authUrl);
-		const transport = new StreamableHTTPClientTransport(new URL(conf.url), {
+	if (endpoint.transport === "http" && endpoint.oauth) {
+		const scope = endpoint.scopes?.length
+			? endpoint.scopes.join(" ")
+			: undefined;
+		const { provider, authUrl } = await ensureAuthorized(endpoint.url, scope);
+		if (authUrl) throw new NeedsAuthError(name, authUrl);
+		const transport = new StreamableHTTPClientTransport(new URL(endpoint.url), {
 			authProvider: provider,
 		});
 		try {
@@ -262,22 +185,21 @@ async function openClient(
 		} catch (e) {
 			if (!(e instanceof UnauthorizedError)) throw e;
 			await provider.invalidateCredentials("tokens");
-			const retry = await ensureAuthorized(conf.url, scope);
-			throw new NeedsAuthError(conf.name, retry.authUrl ?? conf.url);
+			const retry = await ensureAuthorized(endpoint.url, scope);
+			throw new NeedsAuthError(name, retry.authUrl ?? endpoint.url);
 		}
 	} else {
 		const transport =
-			"url" in conf
-				? new StreamableHTTPClientTransport(new URL(conf.url), {
-						requestInit: conf.headers ? { headers: conf.headers } : undefined,
+			endpoint.transport === "http"
+				? new StreamableHTTPClientTransport(new URL(endpoint.url), {
+						requestInit: endpoint.headers
+							? { headers: endpoint.headers }
+							: undefined,
 					})
 				: new StdioClientTransport({
-						command: conf.command,
-						args: conf.args ?? [],
-						env: {
-							...(process.env as Record<string, string>),
-							...(conf.env ?? {}),
-						},
+						command: endpoint.command,
+						args: endpoint.args,
+						env: endpoint.env,
 					});
 		await client.connect(transport, { signal });
 	}
@@ -338,17 +260,14 @@ async function ensureAuthorized(
 	return { provider, authUrl: authUrl.href };
 }
 
-async function login(payload: {
-	name?: string;
-	url: string;
-	scopes?: string[];
-	command?: string;
-	args?: string[];
-	env?: Record<string, string>;
-}): Promise<{ authUrl: string | null }> {
-	await ensureLocalServer({ name: payload.name ?? payload.url, ...payload });
-	const scope = payload.scopes?.length ? payload.scopes.join(" ") : undefined;
-	const { authUrl } = await ensureAuthorized(payload.url, scope);
+async function login(
+	spec: ServerSpec,
+	endpoint: Endpoint,
+): Promise<{ authUrl: string | null }> {
+	if (endpoint.transport !== "http")
+		throw new Error(`${spec.name} does not speak HTTP, so it cannot log in`);
+	const scope = endpoint.scopes?.length ? endpoint.scopes.join(" ") : undefined;
+	const { authUrl } = await ensureAuthorized(endpoint.url, scope);
 	return { authUrl };
 }
 
@@ -357,7 +276,10 @@ async function logout(payload: { url: string }): Promise<{ ok: true }> {
 	return { ok: true };
 }
 
-async function listTools(serverId: string): Promise<Tool[]> {
+async function listTools(
+	clients: ClientPool,
+	serverId: string,
+): Promise<Tool[]> {
 	const entry = clients.get(serverId);
 	if (!entry) throw new Error(`no such server: ${serverId}`);
 	const { tools } = await entry.client.listTools();
@@ -377,6 +299,7 @@ function asJsonDocument(text: string): unknown | undefined {
 }
 
 async function callTool(
+	clients: ClientPool,
 	payload: {
 		serverId: string;
 		tool: string;
@@ -408,7 +331,10 @@ async function callTool(
 	return content ?? null;
 }
 
-async function disconnect(serverId: string): Promise<{ ok: true }> {
+async function disconnect(
+	clients: ClientPool,
+	serverId: string,
+): Promise<{ ok: true }> {
 	const entry = clients.get(serverId);
 	if (!entry) throw new Error(`no such server: ${serverId}`);
 	await entry.client.close();
