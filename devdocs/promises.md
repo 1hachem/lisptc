@@ -11,6 +11,7 @@ deliberately domain-agnostic: `promises.ts` knows nothing about MCP. MCP is a
 src/promises.ts    Dispatch + Promises (the built-ins, and what a promise cannot say)
 src/mcp.ts         the MCP built-ins, and the finalizer that installs tool bindings
 src/mcp-client.ts  the domain dispatch: connect, call-tool, login, ...
+src/mcp-runtime.ts where a server runs: the McpRuntime port and the local one
 ```
 
 ## The value is the host's promise
@@ -128,13 +129,14 @@ Only objects and arrays. A tool that answered `42`, `null` or `"ok"` meant text,
 and parsing those would replace its answer with a number, nil or a re-quoted
 string.
 
-### The client module is process-wide
+### What the client module shares between interps
 
-`clients`, the shared OAuth callback server and the token store live in
-`mcp-client.ts` module scope, so **every interp in a process shares them**. Under
-the worker each interp got its own copy, one per broker. Two interps loading the
-same server now share nothing but that map, keyed by `serverId`, so they do not
-collide; but a test that expects isolation between interps will not get it.
+The shared OAuth callback server and the token store live in `mcp-client.ts`
+module scope, so **every interp in a process shares them** — a port and a file
+can only be held once. The `clients` map is not shared: `createMcpDispatch`
+closes over its own, so an interp owns the SDK clients it opened and releases
+them on `dispose`. Nothing passes a `serverId` between interps, so that map was
+never a channel between them.
 
 ### `LOAD_MCP_ARGS` marks only `:name` required
 

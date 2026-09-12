@@ -27,6 +27,10 @@ When you fix something non-obvious, add it to the page for that area.
   the rest.
 - [Secret registry](./secrets.md) — the `REPL_*` secret store, taint-tracked
   redaction, and how secrets reach MCP calls.
+- [Where an MCP server runs](./mcp-runtime.md) — the `McpRuntime` port that
+  separates connecting to a server from running one, the stdio/http invariant a
+  remote adapter must honour, why an instance is an identity rather than a
+  handle, and what a cluster adapter still has to solve.
 - [OAuth 2.1 for remote MCP servers](./oauth.md) — how `load-mcp` authenticates
   OAuth servers (Linear): flow, callback strategies, token storage, cloud/ingress
   config.

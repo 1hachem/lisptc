@@ -65,12 +65,13 @@ that failed to install cannot reach a real llama-server.
 
 ## The exemptions
 
-Three `process.env` reads survive in `src`, each with a `biome-ignore` naming the
-reason, because no typed module can express them:
+Three kinds of `process.env` read survive in `src`, each with a `biome-ignore`
+naming the reason, because no typed module can express them:
 
 - **The whole environment, passed to a child.** `spawn`'s `env` in
-  `mcp-client.ts` (and `scripts/infisical-run.ts`) forwards the parent environment
-  wholesale; no value is read.
+  `mcp-runtime.ts`, the stdio `Endpoint` it hands back for the SDK to spawn, and
+  `scripts/infisical-run.ts` all forward the parent environment wholesale; no
+  value is read.
 - **A name known only at runtime.** `expandEnv` in `mcp.ts` resolves `${VAR}` out
   of `mcp.toolkit.json`, where the variable is named by config.
 - **A scan by prefix.** `EnvSecretsStore` collects every `REPL_*` name; the point

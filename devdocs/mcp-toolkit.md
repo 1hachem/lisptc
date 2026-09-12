@@ -136,13 +136,15 @@ handshake:
   progress belongs on stderr anyway, and it is what makes that script safe to
   wrap around any protocol server. Do not move them back.
 
-## Starting a url server (`ensureLocalServer`)
+## Starting a url server (the local runtime)
 
-A toolkit entry with a `url` may also carry `command`/`args`, meaning "this is a
-local server; start it if it is not up". `ensureLocalServer` (`src/mcp-client.ts`)
-runs before both the connect and the `login` paths — `login` needs it too, or
-asking for the authorization link of a server that is not running fails with a
-bare `fetch failed`.
+A toolkit entry with a `url` may also carry `command`/`args`, meaning "we run
+this server; start it if it is not up". Starting it is the runtime's job, not the
+client's: `localRuntime()` (`src/mcp-runtime.ts`) is what `registerMcp` uses
+unless a host passes another, and its `start` runs before both the connect and
+the `login` paths — `login` needs it too, or asking for the authorization link of
+a server that is not running fails with a bare `fetch failed`. See
+[mcp-runtime.md](./mcp-runtime.md) for the port itself.
 
 - **Reachability decides, not bookkeeping.** A `HEAD` on the url's origin (2s
   timeout) is the only test. A server you started with `task mcp:sheets` is
@@ -161,7 +163,7 @@ bare `fetch failed`.
 
   That is the one diagnostic a spawned MCP server otherwise never gets: a stdio
   server that dies at startup surfaces only `MCP error -32000: Connection closed`.
-- **`detached: true` is kept** so `stopLocalServers` can `kill(-pid)` the whole
+- **`detached: true` is kept** so `stopAll` can `kill(-pid)` the whole
   `task` → `infisical-run` → `pnpm` → `node` tree; killing just the `task` pid
   would orphan the server. It runs from `mcp-shutdown` and from the `dispose`
   hook, so a `reset()` does not leave a server behind.
