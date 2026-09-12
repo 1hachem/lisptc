@@ -3,12 +3,15 @@ import { type Channels, MODEL, USER } from "./channels.ts";
 import {
 	Cell,
 	callableKind,
+	DOC_DOC,
+	DOC_SIGNATURE,
 	type DocArg,
 	EvalException,
 	echoText,
 	type Interp,
 	type InterpExtension,
 	type List,
+	lookupDoc,
 	newSym,
 	Sym,
 	str,
@@ -181,6 +184,7 @@ export class Compactor {
 	result(interp: Interp, form: unknown, value: unknown): string {
 		if (!this.stepping) return "";
 		if (value === Unspecified) return "";
+		if (isDocForm(form)) return "";
 		if (isReadForm(form)) {
 			this.print(interp, value);
 			return "";
@@ -227,6 +231,12 @@ export class Compactor {
 			this.channels?.emit({ channel: USER, text: bounded.user });
 		if (bounded.model !== "")
 			this.channels?.emit({ channel: MODEL, text: bounded.model });
+	}
+
+	doc(text: string): Bounded {
+		const bounded = { model: text, user: text };
+		this.say(bounded);
+		return bounded;
 	}
 
 	private print(interp: Interp, value: unknown): void {
@@ -417,6 +427,12 @@ const READ_FORMS = new Set([
 function isReadForm(form: unknown): boolean {
 	if (!(form instanceof Cell) || !(form.car instanceof Sym)) return false;
 	return READ_FORMS.has(form.car.name);
+}
+
+function isDocForm(form: unknown): boolean {
+	return (
+		form instanceof Cell && form.car instanceof Sym && form.car.name === "doc"
+	);
 }
 
 function lastAssignedSymbol(form: unknown): string | undefined {
@@ -697,6 +713,18 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 		if (report !== "") c.say({ model: report, user: report });
 		return value;
 	});
+	interp.def(
+		"doc",
+		-1,
+		DOC_SIGNATURE,
+		`${DOC_DOC} Documentation is quoted back to you whole, however long it is, and reading it does not spend the step's ${c.limit} echo words — so look a binding up whenever you are unsure of it.`,
+		z.tuple([zList]),
+		([rest]) => {
+			const answer = lookupDoc(interp, rest);
+			c.doc(answer.text);
+			return answer.value;
+		},
+	);
 	interp.def(
 		"echo",
 		-1,

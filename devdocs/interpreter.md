@@ -103,14 +103,18 @@ never change the program's outcome.
 
 **`doc` answers on both channels, and it is the only built-in that does.** Every
 other core print goes to `user` alone, because the model's copy is the one
-compaction has to bound. `doc` output is bounded by construction (one binding's
-signature and description), and it is the only thing the core prints that is
-*asked for by whoever is typing* — in an agent REPL that is the model. While it
-went to `user` alone the agent got back `playwright/browser_evaluate: function`
-and nothing else, so an agent recovering from a rejected call read the docs, was
-told nothing, and abandoned the tool, three steps into a twelve-step budget. The
+compaction has to bound. `doc` is the one thing the core prints that is *asked
+for by whoever is typing* — in an agent REPL that is the model. While it went to
+`user` alone the agent got back `playwright/browser_evaluate: function` and
+nothing else, so an agent recovering from a rejected call read the docs, was told
+nothing, and abandoned the tool, three steps into a twelve-step budget. The
 language reference advertises `doc` as the way to inspect a binding; `tell`
 makes that true.
+
+`lookupDoc` renders the answer and the built-in only decides where to put it, so
+`compactionExtension` overrides `doc` to send the same text through the
+`Compactor` instead — where it stays unbounded, but mints no name and no result
+line. See [compaction.md](./compaction.md).
 
 A channel is not registered, only emitted on, so an extension adding one costs
 the core nothing. `setWriter` remains the process-wide default sink for `user`,

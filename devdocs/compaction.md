@@ -63,15 +63,39 @@ extension** like secrets and MCP.
 - `print` — writes a value the way `echo` does (human's copy out through the
   writer, model's copy charged to the step's budget). What `result` calls for a
   top-level slice.
+- `doc` — a documentation entry, sent to both copies whole. What the overridden
+  `doc` built-in writes.
 - `compactionExtension(compactor?)` — installs `head` / `tail` / `grep`, and
-  **overrides** the core `echo` with the windowed, searchable version (the same
+  **overrides** the core `echo` with the windowed, searchable version and the
+  core `doc` with the one that reports through the compactor (the same
   `interp.def` idiom `secretsExtension` uses on the string primitives, so an
-  interpreter without this extension still has a plain `echo`).
+  interpreter without this extension still has a plain `echo` and a plain `doc`).
 
 `Compactor` holds **no values**. A named result is an ordinary global, which is
 what lets `echo`/`grep` take a *value* rather than a handle — so they work just
-as well on a `let` binding or anything the agent named itself, and `dump`/`doc`
-keep working with no special cases.
+as well on a `let` binding or anything the agent named itself, and `dump` keeps
+working with no special cases.
+
+## Reading documentation is free, and deliberately so
+
+`doc` used to write straight to the channels, bypassing the compactor entirely.
+It now goes through it like every other output, and is the one thing the
+compactor does not bound:
+
+- **Never truncated, and never charged.** A doc entry is what the agent reads in
+  order to call something correctly; a trimmed one is the argument list it was
+  missing. Capping it would save a few hundred words and cost the step that the
+  lookup was for. It does not touch `spent` either, so a step can read a binding
+  and still echo its full allowance.
+- **No name, no result line.** `doc` returns the symbol, and a top-level symbol
+  naming a global otherwise reports what it holds — so `(doc 'grep)` closed with
+  `grep: function` under its own description. `result` returns `""` for a `doc`
+  form before `nameFor` can run, so nothing is minted and the entry that was
+  printed IS the report, the same rule a bare slice follows.
+
+What the compactor still buys here is one reporting path (`say`, both copies)
+and that suppression. An unbounded output is safe precisely because its size is
+set by the doc table, not by the data the agent happens to be holding.
 
 ## Two copies of every output
 

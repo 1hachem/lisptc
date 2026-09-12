@@ -211,6 +211,7 @@ printing. Extract into a name, then echo a rendering of it.
 
 **Introspection**
 - (doc name) print a binding's signature and doc; (doc) lists all documented names.
+  Docs print whole and cost nothing against the step's echo budget: look freely.
 - (dump) list every global symbol · (import "path") load and eval a Lisp file.
 
 Globals: *gensym-counter*, *version*.
