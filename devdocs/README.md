@@ -50,8 +50,8 @@ When you fix something non-obvious, add it to the page for that area.
   and scored across models.
 - [Environment variables](./env.md) — why every variable is declared in
   `packages/env`, why the provider table is filled there rather than in
-  `@repo/shared`, the import-time snapshot that trips tests up, and the three
-  reads that are exempt.
+  `@repo/shared`, the import-time snapshot that trips tests up, the three
+  reads that are exempt, and what the `Taskfile` tasks that supply them do.
 - [The lisptc LSP's static analysis](./lsp.md) — module layout, the shared
   tokenizer grammar vs. the interpreter's `Reader`, and how `load-mcp`'s args
   reach the LSP from the interpreter.

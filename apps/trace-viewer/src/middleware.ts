@@ -1,4 +1,4 @@
-import { viewerEnv } from "@repo/env/viewer";
+import { traceViewerEnv } from "@repo/env/trace-viewer";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -10,8 +10,8 @@ export function middleware(request: NextRequest): NextResponse {
 	const url = request.nextUrl.clone();
 	const upstream = new URL(
 		url.pathname.startsWith("/ingest/static")
-			? viewerEnv.POSTHOG_ASSET_HOST
-			: viewerEnv.POSTHOG_HOST,
+			? traceViewerEnv.POSTHOG_ASSET_HOST
+			: traceViewerEnv.POSTHOG_HOST,
 	);
 
 	url.protocol = upstream.protocol;

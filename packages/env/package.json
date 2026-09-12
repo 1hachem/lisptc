@@ -16,7 +16,7 @@
     "./r2": "./src/r2.ts",
     "./repl": "./src/repl.ts",
     "./server": "./src/server.ts",
-    "./viewer": "./src/viewer.ts",
+    "./trace-viewer": "./src/trace-viewer.ts",
     "./web": "./src/web.ts",
     "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
     "./mcps/mistral/api": "./src/mcps/mistral/api.ts"

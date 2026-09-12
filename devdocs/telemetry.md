@@ -411,34 +411,44 @@ be imported from Node — which is why it is absent from that package's
 second copy of Vite into the workspace and breaks the API's plugin types, so
 the `import.meta.env` read is a cast with a comment instead.
 
-### `/viewer` — the eval viewer, `packages/env/src/viewer.ts`
+### `/trace-viewer` — the eval viewer, `packages/env/src/trace-viewer.ts`
 
 | variable | default | meaning |
 | --- | --- | --- |
-| `POSTHOG_KEY` | `VITE_POSTHOG_KEY`, then `POSTHOG_API_KEY` | the `phc_` project key; unset hides the vote entirely |
-| `POSTHOG_SURVEY_ID` | `VITE_POSTHOG_SURVEY_ID` | the survey the votes answer; unset hides the vote entirely |
+| `NEXT_PUBLIC_POSTHOG_KEY` | — | the `phc_` project key; unset hides the vote entirely |
+| `NEXT_PUBLIC_POSTHOG_SURVEY_ID` | — | the survey the votes answer; unset hides the vote entirely |
+| `NEXT_PUBLIC_ENVIRONMENT` | `dev` | tagged onto every event as `environment`, the same dimension `apps/app` tags |
 | `POSTHOG_HOST` | `https://us.i.posthog.com` | what the `/ingest` middleware forwards events to |
 | `POSTHOG_ASSET_HOST` | `https://us-assets.i.posthog.com` | what it forwards `/ingest/static/*` to |
 | `POSTHOG_UI_HOST` | `https://us.posthog.com` | where posthog-js's "view in PostHog" links point, since a proxied `api_host` hides the region |
 
-The viewer needs **no secret of its own**: each name falls back to the one the
-app or the server already uses, so `task evals:open` picks the key and the
-survey up from `/web` and `/analytics` and a vote works with nothing added to
-Infisical. Setting `POSTHOG_KEY` or `POSTHOG_SURVEY_ID` overrides that, which is
-how the eval reviews get their own survey when they should.
+The viewer has **its own Infisical path**, `/trace-viewer`, and borrows nothing
+from `/web`. The two front-ends carry the same three values under different
+names on purpose: `VITE_*` for the app, `NEXT_PUBLIC_*` for the viewer. A shared
+name would mean one path could only ever be loaded for one of them, and a task
+that loads both would silently hand the app the viewer's key.
 
-Both ids are **optional**, unlike `/web`'s: a clone with no PostHog credentials
-must still read reports, so `reviewTarget()` returns undefined and the buttons
-are not rendered rather than rendered and dead.
+The three hosts are **not** `NEXT_PUBLIC_`. Only the middleware reads them, it
+runs server-side, and a region that the browser never needs to know should not
+be inlined into a bundle to be read back out.
 
-**These are read on the server, not inlined into the bundle.** The obvious shape
-for a Next app is `NEXT_PUBLIC_*`, and it is the wrong one here: those are
-substituted at build time, `task evals:open` builds the viewer before it has any
-secrets, and the result is a page that renders with the vote silently missing.
-The report page is `force-dynamic` already, so it reads the key per request and
-hands it to the transcript as a prop — the same `phc_` key the browser would
-have carried anyway, publishable by design. Changing the survey is then a
-restart, not a rebuild.
+The two ids are **optional**, unlike `/web`'s: a clone with no PostHog
+credentials must still read reports, so `reviewTarget()` returns undefined and
+the buttons are not rendered rather than rendered and dead.
+
+`NEXT_PUBLIC_*` is substituted at **build** time, so the build has to run under
+the secrets: `task evals:open` runs `pnpm build` and `pnpm start` inside a
+single Infisical invocation for the same reason `task start:app` does, and a
+build outside one bakes an undefined key into the bundle and the vote vanishes
+with no error anywhere. `turbo.json` therefore lists `NEXT_PUBLIC_*` and
+`VITE_*` in the `build` task's `env`: with `envMode: "loose"` and no such list,
+two builds under different keys hash the same and turbo would restore the wrong
+bundle from cache.
+
+`reviewTarget()` still reads the key on the server and hands it to the
+transcript as a prop. The key is public either way; what the server keeps is the
+decision of whether the vote renders at all, in one place rather than in the
+island.
 
 The viewer proxies PostHog too, at the same `/ingest` path, because a blocked
 vote is a lost vote and a reviewer should not have to know that. It needs none
@@ -463,6 +473,11 @@ dev-app` and `task start:app` run under `/web /analytics` — `/web` for the
 bundle, and `/analytics` as well because the app has a *server* half of its own
 now: the proxy resolves `POSTHOG_HOST` and `POSTHOG_ASSET_HOST` per request, at
 runtime, in the same process that serves the pages.
+
+`task evals:open` and `task evals:dev` run under `/assets /trace-viewer` —
+`/assets` for the R2 credentials the reports are read through, `/trace-viewer`
+for the vote. The viewer's proxy needs no `/analytics`: its two upstream hosts
+default to the US region, which is what `/analytics` sets anyway.
 
 `/api` holds `APP_URL`, the single browser origin the API answers to
 (`packages/env/src/api.ts`). It is required and has no wildcard fallback, so an

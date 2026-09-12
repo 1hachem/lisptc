@@ -1,21 +1,22 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
-export const viewerEnv = createEnv({
+export const traceViewerEnv = createEnv({
+	clientPrefix: "NEXT_PUBLIC_",
+	client: {
+		NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
+		NEXT_PUBLIC_POSTHOG_SURVEY_ID: z.string().optional(),
+		NEXT_PUBLIC_ENVIRONMENT: z.enum(["dev", "staging", "prod"]).default("dev"),
+	},
 	server: {
-		POSTHOG_KEY: z.string().optional(),
-		POSTHOG_SURVEY_ID: z.string().optional(),
 		POSTHOG_HOST: z.url().default("https://us.i.posthog.com"),
 		POSTHOG_ASSET_HOST: z.url().default("https://us-assets.i.posthog.com"),
 		POSTHOG_UI_HOST: z.url().default("https://us.posthog.com"),
 	},
 	runtimeEnv: {
-		POSTHOG_KEY:
-			process.env.POSTHOG_KEY ??
-			process.env.VITE_POSTHOG_KEY ??
-			process.env.POSTHOG_API_KEY,
-		POSTHOG_SURVEY_ID:
-			process.env.POSTHOG_SURVEY_ID ?? process.env.VITE_POSTHOG_SURVEY_ID,
+		NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
+		NEXT_PUBLIC_POSTHOG_SURVEY_ID: process.env.NEXT_PUBLIC_POSTHOG_SURVEY_ID,
+		NEXT_PUBLIC_ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT,
 		POSTHOG_HOST: process.env.POSTHOG_HOST,
 		POSTHOG_ASSET_HOST: process.env.POSTHOG_ASSET_HOST,
 		POSTHOG_UI_HOST: process.env.POSTHOG_UI_HOST,

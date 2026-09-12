@@ -9,6 +9,7 @@
     "build": {
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_*", "VITE_*"],
       "dependsOn": ["^build"]
     },
     "typecheck": {

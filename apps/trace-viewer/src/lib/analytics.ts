@@ -19,6 +19,14 @@ function client(target: ReviewTarget): typeof posthog {
 			capture_performance: false,
 			disable_session_recording: true,
 			persistence: "localStorage",
+			before_send: (event) => {
+				if (event)
+					event.properties = {
+						...event.properties,
+						environment: target.environment,
+					};
+				return event;
+			},
 		});
 		started = target.key;
 	}

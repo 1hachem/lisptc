@@ -13,10 +13,6 @@ tasks:
       vars: [ENV, PATHS, CMD]
     vars:
       DIR: '{{.DIR | default "."}}'
-    # node directly rather than `pnpm tsx`: pnpm exits 130 on the Ctrl-C that
-    # reaches the whole process group, which makes task report a failed task on
-    # every ordinary shutdown. Run the script as task's own child so its exit
-    # code is the one task sees.
     cmd: |
       node --no-warnings --experimental-transform-types ./scripts/infisical-run.ts -e {{.ENV}} \
        --projectId={{.PROJECTID}} \
@@ -40,8 +36,6 @@ tasks:
         sh: nix eval --impure --raw --expr builtins.currentSystem
     cmds:
       - nix flake check --no-warn-dirty
-      # nix flake check hides check output once cached; print the stored
-      # ptcfmt test summary so the pass count is always visible.
       - nix build --no-warn-dirty --no-link ".#checks.{{.SYSTEM}}.ptcfmt"
       - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
 
@@ -68,10 +62,9 @@ tasks:
       PORT: '{{.PORT | default "3200"}}'
       URL: 'http://localhost:{{.PORT}}'
     cmds:
-      - pnpm run build --filter @lisptc/trace-viewer
       - |
         (
-          for _ in $(seq 60); do
+          for _ in $(seq 480); do
             if curl -sf -o /dev/null "{{.URL}}"; then
               if command -v xdg-open >/dev/null 2>&1; then xdg-open "{{.URL}}"
               elif command -v open >/dev/null 2>&1; then open "{{.URL}}"
@@ -85,9 +78,20 @@ tasks:
         ) >/dev/null 2>&1 &
       - task: _infisical-run
         vars:
-          ENV: dev
-          PATHS: "/assets /analytics /web"
-          CMD: 'PORT={{.PORT}} pnpm --filter @lisptc/trace-viewer start'
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/assets /trace-viewer"
+          CMD: 'PORT={{.PORT}} pnpm run build --filter @lisptc/trace-viewer && pnpm --filter @lisptc/trace-viewer start'
+
+  evals:dev:
+    desc: run the eval trace viewer in dev mode with access to secrets
+    vars:
+      PORT: '{{.PORT | default "3200"}}'
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/assets /trace-viewer"
+          CMD: 'PORT={{.PORT}} pnpm run dev --filter @lisptc/trace-viewer'
 
   dev:
     deps: [dev-app, dev-api]
@@ -108,14 +112,10 @@ tasks:
     desc: build and serve both the app and the api
     deps: [start:app, start:api]
 
-  # `build` goes through the root script, so turbo caches it and builds whatever
-  # the workspace depends on first; `start` exists only on the workspace itself.
-  # Both halves run under the same secrets, since the build reads env too.
   start:app:
     desc: build the app and serve the built output with access to secrets
     cmds:
       - task: _infisical-run
-        # `ENV=prod task start:app` to serve against another Infisical environment.
         vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/web /analytics", CMD: "pnpm run build --filter app && pnpm --filter app start" }
 
   start:api:
@@ -125,7 +125,6 @@ tasks:
         vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai /analytics /api", CMD: "pnpm run build --filter api && pnpm --filter api start" }
 
 
-  # The interpreter starts this itself, through the `ocr` entry in mcp.toolkit.json
   mcp:sheets:
     desc: serve the Google Sheets MCP server (OAuth resource server on :8911)
     cmds:
