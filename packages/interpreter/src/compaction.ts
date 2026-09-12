@@ -206,6 +206,13 @@ export class Compactor {
 		this.dropped = 0;
 	}
 
+	reset(): void {
+		this.counters.clear();
+		this.stepping = false;
+		this.spent = 0;
+		this.dropped = 0;
+	}
+
 	attach(channels: Channels): void {
 		this.channels = channels;
 	}
@@ -705,6 +712,7 @@ const GREP_ARGS: DocArg[] = [
 ];
 
 function registerCompaction(interp: Interp, c: Compactor): void {
+	c.reset();
 	c.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (interp, form, next) {
@@ -806,8 +814,20 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 	return n;
 }
 
+export interface CompactionExtension extends InterpExtension {
+	readonly compactor: Compactor;
+}
+
 export function compactionExtension(
 	compactor: Compactor = new Compactor(),
-): InterpExtension {
-	return (interp: Interp): void => registerCompaction(interp, compactor);
+): CompactionExtension {
+	return Object.assign(
+		(interp: Interp): void => registerCompaction(interp, compactor),
+		{ compactor },
+	);
+}
+
+export function compactorOf(extension: InterpExtension): Compactor | undefined {
+	const carried = (extension as Partial<CompactionExtension>).compactor;
+	return carried instanceof Compactor ? carried : undefined;
 }

@@ -121,17 +121,23 @@ already says how much is below.
 
 ## Consuming from a host
 
-Unlike `secretsExtension`, whose store is host configuration that must survive a
-`reset()`, the host creates a **new `Compactor` per interpreter**: the counters
-have to die with the globals they named, or a reset leaves the count climbing
-past names that are no longer bound.
+A host configures the extension once, with the word limit it wants, and reuses it
+for the life of the REPL:
 
 ```ts
-private freshInterp(): Interp {
-  this.compactor = new Compactor(this.wordLimit);
-  return new Interp({ extensions: [..., compactionExtension(this.compactor)] });
-}
+new MemoryRepl({
+  extensions: modelFacingExtensions({
+    compaction: compactionExtension(new Compactor(wordLimit)),
+  }),
+});
 ```
+
+The counters still have to die with the globals they named, or a reset leaves the
+count climbing past names that are no longer bound. So **installing is the
+boundary**: `registerCompaction` calls `Compactor.reset()` before it attaches to
+the new interp's channels. A reset therefore restarts the numbering without the
+host rebuilding anything, and the extension carries its `compactor` (read back
+with `compactorOf`) so the REPL can still open and close each step.
 
 `MemoryRepl` is the choke point. `evalOutput` returns both copies; `eval`
 returns `model`, so `apps/mcp` and `session-server.ts` need no code of their own.

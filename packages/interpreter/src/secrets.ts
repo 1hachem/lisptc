@@ -113,16 +113,30 @@ export interface SecretsOptions {
 	envFile?: boolean | string;
 }
 
+export interface SecretsExtension extends InterpExtension {
+	readonly store: SecretsStore;
+}
+
 export function secretsExtension(
 	options: SecretsOptions = {},
-): InterpExtension {
+): SecretsExtension {
 	const store = options.store ?? new EnvSecretsStore();
 	if (options.envFile)
 		loadSecretsFromEnvFile(
 			store,
 			options.envFile === true ? undefined : options.envFile,
 		);
-	return (interp: Interp): void => registerSecrets(interp, store);
+	return Object.assign(
+		(interp: Interp): void => registerSecrets(interp, store),
+		{
+			store,
+		},
+	);
+}
+
+export function storeOf(extension: InterpExtension): SecretsStore | undefined {
+	const carried = (extension as Partial<SecretsExtension>).store;
+	return typeof carried?.get === "function" ? carried : undefined;
 }
 
 class Secret implements ToJson {

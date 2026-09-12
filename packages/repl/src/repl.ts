@@ -1,8 +1,8 @@
 import { MODEL, USER } from "@repo/interpreter/channels";
 import {
 	type Bounded,
-	Compactor,
-	MAX_WORDS,
+	type Compactor,
+	compactorOf,
 } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
@@ -16,10 +16,13 @@ import {
 	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
-import type { Dispatch } from "@repo/interpreter/promises";
 import { isTruncated } from "@repo/interpreter/prose";
-import { EnvSecretsStore, type SecretsStore } from "@repo/interpreter/secrets";
-import type { LlmObserver } from "@repo/llm/llm";
+import { type SecretsStore, storeOf } from "@repo/interpreter/secrets";
+import {
+	isLlmExtension,
+	type LlmExtension,
+	type LlmObserver,
+} from "@repo/llm/llm";
 import { modelFacingExtensions } from "./extensions.ts";
 
 export interface Repl {
@@ -32,15 +35,22 @@ export interface InMemoryRepl extends Repl {
 }
 
 export interface ReplOptions {
-	wordLimit?: number;
-	secretsStore?: SecretsStore;
 	extensions?: InterpExtension[];
-	mcpDispatch?: Dispatch;
-	toolkitJson?: string;
 }
 
 interface EvalResult extends Bounded {
 	skipped: string[];
+}
+
+function find<T>(
+	extensions: readonly InterpExtension[],
+	carried: (extension: InterpExtension) => T | undefined,
+): T | undefined {
+	for (const extension of extensions) {
+		const value = carried(extension);
+		if (value !== undefined) return value;
+	}
+	return undefined;
 }
 
 function skipNotes(skipped: string[]): string {
@@ -54,22 +64,17 @@ function render({ model, user, skipped }: EvalResult): Bounded {
 
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
-	private compactor: Compactor;
 	private inFlight: Promise<void> = Promise.resolve();
-	readonly secrets: SecretsStore;
-	llmObserver?: LlmObserver;
-	private readonly wordLimit: number;
 	private readonly extensions: InterpExtension[];
-	private readonly mcpDispatch?: Dispatch;
-	private readonly toolkitJson?: string;
+	private readonly compactor?: Compactor;
+	private readonly llm?: LlmExtension;
+	readonly secrets?: SecretsStore;
 
 	constructor(options: ReplOptions = {}) {
-		this.wordLimit = options.wordLimit ?? MAX_WORDS;
-		this.compactor = new Compactor(this.wordLimit);
-		this.secrets = options.secretsStore ?? new EnvSecretsStore();
-		this.extensions = options.extensions ?? [];
-		this.mcpDispatch = options.mcpDispatch;
-		this.toolkitJson = options.toolkitJson;
+		this.extensions = options.extensions ?? modelFacingExtensions();
+		this.compactor = find(this.extensions, compactorOf);
+		this.secrets = find(this.extensions, storeOf);
+		this.llm = this.extensions.find(isLlmExtension);
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -77,18 +82,16 @@ export class MemoryRepl implements InMemoryRepl {
 		return this.currentInterp;
 	}
 
+	get llmObserver(): LlmObserver | undefined {
+		return this.llm?.observe;
+	}
+
+	set llmObserver(observer: LlmObserver | undefined) {
+		if (this.llm) this.llm.observe = observer;
+	}
+
 	private freshInterp(): Interp {
-		this.compactor = new Compactor(this.wordLimit);
-		const interp = new Interp({
-			extensions: modelFacingExtensions({
-				compactor: this.compactor,
-				secrets: this.secrets,
-				observe: (call) => this.llmObserver?.(call),
-				extra: this.extensions,
-				...(this.mcpDispatch ? { mcpDispatch: this.mcpDispatch } : {}),
-				...(this.toolkitJson ? { toolkitJson: this.toolkitJson } : {}),
-			}),
-		});
+		const interp = new Interp({ extensions: this.extensions });
 		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
@@ -113,7 +116,7 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private async evaluateOne(code: string): Promise<EvalResult> {
-		this.compactor.beginStep();
+		this.compactor?.beginStep();
 		let model = "";
 		let user = "";
 		const skipped: string[] = [];
@@ -134,8 +137,10 @@ export class MemoryRepl implements InMemoryRepl {
 		try {
 			await runAsync(this.currentInterp, code);
 		} catch (ex) {
-			if (ex instanceof EvalException) error = this.compactor.error(`${ex}\n`);
-			else if (ex === EndOfFile) {
+			if (ex instanceof EvalException) {
+				const text = `${ex}\n`;
+				error = this.compactor?.error(text) ?? { model: text, user: text };
+			} else if (ex === EndOfFile) {
 				const text = "unbalanced expression (unexpected end of input)\n";
 				error = { model: text, user: text };
 			} else throw ex;
@@ -143,7 +148,7 @@ export class MemoryRepl implements InMemoryRepl {
 			for (const off of unsubscribe) off();
 		}
 		return {
-			model: model + this.compactor.endStep() + error.model,
+			model: model + (this.compactor?.endStep() ?? "") + error.model,
 			user: user + error.user,
 			skipped,
 		};

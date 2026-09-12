@@ -1,39 +1,33 @@
 import {
-	type Compactor,
+	type CompactionExtension,
 	compactionExtension,
 } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import { mcpExtension } from "@repo/interpreter/mcp";
-import type { Dispatch } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
-import { type SecretsStore, secretsExtension } from "@repo/interpreter/secrets";
-import { type LlmObserver, llmExtension } from "@repo/llm/llm";
+import {
+	type SecretsExtension,
+	secretsExtension,
+} from "@repo/interpreter/secrets";
+import { type LlmExtension, llmExtension } from "@repo/llm/llm";
 
-export interface ModelFacingOptions {
-	compactor: Compactor;
-	secrets: SecretsStore;
-	envFile?: boolean;
-	observe?: LlmObserver;
-	mcpDispatch?: Dispatch;
-	toolkitJson?: string;
+export interface ModelFacingParts {
+	secrets?: SecretsExtension;
+	mcp?: InterpExtension;
+	llm?: LlmExtension;
+	compaction?: CompactionExtension;
 	extra?: InterpExtension[];
 }
 
 export function modelFacingExtensions(
-	options: ModelFacingOptions,
+	parts: ModelFacingParts = {},
 ): InterpExtension[] {
 	return [
-		secretsExtension({
-			store: options.secrets,
-			...(options.envFile ? { envFile: true } : {}),
-		}),
-		mcpExtension({
-			...(options.mcpDispatch ? { dispatch: options.mcpDispatch } : {}),
-			...(options.toolkitJson ? { toolkitJson: options.toolkitJson } : {}),
-		}),
-		llmExtension(options.observe ? { observe: options.observe } : {}),
-		compactionExtension(options.compactor),
+		parts.secrets ?? secretsExtension(),
+		parts.mcp ?? mcpExtension(),
+		parts.llm ?? llmExtension(),
+		parts.compaction ?? compactionExtension(),
 		proseExtension(),
-		...(options.extra ?? []),
+		...(parts.extra ?? []),
 	];
 }

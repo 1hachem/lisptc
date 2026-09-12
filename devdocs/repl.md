@@ -14,24 +14,56 @@ which is what stops the two drifting. They had drifted: the CLI was missing the
 LLM extension for exactly as long as the roster was written twice, so `pnpm repl`
 silently lacked `llm/complete` while the agent had it.
 
-The two callers differ in one argument each. The CLI passes `envFile: true`, so a
-terminal session loads secrets from the project `.env`; a hosted REPL does not,
-because its host injects secrets instead. `MemoryRepl` passes an `observe`
-indirection for LLM telemetry. Anything else that differs between hosts belongs
-in that options object rather than in a second list.
+**A host configures an extension, never the REPL.** The roster takes one slot per
+extension, each holding an already-configured extension, and fills the rest with
+defaults:
+
+```ts
+modelFacingExtensions({
+  secrets: secretsExtension({ store, envFile: true }),
+  mcp: mcpExtension({ dispatch }),
+  compaction: compactionExtension(new Compactor(wordLimit)),
+  extra: [trace.extension()],
+})
+```
+
+`ReplOptions` is therefore one field, `extensions`. It used to be the union of
+every extension's knobs — `secretsStore`, `wordLimit`, `mcpDispatch`,
+`toolkitJson`, plus an `extra` list — each threaded through a `MemoryRepl` field
+into `freshInterp()`, so teaching one extension a new option meant editing the
+REPL, the roster and the options type. A REPL does not know what an MCP dispatch
+or a word limit is, and now does not have to.
+
+### What the REPL still needs back
+
+Three things belong to the REPL's own job rather than to the language: the step
+boundary (`beginStep`/`endStep`), the store a host pushes secrets into, and the
+per-turn LLM observer. Instead of taking them as options, each extension
+**carries** what it was configured with, and the REPL reads it off the list:
+
+- `compactionExtension(c)` carries `compactor`, found with `compactorOf`.
+- `secretsExtension({ store })` carries `store`, found with `storeOf`.
+- `llmExtension({ observe })` carries a settable `observe`, found with
+  `isLlmExtension`; `repl.llmObserver` is a getter/setter onto it, which is why
+  the observer survives a `reset()` — it lives on the extension, not the interp.
+
+Each is optional. A roster with no compaction reports nothing and caps nothing; a
+roster with no secrets leaves `repl.secrets` undefined. That is the honest
+reading of "the REPL speaks whatever language it was handed".
 
 ## `MemoryRepl`
 
 ### What lives across a `reset()`, and what dies with the interp
 
-- The **secrets store** is held for the life of the REPL. `freshInterp()`
-  re-installs the secrets extension over that same store on every reset, so a
-  secret a host pushed in via `repl.secrets.set(...)` survives instead of dying
-  with the interp.
-- The **`Compactor`** is recreated with every interp. The naming counters must die
-  with the globals they named, or a reset leaves the count climbing past unbound
-  names. This is deliberately the opposite of the secrets store: one is host
-  configuration, the other is per-interpreter state.
+- The **secrets store** is held by the secrets extension, which the REPL keeps for
+  its lifetime and re-installs on every fresh interp, so a secret a host pushed in
+  (`repl.secrets.set(...)`, or the store the host configured the extension with)
+  survives instead of dying with the interp.
+- The **`Compactor`** outlives the interp but not its numbering. The counters must
+  die with the globals they named, or a reset leaves the count climbing past
+  unbound names, so `registerCompaction` calls `Compactor.reset()` as it installs.
+  Installing *is* the per-interpreter boundary, which is what lets one configured
+  extension be reused across every reset while still behaving per interp.
 
 The outgoing interp is `dispose()`d first, so an extension holding something the
 language cannot reclaim — a live MCP client — releases it rather than leaking
@@ -39,11 +71,11 @@ one per reset.
 
 ### Construction ordering trap
 
-`this.wordLimit` is assigned **before** `freshInterp()`, which reads it. The
-`setup()` hook has the same hazard from the other side: the base constructor
-calls it before a subclass's field initializers have run, so an override must
-tolerate its own fields still being `undefined`. `AgentRepl.setup` guards
-`conversationVars` for exactly this reason.
+The extension list and the handles read off it are assigned **before**
+`freshInterp()`, which uses them. The `setup()` hook has the same hazard from the
+other side: the base constructor calls it before a subclass's field initializers
+have run, so an override must tolerate its own fields still being `undefined`.
+`AgentRepl.setup` guards `conversationVars` for exactly this reason.
 
 ### Evaluation is async, and serialized
 

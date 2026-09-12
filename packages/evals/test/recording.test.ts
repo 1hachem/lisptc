@@ -1,6 +1,7 @@
+import type { SecretsStore } from "@repo/interpreter/secrets";
 import type { AgentRepl } from "@repo/repl/repl";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { tracedRepl } from "../src/harness.ts";
+import { type Harness, tracedRepl } from "../src/harness.ts";
 import type { MockSpec } from "../src/mocks.ts";
 import type { Trace } from "../src/trace.ts";
 
@@ -28,7 +29,7 @@ const PLAYWRIGHT: MockSpec = {
 	},
 };
 
-function replFor(spec: MockSpec): { repl: AgentRepl; trace: Trace } {
+function replFor(spec: MockSpec): Harness {
 	return tracedRepl({ mocks: spec });
 }
 
@@ -109,12 +110,13 @@ describe("a mocked MCP server", () => {
 	});
 
 	test("a secret never lands in the trace", async () => {
-		({ repl, trace } = replFor({
+		let secrets: SecretsStore;
+		({ repl, trace, secrets } = replFor({
 			servers: {
 				api: { tools: [{ name: "send" }], calls: { send: { ok: true } } },
 			},
 		}));
-		repl.secrets.set({ REPL_TOKEN: "s3cr3t-value" });
+		secrets.set({ REPL_TOKEN: "s3cr3t-value" });
 		await repl.eval('(await (load-mcp :name "api" :command "none"))');
 		await repl.eval('(api/send :token (secret "REPL_TOKEN"))');
 

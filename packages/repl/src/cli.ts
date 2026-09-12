@@ -1,6 +1,6 @@
 import { replEnv } from "@repo/env/repl";
 import { MODEL } from "@repo/interpreter/channels";
-import { Compactor } from "@repo/interpreter/compaction";
+import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
 import {
 	EndOfFile,
 	EvalException,
@@ -13,7 +13,7 @@ import {
 	setWriter,
 	stripProse,
 } from "@repo/interpreter/lisp";
-import { EnvSecretsStore } from "@repo/interpreter/secrets";
+import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { modelFacingExtensions } from "./extensions.ts";
 import type { Repl } from "./repl.ts";
 import {
@@ -30,7 +30,7 @@ const write = (s: string): void => {
 
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
-	private compactor: Compactor = new Compactor();
+	private readonly compactor = new Compactor();
 	private readonly secretsStore = new EnvSecretsStore();
 
 	constructor() {
@@ -42,12 +42,13 @@ class InteractiveRepl implements Repl {
 	}
 
 	private freshInterp(): Interp {
-		this.compactor = new Compactor();
 		const interp = new Interp({
 			extensions: modelFacingExtensions({
-				compactor: this.compactor,
-				secrets: this.secretsStore,
-				envFile: true,
+				secrets: secretsExtension({
+					store: this.secretsStore,
+					envFile: true,
+				}),
+				compaction: compactionExtension(this.compactor),
 			}),
 		});
 		runSync(interp, prelude);

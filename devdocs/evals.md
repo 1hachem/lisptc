@@ -156,10 +156,11 @@ promise combinators. A check written against those from the runtime side would
 silently never fire; `called` covers the local built-ins by reading the
 recorded *form* instead.
 
-Both hang off options that did not exist before: `mcpDispatch`, `toolkitJson`
-and `extensions` on `MemoryRepl`, forwarded from `freshInterp` so a recorder
-**survives `reset()`**. The `setup(interp)` hook is a tempting shortcut but
-cannot reach the `Dispatch`, which is captured in a closure at `registerMcp`
+Both hang off the harness's own roster: `tracedRepl` builds
+`mcpExtension({ dispatch: trace.dispatch(...) })` and adds `trace.extension()`
+as an extra, and the REPL re-installs that same list on every fresh interp, so a
+recorder **survives `reset()`**. The `setup(interp)` hook is a tempting shortcut
+but cannot reach the `Dispatch`, which is captured in a closure at `registerMcp`
 time.
 
 ### One call, two seams, one hit
