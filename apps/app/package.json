@@ -20,6 +20,7 @@
     "@posthog/react": "^1.10.5",
     "@repo/bloub": "workspace:*",
     "@repo/env": "workspace:*",
+    "@repo/shared": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.5",
     "@tanstack/react-router": "^1.170.32",

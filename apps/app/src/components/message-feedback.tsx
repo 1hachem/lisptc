@@ -1,40 +1,9 @@
 import type { ExpressionId } from "@repo/bloub";
-import { useEffect, useRef, useState } from "react";
+import type { Thumb } from "@repo/shared/feedback";
+import { MessageFeedback as Feedback } from "@repo/ui/components/message-feedback.tsx";
 import { useAgent } from "../lib/agent.tsx";
 import { captureFeedback } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
-
-type Thumb = "up" | "down";
-
-const POSITIVE_MESSAGES = [
-	"thanks for the nice words",
-	"thanks",
-	"maaa man",
-	"you're too kind",
-	"i'll be here all week",
-	"flattery will get you everywhere",
-	"much obliged, friend",
-	"you really know how to make a bot blush",
-];
-
-const NEGATIVE_MESSAGES = [
-	"sorry about that",
-	"copy that sir",
-	"my bad, fixing my circuits",
-	"i'll do better next time",
-	"back to the drawing board",
-	"noted, working on it",
-	"rough day at the office",
-	"i'll blame my training data",
-	"oops, that was my evil twin",
-];
-
-function randomMessage(thumb: Thumb): string {
-	const arr = thumb === "up" ? POSITIVE_MESSAGES : NEGATIVE_MESSAGES;
-	return arr[Math.floor(Math.random() * arr.length)];
-}
-
-const RESPONSE: Record<Thumb, number> = { up: 1, down: 2 };
 
 const FACE: Record<Thumb, ExpressionId> = { up: "heureux", down: "triste" };
 
@@ -47,108 +16,19 @@ export function MessageFeedback({
 }) {
 	const { threadId } = useChatSession();
 	const { say } = useAgent();
-	const [thumb, setThumb] = useState<Thumb | null>(null);
-	const submission = useRef<string | null>(null);
-	const [asking, setAsking] = useState(false);
-	const [draft, setDraft] = useState("");
-	const [thanked, setThanked] = useState(false);
-	const [feedbackText, setFeedbackText] = useState("");
-	const field = useRef<HTMLInputElement>(null);
-
-	useEffect(() => {
-		if (asking) field.current?.focus();
-	}, [asking]);
-
-	const rate = (value: Thumb) => {
-		const id = crypto.randomUUID();
-		submission.current = id;
-		setThumb(value);
-		setAsking(true);
-		say({ face: FACE[value] });
-		captureFeedback({
-			$survey_response: RESPONSE[value],
-			$ai_trace_id: threadId,
-			$survey_submission_id: id,
-			$survey_completed: true,
-			...(messageId ? { message_id: messageId } : {}),
-			message_index: index,
-		});
-	};
-
-	const explain = () => {
-		const text = draft.trim();
-		if (!text || !thumb || !submission.current) return;
-		captureFeedback({
-			$survey_response: RESPONSE[thumb],
-			$survey_response_1: text,
-			$ai_trace_id: threadId,
-			$survey_submission_id: submission.current,
-			$survey_completed: true,
-			...(messageId ? { message_id: messageId } : {}),
-			message_index: index,
-		});
-		setDraft("");
-		setAsking(false);
-		setFeedbackText(randomMessage(thumb));
-		setThanked(true);
-	};
 
 	return (
-		<>
-			<div className="absolute top-0 left-full ml-3 flex select-none gap-1.5 text-[11px] leading-[1.7]">
-				<button
-					type="button"
-					onClick={() => rate("up")}
-					title="helpful"
-					className={`transition-opacity hover:text-fg ${
-						thumb === "up"
-							? "text-yellow opacity-100"
-							: "text-dim opacity-0 group-hover:opacity-100 focus:opacity-100"
-					}`}
-				>
-					▲
-				</button>
-				<button
-					type="button"
-					onClick={() => rate("down")}
-					title="not helpful"
-					className={`transition-opacity hover:text-fg ${
-						thumb === "down"
-							? "text-yellow opacity-100"
-							: "text-dim opacity-0 group-hover:opacity-100 focus:opacity-100"
-					}`}
-				>
-					▼
-				</button>
-			</div>
-
-			{asking && (
-				<div className="mt-1 flex items-center gap-2 border-yellow/40 border-l pl-3">
-					<span className="select-none text-[11px] text-dim">
-						{thumb === "up" ? "what worked?" : "what went wrong?"}
-					</span>
-					<input
-						ref={field}
-						value={draft}
-						onChange={(e) => setDraft(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") {
-								e.preventDefault();
-								explain();
-							}
-							if (e.key === "Escape") setAsking(false);
-						}}
-						placeholder="optional — ⏎ to send, esc to skip"
-						className="min-w-0 flex-1 bg-transparent text-[12px] text-yellow caret-yellow outline-none placeholder:text-dim"
-					/>
-				</div>
-			)}
-
-			{thanked && (
-				<div className="mt-1 select-none text-[11px] text-dim">
-					{feedbackText}
-				</div>
-			)}
-		</>
+		<Feedback
+			capture={(properties) =>
+				captureFeedback({
+					...properties,
+					$ai_trace_id: threadId,
+					...(messageId ? { message_id: messageId } : {}),
+					message_index: index,
+				})
+			}
+			className="absolute top-0 left-full ml-3"
+			onRate={(thumb) => say({ face: FACE[thumb] })}
+		/>
 	);
 }
