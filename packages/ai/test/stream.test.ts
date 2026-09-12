@@ -1,3 +1,5 @@
+import { providerSpecs } from "@repo/env/providers";
+import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 
@@ -21,6 +23,8 @@ interface WireMessage {
 		meta?: {
 			at?: string;
 			durationMs?: number;
+			provider?: string;
+			model?: string;
 			inputTokens?: number;
 			outputTokens?: number;
 			cachedInputTokens?: number;
@@ -87,6 +91,36 @@ describe("chat stream", () => {
 			outputTokens: 6,
 			cachedInputTokens: 10,
 			steps: 2,
+		});
+	});
+
+	test("every model call names the model that was billed for it", async () => {
+		const messages = await finalMessages(
+			streamChatResponse(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{ provider: "fireworks", model: "a-pinned-one" },
+			),
+		);
+
+		for (const m of messages.filter((m) => m.type === "ai"))
+			expect(m.additional_kwargs?.meta).toMatchObject({
+				provider: "fireworks",
+				model: "a-pinned-one",
+			});
+	});
+
+	test("an unpinned call names the default it actually ran on", async () => {
+		const messages = await finalMessages(
+			streamChatResponse({
+				messages: [{ type: "human", content: "what is 1 + 2?" }],
+			}),
+		);
+
+		expect(
+			messages.find((m) => m.type === "ai")?.additional_kwargs?.meta,
+		).toMatchObject({
+			provider: DEFAULT_PROVIDER,
+			model: providerSpecs[DEFAULT_PROVIDER].defaultModel,
 		});
 	});
 

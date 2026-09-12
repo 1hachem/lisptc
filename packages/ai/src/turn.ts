@@ -1,6 +1,7 @@
 import type { AgentRepl } from "@repo/repl/repl";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
 import { MAX_STEPS } from "./prompts/lisp.ts";
+import { resolveModel } from "./provider.ts";
 import {
 	evalCode,
 	proseFeedbackContent,
@@ -30,6 +31,8 @@ export interface TurnOptions {
 export interface StepMeta {
 	at: string;
 	durationMs: number;
+	provider: string;
+	model: string;
 	inputTokens?: number;
 	outputTokens?: number;
 	cachedInputTokens?: number;
@@ -60,10 +63,16 @@ function lastUserPrompt(transcript: TranscriptEntry[]): string {
 	return transcript.filter((e) => e.role === "user").at(-1)?.content ?? "";
 }
 
-function stepMeta(startedAt: number, usage: TokenUsage | undefined): StepMeta {
+function stepMeta(
+	startedAt: number,
+	usage: TokenUsage | undefined,
+	ran: { provider: string; model: string },
+): StepMeta {
 	return {
 		at: new Date().toISOString(),
 		durationMs: Date.now() - startedAt,
+		provider: ran.provider,
+		model: ran.model,
 		...(usage
 			? {
 					inputTokens: usage.input,
@@ -83,13 +92,14 @@ export async function* runAgentTurn(
 	const { threadId, config, signal, identity, maxSteps = MAX_STEPS } = options;
 	const transcript = [...messages];
 
+	const ran = resolveModel(config?.provider, config?.model);
 	const trace: TraceContext = {
 		threadId: threadId ?? crypto.randomUUID(),
 		turnId: crypto.randomUUID(),
 		distinctId: identity?.distinctId,
 		sessionId: identity?.sessionId,
-		provider: config?.provider,
-		model: config?.model,
+		provider: ran.provider,
+		model: ran.model,
 	};
 	const tracedConfig: AgentConfig = { ...config, trace };
 	const startedAt = Date.now();
@@ -149,7 +159,7 @@ export async function* runAgentTurn(
 				stepId,
 				code,
 				...(reasoning ? { reasoning } : {}),
-				meta: stepMeta(stepStartedAt, usage),
+				meta: stepMeta(stepStartedAt, usage, ran),
 			};
 			transcript.push({ role: "assistant", content: code });
 
