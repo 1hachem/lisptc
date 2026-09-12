@@ -15,9 +15,11 @@
     "test:evals": "vitest run --config vitest.evals.config.ts"
   },
   "dependencies": {
+    "@repo/env": "workspace:*",
     "@repo/evals": "workspace:*",
     "@repo/ui": "workspace:*",
     "next": "^15.5.4",
+    "posthog-js": "^1.425.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

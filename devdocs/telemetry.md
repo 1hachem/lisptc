@@ -174,6 +174,35 @@ the single turn inside it — `message_id` is what narrows it. Pinning a vote to
 its exact turn would mean the server handing its `$ai_span_id` (`turnId` in
 `stream.ts`) to the client, which it does not do today.
 
+### The same gesture in the eval viewer
+
+`apps/trace-viewer` votes on an agent turn too, and none of it is a second
+implementation. The survey payload is `@repo/shared/feedback.ts`
+(`surveyResponse`, the thumb/sentence rules below encoded once), the affordance
+is `@repo/ui/components/message-feedback.tsx` (the `▲`/`▼`, the follow-up input,
+the reply afterwards), and what differs between the two apps is exactly what
+should: who captures the event, and what context rides along. `apps/app` passes
+`$ai_trace_id` and the message id; the viewer passes the eval run.
+
+**The viewer sends the trace itself**, which the chat app never has to. A chat's
+turns are already in PostHog — the vote joins them by `$ai_trace_id`. An eval run
+is not: `runner.ts` calls `runAgentTurn` without a `threadId`, so the turn mints a
+random one that no report records, and there is nothing on the other side of the
+join. So the event carries the conversation as data (`reviewProperties`,
+`packages/evals/src/review.ts`) and `eval_run` — report file, case, provider,
+model, sample — is the id every vote on one run shares. No `$ai_trace_id` is
+sent, deliberately: a synthetic one would mint an empty trace in LLM analytics
+for a run that has no generations there.
+
+An event has to fit, so the trace is **fitted around the turn that was voted on**
+(`fitTrace`, `TRACE_BUDGET` 100k characters — well under PostHog's 1MB ingestion
+limit, with the survey properties and a long sentence to spare). The voted turn
+is kept first, truncated on its own if it alone overruns, and its neighbours are
+added outward, cheapest side first, until the budget is gone; `trace_from`,
+`trace_dropped` and `trace_turns` say what was left out. Sending the tail
+instead would be simpler and would lose the turn the vote is about whenever a
+run goes long, which is the run worth voting on.
+
 ### Sent from the browser, unlike everything else here
 
 Every other event in this doc is captured server-side. This one cannot be: it is
@@ -358,6 +387,24 @@ be imported from Node — which is why it is absent from that package's
 `index.ts`. It also takes no Vite dependency of its own: adding one pulls a
 second copy of Vite into the workspace and breaks the API's plugin types, so
 the `import.meta.env` read is a cast with a comment instead.
+
+### `/viewer` — the eval viewer, `packages/env/src/viewer.ts`
+
+| variable | default | meaning |
+| --- | --- | --- |
+| `NEXT_PUBLIC_POSTHOG_KEY` | — | the same `phc_` project key; unset hides the vote entirely |
+| `NEXT_PUBLIC_POSTHOG_SURVEY_ID` | — | the survey the votes answer; unset hides the vote entirely |
+| `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com` | sent to directly, not through a proxy |
+
+Both ids are **optional**, unlike `/web`'s: a clone with no PostHog credentials
+must still read reports, and `reviewsEnabled` is false, so the buttons are not
+rendered rather than rendered and dead.
+
+The viewer talks to PostHog directly, with no `/ingest` proxy of its own. The
+proxy in `apps/app` exists to get past content blockers and is a dumb pipe with
+a list of headers it must not relay; standing a second one up in Next would
+duplicate exactly that, for an internal tool whose users can turn a blocker off.
+A blocked vote is a lost vote here, which is the trade.
 
 ### Which task gets which path
 

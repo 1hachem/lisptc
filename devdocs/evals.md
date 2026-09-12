@@ -498,10 +498,10 @@ clears them.
 
 ## The viewer
 
-`apps/trace-viewer` is a Next.js app-router app, server components only — it
-reads the report store and renders; there is no client state and no API layer,
-because the data is a list of JSON documents and a server component can await
-them. The masthead names the store it is reading (`r2://bucket/evals/`, or the
+`apps/trace-viewer` is a Next.js app-router app, server components except for
+one island — it reads the report store and renders; there is no client state to
+speak of and no API layer, because the data is a list of JSON documents and a
+server component can await them. The masthead names the store it is reading (`r2://bucket/evals/`, or the
 directory), so it is never a guess whose reports are on screen. `/` lists runs
 newest-first with the date, the targets and a checks score; `/r/…` opens one and
 shows every row's score, how it ended, its checks with the step each decided at,
@@ -519,6 +519,28 @@ fails on, so a red row is a row that dragged its case toward a red suite. The
 pass/degraded/fail grade still prints in the terminal; the viewer no longer shows
 it, so a run that never answered can read green when its checks held up, and the
 line under the score is what says it never answered.
+
+A run mixes models and cases, so `/r/…` **filters by either**, and the filter
+lives in the query string (`?model=…`, `?eval=…`) rather than in component
+state. That is what keeps the page a server component: a chip is a `<Link>`, the
+server re-reads the report and renders the rows that match, and there is still
+no client bundle to speak of. A chip pointing at the filter it already carries
+links back to the page without it, so clicking an active chip clears it.
+
+The **score in the masthead is computed over the filtered rows**, which is the
+reason to filter at all: narrowed to one model it answers "how did this model
+do on this run", which the whole-run score cannot. The chip rows only render
+when there is more than one value to choose between, since a single-model run
+has nothing to filter.
+
+**The transcript is the one client component**, because a turn can be voted on:
+`▲`/`▼` in the gutter beside every agent turn, the same affordance the chat app
+has, sending the run's trace along with the vote. That is `components/
+transcript.tsx`, and it is why `Turn` is imported rather than rendered by the
+page. Everything around it — the filters included — stays a server component.
+The gesture, the survey payload and the event shape are covered in
+[telemetry.md](./telemetry.md); nothing about them is a second implementation of
+what `apps/app` does.
 
 The app carries **two tsconfigs**, because it has two TypeScript worlds: the UI
 is DOM plus bundler resolution, while `evals/` pulls the interpreter and needs
