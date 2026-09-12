@@ -6,6 +6,7 @@ import {
 	type TokenUsage,
 } from "./agent.ts";
 import { MAX_STEPS } from "./prompts/lisp.ts";
+import { resolveModel } from "./provider.ts";
 import {
 	evalCode,
 	proseFeedbackContent,
@@ -78,13 +79,14 @@ export function streamChatResponse(
 	if (signal)
 		signal.addEventListener("abort", () => abort.abort(), { once: true });
 
+	const { provider, model } = resolveModel(config?.provider, config?.model);
 	const trace: TraceContext = {
 		threadId: threadId ?? crypto.randomUUID(),
 		turnId: crypto.randomUUID(),
 		distinctId: identity?.distinctId,
 		sessionId: identity?.sessionId,
-		provider: config?.provider,
-		model: config?.model,
+		provider,
+		model,
 	};
 	const tracedConfig: AgentConfig = { ...config, trace };
 	const startedAt = Date.now();
@@ -174,6 +176,8 @@ export function streamChatResponse(
 					const meta: Record<string, unknown> = {
 						at: new Date().toISOString(),
 						durationMs: Date.now() - stepStartedAt,
+						provider,
+						model,
 						...(usage
 							? {
 									inputTokens: usage.input,
