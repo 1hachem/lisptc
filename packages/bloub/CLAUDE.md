@@ -171,6 +171,13 @@ built beside it — nothing in `src/bot/` goes through the rendering path, so no
 can catch that. Keep the DOM per-file: a global DOM environment would slow the whole
 suite for one test.
 
+**`skins.test.ts`'s sweeps carry a 120s timeout**, and it is a safety net rather
+than a budget: the sweeps are brute force over every shape, expression and
+instant, about 6s on a dev machine. In CI they run beside a dozen other package
+suites on a shared runner, where the same work took 32s and blew a 30s limit.
+Nothing about the assertion changed; only the machine did. Raise the timeout
+again before trimming the sweep — the combinations are the test.
+
 ## Generated files
 
 `src/bot/profiles.ts` was produced from the video's frames by a Python script that
