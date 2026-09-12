@@ -341,11 +341,12 @@ export function evalCase(name: string, spec: EvalSpec): void {
 				const reviewer = activeJudge();
 				if (reviewer) {
 					row.judge = `${reviewer.provider} · ${reviewer.model}`;
-					row.recap = await recapOf(
+					const recap = await recapOf(
 						reviewer,
 						cases.find((info) => info.name === name),
 						row,
 					);
+					if (recap) row.recap = recap;
 				}
 				runs.push(run);
 				rows.push(row);

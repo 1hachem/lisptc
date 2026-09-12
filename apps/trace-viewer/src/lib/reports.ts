@@ -37,6 +37,10 @@ export function scoreOf(rows: ReportRow[]): Score {
 	return { passed, total, tone: toneOf(passed, total) };
 }
 
+export function targetOf(row: ReportRow): string {
+	return `${row.provider} · ${row.model}`;
+}
+
 export type Loaded =
 	| { file: string; ok: true; report: Report }
 	| { file: string; ok: false; why: string };

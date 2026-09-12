@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
+    "./feedback": "./src/feedback.ts",
     "./messages": "./src/messages.ts",
     "./package.json": "./package.json",
     "./providers": "./src/providers.ts"

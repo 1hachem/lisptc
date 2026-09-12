@@ -128,6 +128,11 @@ never be typed: a rating waiting on a follow-up is a rating lost when the tab
 closes. PostHog's rule for a second event under one submission id is that it must
 carry every answer collected so far, so the thumb rides along with the sentence.
 
+Both of those rules live in `@repo/shared/feedback.ts` and the gesture itself in
+`@repo/ui/components/message-feedback.tsx`, since `apps/trace-viewer` votes on
+agent turns too. What stays here is the context a vote carries — the thread id,
+the message — and the agent's face reacting to it.
+
 ## The agent's face
 
 One character with three appearances — the avatar at the foot of the transcript,
@@ -276,6 +281,7 @@ Each app reaches Tailwind its own way: the app through `@tailwindcss/vite`, the
 trace-viewer through `@tailwindcss/postcss` in `postcss.config.mjs`, both
 resolving `@import "@repo/ui/styles/app.css"` through the package's exports map.
 
-The trace-viewer renders server components only, so it imports `@repo/ui` by
-subpath (`@repo/ui/fonts.ts`, `@repo/ui/lib/utils`) rather than through the
-barrel, which re-exports the `"use client"` sidebar and its radix dependencies.
+The trace-viewer renders server components apart from its transcript, so it
+imports `@repo/ui` by subpath (`@repo/ui/fonts.ts`, `@repo/ui/lib/utils`,
+`@repo/ui/components/message-feedback.tsx`) rather than through the barrel,
+which re-exports the `"use client"` sidebar and its radix dependencies.

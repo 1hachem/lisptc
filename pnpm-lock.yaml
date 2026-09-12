@@ -106,6 +106,9 @@ importers:
       '@repo/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -239,6 +242,9 @@ importers:
 
   apps/trace-viewer:
     dependencies:
+      '@repo/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@repo/evals':
         specifier: workspace:*
         version: link:../../packages/evals
@@ -248,6 +254,9 @@ importers:
       next:
         specifier: ^15.5.4
         version: 15.5.25(@opentelemetry/api@1.9.0)(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      posthog-js:
+        specifier: ^1.425.1
+        version: 1.425.1(@types/react@19.2.18)(react@19.2.8)
       react:
         specifier: ^19.2.0
         version: 19.2.8
@@ -515,6 +524,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
       ai:
         specifier: ^7.0.79
         version: 7.0.79(zod@4.4.3)

@@ -11,6 +11,7 @@
     "./mocks": "./src/mocks.ts",
     "./package.json": "./package.json",
     "./report": "./src/report.ts",
+    "./review": "./src/review.ts",
     "./runner": "./src/runner.ts",
     "./shards": "./src/shards.ts",
     "./storage": "./src/storage.ts",

@@ -156,6 +156,12 @@ survey sent  $survey_response: 1|2          the vote — 1 up, 2 down
              message_id, message_index      which turn was voted on
 ```
 
+The sentence also rides along as a plain `review_text` property. PostHog only
+keeps `$survey_response_1` when the survey actually has a question at index 1;
+point the config at a survey without one and the sentence is accepted and then
+dropped, with nothing to say so. The plain property is the copy that cannot be
+dropped, and the one to query when a rating's explanation is missing.
+
 Two rules of PostHog's that the code is shaped around. The vote is sent
 `$survey_completed: true` on the click rather than held back for a sentence that
 may never be typed — a rating waiting on a follow-up is a rating lost when the
@@ -173,6 +179,52 @@ mean.
 the single turn inside it — `message_id` is what narrows it. Pinning a vote to
 its exact turn would mean the server handing its `$ai_span_id` (`turnId` in
 `stream.ts`) to the client, which it does not do today.
+
+### The same gesture in the eval viewer
+
+`apps/trace-viewer` votes on an agent turn too, and none of it is a second
+implementation. The survey payload is `@repo/shared/feedback.ts`
+(`surveyResponse`, the thumb/sentence rules below encoded once), the affordance
+is `@repo/ui/components/message-feedback.tsx` (the `▲`/`▼`, the follow-up input,
+the reply afterwards), and what differs between the two apps is exactly what
+should: who captures the event, and what context rides along. `apps/app` passes
+`$ai_trace_id` and the message id; the viewer passes the eval run. The one
+visual difference is `reveal`: the chat hides the arrows until the turn is
+hovered, and the viewer shows them always, because voting is what a reviewer
+opened it to do.
+
+**The viewer sends the trace itself**, which the chat app never has to. A chat's
+turns are already in PostHog — the vote joins them by `$ai_trace_id`. An eval run
+is not: `runner.ts` calls `runAgentTurn` without a `threadId`, so the turn mints a
+random one that no report records, and the generations it captured (if the key
+was even set for that run) are joined to an id the report never saw.
+
+So a vote **replays the run as a trace** before it sends the rating
+(`traceEvents`, `packages/evals/src/review.ts`), mirroring the shape
+`packages/ai/telemetry.ts` captures live: one `$ai_trace` for the run, one
+`$ai_generation` per agent turn (its `$ai_input` the conversation up to that
+point, its `$ai_output_choices` the turn itself), one `$ai_span` per REPL result,
+all under the same `$ai_trace_id`. Then the survey event carries that id, so the
+rating renders **inside** the run it is about, which is the one thing PostHog
+does with survey events that a table of properties cannot.
+
+`eval_run` — report file, case, provider, model, sample — is that id, so it is
+stable across reloads and across reviewers: two people voting on the same run
+write to one trace instead of two. The span ids are derived from it the same way
+(`…/run`, `…/3`), which is what makes a re-send idempotent rather than duplicate.
+Within a page the client sends a run's trace **once**, before the first vote on
+it (`traced`, `src/lib/analytics.ts`); later votes on the same run send the
+rating alone.
+
+An event still has to fit, so a generation's `$ai_input` is **fitted around the
+turn** (`fitTrace`, `TRACE_BUDGET` 100k characters — well under PostHog's 1MB
+ingestion limit). The turn is kept first, truncated on its own if it alone
+overruns, and its neighbours are added outward, cheapest side first, until the
+budget is gone. Sending the tail instead would be simpler and would lose the turn
+in question whenever a run goes long, which is the run worth reviewing. The
+survey event itself carries only the run's identity, its checks and the voted
+message (clamped to `MESSAGE_BUDGET`), since the conversation is now in the trace
+beside it.
 
 ### Sent from the browser, unlike everything else here
 
@@ -359,6 +411,61 @@ be imported from Node — which is why it is absent from that package's
 second copy of Vite into the workspace and breaks the API's plugin types, so
 the `import.meta.env` read is a cast with a comment instead.
 
+### `/trace-viewer` — the eval viewer, `packages/env/src/trace-viewer.ts`
+
+| variable | default | meaning |
+| --- | --- | --- |
+| `NEXT_PUBLIC_POSTHOG_KEY` | — | the `phc_` project key; unset hides the vote entirely |
+| `NEXT_PUBLIC_POSTHOG_SURVEY_ID` | — | the survey the votes answer; unset hides the vote entirely |
+| `NEXT_PUBLIC_ENVIRONMENT` | `dev` | tagged onto every event as `environment`, the same dimension `apps/app` tags |
+| `POSTHOG_HOST` | `https://us.i.posthog.com` | what the `/ingest` middleware forwards events to |
+| `POSTHOG_ASSET_HOST` | `https://us-assets.i.posthog.com` | what it forwards `/ingest/static/*` to |
+| `POSTHOG_UI_HOST` | `https://us.posthog.com` | where posthog-js's "view in PostHog" links point, since a proxied `api_host` hides the region |
+
+The viewer has **its own Infisical path**, `/trace-viewer`, and borrows nothing
+from `/web`. The two front-ends carry the same three values under different
+names on purpose: `VITE_*` for the app, `NEXT_PUBLIC_*` for the viewer. A shared
+name would mean one path could only ever be loaded for one of them, and a task
+that loads both would silently hand the app the viewer's key.
+
+The three hosts are **not** `NEXT_PUBLIC_`. Only the middleware reads them, it
+runs server-side, and a region that the browser never needs to know should not
+be inlined into a bundle to be read back out.
+
+The two ids are **optional**, unlike `/web`'s: a clone with no PostHog
+credentials must still read reports, so `reviewTarget()` returns undefined and
+the buttons are not rendered rather than rendered and dead.
+
+`NEXT_PUBLIC_*` is substituted at **build** time, so the build has to run under
+the secrets: `task evals:open` runs `pnpm build` and `pnpm start` inside a
+single Infisical invocation for the same reason `task start:app` does, and a
+build outside one bakes an undefined key into the bundle and the vote vanishes
+with no error anywhere. `turbo.json` therefore lists `NEXT_PUBLIC_*` and
+`VITE_*` in the `build` task's `env`: with `envMode: "loose"` and no such list,
+two builds under different keys hash the same and turbo would restore the wrong
+bundle from cache.
+
+`reviewTarget()` still reads the key on the server and hands it to the
+transcript as a prop. The key is public either way; what the server keeps is the
+decision of whether the vote renders at all, in one place rather than in the
+island.
+
+The viewer proxies PostHog too, at the same `/ingest` path, because a blocked
+vote is a lost vote and a reviewer should not have to know that. It needs none
+of the API-route machinery `apps/app` carries: Next runs it as **middleware**
+(`src/middleware.ts`, matcher `/ingest/:path*`), rewriting the request upstream
+with `NextResponse.rewrite` — `/ingest/static/*` to `POSTHOG_ASSET_HOST`, the
+rest to `POSTHOG_HOST` — and the platform does the fetch. `cookie` and
+`accept-encoding` are still deleted for the reasons the app's proxy deletes
+them.
+
+`skipTrailingSlashRedirect` in `next.config.ts` is **load-bearing**, not
+tidiness: posthog-js posts to `/e/?ip=1`, with the trailing slash, and Next's
+default is to answer a trailing slash with a 308 to the path without it. A
+redirected `fetch` survives that; a `navigator.sendBeacon` on page unload does
+not, so the votes most likely to be lost are exactly the ones sent as the tab
+closes.
+
 ### Which task gets which path
 
 `task dev-api` and `task start:api` run under `/ai /analytics /api`. `task
@@ -366,6 +473,11 @@ dev-app` and `task start:app` run under `/web /analytics` — `/web` for the
 bundle, and `/analytics` as well because the app has a *server* half of its own
 now: the proxy resolves `POSTHOG_HOST` and `POSTHOG_ASSET_HOST` per request, at
 runtime, in the same process that serves the pages.
+
+`task evals:open` and `task evals:dev` run under `/assets /trace-viewer` —
+`/assets` for the R2 credentials the reports are read through, `/trace-viewer`
+for the vote. The viewer's proxy needs no `/analytics`: its two upstream hosts
+default to the US region, which is what `/analytics` sets anyway.
 
 `/api` holds `APP_URL`, the single browser origin the API answers to
 (`packages/env/src/api.ts`). It is required and has no wildcard fallback, so an
