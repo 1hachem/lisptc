@@ -10,27 +10,37 @@ import {
 	Sym,
 	str,
 } from "./lisp.ts";
+import { type PromptSection, prompted, promptSection } from "./prompt.ts";
 
 export type ProseClassifier = (
 	interp: Interp,
 	form: unknown,
 ) => string | undefined;
 
+export const PROSE_PROMPT: PromptSection = promptSection(
+	"prose",
+	new URL("./prose.ptc", import.meta.url),
+);
+
 export function proseExtension(
 	classify: ProseClassifier = readsAsProse,
 ): InterpExtension {
-	return (interp) => {
-		interp.hooks.unclosedForm.use(
-			(text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
-		);
-		interp.hooks.unreadableForm.use(
-			(text, start, end, next) =>
-				unreadable(text, start, end) ?? next(text, start, end),
-		);
-		interp.hooks.skipForm.use(
-			(interp, form, next) => classify(interp, form) ?? next(interp, form),
-		);
-	};
+	return prompted(
+		(interp: Interp): void => {
+			interp.prompts.add(PROSE_PROMPT);
+			interp.hooks.unclosedForm.use(
+				(text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
+			);
+			interp.hooks.unreadableForm.use(
+				(text, start, end, next) =>
+					unreadable(text, start, end) ?? next(text, start, end),
+			);
+			interp.hooks.skipForm.use(
+				(interp, form, next) => classify(interp, form) ?? next(interp, form),
+			);
+		},
+		[PROSE_PROMPT],
+	);
 }
 
 function unreadable(

@@ -1,0 +1,142 @@
+## Reading and showing values
+
+Everything the REPL prints is spent context, so it prints nothing on its own and
+gives you commands to say what you want to see. Two moves cover almost
+everything: head, tail and grep pull a value out, which the REPL names, and
+echo shows a rendering of it.
+
+### The REPL is silent: it names your result and describes its shape
+
+Nothing is printed unless you echo it. Every result is bound to a variable —
+named after the function that produced it — and reported as one line saying
+what is in it:
+
+(acme/list-issues :query "auth bug")
+acme/list-issues-1: list of 27 alists, keys "id" "identifier" "title" "state" "url"
+
+(+ 1 2)
++-1: 3
+
+A small value is reported as itself; a large one is described: list of 27
+alists with its keys, or 3412 words, or 200 characters. Either way **the variable
+holds the whole value.** A setq or defun is reported under the name it
+already bound, and nil and t report plainly — there is nothing to name.
+
+**Never retype data the REPL produced.** Refer to the variable: it holds the
+exact value, costs a handful of tokens, and cannot be misremembered. Re-emitting
+a list, an id, a title or a body by hand is wasted output and the main way you
+produce wrong data. Build on the name —
+(mapcar (lambda (i) (cdr (assoc "id" i))) acme/list-issues-1).
+
+To look at a result, name it in a form: (echo acme/list-issues-1). Writing the
+bare name acme/list-issues-1 on a line of its own is a bare value, see "Syntax" —
+it is prose, it evaluates nothing, and a reply that is nothing but prose ENDS THE
+LOOP with that line as your final answer.
+This is the most expensive typo in the language.
+
+### Extract into a name, then echo a rendering of it
+
+The shape line tells you what you need to write the next form. A bare head or
+tail is the exception that needs neither step: it prints its slice on the spot.
+
+To answer with something the REPL produced, compute the answer and echo THAT:
+
+(grep page-1 "https?://[^ ]+")
+grep-1: ("https://x.dev/a")
+
+(echo (car grep-1))
+https://x.dev/a
+
+A bare slice is already the answer to "what is in there":
+
+(head acme/list-issues-1 2)
+((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
+ (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
+
+To render it for the user rather than read it yourself, keep the whole list and
+echo the rendering:
+
+(defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
+row: function
+
+(echo (string-join (mapcar row (head acme/list-issues-1 4)) "\n"))
+| ENG-12 | Auth token refresh fails |
+| ENG-31 | OAuth callback drops the state param |
+
+Both wrong versions look like this — never do either:
+
+(echo "https://x.dev/a")                      the URL typed from a printout
+(echo "| ENG-12 | Auth token refresh fails |")   the rows typed out by hand
+
+You cannot retype what you were never shown, which is why the REPL describes a
+result instead of printing it. Prefer computing over reading: (length x),
+mapcar, assoc and grep work on the complete value, and one form that
+extracts what you need beats paging through text.
+
+### Echo output is capped for you, not for the user
+
+A step may echo a fixed number of words. Past that the text you see stops and a
+... line says how much is left and how to continue:
+
+(echo report-1)
+Q3 revenue grew 12 percent, driven by the two enterprise
+... 10 of 40 words shown, 30 below — read on with (echo report-1 :offset 10)
+
+The user reading the conversation sees the whole output; the cap is on your copy
+alone. So when you see that line: do not re-run the call, and do not answer from
+the fragment — page on with the offset it gave you, or use
+(echo report-1 :match "pattern") when you know what you are looking for. Output
+that is one unbroken word, minified JSON say, is cut by character instead, and
+the ... line points at substring. Several echoes in one step share the budget;
+when it runs out you are told how many words you were not shown.
+
+### Windowing what echo prints
+
+These options extend the core echo, see "Primitive built-ins".
+
+- (echo x :offset 0 :length n) print a window of x, counted in
+  whitespace-separated words; the ... line it ends with gives the offset to
+  continue from.
+- (echo x :match "re" :context 8 :max 10 :ignore-case t) print only the
+  regions matching a regular expression, each as an @ and a word offset, plus
+  the surrounding words with the match wrapped in double square brackets. Feed a
+  reported offset back in as :offset. Use this to READ a value; use grep to KEEP
+  what matched.
+- (doc name) prints whole and costs nothing against the step's echo budget, and
+  mints no name: the entry it printed is the report. Look freely.
+
+### Extracting a value to keep it
+
+These RETURN a value, so the REPL names it instead of printing. Extract into a
+name, then echo a rendering of it.
+
+- (head x [n]) the first n of x; (tail x [n]) the last n. On a list,
+  n ELEMENTS — (head issues 4) is the first four rows. On text, n words.
+  A slice is taken to be read, so one written as a step of its own is PRINTED
+  and gets no name: (head issues 4) shows you the four rows, and there is no
+  (echo …) to write after it. Nested in another form it prints nothing and is
+  just the value — (mapcar row (head issues 4)), (setq top (head issues 4)).
+  The discovery calls, see "MCP servers" — search-mcps, search-tools, list-tools,
+  list-toolkit, list-mcps — print the same way for the same reason: you asked
+  what is available in order to read it, so the answer is shown in full and
+  there is no (echo …) step to follow it with.
+- (grep x "pattern" :group n :max n :ignore-case t) what pattern matched, as
+  a list, or nil. On a list, the ELEMENTS whose printed form matches:
+  (grep issues "auth") is the issues about auth. On text, the matched
+  substrings: (grep page "https?://[^ ]+") is the URLs in it.
+
+### Gotchas
+
+- The REPL prints NOTHING on its own: it reports a result's name and shape.
+  The echo built-in is the only way to see a value, and the only way to show one
+  to the user.
+- Retyping data the REPL produced is the main way you produce wrong data.
+  Extract it with grep or head and echo the variable instead.
+- The head, tail and grep built-ins RETURN a value; only echo prints — except a
+  bare head or tail, and a bare discovery call, which the REPL prints instead of
+  describing, because both are asked for in order to be read.
+- Echo output is capped for you but not for the user. Output ending in a
+  ... line is not everything — page on with the offset it gives you.
+- A hash-and-angle-brackets printout — of a promise, of a secret naming its key,
+  of a closure — is a printout of a value that cannot be read back, so typing one
+  is always an error. Use the name the value was reported under.

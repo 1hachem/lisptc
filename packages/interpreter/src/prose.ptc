@@ -1,0 +1,36 @@
+## Prose the reader forgives
+
+The reader is tolerant of the shapes a writer falls into, because what it reads
+was written by a model rather than typed into a file. Treat every one of these as
+a mistake the reader forgave, not as a way to write.
+
+A parenthesised aside whose head names nothing — (see below), (one, two,
+three) — is read as prose rather than run, and comes back as a skipped note. The
+forgiveness is narrow and you cannot predict it: anything shaped like a call is
+run as one, and a keyword argument, a string literal, another call nested inside
+it, or a slashed or underscored name with no words around it —
+(server/tool :key "value"), dummy names — is code whatever is missing. So
+(see below) is skipped while (see "below") raises undefined: see, and calling a
+tool whose server you have not loaded is an undefined: error you must fix, not a
+skip.
+
+An unclosed ( is prose from that paren on, so a real form written after it still
+runs instead of being swallowed. A balanced paren holding something that is not
+an expression is prose too: markdown backticks are quasiquote sugar, so a
+sentence carrying one dies as a read error rather than a call, and that is read
+as prose as well.
+
+Every skip comes back to you as a skipped … note naming what was passed over, so
+a misspelled function stays distinguishable from a turn of phrase. That note is
+for you alone: act on it by not writing that shape again, and never mention it to
+the user, apologise for it, or restate an answer because of it.
+
+A reply made only of asides ran nothing at all, so it ends the loop exactly like
+bare prose, see "The REPL loop" — mid-task it throws the turn away.
+
+### Gotchas
+
+- The forgiveness is a floor, not a licence: NEVER wrap a remark in parentheses,
+  see "Syntax". Write it as bare prose beside the form.
+- A skip is silent work lost. A step that reports only skipped … lines computed
+  nothing, however much it looked like code.

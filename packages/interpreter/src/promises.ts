@@ -9,9 +9,15 @@ import {
 	newLispKeyword,
 	zList,
 } from "./lisp.ts";
+import { type PromptSection, promptSection } from "./prompt.ts";
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
 export const AWAIT_TIMEOUT_MS = 50_000;
+
+export const PROMISES_PROMPT: PromptSection = promptSection(
+	"promises",
+	new URL("./promises.ptc", import.meta.url),
+);
 
 export type Dispatch = (
 	op: string,
@@ -127,6 +133,7 @@ export class Promises {
 	}
 
 	installBuiltins(interp: Interp): void {
+		interp.prompts.add(PROMISES_PROMPT);
 		interp.def(
 			"await",
 			-1,

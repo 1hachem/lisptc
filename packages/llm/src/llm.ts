@@ -22,11 +22,21 @@ import {
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
 import { withTimeout } from "@repo/interpreter/promises";
+import {
+	type PromptSection,
+	prompted,
+	promptSection,
+} from "@repo/interpreter/prompt";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
 import { langchainGenerate, listProviders } from "./llm-client.ts";
 
 export const LLM_TIMEOUT_MS = 60_000;
+
+export const LLM_PROMPT: PromptSection = promptSection(
+	"llm",
+	new URL("./llm.ptc", import.meta.url),
+);
 
 export type LlmMessage = ChatMessage;
 
@@ -119,9 +129,12 @@ export interface LlmExtension extends InterpExtension {
 
 export function llmExtension(options: LlmOptions = {}): LlmExtension {
 	const config: LlmOptions = { ...options };
-	const extension: LlmExtension = (interp: Interp): void => {
-		registerLlm(interp, config);
-	};
+	const extension: LlmExtension = prompted(
+		(interp: Interp): void => {
+			registerLlm(interp, config);
+		},
+		[LLM_PROMPT],
+	);
 	Object.defineProperty(extension, "observe", {
 		enumerable: true,
 		get: () => config.observe,
@@ -439,6 +452,7 @@ function oneValue(values: List, complaint: string, rest: List): unknown {
 }
 
 export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
+	interp.prompts.add(LLM_PROMPT);
 	const generate = options.generate ?? langchainGenerate;
 	const providers = options.providers ?? listProviders;
 	const call = caller(generate, () => options.observe);

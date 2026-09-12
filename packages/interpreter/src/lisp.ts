@@ -18,6 +18,8 @@ import {
 } from "./arith.ts";
 import { Channels, MODEL, USER } from "./channels.ts";
 import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
+import { Prompts } from "./prompt.ts";
+import { CORE_PROMPT } from "./source.ts";
 
 function assert(x: boolean, message?: string): asserts x {
 	if (!x) throw new Error(`Assertion Failure: ${message || ""}`);
@@ -537,6 +539,8 @@ export class Interp {
 
 	readonly channels: Channels = new Channels();
 
+	readonly prompts: Prompts = new Prompts();
+
 	readonly importStack: string[] = [];
 	private readonly importing: Set<string> = new Set();
 
@@ -560,6 +564,7 @@ export class Interp {
 	}
 
 	constructor(options: InterpOptions = {}) {
+		this.prompts.add(CORE_PROMPT);
 		this.channels.on(USER, (d) => write(d.text));
 		this.def(
 			"car",

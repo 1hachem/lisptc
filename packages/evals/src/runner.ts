@@ -1,7 +1,6 @@
 import { writeFileSync } from "node:fs";
 import {
 	evalCode,
-	LISP_SYSTEM_PROMPT,
 	replResultContent,
 	runAgentTurn,
 	type TranscriptEntry,
@@ -129,7 +128,7 @@ export async function runCase(
 		config: {
 			provider: target.provider,
 			model: target.model,
-			system: spec.system ?? LISP_SYSTEM_PROMPT,
+			...(spec.system ? { system: spec.system } : {}),
 		},
 	})) {
 		if (event.type === "assistant") {

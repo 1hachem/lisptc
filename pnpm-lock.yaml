@@ -60,6 +60,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@repo/shared':
         specifier: workspace:*
         version: link:../../packages/shared

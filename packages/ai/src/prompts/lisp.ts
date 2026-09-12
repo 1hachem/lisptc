@@ -1,4 +1,4 @@
-import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
+import { languageReference } from "@repo/repl/extensions";
 
 export const MAX_STEPS = 25;
 
@@ -36,4 +36,8 @@ ABSOLUTE RULES:
 12. NEVER write Lisp in your thinking. Thinking is reserved for unstructured, natural-language internal thoughts — plan, reason, and reflect in prose only. No s-expressions, no code, no Lisp of any kind in thinking. All Lisp belongs exclusively in your final text output. To repeat: thinking = prose thoughts only, never Lisp; final output = Lisp only.
 `;
 
-export const SYSTEM_PROMPT: string = `${IDENTITY}${"\n\n"}${POLICY}${"\n"}${LANGUAGE_REFERENCE}`;
+export function systemPrompt(reference: string): string {
+	return `${IDENTITY}${"\n\n"}${POLICY}${"\n"}${reference}`;
+}
+
+export const SYSTEM_PROMPT: string = systemPrompt(languageReference());

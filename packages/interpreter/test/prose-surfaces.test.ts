@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { compactionExtension } from "../src/compaction.ts";
 import { LISP_GRAMMAR } from "../src/grammar.ts";
 import { checkSyntax } from "../src/lisp.ts";
-import { LANGUAGE_REFERENCE } from "../src/source.ts";
+import { referenceFor } from "../src/prompt.ts";
+import { proseExtension } from "../src/prose.ts";
+import { CORE_PROMPT } from "../src/source.ts";
 import { accepts, parseGrammar } from "./gbnf.ts";
 import { ev } from "./helpers.ts";
+
+const REFERENCE = referenceFor(CORE_PROMPT, [
+	proseExtension(),
+	compactionExtension(),
+]);
 
 const REPLIES: [source: string, value: string][] = [
 	["Let me square it: (* 5 5)", "25"],
@@ -40,17 +48,17 @@ describe("prose is allowed on every surface the model meets", () => {
 
 describe("the language reference teaches prose", () => {
 	it("says the text around the forms is ignored", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(
+		expect(REFERENCE).toMatch(
 			/only the parenthesised top-level forms are program text/i,
 		);
 	});
 
 	it("says there is no comment syntax", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/there is no comment syntax/i);
+		expect(REFERENCE).toMatch(/there is no comment syntax/i);
 	});
 
 	it("says prose cannot hold a < or a [", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(
+		expect(REFERENCE).toMatch(
 			/prose cannot hold a less-than sign or an opening square bracket/i,
 		);
 	});
@@ -58,25 +66,21 @@ describe("the language reference teaches prose", () => {
 
 describe("the language reference teaches context compaction", () => {
 	it("says the REPL prints nothing on its own", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/the ONLY thing that prints/);
-		expect(LANGUAGE_REFERENCE).toMatch(/reports? (one line|a result's name)/i);
+		expect(REFERENCE).toMatch(/the ONLY thing that prints/);
+		expect(REFERENCE).toMatch(/reports? (one line|a result's name)/i);
 	});
 
 	it("says every result is bound to a name", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/never retype data the REPL/i);
+		expect(REFERENCE).toMatch(/never retype data the REPL/i);
 	});
 
 	it("says the extraction commands return rather than print", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/RETURN a value/);
-		expect(LANGUAGE_REFERENCE).toMatch(
-			/head, tail and grep built-ins RETURN a value/,
-		);
+		expect(REFERENCE).toMatch(/RETURN a value/);
+		expect(REFERENCE).toMatch(/head, tail and grep built-ins RETURN a value/);
 	});
 
 	it("says a truncated echo is not the whole output", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(
-			/capped for you.{0,20}not for the user/i,
-		);
-		expect(LANGUAGE_REFERENCE).toMatch(/read on with/i);
+		expect(REFERENCE).toMatch(/capped for you.{0,20}not for the user/i);
+		expect(REFERENCE).toMatch(/read on with/i);
 	});
 });
