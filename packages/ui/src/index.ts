@@ -11,6 +11,7 @@ export { Input } from "./components/ui/input.tsx";
 export * from "./components/ui/sidebar.tsx";
 export { Switch } from "./components/ui/switch.tsx";
 
+export { type FontLink, fontLinks } from "./fonts.ts";
 export { useIsMobile } from "./hooks/use-mobile.ts";
 export { cn } from "./lib/utils.ts";
 export { defaultThemeId, type ThemeDef, themes } from "./themes.ts";

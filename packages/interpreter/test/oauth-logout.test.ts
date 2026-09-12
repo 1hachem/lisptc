@@ -1,12 +1,10 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "lisptc-logout-"));
-process.env.LISPTC_OAUTH_DIR = dir;
+const dir = process.env.LISPTC_OAUTH_DIR as string;
 
 describe("logout", () => {
 	const interp = new Interp({ extensions: [mcpExtension()] });

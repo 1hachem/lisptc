@@ -783,6 +783,7 @@ function toolDocBody(tool: Tool): string {
 }
 
 function expandEnv(s: string): string {
+	// biome-ignore lint/style/noProcessEnv: mcp.toolkit.json names the variable, so it is only known at runtime
 	return s.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] ?? "");
 }
 

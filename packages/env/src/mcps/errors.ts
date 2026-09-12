@@ -1,21 +1,4 @@
-interface ValidationIssue {
-	readonly message: string;
-	readonly path?: readonly unknown[];
-}
-
-function issueName(issue: ValidationIssue): string {
-	const segment = issue.path?.[0];
-	if (typeof segment === "string") return segment;
-	if (
-		segment &&
-		typeof segment === "object" &&
-		"key" in segment &&
-		typeof segment.key === "string"
-	) {
-		return segment.key;
-	}
-	return issue.message;
-}
+import { issueName, type ValidationIssue } from "../errors.ts";
 
 export function missing(params: {
 	server: string;

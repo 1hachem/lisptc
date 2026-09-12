@@ -8,8 +8,13 @@
     "./ai": "./src/ai.ts",
     "./analytics": "./src/analytics.ts",
     "./api": "./src/api.ts",
-    "./repl": "./src/repl.ts",
+    "./evals": "./src/evals.ts",
+    "./infisical": "./src/infisical.ts",
     "./oauth": "./src/oauth.ts",
+    "./providers": "./src/providers.ts",
+    "./r2": "./src/r2.ts",
+    "./repl": "./src/repl.ts",
+    "./server": "./src/server.ts",
     "./web": "./src/web.ts",
     "./package.json": "./package.json",
     "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
@@ -22,6 +27,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "zod": "^4.4.3"
   },

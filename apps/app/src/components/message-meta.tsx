@@ -6,7 +6,9 @@ export type MetaField =
 	| "steps"
 	| "input"
 	| "cached"
-	| "output";
+	| "output"
+	| "model"
+	| "provider";
 
 const META_FIELDS: Record<MetaField, boolean> = {
 	time: true,
@@ -15,6 +17,8 @@ const META_FIELDS: Record<MetaField, boolean> = {
 	input: true,
 	cached: true,
 	output: true,
+	model: true,
+	provider: true,
 };
 
 function formatDuration(ms: number): string {
@@ -26,6 +30,10 @@ function formatDuration(ms: number): string {
 
 function formatTokens(n: number): string {
 	return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
+
+function formatModel(model: string): string {
+	return model.slice(model.lastIndexOf("/") + 1);
 }
 
 function formatTime(at: string): string | null {
@@ -66,6 +74,8 @@ const SEGMENTS: {
 				? null
 				: `${formatTokens(m.outputTokens)} out`,
 	},
+	{ field: "model", render: (m) => (m.model ? formatModel(m.model) : null) },
+	{ field: "provider", render: (m) => m.provider ?? null },
 ];
 
 export function MessageMeta({

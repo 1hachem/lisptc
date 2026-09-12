@@ -48,7 +48,47 @@ tasks:
   test:nvim:
     desc: run the nvim integration test
     cmd: bash editors/nvim/tests/run.sh
+
+  evals:run:
+    desc: run the agent eval suite against real models
+    vars:
+      MATRIX: '{{.EVAL_MATRIX | default "digitalocean:gemma-4-31B-it"}}'
+      JUDGE: '{{.EVAL_JUDGE | default "digitalocean:gemma-4-31B-it"}}'
+      CONCURRENCY: '{{.EVAL_CONCURRENCY | default "4"}}'
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: dev
+          PATHS: "/ai /assets"
+          CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" EVAL_CONCURRENCY="{{.CONCURRENCY}}" pnpm test:evals'
   
+  evals:open:
+    desc: build the eval trace viewer, serve it, and open a browser on it
+    vars:
+      PORT: '{{.PORT | default "3200"}}'
+      URL: 'http://localhost:{{.PORT}}'
+    cmds:
+      - pnpm run build --filter @lisptc/trace-viewer
+      - |
+        (
+          for _ in $(seq 60); do
+            if curl -sf -o /dev/null "{{.URL}}"; then
+              if command -v xdg-open >/dev/null 2>&1; then xdg-open "{{.URL}}"
+              elif command -v open >/dev/null 2>&1; then open "{{.URL}}"
+              else echo "the tracer is at {{.URL}}"
+              fi
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "the tracer never answered on {{.URL}}"
+        ) >/dev/null 2>&1 &
+      - task: _infisical-run
+        vars:
+          ENV: dev
+          PATHS: "/assets"
+          CMD: 'PORT={{.PORT}} pnpm --filter @lisptc/trace-viewer start'
+
   dev:
     deps: [dev-app, dev-api]
 
@@ -83,6 +123,7 @@ tasks:
     cmds:
       - task: _infisical-run
         vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai /analytics /api", CMD: "pnpm run build --filter api && pnpm --filter api start" }
+
 
   # The interpreter starts this itself, through the `ocr` entry in mcp.toolkit.json
   mcp:sheets:

@@ -1,27 +1,7 @@
 import { contentToText } from "@repo/shared/messages";
-import {
-	type AgentConfig,
-	type AgentMessage,
-	streamAgent,
-	type TokenUsage,
-} from "./agent.ts";
-import { MAX_STEPS } from "./prompts/lisp.ts";
-import {
-	evalCode,
-	proseFeedbackContent,
-	replResultContent,
-	snapshotConversation,
-	stripFences,
-	type TranscriptEntry,
-	toLlmMessages,
-} from "./repl.ts";
-import { getThreadRepl } from "./repl-store.ts";
-import {
-	captureLlmCall,
-	captureReplEval,
-	captureTurn,
-	type TraceContext,
-} from "./telemetry.ts";
+import type { AgentConfig } from "./agent.ts";
+import { replResultContent, type TranscriptEntry } from "./repl.ts";
+import { runAgentTurn } from "./turn.ts";
 
 export interface ChatMessageInput {
 	id?: string;
@@ -56,10 +36,6 @@ function wireType(
 	return "human";
 }
 
-export function toAgentMessages(input: ChatInput): AgentMessage[] {
-	return toLlmMessages(toTranscript(input));
-}
-
 function toTranscript(input: ChatInput): TranscriptEntry[] {
 	return (input.messages ?? []).map((m) => ({
 		role: agentRole(m.type ?? m.role),
@@ -77,22 +53,6 @@ export function streamChatResponse(
 	const abort = new AbortController();
 	if (signal)
 		signal.addEventListener("abort", () => abort.abort(), { once: true });
-
-	const trace: TraceContext = {
-		threadId: threadId ?? crypto.randomUUID(),
-		turnId: crypto.randomUUID(),
-		distinctId: identity?.distinctId,
-		sessionId: identity?.sessionId,
-		provider: config?.provider,
-		model: config?.model,
-	};
-	const tracedConfig: AgentConfig = { ...config, trace };
-	const startedAt = Date.now();
-	const prompt = contentToText(
-		(input.messages ?? [])
-			.filter((m) => wireType(m.type ?? m.role) === "human")
-			.at(-1)?.content,
-	);
 
 	const body = new ReadableStream<Uint8Array>({
 		async start(controller) {
@@ -117,140 +77,80 @@ export function streamChatResponse(
 			);
 
 			let steps = 0;
-			let answer = "";
-			let halted = false;
-			let failure: string | undefined;
+			let lastMeta: Record<string, unknown> | undefined;
+
 			try {
 				write(sse("values", { messages: wire }));
 
-				const repl = getThreadRepl(threadId);
-				repl.llmObserver = (call) => captureLlmCall(trace, call);
-				const transcript = toTranscript(input);
-
-				const withheld = repl.takeProseFeedback();
-				if (withheld)
-					transcript.push({
-						role: "tool",
-						content: proseFeedbackContent(withheld),
-					});
-
-				while (!abort.signal.aborted) {
-					repl.setConversationVars(snapshotConversation(transcript));
-
-					const aiId = crypto.randomUUID();
-					const stepStartedAt = Date.now();
-					let full = "";
-					let reasoning = "";
-					let usage: TokenUsage | undefined;
-					let disconnected = false;
-					for await (const delta of streamAgent(
-						toLlmMessages(transcript),
-						tracedConfig,
-						{ signal: abort.signal },
-					)) {
-						if (delta.usage) {
-							usage = delta.usage;
-							continue;
-						}
-						const chunk: Record<string, unknown> = { type: "ai", id: aiId };
-						if (delta.reasoning) {
-							reasoning += delta.reasoning;
+				for await (const event of runAgentTurn(toTranscript(input), {
+					threadId,
+					config,
+					signal: abort.signal,
+					identity,
+				})) {
+					if (event.type === "delta") {
+						const chunk: Record<string, unknown> = {
+							type: "ai",
+							id: event.stepId,
+						};
+						if (event.reasoning !== undefined) {
 							chunk.content = "";
-							chunk.additional_kwargs = { reasoning_content: delta.reasoning };
+							chunk.additional_kwargs = {
+								reasoning_content: event.reasoning,
+							};
 						} else {
-							full += delta.text ?? "";
-							chunk.content = delta.text ?? "";
+							chunk.content = event.text ?? "";
 						}
-						if (!write(sse("messages", [chunk, {}]))) {
-							disconnected = true;
-							break;
-						}
-					}
-					if (disconnected) break;
-
-					const code = stripFences(full);
-					if (code === "") break;
-
-					const meta: Record<string, unknown> = {
-						at: new Date().toISOString(),
-						durationMs: Date.now() - stepStartedAt,
-						...(usage
-							? {
-									inputTokens: usage.input,
-									outputTokens: usage.output,
-									...(usage.cachedInput !== undefined
-										? { cachedInputTokens: usage.cachedInput }
-										: {}),
-								}
-							: {}),
-					};
-					const finalAi: Record<string, unknown> = {
-						type: "ai",
-						content: code,
-						id: aiId,
-						additional_kwargs: {
-							...(reasoning ? { reasoning_content: reasoning } : {}),
-							meta,
-						},
-					};
-					wire.push(finalAi);
-					transcript.push({ role: "assistant", content: code });
-
-					const evalStartedAt = Date.now();
-					const { output, display, error } = await evalCode(repl, code);
-					steps += 1;
-					if (repl.takeFinished()) {
-						answer = code;
-						halted = true;
-						meta.steps = steps;
+						if (!write(sse("messages", [chunk, {}]))) break;
+					} else if (event.type === "assistant") {
+						lastMeta = { ...event.meta };
+						wire.push({
+							type: "ai",
+							content: event.code,
+							id: event.stepId,
+							additional_kwargs: {
+								...(event.reasoning
+									? { reasoning_content: event.reasoning }
+									: {}),
+								meta: lastMeta,
+							},
+						});
+					} else if (event.type === "result") {
+						steps = event.step;
+						wire.push({
+							type: "tool",
+							content: replResultContent(event.output, event.error),
+							id: crypto.randomUUID(),
+							...(event.display !== event.output
+								? { additional_kwargs: { display: event.display } }
+								: undefined),
+						});
+						if (!write(sse("values", { messages: wire }))) break;
+					} else if (event.type === "halt") {
+						steps = event.steps;
+						if (lastMeta) lastMeta.steps = event.steps;
 						write(sse("values", { messages: wire }));
-						break;
+					} else if (event.type === "capped") {
+						steps = event.steps;
+					} else if (event.type === "silent") {
+						steps = event.steps;
+						console.error(
+							`[ai] the model returned an empty reply after ${event.steps} step(s)`,
+						);
+					} else {
+						console.error("[ai] chat stream failed:", event.error);
+						write(
+							sse("error", {
+								error: "AgentError",
+								message: event.message,
+							}),
+						);
 					}
-					captureReplEval(trace, {
-						step: steps,
-						source: code,
-						output,
-						error,
-						latencyMs: Date.now() - evalStartedAt,
-					});
-
-					const resultContent = replResultContent(output, error);
-					wire.push({
-						type: "tool",
-						content: resultContent,
-						id: crypto.randomUUID(),
-						...(display !== output
-							? { additional_kwargs: { display } }
-							: undefined),
-					});
-					transcript.push({ role: "tool", content: resultContent });
-
-					if (!write(sse("values", { messages: wire }))) break;
-					if (steps >= MAX_STEPS) break;
-				}
-			} catch (err) {
-				failure = err instanceof Error ? err.message : String(err);
-				if (!abort.signal.aborted) {
-					console.error("[ai] chat stream failed:", err);
-					write(
-						sse("error", {
-							error: "AgentError",
-							message: err instanceof Error ? err.message : String(err),
-						}),
-					);
 				}
 			} finally {
 				console.log(
 					`[ai] chat stream closed after ${steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);
-				captureTurn(trace, {
-					prompt,
-					answer,
-					steps,
-					halted,
-					latencyMs: Date.now() - startedAt,
-					error: failure,
-				});
 				closed = true;
 				try {
 					controller.close();

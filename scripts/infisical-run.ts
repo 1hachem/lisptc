@@ -97,20 +97,9 @@ const infisicalRun = command({
 	handler: async ({ url, env, projectId, paths, dir, cmd }) => {
 		const processedPaths = paths.split(" ").filter((path) => path !== "");
 
-		const clientId = process.env.INFISICAL_CLIENT_ID;
-		const clientSecret = process.env.INFISICAL_CLIENT_SECRET;
-
-		if (!clientId) {
-			throw new Error(
-				"INFISICAL_CLIENT_ID is required to authenticate with Infisical.",
-			);
-		}
-
-		if (!clientSecret) {
-			throw new Error(
-				"INFISICAL_CLIENT_SECRET is required to authenticate with Infisical.",
-			);
-		}
+		const { infisicalEnv } = await import("@repo/env/infisical");
+		const clientId = infisicalEnv.INFISICAL_CLIENT_ID;
+		const clientSecret = infisicalEnv.INFISICAL_CLIENT_SECRET;
 
 		const client = new InfisicalSDK({
 			siteUrl: url,
@@ -151,6 +140,7 @@ const infisicalRun = command({
 		);
 		console.info(`${Object.keys(secrets).length} secrets loaded 👌`);
 		const exitCode = await spawnWithSignal(cmd, {
+			// biome-ignore lint/style/noProcessEnv: the command inherits the whole environment, no value is read here
 			env: { ...process.env, ...secrets },
 			cwd: dir,
 		});

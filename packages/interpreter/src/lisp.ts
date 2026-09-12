@@ -458,6 +458,38 @@ const specialFormDocs: Record<string, Doc> = {
 	nil: { signature: "nil", doc: "The empty list / false value." },
 };
 
+export const DOC_SIGNATURE = "(doc [name])";
+
+export const DOC_DOC =
+	"With a symbol, print that binding's signature and description; return the symbol (nil if undocumented). With no argument, print every documented name.";
+
+export interface DocAnswer {
+	text: string;
+	value: unknown;
+}
+
+export function lookupDoc(interp: Interp, rest: List): DocAnswer {
+	const docs = interp.docs();
+	if (rest === null)
+		return {
+			text: [...docs.keys()]
+				.sort()
+				.map((key) => `${key}\n`)
+				.join(""),
+			value: true,
+		};
+	const name = rest.car;
+	if (!(name instanceof Sym)) throw new EvalException("symbol expected", name);
+	const entry = docs.get(name.name);
+	if (entry === undefined)
+		return { text: `${name.name}: undocumented\n`, value: null };
+	const body = entry.doc
+		.split("\n")
+		.map((line) => (line ? `  ${line}` : line))
+		.join("\n");
+	return { text: `${entry.signature}\n${body}\n`, value: name };
+}
+
 function listToStrings(list: List): string[] {
 	const out: string[] = [];
 	for (let c = list; c !== null; c = c.cdr as Cell | null) out.push(str(c.car));
@@ -742,34 +774,11 @@ export class Interp {
 				return Unspecified;
 			},
 		);
-		this.def(
-			"doc",
-			-1,
-			"(doc [name])",
-			"With a symbol, print that binding's signature and description; return the symbol (nil if undocumented). With no argument, print every documented name.",
-			z.tuple([zList]),
-			([rest]) => {
-				const docs = this.docs();
-				if (rest === null) {
-					for (const key of [...docs.keys()].sort()) this.say(`${key}\n`);
-					return true;
-				}
-				const name = rest.car;
-				if (!(name instanceof Sym))
-					throw new EvalException("symbol expected", name);
-				const entry = docs.get(name.name);
-				if (entry === undefined) {
-					this.say(`${name.name}: undocumented\n`);
-					return null;
-				}
-				const body = entry.doc
-					.split("\n")
-					.map((line) => (line ? `  ${line}` : line))
-					.join("\n");
-				this.say(`${entry.signature}\n${body}\n`);
-				return name;
-			},
-		);
+		this.def("doc", -1, DOC_SIGNATURE, DOC_DOC, z.tuple([zList]), ([rest]) => {
+			const answer = lookupDoc(this, rest);
+			this.tell(answer.text);
+			return answer.value;
+		});
 
 		const gensymCounter = newSym("*gensym-counter*");
 		this.globals.set(gensymCounter, ONE);
@@ -1090,6 +1099,11 @@ export class Interp {
 
 	private say(text: string): void {
 		this.channels.emit({ channel: USER, text });
+	}
+
+	private tell(text: string): void {
+		this.channels.emit({ channel: USER, text });
+		this.channels.emit({ channel: MODEL, text });
 	}
 
 	dispose(): void {

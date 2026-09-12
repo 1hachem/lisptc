@@ -16,3 +16,10 @@ editors/nvim/.vendor/
 .llama-cache/
 
 dist/
+
+# the eval suite's report artifacts
+apps/trace-viewer/.evals/
+
+.next/
+next-env.d.ts
+*.tsbuildinfo

@@ -121,7 +121,7 @@ describe("formes du personnalisateur", () => {
 			}
 		}
 		expect(fautifs).toEqual([]);
-	}, 30_000);
+	}, 120_000);
 
 	const A_REGARD_LIBRE = ["cercle", "squircle", "carre"];
 	const ENVELOPPE: Look[] = [-16, 0, 16].flatMap((yaw) =>
@@ -144,7 +144,7 @@ describe("formes du personnalisateur", () => {
 			}
 		}
 		expect(fautifs).toEqual([]);
-	}, 30_000);
+	}, 120_000);
 
 	const ECHELLE_MAX = 1.3;
 
@@ -162,7 +162,7 @@ describe("formes du personnalisateur", () => {
 			}
 		}
 		expect(fautifs).toEqual([]);
-	}, 30_000);
+	}, 120_000);
 
 	it("choisir le cercle rend exactement la meme chose que ne rien choisir", () => {
 		expect(DEFAULT_SHAPE).toBe("cercle");

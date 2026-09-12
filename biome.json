@@ -15,14 +15,17 @@
       "apps/*/src/**",
       "apps/*/server/**",
       "apps/*/test/**",
+      "apps/*/evals/**",
       "apps/*/extension/**",
       "apps/*/*.ts",
       "apps/*/*.json",
+      "scripts/**/*.ts",
       "*.ts",
       "*.json",
       "!**/node_modules",
       "!.claude",
-      "!apps/app/src/routeTree.gen.ts"
+      "!apps/app/src/routeTree.gen.ts",
+      "!apps/trace-viewer/next-env.d.ts"
     ]
   },
   "formatter": {
@@ -32,7 +35,10 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "style": {
+        "noProcessEnv": "error"
+      }
     }
   },
   "javascript": {
@@ -60,6 +66,20 @@
     }
   },
   "overrides": [
+    {
+      "includes": [
+        "packages/env/src/**",
+        "packages/*/test/**",
+        "apps/*/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
     {
       "includes": [
         "packages/ui/src/components/ui/**",

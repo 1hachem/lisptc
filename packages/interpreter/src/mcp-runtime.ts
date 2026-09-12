@@ -91,6 +91,7 @@ function startChild(spec: {
 		detached: true,
 		stdio: ["ignore", "ignore", "pipe"],
 		env: {
+			// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
 			...(process.env as Record<string, string>),
 			...(spec.env ?? {}),
 		},
@@ -164,6 +165,7 @@ export function createLocalRuntime(): McpRuntime {
 					command: spec.command,
 					args: spec.args ?? [],
 					env: {
+						// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
 						...(process.env as Record<string, string>),
 						...(spec.env ?? {}),
 					},

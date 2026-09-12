@@ -1,3 +1,5 @@
+import { providerSpecs } from "@repo/env/providers";
+import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 
@@ -21,12 +23,24 @@ interface WireMessage {
 		meta?: {
 			at?: string;
 			durationMs?: number;
+			provider?: string;
+			model?: string;
 			inputTokens?: number;
 			outputTokens?: number;
 			cachedInputTokens?: number;
 			steps?: number;
 		};
 	};
+}
+
+function records(text: string): { event: string; data: unknown }[] {
+	return text
+		.split("\n\n")
+		.filter((record) => record.startsWith("event: "))
+		.map((record) => ({
+			event: record.slice(7, record.indexOf("\n")),
+			data: JSON.parse(record.slice(record.indexOf("data: ") + 6)),
+		}));
 }
 
 async function finalMessages(response: Response): Promise<WireMessage[]> {
@@ -80,6 +94,36 @@ describe("chat stream", () => {
 		});
 	});
 
+	test("every model call names the model that was billed for it", async () => {
+		const messages = await finalMessages(
+			streamChatResponse(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{ provider: "fireworks", model: "a-pinned-one" },
+			),
+		);
+
+		for (const m of messages.filter((m) => m.type === "ai"))
+			expect(m.additional_kwargs?.meta).toMatchObject({
+				provider: "fireworks",
+				model: "a-pinned-one",
+			});
+	});
+
+	test("an unpinned call names the default it actually ran on", async () => {
+		const messages = await finalMessages(
+			streamChatResponse({
+				messages: [{ type: "human", content: "what is 1 + 2?" }],
+			}),
+		);
+
+		expect(
+			messages.find((m) => m.type === "ai")?.additional_kwargs?.meta,
+		).toMatchObject({
+			provider: DEFAULT_PROVIDER,
+			model: providerSpecs[DEFAULT_PROVIDER].defaultModel,
+		});
+	});
+
 	test("a REPL result carries no cost of its own", async () => {
 		const messages = await finalMessages(
 			streamChatResponse({
@@ -89,5 +133,28 @@ describe("chat stream", () => {
 
 		const tool = messages.find((m) => m.type === "tool");
 		expect(tool?.additional_kwargs?.meta).toBeUndefined();
+	});
+	test("the wire contract the app reads", async () => {
+		const text = await streamChatResponse({
+			messages: [{ type: "human", content: "what is 1 + 2?" }],
+		}).text();
+		const seen = records(text);
+
+		expect(new Set(seen.map((r) => r.event))).toEqual(
+			new Set(["values", "messages"]),
+		);
+
+		const delta = seen.find((r) => r.event === "messages")?.data as unknown[];
+		expect(delta).toHaveLength(2);
+		expect(delta[1]).toEqual({});
+		expect(delta[0]).toMatchObject({ type: "ai", content: "(+ 1 2)" });
+
+		const snapshot = seen.at(-1)?.data as { messages: WireMessage[] };
+		expect(snapshot.messages.map((m) => m.type)).toEqual([
+			"human",
+			"ai",
+			"tool",
+			"ai",
+		]);
 	});
 });

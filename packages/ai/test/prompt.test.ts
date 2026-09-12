@@ -45,6 +45,49 @@ describe("prose around the forms", () => {
 	});
 });
 
+describe("the failures a run actually dies of", () => {
+	it("forbids wrapping a remark in parentheses, not just a lone paren", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/NEVER WRAP A REMARK IN PARENTHESES/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/NEVER PUT A SENTENCE IN PARENTHESES/);
+	});
+
+	it("says the aside tolerance is forgiveness, not a way to write", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/a mistake the reader forgives, NOT a way to write/i,
+		);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/narrow and unpredictable/i);
+	});
+
+	it("says a bare result name ends the turn instead of showing it", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/ENDS THE TURN/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/most expensive typo in the language/i);
+	});
+
+	it("says a discovery call prints itself and needs no echo", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/DISCOVERY CALLS PRINT THEMSELVES/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(
+			/never re-run the same search with different words/i,
+		);
+		for (const name of [
+			"search-mcps",
+			"search-tools",
+			"list-tools",
+			"list-toolkit",
+			"list-mcps",
+		])
+			expect(LISP_SYSTEM_PROMPT).toMatch(names(name));
+	});
+
+	it("points at doc for a tool's signature", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/prints (a tool's|its) full signature/i);
+	});
+
+	it("says to stop when the request is met", () => {
+		expect(LISP_SYSTEM_PROMPT).toMatch(/Do what was asked, then stop/);
+		expect(LISP_SYSTEM_PROMPT).toMatch(/do not go on to snapshot it/i);
+	});
+});
+
 describe("the REPL loop protocol", () => {
 	it("says the REPL prints nothing and reports a name and shape instead", () => {
 		expect(LISP_SYSTEM_PROMPT).toMatch(/The REPL prints nothing on its own/);
