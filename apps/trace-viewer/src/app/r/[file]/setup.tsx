@@ -28,9 +28,8 @@ export function Setup({ info }: { info: CaseInfo }) {
 			<details>
 				<Summary>
 					how this is set up — optimal {info.min}, budget {info.max},{" "}
-					{info.samples} sample{info.samples === 1 ? "" : "s"}
-					{info.passRate === undefined ? "" : `, pass rate ≥ ${info.passRate}`},{" "}
-					{info.systemPrompt} system prompt
+					{info.samples} sample{info.samples === 1 ? "" : "s"}, score ≥{" "}
+					{info.minScore}, {info.systemPrompt} system prompt
 				</Summary>
 
 				<div className="border-bg2 border-t px-4 pb-3.5">

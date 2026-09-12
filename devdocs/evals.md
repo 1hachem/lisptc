@@ -349,9 +349,30 @@ It still grades as a fail, since the run proved nothing, but it no longer reads
 as evidence about the model under test. Worth knowing when cases run as parallel
 shards against one provider.
 
-One run per case by default. `samples: k` with a `passRate` floor buys repeats
-where a case is known to be borderline; a model is stochastic and one run is a
-coin flip, so a single red case is evidence, not proof.
+One run per case by default. `samples: k` buys repeats where a case is known to
+be borderline; a model is stochastic and one run is a coin flip, so a single red
+case is evidence, not proof.
+
+### The grade is not the exit code
+
+A grade describes one run. What fails the vitest process is the **case score**,
+and `gate` is the only place that decides it. A model that misses one assertion
+out of five has not regressed, it has done what models do, and a suite that goes
+red on it stops being read. So the gate counts, across every sample of the case,
+the checks that came out true plus one point per run that answered, and fails
+only when that total is **below half** — the point where more was missed than
+met. `minScore` on a case raises the floor (`minScore: 1` restores the old
+all-or-nothing behaviour for a case that must never slip).
+
+Answering counts as a check because no check asserts it (see *Halting is the
+band's job*), so without that point a run that burned its whole budget could
+still score full marks. Scoring the samples **together** is what makes a `samples`
+band mean something: three good runs and one silent one is a passing case, and
+the failure line still names the silent run.
+
+The terminal still prints every run's grade, its transcript and the score line
+(`scored 7/9 (floor 0.5) — pass in 4 steps; …`), so a degrade or a single miss is
+visible without being fatal.
 
 **Input tokens are not summed.** Every model call is handed the whole
 conversation, so each step's input count already contains the ones before it
@@ -440,10 +461,11 @@ across a list of runs the numbers are comparable in a way three words were not.
 The colour comes from the score itself, not from the grade: **green above
 average, yellow at it, red below**, where average is half the checks. `6/10` is
 green and `5/10` is yellow, so the tint answers "did more pass than fail" and the
-number answers by how much. The pass/degraded/fail grade is still what gates the
-vitest run and still prints in the terminal; the viewer no longer shows it, so a
-run that never answered can read green when its checks held up, and the line
-under the score is what says it never answered.
+number answers by how much. That half-the-checks line is the same one the gate
+fails on, so a red row is a row that dragged its case toward a red suite. The
+pass/degraded/fail grade still prints in the terminal; the viewer no longer shows
+it, so a run that never answered can read green when its checks held up, and the
+line under the score is what says it never answered.
 
 The app carries **two tsconfigs**, because it has two TypeScript worlds: the UI
 is DOM plus bundler resolution, while `evals/` pulls the interpreter and needs

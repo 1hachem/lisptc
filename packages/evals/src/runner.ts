@@ -40,7 +40,7 @@ export interface EvalSpec {
 	mocks?: MockSpec;
 	seed?: SeedEntry[];
 	samples?: number;
-	passRate?: number;
+	minScore?: number;
 	system?: string;
 }
 
@@ -199,6 +199,8 @@ function grade(
 	return steps <= spec.min ? "pass" : "degraded";
 }
 
+const DEFAULT_MIN_SCORE = 0.5;
+
 const RULE = "─".repeat(72);
 
 function speaker(line: TranscriptLine): string {
@@ -238,6 +240,41 @@ export function formatRun(name: string, run: ReportRow): string {
 	}
 	out.push(RULE);
 	return out.join("\n");
+}
+
+export interface CaseScore {
+	passed: number;
+	total: number;
+	ratio: number;
+}
+
+export function caseScore(runs: RunResult[]): CaseScore {
+	let passed = 0;
+	let total = 0;
+	for (const run of runs) {
+		passed += run.checks.filter((check) => check.verdict === "true").length;
+		total += run.checks.length;
+		if (run.halted) passed += 1;
+		total += 1;
+	}
+	return { passed, total, ratio: passed / total };
+}
+
+export function gate(
+	spec: EvalSpec,
+	runs: RunResult[],
+): { ok: boolean; line: string } {
+	const score = caseScore(runs);
+	const floor = spec.minScore ?? DEFAULT_MIN_SCORE;
+	const summary = runs
+		.map((run) => `${run.grade} in ${run.steps} steps`)
+		.join("; ");
+	const missed = failures(runs);
+	const head = `scored ${score.passed}/${score.total} (floor ${floor}) — ${summary}`;
+	return {
+		ok: score.ratio >= floor,
+		line: missed ? `${head} — ${missed}` : head,
+	};
 }
 
 function failures(runs: RunResult[]): string {
@@ -282,7 +319,7 @@ function describeCase(name: string, spec: EvalSpec): CaseInfo {
 		min: spec.min,
 		max: spec.max,
 		samples: spec.samples ?? 1,
-		...(spec.passRate === undefined ? {} : { passRate: spec.passRate }),
+		minScore: spec.minScore ?? DEFAULT_MIN_SCORE,
 		systemPrompt: spec.system === undefined ? "default" : "custom",
 		checks: spec.checks.trim(),
 		seed: seedOf(spec),
@@ -316,26 +353,9 @@ export function evalCase(name: string, spec: EvalSpec): void {
 			}
 			writeReport();
 
-			const passed = runs.filter((run) => run.grade === "pass").length;
-			const rate = passed / runs.length;
-			const summary = runs
-				.map((run) => `${run.grade} in ${run.steps} steps`)
-				.join("; ");
-
-			if (samples > 1) {
-				const floor = spec.passRate ?? 1;
-				if (rate < floor)
-					throw new Error(
-						`pass rate ${rate.toFixed(2)} below ${floor} — ${summary}${
-							failures(runs) ? ` (${failures(runs)})` : ""
-						}`,
-					);
-				return;
-			}
-			if (runs[0].grade === "fail")
-				throw new Error(
-					`${summary}${failures(runs) ? ` — ${failures(runs)}` : ""}`,
-				);
+			const verdict = gate(spec, runs);
+			console.log(`${label}: ${verdict.line}`);
+			if (!verdict.ok) throw new Error(verdict.line);
 		});
 	}
 }

@@ -62,7 +62,7 @@ export const caseInfoSchema = z.object({
 	min: z.number(),
 	max: z.number(),
 	samples: z.number(),
-	passRate: z.number().optional(),
+	minScore: z.number().default(0.5),
 	systemPrompt: z.enum(["default", "custom"]),
 	checks: z.string(),
 	seed: z.array(seedTurnSchema),

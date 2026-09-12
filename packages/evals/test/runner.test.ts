@@ -1,5 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import type { Verdict } from "../src/report.ts";
+import type { EvalSpec, RunResult } from "../src/runner.ts";
 import { playwright } from "./fixtures/server.ts";
 
 const TURNS: string[] = [
@@ -131,5 +133,65 @@ describe("a case runs against a scripted model", () => {
 			step: 1,
 		});
 		expect(result.grade).toBe("fail");
+	});
+});
+
+describe("the gate scores a case instead of failing on any miss", () => {
+	let gate: typeof import("../src/runner.ts").gate;
+
+	beforeAll(async () => {
+		({ gate } = await import("../src/runner.ts"));
+	});
+
+	function run(verdicts: Verdict[], halted = true): RunResult {
+		return {
+			provider: "digitalocean",
+			model: "stub",
+			grade: verdicts.includes("false") || !halted ? "fail" : "pass",
+			steps: 4,
+			min: 4,
+			max: 8,
+			halted,
+			silent: false,
+			answer: halted ? "done" : "",
+			inputTokens: 0,
+			outputTokens: 0,
+			durationMs: 0,
+			errors: 0,
+			skips: 0,
+			checks: verdicts.map((verdict, index) => ({
+				name: `check-${index}`,
+				verdict,
+			})),
+			transcript: [],
+		};
+	}
+
+	const spec: EvalSpec = { min: 4, max: 8, checks: "" };
+
+	test("a minority of failed checks still passes", () => {
+		const result = gate(spec, [run(["true", "true", "false"])]);
+		expect(result.ok).toBe(true);
+		expect(result.line).toContain("scored 3/4");
+	});
+
+	test("a majority of failed checks fails", () => {
+		const result = gate(spec, [run(["false", "false", "false", "true"])]);
+		expect(result.ok).toBe(false);
+		expect(result.line).toContain("scored 2/5");
+	});
+
+	test("samples are scored together, so one bad run does not sink the case", () => {
+		const result = gate(spec, [
+			run(["true", "true", "true"]),
+			run(["false", "false", "false"], false),
+		]);
+		expect(result.ok).toBe(true);
+		expect(result.line).toContain("never answered");
+	});
+
+	test("minScore raises the bar", () => {
+		const result = gate({ ...spec, minScore: 1 }, [run(["true", "false"])]);
+		expect(result.ok).toBe(false);
 	});
 });
