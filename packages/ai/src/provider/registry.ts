@@ -1,4 +1,8 @@
-import { DEFAULT_PROVIDER, type ProviderName } from "@repo/shared/providers";
+import {
+	DEFAULT_PROVIDER,
+	type ProviderName,
+	providerSpecs,
+} from "@repo/shared/providers";
 import type { Provider } from "./core.ts";
 import { digitalocean } from "./digitalocean.ts";
 import { fireworks } from "./fireworks.ts";
@@ -16,4 +20,14 @@ export function getProvider(name: ProviderName = DEFAULT_PROVIDER): Provider {
 	const provider = providers[name];
 	if (!provider) throw new Error(`unknown AI provider: ${name}`);
 	return provider;
+}
+
+export function resolveModel(
+	provider: ProviderName = DEFAULT_PROVIDER,
+	model?: string,
+): { provider: ProviderName; model: string } {
+	return {
+		provider,
+		model: model ?? providerSpecs[provider].defaultModel,
+	};
 }

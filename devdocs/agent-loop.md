@@ -34,6 +34,13 @@ them across the loop charges the same prompt several times over.
 `steps` is the one exception: it belongs to the turn, not the call, so it hangs
 off the message the reader ends on and nowhere else.
 
+`provider` and `model` are **resolved**, never echoed back from the config. A
+request that pins neither still ran on something, and the point of the field is
+to say what answered — an absent provider on the message would leave a reader
+guessing at a default that moves with an env var. The same resolved pair is what
+the turn's trace reports, so PostHog and the transcript cannot disagree about
+which model was billed.
+
 `cachedInput` is a **subset** of `input`, not an extra. Absent when the provider
 says nothing about caching, which is not the same as a cold prompt. A backend
 that reports no usage simply never produces a usage delta, and the turn goes
