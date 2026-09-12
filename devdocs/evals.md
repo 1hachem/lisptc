@@ -440,8 +440,11 @@ place no matter who ran it. `reportStore()` picks:
 
 The last row is what keeps a clone with no secrets working: `pnpm test:evals`
 still writes and the viewer still renders, locally. The third row is the
-opposite case — CI sets `EVAL_STORAGE=r2` explicitly, so a run there fails loudly
-rather than writing a report to a container that is about to be deleted.
+opposite case — CI hardcodes `EVAL_STORAGE=r2`, with no input to override it, so
+a run there fails loudly rather than writing a report to a container that is
+about to be deleted. A local report from CI is not a fallback anyone would go
+looking for; the only thing on that runner's disk worth keeping is the copy a
+failed R2 write leaves behind, and the artifact step collects that.
 
 `r2Config()` (`@repo/env/r2`) is the same idea one level down. The variables are
 individually optional, but **half-configuration throws**, naming what is

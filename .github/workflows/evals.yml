@@ -6,7 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       matrix:
-        description: "provider:model pairs, comma separated"
+        description: "provider:model pairs, comma separated (default: the EVAL_MATRIX variable)"
+        required: false
+        default: ""
+      judge:
+        description: "provider:model for the recap judge, or none (default: the EVAL_JUDGE variable)"
         required: false
         default: ""
 
@@ -67,7 +71,7 @@ jobs:
         run: pnpm test:evals
         env:
           EVAL_MATRIX: ${{ inputs.matrix || vars.EVAL_MATRIX }}
-          EVAL_JUDGE: ${{ vars.EVAL_JUDGE }}
+          EVAL_JUDGE: ${{ inputs.judge || vars.EVAL_JUDGE }}
           EVAL_STORAGE: r2
 
       # The report goes to R2; anything on disk here is the fallback copy a
