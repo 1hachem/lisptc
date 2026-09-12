@@ -1,46 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { contentToText, isRole } from "../src/messages.ts";
-import {
-	buildProviderSpecs,
-	defaultProviderName,
-	providerSpecFor,
-} from "../src/providers.ts";
+import { isProviderName, providerSpecFor } from "../src/providers.ts";
 
-describe("provider specs", () => {
-	it("falls back to the bundled defaults when nothing is set", () => {
-		const specs = buildProviderSpecs({});
-		expect(specs.llamacpp.baseUrl).toBe("http://127.0.0.1:8080/v1");
-		expect(specs.digitalocean.defaultModel).toBe("gemma-4-31B-it");
-		expect(specs.digitalocean.apiKey).toBeUndefined();
+const SPECS = {
+	digitalocean: {
+		label: "DigitalOcean inference",
+		apiKey: undefined,
+		apiKeyEnv: "DO_API_KEY",
+		baseUrl: "https://inference.do-ai.run/v1",
+		defaultModel: "gemma-4-31B-it",
+	},
+} as unknown as Parameters<typeof providerSpecFor>[1];
+
+describe("provider names", () => {
+	it("knows the four providers", () => {
+		expect(isProviderName("fireworks")).toBe(true);
+		expect(isProviderName("nowhere")).toBe(false);
 	});
 
-	it("takes the base url, model and key from the environment", () => {
-		const specs = buildProviderSpecs({
-			OPENROUTER_API_KEY: "sk-test",
-			OPENROUTER_MODEL: "some/model",
-			OPENROUTER_BASE_URL: "http://localhost:1234/v1",
-		});
-		expect(specs.openrouter).toMatchObject({
-			apiKey: "sk-test",
-			defaultModel: "some/model",
-			baseUrl: "http://localhost:1234/v1",
-		});
-	});
-
-	it("reads an empty variable as unset, the way the typed env does", () => {
-		expect(
-			buildProviderSpecs({ DO_API_KEY: "" }).digitalocean.apiKey,
-		).toBeUndefined();
-	});
-
-	it("resolves the default provider, and refuses an unknown one", () => {
-		expect(defaultProviderName({ LLM_PROVIDER: "fireworks" })).toBe(
-			"fireworks",
+	it("looks a spec up by name, and refuses an unknown one", () => {
+		expect(providerSpecFor("digitalocean", SPECS).defaultModel).toBe(
+			"gemma-4-31B-it",
 		);
-		expect(() => defaultProviderName({ LLM_PROVIDER: "nowhere" })).toThrow(
-			/LLM_PROVIDER is "nowhere", but expected one of/,
-		);
-		expect(() => providerSpecFor("nowhere")).toThrow(
+		expect(() => providerSpecFor("nowhere", SPECS)).toThrow(
 			/unknown provider "nowhere", expected one of digitalocean, fireworks, llamacpp, openrouter/,
 		);
 	});

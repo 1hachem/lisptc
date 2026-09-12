@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     "./repl": "./src/repl.ts",
+    "./extensions": "./src/extensions.ts",
     "./session-server": "./src/session-server.ts",
     "./cli": "./src/cli.ts",
     "./package.json": "./package.json"
@@ -21,6 +22,7 @@
     "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
   },
   "dependencies": {
+    "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm": "workspace:*"
   },

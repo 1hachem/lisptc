@@ -113,8 +113,29 @@ const SCALARS: Record<string, string> = {
 const FIELD_TYPES =
 	":string :number :integer :boolean :any :enum :list :optional";
 
-export function llmExtension(options: LlmOptions = {}): InterpExtension {
-	return (interp: Interp): void => registerLlm(interp, options);
+export interface LlmExtension extends InterpExtension {
+	observe?: LlmObserver;
+}
+
+export function llmExtension(options: LlmOptions = {}): LlmExtension {
+	const config: LlmOptions = { ...options };
+	const extension: LlmExtension = (interp: Interp): void => {
+		registerLlm(interp, config);
+	};
+	Object.defineProperty(extension, "observe", {
+		enumerable: true,
+		get: () => config.observe,
+		set: (observer: LlmObserver | undefined) => {
+			config.observe = observer;
+		},
+	});
+	return extension;
+}
+
+export function isLlmExtension(
+	extension: InterpExtension,
+): extension is LlmExtension {
+	return "observe" in extension;
 }
 
 function asText(x: unknown, what: string): string {
@@ -385,12 +406,13 @@ function traceOf(
 
 function caller(
 	generate: Generate,
-	observe: LlmObserver | undefined,
+	observe: () => LlmObserver | undefined,
 ): (builtin: string, req: LlmRequest, timeoutMs: number) => Promise<LlmResult> {
 	const report = (call: LlmCall): void => {
-		if (observe === undefined) return;
+		const observer = observe();
+		if (observer === undefined) return;
 		try {
-			observe(call);
+			observer(call);
 		} catch {}
 	};
 	return (builtin, req, timeoutMs) => {
@@ -419,7 +441,7 @@ function oneValue(values: List, complaint: string, rest: List): unknown {
 export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
 	const generate = options.generate ?? langchainGenerate;
 	const providers = options.providers ?? listProviders;
-	const call = caller(generate, options.observe);
+	const call = caller(generate, () => options.observe);
 
 	interp.defineGlobal(newSym(DEFAULTS_VAR), null, {
 		signature: DEFAULTS_VAR,

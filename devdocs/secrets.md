@@ -19,7 +19,9 @@ extension. There is one addon, `secretsExtension`; everything lives in
   It warns only on an explicitly-named missing file.
 - `secretsExtension({ store?, envFile? })` / `registerSecrets(interp, store)` —
   the extension: installs `(secret)` / `(secrets)` over a store and, when
-  `envFile` is set, seeds that store from a `.env` file. This IS the addon.
+  `envFile` is set, seeds that store from a `.env` file. This IS the addon. It
+  **carries** the store it was configured with (`storeOf` reads it back), so a
+  host that hands the extension to a REPL does not also hand it the store.
 
 The taint story lives here too: the `Secret` type, and overrides of the core
 string primitives (`interp.def` overwrites the global) that make every string

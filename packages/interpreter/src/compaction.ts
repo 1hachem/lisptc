@@ -3,12 +3,15 @@ import { type Channels, MODEL, USER } from "./channels.ts";
 import {
 	Cell,
 	callableKind,
+	DOC_DOC,
+	DOC_SIGNATURE,
 	type DocArg,
 	EvalException,
 	echoText,
 	type Interp,
 	type InterpExtension,
 	type List,
+	lookupDoc,
 	newSym,
 	Sym,
 	str,
@@ -181,7 +184,8 @@ export class Compactor {
 	result(interp: Interp, form: unknown, value: unknown): string {
 		if (!this.stepping) return "";
 		if (value === Unspecified) return "";
-		if (isSliceForm(form)) {
+		if (isDocForm(form)) return "";
+		if (isReadForm(form)) {
 			this.print(interp, value);
 			return "";
 		}
@@ -198,6 +202,13 @@ export class Compactor {
 
 	beginStep(): void {
 		this.stepping = true;
+		this.spent = 0;
+		this.dropped = 0;
+	}
+
+	reset(): void {
+		this.counters.clear();
+		this.stepping = false;
 		this.spent = 0;
 		this.dropped = 0;
 	}
@@ -227,6 +238,12 @@ export class Compactor {
 			this.channels?.emit({ channel: USER, text: bounded.user });
 		if (bounded.model !== "")
 			this.channels?.emit({ channel: MODEL, text: bounded.model });
+	}
+
+	doc(text: string): Bounded {
+		const bounded = { model: text, user: text };
+		this.say(bounded);
+		return bounded;
 	}
 
 	private print(interp: Interp, value: unknown): void {
@@ -404,9 +421,25 @@ export class Compactor {
 	}
 }
 
-function isSliceForm(form: unknown): boolean {
+const READ_FORMS = new Set([
+	"head",
+	"tail",
+	"list-mcps",
+	"list-toolkit",
+	"list-tools",
+	"search-mcps",
+	"search-tools",
+]);
+
+function isReadForm(form: unknown): boolean {
 	if (!(form instanceof Cell) || !(form.car instanceof Sym)) return false;
-	return form.car.name === "head" || form.car.name === "tail";
+	return READ_FORMS.has(form.car.name);
+}
+
+function isDocForm(form: unknown): boolean {
+	return (
+		form instanceof Cell && form.car instanceof Sym && form.car.name === "doc"
+	);
 }
 
 function lastAssignedSymbol(form: unknown): string | undefined {
@@ -679,6 +712,7 @@ const GREP_ARGS: DocArg[] = [
 ];
 
 function registerCompaction(interp: Interp, c: Compactor): void {
+	c.reset();
 	c.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (interp, form, next) {
@@ -687,6 +721,18 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 		if (report !== "") c.say({ model: report, user: report });
 		return value;
 	});
+	interp.def(
+		"doc",
+		-1,
+		DOC_SIGNATURE,
+		`${DOC_DOC} Documentation is quoted back to you whole, however long it is, and reading it does not spend the step's ${c.limit} echo words — so look a binding up whenever you are unsure of it.`,
+		z.tuple([zList]),
+		([rest]) => {
+			const answer = lookupDoc(interp, rest);
+			c.doc(answer.text);
+			return answer.value;
+		},
+	);
 	interp.def(
 		"echo",
 		-1,
@@ -768,8 +814,20 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 	return n;
 }
 
+export interface CompactionExtension extends InterpExtension {
+	readonly compactor: Compactor;
+}
+
 export function compactionExtension(
 	compactor: Compactor = new Compactor(),
-): InterpExtension {
-	return (interp: Interp): void => registerCompaction(interp, compactor);
+): CompactionExtension {
+	return Object.assign(
+		(interp: Interp): void => registerCompaction(interp, compactor),
+		{ compactor },
+	);
+}
+
+export function compactorOf(extension: InterpExtension): Compactor | undefined {
+	const carried = (extension as Partial<CompactionExtension>).compactor;
+	return carried instanceof Compactor ? carried : undefined;
 }

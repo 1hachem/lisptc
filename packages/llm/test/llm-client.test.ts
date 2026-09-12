@@ -1,4 +1,3 @@
-import { createServer, type Server } from "node:http";
 import {
 	Interp,
 	prelude,
@@ -6,63 +5,72 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 interface Seen {
-	url: string | undefined;
+	url: string;
 	body: Record<string, unknown>;
 }
 
 const seen: Seen[] = [];
-let server: Server;
 let llmExtension: typeof import("../src/llm.ts").llmExtension;
-let hang = false;
 
-function stub(): Server {
-	return createServer((req, res) => {
-		let raw = "";
-		req.on("data", (chunk) => {
-			raw += chunk;
-		});
-		req.on("end", () => {
-			seen.push({ url: req.url, body: JSON.parse(raw) });
-			if (hang) return;
-			res.writeHead(200, { "content-type": "application/json" });
-			res.end(
-				JSON.stringify({
-					id: "1",
-					object: "chat.completion",
-					created: 1,
-					model: "stub",
-					choices: [
-						{
-							index: 0,
-							message: {
-								role: "assistant",
-								content: '{"words":["one","two"]}',
-							},
-							finish_reason: "stop",
-						},
-					],
-				}),
-			);
-		});
+const completion = {
+	id: "1",
+	object: "chat.completion",
+	created: 1,
+	model: "stub",
+	choices: [
+		{
+			index: 0,
+			message: { role: "assistant", content: '{"words":["one","two"]}' },
+			finish_reason: "stop",
+		},
+	],
+};
+
+function stubFetch(
+	answer: (signal: AbortSignal | null | undefined) => Promise<Response>,
+): void {
+	vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+		const url =
+			typeof input === "string"
+				? input
+				: input instanceof URL
+					? input.href
+					: (input as Request).url;
+		const raw = typeof init?.body === "string" ? init.body : "";
+		seen.push({ url, body: JSON.parse(raw) });
+		return answer(init?.signal);
+	});
+}
+
+function answers(): Promise<Response> {
+	return Promise.resolve(
+		new Response(JSON.stringify(completion), {
+			headers: { "content-type": "application/json" },
+		}),
+	);
+}
+
+function neverAnswers(
+	signal: AbortSignal | null | undefined,
+): Promise<Response> {
+	return new Promise((_, reject) => {
+		signal?.addEventListener("abort", () =>
+			reject(new DOMException("aborted", "AbortError")),
+		);
 	});
 }
 
 beforeAll(async () => {
-	server = stub();
-	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	const address = server.address();
-	const port =
-		typeof address === "object" && address !== null ? address.port : 0;
-	process.env.LLAMACPP_BASE_URL = `http://127.0.0.1:${port}/v1`;
+	process.env.LLAMACPP_BASE_URL = "http://llamacpp.test/v1";
 	llmExtension = (await import("../src/llm.ts")).llmExtension;
+	await import("@langchain/openai");
 });
 
-afterAll(() => {
-	server.closeAllConnections();
-	server.close();
+afterEach(() => {
+	vi.unstubAllGlobals();
 });
 
 function clientInterp(): Interp {
@@ -71,14 +79,16 @@ function clientInterp(): Interp {
 	return interp;
 }
 
-describe("the langchain client against a local OpenAI-compatible server", () => {
+describe("the langchain client against a stubbed fetch", () => {
 	it("sends the prompt, the model and the token budget", async () => {
+		stubFetch(answers);
 		const interp = clientInterp();
 		const reply = await runAsync(
 			interp,
 			'(llm/complete "hi" :provider :llamacpp :max-tokens 32)',
 		);
 		expect(str(reply.value)).toBe('"{\\"words\\":[\\"one\\",\\"two\\"]}"');
+		expect(seen.at(-1)?.url).toBe("http://llamacpp.test/v1/chat/completions");
 		expect(seen.at(-1)?.body).toMatchObject({
 			model: "gemma-4-E4B-it",
 			stream: false,
@@ -88,6 +98,7 @@ describe("the langchain client against a local OpenAI-compatible server", () => 
 	});
 
 	it("constrains an extraction with response_format and parses the answer", async () => {
+		stubFetch(answers);
 		const interp = clientInterp();
 		const value = await runAsync(
 			interp,
@@ -109,24 +120,20 @@ describe("the langchain client against a local OpenAI-compatible server", () => 
 	});
 
 	it("reports an unknown provider without calling out", async () => {
+		stubFetch(answers);
 		const interp = clientInterp();
+		const before = seen.length;
 		await expect(
 			runAsync(interp, '(llm/complete "hi" :provider :nowhere)'),
 		).rejects.toThrow(/unknown provider "nowhere"/);
+		expect(seen.length).toBe(before);
 	});
 
 	it("gives up on a request that never answers", async () => {
-		hang = true;
-		try {
-			const interp = clientInterp();
-			await expect(
-				runAsync(
-					interp,
-					'(llm/complete "hi" :provider :llamacpp :timeout 100)',
-				),
-			).rejects.toThrow(/llm timed out/);
-		} finally {
-			hang = false;
-		}
+		stubFetch(neverAnswers);
+		const interp = clientInterp();
+		await expect(
+			runAsync(interp, '(llm/complete "hi" :provider :llamacpp :timeout 100)'),
+		).rejects.toThrow(/llm timed out/);
 	});
 });

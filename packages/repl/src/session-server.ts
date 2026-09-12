@@ -5,6 +5,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { replEnv } from "@repo/env/repl";
 import type { Arity, DocArg } from "@repo/interpreter/lisp";
 import { MemoryRepl } from "./repl.ts";
 
@@ -38,9 +39,9 @@ interface Reply {
 }
 
 export function socketPathFor(session?: string): string {
-	const id = session ?? process.env.LISPTC_SESSION ?? process.cwd();
+	const id = session ?? replEnv.LISPTC_SESSION ?? process.cwd();
 	const hash = createHash("sha256").update(id).digest("hex").slice(0, 16);
-	const dir = process.env.XDG_RUNTIME_DIR ?? tmpdir();
+	const dir = replEnv.XDG_RUNTIME_DIR ?? tmpdir();
 	return join(dir, `lisptc-${hash}.sock`);
 }
 

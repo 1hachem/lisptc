@@ -49,24 +49,56 @@ uncounted rather than counted wrong.
 ### The stream test imports in a hook, not in a test
 
 `test/stream.test.ts` drives the real `streamChatResponse` with `agent.ts`
-mocked, so its first test used to pay the whole module graph inside a test's 5s
-budget: 4773ms of 5000 on a CI runner, and a single new import under
-`MemoryRepl` tipped it over. The import now happens in `beforeAll`, which has
+mocked (`test/turn.test.ts` does the same to the loop underneath it), so its
+first test used to pay the whole module graph inside a test's 5s budget:
+4773ms of 5000 on a CI runner, and a single new import under `MemoryRepl`
+tipped it over. The import now happens in `beforeAll`, which has
 its own 10s budget, and each test measures only what it is about (~60ms). Any
 test that pulls a heavy graph belongs in a hook for the same reason.
 
-## Stream plumbing
+## The loop and its encoding are two things
 
-The client tears the fetch down (and re-issues it) whenever dev tools open or the
-tab reloads. Once that happens `controller.enqueue` throws, so every write is
-guarded and the abort is propagated to the upstream model call — otherwise the
-unhandled error takes the server process down.
+`turn.ts` is the loop: `runAgentTurn` is an async generator of `TurnEvent`s
+that takes a transcript and knows nothing about HTTP. `stream.ts` is the
+encoder: `streamChatResponse` consumes those events and writes the SSE wire the
+app reads. The split exists so the loop can be driven headlessly — by a test,
+or by the eval suite — without standing up a `Response` and parsing SSE back
+out of it.
 
-The response headers went out long ago, so the `console.error` on a failed model
-call is the **only** place it is ever reported: without it the failure reaches
-the browser as an SSE `error` event and the server says nothing. Likewise the
-closing `console.log` outlives the request log line and is the only record of how
-a chat turn actually finished.
+The line between them is "would this survive if the client were a test?".
+`wire[]`, the `values`/`messages`/`error` event names and the `[chunk, {}]`
+tuple are the encoder's, because `apps/app` reads them through the LangGraph
+SDK. The trace context, the transcript, `MAX_STEPS` and every `capture*` call
+are the loop's.
+
+**Telemetry stays inside the generator.** `captureTurn` has to fire even when
+the consumer walks away, and a generator cannot yield from a `finally` after
+`.return()` — so it can never be the consumer's job. The generator's `finally`
+is the only place that reliably runs.
+
+**Disconnect is just a consumer that stops consuming.** There is no real
+backpressure here: `write` never consults `desiredSize`, and `enqueue` succeeds
+until the stream is closed or errored, so a failed write means the client is
+gone. The encoder breaks out of its `for await`, which calls `.return()` on the
+generator, which runs its `finally`. That one path replaced three separate
+disconnect checks.
+
+`meta.steps` is the exception that keeps a mutation: the halting reply's meta
+is already inside `wire` by the time the step count is known, so the encoder
+holds the alias and stamps it when the `halt` event arrives.
+
+The client tears the fetch down (and re-issues it) whenever dev tools open or
+the tab reloads. Once that happens `controller.enqueue` throws, so every write
+is guarded and the abort is propagated to the upstream model call — otherwise
+the unhandled error takes the server process down.
+
+The response headers went out long ago, so the `console.error` on a failed
+model call is the **only** place it is ever reported: without it the failure
+reaches the browser as an SSE `error` event and the server says nothing. The
+`failed` event therefore carries the original error alongside its message, so
+the encoder can log the thing with a stack rather than a string. Likewise the
+closing `console.log` outlives the request log line and is the only record of
+how a chat turn actually finished.
 
 A turn always gets a trace id, even without a chat identity: an ephemeral run is
 still worth measuring, it just groups only with itself.
@@ -77,6 +109,10 @@ the user, and it should not come back on the next replayed transcript. It has to
 say out loud that it is not from the user and not to be answered — the failure
 mode is a model that opens its reply apologising for a mistake the user never
 saw.
+
+`runAgentTurn` copies the transcript it is handed. A caller that replays the
+same array across runs — which is exactly what an eval harness does — would
+otherwise find its fixture growing an assistant turn each time.
 
 ## Per-thread REPL persistence
 

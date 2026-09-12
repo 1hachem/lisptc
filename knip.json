@@ -27,6 +27,10 @@
     "apps/mcp-toolkit": {
       "project": ["src/**/*.ts"]
     },
+    "apps/trace-viewer": {
+      "entry": ["evals/**/*.eval.ts"],
+      "project": ["src/**/*.{ts,tsx}", "evals/**/*.ts"]
+    },
     "packages/ai": {
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
@@ -37,6 +41,10 @@
     },
     "packages/env": {
       "project": ["src/**/*.ts"]
+    },
+    "packages/evals": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "packages/interpreter": {
       "entry": ["test/**/*.ts"],

@@ -3,7 +3,7 @@ import { readdirSync, unlinkSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { aiEnv } from "@repo/env/ai";
-import { providerSpecs } from "@repo/shared/providers";
+import { providerSpecs } from "@repo/env/providers";
 import { SYSTEM_PROMPT } from "./prompts/lisp.ts";
 
 export type WarmStatus =

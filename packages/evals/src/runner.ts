@@ -1,0 +1,376 @@
+import { writeFileSync } from "node:fs";
+import {
+	evalCode,
+	LISP_SYSTEM_PROMPT,
+	replResultContent,
+	runAgentTurn,
+	type TranscriptEntry,
+} from "@repo/ai";
+import { evalsEnv } from "@repo/env/evals";
+import type { ProviderName } from "@repo/shared/providers";
+import { test } from "vitest";
+import { Checks } from "./checks.ts";
+import { tracedRepl } from "./harness.ts";
+import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
+import type { MockSpec } from "./mocks.ts";
+import type {
+	CaseInfo,
+	CheckOutcome,
+	Grade,
+	MockedServer,
+	Report,
+	ReportRow,
+	SeedTurn,
+	TranscriptLine,
+} from "./report.ts";
+import { reportSchema } from "./report.ts";
+import { shardPath } from "./shards.ts";
+import { evalMatrix, reachable, type Target } from "./targets.ts";
+import { Trace } from "./trace.ts";
+
+export type { Target } from "./targets.ts";
+export { evalConcurrency, evalMatrix, reachable } from "./targets.ts";
+
+export type SeedEntry = { user: string } | { assistant: string };
+
+export interface EvalSpec {
+	min: number;
+	max: number;
+	checks: string;
+	mocks?: MockSpec;
+	seed?: SeedEntry[];
+	samples?: number;
+	minScore?: number;
+	system?: string;
+}
+
+export interface RunResult {
+	provider: ProviderName;
+	model: string;
+	grade: Grade;
+	steps: number;
+	min: number;
+	max: number;
+	halted: boolean;
+	silent: boolean;
+	answer: string;
+	inputTokens: number;
+	outputTokens: number;
+	durationMs: number;
+	errors: number;
+	skips: number;
+	checks: CheckOutcome[];
+	transcript: TranscriptLine[];
+}
+
+const STARTED_AT = new Date()
+	.toISOString()
+	.replace(/\.\d+Z$/, "")
+	.replace(/:/g, "-");
+
+const SHARD_ID = `${STARTED_AT}-${process.pid}`;
+
+const rows: ReportRow[] = [];
+
+const cases: CaseInfo[] = [];
+
+let judge: Judge | undefined;
+let judgeChecked = false;
+
+function activeJudge(): Judge | undefined {
+	if (!judgeChecked) {
+		judgeChecked = true;
+		const wanted = judgeFrom(evalsEnv.EVAL_JUDGE);
+		if (wanted && !judgeReachable(wanted))
+			console.log(`[evals] no recaps: ${wanted.provider} has no API key set`);
+		else judge = wanted;
+	}
+	return judge;
+}
+
+export async function runCase(
+	spec: EvalSpec,
+	target: Target,
+): Promise<RunResult> {
+	const { repl, trace } = tracedRepl(spec.mocks ? { mocks: spec.mocks } : {});
+	const checks = new Checks(trace, spec.checks);
+	const transcript: TranscriptEntry[] = [];
+	const seen: TranscriptLine[] = [];
+
+	trace.beginStep(0);
+	for (const entry of spec.seed ?? []) {
+		if ("user" in entry) {
+			transcript.push({ role: "user", content: entry.user });
+			seen.push({ role: "user", content: entry.user });
+			continue;
+		}
+		const { output, error } = await evalCode(repl, entry.assistant);
+		repl.takeFinished();
+		transcript.push({ role: "assistant", content: entry.assistant });
+		transcript.push({
+			role: "tool",
+			content: replResultContent(output, error),
+		});
+		seen.push({ role: "assistant", content: entry.assistant });
+		seen.push({ role: "tool", content: output });
+	}
+
+	let steps = 0;
+	let halted = false;
+	let silent = false;
+	let answer = "";
+	let inputTokens = 0;
+	let outputTokens = 0;
+	const startedAt = Date.now();
+
+	for await (const event of runAgentTurn(transcript, {
+		repl,
+		maxSteps: spec.max,
+		config: {
+			provider: target.provider,
+			model: target.model,
+			system: spec.system ?? LISP_SYSTEM_PROMPT,
+		},
+	})) {
+		if (event.type === "assistant") {
+			steps += 1;
+			trace.beginStep(steps);
+			trace.reply(event.code);
+			seen.push({ role: "assistant", content: event.code });
+			inputTokens = event.meta.inputTokens ?? inputTokens;
+			outputTokens += event.meta.outputTokens ?? 0;
+			continue;
+		}
+		if (event.type === "result") {
+			seen.push({ role: "tool", content: event.output });
+			checks.evaluate(steps);
+			continue;
+		}
+		if (event.type === "halt") {
+			halted = true;
+			answer = event.answer;
+			trace.halt(event.answer);
+			checks.evaluate(steps);
+			continue;
+		}
+		if (event.type === "silent") {
+			silent = true;
+			continue;
+		}
+		if (event.type === "failed") throw new Error(event.message);
+	}
+
+	const verdicts = checks.results();
+	return {
+		provider: target.provider,
+		model: target.model,
+		grade: grade(spec, verdicts, steps, halted),
+		steps,
+		min: spec.min,
+		max: spec.max,
+		halted,
+		silent,
+		answer,
+		inputTokens,
+		outputTokens,
+		durationMs: Date.now() - startedAt,
+		errors: trace.events.filter(
+			(e) =>
+				(e.kind === "form" && e.error !== undefined) ||
+				(e.kind === "note" && e.severity === "critical"),
+		).length,
+		skips: trace.events.filter(
+			(e) => e.kind === "note" && e.severity === "warning",
+		).length,
+		checks: verdicts,
+		transcript: seen,
+	};
+}
+
+function grade(
+	spec: EvalSpec,
+	verdicts: CheckOutcome[],
+	steps: number,
+	halted: boolean,
+): Grade {
+	if (verdicts.some((check) => check.verdict === "false")) return "fail";
+	if (!halted) return "fail";
+	if (steps > spec.max) return "fail";
+	return steps <= spec.min ? "pass" : "degraded";
+}
+
+const DEFAULT_MIN_SCORE = 0.5;
+
+const RULE = "─".repeat(72);
+
+function speaker(line: TranscriptLine): string {
+	if (line.role === "user") return "user";
+	return line.role === "assistant" ? "agent" : "repl";
+}
+
+export function formatRun(name: string, run: ReportRow): string {
+	const band = `optimal ${run.min}, budget ${run.max}`;
+	const ending = run.halted
+		? `answered at step ${run.steps} (${band})`
+		: run.silent
+			? `NO REPLY — the model returned nothing at step ${run.steps + 1}`
+			: `NEVER ANSWERED — ran to the ${run.steps}-step cap`;
+	const out: string[] = [
+		RULE,
+		`${name}  [${run.provider} · ${run.model}]`,
+		`${run.grade.toUpperCase()} · ${ending} · ${run.inputTokens} in / ${run.outputTokens} out · ${run.durationMs}ms`,
+		RULE,
+	];
+	for (const line of run.transcript) {
+		out.push(
+			`${speaker(line).padEnd(5)} │ ${line.content.trimEnd().split("\n").join("\n      │ ")}`,
+		);
+	}
+	out.push(RULE);
+	for (const check of run.checks) {
+		const mark = check.verdict === "true" ? "✓" : "✗";
+		const when =
+			check.step === undefined ? "" : ` (decided at step ${check.step})`;
+		out.push(`${mark} ${check.name}${when}`);
+	}
+	if (run.recap) {
+		out.push(RULE);
+		out.push(`recap by ${run.judge ?? "the judge"}:`);
+		out.push(run.recap);
+	}
+	out.push(RULE);
+	return out.join("\n");
+}
+
+export interface CaseScore {
+	passed: number;
+	total: number;
+	ratio: number;
+}
+
+export function caseScore(runs: RunResult[]): CaseScore {
+	let passed = 0;
+	let total = 0;
+	for (const run of runs) {
+		passed += run.checks.filter((check) => check.verdict === "true").length;
+		total += run.checks.length;
+		if (run.halted) passed += 1;
+		total += 1;
+	}
+	return { passed, total, ratio: passed / total };
+}
+
+export function gate(
+	spec: EvalSpec,
+	runs: RunResult[],
+): { ok: boolean; line: string } {
+	const score = caseScore(runs);
+	const floor = spec.minScore ?? DEFAULT_MIN_SCORE;
+	const summary = runs
+		.map((run) => `${run.grade} in ${run.steps} steps`)
+		.join("; ");
+	const missed = failures(runs);
+	const head = `scored ${score.passed}/${score.total} (floor ${floor}) — ${summary}`;
+	return {
+		ok: score.ratio >= floor,
+		line: missed ? `${head} — ${missed}` : head,
+	};
+}
+
+function failures(runs: RunResult[]): string {
+	return runs
+		.flatMap((run, sample) => {
+			const named = run.checks
+				.filter((check) => check.verdict === "false")
+				.map((check) => check.name);
+			if (run.silent)
+				named.unshift(`the model returned nothing at step ${run.steps + 1}`);
+			else if (!run.halted)
+				named.unshift(`never answered in ${run.steps} steps`);
+			return named.map((what) => `run ${sample + 1}: ${what}`);
+		})
+		.join(", ");
+}
+
+function mockedServers(spec: EvalSpec): MockedServer[] {
+	return Object.entries(spec.mocks?.servers ?? {}).map(([name, server]) => ({
+		name,
+		tools: server.tools.map((tool) => tool.name),
+		answers: Object.keys(server.calls ?? {}),
+		...(server.connectDelayMs === undefined
+			? {}
+			: { connectDelayMs: server.connectDelayMs }),
+		...(server.fails === undefined ? {} : { fails: server.fails }),
+		...(server.otherwise === undefined ? {} : { answersAnythingElse: true }),
+	}));
+}
+
+function seedOf(spec: EvalSpec): SeedTurn[] {
+	return (spec.seed ?? []).map((entry) =>
+		"user" in entry
+			? { role: "user" as const, content: entry.user }
+			: { role: "assistant" as const, content: entry.assistant },
+	);
+}
+
+function describeCase(name: string, spec: EvalSpec): CaseInfo {
+	return {
+		name,
+		min: spec.min,
+		max: spec.max,
+		samples: spec.samples ?? 1,
+		minScore: spec.minScore ?? DEFAULT_MIN_SCORE,
+		systemPrompt: spec.system === undefined ? "default" : "custom",
+		checks: spec.checks.trim(),
+		seed: seedOf(spec),
+		mocks: mockedServers(spec),
+	};
+}
+
+export function evalCase(name: string, spec: EvalSpec): void {
+	new Checks(new Trace(), spec.checks).evaluate(0);
+	cases.push(describeCase(name, spec));
+	const samples = spec.samples ?? 1;
+	for (const target of evalMatrix()) {
+		const label = `${name} [${target.provider} · ${target.model}]`;
+		test.skipIf(!reachable(target.provider))(label, async () => {
+			const runs: RunResult[] = [];
+			for (let sample = 0; sample < samples; sample++) {
+				const run = await runCase(spec, target);
+				const row: ReportRow = { ...run, case: name, sample: sample + 1 };
+				const reviewer = activeJudge();
+				if (reviewer) {
+					row.judge = `${reviewer.provider} · ${reviewer.model}`;
+					row.recap = await recapOf(
+						reviewer,
+						cases.find((info) => info.name === name),
+						row,
+					);
+				}
+				runs.push(run);
+				rows.push(row);
+				console.log(formatRun(name, row));
+			}
+			writeReport();
+
+			const verdict = gate(spec, runs);
+			console.log(`${label}: ${verdict.line}`);
+			if (!verdict.ok) throw new Error(verdict.line);
+		});
+	}
+}
+
+function writeReport(): void {
+	const targets = evalMatrix();
+	const report: Report = {
+		startedAt: STARTED_AT,
+		sha: evalsEnv.GITHUB_SHA,
+		targets,
+		cases,
+		rows,
+	};
+	writeFileSync(
+		shardPath(SHARD_ID),
+		`${JSON.stringify(reportSchema.parse(report), null, 2)}\n`,
+	);
+}

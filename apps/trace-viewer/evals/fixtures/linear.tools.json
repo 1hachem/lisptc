@@ -1,0 +1,191 @@
+[
+  {
+    "name": "list_issues",
+    "description": "List issues in the user's Linear workspace. Filter by assignee, team, project, state, label, cycle or a free-text query. Use assignee \"me\" for the issues assigned to the current user.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Free-text search over issue titles and descriptions."
+        },
+        "assignee": {
+          "type": "string",
+          "description": "Filter by assignee: a user's UUID, name, email, or \"me\" for the current user."
+        },
+        "team": { "type": "string", "description": "Team UUID, key or name." },
+        "project": { "type": "string", "description": "Project UUID or name." },
+        "state": {
+          "type": "string",
+          "description": "Workflow state UUID or name."
+        },
+        "label": { "type": "string", "description": "Label UUID or name." },
+        "cycle": { "type": "string", "description": "Cycle UUID or number." },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO date or duration, e.g. -P1W."
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO date or duration, e.g. -P1W."
+        },
+        "orderBy": { "type": "string", "enum": ["createdAt", "updatedAt"] },
+        "includeArchived": { "type": "boolean" },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of issues to return (default 25, max 250)."
+        },
+        "after": { "type": "string", "description": "Pagination cursor." }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_issue",
+    "description": "Retrieve a single Linear issue by id or identifier, with its description, state, assignee and labels.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Issue UUID or identifier such as ENG-123."
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_issue",
+    "description": "Create a Linear issue.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "team": { "type": "string" },
+        "description": { "type": "string" },
+        "assignee": { "type": "string" },
+        "state": { "type": "string" },
+        "priority": { "type": "number" },
+        "project": { "type": "string" },
+        "labels": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title", "team"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_issue",
+    "description": "Update an existing Linear issue.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "assignee": { "type": "string" },
+        "state": { "type": "string" },
+        "priority": { "type": "number" },
+        "project": { "type": "string" },
+        "labels": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_issue_statuses",
+    "description": "List the workflow states available to a team.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "team": { "type": "string" } },
+      "required": ["team"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_issue_labels",
+    "description": "List the issue labels in the workspace or on a team.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "team": { "type": "string" } },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_comments",
+    "description": "List the comments on a Linear issue.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issueId": { "type": "string" },
+        "limit": { "type": "number" }
+      },
+      "required": ["issueId"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_comment",
+    "description": "Add a comment to a Linear issue.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issueId": { "type": "string" },
+        "body": { "type": "string" }
+      },
+      "required": ["issueId", "body"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_projects",
+    "description": "List the projects in the user's Linear workspace.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": { "type": "string" },
+        "limit": { "type": "number" }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_teams",
+    "description": "List the teams in the user's Linear workspace.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "limit": { "type": "number" } },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_users",
+    "description": "List the users in the Linear workspace.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "query": { "type": "string" } },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_cycles",
+    "description": "List a team's cycles.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "team": { "type": "string" } },
+      "required": ["team"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "search_documentation",
+    "description": "Search Linear's own product documentation.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "query": { "type": "string" } },
+      "required": ["query"],
+      "additionalProperties": false
+    }
+  }
+]

@@ -48,6 +48,24 @@ path to the OpenAI SDK, so its first test paid the new import inside its own 5s
 timeout and went from 4773ms to 5232ms. Keep the load lazy, and keep an eye on
 anything that adds a static import under `MemoryRepl`.
 
+The same trap caught `test/llm-client.test.ts`: its first case pays the import
+and the other three run warm, so on a loaded machine that one case alone crossed
+the 5s timeout (measured: 320ms idle, 1027ms with every core busy, and a whole
+file ten times its usual duration on the run that failed). Its `beforeAll` now
+does `await import("@langchain/openai")` after importing `llm.ts`, so the cost
+lands in the hook's larger budget and each test times only its own request. Any
+new test file that calls a model first thing wants the same line.
+
+That file also stubs `globalThis.fetch` rather than listening on a port. The
+seam it is there to cover is the request body LangChain builds, and a real
+`node:http` server bought nothing but a socket, a random port and a shutdown to
+get wrong. The OpenAI SDK reads the global `fetch` when the client is
+constructed (`getDefaultFetch`), and `chatModel` constructs one per call, so a
+`vi.stubGlobal` in the test body is seen. `LLAMACPP_BASE_URL` is pinned to the
+unroutable `http://llamacpp.test/v1`: the test asserts the full request URL, and
+a stub that failed to install fails loudly instead of reaching a llama-server
+that happens to be running on 8080.
+
 ## Why the calls suspend instead of returning a promise
 
 `load-mcp` returns a promise because a connect is worth overlapping with other

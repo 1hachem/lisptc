@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { replEnv } from "@repo/env/repl";
 import * as dotenv from "dotenv";
 import { z } from "zod";
 import { compare, isNumeric, type Numeric, quotient, ZERO } from "./arith.ts";
@@ -41,6 +42,7 @@ export class EnvSecretsStore implements SecretsStore {
 		{ value: string; description: string }
 	>();
 
+	// biome-ignore lint/style/noProcessEnv: the store scans for every REPL_*-prefixed name, so no typed env module can enumerate them
 	constructor(env: NodeJS.ProcessEnv = process.env) {
 		for (const [name, value] of Object.entries(env))
 			if (value !== undefined && name.startsWith(SECRET_ENV_PREFIX))
@@ -78,8 +80,6 @@ export function loadSecretsFromFile(
 	return record;
 }
 
-const SECRETS_FILE_ENV = "LISPTC_SECRETS_FILE";
-
 function findEnvFileUpwards(start: string): string | undefined {
 	let dir = start;
 	for (;;) {
@@ -95,9 +95,9 @@ export function loadSecretsFromEnvFile(
 	store: SecretsStore,
 	path?: string,
 ): Record<string, string> {
-	const explicit = (path ?? process.env[SECRETS_FILE_ENV]) || undefined;
+	const explicit = (path ?? replEnv.LISPTC_SECRETS_FILE) || undefined;
 	const file =
-		explicit ?? findEnvFileUpwards(process.env.INIT_CWD || process.cwd());
+		explicit ?? findEnvFileUpwards(replEnv.INIT_CWD || process.cwd());
 	if (!file) return {};
 	try {
 		return loadSecretsFromFile(store, file);
@@ -113,16 +113,30 @@ export interface SecretsOptions {
 	envFile?: boolean | string;
 }
 
+export interface SecretsExtension extends InterpExtension {
+	readonly store: SecretsStore;
+}
+
 export function secretsExtension(
 	options: SecretsOptions = {},
-): InterpExtension {
+): SecretsExtension {
 	const store = options.store ?? new EnvSecretsStore();
 	if (options.envFile)
 		loadSecretsFromEnvFile(
 			store,
 			options.envFile === true ? undefined : options.envFile,
 		);
-	return (interp: Interp): void => registerSecrets(interp, store);
+	return Object.assign(
+		(interp: Interp): void => registerSecrets(interp, store),
+		{
+			store,
+		},
+	);
+}
+
+export function storeOf(extension: InterpExtension): SecretsStore | undefined {
+	const carried = (extension as Partial<SecretsExtension>).store;
+	return typeof carried?.get === "function" ? carried : undefined;
 }
 
 class Secret implements ToJson {

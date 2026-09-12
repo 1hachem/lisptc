@@ -19,14 +19,27 @@ still read as code, so never write one, and a smiley built from a paren is
 unsayable; and prose cannot hold a less-than sign or an opening square bracket
 at all — write "less than", or put the comparison in a form, (< 1 2).
 
+NEVER PUT A SENTENCE IN PARENTHESES. Every paren you type is read as code, so a
+remark wrapped in them is a call: writing (the page loaded, title is "hyko")
+calls the with five arguments, and it fails with undefined: the.
+Write the remark as bare prose beside the form instead. There is no bracket that
+makes a comment, in any shape.
+
 A parenthesised aside whose head names nothing — (see below), (one, two,
-three) — is read as prose rather than run, and comes back as a skipped note; a
-reply made only of those ran nothing, which ends the loop, see "Ending the
-loop". That tolerance stops at anything shaped like a call: a keyword argument,
-a string literal, another call nested inside it, or a slashed or underscored
-name with no words around it — (server/tool :key "value"), dummy names — is
-code whatever is missing, so calling a tool whose server you have not loaded is
-an undefined: error you must fix, not a skip.
+three) — is read as prose rather than run, and comes back as a skipped note, but
+treat that as a mistake the reader forgave, not a way to write. The forgiveness
+is narrow and you cannot predict it: anything shaped like a call is run as one,
+and a keyword argument, a string literal, another call nested inside it, or a
+slashed or underscored name with no words around it — (server/tool :key "value"),
+dummy names — is code whatever is missing. So (see below) is skipped while (see
+"below") raises undefined: see, and calling a tool whose server you have not
+loaded is an undefined: error you must fix, not a skip. A reply made only of
+asides ran nothing, which ends the loop, see "Ending the loop".
+
+To look at a result, name it in a form: (echo search-mcps-1). Writing the bare
+name search-mcps-1 on a line of its own is the bare value above — it is prose,
+it evaluates nothing, and a reply that is nothing but prose ENDS THE LOOP with
+that line as your final answer. This is the most expensive typo in the language.
 
 - **Quote**: 'x is the same as (quote x) — returns x unevaluated.
 - **Quasiquote**: a leading backtick is the same as (quasiquote x). Inside it, ,x
@@ -187,6 +200,10 @@ printing. Extract into a name, then echo a rendering of it.
   and gets no name: (head issues 4) shows you the four rows, and there is no
   (echo …) to write after it. Nested in another form it prints nothing and is
   just the value — (mapcar row (head issues 4)), (setq top (head issues 4)).
+  The discovery calls of §10.1 — search-mcps, search-tools, list-tools,
+  list-toolkit, list-mcps — print the same way for the same reason: you asked
+  what is available in order to read it, so the answer is shown in full and
+  there is no (echo …) step to follow it with.
 - (grep x "pattern" :group n :max n :ignore-case t) what pattern matched, as
   a list, or nil. On a list, the ELEMENTS whose printed form matches:
   (grep issues "auth") is the issues about auth. On text, the matched
@@ -194,6 +211,7 @@ printing. Extract into a name, then echo a rendering of it.
 
 **Introspection**
 - (doc name) print a binding's signature and doc; (doc) lists all documented names.
+  Docs print whole and cost nothing against the step's echo budget: look freely.
 - (dump) list every global symbol · (import "path") load and eval a Lisp file.
 
 Globals: *gensym-counter*, *version*.
@@ -432,6 +450,9 @@ answer to the user, e.g. "the sum is 3".
   (await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) — settled
   rather than all, so one server failing does not discard the others.
 - **Finding tools — two different searches, don't confuse them:**
+  - All of these PRINT their answer rather than naming it, see §5, so one is a
+    complete step: read the names and descriptions out of what it printed and go
+    on. Never follow one with (echo …), and never run the same search twice.
   - (search-mcps "query") searches the *toolkit* of predefined servers, loaded or
     not — use this to find a server to load. It matches each server's keywords as
     well as its name and description, so search for the capability you want in
@@ -459,7 +480,9 @@ answer to the user, e.g. "the sum is 3".
     no-op-safe sign-out — it doesn't error if the server isn't currently loaded.
 - Each loaded tool becomes a global named server/tool, called with keyword args and
   **blocking**, returning the result directly, e.g.
-  (acme/list_widgets :query "blue"). Inspect one with (doc 'acme/list_widgets).
+  (acme/list_widgets :query "blue"). (doc 'acme/list_widgets) prints its full
+  signature, every argument and which are required — read that before guessing a
+  keyword, and read it again when a call comes back rejected.
 - A tool result arrives already converted to Lisp data, a JSON object as an alist
   with string keys and an array as a list, so read it with assoc, cdr, mapcar and
   nth — no parsing step. This holds however the server sent it: a JSON document
@@ -628,8 +651,8 @@ owner: "Nadia"
   printed form is the common version of this mistake; (await load-mcp-1) is what
   it meant.
 - The head, tail and grep built-ins RETURN a value; only echo prints — except a
-  bare head or tail, whose slice the REPL prints instead of describing, because a
-  slice is asked for in order to be read.
+  bare head or tail, and a bare discovery call, which the REPL prints instead of
+  describing, because both are asked for in order to be read.
 - Echo output is capped for you but not for the user, see §9. Output ending in a
   ... line is not everything — page on with the offset it gives you.
 - A model call, see §10.4, waits for the reply and can fail, so it is the one call

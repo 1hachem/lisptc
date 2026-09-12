@@ -1,0 +1,33 @@
+{
+  "name": "@lisptc/trace-viewer",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "dev": "next dev --port ${PORT:-3200}",
+    "build": "next build",
+    "start": "next start --port ${PORT:-3200}",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.evals.json",
+    "test": "vitest list --config vitest.evals.config.ts",
+    "test:evals": "vitest run --config vitest.evals.config.ts"
+  },
+  "dependencies": {
+    "@repo/evals": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "next": "^15.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@repo/tsconfigs": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.16",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

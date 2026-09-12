@@ -1,13 +1,12 @@
 import { serve } from "@hono/node-server";
 import { shutdownTelemetry } from "@repo/ai";
+import { serverEnv } from "@repo/env/server";
 import app from "./app.ts";
 
 const DRAIN_MS = 5_000;
 
-const server = serve(
-	{ fetch: app.fetch, port: Number(process.env.PORT ?? 3001) },
-	(info) =>
-		console.log(`@lisptc/api listening on http://localhost:${info.port}`),
+const server = serve({ fetch: app.fetch, port: serverEnv.PORT }, (info) =>
+	console.log(`@lisptc/api listening on http://localhost:${info.port}`),
 );
 
 let stopping = false;

@@ -33,9 +33,7 @@ function tracked(): string[] {
 }
 
 function findComments(text: string, fileName: string): Found[] {
-	const kind = fileName.endsWith(".tsx")
-		? ts.ScriptKind.TSX
-		: ts.ScriptKind.TS;
+	const kind = fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
 	const sf = ts.createSourceFile(
 		fileName,
 		text,
@@ -149,7 +147,9 @@ console.error(
 );
 console.error("");
 console.error("This repo's code carries no comments. If one of these states a");
-console.error("real constraint, move it to the devdocs/ page for that area (see");
+console.error(
+	"real constraint, move it to the devdocs/ page for that area (see",
+);
 console.error("devdocs/README.md); otherwise run `pnpm fix:comments` to strip");
 console.error("them, then `pnpm format`.");
 process.exit(1);

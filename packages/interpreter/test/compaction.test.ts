@@ -483,3 +483,42 @@ describe("the compaction built-ins are documented", () => {
 		}
 	});
 });
+
+describe("doc is read in full and costs nothing", () => {
+	it("quotes the whole entry to the model and mints no result line", () => {
+		const { model, user } = stepped("(doc 'car)", interpWithLimit(400));
+		const whole =
+			"(car list)\n  Return the first element of `list`, or nil for nil.\n";
+		expect(model).toBe(whole);
+		expect(user).toBe(whole);
+	});
+
+	it("is never truncated, however small the step's limit", () => {
+		const whole =
+			"(car list)\n  Return the first element of `list`, or nil for nil.\n";
+		expect(stepped("(doc 'car)", interpWithLimit(1)).model).toBe(whole);
+		expect(stepped("(doc)", interpWithLimit(1)).model).toContain("mapcar\n");
+	});
+
+	it("binds no name for what it printed", () => {
+		const given = interpWithLimit(400);
+		const before = given.interp.globalNames().length;
+		stepped("(progn (doc 'car) (doc))", given);
+		expect(given.interp.globalNames().length).toBe(before);
+		expect(given.interp.hasGlobal(newSym("doc-1"))).toBe(false);
+	});
+
+	it("leaves the step's echo budget whole", () => {
+		const given = interpWithLimit(4);
+		const { model } = stepped('(progn (doc \'car) (echo "a b c d"))', given);
+		expect(model).toContain("a b c d\n");
+		expect(model).not.toContain("not shown to you");
+	});
+
+	it("still answers whether a name is documented", () => {
+		expect(ev("(doc 'car)", interpWithLimit(400).interp)).toBe("car");
+		expect(ev("(doc 'no-such-binding)", interpWithLimit(400).interp)).toBe(
+			"nil",
+		);
+	});
+});

@@ -3,10 +3,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Shared package ships .tsx source (no build step), and the app lives outside
- * this package's tree, so scan both explicitly for class candidates. */
+/* Shared package ships .tsx source (no build step), and the apps live outside
+ * this package's tree, so scan them all explicitly for class candidates. */
 @source "../";
 @source "../../../../apps/app/src";
+@source "../../../../apps/trace-viewer/src";
 
 @layer base {
 	html,

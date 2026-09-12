@@ -8,7 +8,7 @@
     },
     "build": {
       "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": ["dist/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
       "dependsOn": ["^build"]
     },
     "typecheck": {
@@ -21,6 +21,9 @@
     "test:watch": {
       "cache": false,
       "persistent": true
+    },
+    "test:evals": {
+      "cache": false
     }
   }
 }

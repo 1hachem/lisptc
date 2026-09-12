@@ -1,3 +1,4 @@
+import { defaultThemeId, fontLinks } from "@repo/ui";
 import appCss from "@repo/ui/styles/app.css?url";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -28,16 +29,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			{ rel: "icon", href: "/favicon.ico", sizes: "16x16 32x32 48x48" },
 			{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
 			{ rel: "stylesheet", href: appCss },
-			{ rel: "preconnect", href: "https://fonts.googleapis.com" },
-			{
-				rel: "preconnect",
-				href: "https://fonts.gstatic.com",
-				crossOrigin: "anonymous",
-			},
-			{
-				rel: "stylesheet",
-				href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300..700;1,400&display=swap",
-			},
+			...fontLinks,
 		],
 	}),
 	component: RootComponent,
@@ -64,7 +56,7 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang="en" data-theme="gruvbox" suppressHydrationWarning>
+		<html lang="en" data-theme={defaultThemeId} suppressHydrationWarning>
 			<head>
 				<HeadContent />
 			</head>

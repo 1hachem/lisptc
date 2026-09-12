@@ -6,7 +6,7 @@ here is a list of extensions added to the interpreter:
 - [x] ai features
 - [ ] generative ui
 - [ ] permissions (deny, allow, auto and ask, on forms and params) not pattern matching, but on the interpreter level
-- [ ] evals and checks
+- [x] evals and checks (`packages/evals`, see [evals.md](./evals.md))
 - [ ] agents orchestrations
 - [ ] memory (code persistance and self-modification)
 - [ ] hooks (memories attached to lifecycle events)
