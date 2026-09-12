@@ -8,10 +8,12 @@ export function MessageFeedback({
 	capture,
 	onRate,
 	className,
+	reveal = "hover",
 }: {
 	capture: (properties: Record<string, unknown>) => void;
 	onRate?: (thumb: Thumb) => void;
 	className?: string;
+	reveal?: "hover" | "always";
 }) {
 	const [thumb, setThumb] = useState<Thumb | null>(null);
 	const submission = useRef<string | null>(null);
@@ -19,6 +21,10 @@ export function MessageFeedback({
 	const [draft, setDraft] = useState("");
 	const [thanked, setThanked] = useState<string | null>(null);
 	const field = useRef<HTMLInputElement>(null);
+	const resting =
+		reveal === "always"
+			? "text-dim"
+			: "text-dim opacity-0 focus:opacity-100 group-hover:opacity-100";
 
 	useEffect(() => {
 		if (asking) field.current?.focus();
@@ -54,9 +60,7 @@ export function MessageFeedback({
 				<button
 					className={cn(
 						"transition-opacity hover:text-fg",
-						thumb === "up"
-							? "text-yellow opacity-100"
-							: "text-dim opacity-0 focus:opacity-100 group-hover:opacity-100",
+						thumb === "up" ? "text-yellow opacity-100" : resting,
 					)}
 					onClick={() => rate("up")}
 					title="helpful"
@@ -67,9 +71,7 @@ export function MessageFeedback({
 				<button
 					className={cn(
 						"transition-opacity hover:text-fg",
-						thumb === "down"
-							? "text-yellow opacity-100"
-							: "text-dim opacity-0 focus:opacity-100 group-hover:opacity-100",
+						thumb === "down" ? "text-yellow opacity-100" : resting,
 					)}
 					onClick={() => rate("down")}
 					title="not helpful"

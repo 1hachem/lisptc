@@ -182,7 +182,10 @@ implementation. The survey payload is `@repo/shared/feedback.ts`
 is `@repo/ui/components/message-feedback.tsx` (the `▲`/`▼`, the follow-up input,
 the reply afterwards), and what differs between the two apps is exactly what
 should: who captures the event, and what context rides along. `apps/app` passes
-`$ai_trace_id` and the message id; the viewer passes the eval run.
+`$ai_trace_id` and the message id; the viewer passes the eval run. The one
+visual difference is `reveal`: the chat hides the arrows until the turn is
+hovered, and the viewer shows them always, because voting is what a reviewer
+opened it to do.
 
 **The viewer sends the trace itself**, which the chat app never has to. A chat's
 turns are already in PostHog — the vote joins them by `$ai_trace_id`. An eval run
@@ -392,13 +395,28 @@ the `import.meta.env` read is a cast with a comment instead.
 
 | variable | default | meaning |
 | --- | --- | --- |
-| `NEXT_PUBLIC_POSTHOG_KEY` | — | the same `phc_` project key; unset hides the vote entirely |
-| `NEXT_PUBLIC_POSTHOG_SURVEY_ID` | — | the survey the votes answer; unset hides the vote entirely |
-| `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com` | sent to directly, not through a proxy |
+| `POSTHOG_KEY` | `VITE_POSTHOG_KEY`, then `POSTHOG_API_KEY` | the `phc_` project key; unset hides the vote entirely |
+| `POSTHOG_SURVEY_ID` | `VITE_POSTHOG_SURVEY_ID` | the survey the votes answer; unset hides the vote entirely |
+| `POSTHOG_HOST` | `https://us.i.posthog.com` | sent to directly, not through a proxy |
+
+The viewer needs **no secret of its own**: each name falls back to the one the
+app or the server already uses, so `task evals:open` picks the key and the
+survey up from `/web` and `/analytics` and a vote works with nothing added to
+Infisical. Setting `POSTHOG_KEY` or `POSTHOG_SURVEY_ID` overrides that, which is
+how the eval reviews get their own survey when they should.
 
 Both ids are **optional**, unlike `/web`'s: a clone with no PostHog credentials
-must still read reports, and `reviewsEnabled` is false, so the buttons are not
-rendered rather than rendered and dead.
+must still read reports, so `reviewTarget()` returns undefined and the buttons
+are not rendered rather than rendered and dead.
+
+**These are read on the server, not inlined into the bundle.** The obvious shape
+for a Next app is `NEXT_PUBLIC_*`, and it is the wrong one here: those are
+substituted at build time, `task evals:open` builds the viewer before it has any
+secrets, and the result is a page that renders with the vote silently missing.
+The report page is `force-dynamic` already, so it reads the key per request and
+hands it to the transcript as a prop — the same `phc_` key the browser would
+have carried anyway, publishable by design. Changing the survey is then a
+restart, not a rebuild.
 
 The viewer talks to PostHog directly, with no `/ingest` proxy of its own. The
 proxy in `apps/app` exists to get past content blockers and is a dumb pipe with

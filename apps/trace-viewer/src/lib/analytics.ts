@@ -1,20 +1,14 @@
 "use client";
 
-import { viewerEnv } from "@repo/env/viewer";
 import posthog from "posthog-js";
+import type { ReviewTarget } from "@/lib/reviews.ts";
 
-const KEY = viewerEnv.NEXT_PUBLIC_POSTHOG_KEY;
-const SURVEY = viewerEnv.NEXT_PUBLIC_POSTHOG_SURVEY_ID;
+let started: string | undefined;
 
-export const reviewsEnabled = Boolean(KEY && SURVEY);
-
-let started = false;
-
-function client(): typeof posthog | undefined {
-	if (!KEY) return undefined;
-	if (!started) {
-		posthog.init(KEY, {
-			api_host: viewerEnv.NEXT_PUBLIC_POSTHOG_HOST,
+function client(target: ReviewTarget): typeof posthog {
+	if (started !== target.key) {
+		posthog.init(target.key, {
+			api_host: target.host,
 			ui_host: "https://us.posthog.com",
 			autocapture: false,
 			capture_pageview: false,
@@ -23,12 +17,17 @@ function client(): typeof posthog | undefined {
 			disable_session_recording: true,
 			persistence: "localStorage",
 		});
-		started = true;
+		started = target.key;
 	}
 	return posthog;
 }
 
-export function captureReview(properties: Record<string, unknown>): void {
-	if (!reviewsEnabled) return;
-	client()?.capture("survey sent", { $survey_id: SURVEY, ...properties });
+export function captureReview(
+	target: ReviewTarget,
+	properties: Record<string, unknown>,
+): void {
+	client(target).capture("survey sent", {
+		$survey_id: target.surveyId,
+		...properties,
+	});
 }

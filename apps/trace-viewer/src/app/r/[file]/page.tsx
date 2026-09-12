@@ -15,6 +15,8 @@ import {
 import { duration, when } from "@/lib/format.ts";
 import type { CaseInfo, ReportRow } from "@/lib/reports.ts";
 import { readReport, scoreOf, targetOf } from "@/lib/reports.ts";
+import type { ReviewTarget } from "@/lib/reviews.ts";
+import { reviewTarget } from "@/lib/reviews.ts";
 import { Setup } from "./setup.tsx";
 
 export const dynamic = "force-dynamic";
@@ -122,7 +124,15 @@ function grouped(
 	]);
 }
 
-function Run({ identity, row }: { identity: RunIdentity; row: ReportRow }) {
+function Run({
+	identity,
+	row,
+	target,
+}: {
+	identity: RunIdentity;
+	row: ReportRow;
+	target?: ReviewTarget;
+}) {
 	const failed = row.checks.filter((check) => check.verdict === "false");
 	const score = scoreOf([row]);
 
@@ -187,7 +197,7 @@ function Run({ identity, row }: { identity: RunIdentity; row: ReportRow }) {
 					conversation — {row.transcript.length} turn
 					{row.transcript.length === 1 ? "" : "s"}
 				</Summary>
-				<Transcript identity={identity} row={row} />
+				<Transcript identity={identity} row={row} target={target} />
 			</details>
 		</Panel>
 	);
@@ -220,6 +230,7 @@ export default async function ReportPage({
 		startedAt: report.startedAt,
 		sha: report.sha,
 	};
+	const target = reviewTarget();
 
 	return (
 		<Shell>
@@ -259,6 +270,7 @@ export default async function ReportPage({
 							identity={identity}
 							key={`${row.provider}-${row.model}-${row.sample}`}
 							row={row}
+							target={target}
 						/>
 					))}
 				</section>

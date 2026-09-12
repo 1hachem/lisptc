@@ -540,7 +540,10 @@ transcript.tsx`, and it is why `Turn` is imported rather than rendered by the
 page. Everything around it — the filters included — stays a server component.
 The gesture, the survey payload and the event shape are covered in
 [telemetry.md](./telemetry.md); nothing about them is a second implementation of
-what `apps/app` does.
+what `apps/app` does. The PostHog key reaches the island as a **prop from the
+server**, so `task evals:open` — which builds the viewer before Infisical is in
+the picture and only then serves it under `/assets /analytics /web` — does not
+need the secret at build time.
 
 The app carries **two tsconfigs**, because it has two TypeScript worlds: the UI
 is DOM plus bundler resolution, while `evals/` pulls the interpreter and needs
@@ -555,8 +558,21 @@ during the run; one that collapsed from pending at the end carries nothing.
 
 When `EVAL_JUDGE` names a `provider:model`, every finished run is handed to that
 model — the case setup, the check source, how each check came out, and the whole
-conversation — and asked for a short prose recap. It lands on the row as
-`recap`, prints under the transcript, and shows in the viewer.
+conversation — and asked what went wrong. It lands on the row as `recap`, prints
+under the transcript, and shows in the viewer.
+
+**A run that went to plan gets no recap at all.** The judge is told to answer
+with nothing when every assertion held, the agent answered, and it took no
+detour worth reading about; `recapOf` returns an empty string and the runner
+leaves `recap` off the row, so the terminal and the viewer both drop the block.
+A recap on a row therefore *means* something is wrong, and a reader scanning a
+report reads only the rows that have one. Praise costs a reader the same
+attention a real finding does, which is why it is not written.
+
+A model asked to say nothing sometimes says "nothing" instead, so `nothingSaid`
+maps a bare "none" / "n/a" / "no issues" / "ok" back to empty. That list is a
+guess about phrasing and nothing depends on it being complete: a recap that
+slips through reads as a short all-clear rather than breaking anything.
 
 The judge is asked one thing the checks cannot answer: **when an assertion
 failed, was the agent at fault or was the assertion too narrow?** That question

@@ -2,16 +2,19 @@ import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
 export const viewerEnv = createEnv({
-	clientPrefix: "NEXT_PUBLIC_",
-	client: {
-		NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
-		NEXT_PUBLIC_POSTHOG_HOST: z.url().default("https://us.i.posthog.com"),
-		NEXT_PUBLIC_POSTHOG_SURVEY_ID: z.string().optional(),
+	server: {
+		POSTHOG_KEY: z.string().optional(),
+		POSTHOG_SURVEY_ID: z.string().optional(),
+		POSTHOG_HOST: z.url().default("https://us.i.posthog.com"),
 	},
 	runtimeEnv: {
-		NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
-		NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-		NEXT_PUBLIC_POSTHOG_SURVEY_ID: process.env.NEXT_PUBLIC_POSTHOG_SURVEY_ID,
+		POSTHOG_KEY:
+			process.env.POSTHOG_KEY ??
+			process.env.VITE_POSTHOG_KEY ??
+			process.env.POSTHOG_API_KEY,
+		POSTHOG_SURVEY_ID:
+			process.env.POSTHOG_SURVEY_ID ?? process.env.VITE_POSTHOG_SURVEY_ID,
+		POSTHOG_HOST: process.env.POSTHOG_HOST,
 	},
 	emptyStringAsUndefined: true,
 });

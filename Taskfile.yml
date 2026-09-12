@@ -86,7 +86,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: dev
-          PATHS: "/assets"
+          PATHS: "/assets /analytics /web"
           CMD: 'PORT={{.PORT}} pnpm --filter @lisptc/trace-viewer start'
 
   dev:
