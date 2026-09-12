@@ -4,6 +4,7 @@ import { z } from "zod";
 export const evalsEnv = createEnv({
 	server: {
 		EVAL_REPORT_DIR: z.string().optional(),
+		EVAL_STORAGE: z.enum(["r2", "local"]).optional(),
 		EVAL_JUDGE: z.string().optional(),
 		EVAL_MATRIX: z.string().optional(),
 		EVAL_CONCURRENCY: z.coerce.number().int().positive().default(4),

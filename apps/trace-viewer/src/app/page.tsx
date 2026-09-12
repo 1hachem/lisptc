@@ -9,18 +9,18 @@ import {
 	Title,
 } from "@/components/ui.tsx";
 import { when } from "@/lib/format.ts";
-import { listReports, reportDir } from "@/lib/reports.ts";
+import { listReports, reportHome } from "@/lib/reports.ts";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-	const runs = listReports();
+export default async function Home() {
+	const runs = await listReports();
 
 	return (
 		<Shell>
 			<Masthead>
 				<Title>eval traces</Title>
-				<span className="text-[11.5px] text-dim">{reportDir()}</span>
+				<span className="text-[11.5px] text-dim">{reportHome()}</span>
 			</Masthead>
 
 			{runs.length === 0 ? (

@@ -39,15 +39,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Fetch model credentials from Infisical
+      # The action takes one secret-path per step and has no multi-path input,
+      # so each path the evals need is its own step.
+      - name: Fetch the model credentials from Infisical
         uses: Infisical/secrets-action@v1.0.9
         with:
           method: universal
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: dev
+          env-slug: ci
           secret-path: /ai
+          export-type: env
+
+      - name: Fetch the R2 report-store credentials from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ci
+          secret-path: /assets
           export-type: env
 
       - name: Evals
@@ -55,11 +68,14 @@ jobs:
         env:
           EVAL_MATRIX: ${{ inputs.matrix || vars.EVAL_MATRIX }}
           EVAL_JUDGE: ${{ vars.EVAL_JUDGE }}
+          EVAL_STORAGE: r2
 
-      - name: Upload the report
+      # The report goes to R2; anything on disk here is the fallback copy a
+      # failed upload left behind, so an unreachable bucket does not lose a run.
+      - name: Upload the report only if it never reached R2
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evals-report
-          path: apps/trace-viewer/.evals/
-          if-no-files-found: warn
+          name: evals-report-fallback
+          path: apps/trace-viewer/.evals/*.json
+          if-no-files-found: ignore

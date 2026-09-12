@@ -1,13 +1,17 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { evalsEnv } from "@repo/env/evals";
 import type { Report, ReportRow, TranscriptLine } from "@repo/evals/report";
 import { parseReport } from "@repo/evals/report";
+import type { ReportStore } from "@repo/evals/storage";
+import { reportStore } from "@repo/evals/storage";
 
 export type { CaseInfo, ReportRow } from "@repo/evals/report";
 export type Role = TranscriptLine["role"];
 
-const REPORT_DIR = evalsEnv.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");
+let opened: ReportStore | undefined;
+
+function store(): ReportStore {
+	opened ??= reportStore();
+	return opened;
+}
 
 export type Tone = "green" | "yellow" | "red";
 
@@ -33,25 +37,15 @@ export function scoreOf(rows: ReportRow[]): Score {
 	return { passed, total, tone: toneOf(passed, total) };
 }
 
-function files(): string[] {
-	try {
-		return readdirSync(REPORT_DIR).filter((name) => name.endsWith(".json"));
-	} catch {
-		return [];
-	}
-}
-
 export type Loaded =
 	| { file: string; ok: true; report: Report }
 	| { file: string; ok: false; why: string };
 
-export function readReport(file: string): Loaded {
+export async function readReport(file: string): Promise<Loaded> {
 	if (file.includes("/") || file.includes(".."))
 		return { file, ok: false, why: "not a report in this directory" };
 	try {
-		const raw: unknown = JSON.parse(
-			readFileSync(join(REPORT_DIR, file), "utf8"),
-		);
+		const raw: unknown = JSON.parse(await store().read(file));
 		const parsed = parseReport(raw);
 		return parsed.ok
 			? { file, ok: true, report: parsed.report }
@@ -77,11 +71,11 @@ export type Listed =
 	  }
 	| { ok: false; file: string; ranAt: number; why: string };
 
-export function listReports(): Listed[] {
-	return files()
-		.map((file): Listed => {
-			const ranAt = statSync(join(REPORT_DIR, file)).mtimeMs;
-			const loaded = readReport(file);
+export async function listReports(): Promise<Listed[]> {
+	const stored = await store().list();
+	const listed = await Promise.all(
+		stored.map(async ({ name: file, modifiedAt: ranAt }): Promise<Listed> => {
+			const loaded = await readReport(file);
 			if (!loaded.ok) return { ok: false, file, ranAt, why: loaded.why };
 			const { report } = loaded;
 			return {
@@ -93,10 +87,11 @@ export function listReports(): Listed[] {
 				cases: report.rows.length,
 				score: scoreOf(report.rows),
 			};
-		})
-		.sort((a, b) => b.ranAt - a.ranAt);
+		}),
+	);
+	return listed.sort((a, b) => b.ranAt - a.ranAt);
 }
 
-export function reportDir(): string {
-	return REPORT_DIR;
+export function reportHome(): string {
+	return store().describe();
 }

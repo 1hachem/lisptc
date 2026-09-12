@@ -118,7 +118,7 @@ export default async function ReportPage({
 	params: Promise<{ file: string }>;
 }) {
 	const { file } = await params;
-	const loaded = readReport(decodeURIComponent(file));
+	const loaded = await readReport(decodeURIComponent(file));
 	if (!loaded.ok) notFound();
 
 	const { report } = loaded;

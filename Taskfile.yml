@@ -59,7 +59,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: dev
-          PATHS: "/ai"
+          PATHS: "/ai /assets"
           CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" EVAL_CONCURRENCY="{{.CONCURRENCY}}" pnpm test:evals'
   
   evals:open:
@@ -83,7 +83,11 @@ tasks:
           done
           echo "the tracer never answered on {{.URL}}"
         ) >/dev/null 2>&1 &
-        PORT={{.PORT}} pnpm --filter @lisptc/trace-viewer start
+      - task: _infisical-run
+        vars:
+          ENV: dev
+          PATHS: "/assets"
+          CMD: 'PORT={{.PORT}} pnpm --filter @lisptc/trace-viewer start'
 
   dev:
     deps: [dev-app, dev-api]

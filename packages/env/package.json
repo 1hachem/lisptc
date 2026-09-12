@@ -12,6 +12,7 @@
     "./infisical": "./src/infisical.ts",
     "./oauth": "./src/oauth.ts",
     "./providers": "./src/providers.ts",
+    "./r2": "./src/r2.ts",
     "./repl": "./src/repl.ts",
     "./server": "./src/server.ts",
     "./web": "./src/web.ts",

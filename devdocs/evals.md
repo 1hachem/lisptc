@@ -398,11 +398,10 @@ snapshot of the environment taken at import and a missing key yields
 `apiKey: undefined`; the throw comes later, at model construction. `llamacpp`
 hardcodes its key, so naming it in `EVAL_MATRIX` is taken as meaning it.
 
-Every run writes one report into the app's gitignored `.evals/`, named for when
-it ran and what it ran against:
+Every run writes one report, named for when it ran and what it ran against:
 
 ```
-apps/trace-viewer/.evals/2026-09-10T13-55-11__digitalocean-gemma-4-31B-it__openrouter-deepseek-deepseek-v4-flash-0731.json
+2026-09-10T13-55-11__digitalocean-gemma-4-31B-it__openrouter-deepseek-deepseek-v4-flash-0731.json
 ```
 
 Reports accumulate rather than overwrite, which is the point: scoring a model
@@ -413,9 +412,58 @@ the git `sha`, the resolved `targets`, and one row per (case, provider, model,
 sample) with the grade, steps, tokens, the full transcript, and each check's
 verdict and the step it decided at.
 
-The directory is `.evals` under the vitest project root, which puts reports
+### Where a report lives: one port, two backends
+
+Reports outlive the machine that produced them. CI's runs are the ones worth
+comparing a model against, and a report only readable on the runner that wrote
+it is a report nobody reads — GitHub artifacts expire, and committing a stream
+of model transcripts into the source tree is not a history anyone wants in
+`git log`.
+
+So `storage.ts` holds a `ReportStore` port — `describe` / `list` / `read` /
+`write`, keyed by the report's file name — and both the writer
+(`global-setup.ts`) and the reader (the viewer's `lib/reports.ts`) go through
+it. `localStore` is the filesystem; `r2Store` is a Cloudflare R2 bucket over the
+S3 API (`@aws-sdk/client-s3`, `region: "auto"`, path-style addressing, since R2
+does not serve bucket-as-subdomain on the account endpoint). Nothing else in the
+suite knows which one it got.
+
+**R2 is the default**, for CI and for a local run alike, so a report is in one
+place no matter who ran it. `reportStore()` picks:
+
+| condition | store |
+| --- | --- |
+| `EVAL_STORAGE=local` | the filesystem, whatever the credentials say |
+| credentials present | R2 |
+| `EVAL_STORAGE=r2`, no credentials | throws |
+| nothing set | the filesystem |
+
+The last row is what keeps a clone with no secrets working: `pnpm test:evals`
+still writes and the viewer still renders, locally. The third row is the
+opposite case — CI sets `EVAL_STORAGE=r2` explicitly, so a run there fails loudly
+rather than writing a report to a container that is about to be deleted.
+
+`r2Config()` (`@repo/env/r2`) is the same idea one level down. The variables are
+individually optional, but **half-configuration throws**, naming what is
+missing: a typo in `R2_SECRET_ACCESS_KEY` must not read as "no R2 configured,
+write locally". The credentials — `R2_ACCOUNT_ID` (or `R2_ENDPOINT`),
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and `R2_EVALS_PREFIX`
+for the folder — come from Infisical at `/assets`, which is why `task evals:run`
+and `task evals:open` both load that path. The bucket is private and the viewer
+holds credentials of its own; give the viewer a read-only R2 token, since it
+never writes.
+
+A failed write falls back to the filesystem and says so rather than throwing:
+the run already happened, and losing its evidence to a network blip would be
+the worst of both. That is the only thing CI's artifact upload is still for.
+
+Shards stay local in every configuration (below). They are per-worker
+scratch, cleared at both ends of a run, and round-tripping them through object
+storage would buy nothing.
+
+The local directory is `.evals` under the vitest project root, which puts reports
 beside the cases that produced them and under the app that reads them.
-`EVAL_REPORT_DIR` overrides it.
+`EVAL_REPORT_DIR` overrides it. It stays gitignored.
 
 ### One report per invocation, out of one shard per worker
 
@@ -433,8 +481,8 @@ So a worker writes a **shard** instead: a whole, schema-valid `Report` at
 long run is still watchable. `global-setup.ts` clears `parts/` before the run
 and merges it after: cases deduped by name, rows concatenated and sorted by
 case then sample, `startedAt` the earliest of the shards. The merged file is
-the only thing that lands in `.evals/` itself, and `parts/` is a subdirectory,
-so the viewer's `readdirSync(...).filter(endsWith(".json"))` never sees a shard.
+the only thing that goes to the report store, and `parts/` is a subdirectory of
+the local `.evals/`, so a listing of reports never sees a shard.
 
 A shard carries `targets` and `startedAt` of its own rather than having them
 handed down from the main process. That is what keeps `global-setup.ts` free of
@@ -448,8 +496,10 @@ clears them.
 ## The viewer
 
 `apps/trace-viewer` is a Next.js app-router app, server components only — it
-reads the filesystem and renders; there is no client state and no API layer,
-because the data is a directory of JSON on the same machine. `/` lists runs
+reads the report store and renders; there is no client state and no API layer,
+because the data is a list of JSON documents and a server component can await
+them. The masthead names the store it is reading (`r2://bucket/evals/`, or the
+directory), so it is never a guess whose reports are on screen. `/` lists runs
 newest-first with the date, the targets and a checks score; `/r/…` opens one and
 shows every row's score, how it ended, its checks with the step each decided at,
 and the whole conversation.
@@ -517,10 +567,17 @@ the human one); then each check with the step it decided at.
 
 `.github/workflows/ci.yml` is the PR gate and evals are neither hermetic nor
 free — the model is still a network call, and still costs money.
-`.github/workflows/evals.yml` runs them nightly and on demand, pulls model
-credentials through the Infisical action, and uploads the report as an
-artifact. It needs `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET` as
-repository secrets and `INFISICAL_PROJECT_SLUG` as a variable.
+`.github/workflows/evals.yml` runs them nightly and on demand and writes the
+report to the bucket with `EVAL_STORAGE=r2`. It needs two Infisical paths in the
+**`ci` environment** — `/ai` for the model keys (the judge's included) and
+`/assets` for the R2 credentials. The action takes one `secret-path` per step and
+has no multi-path input, so that is two steps. Reading the environment root with
+`recursive: true` would also work in one step, and is what we do not do: the job
+should hold the secrets the evals need and not every secret that environment ever
+accumulates. It
+needs `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET` as repository secrets and
+`INFISICAL_PROJECT_SLUG` as a variable. The artifact upload that remains catches
+only the fallback copy of a report that never reached R2.
 
 `retry: 0` is deliberate in the eval vitest config: a retry hides exactly what
 is being measured.
