@@ -13,11 +13,17 @@ import {
 	str,
 	zList,
 } from "./lisp.ts";
+import { type PromptSection, prompted, promptSection } from "./prompt.ts";
 import type { ToJson } from "./types.ts";
 
 export type SecretSpec = string | { value: string; description?: string };
 
 export const SECRET_ENV_PREFIX = "REPL_";
+
+export const SECRETS_PROMPT: PromptSection = promptSection(
+	"secrets",
+	new URL("./secrets.ptc", import.meta.url),
+);
 
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
@@ -127,7 +133,10 @@ export function secretsExtension(
 			options.envFile === true ? undefined : options.envFile,
 		);
 	return Object.assign(
-		(interp: Interp): void => registerSecrets(interp, store),
+		prompted(
+			(interp: Interp): void => registerSecrets(interp, store),
+			[SECRETS_PROMPT],
+		),
 		{
 			store,
 		},
@@ -172,6 +181,7 @@ function propagateTaint(
 }
 
 export function registerSecrets(interp: Interp, store: SecretsStore): void {
+	interp.prompts.add(SECRETS_PROMPT);
 	interp.def(
 		"secrets",
 		0,

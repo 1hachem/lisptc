@@ -17,6 +17,7 @@
     "@repo/ai": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*",
     "@repo/shared": "workspace:*",
     "hono": "^4.13.5",
     "zod": "^4.4.3"

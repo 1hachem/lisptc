@@ -20,8 +20,14 @@ import {
 	zList,
 } from "./lisp.ts";
 import { plistOptions, splitKeywordArgs } from "./plist.ts";
+import { type PromptSection, prompted, promptSection } from "./prompt.ts";
 
 export const MAX_WORDS = 400;
+
+export const COMPACTION_PROMPT: PromptSection = promptSection(
+	"compaction",
+	new URL("./compaction.ptc", import.meta.url),
+);
 
 const INLINE_WORDS = 10;
 
@@ -712,6 +718,7 @@ const GREP_ARGS: DocArg[] = [
 ];
 
 function registerCompaction(interp: Interp, c: Compactor): void {
+	interp.prompts.add(COMPACTION_PROMPT);
 	c.reset();
 	c.attach(interp.channels);
 
@@ -822,7 +829,10 @@ export function compactionExtension(
 	compactor: Compactor = new Compactor(),
 ): CompactionExtension {
 	return Object.assign(
-		(interp: Interp): void => registerCompaction(interp, compactor),
+		prompted(
+			(interp: Interp): void => registerCompaction(interp, compactor),
+			[COMPACTION_PROMPT],
+		),
 		{ compactor },
 	);
 }

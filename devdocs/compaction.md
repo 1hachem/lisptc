@@ -251,11 +251,13 @@ newline would point one character past the end of the value — enough to make t
 ## Teaching the model
 
 Half the feature is the prompt: a model that is not told waits for values it
-will never be shown, and keeps retyping data it could have named. `SKILL.ptc` §5
-lists the built-ins — `echo` under Output, `head`/`tail`/`grep` under Extracting
-(where a bare slice's printing is spelled out) — and §9 explains the silence,
-the report line, and the extract-then-echo
-pattern with a worked example of each failure. POLICY rules 2, 10, 11 and 11a in
+will never be shown, and keeps retyping data it could have named. The extension
+carries that prompt itself, in `compaction.ptc` beside the code
+(see [extensions.md](./extensions.md)): it explains the silence, the report line
+and the extract-then-echo pattern with a worked example of each failure, and
+documents `head`/`tail`/`grep` and `echo`'s windowing options, since those are
+the extension's own built-ins. The core `SKILL.ptc` keeps only the bare `echo`.
+POLICY rules 2, 10, 11 and 11a in
 `packages/ai/src/prompts/lisp.ts` say it outright, and rule 4c corrects the one
 thing the model cannot observe: the user *does* read what a step echoes.
 `test/prose-surfaces.test.ts` and `packages/ai/test/prompt.test.ts` pin both

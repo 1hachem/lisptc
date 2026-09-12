@@ -1,0 +1,78 @@
+## MCP servers
+
+- (load-mcp "name") — load a predefined server by name. **Asynchronous**: returns
+  a *promise* immediately, see "Promises"; the tools install only when it settles.
+- **An unawaited load is finished code, not a loose end.** The promise installs the
+  tools itself when it settles, so a step that reported
+  "load-mcp-1: a promise, still running …" needs no follow-up:
+  go on with the task and call the tools on a later step. Use await for when
+  you want the tool list in the SAME step, nothing else.
+- **To load and use in one step, wrap the SINGLE load-mcp call in await:**
+  (await (load-mcp "acme")) blocks until ready and returns the tool list.
+  Do NOT call (load-mcp "acme") and then (await (load-mcp "acme")) —
+  that starts TWO separate connections. Either wrap it directly as above, or bind
+  the one promise and await that: (setq p (load-mcp "acme")) then later (await p).
+- Ad-hoc servers, all still wrapped in await the same way:
+  - Remote: (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
+  - Local stdio: (load-mcp :name "acme" :command "npx" :args '("-y" "acme-mcp-server"))
+  - OAuth remote: add :oauth t, and optionally :scopes; then use login and mcp-authorize.
+- Load several concurrently:
+  (await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) — settled
+  rather than all, so one server failing does not discard the others.
+- **Finding tools — two different searches, don't confuse them:**
+  - All of these PRINT their answer rather than naming it, see "Reading and
+    showing values", so one is a complete step: read the names and descriptions
+    out of what it printed and go on. Never follow one with (echo …), and never
+    run the same search twice.
+  - (search-mcps "query") searches the *toolkit* of predefined servers, loaded or
+    not — use this to find a server to load. It matches each server's keywords as
+    well as its name and description, so search for the capability you want in
+    your own words: vision, spreadsheet, tickets, analytics. Don't guess a product
+    name. Also (list-mcps), and (list-toolkit), which reports every server's
+    keywords.
+  - (search-tools "query") searches the tools of *already-loaded* servers by
+    name and description, ranked best-first. It takes ONE query string and searches
+    ALL loaded servers — there is NO server argument. (search-tools "acme" "widget")
+    is WRONG, an arity error. To search one server's tools, load it first, then
+    (search-tools "widget"); to list them use (list-tools "acme").
+- (unload-mcp "name"), (login "name"), (logout "name"),
+  (mcp-authorize "name" "code"), (mcp-shutdown).
+- **OAuth login and logout lifecycle**, only for :oauth t servers:
+  - (login "name") begins authorization and returns the login URL to open, or
+    :logged-in if already authenticated. After approving, (load-mcp "name")
+    connects.
+  - (logout "name") gives :logged-out. It unloads the server if it's loaded AND
+    deletes its saved tokens, so the next (load-mcp "name") or (login "name")
+    re-authorizes from scratch. Use it to sign out, or to force a fresh consent
+    after widening a server's :scopes, say when a tool call returned
+    403 insufficient_scope: (logout "name") then (login "name") again.
+  - Both login and logout only accept a **predefined OAuth server name**;
+    calling them on an unknown or non-OAuth server errors. The logout call is a
+    no-op-safe sign-out — it doesn't error if the server isn't currently loaded.
+- Each loaded tool becomes a global named server/tool, called with keyword args and
+  **blocking**, returning the result directly, e.g.
+  (acme/list_widgets :query "blue"). (doc 'acme/list_widgets) prints its full
+  signature, every argument and which are required — read that before guessing a
+  keyword, and read it again when a call comes back rejected.
+- A tool result arrives already converted to Lisp data, a JSON object as an alist
+  with string keys and an array as a list, so read it with assoc, cdr, mapcar and
+  nth — no parsing step. This holds however the server sent it: a JSON document
+  delivered as text is parsed for you too, which is why a result's report names its
+  keys. Only when a tool hands back a *string* that is not itself a JSON document do
+  you need (json-parse s), see "Primitive built-ins".
+- Full example — find the server, load it, find the tool, call it. The server and
+  tool names below are made up: you never know them in advance, so start from
+  search-mcps and let each step tell you the next name.
+
+  (search-mcps "widget")
+  (await (load-mcp "acme"))
+  (search-tools "widget")
+  (acme/get_widget :id "42")
+
+### Gotchas
+
+- You are never told which servers exist. Find one with search-mcps or
+  list-toolkit and read its name out of the answer; never invent a server or a
+  tool name.
+- A discovery call already printed its whole answer, so an (echo …) after it and
+  a second search with different words are both wasted steps.

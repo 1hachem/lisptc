@@ -82,6 +82,10 @@ export class MemoryRepl implements InMemoryRepl {
 		return this.currentInterp;
 	}
 
+	get languageReference(): string {
+		return this.currentInterp.prompts.text();
+	}
+
 	get llmObserver(): LlmObserver | undefined {
 		return this.llm?.observe;
 	}

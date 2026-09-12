@@ -1,0 +1,31 @@
+## Promises
+
+A *promise* stands for work still running, currently just load-mcp, see
+"MCP servers". These are the host runtime's own promises, so they behave the way
+JavaScript promises do: one settles once and keeps its result, awaiting it twice
+gives the same answer, and the combinators are the ones you already know. A
+promise is a live value, so the only way to name one is the name the REPL
+reported it under, load-mcp-1, or one you bound yourself — never its printed
+hash-and-angle-brackets form, which the reader refuses.
+
+- (await promise [timeout-ms]) wait for it and return its value, re-raising its
+  error. Waiting again on a settled promise returns the same value at once.
+- (promise-all promises) gives one promise for every value, in order; it rejects
+  as soon as any of them does.
+- (promise-all-settled promises) gives one promise for how each turned out, as
+  (:fulfilled value) or (:rejected "message"); it never rejects, so one failure
+  keeps its siblings. This is the one to reach for when loading several servers.
+- (promise-any promises) the first to succeed · (promise-race promises)
+  the first to settle either way.
+- (promise-state promise) gives :pending, :fulfilled or :rejected, without
+  waiting.
+- (promises) list what is still running · (cancel promise) abort the work
+  behind one.
+
+### Gotchas
+
+- Never write a promise's hash-and-angle-brackets printout back into code.
+  Awaiting that printed form is the common version of this mistake;
+  (await load-mcp-1) is what it meant.
+- A promise the REPL reported as still running is a step that is DONE. Await it
+  only when you want its value in that same step.

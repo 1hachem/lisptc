@@ -1,6 +1,6 @@
 import type { AgentRepl } from "@repo/repl/repl";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
-import { MAX_STEPS } from "./prompts/lisp.ts";
+import { MAX_STEPS, systemPrompt } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
 import {
 	evalCode,
@@ -101,7 +101,6 @@ export async function* runAgentTurn(
 		provider: ran.provider,
 		model: ran.model,
 	};
-	const tracedConfig: AgentConfig = { ...config, trace };
 	const startedAt = Date.now();
 	const prompt = lastUserPrompt(transcript);
 
@@ -113,6 +112,12 @@ export async function* runAgentTurn(
 	try {
 		const repl = options.repl ?? getThreadRepl(threadId);
 		repl.llmObserver = (call) => captureLlmCall(trace, call);
+
+		const tracedConfig: AgentConfig = {
+			...config,
+			system: config?.system ?? systemPrompt(repl.languageReference),
+			trace,
+		};
 
 		const withheld = repl.takeProseFeedback();
 		if (withheld)

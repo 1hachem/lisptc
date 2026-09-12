@@ -4,11 +4,13 @@ import {
 } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import { mcpExtension } from "@repo/interpreter/mcp";
+import { referenceFor } from "@repo/interpreter/prompt";
 import { proseExtension } from "@repo/interpreter/prose";
 import {
 	type SecretsExtension,
 	secretsExtension,
 } from "@repo/interpreter/secrets";
+import { CORE_PROMPT } from "@repo/interpreter/source";
 import { type LlmExtension, llmExtension } from "@repo/llm/llm";
 
 export interface ModelFacingParts {
@@ -30,4 +32,8 @@ export function modelFacingExtensions(
 		proseExtension(),
 		...(parts.extra ?? []),
 	];
+}
+
+export function languageReference(parts: ModelFacingParts = {}): string {
+	return referenceFor(CORE_PROMPT, modelFacingExtensions(parts));
 }

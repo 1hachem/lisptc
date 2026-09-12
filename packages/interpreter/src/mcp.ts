@@ -19,7 +19,8 @@ import {
 } from "./lisp.ts";
 import { type McpOp, mcpDispatch, stopLocalServers } from "./mcp-client.ts";
 import { keyName, parsePlist } from "./plist.ts";
-import { type Dispatch, Promises } from "./promises.ts";
+import { type Dispatch, PROMISES_PROMPT, Promises } from "./promises.ts";
+import { type PromptSection, prompted, promptSection } from "./prompt.ts";
 import type { ToJson } from "./types.ts";
 
 const zName = z
@@ -332,8 +333,16 @@ function installServer(
 	return arrayToList(toolSyms);
 }
 
+export const MCP_PROMPT: PromptSection = promptSection(
+	"mcp",
+	new URL("./mcp.ptc", import.meta.url),
+);
+
 export function mcpExtension(options: RegisterMcpOptions = {}) {
-	return (interp: Interp): void => registerMcp(interp, options);
+	return prompted(
+		(interp: Interp): void => registerMcp(interp, options),
+		[PROMISES_PROMPT, MCP_PROMPT],
+	);
 }
 
 const FROM_SOURCE = import.meta.url.endsWith(".ts");
@@ -353,6 +362,7 @@ export function registerMcp(
 			mcpDispatch(op as McpOp, payload, signal));
 	const promises = new Promises(dispatch, jsonToLisp);
 	promises.installBuiltins(interp);
+	interp.prompts.add(MCP_PROMPT);
 
 	const servers = new Map<string, ServerRec>();
 	const predefined = new Map<string, ConnConfig>();
