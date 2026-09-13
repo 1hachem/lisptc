@@ -34,10 +34,6 @@ export function setWriter(fn: (s: string) => void): (s: string) => void {
 	return prev;
 }
 
-export function writeOut(s: string): void {
-	write(s);
-}
-
 export function setExit(fn: (n: number) => void): void {
 	exit = fn;
 }
@@ -1760,15 +1756,6 @@ export class Reader {
 
 	get line(): number {
 		return this.lineNo;
-	}
-
-	copyFrom(other: Reader): void {
-		this.tokens = other.tokens.slice();
-		this.lineNo = other.lineNo;
-	}
-
-	clear(): void {
-		this.tokens.length = 0;
 	}
 
 	isEmpty(): boolean {
