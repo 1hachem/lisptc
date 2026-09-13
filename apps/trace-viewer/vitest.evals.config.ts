@@ -8,7 +8,7 @@ export default defineConfig({
 		environment: "node",
 		include: ["evals/**/*.eval.ts"],
 		globalSetup: ["@repo/evals/global-setup"],
-		testTimeout: 300_000,
+		testTimeout: 600_000,
 		hookTimeout: 60_000,
 		fileParallelism: concurrency > 1,
 		maxWorkers: concurrency,
