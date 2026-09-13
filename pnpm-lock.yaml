@@ -60,6 +60,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@repo/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -170,6 +173,9 @@ importers:
       '@repo/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@repo/repl':
         specifier: workspace:*
         version: link:../../packages/repl
@@ -429,6 +435,9 @@ importers:
       '@repo/llm':
         specifier: workspace:*
         version: link:../llm
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@repo/repl':
         specifier: workspace:*
         version: link:../repl
@@ -454,9 +463,6 @@ importers:
 
   packages/interpreter:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.12.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       '@repo/env':
         specifier: workspace:*
         version: link:../env
@@ -514,6 +520,34 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
 
+  packages/mcp:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.12.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@repo/env':
+        specifier: workspace:*
+        version: link:../env
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
+
   packages/repl:
     dependencies:
       '@repo/env':
@@ -525,6 +559,9 @@ importers:
       '@repo/llm':
         specifier: workspace:*
         version: link:../llm
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../mcp
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*

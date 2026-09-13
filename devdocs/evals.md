@@ -122,7 +122,7 @@ one would for the page the fixture describes.
 `error` result, are how the suite evals whether the agent recovers. Nothing
 else can reach that behaviour.
 
-The real fixture servers in `packages/interpreter/test` stay where they are.
+The real fixture servers in `packages/mcp/test` stay where they are.
 An eval reaches for one only when the case is about the real SDK path.
 
 ## Two recorders, because one cannot see everything

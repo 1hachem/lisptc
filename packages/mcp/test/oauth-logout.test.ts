@@ -1,9 +1,15 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+	Interp,
+	prelude,
+	runAsync,
+	runSync,
+	str,
+} from "@repo/interpreter/lisp";
+import { promisesExtension } from "@repo/interpreter/promises";
 import { afterAll, describe, expect, it } from "vitest";
-import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
-import { promisesExtension } from "../src/promises.ts";
 
 const dir = process.env.LISPTC_OAUTH_DIR as string;
 

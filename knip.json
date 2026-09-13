@@ -58,6 +58,10 @@
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
+    "packages/mcp": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
     "packages/repl": {
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]

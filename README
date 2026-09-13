@@ -15,10 +15,12 @@ Write-up: https://d4shi.com/blog/lisptc/
 REPO LAYOUT (pnpm + Turborepo monorepo)
 
 packages/interpreter  @repo/interpreter — the interpreter core (src/lisp.ts),
-                       arithmetic (arith.ts), grammar for structured output
-                       (grammar.ts), and the MCP integration (mcp.ts,
-                       mcp-broker.ts, mcp-oauth.ts). Pure TypeScript, no
-                       build step (run directly via Node's type-stripping).
+                       arithmetic (arith.ts), and the grammar for structured
+                       output (grammar.ts). Pure TypeScript, no build step
+                       (run directly via Node's type-stripping).
+packages/mcp           @repo/mcp — the MCP extension (mcp.ts), its client
+                       and OAuth (mcp-client.ts, mcp-oauth.ts), and the
+                       bundled server list (mcp.toolkit.json).
 packages/repl          @repo/repl — REPL front-ends on top of the
                        interpreter: an embeddable string-in/string-out REPL
                        (repl.ts), the interactive CLI (cli.ts), and a

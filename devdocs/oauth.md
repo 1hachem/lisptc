@@ -3,8 +3,8 @@
 Remote MCP servers (e.g. Linear) authenticate with OAuth 2.1 — PKCE, dynamic
 client registration (DCR), and metadata discovery. The MCP SDK implements the
 whole protocol; lisptc only supplies **token persistence** and **redirect
-capture**. Code lives in `src/mcp-oauth.ts` (provider + storage + callback) and
-`src/mcp-client.ts` (`ensureAuthorized` + the `connect` / `login` / `authorize` /
+capture**. Code lives in `@repo/mcp`: `src/mcp-oauth.ts` (provider + storage +
+callback) and `src/mcp-client.ts` (`ensureAuthorized` + the `connect` / `login` / `authorize` /
 `logout` ops), surfaced as the `login` / `logout` / `mcp-authorize` built-ins.
 
 ## Marking a server as OAuth

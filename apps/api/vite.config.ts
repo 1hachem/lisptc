@@ -4,20 +4,25 @@ import devServer from "@hono/vite-dev-server";
 import { serverEnv } from "@repo/env/server";
 import { defineConfig, type Plugin } from "vite";
 
-const RUNTIME_ASSETS = ["src/SKILL.ptc", "src/lisptc.gbnf", "mcp.toolkit.json"];
+const INTERPRETER_SRC = new URL(
+	".",
+	import.meta.resolve("@repo/interpreter/source"),
+);
+
+const RUNTIME_ASSETS = [
+	new URL("SKILL.ptc", INTERPRETER_SRC),
+	new URL("lisptc.gbnf", INTERPRETER_SRC),
+	new URL(import.meta.resolve("@repo/mcp/mcp.toolkit.json")),
+];
 
 function copyRuntimeAssets(): Plugin {
 	return {
-		name: "copy-interpreter-runtime-assets",
+		name: "copy-runtime-assets",
 		apply: "build",
 		closeBundle() {
-			const root = new URL(
-				".",
-				import.meta.resolve("@repo/interpreter/package.json"),
-			);
 			for (const asset of RUNTIME_ASSETS) {
-				const name = asset.split("/").pop() as string;
-				copyFileSync(fileURLToPath(new URL(asset, root)), `dist/${name}`);
+				const name = asset.pathname.split("/").pop() as string;
+				copyFileSync(fileURLToPath(asset), `dist/${name}`);
 			}
 		},
 	};

@@ -1,7 +1,7 @@
 # The bundled MCP servers (`apps/mcp-toolkit`)
 
 The servers in the toolkit that we write ourselves, listed in
-`packages/interpreter/mcp.toolkit.json` alongside the third-party ones. Today:
+`packages/mcp/mcp.toolkit.json` alongside the third-party ones. Today:
 `sheets` (Google Sheets) and `ocr` (Mistral OCR).
 
 They live in an app rather than a package because each one is an executable, not
@@ -86,7 +86,12 @@ starting with `./` or `../` is resolved **against the toolkit file's own
 directory**, not the process cwd. Without that second step a bundled server is
 unreachable, because there is no cwd that all of its callers share: `pnpm repl`
 runs from `packages/repl`, the LSP from the editor's project root, the agent from
-`apps/api`, a test from its own package. Relative paths in the toolkit therefore
+`apps/api`, a test from its own package. The rule also fixes where the package
+may sit: `mcp.toolkit.json` is one directory above `src/mcp.ts`, and the bundled
+entries climb two more with `--dir ../..`, so `@repo/mcp` has to stay at
+`packages/<name>/` for the repo root to land where they expect.
+`test/toolkit-paths.test.ts` asserts it by loading `sheets` and `ocr` against a
+recording client and checking the directory they name holds `Taskfile.yml`. Relative paths in the toolkit therefore
 mean "relative to `mcp.toolkit.json`", which is the only fixed point.
 
 Third-party servers keep using a bare command (`npx`, `node`) with no leading
