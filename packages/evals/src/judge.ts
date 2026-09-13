@@ -66,13 +66,6 @@ function brief(info: CaseInfo | undefined, row: ReportRow): string {
 	].join("\n");
 }
 
-const NOTHING =
-	/^[\s.()"'*_-]*(nothing|none|n\/a|no issues?|ok|all good)[\s.()"'*_!-]*$/i;
-
-function nothingSaid(text: string): string {
-	return NOTHING.test(text) ? "" : text;
-}
-
 export async function recapOf(
 	judge: Judge,
 	info: CaseInfo | undefined,
@@ -94,7 +87,7 @@ export async function recapOf(
 			},
 			controller.signal,
 		);
-		return nothingSaid(result.text.trim());
+		return result.text.trim();
 	} catch (err) {
 		return `the judge could not be reached: ${err instanceof Error ? err.message : String(err)}`;
 	} finally {

@@ -570,11 +570,6 @@ A recap on a row therefore *means* something is wrong, and a reader scanning a
 report reads only the rows that have one. Praise costs a reader the same
 attention a real finding does, which is why it is not written.
 
-A model asked to say nothing sometimes says "nothing" instead, so `nothingSaid`
-maps a bare "none" / "n/a" / "no issues" / "ok" back to empty. That list is a
-guess about phrasing and nothing depends on it being complete: a recap that
-slips through reads as a short all-clear rather than breaking anything.
-
 The judge is asked one thing the checks cannot answer: **when an assertion
 failed, was the agent at fault or was the assertion too narrow?** That question
 is the whole reason it exists. A check like "call `list-tools` before
