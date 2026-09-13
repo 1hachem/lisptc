@@ -175,9 +175,16 @@ with the same CORS headers as the chat route.
 
 ## The system prompt is the whole contract
 
-`prompts/lisp.ts` is the only tool description, API reference and protocol spec
-the model gets, and `test/prompt.test.ts` pins every rule that had to be learned
-the hard way:
+`systemPromptFor(interp)` (`prompts/lisp.ts`) is the only tool description, API
+reference and protocol spec the model gets: the identity, the loop policy, then
+whatever language the interpreter it is driving actually speaks
+(`interp.systemPrompt()`, see [interpreter.md](./interpreter.md)). `turn.ts`
+builds it from the turn's own REPL, so nothing upstream sends a prompt —
+`apps/api` passes a provider and a model and nothing else, and an eval case that
+installs three extensions is prompted with three sections.
+
+`test/prompt.test.ts` builds the prompt the agent hosts get and pins every rule
+that had to be learned the hard way:
 
 - **The text around the forms is skipped, not evaluated.** Without this the model
   falls back on Common Lisp habits it was trained on — `;` comments and bare

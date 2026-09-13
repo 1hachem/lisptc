@@ -8,6 +8,7 @@ import {
 	type DocArg,
 	EvalException,
 	type Interp,
+	type InterpExtension,
 	jsonToLisp,
 	LispKeyword,
 	type List,
@@ -307,8 +308,17 @@ function installServer(
 	return arrayToList(toolSyms);
 }
 
-export function mcpExtension(options: RegisterMcpOptions = {}) {
-	return (interp: Interp): void => registerMcp(interp, options);
+const PROMPT: string = readFileSync(
+	new URL("./mcp.ptc", import.meta.url),
+	"utf8",
+);
+
+export function mcpExtension(
+	options: RegisterMcpOptions = {},
+): InterpExtension {
+	return Object.assign((interp: Interp): void => registerMcp(interp, options), {
+		prompt: PROMPT,
+	});
 }
 
 const FROM_SOURCE = import.meta.url.endsWith(".ts");

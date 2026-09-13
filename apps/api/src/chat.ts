@@ -1,4 +1,4 @@
-import { LISP_SYSTEM_PROMPT, streamChatResponse } from "@repo/ai";
+import { streamChatResponse } from "@repo/ai";
 import { Hono } from "hono";
 import { z } from "zod";
 import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
@@ -40,11 +40,7 @@ chat.post("/", async (c) => {
 	);
 	return streamChatResponse(
 		input ?? {},
-		{
-			provider: CHAT_PROVIDER,
-			model: CHAT_MODEL,
-			system: LISP_SYSTEM_PROMPT,
-		},
+		{ provider: CHAT_PROVIDER, model: CHAT_MODEL },
 		c.req.raw.signal,
 		threadId,
 		{ distinctId, sessionId },

@@ -59,10 +59,11 @@ An `EvalException` the reader raises about a token it *did* read — the `#<…>
 above — is a complaint about real code, not a sign the text was never code. It is
 left to be raised again where it matters.
 
-## Hooks and channels
+## Hooks, channels and prompts
 
-Two mechanisms the core owns, neither of which names an extension. Neither file
-imports anything from an extension, and neither ever should.
+Three mechanisms the core owns, none of which names an extension. Neither
+`hooks.ts` nor `channels.ts` imports anything from an extension, and neither ever
+should.
 
 **Hooks** (`hooks.ts`) are for *deciding*. Everything is one combinator: a
 `Chain` is an ordered list of middlewares over a base behaviour, and the three
@@ -120,6 +121,23 @@ line. See [compaction.md](./compaction.md).
 A channel is not registered, only emitted on, so an extension adding one costs
 the core nothing. `setWriter` remains the process-wide default sink for `user`,
 so a host that never learns about channels still works.
+
+**Prompts** are for *teaching*. An `InterpExtension` is a function with an
+optional `prompt`, read from a `.ptc` file beside its source
+(`promises.ts`/`promises.ptc`, `@repo/mcp`'s `mcp.ts`/`mcp.ptc`, and so on), and
+`Interp.systemPrompt()` is the language reference followed by the prompt of every
+extension that was installed, in the order they were given. So the prompt an
+agent gets is derived from the interpreter it is driving rather than assembled by
+hand next to it: a REPL built without `mcpExtension()` is never told about
+`load-mcp`, and one built without `compactionExtension()` is never told about
+`:offset` or `head`. What no extension can know — the agent loop's own protocol,
+the step cap, the conversation globals a host injects — stays with the driver
+(`packages/ai`'s `prompts/lisp.ts`, which prepends its policy to
+`interp.systemPrompt()`).
+
+The `.ptc` files carry no markdown and no section numbers: a section is a title
+line in capitals, and a cross-reference names the section rather than numbering
+it, since which sections are present depends on which extensions were installed.
 
 ## The evaluator is a generator
 

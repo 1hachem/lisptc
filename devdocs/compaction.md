@@ -125,9 +125,11 @@ for the life of the REPL:
 
 ```ts
 new MemoryRepl({
-  extensions: modelFacingExtensions({
-    compaction: compactionExtension(new Compactor(wordLimit)),
-  }),
+  extensions: [
+    promisesExtension(),
+    compactionExtension(new Compactor(wordLimit)),
+    proseExtension(),
+  ],
 });
 ```
 
@@ -251,12 +253,15 @@ newline would point one character past the end of the value — enough to make t
 ## Teaching the model
 
 Half the feature is the prompt: a model that is not told waits for values it
-will never be shown, and keeps retyping data it could have named. `SKILL.ptc` §5
-lists the built-ins — `echo` under Output, `head`/`tail`/`grep` under Extracting
-(where a bare slice's printing is spelled out) — and §9 explains the silence,
-the report line, and the extract-then-echo
-pattern with a worked example of each failure. POLICY rules 2, 10, 11 and 11a in
-`packages/ai/src/prompts/lisp.ts` say it outright, and rule 4c corrects the one
-thing the model cannot observe: the user *does* read what a step echoes.
+will never be shown, and keeps retyping data it could have named. That half is
+`compaction.ptc`, the extension's own prompt section (see
+[interpreter.md](./interpreter.md)), so only a REPL that installed this extension
+is taught it: it lists the built-ins it adds — `echo`'s windowing and searching
+options, `head`/`tail`/`grep` under Extracting, where a bare slice's printing is
+spelled out — explains the silence, the report line and the extract-then-echo
+pattern with a worked example of each failure, and closes with the rules stated
+outright. The driver's POLICY still corrects the one thing the model cannot
+observe: the user *does* read what a step echoes (rule 4c in
+`packages/ai/src/prompts/lisp.ts`).
 `test/prose-surfaces.test.ts` and `packages/ai/test/prompt.test.ts` pin both
 surfaces so they cannot silently regress.

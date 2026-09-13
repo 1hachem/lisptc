@@ -108,6 +108,11 @@ export function loadSecretsFromEnvFile(
 	}
 }
 
+const PROMPT: string = readFileSync(
+	new URL("./secrets.ptc", import.meta.url),
+	"utf8",
+);
+
 export interface SecretsOptions {
 	store?: SecretsStore;
 	envFile?: boolean | string;
@@ -128,9 +133,7 @@ export function secretsExtension(
 		);
 	return Object.assign(
 		(interp: Interp): void => registerSecrets(interp, store),
-		{
-			store,
-		},
+		{ store, prompt: PROMPT },
 	);
 }
 

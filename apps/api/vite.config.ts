@@ -9,8 +9,18 @@ const INTERPRETER_SRC = new URL(
 	import.meta.resolve("@repo/interpreter/source"),
 );
 
+const PROMPT_FILES = [
+	"SKILL.ptc",
+	"compaction.ptc",
+	"promises.ptc",
+	"prose.ptc",
+	"secrets.ptc",
+];
+
 const RUNTIME_ASSETS = [
-	new URL("SKILL.ptc", INTERPRETER_SRC),
+	...PROMPT_FILES.map((name) => new URL(name, INTERPRETER_SRC)),
+	new URL("mcp.ptc", new URL(import.meta.resolve("@repo/mcp"))),
+	new URL("llm.ptc", new URL(import.meta.resolve("@repo/llm/llm"))),
 	new URL(import.meta.resolve("@repo/mcp/mcp.toolkit.json")),
 ];
 
