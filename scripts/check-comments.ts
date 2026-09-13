@@ -146,10 +146,12 @@ console.error(
 	}.`,
 );
 console.error("");
-console.error("This repo's code carries no comments. If one of these states a");
 console.error(
-	"real constraint, move it to the devdocs/ page for that area (see",
+	"This repo's code carries no comments, and keeps no design notes",
 );
-console.error("devdocs/README.md); otherwise run `pnpm fix:comments` to strip");
-console.error("them, then `pnpm format`.");
+console.error(
+	"to move one to. If one of these states a real constraint, put it in",
+);
+console.error("a name, a type or a test; otherwise run `pnpm fix:comments` to");
+console.error("strip them, then `pnpm format`.");
 process.exit(1);
