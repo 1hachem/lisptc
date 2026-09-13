@@ -137,10 +137,6 @@ tasks:
       - task: _infisical-run
         vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/mcps/mistral", CMD: "pnpm --silent --filter @lisptc/mcp-toolkit run ocr" }
 
-  serve-gemma:
-    desc: serve the local gemma model (the API primes its system-prompt KV cache)
-    cmd: packages/ai/scripts/serve-llama.sh
-
   repl:
     desc: run the interactive REPL against a local (private) interpreter
     cmd: pnpm repl

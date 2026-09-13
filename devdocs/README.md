@@ -42,8 +42,8 @@ When you fix something non-obvious, add it to the page for that area.
   signal, withheld prose feedback, what survives a `reset()`), the interactive
   CLI, and the shared session server's protocol and socket hygiene.
 - [The agent loop](./agent-loop.md) — the model-output-to-eval loop, per-call
-  accounting, per-thread REPL persistence, provider grammar spellings, KV
-  warming, and what the system prompt has to say.
+  accounting, per-thread REPL persistence, what each provider spec carries, and
+  what the system prompt has to say.
 - [The eval suite](./evals.md) — how a case seeds both the transcript and the
   interpreter, why the world is mocked at the MCP client, the three-valued
   latching check language (and why a pending `never` ends true), the zod report

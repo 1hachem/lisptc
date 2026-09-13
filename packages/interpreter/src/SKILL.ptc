@@ -12,12 +12,11 @@ Source is s-expressions. (f a b) calls f with the evaluated a and b.
 
 Only the parenthesised top-level forms are program text: anything written around
 them is prose and is ignored, so a program can be prose with forms embedded in it.
-Writing "let me square it" around (sq 5) evaluates just the one form. Three
+Writing "let me square it" around (sq 5) evaluates just the one form. Two
 consequences: a bare value at top level — 42, "done", my-var — is prose, not an
 expression to evaluate, so wrap it in a form; a stray parenthesis in prose is
 still read as code, so never write one, and a smiley built from a paren is
-unsayable; and prose cannot hold a less-than sign or an opening square bracket
-at all — write "less than", or put the comparison in a form, (< 1 2).
+unsayable.
 
 NEVER PUT A SENTENCE IN PARENTHESES. Every paren you type is read as code, so a
 remark wrapped in them is a call: writing (the page loaded, title is "hyko")
@@ -595,7 +594,7 @@ The *llm-defaults* global is the keyword list every call starts from; an option 
 the call site wins over it. (with-llm (option...) body...) extends it for one
 block and restores it after:
 
-(with-llm (:provider :llamacpp :max-tokens 120)
+(with-llm (:provider :openrouter :max-tokens 120)
   (summarize-each (head pages-1 3)))
 
 **Three macros over llm/complete** carry the prompt for you, so (doc 'summarize)

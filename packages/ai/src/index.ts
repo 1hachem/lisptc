@@ -35,9 +35,3 @@ export {
 	type TurnEvent,
 	type TurnOptions,
 } from "./turn.ts";
-export {
-	ensureWarm,
-	systemPromptSlotFile,
-	type WarmStatus,
-	warmStatus,
-} from "./warm.ts";

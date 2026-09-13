@@ -44,7 +44,5 @@ export function reachable(provider: ProviderName): boolean {
 }
 
 export function evalConcurrency(): number {
-	const wanted = evalsEnv.EVAL_CONCURRENCY;
-	if (evalMatrix().some((target) => target.provider === "llamacpp")) return 1;
-	return wanted;
+	return evalsEnv.EVAL_CONCURRENCY;
 }

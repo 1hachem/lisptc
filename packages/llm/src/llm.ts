@@ -666,5 +666,5 @@ const MACROS = `
              (setq *llm-defaults* _llm-saved)
              _llm-value))))
 (_set-doc 'with-llm "(with-llm (option...) body...)"
-          "Evaluate the body with *llm-defaults* extended by the given options, then restore it, so a block of code can pin a provider or a model without repeating it: (with-llm (:provider :llamacpp :max-tokens 200) (summarize-each pages)). A call in the body can still override any of them.")
+          "Evaluate the body with *llm-defaults* extended by the given options, then restore it, so a block of code can pin a provider or a model without repeating it: (with-llm (:provider :openrouter :max-tokens 200) (summarize-each pages)). A call in the body can still override any of them.")
 `;

@@ -29,7 +29,7 @@ It is `messages[0]`, and it is replayed to the model with every send, so the age
 is answering a conversation it opened rather than one that starts mid-air.
 
 It is written locally rather than by the model because a greeting costs a round
-trip and a cache warm-up, and it would be the one turn in the conversation that
+trip, and it would be the one turn in the conversation that
 says nothing. It is **prose, not Lisp**, which is legal for an assistant turn: a
 form-less reply is how the policy spells "finished answering", so the model reads
 it as a completed turn and not as code to carry on from.
@@ -57,9 +57,6 @@ local copy on top of it would show it twice.
   part-way up the conversation to the top and then scrolls them back down.
 - **The turn's id is named client-side** and echoed back verbatim, so the message
   shown on send and the one that comes back are the same React row.
-- **Only an explicit `"pending"` counts as warming.** An unreachable API stays
-  `null`: locking the composer because the server is down would strand the user
-  with no way to find out why. A send surfaces the real error instead.
 
 ## The PostHog proxy
 

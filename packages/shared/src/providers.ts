@@ -10,7 +10,6 @@ export interface ProviderSpec {
 export const PROVIDER_NAMES = [
 	"digitalocean",
 	"fireworks",
-	"llamacpp",
 	"openrouter",
 ] as const;
 

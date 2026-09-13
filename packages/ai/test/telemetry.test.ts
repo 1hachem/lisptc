@@ -122,7 +122,7 @@ describe("llm built-in calls", () => {
 
 		captureLlmCall(CTX, {
 			builtin: "llm/extract",
-			provider: "llamacpp",
+			provider: "fireworks",
 			model: "a-small-one",
 			messages: [{ role: "user", content: "one and two" }],
 			structured: true,
@@ -139,7 +139,7 @@ describe("llm built-in calls", () => {
 			$ai_trace_id: "thread-abc",
 			$ai_parent_id: "turn-1",
 			$ai_span_name: "llm/extract",
-			$ai_provider: "llamacpp",
+			$ai_provider: "fireworks",
 			$ai_model: "a-small-one",
 			$ai_input_tokens: 11,
 			$ai_output_tokens: 7,

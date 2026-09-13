@@ -172,42 +172,6 @@ export function useChatSession(): ChatSession {
 	return ctx;
 }
 
-export type WarmStatus =
-	| "pending"
-	| "restored"
-	| "saved"
-	| "unavailable"
-	| "failed"
-	| "skipped";
-
-export function useWarmup(): { warming: boolean; status: WarmStatus | null } {
-	const [status, setStatus] = useState<WarmStatus | null>(null);
-
-	useEffect(() => {
-		let cancelled = false;
-		let timer: ReturnType<typeof setTimeout>;
-
-		const poll = async () => {
-			let warm: WarmStatus | null = null;
-			try {
-				const res = await fetch(`${API_URL}/health`);
-				warm = ((await res.json()) as { warm?: WarmStatus }).warm ?? null;
-			} catch {}
-			if (cancelled) return;
-			setStatus(warm);
-			if (warm === null || warm === "pending") timer = setTimeout(poll, 2000);
-		};
-		void poll();
-
-		return () => {
-			cancelled = true;
-			clearTimeout(timer);
-		};
-	}, []);
-
-	return { warming: status === "pending", status };
-}
-
 export function messageReasoning(message: ChatMessage): string {
 	const reasoning = message.additional_kwargs?.reasoning_content;
 	return typeof reasoning === "string" ? reasoning : "";

@@ -394,8 +394,9 @@ report that default or the row scores nothing.
 
 **A provider with no key is skipped, not failed.** `providerSpecs` is a
 snapshot of the environment taken at import and a missing key yields
-`apiKey: undefined`; the throw comes later, at model construction. `llamacpp`
-hardcodes its key, so naming it in `EVAL_MATRIX` is taken as meaning it.
+`apiKey: undefined`; the throw comes later, at model construction. Every
+provider needs a real key, so a matrix can never point at a target that is not
+actually reachable.
 
 Every run writes one report, named for when it ran and what it ran against:
 
@@ -583,8 +584,8 @@ entirely — an *empty* value cannot mean that, because Task's `default` filter
 treats empty as unset and hands back the default.
 
 It goes through `@repo/llm`'s `Generate` port, not `packages/ai`'s providers:
-those are streaming and pinned to `LISP_GRAMMAR`, which is right for the agent's
-own turns and exactly wrong for a reviewer who should answer in prose.
+those are streaming, which is right for the agent's own turns and exactly wrong
+for a reviewer whose prose is read whole.
 
 **A judge never fails an eval.** An unreachable provider logs once and skips
 every recap; a call that errors or times out is recorded as the recap text
@@ -638,8 +639,3 @@ one**: vitest has no cross-worker semaphore, so the true ceiling is workers
 times concurrency. For a suite of a handful of cases the burst is small enough
 that a real bound is not worth building; if that stops being true, the place to
 fix it is a semaphore in `runCase`, not more vitest settings.
-
-**`llamacpp` in the matrix forces 1**, wherever it appears in it, because
-`llama-server` runs `--parallel 1` and concurrent requests would queue behind
-each other and time out. That check lives in `evalConcurrency()` rather than in
-the config, so it cannot be forgotten by whoever writes the next config.

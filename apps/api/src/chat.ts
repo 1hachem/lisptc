@@ -1,7 +1,7 @@
-import { ensureWarm, LISP_SYSTEM_PROMPT, streamChatResponse } from "@repo/ai";
+import { LISP_SYSTEM_PROMPT, streamChatResponse } from "@repo/ai";
 import { Hono } from "hono";
 import { z } from "zod";
-import { CHAT_MODEL, CHAT_PROVIDER, NEEDS_WARMUP } from "./model.ts";
+import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
 
 const chatMessageSchema = z.object({
 	id: z.string().optional(),
@@ -38,7 +38,6 @@ chat.post("/", async (c) => {
 	console.log(
 		`chat thread=${threadId ?? "-"} messages=${input?.messages?.length ?? 0} ${CHAT_PROVIDER}/${CHAT_MODEL}`,
 	);
-	if (NEEDS_WARMUP) await ensureWarm();
 	return streamChatResponse(
 		input ?? {},
 		{
