@@ -92,11 +92,10 @@ respect. Hence `connectDelayMs`, the same trick `LISPTC_FIXTURE_DELAY_MS`
 plays for the interpreter's own fixture server.
 
 **A mock never tells the agent it is a mock.** An unmocked server or tool
-fails with `cannot start MCP server "pw"` or `pw/go is unavailable`, not with
-the old `add it to the case's mocks`, which taught a recovering agent that it
-was inside a test harness and gave it no in-world reason to stop. The hint the
-eval author needs is still printed, on `console.warn`, where the runner's own
-output is.
+fails with `cannot start MCP server "pw"` or `pw/go is unavailable`, in-world
+reasons to stop. A message naming the case's `mocks` would teach a recovering
+agent that it is inside a test harness and give it nothing to act on. The hint
+the eval author needs goes to `console.warn`, where the runner's own output is.
 
 **A tool the fixture lists has to answer.** The playwright descriptors are a
 real connect's 24 tools and the case mocks five of them, so `browser_evaluate`
@@ -167,11 +166,11 @@ tempting shortcut but cannot reach the client, which is captured in a closure at
 
 A call the agent wrote *and* the runtime ran shows up twice: once as the
 top-level `form` that contains it, once as the `connect` or `tool` event the
-client answered. Ordering combinators do not care, but counting ones do, and
-`(at-most (called "load-mcp" "playwright") 3)` used to latch false at the
-**second** attempt: the check read as "stop retrying" and fired on an agent
-that had retried once. A run was graded against the agent for the harness's
-double vision.
+client answered. Ordering combinators do not care, but counting ones do:
+`(at-most (called "load-mcp" "playwright") 3)` would latch false at the
+**second** attempt, the check reading as "stop retrying" and firing on an agent
+that had retried once, grading a run against the agent for the harness's double
+vision.
 
 So `called` keeps every runtime hit, and drops a written hit whose step
 already has one for that name. A call that never reached the client (an
@@ -340,13 +339,13 @@ and it is also the loop's `maxSteps`, so a run that never answers is a fail
 rather than an overrun. Degraded is recorded, not failed.
 
 **A model that says nothing is not an agent that never answered.** An empty
-completion ends `runAgentTurn`'s loop, and for a while it did so silently: a run
-that stopped at step 3 of a 15-step budget was reported exactly like one that
-burned every step without concluding, and a provider hiccup read as the agent
-failing the case. The loop now yields `silent` before it breaks, the row carries
-it, and the summary line says `NO REPLY — the model returned nothing at step 4`.
-It still grades as a fail, since the run proved nothing, but it no longer reads
-as evidence about the model under test. Worth knowing when cases run as parallel
+completion ends `runAgentTurn`'s loop, and a silent break would report a run that
+stopped at step 3 of a 15-step budget exactly like one that burned every step
+without concluding, reading a provider hiccup as the agent failing the case. So
+the loop yields `silent` before it breaks, the row carries it, and the summary
+line says `NO REPLY — the model returned nothing at step 4`. It grades as a fail,
+since the run proved nothing, but it does not read as evidence about the model
+under test. Worth knowing when cases run as parallel
 shards against one provider.
 
 One run per case by default. `samples: k` buys repeats where a case is known to
@@ -516,9 +515,9 @@ average, yellow at it, red below**, where average is half the checks. `6/10` is
 green and `5/10` is yellow, so the tint answers "did more pass than fail" and the
 number answers by how much. That half-the-checks line is the same one the gate
 fails on, so a red row is a row that dragged its case toward a red suite. The
-pass/degraded/fail grade still prints in the terminal; the viewer no longer shows
-it, so a run that never answered can read green when its checks held up, and the
-line under the score is what says it never answered.
+pass/degraded/fail grade prints in the terminal and not in the viewer, so a run
+that never answered can read green when its checks held up, and the line under
+the score is what says it never answered.
 
 A run mixes models and cases, so `/r/…` **filters by either**, and the filter
 lives in the query string (`?model=…`, `?eval=…`) rather than in component
@@ -633,8 +632,8 @@ other. Against a stub model the four cases finish in 2.9s rather than 8.2s.
 `EVAL_CONCURRENCY` sets it, default 4.
 
 Two things it is honest about. **1 means serial**, all three settings collapse
-and the suite runs exactly as it used to — that is the escape hatch for a
-provider answering 429. Above 1 the number is a **per-file cap, not a global
+and the cases run one after another — that is the escape hatch for a provider
+answering 429. Above 1 the number is a **per-file cap, not a global
 one**: vitest has no cross-worker semaphore, so the true ceiling is workers
 times concurrency. For a suite of a handful of cases the burst is small enough
 that a real bound is not worth building; if that stops being true, the place to

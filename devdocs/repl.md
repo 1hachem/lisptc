@@ -9,10 +9,10 @@ shared over a unix socket).
 
 `extensions.ts` exports `modelFacingExtensions()`, and it is the only place the
 language a model sees is spelled out: secrets, promises, MCP, LLM, compaction,
-prose, in that order. `MemoryRepl` and the interactive CLI both build their interp from it,
-which is what stops the two drifting. They had drifted: the CLI was missing the
-LLM extension for exactly as long as the roster was written twice, so `pnpm repl`
-silently lacked `llm/complete` while the agent had it.
+prose, in that order. `MemoryRepl` and the interactive CLI both build their
+interp from it, which is what stops the two drifting. A roster written twice
+drifts silently: the copy that forgets `llmExtension()` leaves `pnpm repl`
+without `llm/complete` while the agent has it, and nothing fails to say so.
 
 **A host configures an extension, never the REPL.** The roster takes one slot per
 extension, each holding an already-configured extension, and fills the rest with
@@ -31,12 +31,12 @@ modelFacingExtensions({
 a configuration: there is nothing for a host to hand in, and a roster that
 dropped either would be handing the model a language with holes in it.
 
-`ReplOptions` is therefore one field, `extensions`. It used to be the union of
-every extension's knobs — `secretsStore`, `wordLimit`, `mcpClient`,
-`toolkitJson`, plus an `extra` list — each threaded through a `MemoryRepl` field
-into `freshInterp()`, so teaching one extension a new option meant editing the
-REPL, the roster and the options type. A REPL does not know what an MCP client
-or a word limit is, and now does not have to.
+`ReplOptions` is therefore one field, `extensions`, and not the union of every
+extension's knobs — `secretsStore`, `wordLimit`, `mcpClient`, `toolkitJson` —
+each threaded through a `MemoryRepl` field into `freshInterp()`. That shape makes
+teaching one extension a new option an edit to the REPL, the roster and the
+options type, for something a REPL has no opinion about: it does not know what an
+MCP client or a word limit is, and does not have to.
 
 ### What the REPL still needs back
 
@@ -83,10 +83,9 @@ have run, so an override must tolerate its own fields still being `undefined`.
 
 ### Evaluation is async, and serialized
 
-`MemoryRepl.eval` / `evalOutput` return promises, because the interpreter can
-now suspend on a promise and the event loop turns *during* an eval. That makes a
-second `eval()` reachable while the first is still running, which was
-structurally impossible before.
+`MemoryRepl.eval` / `evalOutput` return promises, because the interpreter
+suspends on a promise and the event loop turns *during* an eval. That makes a
+second `eval()` reachable while the first is still running.
 
 So `evaluate` queues: each call chains onto `inFlight` and runs alone. Without
 it, `compactor.beginStep()` / `endStep()` and the channel subscriptions in
@@ -113,8 +112,8 @@ The two copies arrive as **two channels of this interp**, not as a writer plus a
 callback: the compaction extension puts the uncapped copy on `user` and the
 capped one on `model` as each form settles, so nothing here has to reassemble
 them afterwards. Subscribing to this interp rather than swapping the
-process-wide writer also means a second REPL in the same process no longer
-captures this one's output.
+process-wide writer is also what keeps a second REPL in the same process from
+capturing this one's output.
 
 A `warning` on the model channel is a skip note. A `critical` is *not* taken
 here: it is thrown as well as reported, and the surrounding catch is what bounds

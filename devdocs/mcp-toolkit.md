@@ -131,10 +131,10 @@ handshake:
   `> @lisptc/mcp-toolkit@0.0.0 ocr` banner to stdout. The Taskfile's own
   `silent: true` covers task's echoing but not pnpm's.
 - **`infisical-run.ts` reports on stderr.** Its two progress lines
-  ("requesting secrets from …", "N secrets loaded") were `console.info`, which is
-  stdout, and they landed in the JSON-RPC stream. They are `console.error` now:
-  progress belongs on stderr anyway, and it is what makes that script safe to
-  wrap around any protocol server. Do not move them back.
+  ("requesting secrets from …", "N secrets loaded") go through `console.error`.
+  `console.info` is stdout, so they would land in the JSON-RPC stream. Progress
+  belongs on stderr anyway, and that is what makes the script safe to wrap around
+  any protocol server. Do not move them.
 
 ## Starting a url server (`ensureLocalServer`)
 

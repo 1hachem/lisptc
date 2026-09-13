@@ -44,9 +44,9 @@ about to be cut off mid-answer anyway, and everything already captured survives.
 
 `index.ts` is the *build* entry. `pnpm dev` runs Vite with
 `@hono/vite-dev-server`, whose entry is `src/app.ts`, so nothing in `index.ts`
-is ever loaded and a Ctrl+C in dev dropped the same events. Registering a
-`process.on("SIGTERM")` from inside the app would not fix it either: Vite
-installs its own listener, `await`s only `server.close()`, and then calls
+is ever loaded and a flush registered there misses every Ctrl+C in dev.
+Registering a `process.on("SIGTERM")` from inside the app does not fix it either:
+Vite installs its own listener, `await`s only `server.close()`, and then calls
 `process.exit()` — an async flush of ours would be racing that exit.
 
 The one hook Vite *does* await is a plugin's `closeBundle`, which
@@ -97,7 +97,7 @@ its own `Some events may not have been sent` warning right above it.
 That deadline is `FLUSH_TIMEOUT_MS`, passed explicitly because posthog-node's
 default is 30s — long enough for a dead analytics host to outlive the platform's
 kill timeout and take the whole shutdown down with it. 5s for the drain plus 5s
-for the flush is the worst case now, measured.
+for the flush is the measured worst case.
 
 `$ai_generation` is emitted by `@posthog/ai`'s `LangChainCallbackHandler`, wired
 in `agent.ts`. It reports token counts and cost correctly per provider, which is
@@ -122,10 +122,10 @@ not what the completion looked like.
 
 Everything a conversation ever produced shares one id — across turns, and
 including the votes given on it afterwards. That is the join key for the
-trace view and for any insight. `apps/app` now mints the thread id up front
-rather than waiting for the server to name one; the API already keyed the
-persistent `AgentRepl` off it, so a conversation without one was silently losing
-its interpreter state between turns.
+trace view and for any insight. `apps/app` mints the thread id up front rather
+than waiting for the server to name one, because the API keys the persistent
+`AgentRepl` off it: a conversation without one silently loses its interpreter
+state between turns.
 
 ### The two numbers worth watching
 
@@ -137,11 +137,10 @@ never halted is the agent looping — it reads as a success in the transcript
 
 `▲` / `▼` in the gutter beside every assistant turn
 (`components/message-feedback.tsx`), and a one-line input afterwards for the
-sentence that explains the vote. This replaced free-text notes, which were the
-right instinct and the wrong gesture: a comment is a paragraph nobody writes
-twice, while a vote is one keystroke and gives the rating a number to aggregate
-on. The sentence is asked for *after* the vote is already recorded, so the cheap
-gesture is never blocked on the expensive one.
+sentence that explains the vote. A vote first, because it is one keystroke and
+gives the rating a number to aggregate on, where a free-text note alone is a
+paragraph nobody writes twice. The sentence is asked for *after* the vote is
+already recorded, so the cheap gesture is never blocked on the expensive one.
 
 It goes out as PostHog **survey events**, not an event of our own. That is the
 one shape PostHog renders *inside* the trace, so a rating shows up on the run it
@@ -223,7 +222,7 @@ overruns, and its neighbours are added outward, cheapest side first, until the
 budget is gone. Sending the tail instead would be simpler and would lose the turn
 in question whenever a run goes long, which is the run worth reviewing. The
 survey event itself carries only the run's identity, its checks and the voted
-message (clamped to `MESSAGE_BUDGET`), since the conversation is now in the trace
+message (clamped to `MESSAGE_BUDGET`), since the conversation is already in the trace
 beside it.
 
 ### Sent from the browser, unlike everything else here
@@ -285,10 +284,10 @@ Three details are not arbitrary:
   loaded bundles — session recorder, toolbar, surveys — from a CDN host rather
   than from the host that accepts events (`POSTHOG_ASSET_HOST`). Everything
   else goes to `POSTHOG_HOST`. With a proxied `api_host` posthog-js stops
-  splitting them itself: it can no longer recognise the region, so it sends
+  splitting them itself: it cannot recognise the region, so it sends
   every path to `api_host` and the split has to happen here.
 - **`cookie` is stripped on the way out, `set-cookie` on the way back.** Making
-  a third party same-origin means the browser now attaches our cookies to every
+  a third party same-origin means the browser attaches our cookies to every
   event it sends. Forwarding those would hand PostHog whatever session this app
   grows, and relaying its `set-cookie` would let it write first-party ones.
 - **`x-forwarded-for` gets the client IP appended, and the user agent is passed
@@ -470,8 +469,8 @@ closes.
 
 `task dev-api` and `task start:api` run under `/ai /analytics /api`. `task
 dev-app` and `task start:app` run under `/web /analytics` — `/web` for the
-bundle, and `/analytics` as well because the app has a *server* half of its own
-now: the proxy resolves `POSTHOG_HOST` and `POSTHOG_ASSET_HOST` per request, at
+bundle, and `/analytics` as well because the app has a *server* half of its
+own: the proxy resolves `POSTHOG_HOST` and `POSTHOG_ASSET_HOST` per request, at
 runtime, in the same process that serves the pages.
 
 `task evals:open` and `task evals:dev` run under `/assets /trace-viewer` —

@@ -33,15 +33,14 @@ runtime already does:
 | `(promise-any ps)` | `Promise.any` |
 | `(promise-race ps)` | `Promise.race` |
 
-That is not just tidiness. Three behaviours the old job layer implemented by hand
-are now the runtime's own: a promise settles **once** and keeps its result, so
-awaiting twice returns the same value with no `finalized` flag or result cache; a
-finalizer attached with `.then` runs **exactly once** whether or not anyone
-awaits, which is what installs a server's tool bindings in the background; and
-awaiting a settled promise costs a microtask rather than a lookup through an id
-map. The map, the `jobId`, the `collect`/`track` bookkeeping and the
-`JobsRuntime` indirection all existed to carry a promise across a worker
-boundary that no longer exists.
+That is not just tidiness. Three behaviours come free with the runtime's own
+type: a promise settles **once** and keeps its result, so awaiting twice returns
+the same value with no result cache to keep; a finalizer attached with `.then`
+runs **exactly once** whether or not anyone awaits, which is what installs a
+server's tool bindings in the background; and awaiting a settled promise costs a
+microtask rather than a lookup through an id map. Any wrapper would have to
+reimplement all three, and it would only be worth it to carry a promise across a
+thread boundary. There is none: the evaluator waits on this thread.
 
 ## The bookkeeping is the core's, because it cannot be optional
 
@@ -85,20 +84,19 @@ with `runSync`; what the agent loses is any way to *talk* about a promise.
 the full language, and `test/mcp.test.ts` pins the other half: MCP alone is
 enough to load a server and call its tools.
 
-## There is no dispatch
+## A feature brings its own port
 
-`Dispatch` was `(op, payload, signal) => Promise<unknown>`, one string-keyed
-entry point that every async feature was expected to route through. It cost a
-`switch` on the op name and a cast of `payload` at both ends, it made MCP own a
-`Promises` instance in order to reach its own client, and it meant that
-installing MCP installed `await`, so a second consumer of the layer would have
-overwritten the first one's built-ins.
+There is no shared async entry point to route a call through. A feature that
+wants async work defines its own built-ins and talks to the world through a port
+of its own shape: MCP's is `McpClient` (`connect`, `callTool`, `disconnect`,
+`login`, `logout`, `authorize`), whose arguments are the real types rather than
+an op name and an `unknown` payload.
 
-MCP now calls a typed `McpClient` (`connect`, `callTool`, `disconnect`, `login`,
-`logout`, `authorize`) whose arguments are the real shapes, and a test or an eval
-replaces the whole client rather than a string router, with
-`mcpExtension({ client })`. `packages/evals` does exactly that twice over: a mock
-client, wrapped by a recording one.
+That is what a host swaps to replace the world: `mcpExtension({ client })`.
+`packages/evals` does it twice over, a mock client wrapped by a recording one.
+A generic `(op, payload, signal)` seam would buy a `switch` and a cast at both
+ends, and would tempt the next async feature into sharing one set of promise
+built-ins with MCP.
 
 ## What a promise cannot tell you
 
@@ -111,16 +109,16 @@ waiting. So the same `.then` that tracks settling records `pending` →
 
 **Cancellation.** A promise is not cancellable; an `AbortController` is what the
 host offers, and `interp.async.start` is what ties one to a promise. `(cancel p)`
-aborts it and the promise then **rejects**, which is the honest outcome, and
-better than the old `no such job` that came from deleting a map entry. A promise
-built by `promise-all` and friends was only watched, never started, so it has no
-controller of its own and `cancel` returns nil there rather than pretending.
+aborts it and the promise then **rejects**, which is the honest outcome: the work
+stopped, and anyone awaiting it hears so. A promise built by `promise-all` and
+friends is only watched, never started, so it has no controller of its own and
+`cancel` returns nil there rather than pretending.
 
 `(mcp-shutdown)` cancels the loads MCP itself started, which is why `mcp.ts`
 keeps the set of them: aborting *everything* pending would reach work that was
 never its own.
 
-## Two kinds of builtin, because a promise is a value now
+## Two kinds of builtin, because a promise is a value
 
 The evaluator's rule (see [interpreter.md](./interpreter.md)) is that a `Promise`
 returned from a builtin is yielded, not returned. That makes an MCP tool call
@@ -148,12 +146,12 @@ only way an async driver can hand back a promise as a value.
 
 ## Timeouts are policy, not a deadlock guard
 
+Nothing blocks the thread, so no timeout here is a deadlock guard.
 `CALL_TIMEOUT_MS` (30s, `mcp.ts`) and `AWAIT_TIMEOUT_MS` (50s, `promises.ts`)
-used to exist because `Atomics.wait` with no bound would hang a thread forever.
-Nothing hangs now: they stay only so one agent turn cannot wait on a dead server
-without end, and `(await p ms)` lets the agent choose. Each sits with the feature
-whose policy it is: a tool call's deadline is MCP's business, an `await`'s is the
-promise language's. A non-finite timeout is rejected.
+exist only so one agent turn cannot wait on a dead server without end, and
+`(await p ms)` lets the agent choose. Each sits with the feature whose policy it
+is: a tool call's deadline is MCP's business, an `await`'s is the promise
+language's. A non-finite timeout is rejected.
 `withTimeout` races against a timer it unrefs, so a pending deadline cannot hold
 the process open by itself, and a timeout leaves the promise itself pending and
 awaitable — as racing does.
@@ -182,10 +180,10 @@ string.
 ### The client module is process-wide
 
 `clients`, the shared OAuth callback server and the token store live in
-`mcp-client.ts` module scope, so **every interp in a process shares them**. Under
-the worker each interp got its own copy, one per broker. Two interps loading the
-same server now share nothing but that map, keyed by `serverId`, so they do not
-collide; but a test that expects isolation between interps will not get it.
+`mcp-client.ts` module scope, so **every interp in a process shares them**. Two
+interps loading the same server share nothing but that map, keyed by `serverId`,
+so they do not collide; but a test that expects isolation between interps will
+not get it.
 
 ### `LOAD_MCP_ARGS` marks only `:name` required
 
@@ -201,14 +199,12 @@ the interp releases them through the `dispose` hook. Both may fire. Every
 installed `<server>/<tool>` global is undefined on the way out, so no stale
 binding lingers with a closure capturing a dead `serverId`.
 
-**Shutdown has to close the clients, and it did not used to.** Under the worker,
-shutting the runtime down was `worker.terminate()`, and killing the thread took
-every SDK client and every stdio child process with it. On the main thread there
-is no thread to kill: aborting a controller does nothing to a client that already
-connected. So `shutdown()` disconnects each of *this interp's* servers by hand,
-and `connect` closes its client if anything after `new Client` throws (an abort
-included), which is what releases a child spawned by a connect that was
-cancelled.
+**Shutdown has to close the clients by hand.** There is no thread to kill that
+would take the SDK clients and their stdio children with it, and aborting a
+controller does nothing to a client that already connected. So `shutdown()`
+disconnects each of *this interp's* servers itself, and `connect` closes its
+client if anything after `new Client` throws (an abort included), which is what
+releases a child spawned by a connect that was cancelled.
 
 It closes this interp's servers, never the whole `clients` map, because that map
 is process-wide: clearing it would kill another interp's servers.
@@ -224,7 +220,7 @@ browser, say) without hardcoding machine-specific store paths. Unset vars expand
 to the empty string, and a malformed config entry is ignored rather than crashing
 interpreter startup.
 
-`mcp.toolkit.json` still sits at the package root next to `src/` and is emitted
+`mcp.toolkit.json` sits at the package root next to `src/` and is emitted
 beside the code in a build (see `apps/api/vite.config.ts`, which copies it).
 
 ## Test fixtures
@@ -243,10 +239,10 @@ observe a load in `:pending`.
 at least one tool is registered — and the whole point of that fixture is to
 advertise it with none.
 
-The concurrency test asserts on the two promises' **states** rather than on
-elapsed time. An earlier wall-clock version compared a two-load run against a
-single-load baseline and flaked whenever CPU contention made two simultaneous
-node spawns cost more than the one the baseline measured.
+The concurrency test asserts on the two promises' **states**, never on elapsed
+time. A wall-clock version of it compares a two-load run against a single-load
+baseline and flakes whenever CPU contention makes two simultaneous node spawns
+cost more than the one the baseline measured.
 
 Tests that touch MCP drive the interpreter with `runAsync` (or `evAsync` from
 `test/helpers.ts`); `runSync` raises `cannot suspend` the moment a tool call

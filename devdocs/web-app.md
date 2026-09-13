@@ -169,7 +169,7 @@ case — the body itself becomes the middle dot.
   uniform bar, since its width was measured for a lean.
 - **`eyeScale={1.29}`** is just under the ceiling `@repo/bloub` locks (1.3 on
   `carre`, across the gaze envelope for all sixteen expressions). `surpris` — the
-  widest, and now the resting face — is what sets it: at 1.45 the two eyes meet
+  widest, and the resting face — is what sets it: at 1.45 the two eyes meet
   and leave the silhouette.
 
 The gaze goes through `gaze` rather than `aim` when looking up, because the engine

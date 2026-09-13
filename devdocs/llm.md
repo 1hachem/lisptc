@@ -18,40 +18,42 @@ is part of that claim: `@modelcontextprotocol/sdk` for MCP, `dotenv` for
 secrets, nothing else. LangChain pulls the OpenAI SDK and its transitive tree
 behind it, which is a lot of surface for a package the LSP, the MCP server and
 every test import. Because an extension is just `(interp) => void` and attaches
-through `def` / hooks / channels, moving it out cost nothing but import paths:
-`@repo/llm` depends on `@repo/interpreter`, never the other way round, and the
-"extensions do not cross-import each other" rule is now a fact of the package
-graph rather than a convention.
+through `def` / hooks / channels, living outside the interpreter costs nothing
+but import paths: `@repo/llm` depends on `@repo/interpreter`, never the other way
+round, so the "extensions do not cross-import each other" rule is a fact of the
+package graph rather than a convention.
 
-What the move needed from the core was two exports it should have had anyway:
+It needs two exports from the core:
 `./plist` (the keyword-argument parser three extensions use) and the
-`arrayToList` / `listToArray` pair, which had been copied into four modules.
+`arrayToList` / `listToArray` pair, which every extension needs and no
+extension should carry its own copy of.
 
 ### The LangChain import is lazy, and that is load-bearing
 
-Moving the package did not by itself move the weight. `modelFacingExtensions()`
-installs `llmExtension()` for every host, so a static
-`import { ChatOpenAI } from "@langchain/openai"` in `llm-client.ts` made the LSP,
-the MCP server, the CLI and every REPL test load LangChain and the OpenAI SDK at
-startup, whether or not a model was ever called. Measured on a warm dev machine:
-importing `@repo/repl/repl` went from 204ms to 462ms, all of it that one import.
+Living in its own package does not by itself move the weight.
+`modelFacingExtensions()` installs `llmExtension()` for every host, so a static
+`import { ChatOpenAI } from "@langchain/openai"` in `llm-client.ts` makes the
+LSP, the MCP server, the CLI and every REPL test load LangChain and the OpenAI
+SDK at startup, whether or not a model is ever called. Measured on a warm dev
+machine, that is importing `@repo/repl/repl` at 462ms instead of 204ms, all of it
+that one import.
 
 So `llm-client.ts` holds only **type** imports of LangChain, which erase, and
 `chatModel()` does `await import("@langchain/openai")` on the first real call.
-`langchainGenerate` was already async, so nothing in the API changed. The
+`langchainGenerate` is async anyway, so the lazy load costs the API nothing. The
 message-to-LangChain seam sits in its own module (`langchain.ts`) for the same
 reason: `packages/ai` needs it eagerly, this package does not.
 
-That regression is what broke CI, and it broke it somewhere unrelated:
-`packages/ai/test/stream.test.ts` mocks `agent.ts`, which used to be the only
-path to the OpenAI SDK, so its first test paid the new import inside its own 5s
-timeout and went from 4773ms to 5232ms. Keep the load lazy, and keep an eye on
-anything that adds a static import under `MemoryRepl`.
+A static import breaks CI somewhere unrelated: `packages/ai/test/stream.test.ts`
+mocks `agent.ts`, the one path that pulls the OpenAI SDK eagerly, so its first
+test pays the load inside its own 5s timeout and goes from 4773ms to 5232ms.
+Keep the load lazy, and keep an eye on anything that adds a static import under
+`MemoryRepl`.
 
 The same trap caught `test/llm-client.test.ts`: its first case pays the import
 and the other three run warm, so on a loaded machine that one case alone crossed
 the 5s timeout (measured: 320ms idle, 1027ms with every core busy, and a whole
-file ten times its usual duration on the run that failed). Its `beforeAll` now
+file ten times its usual duration on the run that failed). Its `beforeAll`
 does `await import("@langchain/openai")` after importing `llm.ts`, so the cost
 lands in the hook's larger budget and each test times only its own request. Any
 new test file that calls a model first thing wants the same line.

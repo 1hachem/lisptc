@@ -45,12 +45,13 @@ follow whitespace: prose punctuation that happens to touch a form
 
 Every value that cannot be read back prints that way — a promise, a secret, a
 closure, a built-in — so a `#<…>` in source is *always* a retyped printout.
-Left as an ordinary symbol it failed one step later as `void variable: #<promise`,
-which named neither the mistake nor the fix. `readToken` raises an
-`EvalException` (not a `FormatException`) because that is the error every layer
-above already renders inline as a syntax error.
+Left as an ordinary symbol it fails one step later as `void variable: #<promise`,
+naming neither the mistake nor the fix. `readToken` raises an `EvalException`
+(not a `FormatException`) because that is the error every layer above already
+renders inline as a syntax error.
 
-Four negative survey reports in two days were an agent typing a promise's printed form back.
+An agent typing a promise's printed form back cost four negative survey reports
+in two days, which is what the refusal is worth.
 
 ### `readFailure` reports only parse failures
 
@@ -76,10 +77,10 @@ middleware 0 on the outside.
 `evalForm` deliberately wraps one **top-level** form, not the recursive
 `Interp.eval`, which runs per subexpression.
 
-**Channels** (`channels.ts`) are for *reporting*. The core grew this by hand
-three times before it was one abstraction: the module-level writer behind
-`prin1`/`princ`, the prose skip notes threaded out as a callback, and errors
-thrown for a host to catch and render.
+**Channels** (`channels.ts`) are for *reporting*. One abstraction covers the
+three things the core has to say: printed output (the module-level writer behind
+`prin1`/`princ`), prose skip notes, and errors a host renders. Each is otherwise
+its own bespoke callback threaded out by hand.
 
 Two axes, kept apart on purpose:
 
@@ -136,10 +137,10 @@ delegating. Creating a generator to read a variable was most of the cost: with
 the check, the argument loop allocates nothing for the common case.
 
 For the same reason the **call protocol lives in `evalGen`**, not in the `Func`
-classes. `Func.evalFrame`, `Closure.makeEnv` and `BuiltInFunc.evalWith` used to
-own it, and each added a generator (and two JS stack frames) per Lisp call. A
-builtin call now costs **zero** generator frames: `BuiltInFunc.call` is a plain
-method, and only a builtin declared with `defGen` goes through `callGen`.
+classes. A `Func` method that owns part of it adds a generator, and two JS stack
+frames, to every Lisp call. Here a builtin call costs **zero** generator frames:
+`BuiltInFunc.call` is a plain method, and only a builtin declared with `defGen`
+goes through `callGen`.
 
 ### A promise a builtin returns is the core's to track
 
@@ -161,21 +162,21 @@ whole compile path a generator would cost every call site for that.
 
 ### What generators cost, measured
 
-`pnpm --filter @repo/interpreter bench` is the gate. Against the pre-generator
-evaluator on one dev machine:
+`pnpm --filter @repo/interpreter bench` is the gate. On one dev machine:
 
-| case | before | after |
-| --- | --- | --- |
-| 300k tail-recursive calls | 361 ms | 467 ms |
-| 300k `dotimes` iterations | 674 ms | 950 ms |
-| non-tail `cons` recursion depth | 5624 | 3366 |
-| non-tail arithmetic recursion depth | 3183 | 3366 |
+| case | cost |
+| --- | --- |
+| 300k tail-recursive calls | 467 ms |
+| 300k `dotimes` iterations | 950 ms |
+| non-tail `cons` recursion depth | 3366 |
+| non-tail arithmetic recursion depth | 3366 |
 
-A generator frame is bigger than a call frame, so **recursion depth is the real
-cost**, not speed. Prelude `mapcar`, `_append` and `assoc` recurse once per
-element, so the depth number is the longest list they can walk. It scales
-linearly with `--stack-size`: 4000 buys about 5300 frames, 8000 about 10700, if
-a host ever needs the old headroom back.
+Speed is about 40% off what a plain recursive evaluator does, but a generator
+frame is bigger than a call frame, so **recursion depth is the real cost**.
+Prelude `mapcar`, `_append` and `assoc` recurse once per element, so the depth
+number is the longest list they can walk. It scales linearly with
+`--stack-size`: 4000 buys about 5300 frames, 8000 about 10700, if a host needs
+more headroom.
 
 ## Evaluator traps
 
