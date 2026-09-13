@@ -23,7 +23,7 @@ describe("provider names", () => {
 			"gemma-4-31B-it",
 		);
 		expect(() => providerSpecFor("nowhere", SPECS)).toThrow(
-			/unknown provider "nowhere", expected one of digitalocean, fireworks, llamacpp, openrouter/,
+			/unknown provider "nowhere", expected one of digitalocean, fireworks, openrouter/,
 		);
 	});
 });

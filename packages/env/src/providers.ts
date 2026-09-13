@@ -19,9 +19,6 @@ const providersEnv = createEnv({
 			.url()
 			.default("https://api.fireworks.ai/inference/v1"),
 		FIREWORKS_MODEL: z.string().default("accounts/fireworks/models/kimi-k3"),
-		LLAMACPP_API_KEY: z.string().default("llama.cpp"),
-		LLAMACPP_BASE_URL: z.url().default("http://127.0.0.1:8080/v1"),
-		LLAMACPP_MODEL: z.string().default("gemma-4-E4B-it"),
 		OPENROUTER_API_KEY: z.string().optional(),
 		OPENROUTER_BASE_URL: z.url().default("https://openrouter.ai/api/v1"),
 		OPENROUTER_MODEL: z.string().default("google/gemma-4-31b-it"),
@@ -51,12 +48,6 @@ export const providerSpecs: Record<ProviderName, ProviderSpec> = {
 		...key("FIREWORKS_API_KEY"),
 		baseUrl: providersEnv.FIREWORKS_BASE_URL,
 		defaultModel: providersEnv.FIREWORKS_MODEL,
-	},
-	llamacpp: {
-		label: "the local llama-server",
-		...key("LLAMACPP_API_KEY"),
-		baseUrl: providersEnv.LLAMACPP_BASE_URL,
-		defaultModel: providersEnv.LLAMACPP_MODEL,
 	},
 	openrouter: {
 		label: "OpenRouter",

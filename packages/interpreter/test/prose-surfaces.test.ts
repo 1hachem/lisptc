@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { LISP_GRAMMAR } from "../src/grammar.ts";
 import { checkSyntax } from "../src/lisp.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
-import { accepts, parseGrammar } from "./gbnf.ts";
 import { ev } from "./helpers.ts";
 
 const REPLIES: [source: string, value: string][] = [
@@ -21,12 +19,6 @@ const REPLIES: [source: string, value: string][] = [
 ];
 
 describe("prose is allowed on every surface the model meets", () => {
-	const grammar = parseGrammar(LISP_GRAMMAR);
-
-	it.each(REPLIES)("the GBNF lets the model write %j", (source) => {
-		expect(accepts(grammar, source)).toBe(true);
-	});
-
 	it.each(REPLIES)("the reader finds no syntax error in %j", (source) => {
 		expect(checkSyntax(source)).toEqual([]);
 	});
@@ -47,12 +39,6 @@ describe("the language reference teaches prose", () => {
 
 	it("says there is no comment syntax", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/there is no comment syntax/i);
-	});
-
-	it("says prose cannot hold a < or a [", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(
-			/prose cannot hold a less-than sign or an opening square bracket/i,
-		);
 	});
 });
 

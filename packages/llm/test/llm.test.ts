@@ -19,7 +19,11 @@ type Reply = (req: LlmRequest) => LlmResult | string;
 
 const PROVIDERS = [
 	{ name: "digitalocean", model: "gemma-4-31B-it", ready: true },
-	{ name: "llamacpp", model: "gemma-4-E4B-it", ready: false },
+	{
+		name: "fireworks",
+		model: "accounts/fireworks/models/kimi-k3",
+		ready: false,
+	},
 ];
 
 function llmInterp(reply: Reply = () => "ok") {
@@ -126,11 +130,11 @@ describe("*llm-defaults* and with-llm", () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			`(setq *llm-defaults* (list :provider :llamacpp :max-tokens 50))
+			`(setq *llm-defaults* (list :provider :fireworks :max-tokens 50))
 			 (llm/complete "one")
 			 (llm/complete "two" :max-tokens 500)`,
 		);
-		expect(seen[0].provider).toBe("llamacpp");
+		expect(seen[0].provider).toBe("fireworks");
 		expect(seen[0].maxTokens).toBe(50);
 		expect(seen[1].maxTokens).toBe(500);
 	});
@@ -405,10 +409,10 @@ describe("the summarization macros", () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			'(summarize "text" :words 30 :max-tokens 15 :provider :llamacpp)',
+			'(summarize "text" :words 30 :max-tokens 15 :provider :fireworks)',
 		);
 		expect(seen[0].maxTokens).toBe(15);
-		expect(seen[0].provider).toBe("llamacpp");
+		expect(seen[0].provider).toBe("fireworks");
 	});
 
 	it("summarizes every element of a list, in order", async () => {
@@ -481,11 +485,11 @@ describe("llm/answer", () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			'(llm/answer "q" "ctx" :words 10 :provider :llamacpp :temperature 0.0)',
+			'(llm/answer "q" "ctx" :words 10 :provider :fireworks :temperature 0.0)',
 		);
 		expect(seen[0].messages[0].content).toContain("at most 10 words");
 		expect(seen[0]).toMatchObject({
-			provider: "llamacpp",
+			provider: "fireworks",
 			temperature: 0,
 			maxTokens: 40,
 		});
@@ -502,7 +506,7 @@ describe("llm/providers", () => {
 	it("reports each provider, its default model and whether it is usable", async () => {
 		const { interp } = llmInterp();
 		expect(await evalStr(interp, "(llm/providers)")).toBe(
-			'((:digitalocean "gemma-4-31B-it" :ready) (:llamacpp "gemma-4-E4B-it" :no-api-key))',
+			'((:digitalocean "gemma-4-31B-it" :ready) (:fireworks "accounts/fireworks/models/kimi-k3" :no-api-key))',
 		);
 	});
 });
@@ -535,7 +539,7 @@ describe("the observer", () => {
 	it("reports one call, with what answered it and what it cost", async () => {
 		const { interp, traced } = llmInterp(() => ({
 			text: "hello there",
-			provider: "llamacpp",
+			provider: "fireworks",
 			model: "a-small-one",
 			inputTokens: 11,
 			outputTokens: 7,
@@ -544,7 +548,7 @@ describe("the observer", () => {
 		expect(traced).toHaveLength(1);
 		expect(traced[0]).toMatchObject({
 			builtin: "llm/complete",
-			provider: "llamacpp",
+			provider: "fireworks",
 			model: "a-small-one",
 			messages: [{ role: "user", content: "greet me" }],
 			structured: false,

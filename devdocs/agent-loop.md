@@ -1,8 +1,8 @@
 # The agent loop
 
 `packages/ai`, plus the two `apps/api` routes that drive it. The agent has **no
-tools**: the model is grammar-constrained so every reply IS a Lisptc program, the
-program is evaluated, and the REPL's output is fed back as the next turn's input.
+tools**: every reply IS a Lisptc program, the program is evaluated, and the
+REPL's output is fed back as the next turn's input.
 
 ```
 model turn (text = a Lisp program)
@@ -134,57 +134,24 @@ A thrown error from `evalCode` means an unexpected *host* error — the REPL ren
 Lisp errors into its output rather than throwing — so the interpreter is reset to
 avoid persisting corrupt state.
 
-## Providers and grammars
+## Providers
 
-Constraining generation is the point of this package: an unconstrained model
-emits prose the REPL cannot evaluate. So a provider is grammar-constrained unless
-its spec says otherwise, and `grammarResponseFormat` — the spelling shared by the
-OpenAI-compatible providers that implement grammars at all — is the default.
+Nothing constrains the decoder: a reply stays on-dialect by the system prompt
+plus the chat loop's `checkSyntax` repair pass, and the interpreter's prose
+tolerance (`proseExtension`) absorbs the sentences a model writes around its
+forms. That is the same surface every backend gets, so a provider spec carries
+only the differences that are real:
 
-Each backend spells it differently, and each difference was measured:
-
-| backend | grammar | why |
+| backend | body | why |
 | --- | --- | --- |
-| **Fireworks** | default `response_format` | grammar output and `reasoning_effort` are Fireworks extensions to the OpenAI body |
-| **llama.cpp** | top-level `grammar` (`gbnfBody`) | `llama-server`'s chat endpoint implements `response_format` only for `json_object`/`json_schema` and **raises** on a type it doesn't know. No `reasoning_effort` — gemma has no thinking channel. It ignores the API key, but `ChatOpenAI` insists on a non-empty one. |
-| **OpenRouter** | default, rides through | it has no grammar field of its own: it forwards unknown body params upstream and silently drops the ones that provider doesn't accept, so the default takes effect only where the routed provider understands it — which is why the spec's `body` pins routing to one upstream (see `devdocs/llm.md`) |
-| **DigitalOcean** | `null` — none | no grammar reaches the vLLM behind the gateway, whichever spelling is tried: `structured_outputs` (vLLM's current field) comes back "not a supported request field", a grammar `response_format` 400s against vLLM's closed union, and the pre-0.12 `guided_grammar` has no effect. Replies stay on-dialect by system prompt plus the chat loop's `checkSyntax` repair pass. |
+| **Fireworks** | `reasoning_effort`, default `low` | a Fireworks extension to the OpenAI body |
+| **OpenRouter** | `body` pins routing to one upstream | it forwards unknown body params upstream and silently drops the ones that provider doesn't accept, so an unpinned route makes two runs incomparable (see `devdocs/llm.md`) |
+| **DigitalOcean** | nothing beyond the defaults | the vLLM behind the gateway takes the plain OpenAI body |
 
-Under a grammar the model can satisfy the constraint by looping on whitespace
-forever, so a mild `repeatPenalty` is on by default (1 disables it). `repeatLastN`
-is left unset so llama.cpp's own default (64) stands.
+A model can loop on whitespace forever, so a mild `repeatPenalty` is on by
+default (1 disables it).
 
 Adding a provider: one file in `provider/`, one entry in `registry.ts`.
-
-## Warming llama.cpp's KV cache
-
-Only llama.cpp has a local KV slot to prime; a hosted provider has none, and
-leaving the warm status at `"pending"` would lock the app's composer forever.
-
-The system prompt is ~21.8k chars and takes **minutes** to evaluate on CPU, during
-which no response bytes flow — which trips fetch's (undici) header and body
-timeouts. Hence `node:http` with every socket timeout disabled, rather than
-`fetch`.
-
-`llama-server` persists the KV itself under `--slot-save-path`, in a file named
-after the prompt's content hash: edit the prompt and the old file is simply never
-asked for, so a stale cache cannot be restored. gemma also needs `--swa-full`, or
-its sliding-window attention discards the prefix KV and there is nothing reusable
-to save. The cache file is never `stat`ed — the server is asked to restore it and
-allowed to answer, which keeps this working when `llama-server` is not on the same
-host.
-
-`ensureWarm` is **single-flight and memoized**: startup kicks it off and the chat
-handler awaits the same promise. That gate matters — `llama-server` runs
-`--parallel 1`, so a request landing mid-warm would queue ahead of the slot save
-and get its own conversation persisted as the "system prompt" cache. It never
-rejects: a cold cache is slow, not broken.
-
-Slot files are hundreds of MB each, so stale ones are pruned best-effort — the
-directory is a `llama-server` flag and may not be visible from here at all.
-
-`/health` and `/slots` live at the server root; only completions sit under the
-base URL's `/v1` path.
 
 ## The API's CORS list is load-bearing
 
@@ -203,8 +170,8 @@ The `x-posthog-*` pair is added by posthog-js `tracing_headers` — both of them
 though only the session id is read — so omitting them breaks the chat itself and
 not merely the telemetry riding along with it.
 
-The middleware is mounted on `*`, not `/api/*`, because the app polls `/health`
-to know when the KV warmup is done.
+The middleware is mounted on `*`, not `/api/*`, so `/health` answers the app
+with the same CORS headers as the chat route.
 
 ## The system prompt is the whole contract
 
@@ -212,11 +179,9 @@ to know when the KV warmup is done.
 the model gets, and `test/prompt.test.ts` pins every rule that had to be learned
 the hard way:
 
-- **The text around the forms is skipped, not evaluated**, and prose cannot hold
-  a `<` or a `[`. Without these the model falls back on Common Lisp habits it was
-  trained on — `;` comments and bare top-level atoms — both of which this dialect
-  reads as something else entirely, and every model family brackets a thinking
-  channel with `<` or `[`.
+- **The text around the forms is skipped, not evaluated.** Without this the model
+  falls back on Common Lisp habits it was trained on — `;` comments and bare
+  top-level atoms — both of which this dialect reads as something else entirely.
 - **The REPL prints nothing on its own.** Invisible unless stated: a model that
   is not told waits for values it will never be shown, and keeps retyping data it
   could have referred to by name.

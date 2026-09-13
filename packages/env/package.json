@@ -5,7 +5,6 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./ai": "./src/ai.ts",
     "./analytics": "./src/analytics.ts",
     "./api": "./src/api.ts",
     "./evals": "./src/evals.ts",

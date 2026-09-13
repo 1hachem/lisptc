@@ -11,7 +11,6 @@ const INTERPRETER_SRC = new URL(
 
 const RUNTIME_ASSETS = [
 	new URL("SKILL.ptc", INTERPRETER_SRC),
-	new URL("lisptc.gbnf", INTERPRETER_SRC),
 	new URL(import.meta.resolve("@repo/mcp/mcp.toolkit.json")),
 ];
 

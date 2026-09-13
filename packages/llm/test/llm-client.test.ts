@@ -64,7 +64,8 @@ function neverAnswers(
 }
 
 beforeAll(async () => {
-	process.env.LLAMACPP_BASE_URL = "http://llamacpp.test/v1";
+	process.env.FIREWORKS_API_KEY = "test-key";
+	process.env.FIREWORKS_BASE_URL = "http://fireworks.test/v1";
 	llmExtension = (await import("../src/llm.ts")).llmExtension;
 	await import("@langchain/openai");
 });
@@ -85,12 +86,12 @@ describe("the langchain client against a stubbed fetch", () => {
 		const interp = clientInterp();
 		const reply = await runAsync(
 			interp,
-			'(llm/complete "hi" :provider :llamacpp :max-tokens 32)',
+			'(llm/complete "hi" :provider :fireworks :max-tokens 32)',
 		);
 		expect(str(reply.value)).toBe('"{\\"words\\":[\\"one\\",\\"two\\"]}"');
-		expect(seen.at(-1)?.url).toBe("http://llamacpp.test/v1/chat/completions");
+		expect(seen.at(-1)?.url).toBe("http://fireworks.test/v1/chat/completions");
 		expect(seen.at(-1)?.body).toMatchObject({
-			model: "gemma-4-E4B-it",
+			model: "accounts/fireworks/models/kimi-k3",
 			stream: false,
 			max_tokens: 32,
 			messages: [{ role: "user", content: "hi" }],
@@ -102,7 +103,7 @@ describe("the langchain client against a stubbed fetch", () => {
 		const interp = clientInterp();
 		const value = await runAsync(
 			interp,
-			'(llm/extract "one and two" (list (cons "words" (list :list :string))) :provider :llamacpp)',
+			'(llm/extract "one and two" (list (cons "words" (list :list :string))) :provider :fireworks)',
 		);
 		expect(str(value.value)).toBe('(("words" "one" "two"))');
 		expect(seen.at(-1)?.body.response_format).toEqual({
@@ -133,7 +134,7 @@ describe("the langchain client against a stubbed fetch", () => {
 		stubFetch(neverAnswers);
 		const interp = clientInterp();
 		await expect(
-			runAsync(interp, '(llm/complete "hi" :provider :llamacpp :timeout 100)'),
+			runAsync(interp, '(llm/complete "hi" :provider :fireworks :timeout 100)'),
 		).rejects.toThrow(/llm timed out/);
 	});
 });

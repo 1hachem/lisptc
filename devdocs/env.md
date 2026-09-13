@@ -31,10 +31,7 @@ on the schema key rather than a `?? "..."` at the point of use, so `DO_MODEL` ha
 exactly one fallback. And `apiKeyEnv`, the variable name a "please set your key"
 error prints, is *the schema key itself* (`key("DO_API_KEY")`, typed against
 `keyof typeof providersEnv`): a rename of the variable that misses the error
-message is a type error rather than a wrong instruction to the user. `llamacpp`
-has no real key, so `LLAMACPP_API_KEY` defaults to `"llama.cpp"` — the local server
-accepts anything — which keeps it on the same path as the other three instead of a
-special case.
+message is a type error rather than a wrong instruction to the user.
 
 ## The import-time snapshot, and what it costs tests
 
@@ -59,9 +56,9 @@ graph, `@repo/env` included, has been evaluated. `packages/mcp` and
 
 The other way out is a dynamic `import()` after the variables are set —
 `packages/evals/test/runner.test.ts` points a provider at a local stub server
-that way, and `packages/llm/test/llm-client.test.ts` pins one at an unroutable
-host (`http://llamacpp.test/v1`) so the URL it asserts on is fixed and a stub
-that failed to install cannot reach a real llama-server.
+that way, and `packages/llm/test/llm-client.test.ts` gives Fireworks a stub key
+and an unroutable host (`http://fireworks.test/v1`) so the URL it asserts on is
+fixed and a stub that failed to install cannot reach the real API.
 
 ## The exemptions
 
