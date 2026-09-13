@@ -1,9 +1,17 @@
 import { evalCase } from "@repo/evals/runner";
+import { promisesExtension } from "@repo/interpreter/promises";
+import { proseExtension } from "@repo/interpreter/prose";
 import { linear } from "./fixtures/linear.ts";
 
 evalCase("lists its own linear issues and renders them", {
 	min: 6,
 	max: 12,
+	extensions: ({ mcp, compaction }) => [
+		promisesExtension(),
+		mcp,
+		compaction,
+		proseExtension(),
+	],
 	mocks: { servers: { linear } },
 	seed: [{ user: "list the issues assigned to me in linear" }],
 	checks: `

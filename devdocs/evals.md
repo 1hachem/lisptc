@@ -53,6 +53,22 @@ A report the schema rejects is listed as unreadable with the offending field
 paths, never rendered as a blank or half-filled run — an old report from before
 a shape change should say so, not lie.
 
+## A case picks the language it is run against
+
+`EvalSpec.extensions` is a function from the harness kit — the secrets extension
+bound to the trace's store, the MCP extension wired to the traced mock, the
+compactor — to the list the case's `AgentRepl` is built from; the runner appends
+the recorder itself, so a case never has to remember it. Omitting the field gives
+the full model-facing language.
+
+Two things follow from a case naming three extensions instead of six. The REPL
+has only those built-ins, so a check on a language the case did not ask for fails
+loudly rather than passing by accident. And the system prompt is
+`systemPromptFor(repl.interp)` — the sections of the extensions that are actually
+installed — so a browsing case is not paying for the language-model section, and
+a regression in the MCP section cannot be masked by a case that never loads a
+server.
+
 ## What is mocked, and what deliberately is not
 
 These evals measure the agent's logic, not the REPL's functionality, which has

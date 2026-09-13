@@ -1,10 +1,18 @@
 import { evalCase } from "@repo/evals/runner";
+import { promisesExtension } from "@repo/interpreter/promises";
+import { proseExtension } from "@repo/interpreter/prose";
 import { linear } from "./fixtures/linear.ts";
 import { playwright } from "./fixtures/playwright.ts";
 
 evalCase("navigates to hyko.ai by the book", {
 	min: 5,
 	max: 10,
+	extensions: ({ mcp, compaction }) => [
+		promisesExtension(),
+		mcp,
+		compaction,
+		proseExtension(),
+	],
 	mocks: { servers: { playwright } },
 	seed: [{ user: "navigate to hyko.ai" }],
 	checks: `
@@ -31,6 +39,12 @@ evalCase("navigates to hyko.ai by the book", {
 evalCase("finds a browser, loads it, and opens the page", {
 	min: 4,
 	max: 12,
+	extensions: ({ mcp, compaction }) => [
+		promisesExtension(),
+		mcp,
+		compaction,
+		proseExtension(),
+	],
 	mocks: { servers: { playwright, linear } },
 	seed: [{ user: "open hyko.ai and tell me the main heading" }],
 	checks: `
