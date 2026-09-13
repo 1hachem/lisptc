@@ -1,4 +1,6 @@
+import { mockedMcpExtension } from "@repo/evals/mocks";
 import { evalCase } from "@repo/evals/runner";
+import { compactionExtension } from "@repo/interpreter/compaction";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { linear } from "./fixtures/linear.ts";
@@ -6,10 +8,10 @@ import { linear } from "./fixtures/linear.ts";
 evalCase("lists its own linear issues and renders them", {
 	min: 6,
 	max: 12,
-	extensions: ({ mcp, compaction }) => [
+	extensions: () => [
 		promisesExtension(),
-		mcp,
-		compaction,
+		mockedMcpExtension(),
+		compactionExtension(),
 		proseExtension(),
 	],
 	mocks: { servers: { linear } },

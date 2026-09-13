@@ -1,5 +1,47 @@
 import { randomUUID } from "node:crypto";
+import type { InterpExtension } from "@repo/interpreter/lisp";
+import {
+	type SecretsExtension,
+	type SecretsStore,
+	secretsExtension,
+} from "@repo/interpreter/secrets";
+import { mcpExtension } from "@repo/mcp";
 import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/client";
+import type { Trace } from "./trace.ts";
+
+export interface EvalRun {
+	trace: Trace;
+	mocks: MockSpec;
+	secrets: SecretsStore;
+}
+
+let current: EvalRun | undefined;
+
+export function withRun<T>(run: EvalRun, build: () => T): T {
+	current = run;
+	try {
+		return build();
+	} finally {
+		current = undefined;
+	}
+}
+
+function run(what: string): EvalRun {
+	if (!current)
+		throw new Error(
+			`${what} is only available inside an eval case's extensions list`,
+		);
+	return current;
+}
+
+export function mockedMcpExtension(): InterpExtension {
+	const { trace, mocks } = run("mockedMcpExtension()");
+	return mcpExtension({ client: trace.client(mockClient(mocks)) });
+}
+
+export function tracedSecretsExtension(): SecretsExtension {
+	return secretsExtension({ store: run("tracedSecretsExtension()").secrets });
+}
 
 export interface MockTool {
 	name: string;
