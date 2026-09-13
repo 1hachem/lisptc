@@ -7,8 +7,7 @@
     "./repl": "./src/repl.ts",
     "./extensions": "./src/extensions.ts",
     "./session-server": "./src/session-server.ts",
-    "./cli": "./src/cli.ts",
-    "./package.json": "./package.json"
+    "./cli": "./src/cli.ts"
   },
   "engines": {
     "node": ">=22.6.0"

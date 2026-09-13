@@ -1,4 +1,5 @@
 import { cn } from "@repo/ui/lib/utils";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Role, Score, Tone } from "@/lib/reports.ts";
 
@@ -70,6 +71,47 @@ export function Tags({ children }: { children: ReactNode }) {
 export function Tag({ children }: { children: ReactNode }) {
 	return (
 		<span className="bg-bg2 px-2 py-px text-[11.5px] text-dim">{children}</span>
+	);
+}
+
+export function Chip({
+	href,
+	active,
+	children,
+}: {
+	href: string;
+	active: boolean;
+	children: ReactNode;
+}) {
+	return (
+		<Link
+			className={cn(
+				"border px-2 py-px text-[11.5px] transition-colors",
+				active
+					? "border-orange/50 bg-orange/10 text-orange"
+					: "border-bg2 text-dim hover:border-dim/50 hover:text-fg",
+			)}
+			href={href}
+		>
+			{children}
+		</Link>
+	);
+}
+
+export function ChipRow({
+	label,
+	children,
+}: {
+	label: string;
+	children: ReactNode;
+}) {
+	return (
+		<div className="flex flex-wrap items-baseline gap-1.5">
+			<span className="w-[46px] shrink-0 text-[11px] text-dim uppercase tracking-[0.14em]">
+				{label}
+			</span>
+			{children}
+		</div>
 	);
 }
 

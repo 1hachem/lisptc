@@ -6,7 +6,7 @@ import {
 	PITCH_MAX,
 	YAW_MAX,
 } from "@repo/bloub";
-import { Typewriter } from "@repo/ui";
+import { Typewriter } from "@repo/components";
 import { useCallback, useEffect, useRef } from "react";
 import { type Utterance, useAgent } from "../lib/agent.tsx";
 import { usePrefersReducedMotion } from "../lib/motion.ts";

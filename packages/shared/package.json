@@ -5,7 +5,6 @@
   "private": true,
   "exports": {
     "./messages": "./src/messages.ts",
-    "./package.json": "./package.json",
     "./providers": "./src/providers.ts"
   },
   "engines": {

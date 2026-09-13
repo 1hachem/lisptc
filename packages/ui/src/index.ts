@@ -1,11 +1,6 @@
 export * from "./components/ai-elements/conversation.tsx";
 export * from "./components/ai-elements/prompt-input.tsx";
 export * from "./components/ai-elements/suggestion.tsx";
-export {
-	Typewriter,
-	type TypewriterProps,
-	useTypewriter,
-} from "./components/typewriter.tsx";
 export { Button, buttonVariants } from "./components/ui/button.tsx";
 export { Input } from "./components/ui/input.tsx";
 export * from "./components/ui/sidebar.tsx";

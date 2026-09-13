@@ -6,8 +6,7 @@
   "exports": {
     "./client": "./src/llm-client.ts",
     "./langchain": "./src/langchain.ts",
-    "./llm": "./src/llm.ts",
-    "./package.json": "./package.json"
+    "./llm": "./src/llm.ts"
   },
   "engines": {
     "node": ">=22.6.0"

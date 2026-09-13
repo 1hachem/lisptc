@@ -39,6 +39,10 @@
       "entry": ["src/**/*.test.{ts,tsx}"],
       "project": ["src/**/*.{ts,tsx}"]
     },
+    "packages/components": {
+      "entry": ["src/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
     "packages/env": {
       "project": ["src/**/*.ts"]
     },

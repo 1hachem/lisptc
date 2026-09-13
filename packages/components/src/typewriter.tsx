@@ -1,5 +1,5 @@
+import { cn } from "@repo/ui/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "../lib/utils.ts";
 
 export type Reveal = "char" | "token";
 

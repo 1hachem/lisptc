@@ -13,6 +13,6 @@ export default defineConfig({
 		nitro({ serverDir: "server" }),
 	],
 	optimizeDeps: {
-		exclude: ["@repo/ui"],
+		exclude: ["@repo/components", "@repo/ui"],
 	},
 });

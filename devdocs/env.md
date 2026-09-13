@@ -88,3 +88,36 @@ reachable only by their own subpath for that reason, and `infisical-run.ts` goes
 further and `import()`s its module inside the command handler, so `--help` still
 works with no credentials. `mcps/errors.ts` and `errors.ts` shape those failures
 into a sentence that says which variable is missing and which `task` supplies it.
+
+## The Taskfile
+
+`Taskfile.yml` is where a variable meets the secret that fills it: every task
+that needs one wraps its command in `_infisical-run`, which fetches the named
+Infisical paths and spawns the command with them in its environment. It carries
+no comments, so the reasons live here.
+
+**`_infisical-run` spawns `node` directly, not `pnpm tsx`.** pnpm exits 130 on
+the Ctrl-C that reaches the whole process group, so every ordinary shutdown of a
+dev server would be reported as a failed task. Running the script as task's own
+child makes the exit code task sees the command's own.
+
+**A build runs under the same secrets as the serve it feeds.** `start:app` and
+`evals:open` each run `pnpm build && pnpm start` inside one `_infisical-run`,
+because `VITE_*` and `NEXT_PUBLIC_*` are substituted at build time: a value
+missing then is missing for good, and the page renders with the feature silently
+absent rather than with an error. `turbo.json`'s `build` task lists both
+prefixes in its `env` for the same reason — with `envMode: "loose"` and no such
+list, two builds under different keys hash identically and turbo restores the
+wrong bundle from its cache.
+
+**`ENV` is a variable on every serving task**, so `ENV=prod task start:app`
+serves against another Infisical environment without a second task.
+
+**`mcp:ocr` and `mcp:sheets` exist for the interpreter, not for a human.** Both
+toolkit entries in `mcp.toolkit.json` name the task as their `command`, so
+`(load-mcp "ocr")` starts the server itself with its secrets already loaded.
+See [the bundled MCP servers](./mcp-toolkit.md).
+
+**`test:nix` re-runs `nix build` and `nix log` after `nix flake check`.** A
+cached check prints nothing, so the stored ptcfmt summary is fetched back
+explicitly and the pass count is always visible.
