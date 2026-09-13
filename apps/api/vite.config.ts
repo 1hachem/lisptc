@@ -1,26 +1,23 @@
-import { copyFileSync } from "node:fs";
+import { copyFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import devServer from "@hono/vite-dev-server";
 import { serverEnv } from "@repo/env/server";
 import { defineConfig, type Plugin } from "vite";
 
-const INTERPRETER_SRC = new URL(
-	".",
+const PROMPT_SOURCES = [
 	import.meta.resolve("@repo/interpreter/source"),
-);
+	import.meta.resolve("@repo/mcp"),
+	import.meta.resolve("@repo/llm/llm"),
+].map((entry) => new URL(".", entry));
 
-const PROMPT_FILES = [
-	"SKILL.ptc",
-	"compaction.ptc",
-	"promises.ptc",
-	"prose.ptc",
-	"secrets.ptc",
-];
+function promptFiles(dir: URL): URL[] {
+	return readdirSync(dir)
+		.filter((name) => name.endsWith(".ptc"))
+		.map((name) => new URL(name, dir));
+}
 
 const RUNTIME_ASSETS = [
-	...PROMPT_FILES.map((name) => new URL(name, INTERPRETER_SRC)),
-	new URL("mcp.ptc", new URL(import.meta.resolve("@repo/mcp"))),
-	new URL("llm.ptc", new URL(import.meta.resolve("@repo/llm/llm"))),
+	...PROMPT_SOURCES.flatMap(promptFiles),
 	new URL(import.meta.resolve("@repo/mcp/mcp.toolkit.json")),
 ];
 
