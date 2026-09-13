@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { isNumeric } from "./arith.ts";
 import {
 	Cell,
@@ -16,10 +17,15 @@ export type ProseClassifier = (
 	form: unknown,
 ) => string | undefined;
 
+const PROMPT: string = readFileSync(
+	new URL("./prose.ptc", import.meta.url),
+	"utf8",
+);
+
 export function proseExtension(
 	classify: ProseClassifier = readsAsProse,
 ): InterpExtension {
-	return (interp) => {
+	const extension = (interp: Interp): void => {
 		interp.hooks.unclosedForm.use(
 			(text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
 		);
@@ -31,6 +37,7 @@ export function proseExtension(
 			(interp, form, next) => classify(interp, form) ?? next(interp, form),
 		);
 	};
+	return Object.assign(extension, { prompt: PROMPT });
 }
 
 function unreadable(

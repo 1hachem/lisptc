@@ -6,8 +6,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { replEnv } from "@repo/env/repl";
-import type { Arity, DocArg } from "@repo/interpreter/lisp";
+import { compactionExtension } from "@repo/interpreter/compaction";
+import type { Arity, DocArg, InterpExtension } from "@repo/interpreter/lisp";
+import { promisesExtension } from "@repo/interpreter/promises";
+import { proseExtension } from "@repo/interpreter/prose";
+import { secretsExtension } from "@repo/interpreter/secrets";
+import { llmExtension } from "@repo/llm/llm";
+import { mcpExtension } from "@repo/mcp";
 import { MemoryRepl } from "./repl.ts";
+
+export function sessionExtensions(): InterpExtension[] {
+	return [
+		secretsExtension(),
+		promisesExtension(),
+		mcpExtension(),
+		llmExtension(),
+		compactionExtension(),
+		proseExtension(),
+	];
+}
 
 export interface CompletionEntry {
 	name: string;
@@ -133,7 +150,7 @@ export async function serve(
 		} catch {}
 	}
 
-	const repl = new MemoryRepl();
+	const repl = new MemoryRepl({ extensions: sessionExtensions() });
 
 	const server = createServer((socket: Socket) => {
 		let buffer = "";

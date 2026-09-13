@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { type Channels, MODEL, USER } from "./channels.ts";
 import {
@@ -814,6 +815,11 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 	return n;
 }
 
+const PROMPT: string = readFileSync(
+	new URL("./compaction.ptc", import.meta.url),
+	"utf8",
+);
+
 export interface CompactionExtension extends InterpExtension {
 	readonly compactor: Compactor;
 }
@@ -823,7 +829,7 @@ export function compactionExtension(
 ): CompactionExtension {
 	return Object.assign(
 		(interp: Interp): void => registerCompaction(interp, compactor),
-		{ compactor },
+		{ compactor, prompt: PROMPT },
 	);
 }
 

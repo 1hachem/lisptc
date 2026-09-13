@@ -19,6 +19,7 @@ import {
 import { AsyncWork } from "./async.ts";
 import { Channels, MODEL, USER } from "./channels.ts";
 import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
+import { LANGUAGE_REFERENCE } from "./source.ts";
 
 function assert(x: boolean, message?: string): asserts x {
 	if (!x) throw new Error(`Assertion Failure: ${message || ""}`);
@@ -31,10 +32,6 @@ export function setWriter(fn: (s: string) => void): (s: string) => void {
 	const prev = write;
 	write = fn;
 	return prev;
-}
-
-export function writeOut(s: string): void {
-	write(s);
 }
 
 export function setExit(fn: (n: number) => void): void {
@@ -525,7 +522,10 @@ export function jsonToLisp(x: unknown): unknown {
 	return String(x);
 }
 
-export type InterpExtension = (interp: Interp) => void;
+export interface InterpExtension {
+	(interp: Interp): void;
+	readonly prompt?: string;
+}
 
 export interface InterpOptions {
 	extensions?: InterpExtension[];
@@ -544,6 +544,8 @@ export class Interp {
 	private readonly importing: Set<string> = new Set();
 
 	private readonly docTable: Map<string, Doc> = new Map();
+
+	private readonly prompts: string[] = [];
 
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);
@@ -1027,7 +1029,14 @@ export class Interp {
 			(a) => this.runLoopBody(a),
 		);
 
-		for (const extension of options.extensions ?? []) extension(this);
+		for (const extension of options.extensions ?? []) {
+			extension(this);
+			if (extension.prompt) this.prompts.push(extension.prompt);
+		}
+	}
+
+	systemPrompt(): string {
+		return [LANGUAGE_REFERENCE, ...this.prompts].join("\n\n");
 	}
 
 	def<T extends z.ZodType>(
@@ -1747,15 +1756,6 @@ export class Reader {
 
 	get line(): number {
 		return this.lineNo;
-	}
-
-	copyFrom(other: Reader): void {
-		this.tokens = other.tokens.slice();
-		this.lineNo = other.lineNo;
-	}
-
-	clear(): void {
-		this.tokens.length = 0;
 	}
 
 	isEmpty(): boolean {

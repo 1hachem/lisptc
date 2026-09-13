@@ -60,6 +60,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@repo/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
@@ -207,6 +210,12 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@repo/repl':
         specifier: workspace:*
         version: link:../../packages/repl
@@ -257,6 +266,9 @@ importers:
       '@repo/evals':
         specifier: workspace:*
         version: link:../../packages/evals
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../../packages/interpreter
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -315,6 +327,9 @@ importers:
       '@repo/llm':
         specifier: workspace:*
         version: link:../llm
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@repo/repl':
         specifier: workspace:*
         version: link:../repl

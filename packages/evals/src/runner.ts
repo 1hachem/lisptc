@@ -1,16 +1,16 @@
 import { writeFileSync } from "node:fs";
 import {
 	evalCode,
-	LISP_SYSTEM_PROMPT,
 	replResultContent,
 	runAgentTurn,
+	systemPromptFor,
 	type TranscriptEntry,
 } from "@repo/ai";
 import { evalsEnv } from "@repo/env/evals";
 import type { ProviderName } from "@repo/shared/providers";
 import { test } from "vitest";
 import { Checks } from "./checks.ts";
-import { tracedRepl } from "./harness.ts";
+import { type ExtensionsFor, tracedRepl } from "./harness.ts";
 import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
 import type { MockSpec } from "./mocks.ts";
 import type {
@@ -42,6 +42,7 @@ export interface EvalSpec {
 	samples?: number;
 	minScore?: number;
 	system?: string;
+	extensions?: ExtensionsFor;
 }
 
 export interface RunResult {
@@ -92,7 +93,10 @@ export async function runCase(
 	spec: EvalSpec,
 	target: Target,
 ): Promise<RunResult> {
-	const { repl, trace } = tracedRepl(spec.mocks ? { mocks: spec.mocks } : {});
+	const { repl, trace } = tracedRepl({
+		...(spec.mocks ? { mocks: spec.mocks } : {}),
+		...(spec.extensions ? { extensions: spec.extensions } : {}),
+	});
 	const checks = new Checks(trace, spec.checks);
 	const transcript: TranscriptEntry[] = [];
 	const seen: TranscriptLine[] = [];
@@ -129,7 +133,7 @@ export async function runCase(
 		config: {
 			provider: target.provider,
 			model: target.model,
-			system: spec.system ?? LISP_SYSTEM_PROMPT,
+			system: spec.system ?? systemPromptFor(repl.interp),
 		},
 	})) {
 		if (event.type === "assistant") {

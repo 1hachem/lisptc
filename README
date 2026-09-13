@@ -45,8 +45,6 @@ editors/nvim           A Neovim plugin: filetype detection, LSP client
 examples/              Runnable .ptc walkthroughs: language basics, macros
                        and closures, MCP usage, and Linear/Playwright over
                        MCP.
-devdocs/               Design notes for internals kept out of code comments:
-                       OAuth for remote MCP servers, the secret registry.
 
 WHAT'S WORKING
 

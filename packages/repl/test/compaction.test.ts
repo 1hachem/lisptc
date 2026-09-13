@@ -1,17 +1,17 @@
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
+import { proseExtension } from "@repo/interpreter/prose";
 import { describe, expect, it } from "vitest";
-import { modelFacingExtensions } from "../src/extensions.ts";
-import { MemoryRepl } from "../src/repl.ts";
+import type { MemoryRepl } from "../src/repl.ts";
+import { memoryRepl } from "./helpers.ts";
 
 const RANGE =
 	"(defun range (n) (let ((out nil)) (dotimes (i n) (setq out (cons i out))) out))";
 
 async function repl(wordLimit = 6): Promise<MemoryRepl> {
-	const r = new MemoryRepl({
-		extensions: modelFacingExtensions({
-			compaction: compactionExtension(new Compactor(wordLimit)),
-		}),
-	});
+	const r = memoryRepl([
+		compactionExtension(new Compactor(wordLimit)),
+		proseExtension(),
+	]);
 	await r.eval(RANGE);
 	return r;
 }
@@ -118,7 +118,7 @@ describe("a slice taken as a step of its own", () => {
 
 describe("a discovery call is read, not described", () => {
 	it("prints what the toolkit search found", async () => {
-		const r = new MemoryRepl();
+		const r = memoryRepl();
 		const out = await r.eval('(search-mcps "browser")');
 		expect(out).toContain("playwright");
 		expect(out).toContain("Chromium");
@@ -126,14 +126,14 @@ describe("a discovery call is read, not described", () => {
 	});
 
 	it("prints the toolkit listing the same way", async () => {
-		const r = new MemoryRepl();
+		const r = memoryRepl();
 		const out = await r.eval("(list-toolkit)");
 		expect(out).toContain("playwright");
 		expect(out).not.toContain("list-toolkit-1:");
 	});
 
 	it("mints no name, since the answer was the point", async () => {
-		const r = new MemoryRepl();
+		const r = memoryRepl();
 		await r.eval('(search-mcps "browser")');
 		expect(await r.eval("(dump)")).not.toContain("search-mcps-1");
 	});

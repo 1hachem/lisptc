@@ -13,8 +13,11 @@ import {
 	setWriter,
 	stripProse,
 } from "@repo/interpreter/lisp";
+import { promisesExtension } from "@repo/interpreter/promises";
+import { proseExtension } from "@repo/interpreter/prose";
 import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
-import { modelFacingExtensions } from "./extensions.ts";
+import { llmExtension } from "@repo/llm/llm";
+import { mcpExtension } from "@repo/mcp";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -43,13 +46,14 @@ class InteractiveRepl implements Repl {
 
 	private freshInterp(): Interp {
 		const interp = new Interp({
-			extensions: modelFacingExtensions({
-				secrets: secretsExtension({
-					store: this.secretsStore,
-					envFile: true,
-				}),
-				compaction: compactionExtension(this.compactor),
-			}),
+			extensions: [
+				secretsExtension({ store: this.secretsStore, envFile: true }),
+				promisesExtension(),
+				mcpExtension(),
+				llmExtension(),
+				compactionExtension(this.compactor),
+				proseExtension(),
+			],
 		});
 		runSync(interp, prelude);
 		interp.channels.on(MODEL, (d) => {

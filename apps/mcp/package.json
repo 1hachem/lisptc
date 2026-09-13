@@ -16,6 +16,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*",
+    "@repo/mcp": "workspace:*",
     "@repo/repl": "workspace:*"
   },
   "devDependencies": {

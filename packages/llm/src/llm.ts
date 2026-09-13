@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { isNumeric } from "@repo/interpreter/arith";
 import { withTimeout } from "@repo/interpreter/async";
 import {
@@ -113,15 +114,23 @@ const SCALARS: Record<string, string> = {
 const FIELD_TYPES =
 	":string :number :integer :boolean :any :enum :list :optional";
 
+const PROMPT: string = readFileSync(
+	new URL("./llm.ptc", import.meta.url),
+	"utf8",
+);
+
 export interface LlmExtension extends InterpExtension {
 	observe?: LlmObserver;
 }
 
 export function llmExtension(options: LlmOptions = {}): LlmExtension {
 	const config: LlmOptions = { ...options };
-	const extension: LlmExtension = (interp: Interp): void => {
-		registerLlm(interp, config);
-	};
+	const extension: LlmExtension = Object.assign(
+		(interp: Interp): void => {
+			registerLlm(interp, config);
+		},
+		{ prompt: PROMPT },
+	);
 	Object.defineProperty(extension, "observe", {
 		enumerable: true,
 		get: () => config.observe,

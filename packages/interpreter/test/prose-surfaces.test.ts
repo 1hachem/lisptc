@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { compactionExtension } from "../src/compaction.ts";
 import { checkSyntax } from "../src/lisp.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
 import { ev } from "./helpers.ts";
@@ -42,27 +43,25 @@ describe("the language reference teaches prose", () => {
 	});
 });
 
-describe("the language reference teaches context compaction", () => {
+describe("the compaction extension teaches its own half of the language", () => {
+	const COMPACTION = compactionExtension().prompt ?? "";
+
 	it("says the REPL prints nothing on its own", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/the ONLY thing that prints/);
-		expect(LANGUAGE_REFERENCE).toMatch(/reports? (one line|a result's name)/i);
+		expect(COMPACTION).toMatch(/reports? (one line|a result's name)/i);
 	});
 
 	it("says every result is bound to a name", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/never retype data the REPL/i);
+		expect(COMPACTION).toMatch(/never retype data the REPL/i);
 	});
 
 	it("says the extraction commands return rather than print", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/RETURN a value/);
-		expect(LANGUAGE_REFERENCE).toMatch(
-			/head, tail and grep built-ins RETURN a value/,
-		);
+		expect(COMPACTION).toMatch(/RETURN a value/);
+		expect(COMPACTION).toMatch(/head, tail and grep built-ins RETURN a value/);
 	});
 
 	it("says a truncated echo is not the whole output", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(
-			/capped for you.{0,20}not for the user/i,
-		);
-		expect(LANGUAGE_REFERENCE).toMatch(/read on with/i);
+		expect(COMPACTION).toMatch(/capped for you.{0,20}not for the user/i);
+		expect(COMPACTION).toMatch(/read on with/i);
 	});
 });

@@ -1,0 +1,28 @@
+PROSE AROUND THE FORMS
+
+Only the parenthesised forms in your output are program text. Everything around
+them is prose the REPL skips, and a parenthesised aside whose head names nothing
+that exists is read as prose too.
+
+Ending the loop: prose alone
+
+There is no halt, exit or quit. You end the loop by replying with prose and
+no form at all — a message with nothing to evaluate is a program that does
+nothing, and that is the signal that you are done. The prose you write is your final
+answer to the user, e.g. "the sum is 3".
+
+- Reply that way ONLY when the user's request is FULLY satisfied. Until then every
+  reply must carry at least one form — if you still need to inspect a result,
+  branch, or take another step, emit the next form and you'll be asked to continue.
+- Prose around a form is ignored, but prose instead of a form
+  stops the loop. So never answer in bare prose mid-task, and never park a plan or a
+  note in a form-less message — put remarks around the form you are emitting.
+- The loop also stops on its own after a fixed number of steps, a safety cap, but
+  end deliberately with your answer rather than relying on that.
+- This is a REPL and driver behaviour, not part of the core language: outside the
+  agent loop a form-less program is simply a no-op.
+
+
+RULES
+
+- A parenthesised aside whose head names nothing that exists — (see below), (one, two, three) — is prose, not code. That is a mistake the reader forgives, NOT a way to write remarks, and the forgiveness is narrow and unpredictable: a keyword argument, a string literal, a nested call, or a slashed/underscored name makes it code, so (see below) is skipped while (see "below") raises undefined: see, and calling a tool before its server is loaded is an undefined: error you are expected to fix, not a skipped aside. So a reply made only of asides ran nothing at all and ends the loop exactly like bare prose: mid-task it throws the turn away. Whatever was read as prose comes back to you as a skipped … note — and when that note is all a reply produced you get it with the next user message instead of at the time. That note is for you alone: keep it to yourself, act on it silently by not writing that shape again, and NEVER mention it to the user. Do not apologise for it, do not explain what was skipped, do not restate your previous answer because of it — the user asked something new, so answer that and nothing else.

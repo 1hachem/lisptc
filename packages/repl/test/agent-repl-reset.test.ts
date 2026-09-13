@@ -1,14 +1,14 @@
+import { compactionExtension } from "@repo/interpreter/compaction";
 import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { describe, expect, it } from "vitest";
-import { modelFacingExtensions } from "../src/extensions.ts";
-import { AgentRepl } from "../src/repl.ts";
+import { agentRepl } from "./helpers.ts";
 
 describe("AgentRepl secret handling", () => {
 	it("exposes REPL_* env-var secrets", async () => {
 		const prev = process.env.REPL_ENV_TOKEN;
 		process.env.REPL_ENV_TOKEN = "tok";
 		try {
-			const repl = new AgentRepl();
+			const repl = agentRepl();
 			expect(await repl.eval("(secrets)")).toContain("REPL_ENV_TOKEN");
 		} finally {
 			if (prev === undefined) delete process.env.REPL_ENV_TOKEN;
@@ -17,17 +17,16 @@ describe("AgentRepl secret handling", () => {
 	});
 
 	it("does not auto-load $LISPTC_SECRETS_FILE for an embedded AgentRepl", async () => {
-		const repl = new AgentRepl();
+		const repl = agentRepl();
 		expect(await repl.eval("(secrets)")).not.toContain("REPL_PI_TOKEN");
 	});
 
 	it("lets a host inject secrets that survive reset()", async () => {
 		const store = new EnvSecretsStore();
-		const repl = new AgentRepl({
-			extensions: modelFacingExtensions({
-				secrets: secretsExtension({ store }),
-			}),
-		});
+		const repl = agentRepl([
+			secretsExtension({ store }),
+			compactionExtension(),
+		]);
 		store.set({
 			REPL_HOST_TOKEN: { value: "h0st", description: "from host" },
 		});
@@ -44,11 +43,10 @@ describe("AgentRepl secret handling", () => {
 	it("uses a store handed in at construction", async () => {
 		const store = new EnvSecretsStore();
 		store.set({ REPL_SHARED_TOKEN: "shared" });
-		const repl = new AgentRepl({
-			extensions: modelFacingExtensions({
-				secrets: secretsExtension({ store }),
-			}),
-		});
+		const repl = agentRepl([
+			secretsExtension({ store }),
+			compactionExtension(),
+		]);
 		expect(await repl.eval('(secret "REPL_SHARED_TOKEN")')).toContain(
 			"#<secret:REPL_SHARED_TOKEN>",
 		);

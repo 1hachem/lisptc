@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { withTimeout } from "./async.ts";
 import {
@@ -38,8 +39,15 @@ function parseTimeout(x: unknown): number {
 	return ms;
 }
 
+const PROMPT: string = readFileSync(
+	new URL("./promises.ptc", import.meta.url),
+	"utf8",
+);
+
 export function promisesExtension(): InterpExtension {
-	return (interp: Interp): void => registerPromises(interp);
+	return Object.assign((interp: Interp): void => registerPromises(interp), {
+		prompt: PROMPT,
+	});
 }
 
 export function registerPromises(interp: Interp): void {

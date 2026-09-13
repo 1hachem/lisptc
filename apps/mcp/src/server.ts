@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { checkSyntax } from "@repo/interpreter";
-import { MemoryRepl } from "@repo/repl/repl";
 import { z } from "zod";
+import { newRepl } from "./repl.ts";
 
-const repl = new MemoryRepl();
+const repl = newRepl();
 
 const server = new McpServer({
 	name: "lisptc-repl",
