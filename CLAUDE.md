@@ -51,6 +51,8 @@ pnpm format                  # biome check --write (auto-fix)
 pnpm knip                    # dead-code / unused-dependency check (part of CI), run at root
 pnpm check:comments          # fails on any non-directive comment (part of CI), run at root
 pnpm fix:comments            # strip them; follow with `pnpm format`
+pnpm check:docs              # fails on tracked markdown outside the allowlist (part of CI)
+pnpm fix:docs                # delete those files
 pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
