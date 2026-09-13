@@ -6,9 +6,9 @@ import {
 	runSync,
 } from "@repo/interpreter";
 import { compactionExtension } from "@repo/interpreter/compaction";
-import { mcpExtension } from "@repo/interpreter/mcp";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { llmExtension } from "@repo/llm/llm";
+import { mcpExtension } from "@repo/mcp";
 import {
 	type CompletionEntry,
 	connectOrSpawn,

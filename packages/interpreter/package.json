@@ -12,9 +12,6 @@
     "./grammar": "./src/grammar.ts",
     "./hooks": "./src/hooks.ts",
     "./lisp": "./src/lisp.ts",
-    "./mcp": "./src/mcp.ts",
-    "./mcp-client": "./src/mcp-client.ts",
-    "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./plist": "./src/plist.ts",
     "./promises": "./src/promises.ts",
     "./prose": "./src/prose.ts",
@@ -32,7 +29,6 @@
     "bench": "node --experimental-transform-types --no-warnings bench/eval.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/env": "workspace:*",
     "dotenv": "^17.4.2"
   },

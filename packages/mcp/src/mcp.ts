@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { z } from "zod";
-import { isNumeric } from "./arith.ts";
-import { withTimeout } from "./async.ts";
+import { isNumeric } from "@repo/interpreter/arith";
+import { withTimeout } from "@repo/interpreter/async";
 import {
 	arrayToList,
 	Cell,
@@ -17,7 +16,10 @@ import {
 	newSym,
 	Sym,
 	zList,
-} from "./lisp.ts";
+} from "@repo/interpreter/lisp";
+import { keyName, parsePlist } from "@repo/interpreter/plist";
+import type { ToJson } from "@repo/interpreter/types";
+import { z } from "zod";
 import {
 	type ConnConfig,
 	type ConnectResult,
@@ -28,8 +30,6 @@ import {
 	stopLocalServers,
 	type Tool,
 } from "./mcp-client.ts";
-import { keyName, parsePlist } from "./plist.ts";
-import type { ToJson } from "./types.ts";
 
 const CALL_TIMEOUT_MS = 30_000;
 

@@ -5,13 +5,13 @@ The evaluator suspends rather than blocks (see
 loop. This layer is how the language (a) makes a call into async work that reads
 as ordinary and (b) hands back a value standing for work still running.
 
-Four files, and they come apart cleanly:
+Four files in two packages, and they come apart cleanly:
 
 ```
-src/async.ts       AsyncWork: what a promise cannot say, and withTimeout (core, always on)
-src/promises.ts    promisesExtension(): await, the combinators, promise-state, promises, cancel
-src/mcp.ts         the MCP built-ins, and the finalizer that installs tool bindings
-src/mcp-client.ts  McpClient: connect, call-tool, login, ...
+@repo/interpreter src/async.ts       AsyncWork: what a promise cannot say, and withTimeout (core, always on)
+@repo/interpreter src/promises.ts    promisesExtension(): await, the combinators, promise-state, promises, cancel
+@repo/mcp         src/mcp.ts         the MCP built-ins, and the finalizer that installs tool bindings
+@repo/mcp         src/mcp-client.ts  McpClient: connect, call-tool, login, ...
 ```
 
 `mcp.ts` imports the client and `withTimeout`, and nothing at all from
@@ -220,8 +220,12 @@ browser, say) without hardcoding machine-specific store paths. Unset vars expand
 to the empty string, and a malformed config entry is ignored rather than crashing
 interpreter startup.
 
-`mcp.toolkit.json` sits at the package root next to `src/` and is emitted
-beside the code in a build (see `apps/api/vite.config.ts`, which copies it).
+`mcp.toolkit.json` sits at `@repo/mcp`'s package root next to `src/` and is
+emitted beside the code in a build (see `apps/api/vite.config.ts`, which copies
+it). The copier resolves each asset through a subpath the package actually
+exports — `@repo/interpreter/source` for the two files beside it, and
+`@repo/mcp/mcp.toolkit.json` for this one — because neither exports map
+publishes `package.json`.
 
 ## Test fixtures
 

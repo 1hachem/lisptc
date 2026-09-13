@@ -1,10 +1,10 @@
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
-import { mcpExtension } from "@repo/interpreter/mcp";
 import {
 	EnvSecretsStore,
 	type SecretsStore,
 	secretsExtension,
 } from "@repo/interpreter/secrets";
+import { mcpExtension } from "@repo/mcp";
 import { modelFacingExtensions } from "@repo/repl/extensions";
 import { AgentRepl } from "@repo/repl/repl";
 import { type MockSpec, mockClient } from "./mocks.ts";

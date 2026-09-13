@@ -45,11 +45,11 @@ that changes nothing.
 In production this is what you want (fail at boot, not at the first request), but
 it is a trap in tests. ESM evaluates a test file's imports before its body, so
 setting a variable at the top of a test file is already too late — the module
-graph, `@repo/env` included, has been evaluated. `packages/interpreter` and
+graph, `@repo/env` included, has been evaluated. `packages/mcp` and
 `packages/repl` therefore set theirs in a vitest `setupFiles`
 (`test/setup-env.ts`), which runs before the test module loads:
 
-- `packages/interpreter/test/setup-env.ts` points `LISPTC_OAUTH_DIR` at a fresh
+- `packages/mcp/test/setup-env.ts` points `LISPTC_OAUTH_DIR` at a fresh
   temp dir, so `oauth-logout.test.ts` has a directory to assert on and no test can
   touch the developer's real `~/.config/lisptc/oauth`.
 - `packages/repl/test/setup-env.ts` writes a `.env` holding `REPL_PI_TOKEN` and

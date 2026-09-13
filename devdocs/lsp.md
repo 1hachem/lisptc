@@ -56,7 +56,7 @@ of sharing that's actually correct here.
 `(load-mcp "name")` takes a bare predefined toolkit-server name (completed from
 `mcp.toolkit.json` — `src/load-mcp.ts`'s `toolkitCompletions`). The ad-hoc
 `:key` plist form — `(load-mcp :name "x" :url "…"|:command "…" …)`, parsed by
-`connConfigFromArgs` in `packages/interpreter/src/mcp.ts` — needs **no**
+`connConfigFromArgs` in `packages/mcp/src/mcp.ts` — needs **no**
 LSP-specific handling: its `DocArg[]` (`LOAD_MCP_ARGS`, defined in `mcp.ts`
 right next to `connConfigFromArgs`) is attached to `load-mcp`'s own doc entry
 via `Interp.def`'s optional `args` parameter, the same mechanism

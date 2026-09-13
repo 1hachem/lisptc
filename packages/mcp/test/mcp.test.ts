@@ -1,9 +1,15 @@
 import { fileURLToPath } from "node:url";
+import { USER } from "@repo/interpreter/channels";
+import {
+	Interp,
+	prelude,
+	runAsync,
+	runSync,
+	str,
+} from "@repo/interpreter/lisp";
+import { promisesExtension } from "@repo/interpreter/promises";
 import { afterAll, describe, expect, it } from "vitest";
-import { USER } from "../src/channels.ts";
-import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
-import { promisesExtension } from "../src/promises.ts";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
 	return str((await runAsync(interp, code)).value);

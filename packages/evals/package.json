@@ -31,6 +31,7 @@
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm": "workspace:*",
+    "@repo/mcp": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
     "zod": "^4.4.3"

@@ -1,9 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type {
-	ConnectResult,
-	McpClient,
-	ToolCall,
-} from "@repo/interpreter/mcp-client";
+import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/client";
 
 export interface MockTool {
 	name: string;

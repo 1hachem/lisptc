@@ -3,7 +3,6 @@ import {
 	compactionExtension,
 } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { mcpExtension } from "@repo/interpreter/mcp";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import {
@@ -11,6 +10,7 @@ import {
 	secretsExtension,
 } from "@repo/interpreter/secrets";
 import { type LlmExtension, llmExtension } from "@repo/llm/llm";
+import { mcpExtension } from "@repo/mcp";
 
 export interface ModelFacingParts {
 	secrets?: SecretsExtension;

@@ -384,9 +384,10 @@ that really is keyed by symbols still behaves.
 
 ## Argument plists (`plist.ts`)
 
-Lives apart from `mcp.ts`, which grew it first, because `mcp.ts` carries the
-`@modelcontextprotocol/sdk` dependency: a consumer that only wants keyword args
-(`compaction.ts`) must not pull the MCP SDK in behind it.
+Lives in the core rather than with `mcp.ts`, which grew it first, because
+`mcp.ts` is now `@repo/mcp` and carries the `@modelcontextprotocol/sdk`
+dependency: a consumer that only wants keyword args (`compaction.ts`) must not
+pull the MCP SDK in behind it.
 
 `splitKeywordArgs` starts the options as soon as a keyword *could* be one — any
 keyword carrying a value after it, **a misspelling included**, so

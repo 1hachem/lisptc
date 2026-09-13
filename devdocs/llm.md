@@ -14,8 +14,9 @@ packages/shared/src/messages.ts  the chat-message shape, the roles, contentToTex
 ## Why it is a package and not a file in the interpreter
 
 The interpreter is the deterministic half of the system, and its dependency list
-is part of that claim: `@modelcontextprotocol/sdk` for MCP, `dotenv` for
-secrets, nothing else. LangChain pulls the OpenAI SDK and its transitive tree
+is part of that claim: `dotenv` for secrets, `@repo/env`, nothing else. MCP is
+already outside it for the same reason (`@repo/mcp` carries
+`@modelcontextprotocol/sdk`). LangChain pulls the OpenAI SDK and its transitive tree
 behind it, which is a lot of surface for a package the LSP, the MCP server and
 every test import. Because an extension is just `(interp) => void` and attaches
 through `def` / hooks / channels, living outside the interpreter costs nothing

@@ -1,11 +1,8 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
-import { mcpExtension } from "../src/mcp.ts";
-import { promisesExtension } from "../src/promises.ts";
 import {
 	EnvSecretsStore,
 	loadSecretsFromFile,
@@ -13,10 +10,6 @@ import {
 	secretsExtension,
 } from "../src/secrets.ts";
 import { ev } from "./helpers.ts";
-
-const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
-);
 
 function interpWithSecrets(record: Record<string, SecretSpec>): Interp {
 	const store = new EnvSecretsStore();
@@ -173,46 +166,6 @@ describe("secret registry (.env file loading)", () => {
 		const keys = ev("(secrets)", interp);
 		expect(keys).toContain("REPL_LINEAR_API_KEY");
 		expect(keys).not.toContain("NOT_A_SECRET");
-	});
-});
-
-describe("secret registry (revealed only into an MCP call)", () => {
-	const store = new EnvSecretsStore();
-	store.set({ REPL_FOO: "s3cr3t" });
-	const interp = new Interp({
-		extensions: [
-			secretsExtension({ store }),
-			promisesExtension(),
-			mcpExtension(),
-		],
-	});
-	runSync(interp, prelude);
-
-	afterAll(async () => {
-		await runAsync(interp, "(mcp-shutdown)");
-	});
-
-	it("passes the real (and composed) value into an MCP tool call", async () => {
-		await runAsync(
-			interp,
-			`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
-		);
-		expect(
-			str(
-				(await runAsync(interp, '(fx/echo :message (secret "REPL_FOO"))'))
-					.value,
-			),
-		).toBe('"s3cr3t"');
-		expect(
-			str(
-				(
-					await runAsync(
-						interp,
-						'(fx/echo :message (concat "Bearer " (secret "REPL_FOO")))',
-					)
-				).value,
-			),
-		).toBe('"Bearer s3cr3t"');
 	});
 });
 
