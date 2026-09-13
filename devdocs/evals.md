@@ -59,7 +59,7 @@ These evals measure the agent's logic, not the REPL's functionality, which has
 its own suites. So `(load-mcp "playwright")` answers "loaded" without spawning
 anything.
 
-The mock sits at the **`Dispatch`**, not at `load-mcp`. That is what keeps the
+The mock sits at the **`McpClient`**, not at `load-mcp`. That is what keeps the
 agent's surface honest: `mcp.ts` still mints the real `<server>/<tool>`
 bindings from the tool list the mocked `connect` returns, still registers their
 docs, still runs `validate(tool, args)` against their schemas, and `load-mcp`
@@ -67,7 +67,7 @@ still returns a real promise. Replacing the built-in instead would test a
 different language from the one the agent will meet.
 
 **The toolkit stays real.** `list-toolkit`, `search-mcps` and `search-tools`
-are answered locally and never dispatch, so `mcp.toolkit.json` gives the agent
+are answered locally and never reach the client, so `mcp.toolkit.json` gives the agent
 the real discovery surface — which is exactly what `finds-the-server` is
 testing. Only execution is mocked.
 
@@ -75,7 +75,7 @@ testing. Only execution is mocked.
 `test/fixtures/playwright.tools.json` was captured from a real `connect`.
 Hand-written schemas drift from the server and quietly stop catching the agent
 passing wrong arguments. Regenerate it by
-wrapping `mcpDispatch` and keeping the `tools` off a real connect.
+wrapping `mcpClient` and keeping the `tools` off a real connect.
 
 `linear.tools.json` is the exception, and a debt rather than a pattern.
 `mcp.linear.app` answers `401` to an unauthenticated `initialize`, so capturing
@@ -132,21 +132,21 @@ An eval reaches for one only when the case is about the real SDK path.
   and whether it raised. The recorder is appended after `compactionExtension`
   in the roster, which by the chain's outermost-first order puts it innermost,
   so it sees the raw value before compaction names it.
-- **A wrapping `Dispatch`** sees what actually *happened*. `evalForm` only
+- **A wrapping `McpClient`** sees what actually *happened*. `evalForm` only
   wraps top-level forms, and half the interesting calls are nested
   (`(await (load-mcp …))`, a tool call inside a `let`).
 
 Three traps that produce a wrong trace if missed:
 
-- **`call-tool`'s payload carries `serverId`, a UUID, not the server name.**
-  The name lives only in the `connect` payload. The recorder builds a
+- **A `ToolCall` carries `serverId`, a UUID, not the server name.**
+  The name lives only in the connect config. The recorder builds a
   `serverId → name` map from connect results and joins on it.
 - **Secrets are plaintext in tool arguments.** `plistToJson` calls
   `Secret.toJSON()`, which reveals, so a naive recorder writes them into the
   report artifact. Arguments are scrubbed against the REPL's secret store at
   record time.
-- **Timeouts settle outside `dispatch`.** `withTimeout` wraps the dispatch
-  promise, so the recorder sees the underlying call's real settle, not the
+- **Timeouts settle outside the client.** `withTimeout` wraps the call in
+  `mcp.ts`, so the recorder sees the underlying call's real settle, not the
   timeout the Lisp side observed. The Lisp-visible outcome comes from the
   `evalForm` side.
 
@@ -157,24 +157,24 @@ silently never fire; `called` covers the local built-ins by reading the
 recorded *form* instead.
 
 Both hang off the harness's own roster: `tracedRepl` builds
-`mcpExtension({ dispatch: trace.dispatch(...) })` and adds `trace.extension()`
-as an extra, and the REPL re-installs that same list on every fresh interp, so a
-recorder **survives `reset()`**. The `setup(interp)` hook is a tempting shortcut
-but cannot reach the `Dispatch`, which is captured in a closure at `registerMcp`
-time.
+`mcpExtension({ client: trace.client(mockClient(...)) })` and adds
+`trace.extension()` as an extra, and the REPL re-installs that same list on every
+fresh interp, so a recorder **survives `reset()`**. The `setup(interp)` hook is a
+tempting shortcut but cannot reach the client, which is captured in a closure at
+`registerMcp` time.
 
 ### One call, two seams, one hit
 
 A call the agent wrote *and* the runtime ran shows up twice: once as the
-top-level `form` that contains it, once as the `connect` or `tool` event it
-dispatched. Ordering combinators do not care, but counting ones do, and
+top-level `form` that contains it, once as the `connect` or `tool` event the
+client answered. Ordering combinators do not care, but counting ones do, and
 `(at-most (called "load-mcp" "playwright") 3)` used to latch false at the
 **second** attempt: the check read as "stop retrying" and fired on an agent
 that had retried once. A run was graded against the agent for the harness's
 double vision.
 
-So `called` keeps every dispatch hit, and drops a written hit whose step
-already has one for that name. A call that never reached `Dispatch` (an
+So `called` keeps every runtime hit, and drops a written hit whose step
+already has one for that name. A call that never reached the client (an
 undefined `server/tool`, a form that raised before it ran) still counts as
 written, which is what keeps `looks-up-tools-before-navigating` honest about a
 tool the agent reached for and missed.
@@ -300,7 +300,7 @@ against the halting reply verbatim, prose and all.
 
 ### `awaited` is syntactic
 
-`await` is a promise built-in and never passes through `Dispatch`, so
+`await` is a promise built-in and never passes through the MCP client, so
 `(awaited "load-mcp")` is a claim about the code the agent wrote: a call to
 that name, or a symbol named after it, inside an `await`. It follows the
 compactor's minted names, so `(await load-mcp-1)` counts. It does **not**
@@ -622,7 +622,7 @@ is being measured.
 ## Cases run in parallel
 
 Nothing connects one case to another: each builds its own `AgentRepl`, its own
-mocked dispatch and its own trace, and the only shared thing is the report,
+mocked MCP client and its own trace, and the only shared thing is the report,
 which is sharded per worker (above). So the suite runs concurrently — files
 across workers and cases within a file, since three of the four cases live in
 one file and per-file parallelism alone would leave them queued behind each

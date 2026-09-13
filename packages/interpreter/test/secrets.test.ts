@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
+import { promisesExtension } from "../src/promises.ts";
 import {
 	EnvSecretsStore,
 	loadSecretsFromFile,
@@ -179,7 +180,11 @@ describe("secret registry (revealed only into an MCP call)", () => {
 	const store = new EnvSecretsStore();
 	store.set({ REPL_FOO: "s3cr3t" });
 	const interp = new Interp({
-		extensions: [secretsExtension({ store }), mcpExtension()],
+		extensions: [
+			secretsExtension({ store }),
+			promisesExtension(),
+			mcpExtension(),
+		],
 	});
 	runSync(interp, prelude);
 

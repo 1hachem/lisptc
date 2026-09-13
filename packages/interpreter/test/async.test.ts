@@ -10,10 +10,10 @@ import {
 	runSync,
 	str,
 } from "../src/lisp.ts";
-import { Promises } from "../src/promises.ts";
+import { promisesExtension } from "../src/promises.ts";
 
 function interpWithSlow(): Interp {
-	const interp = new Interp();
+	const interp = new Interp({ extensions: [promisesExtension()] });
 	runSync(interp, prelude);
 	interp.def(
 		"slow",
@@ -139,21 +139,15 @@ describe("runSync refuses to suspend", () => {
 });
 
 describe("a promise is the host's own promise", () => {
+	function later<T>(value: T, fail = false): Promise<T> {
+		return new Promise((resolve, reject) =>
+			setTimeout(() => (fail ? reject(new Error("nope")) : resolve(value)), 1),
+		);
+	}
+
 	function starter(): { interp: Interp; runs: () => number } {
 		const interp = interpWithSlow();
 		let runs = 0;
-		const promises = new Promises(
-			(op, payload) =>
-				new Promise((resolve, reject) =>
-					setTimeout(
-						() =>
-							op === "fail" ? reject(new Error("nope")) : resolve(payload),
-						1,
-					),
-				),
-			(raw) => raw,
-		);
-		promises.installBuiltins(interp);
 		interp.defPromise(
 			"start",
 			1,
@@ -161,10 +155,12 @@ describe("a promise is the host's own promise", () => {
 			"Return a promise for x.",
 			z.tuple([z.any()]),
 			([x]) =>
-				promises.start("echo", x, (raw) => {
-					runs += 1;
-					return raw;
-				}),
+				interp.async.start(() =>
+					later(x).then((raw) => {
+						runs += 1;
+						return raw;
+					}),
+				),
 		);
 		interp.defPromise(
 			"start-failing",
@@ -172,7 +168,7 @@ describe("a promise is the host's own promise", () => {
 			"(start-failing)",
 			"Return a promise that rejects.",
 			z.tuple([]),
-			() => promises.start("fail", null),
+			() => interp.async.start(() => later(null, true)),
 		);
 		return { interp, runs: () => runs };
 	}
@@ -241,5 +237,46 @@ describe("a promise is the host's own promise", () => {
 				interp,
 			),
 		).toContain(":rejected");
+	});
+});
+
+describe("a promise built-in stands on its own", () => {
+	function bare(): Interp {
+		const interp = new Interp();
+		runSync(interp, prelude);
+		interp.defPromise(
+			"start-doomed",
+			0,
+			"(start-doomed)",
+			"Return a promise nobody will await.",
+			z.tuple([]),
+			() =>
+				interp.async.start(
+					() =>
+						new Promise((_, reject) =>
+							setTimeout(() => reject(new Error("nope")), 1),
+						),
+				),
+		);
+		return interp;
+	}
+
+	it("starts work with no promise built-ins installed", () => {
+		expect(runSync(bare(), "(start-doomed)")).toBeInstanceOf(Promise);
+	});
+
+	it("absorbs a rejection nobody awaited", async () => {
+		const interp = bare();
+		const promise = runSync(interp, "(start-doomed)") as Promise<unknown>;
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(interp.async.stateOf(promise)).toBe("rejected");
+	});
+
+	it("is cancellable by the host that dropped the interp", () => {
+		const interp = bare();
+		const promise = runSync(interp, "(start-doomed)") as Promise<unknown>;
+		expect(interp.async.pending()).toContain(promise);
+		interp.dispose();
+		expect(interp.async.pending()).toHaveLength(0);
 	});
 });

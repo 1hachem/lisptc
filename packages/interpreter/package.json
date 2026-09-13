@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/lisp.ts",
     "./arith": "./src/arith.ts",
+    "./async": "./src/async.ts",
     "./channels": "./src/channels.ts",
     "./compaction": "./src/compaction.ts",
     "./grammar": "./src/grammar.ts",

@@ -4,6 +4,7 @@ import {
 } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import { mcpExtension } from "@repo/interpreter/mcp";
+import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import {
 	type SecretsExtension,
@@ -24,6 +25,7 @@ export function modelFacingExtensions(
 ): InterpExtension[] {
 	return [
 		parts.secrets ?? secretsExtension(),
+		promisesExtension(),
 		parts.mcp ?? mcpExtension(),
 		parts.llm ?? llmExtension(),
 		parts.compaction ?? compactionExtension(),

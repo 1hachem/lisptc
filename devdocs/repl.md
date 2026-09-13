@@ -8,8 +8,8 @@ shared over a unix socket).
 ## One roster, four hosts
 
 `extensions.ts` exports `modelFacingExtensions()`, and it is the only place the
-language a model sees is spelled out: secrets, MCP, LLM, compaction, prose, in
-that order. `MemoryRepl` and the interactive CLI both build their interp from it,
+language a model sees is spelled out: secrets, promises, MCP, LLM, compaction,
+prose, in that order. `MemoryRepl` and the interactive CLI both build their interp from it,
 which is what stops the two drifting. They had drifted: the CLI was missing the
 LLM extension for exactly as long as the roster was written twice, so `pnpm repl`
 silently lacked `llm/complete` while the agent had it.
@@ -21,17 +21,21 @@ defaults:
 ```ts
 modelFacingExtensions({
   secrets: secretsExtension({ store, envFile: true }),
-  mcp: mcpExtension({ dispatch }),
+  mcp: mcpExtension({ client }),
   compaction: compactionExtension(new Compactor(wordLimit)),
   extra: [trace.extension()],
 })
 ```
 
+`promisesExtension()` and `proseExtension()` get no slot, because neither takes
+a configuration: there is nothing for a host to hand in, and a roster that
+dropped either would be handing the model a language with holes in it.
+
 `ReplOptions` is therefore one field, `extensions`. It used to be the union of
-every extension's knobs — `secretsStore`, `wordLimit`, `mcpDispatch`,
+every extension's knobs — `secretsStore`, `wordLimit`, `mcpClient`,
 `toolkitJson`, plus an `extra` list — each threaded through a `MemoryRepl` field
 into `freshInterp()`, so teaching one extension a new option meant editing the
-REPL, the roster and the options type. A REPL does not know what an MCP dispatch
+REPL, the roster and the options type. A REPL does not know what an MCP client
 or a word limit is, and now does not have to.
 
 ### What the REPL still needs back

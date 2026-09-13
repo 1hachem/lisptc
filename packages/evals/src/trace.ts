@@ -1,6 +1,10 @@
 import { MODEL, type Severity } from "@repo/interpreter/channels";
 import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
-import type { Dispatch } from "@repo/interpreter/promises";
+import type {
+	ConnectResult,
+	McpClient,
+	ToolCall,
+} from "@repo/interpreter/mcp-client";
 import type { SecretsStore } from "@repo/interpreter/secrets";
 
 export const REDACTED = "<redacted>";
@@ -27,17 +31,6 @@ export type TraceEvent =
 	| { kind: "connect"; step: number; server: string; ok: boolean }
 	| { kind: "note"; step: number; severity: Severity; text: string }
 	| { kind: "halt"; step: number; answer: string };
-
-interface ConnectResult {
-	serverId: string;
-	tools: unknown[];
-}
-
-interface CallToolPayload {
-	serverId: string;
-	tool: string;
-	args: Record<string, unknown>;
-}
 
 function clip(text: string): string {
 	return text.length > MAX_RENDERED ? `${text.slice(0, MAX_RENDERED)}…` : text;
@@ -125,22 +118,22 @@ export class Trace {
 		};
 	}
 
-	dispatch(inner: Dispatch): Dispatch {
-		return async (op, payload, signal) => {
-			if (op === "connect") return this.recordConnect(inner, payload, signal);
-			if (op === "call-tool") return this.recordCall(inner, payload, signal);
-			return inner(op, payload, signal);
+	client(inner: McpClient): McpClient {
+		return {
+			...inner,
+			connect: (conf, signal) => this.recordConnect(inner, conf, signal),
+			callTool: (call, signal) => this.recordCall(inner, call, signal),
 		};
 	}
 
 	private async recordConnect(
-		inner: Dispatch,
-		payload: unknown,
+		inner: McpClient,
+		conf: Parameters<McpClient["connect"]>[0],
 		signal?: AbortSignal,
-	): Promise<unknown> {
-		const server = (payload as { name?: string }).name ?? "";
+	): Promise<ConnectResult> {
+		const server = conf.name;
 		try {
-			const result = (await inner("connect", payload, signal)) as ConnectResult;
+			const result = await inner.connect(conf, signal);
 			this.servers.set(result.serverId, server);
 			this.add({ kind: "connect", step: this.step, server, ok: true });
 			return result;
@@ -151,20 +144,19 @@ export class Trace {
 	}
 
 	private async recordCall(
-		inner: Dispatch,
-		payload: unknown,
+		inner: McpClient,
+		call: ToolCall,
 		signal?: AbortSignal,
 	): Promise<unknown> {
-		const { serverId, tool, args } = payload as CallToolPayload;
-		const server = this.servers.get(serverId) ?? serverId;
-		const safe = this.redact(args) as Record<string, unknown>;
+		const server = this.servers.get(call.serverId) ?? call.serverId;
+		const safe = this.redact(call.args) as Record<string, unknown>;
 		try {
-			const result = await inner("call-tool", payload, signal);
+			const result = await inner.callTool(call, signal);
 			this.add({
 				kind: "tool",
 				step: this.step,
 				server,
-				tool,
+				tool: call.tool,
 				args: safe,
 				ok: true,
 			});
@@ -174,7 +166,7 @@ export class Trace {
 				kind: "tool",
 				step: this.step,
 				server,
-				tool,
+				tool: call.tool,
 				args: safe,
 				ok: false,
 			});

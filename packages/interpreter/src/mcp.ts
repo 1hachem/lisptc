@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { isNumeric } from "./arith.ts";
+import { withTimeout } from "./async.ts";
 import {
 	arrayToList,
 	Cell,
@@ -17,10 +18,20 @@ import {
 	Sym,
 	zList,
 } from "./lisp.ts";
-import { type McpOp, mcpDispatch, stopLocalServers } from "./mcp-client.ts";
+import {
+	type ConnConfig,
+	type ConnectResult,
+	type HttpConnConfig,
+	type JsonSchema,
+	type McpClient,
+	mcpClient,
+	stopLocalServers,
+	type Tool,
+} from "./mcp-client.ts";
 import { keyName, parsePlist } from "./plist.ts";
-import { type Dispatch, Promises } from "./promises.ts";
 import type { ToJson } from "./types.ts";
+
+const CALL_TIMEOUT_MS = 30_000;
 
 const zName = z
 	.custom<string | Sym | LispKeyword>(
@@ -30,40 +41,6 @@ const zName = z
 	)
 	.transform((x) => asName(x));
 
-export interface Tool {
-	name: string;
-	description?: string;
-	inputSchema?: JsonSchema;
-	outputSchema?: JsonSchema;
-}
-
-export interface JsonSchema {
-	type?: string;
-	properties?: Record<string, JsonSchema>;
-	required?: string[];
-	enum?: unknown[];
-	description?: string;
-	items?: JsonSchema;
-	default?: unknown;
-	examples?: unknown[];
-}
-
-export type ConnConfig = { description?: string; keywords?: string[] } & (
-	| {
-			name: string;
-			url: string;
-			headers?: Record<string, string>;
-			oauth?: boolean;
-			scopes?: string[];
-	  }
-	| {
-			name: string;
-			command: string;
-			args?: string[];
-			env?: Record<string, string>;
-	  }
-);
-
 interface ServerRec {
 	name: string;
 	serverId: string;
@@ -72,7 +49,7 @@ interface ServerRec {
 }
 
 export interface RegisterMcpOptions {
-	dispatch?: Dispatch;
+	client?: McpClient;
 	toolkitJson?: string;
 }
 
@@ -286,13 +263,13 @@ const LOAD_MCP_ARGS: DocArg[] = [
 
 function doUnload(
 	interp: Interp,
-	promises: Promises,
+	client: McpClient,
 	servers: Map<string, ServerRec>,
 	name: string,
 ): Sym[] {
 	const rec = servers.get(name);
 	if (!rec) throw new EvalException("MCP server not loaded", name, false);
-	void promises.call("disconnect", { serverId: rec.serverId }).catch(() => {});
+	void client.disconnect(rec.serverId).catch(() => {});
 	for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 	servers.delete(name);
 	return rec.toolSyms;
@@ -300,10 +277,10 @@ function doUnload(
 
 function installServer(
 	interp: Interp,
-	promises: Promises,
+	client: McpClient,
 	servers: Map<string, ServerRec>,
 	name: string,
-	res: { serverId: string; tools: Tool[] },
+	res: ConnectResult,
 ): List {
 	const toolMap = new Map<string, Tool>();
 	const toolSyms: Sym[] = [];
@@ -313,13 +290,11 @@ function installServer(
 		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
 			const args = plistToJson(f[0] as List);
 			validate(tool, args);
-			return promises
-				.call("call-tool", {
-					serverId: res.serverId,
-					tool: tool.name,
-					args,
-				})
-				.then(jsonToLisp);
+			return withTimeout(
+				client.callTool({ serverId: res.serverId, tool: tool.name, args }),
+				CALL_TIMEOUT_MS,
+				sym.name,
+			).then(jsonToLisp);
 		});
 		interp.defineGlobal(sym, wrapper, {
 			signature: toolSignature(sym.name, tool),
@@ -347,16 +322,24 @@ export function registerMcp(
 	interp: Interp,
 	options: RegisterMcpOptions = {},
 ): void {
-	const dispatch: Dispatch =
-		options.dispatch ??
-		((op: string, payload: unknown, signal?: AbortSignal) =>
-			mcpDispatch(op as McpOp, payload, signal));
-	const promises = new Promises(dispatch, jsonToLisp);
-	promises.installBuiltins(interp);
+	const client = options.client ?? mcpClient;
 
 	const servers = new Map<string, ServerRec>();
 	const predefined = new Map<string, ConnConfig>();
+	const loading = new Set<Promise<unknown>>();
 	parsePredefined(predefined, options.toolkitJson);
+
+	function startLoad(conf: ConnConfig): Promise<unknown> {
+		const promise = interp.async.start((signal) =>
+			client
+				.connect(conf, signal)
+				.then((res) => installServer(interp, client, servers, conf.name, res)),
+		);
+		loading.add(promise);
+		const forget = () => loading.delete(promise);
+		void promise.then(forget, forget);
+		return promise;
+	}
 
 	interp.defPromise(
 		"load-mcp",
@@ -366,17 +349,8 @@ export function registerMcp(
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, predefined);
-			if (servers.has(conf.name))
-				doUnload(interp, promises, servers, conf.name);
-			return promises.start("connect", conf, (raw: unknown) =>
-				installServer(
-					interp,
-					promises,
-					servers,
-					conf.name,
-					raw as { serverId: string; tools: Tool[] },
-				),
-			);
+			if (servers.has(conf.name)) doUnload(interp, client, servers, conf.name);
+			return startLoad(conf);
 		},
 		LOAD_MCP_ARGS,
 	);
@@ -387,7 +361,7 @@ export function registerMcp(
 		'(unload-mcp "server")',
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
-		([name]) => arrayToList(doUnload(interp, promises, servers, name)),
+		([name]) => arrayToList(doUnload(interp, client, servers, name)),
 	);
 
 	interp.def(
@@ -413,12 +387,12 @@ export function registerMcp(
 					raw,
 					false,
 				);
-			const conf = predefined.get(name);
-			if (!conf || !("url" in conf))
-				throw new EvalException("unknown OAuth MCP server", name, false);
-			return promises
-				.call("authorize", { url: conf.url, code, scopes: conf.scopes })
-				.then(() => newLispKeyword("authorized"));
+			const conf = oauthServer(predefined, name);
+			return withTimeout(
+				client.authorize(conf, code),
+				CALL_TIMEOUT_MS,
+				"mcp-authorize",
+			).then(() => newLispKeyword("authorized"));
 		},
 	);
 
@@ -431,22 +405,10 @@ export function registerMcp(
 		([rest]) => {
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
-			const conf = predefined.get(name);
-			if (!conf || !("url" in conf))
-				throw new EvalException("unknown OAuth MCP server", name, false);
-			return promises
-				.call("login", {
-					name,
-					url: conf.url,
-					scopes: conf.scopes,
-					command: "command" in conf ? conf.command : undefined,
-					args: "args" in conf ? conf.args : undefined,
-				})
-				.then(
-					(res) =>
-						(res as { authUrl: string | null }).authUrl ??
-						newLispKeyword("logged-in"),
-				);
+			const conf = oauthServer(predefined, name);
+			return withTimeout(client.login(conf), CALL_TIMEOUT_MS, "login").then(
+				(res) => res.authUrl ?? newLispKeyword("logged-in"),
+			);
 		},
 	);
 
@@ -459,13 +421,11 @@ export function registerMcp(
 		([rest]) => {
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
-			const conf = predefined.get(name);
-			if (!conf || !("url" in conf))
-				throw new EvalException("unknown OAuth MCP server", name, false);
-			if (servers.has(name)) doUnload(interp, promises, servers, name);
-			return promises
-				.call("logout", { url: conf.url })
-				.then(() => newLispKeyword("logged-out"));
+			const conf = oauthServer(predefined, name);
+			if (servers.has(name)) doUnload(interp, client, servers, name);
+			return withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout").then(
+				() => newLispKeyword("logged-out"),
+			);
 		},
 	);
 
@@ -598,13 +558,12 @@ export function registerMcp(
 
 	const shutdown = (): void => {
 		for (const rec of servers.values()) {
-			void promises
-				.call("disconnect", { serverId: rec.serverId })
-				.catch(() => {});
+			void client.disconnect(rec.serverId).catch(() => {});
 			for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
 		}
 		servers.clear();
-		promises.shutdown();
+		for (const promise of loading) interp.async.cancel(promise);
+		loading.clear();
 		stopLocalServers();
 	};
 
@@ -624,6 +583,16 @@ export function registerMcp(
 		shutdown();
 		next();
 	});
+}
+
+function oauthServer(
+	predefined: Map<string, ConnConfig>,
+	name: string,
+): HttpConnConfig {
+	const conf = predefined.get(name);
+	if (!conf || !("url" in conf))
+		throw new EvalException("unknown OAuth MCP server", name, false);
+	return conf;
 }
 
 function asName(x: unknown): string {

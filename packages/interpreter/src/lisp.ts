@@ -16,6 +16,7 @@ import {
 	tryToParse,
 	ZERO,
 } from "./arith.ts";
+import { AsyncWork } from "./async.ts";
 import { Channels, MODEL, USER } from "./channels.ts";
 import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
 
@@ -536,6 +537,8 @@ export class Interp {
 	readonly hooks: Hooks = newHooks();
 
 	readonly channels: Channels = new Channels();
+
+	readonly async: AsyncWork = new AsyncWork();
 
 	readonly importStack: string[] = [];
 	private readonly importing: Set<string> = new Set();
@@ -1107,7 +1110,7 @@ export class Interp {
 	}
 
 	dispose(): void {
-		this.hooks.dispose.run(() => {});
+		this.hooks.dispose.run(() => this.async.abortAll());
 	}
 
 	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
@@ -1219,8 +1222,10 @@ export class Interp {
 							if (fn instanceof BuiltInFunc) {
 								if (fn.kind === "generator") return yield* fn.callGen(frame);
 								const value = fn.call(frame);
-								if (fn.kind === "plain" && value instanceof Promise)
-									return yield* fn.settle(value);
+								if (value instanceof Promise)
+									return fn.kind === "plain"
+										? yield* fn.settle(value)
+										: this.async.watch(value);
 								return value;
 							}
 							env = new Cell(frame, fn.env);

@@ -3,11 +3,14 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
+import { promisesExtension } from "../src/promises.ts";
 
 const dir = process.env.LISPTC_OAUTH_DIR as string;
 
 describe("logout", () => {
-	const interp = new Interp({ extensions: [mcpExtension()] });
+	const interp = new Interp({
+		extensions: [promisesExtension(), mcpExtension()],
+	});
 	runSync(interp, prelude);
 
 	afterAll(async () => {
@@ -37,7 +40,9 @@ describe("logout", () => {
 });
 
 describe("login", () => {
-	const interp = new Interp({ extensions: [mcpExtension()] });
+	const interp = new Interp({
+		extensions: [promisesExtension(), mcpExtension()],
+	});
 	runSync(interp, prelude);
 
 	afterAll(async () => {

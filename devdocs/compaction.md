@@ -204,7 +204,8 @@ In order, `Compactor.result` and `nameFor`:
    two days. The line also says that nothing is owed, since a promise applies
    its own result when it settles. Recognised with `instanceof Promise`, which
    is a host type, so compaction still imports nothing from the promises
-   layer.
+   layer; the built-ins the line names (`await`, `promise-state`, `cancel`) are
+   `promisesExtension`'s, a coupling by name only, like (2).
 4. `nil` and `t` are reported plainly. They carry nothing a later step could
    refer to, and every side-effecting loop returns `nil`; naming those would
    bury the results that matter under `dotimes-1: nil`.

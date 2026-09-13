@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { Dispatch } from "@repo/interpreter/promises";
+import type {
+	ConnectResult,
+	McpClient,
+	ToolCall,
+} from "@repo/interpreter/mcp-client";
 
 export interface MockTool {
 	name: string;
@@ -51,14 +55,14 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
-export function mockDispatch(spec: MockSpec): Dispatch {
+export function mockClient(spec: MockSpec): McpClient {
 	const live = new Map<string, Live>();
 
 	async function connect(
-		payload: unknown,
+		conf: { name: string },
 		signal?: AbortSignal,
-	): Promise<unknown> {
-		const name = (payload as { name?: string }).name ?? "";
+	): Promise<ConnectResult> {
+		const name = conf.name;
 		const server = spec.servers[name];
 		if (!server) {
 			console.warn(
@@ -82,12 +86,7 @@ export function mockDispatch(spec: MockSpec): Dispatch {
 		};
 	}
 
-	function callTool(payload: unknown): unknown {
-		const { serverId, tool, args } = payload as {
-			serverId: string;
-			tool: string;
-			args: Record<string, unknown>;
-		};
+	function callTool({ serverId, tool, args }: ToolCall): unknown {
 		const entry = live.get(serverId);
 		if (!entry) throw new Error(`no such server: ${serverId}`);
 		const specific = entry.server.calls?.[tool];
@@ -104,27 +103,14 @@ export function mockDispatch(spec: MockSpec): Dispatch {
 		return value;
 	}
 
-	return async (op, payload, signal) => {
-		switch (op) {
-			case "connect":
-				return connect(payload, signal);
-			case "call-tool":
-				return callTool(payload);
-			case "list-tools": {
-				const entry = live.get((payload as { serverId: string }).serverId);
-				if (!entry) throw new Error("no such server");
-				return entry.server.tools;
-			}
-			case "disconnect":
-				live.delete((payload as { serverId: string }).serverId);
-				return { ok: true };
-			case "login":
-				return { authUrl: null };
-			case "authorize":
-			case "logout":
-				return { ok: true };
-			default:
-				throw new Error(`unknown op: ${op}`);
-		}
+	return {
+		connect,
+		callTool: async (call) => callTool(call),
+		disconnect: async (serverId) => {
+			live.delete(serverId);
+		},
+		login: async () => ({ authUrl: null }),
+		logout: async () => {},
+		authorize: async () => {},
 	};
 }

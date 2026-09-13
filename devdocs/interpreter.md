@@ -141,6 +141,16 @@ own it, and each added a generator (and two JS stack frames) per Lisp call. A
 builtin call now costs **zero** generator frames: `BuiltInFunc.call` is a plain
 method, and only a builtin declared with `defGen` goes through `callGen`.
 
+### A promise a builtin returns is the core's to track
+
+`Interp.async` (an `AsyncWork`, `async.ts`) is on every interp, extensions or
+none. A promise a `defPromise` builtin hands back is watched there on its way out
+of `evalGen`, which is what absorbs a rejection nobody awaited and what lets
+`interp.dispose()` abort work still in flight. It is core rather than
+`promisesExtension`'s because neither of those can be opt-in: a host that
+composes the language without `await` must still not be killed by a load that
+failed while the agent was busy. See [promises.md](./promises.md).
+
 ### Macro expansion is driven synchronously
 
 `expandMacros` runs at *compile* time, inside `compile`, which is an ordinary

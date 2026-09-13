@@ -7,7 +7,7 @@ import {
 } from "@repo/interpreter/secrets";
 import { modelFacingExtensions } from "@repo/repl/extensions";
 import { AgentRepl } from "@repo/repl/repl";
-import { type MockSpec, mockDispatch } from "./mocks.ts";
+import { type MockSpec, mockClient } from "./mocks.ts";
 import { Trace } from "./trace.ts";
 
 export interface HarnessOptions {
@@ -28,9 +28,7 @@ export function tracedRepl(options: HarnessOptions = {}): Harness {
 		extensions: modelFacingExtensions({
 			secrets: secretsExtension({ store: secrets }),
 			mcp: mcpExtension({
-				dispatch: trace.dispatch(
-					mockDispatch(options.mocks ?? { servers: {} }),
-				),
+				client: trace.client(mockClient(options.mocks ?? { servers: {} })),
 			}),
 			...(options.wordLimit
 				? { compaction: compactionExtension(new Compactor(options.wordLimit)) }

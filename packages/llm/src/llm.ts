@@ -1,4 +1,5 @@
 import { isNumeric } from "@repo/interpreter/arith";
+import { withTimeout } from "@repo/interpreter/async";
 import {
 	arrayToList,
 	Cell,
@@ -21,7 +22,6 @@ import {
 	plistOptions,
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
-import { withTimeout } from "@repo/interpreter/promises";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
 import { langchainGenerate, listProviders } from "./llm-client.ts";

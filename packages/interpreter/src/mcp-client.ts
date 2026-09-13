@@ -7,7 +7,6 @@ import {
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { oauthEnv } from "@repo/env/oauth";
 import {
 	type CallbackServer,
@@ -16,23 +15,68 @@ import {
 	StoredOAuthProvider,
 } from "./mcp-oauth.ts";
 
-type ConnConfig =
-	| {
-			name: string;
-			url: string;
-			headers?: Record<string, string>;
-			oauth?: boolean;
-			scopes?: string[];
-			command?: string;
-			args?: string[];
-			env?: Record<string, string>;
-	  }
-	| {
-			name: string;
-			command: string;
-			args?: string[];
-			env?: Record<string, string>;
-	  };
+export interface JsonSchema {
+	type?: string;
+	properties?: Record<string, JsonSchema>;
+	required?: string[];
+	enum?: unknown[];
+	description?: string;
+	items?: JsonSchema;
+	default?: unknown;
+	examples?: unknown[];
+}
+
+export interface Tool {
+	name: string;
+	description?: string;
+	inputSchema?: JsonSchema;
+	outputSchema?: JsonSchema;
+}
+
+interface ConnMeta {
+	description?: string;
+	keywords?: string[];
+}
+
+export type HttpConnConfig = ConnMeta & {
+	name: string;
+	url: string;
+	headers?: Record<string, string>;
+	oauth?: boolean;
+	scopes?: string[];
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
+};
+
+export type StdioConnConfig = ConnMeta & {
+	name: string;
+	command: string;
+	args?: string[];
+	env?: Record<string, string>;
+};
+
+export type ConnConfig = HttpConnConfig | StdioConnConfig;
+
+export interface ConnectResult {
+	serverId: string;
+	tools: Tool[];
+}
+
+export interface ToolCall {
+	serverId: string;
+	tool: string;
+	args: Record<string, unknown>;
+}
+
+export interface McpClient {
+	connect(conf: ConnConfig, signal?: AbortSignal): Promise<ConnectResult>;
+	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
+	disconnect(serverId: string): Promise<void>;
+	login(conf: HttpConnConfig): Promise<{ authUrl: string | null }>;
+	logout(conf: HttpConnConfig): Promise<void>;
+	authorize(conf: HttpConnConfig, code: string): Promise<void>;
+}
 
 const oauthStore = new FileOAuthStore();
 
@@ -181,58 +225,21 @@ async function startCallbackCapture(
 	).catch(() => {});
 }
 
-const clients = new Map<string, { client: Client; tools: Tool[] }>();
+const clients = new Map<string, Client>();
 
-export type McpOp =
-	| "connect"
-	| "login"
-	| "authorize"
-	| "logout"
-	| "list-tools"
-	| "call-tool"
-	| "disconnect"
-	| "search";
-
-export async function mcpDispatch(
-	op: McpOp,
-	payload: unknown,
-	signal?: AbortSignal,
-): Promise<unknown> {
-	switch (op) {
-		case "connect":
-			return connect(payload as ConnConfig, signal);
-		case "login":
-			return login(payload as { url: string; scopes?: string[] });
-		case "authorize":
-			return authorize(
-				payload as { url: string; code: string; scopes?: string[] },
-			);
-		case "logout":
-			return logout(payload as { url: string });
-		case "list-tools":
-			return listTools((payload as { serverId: string }).serverId);
-		case "call-tool":
-			return callTool(
-				payload as {
-					serverId: string;
-					tool: string;
-					args: Record<string, unknown>;
-				},
-				signal,
-			);
-		case "disconnect":
-			return disconnect((payload as { serverId: string }).serverId);
-		case "search":
-			throw new Error("semantic search backend not implemented");
-		default:
-			throw new Error(`unknown op: ${op}`);
-	}
-}
+export const mcpClient: McpClient = {
+	connect,
+	callTool,
+	disconnect,
+	login,
+	logout,
+	authorize,
+};
 
 async function connect(
 	conf: ConnConfig,
 	signal?: AbortSignal,
-): Promise<{ serverId: string; tools: Tool[] }> {
+): Promise<ConnectResult> {
 	const client = new Client(
 		{ name: "lisptc", version: "1.0.0" },
 		{ capabilities: {} },
@@ -249,7 +256,7 @@ async function openClient(
 	client: Client,
 	conf: ConnConfig,
 	signal?: AbortSignal,
-): Promise<{ serverId: string; tools: Tool[] }> {
+): Promise<ConnectResult> {
 	if ("url" in conf) await ensureLocalServer(conf);
 	if ("url" in conf && conf.oauth) {
 		const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
@@ -289,30 +296,25 @@ async function openClient(
 		throw new Error("connected but the server exposed no tools");
 	}
 	const serverId = randomUUID();
-	clients.set(serverId, { client, tools });
-	return { serverId, tools };
+	clients.set(serverId, client);
+	return { serverId, tools: tools as Tool[] };
 }
 
-async function authorize(payload: {
-	url: string;
-	code: string;
-	scopes?: string[];
-}): Promise<{ ok: true }> {
-	const scope = payload.scopes?.length ? payload.scopes.join(" ") : undefined;
+async function authorize(conf: HttpConnConfig, code: string): Promise<void> {
+	const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
 	const provider = await StoredOAuthProvider.create(
 		oauthStore,
-		payload.url,
+		conf.url,
 		redirectUri(),
 		scope,
 	);
 	const result = await auth(provider, {
-		serverUrl: payload.url,
-		authorizationCode: payload.code,
+		serverUrl: conf.url,
+		authorizationCode: code,
 		scope,
 	});
 	if (result !== "AUTHORIZED")
 		throw new Error("authorization did not complete (unexpected redirect)");
-	return { ok: true };
 }
 
 async function ensureAuthorized(
@@ -340,31 +342,17 @@ async function ensureAuthorized(
 	return { provider, authUrl: authUrl.href };
 }
 
-async function login(payload: {
-	name?: string;
-	url: string;
-	scopes?: string[];
-	command?: string;
-	args?: string[];
-	env?: Record<string, string>;
-}): Promise<{ authUrl: string | null }> {
-	await ensureLocalServer({ name: payload.name ?? payload.url, ...payload });
-	const scope = payload.scopes?.length ? payload.scopes.join(" ") : undefined;
-	const { authUrl } = await ensureAuthorized(payload.url, scope);
+async function login(
+	conf: HttpConnConfig,
+): Promise<{ authUrl: string | null }> {
+	await ensureLocalServer(conf);
+	const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
+	const { authUrl } = await ensureAuthorized(conf.url, scope);
 	return { authUrl };
 }
 
-async function logout(payload: { url: string }): Promise<{ ok: true }> {
-	await oauthStore.clear(new URL(payload.url).origin);
-	return { ok: true };
-}
-
-async function listTools(serverId: string): Promise<Tool[]> {
-	const entry = clients.get(serverId);
-	if (!entry) throw new Error(`no such server: ${serverId}`);
-	const { tools } = await entry.client.listTools();
-	entry.tools = tools;
-	return tools;
+async function logout(conf: HttpConnConfig): Promise<void> {
+	await oauthStore.clear(new URL(conf.url).origin);
 }
 
 function asJsonDocument(text: string): unknown | undefined {
@@ -379,23 +367,19 @@ function asJsonDocument(text: string): unknown | undefined {
 }
 
 async function callTool(
-	payload: {
-		serverId: string;
-		tool: string;
-		args: Record<string, unknown>;
-	},
+	call: ToolCall,
 	signal?: AbortSignal,
 ): Promise<unknown> {
-	const entry = clients.get(payload.serverId);
-	if (!entry) throw new Error(`no such server: ${payload.serverId}`);
-	const result = await entry.client.callTool(
-		{ name: payload.tool, arguments: payload.args },
+	const client = clients.get(call.serverId);
+	if (!client) throw new Error(`no such server: ${call.serverId}`);
+	const result = await client.callTool(
+		{ name: call.tool, arguments: call.args },
 		undefined,
 		{ signal },
 	);
 	if (result.isError) {
 		const text = extractText(result.content);
-		throw new Error(text || `tool ${payload.tool} returned an error`);
+		throw new Error(text || `tool ${call.tool} returned an error`);
 	}
 	if (result.structuredContent !== undefined) return result.structuredContent;
 	const content = result.content;
@@ -410,12 +394,11 @@ async function callTool(
 	return content ?? null;
 }
 
-async function disconnect(serverId: string): Promise<{ ok: true }> {
-	const entry = clients.get(serverId);
-	if (!entry) throw new Error(`no such server: ${serverId}`);
-	await entry.client.close();
+async function disconnect(serverId: string): Promise<void> {
+	const client = clients.get(serverId);
+	if (!client) throw new Error(`no such server: ${serverId}`);
+	await client.close();
 	clients.delete(serverId);
-	return { ok: true };
 }
 
 function extractText(content: unknown): string {

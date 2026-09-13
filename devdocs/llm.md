@@ -72,17 +72,16 @@ that happens to be running on 8080.
 work. A model call is not: the next form almost always needs the text. So every
 `llm/` built-in is an ordinary `interp.def` whose body returns a promise, which
 the evaluator yields on and resumes with the value (see
-[promises.md](./promises.md)). The consequence to keep in mind: the extension
-installs **no** promise built-ins of its own. `Promises.installBuiltins` writes
-`await`, `promises` and `cancel` as globals, and a second installation would
-replace the MCP layer's copies with ones tracking a different `live` set. If
-concurrent generation is ever wanted, the fix is one promise-returning built-in
-(`interp.defPromise`) reusing the MCP layer's combinators, not a second
-`Promises` instance.
+[promises.md](./promises.md)). The extension therefore installs no promise
+built-ins of its own; `await` and friends belong to `promisesExtension()`, and
+this one neither needs them nor would know what to do with a second copy. If
+concurrent generation is ever wanted, the fix is one `interp.defPromise` built-in
+whose promise the evaluator tracks like any other, and the existing combinators
+work on it unchanged.
 
 The `:timeout` option (60s by default) is enforced with `withTimeout` from
-`promises.ts`, and the `AbortController` behind it is aborted on the way out, so
-a timed-out request stops rather than running on invisibly.
+`async.ts`, and the `AbortController` behind it is aborted on the way out, so a
+timed-out request stops rather than running on invisibly.
 
 ## A secret cannot reach a model
 
