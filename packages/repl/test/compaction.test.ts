@@ -1,17 +1,17 @@
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
+import { proseExtension } from "@repo/interpreter/prose";
 import { describe, expect, it } from "vitest";
-import { MemoryRepl } from "../src/repl.ts";
-import { memoryRepl, modelFacing } from "./helpers.ts";
+import type { MemoryRepl } from "../src/repl.ts";
+import { memoryRepl } from "./helpers.ts";
 
 const RANGE =
 	"(defun range (n) (let ((out nil)) (dotimes (i n) (setq out (cons i out))) out))";
 
 async function repl(wordLimit = 6): Promise<MemoryRepl> {
-	const r = new MemoryRepl({
-		extensions: modelFacing({
-			compaction: compactionExtension(new Compactor(wordLimit)),
-		}),
-	});
+	const r = memoryRepl([
+		compactionExtension(new Compactor(wordLimit)),
+		proseExtension(),
+	]);
 	await r.eval(RANGE);
 	return r;
 }

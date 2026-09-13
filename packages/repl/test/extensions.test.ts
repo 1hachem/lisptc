@@ -39,7 +39,7 @@ describe("a REPL built from a list of its own", () => {
 	it("takes the secrets store from the extension that was configured", async () => {
 		const store = new EnvSecretsStore();
 		store.set({ REPL_SHARED: { value: "s", description: "shared" } });
-		const r = memoryRepl({ secrets: secretsExtension({ store }) });
+		const r = memoryRepl([secretsExtension({ store }), compactionExtension()]);
 
 		expect(r.secrets).toBe(store);
 		expect(await r.eval("(secrets)")).toContain("shared");
@@ -47,11 +47,11 @@ describe("a REPL built from a list of its own", () => {
 
 	it("points the llm observer at the llm extension it carries", async () => {
 		const calls: LlmCall[] = [];
-		const r = memoryRepl({
-			llm: llmExtension({
+		const r = memoryRepl([
+			llmExtension({
 				generate: async () => ({ text: "pong", provider: "x", model: "y" }),
 			}),
-		});
+		]);
 		r.llmObserver = (call) => calls.push(call);
 
 		await r.eval('(llm/complete "ping")');
