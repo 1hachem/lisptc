@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { USER } from "../src/channels.ts";
 import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { mcpExtension } from "../src/mcp.ts";
+import { promisesExtension } from "../src/promises.ts";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
 	return str((await runAsync(interp, code)).value);
@@ -22,7 +23,7 @@ async function evalOutput(interp: Interp, code: string): Promise<string> {
 }
 
 function mcpInterp(): Interp {
-	return new Interp({ extensions: [mcpExtension()] });
+	return new Interp({ extensions: [promisesExtension(), mcpExtension()] });
 }
 
 const FIXTURE = fileURLToPath(
@@ -199,7 +200,9 @@ describe("loading a toolkit server by name", () => {
 			args: ["--no-warnings", "--experimental-transform-types", FIXTURE],
 		},
 	]);
-	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	const interp = new Interp({
+		extensions: [promisesExtension(), mcpExtension({ toolkitJson })],
+	});
 	runSync(interp, prelude);
 
 	afterAll(async () => {
@@ -242,7 +245,9 @@ describe("a url server the interpreter starts for you", () => {
 			args: ["-e", "console.error('no secrets for you'); process.exit(3)"],
 		},
 	]);
-	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	const interp = new Interp({
+		extensions: [promisesExtension(), mcpExtension({ toolkitJson })],
+	});
 	runSync(interp, prelude);
 
 	afterAll(async () => {
@@ -269,7 +274,9 @@ describe("a toolkit server bundled with the repo", () => {
 			],
 		},
 	]);
-	const interp = new Interp({ extensions: [mcpExtension({ toolkitJson })] });
+	const interp = new Interp({
+		extensions: [promisesExtension(), mcpExtension({ toolkitJson })],
+	});
 	runSync(interp, prelude);
 
 	afterAll(async () => {
@@ -312,6 +319,23 @@ function loadForm(name: string, delayMs = 0): string {
 			: "";
 	return `(load-mcp :name "${name}" :command "node"${env} :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`;
 }
+
+describe("MCP without the promises extension", () => {
+	const interp = new Interp({ extensions: [mcpExtension()] });
+	runSync(interp, prelude);
+
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
+	});
+
+	it("starts a load, installs the bindings, and offers no await", async () => {
+		const promise = runSync(interp, loadForm("alone")) as Promise<unknown>;
+		expect(promise).toBeInstanceOf(Promise);
+		expect(str(await promise)).toContain("alone/echo");
+		expect(await evalStr(interp, '(alone/echo :message "hi")')).toBe('"hi"');
+		expect(() => runSync(interp, "(await 1)")).toThrow(/undefined: await/);
+	});
+});
 
 describe("MCP promises", () => {
 	const interp = mcpInterp();

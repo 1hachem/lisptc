@@ -3,7 +3,7 @@
 `apps/lsp` never evaluates the buffer — diagnostics, completion, and hover are
 all derived statically, falling back to a local prelude-only interpreter when
 no shared session is reachable (see `packages/repl`'s session-server for what
-"shared" means). `src/server.ts` is now just the connection wiring; the actual
+"shared" means). `src/server.ts` is the connection wiring and nothing else; the actual
 analysis lives in a handful of standalone modules so it can be unit-tested
 without spinning up a real LSP connection:
 

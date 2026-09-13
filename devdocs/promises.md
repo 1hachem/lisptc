@@ -1,17 +1,23 @@
-# Promises, and MCP on top of them
+# Async work: the core, the promises extension, and MCP
 
 The evaluator suspends rather than blocks (see
 [interpreter.md](./interpreter.md)), so async work runs on Node's own event
 loop. This layer is how the language (a) makes a call into async work that reads
-as ordinary and (b) hands back a value standing for work still running. It is
-deliberately domain-agnostic: `promises.ts` knows nothing about MCP. MCP is a
-*consumer*.
+as ordinary and (b) hands back a value standing for work still running.
+
+Four files, and they come apart cleanly:
 
 ```
-src/promises.ts    Dispatch + Promises (the built-ins, and what a promise cannot say)
+src/async.ts       AsyncWork: what a promise cannot say, and withTimeout (core, always on)
+src/promises.ts    promisesExtension(): await, the combinators, promise-state, promises, cancel
 src/mcp.ts         the MCP built-ins, and the finalizer that installs tool bindings
-src/mcp-client.ts  the domain dispatch: connect, call-tool, login, ...
+src/mcp-client.ts  McpClient: connect, call-tool, login, ...
 ```
+
+`mcp.ts` imports the client and `withTimeout`, and nothing at all from
+`promises.ts`. It starts its connect with `interp.async.start` and declares
+`load-mcp` with `interp.defPromise`, the same two things any other extension
+would use. Nothing in MCP knows whether `await` exists.
 
 ## The value is the host's promise
 
@@ -27,63 +33,104 @@ runtime already does:
 | `(promise-any ps)` | `Promise.any` |
 | `(promise-race ps)` | `Promise.race` |
 
-That is not just tidiness. Three behaviours the old job layer implemented by hand
-are now the runtime's own: a promise settles **once** and keeps its result, so
-awaiting twice returns the same value with no `finalized` flag or result cache; a
-finalizer attached with `.then` runs **exactly once** whether or not anyone
-awaits, which is what installs a server's tool bindings in the background; and
-awaiting a settled promise costs a microtask rather than a lookup through an id
-map. The map, the `jobId`, the `collect`/`track` bookkeeping and the
-`JobsRuntime` indirection all existed to carry a promise across a worker
-boundary that no longer exists.
+That is not just tidiness. Three behaviours come free with the runtime's own
+type: a promise settles **once** and keeps its result, so awaiting twice returns
+the same value with no result cache to keep; a finalizer attached with `.then`
+runs **exactly once** whether or not anyone awaits, which is what installs a
+server's tool bindings in the background; and awaiting a settled promise costs a
+microtask rather than a lookup through an id map. Any wrapper would have to
+reimplement all three, and it would only be worth it to carry a promise across a
+thread boundary. There is none: the evaluator waits on this thread.
 
-`Dispatch` is what remains of that indirection, and it is the extension point: a
-different backend (a Redis-backed queue, say) is a different `Dispatch`, not a
-different runtime class.
+## The bookkeeping is the core's, because it cannot be optional
+
+`Interp.async` is an `AsyncWork`, and it exists on every interp whether or not a
+single extension is installed. Two of the three things it does are obligations
+rather than features:
+
+- **Absorbing rejections.** Node kills the process on an unhandled rejection, and
+  a promise the agent starts and never awaits is the normal case here. That is
+  the whole point of `load-mcp` returning immediately. An extension that could
+  take the host down when the language it shipped with is composed differently is
+  not an extension.
+- **Releasing work on the way out.** `interp.dispose()` aborts everything still
+  pending, so a host dropping an interp does not strand a connect. That is the
+  base of the `dispose` hook chain, under whatever the extensions register.
+
+The third is `stateOf`, which the extension reads. `AsyncWork` keeps a `WeakMap`
+from promise to `{ state, controller }` and a `live` `Set` beside it holding only
+what is still pending, so a promise the agent drops is collectable.
+
+A builtin reaches it two ways. `interp.async.start(run)` mints an
+`AbortController`, hands the signal to `run` and tracks the promise it returns.
+That is what makes the work cancellable, so MCP wraps its whole
+`connect().then(install)` chain in one `start` and the controller belongs to the
+promise the agent holds. Everything else is tracked where it is returned: the
+evaluator watches any promise a `defPromise` builtin hands back, so the
+combinators, and a builtin written by someone who never read this page, are
+absorbed and observable for free.
+
+## The extension is the language, not the plumbing
+
+`promisesExtension()` installs `await`, `promise-all`, `promise-all-settled`,
+`promise-any`, `promise-race`, `promise-state`, `promises` and `cancel`, each a
+thin reading of `interp.async` or of the host combinator of the same name. It
+holds no state of its own.
+
+An interp without it still runs async work. `(load-mcp "acme")` starts the
+connect, installs the bindings when it lands, and a synchronous host can drive it
+with `runSync`; what the agent loses is any way to *talk* about a promise.
+`modelFacingExtensions()` always includes it, so every model-facing front-end has
+the full language, and `test/mcp.test.ts` pins the other half: MCP alone is
+enough to load a server and call its tools.
+
+## A feature brings its own port
+
+There is no shared async entry point to route a call through. A feature that
+wants async work defines its own built-ins and talks to the world through a port
+of its own shape: MCP's is `McpClient` (`connect`, `callTool`, `disconnect`,
+`login`, `logout`, `authorize`), whose arguments are the real types rather than
+an op name and an `unknown` payload.
+
+That is what a host swaps to replace the world: `mcpExtension({ client })`.
+`packages/evals` does it twice over, a mock client wrapped by a recording one.
+A generic `(op, payload, signal)` seam would buy a `switch` and a cast at both
+ends, and would tempt the next async feature into sharing one set of promise
+built-ins with MCP.
 
 ## What a promise cannot tell you
 
-Two things, and they are the only state this module keeps: a `WeakMap` from
-promise to `{ state, controller }`.
+Two things, and they are the only state `AsyncWork` keeps.
 
 **State.** A JS promise cannot be asked synchronously whether it has settled, and
-`(promise-state p)` must not block — an agent polls it precisely to avoid
+`(promise-state p)` must not block, since an agent polls it precisely to avoid
 waiting. So the same `.then` that tracks settling records `pending` →
 `fulfilled` / `rejected`. The keyword names are the spec's, not ours.
 
 **Cancellation.** A promise is not cancellable; an `AbortController` is what the
-host offers, and the signal is already wired into every dispatch op. `(cancel p)`
-aborts that, and the promise then **rejects** — which is the honest outcome, and
-better than the old `no such job` that came from deleting a map entry. A promise
-built by `promise-all` and friends has no controller of its own, so `cancel`
-returns nil there rather than pretending.
+host offers, and `interp.async.start` is what ties one to a promise. `(cancel p)`
+aborts it and the promise then **rejects**, which is the honest outcome: the work
+stopped, and anyone awaiting it hears so. A promise built by `promise-all` and
+friends is only watched, never started, so it has no controller of its own and
+`cancel` returns nil there rather than pretending.
 
-The `WeakMap` also means a promise the agent drops is collectable; the `live`
-`Set` beside it holds only what is still pending, so `(promises)` can list it and
-`shutdown` can abort it, and the settling `.then` removes it.
+`(mcp-shutdown)` cancels the loads MCP itself started, which is why `mcp.ts`
+keeps the set of them: aborting *everything* pending would reach work that was
+never its own.
 
-## Absorbing rejections is not optional
-
-Node kills the process on an unhandled rejection. A promise the agent starts and
-never awaits is the normal case here — that is the whole point of `load-mcp`
-returning immediately — so the state-tracking `.then` doubles as the absorber: it
-attaches an `onRejected` at creation, which is why a load that fails while the
-agent is doing something else marks itself `:rejected` instead of taking the host
-down.
-
-## Two kinds of builtin, because a promise is a value now
+## Two kinds of builtin, because a promise is a value
 
 The evaluator's rule (see [interpreter.md](./interpreter.md)) is that a `Promise`
 returned from a builtin is yielded, not returned. That makes an MCP tool call
 read as ordinary code. But it cannot hold for a builtin whose promise **is** the
 answer, so the kind is declared at definition:
 
-- `interp.def` — plain. A returned promise suspends the evaluator. Tool bindings,
-  `login`, `logout`, `mcp-authorize`, and `await` itself (which just returns the
-  promise it was handed, timeout applied).
-- `interp.defPromise` — the returned promise is the value. `load-mcp` and the
-  four combinators.
-- `interp.defGen` — the body is a generator and yields for itself.
+- `interp.def` is plain: a returned promise suspends the evaluator. Tool
+  bindings, `login`, `logout`, `mcp-authorize`, and `await` itself, which just
+  returns the promise it was handed, timeout applied.
+- `interp.defPromise` means the returned promise is the value, and the evaluator
+  watches it on the way out. `load-mcp` and the four combinators.
+- `interp.defGen` means the body is a generator and yields for itself.
 
 So `(load-mcp …)` does not suspend at all, and a synchronous host can start
 background work with `runSync` and read `(promise-state …)` on it.
@@ -99,10 +146,12 @@ only way an async driver can hand back a promise as a value.
 
 ## Timeouts are policy, not a deadlock guard
 
-`DEFAULT_TIMEOUT_MS` (30s) and `AWAIT_TIMEOUT_MS` (50s) used to exist because
-`Atomics.wait` with no bound would hang a thread forever. Nothing hangs now: they
-stay only so one agent turn cannot wait on a dead server without end, and
-`(await p ms)` lets the agent choose. A non-finite timeout is rejected.
+Nothing blocks the thread, so no timeout here is a deadlock guard.
+`CALL_TIMEOUT_MS` (30s, `mcp.ts`) and `AWAIT_TIMEOUT_MS` (50s, `promises.ts`)
+exist only so one agent turn cannot wait on a dead server without end, and
+`(await p ms)` lets the agent choose. Each sits with the feature whose policy it
+is: a tool call's deadline is MCP's business, an `await`'s is the promise
+language's. A non-finite timeout is rejected.
 `withTimeout` races against a timer it unrefs, so a pending deadline cannot hold
 the process open by itself, and a timeout leaves the promise itself pending and
 awaitable — as racing does.
@@ -131,10 +180,10 @@ string.
 ### The client module is process-wide
 
 `clients`, the shared OAuth callback server and the token store live in
-`mcp-client.ts` module scope, so **every interp in a process shares them**. Under
-the worker each interp got its own copy, one per broker. Two interps loading the
-same server now share nothing but that map, keyed by `serverId`, so they do not
-collide; but a test that expects isolation between interps will not get it.
+`mcp-client.ts` module scope, so **every interp in a process shares them**. Two
+interps loading the same server share nothing but that map, keyed by `serverId`,
+so they do not collide; but a test that expects isolation between interps will
+not get it.
 
 ### `LOAD_MCP_ARGS` marks only `:name` required
 
@@ -150,14 +199,12 @@ the interp releases them through the `dispose` hook. Both may fire. Every
 installed `<server>/<tool>` global is undefined on the way out, so no stale
 binding lingers with a closure capturing a dead `serverId`.
 
-**Shutdown has to close the clients, and it did not used to.** Under the worker,
-shutting the runtime down was `worker.terminate()`, and killing the thread took
-every SDK client and every stdio child process with it. On the main thread there
-is no thread to kill: aborting a controller does nothing to a client that already
-connected. So `shutdown()` disconnects each of *this interp's* servers by hand,
-and `connect` closes its client if anything after `new Client` throws (an abort
-included), which is what releases a child spawned by a connect that was
-cancelled.
+**Shutdown has to close the clients by hand.** There is no thread to kill that
+would take the SDK clients and their stdio children with it, and aborting a
+controller does nothing to a client that already connected. So `shutdown()`
+disconnects each of *this interp's* servers itself, and `connect` closes its
+client if anything after `new Client` throws (an abort included), which is what
+releases a child spawned by a connect that was cancelled.
 
 It closes this interp's servers, never the whole `clients` map, because that map
 is process-wide: clearing it would kill another interp's servers.
@@ -173,7 +220,7 @@ browser, say) without hardcoding machine-specific store paths. Unset vars expand
 to the empty string, and a malformed config entry is ignored rather than crashing
 interpreter startup.
 
-`mcp.toolkit.json` still sits at the package root next to `src/` and is emitted
+`mcp.toolkit.json` sits at the package root next to `src/` and is emitted
 beside the code in a build (see `apps/api/vite.config.ts`, which copies it).
 
 ## Test fixtures
@@ -192,10 +239,10 @@ observe a load in `:pending`.
 at least one tool is registered — and the whole point of that fixture is to
 advertise it with none.
 
-The concurrency test asserts on the two promises' **states** rather than on
-elapsed time. An earlier wall-clock version compared a two-load run against a
-single-load baseline and flaked whenever CPU contention made two simultaneous
-node spawns cost more than the one the baseline measured.
+The concurrency test asserts on the two promises' **states**, never on elapsed
+time. A wall-clock version of it compares a two-load run against a single-load
+baseline and flakes whenever CPU contention makes two simultaneous node spawns
+cost more than the one the baseline measured.
 
 Tests that touch MCP drive the interpreter with `runAsync` (or `evAsync` from
 `test/helpers.ts`); `runSync` raises `cannot suspend` the moment a tool call

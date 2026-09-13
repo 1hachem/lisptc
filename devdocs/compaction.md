@@ -78,9 +78,8 @@ working with no special cases.
 
 ## Reading documentation is free, and deliberately so
 
-`doc` used to write straight to the channels, bypassing the compactor entirely.
-It now goes through it like every other output, and is the one thing the
-compactor does not bound:
+`doc` goes through the compactor like every other output, and is the one thing
+the compactor does not bound:
 
 - **Never truncated, and never charged.** A doc entry is what the agent reads in
   order to call something correctly; a trimmed one is the argument list it was
@@ -199,12 +198,13 @@ In order, `Compactor.result` and `nameFor`:
 3. A **promise** is reported by name plus what the name is for — `load-mcp-1: a
    promise, still running … (await load-mcp-1) …` — and its printed form
    (`#<promise>`) is never shown, in this line or in `describe`. That form is
-   not readable source, and an agent shown one types it back: the old
-   `(await #<job load-mcp:linear 8d12…>)` was four negative survey reports in
-   two days. The line also says that nothing is owed, since a promise applies
-   its own result when it settles. Recognised with `instanceof Promise`, which
-   is a host type, so compaction still imports nothing from the promises
-   layer.
+   not readable source, and an agent shown one types it back, which cost four
+   negative survey reports in two days. The line also says that nothing is owed,
+   since a promise applies its own result when it settles. Recognised with
+   `instanceof Promise`, which is a host type, so compaction imports nothing
+   from the promises layer; the built-ins the line names (`await`,
+   `promise-state`, `cancel`) are `promisesExtension`'s, a coupling by name
+   only, like (2).
 4. `nil` and `t` are reported plainly. They carry nothing a later step could
    refer to, and every side-effecting loop returns `nil`; naming those would
    bury the results that matter under `dotimes-1: nil`.

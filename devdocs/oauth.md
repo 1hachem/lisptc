@@ -146,8 +146,7 @@ Reset a server's OAuth by deleting its file.
 ## The token directory is resolved per call, not at import
 
 `FileOAuthStore` reads `LISPTC_OAUTH_DIR` when it loads or saves a token, not
-when it is constructed. It used to be constructed inside the broker worker,
-which was spawned late and re-read `process.env` on the way up; on the main
-thread the module is imported once at startup, so a constructor default would
-freeze whatever the directory was at import time. `@repo/env`'s typed env is a
+when it is constructed. The module is imported once at startup, so a constructor
+default would freeze whatever the directory was at import time, and a test that
+sets the variable in its own body would write to the wrong place. `@repo/env`'s typed env is a
 snapshot for the same reason, so this one key is read from `process.env` first.

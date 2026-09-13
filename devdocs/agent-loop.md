@@ -49,10 +49,10 @@ uncounted rather than counted wrong.
 ### The stream test imports in a hook, not in a test
 
 `test/stream.test.ts` drives the real `streamChatResponse` with `agent.ts`
-mocked (`test/turn.test.ts` does the same to the loop underneath it), so its
-first test used to pay the whole module graph inside a test's 5s budget:
-4773ms of 5000 on a CI runner, and a single new import under `MemoryRepl`
-tipped it over. The import now happens in `beforeAll`, which has
+mocked (`test/turn.test.ts` does the same to the loop underneath it), so the
+first test to import it pays for the whole module graph. Inside a test's 5s
+budget that is 4773ms of 5000 on a CI runner, and one new import under
+`MemoryRepl` tips it over. The import therefore happens in `beforeAll`, which has
 its own 10s budget, and each test measures only what it is about (~60ms). Any
 test that pulls a heavy graph belongs in a hook for the same reason.
 
@@ -125,7 +125,7 @@ up earlier in the chat.
 One long-lived `AgentRepl` per `thread_id` fixes that. Insertion order in the Map
 doubles as LRU recency: a touched thread is re-inserted at the end, so the
 least-recently-used is always `keys().next()`. No thread id means an ephemeral
-REPL, preserving the old stateless behaviour.
+REPL, carrying nothing from one request to the next.
 
 Eviction does **not** yet release the thread's MCP clients (`TODO` in
 `repl-store.ts`).

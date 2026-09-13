@@ -15,9 +15,10 @@ When you fix something non-obvious, add it to the page for that area.
   syntax, `#<…>`, prose stripping), the generator evaluator and what it costs,
   the hooks/channels extension vocabulary, the evaluator's traps, and the prose
   classifier.
-- [Promises and MCP](./promises.md) — why a Lisp promise is the host's own
-  promise, the two things a promise cannot tell you, the builtin kinds, and what
-  MCP adds on top.
+- [Async work](./promises.md) — why a Lisp promise is the host's own promise,
+  what the core has to track whatever the host composed, what the promises
+  extension adds on top, the builtin kinds, and how MCP starts async work
+  without knowing the extension exists.
 - [Language models in the REPL](./llm.md) — why the extension is its own package
   (`@repo/llm`), why an `llm/` call suspends rather than returning a promise, why
   a secret cannot reach a model, the extraction shape language, the trap in
@@ -44,7 +45,7 @@ When you fix something non-obvious, add it to the page for that area.
   accounting, per-thread REPL persistence, provider grammar spellings, KV
   warming, and what the system prompt has to say.
 - [The eval suite](./evals.md) — how a case seeds both the transcript and the
-  interpreter, why the world is mocked at the `Dispatch`, the three-valued
+  interpreter, why the world is mocked at the MCP client, the three-valued
   latching check language (and why a pending `never` ends true), the zod report
   contract that keeps the runner and the viewer honest, and how runs are graded
   and scored across models.
