@@ -11,17 +11,23 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "start": "node --no-warnings --experimental-transform-types src/server.ts"
+    "start": "node --no-warnings --experimental-transform-types src/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*",
+    "@repo/mcp": "workspace:*",
     "@repo/repl": "workspace:*"
   },
   "devDependencies": {
+    "@repo/ai": "workspace:*",
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3",
+    "vitest": "^3.0.0",
     "zod": "^4.4.3"
   }
 }

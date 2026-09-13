@@ -32,7 +32,7 @@ extension should carry its own copy of.
 ### The LangChain import is lazy, and that is load-bearing
 
 Living in its own package does not by itself move the weight.
-`modelFacingExtensions()` installs `llmExtension()` for every host, so a static
+Every model-facing host lists `llmExtension()`, so a static
 `import { ChatOpenAI } from "@langchain/openai"` in `llm-client.ts` makes the
 LSP, the MCP server, the CLI and every REPL test load LangChain and the OpenAI
 SDK at startup, whether or not a model is ever called. Measured on a warm dev

@@ -23,7 +23,6 @@ import {
 	type LlmExtension,
 	type LlmObserver,
 } from "@repo/llm/llm";
-import { modelFacingExtensions } from "./extensions.ts";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -35,7 +34,7 @@ export interface InMemoryRepl extends Repl {
 }
 
 export interface ReplOptions {
-	extensions?: InterpExtension[];
+	extensions: InterpExtension[];
 }
 
 interface EvalResult extends Bounded {
@@ -70,8 +69,8 @@ export class MemoryRepl implements InMemoryRepl {
 	private readonly llm?: LlmExtension;
 	readonly secrets?: SecretsStore;
 
-	constructor(options: ReplOptions = {}) {
-		this.extensions = options.extensions ?? modelFacingExtensions();
+	constructor(options: ReplOptions) {
+		this.extensions = options.extensions;
 		this.compactor = find(this.extensions, compactorOf);
 		this.secrets = find(this.extensions, storeOf);
 		this.llm = this.extensions.find(isLlmExtension);

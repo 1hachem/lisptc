@@ -80,9 +80,9 @@ holds no state of its own.
 An interp without it still runs async work. `(load-mcp "acme")` starts the
 connect, installs the bindings when it lands, and a synchronous host can drive it
 with `runSync`; what the agent loses is any way to *talk* about a promise.
-`modelFacingExtensions()` always includes it, so every model-facing front-end has
-the full language, and `test/mcp.test.ts` pins the other half: MCP alone is
-enough to load a server and call its tools.
+Every model-facing host lists it, so each of them has the full language, and
+`test/mcp.test.ts` pins the other half: MCP alone is enough to load a server and
+call its tools.
 
 ## A feature brings its own port
 

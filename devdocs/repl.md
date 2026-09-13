@@ -5,38 +5,45 @@ it. Three of them: `MemoryRepl`/`AgentRepl` (embeddable, string in / string out)
 `cli.ts` (the interactive terminal), and `session-server.ts` (one interpreter
 shared over a unix socket).
 
-## One roster, four hosts
+## Each host lists the extensions it speaks
 
-`extensions.ts` exports `modelFacingExtensions()`, and it is the only place the
-language a model sees is spelled out: secrets, promises, MCP, LLM, compaction,
-prose, in that order. `MemoryRepl` and the interactive CLI both build their
-interp from it, which is what stops the two drifting. A roster written twice
-drifts silently: the copy that forgets `llmExtension()` leaves `pnpm repl`
-without `llm/complete` while the agent has it, and nothing fails to say so.
+`ReplOptions.extensions` is required, and every host spells its own list where it
+builds its REPL: the CLI, the session server, `apps/mcp` and `packages/ai`'s
+per-thread store each name secrets, promises, MCP, LLM, compaction and prose, in
+that order; the eval harness names the four it configures and `apps/lsp` the ones
+it needs for completion. Reading a host tells you exactly what language it
+speaks, and a host that never names `llmExtension` never pulls `@repo/llm` into
+its graph.
 
-**A host configures an extension, never the REPL.** The roster takes one slot per
-extension, each holding an already-configured extension, and fills the rest with
-defaults:
+**A host configures an extension, never the REPL.** Each entry is an
+already-configured extension, so there is nowhere for a REPL to hold an
+extension's knobs:
 
 ```ts
-modelFacingExtensions({
-  secrets: secretsExtension({ store, envFile: true }),
-  mcp: mcpExtension({ client }),
-  compaction: compactionExtension(new Compactor(wordLimit)),
-  extra: [trace.extension()],
-})
+new MemoryRepl({
+  extensions: [
+    secretsExtension({ store, envFile: true }),
+    promisesExtension(),
+    mcpExtension({ client }),
+    llmExtension(),
+    compactionExtension(new Compactor(wordLimit)),
+    proseExtension(),
+  ],
+});
 ```
-
-`promisesExtension()` and `proseExtension()` get no slot, because neither takes
-a configuration: there is nothing for a host to hand in, and a roster that
-dropped either would be handing the model a language with holes in it.
 
 `ReplOptions` is therefore one field, `extensions`, and not the union of every
 extension's knobs — `secretsStore`, `wordLimit`, `mcpClient`, `toolkitJson` —
-each threaded through a `MemoryRepl` field into `freshInterp()`. That shape makes
-teaching one extension a new option an edit to the REPL, the roster and the
-options type, for something a REPL has no opinion about: it does not know what an
-MCP client or a word limit is, and does not have to.
+each threaded through a `MemoryRepl` field into `freshInterp()`. That shape would
+make teaching one extension a new option an edit to the REPL and the options
+type, for something a REPL has no opinion about: it does not know what an MCP
+client or a word limit is, and does not have to.
+
+Separate lists can drift, and the drift is silent: a host missing
+`llmExtension()` leaves that front-end without `llm/complete` while the agent has
+it, and a model trained against the agent's globals would hit it. That is what
+`apps/mcp/test/host-language.test.ts` guards — it builds a REPL the way each
+agent-facing host does and asserts the three have the same set of global names.
 
 ### What the REPL still needs back
 
@@ -51,8 +58,8 @@ per-turn LLM observer. Instead of taking them as options, each extension
   `isLlmExtension`; `repl.llmObserver` is a getter/setter onto it, which is why
   the observer survives a `reset()` — it lives on the extension, not the interp.
 
-Each is optional. A roster with no compaction reports nothing and caps nothing; a
-roster with no secrets leaves `repl.secrets` undefined. That is the honest
+Each is optional. A list with no compaction reports nothing and caps nothing; a
+list with no secrets leaves `repl.secrets` undefined. That is the honest
 reading of "the REPL speaks whatever language it was handed".
 
 ## `MemoryRepl`

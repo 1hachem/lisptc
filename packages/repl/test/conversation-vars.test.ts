@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentRepl, MemoryRepl } from "../src/repl.ts";
+import { agentRepl, memoryRepl } from "./helpers.ts";
 
 function sampleVars() {
 	return {
@@ -14,7 +14,7 @@ function sampleVars() {
 
 describe("AgentRepl conversation variables", () => {
 	it("exposes messages as alists readable with assoc/car/cdr", async () => {
-		const r = new AgentRepl();
+		const r = agentRepl();
 		r.setConversationVars(sampleVars());
 		expect(await r.eval('(cdr (assoc "role" (car conversation)))')).toBe(
 			'cdr-1: "user"\n',
@@ -25,7 +25,7 @@ describe("AgentRepl conversation variables", () => {
 	});
 
 	it("supports mapcar over a filtered message list", async () => {
-		const r = new AgentRepl();
+		const r = agentRepl();
 		r.setConversationVars(sampleVars());
 		expect(await r.eval("(length user-messages)")).toBe("length-1: 1\n");
 		expect(await r.eval("(car user-messages)")).toBe('car-1: "hi"\n');
@@ -35,7 +35,7 @@ describe("AgentRepl conversation variables", () => {
 	});
 
 	it("re-injection restores a global the user reassigned (not hard read-only)", async () => {
-		const r = new AgentRepl();
+		const r = agentRepl();
 		r.setConversationVars(sampleVars());
 		expect(await r.eval("(setq conversation 1)")).toBe("conversation: 1\n");
 		expect(await r.eval("(progn conversation)")).toBe("progn-1: 1\n");
@@ -44,14 +44,14 @@ describe("AgentRepl conversation variables", () => {
 	});
 
 	it("reset() keeps the injected globals (post-error survival)", async () => {
-		const r = new AgentRepl();
+		const r = agentRepl();
 		r.setConversationVars(sampleVars());
 		r.reset();
 		expect(await r.eval("(length conversation)")).toBe("length-1: 2\n");
 	});
 
 	it("an empty snapshot yields nil lists", async () => {
-		const r = new AgentRepl();
+		const r = agentRepl();
 		r.setConversationVars({ conversation: [], "user-messages": [] });
 		expect(await r.eval("(progn conversation)")).toBe("nil\n");
 		expect(await r.eval("(length user-messages)")).toBe("length-1: 0\n");
@@ -60,7 +60,7 @@ describe("AgentRepl conversation variables", () => {
 
 describe("MemoryRepl (language-only base)", () => {
 	it("has no conversation globals — they are an AgentRepl feature", async () => {
-		const r = new MemoryRepl();
+		const r = memoryRepl();
 		expect(await r.eval("(progn conversation)")).toContain("void variable");
 	});
 });

@@ -11,18 +11,16 @@ import {
 } from "@repo/interpreter/secrets";
 import { type LlmExtension, llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
+import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
 export interface ModelFacingParts {
 	secrets?: SecretsExtension;
 	mcp?: InterpExtension;
 	llm?: LlmExtension;
 	compaction?: CompactionExtension;
-	extra?: InterpExtension[];
 }
 
-export function modelFacingExtensions(
-	parts: ModelFacingParts = {},
-): InterpExtension[] {
+export function modelFacing(parts: ModelFacingParts = {}): InterpExtension[] {
 	return [
 		parts.secrets ?? secretsExtension(),
 		promisesExtension(),
@@ -30,6 +28,13 @@ export function modelFacingExtensions(
 		parts.llm ?? llmExtension(),
 		parts.compaction ?? compactionExtension(),
 		proseExtension(),
-		...(parts.extra ?? []),
 	];
+}
+
+export function memoryRepl(parts: ModelFacingParts = {}): MemoryRepl {
+	return new MemoryRepl({ extensions: modelFacing(parts) });
+}
+
+export function agentRepl(parts: ModelFacingParts = {}): AgentRepl {
+	return new AgentRepl({ extensions: modelFacing(parts) });
 }

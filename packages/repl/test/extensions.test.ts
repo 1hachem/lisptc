@@ -3,12 +3,12 @@ import { proseExtension } from "@repo/interpreter/prose";
 import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { type LlmCall, llmExtension } from "@repo/llm/llm";
 import { describe, expect, it } from "vitest";
-import { modelFacingExtensions } from "../src/extensions.ts";
 import { MemoryRepl } from "../src/repl.ts";
+import { memoryRepl } from "./helpers.ts";
 
-describe("a REPL built from the default roster", () => {
+describe("a REPL built from the model-facing list", () => {
 	it("speaks the whole model-facing language", async () => {
-		const r = new MemoryRepl();
+		const r = memoryRepl();
 
 		expect(await r.eval("(+ 1 2)")).toBe("+-1: 3\n");
 		expect(await r.eval("(list-toolkit)")).toContain("playwright");
@@ -17,7 +17,7 @@ describe("a REPL built from the default roster", () => {
 	});
 });
 
-describe("a REPL built from a roster of its own", () => {
+describe("a REPL built from a list of its own", () => {
 	it("gets exactly the extensions it was handed", async () => {
 		const r = new MemoryRepl({
 			extensions: [compactionExtension(new Compactor(4)), proseExtension()],
@@ -39,11 +39,7 @@ describe("a REPL built from a roster of its own", () => {
 	it("takes the secrets store from the extension that was configured", async () => {
 		const store = new EnvSecretsStore();
 		store.set({ REPL_SHARED: { value: "s", description: "shared" } });
-		const r = new MemoryRepl({
-			extensions: modelFacingExtensions({
-				secrets: secretsExtension({ store }),
-			}),
-		});
+		const r = memoryRepl({ secrets: secretsExtension({ store }) });
 
 		expect(r.secrets).toBe(store);
 		expect(await r.eval("(secrets)")).toContain("shared");
@@ -51,11 +47,9 @@ describe("a REPL built from a roster of its own", () => {
 
 	it("points the llm observer at the llm extension it carries", async () => {
 		const calls: LlmCall[] = [];
-		const r = new MemoryRepl({
-			extensions: modelFacingExtensions({
-				llm: llmExtension({
-					generate: async () => ({ text: "pong", provider: "x", model: "y" }),
-				}),
+		const r = memoryRepl({
+			llm: llmExtension({
+				generate: async () => ({ text: "pong", provider: "x", model: "y" }),
 			}),
 		});
 		r.llmObserver = (call) => calls.push(call);
