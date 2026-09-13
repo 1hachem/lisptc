@@ -12,8 +12,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./bot/*": "./src/bot/*.ts",
-    "./gaze": "./src/gaze.ts",
-    "./package.json": "./package.json"
+    "./gaze": "./src/gaze.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

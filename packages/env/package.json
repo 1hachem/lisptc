@@ -11,7 +11,6 @@
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",
     "./oauth": "./src/oauth.ts",
-    "./package.json": "./package.json",
     "./providers": "./src/providers.ts",
     "./r2": "./src/r2.ts",
     "./repl": "./src/repl.ts",
