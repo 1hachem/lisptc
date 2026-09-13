@@ -15,6 +15,7 @@
     "test:evals": "vitest run --config vitest.evals.config.ts"
   },
   "dependencies": {
+    "@repo/components": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/evals": "workspace:*",
     "@repo/ui": "workspace:*",

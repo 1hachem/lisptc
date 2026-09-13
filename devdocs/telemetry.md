@@ -183,9 +183,9 @@ its exact turn would mean the server handing its `$ai_span_id` (`turnId` in
 ### The same gesture in the eval viewer
 
 `apps/trace-viewer` votes on an agent turn too, and none of it is a second
-implementation. The survey payload is `@repo/shared/feedback.ts`
+implementation. The survey payload is `@repo/components/feedback.ts`
 (`surveyResponse`, the thumb/sentence rules below encoded once), the affordance
-is `@repo/ui/components/message-feedback.tsx` (the `▲`/`▼`, the follow-up input,
+is `@repo/components/message-feedback.tsx` (the `▲`/`▼`, the follow-up input,
 the reply afterwards), and what differs between the two apps is exactly what
 should: who captures the event, and what context rides along. `apps/app` passes
 `$ai_trace_id` and the message id; the viewer passes the eval run. The one

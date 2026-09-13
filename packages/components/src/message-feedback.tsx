@@ -1,8 +1,8 @@
 "use client";
 
-import { quip, surveyResponse, type Thumb } from "@repo/shared/feedback";
+import { cn } from "@repo/ui/lib/utils";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "../lib/utils.ts";
+import { quip, surveyResponse, type Thumb } from "./feedback.ts";
 
 export function MessageFeedback({
 	capture,

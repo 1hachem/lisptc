@@ -1,6 +1,5 @@
 import type { ExpressionId } from "@repo/bloub";
-import type { Thumb } from "@repo/shared/feedback";
-import { MessageFeedback as Feedback } from "@repo/ui/components/message-feedback.tsx";
+import { MessageFeedback as Feedback, type Thumb } from "@repo/components";
 import { useAgent } from "../lib/agent.tsx";
 import { captureFeedback } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";

@@ -103,12 +103,12 @@ importers:
       '@repo/bloub':
         specifier: workspace:*
         version: link:../../packages/bloub
+      '@repo/components':
+        specifier: workspace:*
+        version: link:../../packages/components
       '@repo/env':
         specifier: workspace:*
         version: link:../../packages/env
-      '@repo/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -242,6 +242,9 @@ importers:
 
   apps/trace-viewer:
     dependencies:
+      '@repo/components':
+        specifier: workspace:*
+        version: link:../../packages/components
       '@repo/env':
         specifier: workspace:*
         version: link:../../packages/env
@@ -330,6 +333,37 @@ importers:
         version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/bloub:
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.2
+        version: 19.2.5(@types/react@19.2.18)
+      happy-dom:
+        specifier: ^20.13.0
+        version: 20.13.0
+      react:
+        specifier: ^19.2.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
+
+  packages/components:
+    dependencies:
+      '@repo/ui':
+        specifier: workspace:*
+        version: link:../ui
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*
@@ -524,9 +558,6 @@ importers:
 
   packages/ui:
     dependencies:
-      '@repo/shared':
-        specifier: workspace:*
-        version: link:../shared
       ai:
         specifier: ^7.0.79
         version: 7.0.79(zod@4.4.3)
@@ -564,9 +595,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.2
         version: 19.2.5(@types/react@19.2.18)
-      happy-dom:
-        specifier: ^20.13.0
-        version: 20.13.0
       react:
         specifier: ^19.2.0
         version: 19.2.8
@@ -579,9 +607,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
 
 packages:
 

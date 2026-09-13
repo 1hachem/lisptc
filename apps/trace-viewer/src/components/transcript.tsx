@@ -1,8 +1,8 @@
 "use client";
 
+import { MessageFeedback } from "@repo/components/message-feedback.tsx";
 import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
-import { MessageFeedback } from "@repo/ui/components/message-feedback.tsx";
 import { Turn } from "@/components/ui.tsx";
 import { captureReview } from "@/lib/analytics.ts";
 import type { ReportRow } from "@/lib/reports.ts";

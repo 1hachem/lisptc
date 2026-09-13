@@ -1,4 +1,4 @@
-import { Typewriter } from "@repo/ui";
+import { Typewriter } from "@repo/components";
 import { useChatSession } from "../lib/chat.tsx";
 import { usePrefersReducedMotion } from "../lib/motion.ts";
 
