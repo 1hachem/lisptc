@@ -1,5 +1,6 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
+import { memoryExtension } from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { EnvSecretsStore, type SecretsStore } from "@repo/interpreter/secrets";
@@ -32,6 +33,7 @@ const modelFacing: ExtensionsFor = () => [
 	mockedMcpExtension(),
 	llmExtension(),
 	compactionExtension(),
+	memoryExtension(),
 	proseExtension(),
 ];
 

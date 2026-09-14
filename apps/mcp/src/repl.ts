@@ -1,4 +1,5 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
+import { memoryExtension } from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { secretsExtension } from "@repo/interpreter/secrets";
@@ -14,6 +15,7 @@ export function newRepl(): MemoryRepl {
 			mcpExtension(),
 			llmExtension(),
 			compactionExtension(),
+			memoryExtension(),
 			proseExtension(),
 		],
 	});

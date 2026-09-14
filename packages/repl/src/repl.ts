@@ -16,6 +16,7 @@ import {
 	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
+import { bankOf, type MemoryBank } from "@repo/interpreter/memory";
 import { isTruncated } from "@repo/interpreter/prose";
 import { type SecretsStore, storeOf } from "@repo/interpreter/secrets";
 import {
@@ -68,11 +69,13 @@ export class MemoryRepl implements InMemoryRepl {
 	private readonly compactor?: Compactor;
 	private readonly llm?: LlmExtension;
 	readonly secrets?: SecretsStore;
+	readonly memories?: MemoryBank;
 
 	constructor(options: ReplOptions) {
 		this.extensions = options.extensions;
 		this.compactor = find(this.extensions, compactorOf);
 		this.secrets = find(this.extensions, storeOf);
+		this.memories = find(this.extensions, bankOf);
 		this.llm = this.extensions.find(isLlmExtension);
 		this.currentInterp = this.freshInterp();
 	}
@@ -116,6 +119,7 @@ export class MemoryRepl implements InMemoryRepl {
 
 	private async evaluateOne(code: string): Promise<EvalResult> {
 		this.compactor?.beginStep();
+		const recalled = this.memories?.beginStep(code, this.currentInterp) ?? "";
 		let model = "";
 		let user = "";
 		const skipped: string[] = [];
@@ -147,7 +151,12 @@ export class MemoryRepl implements InMemoryRepl {
 			for (const off of unsubscribe) off();
 		}
 		return {
-			model: model + (this.compactor?.endStep() ?? "") + error.model,
+			model:
+				recalled +
+				model +
+				(this.memories?.endStep() ?? "") +
+				(this.compactor?.endStep() ?? "") +
+				error.model,
 			user: user + error.user,
 			skipped,
 		};

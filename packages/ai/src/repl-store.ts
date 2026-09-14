@@ -1,5 +1,11 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
+import {
+	FileMemoryStore,
+	MemoryBank,
+	memoryDirFor,
+	memoryExtension,
+} from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { secretsExtension } from "@repo/interpreter/secrets";
@@ -9,19 +15,22 @@ import { AgentRepl } from "@repo/repl/repl";
 
 const MAX_THREADS = 50;
 
-export function agentExtensions(): InterpExtension[] {
+export function agentExtensions(scope?: string): InterpExtension[] {
 	return [
 		secretsExtension(),
 		promisesExtension(),
 		mcpExtension(),
 		llmExtension(),
 		compactionExtension(),
+		memoryExtension(
+			new MemoryBank(new FileMemoryStore(memoryDirFor(scope ?? "shared"))),
+		),
 		proseExtension(),
 	];
 }
 
-function newAgentRepl(): AgentRepl {
-	return new AgentRepl({ extensions: agentExtensions() });
+function newAgentRepl(scope?: string): AgentRepl {
+	return new AgentRepl({ extensions: agentExtensions(scope) });
 }
 
 const repls = new Map<string, AgentRepl>();
@@ -36,7 +45,7 @@ export function getThreadRepl(threadId: string | undefined): AgentRepl {
 		return existing;
 	}
 
-	const repl = newAgentRepl();
+	const repl = newAgentRepl(threadId);
 	repls.set(threadId, repl);
 	while (repls.size > MAX_THREADS) {
 		const oldest = repls.keys().next().value;

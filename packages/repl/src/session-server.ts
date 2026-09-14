@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import type { Arity, DocArg, InterpExtension } from "@repo/interpreter/lisp";
+import { memoryExtension } from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { secretsExtension } from "@repo/interpreter/secrets";
@@ -22,6 +23,7 @@ export function sessionExtensions(): InterpExtension[] {
 		mcpExtension(),
 		llmExtension(),
 		compactionExtension(),
+		memoryExtension(),
 		proseExtension(),
 	];
 }
