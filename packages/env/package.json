@@ -9,6 +9,7 @@
     "./api": "./src/api.ts",
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",
+    "./memory": "./src/memory.ts",
     "./oauth": "./src/oauth.ts",
     "./providers": "./src/providers.ts",
     "./r2": "./src/r2.ts",
