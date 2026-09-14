@@ -10,7 +10,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { memoryEnv } from "@repo/env/memory";
 import { z } from "zod";
-import { type Channels, MEMORY } from "./channels.ts";
+import { type Channels, MEMORY } from "../../channels.ts";
 import {
 	arrayToList,
 	Cell,
@@ -27,8 +27,8 @@ import {
 	str,
 	stripProse,
 	zList,
-} from "./lisp.ts";
-import { plistOptions, splitKeywordArgs } from "./plist.ts";
+} from "../../lisp.ts";
+import { plistOptions, splitKeywordArgs } from "../../plist.ts";
 
 export const INITIAL_SCORE = 1;
 export const REINFORCEMENT = 0.5;

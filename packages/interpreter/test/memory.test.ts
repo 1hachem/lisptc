@@ -2,8 +2,7 @@ import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { compactionExtension } from "../src/compaction.ts";
-import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
+import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
 import {
 	FileMemoryStore,
 	FORGET_BELOW,
@@ -17,7 +16,8 @@ import {
 	REINFORCEMENT,
 	scopedMemoryStore,
 	VolatileStore,
-} from "../src/memory.ts";
+} from "../src/extensions/memory/memory.ts";
+import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 
 interface Fixture {
 	interp: Interp;

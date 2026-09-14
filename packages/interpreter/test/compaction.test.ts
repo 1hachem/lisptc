@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { MODEL, USER } from "../src/channels.ts";
-import { Compactor, compactionExtension } from "../src/compaction.ts";
+import {
+	Compactor,
+	compactionExtension,
+} from "../src/extensions/compaction/compaction.ts";
+import { secretsExtension } from "../src/extensions/secrets/secrets.ts";
 import { Cell, Interp, newSym, prelude, runSync, str } from "../src/lisp.ts";
-import { secretsExtension } from "../src/secrets.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
 function interpWithLimit(limit: number): { interp: Interp; c: Compactor } {

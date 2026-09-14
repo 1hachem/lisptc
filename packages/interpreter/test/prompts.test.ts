@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { compactionExtension } from "../src/compaction.ts";
+import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
+import { memoryExtension } from "../src/extensions/memory/memory.ts";
+import { promisesExtension } from "../src/extensions/promises/promises.ts";
+import { proseExtension } from "../src/extensions/prose/prose.ts";
+import { secretsExtension } from "../src/extensions/secrets/secrets.ts";
 import { Interp } from "../src/lisp.ts";
-import { memoryExtension } from "../src/memory.ts";
-import { promisesExtension } from "../src/promises.ts";
-import { proseExtension } from "../src/prose.ts";
-import { secretsExtension } from "../src/secrets.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
 
 describe("the system prompt an interpreter composes", () => {

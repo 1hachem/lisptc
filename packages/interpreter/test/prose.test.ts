@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MODEL } from "../src/channels.ts";
+import { isTruncated, proseExtension } from "../src/extensions/prose/prose.ts";
 import {
 	checkSyntax,
 	Interp,
@@ -8,7 +9,6 @@ import {
 	str,
 	stripProse,
 } from "../src/lisp.ts";
-import { isTruncated, proseExtension } from "../src/prose.ts";
 import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
 function collectSkips(interp: Interp): string[] {

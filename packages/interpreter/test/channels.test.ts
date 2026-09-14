@@ -6,8 +6,8 @@ import {
 	MODEL,
 	USER,
 } from "../src/channels.ts";
+import { proseExtension } from "../src/extensions/prose/prose.ts";
 import { Interp, runSync, setWriter, str } from "../src/lisp.ts";
-import { proseExtension } from "../src/prose.ts";
 
 function record(channels: Channels, channel: string): Diagnostic[] {
 	const seen: Diagnostic[] = [];

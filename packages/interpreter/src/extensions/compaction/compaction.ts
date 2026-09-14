@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { type Channels, MODEL, USER } from "./channels.ts";
+import { type Channels, MODEL, USER } from "../../channels.ts";
 import {
 	Cell,
 	callableKind,
@@ -19,8 +19,8 @@ import {
 	Unspecified,
 	zAny,
 	zList,
-} from "./lisp.ts";
-import { plistOptions, splitKeywordArgs } from "./plist.ts";
+} from "../../lisp.ts";
+import { plistOptions, splitKeywordArgs } from "../../plist.ts";
 
 export const MAX_WORDS = 400;
 

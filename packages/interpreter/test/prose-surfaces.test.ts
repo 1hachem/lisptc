@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compactionExtension } from "../src/compaction.ts";
+import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
 import { checkSyntax } from "../src/lisp.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
 import { ev } from "./helpers.ts";
