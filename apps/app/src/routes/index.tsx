@@ -10,15 +10,16 @@ export const Route = createFileRoute("/")({
 
 function ChatRoute() {
 	const runCommand = useCommandRunner();
-	const { send, stop, isLoading } = useChatSession();
+	const { send, runLisp, stop, isLoading } = useChatSession();
 
 	return (
 		<>
 			<ChatView />
 			<div className="px-8 pb-7">
 				<ChatInput
-					placeholder="type a message  ·  / for commands  ·  ! to run lisp"
+					placeholder="type a message  ·  / for commands  ·  ! for lisp"
 					onSubmit={send}
+					onLisp={runLisp}
 					onCommand={runCommand}
 					isStreaming={isLoading}
 					onStop={stop}

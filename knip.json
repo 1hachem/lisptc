@@ -70,6 +70,10 @@
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
+    "packages/syntax": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
     "packages/ui": {
       "project": ["src/**/*.{ts,tsx}"]
     }

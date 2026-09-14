@@ -1,7 +1,34 @@
+import { createElement, type ReactNode } from "react";
 import { type Components, Streamdown } from "streamdown";
 import "streamdown/styles.css";
+import { withLisp } from "./lisp-text.tsx";
+
+const TEXT_TAGS = [
+	"p",
+	"li",
+	"em",
+	"strong",
+	"blockquote",
+	"h1",
+	"h2",
+	"h3",
+	"h4",
+	"h5",
+	"h6",
+	"td",
+	"th",
+];
+
+function highlighted(tag: string) {
+	return ({
+		children,
+		...props
+	}: Record<string, unknown> & { children?: ReactNode }) =>
+		createElement(tag, props, withLisp(children));
+}
 
 const components: Components = {
+	...Object.fromEntries(TEXT_TAGS.map((tag) => [tag, highlighted(tag)])),
 	a: ({ children, ...props }) => (
 		<a
 			{...props}
@@ -17,7 +44,7 @@ const components: Components = {
 			{...props}
 			className="whitespace-pre-wrap break-words bg-transparent p-0 font-[inherit] text-[length:inherit]"
 		>
-			{children}
+			{withLisp(children)}
 		</code>
 	),
 	pre: ({ children, ...props }) => (

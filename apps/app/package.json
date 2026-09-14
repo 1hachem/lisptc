@@ -21,6 +21,7 @@
     "@repo/bloub": "workspace:*",
     "@repo/components": "workspace:*",
     "@repo/env": "workspace:*",
+    "@repo/syntax": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.5",
     "@tanstack/react-router": "^1.170.32",
@@ -29,7 +30,8 @@
     "posthog-js": "^1.425.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "streamdown": "^2.6.0"
+    "streamdown": "^2.6.0",
+    "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

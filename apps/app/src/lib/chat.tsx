@@ -72,16 +72,9 @@ interface ChatSession {
 	threadId: string;
 	error?: string;
 	send: (text: string) => void;
+	runLisp: (code: string) => void;
 	stop: () => void;
 	clear: () => void;
-}
-
-const LISP_PREFIX = "!";
-
-function lispEntry(text: string): string | null {
-	if (!text.startsWith(LISP_PREFIX)) return null;
-	const code = text.slice(LISP_PREFIX.length).trim();
-	return code === "" ? null : code;
 }
 
 async function evalLisp(
@@ -203,14 +196,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 					? stream.error.message
 					: String(stream.error)
 				: undefined) ?? evalError,
+		runLisp: (code) => {
+			void runLisp(code);
+		},
 		send: (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
-			const code = lispEntry(trimmed);
-			if (code !== null) {
-				void runLisp(code);
-				return;
-			}
 			const history = messages.map((m) => ({
 				type: m.type,
 				content: m.content,
