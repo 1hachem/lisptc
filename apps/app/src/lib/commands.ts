@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useChatSession } from "./chat.tsx";
+import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
 
 export interface Command {
@@ -12,30 +13,43 @@ export interface Command {
 
 export const commands: Command[] = [
 	{ name: "/clear", desc: "start a fresh session" },
+	{ name: "/copy", desc: "copy the conversation to the clipboard" },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
 ];
 
+async function copyConversation(text: string): Promise<string> {
+	if (!text) return "nothing to copy";
+	try {
+		await navigator.clipboard.writeText(text);
+		return "conversation copied";
+	} catch {
+		return "the clipboard is not available";
+	}
+}
+
 export function useCommandRunner() {
 	const { toggleLeft, toggleRight } = useUI();
-	const { clear } = useChatSession();
+	const { clear, messages } = useChatSession();
 
 	return useCallback(
-		(name: string) => {
+		async (name: string): Promise<string | null> => {
 			switch (name) {
 				case "/clear":
 					clear();
-					break;
+					return null;
+				case "/copy":
+					return await copyConversation(transcript(messages));
 				case "/sidebar":
 					toggleLeft();
-					break;
+					return null;
 				case "/panel":
 					toggleRight();
-					break;
+					return null;
 				default:
-					break;
+					return null;
 			}
 		},
-		[toggleLeft, toggleRight, clear],
+		[toggleLeft, toggleRight, clear, messages],
 	);
 }

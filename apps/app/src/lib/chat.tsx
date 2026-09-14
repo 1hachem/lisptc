@@ -280,6 +280,10 @@ export function isToolMessage(message: ChatMessage): boolean {
 	return message.type === "tool";
 }
 
+export function isUserMessage(message: ChatMessage): boolean {
+	return message.type === "human" || message.type === "user";
+}
+
 export function toolResult(message: ChatMessage): {
 	output: string;
 	error: boolean;

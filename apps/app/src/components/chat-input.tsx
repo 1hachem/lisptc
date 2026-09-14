@@ -29,13 +29,14 @@ export interface ChatInputProps {
 	placeholder?: string;
 	onSubmit: (text: string) => void;
 	onLisp: (code: string) => void;
-	onCommand?: (name: string) => void;
+	onCommand?: (name: string) => Promise<string | null>;
 	isStreaming?: boolean;
 	onStop?: () => void;
 	disabled?: boolean;
 }
 
 const LISP_PREFIX = "!";
+const NOTICE_MS = 2000;
 
 class CommandOption extends MenuOption {
 	command: Command;
@@ -105,6 +106,16 @@ function Editor({
 	const [editor] = useLexicalComposerContext();
 	const menuOpen = useRef(false);
 	const menuHost = useRef<HTMLDivElement>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+	const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => () => clearTimeout(noticeTimer.current ?? undefined), []);
+
+	const flash = useCallback((text: string) => {
+		setNotice(text);
+		clearTimeout(noticeTimer.current ?? undefined);
+		noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
+	}, []);
 
 	useEffect(() => {
 		editor.setEditable(!disabled);
@@ -135,15 +146,22 @@ function Editor({
 
 	const runCommand = useCallback(
 		(name: string) => {
-			onCommand?.(name);
 			editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
+			void Promise.resolve(onCommand?.(name)).then((text) => {
+				if (text) flash(text);
+			});
 		},
-		[editor, onCommand],
+		[editor, onCommand, flash],
 	);
 
 	return (
 		<>
 			<div ref={menuHost} />
+			{notice && (
+				<div className="border-b border-bg2 bg-bg1 px-3 py-0.5 text-dim">
+					{notice}
+				</div>
+			)}
 			<InputShell
 				prompt={disabled ? "⋯" : "›"}
 				tone={disabled ? "text-dim" : "text-green"}
