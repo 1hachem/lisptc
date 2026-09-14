@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compactionExtension } from "../src/compaction.ts";
 import { Interp } from "../src/lisp.ts";
+import { memoryExtension } from "../src/memory.ts";
 import { promisesExtension } from "../src/promises.ts";
 import { proseExtension } from "../src/prose.ts";
 import { secretsExtension } from "../src/secrets.ts";
@@ -28,6 +29,27 @@ describe("the system prompt an interpreter composes", () => {
 		expect(prompt).not.toMatch(/\(await /);
 		expect(prompt).not.toMatch(/\(secret /);
 		expect(prompt).not.toMatch(/:offset/);
+		expect(prompt).not.toMatch(/memory\/recall/);
+	});
+
+	it("teaches remembering only when memory is installed", () => {
+		const prompt = new Interp({
+			extensions: [memoryExtension()],
+		}).systemPrompt();
+
+		expect(prompt).toMatch(/MEMORY/);
+		expect(prompt).toMatch(/memory\/remember/);
+		expect(prompt).toMatch(/memory\/replay/);
+	});
+
+	it("puts memory after compaction, so recall is read the way results are", () => {
+		const prompt = new Interp({
+			extensions: [compactionExtension(), memoryExtension()],
+		}).systemPrompt();
+
+		expect(prompt.indexOf("EXTRACT, THEN ECHO")).toBeLessThan(
+			prompt.indexOf("MEMORY"),
+		);
 	});
 
 	it("teaches windowing only when compaction is installed", () => {

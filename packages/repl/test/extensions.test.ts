@@ -1,4 +1,9 @@
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
+import {
+	MemoryBank,
+	memoryExtension,
+	VolatileStore,
+} from "@repo/interpreter/memory";
 import { proseExtension } from "@repo/interpreter/prose";
 import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { type LlmCall, llmExtension } from "@repo/llm/llm";
@@ -43,6 +48,28 @@ describe("a REPL built from a list of its own", () => {
 
 		expect(r.secrets).toBe(store);
 		expect(await r.eval("(secrets)")).toContain("shared");
+	});
+
+	it("takes the memory bank from the extension that was configured", async () => {
+		const bank = new MemoryBank(new VolatileStore());
+		const r = memoryRepl([compactionExtension(), memoryExtension(bank)]);
+
+		expect(r.memories).toBe(bank);
+		await r.eval('(memory/remember "k" "a note worth keeping")');
+
+		expect(bank.store.get("k")?.body).toBe("a note worth keeping");
+	});
+
+	it("surfaces a memory that fires on the step it was written for", async () => {
+		const bank = new MemoryBank(new VolatileStore());
+		const r = memoryRepl([compactionExtension(), memoryExtension(bank)]);
+		await r.eval(`(memory/remember "k" "the note" :on '(step))`);
+
+		expect(await r.eval("(+ 1 1)")).toContain("k: the note");
+	});
+
+	it("has no bank when no memory extension is in it", () => {
+		expect(memoryRepl([compactionExtension()]).memories).toBeUndefined();
 	});
 
 	it("points the llm observer at the llm extension it carries", async () => {

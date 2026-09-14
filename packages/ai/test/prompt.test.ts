@@ -1,4 +1,5 @@
 import { Interp } from "@repo/interpreter/lisp";
+import { TRIGGER_KINDS } from "@repo/interpreter/memory";
 import { describe, expect, it } from "vitest";
 import { IDENTITY, MAX_STEPS, systemPromptFor } from "../src/prompts/lisp.ts";
 import { snapshotConversation } from "../src/repl.ts";
@@ -279,5 +280,37 @@ describe("the language reference", () => {
 			/Your view of echo output is capped; the user's is not/,
 		);
 		expect(PROMPT).toMatch(/page on with the offset/);
+	});
+});
+
+describe("memory", () => {
+	const MEMORY_BUILTINS = [
+		"memory/remember",
+		"memory/recall",
+		"memory/forget",
+		"memory/revise",
+		"memory/replay",
+		"memories",
+	];
+
+	it.each(MEMORY_BUILTINS)("names %s", (name) => {
+		expect(PROMPT).toContain(name);
+	});
+
+	it("names every trigger kind a memory can hook", () => {
+		for (const kind of TRIGGER_KINDS) expect(PROMPT).toMatch(names(kind));
+	});
+
+	it("says a fired memory reaches the model and not the user", () => {
+		expect(PROMPT).toMatch(/to you alone/);
+		expect(PROMPT).toMatch(/the user does not see it/);
+	});
+
+	it("says why the memory builtins are slashed", () => {
+		expect(PROMPT).toMatch(/ordinary English\s+verbs/);
+	});
+
+	it("says a code body has to be quoted", () => {
+		expect(PROMPT).toMatch(/Quote a code body/);
 	});
 });
