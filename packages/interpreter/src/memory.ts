@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { memoryEnv } from "@repo/env/memory";
 import { z } from "zod";
+import { type Channels, MEMORY } from "./channels.ts";
 import {
 	arrayToList,
 	Cell,
@@ -322,7 +323,13 @@ interface MemoryEvent {
 	text: string;
 }
 
+export interface FiredMemory {
+	key: string;
+	body: string;
+}
+
 export class MemoryBank {
+	private channels?: Channels;
 	private readonly fired = new Set<string>();
 	private readonly open = new Set<string>();
 	private depth = 0;
@@ -336,6 +343,10 @@ export class MemoryBank {
 		readonly store: MemoryStore = new FileMemoryStore(),
 		private readonly now: () => number = Date.now,
 	) {}
+
+	attach(channels: Channels): void {
+		this.channels = channels;
+	}
 
 	reset(): void {
 		this.fired.clear();
@@ -421,7 +432,7 @@ export class MemoryBank {
 		this.fired.add(memory.key);
 		this.open.add(memory.key);
 		this.reinforce(memory);
-		this.say(`${memory.key}: ${bodyText(memory.body)}\n`);
+		this.say(memory.key, bodyText(memory.body));
 		this.depth++;
 		try {
 			this.dispatch({ kind: "recall", text: memory.key }, interp);
@@ -471,14 +482,16 @@ export class MemoryBank {
 		}
 	}
 
-	private say(text: string): void {
-		const words = text.split(/\s+/).filter((w) => w !== "").length;
+	private say(key: string, body: string): void {
+		const line = `${key}: ${body}\n`;
+		const words = line.split(/\s+/).filter((w) => w !== "").length;
 		if (this.spent >= MAX_RECALL_WORDS) {
 			this.dropped += words;
 			return;
 		}
 		this.spent += words;
-		this.pending += text;
+		this.pending += line;
+		this.channels?.emit({ channel: MEMORY, text: line, value: { key, body } });
 	}
 }
 
@@ -554,6 +567,7 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.reset();
+	bank.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
 		bank.onCall(i, form);

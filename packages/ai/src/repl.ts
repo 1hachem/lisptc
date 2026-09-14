@@ -1,3 +1,4 @@
+import type { FiredMemory } from "@repo/interpreter/memory";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 
@@ -32,12 +33,17 @@ export function stripFences(text: string): string {
 	return m ? m[1] : text.trim();
 }
 
-export function replResultContent(output: string, error: boolean): string {
+export function replResultContent(
+	output: string,
+	error: boolean,
+	memories: FiredMemory[] = [],
+): string {
 	return JSON.stringify({
 		type: "tool_result",
 		source: "lisp-repl",
 		error,
 		output: output || "(no output)",
+		...(memories.length > 0 ? { memories } : {}),
 	});
 }
 
@@ -56,14 +62,19 @@ export function proseFeedbackContent(feedback: string): string {
 export async function evalCode(
 	repl: AgentRepl,
 	code: string,
-): Promise<{ output: string; display: string; error: boolean }> {
+): Promise<{
+	output: string;
+	display: string;
+	error: boolean;
+	memories: FiredMemory[];
+}> {
 	try {
-		const { model, user } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false };
+		const { model, user, memories } = await repl.evalOutput(code);
+		return { output: model, display: user, error: false, memories };
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
 		const text = `REPL error: ${msg} (interpreter was reset, definitions lost)`;
-		return { output: text, display: text, error: true };
+		return { output: text, display: text, error: true, memories: [] };
 	}
 }

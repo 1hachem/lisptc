@@ -1,4 +1,4 @@
-import { MODEL, USER } from "@repo/interpreter/channels";
+import { MEMORY, MODEL, USER } from "@repo/interpreter/channels";
 import {
 	type Bounded,
 	type Compactor,
@@ -16,7 +16,11 @@ import {
 	runSync,
 	stripProse,
 } from "@repo/interpreter/lisp";
-import { bankOf, type MemoryBank } from "@repo/interpreter/memory";
+import {
+	bankOf,
+	type FiredMemory,
+	type MemoryBank,
+} from "@repo/interpreter/memory";
 import { isTruncated } from "@repo/interpreter/prose";
 import { type SecretsStore, storeOf } from "@repo/interpreter/secrets";
 import {
@@ -38,7 +42,11 @@ export interface ReplOptions {
 	extensions: InterpExtension[];
 }
 
-interface EvalResult extends Bounded {
+export interface EvalOutput extends Bounded {
+	memories: FiredMemory[];
+}
+
+interface EvalResult extends EvalOutput {
 	skipped: string[];
 }
 
@@ -57,9 +65,9 @@ function skipNotes(skipped: string[]): string {
 	return skipped.map((what) => `skipped ${what}\n`).join("");
 }
 
-function render({ model, user, skipped }: EvalResult): Bounded {
+function render({ model, user, skipped, memories }: EvalResult): EvalOutput {
 	const notes = skipNotes(skipped);
-	return { model: model + notes, user: user + notes };
+	return { model: model + notes, user: user + notes, memories };
 }
 
 export class MemoryRepl implements InMemoryRepl {
@@ -101,7 +109,7 @@ export class MemoryRepl implements InMemoryRepl {
 
 	protected setup(_interp: Interp): void {}
 
-	async evalOutput(code: string): Promise<Bounded> {
+	async evalOutput(code: string): Promise<EvalOutput> {
 		return render(await this.evaluate(code));
 	}
 
@@ -119,14 +127,18 @@ export class MemoryRepl implements InMemoryRepl {
 
 	private async evaluateOne(code: string): Promise<EvalResult> {
 		this.compactor?.beginStep();
-		const recalled = this.memories?.beginStep(code, this.currentInterp) ?? "";
 		let model = "";
 		let user = "";
 		const skipped: string[] = [];
+		const memories: FiredMemory[] = [];
 		const { channels } = this.currentInterp;
 		const unsubscribe = [
 			channels.on(USER, (d) => {
 				user += d.text;
+			}),
+			channels.on(MEMORY, (d) => {
+				const fired = d.value as FiredMemory | undefined;
+				if (fired) memories.push(fired);
 			}),
 			channels.on(MODEL, (d) => {
 				if (d.severity === "warning") {
@@ -138,6 +150,7 @@ export class MemoryRepl implements InMemoryRepl {
 		];
 		let error: Bounded = { model: "", user: "" };
 		try {
+			this.memories?.beginStep(code, this.currentInterp);
 			await runAsync(this.currentInterp, code);
 		} catch (ex) {
 			if (ex instanceof EvalException) {
@@ -148,16 +161,13 @@ export class MemoryRepl implements InMemoryRepl {
 				error = { model: text, user: text };
 			} else throw ex;
 		} finally {
+			this.memories?.endStep();
 			for (const off of unsubscribe) off();
 		}
 		return {
-			model:
-				recalled +
-				model +
-				(this.memories?.endStep() ?? "") +
-				(this.compactor?.endStep() ?? "") +
-				error.model,
+			model: model + (this.compactor?.endStep() ?? "") + error.model,
 			user: user + error.user,
+			memories,
 			skipped,
 		};
 	}
@@ -182,12 +192,16 @@ export class AgentRepl extends MemoryRepl {
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 	}
 
-	override async evalOutput(code: string): Promise<Bounded> {
+	override async evalOutput(code: string): Promise<EvalOutput> {
 		const result = await this.evaluate(code);
 		if (!isAnswer(code, result)) return render(result);
 		this.finished = true;
 		this.pendingProse.push(...result.skipped);
-		return { model: result.model, user: result.user };
+		return {
+			model: result.model,
+			user: result.user,
+			memories: result.memories,
+		};
 	}
 
 	setConversationVars(vars: Record<string, unknown>): void {

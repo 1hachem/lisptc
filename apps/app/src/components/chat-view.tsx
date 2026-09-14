@@ -17,6 +17,7 @@ import { AgentAvatar } from "./agent-avatar.tsx";
 import { Greeting } from "./greeting.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
+import { MessageMemories } from "./message-memories.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 
 function isUser(m: ChatMessage): boolean {
@@ -111,6 +112,9 @@ export function ChatView() {
 											<Markdown>{messageText(m)}</Markdown>
 										)}
 									</div>
+								)}
+								{stats?.memories && (
+									<MessageMemories memories={stats.memories} />
 								)}
 								{stats && <MessageMeta meta={stats} />}
 								{!isUser(m) && !isToolMessage(m) && (

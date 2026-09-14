@@ -10,6 +10,7 @@ export interface Diagnostic {
 
 export const USER = "user";
 export const MODEL = "model";
+export const MEMORY = "memory";
 export const DEBUG = "debug";
 
 export const ALL = "*";

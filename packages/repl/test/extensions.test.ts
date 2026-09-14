@@ -60,12 +60,25 @@ describe("a REPL built from a list of its own", () => {
 		expect(bank.store.get("k")?.body).toBe("a note worth keeping");
 	});
 
-	it("surfaces a memory that fires on the step it was written for", async () => {
+	it("hands a fired memory back on its own lane, not in the REPL output", async () => {
 		const bank = new MemoryBank(new VolatileStore());
 		const r = memoryRepl([compactionExtension(), memoryExtension(bank)]);
 		await r.eval(`(memory/remember "k" "the note" :on '(step))`);
 
-		expect(await r.eval("(+ 1 1)")).toContain("k: the note");
+		const { model, memories } = await r.evalOutput("(+ 1 1)");
+
+		expect(memories).toEqual([{ key: "k", body: "the note" }]);
+		expect(model).not.toContain("the note");
+		expect(model).toContain("2");
+	});
+
+	it("reports no memories on a step that fired none", async () => {
+		const r = memoryRepl([
+			compactionExtension(),
+			memoryExtension(new MemoryBank(new VolatileStore())),
+		]);
+
+		expect((await r.evalOutput("(+ 1 1)")).memories).toEqual([]);
 	});
 
 	it("has no bank when no memory extension is in it", () => {

@@ -17,6 +17,11 @@ export interface ChatMessage {
 	};
 }
 
+export interface FiredMemory {
+	key: string;
+	body: string;
+}
+
 export interface StepMeta {
 	at?: string;
 	durationMs: number;
@@ -26,6 +31,7 @@ export interface StepMeta {
 	outputTokens?: number;
 	cachedInputTokens?: number;
 	steps?: number;
+	memories?: FiredMemory[];
 }
 
 function num(value: unknown): number | undefined {
@@ -36,6 +42,19 @@ function num(value: unknown): number | undefined {
 
 function text(value: unknown): string | undefined {
 	return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+function parseMemories(value: unknown): FiredMemory[] | undefined {
+	if (!Array.isArray(value)) return undefined;
+	const fired: FiredMemory[] = [];
+	for (const entry of value) {
+		if (!entry || typeof entry !== "object") continue;
+		const raw = entry as Record<string, unknown>;
+		const key = text(raw.key);
+		if (key === undefined) continue;
+		fired.push({ key, body: text(raw.body) ?? "" });
+	}
+	return fired.length > 0 ? fired : undefined;
 }
 
 function parseMeta(value: unknown): StepMeta | undefined {
@@ -52,6 +71,7 @@ function parseMeta(value: unknown): StepMeta | undefined {
 		outputTokens: num(raw.outputTokens),
 		cachedInputTokens: num(raw.cachedInputTokens),
 		steps: num(raw.steps),
+		memories: parseMemories(raw.memories),
 	};
 }
 
@@ -116,9 +136,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		const found: Record<string, StepMeta> = {};
 		for (const m of streamed) {
-			if (!m.id || meta[m.id]) continue;
+			if (!m.id) continue;
+			const known = meta[m.id];
+			if (known?.memories) continue;
 			const parsed = parseMeta(m.additional_kwargs?.meta);
-			if (parsed) found[m.id] = parsed;
+			if (!parsed) continue;
+			if (known && !parsed.memories) continue;
+			found[m.id] = parsed;
 		}
 		if (Object.keys(found).length > 0)
 			setMeta((prev) => ({ ...prev, ...found }));

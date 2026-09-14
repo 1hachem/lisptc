@@ -117,6 +117,8 @@ export function streamChatResponse(
 						});
 					} else if (event.type === "result") {
 						steps = event.step;
+						if (lastMeta && event.memories.length > 0)
+							lastMeta.memories = event.memories;
 						wire.push({
 							type: "tool",
 							content: replResultContent(event.output, event.error),
