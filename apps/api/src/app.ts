@@ -16,6 +16,7 @@ app.use(
 			"x-distinct-id",
 			"x-posthog-distinct-id",
 			"x-posthog-session-id",
+			"x-posthog-window-id",
 		],
 	}),
 );

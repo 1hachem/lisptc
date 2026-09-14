@@ -7,6 +7,7 @@ export {
 	type Role,
 	streamAgent,
 } from "./agent.ts";
+export { type EvalMessage, evalUserCode } from "./eval.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 export {
 	getProvider,

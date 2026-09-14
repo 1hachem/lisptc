@@ -15,6 +15,7 @@ import {
 } from "../lib/chat.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { Greeting } from "./greeting.tsx";
+import { LispText } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMemories } from "./message-memories.tsx";
@@ -106,7 +107,9 @@ export function ChatView() {
 										{isUser(m) ? (
 											<div className="flex min-w-0 gap-1">
 												<span className="select-none text-dim">›</span>
-												<Markdown>{messageText(m)}</Markdown>
+												<div className="min-w-0 whitespace-pre-wrap break-words">
+													<LispText>{messageText(m)}</LispText>
+												</div>
 											</div>
 										) : (
 											<Markdown>{messageText(m)}</Markdown>

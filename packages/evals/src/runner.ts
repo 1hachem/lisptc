@@ -6,13 +6,14 @@ import {
 	systemPromptFor,
 	type TranscriptEntry,
 } from "@repo/ai";
+import { Checks } from "@repo/checks/checks";
+import type { MockSpec } from "@repo/checks/mocks";
+import { Trace } from "@repo/checks/trace";
 import { evalsEnv } from "@repo/env/evals";
 import type { ProviderName } from "@repo/shared/providers";
 import { test } from "vitest";
-import { Checks } from "./checks.ts";
 import { type ExtensionsFor, tracedRepl } from "./harness.ts";
 import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
-import type { MockSpec } from "./mocks.ts";
 import type {
 	CaseInfo,
 	CheckOutcome,
@@ -26,7 +27,6 @@ import type {
 import { reportSchema } from "./report.ts";
 import { shardPath } from "./shards.ts";
 import { evalMatrix, reachable, type Target } from "./targets.ts";
-import { Trace } from "./trace.ts";
 
 export type { Target } from "./targets.ts";
 export { evalConcurrency, evalMatrix, reachable } from "./targets.ts";

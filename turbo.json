@@ -1,6 +1,65 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "envMode": "loose",
+  "boundaries": {
+    "tags": {
+      "foundation": {
+        "dependencies": {
+          "deny": [
+            "platform",
+            "language",
+            "extension",
+            "runtime",
+            "agent",
+            "frontend",
+            "product"
+          ]
+        }
+      },
+      "platform": {
+        "dependencies": {
+          "deny": [
+            "language",
+            "extension",
+            "runtime",
+            "agent",
+            "frontend",
+            "product"
+          ]
+        }
+      },
+      "language": {
+        "dependencies": {
+          "deny": ["extension", "runtime", "agent", "frontend", "product"]
+        }
+      },
+      "extension": {
+        "dependencies": {
+          "deny": ["runtime", "agent", "frontend", "product"]
+        }
+      },
+      "runtime": {
+        "dependencies": {
+          "deny": ["agent", "frontend", "product"]
+        }
+      },
+      "agent": {
+        "dependencies": {
+          "deny": ["frontend", "product"]
+        }
+      },
+      "frontend": {
+        "dependencies": {
+          "deny": ["language", "extension", "runtime", "agent", "product"]
+        }
+      },
+      "product": {
+        "dependents": {
+          "allow": []
+        }
+      }
+    }
+  },
   "tasks": {
     "dev": {
       "cache": false,

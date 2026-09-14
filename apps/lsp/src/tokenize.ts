@@ -1,4 +1,4 @@
-import { tokenPattern } from "@repo/interpreter";
+import { tokenPattern } from "@repo/shared/lisp-tokens";
 
 export interface Atom {
 	kind: "atom";

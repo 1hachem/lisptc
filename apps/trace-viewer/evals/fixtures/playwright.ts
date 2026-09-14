@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { MockServer, MockTool } from "@repo/evals/mocks";
+import type { MockServer, MockTool } from "@repo/checks/mocks";
 
 const tools = JSON.parse(
 	readFileSync(new URL("./playwright.tools.json", import.meta.url), "utf8"),

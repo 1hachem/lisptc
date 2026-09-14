@@ -1,9 +1,9 @@
+import type { MockSpec } from "@repo/checks/mocks";
+import type { Trace } from "@repo/checks/trace";
 import type { SecretsStore } from "@repo/interpreter/secrets";
 import type { AgentRepl } from "@repo/repl/repl";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { type Harness, tracedRepl } from "../src/harness.ts";
-import type { MockSpec } from "../src/mocks.ts";
-import type { Trace } from "../src/trace.ts";
 
 const PLAYWRIGHT: MockSpec = {
 	servers: {

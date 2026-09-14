@@ -41,6 +41,12 @@ jobs:
       - name: No stray docs
         run: pnpm check:docs
 
+      - name: Boundaries
+        run: pnpm boundaries
+
+      - name: Architecture
+        run: pnpm check:arch
+
       - name: Knip
         run: pnpm knip
 

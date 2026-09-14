@@ -1,4 +1,4 @@
-import { mockedMcpExtension } from "@repo/evals/mocks";
+import { mockedMcpExtension } from "@repo/checks/mocks";
 import { evalCase } from "@repo/evals/runner";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { promisesExtension } from "@repo/interpreter/promises";

@@ -1,18 +1,19 @@
+import {
+	type CheckOutcome,
+	checkOutcomeSchema,
+	type Verdict,
+	verdictSchema,
+} from "@repo/checks/verdict";
 import { z } from "zod";
 
-export const gradeSchema = z.enum(["pass", "degraded", "fail"]);
+export type { CheckOutcome, Verdict };
+export { checkOutcomeSchema, verdictSchema };
 
-export const verdictSchema = z.enum(["true", "false", "pending"]);
+export const gradeSchema = z.enum(["pass", "degraded", "fail"]);
 
 export const transcriptLineSchema = z.object({
 	role: z.enum(["user", "assistant", "tool"]),
 	content: z.string(),
-});
-
-export const checkOutcomeSchema = z.object({
-	name: z.string(),
-	verdict: verdictSchema,
-	step: z.number().optional(),
 });
 
 export const targetSchema = z.object({
@@ -78,9 +79,7 @@ export const reportSchema = z.object({
 });
 
 export type Grade = z.infer<typeof gradeSchema>;
-export type Verdict = z.infer<typeof verdictSchema>;
 export type TranscriptLine = z.infer<typeof transcriptLineSchema>;
-export type CheckOutcome = z.infer<typeof checkOutcomeSchema>;
 export type Target = z.infer<typeof targetSchema>;
 export type SeedTurn = z.infer<typeof seedTurnSchema>;
 export type MockedServer = z.infer<typeof mockedServerSchema>;

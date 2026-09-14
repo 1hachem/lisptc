@@ -1,4 +1,4 @@
-import type { MockServer } from "../../src/mocks.ts";
+import type { MockServer } from "@repo/checks/mocks";
 
 export const playwright: MockServer = {
 	connectDelayMs: 30,
