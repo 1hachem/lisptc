@@ -40,6 +40,19 @@ Dependencies run one way: the interpreter depends on no workspace package that
 depends on it, the extension packages depend on the interpreter, the REPL
 front-ends depend on those, and the agent depends on the REPL.
 
+That layering is declared, not described. Each package carries a `turbo.json`
+naming its tag, and `boundaries.tags` in the root `turbo.json` says which tags a
+tag may not depend on. `pnpm boundaries` fails on a wrong-direction dependency,
+on an import of a package missing from a `package.json`, on an import that
+reaches into another package's files, and on a cycle.
+
+Two rules sit outside that, in `scripts/check-arch.ts` (`pnpm check:arch`):
+`@repo/shared` carries no dependencies at all, and `@repo/ui` carries no
+workspace package. Tags cannot express either, because the root package's
+`@repo/env` devDependency puts `@repo/env` and `@repo/shared` in every
+package's turbo dependency graph. The same file keeps
+`@modelcontextprotocol/sdk` and `@langchain/openai` out of the interpreter.
+
 ## Commands
 
 Root scripts delegate to Turbo, which fans out across workspaces:
@@ -50,6 +63,8 @@ pnpm typecheck               # turbo run typecheck (tsc --noEmit per package)
 pnpm lint                    # biome ci (lint + format check) — matches CI, run at root
 pnpm format                  # biome check --write (auto-fix)
 pnpm knip                    # dead-code / unused-dependency check (part of CI), run at root
+pnpm boundaries              # package layering + import rules (part of CI), run at root
+pnpm check:arch              # manifest rules boundaries cannot express (part of CI)
 pnpm check:comments          # fails on any non-directive comment (part of CI), run at root
 pnpm fix:comments            # strip them; follow with `pnpm format`
 pnpm check:docs              # fails on tracked markdown outside the allowlist (part of CI)
@@ -65,11 +80,12 @@ pnpm --filter @repo/interpreter exec vitest run -t "name of test"
 
 Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via
 `--experimental-transform-types` (no build step). CI (`.github/workflows/ci.yml`)
-runs, in order: typecheck → lint → check:comments → check:docs → knip → test.
+runs, in order: typecheck → lint → check:comments → check:docs →
+boundaries → check:arch → knip → test.
 `lint`, the `check:*` scripts and `knip` run once at the root;
 `typecheck` and `test` fan out through Turbo. Husky runs commitlint
-(conventional commits) on `commit-msg`, and `pnpm check:comments` on
-`pre-push`.
+(conventional commits) on `commit-msg`, and `pnpm check:comments`,
+`pnpm boundaries` and `pnpm check:arch` on `pre-push`.
 
 ## Comments
 

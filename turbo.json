@@ -1,6 +1,86 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "envMode": "loose",
+  "boundaries": {
+    "tags": {
+      "foundation": {
+        "dependencies": {
+          "deny": [
+            "platform",
+            "language",
+            "extension",
+            "runtime",
+            "agent",
+            "eval-harness",
+            "frontend",
+            "product"
+          ]
+        }
+      },
+      "platform": {
+        "dependencies": {
+          "deny": [
+            "language",
+            "extension",
+            "runtime",
+            "agent",
+            "eval-harness",
+            "frontend",
+            "product"
+          ]
+        }
+      },
+      "language": {
+        "dependencies": {
+          "deny": [
+            "extension",
+            "runtime",
+            "agent",
+            "eval-harness",
+            "frontend",
+            "product"
+          ]
+        }
+      },
+      "extension": {
+        "dependencies": {
+          "deny": ["runtime", "agent", "eval-harness", "frontend", "product"]
+        }
+      },
+      "runtime": {
+        "dependencies": {
+          "deny": ["agent", "eval-harness", "frontend", "product"]
+        }
+      },
+      "agent": {
+        "dependencies": {
+          "deny": ["eval-harness", "frontend", "product"]
+        }
+      },
+      "eval-harness": {
+        "dependencies": {
+          "deny": ["frontend", "product"]
+        }
+      },
+      "frontend": {
+        "dependencies": {
+          "deny": [
+            "language",
+            "extension",
+            "runtime",
+            "agent",
+            "eval-harness",
+            "product"
+          ]
+        }
+      },
+      "product": {
+        "dependents": {
+          "allow": []
+        }
+      }
+    }
+  },
   "tasks": {
     "dev": {
       "cache": false,
