@@ -13,12 +13,13 @@ function stale(reason: string): never {
 	console.error(reason);
 	console.error("");
 	console.error(
-		"The chat highlights lisp with this wasm, built from the grammar that",
+		"The chat highlights lisp with this wasm, built from the grammar ptcfmt",
 	);
 	console.error(
-		"ptcfmt reads. Rebuild it with `pnpm build:grammar` (needs docker), then",
+		"reads. Rebuild it, then commit the wasm and its stamp together:",
 	);
-	console.error("commit the wasm and its stamp together.");
+	console.error("");
+	console.error("  nix develop -c pnpm build:grammar");
 	process.exit(1);
 }
 

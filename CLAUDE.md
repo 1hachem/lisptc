@@ -20,6 +20,7 @@ workspaces `packages/*` and `apps/*`.
 - `packages/ai` (`@repo/ai`) — the agent loop, its system prompt, the model providers, telemetry.
 - `packages/evals` (`@repo/evals`) — the eval engine: runner, check DSL, mocks, report schema, storage, judge. It holds no cases of its own.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer, for what two packages both need and neither owns.
+- `packages/syntax` (`@repo/syntax`) — the lisptc grammar as wasm (built from `tree-sitter-lisptc`, the one ptcfmt reads) and the spans it reads out of a string. What the chat highlights lisp with.
 - `packages/env` (`@repo/env`) — typed env via t3-env/zod. The only place `process.env` is read.
 - `packages/ui` (`@repo/ui`) — the base design system: palette, Tailwind entry, shadcn and ai-elements primitives. Depends on no other workspace package.
 - `packages/components` (`@repo/components`) — the components we wrote, on top of `@repo/ui`. Both front-ends import them.
@@ -53,6 +54,8 @@ pnpm check:comments          # fails on any non-directive comment (part of CI), 
 pnpm fix:comments            # strip them; follow with `pnpm format`
 pnpm check:docs              # fails on tracked markdown outside the allowlist (part of CI)
 pnpm fix:docs                # delete those files
+pnpm check:grammar           # fails when the committed grammar wasm is older than grammar.js (part of CI)
+pnpm build:grammar           # rebuild it — needs the dev shell: nix develop -c pnpm build:grammar
 pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
@@ -64,10 +67,11 @@ pnpm --filter @repo/interpreter exec vitest run -t "name of test"
 
 Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via
 `--experimental-transform-types` (no build step). CI (`.github/workflows/ci.yml`)
-runs, in order: typecheck → lint → check:comments → knip → test. `lint`,
-`check:comments` and `knip` run once at the root; `typecheck` and `test` fan out
-through Turbo. Husky runs commitlint (conventional commits) on `commit-msg` and
-`pnpm check:comments` on `pre-push`.
+runs, in order: typecheck → lint → check:comments → check:docs → check:grammar →
+knip → test. `lint`, the `check:*` scripts and `knip` run once at the root;
+`typecheck` and `test` fan out through Turbo. Husky runs commitlint
+(conventional commits) on `commit-msg`, and `pnpm check:comments` plus
+`pnpm check:grammar` on `pre-push`.
 
 ## Comments
 
