@@ -53,7 +53,7 @@ export type TriggerKind = (typeof TRIGGER_KINDS)[number];
 
 export interface Trigger {
 	kind: TriggerKind;
-	pattern?: string;
+	pattern?: unknown;
 }
 
 export interface Memory {
@@ -118,6 +118,12 @@ function triggerToForm(trigger: Trigger): unknown {
 	return arrayToList(parts);
 }
 
+function isTextPattern(pattern: unknown): boolean {
+	if (typeof pattern === "string") return true;
+	if (combinatorIn(pattern) === undefined) return false;
+	return listToArray((pattern as Cell).cdr as List).every(isTextPattern);
+}
+
 export function parseTrigger(value: unknown): Trigger | undefined {
 	if (value === null || value === undefined) return undefined;
 	if (!(value instanceof Cell) || !(value.car instanceof Sym))
@@ -130,9 +136,28 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 		);
 	const rest = value.cdr;
 	if (rest === null) return { kind };
-	if (!(rest instanceof Cell) || typeof rest.car !== "string")
-		throw new EvalException("trigger pattern must be a string", rest);
-	return { kind, pattern: rest.car };
+	if (!(rest instanceof Cell))
+		throw new EvalException("trigger pattern expected after the kind", rest);
+	const pattern = rest.car;
+	if (kind === "call" && typeof pattern === "string")
+		throw new EvalException(
+			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',
+			pattern,
+		);
+	if (kind !== "call" && !isTextPattern(pattern))
+		throw new EvalException(
+			`a ${kind} trigger matches text, so its pattern must be a string or a combinator over strings`,
+			pattern,
+		);
+	return { kind, pattern };
+}
+
+function readableTrigger(value: unknown): Trigger | undefined {
+	try {
+		return parseTrigger(value);
+	} catch {
+		return undefined;
+	}
 }
 
 export function memoryToForm(memory: Memory): unknown {
@@ -178,7 +203,7 @@ export function formToMemory(form: unknown): Memory | undefined {
 	return {
 		key: rest.car,
 		body: opts.get("body") ?? null,
-		on: parseTrigger(opts.get("on")),
+		on: readableTrigger(opts.get("on")),
 		links,
 		score: Number(opts.get("score") ?? INITIAL_SCORE),
 		used: Number(opts.get("used") ?? 0),
@@ -302,12 +327,63 @@ function unreadable(body: unknown): boolean {
 	return printed.includes("#<") || printed.includes("#:");
 }
 
-function headsIn(form: unknown, out: string[]): string[] {
-	if (!(form instanceof Cell)) return out;
-	if (form.car instanceof Sym) out.push(form.car.name);
+export const ANYTHING = "_";
+export const COMBINATORS = ["all", "any-of", "not"] as const;
+
+function combinatorIn(pattern: unknown): string | undefined {
+	if (!(pattern instanceof Cell) || !(pattern.car instanceof Sym))
+		return undefined;
+	const name = pattern.car.name;
+	return COMBINATORS.includes(name as (typeof COMBINATORS)[number])
+		? name
+		: undefined;
+}
+
+function evalPattern(pattern: unknown, leaf: (p: unknown) => boolean): boolean {
+	const combinator = combinatorIn(pattern);
+	if (combinator === undefined) return leaf(pattern);
+	const parts = listToArray((pattern as Cell).cdr as List);
+	if (combinator === "all") return parts.every((p) => evalPattern(p, leaf));
+	if (combinator === "any-of") return parts.some((p) => evalPattern(p, leaf));
+	return !parts.some((p) => evalPattern(p, leaf));
+}
+
+function wholly(pattern: string, name: string): boolean {
+	try {
+		return new RegExp(`^(?:${pattern})$`).test(name);
+	} catch {
+		return pattern === name;
+	}
+}
+
+function structurally(pattern: unknown, target: unknown): boolean {
+	if (pattern instanceof Sym)
+		return (
+			pattern.name === ANYTHING ||
+			(target instanceof Sym && wholly(pattern.name, target.name))
+		);
+	if (typeof pattern === "string") return matches(pattern, str(target, false));
+	if (pattern instanceof Cell) {
+		if (!(target instanceof Cell)) return false;
+		let p: unknown = pattern;
+		let t: unknown = target;
+		while (p instanceof Cell) {
+			if (!(t instanceof Cell)) return false;
+			if (!structurally(p.car, t.car)) return false;
+			p = p.cdr;
+			t = t.cdr;
+		}
+		return true;
+	}
+	return str(pattern) === str(target);
+}
+
+function someSubform(form: unknown, test: (s: unknown) => boolean): boolean {
+	if (!(form instanceof Cell)) return false;
+	if (test(form)) return true;
 	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr)
-		if (rest.car instanceof Cell) headsIn(rest.car, out);
-	return out;
+		if (someSubform(rest.car, test)) return true;
+	return false;
 }
 
 function lastUserMessage(interp: Interp): string {
@@ -320,7 +396,19 @@ function lastUserMessage(interp: Interp): string {
 
 interface MemoryEvent {
 	kind: TriggerKind;
-	text: string;
+	text?: string;
+	form?: unknown;
+}
+
+function fires(trigger: Trigger, event: MemoryEvent): boolean {
+	if (trigger.pattern === undefined) return true;
+	if (event.form !== undefined)
+		return evalPattern(trigger.pattern, (p) =>
+			someSubform(event.form, (s) => structurally(p, s)),
+		);
+	return evalPattern(trigger.pattern, (p) =>
+		typeof p === "string" ? matches(p, event.text ?? "") : false,
+	);
 }
 
 export interface FiredMemory {
@@ -399,8 +487,7 @@ export class MemoryBank {
 	}
 
 	onCall(interp: Interp, form: unknown): void {
-		for (const head of headsIn(form, []))
-			this.dispatch({ kind: "call", text: head }, interp);
+		if (form instanceof Cell) this.dispatch({ kind: "call", form }, interp);
 	}
 
 	onResult(interp: Interp, value: unknown): void {
@@ -476,8 +563,7 @@ export class MemoryBank {
 		for (const memory of this.store.all()) {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
-			if (on.pattern !== undefined && !matches(on.pattern, event.text))
-				continue;
+			if (!fires(on, event)) continue;
 			this.fire(memory, interp);
 		}
 	}

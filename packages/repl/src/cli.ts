@@ -86,12 +86,13 @@ class InteractiveRepl implements Repl {
 				this.compactor.beginStep();
 				write(this.memories.beginStep(text, this.currentInterp));
 				await runAsync(this.currentInterp, text);
-				write(this.memories.endStep());
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)
 					write("unbalanced expression (unexpected end of input)\n");
 				else throw ex;
+			} finally {
+				write(this.memories.endStep());
 			}
 		}
 	}

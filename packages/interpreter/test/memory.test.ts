@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync } from "node:fs";
+import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -126,7 +126,7 @@ describe("triggers", () => {
 		const f = fixture();
 		await ev(
 			f,
-			`(memory/remember "tools" "list first" :on '(call "string-join"))`,
+			`(memory/remember "tools" "list first" :on '(call (string-join)))`,
 		);
 
 		expect(await f.step('(echo "hi")')).not.toContain("list first");
@@ -137,7 +137,7 @@ describe("triggers", () => {
 
 	it("finds a call nested inside a binding form", async () => {
 		const f = fixture();
-		await ev(f, `(memory/remember "t" "note" :on '(call "concat"))`);
+		await ev(f, `(memory/remember "t" "note" :on '(call (concat)))`);
 
 		expect(await f.step('(setq x (concat "a" "b"))')).toContain("t: note");
 	});
@@ -186,6 +186,93 @@ describe("triggers", () => {
 		await ev(f, '(memory/remember "untriggered" "v")');
 
 		expect(await ev(f, "(memories)")).toContain("nil");
+	});
+
+	it("fires only for the argument the trigger names", async () => {
+		const f = fixture();
+		await ev(
+			f,
+			`(memory/remember "pw" "browser_navigate, not navigate"
+			   :on '(call (string-join "playwright")))`,
+		);
+
+		expect(await f.step(`(string-join '("linear") ",")`)).not.toContain("pw:");
+		expect(await f.step(`(string-join '("playwright") ",")`)).toContain(
+			"pw: browser_navigate",
+		);
+	});
+
+	it("takes a bare call as any call to that name", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "any" "note" :on '(call (string-join)))`);
+
+		expect(await f.step(`(string-join '("linear") ",")`)).toContain(
+			"any: note",
+		);
+	});
+
+	it("matches a wildcard argument without constraining it", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "w" "note" :on '(call (concat _ "b")))`);
+
+		expect(await f.step('(concat "a" "b")')).toContain("w: note");
+		expect(await f.step('(concat "a" "c")')).not.toContain("w: note");
+	});
+
+	it("matches a head by regular expression, so a whole server hooks at once", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "s" "note" :on '(call (string-.*)))`);
+
+		expect(await f.step('(string-upcase "a")')).toContain("s: note");
+		expect(await f.step('(concat "a")')).not.toContain("s: note");
+	});
+
+	it("matches a call nested anywhere in the form", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "n" "note" :on '(call (concat "x")))`);
+
+		expect(await f.step('(setq v (list (concat "x" "y")))')).toContain(
+			"n: note",
+		);
+	});
+
+	it("combines patterns with all, any-of and not", async () => {
+		const f = fixture();
+		await ev(
+			f,
+			`(memory/remember "c" "note"
+			   :on '(call (all (concat) (not (concat "skip")))))`,
+		);
+
+		expect(await f.step('(concat "keep")')).toContain("c: note");
+		expect(await f.step('(concat "skip")')).not.toContain("c: note");
+	});
+
+	it("combines text patterns for the kinds that match text", async () => {
+		const f = fixture();
+		await ev(
+			f,
+			`(memory/remember "u" "note" :on '(prose (any-of "deploy" "ship")))`,
+		);
+
+		expect(await f.step("ship it now\n(+ 1 1)")).toContain("u: note");
+		expect(await f.step("nothing here\n(+ 1 1)")).not.toContain("u: note");
+	});
+
+	it("says a call trigger needs a form when handed the old string", async () => {
+		const f = fixture();
+
+		await expect(
+			ev(f, `(memory/remember "k" "v" :on '(call "load-mcp"))`),
+		).rejects.toThrow(/matches a form, not a name/);
+	});
+
+	it("says a text trigger needs a string when handed a form", async () => {
+		const f = fixture();
+
+		await expect(
+			ev(f, `(memory/remember "k" "v" :on '(error (load-mcp)))`),
+		).rejects.toThrow(/must be a string/);
 	});
 
 	it("rejects a trigger kind that does not exist", async () => {
@@ -412,7 +499,7 @@ describe("the file store", () => {
 		store.put({
 			key: "triage",
 			body: "keep the ids",
-			on: { kind: "call", pattern: "load-mcp" },
+			on: { kind: "error", pattern: "undefined" },
 			links: new Map([["other", LINKED_FIRES_AT]]),
 			score: 1.5,
 			used: 3,
@@ -423,11 +510,38 @@ describe("the file store", () => {
 
 		expect(back?.key).toBe("triage");
 		expect(back?.body).toBe("keep the ids");
-		expect(back?.on).toEqual({ kind: "call", pattern: "load-mcp" });
+		expect(back?.on).toEqual({ kind: "error", pattern: "undefined" });
 		expect(back?.links.get("other")).toBe(LINKED_FIRES_AT);
 		expect(back?.score).toBeCloseTo(1.5, 5);
 		expect(back?.used).toBe(3);
 		expect(back?.lastUsed).toBe(1_700_000_000_000);
+	});
+
+	it("round-trips a call trigger, so its pattern still fires after a restart", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
+		const first = fixture(new MemoryBank(new FileMemoryStore(dir)));
+		await ev(
+			first,
+			`(memory/remember "pw" "note" :on '(call (concat "playwright")))`,
+		);
+
+		const second = fixture(new MemoryBank(new FileMemoryStore(dir)));
+
+		expect(await second.step('(concat "linear")')).not.toContain("pw: note");
+		expect(await second.step('(concat "playwright")')).toContain("pw: note");
+	});
+
+	it("keeps a memory whose trigger no longer parses, rather than losing it", () => {
+		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
+		writeFileSync(
+			join(dir, "old.ptc"),
+			'(memory "old" :body "from an older grammar" :on (call "load-mcp") :links nil :score 1.0 :used 0.0 :last-used 0.0)\n',
+		);
+
+		const back = new FileMemoryStore(dir).get("old");
+
+		expect(back?.body).toBe("from an older grammar");
+		expect(back?.on).toBeUndefined();
 	});
 
 	it("round-trips a form body, which is what makes a recipe survive", () => {
@@ -541,9 +655,9 @@ describe("the listing", () => {
 	it("names each memory with its strength and its trigger", async () => {
 		const clock = { now: 1_000_000 };
 		const f = fixture(new MemoryBank(new VolatileStore(), clockAt(clock)));
-		await ev(f, `(memory/remember "k" "v" :on '(call "load-mcp"))`);
+		await ev(f, `(memory/remember "k" "v" :on '(call (load-mcp)))`);
 
-		expect(await ev(f, "(memories)")).toContain('("k" 1.0 (call "load-mcp"))');
+		expect(await ev(f, "(memories)")).toContain('("k" 1.0 (call (load-mcp)))');
 	});
 
 	it("strengthens nothing by being read", async () => {

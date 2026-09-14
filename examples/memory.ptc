@@ -43,13 +43,23 @@ because in this language they are the same material.
 (echo "=== 3. firing on an event ===")
 
 With :on the memory watches for something and loads itself when it
-happens. Here: any call whose head is string-join.
+happens. For a call the pattern is a FORM, matched structurally, so
+naming no arguments hooks every call to that name.
 (memory/remember "joins" "string-join takes the list FIRST, then the separator."
-                 :on '(call "string-join"))
+                 :on '(call (string-join)))
 
 Now write a form that calls it, and the note arrives with the result
 of the step — before you get the argument order wrong.
 (echo (string-join '("a" "b") ","))
+
+Name an argument and the memory gets precise: this one only fires for
+the widget tool, not for every call to concat.
+(memory/remember "widget-concat" "widget ids concatenate with a dash, never a slash."
+                 :on '(call (concat "widget" _)))
+(echo (concat "widget" "-1a2b"))
+
+A bare _ matches one argument whatever it is, a head is a regular
+expression, and all, any-of and not combine patterns.
 
 The seven kinds are call, result, error, step, prose, user and
 recall. An error trigger is the useful one: a mistake you made once
