@@ -1,17 +1,27 @@
 import { execFileSync } from "node:child_process";
-import { renameSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+	CLI_VERSION,
+	GRAMMAR_DIR,
+	grammarDigest,
+	relative,
+	type Stamp,
+	STAMP,
+	WASM,
+} from "./grammar.ts";
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const grammar = join(root, "tree-sitter-lisptc");
-const target = join(root, "packages", "syntax", "src", "lisptc.wasm");
+const run = (args: string[]) =>
+	execFileSync("npx", ["--yes", `tree-sitter-cli@${CLI_VERSION}`, ...args], {
+		cwd: GRAMMAR_DIR,
+		stdio: "inherit",
+	});
 
-const cli = ["--yes", "tree-sitter-cli@0.25.10"];
-const run = (args: string[], cwd: string) =>
-	execFileSync("npx", [...cli, ...args], { cwd, stdio: "inherit" });
+run(["generate"]);
+run(["build", "--wasm", "--docker", "."]);
+renameSync(join(GRAMMAR_DIR, "tree-sitter-lisptc.wasm"), WASM);
 
-run(["generate"], grammar);
-run(["build", "--wasm", "--docker", "."], grammar);
-renameSync(join(grammar, "tree-sitter-lisptc.wasm"), target);
-console.log(`wrote ${target}`);
+const stamp: Stamp = { grammar: grammarDigest(), cli: CLI_VERSION };
+writeFileSync(STAMP, `${JSON.stringify(stamp, null, 2)}\n`);
+
+console.log(`Wrote ${relative(WASM)} and ${relative(STAMP)}.`);
