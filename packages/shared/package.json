@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
+    "./lisp-tokens": "./src/lisp-tokens.ts",
     "./messages": "./src/messages.ts",
     "./providers": "./src/providers.ts"
   },

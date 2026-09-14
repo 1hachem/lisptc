@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
+import { tokenPattern } from "@repo/shared/lisp-tokens";
 import { z } from "zod";
 import {
 	add,
@@ -1645,9 +1646,7 @@ function qqExpand2(y: unknown, level: number): unknown {
 	return new Cell(listSym, new Cell(qqExpand0(y, level), null));
 }
 
-export function tokenPattern(): RegExp {
-	return /\s+|("(\\.?|.)*?"|,@?|[^()'`~" \t]+|.)/g;
-}
+export { tokenPattern };
 
 function endOfString(text: string, i: number): number {
 	for (let j = i + 1; j < text.length; j++) {

@@ -7,8 +7,7 @@
     "node": ">=22.6.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./lisptc.wasm": "./src/lisptc.wasm"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -16,7 +15,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "web-tree-sitter": "^0.25.10"
+    "@repo/shared": "workspace:*",
+    "@tanstack/highlight": "^0.1.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

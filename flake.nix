@@ -69,13 +69,6 @@
           # from the bot engine and rasterised into a .ico. Only that script needs
           # it — the icon is checked in, so no build or test does.
           imagemagick
-          # `tree-sitter` and `emcc`, for `pnpm build:grammar`: the chat
-          # highlights lisp with a wasm build of tree-sitter-lisptc. Pinning
-          # them here is what keeps that build offline and reproducible —
-          # CLI_VERSION and EMCC_VERSION in scripts/grammar.ts pin the two
-          # below, and the wasm records which pair built it.
-          tree-sitter
-          emscripten
           ptcrepl-dev
           ptcfmt-dev
           # Nix-built browsers with system deps, used via PLAYWRIGHT_MCP_EXECUTABLE.
@@ -89,7 +82,6 @@
         # Point @playwright/mcp at the Nix Chromium (globbed, rev-independent).
         shellHook = ''
           export PLAYWRIGHT_MCP_EXECUTABLE="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"
-          export EM_CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/emscripten"
         '';
       };
     });

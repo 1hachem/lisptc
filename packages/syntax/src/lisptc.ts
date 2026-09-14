@@ -1,117 +1,94 @@
-import { Language, type Node, Parser } from "web-tree-sitter";
+import { tokenPattern } from "@repo/shared/lisp-tokens";
+import {
+	createHighlighter,
+	defineLanguage,
+	type TokenRange,
+} from "@tanstack/highlight/core";
 
-export type SpanKind =
-	| "plain"
-	| "prose"
-	| "delimiter"
-	| "head"
-	| "symbol"
-	| "keyword"
-	| "number"
-	| "string";
+const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)$/;
+const QUOTE = new Set(["'", "`", "~", ",", ",@"]);
 
-export interface Span {
-	at: number;
-	text: string;
-	kind: SpanKind;
-}
-
-export interface Reading {
-	spans: Span[];
+interface Scan {
+	ranges: TokenRange[];
 	openForms: number;
 }
 
-export interface Lisptc {
-	read(text: string): Reading;
+function atomClass(text: string, head: boolean): TokenRange["className"] {
+	if (text.startsWith(":")) return "attr";
+	if (NUMBER.test(text)) return "number";
+	return head ? "function" : "variable";
 }
 
-export interface LisptcSources {
-	grammar: string | Uint8Array;
-	runtime?: string;
-}
-
-const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)$/;
-
-function atomKind(text: string): SpanKind {
-	if (text.startsWith(":")) return "keyword";
-	return NUMBER.test(text) ? "number" : "symbol";
-}
-
-interface Leaf {
-	from: number;
-	to: number;
-	kind: SpanKind;
-	closing?: boolean;
-}
-
-function leaves(node: Node, head: boolean, out: Leaf[]): void {
-	const leaf = { from: node.startIndex, to: node.endIndex };
-	if (node.type === "open" || node.type === "close")
-		return void out.push({
-			...leaf,
-			kind: "delimiter",
-			closing: node.type === "close",
-		});
-	if (node.type === "string") return void out.push({ ...leaf, kind: "string" });
-	if (node.type === "prose") return void out.push({ ...leaf, kind: "prose" });
-	if (node.type === "atom")
-		return void out.push({
-			...leaf,
-			kind: head ? "head" : atomKind(node.text),
-		});
-
-	let seen = 0;
-	for (const child of node.children) {
-		if (child === null) continue;
-		leaves(child, node.type === "form" && seen === 1, out);
-		seen += 1;
-	}
-}
-
-function spansOf(text: string, roots: Leaf[]): Span[] {
-	const spans: Span[] = [];
-	let at = 0;
-	for (const leaf of roots) {
-		if (leaf.to <= leaf.from) continue;
-		if (leaf.from > at)
-			spans.push({ at, text: text.slice(at, leaf.from), kind: "plain" });
-		spans.push({
-			at: leaf.from,
-			text: text.slice(leaf.from, leaf.to),
-			kind: leaf.kind,
-		});
-		at = leaf.to;
-	}
-	if (at < text.length) spans.push({ at, text: text.slice(at), kind: "plain" });
-	return spans;
-}
-
-function openForms(leaves: Leaf[]): number {
+function scan(text: string): Scan {
+	const token = tokenPattern();
+	const ranges: TokenRange[] = [];
 	let depth = 0;
-	for (const leaf of leaves) {
-		if (leaf.kind !== "delimiter" || leaf.to <= leaf.from) continue;
-		depth += leaf.closing ? -1 : 1;
-		if (depth < 0) depth = 0;
+	let head = false;
+	let base = 0;
+	let quoteAt = -1;
+	let quoteEnd = -1;
+
+	const push = (
+		start: number,
+		end: number,
+		className: TokenRange["className"],
+	) => {
+		if (depth > 0) ranges.push({ className, start, end });
+	};
+
+	for (const line of text.split("\n")) {
+		for (let m = token.exec(line); m !== null; m = token.exec(line)) {
+			const word = m[1];
+			if (word === undefined) continue;
+			const start = base + m.index;
+			const end = start + word.length;
+
+			if (QUOTE.has(word)) {
+				if (depth > 0) push(start, end, "operator");
+				else if (quoteEnd !== start) quoteAt = start;
+				quoteEnd = end;
+				continue;
+			}
+
+			const from = quoteEnd === start && quoteAt >= 0 ? quoteAt : start;
+			quoteAt = -1;
+			quoteEnd = -1;
+
+			if (word === "(") {
+				depth += 1;
+				head = true;
+				push(from, end, "operator");
+			} else if (word === ")") {
+				push(start, end, "operator");
+				if (depth > 0) depth -= 1;
+			} else if (word === '"') {
+				push(start, base + line.length, "string");
+				token.lastIndex = 0;
+				break;
+			} else if (word.startsWith('"')) {
+				push(start, end, "string");
+				head = false;
+			} else {
+				push(start, end, atomClass(word, head));
+				head = false;
+			}
+		}
+		base += line.length + 1;
+		quoteAt = -1;
+		quoteEnd = -1;
 	}
-	return depth;
+
+	return { ranges, openForms: depth };
 }
 
-export async function loadLisptc({
-	grammar,
-	runtime,
-}: LisptcSources): Promise<Lisptc> {
-	await Parser.init(runtime ? { locateFile: () => runtime } : undefined);
-	const parser = new Parser();
-	parser.setLanguage(await Language.load(grammar));
-	return {
-		read(text) {
-			const tree = parser.parse(text);
-			if (!tree)
-				return { spans: [{ at: 0, text, kind: "plain" }], openForms: 0 };
-			const found: Leaf[] = [];
-			leaves(tree.rootNode, false, found);
-			tree.delete();
-			return { spans: spansOf(text, found), openForms: openForms(found) };
-		},
-	};
+export const lisptc = defineLanguage({
+	name: "lisptc",
+	aliases: ["lisp", "ptc"],
+	tokenize: (code) => scan(code).ranges,
+});
+
+export const highlighter = createHighlighter({ languages: [lisptc] });
+
+export function openForms(text: string): number {
+	return scan(text).openForms;
 }

@@ -3,8 +3,7 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/**/*.ts"],
-      "project": ["scripts/**/*.ts"],
-      "ignoreBinaries": ["tree-sitter"]
+      "project": ["scripts/**/*.ts"]
     },
     "apps/api": {
       "project": ["src/**/*.ts"]

@@ -1,5 +1,5 @@
+import { openForms } from "@repo/syntax";
 import { useEffect, useRef, useState } from "react";
-import { useLisptc } from "../lib/lisptc.ts";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispText } from "./lisp-text.tsx";
 
@@ -21,7 +21,6 @@ export function LispEditor({
 	const [text, setText] = useState(initial);
 	const area = useRef<HTMLTextAreaElement>(null);
 	const mirror = useRef<HTMLPreElement>(null);
-	const lisptc = useLisptc();
 
 	useEffect(() => {
 		area.current?.focus();
@@ -34,7 +33,7 @@ export function LispEditor({
 		setText("");
 	};
 
-	const waiting = (lisptc?.read(text).openForms ?? 0) > 0;
+	const waiting = openForms(text) > 0;
 
 	return (
 		<InputShell

@@ -41,9 +41,6 @@ jobs:
       - name: No stray docs
         run: pnpm check:docs
 
-      - name: Grammar wasm up to date
-        run: pnpm check:grammar
-
       - name: Knip
         run: pnpm knip
 
