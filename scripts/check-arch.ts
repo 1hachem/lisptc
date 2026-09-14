@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 type Field = "dependencies" | "devDependencies" | "peerDependencies";
 
@@ -34,6 +37,30 @@ const RULES: Rule[] = [
 	},
 ];
 
+interface ImportRule {
+	modules: string[];
+	allow: string[];
+	reason: string;
+}
+
+const IMPORTS: ImportRule[] = [
+	{
+		modules: [
+			"@repo/evals/global-setup",
+			"@repo/evals/harness",
+			"@repo/evals/judge",
+			"@repo/evals/runner",
+			"@repo/evals/targets",
+		],
+		allow: [
+			"apps/trace-viewer/evals/",
+			"apps/trace-viewer/vitest.evals.config.ts",
+		],
+		reason:
+			"Only the eval cases run a suite. Read reports through @repo/evals/report, /review and /storage instead.",
+	},
+];
+
 type Manifest = Partial<Record<Field, Record<string, string>>>;
 
 const offenders = RULES.flatMap((rule) => {
@@ -45,8 +72,29 @@ const offenders = RULES.flatMap((rule) => {
 	);
 });
 
-if (offenders.length === 0) {
-	console.log(`No architecture violations in ${RULES.length} manifests.`);
+const self = relative(process.cwd(), fileURLToPath(import.meta.url));
+
+const sources = execFileSync("git", ["ls-files", "*.ts", "*.tsx"], {
+	encoding: "utf8",
+})
+	.split("\n")
+	.filter((file) => file !== "" && file !== self && existsSync(file));
+
+const reaches = IMPORTS.flatMap((rule) =>
+	sources
+		.filter((file) => !rule.allow.some((prefix) => file.startsWith(prefix)))
+		.flatMap((file) => {
+			const text = readFileSync(file, "utf8");
+			return rule.modules
+				.filter((module) => text.includes(`"${module}"`))
+				.map((module) => ({ rule, file, module }));
+		}),
+);
+
+if (offenders.length === 0 && reaches.length === 0) {
+	console.log(
+		`No architecture violations in ${RULES.length} manifests and ${sources.length} sources.`,
+	);
 	process.exit(0);
 }
 
@@ -54,9 +102,14 @@ for (const { rule, field, name } of offenders) {
 	console.error(`${rule.manifest} ${field}.${name}`);
 	console.error(`  ${rule.reason}`);
 }
+
+for (const { rule, file, module } of reaches) {
+	console.error(`${file} imports ${module}`);
+	console.error(`  ${rule.reason}`);
+}
 console.error("");
 console.error(
-	`${offenders.length} forbidden dependenc${offenders.length === 1 ? "y" : "ies"}.`,
+	`${offenders.length + reaches.length} forbidden dependenc${offenders.length + reaches.length === 1 ? "y" : "ies"}.`,
 );
 console.error("");
 console.error("`turbo boundaries` holds the layer direction; these are the");

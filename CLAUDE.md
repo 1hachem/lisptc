@@ -54,6 +54,14 @@ workspace package. Tags cannot express either, because the root package's
 package's turbo dependency graph. The same file keeps
 `@modelcontextprotocol/sdk` and `@langchain/openai` out of the interpreter.
 
+`check:arch` also reads imports, for the rule a manifest cannot hold: the
+entrypoints that run a suite — `@repo/evals/runner`, `/harness`, `/judge`,
+`/targets`, `/global-setup` — may only be imported under
+`apps/trace-viewer/evals`, the directory that holds the cases. The viewer reads
+finished runs through `/report`, `/review` and `/storage` instead, so a Next.js
+page never pulls in vitest or a model provider. `apps/trace-viewer` declares
+`@repo/evals` once, which is why the rule has to be about imports.
+
 ## Commands
 
 Root scripts delegate to Turbo, which fans out across workspaces:
