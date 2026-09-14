@@ -100,11 +100,15 @@ export function memoryDirFor(scope?: string): string {
 			"lisptc",
 			"memory",
 		);
-	return scope === undefined ? base : join(base, keyToFileName(scope));
+	return scope === undefined ? base : join(base, sanitize(scope));
+}
+
+function sanitize(name: string): string {
+	return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
 function keyToFileName(key: string): string {
-	return `${key.replace(/[^a-zA-Z0-9._-]/g, "_")}.ptc`;
+	return `${sanitize(key)}.ptc`;
 }
 
 function triggerToForm(trigger: Trigger): unknown {
@@ -197,9 +201,9 @@ export class FileMemoryStore implements MemoryStore {
 		try {
 			const base = this.base();
 			if (!existsSync(base)) return out;
-			for (const name of readdirSync(base)) {
-				if (!name.endsWith(".ptc")) continue;
-				const memory = this.readOne(join(base, name));
+			for (const entry of readdirSync(base, { withFileTypes: true })) {
+				if (!entry.isFile() || !entry.name.endsWith(".ptc")) continue;
+				const memory = this.readOne(join(base, entry.name));
 				if (memory !== undefined) out.push(memory);
 			}
 		} catch {}

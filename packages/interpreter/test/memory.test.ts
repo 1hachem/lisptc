@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -448,6 +448,44 @@ describe("the file store", () => {
 		expect(
 			new FileMemoryStore(join(tmpdir(), "lisptc-nothing-here")).all(),
 		).toEqual([]);
+	});
+
+	it("names a memory after its key and a scope after itself", () => {
+		const base = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
+		const scoped = join(base, "thread-a");
+		new FileMemoryStore(scoped).put({
+			key: "a key/with punctuation",
+			body: "v",
+			links: new Map(),
+			score: 1,
+			used: 0,
+			lastUsed: 0,
+		});
+
+		expect(readdirSync(base)).toEqual(["thread-a"]);
+		expect(readdirSync(scoped)).toEqual(["a_key_with_punctuation.ptc"]);
+	});
+
+	it("ignores a scope directory when listing the base it sits in", () => {
+		const base = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
+		new FileMemoryStore(memoryDirFor("scoped")).put({
+			key: "theirs",
+			body: "v",
+			links: new Map(),
+			score: 1,
+			used: 0,
+			lastUsed: 0,
+		});
+		new FileMemoryStore(base).put({
+			key: "mine",
+			body: "v",
+			links: new Map(),
+			score: 1,
+			used: 0,
+			lastUsed: 0,
+		});
+
+		expect(new FileMemoryStore(base).all().map((m) => m.key)).toEqual(["mine"]);
 	});
 
 	it("keeps one scope's memories out of another's", async () => {
