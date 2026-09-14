@@ -1,0 +1,85 @@
+MEMORY
+
+What you work out in one session is gone by the next unless you remember it. A
+memory is a key and a body, and the body is either prose or code — one slot, both
+kinds, because in this language they are the same material.
+
+- (memory/remember key body) store one. Prose in the body is something to know.
+  A quoted form in the body is something to do, a recipe you run later. Quote it:
+  the arguments are evaluated, so an unquoted form stores its result instead.
+- (memory/recall query) retrieve by key or body text, strongest first. The query is
+  a regular expression. What it finds is loaded into your context, so recalling IS
+  reading and there is no echo step to write after it.
+- (memories) every memory as key, score and trigger, strongest first.
+- (memory/forget key) drop one for good.
+- (memory/replay key) evaluate a memory whose body is a form, and return what it
+  produced. A memory holding a defun installs that function when you replay it.
+  This is how a remembered recipe becomes a running one.
+- (memory/revise key body) correct a memory. See the window below.
+
+The names are slashed because remember, recall and forget are ordinary English
+verbs, and a bare one in an aside would be read as code.
+
+FIRING BY ITSELF
+
+With :on a memory watches for an event and loads itself when that event happens,
+without you asking. The trigger is a quoted form of a kind and a pattern, and the
+pattern is a regular expression. The seven kinds:
+
+  call     a form about to be evaluated, matched on its head, at any depth —
+           so it catches a call nested inside a setq or a let
+  result   the printed value a top-level form returned
+  error    an evaluation that raised, so a past mistake surfaces exactly as it
+           is about to repeat
+  step     every step
+  prose    words in the prose around your forms
+  user     words in what the user just said
+  recall   another memory being retrieved
+
+A memory set to fire on a call to the loader will surface what you know about a
+server at the moment you load it. A memory set on an error will surface the fix
+the moment the same error comes back.
+
+A fired memory arrives as a line of REPL feedback, to you alone. It is not run and
+the user does not see it. To run one, replay it. To show the user something, echo
+it.
+
+CHAINING
+
+The last kind is the interesting one: retrieval is itself an event, so a memory can
+hook another memory and the two arrive together. You can also say it outright with
+:links, which takes a list of keys.
+
+And it happens on its own: memories that fire in the same step get wired to each
+other, so the things you keep using together start arriving together.
+
+STRENGTH AND FORGETTING
+
+Every memory has a score. Recalling one strengthens it. Leaving it alone lets it
+fade — half its strength a week — and under a floor it is swept away. So what you
+keep using stays and what you wrote once and never needed goes. Nothing has to be
+tidied by hand, though memory/forget is there when something is simply wrong.
+
+THE WINDOW
+
+Retrieving a memory opens it: until the end of the step you can revise its body to
+correct what it says. Outside that window revise is an error telling you to recall
+it first. Reading and rewriting are one act on purpose — you fix a memory while you
+are looking at it and can see that it was wrong.
+
+GOTCHAS
+
+- A memory body must be prose or a form that can be read back. A closure, a promise
+  or a secret is a live value, prints in angle brackets, and remember rejects it.
+  Store the quoted form that builds the thing, never the built thing itself.
+- Quote a code body. Without the quote the form is evaluated and you store its
+  result.
+- memory/recall loads what it finds into your context. Do not follow it with an
+  echo to see it properly; it is already in front of you.
+- Firing does not run anything. A memory that fires on a call tells you what it
+  knows; if it holds a recipe, replay it.
+- Triggers watch the code you write into the REPL. A form evaluated inside a replay
+  or inside a function body is not a step of its own and fires nothing.
+- Memories outlive the interpreter. Definitions die on a reset and memories do not,
+  so a recipe worth keeping belongs in a memory rather than in a defun you will
+  lose.

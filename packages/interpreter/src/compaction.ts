@@ -430,6 +430,8 @@ const READ_FORMS = new Set([
 	"list-tools",
 	"search-mcps",
 	"search-tools",
+	"memory/recall",
+	"memories",
 ]);
 
 function isReadForm(form: unknown): boolean {

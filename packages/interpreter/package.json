@@ -11,6 +11,7 @@
     "./compaction": "./src/compaction.ts",
     "./hooks": "./src/hooks.ts",
     "./lisp": "./src/lisp.ts",
+    "./memory": "./src/memory.ts",
     "./plist": "./src/plist.ts",
     "./promises": "./src/promises.ts",
     "./prose": "./src/prose.ts",
