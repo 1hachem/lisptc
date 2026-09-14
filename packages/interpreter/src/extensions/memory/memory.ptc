@@ -39,12 +39,12 @@ seven kinds:
 For call the pattern is A FORM, written the way the call itself is written, and
 matched structurally. This is what gives you precision about arguments:
 
-  (call (load-mcp "acme"))         only that server, not every load
-  (call (load-mcp))                any call to load-mcp, whatever its arguments
-  (call (load-mcp _))              _ matches one argument, whatever it is
-  (call (acme/.*))                 a head is a regular expression, so one
+(call (load-mcp "acme")) only that server, not every load
+(call (load-mcp)) any call to load-mcp, whatever its arguments
+(call (load-mcp _)) _ matches one argument, whatever it is
+(call (acme/.*)) a head is a regular expression, so one
                                    pattern hooks every tool on a server
-  (call (setq _ (acme/get _)))     the shape nests as deeply as you write it
+(call (setq _ (acme/get _))) the shape nests as deeply as you write it
 
 A pattern list matches a PREFIX of the call, so naming fewer arguments is looser
 and naming more is tighter. Every other kind matches text, so its pattern is a
@@ -52,8 +52,8 @@ string used as a regular expression.
 
 Combine patterns with all, any-of and not, in either sort of trigger:
 
-  (call (all (load-mcp) (not (load-mcp "acme"))))
-  (error (any-of "undefined" "void variable"))
+(call (all (load-mcp) (not (load-mcp "acme"))))
+(error (any-of "undefined" "void variable"))
 
 A memory on a call to the loader surfaces what you know about a server the moment
 you load it. A memory on an error surfaces the fix the moment the same error
@@ -120,7 +120,7 @@ RULES
   remember to look for is a memory you will not look for.
 - NAME THE ARGUMENT THAT MADE IT TRUE. What you learned about one server is not
   true of the next one, so (call (load-mcp "acme")) is right where
-  (call (load-mcp)) would fire on every server you ever load and teach you the
+(call (load-mcp)) would fire on every server you ever load and teach you the
   wrong thing about most of them. Hook the whole call, not just the name.
 - Remember the correction, not the transcript. "browser_navigate, not navigate" is
   worth keeping; the whole tool listing is not, and the next listing will be

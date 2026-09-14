@@ -24,27 +24,27 @@ calls the with five arguments, and it fails with undefined: the.
 Write the remark as bare prose beside the form instead. There is no bracket that
 makes a comment, in any shape.
 
-A parenthesised aside whose head names nothing — (see below), (one, two,
-three) — is read as prose rather than run, and comes back as a skipped note, but
+A parenthesised aside whose head names nothing — (see below) , (one, two,
+  three) — is read as prose rather than run, and comes back as a skipped note, but
 treat that as a mistake the reader forgave, not a way to write. The forgiveness
 is narrow and you cannot predict it: anything shaped like a call is run as one,
 and a keyword argument, a string literal, another call nested inside it, or a
-slashed or underscored name with no words around it — (server/tool :key "value"),
+slashed or underscored name with no words around it — (server/tool :key "value") ,
 dummy names — is code whatever is missing. So (see below) is skipped while (see
-"below") raises undefined: see, and calling a tool whose server you have not
+  "below") raises undefined: see, and calling a tool whose server you have not
 loaded is an undefined: error you must fix, not a skip. A reply made only of
 asides ran nothing, which ends the loop, see "Ending the loop".
 
-To look at a result, name it in a form: (echo search-mcps-1). Writing the bare
+To look at a result, name it in a form: (echo search-mcps-1) . Writing the bare
 name search-mcps-1 on a line of its own is the bare value above — it is prose,
 it evaluates nothing, and a reply that is nothing but prose ENDS THE LOOP with
 that line as your final answer. This is the most expensive typo in the language.
 
 - Quote: 'x is the same as (quote x) — returns x unevaluated.
-- Quasiquote: a leading backtick is the same as (quasiquote x). Inside it, ,x
+- Quasiquote: a leading backtick is the same as (quasiquote x) . Inside it, ,x
   is unquote and inserts the evaluated x, and ,@x is unquote-splicing and splices
   a list. Example: (a ,(+ 1 2) ,@(list 3 4)) evaluates to the list a 3 3 4.
-- Lists: (a b c). Dotted pair: (a . b) is a single cons cell.
+- Lists: (a b c) . Dotted pair: (a . b) is a single cons cell.
 - Strings: "..." with escapes \\ \" \n \r \f \b \t \v. There is no character
   type — a "character" is just a one-character string.
 - Keywords: :foo is a self-evaluating keyword, interned, so (eq :a :a) is t.
@@ -61,7 +61,7 @@ DATA TYPES
 - nil = () = null = the empty list = the ONLY false value.
 - t = canonical true. Everything except nil is truthy, including 0, "",
   and empty structures.
-- Cons cell — a pair (car . cdr); lists are chains of cells ending in nil.
+- Cons cell — a pair (car . cdr) ; lists are chains of cells ending in nil.
 - Symbol — an interned name; gensym and make-symbol create uninterned ones,
   printed #:name.
 - Keyword — :foo, self-evaluating.
@@ -88,7 +88,10 @@ list of core special forms:
 | lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
 | macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
 | quasiquote | (quasiquote x) | Template with unquote and unquote-splicing, see the syntax section. |
-| try | (try body (catch (e) handler...)) | Eval body; on error, bind e to the error value and run the handler. |
+| try | (try
+  body
+  (catch (e)
+    handler...)) | Eval body; on error, bind e to the error value and run the handler. |
 
 Everything else that looks like a form — if, when, unless, and, or,
 let, let, letrec, while, dolist, dotimes, case, defun,
@@ -111,10 +114,10 @@ Rules:
 
 - The operators + -  keep exactness: bigint with bigint gives a bigint. Mixing in
   ANY float makes the whole result a float, "float contagion": (+ 1 2) is 3,
-  (+ 1 2.0) is 3.0.
+(+ 1 2.0) is 3.0.
 - The / operator is ALWAYS a float, even for evenly-divisible integers: (/ 6 2)
-  is 3.0. For exact integer division use truncate, which returns a bigint:
-  (truncate 6 2) is 3.
+is 3.0. For exact integer division use truncate, which returns a bigint:
+(truncate 6 2) is 3.
 - Output disambiguates: an integer-valued float prints with a trailing .0, as
   3.0; a bigint prints bare, as 3.
 - The = and eql operators compare numerically across types: (= 3 3.0) is t.
@@ -123,45 +126,45 @@ Rules:
 
 Arithmetic built-ins:
 
-- (+ n...) sum, 0 if none · ( n...) product, 1 if none ·
-  (- n m...) subtract, or negate one arg · (/ n m...) float divide.
+- (+ n...) sum, 0 if none · (n...) product, 1 if none ·
+(- n m...) subtract, or negate one arg · (/ n m...) float divide.
 - (% x y) remainder, sign of x, alias rem · (mod x y) modulo, sign of y ·
-  (truncate x [y]) truncate toward zero, giving a bigint.
-- (< x y) less-than, a primitive. Prelude adds (> x y), (>= x y), (<= x y),
-  (/= x y) and (= x y).
+(truncate x [y]) truncate toward zero, giving a bigint.
+- (< x y) less-than, a primitive. Prelude adds (> x y) , (>= x y) , (<= x y) ,
+(/= x y) and (= x y) .
 - (numberp x) is the only numeric predicate. There are NO zerop, evenp,
   abs, min, max, floor, ceiling, round, expt, sqrt or gcd — build them
-  yourself: even is (= 0 (% n 2)), abs is (if (< n 0) (- n) n).
+  yourself: even is (= 0 (% n 2)) , abs is (if (< n 0) (- n) n) .
 
 PRIMITIVE BUILT-INS, DEFINED IN THE INTERPRETER CORE
 
 Lists & pairs
-- (car x) first element · (cdr x) rest · (cons a b) new cell · (list x...).
+- (car x) first element · (cdr x) rest · (cons a b) new cell · (list x...) .
 - (length x) length of a list or string, as a bigint.
 - (rplaca cell x) and (rplacd cell x) destructively set car and cdr, aliased
   setcar and setcdr.
 
 Predicates
 - (atom x) true if not a cons · (eq x y) identity · (eql x y) identity or
-  numeric and string equality, aliased = · (stringp x) · (numberp x).
+  numeric and string equality, aliased = · (stringp x) · (numberp x) .
 
 Symbols
 - (gensym) fresh uninterned symbol · (make-symbol name) · (intern name) ·
-  (symbol-name sym).
+(symbol-name sym) .
 
 Strings
 - (char s i) one-char string at index i, or nil · (concat s...) concatenate
-  · (string-upcase s) · (string-downcase s).
+  · (string-upcase s) · (string-downcase s) .
 - (string x) convert any value to a string — its printed form, with a string
   left as itself rather than quoted: (string 12) is "12", (string 'foo) is
   "foo", (string nil) is "nil". Use it to put a number in text:
-  (concat "Chapter " (string n)). The concat built-in takes strings only, so a
+(concat "Chapter " (string n)) . The concat built-in takes strings only, so a
   number has to go through string first. A float keeps its .0, so (string 3.0)
-  is "3.0" and (string (truncate x)) is the way to a bare integer.
+is "3.0" and (string (truncate x)) is the way to a bare integer.
 
 Parsing text into data
 - (read s) parse the FIRST Lisp expression in the string s and return it as
-  data, unevaluated: (read "(+ 1 2)") gives the list (+ 1 2), not 3. Text after
+  data, unevaluated: (read "(+ 1 2)") gives the list (+ 1 2) , not 3. Text after
   that expression is ignored; a string with no expression errors.
 - (json-parse s) parse a JSON document: an object becomes an alist with string
   keys, an array a list, true becomes t, and false and null become nil. Numbers
@@ -202,12 +205,12 @@ caddr cdaar cdadr cddar cdddr. So cadr is the 2nd element, caddr the 3rd, and so
 List building / manipulation
 - (append list...) concatenate lists, non-destructive.
 - (nreverse list) reverse destructively · (last list) last cons cell ·
-  (nconc lists...) destructive concat.
+(nconc lists...) destructive concat.
 - (mapcar f list) new list of f over each element. Example:
-  (mapcar (lambda (n) ( n n)) '(1 2 3)) gives (1 4 9).
+(mapcar (lambda (n) (n n)) '(1 2 3)) gives (1 4 9) .
 - (nth n list) the element at index n, counting from 0; nil past the end.
 - (filter f list) the elements f says yes to. Example:
-  (filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40).
+(filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40) .
 - (reduce f list [initial]) fold left into one value: f takes the
   accumulator and each element. Without initial the first element starts it
   and an empty list is nil. (reduce + '(1 2 3)) is 6. The list comes
@@ -217,13 +220,13 @@ List building / manipulation
 
 Predicates
 - (not x) and (null x) true if nil · (consp x) true if a cons ·
-  (listp x) true if nil or a cons · (equal x y) deep structural equality.
+(listp x) true if nil or a cons · (equal x y) deep structural equality.
 
 Membership / alists
 - (memq key list) tail from first eq match · (member key list) first equal
   match · (assq key alist) first pair with eq car · (assoc key alist) first
   pair with equal car. Read an alist field:
-  (cdr (assoc "content" msg)).
+(cdr (assoc "content" msg)) .
 - (get-in record key...) read through nested alists and lists in one step, with
   every step guarded: (get-in config "server" "port") is nil when there is no
   "server" instead of an error, so no or guard and no assoc chain.
@@ -232,20 +235,20 @@ Membership / alists
 
 Control-flow macros
 - (if test then else...) · (when test body...) · (unless test body...) ·
-  (and x...), nil on first nil, else last · (or x...), the first non-nil ·
-  (case key (keys forms...) ... (t default...)) — matches key by equal
+(and x...) , nil on first nil, else last · (or x...) , the first non-nil ·
+(case key (keys forms...) ... (t default...)) — matches key by equal
   against each clause's key list; the t clause is the default.
 
 Binding macros
-- (let ((name val)...) body...) parallel bindings; a bare name binds nil.
-- (let ((name val)...) body...) sequential bindings — each val may use the
+- (let ((name val) ...) body...) parallel bindings; a bare name binds nil.
+- (let ((name val) ...) body...) sequential bindings — each val may use the
   names bound before it, e.g.
-  (let ((issue (car issues)) (state (cdr (assoc "state" issue)))) …).
-- (letrec ((name val)...) body...) bindings may reference each other — use for
+(let ((issue (car issues)) (state (cdr (assoc "state" issue)))) …) .
+- (letrec ((name val) ...) body...) bindings may reference each other — use for
   local recursive functions.
 
 Loops, and they support (break) and (return value)
-- (while test body...).
+- (while test body...) .
 - (dolist (name list [result]) body...) iterate elements.
 - (dotimes (name count [result]) body...) iterate 0..count-1.
 
@@ -255,15 +258,15 @@ Defining
 
 Strings
 - (substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
-  (string-index s sub [start]) giving an index or nil · (string-contains? s sub) ·
-  (string-count s sub) · (string-replace s old new) ·
-  (string-split s sep), where an empty sep gives characters · (string-join list sep) ·
-  (string-trim s).
+(string-index s sub [start]) giving an index or nil · (string-contains? s sub) ·
+(string-count s sub) · (string-replace s old new) ·
+(string-split s sep) , where an empty sep gives characters · (string-join list sep) ·
+(string-trim s) .
 
 Misc
 - (identity x) return x.
 - (think part...) echo reasoning as narration: parts print literally, but a
-  ,x part is evaluated first, e.g. (think "sum is" ,(+ 1 2)). Returns nil;
+  ,x part is evaluated first, e.g. (think "sum is" ,(+ 1 2)) . Returns nil;
   put the real answer in a separate expression.
 
 MACROS
@@ -280,11 +283,17 @@ Macros expand up to 20 nesting levels at compile time.
 ERRORS & CONTROL FLOW
 
 - (error value) raises; value can be any Lisp value, often a string.
-- (try expr (catch (e) handler...)) evaluates expr; if it raises, e is bound
+- (try
+  expr
+  (catch (e)
+    handler...)) evaluates expr; if it raises, e is bound
   to the raised value and the handler runs. This is the ONLY error mechanism —
   there is no condition system, no unwind-protect.
 
-(try (/ 1 0) (catch (e) (concat "failed: " e)))
+(try
+  (/ 1 0)
+  (catch (e)
+    (concat "failed: " e)))
 
 - (break) and (return value) escape the nearest while, dolist or dotimes.
   Using them outside a loop is an error.

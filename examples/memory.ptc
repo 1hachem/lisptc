@@ -46,7 +46,7 @@ With :on the memory watches for something and loads itself when it
 happens. For a call the pattern is a FORM, matched structurally, so
 naming no arguments hooks every call to that name.
 (memory/remember "joins" "string-join takes the list FIRST, then the separator."
-                 :on '(call (string-join)))
+  :on '(call (string-join)))
 
 Now write a form that calls it, and the note arrives with the result
 of the step — before you get the argument order wrong.
@@ -55,7 +55,7 @@ of the step — before you get the argument order wrong.
 Name an argument and the memory gets precise: this one only fires for
 the widget tool, not for every call to concat.
 (memory/remember "widget-concat" "widget ids concatenate with a dash, never a slash."
-                 :on '(call (concat "widget" _)))
+  :on '(call (concat "widget" _)))
 (echo (concat "widget" "-1a2b"))
 
 A bare _ matches one argument whatever it is, a head is a regular
@@ -65,14 +65,14 @@ The seven kinds are call, result, error, step, prose, user and
 recall. An error trigger is the useful one: a mistake you made once
 surfaces exactly as it is about to repeat.
 (memory/remember "undefineds" "Check (dump) before calling a name you have not defined."
-                 :on '(error "undefined"))
+  :on '(error "undefined"))
 
 (echo "=== 4. chaining ===")
 
 Retrieval is itself an event, so one memory can hook another. Recall
 the first and both arrive.
 (memory/remember "widget-shape" "A widget alist has id, name and state."
-                 :on '(recall "widget-ids"))
+  :on '(recall "widget-ids"))
 
 You can also say it outright with :links. And memories that fire in
 the same step get wired to each other on their own, so what you use
