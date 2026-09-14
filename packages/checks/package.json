@@ -6,8 +6,8 @@
   "exports": {
     "./checks": "./src/checks.ts",
     "./mocks": "./src/mocks.ts",
-    "./report": "./src/report.ts",
-    "./trace": "./src/trace.ts"
+    "./trace": "./src/trace.ts",
+    "./verdict": "./src/verdict.ts"
   },
   "engines": {
     "node": ">=22.6.0"

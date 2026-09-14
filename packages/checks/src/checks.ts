@@ -12,8 +12,8 @@ import {
 	zList,
 } from "@repo/interpreter/lisp";
 import { z } from "zod";
-import type { CheckOutcome, Verdict } from "./report.ts";
 import type { Trace, TraceEvent } from "./trace.ts";
+import type { CheckOutcome, Verdict } from "./verdict.ts";
 
 type Settled = ":true" | ":false" | ":pending-true" | ":pending-false";
 

@@ -1,9 +1,9 @@
-import type { Report, ReportRow, TranscriptLine } from "@repo/checks/report";
-import { parseReport } from "@repo/checks/report";
+import type { Report, ReportRow, TranscriptLine } from "@repo/evals/report";
+import { parseReport } from "@repo/evals/report";
 import type { ReportStore } from "@repo/evals/storage";
 import { reportStore } from "@repo/evals/storage";
 
-export type { CaseInfo, ReportRow } from "@repo/checks/report";
+export type { CaseInfo, ReportRow } from "@repo/evals/report";
 export type Role = TranscriptLine["role"];
 
 let opened: ReportStore | undefined;

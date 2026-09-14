@@ -8,6 +8,12 @@ import {
 } from "@repo/ai";
 import { Checks } from "@repo/checks/checks";
 import type { MockSpec } from "@repo/checks/mocks";
+import { Trace } from "@repo/checks/trace";
+import { evalsEnv } from "@repo/env/evals";
+import type { ProviderName } from "@repo/shared/providers";
+import { test } from "vitest";
+import { type ExtensionsFor, tracedRepl } from "./harness.ts";
+import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
 import type {
 	CaseInfo,
 	CheckOutcome,
@@ -17,14 +23,8 @@ import type {
 	ReportRow,
 	SeedTurn,
 	TranscriptLine,
-} from "@repo/checks/report";
-import { reportSchema } from "@repo/checks/report";
-import { Trace } from "@repo/checks/trace";
-import { evalsEnv } from "@repo/env/evals";
-import type { ProviderName } from "@repo/shared/providers";
-import { test } from "vitest";
-import { type ExtensionsFor, tracedRepl } from "./harness.ts";
-import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
+} from "./report.ts";
+import { reportSchema } from "./report.ts";
 import { shardPath } from "./shards.ts";
 import { evalMatrix, reachable, type Target } from "./targets.ts";
 

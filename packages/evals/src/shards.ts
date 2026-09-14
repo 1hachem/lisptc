@@ -1,8 +1,8 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import type { CaseInfo, Report, ReportRow } from "@repo/checks/report";
-import { parseReport } from "@repo/checks/report";
 import { evalsEnv } from "@repo/env/evals";
+import type { CaseInfo, Report, ReportRow } from "./report.ts";
+import { parseReport } from "./report.ts";
 
 export const REPORT_DIR =
 	evalsEnv.EVAL_REPORT_DIR ?? join(process.cwd(), ".evals");

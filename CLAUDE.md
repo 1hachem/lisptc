@@ -18,8 +18,8 @@ workspaces `packages/*` and `apps/*`.
 - `packages/llm` (`@repo/llm`) — the language-model extension. Carries `@langchain/openai`, so the interpreter does not.
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter: the embeddable REPLs, the interactive CLI, the shared-session server.
 - `packages/ai` (`@repo/ai`) — the agent loop, its system prompt, the model providers, telemetry.
-- `packages/checks` (`@repo/checks`) — the check extension: the check DSL an eval case is written in, the report schema it grades into, and the trace and mocked MCP surfaces it reads a run through. Depends on the interpreter and `@repo/mcp`, and on nothing that runs a suite.
-- `packages/evals` (`@repo/evals`) — the eval suite around `@repo/checks`: runner, harness, judge, storage, shards, targets, review. It holds no cases of its own.
+- `packages/checks` (`@repo/checks`) — the check extension: the check DSL an eval case is written in, the verdict it settles on, and the trace and mocked MCP surfaces it reads a run through. Core logic and language features only, so it carries no reporting and depends on nothing that runs a suite.
+- `packages/evals` (`@repo/evals`) — the eval suite around `@repo/checks`, and all of its reporting: runner, harness, judge, report schema, storage, shards, targets, review. It holds no cases of its own.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer, for what two packages both need and neither owns.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for `@tanstack/highlight`, tokenized with the reader's own `tokenPattern()`. What the chat highlights lisp with, and where `openForms` counts the parens the editor is still waiting on.
 - `packages/env` (`@repo/env`) — typed env via t3-env/zod. The only place `process.env` is read.
