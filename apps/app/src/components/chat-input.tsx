@@ -22,15 +22,20 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Command, commands } from "../lib/commands.ts";
+import { InputAction, InputShell } from "./input-shell.tsx";
+import { LispEditor } from "./lisp-editor.tsx";
 
 export interface ChatInputProps {
 	placeholder?: string;
 	onSubmit: (text: string) => void;
+	onLisp: (code: string) => void;
 	onCommand?: (name: string) => void;
 	isStreaming?: boolean;
 	onStop?: () => void;
 	disabled?: boolean;
 }
+
+const LISP_PREFIX = "!";
 
 class CommandOption extends MenuOption {
 	command: Command;
@@ -43,32 +48,47 @@ class CommandOption extends MenuOption {
 export function ChatInput({
 	placeholder = "",
 	onSubmit,
+	onLisp,
 	onCommand,
 	isStreaming,
 	onStop,
 	disabled,
 }: ChatInputProps) {
+	const [lisp, setLisp] = useState<string | null>(null);
+
 	return (
 		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			<LexicalComposer
-				initialConfig={{
-					namespace: "chat-input",
-					theme: {},
-					nodes: [],
-					onError: (error) => {
-						throw error;
-					},
-				}}
-			>
-				<Editor
-					placeholder={placeholder}
-					onSubmit={onSubmit}
-					onCommand={onCommand}
+			{lisp === null ? (
+				<LexicalComposer
+					initialConfig={{
+						namespace: "chat-input",
+						theme: {},
+						nodes: [],
+						onError: (error) => {
+							throw error;
+						},
+					}}
+				>
+					<Editor
+						placeholder={placeholder}
+						onSubmit={onSubmit}
+						onLisp={onLisp}
+						onEnterLisp={setLisp}
+						onCommand={onCommand}
+						isStreaming={isStreaming}
+						onStop={onStop}
+						disabled={disabled}
+					/>
+				</LexicalComposer>
+			) : (
+				<LispEditor
+					initial={lisp}
+					onRun={onLisp}
+					onExit={() => setLisp(null)}
 					isStreaming={isStreaming}
 					onStop={onStop}
-					disabled={disabled}
 				/>
-			</LexicalComposer>
+			)}
 		</div>
 	);
 }
@@ -76,11 +96,12 @@ export function ChatInput({
 function Editor({
 	placeholder = "",
 	onSubmit,
+	onEnterLisp,
 	onCommand,
 	isStreaming,
 	onStop,
 	disabled,
-}: ChatInputProps) {
+}: ChatInputProps & { onEnterLisp: (code: string) => void }) {
 	const [editor] = useLexicalComposerContext();
 	const menuOpen = useRef(false);
 	const menuHost = useRef<HTMLDivElement>(null);
@@ -88,6 +109,18 @@ function Editor({
 	useEffect(() => {
 		editor.setEditable(!disabled);
 	}, [editor, disabled]);
+
+	useEffect(() => {
+		if (disabled) return;
+		return editor.registerUpdateListener(({ editorState }) => {
+			const text = editorState.read(() => $getRoot().getTextContent());
+			if (!text.startsWith(LISP_PREFIX)) return;
+			queueMicrotask(() => {
+				editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
+				onEnterLisp(text.slice(LISP_PREFIX.length));
+			});
+		});
+	}, [editor, onEnterLisp, disabled]);
 
 	const runText = useCallback(() => {
 		if (disabled) return;
@@ -111,67 +144,49 @@ function Editor({
 	return (
 		<>
 			<div ref={menuHost} />
-			<div
-				className={cn(
-					"flex w-full items-end gap-2.5 border-b border-bg2 bg-bg1 px-3 py-1",
-					disabled && "opacity-60",
-				)}
+			<InputShell
+				prompt={disabled ? "⋯" : "›"}
+				tone={disabled ? "text-dim" : "text-green"}
+				dim={disabled}
+				action={
+					isStreaming ? (
+						<InputAction
+							label="stop"
+							glyph="■"
+							tone="text-red hover:brightness-125"
+							onClick={onStop}
+						/>
+					) : (
+						<InputAction
+							label="send"
+							glyph="⏎"
+							tone="text-green hover:brightness-125"
+							onClick={runText}
+							disabled={disabled}
+						/>
+					)
+				}
 			>
-				<span
-					className={cn(
-						"flex-none self-start py-1",
-						disabled ? "text-dim" : "text-green",
-					)}
-				>
-					{disabled ? "⋯" : "›"}
-				</span>
-				<div className="relative min-w-0 flex-1">
-					<PlainTextPlugin
-						contentEditable={
-							<ContentEditable
-								aria-placeholder={placeholder}
-								placeholder={
-									<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
-										{placeholder}
-									</div>
-								}
-								className={cn(
-									"max-h-40 min-h-0 overflow-y-auto py-1 outline-none",
-									disabled
-										? "cursor-not-allowed text-dim"
-										: "text-yellow caret-yellow",
-								)}
-							/>
-						}
-						ErrorBoundary={LexicalErrorBoundary}
-					/>
-				</div>
-				{isStreaming ? (
-					<button
-						type="button"
-						onClick={onStop}
-						className="flex h-auto flex-none items-center gap-[7px] self-center rounded-none bg-bg2 px-[9px] py-px text-[11.5px] text-red hover:brightness-125"
-					>
-						<span>stop</span>
-						<span className="text-dim">■</span>
-					</button>
-				) : (
-					<button
-						type="button"
-						onClick={runText}
-						disabled={disabled}
-						className={cn(
-							"flex h-auto flex-none items-center gap-[7px] self-center rounded-none bg-bg2 px-[9px] py-px text-[11.5px]",
-							disabled
-								? "cursor-not-allowed text-dim"
-								: "text-green hover:brightness-125",
-						)}
-					>
-						<span>send</span>
-						<span className="text-dim">⏎</span>
-					</button>
-				)}
-			</div>
+				<PlainTextPlugin
+					contentEditable={
+						<ContentEditable
+							aria-placeholder={placeholder}
+							placeholder={
+								<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
+									{placeholder}
+								</div>
+							}
+							className={cn(
+								"max-h-40 min-h-0 overflow-y-auto py-1 outline-none",
+								disabled
+									? "cursor-not-allowed text-dim"
+									: "text-yellow caret-yellow",
+							)}
+						/>
+					}
+					ErrorBoundary={LexicalErrorBoundary}
+				/>
+			</InputShell>
 
 			<HistoryPlugin />
 			<ClearEditorPlugin />

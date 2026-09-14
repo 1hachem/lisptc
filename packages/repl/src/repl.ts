@@ -201,10 +201,14 @@ export class AgentRepl extends MemoryRepl {
 		return skipNotes(notes);
 	}
 
-	override reset(): void {
-		super.reset();
+	clearTurnSignals(): void {
 		this.finished = false;
 		this.pendingProse = [];
+	}
+
+	override reset(): void {
+		super.reset();
+		this.clearTurnSignals();
 	}
 }
 

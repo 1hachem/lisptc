@@ -20,6 +20,8 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
+    "boundaries": "turbo boundaries",
+    "check:arch": "node --no-warnings --experimental-transform-types ./scripts/check-arch.ts",
     "check:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts",
     "fix:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts --fix",
     "check:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts",

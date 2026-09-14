@@ -36,6 +36,9 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "correctness": {
+        "noUndeclaredDependencies": "error"
+      },
       "style": {
         "noProcessEnv": "error"
       }

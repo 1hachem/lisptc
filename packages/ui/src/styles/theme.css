@@ -103,3 +103,27 @@
 		opacity: 0;
 	}
 }
+
+/*
+ * Lisp highlighting: @tanstack/highlight emits th-* classes, and the lisptc
+ * language in @repo/syntax picks which one each token gets. This is the only
+ * place the colours are chosen.
+ */
+.th-function {
+	color: var(--blue);
+}
+.th-variable {
+	color: var(--fg);
+}
+.th-attr {
+	color: var(--aqua);
+}
+.th-number {
+	color: var(--purple);
+}
+.th-string {
+	color: var(--green);
+}
+.th-operator {
+	color: var(--dim);
+}

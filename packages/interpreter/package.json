@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@repo/env": "workspace:*",
+    "@repo/shared": "workspace:*",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {

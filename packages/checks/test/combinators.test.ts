@@ -1,8 +1,8 @@
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, test } from "vitest";
 import { Checks } from "../src/checks.ts";
-import type { CheckOutcome } from "../src/report.ts";
 import { Trace } from "../src/trace.ts";
+import type { CheckOutcome } from "../src/verdict.ts";
 
 const reader = new Interp();
 runSync(reader, prelude);

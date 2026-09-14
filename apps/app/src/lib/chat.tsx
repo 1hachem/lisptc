@@ -2,7 +2,15 @@ import {
 	FetchStreamTransport,
 	useStream,
 } from "@langchain/langgraph-sdk/react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
 
@@ -64,8 +72,28 @@ interface ChatSession {
 	threadId: string;
 	error?: string;
 	send: (text: string) => void;
+	runLisp: (code: string) => void;
 	stop: () => void;
 	clear: () => void;
+}
+
+async function evalLisp(
+	code: string,
+	threadId: string,
+	signal: AbortSignal,
+): Promise<ChatMessage> {
+	const response = await fetch(`${API_URL}/api/chat/eval`, {
+		method: "POST",
+		headers: apiHeaders(),
+		body: JSON.stringify({
+			code,
+			config: { configurable: { thread_id: threadId } },
+		}),
+		signal,
+	});
+	if (!response.ok) throw new Error(`the repl returned ${response.status}`);
+	const { message } = (await response.json()) as { message: ChatMessage };
+	return message;
 }
 
 const GREETING_ID = "greeting";
@@ -104,13 +132,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		setGreeting(greetingMessage());
 	}, []);
 
-	const messages = useMemo(
-		() =>
-			!greeting || streamed.some((m) => m.id === GREETING_ID)
-				? streamed
-				: [greeting, ...streamed],
-		[greeting, streamed],
-	);
+	const [entries, setEntries] = useState<ChatMessage[]>([]);
+	const [evaluating, setEvaluating] = useState(false);
+	const [evalError, setEvalError] = useState<string | undefined>(undefined);
+	const running = useRef<AbortController | null>(null);
+
+	const messages = useMemo(() => {
+		const shown = [...streamed, ...entries];
+		return !greeting || shown.some((m) => m.id === GREETING_ID)
+			? shown
+			: [greeting, ...shown];
+	}, [greeting, streamed, entries]);
 
 	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
 	useEffect(() => {
@@ -124,18 +156,49 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			setMeta((prev) => ({ ...prev, ...found }));
 	}, [streamed, meta]);
 
+	const runLisp = useCallback(
+		async (code: string) => {
+			const run = new AbortController();
+			running.current?.abort();
+			running.current = run;
+			setEvalError(undefined);
+			setEvaluating(true);
+			setEntries((prev) => [
+				...prev,
+				{ id: crypto.randomUUID(), type: "human", content: code },
+			]);
+			try {
+				const result = await evalLisp(code, threadId, run.signal);
+				setEntries((prev) => [...prev, result]);
+			} catch (ex) {
+				if (run.signal.aborted) return;
+				setEvalError(ex instanceof Error ? ex.message : String(ex));
+			} finally {
+				if (running.current === run) {
+					running.current = null;
+					setEvaluating(false);
+				}
+			}
+		},
+		[threadId],
+	);
+
 	const value: ChatSession = {
 		messages,
 		meta,
 		greeting: greeting ? messageText(greeting) : null,
-		fresh: streamed.length === 0,
-		isLoading: stream.isLoading,
+		fresh: streamed.length === 0 && entries.length === 0,
+		isLoading: stream.isLoading || evaluating,
 		threadId,
-		error: stream.error
-			? stream.error instanceof Error
-				? stream.error.message
-				: String(stream.error)
-			: undefined,
+		error:
+			(stream.error
+				? stream.error instanceof Error
+					? stream.error.message
+					: String(stream.error)
+				: undefined) ?? evalError,
+		runLisp: (code) => {
+			void runLisp(code);
+		},
 		send: (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
@@ -148,13 +211,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 				...history,
 				{ type: "human", content: trimmed, id: crypto.randomUUID() },
 			];
+			setEntries([]);
+			setEvalError(undefined);
 			stream.submit(
 				{ messages: turn },
 				{ optimisticValues: { messages: turn } },
 			);
 		},
-		stop: () => stream.stop(),
+		stop: () => {
+			running.current?.abort();
+			running.current = null;
+			setEvaluating(false);
+			stream.stop();
+		},
 		clear: () => {
+			running.current?.abort();
+			running.current = null;
+			setEvaluating(false);
+			setEntries([]);
+			setEvalError(undefined);
 			setThreadId(crypto.randomUUID());
 			setMeta({});
 			setGreeting(greetingMessage());

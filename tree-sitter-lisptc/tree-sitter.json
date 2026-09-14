@@ -1,0 +1,14 @@
+{
+  "grammars": [
+    {
+      "name": "lisptc",
+      "camelcase": "Lisptc",
+      "scope": "source.lisptc",
+      "path": ".",
+      "file-types": ["ptc"]
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0"
+  }
+}

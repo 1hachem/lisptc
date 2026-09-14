@@ -4,18 +4,15 @@
   "type": "module",
   "private": true,
   "exports": {
-    "./checks": "./src/checks.ts",
     "./global-setup": "./src/global-setup.ts",
     "./harness": "./src/harness.ts",
     "./judge": "./src/judge.ts",
-    "./mocks": "./src/mocks.ts",
     "./report": "./src/report.ts",
     "./review": "./src/review.ts",
     "./runner": "./src/runner.ts",
     "./shards": "./src/shards.ts",
     "./storage": "./src/storage.ts",
-    "./targets": "./src/targets.ts",
-    "./trace": "./src/trace.ts"
+    "./targets": "./src/targets.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -28,10 +25,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.700.0",
     "@repo/ai": "workspace:*",
+    "@repo/checks": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
     "zod": "^4.4.3"
