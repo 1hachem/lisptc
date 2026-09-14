@@ -17,7 +17,7 @@ function ChatRoute() {
 			<ChatView />
 			<div className="px-8 pb-7">
 				<ChatInput
-					placeholder="type a message  ·  / for commands"
+					placeholder="type a message  ·  / for commands  ·  ! to run lisp"
 					onSubmit={send}
 					onCommand={runCommand}
 					isStreaming={isLoading}
