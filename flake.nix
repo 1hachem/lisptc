@@ -72,7 +72,8 @@
           # `tree-sitter` and `emcc`, for `pnpm build:grammar`: the chat
           # highlights lisp with a wasm build of tree-sitter-lisptc. Pinning
           # them here is what keeps that build offline and reproducible —
-          # CLI_VERSION in scripts/grammar.ts tracks the version below.
+          # CLI_VERSION and EMCC_VERSION in scripts/grammar.ts pin the two
+          # below, and the wasm records which pair built it.
           tree-sitter
           emscripten
           ptcrepl-dev

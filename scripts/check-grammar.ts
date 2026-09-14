@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import {
 	CLI_VERSION,
+	EMCC_VERSION,
 	GRAMMAR,
 	grammarDigest,
 	relative,
@@ -33,7 +34,12 @@ if (stamp.grammar !== grammarDigest())
 
 if (stamp.cli !== CLI_VERSION)
 	stale(
-		`${relative(WASM)} was built by tree-sitter-cli ${stamp.cli}, and the build now pins ${CLI_VERSION}.`,
+		`${relative(WASM)} was built by tree-sitter ${stamp.cli}, and the flake now pins ${CLI_VERSION}.`,
+	);
+
+if (stamp.emcc !== EMCC_VERSION)
+	stale(
+		`${relative(WASM)} was built by emcc ${stamp.emcc}, and the flake now pins ${EMCC_VERSION}.`,
 	);
 
 console.log(`Grammar wasm matches ${relative(GRAMMAR)}.`);

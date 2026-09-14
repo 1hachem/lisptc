@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const CLI_VERSION = "0.25.10";
+export const EMCC_VERSION = "4.0.12-git";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -15,6 +16,7 @@ export const STAMP = `${WASM}.json`;
 export interface Stamp {
 	grammar: string;
 	cli: string;
+	emcc: string;
 }
 
 export function grammarDigest(): string {

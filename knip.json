@@ -4,7 +4,7 @@
     ".": {
       "entry": ["scripts/**/*.ts"],
       "project": ["scripts/**/*.ts"],
-      "ignoreBinaries": ["tree-sitter", "emcc"]
+      "ignoreBinaries": ["tree-sitter"]
     },
     "apps/api": {
       "project": ["src/**/*.ts"]
