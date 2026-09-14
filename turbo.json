@@ -11,7 +11,6 @@
             "extension",
             "runtime",
             "agent",
-            "eval-harness",
             "frontend",
             "product"
           ]
@@ -24,7 +23,6 @@
             "extension",
             "runtime",
             "agent",
-            "eval-harness",
             "frontend",
             "product"
           ]
@@ -32,46 +30,27 @@
       },
       "language": {
         "dependencies": {
-          "deny": [
-            "extension",
-            "runtime",
-            "agent",
-            "eval-harness",
-            "frontend",
-            "product"
-          ]
+          "deny": ["extension", "runtime", "agent", "frontend", "product"]
         }
       },
       "extension": {
         "dependencies": {
-          "deny": ["runtime", "agent", "eval-harness", "frontend", "product"]
+          "deny": ["runtime", "agent", "frontend", "product"]
         }
       },
       "runtime": {
         "dependencies": {
-          "deny": ["agent", "eval-harness", "frontend", "product"]
+          "deny": ["agent", "frontend", "product"]
         }
       },
       "agent": {
-        "dependencies": {
-          "deny": ["eval-harness", "frontend", "product"]
-        }
-      },
-      "eval-harness": {
         "dependencies": {
           "deny": ["frontend", "product"]
         }
       },
       "frontend": {
         "dependencies": {
-          "deny": [
-            "language",
-            "extension",
-            "runtime",
-            "agent",
-            "eval-harness",
-            "product"
-          ]
+          "deny": ["language", "extension", "runtime", "agent", "product"]
         }
       },
       "product": {

@@ -1,5 +1,5 @@
+import type { ReportRow, TranscriptLine } from "@repo/checks/report";
 import { describe, expect, test } from "vitest";
-import type { ReportRow, TranscriptLine } from "../src/report.ts";
 import {
 	fitTrace,
 	reviewProperties,

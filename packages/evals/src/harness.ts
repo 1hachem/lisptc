@@ -1,3 +1,10 @@
+import {
+	type MockSpec,
+	mockedMcpExtension,
+	tracedSecretsExtension,
+	withRun,
+} from "@repo/checks/mocks";
+import { Trace } from "@repo/checks/trace";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/interpreter/promises";
@@ -5,13 +12,6 @@ import { proseExtension } from "@repo/interpreter/prose";
 import { EnvSecretsStore, type SecretsStore } from "@repo/interpreter/secrets";
 import { llmExtension } from "@repo/llm/llm";
 import { AgentRepl } from "@repo/repl/repl";
-import {
-	type MockSpec,
-	mockedMcpExtension,
-	tracedSecretsExtension,
-	withRun,
-} from "./mocks.ts";
-import { Trace } from "./trace.ts";
 
 export type ExtensionsFor = () => InterpExtension[];
 

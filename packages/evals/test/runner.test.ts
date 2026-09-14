@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
+import type { Verdict } from "@repo/checks/report";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import type { Verdict } from "../src/report.ts";
 import type { EvalSpec, RunResult } from "../src/runner.ts";
 import { playwright } from "./fixtures/server.ts";
 

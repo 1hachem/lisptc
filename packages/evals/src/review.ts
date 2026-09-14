@@ -1,4 +1,4 @@
-import type { ReportRow, TranscriptLine } from "./report.ts";
+import type { ReportRow, TranscriptLine } from "@repo/checks/report";
 
 export const TRACE_BUDGET = 100_000;
 export const MESSAGE_BUDGET = 10_000;

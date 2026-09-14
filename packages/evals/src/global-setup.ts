@@ -1,4 +1,4 @@
-import { reportSchema } from "./report.ts";
+import { reportSchema } from "@repo/checks/report";
 import { clearParts, mergeShards, REPORT_DIR, reportName } from "./shards.ts";
 import { localStore, reportStore } from "./storage.ts";
 
