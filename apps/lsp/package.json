@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
+    "@repo/shared": "workspace:*",
     "@repo/llm": "workspace:*",
     "@repo/mcp": "workspace:*",
     "@repo/repl": "workspace:*",

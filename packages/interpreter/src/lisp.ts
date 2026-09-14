@@ -1646,7 +1646,6 @@ function qqExpand2(y: unknown, level: number): unknown {
 	return new Cell(listSym, new Cell(qqExpand0(y, level), null));
 }
 
-export { tokenPattern };
 
 function endOfString(text: string, i: number): number {
 	for (let j = i + 1; j < text.length; j++) {

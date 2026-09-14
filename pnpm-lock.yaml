@@ -188,6 +188,9 @@ importers:
       '@repo/repl':
         specifier: workspace:*
         version: link:../../packages/repl
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       vscode-languageserver:
         specifier: ^9.0.1
         version: 9.0.1
