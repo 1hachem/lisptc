@@ -110,7 +110,7 @@ export async function* runAgentTurn(
 	let failure: string | undefined;
 
 	try {
-		const repl = options.repl ?? getThreadRepl(threadId);
+		const repl = options.repl ?? getThreadRepl(threadId, identity?.distinctId);
 		repl.llmObserver = (call) => captureLlmCall(trace, call);
 
 		const tracedConfig: AgentConfig = {

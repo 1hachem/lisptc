@@ -35,8 +35,11 @@ function newAgentRepl(scope?: string): AgentRepl {
 
 const repls = new Map<string, AgentRepl>();
 
-export function getThreadRepl(threadId: string | undefined): AgentRepl {
-	if (!threadId) return newAgentRepl();
+export function getThreadRepl(
+	threadId: string | undefined,
+	scope?: string,
+): AgentRepl {
+	if (!threadId) return newAgentRepl(scope);
 
 	const existing = repls.get(threadId);
 	if (existing) {
@@ -45,7 +48,7 @@ export function getThreadRepl(threadId: string | undefined): AgentRepl {
 		return existing;
 	}
 
-	const repl = newAgentRepl(threadId);
+	const repl = newAgentRepl(scope);
 	repls.set(threadId, repl);
 	while (repls.size > MAX_THREADS) {
 		const oldest = repls.keys().next().value;

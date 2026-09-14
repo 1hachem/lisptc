@@ -19,12 +19,36 @@ describe("the REPL every agent host builds", () => {
 		).toContain("still here");
 	});
 
-	it("keeps one thread's memories out of another's", async () => {
-		await getThreadRepl("thread-c").eval('(memory/remember "secret" "mine")');
+	it("carries what one conversation learned into the next", async () => {
+		await getThreadRepl("thread-c", "someone").eval(
+			'(memory/remember "k" "learned in the first conversation")',
+		);
 
 		expect(
-			await getThreadRepl("thread-d").eval('(memory/recall "secret")'),
+			await getThreadRepl("a-brand-new-thread", "someone").eval(
+				'(memory/recall "k")',
+			),
+		).toContain("learned in the first conversation");
+	});
+
+	it("keeps one person's memories out of another's", async () => {
+		await getThreadRepl("thread-d", "someone").eval(
+			'(memory/remember "secret" "mine")',
+		);
+
+		expect(
+			await getThreadRepl("thread-e", "someone-else").eval(
+				'(memory/recall "secret")',
+			),
 		).not.toContain("mine");
+	});
+
+	it("gives a caller with no identity a shared memory rather than none", async () => {
+		await getThreadRepl("thread-f").eval('(memory/remember "k" "anonymous")');
+
+		expect(
+			await getThreadRepl("thread-g").eval('(memory/recall "k")'),
+		).toContain("anonymous");
 	});
 
 	it("gives an unscoped roster a bank of its own", () => {
