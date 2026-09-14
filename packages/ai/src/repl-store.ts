@@ -1,10 +1,9 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
-	FileMemoryStore,
 	MemoryBank,
-	memoryDirFor,
 	memoryExtension,
+	scopedMemoryStore,
 } from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
@@ -22,9 +21,7 @@ export function agentExtensions(scope?: string): InterpExtension[] {
 		mcpExtension(),
 		llmExtension(),
 		compactionExtension(),
-		memoryExtension(
-			new MemoryBank(new FileMemoryStore(memoryDirFor(scope ?? "shared"))),
-		),
+		memoryExtension(new MemoryBank(scopedMemoryStore(scope))),
 		proseExtension(),
 	];
 }

@@ -83,3 +83,27 @@ GOTCHAS
 - Memories outlive the interpreter. Definitions die on a reset and memories do not,
   so a recipe worth keeping belongs in a memory rather than in a defun you will
   lose.
+- A memory with no :on never arrives by itself. It waits for a recall that names
+  it, and if you cannot guess its key later it is as good as lost. Storing a
+  correction without a trigger is the commonest way to write a memory that never
+  helps you again.
+
+RULES
+
+- REMEMBER THE MOMENT A GUESS FAILS. A rejected call, a name that turned out wrong,
+  an argument order you had backwards: that is the one thing worth keeping, and the
+  moment you know it is the only moment you will ever have the correction in front
+  of you. Write it before you move on, while the right answer is on screen.
+- GIVE IT THE TRIGGER THAT WILL REPEAT, not a description of the topic. Ask what you
+  will be doing when you next need this, and hook that. A tool you misnamed belongs
+  on the call that loads its server, so it arrives before you can misname it again;
+  a mistake the interpreter rejected belongs on that error. A memory you have to
+  remember to look for is a memory you will not look for.
+- Remember the correction, not the transcript. "browser_navigate, not navigate" is
+  worth keeping; the whole tool listing is not, and the next listing will be
+  different anyway.
+- Do not remember what the REPL can tell you. Anything doc prints, anything a
+  discovery call returns, anything you can recompute: look it up instead. Memory is
+  for what you had to find out the hard way.
+- Recall before you guess. When you are about to write a name you are not sure of
+  and the session has not told you, that is the cheapest possible recall.

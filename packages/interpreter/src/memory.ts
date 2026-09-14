@@ -251,6 +251,39 @@ export class FileMemoryStore implements MemoryStore {
 	}
 }
 
+export class LayeredStore implements MemoryStore {
+	constructor(
+		private readonly own: MemoryStore,
+		private readonly shared: MemoryStore,
+	) {}
+
+	all(): Memory[] {
+		const byKey = new Map<string, Memory>();
+		for (const memory of this.shared.all()) byKey.set(memory.key, memory);
+		for (const memory of this.own.all()) byKey.set(memory.key, memory);
+		return [...byKey.values()];
+	}
+
+	get(key: string): Memory | undefined {
+		return this.own.get(key) ?? this.shared.get(key);
+	}
+
+	put(memory: Memory): void {
+		this.own.put(memory);
+	}
+
+	delete(key: string): boolean {
+		const mine = this.own.delete(key);
+		return this.shared.delete(key) || mine;
+	}
+}
+
+export function scopedMemoryStore(scope?: string): MemoryStore {
+	const shared = new FileMemoryStore(memoryDirFor());
+	if (scope === undefined) return shared;
+	return new LayeredStore(new FileMemoryStore(memoryDirFor(scope)), shared);
+}
+
 function matches(pattern: string, text: string): boolean {
 	try {
 		return new RegExp(pattern, "i").test(text);

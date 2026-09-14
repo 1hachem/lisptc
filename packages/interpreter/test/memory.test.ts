@@ -15,6 +15,7 @@ import {
 	memoryDirFor,
 	memoryExtension,
 	REINFORCEMENT,
+	scopedMemoryStore,
 	VolatileStore,
 } from "../src/memory.ts";
 
@@ -168,6 +169,23 @@ describe("triggers", () => {
 		expect(await f.step("TODO check this\n(+ 1 1)")).toContain(
 			"todos: finish it",
 		);
+	});
+
+	it("never fires a memory that was stored without a trigger", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "untriggered" "a note with no :on")');
+
+		expect(await f.step(`(string-join '("a") ",")`)).not.toContain(
+			"untriggered",
+		);
+		expect(await f.step("(+ 1 1)")).not.toContain("untriggered");
+	});
+
+	it("reports a missing trigger as nil, so an inert memory is visible", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "untriggered" "v")');
+
+		expect(await ev(f, "(memories)")).toContain("nil");
 	});
 
 	it("rejects a trigger kind that does not exist", async () => {
@@ -486,6 +504,24 @@ describe("the file store", () => {
 		});
 
 		expect(new FileMemoryStore(base).all().map((m) => m.key)).toEqual(["mine"]);
+	});
+
+	it("shows a scope what was remembered in the shared base", async () => {
+		const shared = fixture(new MemoryBank(new FileMemoryStore(memoryDirFor())));
+		await ev(shared, '(memory/remember "common" "everyone should know this")');
+
+		const scoped = fixture(new MemoryBank(scopedMemoryStore("someone")));
+
+		expect(await ev(scoped, '(length (memory/recall "common"))')).toBe("1");
+	});
+
+	it("writes a scope's own memories into its own layer", async () => {
+		const scoped = fixture(new MemoryBank(scopedMemoryStore("writer")));
+		await ev(scoped, '(memory/remember "private" "only mine")');
+
+		const shared = fixture(new MemoryBank(new FileMemoryStore(memoryDirFor())));
+
+		expect(await ev(shared, '(length (memory/recall "private"))')).toBe("0");
 	});
 
 	it("keeps one scope's memories out of another's", async () => {
