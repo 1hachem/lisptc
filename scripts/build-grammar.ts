@@ -6,8 +6,8 @@ import {
 	GRAMMAR_DIR,
 	grammarDigest,
 	relative,
-	type Stamp,
 	STAMP,
+	type Stamp,
 	WASM,
 } from "./grammar.ts";
 

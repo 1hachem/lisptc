@@ -4,8 +4,8 @@ import {
 	GRAMMAR,
 	grammarDigest,
 	relative,
-	type Stamp,
 	STAMP,
+	type Stamp,
 	WASM,
 } from "./grammar.ts";
 
