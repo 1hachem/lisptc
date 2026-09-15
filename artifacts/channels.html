@@ -1,0 +1,1204 @@
+<title>What The Channels Carry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root {
+	--bg: #F0F0F3;
+	--surface: #FFFFFF;
+	--sunken: #E6E6EC;
+	--ink: #16161D;
+	--muted: #55555F;
+	--faint: #7C7C89;
+	--line: #DBDBE3;
+	--line-strong: #BEBEC9;
+
+	--user: #B8496A;
+	--model: #3E5FC0;
+	--memory: #1B8A6B;
+	--warn: #9A5A12;
+	--dead: #8A8A96;
+
+	--user-soft: #FAE8ED;
+	--model-soft: #E5EAF9;
+	--memory-soft: #DFF0EA;
+
+	--shadow: 0 1px 2px rgba(22, 22, 29, .05), 0 10px 28px -14px rgba(22, 22, 29, .22);
+
+	--serif: "Newsreader", Georgia, serif;
+	--sans: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+	--mono: "DM Mono", ui-monospace, Menlo, monospace;
+
+	--rhythm: clamp(3rem, 6vw, 5rem);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #0D0D12;
+		--surface: #16161D;
+		--sunken: #1E1E27;
+		--ink: #E6E6EE;
+		--muted: #9C9CAC;
+		--faint: #7A7A89;
+		--line: #26262F;
+		--line-strong: #383843;
+
+		--user: #F27A9B;
+		--model: #8AA4F2;
+		--memory: #45C39C;
+		--warn: #DFA355;
+		--dead: #6B6B79;
+
+		--user-soft: #2E1620;
+		--model-soft: #161E38;
+		--memory-soft: #102D25;
+
+		--shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -14px rgba(0, 0, 0, .8);
+	}
+}
+
+:root[data-theme="dark"] {
+	--bg: #0D0D12;
+	--surface: #16161D;
+	--sunken: #1E1E27;
+	--ink: #E6E6EE;
+	--muted: #9C9CAC;
+	--faint: #7A7A89;
+	--line: #26262F;
+	--line-strong: #383843;
+
+	--user: #F27A9B;
+	--model: #8AA4F2;
+	--memory: #45C39C;
+	--warn: #DFA355;
+	--dead: #6B6B79;
+
+	--user-soft: #2E1620;
+	--model-soft: #161E38;
+	--memory-soft: #102D25;
+
+	--shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -14px rgba(0, 0, 0, .8);
+}
+
+* { box-sizing: border-box; }
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	font-family: var(--sans);
+	font-size: 16px;
+	line-height: 1.62;
+	-webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 clamp(1.25rem, 4vw, 2.5rem); }
+.spine { max-width: 66ch; }
+
+h1, h2, h3 {
+	font-family: var(--serif);
+	font-weight: 500;
+	line-height: 1.12;
+	text-wrap: balance;
+	margin: 0;
+	letter-spacing: -0.012em;
+}
+
+h1 { font-size: clamp(2.5rem, 6.5vw, 4.2rem); font-weight: 400; }
+h2 { font-size: clamp(1.65rem, 3.2vw, 2.3rem); }
+h3 { font-size: 1.1rem; font-weight: 600; font-family: var(--sans); letter-spacing: 0; }
+
+p { margin: 0; }
+
+code, pre, .mono { font-family: var(--mono); }
+
+.eyebrow {
+	font-family: var(--sans);
+	font-weight: 600;
+	font-size: .74rem;
+	letter-spacing: .15em;
+	text-transform: uppercase;
+	color: var(--faint);
+}
+
+:focus-visible { outline: 2px solid var(--model); outline-offset: 3px; border-radius: 2px; }
+
+/* ---------- masthead ---------- */
+
+.masthead { padding: clamp(3.5rem, 9vw, 6rem) 0 clamp(2rem, 4vw, 2.75rem); }
+.masthead .stack { display: flex; flex-direction: column; gap: 1.4rem; }
+
+.lede {
+	font-family: var(--serif);
+	font-size: clamp(1.15rem, 2.1vw, 1.45rem);
+	line-height: 1.5;
+	color: var(--muted);
+	max-width: 54ch;
+}
+
+.lede em { font-style: italic; color: var(--ink); }
+
+.byline {
+	display: flex; flex-wrap: wrap; gap: .4rem 1.4rem;
+	font-family: var(--mono); font-size: .78rem; color: var(--faint);
+	padding-top: .4rem; border-top: 1px solid var(--line);
+}
+
+/* ---------- section scaffolding ---------- */
+
+.section { padding: var(--rhythm) 0; border-top: 1px solid var(--line); }
+.section-head { display: flex; flex-direction: column; gap: .75rem; margin-bottom: 2.25rem; }
+.section-head p { color: var(--muted); }
+
+.prose { display: flex; flex-direction: column; gap: 1rem; color: var(--muted); }
+.prose strong { color: var(--ink); font-weight: 600; }
+
+/* ---------- switchboard ---------- */
+
+.board-shell {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	box-shadow: var(--shadow);
+	overflow: hidden;
+}
+
+.board-top { padding: .75rem 1rem; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: center; }
+
+.legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .76rem; font-family: var(--mono); color: var(--faint); }
+.legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.swatch { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+
+.board-hint { margin-left: auto; font-size: .78rem; color: var(--faint); }
+
+svg.board { display: block; width: 100%; height: auto; padding: .5rem; }
+
+.node rect { transition: opacity .18s, stroke-width .18s; }
+.node text { pointer-events: none; }
+.node { cursor: pointer; }
+
+.n-label { font-family: var(--mono); font-size: 11.5px; font-weight: 500; }
+.n-sub { font-family: var(--mono); font-size: 9.5px; opacity: .72; }
+
+.col-head {
+	font-family: var(--sans); font-size: 10px; font-weight: 600;
+	letter-spacing: .16em; text-transform: uppercase; fill: var(--faint);
+}
+
+.edge { fill: none; transition: opacity .18s, stroke-width .18s; }
+
+.stub-note { font-family: var(--mono); font-size: 9.5px; fill: var(--dead); }
+
+/* ---------- readout ---------- */
+
+.readout {
+	border-top: 1px solid var(--line);
+	padding: 1.1rem 1.15rem 1.25rem;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+	gap: 1.25rem;
+	background: var(--sunken);
+}
+
+@media (max-width: 760px) { .readout { grid-template-columns: 1fr; } }
+
+.readout .who { display: flex; flex-direction: column; gap: .5rem; }
+.readout h3 { font-family: var(--mono); font-size: .92rem; font-weight: 500; color: var(--ink); }
+.readout .where { font-family: var(--mono); font-size: .75rem; color: var(--faint); }
+.readout p { font-size: .9rem; color: var(--muted); }
+
+pre.code {
+	margin: 0;
+	font-size: .78rem;
+	line-height: 1.7;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: .8rem .9rem;
+	overflow-x: auto;
+	white-space: pre;
+	color: var(--ink);
+}
+
+.tally { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+.pill {
+	font-family: var(--mono); font-size: .72rem;
+	padding: .18rem .5rem; border-radius: 2px;
+	border: 1px solid currentColor;
+}
+
+.pill.keep { color: var(--memory); }
+.pill.drop { color: var(--dead); text-decoration: line-through; }
+
+/* ---------- faults ---------- */
+
+.faults { display: flex; flex-direction: column; gap: .5rem; }
+
+.fault {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	overflow: hidden;
+}
+
+.fault-head {
+	width: 100%; display: grid;
+	grid-template-columns: 2.4rem minmax(0, 1fr) auto auto;
+	align-items: center; gap: .85rem;
+	padding: .85rem 1rem; background: transparent; border: 0;
+	text-align: left; cursor: pointer; color: inherit; font: inherit;
+}
+
+@media (max-width: 640px) { .fault-head { grid-template-columns: 2.4rem minmax(0,1fr) auto; } .fault-head .sev { display: none; } }
+
+.fault-n { font-family: var(--mono); font-size: .8rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.fault-t { font-weight: 600; font-size: .96rem; }
+.sev { font-family: var(--mono); font-size: .72rem; color: var(--faint); white-space: nowrap; }
+
+.caret { width: 8px; height: 8px; border-right: 1.6px solid var(--faint); border-bottom: 1.6px solid var(--faint); transform: rotate(-45deg); transition: transform .2s; }
+.fault.open .caret { transform: rotate(45deg); border-color: var(--ink); }
+
+.fault-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.4,0,.2,1); }
+.fault.open .fault-body { grid-template-rows: 1fr; }
+.fault-body > div { overflow: hidden; }
+.fault-inner { padding: 0 1rem 1.1rem 4.25rem; display: flex; flex-direction: column; gap: .75rem; }
+@media (max-width: 640px) { .fault-inner { padding-left: 1rem; } }
+.fault-inner p { font-size: .92rem; color: var(--muted); max-width: 64ch; }
+.fault-inner p b { color: var(--ink); font-weight: 600; }
+
+/* ---------- proposal ---------- */
+
+.shape { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.shape-part {
+	display: grid;
+	grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+	gap: 1.25rem;
+	align-items: start;
+	padding-top: 1.25rem;
+	border-top: 1px dashed var(--line-strong);
+}
+
+@media (max-width: 760px) { .shape-part { grid-template-columns: 1fr; gap: .75rem; } }
+
+.shape-part .title { display: flex; flex-direction: column; gap: .35rem; }
+.shape-part h3 { font-size: 1rem; }
+.shape-part .title p { font-size: .87rem; color: var(--muted); }
+
+.swap { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+@media (max-width: 640px) { .swap { grid-template-columns: 1fr; } }
+
+.swap > div { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.swap h4 { margin: 0; font-family: var(--sans); font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; }
+.swap .old h4 { color: var(--dead); }
+.swap .new h4 { color: var(--memory); }
+.swap .old pre.code { border-style: dashed; }
+
+/* ---------- balance ---------- */
+
+.balance { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 800px) { .balance { grid-template-columns: 1fr; } }
+
+.col {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	padding: 1.25rem 1.3rem;
+	display: flex; flex-direction: column; gap: 1rem;
+}
+
+.col > header { display: flex; flex-direction: column; gap: .2rem; }
+.col h3 { font-family: var(--serif); font-size: 1.35rem; font-weight: 500; }
+.col .sub { font-size: .82rem; color: var(--faint); font-family: var(--mono); }
+
+.col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .8rem; }
+.col li { display: grid; grid-template-columns: 1.1rem 1fr; gap: .55rem; font-size: .92rem; color: var(--muted); }
+.col li b { color: var(--ink); font-weight: 600; }
+.mark { font-family: var(--mono); font-size: .9rem; line-height: 1.5; }
+.mark.plus { color: var(--memory); }
+.mark.minus { color: var(--user); }
+
+/* ---------- verdict ---------- */
+
+.verdict {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--model);
+	border-radius: 3px;
+	padding: 1.25rem 1.4rem;
+	display: flex; flex-direction: column; gap: .7rem;
+}
+
+.verdict p { color: var(--muted); max-width: 66ch; }
+.verdict p strong { color: var(--ink); font-weight: 600; }
+
+.stage {
+	display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .6rem;
+	margin-top: .3rem;
+}
+
+.stage div {
+	border: 1px solid var(--line); border-radius: 3px; padding: .75rem .85rem;
+	display: flex; flex-direction: column; gap: .25rem; background: var(--sunken);
+}
+
+.stage .n { font-family: var(--mono); font-size: .72rem; color: var(--model); }
+.stage .t { font-size: .88rem; font-weight: 600; }
+.stage .d { font-size: .82rem; color: var(--muted); }
+
+/* ---------- aside ---------- */
+
+.aside {
+	margin-top: 1.5rem;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--user);
+	border-radius: 3px;
+	padding: 1.2rem 1.35rem;
+	display: flex; flex-direction: column; gap: .8rem;
+}
+
+.aside h3 { font-size: 1.02rem; }
+.aside .prose { gap: .7rem; }
+.aside .prose p { font-size: .93rem; max-width: 68ch; }
+
+.sub-head {
+	font-family: var(--sans); font-size: .74rem; font-weight: 600;
+	letter-spacing: .15em; text-transform: uppercase; color: var(--faint);
+	margin-bottom: .85rem;
+}
+
+/* ---------- rules table ---------- */
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
+
+table.rules { border-collapse: collapse; width: 100%; min-width: 620px; }
+
+table.rules th {
+	text-align: left; font-family: var(--sans); font-size: .7rem; font-weight: 600;
+	letter-spacing: .13em; text-transform: uppercase; color: var(--faint);
+	padding: .7rem .9rem; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+
+table.rules td { padding: .7rem .9rem; font-size: .89rem; color: var(--ink); border-bottom: 1px solid var(--line); vertical-align: top; }
+table.rules tbody tr:last-child td { border-bottom: 0; }
+table.rules tr.dim td { color: var(--muted); }
+table.rules td.mono { font-family: var(--mono); font-size: .82rem; }
+table.rules td.small { font-size: .76rem; color: var(--muted); }
+
+.aud {
+	font-family: var(--mono); font-size: .74rem;
+	padding: .14rem .45rem; border-radius: 2px; white-space: nowrap;
+	border: 1px solid currentColor;
+}
+.aud.user { color: var(--user); }
+.aud.model { color: var(--model); }
+
+/* ---------- path ---------- */
+
+.path {
+	display: flex; align-items: stretch; gap: 0;
+	overflow-x: auto; padding-bottom: .5rem;
+}
+
+.hop {
+	flex: 1 0 auto; min-width: 128px; max-width: 200px;
+	display: flex; flex-direction: column; gap: .3rem;
+	padding: .8rem .85rem;
+	border: 1px solid var(--line);
+	border-right: 0;
+	background: var(--surface);
+}
+
+.hop:first-child { border-radius: 3px 0 0 3px; }
+.hop:last-child { border-right: 1px solid var(--line); border-radius: 0 3px 3px 0; }
+
+.hop .stage { font-family: var(--mono); font-size: .68rem; color: var(--faint); letter-spacing: .05em; }
+.hop .name { font-family: var(--mono); font-size: .81rem; font-weight: 500; color: var(--ink); }
+.hop .carries { font-size: .78rem; color: var(--muted); }
+
+.hop.rich { border-top: 3px solid var(--memory); }
+.hop.flat { border-top: 3px solid var(--dead); }
+.hop.cut { border-top: 3px solid var(--user); background: var(--user-soft); }
+.hop.cut .name { color: var(--user); }
+
+.path-key {
+	display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin-top: .7rem;
+	font-size: .78rem; color: var(--faint); font-family: var(--mono);
+}
+.path-key span { display: inline-flex; align-items: center; gap: .35rem; }
+.path-key i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+
+footer { border-top: 1px solid var(--line); padding: 2.5rem 0 4rem; color: var(--faint); font-size: .86rem; }
+footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
+</style>
+
+<header class="masthead">
+	<div class="wrap stack">
+		<span class="eyebrow">lisptc &middot; a look at channels</span>
+		<h1>What the channels<br>carry</h1>
+		<p class="lede">One evaluator speaks to two audiences at once: the person watching the terminal,
+			and the model whose context it is steering. <em>Channels</em> is the bus that splits them
+			&mdash; and the place where the split has quietly stopped being the thing doing the work.</p>
+		<div class="byline">
+			<span>8 emit sites</span>
+			<span>6 listeners</span>
+			<span>4 channel constants, 1 unused</span>
+			<span>packages/interpreter/src/channels.ts</span>
+		</div>
+	</div>
+</header>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">How it works today</span>
+			<h2>A string-keyed broadcast bus</h2>
+			<p>Forty lines. A <code>Diagnostic</code> is <code>{ channel, severity?, text, value?, line? }</code>;
+				<code>on(channel, fn)</code> returns an unsubscribe; <code>emit</code> walks the channel's
+				listener set and then the <code>"*"</code> set, swallowing anything a listener throws.
+				That is the whole of it.</p>
+		</div>
+
+		<div class="board-shell">
+			<div class="board-top">
+				<div class="legend">
+					<span><i class="swatch" style="background: var(--user)"></i> user</span>
+					<span><i class="swatch" style="background: var(--model)"></i> model</span>
+					<span><i class="swatch" style="background: var(--memory)"></i> memory</span>
+					<span><i class="swatch" style="background: var(--dead)"></i> nothing listens</span>
+				</div>
+				<span class="board-hint">Click any box to trace what reaches it</span>
+			</div>
+
+			<svg class="board" viewBox="0 0 960 470" role="img" aria-labelledby="boardTitle boardDesc">
+				<title id="boardTitle">The channel switchboard</title>
+				<desc id="boardDesc">Six emit sites on the left feed five lanes in the middle — user, model
+					text, model warning, model critical, memory — which are read by four consumers on the
+					right. The model critical lane reaches only the eval trace; the REPL drops it.</desc>
+				<g id="edges"></g>
+				<g id="nodes"></g>
+				<g id="notes"></g>
+			</svg>
+
+			<div class="readout">
+				<div class="who">
+					<span class="eyebrow">Selected</span>
+					<h3 id="roName">model &middot; severity: "warning"</h3>
+					<span class="where" id="roWhere">emitted by runGen &rarr; stripProse</span>
+					<p id="roText"></p>
+					<div class="tally" id="roTally"></div>
+				</div>
+				<pre class="code" id="roCode"></pre>
+			</div>
+		</div>
+
+		<div class="aside">
+			<h3>The one that confuses everyone: <code>write()</code></h3>
+			<div class="prose">
+				<p><code>write</code> is <strong>not</strong> the transport. It is a module-level global in
+					<code>lisp.ts</code> whose default is a no-op, and every <code>Interp</code> subscribes it
+					to its own <code>USER</code> channel in the constructor.</p>
+			</div>
+			<pre class="code">// lisp.ts:29 — one global, shared by every Interp in the process
+let write: (s: string) => void = () =&gt; {};
+
+export function setWriter(fn) { const prev = write; write = fn; return prev; }
+
+// lisp.ts:569 — in the constructor of every interpreter
+this.channels.on(USER, (d) =&gt; write(d.text));</pre>
+			<div class="prose">
+				<p>Only <code>cli.ts</code> ever installs a real one (<code>process.stdout.write</code>); the
+					tests swap it to capture output and restore it afterwards. <strong>Nothing in
+					<code>apps/api</code> calls <code>setWriter</code></strong>, so on the server every
+					<code>USER</code> record reaches a function that does nothing and is discarded.</p>
+				<p>Output reaches the browser by an entirely separate route: the REPL <em>accumulates</em> the
+					channels into two strings and returns them as a value. <code>write()</code> is a
+					vestigial second exit that only the terminal uses &mdash; which is why adding a channel
+					the frontend can listen to is not a matter of pointing <code>write</code> somewhere new.</p>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">The problem</span>
+			<h2>Severity is doing a channel&rsquo;s job</h2>
+			<p>Three separate consumers subscribe to <code>MODEL</code>. Each one immediately partitions the
+				stream by <code>severity</code>, and no two partitions agree. That is the tell: the bus is
+				carrying two unrelated streams down one wire and asking every reader to sort the mail.</p>
+		</div>
+		<div class="faults" id="faults"></div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">A better shape</span>
+			<h2>Typed topics, explicit audience, a recorded step</h2>
+			<p>Three changes, independent of each other. None of them closes the bus to new extensions
+				&mdash; that constraint is what rules out the obvious fix of one big discriminated union.</p>
+		</div>
+		<div class="shape" id="shape"></div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">The new requirement</span>
+			<h2>A channel the frontend listens to</h2>
+			<p>Generative UI: the interpreter emits a component, the browser renders it. JSON describing a
+				component at first, a serialised component later. This is the requirement that turns the
+				refactor from tidying into work that has to happen &mdash; because today there is no way to
+				get a structured payload out of the interpreter at all.</p>
+		</div>
+
+		<h3 class="sub-head">Where the structure is lost</h3>
+		<div class="path" id="path"></div>
+
+		<div class="prose spine" style="margin-top: 1.5rem">
+			<p>The two-audience split already survives all the way to the wire: <code>content</code> is what
+				the model reads, <code>additional_kwargs.display</code> is what the person reads. <strong>It
+				survives as two flat strings.</strong> A component spec would have to be smuggled inside the
+				display string and re-parsed in the browser, and every channel record that is not
+				<code>USER</code> or <code>MODEL</code> text is dropped before it reaches the stream at all.</p>
+		</div>
+
+		<div class="shape" id="ui"></div>
+
+		<h3 class="sub-head" style="margin-top: 2.25rem">What the browser does with each envelope</h3>
+		<div class="tablewrap">
+			<table class="rules">
+				<thead>
+					<tr><th>topic</th><th>to</th><th>the frontend</th><th>payload</th></tr>
+				</thead>
+				<tbody id="rules"></tbody>
+			</table>
+		</div>
+
+		<div class="prose spine" style="margin-top: 1.5rem">
+			<p><strong>Routing is <code>to</code>, not topic.</strong> The rule you want &mdash; render what
+				is for the person, hide what is for the model behind a debug toggle &mdash; is a filter on
+				one field, which is only possible once audience stops being encoded in the channel name.</p>
+		</div>
+
+		<h3 class="sub-head" style="margin-top: 2.25rem">What a transport costs that an in-process bus did not</h3>
+		<div class="guard">
+			<div class="guard-item">
+				<span class="k">ordering across a reconnect</span>
+				<p>An in-process listener cannot miss a record. An SSE client can drop and resume, so every
+					envelope needs a <code>seq</code> and the stream needs to honour
+					<code>Last-Event-ID</code> &mdash; or the browser silently renders a hole.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">backpressure and closure</span>
+				<p><code>emit</code> returns <code>void</code> today. <code>stream.ts</code> already tracks a
+					closed controller and breaks its loop on a failed write; a transport that cannot report
+					failure throws that away. Hence <code>send(): boolean</code>.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">a second serialisation boundary</span>
+				<p>Payloads stop being any JS value and become whatever survives <code>JSON.stringify</code>.
+					That is a real constraint on <code>value?: unknown</code> today &mdash; a Lisp
+					<code>Cell</code> in an error's <code>value</code> does not cross the wire intact.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">the step boundary becomes load-bearing</span>
+				<p>Batching per step is what the REPL's accumulate-then-return does for free. Streaming
+					envelope-by-envelope means the browser sees a partial step, so <code>step</code> has to
+					ride on the envelope and the UI has to tolerate a step still in flight.</p>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">Honestly</span>
+			<h2>What each shape is good at</h2>
+			<p>The bus is not a bad design. It is a deliberately loose one, and looseness bought real
+				things &mdash; some of which the replacement gives back.</p>
+		</div>
+		<div class="balance">
+			<div class="col">
+				<header>
+					<h3>The bus today</h3>
+					<span class="sub">channel: string + severity?</span>
+				</header>
+				<ul id="prosOld"></ul>
+			</div>
+			<div class="col">
+				<header>
+					<h3>Topics &amp; steps</h3>
+					<span class="sub">Topic&lt;T&gt; + Audience + Step</span>
+				</header>
+				<ul id="prosNew"></ul>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">If it were mine to sequence</span>
+			<h2>What I would actually do</h2>
+		</div>
+		<div class="verdict">
+			<p><strong>The generative-UI channel changes this answer.</strong> Read on its own, the bus has
+				one defect that costs correctness and several that cost clarity, and I would have said the
+				audience work buys tidiness rather than correctness &mdash; not worth touching every emit
+				site for. A channel the frontend listens to makes that wrong: you cannot route on audience
+				from the browser while audience is spelled as a channel name, and you cannot stream a
+				component through a pair of accumulated strings. <strong>Audience and payload typing become
+				load-bearing, so they move to the front.</strong></p>
+			<p>What does not change: the bus stays open. A discriminated union over every record would close
+				the set an extension can contribute to, which fights the plugin model the rest of the
+				interpreter is built on. Typed topics give the compiler the same grip without that.</p>
+			<p>The <code>Step</code> recorder is the one I would push back on hardest if someone proposed it
+				to me. It makes the current implicit behaviour explicit, which is good, but it does not fix
+				attribution for work that settles after the step ends &mdash; a promise from
+				<code>(load-mcp &hellip;)</code> resolving into whichever accumulator happens to be live.
+				Fixing <em>that</em> properly wants <code>AsyncLocalStorage</code>, which is a
+				<code>node:</code> import in the core &mdash; and the host-ports work just spent a refactor
+				getting those out. It would have to arrive as a port, and at that point the cure is bigger
+				than the disease.</p>
+			<div class="stage">
+				<div><span class="n">first</span><span class="t">Envelope: topic + to</span><span class="d">Pull audience out of the channel name. Everything else depends on it, and it is what lets the browser filter without parsing.</span></div>
+				<div><span class="n">first</span><span class="t">Split the MODEL lanes</span><span class="d">Notes get their own topic. Falls out of the envelope work, deletes the severity partition from all three consumers, and stops <code>critical</code> vanishing.</span></div>
+				<div><span class="n">then</span><span class="t">ChannelTransport</span><span class="d">One port, three implementations. Retires the <code>write()</code> global and the REPL's hand-rolled accumulation in the same move.</span></div>
+				<div><span class="n">then</span><span class="t">The ui topic</span><span class="d">Only meaningful once an envelope can carry a typed payload to a named audience over a real transport.</span></div>
+				<div><span class="n">last</span><span class="t">Stop swallowing</span><span class="d">Independent of all of it and a one-line change: report listener failures instead of discarding them.</span></div>
+			</div>
+		</div>
+	</div>
+</section>
+
+<footer>
+	<div class="wrap">
+		<p class="spine">Read against <code>packages/interpreter/src/channels.ts</code>,
+			<code>lisp.ts</code>, <code>repl.ts</code>, <code>cli.ts</code>, <code>trace.ts</code>,
+			and the <code>Compactor</code> and <code>MemoryBank</code> emit sites. Line-level claims were
+			checked against the working tree, not from memory.</p>
+		<p class="mono">worktree ptc-host-ports</p>
+	</div>
+</footer>
+
+<script>
+(function () {
+	"use strict";
+
+	function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+	/* ================================================================ board */
+
+	var EMITTERS = [
+		{ id: "say", label: "say()", sub: "lisp.ts · echo, prin", out: ["user"] },
+		{ id: "tell", label: "tell()", sub: "lisp.ts · doc, help", out: ["user", "mtext"] },
+		{ id: "compact", label: "Compactor.say()", sub: "compaction.ts", out: ["user", "mtext"] },
+		{ id: "skip", label: "runGen skipped", sub: "lisp.ts · prose", out: ["mwarn"] },
+		{ id: "fail", label: "evalTopLevel catch", sub: "lisp.ts · EvalException", out: ["mcrit"] },
+		{ id: "fire", label: "MemoryBank.fire", sub: "memory.ts", out: ["mem"] }
+	];
+
+	var LANES = [
+		{ id: "user", label: "user", sub: "", tone: "var(--user)" },
+		{ id: "mtext", label: "model", sub: "severity: undefined", tone: "var(--model)" },
+		{ id: "mwarn", label: "model", sub: 'severity: "warning"', tone: "var(--model)" },
+		{ id: "mcrit", label: "model", sub: 'severity: "critical"', tone: "var(--model)" },
+		{ id: "mem", label: "memory", sub: "value: FiredMemory", tone: "var(--memory)" }
+	];
+
+	var CONSUMERS = [
+		{ id: "stdout", label: "write()", sub: "Interp constructor", takes: ["user"] },
+		{ id: "repl", label: "MemoryRepl", sub: "repl.ts · evaluateOne", takes: ["user", "mtext", "mwarn", "mem"] },
+		{ id: "cli", label: "InteractiveRepl", sub: "cli.ts", takes: ["mwarn"] },
+		{ id: "trace", label: "Trace", sub: "checks/trace.ts", takes: ["mwarn", "mcrit"] }
+	];
+
+	var DETAIL = {
+		say: {
+			name: "say()", where: "lisp.ts:1113 — private on Interp",
+			text: "Writes to the person only. Backs (echo …) and (prin …): the human sees the whole value, the model does not.",
+			code: "private say(text: string): void {\n  this.channels.emit({ channel: USER, text });\n}",
+			tally: []
+		},
+		tell: {
+			name: "tell()", where: "lisp.ts:1117 — private on Interp",
+			text: "Writes the same string to both audiences, as two separate emits. Any '*' subscriber therefore sees the text twice.",
+			code: "private tell(text: string): void {\n  this.channels.emit({ channel: USER, text });\n  this.channels.emit({ channel: MODEL, text });\n}",
+			tally: []
+		},
+		compact: {
+			name: "Compactor.say()", where: "compaction.ts:238",
+			text: "The only emitter that sends genuinely different text to each audience: the user gets the full echo, the model gets the word-bounded one. This is the case the two-audience design exists for.",
+			code: "say(bounded: Bounded): void {\n  if (bounded.user !== \"\")\n    this.channels?.emit({ channel: USER, text: bounded.user });\n  if (bounded.model !== \"\")\n    this.channels?.emit({ channel: MODEL, text: bounded.model });\n}",
+			tally: []
+		},
+		skip: {
+			name: "runGen → skipped", where: "lisp.ts:2007",
+			text: "A form that was read as prose rather than evaluated. Carried on MODEL with severity \"warning\", which is how three different consumers find it.",
+			code: "const skipped = (what: string) =>\n  interp.channels.emit({\n    channel: MODEL,\n    severity: \"warning\",\n    text: what,\n  });",
+			tally: []
+		},
+		fail: {
+			name: "evalTopLevel catch", where: "lisp.ts:1994",
+			text: "The failure is emitted AND rethrown. Every consumer that matters reads it from the throw instead, so the emit reaches only the eval trace.",
+			code: "if (failure instanceof EvalException)\n  interp.channels.emit({\n    channel: MODEL,\n    severity: \"critical\",\n    text: String(failure),\n    value: failure.value,\n  });\nthrow failure;",
+			tally: []
+		},
+		fire: {
+			name: "MemoryBank.fire", where: "memory.ts:456",
+			text: "The one structured event on the bus. It fills text AND value; the only consumer reads value and ignores text, after casting it.",
+			code: "this.channels?.emit({\n  channel: MEMORY,\n  text: line,\n  value: { key, body },\n});",
+			tally: []
+		},
+
+		user: {
+			name: "user", where: "the person at the terminal",
+			text: "Straightforward. Two subscribers, both of which want every record: stdout writes it, the REPL accumulates it for the transcript.",
+			code: "this.channels.on(USER, (d) => write(d.text));",
+			tally: [["stdout", "keep"], ["MemoryRepl", "keep"]]
+		},
+		mtext: {
+			name: 'model · severity: undefined', where: "what lands in the model's context",
+			text: "The actual output stream. Identified not by a name but by the ABSENCE of a severity, which is why every consumer has to test for undefined.",
+			code: "channels.on(MODEL, (d) => {\n  if (d.severity === \"warning\") { … return; }\n  if (d.severity === undefined) model += d.text;\n});",
+			tally: [["MemoryRepl", "keep"], ["cli.ts", "drop"], ["Trace", "drop"]]
+		},
+		mwarn: {
+			name: 'model · severity: "warning"', where: "notes about the step, not output",
+			text: "The one lane every consumer wants — and it is riding the same channel as the output text, so each of them writes its own filter to pull it back out.",
+			code: "// repl.ts\nif (d.severity === \"warning\") { skipped.push(d.text); return; }\n\n// cli.ts\nif (d.severity === \"warning\") write(`skipped ${d.text}\\n`);\n\n// trace.ts\nif (!d.severity) return;   // the opposite test",
+			tally: [["MemoryRepl", "keep"], ["cli.ts", "keep"], ["Trace", "keep"]]
+		},
+		mcrit: {
+			name: 'model · severity: "critical"', where: "a failed top-level form",
+			text: "Reaches exactly one consumer. The REPL's MODEL listener tests for \"warning\" and for undefined, so a critical falls through both branches and is discarded — it reconstructs the failure from the thrown EvalException instead. Two paths for one fact.",
+			code: "// repl.ts — neither branch matches \"critical\"\nchannels.on(MODEL, (d) => {\n  if (d.severity === \"warning\") { …; return; }\n  if (d.severity === undefined) model += d.text;\n  // \"critical\" and \"note\" fall off the end\n});",
+			tally: [["MemoryRepl", "drop"], ["cli.ts", "drop"], ["Trace", "keep"]]
+		},
+		mem: {
+			name: "memory", where: "a memory fired into the step",
+			text: "Structured, not diagnostic. The payload travels in value?: unknown and is cast at the only place that reads it.",
+			code: "channels.on(MEMORY, (d) => {\n  const fired = d.value as FiredMemory | undefined;\n  if (fired) memories.push(fired);\n});",
+			tally: [["MemoryRepl", "keep"]]
+		},
+
+		stdout: {
+			name: "write()", where: "lisp.ts:569 — subscribed in the constructor",
+			text: "The only listener the interpreter installs on itself. Everything on USER goes to stdout, which is why a bare Interp in a server process still writes to the terminal unless setWriter is called.",
+			code: "constructor(options: InterpOptions = {}) {\n  this.channels.on(USER, (d) => write(d.text));\n  …\n}",
+			tally: [["user", "keep"]]
+		},
+		repl: {
+			name: "MemoryRepl.evaluateOne", where: "repl.ts:134 — per evaluation",
+			text: "Subscribes three listeners, accumulates into four mutable locals, unsubscribes in a finally. Because the accumulators are shared state on one interpreter, evaluations have to be serialised through an inFlight promise chain.",
+			code: "const unsubscribe = [\n  channels.on(USER,   d => { user += d.text; }),\n  channels.on(MEMORY, d => { … d.value as FiredMemory … }),\n  channels.on(MODEL,  d => {\n    if (d.severity === \"warning\") { …skipped…; return; }\n    if (d.severity === undefined) model += d.text;\n  }),\n];\ntry { await runAsync(…); }\nfinally { for (const off of unsubscribe) off(); }",
+			tally: [["user", "keep"], ["model·text", "keep"], ["model·warning", "keep"], ["memory", "keep"], ["model·critical", "drop"]]
+		},
+		cli: {
+			name: "InteractiveRepl", where: "cli.ts:68",
+			text: "Wants one thing: the skipped-prose notes, to print them as \"skipped …\". Everything else on MODEL is ignored.",
+			code: "interp.channels.on(MODEL, (d) => {\n  if (d.severity === \"warning\") write(`skipped ${d.text}\\n`);\n});",
+			tally: [["model·warning", "keep"], ["model·text", "drop"], ["model·critical", "drop"]]
+		},
+		trace: {
+			name: "Trace", where: "checks/trace.ts:105 — the eval harness",
+			text: "Wants the exact complement of what the REPL's text accumulator wants: anything WITH a severity. Same channel, inverted test.",
+			code: "interp.channels.on(MODEL, (d) => {\n  if (!d.severity) return;\n  trace.add({ kind: \"note\", step: trace.step,\n              severity: d.severity, text: d.text });\n});",
+			tally: [["model·warning", "keep"], ["model·critical", "keep"], ["model·text", "drop"]]
+		}
+	};
+
+	var NS = "http://www.w3.org/2000/svg";
+	function el(n, a) { var e = document.createElementNS(NS, n); for (var k in a) if (Object.prototype.hasOwnProperty.call(a, k)) e.setAttribute(k, a[k]); return e; }
+
+	var edgesG = document.getElementById("edges");
+	var nodesG = document.getElementById("nodes");
+	var notesG = document.getElementById("notes");
+
+	var COL = { emit: 22, lane: 372, cons: 742 };
+	var W = { emit: 186, lane: 196, cons: 196 };
+	var H = 40;
+
+	var pos = {};
+
+	function place(list, x, w, top, gap) {
+		list.forEach(function (item, i) {
+			pos[item.id] = { x: x, y: top + i * gap, w: w, cy: top + i * gap + H / 2 };
+		});
+	}
+
+	place(EMITTERS, COL.emit, W.emit, 58, 66);
+	place(LANES, COL.lane, W.lane, 74, 78);
+	place(CONSUMERS, COL.cons, W.cons, 92, 96);
+
+	[["EMIT SITES", COL.emit], ["LANES", COL.lane], ["CONSUMERS", COL.cons]].forEach(function (h) {
+		var t = el("text", { class: "col-head", x: h[1], y: 34 });
+		t.textContent = h[0];
+		notesG.appendChild(t);
+	});
+
+	function toneOf(id) {
+		var lane = LANES.filter(function (l) { return l.id === id; })[0];
+		return lane ? lane.tone : "var(--muted)";
+	}
+
+	var edgeList = [];
+
+	function addEdge(fromId, toId, laneId, dead) {
+		var a = pos[fromId], b = pos[toId];
+		var x1 = a.x + a.w, y1 = a.cy, x2 = b.x, y2 = b.cy;
+		var mid = (x1 + x2) / 2;
+		var p = el("path", {
+			class: "edge",
+			d: "M " + x1 + " " + y1 + " C " + mid + " " + y1 + ", " + mid + " " + y2 + ", " + x2 + " " + y2,
+			stroke: dead ? "var(--dead)" : toneOf(laneId),
+			"stroke-width": "1.4",
+			opacity: dead ? ".3" : ".5",
+			"stroke-dasharray": dead ? "3 3" : "0"
+		});
+		edgesG.appendChild(p);
+		edgeList.push({ el: p, from: fromId, to: toId, lane: laneId, dead: !!dead });
+	}
+
+	EMITTERS.forEach(function (e) { e.out.forEach(function (lane) { addEdge(e.id, lane, lane); }); });
+	CONSUMERS.forEach(function (c) { c.takes.forEach(function (lane) { addEdge(lane, c.id, lane); }); });
+
+	/* the critical lane never reaches the REPL — draw the absence */
+	(function () {
+		var a = pos.mcrit;
+		var stub = el("path", {
+			class: "edge",
+			d: "M " + (a.x + a.w) + " " + a.cy + " l 46 0",
+			stroke: "var(--dead)", "stroke-width": "1.4", "stroke-dasharray": "3 3", opacity: ".5"
+		});
+		edgesG.appendChild(stub);
+		var x = a.x + a.w + 52;
+		var cross = el("path", {
+			d: "M " + x + " " + (a.cy - 5) + " l 10 10 M " + (x + 10) + " " + (a.cy - 5) + " l -10 10",
+			stroke: "var(--dead)", "stroke-width": "1.6", fill: "none", "stroke-linecap": "round"
+		});
+		edgesG.appendChild(cross);
+		var t = el("text", { class: "stub-note", x: x + 17, y: a.cy + 3.5 });
+		t.textContent = "REPL drops it";
+		notesG.appendChild(t);
+	})();
+
+	var nodeEls = {};
+
+	function drawNode(item, kind) {
+		var p = pos[item.id];
+		var tone = kind === "lane" ? item.tone : "var(--muted)";
+		var g = el("g", { class: "node", tabindex: "0", role: "button" });
+		g.setAttribute("aria-label", item.label + (item.sub ? " — " + item.sub : ""));
+
+		var rect = el("rect", {
+			x: p.x, y: p.y, width: p.w, height: H, rx: "3",
+			fill: kind === "lane" ? tone : "var(--sunken)",
+			"fill-opacity": kind === "lane" ? ".11" : "1",
+			stroke: tone, "stroke-width": "1", opacity: ".95"
+		});
+
+		var lab = el("text", { class: "n-label", x: p.x + 11, y: p.y + (item.sub ? 17 : 24), fill: kind === "lane" ? tone : "var(--ink)" });
+		lab.textContent = item.label;
+		g.appendChild(rect);
+		g.appendChild(lab);
+
+		if (item.sub) {
+			var sub = el("text", { class: "n-sub", x: p.x + 11, y: p.y + 30, fill: "var(--faint)" });
+			sub.textContent = item.sub;
+			g.appendChild(sub);
+		}
+
+		nodesG.appendChild(g);
+		nodeEls[item.id] = { g: g, rect: rect };
+
+		function pick() { select(item.id); }
+		g.addEventListener("click", pick);
+		g.addEventListener("mouseenter", pick);
+		g.addEventListener("focus", pick);
+		g.addEventListener("keydown", function (ev) {
+			if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); }
+		});
+	}
+
+	EMITTERS.forEach(function (e) { drawNode(e, "emit"); });
+	LANES.forEach(function (l) { drawNode(l, "lane"); });
+	CONSUMERS.forEach(function (c) { drawNode(c, "cons"); });
+
+	var roName = document.getElementById("roName");
+	var roWhere = document.getElementById("roWhere");
+	var roText = document.getElementById("roText");
+	var roCode = document.getElementById("roCode");
+	var roTally = document.getElementById("roTally");
+
+	function select(id) {
+		var live = {};
+		live[id] = true;
+
+		edgeList.forEach(function (e) {
+			var on = e.from === id || e.to === id || e.lane === id;
+			e.el.setAttribute("opacity", on ? ".95" : ".08");
+			e.el.setAttribute("stroke-width", on ? "2" : "1.2");
+			if (on) { live[e.from] = true; live[e.to] = true; }
+		});
+
+		Object.keys(nodeEls).forEach(function (k) {
+			nodeEls[k].rect.setAttribute("opacity", live[k] ? "1" : ".28");
+			nodeEls[k].rect.setAttribute("stroke-width", k === id ? "2" : "1");
+		});
+
+		var d = DETAIL[id];
+		if (!d) return;
+		roName.textContent = d.name;
+		roWhere.textContent = d.where;
+		roText.textContent = d.text;
+		roCode.textContent = d.code;
+		roTally.innerHTML = d.tally.map(function (t) {
+			return '<span class="pill ' + t[1] + '">' + esc(t[0]) + "</span>";
+		}).join("");
+	}
+
+	/* =============================================================== faults */
+
+	var FAULTS = [
+		{
+			title: "A critical diagnostic reaches no one that can act on it",
+			sev: "correctness",
+			body: "<p>The REPL's <code>MODEL</code> listener branches on <code>\"warning\"</code> and on <code>undefined</code>. A record with <code>severity: \"critical\"</code> matches neither and falls off the end. <b>The failure survives only because the same exception is also thrown</b> and caught a few lines below, where it is formatted through the compactor.</p><p>So one fact travels two paths with different formatting, and the bus path is dead. Add a fourth severity tomorrow and it is silently dropped by two of the three consumers.</p>"
+		},
+		{
+			title: "Three consumers, three disagreeing partitions of one channel",
+			sev: "design",
+			body: "<p><code>repl.ts</code> keeps <code>undefined</code> as output text and <code>\"warning\"</code> as a note. <code>cli.ts</code> keeps only <code>\"warning\"</code>. <code>trace.ts</code> keeps <b>anything with a severity</b> — the exact complement of the REPL's text test.</p><p>Nobody agrees, because <code>MODEL</code> is two streams: the model's output, and notes about the step. The severity field is the de facto channel, and it is optional and untyped as one.</p>"
+		},
+		{
+			title: "The structured payload rides in value?: unknown",
+			sev: "types",
+			body: "<p><code>MEMORY</code> carries a <code>FiredMemory</code>, and the consumer writes <code>d.value as FiredMemory | undefined</code>. The error path puts a Lisp value in the same field. One field, two unrelated meanings, a cast at every read, and no compiler help if the shape drifts.</p><p><code>text</code> is required even here, so <code>fire</code> formats a line that its only consumer never reads.</p>"
+		},
+		{
+			title: "Channel names are strings with no registry",
+			sev: "types",
+			body: "<p><code>on(\"modle\", fn)</code> compiles, runs, and never fires. The constants help at the call sites that use them, but nothing makes them mandatory and nothing ties a channel to a payload type.</p>"
+		},
+		{
+			title: "Listener failures are swallowed",
+			sev: "correctness",
+			body: "<p><code>try { listener(d); } catch {}</code>. For a bus whose entire job is steering a model's context, a listener that throws halfway through means a silently truncated transcript with no trace anywhere.</p><p>Swallowing is defensible — one bad listener should not break evaluation — but discarding is not. The error should go somewhere.</p>"
+		},
+		{
+			title: "attach() is a wiring step that fails quietly",
+			sev: "design",
+			body: "<p><code>Compactor</code> and <code>MemoryBank</code> each hold <code>private channels?: Channels</code> and emit through <code>this.channels?.emit(…)</code>. Forget the <code>attach</code> call in the register function and every emit from that object vanishes with no error — the optional chain is hiding a wiring bug rather than expressing an option.</p>"
+		},
+		{
+			title: "Collection is mutable state the REPL has to serialise around",
+			sev: "design",
+			body: "<p><code>evaluateOne</code> subscribes three listeners, accumulates into four locals, and unsubscribes in a <code>finally</code>. Because those accumulators are shared state on one interpreter, concurrent evaluation is unsafe — which is why <code>evaluate</code> chains everything through an <code>inFlight</code> promise.</p><p>Work that settles after the step ends emits into whatever accumulator is live at the time, or none.</p>"
+		},
+		{
+			title: "DEBUG is declared and never used; \"*\" has no production subscriber",
+			sev: "dead code",
+			body: "<p><code>export const DEBUG = \"debug\"</code> has no emitter and no listener anywhere in the repo. <code>ALL</code> is referenced only inside <code>emit</code> itself and in one test. Two thirds of the exported vocabulary is speculative.</p>"
+		}
+	];
+
+	var faultsEl = document.getElementById("faults");
+	FAULTS.forEach(function (f, i) {
+		var art = document.createElement("article");
+		art.className = "fault";
+		art.innerHTML =
+			'<button class="fault-head" type="button" aria-expanded="false" aria-controls="f' + i + '">' +
+				'<span class="fault-n">' + String(i + 1).padStart(2, "0") + "</span>" +
+				'<span class="fault-t">' + f.title + "</span>" +
+				'<span class="sev">' + f.sev + "</span>" +
+				'<span class="caret" aria-hidden="true"></span>' +
+			"</button>" +
+			'<div class="fault-body" id="f' + i + '"><div><div class="fault-inner">' + f.body + "</div></div></div>";
+		var head = art.querySelector(".fault-head");
+		head.addEventListener("click", function () {
+			var open = art.classList.toggle("open");
+			head.setAttribute("aria-expanded", open ? "true" : "false");
+		});
+		faultsEl.appendChild(art);
+	});
+
+	/* ================================================================ shape */
+
+	var SHAPE = [
+		{
+			title: "Topic<T> — a typed handle, not a string",
+			note: "The bus stays open: an extension declares its own topic and nothing central has to know about it. What it gains is a payload type and one place the name is spelled.",
+			old: "channels.emit({ channel: MEMORY, text: line,\n                value: { key, body } });\n\nchannels.on(MEMORY, (d) => {\n  const fired = d.value as FiredMemory | undefined;\n  if (fired) memories.push(fired);\n});",
+			neu: "// memory.ts declares it once\nexport const fired = topic<FiredMemory>(\"memory\");\n\nfired.emit(channels, { key, body });\n\nfired.on(channels, (m) => memories.push(m));\n//                    ^ FiredMemory, no cast"
+		},
+		{
+			title: "Audience on the record, not a channel per audience",
+			note: "Two audiences is a routing fact, so say it once instead of emitting twice. It also makes the compactor's case — different text per audience — the ordinary shape rather than the exception.",
+			old: "private tell(text: string): void {\n  this.channels.emit({ channel: USER, text });\n  this.channels.emit({ channel: MODEL, text });\n}",
+			neu: "type Audience = \"user\" | \"model\";\n\noutput.emit(channels, { to: [\"user\", \"model\"], text });\n\n// and the compactor's real case:\noutput.emit(channels, { to: [\"user\"],  text: bounded.user });\noutput.emit(channels, { to: [\"model\"], text: bounded.model });"
+		},
+		{
+			title: "Notes are their own topic, never a severity on output",
+			note: "This is the change that pays for itself. Every consumer stops writing a filter, and the dropped critical becomes impossible to express.",
+			old: "// three consumers, three disagreeing tests\nif (d.severity === \"warning\") { … }\nif (d.severity === undefined) { … }\nif (!d.severity) return;",
+			neu: "const note = topic<Note>(\"note\");\n// Note = { kind: \"skipped\" | \"failed\"; text: string; value?: unknown }\n\nnote.on(channels, (n) => {\n  if (n.kind === \"skipped\") skipped.push(n.text);\n  else failure = n;          // exhaustive, no fall-through\n});"
+		},
+		{
+			title: "A recorded step instead of subscribe-accumulate-unsubscribe",
+			note: "Turns four mutable locals and a finally into one value. It does not make concurrent evaluation safe on its own — see the closing note — but it stops the REPL hand-rolling the collection.",
+			old: "const unsubscribe = [ channels.on(USER, …),\n                      channels.on(MEMORY, …),\n                      channels.on(MODEL, …) ];\ntry { await runAsync(interp, code); }\nfinally { for (const off of unsubscribe) off(); }",
+			neu: "const step = channels.record();\ntry { await runAsync(interp, code); }\nfinally { var out = step.end(); }\n\n// out: { user, model, skipped, memories }  — typed"
+		}
+	];
+
+	var shapeEl = document.getElementById("shape");
+	SHAPE.forEach(function (s) {
+		var div = document.createElement("div");
+		div.className = "shape-part";
+		div.innerHTML =
+			'<div class="title"><h3>' + s.title + "</h3><p>" + s.note + "</p></div>" +
+			'<div class="swap">' +
+				'<div class="old"><h4>Today</h4><pre class="code">' + esc(s.old) + "</pre></div>" +
+				'<div class="new"><h4>Proposed</h4><pre class="code">' + esc(s.neu) + "</pre></div>" +
+			"</div>";
+		shapeEl.appendChild(div);
+	});
+
+	/* ================================================================= path */
+
+	var PATH = [
+		{ stage: "emit", name: "Compactor.say()", carries: "{ channel, severity?, text, value? }", cls: "rich" },
+		{ stage: "bus", name: "channels.emit", carries: "the record, structure intact", cls: "rich" },
+		{ stage: "collect", name: "evaluateOne", carries: "user += d.text", cls: "cut" },
+		{ stage: "return", name: "EvalOutput", carries: "{ model, user, memories }", cls: "flat" },
+		{ stage: "adapt", name: "evalCode", carries: "{ output, display }", cls: "flat" },
+		{ stage: "yield", name: "turn.ts result", carries: "one event per step", cls: "flat" },
+		{ stage: "wire", name: "sse(\"values\")", carries: "content + display, as strings", cls: "flat" },
+		{ stage: "browser", name: "the chat UI", carries: "two strings to render", cls: "flat" }
+	];
+
+	var pathEl = document.getElementById("path");
+	pathEl.innerHTML = PATH.map(function (h) {
+		return '<div class="hop ' + h.cls + '">' +
+			'<span class="stage">' + h.stage + "</span>" +
+			'<span class="name">' + esc(h.name) + "</span>" +
+			'<span class="carries">' + esc(h.carries) + "</span>" +
+		"</div>";
+	}).join("");
+
+	var key = document.createElement("div");
+	key.className = "path-key";
+	key.innerHTML =
+		'<span><i style="background: var(--memory)"></i> structured</span>' +
+		'<span><i style="background: var(--user)"></i> flattened to a string here</span>' +
+		'<span><i style="background: var(--dead)"></i> string from here on</span>';
+	pathEl.parentNode.insertBefore(key, pathEl.nextSibling);
+
+	var UI = [
+		{
+			title: "Two axes, not one: topic and audience",
+			note: "USER and MODEL are audiences wearing a channel's clothes. Generative UI is a KIND of thing that happens to be destined for the person, so the two have to come apart before a ui channel makes sense.",
+			old: "// a channel that is really an audience\nemit({ channel: USER,  text });\nemit({ channel: MODEL, text });\n\n// there is nowhere to put a component",
+			neu: "type Audience = \"user\" | \"model\";\n\ninterface Envelope<T> {\n  topic: string;      // output | ui | note | memory\n  to: Audience[];     // who should see it\n  step: number;\n  seq: number;        // ordering across a reconnect\n  payload: T;\n}"
+		},
+		{
+			title: "The transport is a host port",
+			note: "SSE is one deployment's answer, not the interpreter's. Same shape as McpHost and OAuthStore: the extension declares the interface, the colocated host wires the default, a composition root picks. This is also what finally kills the write() global — stdout becomes one transport among several.",
+			old: "// two exits, neither swappable\nlet write = () => {};          // process-global, no-op on the server\n// …and a string accumulator the REPL hand-rolls",
+			neu: "interface ChannelTransport {\n  send(envelope: Envelope<unknown>): boolean;  // false = closed\n  close?(): void;\n}\n\nsseTransport(controller)   // apps/api\nstdoutTransport()          // cli.ts, replaces write()\nbufferTransport()          // the REPL and the eval harness"
+		},
+		{
+			title: "The ui topic, versioned by its payload",
+			note: "JSON now, a serialised component later. The transport never needs to know which — it is serialising an envelope either way, and an SSE stream carries an RSC-style flight payload as happily as it carries JSON.",
+			old: "// today: smuggle it through the display string\nuser += JSON.stringify(node);\n// …and re-parse it in the browser",
+			neu: "const ui = topic<UiNode>(\"ui\");\n\n// v1: a component description\ntype UiNode = { component: string; props: Record<string, unknown> };\n\n// v2: whatever the renderer streams, unchanged at the transport\nui.emit(channels, { to: [\"user\"], payload: node });"
+		},
+		{
+			title: "What the model sees when a component renders",
+			note: "The question worth settling before writing any of it. If the UI goes only to the person, the model does not know what it showed and will repeat itself. The Compactor already solves this shape for text — full value to the user, bounded summary to the model — so generalise that rather than inventing a rule.",
+			old: "// Compactor, today: the same idea, text only\nemit({ channel: USER,  text: bounded.user });   // the whole echo\nemit({ channel: MODEL, text: bounded.model });  // the bounded one",
+			neu: "ui.emit(channels,     { to: [\"user\"],  payload: node });\noutput.emit(channels, { to: [\"model\"], payload:\n  `rendered a ${node.component} over ${rows} rows` });\n\n// one call site, two audiences, different payloads"
+		}
+	];
+
+	var RULES = [
+		["output", "user", "render as chat text", "string"],
+		["ui", "user", "render the component", "UiNode → serialised component"],
+		["output", "model", "hidden; shown by the debug toggle", "string"],
+		["note", "model", "hidden; shown by the debug toggle", "{ kind, text }"],
+		["memory", "user", "the memory-fired affordance", "FiredMemory"]
+	];
+
+	var rulesEl = document.getElementById("rules");
+	rulesEl.innerHTML = RULES.map(function (r) {
+		var hidden = r[1] === "model";
+		return "<tr" + (hidden ? ' class="dim"' : "") + ">" +
+			'<td class="mono">' + r[0] + "</td>" +
+			'<td><span class="aud ' + r[1] + '">' + r[1] + "</span></td>" +
+			"<td>" + r[2] + "</td>" +
+			'<td class="mono small">' + esc(r[3]) + "</td>" +
+		"</tr>";
+	}).join("");
+
+	var uiEl = document.getElementById("ui");
+	UI.forEach(function (s) {
+		var div = document.createElement("div");
+		div.className = "shape-part";
+		div.innerHTML =
+			'<div class="title"><h3>' + s.title + "</h3><p>" + s.note + "</p></div>" +
+			'<div class="swap">' +
+				'<div class="old"><h4>Today</h4><pre class="code">' + esc(s.old) + "</pre></div>" +
+				'<div class="new"><h4>Proposed</h4><pre class="code">' + esc(s.neu) + "</pre></div>" +
+			"</div>";
+		uiEl.appendChild(div);
+	});
+
+	/* ============================================================== balance */
+
+	var OLD = [
+		["+", "<b>Open by construction.</b> An extension invents a channel without editing the core. That matches how the rest of the interpreter is built — extensions register into it, they are not enumerated by it."],
+		["+", "<b>Forty lines, no ceremony.</b> The whole implementation fits on a screen and has no lifecycle beyond subscribe and unsubscribe."],
+		["+", "<b>One record shape.</b> A generic consumer — a logger, the <code>\"*\"</code> tap — can handle everything without knowing any specific payload."],
+		["+", "<b>Uniform severity.</b> Filtering by importance across all channels at once is trivial, which a per-topic split makes harder."],
+		["&minus;", "<b>Severity carries channel meaning</b>, so every consumer re-derives the split and no two agree."],
+		["&minus;", "<b>Untyped payload and untyped name.</b> A cast at each read, and a typo is silent."],
+		["&minus;", "<b>No exhaustiveness.</b> A new severity or channel compiles everywhere and is handled nowhere."],
+		["&minus;", "<b>Collection is the consumer's problem</b>, and its mutable state forces evaluations to be serialised."]
+	];
+
+	var NEW = [
+		["+", "<b>The dropped-critical class of bug stops existing.</b> Notes are a topic with a discriminated payload, so the compiler asks about every case."],
+		["+", "<b>No casts.</b> <code>Topic&lt;FiredMemory&gt;</code> types both ends, and the channel name is spelled in exactly one place."],
+		["+", "<b>Still open.</b> A topic is declared by whoever owns it — no central union to edit, so the plugin model survives."],
+		["+", "<b>Audience becomes explicit</b>, which makes the compactor's split the normal case rather than a special one."],
+		["&minus;", "<b>Touches all 8 emit sites and all 6 listeners.</b> Real churn for changes that are mostly about clarity, not behaviour."],
+		["&minus;", "<b>A generic tap gets harder.</b> With per-topic payloads there is no single record shape for a logger to consume; you would have to keep an untyped escape hatch and lose some of what you bought."],
+		["&minus;", "<b>Cross-cutting severity filtering is lost</b> unless every topic re-declares it — a real capability the flat bus has for free."],
+		["&minus;", "<b><code>record()</code> promises more than it delivers.</b> It reads like a scope, but async work settling after the step still lands wherever; only <code>AsyncLocalStorage</code> fixes attribution, and that is a <code>node:</code> import the core just got rid of."]
+	];
+
+	function fill(id, rows) {
+		var ul = document.getElementById(id);
+		ul.innerHTML = rows.map(function (r) {
+			var cls = r[0] === "+" ? "plus" : "minus";
+			return '<li><span class="mark ' + cls + '">' + r[0] + "</span><span>" + r[1] + "</span></li>";
+		}).join("");
+	}
+
+	fill("prosOld", OLD);
+	fill("prosNew", NEW);
+
+	select("mwarn");
+})();
+</script>

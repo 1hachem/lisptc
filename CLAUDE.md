@@ -130,6 +130,49 @@ this file. Two guards back the rule: a `PreToolUse` hook in
 `.claude/settings.json` refuses to create a new markdown file, and
 `pnpm check:docs` fails CI on any tracked markdown outside that allowlist.
 
+## Host ports
+
+An extension owns a language surface and a prompt. **Everything it does that
+reaches the world outside the process — the filesystem, the environment, the
+network, a subprocess, the clock, its own `.ptc` prompt — goes through an
+interface the extension itself declares.** No extension decides where a server
+runs, where a token is written, or which model answers; it declares what it
+needs and is handed one.
+
+The shape is the same everywhere:
+
+- `<name>.ts` is the extension. It declares `<Name>Host`, one field per port,
+  and takes it as its first argument. It imports no `node:` builtin, no
+  `@repo/env` module, no vendor SDK, and never reads `process.env`. What it
+  cannot reach, it cannot hard-code.
+- `<name>-host.ts` sits beside it and holds the implementations, plus a
+  `<name>Host` value wiring the default strategy. This is the only file in the
+  pair that touches the world.
+- The default arrives as a **default argument** — `proseExtension(host =
+  proseHost)` — so the common call stays `proseExtension()` and any other
+  strategy is one spread away: `mcpExtension({ ...mcpHost, client })`.
+- A host field whose value is expensive or whose class lives in the extension
+  module is a getter, because the two files import each other and a class is
+  not hoisted.
+
+`pnpm check:arch` enforces the first bullet: an extension module that imports a
+node builtin, a typed env module, an SDK or `dotenv`, or that reads
+`process.env`, fails CI and is told which `-host.ts` to move it to. Type-only
+imports are allowed, so a port may still be typed in the SDK's own terms.
+
+The ports that exist today: `MemoryStore`, `SecretsStore`, `Generate` and
+`providers` (llm), `ProseClassifier`, `McpClient`, `McpHost` (where an MCP
+server runs — `ensure`/`stop`/`status`/`logs`, so a subprocess and a container
+look alike), `ToolkitRegistry` (which servers exist), `OAuthStore` (keyed by
+scope, so two people's accounts do not collide), `EnvLookup`, `Clock` and
+`PromptSource`. The last four live in `@repo/shared/host`, which two packages
+share and neither owns; `@repo/shared/host-node` holds the node-side
+`filePrompt`.
+
+**Adding an extension, or a new outward reach in one, means adding a port.**
+Do not import `node:fs` "just for this one path" — that is the decision the
+pattern exists to keep out of the extension.
+
 ## Environment variables
 
 **Never read `process.env` directly.** Every variable the code reads is declared

@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { isNumeric } from "@repo/interpreter/arith";
 import { withTimeout } from "@repo/interpreter/async";
 import {
@@ -23,9 +22,10 @@ import {
 	plistOptions,
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
+import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
-import { langchainGenerate, listProviders } from "./llm-client.ts";
+import { llmHost } from "./llm-host.ts";
 
 export const LLM_TIMEOUT_MS = 60_000;
 
@@ -81,9 +81,14 @@ export interface ProviderReport {
 	ready: boolean;
 }
 
+export interface LlmHost {
+	generate: Generate;
+	providers: () => ProviderReport[];
+	clock: Clock;
+	prompt: PromptSource;
+}
+
 export interface LlmOptions {
-	generate?: Generate;
-	providers?: () => ProviderReport[];
 	observe?: LlmObserver;
 }
 
@@ -114,22 +119,20 @@ const SCALARS: Record<string, string> = {
 const FIELD_TYPES =
 	":string :number :integer :boolean :any :enum :list :optional";
 
-const PROMPT: string = readFileSync(
-	new URL("./llm.ptc", import.meta.url),
-	"utf8",
-);
-
 export interface LlmExtension extends InterpExtension {
 	observe?: LlmObserver;
 }
 
-export function llmExtension(options: LlmOptions = {}): LlmExtension {
-	const config: LlmOptions = { ...options };
+export function llmExtension(
+	host: LlmHost = llmHost,
+	options: LlmOptions = {},
+): LlmExtension {
+	const config = { observe: options.observe };
 	const extension: LlmExtension = Object.assign(
 		(interp: Interp): void => {
-			registerLlm(interp, config);
+			registerLlm(interp, host, () => config.observe);
 		},
-		{ prompt: PROMPT },
+		{ prompt: host.prompt() },
 	);
 	Object.defineProperty(extension, "observe", {
 		enumerable: true,
@@ -389,7 +392,7 @@ function extractionSchema(shape: unknown): {
 function traceOf(
 	builtin: string,
 	req: LlmRequest,
-	startedAt: number,
+	elapsedMs: number,
 	res: LlmResult | undefined,
 	error: unknown,
 ): LlmCall {
@@ -397,7 +400,7 @@ function traceOf(
 		builtin,
 		messages: req.messages,
 		structured: req.schema !== undefined,
-		latencyMs: Date.now() - startedAt,
+		latencyMs: elapsedMs,
 	};
 	const provider = res?.provider ?? req.provider;
 	const model = res?.model ?? req.model;
@@ -415,6 +418,7 @@ function traceOf(
 
 function caller(
 	generate: Generate,
+	clock: Clock,
 	observe: () => LlmObserver | undefined,
 ): (builtin: string, req: LlmRequest, timeoutMs: number) => Promise<LlmResult> {
 	const report = (call: LlmCall): void => {
@@ -425,16 +429,16 @@ function caller(
 		} catch {}
 	};
 	return (builtin, req, timeoutMs) => {
-		const startedAt = Date.now();
+		const startedAt = clock.now();
 		const controller = new AbortController();
 		return withTimeout(generate(req, controller.signal), timeoutMs, "llm").then(
 			(res) => {
-				report(traceOf(builtin, req, startedAt, res, undefined));
+				report(traceOf(builtin, req, clock.now() - startedAt, res, undefined));
 				return res;
 			},
 			(ex) => {
 				controller.abort();
-				report(traceOf(builtin, req, startedAt, undefined, ex));
+				report(traceOf(builtin, req, clock.now() - startedAt, undefined, ex));
 				throw ex;
 			},
 		);
@@ -447,10 +451,13 @@ function oneValue(values: List, complaint: string, rest: List): unknown {
 	return values.car;
 }
 
-export function registerLlm(interp: Interp, options: LlmOptions = {}): void {
-	const generate = options.generate ?? langchainGenerate;
-	const providers = options.providers ?? listProviders;
-	const call = caller(generate, () => options.observe);
+export function registerLlm(
+	interp: Interp,
+	host: LlmHost,
+	observe: () => LlmObserver | undefined = () => undefined,
+): void {
+	const providers = host.providers;
+	const call = caller(host.generate, host.clock, observe);
 
 	interp.defineGlobal(newSym(DEFAULTS_VAR), null, {
 		signature: DEFAULTS_VAR,

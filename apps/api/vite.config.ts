@@ -1,35 +1,17 @@
-import { copyFileSync, readdirSync } from "node:fs";
+import { copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import devServer from "@hono/vite-dev-server";
 import { serverEnv } from "@repo/env/server";
 import { defineConfig, type Plugin } from "vite";
-
-const PROMPT_SOURCES = [
-	import.meta.resolve("@repo/interpreter/source"),
-	import.meta.resolve("@repo/mcp"),
-	import.meta.resolve("@repo/llm/llm"),
-].map((entry) => new URL(".", entry));
-
-function promptFiles(dir: URL): URL[] {
-	return readdirSync(dir, { recursive: true, encoding: "utf8" })
-		.filter((name) => name.endsWith(".ptc"))
-		.map((name) => new URL(name, dir));
-}
-
-const RUNTIME_ASSETS = [
-	...PROMPT_SOURCES.flatMap(promptFiles),
-	new URL(import.meta.resolve("@repo/mcp/mcp.toolkit.json")),
-];
+import { assetName, RUNTIME_ASSETS } from "./runtime-assets.ts";
 
 function copyRuntimeAssets(): Plugin {
 	return {
 		name: "copy-runtime-assets",
 		apply: "build",
 		closeBundle() {
-			for (const asset of RUNTIME_ASSETS) {
-				const name = asset.pathname.split("/").pop() as string;
-				copyFileSync(fileURLToPath(asset), `dist/${name}`);
-			}
+			for (const asset of RUNTIME_ASSETS)
+				copyFileSync(fileURLToPath(asset), `dist/${assetName(asset)}`);
 		},
 	};
 }

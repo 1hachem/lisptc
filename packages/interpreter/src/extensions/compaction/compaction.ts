@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 import { type Channels, MODEL, USER } from "../../channels.ts";
 import {
@@ -21,6 +21,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
+import { compactionHost } from "./compaction-host.ts";
 
 export const MAX_WORDS = 400;
 
@@ -817,21 +818,26 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 	return n;
 }
 
-const PROMPT: string = readFileSync(
-	new URL("./compaction.ptc", import.meta.url),
-	"utf8",
-);
+export interface CompactionHost {
+	prompt: PromptSource;
+}
+
+export interface CompactionOptions {
+	compactor?: Compactor;
+}
 
 export interface CompactionExtension extends InterpExtension {
 	readonly compactor: Compactor;
 }
 
 export function compactionExtension(
-	compactor: Compactor = new Compactor(),
+	host: CompactionHost = compactionHost,
+	options: CompactionOptions = {},
 ): CompactionExtension {
+	const compactor = options.compactor ?? new Compactor();
 	return Object.assign(
 		(interp: Interp): void => registerCompaction(interp, compactor),
-		{ compactor, prompt: PROMPT },
+		{ compactor, prompt: host.prompt() },
 	);
 }
 

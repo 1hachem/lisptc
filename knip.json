@@ -6,7 +6,7 @@
       "project": ["scripts/**/*.ts"]
     },
     "apps/api": {
-      "project": ["src/**/*.ts"]
+      "project": ["src/**/*.ts", "test/**/*.ts", "runtime-assets.ts"]
     },
     "apps/app": {
       "entry": [

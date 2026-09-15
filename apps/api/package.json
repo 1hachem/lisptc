@@ -10,7 +10,9 @@
     "dev": "vite",
     "build": "vite build",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
@@ -28,6 +30,7 @@
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.6"
+    "vite": "^7.3.6",
+    "vitest": "^3.0.0"
   }
 }
