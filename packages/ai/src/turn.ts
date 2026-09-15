@@ -57,7 +57,7 @@ export type TurnEvent =
 			display: string;
 			error: boolean;
 			memories: FiredMemory[];
-			view?: UiNode;
+			ui?: UiNode;
 	  }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -174,7 +174,7 @@ export async function* runAgentTurn(
 			transcript.push({ role: "assistant", content: code });
 
 			const evalStartedAt = Date.now();
-			const { output, display, error, memories, view } = await evalCode(
+			const { output, display, error, memories, ui } = await evalCode(
 				repl,
 				code,
 			);
@@ -202,7 +202,7 @@ export async function* runAgentTurn(
 				display,
 				error,
 				memories,
-				view,
+				ui,
 			};
 			transcript.push({
 				role: "tool",

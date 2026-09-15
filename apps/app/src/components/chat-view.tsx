@@ -18,7 +18,7 @@ import {
 	useChatSession,
 } from "../lib/chat.tsx";
 import { useUI } from "../lib/ui.tsx";
-import { toUiNode } from "../lib/view.ts";
+import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { Greeting } from "./greeting.tsx";
@@ -73,24 +73,33 @@ function FoldedText({ text, tone }: { text: string; tone: string }) {
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { shown } = useUI();
 	const { output, error } = toolResult(message);
-	const view = toUiNode(toolUi(message));
+	const ui = toUiNode(toolUi(message));
 	const model = toolModelOutput(message);
-	const drawsView = view !== undefined && shown.ui;
-	const drawsUser = !drawsView && shown.user;
-	const drawsModel = shown.model && (!drawsUser || model.output !== output);
+	const drawsUi = ui !== undefined && shown.ui;
+	const drawsUser = shown.user && output !== "";
+	const drawsModel = shown.model && model.output !== "";
+	const labelled = [drawsUi, drawsUser, drawsModel].filter(Boolean).length > 1;
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
 				error ? "border-red/60" : "border-dim/40"
 			}`}
 		>
-			{drawsView && <GenerativeUI node={view} />}
+			{drawsUi && (
+				<>
+					{labelled && <ChannelLabel id="ui" />}
+					<GenerativeUI node={ui} />
+				</>
+			)}
 			{drawsUser && (
-				<FoldedText text={output} tone={error ? "text-red" : "text-dim"} />
+				<>
+					{labelled && <ChannelLabel id="user" />}
+					<FoldedText text={output} tone={error ? "text-red" : "text-dim"} />
+				</>
 			)}
 			{drawsModel && (
 				<>
-					{(drawsView || drawsUser) && <ChannelLabel id="model" />}
+					{labelled && <ChannelLabel id="model" />}
 					<FoldedText text={model.output} tone={channel("model").text} />
 				</>
 			)}

@@ -14,11 +14,11 @@ export async function evalUserCode(
 	threadId?: string,
 ): Promise<EvalMessage> {
 	const repl = getThreadRepl(threadId);
-	const { output, display, error, view } = await evalCode(repl, code);
+	const { output, display, error, ui } = await evalCode(repl, code);
 	repl.clearTurnSignals();
 	const extras: EvalMessage["additional_kwargs"] = {};
 	if (display !== output) extras.display = display;
-	if (view) extras.ui = nodeToJson(view);
+	if (ui) extras.ui = nodeToJson(ui);
 	return {
 		type: "tool",
 		content: replResultContent(output, error),

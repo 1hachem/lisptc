@@ -68,11 +68,11 @@ export async function evalCode(
 	display: string;
 	error: boolean;
 	memories: FiredMemory[];
-	view?: UiNode;
+	ui?: UiNode;
 }> {
 	try {
-		const { model, user, memories, view } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false, memories, view };
+		const { model, user, memories, ui } = await repl.evalOutput(code);
+		return { output: model, display: user, error: false, memories, ui };
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);

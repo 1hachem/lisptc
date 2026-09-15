@@ -55,7 +55,7 @@ export interface ReplOptions {
 
 export interface EvalOutput extends Bounded {
 	memories: FiredMemory[];
-	view?: UiNode;
+	ui?: UiNode;
 	message?: string;
 }
 
@@ -112,7 +112,7 @@ function render(result: StepResult): EvalOutput {
 		model: result.model + notes,
 		user: result.user + notes,
 		memories: result.memories,
-		view: result.view,
+		ui: result.ui,
 		message: result.message,
 	};
 }
@@ -125,14 +125,14 @@ export class MemoryRepl implements InMemoryRepl {
 	private readonly llm?: LlmExtension;
 	readonly secrets?: SecretsStore;
 	readonly memories?: MemoryBank;
-	readonly ui?: UiSurface;
+	readonly surface?: UiSurface;
 
 	constructor(options: ReplOptions) {
 		this.extensions = options.extensions;
 		this.compactor = find(this.extensions, compactorOf);
 		this.secrets = find(this.extensions, storeOf);
 		this.memories = find(this.extensions, bankOf);
-		this.ui = find(this.extensions, surfaceOf);
+		this.surface = find(this.extensions, surfaceOf);
 		this.llm = this.extensions.find(isLlmExtension);
 		this.currentInterp = this.freshInterp();
 	}
@@ -177,7 +177,7 @@ export class MemoryRepl implements InMemoryRepl {
 		action: string,
 		values: Record<string, unknown> = {},
 	): Promise<ActionOutput> {
-		const surface = this.ui;
+		const surface = this.surface;
 		if (surface === undefined)
 			throw new EvalException("no ui surface on this repl", action, false);
 		const result = await this.serialize(() => surface.invoke(action, values));
@@ -226,7 +226,7 @@ export class MemoryRepl implements InMemoryRepl {
 				buffer.text("model") + (this.compactor?.endStep() ?? "") + error.model,
 			user: buffer.text("user") + error.user,
 			memories: buffer.payloads(fired),
-			view: buffer.payloads(rendered).at(-1),
+			ui: buffer.payloads(rendered).at(-1),
 			message: joinMessages(buffer.payloads(sent)),
 			skipped,
 			failed: thrown !== undefined,
@@ -262,7 +262,7 @@ export class AgentRepl extends MemoryRepl {
 			model: result.model,
 			user: result.user,
 			memories: result.memories,
-			view: result.view,
+			ui: result.ui,
 			message: result.message,
 		};
 	}

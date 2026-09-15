@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { API_URL, apiHeaders } from "../lib/api.ts";
 import { useChatSession } from "../lib/chat.tsx";
-import { toUiNode, type UiNode } from "../lib/view.ts";
+import { toUiNode, type UiNode } from "../lib/ui-node.ts";
 import { Markdown } from "./markdown.tsx";
 
 interface ActionResponse {
 	output?: string;
 	error?: boolean;
-	view?: unknown;
+	ui?: unknown;
 	message?: string;
 }
 
@@ -273,7 +273,7 @@ function Table({ node }: { node: UiNode }) {
 
 export function GenerativeUI({ node }: { node: UiNode }) {
 	const { threadId, send } = useChatSession();
-	const [view, setView] = useState(node);
+	const [ui, setUi] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
 	const [busy, setBusy] = useState(false);
@@ -294,8 +294,8 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 					return;
 				}
 				const data = (await res.json()) as ActionResponse;
-				const next = toUiNode(data.view);
-				if (next) setView(next);
+				const next = toUiNode(data.ui);
+				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
 				if (data.message) send(data.message);
@@ -310,7 +310,7 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 
 	return (
 		<div className="min-w-0 border-accent/40 border-l pl-3">
-			<Node node={view} fire={fire} busy={busy} />
+			<Node node={ui} fire={fire} busy={busy} />
 			{output && (
 				<div
 					className={`mt-2 whitespace-pre-wrap break-words ${failed ? "text-red" : "text-dim"}`}

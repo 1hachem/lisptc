@@ -122,7 +122,7 @@ export function streamChatResponse(
 							lastMeta.memories = event.memories;
 						const extras: Record<string, unknown> = {};
 						if (event.display !== event.output) extras.display = event.display;
-						if (event.view) extras.ui = nodeToJson(event.view);
+						if (event.ui) extras.ui = nodeToJson(event.ui);
 						wire.push({
 							type: "tool",
 							content: replResultContent(event.output, event.error),

@@ -20,7 +20,7 @@ export const CHANNELS: Channel[] = [
 	},
 	{
 		id: "ui",
-		label: "views",
+		label: "ui",
 		hint: "widgets a step rendered",
 		dot: "bg-aqua",
 		text: "text-aqua",

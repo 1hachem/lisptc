@@ -15,34 +15,34 @@ const PANEL = `
 (ui/render (panel))
 `;
 
-const label = (view: unknown): unknown =>
-	(nodeToJson(view as never) as { children: { props: { text: string } }[] })
+const label = (ui: unknown): unknown =>
+	(nodeToJson(ui as never) as { children: { props: { text: string } }[] })
 		.children[0]?.props.text;
 
-const buttonAction = (view: unknown): string =>
-	(nodeToJson(view as never) as { children: { props: { action: string } }[] })
+const buttonAction = (ui: unknown): string =>
+	(nodeToJson(ui as never) as { children: { props: { action: string } }[] })
 		.children[1]?.props.action ?? "";
 
 describe("a step that renders", () => {
 	it("hands the view back beside the output", async () => {
-		const { view, model } = await memoryRepl().evalOutput(PANEL);
-		expect(view).toBeDefined();
+		const { ui, model } = await memoryRepl().evalOutput(PANEL);
+		expect(ui).toBeDefined();
 		expect(model).toContain("rendered stack");
 		expect(model).not.toContain("ui/button");
 	});
 
 	it("reports no view for a step that rendered none", async () => {
-		expect((await memoryRepl().evalOutput("(+ 1 2)")).view).toBeUndefined();
+		expect((await memoryRepl().evalOutput("(+ 1 2)")).ui).toBeUndefined();
 	});
 });
 
 describe("driving the view", () => {
 	it("runs a click in the same session and answers with the new view", async () => {
 		const r = memoryRepl();
-		expect(label((await r.evalOutput(PANEL)).view)).toBe("count 0");
+		expect(label((await r.evalOutput(PANEL)).ui)).toBe("count 0");
 		const clicked = await r.invokeUi("a1");
-		expect(label(clicked.view)).toBe("count 1");
-		expect(label((await r.invokeUi(buttonAction(clicked.view))).view)).toBe(
+		expect(label(clicked.ui)).toBe("count 1");
+		expect(label((await r.invokeUi(buttonAction(clicked.ui))).ui)).toBe(
 			"count 2",
 		);
 	});
@@ -50,7 +50,7 @@ describe("driving the view", () => {
 	it("passes a submitted form's fields to its handler", async () => {
 		const r = memoryRepl();
 		await r.evalOutput(PANEL);
-		expect(label((await r.invokeUi("a2", { to: "42" })).view)).toBe("count 42");
+		expect(label((await r.invokeUi("a2", { to: "42" })).ui)).toBe("count 42");
 	});
 
 	it("renders a handler's echo for the human without capping it", async () => {
@@ -68,10 +68,10 @@ describe("driving the view", () => {
 		await r.evalOutput(
 			'(ui/render (ui/button "boom" (lambda () (no-such-fn))))',
 		);
-		const { user, error, view } = await r.invokeUi("a1");
+		const { user, error, ui } = await r.invokeUi("a1");
 		expect(error).toBe(true);
 		expect(user).toMatch(/no-such-fn/);
-		expect(view).toBeUndefined();
+		expect(ui).toBeUndefined();
 	});
 
 	it("reports an unknown action instead of silently doing nothing", async () => {
@@ -95,9 +95,9 @@ describe("handing a turn back to the agent", () => {
 			(ui/render (ui/form (lambda (v) (ui/render (ui/text "asking…")) (ui/send "find" (cdr (assoc "q" v))))
 				(ui/input :name "q") :submit "ask"))
 		`);
-		const { message, view } = await r.invokeUi("a1", { q: "auth" });
+		const { message, ui } = await r.invokeUi("a1", { q: "auth" });
 		expect(message).toBe("find auth");
-		expect(view).toBeDefined();
+		expect(ui).toBeDefined();
 	});
 
 	it("reports no message for a click that only rendered", async () => {

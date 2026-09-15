@@ -30,10 +30,10 @@ function tableText(node: UiNode): string {
 		.join("\n");
 }
 
-export function viewText(node: UiNode): string {
+export function uiText(node: UiNode): string {
 	const kids = (): string =>
 		node.children
-			.map(viewText)
+			.map(uiText)
 			.filter((s) => s !== "")
 			.join("\n");
 	switch (node.tag) {

@@ -4,7 +4,7 @@ import { peekThreadRepl } from "./repl-store.ts";
 export interface UiActionResult {
 	output: string;
 	error: boolean;
-	view?: UiValue;
+	ui?: UiValue;
 	message?: string;
 }
 
@@ -16,11 +16,11 @@ export async function runUiAction(
 	const repl = peekThreadRepl(threadId);
 	if (!repl) return undefined;
 	try {
-		const { user, view, message, error } = await repl.invokeUi(action, values);
+		const { user, ui, message, error } = await repl.invokeUi(action, values);
 		return {
 			output: user,
 			error,
-			view: view ? nodeToJson(view) : undefined,
+			ui: ui ? nodeToJson(ui) : undefined,
 			message,
 		};
 	} catch (ex) {
