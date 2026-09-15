@@ -1,6 +1,26 @@
+import {
+	Anvil,
+	Cog,
+	Drill,
+	Hammer,
+	type LucideIcon,
+	PencilRuler,
+	Pickaxe,
+	Ruler,
+	Wrench,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
-const TOOLS = ["🔨", "🔧", "🪛", "⚙️", "📐", "🧰", "⚡", "🪚"];
+const TOOLS: LucideIcon[] = [
+	Hammer,
+	Wrench,
+	Drill,
+	Cog,
+	PencilRuler,
+	Pickaxe,
+	Anvil,
+	Ruler,
+];
 
 const BEAT_MS = 110;
 
@@ -13,13 +33,12 @@ export function Building({ heads, busy }: { heads: string[]; busy: boolean }) {
 	}, [busy]);
 
 	if (heads.length === 0) return null;
+	const Tool = busy ? TOOLS[beat % TOOLS.length] : TOOLS[0];
 	const at = beat % heads.length;
 	return (
-		<div className="flex min-w-0 items-baseline gap-2 text-dim">
-			<span aria-hidden className="select-none">
-				{busy ? TOOLS[beat % TOOLS.length] : TOOLS[0]}
-			</span>
-			<span className="flex min-w-0 flex-wrap gap-x-2">
+		<div className="flex min-w-0 items-center gap-2 text-dim">
+			<Tool aria-hidden size={14} strokeWidth={1.5} className="flex-none" />
+			<span className="flex min-w-0 flex-wrap items-center gap-x-2">
 				{heads.map((head, i) => (
 					<span
 						key={head}
