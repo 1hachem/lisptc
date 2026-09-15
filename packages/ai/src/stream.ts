@@ -1,3 +1,4 @@
+import { nodeToJson } from "@repo/interpreter/ui";
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
@@ -119,12 +120,15 @@ export function streamChatResponse(
 						steps = event.step;
 						if (lastMeta && event.memories.length > 0)
 							lastMeta.memories = event.memories;
+						const extras: Record<string, unknown> = {};
+						if (event.display !== event.output) extras.display = event.display;
+						if (event.view) extras.ui = nodeToJson(event.view);
 						wire.push({
 							type: "tool",
 							content: replResultContent(event.output, event.error),
 							id: crypto.randomUUID(),
-							...(event.display !== event.output
-								? { additional_kwargs: { display: event.display } }
+							...(Object.keys(extras).length > 0
+								? { additional_kwargs: extras }
 								: undefined),
 						});
 						if (!write(sse("values", { messages: wire }))) break;

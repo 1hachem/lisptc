@@ -14,6 +14,7 @@ export interface Command {
 export const commands: Command[] = [
 	{ name: "/clear", desc: "start a fresh session" },
 	{ name: "/copy", desc: "copy the conversation to the clipboard" },
+	{ name: "/debug", desc: "show what the model reads in the side panel" },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
 ];
@@ -29,7 +30,7 @@ async function copyConversation(text: string): Promise<string> {
 }
 
 export function useCommandRunner() {
-	const { toggleLeft, toggleRight } = useUI();
+	const { toggleLeft, toggleRight, toggleDebug, debug } = useUI();
 	const { clear, messages } = useChatSession();
 
 	return useCallback(
@@ -46,10 +47,13 @@ export function useCommandRunner() {
 				case "/panel":
 					toggleRight();
 					return null;
+				case "/debug":
+					toggleDebug();
+					return debug ? "hiding what the model reads" : null;
 				default:
 					return null;
 			}
 		},
-		[toggleLeft, toggleRight, clear, messages],
+		[toggleLeft, toggleRight, toggleDebug, debug, clear, messages],
 	);
 }

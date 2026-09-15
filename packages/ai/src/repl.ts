@@ -1,4 +1,5 @@
 import type { FiredMemory } from "@repo/interpreter/memory";
+import type { UiNode } from "@repo/interpreter/ui";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 
@@ -67,10 +68,11 @@ export async function evalCode(
 	display: string;
 	error: boolean;
 	memories: FiredMemory[];
+	view?: UiNode;
 }> {
 	try {
-		const { model, user, memories } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false, memories };
+		const { model, user, memories, view } = await repl.evalOutput(code);
+		return { output: model, display: user, error: false, memories, view };
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);

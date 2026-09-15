@@ -12,9 +12,12 @@ import {
 	messageReasoning,
 	messageText,
 	toolResult,
+	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
+import { toUiNode } from "../lib/view.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { GenerativeUI } from "./generative-ui.tsx";
 import { Greeting } from "./greeting.tsx";
 import { LispText } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
@@ -26,7 +29,9 @@ const FOLD_LINES = 25;
 
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { output, error } = toolResult(message);
+	const view = toUiNode(toolUi(message));
 	const [expanded, setExpanded] = useState(false);
+	if (view) return <GenerativeUI node={view} />;
 	const lines = output.split("\n");
 	const folded = lines.length > FOLD_LINES && !expanded;
 	return (
