@@ -2,11 +2,13 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
     flake-utils.url = "github:numtide/flake-utils";
+    chrome-agent.url = "github:1hachem/chrome-agent";
   };
 
   outputs = {
     nixpkgs,
     flake-utils,
+    chrome-agent,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
@@ -77,6 +79,7 @@
           ptcrepl-dev
           ptcfmt-dev
           r2mount
+          chrome-agent.packages.${system}.default
           # Nix-built browsers with system deps, used via PLAYWRIGHT_MCP_EXECUTABLE.
           playwright-driver.browsers
         ];
@@ -88,6 +91,9 @@
         # Point @playwright/mcp at the Nix Chromium (globbed, rev-independent).
         shellHook = ''
           export PLAYWRIGHT_MCP_EXECUTABLE="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"
+          # chrome-agent drives the browser already in this shell instead of
+          # pulling a second Chromium into the closure.
+          export CHROME_AGENT_CHROME="$PLAYWRIGHT_MCP_EXECUTABLE"
         '';
       };
     });

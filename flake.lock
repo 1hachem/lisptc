@@ -1,5 +1,23 @@
 {
   "nodes": {
+    "chrome-agent": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1789489094,
+        "narHash": "sha256-bTduw6Ia6WnPRz3L0zmQMhtA3++5UhNsVEIJNWRSuNs=",
+        "owner": "1hachem",
+        "repo": "chrome-agent",
+        "rev": "fff755eea68dddfc2a9f935eb9d04910886e1d67",
+        "type": "github"
+      },
+      "original": {
+        "owner": "1hachem",
+        "repo": "chrome-agent",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -20,6 +38,22 @@
     },
     "nixpkgs": {
       "locked": {
+        "lastModified": 1789286504,
+        "narHash": "sha256-eiEK7cKZORNEvX0GeF3RtNEF/JXhgf2RqSp3230q13E=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
         "lastModified": 1782847189,
         "narHash": "sha256-twXPFqFsrrY5r28Zh7Homgcp2gUMBgQ6WDS98Q/3xFI=",
         "owner": "nixos",
@@ -36,8 +70,9 @@
     },
     "root": {
       "inputs": {
+        "chrome-agent": "chrome-agent",
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs_2"
       }
     },
     "systems": {

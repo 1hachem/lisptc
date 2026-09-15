@@ -1,6 +1,11 @@
 import { execFileSync } from "node:child_process";
 
-const ALLOWED = [/^(.+\/)?README\.md$/, /^(.+\/)?CLAUDE\.md$/, /^\.github\//];
+const ALLOWED = [
+	/^(.+\/)?README\.md$/,
+	/^(.+\/)?CLAUDE\.md$/,
+	/^\.github\//,
+	/^\.claude\/skills\//,
+];
 
 function tracked(): string[] {
 	const out = execFileSync("git", ["ls-files", "*.md", "*.mdx", "*.markdown"], {
