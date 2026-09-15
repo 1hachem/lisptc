@@ -119,12 +119,12 @@ export async function runCase(
 			seen.push({ role: "user", content: entry.user });
 			continue;
 		}
-		const { output, error } = await evalCode(repl, entry.assistant);
+		const { output, error, memories } = await evalCode(repl, entry.assistant);
 		repl.takeFinished();
 		transcript.push({ role: "assistant", content: entry.assistant });
 		transcript.push({
 			role: "tool",
-			content: replResultContent(output, error),
+			content: replResultContent(output, error, memories),
 		});
 		seen.push({ role: "assistant", content: entry.assistant });
 		seen.push({ role: "tool", content: output });
