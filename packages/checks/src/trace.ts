@@ -1,7 +1,7 @@
 import { MODEL, type Severity } from "@repo/interpreter/channels";
 import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
 import type { SecretsStore } from "@repo/interpreter/secrets";
-import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/client";
+import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/ports";
 
 export const REDACTED = "<redacted>";
 

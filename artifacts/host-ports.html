@@ -1,0 +1,1327 @@
+<title>lisptc Host Ports</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root {
+	--bg: #EDF0EE;
+	--surface: #FFFFFF;
+	--surface-2: #E4E9E6;
+	--ink: #101718;
+	--muted: #576668;
+	--faint: #7D8C8D;
+	--line: #D0D8D5;
+	--line-strong: #B4C0BD;
+
+	--sealed: #0F7A6B;
+	--sealed-soft: #D7E8E4;
+	--world: #B4441F;
+	--world-soft: #F4DED4;
+	--wire: #6D5FA6;
+	--wire-soft: #E3DFF1;
+
+	--core: #2C3A3D;
+
+	--shadow: 0 1px 2px rgba(16, 23, 24, .06), 0 8px 24px -12px rgba(16, 23, 24, .18);
+
+	--display: "IBM Plex Sans Condensed", "Helvetica Neue", Arial, sans-serif;
+	--body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+	--mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+	--step: .5rem;
+	--rhythm: clamp(3rem, 6vw, 5rem);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #0B1012;
+		--surface: #131A1C;
+		--surface-2: #1B2426;
+		--ink: #E2E9E7;
+		--muted: #93A2A2;
+		--faint: #748384;
+		--line: #253032;
+		--line-strong: #354346;
+
+		--sealed: #3FBFAB;
+		--sealed-soft: #10312D;
+		--world: #F07F4F;
+		--world-soft: #3A2115;
+		--wire: #A79BD6;
+		--wire-soft: #241F33;
+
+		--core: #B9C7C9;
+
+		--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .7);
+	}
+}
+
+:root[data-theme="dark"] {
+	--bg: #0B1012;
+	--surface: #131A1C;
+	--surface-2: #1B2426;
+	--ink: #E2E9E7;
+	--muted: #93A2A2;
+	--faint: #748384;
+	--line: #253032;
+	--line-strong: #354346;
+
+	--sealed: #3FBFAB;
+	--sealed-soft: #10312D;
+	--world: #F07F4F;
+	--world-soft: #3A2115;
+	--wire: #A79BD6;
+	--wire-soft: #241F33;
+
+	--core: #B9C7C9;
+
+	--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	font-family: var(--body);
+	font-size: 16px;
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+	max-width: 1080px;
+	margin: 0 auto;
+	padding: 0 clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.spine { max-width: 68ch; }
+
+h1, h2, h3, h4 {
+	font-family: var(--display);
+	font-weight: 700;
+	line-height: 1.1;
+	text-wrap: balance;
+	margin: 0;
+	letter-spacing: -0.01em;
+}
+
+h1 { font-size: clamp(2.6rem, 7vw, 4.4rem); }
+h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); }
+h3 { font-size: 1.15rem; letter-spacing: 0; }
+
+p { margin: 0; }
+
+code, pre, .mono { font-family: var(--mono); font-variant-ligatures: none; }
+
+.eyebrow {
+	font-family: var(--display);
+	font-weight: 600;
+	font-size: .78rem;
+	letter-spacing: .13em;
+	text-transform: uppercase;
+	color: var(--faint);
+}
+
+a { color: var(--sealed); }
+
+:focus-visible {
+	outline: 2px solid var(--wire);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+/* ---------- masthead ---------- */
+
+.masthead {
+	padding: clamp(3.5rem, 9vw, 6.5rem) 0 clamp(2rem, 4vw, 3rem);
+	border-bottom: 1px solid var(--line);
+}
+
+.masthead .stack { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.lede {
+	font-size: clamp(1.05rem, 1.9vw, 1.28rem);
+	line-height: 1.55;
+	color: var(--muted);
+	max-width: 58ch;
+}
+
+.lede strong { color: var(--ink); font-weight: 600; }
+
+.tally {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 2.5rem;
+	padding-top: .5rem;
+}
+
+.tally div { display: flex; flex-direction: column; gap: .15rem; }
+
+.tally b {
+	font-family: var(--display);
+	font-size: 2rem;
+	font-weight: 700;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+}
+
+.tally span {
+	font-size: .78rem;
+	color: var(--faint);
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	font-family: var(--display);
+	font-weight: 600;
+}
+
+/* ---------- switch ---------- */
+
+.switchbar {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	background: color-mix(in srgb, var(--bg) 92%, transparent);
+	backdrop-filter: blur(8px);
+	border-bottom: 1px solid var(--line);
+}
+
+.switchbar .inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: .7rem 0;
+	flex-wrap: wrap;
+}
+
+.switch {
+	display: inline-flex;
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 3px;
+	gap: 2px;
+}
+
+.switch button {
+	font-family: var(--display);
+	font-weight: 600;
+	font-size: .82rem;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	padding: .42rem 1.05rem;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+	transition: background .18s, color .18s;
+}
+
+.switch button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.switch button:hover { color: var(--ink); }
+
+.switch-note {
+	font-size: .85rem;
+	color: var(--faint);
+	font-family: var(--mono);
+}
+
+/* ---------- onion ---------- */
+
+.onion-section { padding: var(--rhythm) 0; }
+
+.onion-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+	gap: clamp(1.5rem, 4vw, 3rem);
+	align-items: start;
+}
+
+@media (max-width: 860px) { .onion-grid { grid-template-columns: 1fr; } }
+
+.onion-stage {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	padding: .5rem;
+	box-shadow: var(--shadow);
+}
+
+svg.onion { display: block; width: 100%; height: auto; }
+
+.ring-hit { cursor: pointer; }
+.ring-band { transition: opacity .2s, stroke-width .2s; }
+.ring-label {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 12.5px;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+	pointer-events: none;
+}
+.ring-sub {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	pointer-events: none;
+}
+
+.spoke { transition: d .5s cubic-bezier(.4,0,.2,1), opacity .3s; }
+.spoke-cap { transition: transform .5s cubic-bezier(.4,0,.2,1), opacity .3s; }
+.spoke-label {
+	font-family: var(--mono);
+	font-size: 10px;
+	fill: var(--world);
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.spoke, .spoke-cap { transition: none; }
+	* { animation: none !important; }
+}
+
+.ring-readout {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	position: sticky;
+	top: 4.5rem;
+}
+
+.ring-card {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--tone, var(--line-strong));
+	border-radius: 3px;
+	padding: 1rem 1.15rem;
+	display: flex;
+	flex-direction: column;
+	gap: .5rem;
+}
+
+.ring-card .num {
+	font-family: var(--mono);
+	font-size: .72rem;
+	color: var(--tone, var(--muted));
+	letter-spacing: .1em;
+}
+
+.ring-card h3 { color: var(--ink); }
+.ring-card p { font-size: .92rem; color: var(--muted); }
+
+.ring-card .paths {
+	font-family: var(--mono);
+	font-size: .78rem;
+	color: var(--faint);
+	display: flex;
+	flex-wrap: wrap;
+	gap: .3rem .6rem;
+}
+
+.rule {
+	font-size: .9rem;
+	padding: .55rem .75rem;
+	border-radius: 3px;
+	background: var(--surface-2);
+	color: var(--muted);
+}
+
+.rule b { color: var(--ink); font-weight: 600; }
+
+/* ---------- ledger ---------- */
+
+.section { padding: var(--rhythm) 0; border-top: 1px solid var(--line); }
+
+.section-head { display: flex; flex-direction: column; gap: .7rem; margin-bottom: 2rem; }
+.section-head p { color: var(--muted); max-width: 62ch; }
+
+.filters { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.25rem; }
+
+.chip {
+	font-family: var(--display);
+	font-weight: 600;
+	font-size: .78rem;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+	padding: .34rem .8rem;
+	border-radius: 999px;
+	border: 1px solid var(--line-strong);
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+	transition: background .15s, color .15s, border-color .15s;
+}
+
+.chip:hover { color: var(--ink); border-color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.ledger { display: flex; flex-direction: column; gap: .5rem; }
+
+.port {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	overflow: hidden;
+	transition: border-color .18s;
+}
+
+.port:hover { border-color: var(--line-strong); }
+.port.open { border-color: var(--tone); }
+
+.port-head {
+	width: 100%;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto auto;
+	align-items: center;
+	gap: .9rem;
+	padding: .9rem 1.1rem;
+	background: transparent;
+	border: 0;
+	text-align: left;
+	cursor: pointer;
+	color: inherit;
+	font: inherit;
+}
+
+@media (max-width: 680px) {
+	.port-head { grid-template-columns: auto minmax(0, 1fr) auto; }
+	.port-head .owner { display: none; }
+}
+
+.caret {
+	width: 9px; height: 9px;
+	border-right: 1.6px solid var(--muted);
+	border-bottom: 1.6px solid var(--muted);
+	transform: rotate(-45deg);
+	transition: transform .22s;
+	margin-left: 2px;
+}
+
+.port.open .caret { transform: rotate(45deg); border-color: var(--tone); }
+
+.port-name {
+	font-family: var(--mono);
+	font-weight: 600;
+	font-size: .98rem;
+	color: var(--ink);
+	display: flex;
+	align-items: baseline;
+	gap: .6rem;
+	flex-wrap: wrap;
+}
+
+.port-name em {
+	font-style: normal;
+	font-family: var(--body);
+	font-weight: 400;
+	font-size: .87rem;
+	color: var(--faint);
+}
+
+.owner {
+	font-family: var(--mono);
+	font-size: .78rem;
+	color: var(--faint);
+	white-space: nowrap;
+}
+
+.tag {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: .68rem;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	padding: .2rem .5rem;
+	border-radius: 2px;
+	white-space: nowrap;
+	background: var(--tone-soft);
+	color: var(--tone);
+}
+
+.port-body {
+	display: grid;
+	grid-template-rows: 0fr;
+	transition: grid-template-rows .28s cubic-bezier(.4,0,.2,1);
+}
+
+.port.open .port-body { grid-template-rows: 1fr; }
+
+.port-body > div { overflow: hidden; }
+
+.port-inner {
+	padding: 0 1.1rem 1.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1.1rem;
+	border-top: 1px solid var(--line);
+	margin-top: 0;
+	padding-top: 1.1rem;
+}
+
+.what { font-size: .95rem; color: var(--muted); max-width: 66ch; }
+.what b { color: var(--ink); font-weight: 600; }
+
+.contract {
+	background: var(--surface-2);
+	border-radius: 3px;
+	padding: .85rem 1rem;
+	overflow-x: auto;
+}
+
+.contract pre { margin: 0; font-size: .82rem; line-height: 1.65; white-space: pre; }
+
+.ba {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: .75rem;
+}
+
+@media (max-width: 680px) { .ba { grid-template-columns: 1fr; } }
+
+.ba-cell {
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: .8rem .9rem;
+	display: flex;
+	flex-direction: column;
+	gap: .55rem;
+	min-width: 0;
+}
+
+.ba-cell.before { border-color: color-mix(in srgb, var(--world) 35%, transparent); background: var(--world-soft); }
+.ba-cell.after { border-color: color-mix(in srgb, var(--sealed) 35%, transparent); background: var(--sealed-soft); }
+
+.ba-cell h4 {
+	font-size: .72rem;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+	font-weight: 700;
+}
+
+.ba-cell.before h4 { color: var(--world); }
+.ba-cell.after h4 { color: var(--sealed); }
+
+.ba-cell pre {
+	margin: 0;
+	font-size: .78rem;
+	line-height: 1.6;
+	overflow-x: auto;
+	white-space: pre;
+	color: var(--ink);
+}
+
+.ba-cell p { font-size: .87rem; color: var(--muted); }
+
+.flow {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: .35rem;
+	font-family: var(--mono);
+	font-size: .78rem;
+}
+
+.flow .node {
+	padding: .28rem .55rem;
+	border-radius: 2px;
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	white-space: nowrap;
+}
+
+.flow .node.edge { border-color: color-mix(in srgb, var(--world) 45%, transparent); color: var(--world); }
+.flow .node.pure { border-color: color-mix(in srgb, var(--sealed) 45%, transparent); color: var(--sealed); }
+.flow .arrow { color: var(--faint); }
+
+.unlocks {
+	display: flex;
+	gap: .6rem;
+	align-items: flex-start;
+	font-size: .9rem;
+	color: var(--muted);
+	border-left: 2px solid var(--wire);
+	padding-left: .8rem;
+}
+
+.unlocks b { color: var(--wire); font-weight: 600; font-family: var(--display); letter-spacing: .06em; text-transform: uppercase; font-size: .72rem; }
+
+.sub { display: flex; flex-direction: column; gap: .3rem; }
+
+/* ---------- bundles ---------- */
+
+.bundles {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: .75rem;
+}
+
+.bundle {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: 1rem 1.1rem;
+	display: flex;
+	flex-direction: column;
+	gap: .7rem;
+}
+
+.bundle header { display: flex; flex-direction: column; gap: .2rem; }
+.bundle h3 { font-family: var(--mono); font-size: .95rem; font-weight: 600; }
+.bundle .pkg { font-family: var(--mono); font-size: .74rem; color: var(--faint); }
+
+.bundle ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+
+.bundle li {
+	display: flex;
+	align-items: baseline;
+	gap: .5rem;
+	font-family: var(--mono);
+	font-size: .8rem;
+	color: var(--muted);
+}
+
+.bundle li b { color: var(--ink); font-weight: 500; }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; background: var(--sealed); transform: translateY(-1px); }
+
+.bundle .call {
+	font-family: var(--mono);
+	font-size: .76rem;
+	background: var(--surface-2);
+	padding: .5rem .6rem;
+	border-radius: 2px;
+	color: var(--muted);
+	overflow-x: auto;
+	white-space: pre;
+}
+
+/* ---------- guard ---------- */
+
+.guard {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: .75rem;
+}
+
+.guard-item {
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: 1rem 1.1rem;
+	background: var(--surface);
+	display: flex;
+	flex-direction: column;
+	gap: .45rem;
+}
+
+.guard-item .k { font-family: var(--mono); font-size: .82rem; color: var(--wire); font-weight: 500; }
+.guard-item p { font-size: .88rem; color: var(--muted); }
+
+.terminal {
+	margin-top: 1.25rem;
+	background: var(--core);
+	color: var(--bg);
+	border-radius: 3px;
+	padding: 1rem 1.15rem;
+	font-family: var(--mono);
+	font-size: .8rem;
+	line-height: 1.7;
+	overflow-x: auto;
+	white-space: pre;
+}
+
+footer {
+	border-top: 1px solid var(--line);
+	padding: 2.5rem 0 4rem;
+	color: var(--faint);
+	font-size: .86rem;
+	display: flex;
+	flex-direction: column;
+	gap: .4rem;
+}
+
+footer .mono { font-size: .8rem; }
+</style>
+
+<div class="switchbar">
+	<div class="wrap inner">
+		<div class="switch" role="group" aria-label="Show the code before or after the refactor">
+			<button type="button" data-state="before" aria-pressed="false">Before</button>
+			<button type="button" data-state="after" aria-pressed="true">After</button>
+		</div>
+		<span class="switch-note" id="switchNote">reaches stop at the adapter ring</span>
+	</div>
+</div>
+
+<header class="masthead">
+	<div class="wrap stack">
+		<span class="eyebrow">lisptc &middot; architecture</span>
+		<h1>Host&nbsp;Ports</h1>
+		<p class="lede">An extension owns a language surface and a prompt. Everything it does that reaches
+			the world outside the process now goes through an interface <strong>the extension itself
+			declares</strong> &mdash; and is handed an implementation of.
+			No extension decides where a server runs, where a token is written, or which model answers.</p>
+		<div class="tally">
+			<div><b>11</b><span>ports</span></div>
+			<div><b>5</b><span>new interfaces</span></div>
+			<div><b>7</b><span>host bundles</span></div>
+			<div><b>0</b><span>node imports in an extension</span></div>
+		</div>
+	</div>
+</header>
+
+<section class="onion-section">
+	<div class="wrap onion-grid">
+		<div class="onion-stage">
+			<svg class="onion" viewBox="0 0 680 516" role="img" aria-labelledby="onionTitle onionDesc">
+				<title id="onionTitle">The dependency rings</title>
+				<desc id="onionDesc">Four concentric rings of code — evaluator core, extension modules, host
+					adapters, composition roots — with the world outside. Spokes from the world reach inward,
+					stopping at the adapter ring after the refactor and piercing into the extension ring before it.</desc>
+
+				<g id="spokes"></g>
+				<g id="rings"></g>
+			</svg>
+		</div>
+
+		<div class="ring-readout">
+			<div class="ring-card" id="ringCard">
+				<span class="num">RING 2 &middot; pure</span>
+				<h3>Extension modules</h3>
+				<p>The language surface and the port interfaces. Declares what it needs from the world and
+					takes it as its first argument.</p>
+				<div class="paths"></div>
+			</div>
+			<div class="rule" id="ringRule">
+				<b>Hover or click a ring</b> to read it. The spokes are the world &mdash; filesystem,
+				environment, network, subprocess, SDK, clock.
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">The ledger</span>
+			<h2>Every interface, before and after</h2>
+			<p>Eleven ports. Five did not exist &mdash; the decision lived in a module-level constant.
+				Five existed as interfaces but were pinned by a default that dragged the world in with it.
+				One was already a clean seam.</p>
+		</div>
+
+		<div class="filters" role="group" aria-label="Filter ports by how they changed">
+			<button type="button" class="chip" data-filter="all" aria-pressed="true">All 11</button>
+			<button type="button" class="chip" data-filter="new" aria-pressed="false">New interface</button>
+			<button type="button" class="chip" data-filter="freed" aria-pressed="false">Unpinned</button>
+			<button type="button" class="chip" data-filter="kept" aria-pressed="false">Already clean</button>
+		</div>
+
+		<div class="ledger" id="ledger"></div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">Per extension</span>
+			<h2>The bundles</h2>
+			<p>Each extension declares one <code>&lt;Name&gt;Host</code> with a field per port, and takes it
+				as its first argument. The default arrives as a default argument, so the common call is
+				unchanged and a swap is one spread away.</p>
+		</div>
+		<div class="bundles" id="bundles"></div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">Keeping it</span>
+			<h2>What stops the drift</h2>
+			<p>The repo keeps constraints in code, not prose. Three things fail when the boundary is
+				crossed again.</p>
+		</div>
+		<div class="guard">
+			<div class="guard-item">
+				<span class="k">pnpm check:arch</span>
+				<p>Fails CI and the pre-push hook when an extension module imports a node builtin, a typed
+					env module, an SDK or dotenv, or reads <code>process.env</code> &mdash; and names the
+					<code>-host.ts</code> to move it to. Type-only imports stay allowed.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">host-ports.test.ts</span>
+				<p>Asserts behaviourally that a supplied port is the one the extension uses, and that every
+					default still resolves to its colocated <code>.ptc</code>.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">CLAUDE.md &rarr; Host ports</span>
+				<p>The pattern is written where agents working in this repo read it, so a new extension
+					follows it by default rather than by review.</p>
+			</div>
+		</div>
+		<div class="terminal">packages/interpreter/src/extensions/prose/prose.ts imports a node builtin (node:fs)
+  An extension defines the interface; the host lives in its colocated
+  -host.ts and arrives as the default argument. Move it to
+  packages/interpreter/src/extensions/prose/prose-host.ts.</div>
+	</div>
+</section>
+
+<footer>
+	<div class="wrap">
+		<div class="spine sub">
+			<p>The shared vocabulary &mdash; <code class="mono">Clock</code>,
+				<code class="mono">PromptSource</code>, <code class="mono">systemClock</code> &mdash; lives in
+				<code class="mono">@repo/shared/host</code>, the runtime-free half that extensions may import.
+				<code class="mono">@repo/shared/host-node</code> holds <code class="mono">filePrompt</code> and
+				the only <code class="mono">node:fs</code> in the pair, so check:arch gets the boundary for free.</p>
+			<p class="mono">worktree ptc-host-ports &middot; PR #112</p>
+		</div>
+	</div>
+</footer>
+
+<script>
+(function () {
+	"use strict";
+
+	/* ------------------------------------------------------------------ data */
+
+	var RINGS = [
+		{
+			n: 1, id: "core", tone: "var(--core)", label: "Evaluator", sub: "lisp.ts",
+			title: "The evaluator",
+			body: "Reader, evaluator, prelude, channels. Knows nothing about memory, MCP or a model provider — extensions register into it.",
+			paths: ["lisp.ts", "arith.ts", "channels.ts", "hooks.ts"]
+		},
+		{
+			n: 2, id: "ext", tone: "var(--sealed)", label: "Extensions", sub: "*.ts",
+			title: "Extension modules",
+			body: "The language surface and the port interfaces. Declares what it needs from the world and takes it as its first argument. Imports no node builtin, no env module, no SDK.",
+			paths: ["memory.ts", "secrets.ts", "prose.ts", "promises.ts", "compaction.ts", "llm.ts", "mcp.ts"]
+		},
+		{
+			n: 3, id: "host", tone: "var(--world)", label: "Adapters", sub: "*-host.ts",
+			title: "Host adapters",
+			body: "The implementations, plus the value wiring the default strategy. The only ring that touches the world — and the only place node:fs, dotenv and the SDKs appear.",
+			paths: ["memory-host.ts", "secrets-host.ts", "mcp-host.ts", "llm-host.ts", "local-host.ts", "toolkit.ts"]
+		},
+		{
+			n: 4, id: "root", tone: "var(--wire)", label: "Composition", sub: "apps & front-ends",
+			title: "Composition roots",
+			body: "Where a strategy is actually chosen. Each passes a host, or spreads the default and overrides one field — a per-thread memory scope, a mock MCP client, a volatile store for evals.",
+			paths: ["cli.ts", "session-server.ts", "repl-store.ts", "apps/api", "apps/lsp", "harness.ts"]
+		}
+	];
+
+	var PORTS = [
+		{
+			id: "mcphost", name: "McpHost", owner: "@repo/mcp", status: "new", ring: 3,
+			gist: "where an MCP server runs",
+			what: "The client stops caring whether a URL is a subprocess it started or a container someone else owns. <b>ensure</b> returns the handle to connect to; the rest is lifecycle.",
+			contract: "interface McpHost {\n  ensure(conf: HttpConnConfig): Promise<ServerHandle>;\n  stop(name: string): Promise<void>;\n  stopAll(): Promise<void>;\n  status(name: string): ServerState;\n  logs(name: string): string;\n}",
+			before: {
+				code: "spawn(cmd, args, { detached: true })\nconst started = new Map()   // module-level\nexport function stopLocalServers() { … }",
+				note: "Poll a localhost URL with HEAD every 250ms for up to 60s, keep the last 4KB of stderr, and hold the children in a module-level Map. Every deployment therefore ran its MCP servers as child processes of the API."
+			},
+			after: {
+				code: "mcpClient({ host: new LocalProcessHost(), … })\n\n// LocalProcessHost is one implementation",
+				note: "The spawn-and-poll logic moved intact into LocalProcessHost. The client asks for a handle and connects to whatever answers."
+			},
+			flow: [
+				{ t: "load-mcp", k: "pure" },
+				{ t: "McpClient", k: "pure" },
+				{ t: "McpHost.ensure", k: "" },
+				{ t: "LocalProcessHost", k: "edge" },
+				{ t: "child_process", k: "edge" }
+			],
+			unlocks: "A container per tenant instead of a subprocess per API instance. A server that outlives the request that started it. Per-user isolation for a stdio server that reads the filesystem. A hosted deployment where the API has no business spawning npx at all."
+		},
+		{
+			id: "oauth", name: "OAuthStore", owner: "@repo/mcp", status: "freed", ring: 3,
+			gist: "where a token is written",
+			what: "The interface already existed and <b>FileOAuthStore</b> implemented it — then a module-level constant pinned it. Now it arrives through <code>mcpExtension</code> like the client does, and is <b>keyed by scope</b>.",
+			contract: "interface OAuthStore {\n  load(serverKey: string): Promise<OAuthRecord | undefined>;\n  save(serverKey: string, record: OAuthRecord): Promise<void>;\n  clear(serverKey: string): Promise<void>;\n}",
+			before: {
+				code: "const oauthStore = new FileOAuthStore();  // module-level",
+				note: "Tokens land on the disk of whatever machine happens to run the API, which also means a second instance cannot see the authorization the first one captured."
+			},
+			after: {
+				code: "mcpClient({ oauth, scope })\n\nconst tokenKey = url =>\n  scope === undefined ? origin : `${scope}/${origin}`;",
+				note: "Injected, and every read and write goes through a scoped key, so two people's Google accounts cannot collide in one store."
+			},
+			flow: [
+				{ t: "login", k: "pure" },
+				{ t: "StoredOAuthProvider", k: "pure" },
+				{ t: "OAuthStore (scoped)", k: "" },
+				{ t: "FileOAuthStore", k: "edge" },
+				{ t: "~/.config/lisptc", k: "edge" }
+			],
+			unlocks: "A shared token store two API instances both read. Per-user credentials in one deployment."
+		},
+		{
+			id: "toolkit", name: "ToolkitRegistry", owner: "@repo/mcp", status: "new", ring: 3,
+			gist: "which servers exist",
+			what: "The catalogue of predefined MCP servers. One method, because the extension only ever asks for the whole list and indexes it by name.",
+			contract: "interface ToolkitRegistry {\n  all(): ConnConfig[];\n}",
+			before: {
+				code: "const TOOLKIT_URL = new URL(\n  FROM_SOURCE ? \"../mcp.toolkit.json\" : \"./mcp.toolkit.json\",\n  import.meta.url);\n\nreadFileSync(TOOLKIT_URL, \"utf8\")",
+				note: "A bundled JSON file, read from a path computed against import.meta.url, with a source-vs-build branch baked into the extension module."
+			},
+			after: {
+				code: "bundledToolkit()   // reads the bundled JSON\njsonToolkit(raw)   // any JSON, for tests\n\nfor (const conf of toolkit.all()) predefined.set(conf.name, conf);",
+				note: "Both implementations live in toolkit.ts. Tests pass jsonToolkit(raw) instead of a magic toolkitJson option."
+			},
+			flow: [
+				{ t: "search-mcps", k: "pure" },
+				{ t: "ToolkitRegistry.all", k: "" },
+				{ t: "bundledToolkit", k: "edge" },
+				{ t: "mcp.toolkit.json", k: "edge" }
+			],
+			unlocks: "A registry fetched from a control plane, or one narrowed per tenant, without touching the extension."
+		},
+		{
+			id: "mcpclient", name: "McpClient", owner: "@repo/mcp", status: "freed", ring: 2,
+			gist: "how a tool is called",
+			what: "The seam the eval harness already used for mocking. What changed is the default: it no longer arrives by static import, so the <b>SDK stops riding along with the extension</b>. <code>shutdown()</code> is new, so <code>(mcp-shutdown)</code> no longer reaches for a module-level process map.",
+			contract: "interface McpClient {\n  connect(conf, signal?): Promise<ConnectResult>;\n  callTool(call, signal?): Promise<unknown>;\n  disconnect(serverId): Promise<void>;\n  login(conf): Promise<{ authUrl: string | null }>;\n  logout(conf): Promise<void>;\n  authorize(conf, code): Promise<void>;\n  shutdown(): Promise<void>;\n}",
+			before: {
+				code: "import { mcpClient, stopLocalServers } from \"./mcp-client.ts\";\n\nconst client = options.client ?? mcpClient;",
+				note: "A module-level singleton, imported by value — so @modelcontextprotocol/sdk was in the extension's static graph whether or not you used it."
+			},
+			after: {
+				code: "import type { McpClient } from \"./ports.ts\";\n\nmcpExtension({ ...mcpHost, client })",
+				note: "The interface moved to ports.ts, which is SDK-free at runtime. mcp-client.ts became a factory taking its own ports."
+			},
+			flow: [
+				{ t: "server/tool", k: "pure" },
+				{ t: "McpClient.callTool", k: "" },
+				{ t: "SDK Client", k: "edge" },
+				{ t: "network", k: "edge" }
+			],
+			unlocks: "A traced client in evals, a mock in tests, a client that speaks to a gateway instead of a server."
+		},
+		{
+			id: "generate", name: "Generate + providers", owner: "@repo/llm", status: "freed", ring: 2,
+			gist: "which model answers",
+			what: "Both were already options. The problem was the default: <code>llm.ts</code> imported <b>langchainGenerate</b> at the top, so <code>@langchain/openai</code> came along with the language surface.",
+			contract: "type Generate = (\n  req: LlmRequest,\n  signal?: AbortSignal,\n) => Promise<LlmResult>;\n\ninterface LlmHost {\n  generate: Generate;\n  providers: () => ProviderReport[];\n  clock: Clock;\n  prompt: PromptSource;\n}",
+			before: {
+				code: "import { langchainGenerate, listProviders } from \"./llm-client.ts\";\n\nconst generate = options.generate ?? langchainGenerate;",
+				note: "A static import for a value used only as a fallback — enough to pull the whole provider stack into anything importing the extension."
+			},
+			after: {
+				code: "// llm-host.ts, the only file that names langchain\nexport const llmHost: LlmHost = {\n  generate: langchainGenerate,\n  providers: listProviders, …\n};",
+				note: "registerLlm now takes a resolved host, so there is no fallback to import."
+			},
+			flow: [
+				{ t: "llm/complete", k: "pure" },
+				{ t: "Generate", k: "" },
+				{ t: "langchainGenerate", k: "edge" },
+				{ t: "provider API", k: "edge" }
+			],
+			unlocks: "A recorded transcript in evals, a local model, a router — none of which need the extension rebuilt."
+		},
+		{
+			id: "memorystore", name: "MemoryStore", owner: "@repo/interpreter", status: "freed", ring: 2,
+			gist: "where a memory is kept",
+			what: "The interface existed, but <b>FileMemoryStore</b>, <b>LayeredStore</b> and <code>memoryDirFor</code> lived in the extension module beside it, which is what put <code>node:fs</code>, <code>node:os</code> and the env module in the language surface.",
+			contract: "interface MemoryStore {\n  all(): Memory[];\n  get(key: string): Memory | undefined;\n  put(memory: Memory): void;\n  delete(key: string): boolean;\n}",
+			before: {
+				code: "import { readdirSync, writeFileSync, … } from \"node:fs\";\nimport { homedir } from \"node:os\";\nimport { memoryEnv } from \"@repo/env/memory\";\n\nnew MemoryBank(store = new FileMemoryStore())",
+				note: "Defaulting to disk meant the bare call wrote to ~/.config/lisptc/memory, and every importer of the extension carried the filesystem with it."
+			},
+			after: {
+				code: "// memory.ts keeps only VolatileStore (pure)\n// memory-host.ts holds FileMemoryStore, LayeredStore, memoryDirFor\n\nmemoryExtension({ ...memoryHost, store: new VolatileStore() })",
+				note: "memoryHostFor(scope) builds the layered per-scope store the agent uses; evals pass a volatile one."
+			},
+			flow: [
+				{ t: "memory/remember", k: "pure" },
+				{ t: "MemoryBank", k: "pure" },
+				{ t: "MemoryStore.put", k: "" },
+				{ t: "FileMemoryStore", k: "edge" },
+				{ t: "~/.config/lisptc", k: "edge" }
+			],
+			unlocks: "Memories in Postgres or R2 rather than on one box's disk; a per-tenant layer over a shared one."
+		},
+		{
+			id: "secretsstore", name: "SecretsStore", owner: "@repo/interpreter", status: "freed", ring: 2,
+			gist: "where a secret comes from",
+			what: "Split in two: the pure map lives in the extension as <b>MapSecretsStore</b>; seeding it from the environment and hunting a <code>.env</code> upwards moved to the host.",
+			contract: "interface SecretsStore {\n  get(key: string): { value: string; description: string } | undefined;\n  list(): Array<[string, string]>;\n  set(record: Record<string, SecretSpec>): void;\n}",
+			before: {
+				code: "class EnvSecretsStore {\n  constructor(env = process.env) { … }   // in the extension\n}\n\nfindEnvFileUpwards(replEnv.INIT_CWD || process.cwd())",
+				note: "The extension read process.env, parsed dotenv, and walked the filesystem looking for a .env — three host decisions inside the language surface."
+			},
+			after: {
+				code: "// secrets-host.ts\nenvSecretsStore({ envFile: true })\nsecretsHostFor({ envFile: true })",
+				note: "The envFile option left the extension entirely: locating a .env is a host decision, and only the interactive CLI wanted it."
+			},
+			flow: [
+				{ t: "(secret \"REPL_K\")", k: "pure" },
+				{ t: "SecretsStore.get", k: "" },
+				{ t: "envSecretsStore", k: "edge" },
+				{ t: "process.env / .env", k: "edge" }
+			],
+			unlocks: "Secrets from Infisical or a per-request vault, with the taint tracking in the extension untouched."
+		},
+		{
+			id: "envlookup", name: "EnvLookup", owner: "@repo/mcp", status: "new", ring: 3,
+			gist: "how ${VAR} resolves",
+			what: "The toolkit JSON names environment variables in its args, so they are only known at runtime. One method, because that is all the expansion needs.",
+			contract: "interface EnvLookup {\n  get(name: string): string | undefined;\n}",
+			before: {
+				code: "s.replace(/\\$\\{(\\w+)\\}/g, (_, name) => process.env[name] ?? \"\")",
+				note: "A direct process.env read inside the extension module, carrying its own biome-ignore."
+			},
+			after: {
+				code: "expandEnv(s, env)   // env: EnvLookup\n\nexport const processEnv: EnvLookup = {\n  get: (name) => process.env[name],\n};",
+				note: "The one remaining process.env read sits in toolkit.ts, on the host side of the line."
+			},
+			flow: [
+				{ t: "toolkit args", k: "pure" },
+				{ t: "EnvLookup.get", k: "" },
+				{ t: "processEnv", k: "edge" }
+			],
+			unlocks: "Per-tenant variable resolution, and a toolkit that expands against request context rather than the process."
+		},
+		{
+			id: "prompt", name: "PromptSource", owner: "every extension", status: "new", ring: 2,
+			gist: "where the prompt text comes from",
+			what: "Every extension ships a <code>.ptc</code> prompt beside it, and reading it is a filesystem touch — <b>the one host reach every extension has</b>. Porting it is what lets promises and compaction have zero node imports, so the check:arch rule applies uniformly instead of carving out an exception.",
+			contract: "type PromptSource = () => string;\n\n// @repo/shared/host-node\nfunction filePrompt(url: URL): PromptSource {\n  let text;\n  return () => (text ??= readFileSync(url, \"utf8\"));\n}",
+			before: {
+				code: "const PROMPT: string = readFileSync(\n  new URL(\"./memory.ptc\", import.meta.url), \"utf8\");",
+				note: "A module-level read in all seven extensions, executed at import time whether or not the extension was ever built."
+			},
+			after: {
+				code: "prompt: filePrompt(new URL(\"./memory.ptc\", import.meta.url))\n\n// …and the extension just calls host.prompt()",
+				note: "A thunk, so the read is deferred to construction and memoized — and a caller can supply a prompt that was never a file."
+			},
+			flow: [
+				{ t: "systemPrompt()", k: "pure" },
+				{ t: "PromptSource", k: "" },
+				{ t: "filePrompt", k: "edge" },
+				{ t: "memory.ptc", k: "edge" }
+			],
+			unlocks: "Prompts served from a bundle, an experiment, or a per-deployment override — and an extension that loads with no filesystem at all."
+		},
+		{
+			id: "clock", name: "Clock", owner: "memory, llm", status: "new", ring: 2,
+			gist: "what time it is",
+			what: "Memory decay is time-based — a memory's strength is a function of <code>now - lastUsed</code> — so tests have to drive time. The llm extension used it for call latency. Named once, shared by both.",
+			contract: "interface Clock {\n  now(): number;\n}\n\nconst systemClock: Clock = { now: () => Date.now() };",
+			before: {
+				code: "constructor(store, private readonly now = Date.now) {}\n\n// and in llm.ts\nconst startedAt = Date.now();",
+				note: "Injectable in memory but unnamed; hard-wired in llm. The same idea spelled two different ways."
+			},
+			after: {
+				code: "new MemoryBank(store, clock)\ncaller(generate, clock, observe)",
+				note: "systemClock lives in @repo/shared/host, not host-node — Date.now is ambient ECMAScript, so an extension may import it without tripping the rule."
+			},
+			flow: [
+				{ t: "memory decay", k: "pure" },
+				{ t: "Clock.now", k: "" },
+				{ t: "systemClock", k: "edge" }
+			],
+			unlocks: "Deterministic decay tests. Still reads time rather than schedules it — setTimeout stays direct in async.ts, so timeouts are not yet virtualizable."
+		},
+		{
+			id: "prose", name: "ProseClassifier", owner: "@repo/interpreter", status: "kept", ring: 2,
+			gist: "what counts as prose",
+			what: "The one port that was already right: a function type with a <b>pure</b> default. Nothing to move — it only gained an options object so the classifier and the prompt could be passed separately.",
+			contract: "type ProseClassifier = (\n  interp: Interp,\n  form: unknown,\n) => string | undefined;",
+			before: {
+				code: "proseExtension(classify: ProseClassifier = readsAsProse)",
+				note: "readsAsProse is pure — it reads the interpreter's own globals to decide whether a form is code or an aside. No host reach at all."
+			},
+			after: {
+				code: "proseExtension(proseHost, { classify })",
+				note: "Unchanged in substance. The host argument carries only the prompt."
+			},
+			flow: [
+				{ t: "skipForm hook", k: "pure" },
+				{ t: "ProseClassifier", k: "pure" },
+				{ t: "readsAsProse", k: "pure" }
+			],
+			unlocks: "Already a swap: an eval case passes its own classifier to force everything down the prose path."
+		}
+	];
+
+	var BUNDLES = [
+		{ name: "McpExtensionHost", pkg: "@repo/mcp", ports: ["client: McpClient", "toolkit: ToolkitRegistry", "prompt: PromptSource"], call: "mcpExtension({ ...mcpHost, client })" },
+		{ name: "LlmHost", pkg: "@repo/llm", ports: ["generate: Generate", "providers: () => ProviderReport[]", "clock: Clock", "prompt: PromptSource"], call: "llmExtension({ ...llmHost, generate })" },
+		{ name: "MemoryHost", pkg: "@repo/interpreter", ports: ["store: MemoryStore", "clock: Clock", "prompt: PromptSource"], call: "memoryExtension(memoryHostFor(scope))" },
+		{ name: "SecretsHost", pkg: "@repo/interpreter", ports: ["store: SecretsStore", "prompt: PromptSource"], call: "secretsExtension(secretsHostFor({ envFile: true }))" },
+		{ name: "ProseHost", pkg: "@repo/interpreter", ports: ["prompt: PromptSource"], call: "proseExtension()" },
+		{ name: "CompactionHost", pkg: "@repo/interpreter", ports: ["prompt: PromptSource"], call: "compactionExtension(compactionHost, { compactor })" },
+		{ name: "PromisesHost", pkg: "@repo/interpreter", ports: ["prompt: PromptSource"], call: "promisesExtension()" }
+	];
+
+	var TAGS = {
+		"new": { label: "New interface", tone: "var(--wire)", soft: "var(--wire-soft)" },
+		"freed": { label: "Unpinned", tone: "var(--world)", soft: "var(--world-soft)" },
+		"kept": { label: "Already clean", tone: "var(--sealed)", soft: "var(--sealed-soft)" }
+	};
+
+	/* ----------------------------------------------------------------- onion */
+
+	var CX = 340, CY = 252;
+	var RADII = [
+		{ outer: 212, inner: 168 },
+		{ outer: 166, inner: 122 },
+		{ outer: 120, inner: 78 },
+		{ outer: 76, inner: 0 }
+	];
+	/* RADII index 0 = outermost ring (composition), 3 = core */
+
+	var RING_BY_INDEX = [RINGS[3], RINGS[2], RINGS[1], RINGS[0]];
+
+	/* the ring labels all sit on the vertical above centre, so the spokes
+	   keep clear of it */
+	var SPOKES = [
+		{ label: "environment", angle: -40 },
+		{ label: "network", angle: 0 },
+		{ label: "SDK", angle: 40 },
+		{ label: "subprocess", angle: 90 },
+		{ label: "clock", angle: 140 },
+		{ label: "filesystem", angle: 180 }
+	];
+
+	var ringsEl = document.getElementById("rings");
+	var spokesEl = document.getElementById("spokes");
+	var NS = "http://www.w3.org/2000/svg";
+
+	function el(name, attrs) {
+		var node = document.createElementNS(NS, name);
+		for (var k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) node.setAttribute(k, attrs[k]);
+		return node;
+	}
+
+	function polar(r, deg) {
+		var rad = deg * Math.PI / 180;
+		return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
+	}
+
+	var ringNodes = [];
+
+	RADII.forEach(function (r, i) {
+		var ring = RING_BY_INDEX[i];
+		var g = el("g", { class: "ring-hit", tabindex: "0", role: "button" });
+		g.setAttribute("aria-label", ring.title);
+
+		var band = el("circle", {
+			class: "ring-band",
+			cx: CX, cy: CY, r: (r.outer + r.inner) / 2,
+			fill: "none",
+			stroke: ring.tone,
+			"stroke-width": r.outer - r.inner,
+			opacity: ".14"
+		});
+
+		var edge = el("circle", {
+			cx: CX, cy: CY, r: r.outer,
+			fill: "none",
+			stroke: ring.tone,
+			"stroke-width": "1.25",
+			opacity: ".55"
+		});
+
+		g.appendChild(band);
+		g.appendChild(edge);
+
+		var ly = r.inner === 0 ? CY - 6 : CY - (r.outer + r.inner) / 2 - 2;
+		var label = el("text", {
+			class: "ring-label", x: CX, y: ly,
+			"text-anchor": "middle", fill: ring.tone
+		});
+		label.textContent = ring.label;
+
+		var sub = el("text", {
+			class: "ring-sub", x: CX, y: ly + 14,
+			"text-anchor": "middle", fill: ring.tone, opacity: ".8"
+		});
+		sub.textContent = ring.sub;
+
+		g.appendChild(label);
+		g.appendChild(sub);
+		ringsEl.appendChild(g);
+
+		ringNodes.push({ g: g, band: band, edge: edge, ring: ring });
+
+		function show() { paintRing(ring); highlight(i); }
+		g.addEventListener("mouseenter", show);
+		g.addEventListener("focus", show);
+		g.addEventListener("click", show);
+		g.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(); }
+		});
+	});
+
+	function highlight(index) {
+		ringNodes.forEach(function (rn, i) {
+			rn.band.setAttribute("opacity", i === index ? ".3" : ".12");
+			rn.edge.setAttribute("opacity", i === index ? "1" : ".45");
+		});
+	}
+
+	var ringCard = document.getElementById("ringCard");
+
+	function paintRing(ring) {
+		ringCard.style.setProperty("--tone", ring.tone);
+		ringCard.querySelector(".num").textContent =
+			"RING " + ring.n + " · " + (ring.id === "host" ? "touches the world" : ring.id === "root" ? "chooses" : "pure");
+		ringCard.querySelector("h3").textContent = ring.title;
+		ringCard.querySelector("p").textContent = ring.body;
+		ringCard.querySelector(".paths").innerHTML =
+			ring.paths.map(function (p) { return "<span>" + p + "</span>"; }).join("");
+	}
+
+	/* spokes: the world reaching in */
+
+	var spokeNodes = [];
+
+	SPOKES.forEach(function (s) {
+		var path = el("path", { class: "spoke", stroke: "var(--world)", "stroke-width": "1.4", fill: "none", "stroke-linecap": "round" });
+		var cap = el("circle", { class: "spoke-cap", r: "3.2", fill: "var(--world)" });
+		var start = polar(226, s.angle);
+		var lab = polar(238, s.angle);
+		var text = el("text", {
+			class: "spoke-label", x: lab[0], y: lab[1] + 3,
+			"text-anchor": s.angle === 90 ? "middle" : (s.angle > -90 && s.angle < 90 ? "start" : "end")
+		});
+		if (s.angle === 90) text.setAttribute("y", lab[1] + 11);
+		text.textContent = s.label;
+
+		spokesEl.appendChild(path);
+		spokesEl.appendChild(cap);
+		spokesEl.appendChild(text);
+		spokeNodes.push({ path: path, cap: cap, start: start, angle: s.angle });
+	});
+
+	var STOP_AFTER = 144;   /* inside the adapter ring */
+	var STOP_BEFORE = 99;   /* inside the extension ring */
+
+	function drawSpokes(state) {
+		var stop = state === "before" ? STOP_BEFORE : STOP_AFTER;
+		spokeNodes.forEach(function (sn) {
+			var end = polar(stop, sn.angle);
+			sn.path.setAttribute("d", "M " + sn.start[0] + " " + sn.start[1] + " L " + end[0] + " " + end[1]);
+			sn.cap.setAttribute("cx", end[0]);
+			sn.cap.setAttribute("cy", end[1]);
+			sn.path.setAttribute("stroke-dasharray", state === "before" ? "0" : "5 3");
+		});
+	}
+
+	/* ---------------------------------------------------------------- ledger */
+
+	var ledger = document.getElementById("ledger");
+
+	function flowHtml(flow) {
+		return flow.map(function (n, i) {
+			var cls = n.k ? "node " + n.k : "node";
+			var piece = '<span class="' + cls + '">' + n.t + "</span>";
+			return i < flow.length - 1 ? piece + '<span class="arrow">&rarr;</span>' : piece;
+		}).join("");
+	}
+
+	PORTS.forEach(function (p) {
+		var tag = TAGS[p.status];
+		var art = document.createElement("article");
+		art.className = "port";
+		art.dataset.status = p.status;
+		art.style.setProperty("--tone", tag.tone);
+		art.style.setProperty("--tone-soft", tag.soft);
+
+		art.innerHTML =
+			'<button class="port-head" type="button" aria-expanded="false" aria-controls="body-' + p.id + '">' +
+				'<span class="caret" aria-hidden="true"></span>' +
+				'<span class="port-name">' + p.name + ' <em>' + p.gist + '</em></span>' +
+				'<span class="owner">' + p.owner + '</span>' +
+				'<span class="tag">' + tag.label + '</span>' +
+			'</button>' +
+			'<div class="port-body" id="body-' + p.id + '"><div><div class="port-inner">' +
+				'<p class="what">' + p.what + '</p>' +
+				'<div class="contract"><pre>' + escapeHtml(p.contract) + '</pre></div>' +
+				'<div class="ba">' +
+					'<div class="ba-cell before"><h4>Before</h4><pre>' + escapeHtml(p.before.code) + '</pre><p>' + p.before.note + '</p></div>' +
+					'<div class="ba-cell after"><h4>After</h4><pre>' + escapeHtml(p.after.code) + '</pre><p>' + p.after.note + '</p></div>' +
+				'</div>' +
+				'<div class="flow">' + flowHtml(p.flow) + '</div>' +
+				'<p class="unlocks"><b>Unlocks</b><span>' + p.unlocks + '</span></p>' +
+			'</div></div></div>';
+
+		var head = art.querySelector(".port-head");
+		head.addEventListener("click", function () {
+			var open = art.classList.toggle("open");
+			head.setAttribute("aria-expanded", open ? "true" : "false");
+		});
+
+		ledger.appendChild(art);
+	});
+
+	function escapeHtml(s) {
+		return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+	}
+
+	/* filters */
+
+	var chips = Array.prototype.slice.call(document.querySelectorAll(".chip"));
+	chips.forEach(function (chip) {
+		chip.addEventListener("click", function () {
+			chips.forEach(function (c) { c.setAttribute("aria-pressed", c === chip ? "true" : "false"); });
+			var want = chip.dataset.filter;
+			Array.prototype.forEach.call(ledger.children, function (node) {
+				node.hidden = want !== "all" && node.dataset.status !== want;
+			});
+		});
+	});
+
+	/* --------------------------------------------------------------- bundles */
+
+	var bundlesEl = document.getElementById("bundles");
+	BUNDLES.forEach(function (b) {
+		var div = document.createElement("div");
+		div.className = "bundle";
+		div.innerHTML =
+			"<header><h3>" + b.name + "</h3><span class=\"pkg\">" + b.pkg + "</span></header>" +
+			"<ul>" + b.ports.map(function (port) {
+				var bits = port.split(": ");
+				return '<li><span class="dot"></span><span><b>' + bits[0] + "</b>: " + escapeHtml(bits[1]) + "</span></li>";
+			}).join("") + "</ul>" +
+			'<div class="call">' + escapeHtml(b.call) + "</div>";
+		bundlesEl.appendChild(div);
+	});
+
+	/* ---------------------------------------------------------------- switch */
+
+	var noteEl = document.getElementById("switchNote");
+	var NOTES = {
+		before: "reaches pierce into the extension ring",
+		after: "reaches stop at the adapter ring"
+	};
+
+	var switchButtons = Array.prototype.slice.call(document.querySelectorAll(".switch button"));
+
+	function setState(state) {
+		switchButtons.forEach(function (b) {
+			b.setAttribute("aria-pressed", b.dataset.state === state ? "true" : "false");
+		});
+		noteEl.textContent = NOTES[state];
+		drawSpokes(state);
+		document.querySelectorAll(".ba-cell").forEach(function (cell) {
+			cell.style.opacity = cell.classList.contains(state) ? "1" : ".62";
+		});
+	}
+
+	switchButtons.forEach(function (b) {
+		b.addEventListener("click", function () { setState(b.dataset.state); });
+	});
+
+	/* ------------------------------------------------------------------ init */
+
+	paintRing(RINGS[1]);
+	highlight(2);
+	setState("after");
+})();
+</script>

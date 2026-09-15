@@ -7,14 +7,12 @@ import {
 import { Trace } from "@repo/checks/trace";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import {
-	MemoryBank,
-	memoryExtension,
-	VolatileStore,
-} from "@repo/interpreter/memory";
+import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
+import { memoryHost } from "@repo/interpreter/memory-host";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
-import { EnvSecretsStore, type SecretsStore } from "@repo/interpreter/secrets";
+import type { SecretsStore } from "@repo/interpreter/secrets";
+import { envSecretsStore } from "@repo/interpreter/secrets-host";
 import { llmExtension } from "@repo/llm/llm";
 import { AgentRepl } from "@repo/repl/repl";
 
@@ -37,12 +35,12 @@ const modelFacing: ExtensionsFor = () => [
 	mockedMcpExtension(),
 	llmExtension(),
 	compactionExtension(),
-	memoryExtension(new MemoryBank(new VolatileStore())),
+	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
 	proseExtension(),
 ];
 
 export function tracedRepl(options: HarnessOptions = {}): Harness {
-	const secrets = new EnvSecretsStore();
+	const secrets = envSecretsStore();
 	const trace = new Trace({ secrets });
 	const mocks = options.mocks ?? { servers: {} };
 	const extensions = withRun({ trace, mocks, secrets }, () => [

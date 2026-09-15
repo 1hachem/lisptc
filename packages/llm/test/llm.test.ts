@@ -14,6 +14,7 @@ import {
 	type LlmResult,
 	llmExtension,
 } from "../src/llm.ts";
+import { llmHost } from "../src/llm-host.ts";
 
 type Reply = (req: LlmRequest) => LlmResult | string;
 
@@ -36,11 +37,10 @@ function llmInterp(reply: Reply = () => "ok") {
 	};
 	const interp = new Interp({
 		extensions: [
-			llmExtension({
-				generate,
-				providers: () => PROVIDERS,
-				observe: (call) => traced.push(call),
-			}),
+			llmExtension(
+				{ ...llmHost, generate, providers: () => PROVIDERS },
+				{ observe: (call) => traced.push(call) },
+			),
 		],
 	});
 	runSync(interp, prelude);
@@ -113,6 +113,7 @@ describe("llm/complete", () => {
 		const stuck = new Interp({
 			extensions: [
 				llmExtension({
+					...llmHost,
 					generate: () => new Promise<LlmResult>(() => {}),
 				}),
 			],
@@ -577,12 +578,17 @@ describe("the observer", () => {
 		const failed: LlmCall[] = [];
 		const interp = new Interp({
 			extensions: [
-				llmExtension({
-					generate: () => Promise.reject(new Error("upstream is down")),
-					observe: (call) => {
-						failed.push(call);
+				llmExtension(
+					{
+						...llmHost,
+						generate: () => Promise.reject(new Error("upstream is down")),
 					},
-				}),
+					{
+						observe: (call) => {
+							failed.push(call);
+						},
+					},
+				),
 			],
 		});
 		runSync(interp, prelude);
@@ -600,12 +606,14 @@ describe("the observer", () => {
 	it("never lets a broken observer break the call", async () => {
 		const interp = new Interp({
 			extensions: [
-				llmExtension({
-					generate: async () => ({ text: "fine" }),
-					observe: () => {
-						throw new Error("observer exploded");
+				llmExtension(
+					{ ...llmHost, generate: async () => ({ text: "fine" }) },
+					{
+						observe: () => {
+							throw new Error("observer exploded");
+						},
 					},
-				}),
+				),
 			],
 		});
 		runSync(interp, prelude);

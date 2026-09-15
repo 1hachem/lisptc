@@ -4,7 +4,8 @@ import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
-import type { ConnConfig, McpClient } from "../src/mcp-client.ts";
+import { mcpHost } from "../src/mcp-host.ts";
+import type { ConnConfig, McpClient } from "../src/ports.ts";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
 	const seen: ConnConfig[] = [];
@@ -21,6 +22,7 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 			login: () => Promise.resolve({ authUrl: null }),
 			logout: () => Promise.resolve(),
 			authorize: () => Promise.resolve(),
+			shutdown: () => Promise.resolve(),
 		},
 	};
 }
@@ -28,7 +30,7 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 function argsFor(name: string): string[] {
 	const { client, seen } = recording();
 	const interp = new Interp({
-		extensions: [promisesExtension(), mcpExtension({ client })],
+		extensions: [promisesExtension(), mcpExtension({ ...mcpHost, client })],
 	});
 	runSync(interp, prelude);
 	runSync(interp, `(load-mcp "${name}")`);

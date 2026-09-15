@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MODEL } from "../src/channels.ts";
 import { isTruncated, proseExtension } from "../src/extensions/prose/prose.ts";
+import { proseHost } from "../src/extensions/prose/prose-host.ts";
 import {
 	checkSyntax,
 	Interp,
@@ -263,7 +264,11 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 
 	it("takes a host's own classifier in place of the bundled one", () => {
 		const interp = new Interp({
-			extensions: [proseExtension(() => "everything is prose here")],
+			extensions: [
+				proseExtension(proseHost, {
+					classify: () => "everything is prose here",
+				}),
+			],
 		});
 		const skipped = collectSkips(interp);
 		expect(str(runSync(interp, "(+ 1 2)"))).toBe("#<unspecified>");
