@@ -37,6 +37,7 @@ export interface EvalSpec {
 	min: number;
 	max: number;
 	checks: string;
+	prelude?: string;
 	mocks?: MockSpec;
 	seed?: SeedEntry[];
 	samples?: number;
@@ -100,6 +101,16 @@ export async function runCase(
 	const checks = new Checks(trace, spec.checks);
 	const transcript: TranscriptEntry[] = [];
 	const seen: TranscriptLine[] = [];
+
+	if (spec.prelude !== undefined) {
+		const before = trace.events.length;
+		const { output, error } = await evalCode(repl, spec.prelude);
+		repl.takeFinished();
+		const refused = trace.events
+			.slice(before)
+			.some((e) => e.kind === "note" || (e.kind === "form" && e.error));
+		if (error || refused) throw new Error(`the prelude did not run: ${output}`);
+	}
 
 	trace.beginStep(0);
 	for (const entry of spec.seed ?? []) {
