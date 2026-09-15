@@ -12,6 +12,7 @@ import {
 	isUserMessage,
 	messageReasoning,
 	messageText,
+	toolFailed,
 	toolModelOutput,
 	toolResult,
 	toolUi,
@@ -29,6 +30,7 @@ import { MessageMemories } from "./message-memories.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 
 const FOLD_LINES = 25;
+const PAGE_LINES = 200;
 
 const channel = (id: string) =>
 	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
@@ -46,25 +48,64 @@ function ChannelLabel({ id }: { id: string }) {
 	);
 }
 
-function FoldedText({ text, tone }: { text: string; tone: string }) {
+function ChannelText({ text, tone }: { text: string; tone: string }) {
 	const [expanded, setExpanded] = useState(false);
+	const [page, setPage] = useState(0);
 	const lines = text.split("\n");
-	const folded = lines.length > FOLD_LINES && !expanded;
+	const long = lines.length > FOLD_LINES;
+	const folded = long && !expanded;
+	const pages = Math.ceil(lines.length / PAGE_LINES);
+	const paged = !folded && pages > 1;
+	const shown = folded
+		? lines.slice(0, FOLD_LINES)
+		: paged
+			? lines.slice(page * PAGE_LINES, (page + 1) * PAGE_LINES)
+			: lines;
+	const step = (by: number) =>
+		setPage((p) => Math.min(pages - 1, Math.max(0, p + by)));
 	return (
 		<div className={`min-w-0 break-words ${tone}`}>
-			<Markdown>
-				{folded ? lines.slice(0, FOLD_LINES).join("\n") : text}
-			</Markdown>
-			{lines.length > FOLD_LINES && (
-				<button
-					type="button"
-					onClick={() => setExpanded(!expanded)}
-					className="text-dim underline decoration-dim/40 hover:text-fg"
-				>
-					{folded
-						? `show ${lines.length - FOLD_LINES} more lines`
-						: "show less"}
-				</button>
+			<div className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined}>
+				<Markdown>{shown.join("\n")}</Markdown>
+			</div>
+			{long && (
+				<div className="mt-1 flex items-center gap-3 text-dim">
+					<button
+						type="button"
+						onClick={() => {
+							setExpanded(!expanded);
+							setPage(0);
+						}}
+						className="underline decoration-dim/40 hover:text-fg"
+					>
+						{folded
+							? `see ${lines.length - FOLD_LINES} more lines`
+							: "see less"}
+					</button>
+					{paged && (
+						<span className="flex items-center gap-2">
+							<button
+								type="button"
+								disabled={page === 0}
+								onClick={() => step(-1)}
+								className="hover:text-fg disabled:opacity-30"
+							>
+								‹
+							</button>
+							<span>
+								{page + 1}/{pages}
+							</span>
+							<button
+								type="button"
+								disabled={page === pages - 1}
+								onClick={() => step(1)}
+								className="hover:text-fg disabled:opacity-30"
+							>
+								›
+							</button>
+						</span>
+					)}
+				</div>
 			)}
 		</div>
 	);
@@ -72,17 +113,20 @@ function FoldedText({ text, tone }: { text: string; tone: string }) {
 
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { shown } = useUI();
-	const { output, error } = toolResult(message);
+	const { output } = toolResult(message);
 	const ui = toUiNode(toolUi(message));
 	const model = toolModelOutput(message);
 	const drawsUi = ui !== undefined && shown.ui;
 	const drawsUser = shown.user && output !== "";
+	const drawsError = shown.errors && toolFailed(message);
 	const drawsModel = shown.model && model.output !== "";
-	const labelled = [drawsUi, drawsUser, drawsModel].filter(Boolean).length > 1;
+	const labelled =
+		[drawsUi, drawsUser, drawsModel].filter(Boolean).length > 1 ||
+		(drawsError && drawsModel);
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
-				error ? "border-red/60" : "border-dim/40"
+				drawsError ? "border-red/60" : "border-dim/40"
 			}`}
 		>
 			{drawsUi && (
@@ -94,13 +138,16 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 			{drawsUser && (
 				<>
 					{labelled && <ChannelLabel id="user" />}
-					<FoldedText text={output} tone={error ? "text-red" : "text-dim"} />
+					<ChannelText text={output} tone="text-dim" />
 				</>
+			)}
+			{drawsError && (
+				<div className={channel("errors").text}>a form in this step failed</div>
 			)}
 			{drawsModel && (
 				<>
 					{labelled && <ChannelLabel id="model" />}
-					<FoldedText text={model.output} tone={channel("model").text} />
+					<ChannelText text={model.output} tone={channel("model").text} />
 				</>
 			)}
 		</div>

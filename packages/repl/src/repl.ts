@@ -55,18 +55,14 @@ export interface ReplOptions {
 
 export interface EvalOutput extends Bounded {
 	memories: FiredMemory[];
+	failed: boolean;
 	ui?: UiNode;
 	message?: string;
-}
-
-export interface ActionOutput extends EvalOutput {
-	error: boolean;
 }
 
 interface StepResult extends EvalOutput {
 	envelopes: readonly Envelope[];
 	skipped: string[];
-	failed: boolean;
 }
 
 function partition(notes: readonly Note[]): {
@@ -112,6 +108,7 @@ function render(result: StepResult): EvalOutput {
 		model: result.model + notes,
 		user: result.user + notes,
 		memories: result.memories,
+		failed: result.failed,
 		ui: result.ui,
 		message: result.message,
 	};
@@ -176,12 +173,11 @@ export class MemoryRepl implements InMemoryRepl {
 	async invokeUi(
 		action: string,
 		values: Record<string, unknown> = {},
-	): Promise<ActionOutput> {
+	): Promise<EvalOutput> {
 		const surface = this.surface;
 		if (surface === undefined)
 			throw new EvalException("no ui surface on this repl", action, false);
-		const result = await this.serialize(() => surface.invoke(action, values));
-		return { ...result, error: result.failed };
+		return this.serialize(() => surface.invoke(action, values));
 	}
 
 	private serialize(body: () => Promise<unknown>): Promise<StepResult> {
@@ -215,7 +211,7 @@ export class MemoryRepl implements InMemoryRepl {
 		let error: Bounded = { model: "", user: "" };
 		if (thrown === EndOfFile) {
 			const text = "unbalanced expression (unexpected end of input)\n";
-			error = { model: text, user: text };
+			error = { model: text, user: "" };
 		} else if (thrown !== undefined) {
 			const text = `${failed.at(-1)?.text ?? String(thrown)}\n`;
 			error = this.compactor?.error(text) ?? { model: text, user: text };
@@ -226,10 +222,10 @@ export class MemoryRepl implements InMemoryRepl {
 				buffer.text("model") + (this.compactor?.endStep() ?? "") + error.model,
 			user: buffer.text("user") + error.user,
 			memories: buffer.payloads(fired),
+			failed: thrown !== undefined,
 			ui: buffer.payloads(rendered).at(-1),
 			message: joinMessages(buffer.payloads(sent)),
 			skipped,
-			failed: thrown !== undefined,
 		};
 	}
 
@@ -262,6 +258,7 @@ export class AgentRepl extends MemoryRepl {
 			model: result.model,
 			user: result.user,
 			memories: result.memories,
+			failed: result.failed,
 			ui: result.ui,
 			message: result.message,
 		};
@@ -298,9 +295,9 @@ export class AgentRepl extends MemoryRepl {
 	}
 }
 
-function isAnswer(code: string, { user, skipped }: StepResult): boolean {
+function isAnswer(code: string, { model, skipped }: StepResult): boolean {
 	if (stripProse(code).trim() === "") return true;
-	if (user !== "" || skipped.length === 0) return false;
+	if (model !== "" || skipped.length === 0) return false;
 	return !isTruncated(code);
 }
 

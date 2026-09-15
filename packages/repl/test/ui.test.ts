@@ -58,9 +58,9 @@ describe("driving the view", () => {
 		await r.evalOutput(
 			'(ui/render (ui/button "say" (lambda () (echo "one two three four"))))',
 		);
-		const { user, error } = await r.invokeUi("a1");
+		const { user, failed } = await r.invokeUi("a1");
 		expect(user).toBe("one two three four\n");
-		expect(error).toBe(false);
+		expect(failed).toBe(false);
 	});
 
 	it("reports a failing handler as an error rather than throwing", async () => {
@@ -68,23 +68,24 @@ describe("driving the view", () => {
 		await r.evalOutput(
 			'(ui/render (ui/button "boom" (lambda () (no-such-fn))))',
 		);
-		const { user, error, ui } = await r.invokeUi("a1");
-		expect(error).toBe(true);
-		expect(user).toMatch(/no-such-fn/);
+		const { user, model, failed, ui } = await r.invokeUi("a1");
+		expect(failed).toBe(true);
+		expect(model).toMatch(/no-such-fn/);
+		expect(user).toBe("");
 		expect(ui).toBeUndefined();
 	});
 
 	it("reports an unknown action instead of silently doing nothing", async () => {
 		const r = memoryRepl();
 		await r.evalOutput(PANEL);
-		expect((await r.invokeUi("a99")).user).toMatch(/no such ui action/);
+		expect((await r.invokeUi("a99")).model).toMatch(/no such ui action/);
 	});
 
 	it("drops every action on reset", async () => {
 		const r = memoryRepl();
 		await r.evalOutput(PANEL);
 		r.reset();
-		expect((await r.invokeUi("a1")).user).toMatch(/no such ui action/);
+		expect((await r.invokeUi("a1")).model).toMatch(/no such ui action/);
 	});
 });
 

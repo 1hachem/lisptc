@@ -123,6 +123,7 @@ export function streamChatResponse(
 						const extras: Record<string, unknown> = {};
 						if (event.display !== event.output) extras.display = event.display;
 						if (event.ui) extras.ui = nodeToJson(event.ui);
+						if (event.failed) extras.failed = true;
 						wire.push({
 							type: "tool",
 							content: replResultContent(event.output, event.error),

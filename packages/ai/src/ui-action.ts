@@ -16,10 +16,10 @@ export async function runUiAction(
 	const repl = peekThreadRepl(threadId);
 	if (!repl) return undefined;
 	try {
-		const { user, ui, message, error } = await repl.invokeUi(action, values);
+		const { user, ui, message, failed } = await repl.invokeUi(action, values);
 		return {
 			output: user,
-			error,
+			error: failed,
 			ui: ui ? nodeToJson(ui) : undefined,
 			message,
 		};

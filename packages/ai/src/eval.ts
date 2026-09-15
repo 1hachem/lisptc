@@ -6,7 +6,7 @@ export interface EvalMessage {
 	type: "tool";
 	content: string;
 	id: string;
-	additional_kwargs?: { display?: string; ui?: UiValue };
+	additional_kwargs?: { display?: string; ui?: UiValue; failed?: boolean };
 }
 
 export async function evalUserCode(
@@ -14,11 +14,12 @@ export async function evalUserCode(
 	threadId?: string,
 ): Promise<EvalMessage> {
 	const repl = getThreadRepl(threadId);
-	const { output, display, error, ui } = await evalCode(repl, code);
+	const { output, display, error, failed, ui } = await evalCode(repl, code);
 	repl.clearTurnSignals();
 	const extras: EvalMessage["additional_kwargs"] = {};
 	if (display !== output) extras.display = display;
 	if (ui) extras.ui = nodeToJson(ui);
+	if (failed) extras.failed = true;
 	return {
 		type: "tool",
 		content: replResultContent(output, error),

@@ -1,4 +1,4 @@
-export type ChannelId = "user" | "ui" | "memory" | "model";
+export type ChannelId = "user" | "ui" | "memory" | "errors" | "model";
 
 export interface Channel {
 	id: ChannelId;
@@ -32,6 +32,14 @@ export const CHANNELS: Channel[] = [
 		hint: "what a step recalled",
 		dot: "bg-orange",
 		text: "text-orange",
+		shownByDefault: true,
+	},
+	{
+		id: "errors",
+		label: "errors",
+		hint: "whether a step failed",
+		dot: "bg-red",
+		text: "text-red",
 		shownByDefault: true,
 	},
 	{

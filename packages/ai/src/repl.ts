@@ -68,15 +68,22 @@ export async function evalCode(
 	display: string;
 	error: boolean;
 	memories: FiredMemory[];
+	failed: boolean;
 	ui?: UiNode;
 }> {
 	try {
-		const { model, user, memories, ui } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false, memories, ui };
+		const { model, user, memories, failed, ui } = await repl.evalOutput(code);
+		return { output: model, display: user, error: false, memories, failed, ui };
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
 		const text = `REPL error: ${msg} (interpreter was reset, definitions lost)`;
-		return { output: text, display: text, error: true, memories: [] };
+		return {
+			output: text,
+			display: text,
+			error: true,
+			memories: [],
+			failed: true,
+		};
 	}
 }
