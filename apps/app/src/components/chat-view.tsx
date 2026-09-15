@@ -190,7 +190,8 @@ export function ChatView() {
 				{messages
 					.filter((m) => !isGreetingMessage(m))
 					.map((m, i) => {
-						const reasoning = isUserMessage(m) ? "" : messageReasoning(m);
+						const reasoning =
+							isUserMessage(m) || !shown.thinking ? "" : messageReasoning(m);
 						const stats = m.id ? meta[m.id] : undefined;
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
@@ -199,8 +200,11 @@ export function ChatView() {
 								) : (
 									<div className="min-w-0 break-words text-fg">
 										{reasoning && (
-											<div className="mb-2 whitespace-pre-wrap break-words border-dim/40 border-l pl-3 text-dim italic">
-												{reasoning}
+											<div className="mb-2">
+												<ChannelLabel id="thinking" />
+												<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
+													{reasoning}
+												</div>
 											</div>
 										)}
 										{isUserMessage(m) ? (

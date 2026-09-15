@@ -9,6 +9,7 @@ export interface ChatMessageInput {
 	type?: string;
 	role?: string;
 	content?: unknown;
+	additional_kwargs?: Record<string, unknown>;
 }
 
 export interface ChatInput {
@@ -74,6 +75,9 @@ export function streamChatResponse(
 					type: wireType(m.type ?? m.role),
 					content: contentToText(m.content),
 					id: m.id ?? `msg-${i}`,
+					...(m.additional_kwargs
+						? { additional_kwargs: m.additional_kwargs }
+						: undefined),
 				}),
 			);
 

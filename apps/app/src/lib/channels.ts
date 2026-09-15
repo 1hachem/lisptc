@@ -1,4 +1,10 @@
-export type ChannelId = "user" | "ui" | "memory" | "errors" | "model";
+export type ChannelId =
+	| "user"
+	| "ui"
+	| "thinking"
+	| "memory"
+	| "errors"
+	| "model";
 
 export interface Channel {
 	id: ChannelId;
@@ -24,6 +30,14 @@ export const CHANNELS: Channel[] = [
 		hint: "widgets a step rendered",
 		dot: "bg-aqua",
 		text: "text-aqua",
+		shownByDefault: true,
+	},
+	{
+		id: "thinking",
+		label: "thinking",
+		hint: "what the model reasoned before it answered",
+		dot: "bg-blue",
+		text: "text-blue",
 		shownByDefault: true,
 	},
 	{

@@ -20,6 +20,9 @@ interface WireMessage {
 	type: string;
 	content: string;
 	additional_kwargs?: {
+		reasoning_content?: string;
+		ui?: unknown;
+		display?: string;
 		meta?: {
 			at?: string;
 			durationMs?: number;
@@ -92,6 +95,26 @@ describe("chat stream", () => {
 			cachedInputTokens: 10,
 			steps: 2,
 		});
+	});
+
+	test("carries what a turn attached to a message into the next turn", async () => {
+		const carried = {
+			reasoning_content: "thinking out loud",
+			ui: { tag: "text", props: { text: "a widget" }, children: [] },
+			display: "for the person",
+		};
+		const messages = await finalMessages(
+			streamChatResponse({
+				messages: [
+					{ type: "human", content: "what is 1 + 2?" },
+					{ type: "ai", content: "(+ 1 2)", additional_kwargs: carried },
+					{ type: "human", content: "and again?" },
+				],
+			}),
+		);
+
+		const earlier = messages.find((m) => m.content === "(+ 1 2)");
+		expect(earlier?.additional_kwargs).toMatchObject(carried);
 	});
 
 	test("every model call names the model that was billed for it", async () => {
