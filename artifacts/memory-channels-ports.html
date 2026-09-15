@@ -1,0 +1,888 @@
+<title>Memory, Channels, Ports</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+:root {
+	--bg: #1d2021;
+	--bg1: #282828;
+	--bg2: #3c3836;
+	--fg: #ebdbb2;
+	--dim: #928374;
+	--red: #fb4934;
+	--green: #b8bb26;
+	--yellow: #fabd2f;
+	--blue: #83a598;
+	--purple: #d3869b;
+	--aqua: #8ec07c;
+	--orange: #fe8019;
+
+	--mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+
+	--rule: #3c3836;
+	--measure: 68ch;
+}
+
+* { box-sizing: border-box; }
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font-family: var(--sans);
+	font-size: 15.5px;
+	line-height: 1.68;
+	-webkit-font-smoothing: antialiased;
+	font-feature-settings: "kern";
+}
+
+.page {
+	max-width: 1080px;
+	margin: 0 auto;
+	padding: 0 28px 120px;
+}
+
+/* ---------- type scale ---------- */
+
+h1, h2, h3, h4 {
+	font-family: var(--mono);
+	font-weight: 700;
+	text-wrap: balance;
+	margin: 0;
+	line-height: 1.25;
+}
+
+h1 {
+	font-size: clamp(30px, 5vw, 46px);
+	letter-spacing: -0.035em;
+	color: var(--fg);
+}
+
+h2 {
+	font-size: clamp(21px, 3vw, 26px);
+	letter-spacing: -0.025em;
+}
+
+h3 {
+	font-size: 16.5px;
+	letter-spacing: -0.01em;
+	color: var(--fg);
+}
+
+h4 {
+	font-size: 13px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--dim);
+}
+
+p { margin: 0; max-width: var(--measure); }
+
+a { color: var(--blue); text-decoration: none; border-bottom: 1px solid #83a59855; }
+a:hover { color: var(--aqua); border-bottom-color: #8ec07c99; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+code, .mono { font-family: var(--mono); }
+
+p code, li code, td code, th code, dd code, dt code {
+	font-size: 0.86em;
+	color: var(--aqua);
+	background: var(--bg1);
+	padding: 0.1em 0.34em;
+	white-space: nowrap;
+}
+
+strong { font-weight: 600; color: var(--fg); }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+	padding: 74px 0 44px;
+	border-bottom: 1px solid var(--rule);
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+
+.eyebrow {
+	font-family: var(--mono);
+	font-size: 12px;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--orange);
+}
+
+.masthead p { font-size: 17px; color: #d5c4a1; max-width: 62ch; }
+
+.meta {
+	font-family: var(--mono);
+	font-size: 12.5px;
+	color: var(--dim);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 22px;
+	padding-top: 6px;
+}
+
+.meta b { color: var(--fg); font-weight: 500; }
+
+/* ---------- contents ---------- */
+
+.contents {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+	gap: 0;
+	border-bottom: 1px solid var(--rule);
+}
+
+.contents a {
+	font-family: var(--mono);
+	font-size: 13px;
+	color: var(--dim);
+	border-bottom: none;
+	padding: 20px 20px 20px 0;
+	display: flex;
+	gap: 10px;
+	align-items: baseline;
+}
+
+.contents a:hover { color: var(--fg); }
+.contents a span { color: var(--orange); }
+
+/* ---------- sections ---------- */
+
+section { padding: 64px 0 0; }
+
+.sec-head {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin-bottom: 34px;
+}
+
+.sec-head .num {
+	font-family: var(--mono);
+	font-size: 12px;
+	letter-spacing: 0.16em;
+	color: var(--orange);
+}
+
+.body { display: flex; flex-direction: column; gap: 22px; }
+
+.rail {
+	border-left: 1px solid var(--rule);
+	padding-left: 22px;
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.stack { display: flex; flex-direction: column; gap: 30px; }
+.stack-tight { display: flex; flex-direction: column; gap: 14px; }
+
+ul.plain { margin: 0; padding-left: 1.1em; max-width: var(--measure); }
+ul.plain li { margin-bottom: 7px; }
+ul.plain li::marker { color: var(--dim); }
+
+/* ---------- code ---------- */
+
+pre {
+	margin: 0;
+	background: var(--bg1);
+	border-left: 2px solid var(--bg2);
+	padding: 16px 18px;
+	overflow-x: auto;
+	font-family: var(--mono);
+	font-size: 12.9px;
+	line-height: 1.72;
+	color: #d5c4a1;
+	tab-size: 2;
+}
+
+pre b { font-weight: 400; }
+.k { color: var(--blue); }
+.s { color: var(--green); }
+.n { color: var(--purple); }
+.c { color: var(--dim); }
+.kw { color: var(--aqua); }
+.e { color: var(--red); }
+.y { color: var(--yellow); }
+.o { color: var(--orange); }
+
+figcaption {
+	font-family: var(--mono);
+	font-size: 11.5px;
+	color: var(--dim);
+	padding-top: 8px;
+	letter-spacing: 0.02em;
+}
+
+figure { margin: 0; display: flex; flex-direction: column; }
+
+/* ---------- tables ---------- */
+
+.tw { overflow-x: auto; border-top: 1px solid var(--rule); }
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: 13.5px;
+	min-width: 620px;
+}
+
+th {
+	font-family: var(--mono);
+	font-weight: 500;
+	font-size: 11.5px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--dim);
+	text-align: left;
+	padding: 12px 18px 12px 0;
+	border-bottom: 1px solid var(--rule);
+	vertical-align: bottom;
+}
+
+td {
+	padding: 13px 18px 13px 0;
+	border-bottom: 1px solid #3c383680;
+	vertical-align: top;
+	color: #d5c4a1;
+}
+
+td:first-child, th:first-child { padding-left: 0; }
+td.mono { color: var(--fg); font-size: 12.8px; white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- record diagram ---------- */
+
+.record {
+	display: grid;
+	grid-template-columns: max-content max-content 1fr;
+	font-family: var(--mono);
+	font-size: 13px;
+	background: var(--bg1);
+	border-left: 2px solid var(--yellow);
+}
+
+.record > div {
+	padding: 11px 18px 11px 0;
+	border-bottom: 1px solid #3c383666;
+}
+
+.record > div:nth-child(3n+1) { padding-left: 18px; color: var(--yellow); }
+.record > div:nth-child(3n+2) { color: var(--dim); }
+.record > div:nth-child(3n) { color: #d5c4a1; font-family: var(--sans); font-size: 13.5px; padding-right: 18px; }
+.record > div:nth-last-child(-n+3) { border-bottom: none; }
+
+/* ---------- channel legend ---------- */
+
+.channels {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+	gap: 1px;
+	background: var(--rule);
+	border: 1px solid var(--rule);
+}
+
+.chan {
+	background: var(--bg1);
+	padding: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+
+.chan .name {
+	font-family: var(--mono);
+	font-size: 13px;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.chan .name::before {
+	content: "";
+	width: 9px;
+	height: 9px;
+	background: currentColor;
+	flex: none;
+}
+
+.chan .who { font-size: 13px; color: var(--dim); font-family: var(--sans); line-height: 1.55; }
+.chan .who b { color: #d5c4a1; font-weight: 500; }
+
+.c-user { color: var(--green); }
+.c-model { color: var(--blue); }
+.c-memory { color: var(--yellow); }
+.c-debug { color: var(--dim); }
+
+/* ---------- hop diagram ---------- */
+
+.hops {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--rule);
+	background: var(--bg1);
+	overflow-x: auto;
+}
+
+.hop {
+	display: grid;
+	grid-template-columns: 210px 1fr 118px;
+	gap: 0;
+	border-bottom: 1px solid var(--rule);
+	min-width: 640px;
+}
+
+.hop:last-child { border-bottom: none; }
+
+.hop .where {
+	font-family: var(--mono);
+	font-size: 12.5px;
+	padding: 16px 16px 16px 18px;
+	border-right: 1px solid var(--rule);
+	color: var(--fg);
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.hop .where em {
+	font-style: normal;
+	color: var(--dim);
+	font-size: 11px;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.hop .what {
+	padding: 16px 18px;
+	font-size: 13.5px;
+	color: #d5c4a1;
+	line-height: 1.6;
+}
+
+.hop .what code { white-space: normal; }
+
+.hop .carries {
+	border-left: 1px solid var(--rule);
+	padding: 16px 12px;
+	display: flex;
+	gap: 5px;
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.pip {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	letter-spacing: 0.06em;
+	padding: 2px 6px;
+	border: 1px solid currentColor;
+	text-transform: uppercase;
+}
+
+.pip.off { color: var(--bg2); }
+
+/* ---------- port cards ---------- */
+
+.ports { display: flex; flex-direction: column; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+
+.port {
+	background: var(--bg1);
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 14px;
+	padding: 22px;
+}
+
+.port-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+
+.port-head h3 { font-size: 15.5px; color: var(--orange); }
+
+.tag {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	padding: 2px 7px;
+	border: 1px solid currentColor;
+}
+
+.tag.exists { color: var(--green); }
+.tag.partial { color: var(--yellow); }
+.tag.missing { color: var(--purple); }
+
+.port dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; font-size: 13.5px; }
+.port dt {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--dim);
+	padding-top: 3px;
+}
+.port dd { margin: 0; color: #d5c4a1; }
+
+.note {
+	border-left: 2px solid var(--orange);
+	background: #fe80190d;
+	padding: 14px 18px;
+	font-size: 13.5px;
+	color: #d5c4a1;
+	max-width: var(--measure);
+}
+
+.note b { color: var(--orange); font-weight: 600; }
+
+hr.soft { border: none; border-top: 1px solid var(--rule); margin: 0; }
+
+footer {
+	margin-top: 80px;
+	padding-top: 26px;
+	border-top: 1px solid var(--rule);
+	font-family: var(--mono);
+	font-size: 12px;
+	color: var(--dim);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 24px;
+}
+
+@media (max-width: 720px) {
+	.hop { grid-template-columns: 150px 1fr; }
+	.hop .carries { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--rule); }
+	.record { grid-template-columns: max-content 1fr; }
+	.record > div:nth-child(3n+2) { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	a, .contents a { transition: color 120ms ease; }
+}
+</style>
+
+<div class="page">
+
+<header class="masthead">
+	<div class="eyebrow">lisptc · worktree-ptc-3-memory</div>
+	<h1>Memory, Channels, Ports</h1>
+	<p>How the memory extension works and what it changes in the interpreter; how a channel carries one evaluation from <code>Interp</code> out to the browser; and which seams in this repo are already interfaces, which are half interfaces, and which are still hard-wired.</p>
+	<div class="meta">
+		<span><b>11</b> commits ahead of main</span>
+		<span><b>34</b> files changed</span>
+		<span><b>806</b> lines in <code>src/memory.ts</code></span>
+		<span><b>670</b> lines of tests</span>
+	</div>
+</header>
+
+<nav class="contents">
+	<a href="#memory"><span>§1</span> The memory extension</a>
+	<a href="#interp"><span>§2</span> What it does to the interpreter</a>
+	<a href="#channels"><span>§3</span> Channels, end to end</a>
+	<a href="#ports"><span>§4</span> Ports we could cut</a>
+</nav>
+
+<!-- ============================= 1 ============================= -->
+<section id="memory">
+	<div class="sec-head">
+		<div class="num">§1</div>
+		<h2>The memory extension</h2>
+		<p>An agent that works something out in one session loses it by the next. The memory extension gives the interpreter a store that outlives it, addressed by key, retrieved by regular expression, and fired by the shape of what the agent is doing right now.</p>
+	</div>
+
+	<div class="stack">
+
+		<div class="stack-tight">
+			<h3>What a memory is</h3>
+			<p>One record, seven fields. The body is the interesting one: it holds prose or a form, because in this dialect those are the same material.</p>
+			<div class="record">
+				<div>key</div><div>string</div><div>The address. Also the filename on disk, sanitized.</div>
+				<div>body</div><div>unknown</div><div>Prose to load into context, or a quoted form to <code>replay</code>. A live value (closure, promise, secret) is refused: it prints as <code>#&lt;…&gt;</code> and would not read back.</div>
+				<div>on</div><div>Trigger?</div><div>A kind and an optional pattern. Absent means the memory only ever arrives through an explicit <code>recall</code>.</div>
+				<div>links</div><div>Map&lt;string,&nbsp;number&gt;</div><div>Weighted edges to other keys. At weight ≥ 2 a link fires the memory it points at.</div>
+				<div>score</div><div>number</div><div>Strength at <code>lastUsed</code>. Decays from there.</div>
+				<div>used</div><div>number</div><div>Retrieval count.</div>
+				<div>lastUsed</div><div>number</div><div>Epoch ms. The exponent in the decay.</div>
+			</div>
+		</div>
+
+		<div class="stack-tight">
+			<h3>The six forms</h3>
+			<p>The verbs are slashed because <em>remember</em>, <em>recall</em> and <em>forget</em> are ordinary English, and a bare one in an aside would be read as code. <code>memories</code> is not, so it stays bare.</p>
+			<div class="tw">
+			<table>
+				<thead><tr><th>Form</th><th>Does</th><th>Returns</th></tr></thead>
+				<tbody>
+					<tr><td class="mono">(memory/remember key body<br>&nbsp;&nbsp;[:on t] [:links (k…)])</td><td>Writes the record. Reuses the existing score and use-count if the key is taken, so rewriting a memory does not reset its standing.</td><td>the key</td></tr>
+					<tr><td class="mono">(memory/recall query<br>&nbsp;&nbsp;[:limit n])</td><td>Regex over key and body text, sorted by current strength, top <em>n</em> (default 5). Firing each one is the retrieval: the text lands in context, so there is no echo step to write afterwards.</td><td>alists of key, body, score, used</td></tr>
+					<tr><td class="mono">(memories)</td><td>Every memory as (key strength trigger), strongest first. Reading the list strengthens nothing.</td><td>list</td></tr>
+					<tr><td class="mono">(memory/forget key)</td><td>Deletes it from the store for good.</td><td>t or nil</td></tr>
+					<tr><td class="mono">(memory/revise key body)</td><td>Replaces a body, but only inside the window that retrieval opened.</td><td>the key</td></tr>
+					<tr><td class="mono">(memory/replay key)</td><td>Evaluates a form body in the calling interpreter. This is how a remembered <code>defun</code> becomes an installed function. Defined with <code>defGen</code>, so a replayed form can await.</td><td>what the form produced</td></tr>
+				</tbody>
+			</table>
+			</div>
+		</div>
+
+		<div class="stack-tight">
+			<h3>Triggers: a memory that fires by itself</h3>
+			<p>With <code>:on</code> the memory watches for an event and loads itself when it happens, unasked. Seven kinds, and the split that matters is <strong>one structural, six textual</strong>.</p>
+			<div class="tw">
+			<table>
+				<thead><tr><th>Kind</th><th>Fires on</th><th>Pattern is</th></tr></thead>
+				<tbody>
+					<tr><td class="mono">call</td><td>a form about to be evaluated, at any depth</td><td>a <strong>form</strong>, matched structurally</td></tr>
+					<tr><td class="mono">result</td><td>the printed value a form returned</td><td rowspan="6">a <strong>string</strong>, used as a regular expression over the text</td></tr>
+					<tr><td class="mono">error</td><td>an evaluation that raised</td></tr>
+					<tr><td class="mono">step</td><td>every step, pattern or not</td></tr>
+					<tr><td class="mono">prose</td><td>the words around the forms, recovered by diffing the source against <code>stripProse</code></td></tr>
+					<tr><td class="mono">user</td><td>the newest entry in the <code>user-messages</code> global, once per new message</td></tr>
+					<tr><td class="mono">recall</td><td>another memory being retrieved — retrieval is itself an event</td></tr>
+				</tbody>
+			</table>
+			</div>
+			<p>Handing a string to <code>call</code>, or a form to any of the others, is a parse error with the correction in it. That check is what makes the shape distinction survive contact with a model.</p>
+		</div>
+
+		<figure>
+			<pre><b class="c">a form pattern matches a PREFIX of the call, so fewer arguments is looser</b>
+
+(<b class="kw">call</b> (<b class="k">load-mcp</b> <b class="s">"acme"</b>))          <b class="c">only that server</b>
+(<b class="kw">call</b> (<b class="k">load-mcp</b>))                 <b class="c">any call to load-mcp</b>
+(<b class="kw">call</b> (<b class="k">load-mcp</b> <b class="y">_</b>))               <b class="c">_ matches one argument, whatever it is</b>
+(<b class="kw">call</b> (<b class="k">acme/.*</b>))                 <b class="c">a head is a regex — one pattern hooks a whole server</b>
+(<b class="kw">call</b> (<b class="k">setq</b> <b class="y">_</b> (<b class="k">acme/get</b> <b class="y">_</b>)))     <b class="c">the shape nests as deep as you write it</b>
+
+<b class="c">combinators work in either sort of trigger</b>
+
+(<b class="kw">call</b> (<b class="k">all</b> (<b class="k">load-mcp</b>) (<b class="k">not</b> (<b class="k">load-mcp</b> <b class="s">"acme"</b>))))
+(<b class="kw">error</b> (<b class="k">any-of</b> <b class="s">"undefined"</b> <b class="s">"void variable"</b>))</pre>
+			<figcaption>structurally() walks pattern and target in lockstep; someSubform() re-tries at every depth</figcaption>
+		</figure>
+
+		<div class="stack-tight">
+			<h3>Firing, cascading, wiring</h3>
+			<div class="rail">
+				<p><strong>A fired memory is REPL feedback, not a program.</strong> Nothing is evaluated. The line <code>key: body</code> goes to the model and, on the memory channel, to whatever front-end is listening. To run a memory you <code>replay</code> it; to show the user one you <code>echo</code> it.</p>
+				<p><strong>Each memory fires at most once per step.</strong> A <code>fired</code> set guards it, so a cycle in the link graph terminates. Cascades stop at depth 3.</p>
+				<p><strong>Retrieval is an event,</strong> so a memory hooked <code>(recall "other-key")</code> arrives alongside the one that was actually asked for. <code>:links</code> says the same thing outright.</p>
+				<p><strong>What fires together gets wired together.</strong> At the end of the step, <code>wireTogether()</code> increments a link between every pair that fired. Links reach the firing threshold on their second co-occurrence, so the things the agent keeps using together start arriving together without anyone declaring it.</p>
+			</div>
+		</div>
+
+		<div class="stack-tight">
+			<h3>Strength, decay, and the sweep</h3>
+			<p>Strength is score halved every week since last use: <code>score · 2^(−elapsed / HALF_LIFE)</code>. Recall reinforces by re-basing the score on the <em>decayed</em> value and adding a constant, so a memory climbs only while it is being used faster than it fades. Left alone between recalls, each retrieval pays down the decay before it adds anything.</p>
+			<div class="tw">
+			<table>
+				<thead><tr><th>Constant</th><th>Value</th><th>Effect</th></tr></thead>
+				<tbody>
+					<tr><td class="mono">INITIAL_SCORE</td><td class="mono num">1</td><td>every memory starts level</td></tr>
+					<tr><td class="mono">REINFORCEMENT</td><td class="mono num">0.5</td><td>added to the decayed strength on each retrieval</td></tr>
+					<tr><td class="mono">HALF_LIFE_MS</td><td class="mono num">7 days</td><td>unused, a memory halves every week</td></tr>
+					<tr><td class="mono">FORGET_BELOW</td><td class="mono num">0.05</td><td>swept from the store on the next step or recall — roughly four weeks of neglect from a fresh memory</td></tr>
+					<tr><td class="mono">MAX_CASCADE_DEPTH</td><td class="mono num">3</td><td>how far a chain of links and recall-triggers can run</td></tr>
+					<tr><td class="mono">LINKED_FIRES_AT</td><td class="mono num">2</td><td>link weight at which a link starts firing; an explicit <code>:links</code> is born at this weight</td></tr>
+					<tr><td class="mono">MAX_RECALL_WORDS</td><td class="mono num">200</td><td>context budget for one step's recalled text</td></tr>
+				</tbody>
+			</table>
+			</div>
+			<p>The budget is a hard cut, not a truncation: once 200 words are spent, further bodies are counted and dropped, and the step ends with a line saying how many words were withheld and how to get at them.</p>
+		</div>
+
+		<div class="stack-tight">
+			<h3>The plasticity window</h3>
+			<p>Retrieving a memory puts its key in an <code>open</code> set that the end of the step clears. <code>revise</code> only works on an open memory; outside the window it raises an error telling you to recall it first. Reading and rewriting are deliberately one act — a memory gets corrected while its wrong text is on screen.</p>
+		</div>
+
+		<div class="stack-tight">
+			<h3>The store, and the layering</h3>
+			<p><code>MemoryStore</code> is four methods: <code>all</code>, <code>get</code>, <code>put</code>, <code>delete</code>. Three implementations ship.</p>
+			<div class="tw">
+			<table>
+				<thead><tr><th>Implementation</th><th>Backing</th><th>Used by</th></tr></thead>
+				<tbody>
+					<tr><td class="mono">VolatileStore</td><td>a Map</td><td>tests, and anything that must not touch the real store</td></tr>
+					<tr><td class="mono">FileMemoryStore</td><td>one <code>.ptc</code> s-expression per memory, dir 0700, files 0600</td><td>the CLI, the MCP server, the session server</td></tr>
+					<tr><td class="mono">LayeredStore</td><td>an own store over a shared one: reads fall through, writes land in <code>own</code>, deletes hit both</td><td>the API, via <code>scopedMemoryStore(distinctId)</code></td></tr>
+				</tbody>
+			</table>
+			</div>
+			<p>Persistence is the printer and the reader, nothing else — a memory on disk is a form this language can read, which is also why a trigger that no longer parses is kept rather than dropped.</p>
+			<figure>
+				<pre>(<b class="k">memory</b> <b class="s">"joins"</b>
+  <b class="kw">:body</b> <b class="s">"string-join takes the list FIRST, then the separator."</b>
+  <b class="kw">:on</b> (<b class="k">call</b> (<b class="k">string-join</b>))
+  <b class="kw">:links</b> ((<b class="s">"widget-ids"</b> . <b class="n">2</b>))
+  <b class="kw">:score</b> <b class="n">1.5</b> <b class="kw">:used</b> <b class="n">3</b> <b class="kw">:last-used</b> <b class="n">1757808000000</b>)</pre>
+				<figcaption>~/.config/lisptc/memory/joins.ptc — or $LISPTC_MEMORY_DIR, or a per-person subdirectory under it</figcaption>
+			</figure>
+			<div class="note"><b>Scope is the person, not the thread.</b> The API derives the scope from <code>distinctId</code>, so a REPL rebuilt for a new thread keeps the same memories, and two people on the same deployment share the base layer while writing only into their own.</div>
+		</div>
+
+	</div>
+</section>
+
+<!-- ============================= 2 ============================= -->
+<section id="interp">
+	<div class="sec-head">
+		<div class="num">§2</div>
+		<h2>What it does to the interpreter</h2>
+		<p>Nothing in <code>lisp.ts</code> knows about memory. The extension is a function of an <code>Interp</code> that installs itself through three existing seams, and carries two things the hosts read back off it.</p>
+	</div>
+
+	<div class="stack">
+
+		<figure>
+			<pre><b class="c">an extension is a callable that may carry a prompt and anything else</b>
+
+<b class="k">export interface</b> InterpExtension {
+  (interp: Interp): <b class="kw">void</b>;
+  <b class="k">readonly</b> prompt?: <b class="kw">string</b>;
+}
+
+<b class="k">export interface</b> MemoryExtension <b class="k">extends</b> InterpExtension {
+  <b class="k">readonly</b> bank: MemoryBank;          <b class="c">← what the REPL fishes out with bankOf()</b>
+}</pre>
+			<figcaption>packages/interpreter/src/lisp.ts, src/memory.ts</figcaption>
+		</figure>
+
+		<div class="stack-tight">
+			<h3>The three seams</h3>
+			<div class="rail">
+				<p><strong>1 · The eval hook.</strong> <code>interp.hooks.evalForm.use</code> wraps every form evaluation, so the bank sees the call going in and the value or the exception coming out. That single wrapper is where four of the seven trigger kinds are sourced. It also means a form evaluated inside a <code>replay</code> or a function body still passes through — the step guard, not the hook, is what keeps those from firing.</p>
+				<p><strong>2 · Definitions.</strong> Six <code>interp.def</code> / <code>defGen</code> calls, each with its signature, doc string and zod argument schema, so the six forms show up in <code>(doc)</code>, in the language reference the system prompt carries, and in the LSP's completions for free.</p>
+				<p><strong>3 · Channels.</strong> <code>bank.attach(interp.channels)</code>. Every fired memory is emitted on <code>MEMORY</code> as well as folded into the step's text.</p>
+			</div>
+		</div>
+
+		<div class="stack-tight">
+			<h3>The step boundary lives in the host</h3>
+			<p>This is the part that is not an interpreter concern at all. <code>Interp</code> has no notion of a step; it evaluates forms. The bank needs one, because "fires at most once per step", "the revision window", "the recall budget" and "wire together what fired together" are all step-scoped. So the extension exposes <code>beginStep(code, interp)</code> and <code>endStep()</code>, and each host calls them around its own idea of a step:</p>
+			<div class="tw">
+			<table>
+				<thead><tr><th>Host</th><th>Calls</th><th>Does what with the returned text</th></tr></thead>
+				<tbody>
+					<tr><td class="mono">packages/repl · MemoryRepl</td><td class="mono">beginStep / endStep<br>around runAsync</td><td>collects fired memories off the channel into <code>EvalOutput.memories</code></td></tr>
+					<tr><td class="mono">packages/repl · InteractiveRepl</td><td class="mono">beginStep / endStep<br>around the line</td><td><code>write()</code>s it straight to the terminal</td></tr>
+					<tr><td class="mono">packages/ai · AgentRepl</td><td>inherits MemoryRepl</td><td>hands memories to the turn loop, which attaches them to the step's meta</td></tr>
+				</tbody>
+			</table>
+			</div>
+			<p>Outside a step, <code>dispatch</code> returns immediately. That is what stops the prelude — hundreds of forms evaluated at construction — from firing every <code>step</code>-triggered memory in the store.</p>
+		</div>
+
+		<div class="stack-tight">
+			<h3>What else it touches</h3>
+			<ul class="plain">
+				<li><strong>The system prompt.</strong> <code>memory.ptc</code> ships beside the source, is read at module load, and rides on the extension's <code>prompt</code>. <code>Interp</code> collects those into <code>systemPrompt()</code>, appended after the language reference — so the agent learns the six forms from the same place it learns <code>car</code>.</li>
+				<li><strong>Compaction.</strong> <code>memory/recall</code> and <code>memories</code> joined <code>READ_FORMS</code>, the set of calls whose output the compactor treats as a read rather than a result worth keeping whole.</li>
+				<li><strong>A global it reads, and does not define.</strong> The <code>user</code> trigger reads <code>user-messages</code>, which the agent loop refreshes before every step. In the bare CLI that global does not exist, and the trigger simply never fires.</li>
+				<li><strong>Env.</strong> One new module, <code>@repo/env/memory</code>, declaring <code>LISPTC_MEMORY_DIR</code> and <code>XDG_CONFIG_HOME</code>.</li>
+			</ul>
+		</div>
+
+		<div class="note"><b>The discovery pattern.</b> <code>bankOf(extension)</code> joins <code>compactorOf</code> and <code>storeOf</code>: the REPL walks its extension list asking each one what it carries, instead of being told which extensions it has. Adding a capability to a host is adding one entry to an array.</div>
+
+	</div>
+</section>
+
+<!-- ============================= 3 ============================= -->
+<section id="channels">
+	<div class="sec-head">
+		<div class="num">§3</div>
+		<h2>Channels, end to end</h2>
+		<p>One evaluation produces several streams of text with different audiences. Channels are how the interpreter emits all of them without deciding who reads what.</p>
+	</div>
+
+	<div class="stack">
+
+		<figure>
+			<pre><b class="k">export interface</b> Diagnostic {
+  channel: <b class="kw">string</b>;
+  severity?: <b class="s">"critical"</b> | <b class="s">"warning"</b> | <b class="s">"note"</b>;
+  text: <b class="kw">string</b>;
+  value?: <b class="kw">unknown</b>;   <b class="c">← the structured twin of text; memory puts {key, body} here</b>
+  line?: <b class="kw">number</b>;
+}</pre>
+			<figcaption>packages/interpreter/src/channels.ts — 42 lines, no dependencies</figcaption>
+		</figure>
+
+		<p>Every <code>emit</code> goes to the named channel and to <code>"*"</code>. A listener that throws is swallowed, so a broken front-end cannot take down an evaluation. Subscription returns its own unsubscribe, which is what lets the REPL listen for exactly the length of one eval.</p>
+
+		<div class="channels">
+			<div class="chan c-user">
+				<div class="name">user</div>
+				<div class="who"><b>Written by</b> <code>echo</code>, <code>doc</code>, the compactor.<br><b>Read by</b> the human. This is the only channel a person is meant to see verbatim.</div>
+			</div>
+			<div class="chan c-model">
+				<div class="name">model</div>
+				<div class="who"><b>Written by</b> <code>doc</code>, the compactor's step report, and every <code>EvalException</code> that escapes a top-level form, with <code>severity: critical</code>.<br><b>Read by</b> the agent, as tool-result text.</div>
+			</div>
+			<div class="chan c-memory">
+				<div class="name">memory</div>
+				<div class="who"><b>Written by</b> <code>MemoryBank.say</code>, once per fired memory, carrying <code>{key, body}</code> in <code>value</code>.<br><b>Read by</b> the REPL, which turns it into a structured list rather than more text.</div>
+			</div>
+			<div class="chan c-debug">
+				<div class="name">debug</div>
+				<div class="who">Declared, nothing emits on it yet. The name is reserved for tracing that should never reach either audience.</div>
+			</div>
+		</div>
+
+		<p>Severity is the second axis, and the REPL uses it to split one channel three ways: a <code>warning</code> on the model channel is a skipped form, collected into a <code>skipped</code> list; a <code>critical</code> is an error already handled by the catch; anything unmarked is output.</p>
+
+		<h3>The path a fired memory takes</h3>
+		<div class="hops">
+			<div class="hop">
+				<div class="where"><em>interpreter</em>MemoryBank.say</div>
+				<div class="what">Appends <code>key: body</code> to the step's pending text <em>and</em> emits a Diagnostic with <code>value: {key, body}</code>. Two representations of the same fact, for two different readers.</div>
+				<div class="carries"><span class="pip c-memory">memory</span></div>
+			</div>
+			<div class="hop">
+				<div class="where"><em>interpreter</em>Channels.emit</div>
+				<div class="what">Fans out to the channel's listeners and to <code>"*"</code>. No buffering, no ordering guarantee beyond call order.</div>
+				<div class="carries"><span class="pip c-memory">memory</span></div>
+			</div>
+			<div class="hop">
+				<div class="where"><em>repl</em>MemoryRepl.evaluateOne</div>
+				<div class="what">Subscribes to all three channels for the duration of one eval, accumulates <code>user</code> and <code>model</code> into strings and <code>memory</code> into a <code>FiredMemory[]</code>, then unsubscribes in a <code>finally</code>. Returns <code>{ model, user, memories }</code>.</div>
+				<div class="carries"><span class="pip c-user">user</span><span class="pip c-model">model</span><span class="pip c-memory">memory</span></div>
+			</div>
+			<div class="hop">
+				<div class="where"><em>ai</em>evalCode / runAgentTurn</div>
+				<div class="what"><code>model</code> becomes the <code>output</code> field of the tool-result JSON the agent reads; <code>user</code> becomes <code>display</code>; <code>memories</code> rides both the <code>result</code> event and the tool-result JSON, so the agent sees what fired as structured data.</div>
+				<div class="carries"><span class="pip c-user">user</span><span class="pip c-model">model</span><span class="pip c-memory">memory</span></div>
+			</div>
+			<div class="hop">
+				<div class="where"><em>ai</em>streamChatResponse</div>
+				<div class="what">SSE. The tool message carries <code>output</code> plus <code>additional_kwargs.display</code> when the two differ. The memories are attached instead to the <em>preceding assistant</em> message's <code>meta</code> — they belong to the code that provoked them, not to the output.</div>
+				<div class="carries"><span class="pip c-user">user</span><span class="pip c-model">model</span><span class="pip c-memory">memory</span></div>
+			</div>
+			<div class="hop">
+				<div class="where"><em>app</em>chat.tsx</div>
+				<div class="what"><code>parseMeta</code> validates the wire shape into a <code>StepMeta</code>, keyed by message id. Because meta arrives before memories do, the effect re-parses a message it has already seen until the memories land, then stops.</div>
+				<div class="carries"><span class="pip c-user">user</span><span class="pip off">model</span><span class="pip c-memory">memory</span></div>
+			</div>
+			<div class="hop">
+				<div class="where"><em>app</em>MessageMemories</div>
+				<div class="what">A collapsed <code class="c-memory">◆ 2 memories recalled</code> under the assistant step, in the memory channel's own colour, expanding to key and body.</div>
+				<div class="carries"><span class="pip c-memory">memory</span></div>
+			</div>
+		</div>
+
+		<h3>The same channels, four front-ends</h3>
+		<div class="tw">
+		<table>
+			<thead><tr><th>Front-end</th><th>How it listens</th><th>user</th><th>model</th><th>memory</th></tr></thead>
+			<tbody>
+				<tr><td class="mono">CLI (pnpm repl)</td><td>a process-wide writer plus direct <code>write()</code> of the bank's step text</td><td>stdout</td><td>stdout</td><td>stdout</td></tr>
+				<tr><td class="mono">web app</td><td>per-eval subscription → SSE → React</td><td><code>display</code></td><td><code>output</code></td><td><code>meta.memories</code></td></tr>
+				<tr><td class="mono">MCP server</td><td><code>repl.eval()</code>, the model string alone</td><td>dropped</td><td>tool text</td><td>in the text</td></tr>
+				<tr><td class="mono">session server</td><td><code>MemoryRepl.eval()</code> over HTTP</td><td>dropped</td><td>response</td><td>in the text</td></tr>
+			</tbody>
+		</table>
+		</div>
+		<p>The default listener is worth noting: <code>Interp</code>'s constructor subscribes <code>USER</code> to a module-level writer that starts as a no-op. Embed the interpreter and nothing prints unless you ask; run the CLI and <code>setWriter</code> points it at stdout.</p>
+
+	</div>
+</section>
+
+<!-- ============================= 4 ============================= -->
+<section id="ports">
+	<div class="sec-head">
+		<div class="num">§4</div>
+		<h2>Ports we could cut</h2>
+		<p>The same shape keeps recurring: an extension owns a language surface and a prompt, and delegates the part that touches the world to an interface it takes in its constructor. Where that interface exists, hosting is a swap. Where it does not, the decision is baked into a module-level constant.</p>
+	</div>
+
+	<div class="ports">
+
+		<div class="port">
+			<div class="port-head"><h3>MemoryStore</h3><span class="tag exists">exists</span></div>
+			<dl>
+				<dt>Today</dt><dd>Volatile, File, and Layered; <code>scopedMemoryStore(scope)</code> composes the last two. The clock is injected too, which is what makes the decay testable.</dd>
+				<dt>Strain</dt><dd>Retrieval is <code>all().filter().sort()</code>. That is fine for a directory of files and wrong for anything remote, which would have to page the whole store over the wire on every step. A durable adapter wants the port to grow <code>search(query, limit)</code> and let the backend answer it.</dd>
+				<dt>Unlocks</dt><dd>Postgres or SQLite for a hosted deployment; an embedding index behind the same four methods; a read-only org layer under the person's own, which <code>LayeredStore</code> already composes for free.</dd>
+			</dl>
+		</div>
+
+		<div class="port">
+			<div class="port-head"><h3>SecretsStore</h3><span class="tag exists">exists</span></div>
+			<dl>
+				<dt>Today</dt><dd>The interface is <code>get</code>, <code>list</code>, <code>set</code>; the one adapter scans <code>REPL_*</code> out of the environment, with a dotenv loader beside it. <code>secretsExtension({ store })</code> already takes an injection, and the eval harness passes its own.</dd>
+				<dt>Strain</dt><dd>No scoping. Memory grew a scope and a layer this branch; secrets have neither, so a hosted deployment has one flat namespace of secrets shared by everyone on it.</dd>
+				<dt>Unlocks</dt><dd>A <code>scopedSecretsStore(scope)</code> mirroring the memory one, over a vault adapter — the repo already has a <code>setup-infisical</code> branch — plus per-org defaults under per-user overrides in the same <code>LayeredStore</code> shape.</dd>
+			</dl>
+		</div>
+
+		<div class="port">
+			<div class="port-head"><h3>McpClient</h3><span class="tag exists">exists</span></div>
+			<dl>
+				<dt>Today</dt><dd>Six methods — connect, callTool, disconnect, login, logout, authorize — and <code>mcpExtension({ client })</code> takes one. The evals already substitute a mocked client, which is proof the seam holds.</dd>
+				<dt>Strain</dt><dd>The one adapter does two unrelated jobs: speaking MCP, and deciding where the server runs.</dd>
+			</dl>
+		</div>
+
+		<div class="port">
+			<div class="port-head"><h3>McpHost — where a server runs</h3><span class="tag missing">not cut yet</span></div>
+			<dl>
+				<dt>Today</dt><dd>Inside <code>mcp-client.ts</code>: <code>spawn</code> with <code>detached: true</code>, keep the last 4KB of stderr, poll a localhost URL with <code>HEAD</code> every 250ms for up to 60 seconds, and keep a module-level <code>Map</code> of children that <code>stopLocalServers()</code> kills. Every deployment of the agent therefore runs its MCP servers as child processes of the API.</dd>
+				<dt>Shape</dt><dd><code>ensure(conf) → { url, headers }</code>, <code>stop(name)</code>, <code>status(name)</code>, <code>logs(name)</code>. The client stops caring whether a URL is a subprocess it started or a container someone else owns.</dd>
+				<dt>Unlocks</dt><dd>A container per tenant instead of a subprocess per API instance; a server that outlives the request that started it; per-user isolation for a stdio server that reads the filesystem; a hosted deployment where the API has no business spawning <code>npx</code> at all.</dd>
+			</dl>
+		</div>
+
+		<div class="port">
+			<div class="port-head"><h3>ToolkitRegistry — which servers exist</h3><span class="tag missing">not cut yet</span></div>
+			<dl>
+				<dt>Today</dt><dd><code>readFileSync</code> of a bundled <code>mcp.toolkit.json</code>, <code>${VAR}</code> expansion against the real environment, relative paths resolved against the bundle. <code>registerMcp</code> takes a <code>toolkitJson</code> string override, which is a seam for tests but not for a catalog.</dd>
+				<dt>Shape</dt><dd><code>list()</code>, <code>search(query)</code>, <code>get(name)</code> — the three things <code>(list-toolkit)</code>, <code>(search-mcps)</code> and <code>(load-mcp name)</code> actually ask for, returning configs rather than a file's contents.</dd>
+				<dt>Unlocks</dt><dd>A catalog fetched at runtime; per-org server lists; a server a user added themselves; ranking by what this person has actually loaded before.</dd>
+			</dl>
+		</div>
+
+		<div class="port">
+			<div class="port-head"><h3>OAuthStore</h3><span class="tag partial">interface, not a seam</span></div>
+			<dl>
+				<dt>Today</dt><dd>The interface exists and <code>FileOAuthStore</code> implements it — then <code>mcp-client.ts</code> pins it with a module-level <code>const oauthStore = new FileOAuthStore()</code>. Tokens land on the disk of whatever machine happens to run the API, which also means a second instance cannot see the authorization the first one captured.</dd>
+				<dt>Shape</dt><dd>Already right. It needs to arrive through <code>mcpExtension</code> like the client does, and to be keyed by scope so two people's Google accounts do not collide.</dd>
+			</dl>
+		</div>
+
+		<div class="port">
+			<div class="port-head"><h3>SessionStore — the live REPL</h3><span class="tag missing">not cut yet</span></div>
+			<dl>
+				<dt>Today</dt><dd>A module-level <code>Map&lt;threadId, AgentRepl&gt;</code> capped at 50, evicting oldest-first. A restart drops every definition the agent built; a second API instance is a different set of sessions.</dd>
+				<dt>Shape</dt><dd><code>get(threadId, scope)</code>, <code>evict(threadId)</code> — and the harder half, a rebuild path, since what makes a session is the forms that were evaluated into it.</dd>
+				<dt>Unlocks</dt><dd>Sticky sessions across instances, and an honest answer to what survives a deploy. Memory already answers it one way: definitions die with the interpreter and memories do not, which is exactly why a recipe worth keeping belongs in a memory rather than a <code>defun</code>.</dd>
+			</dl>
+		</div>
+
+		<div class="port">
+			<div class="port-head"><h3>Channels as a sink</h3><span class="tag partial">already the seam</span></div>
+			<dl>
+				<dt>Today</dt><dd>Telemetry is called explicitly from the turn loop — <code>captureReplEval</code>, <code>captureLlmCall</code>, <code>captureTurn</code> — while the channels carry a strictly richer stream that nothing subscribes to wholesale.</dd>
+				<dt>Shape</dt><dd>No new interface. <code>channels.on("*", sink)</code> is the port; what is missing is an adapter that ships Diagnostics to a trace, and a <code>debug</code> channel that has something on it.</dd>
+			</dl>
+		</div>
+
+	</div>
+
+	<div class="body" style="margin-top:30px">
+		<div class="note"><b>The through-line.</b> Four of these are the same refactor: take a decision currently frozen in a module-level constant, name it as an interface, and pass it in where the extension is constructed. The memory extension is the worked example — the bank takes a store and a clock, the store composes, and the scope comes from the caller — and it is the one that made the missing seams elsewhere visible.</div>
+	</div>
+</section>
+
+<footer>
+	<span>lisptc · worktree-ptc-3-memory</span>
+	<span>packages/interpreter · packages/repl · packages/ai · apps/app</span>
+	<span>drawn from the code, 2026-09-14</span>
+</footer>
+
+</div>
+

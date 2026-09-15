@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "deny": [
+      "Read(./artifacts/**)",
+      "Glob(./artifacts/**)",
+      "Grep(./artifacts/**)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
