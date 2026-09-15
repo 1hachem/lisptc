@@ -4,6 +4,7 @@ import {
 	useStickToBottomContext,
 } from "@repo/ui";
 import { useEffect, useState } from "react";
+import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
 	isGreetingMessage,
@@ -11,10 +12,12 @@ import {
 	isUserMessage,
 	messageReasoning,
 	messageText,
+	toolModelOutput,
 	toolResult,
 	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
+import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/view.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
@@ -27,21 +30,30 @@ import { MessageMeta } from "./message-meta.tsx";
 
 const FOLD_LINES = 25;
 
-function ToolMessage({ message }: { message: ChatMessage }) {
-	const { output, error } = toolResult(message);
-	const view = toUiNode(toolUi(message));
+const channel = (id: string) =>
+	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
+
+function ChannelLabel({ id }: { id: string }) {
+	const { label, dot, text } = channel(id);
+	return (
+		<div className="mt-2 mb-1 flex items-center gap-2">
+			<span aria-hidden className={`size-1.5 flex-none rounded-full ${dot}`} />
+			<span className={`flex-none text-[11px] tracking-[0.1em] ${text}`}>
+				{label}
+			</span>
+			<span aria-hidden className="h-px flex-1 bg-dim/20" />
+		</div>
+	);
+}
+
+function FoldedText({ text, tone }: { text: string; tone: string }) {
 	const [expanded, setExpanded] = useState(false);
-	if (view) return <GenerativeUI node={view} />;
-	const lines = output.split("\n");
+	const lines = text.split("\n");
 	const folded = lines.length > FOLD_LINES && !expanded;
 	return (
-		<div
-			className={`min-w-0 break-words border-l pl-3 ${
-				error ? "border-red/60 text-red" : "border-dim/40 text-dim"
-			}`}
-		>
+		<div className={`min-w-0 break-words ${tone}`}>
 			<Markdown>
-				{folded ? lines.slice(0, FOLD_LINES).join("\n") : output}
+				{folded ? lines.slice(0, FOLD_LINES).join("\n") : text}
 			</Markdown>
 			{lines.length > FOLD_LINES && (
 				<button
@@ -53,6 +65,34 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 						? `show ${lines.length - FOLD_LINES} more lines`
 						: "show less"}
 				</button>
+			)}
+		</div>
+	);
+}
+
+function ToolMessage({ message }: { message: ChatMessage }) {
+	const { shown } = useUI();
+	const { output, error } = toolResult(message);
+	const view = toUiNode(toolUi(message));
+	const model = toolModelOutput(message);
+	const drawsView = view !== undefined && shown.ui;
+	const drawsUser = !drawsView && shown.user;
+	const drawsModel = shown.model && (!drawsUser || model.output !== output);
+	return (
+		<div
+			className={`min-w-0 break-words border-l pl-3 ${
+				error ? "border-red/60" : "border-dim/40"
+			}`}
+		>
+			{drawsView && <GenerativeUI node={view} />}
+			{drawsUser && (
+				<FoldedText text={output} tone={error ? "text-red" : "text-dim"} />
+			)}
+			{drawsModel && (
+				<>
+					{(drawsView || drawsUser) && <ChannelLabel id="model" />}
+					<FoldedText text={model.output} tone={channel("model").text} />
+				</>
 			)}
 		</div>
 	);
@@ -83,6 +123,7 @@ function ScrollToLatest() {
 
 export function ChatView() {
 	const { messages, meta, error } = useChatSession();
+	const { shown } = useUI();
 	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
 
 	return (
@@ -118,7 +159,7 @@ export function ChatView() {
 										)}
 									</div>
 								)}
-								{stats?.memories && (
+								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
 								)}
 								{stats && <MessageMeta meta={stats} />}

@@ -5,7 +5,6 @@ const YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 export const SIDEBAR_COOKIE = "ui.sidebar";
 export const PANEL_COOKIE = "ui.panel";
-export const DEBUG_COOKIE = "ui.debug";
 
 const readCookie = createIsomorphicFn()
 	.server((name: string) => getCookie(name))
