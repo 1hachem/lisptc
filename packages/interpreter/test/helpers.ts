@@ -1,13 +1,7 @@
+import { bufferTransport } from "../src/channels-host.ts";
 import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
 import { secretsExtension } from "../src/extensions/secrets/secrets.ts";
-import {
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	setWriter,
-	str,
-} from "../src/lisp.ts";
+import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 
 export function freshInterp(): Interp {
 	const interp = new Interp({
@@ -30,14 +24,11 @@ export async function evAsync(
 
 export function evWithOutput(code: string): { value: string; output: string } {
 	const interp = freshInterp();
-	let output = "";
-	const prev = setWriter((s) => {
-		output += s;
-	});
+	const buffer = bufferTransport();
+	const detach = interp.channels.pipe(buffer);
 	try {
-		const value = str(runSync(interp, code));
-		return { value, output };
+		return { value: str(runSync(interp, code)), output: buffer.text("user") };
 	} finally {
-		setWriter(prev);
+		detach();
 	}
 }

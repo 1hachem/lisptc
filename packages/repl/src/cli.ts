@@ -1,5 +1,5 @@
 import { replEnv } from "@repo/env/repl";
-import { MODEL } from "@repo/interpreter/channels";
+import type { ChannelTransport } from "@repo/interpreter/channels";
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
 import { compactionHost } from "@repo/interpreter/compaction-host";
 import {
@@ -11,7 +11,6 @@ import {
 	runAsync,
 	runSync,
 	setExit,
-	setWriter,
 	stripProse,
 } from "@repo/interpreter/lisp";
 import { MemoryBank, memoryExtension } from "@repo/interpreter/memory";
@@ -20,6 +19,7 @@ import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { secretsExtension } from "@repo/interpreter/secrets";
 import { secretsHostFor } from "@repo/interpreter/secrets-host";
+import { type Note, note, output } from "@repo/interpreter/topics";
 import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
 import type { Repl } from "./repl.ts";
@@ -34,6 +34,18 @@ let readLine: (prompt: string) => Promise<string | null>;
 const write = (s: string): void => {
 	process.stdout.write(s);
 };
+
+const stdoutTransport = (): ChannelTransport => ({
+	send(e) {
+		if (e.topic === output.name) {
+			if (e.to.includes("user")) write(String(e.payload));
+		} else if (e.topic === note.name) {
+			const n = e.payload as Note;
+			if (n.kind === "skipped") write(`skipped ${n.text}\n`);
+		}
+		return true;
+	},
+});
 
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
@@ -65,9 +77,7 @@ class InteractiveRepl implements Repl {
 			],
 		});
 		runSync(interp, prelude);
-		interp.channels.on(MODEL, (d) => {
-			if (d.severity === "warning") write(`skipped ${d.text}\n`);
-		});
+		interp.channels.pipe(stdoutTransport());
 		return interp;
 	}
 
@@ -238,7 +248,6 @@ async function main(): Promise<void> {
 		return line;
 	};
 
-	setWriter(write);
 	setExit(process.exit);
 
 	if (args.includes("--attach")) {

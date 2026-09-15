@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { MODEL } from "../src/channels.ts";
+import { bufferTransport } from "../src/channels-host.ts";
 import { proseExtension } from "../src/extensions/prose/prose.ts";
-import {
-	checkSyntax,
-	Interp,
-	prelude,
-	runSync,
-	setWriter,
-	str,
-} from "../src/lisp.ts";
+import { checkSyntax, Interp, prelude, runSync, str } from "../src/lisp.ts";
+import { note } from "../src/topics.ts";
 
 type Run = { value: string; output: string; skipped: string[] };
 
@@ -16,17 +10,19 @@ function tolerantly(text: string): Run {
 	const interp = new Interp({ extensions: [proseExtension()] });
 	runSync(interp, prelude);
 	const skipped: string[] = [];
-	interp.channels.on(MODEL, (d) => {
-		if (d.severity === "warning") skipped.push(d.text);
+	note.on(interp.channels, (n) => {
+		if (n.kind === "skipped") skipped.push(n.text);
 	});
-	let output = "";
-	const previous = setWriter((s) => {
-		output += s;
-	});
+	const buffer = bufferTransport();
+	const detach = interp.channels.pipe(buffer);
 	try {
-		return { value: str(runSync(interp, text)), output, skipped };
+		return {
+			value: str(runSync(interp, text)),
+			output: buffer.text("user"),
+			skipped,
+		};
 	} finally {
-		setWriter(previous);
+		detach();
 	}
 }
 
