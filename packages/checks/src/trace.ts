@@ -1,9 +1,11 @@
-import { MODEL, type Severity } from "@repo/interpreter/channels";
 import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
 import type { SecretsStore } from "@repo/interpreter/secrets";
+import { note } from "@repo/interpreter/topics";
 import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/ports";
 
 export const REDACTED = "<redacted>";
+
+type Severity = "critical" | "warning";
 
 const MAX_RENDERED = 400;
 
@@ -102,13 +104,12 @@ export class Trace {
 					throw err;
 				}
 			});
-			interp.channels.on(MODEL, (d) => {
-				if (!d.severity) return;
+			note.on(interp.channels, (n) => {
 				trace.add({
 					kind: "note",
 					step: trace.step,
-					severity: d.severity,
-					text: d.text,
+					severity: n.kind === "failed" ? "critical" : "warning",
+					text: n.text,
 				});
 			});
 		};

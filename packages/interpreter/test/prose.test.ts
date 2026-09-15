@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { MODEL } from "../src/channels.ts";
 import { isTruncated, proseExtension } from "../src/extensions/prose/prose.ts";
 import { proseHost } from "../src/extensions/prose/prose-host.ts";
 import {
@@ -10,12 +9,13 @@ import {
 	str,
 	stripProse,
 } from "../src/lisp.ts";
+import { note } from "../src/topics.ts";
 import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
 function collectSkips(interp: Interp): string[] {
 	const skipped: string[] = [];
-	interp.channels.on(MODEL, (d) => {
-		if (d.severity === "warning") skipped.push(d.text);
+	note.on(interp.channels, (n) => {
+		if (n.kind === "skipped") skipped.push(n.text);
 	});
 	return skipped;
 }

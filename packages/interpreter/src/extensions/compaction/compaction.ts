@@ -1,6 +1,6 @@
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { type Channels, MODEL, USER } from "../../channels.ts";
+import type { Channels } from "../../channels.ts";
 import {
 	Cell,
 	callableKind,
@@ -21,6 +21,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
+import { output } from "../../topics.ts";
 import { compactionHost } from "./compaction-host.ts";
 
 export const MAX_WORDS = 400;
@@ -236,10 +237,10 @@ export class Compactor {
 	}
 
 	say(bounded: Bounded): void {
-		if (bounded.user !== "")
-			this.channels?.emit({ channel: USER, text: bounded.user });
-		if (bounded.model !== "")
-			this.channels?.emit({ channel: MODEL, text: bounded.model });
+		const channels = this.channels;
+		if (channels === undefined) return;
+		if (bounded.user !== "") output.emit(channels, ["user"], bounded.user);
+		if (bounded.model !== "") output.emit(channels, ["model"], bounded.model);
 	}
 
 	doc(text: string): Bounded {

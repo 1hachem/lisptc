@@ -1,4 +1,5 @@
-import { MEMORY, MODEL, USER } from "@repo/interpreter/channels";
+import type { Envelope } from "@repo/interpreter/channels";
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
 	type Bounded,
 	type Compactor,
@@ -19,10 +20,12 @@ import {
 import {
 	bankOf,
 	type FiredMemory,
+	fired,
 	type MemoryBank,
 } from "@repo/interpreter/memory";
 import { isTruncated } from "@repo/interpreter/prose";
 import { type SecretsStore, storeOf } from "@repo/interpreter/secrets";
+import { type Note, note } from "@repo/interpreter/topics";
 import {
 	isLlmExtension,
 	type LlmExtension,
@@ -46,8 +49,31 @@ export interface EvalOutput extends Bounded {
 	memories: FiredMemory[];
 }
 
-interface EvalResult extends EvalOutput {
+interface StepResult extends EvalOutput {
+	envelopes: readonly Envelope[];
 	skipped: string[];
+}
+
+function partition(notes: readonly Note[]): {
+	skipped: string[];
+	failed: Note[];
+} {
+	const skipped: string[] = [];
+	const failed: Note[] = [];
+	for (const n of notes)
+		switch (n.kind) {
+			case "skipped":
+				if (!skipped.includes(n.text)) skipped.push(n.text);
+				break;
+			case "failed":
+				failed.push(n);
+				break;
+			default: {
+				const unhandled: never = n.kind;
+				throw new Error(`unhandled note kind ${String(unhandled)}`);
+			}
+		}
+	return { skipped, failed };
 }
 
 function find<T>(
@@ -65,7 +91,7 @@ function skipNotes(skipped: string[]): string {
 	return skipped.map((what) => `skipped ${what}\n`).join("");
 }
 
-function render({ model, user, skipped, memories }: EvalResult): EvalOutput {
+function render({ model, user, skipped, memories }: StepResult): EvalOutput {
 	const notes = skipNotes(skipped);
 	return { model: model + notes, user: user + notes, memories };
 }
@@ -113,7 +139,7 @@ export class MemoryRepl implements InMemoryRepl {
 		return render(await this.evaluate(code));
 	}
 
-	protected evaluate(code: string): Promise<EvalResult> {
+	protected evaluate(code: string): Promise<StepResult> {
 		const done = this.inFlight.then(
 			() => this.evaluateOne(code),
 			() => this.evaluateOne(code),
@@ -125,49 +151,38 @@ export class MemoryRepl implements InMemoryRepl {
 		return done;
 	}
 
-	private async evaluateOne(code: string): Promise<EvalResult> {
+	private async evaluateOne(code: string): Promise<StepResult> {
 		this.compactor?.beginStep();
-		let model = "";
-		let user = "";
-		const skipped: string[] = [];
-		const memories: FiredMemory[] = [];
 		const { channels } = this.currentInterp;
-		const unsubscribe = [
-			channels.on(USER, (d) => {
-				user += d.text;
-			}),
-			channels.on(MEMORY, (d) => {
-				const fired = d.value as FiredMemory | undefined;
-				if (fired) memories.push(fired);
-			}),
-			channels.on(MODEL, (d) => {
-				if (d.severity === "warning") {
-					if (!skipped.includes(d.text)) skipped.push(d.text);
-					return;
-				}
-				if (d.severity === undefined) model += d.text;
-			}),
-		];
-		let error: Bounded = { model: "", user: "" };
+		channels.step += 1;
+		const buffer = bufferTransport();
+		const detach = channels.pipe(buffer);
+		let thrown: unknown;
 		try {
 			this.memories?.beginStep(code, this.currentInterp);
 			await runAsync(this.currentInterp, code);
 		} catch (ex) {
-			if (ex instanceof EvalException) {
-				const text = `${ex}\n`;
-				error = this.compactor?.error(text) ?? { model: text, user: text };
-			} else if (ex === EndOfFile) {
-				const text = "unbalanced expression (unexpected end of input)\n";
-				error = { model: text, user: text };
-			} else throw ex;
+			if (!(ex instanceof EvalException) && ex !== EndOfFile) throw ex;
+			thrown = ex;
 		} finally {
 			this.memories?.endStep();
-			for (const off of unsubscribe) off();
+			detach();
+		}
+		const { skipped, failed } = partition(buffer.payloads(note));
+		let error: Bounded = { model: "", user: "" };
+		if (thrown === EndOfFile) {
+			const text = "unbalanced expression (unexpected end of input)\n";
+			error = { model: text, user: text };
+		} else if (thrown !== undefined) {
+			const text = `${failed.at(-1)?.text ?? String(thrown)}\n`;
+			error = this.compactor?.error(text) ?? { model: text, user: text };
 		}
 		return {
-			model: model + (this.compactor?.endStep() ?? "") + error.model,
-			user: user + error.user,
-			memories,
+			envelopes: buffer.envelopes,
+			model:
+				buffer.text("model") + (this.compactor?.endStep() ?? "") + error.model,
+			user: buffer.text("user") + error.user,
+			memories: buffer.payloads(fired),
 			skipped,
 		};
 	}
@@ -235,7 +250,7 @@ export class AgentRepl extends MemoryRepl {
 	}
 }
 
-function isAnswer(code: string, { user, skipped }: EvalResult): boolean {
+function isAnswer(code: string, { user, skipped }: StepResult): boolean {
 	if (stripProse(code).trim() === "") return true;
 	if (user !== "" || skipped.length === 0) return false;
 	return !isTruncated(code);
