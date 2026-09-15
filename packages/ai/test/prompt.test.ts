@@ -313,4 +313,33 @@ describe("memory", () => {
 	it("says a code body has to be quoted", () => {
 		expect(PROMPT).toMatch(/Quote a code body/);
 	});
+
+	it("tells the agent to store the fix the moment a mistake is solved", () => {
+		expect(PROMPT).toMatch(/LEARN FROM EVERY MISTAKE/);
+		expect(PROMPT).toMatch(/before you move on/i);
+	});
+
+	it("names both kinds the solution can be stored as", () => {
+		expect(PROMPT).toMatch(/A DECLARATIVE one is prose/);
+		expect(PROMPT).toMatch(/A PROCEDURAL one is a quoted form/);
+	});
+
+	it("forbids hooking the memory to the call that failed", () => {
+		expect(PROMPT).toMatch(/NEVER TO THE CALL THAT FAILED/);
+		expect(PROMPT).toMatch(/too late to stop it/);
+		expect(PROMPT).toMatch(/If it only fires as the mistake happens/);
+	});
+
+	it("says to hook the last step that worked before the mistake", () => {
+		expect(PROMPT).toMatch(/HOOK IT TO WHAT PRECEDES THE ERROR/);
+		expect(PROMPT).toMatch(/HOOK THE LAST THING THAT WORKED ON THE WAY IN/);
+		expect(PROMPT).toContain(`:on '(call (load-mcp "acme"))`);
+		expect(PROMPT).toMatch(/before you can name a single tool/);
+	});
+
+	it("says using a memory opens a window where it can be revised", () => {
+		expect(PROMPT).toMatch(/EVERY USE OPENS A WINDOW OF PLASTICITY/);
+		expect(PROMPT).toMatch(/until the end of that step/);
+		expect(PROMPT).toMatch(/Outside the window revise is an error/);
+	});
 });
