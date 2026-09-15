@@ -11,6 +11,13 @@ const QUOTE = new Set(["'", "`", "~", ",", ",@"]);
 interface Scan {
 	ranges: TokenRange[];
 	openForms: number;
+	heads: string[];
+	spans: [number, number][];
+}
+
+export interface Forms {
+	prose: string;
+	heads: string[];
 }
 
 function atomClass(text: string, head: boolean): TokenRange["className"] {
@@ -22,6 +29,9 @@ function atomClass(text: string, head: boolean): TokenRange["className"] {
 function scan(text: string): Scan {
 	const token = tokenPattern();
 	const ranges: TokenRange[] = [];
+	const heads: string[] = [];
+	const spans: [number, number][] = [];
+	let formStart = -1;
 	let depth = 0;
 	let head = false;
 	let base = 0;
@@ -55,12 +65,17 @@ function scan(text: string): Scan {
 			quoteEnd = -1;
 
 			if (word === "(") {
+				if (depth === 0) formStart = from;
 				depth += 1;
 				head = true;
 				push(from, end, "operator");
 			} else if (word === ")") {
 				push(start, end, "operator");
 				if (depth > 0) depth -= 1;
+				if (depth === 0 && formStart >= 0) {
+					spans.push([formStart, end]);
+					formStart = -1;
+				}
 			} else if (word === '"') {
 				push(start, base + line.length, "string");
 				token.lastIndex = 0;
@@ -70,6 +85,7 @@ function scan(text: string): Scan {
 				head = false;
 			} else {
 				push(start, end, atomClass(word, head));
+				if (head) heads.push(word);
 				head = false;
 			}
 		}
@@ -78,7 +94,9 @@ function scan(text: string): Scan {
 		quoteEnd = -1;
 	}
 
-	return { ranges, openForms: depth };
+	if (formStart >= 0) spans.push([formStart, text.length]);
+
+	return { ranges, openForms: depth, heads, spans };
 }
 
 export const lisptc = defineLanguage({
@@ -88,6 +106,24 @@ export const lisptc = defineLanguage({
 });
 
 export const highlighter = createHighlighter({ languages: [lisptc] });
+
+export function formsIn(text: string): Forms {
+	const { heads, spans } = scan(text);
+	let prose = "";
+	let at = 0;
+	for (const [start, end] of spans) {
+		prose += text.slice(at, start);
+		at = end;
+	}
+	prose += text.slice(at);
+	return {
+		prose: prose
+			.replace(/[ \t]{2,}/g, " ")
+			.replace(/\n{3,}/g, "\n\n")
+			.trim(),
+		heads: [...new Set(heads)],
+	};
+}
 
 export function openForms(text: string): number {
 	return scan(text).openForms;

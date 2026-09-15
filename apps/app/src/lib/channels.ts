@@ -1,6 +1,7 @@
 export type ChannelId =
 	| "user"
 	| "ui"
+	| "lisp"
 	| "thinking"
 	| "memory"
 	| "errors"
@@ -31,6 +32,14 @@ export const CHANNELS: Channel[] = [
 		dot: "bg-aqua",
 		text: "text-aqua",
 		shownByDefault: true,
+	},
+	{
+		id: "lisp",
+		label: "lisp",
+		hint: "the forms a step ran, as code rather than as tools at work",
+		dot: "bg-green",
+		text: "text-green",
+		shownByDefault: false,
 	},
 	{
 		id: "thinking",

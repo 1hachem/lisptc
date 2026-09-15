@@ -1,9 +1,10 @@
+import { formsIn } from "@repo/syntax";
 import {
 	Conversation,
 	ConversationContent,
 	useStickToBottomContext,
 } from "@repo/ui";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
@@ -21,6 +22,7 @@ import {
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { Greeting } from "./greeting.tsx";
 import { LispText } from "./lisp-text.tsx";
@@ -111,6 +113,18 @@ function ChannelText({ text, tone }: { text: string; tone: string }) {
 	);
 }
 
+function AssistantText({ text, busy }: { text: string; busy: boolean }) {
+	const { shown } = useUI();
+	const { prose, heads } = useMemo(() => formsIn(text), [text]);
+	if (shown.lisp) return <Markdown>{text}</Markdown>;
+	return (
+		<>
+			{prose && <Markdown>{prose}</Markdown>}
+			<Building heads={heads} busy={busy} />
+		</>
+	);
+}
+
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { shown } = useUI();
 	const { output } = toolResult(message);
@@ -178,7 +192,7 @@ function ScrollToLatest() {
 }
 
 export function ChatView() {
-	const { messages, meta, error } = useChatSession();
+	const { messages, meta, error, isLoading } = useChatSession();
 	const { shown } = useUI();
 	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
 
@@ -189,7 +203,8 @@ export function ChatView() {
 				<Greeting />
 				{messages
 					.filter((m) => !isGreetingMessage(m))
-					.map((m, i) => {
+					.map((m, i, all) => {
+						const last = all.length - 1;
 						const reasoning =
 							isUserMessage(m) || !shown.thinking ? "" : messageReasoning(m);
 						const stats = m.id ? meta[m.id] : undefined;
@@ -215,7 +230,10 @@ export function ChatView() {
 												</div>
 											</div>
 										) : (
-											<Markdown>{messageText(m)}</Markdown>
+											<AssistantText
+												text={messageText(m)}
+												busy={isLoading && i === last}
+											/>
 										)}
 									</div>
 								)}
