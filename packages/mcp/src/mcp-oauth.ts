@@ -11,7 +11,18 @@ import type {
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { oauthEnv } from "@repo/env/oauth";
-import type { OAuthRecord, OAuthStore } from "./ports.ts";
+
+export interface OAuthRecord {
+	clientInformation?: OAuthClientInformationFull;
+	tokens?: OAuthTokens;
+	codeVerifier?: string;
+}
+
+export interface OAuthStore {
+	load(serverKey: string): Promise<OAuthRecord | undefined>;
+	save(serverKey: string, record: OAuthRecord): Promise<void>;
+	clear(serverKey: string): Promise<void>;
+}
 
 function defaultOAuthDir(): string {
 	const dir = oauthEnv.LISPTC_OAUTH_DIR;

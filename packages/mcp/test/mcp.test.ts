@@ -10,8 +10,6 @@ import {
 import { promisesExtension } from "@repo/interpreter/promises";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
-import { mcpHost } from "../src/mcp-host.ts";
-import { jsonToolkit } from "../src/toolkit.ts";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
 	return str((await runAsync(interp, code)).value);
@@ -209,10 +207,7 @@ describe("loading a toolkit server by name", () => {
 		},
 	]);
 	const interp = new Interp({
-		extensions: [
-			promisesExtension(),
-			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
-		],
+		extensions: [promisesExtension(), mcpExtension({ toolkitJson })],
 	});
 	runSync(interp, prelude);
 
@@ -257,10 +252,7 @@ describe("a url server the interpreter starts for you", () => {
 		},
 	]);
 	const interp = new Interp({
-		extensions: [
-			promisesExtension(),
-			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
-		],
+		extensions: [promisesExtension(), mcpExtension({ toolkitJson })],
 	});
 	runSync(interp, prelude);
 
@@ -289,10 +281,7 @@ describe("a toolkit server bundled with the repo", () => {
 		},
 	]);
 	const interp = new Interp({
-		extensions: [
-			promisesExtension(),
-			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
-		],
+		extensions: [promisesExtension(), mcpExtension({ toolkitJson })],
 	});
 	runSync(interp, prelude);
 

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { isNumeric } from "@repo/interpreter/arith";
 import { withTimeout } from "@repo/interpreter/async";
 import {
@@ -18,18 +20,17 @@ import {
 } from "@repo/interpreter/lisp";
 import { keyName, parsePlist } from "@repo/interpreter/plist";
 import type { ToJson } from "@repo/interpreter/types";
-import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { mcpHost } from "./mcp-host.ts";
-import type {
-	ConnConfig,
-	ConnectResult,
-	HttpConnConfig,
-	JsonSchema,
-	McpClient,
-	Tool,
-	ToolkitRegistry,
-} from "./ports.ts";
+import {
+	type ConnConfig,
+	type ConnectResult,
+	type HttpConnConfig,
+	type JsonSchema,
+	type McpClient,
+	mcpClient,
+	stopLocalServers,
+	type Tool,
+} from "./mcp-client.ts";
 
 const CALL_TIMEOUT_MS = 30_000;
 
@@ -48,10 +49,9 @@ interface ServerRec {
 	tools: Map<string, Tool>;
 }
 
-export interface McpExtensionHost {
-	client: McpClient;
-	toolkit: ToolkitRegistry;
-	prompt: PromptSource;
+export interface RegisterMcpOptions {
+	client?: McpClient;
+	toolkitJson?: string;
 }
 
 function extractAuthCode(raw: string): string {
@@ -308,24 +308,36 @@ function installServer(
 	return arrayToList(toolSyms);
 }
 
+const PROMPT: string = readFileSync(
+	new URL("./mcp.ptc", import.meta.url),
+	"utf8",
+);
+
 export function mcpExtension(
-	host: McpExtensionHost = mcpHost,
+	options: RegisterMcpOptions = {},
 ): InterpExtension {
-	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
-		prompt: host.prompt(),
+	return Object.assign((interp: Interp): void => registerMcp(interp, options), {
+		prompt: PROMPT,
 	});
 }
 
+const FROM_SOURCE = import.meta.url.endsWith(".ts");
+
+const TOOLKIT_URL = new URL(
+	FROM_SOURCE ? "../mcp.toolkit.json" : "./mcp.toolkit.json",
+	import.meta.url,
+);
+
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit">,
+	options: RegisterMcpOptions = {},
 ): void {
-	const { client, toolkit } = host;
+	const client = options.client ?? mcpClient;
 
 	const servers = new Map<string, ServerRec>();
 	const predefined = new Map<string, ConnConfig>();
 	const loading = new Set<Promise<unknown>>();
-	for (const conf of toolkit.all()) predefined.set(conf.name, conf);
+	parsePredefined(predefined, options.toolkitJson);
 
 	function startLoad(conf: ConnConfig): Promise<unknown> {
 		const promise = interp.async.start((signal) =>
@@ -562,7 +574,7 @@ export function registerMcp(
 		servers.clear();
 		for (const promise of loading) interp.async.cancel(promise);
 		loading.clear();
-		void client.shutdown().catch(() => {});
+		stopLocalServers();
 	};
 
 	interp.def(
@@ -711,4 +723,37 @@ function toolDocBody(tool: Tool): string {
 	}
 
 	return lines.join("\n");
+}
+
+function expandEnv(s: string): string {
+	// biome-ignore lint/style/noProcessEnv: mcp.toolkit.json names the variable, so it is only known at runtime
+	return s.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] ?? "");
+}
+
+function resolveBundled(s: string): string {
+	return s.startsWith("./") || s.startsWith("../")
+		? fileURLToPath(new URL(s, TOOLKIT_URL))
+		: s;
+}
+
+function registerConfigs(
+	raw: string,
+	predefined: Map<string, ConnConfig>,
+): void {
+	try {
+		const arr = JSON.parse(raw) as ConnConfig[];
+		for (const conf of arr) {
+			if (!conf?.name) continue;
+			if ("args" in conf && conf.args)
+				conf.args = conf.args.map((a) => resolveBundled(expandEnv(a)));
+			predefined.set(conf.name, conf);
+		}
+	} catch {}
+}
+
+function parsePredefined(
+	predefined: Map<string, ConnConfig>,
+	toolkitJson?: string,
+): void {
+	registerConfigs(toolkitJson ?? readFileSync(TOOLKIT_URL, "utf8"), predefined);
 }

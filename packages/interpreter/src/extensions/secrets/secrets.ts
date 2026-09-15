@@ -1,4 +1,7 @@
-import type { PromptSource } from "@repo/shared/host";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { replEnv } from "@repo/env/repl";
+import * as dotenv from "dotenv";
 import { z } from "zod";
 import {
 	compare,
@@ -17,7 +20,6 @@ import {
 	zList,
 } from "../../lisp.ts";
 import type { ToJson } from "../../types.ts";
-import { secretsHost } from "./secrets-host.ts";
 
 export type SecretSpec = string | { value: string; description?: string };
 
@@ -40,11 +42,18 @@ export interface SecretsStore {
 	set(record: Record<string, SecretSpec>): void;
 }
 
-export class MapSecretsStore implements SecretsStore {
+export class EnvSecretsStore implements SecretsStore {
 	private readonly secrets = new Map<
 		string,
 		{ value: string; description: string }
 	>();
+
+	// biome-ignore lint/style/noProcessEnv: the store scans for every REPL_*-prefixed name, so no typed env module can enumerate them
+	constructor(env: NodeJS.ProcessEnv = process.env) {
+		for (const [name, value] of Object.entries(env))
+			if (value !== undefined && name.startsWith(SECRET_ENV_PREFIX))
+				this.secrets.set(name, { value, description: "" });
+	}
 
 	get(key: string): { value: string; description: string } | undefined {
 		return this.secrets.get(key);
@@ -68,9 +77,51 @@ export class MapSecretsStore implements SecretsStore {
 	}
 }
 
-export interface SecretsHost {
-	store: SecretsStore;
-	prompt: PromptSource;
+export function loadSecretsFromFile(
+	store: SecretsStore,
+	path: string,
+): Record<string, string> {
+	const record = dotenv.parse(readFileSync(path));
+	store.set(record);
+	return record;
+}
+
+function findEnvFileUpwards(start: string): string | undefined {
+	let dir = start;
+	for (;;) {
+		const candidate = join(dir, ".env");
+		if (existsSync(candidate)) return candidate;
+		const parent = dirname(dir);
+		if (parent === dir) return undefined;
+		dir = parent;
+	}
+}
+
+export function loadSecretsFromEnvFile(
+	store: SecretsStore,
+	path?: string,
+): Record<string, string> {
+	const explicit = (path ?? replEnv.LISPTC_SECRETS_FILE) || undefined;
+	const file =
+		explicit ?? findEnvFileUpwards(replEnv.INIT_CWD || process.cwd());
+	if (!file) return {};
+	try {
+		return loadSecretsFromFile(store, file);
+	} catch {
+		if (explicit)
+			console.error(`warning: could not read secrets file ${explicit}`);
+		return {};
+	}
+}
+
+const PROMPT: string = readFileSync(
+	new URL("./secrets.ptc", import.meta.url),
+	"utf8",
+);
+
+export interface SecretsOptions {
+	store?: SecretsStore;
+	envFile?: boolean | string;
 }
 
 export interface SecretsExtension extends InterpExtension {
@@ -78,11 +129,17 @@ export interface SecretsExtension extends InterpExtension {
 }
 
 export function secretsExtension(
-	host: SecretsHost = secretsHost,
+	options: SecretsOptions = {},
 ): SecretsExtension {
+	const store = options.store ?? new EnvSecretsStore();
+	if (options.envFile)
+		loadSecretsFromEnvFile(
+			store,
+			options.envFile === true ? undefined : options.envFile,
+		);
 	return Object.assign(
-		(interp: Interp): void => registerSecrets(interp, host.store),
-		{ store: host.store, prompt: host.prompt() },
+		(interp: Interp): void => registerSecrets(interp, store),
+		{ store, prompt: PROMPT },
 	);
 }
 

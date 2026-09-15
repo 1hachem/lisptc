@@ -1,8 +1,11 @@
 import { mockedMcpExtension } from "@repo/checks/mocks";
 import { evalCase } from "@repo/evals/runner";
 import { compactionExtension } from "@repo/interpreter/compaction";
-import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
+import {
+	MemoryBank,
+	memoryExtension,
+	VolatileStore,
+} from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { playwright } from "./fixtures/playwright.ts";
@@ -12,7 +15,7 @@ const extensions = () => [
 	mockedMcpExtension(),
 	compactionExtension(),
 	proseExtension(),
-	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
+	memoryExtension(new MemoryBank(new VolatileStore())),
 ];
 
 evalCase("navigates with the tool name a memory handed it", {

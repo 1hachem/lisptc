@@ -5,11 +5,8 @@ import {
 	type SecretsStore,
 	secretsExtension,
 } from "@repo/interpreter/secrets";
-import { secretsHost } from "@repo/interpreter/secrets-host";
 import { mcpExtension } from "@repo/mcp";
-import { mcpHost } from "@repo/mcp/mcp-host";
-import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/ports";
-
+import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/client";
 import type { Trace } from "./trace.ts";
 
 export interface EvalRun {
@@ -39,14 +36,11 @@ function run(what: string): EvalRun {
 
 export function mockedMcpExtension(): InterpExtension {
 	const { trace, mocks } = run("mockedMcpExtension()");
-	return mcpExtension({ ...mcpHost, client: trace.client(mockClient(mocks)) });
+	return mcpExtension({ client: trace.client(mockClient(mocks)) });
 }
 
 export function tracedSecretsExtension(): SecretsExtension {
-	return secretsExtension({
-		...secretsHost,
-		store: run("tracedSecretsExtension()").secrets,
-	});
+	return secretsExtension({ store: run("tracedSecretsExtension()").secrets });
 }
 
 export interface MockTool {
@@ -156,8 +150,5 @@ export function mockClient(spec: MockSpec): McpClient {
 		login: async () => ({ authUrl: null }),
 		logout: async () => {},
 		authorize: async () => {},
-		shutdown: async () => {
-			live.clear();
-		},
 	};
 }

@@ -1,4 +1,4 @@
-import type { PromptSource } from "@repo/shared/host";
+import { readFileSync } from "node:fs";
 import { isNumeric } from "../../arith.ts";
 import {
 	Cell,
@@ -11,26 +11,20 @@ import {
 	Sym,
 	str,
 } from "../../lisp.ts";
-import { proseHost } from "./prose-host.ts";
 
 export type ProseClassifier = (
 	interp: Interp,
 	form: unknown,
 ) => string | undefined;
 
-export interface ProseHost {
-	prompt: PromptSource;
-}
-
-export interface ProseOptions {
-	classify?: ProseClassifier;
-}
+const PROMPT: string = readFileSync(
+	new URL("./prose.ptc", import.meta.url),
+	"utf8",
+);
 
 export function proseExtension(
-	host: ProseHost = proseHost,
-	options: ProseOptions = {},
+	classify: ProseClassifier = readsAsProse,
 ): InterpExtension {
-	const classify = options.classify ?? readsAsProse;
 	const extension = (interp: Interp): void => {
 		interp.hooks.unclosedForm.use(
 			(text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
@@ -43,7 +37,7 @@ export function proseExtension(
 			(interp, form, next) => classify(interp, form) ?? next(interp, form),
 		);
 	};
-	return Object.assign(extension, { prompt: host.prompt() });
+	return Object.assign(extension, { prompt: PROMPT });
 }
 
 function unreadable(

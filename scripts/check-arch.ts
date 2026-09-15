@@ -61,48 +61,6 @@ const IMPORTS: ImportRule[] = [
 	},
 ];
 
-const EXTENSION_DIRS = ["packages/interpreter/src/extensions/"];
-
-const EXTENSION_FILES = [
-	"packages/llm/src/llm.ts",
-	"packages/mcp/src/mcp.ts",
-	"packages/mcp/src/ports.ts",
-];
-
-const HOST_REACHES: { pattern: RegExp; what: string }[] = [
-	{ pattern: /^node:/, what: "a node builtin" },
-	{ pattern: /^@repo\/env\//, what: "a typed env module" },
-	{ pattern: /^@modelcontextprotocol\/sdk/, what: "the MCP SDK" },
-	{ pattern: /^@langchain\//, what: "a langchain package" },
-	{ pattern: /^dotenv$/, what: "dotenv" },
-];
-
-const HOST_GLOBALS = /\bprocess\.(env|cwd|platform|kill)\b/;
-
-function isExtensionModule(file: string): boolean {
-	if (file.endsWith("-host.ts")) return false;
-	if (EXTENSION_FILES.includes(file)) return true;
-	return EXTENSION_DIRS.some((dir) => file.startsWith(dir));
-}
-
-function runtimeImports(text: string): string[] {
-	const out: string[] = [];
-	const re = /import\s+(type\s+)?([\s\S]*?)from\s+"([^"]+)"/g;
-	for (let m = re.exec(text); m !== null; m = re.exec(text))
-		if (m[1] === undefined) out.push(m[3]);
-	return out;
-}
-
-function hostReaches(text: string): string[] {
-	const found: string[] = [];
-	for (const specifier of runtimeImports(text))
-		for (const { pattern, what } of HOST_REACHES)
-			if (pattern.test(specifier)) found.push(`imports ${what} (${specifier})`);
-	const global = HOST_GLOBALS.exec(text);
-	if (global) found.push(`reads ${global[0]}`);
-	return found;
-}
-
 type Manifest = Partial<Record<Field, Record<string, string>>>;
 
 const offenders = RULES.flatMap((rule) => {
@@ -133,15 +91,9 @@ const reaches = IMPORTS.flatMap((rule) =>
 		}),
 );
 
-const extensionModules = sources.filter(isExtensionModule);
-
-const hosted = extensionModules.flatMap((file) =>
-	hostReaches(readFileSync(file, "utf8")).map((what) => ({ file, what })),
-);
-
-if (offenders.length === 0 && reaches.length === 0 && hosted.length === 0) {
+if (offenders.length === 0 && reaches.length === 0) {
 	console.log(
-		`No architecture violations in ${RULES.length} manifests, ${sources.length} sources and ${extensionModules.length} extension modules.`,
+		`No architecture violations in ${RULES.length} manifests and ${sources.length} sources.`,
 	);
 	process.exit(0);
 }
@@ -155,19 +107,10 @@ for (const { rule, file, module } of reaches) {
 	console.error(`${file} imports ${module}`);
 	console.error(`  ${rule.reason}`);
 }
-
-for (const { file, what } of hosted) {
-	console.error(`${file} ${what}`);
-	console.error(
-		"  An extension defines the interface; the host lives in its colocated",
-	);
-	console.error(
-		`  -host.ts and arrives as the default argument. Move it to ${file.replace(/\.ts$/, "-host.ts")}.`,
-	);
-}
 console.error("");
-const total = offenders.length + reaches.length + hosted.length;
-console.error(`${total} forbidden dependenc${total === 1 ? "y" : "ies"}.`);
+console.error(
+	`${offenders.length + reaches.length} forbidden dependenc${offenders.length + reaches.length === 1 ? "y" : "ies"}.`,
+);
 console.error("");
 console.error("`turbo boundaries` holds the layer direction; these are the");
 console.error("manifest rules it cannot express, because the root package's");

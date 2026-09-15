@@ -1,7 +1,6 @@
 import { replEnv } from "@repo/env/repl";
 import { MODEL } from "@repo/interpreter/channels";
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
 import {
 	EndOfFile,
 	EvalException,
@@ -15,11 +14,9 @@ import {
 	stripProse,
 } from "@repo/interpreter/lisp";
 import { MemoryBank, memoryExtension } from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { secretsHostFor } from "@repo/interpreter/secrets-host";
+import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
 import type { Repl } from "./repl.ts";
@@ -38,11 +35,8 @@ const write = (s: string): void => {
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
 	private readonly compactor = new Compactor();
-	private readonly secrets = secretsHostFor({ envFile: true });
-	private readonly memories = new MemoryBank(
-		memoryHost.store,
-		memoryHost.clock,
-	);
+	private readonly secretsStore = new EnvSecretsStore();
+	private readonly memories = new MemoryBank();
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -55,12 +49,12 @@ class InteractiveRepl implements Repl {
 	private freshInterp(): Interp {
 		const interp = new Interp({
 			extensions: [
-				secretsExtension(this.secrets),
+				secretsExtension({ store: this.secretsStore, envFile: true }),
 				promisesExtension(),
 				mcpExtension(),
 				llmExtension(),
-				compactionExtension(compactionHost, { compactor: this.compactor }),
-				memoryExtension(memoryHost, { bank: this.memories }),
+				compactionExtension(this.compactor),
+				memoryExtension(this.memories),
 				proseExtension(),
 			],
 		});

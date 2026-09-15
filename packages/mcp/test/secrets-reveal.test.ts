@@ -7,8 +7,7 @@ import {
 	str,
 } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/interpreter/promises";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
+import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 
@@ -17,11 +16,11 @@ const FIXTURE = fileURLToPath(
 );
 
 describe("secret registry (revealed only into an MCP call)", () => {
-	const store = envSecretsStore();
+	const store = new EnvSecretsStore();
 	store.set({ REPL_FOO: "s3cr3t" });
 	const interp = new Interp({
 		extensions: [
-			secretsExtension({ ...secretsHost, store }),
+			secretsExtension({ store }),
 			promisesExtension(),
 			mcpExtension(),
 		],

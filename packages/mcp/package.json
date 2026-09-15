@@ -6,9 +6,6 @@
   "exports": {
     ".": "./src/mcp.ts",
     "./client": "./src/mcp-client.ts",
-    "./mcp-host": "./src/mcp-host.ts",
-    "./ports": "./src/ports.ts",
-    "./toolkit": "./src/toolkit.ts",
     "./mcp.toolkit.json": "./mcp.toolkit.json"
   },
   "engines": {
@@ -23,7 +20,6 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
-    "@repo/shared": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

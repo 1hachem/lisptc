@@ -1,6 +1,5 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
+import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { describe, expect, it } from "vitest";
 import { agentRepl } from "./helpers.ts";
 
@@ -23,9 +22,9 @@ describe("AgentRepl secret handling", () => {
 	});
 
 	it("lets a host inject secrets that survive reset()", async () => {
-		const store = envSecretsStore();
+		const store = new EnvSecretsStore();
 		const repl = agentRepl([
-			secretsExtension({ ...secretsHost, store }),
+			secretsExtension({ store }),
 			compactionExtension(),
 		]);
 		store.set({
@@ -42,10 +41,10 @@ describe("AgentRepl secret handling", () => {
 	});
 
 	it("uses a store handed in at construction", async () => {
-		const store = envSecretsStore();
+		const store = new EnvSecretsStore();
 		store.set({ REPL_SHARED_TOKEN: "shared" });
 		const repl = agentRepl([
-			secretsExtension({ ...secretsHost, store }),
+			secretsExtension({ store }),
 			compactionExtension(),
 		]);
 		expect(await repl.eval('(secret "REPL_SHARED_TOKEN")')).toContain(

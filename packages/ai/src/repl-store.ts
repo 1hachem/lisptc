@@ -1,31 +1,28 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
-import { memoryHostFor } from "@repo/interpreter/memory-host";
+import {
+	MemoryBank,
+	memoryExtension,
+	scopedMemoryStore,
+} from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
-import { promisesHost } from "@repo/interpreter/promises-host";
 import { proseExtension } from "@repo/interpreter/prose";
-import { proseHost } from "@repo/interpreter/prose-host";
 import { secretsExtension } from "@repo/interpreter/secrets";
-import { secretsHost } from "@repo/interpreter/secrets-host";
 import { llmExtension } from "@repo/llm/llm";
-import { llmHost } from "@repo/llm/llm-host";
 import { mcpExtension } from "@repo/mcp";
-import { mcpHostFor } from "@repo/mcp/mcp-host";
 import { AgentRepl } from "@repo/repl/repl";
 
 const MAX_THREADS = 50;
 
 export function agentExtensions(scope?: string): InterpExtension[] {
 	return [
-		secretsExtension(secretsHost),
-		promisesExtension(promisesHost),
-		mcpExtension(mcpHostFor(scope)),
-		llmExtension(llmHost),
-		compactionExtension(compactionHost),
-		memoryExtension(memoryHostFor(scope)),
-		proseExtension(proseHost),
+		secretsExtension(),
+		promisesExtension(),
+		mcpExtension(),
+		llmExtension(),
+		compactionExtension(),
+		memoryExtension(new MemoryBank(scopedMemoryStore(scope))),
+		proseExtension(),
 	];
 }
 

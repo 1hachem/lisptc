@@ -1,4 +1,4 @@
-import type { PromptSource } from "@repo/shared/host";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { withTimeout } from "../../async.ts";
 import {
@@ -12,7 +12,6 @@ import {
 	newLispKeyword,
 	zList,
 } from "../../lisp.ts";
-import { promisesHost } from "./promises-host.ts";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
 
@@ -40,15 +39,14 @@ function parseTimeout(x: unknown): number {
 	return ms;
 }
 
-export interface PromisesHost {
-	prompt: PromptSource;
-}
+const PROMPT: string = readFileSync(
+	new URL("./promises.ptc", import.meta.url),
+	"utf8",
+);
 
-export function promisesExtension(
-	host: PromisesHost = promisesHost,
-): InterpExtension {
+export function promisesExtension(): InterpExtension {
 	return Object.assign((interp: Interp): void => registerPromises(interp), {
-		prompt: host.prompt(),
+		prompt: PROMPT,
 	});
 }
 

@@ -1,4 +1,14 @@
-import { type Clock, type PromptSource, systemClock } from "@repo/shared/host";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { memoryEnv } from "@repo/env/memory";
 import { z } from "zod";
 import { type Channels, MEMORY } from "../../channels.ts";
 import {
@@ -12,13 +22,13 @@ import {
 	listToArray,
 	newLispKeyword,
 	newSym,
+	Reader,
 	Sym,
 	str,
 	stripProse,
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
-import { memoryHost } from "./memory-host.ts";
 
 export const INITIAL_SCORE = 1;
 export const REINFORCEMENT = 0.5;
@@ -81,6 +91,25 @@ export class VolatileStore implements MemoryStore {
 	delete(key: string): boolean {
 		return this.memories.delete(key);
 	}
+}
+
+export function memoryDirFor(scope?: string): string {
+	const base =
+		memoryEnv.LISPTC_MEMORY_DIR ??
+		join(
+			memoryEnv.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
+			"lisptc",
+			"memory",
+		);
+	return scope === undefined ? base : join(base, sanitize(scope));
+}
+
+function sanitize(name: string): string {
+	return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function keyToFileName(key: string): string {
+	return `${sanitize(key)}.ptc`;
 }
 
 function triggerToForm(trigger: Trigger): unknown {
@@ -180,6 +209,105 @@ export function formToMemory(form: unknown): Memory | undefined {
 		used: Number(opts.get("used") ?? 0),
 		lastUsed: Number(opts.get("last-used") ?? 0),
 	};
+}
+
+export class FileMemoryStore implements MemoryStore {
+	constructor(private readonly dir?: string) {}
+
+	private base(): string {
+		return this.dir ?? memoryDirFor();
+	}
+
+	private file(key: string): string {
+		return join(this.base(), keyToFileName(key));
+	}
+
+	all(): Memory[] {
+		const out: Memory[] = [];
+		try {
+			const base = this.base();
+			if (!existsSync(base)) return out;
+			for (const entry of readdirSync(base, { withFileTypes: true })) {
+				if (!entry.isFile() || !entry.name.endsWith(".ptc")) continue;
+				const memory = this.readOne(join(base, entry.name));
+				if (memory !== undefined) out.push(memory);
+			}
+		} catch {}
+		return out;
+	}
+
+	get(key: string): Memory | undefined {
+		return this.readOne(this.file(key));
+	}
+
+	put(memory: Memory): void {
+		try {
+			mkdirSync(this.base(), { recursive: true, mode: 0o700 });
+			writeFileSync(this.file(memory.key), `${str(memoryToForm(memory))}\n`, {
+				mode: 0o600,
+			});
+		} catch (ex) {
+			throw new EvalException(
+				"could not write this memory to disk",
+				ex instanceof Error ? ex.message : String(ex),
+				false,
+			);
+		}
+	}
+
+	delete(key: string): boolean {
+		try {
+			const file = this.file(key);
+			if (!existsSync(file)) return false;
+			rmSync(file, { force: true });
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private readOne(path: string): Memory | undefined {
+		try {
+			const reader = new Reader();
+			reader.push(readFileSync(path, "utf8"));
+			return formToMemory(reader.read());
+		} catch {
+			return undefined;
+		}
+	}
+}
+
+export class LayeredStore implements MemoryStore {
+	constructor(
+		private readonly own: MemoryStore,
+		private readonly shared: MemoryStore,
+	) {}
+
+	all(): Memory[] {
+		const byKey = new Map<string, Memory>();
+		for (const memory of this.shared.all()) byKey.set(memory.key, memory);
+		for (const memory of this.own.all()) byKey.set(memory.key, memory);
+		return [...byKey.values()];
+	}
+
+	get(key: string): Memory | undefined {
+		return this.own.get(key) ?? this.shared.get(key);
+	}
+
+	put(memory: Memory): void {
+		this.own.put(memory);
+	}
+
+	delete(key: string): boolean {
+		const mine = this.own.delete(key);
+		return this.shared.delete(key) || mine;
+	}
+}
+
+export function scopedMemoryStore(scope?: string): MemoryStore {
+	const shared = new FileMemoryStore(memoryDirFor());
+	if (scope === undefined) return shared;
+	return new LayeredStore(new FileMemoryStore(memoryDirFor(scope)), shared);
 }
 
 function matches(pattern: string, text: string): boolean {
@@ -300,13 +428,9 @@ export class MemoryBank {
 	private heard = "";
 
 	constructor(
-		readonly store: MemoryStore = new VolatileStore(),
-		readonly clock: Clock = systemClock,
+		readonly store: MemoryStore = new FileMemoryStore(),
+		private readonly now: () => number = Date.now,
 	) {}
-
-	private now(): number {
-		return this.clock.now();
-	}
 
 	attach(channels: Channels): void {
 		this.channels = channels;
@@ -465,28 +589,21 @@ function proseIn(code: string): string {
 	return prose.trim();
 }
 
-export interface MemoryHost {
-	store: MemoryStore;
-	clock: Clock;
-	prompt: PromptSource;
-}
-
-export interface MemoryOptions {
-	bank?: MemoryBank;
-}
+const PROMPT: string = readFileSync(
+	new URL("./memory.ptc", import.meta.url),
+	"utf8",
+);
 
 export interface MemoryExtension extends InterpExtension {
 	readonly bank: MemoryBank;
 }
 
 export function memoryExtension(
-	host: MemoryHost = memoryHost,
-	options: MemoryOptions = {},
+	bank: MemoryBank = new MemoryBank(),
 ): MemoryExtension {
-	const bank = options.bank ?? new MemoryBank(host.store, host.clock);
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
-		prompt: host.prompt(),
+		prompt: PROMPT,
 	});
 }
 
@@ -580,7 +697,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 				links,
 				score: existing?.score ?? INITIAL_SCORE,
 				used: existing?.used ?? 0,
-				lastUsed: bank.clock.now(),
+				lastUsed: Date.now(),
 			});
 			return key;
 		},
