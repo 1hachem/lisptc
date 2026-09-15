@@ -1992,7 +1992,6 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 			note.emit(interp.channels, ["model"], {
 				kind: "failed",
 				text: String(failure),
-				value: failure.value,
 			});
 		throw failure;
 	}
