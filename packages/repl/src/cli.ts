@@ -13,6 +13,7 @@ import {
 	setWriter,
 	stripProse,
 } from "@repo/interpreter/lisp";
+import { MemoryBank, memoryExtension } from "@repo/interpreter/memory";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
@@ -35,6 +36,7 @@ class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
 	private readonly compactor = new Compactor();
 	private readonly secretsStore = new EnvSecretsStore();
+	private readonly memories = new MemoryBank();
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -52,6 +54,7 @@ class InteractiveRepl implements Repl {
 				mcpExtension(),
 				llmExtension(),
 				compactionExtension(this.compactor),
+				memoryExtension(this.memories),
 				proseExtension(),
 			],
 		});
@@ -81,12 +84,15 @@ class InteractiveRepl implements Repl {
 			buffer = "";
 			try {
 				this.compactor.beginStep();
+				write(this.memories.beginStep(text, this.currentInterp));
 				await runAsync(this.currentInterp, text);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)
 					write("unbalanced expression (unexpected end of input)\n");
 				else throw ex;
+			} finally {
+				write(this.memories.endStep());
 			}
 		}
 	}

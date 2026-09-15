@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { withTimeout } from "./async.ts";
+import { withTimeout } from "../../async.ts";
 import {
 	arrayToList,
 	Cell,
@@ -11,7 +11,7 @@ import {
 	listToArray,
 	newLispKeyword,
 	zList,
-} from "./lisp.ts";
+} from "../../lisp.ts";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
 

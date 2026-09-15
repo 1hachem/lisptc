@@ -12,10 +12,10 @@ the reader refuses.
 - (promise-all promises) gives one promise for every value, in order; it rejects
   as soon as any of them does.
 - (promise-all-settled promises) gives one promise for how each turned out, as
-  (:fulfilled value) or (:rejected "message"); it never rejects, so one failure
+(:fulfilled value) or (:rejected "message") ; it never rejects, so one failure
   keeps its siblings. This is the one to reach for when loading several servers.
 - (promise-any promises) the first to succeed · (promise-race promises)
-  the first to settle either way.
+the first to settle either way.
 - (promise-state promise) gives :pending, :fulfilled or :rejected, without
   waiting.
 - (promises) list what is still running · (cancel promise) abort the work
@@ -29,4 +29,4 @@ GOTCHAS
 
 RULES
 
-- A PROMISE IS A LIVE VALUE, AND AN UNAWAITED LOAD IS DONE. A call that returns a promise installs its result itself when it settles, so a step reporting load-mcp-1: a promise, still running … is COMPLETE — carry on with the task and use what it loaded on a later step. Only await it when you want its value in that same step, and then wrap the single call: (await (load-mcp "acme")). Never write a #<…> form — #<promise>, #<secret:KEY> — back into code: that text is a printout of a value the reader cannot read back, so (await #<promise>) is an error. Refer to the promise by the name the REPL reported ((await load-mcp-1)) or one you bound yourself.
+- A PROMISE IS A LIVE VALUE, AND AN UNAWAITED LOAD IS DONE. A call that returns a promise installs its result itself when it settles, so a step reporting load-mcp-1: a promise, still running … is COMPLETE — carry on with the task and use what it loaded on a later step. Only await it when you want its value in that same step, and then wrap the single call: (await (load-mcp "acme")) . Never write a #<…> form — #<promise>, #<secret:KEY> — back into code: that text is a printout of a value the reader cannot read back, so (await #<promise>) is an error. Refer to the promise by the name the REPL reported ((await load-mcp-1)) or one you bound yourself.

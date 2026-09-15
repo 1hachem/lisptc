@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { promisesExtension } from "../src/extensions/promises/promises.ts";
 import {
 	Cell,
 	type Eval,
@@ -10,7 +11,6 @@ import {
 	runSync,
 	str,
 } from "../src/lisp.ts";
-import { promisesExtension } from "../src/promises.ts";
 
 function interpWithSlow(): Interp {
 	const interp = new Interp({ extensions: [promisesExtension()] });

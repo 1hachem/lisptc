@@ -2,13 +2,13 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import {
 	EnvSecretsStore,
 	loadSecretsFromFile,
 	type SecretSpec,
 	secretsExtension,
-} from "../src/secrets.ts";
+} from "../src/extensions/secrets/secrets.ts";
+import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { ev } from "./helpers.ts";
 
 function interpWithSecrets(record: Record<string, SecretSpec>): Interp {

@@ -27,6 +27,7 @@ const Configuration: UserConfig = {
 				"chore",
 				"ci",
 				"docs",
+				"eval",
 				"feat",
 				"fix",
 				"perf",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MODEL } from "../src/channels.ts";
+import { proseExtension } from "../src/extensions/prose/prose.ts";
 import {
 	checkSyntax,
 	Interp,
@@ -8,7 +9,6 @@ import {
 	setWriter,
 	str,
 } from "../src/lisp.ts";
-import { proseExtension } from "../src/prose.ts";
 
 type Run = { value: string; output: string; skipped: string[] };
 

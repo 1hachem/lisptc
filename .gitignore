@@ -20,6 +20,10 @@ dist/
 # the eval suite's report artifacts
 apps/trace-viewer/.evals/
 
+# the on-demand R2 mount and its vfs cache (task r2)
+.r2/
+.r2-cache/
+
 .next/
 next-env.d.ts
 *.tsbuildinfo

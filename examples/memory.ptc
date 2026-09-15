@@ -1,0 +1,100 @@
+=====================================================================
+lisptc — memory: remembering, firing on events, chaining, forgetting
+
+Run me with the interactive REPL:
+  pnpm repl
+which wires the memory extension with a file-backed store, so what
+you remember here is still here next time. Point it somewhere else
+with LISPTC_MEMORY_DIR, or wipe it by deleting that directory.
+
+Built-ins, installed by the memory extension — src/memory.ts:
+  memory/remember  — store a memory under a key
+  memory/recall    — retrieve by key or body, strongest first
+  memories         — list every memory with its strength
+  memory/forget    — drop one
+  memory/replay    — evaluate a memory whose body is a form
+  memory/revise    — correct one, inside the window retrieval opens
+=====================================================================
+(echo "=== 1. a declarative memory: something to know ===")
+
+The body is prose. This is the half of memory that loads text into
+your context.
+(memory/remember "widget-ids" "Widget ids are short strings, never numbers.")
+=> "widget-ids"
+
+(echo (memory/recall "widget"))
+=> one memory, as an alist of key, body, score and used
+
+(echo "=== 2. a procedural memory: something to do ===")
+
+The body is a QUOTED form. Without the quote you would store the
+result of evaluating it, not the recipe.
+(memory/remember "double" '(defun double (x) (* x 2)))
+=> "double"
+
+double is not defined yet — the memory holds the form, nothing ran.
+(memory/replay "double")
+(echo (double 21))
+=> 42
+
+That is the homoiconic part: prose and code live in the same slot
+because in this language they are the same material.
+
+(echo "=== 3. firing on an event ===")
+
+With :on the memory watches for something and loads itself when it
+happens. For a call the pattern is a FORM, matched structurally, so
+naming no arguments hooks every call to that name.
+(memory/remember "joins" "string-join takes the list FIRST, then the separator."
+  :on '(call (string-join)))
+
+Now write a form that calls it, and the note arrives with the result
+of the step — before you get the argument order wrong.
+(echo (string-join '("a" "b") ","))
+
+Name an argument and the memory gets precise: this one only fires for
+the widget tool, not for every call to concat.
+(memory/remember "widget-concat" "widget ids concatenate with a dash, never a slash."
+  :on '(call (concat "widget" _)))
+(echo (concat "widget" "-1a2b"))
+
+A bare _ matches one argument whatever it is, a head is a regular
+expression, and all, any-of and not combine patterns.
+
+The seven kinds are call, result, error, step, prose, user and
+recall. An error trigger is the useful one: a mistake you made once
+surfaces exactly as it is about to repeat.
+(memory/remember "undefineds" "Check (dump) before calling a name you have not defined."
+  :on '(error "undefined"))
+
+(echo "=== 4. chaining ===")
+
+Retrieval is itself an event, so one memory can hook another. Recall
+the first and both arrive.
+(memory/remember "widget-shape" "A widget alist has id, name and state."
+  :on '(recall "widget-ids"))
+
+You can also say it outright with :links. And memories that fire in
+the same step get wired to each other on their own, so what you use
+together starts arriving together.
+
+(echo "=== 5. strength, and forgetting ===")
+
+Every memory has a score. Recalling strengthens it; silence lets it
+fade, half its strength a week, and under a floor it is swept away.
+(echo (memories))
+=> each memory as key, score and trigger, strongest first
+
+(memory/forget "joins")
+=> t, and it is gone for good
+
+(echo "=== 6. the window ===")
+
+Retrieving a memory opens it for correction until the step ends.
+Inside that window revise works:
+(memory/recall "widget-ids")
+(memory/revise "widget-ids" "Widget ids look like w_1a2b — short strings, never numbers.")
+
+Outside it, revise is an error telling you to recall it first. Reading
+and rewriting are one act on purpose: you fix a memory while you are
+looking at it and can see that it was wrong.

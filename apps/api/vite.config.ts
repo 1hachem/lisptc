@@ -11,7 +11,7 @@ const PROMPT_SOURCES = [
 ].map((entry) => new URL(".", entry));
 
 function promptFiles(dir: URL): URL[] {
-	return readdirSync(dir)
+	return readdirSync(dir, { recursive: true, encoding: "utf8" })
 		.filter((name) => name.endsWith(".ptc"))
 		.map((name) => new URL(name, dir));
 }

@@ -13,6 +13,7 @@ const TURNS: string[] = [
 ];
 
 let turn = 0;
+const sent: string[] = [];
 let server: Server;
 let runCase: typeof import("../src/runner.ts").runCase;
 
@@ -28,8 +29,12 @@ function chunk(content: string): string {
 
 function stub(): Server {
 	return createServer((req, res) => {
-		req.on("data", () => {});
+		let body = "";
+		req.on("data", (part) => {
+			body += part;
+		});
 		req.on("end", () => {
+			sent.push(body);
 			const text = TURNS[Math.min(turn++, TURNS.length - 1)];
 			res.writeHead(200, { "content-type": "text/event-stream" });
 			res.write(chunk(text));
@@ -111,6 +116,72 @@ describe("a case runs against a scripted model", () => {
 		expect(result.inputTokens).toBe(100);
 		expect(result.model).toBe("stub");
 		expect(result.provider).toBe("digitalocean");
+	});
+
+	test("a prelude prepares the repl before the first step", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "navigate" "browser_navigate, not navigate" :on '(call (load-mcp "playwright")))`,
+				seed: [{ user: "open hyko.ai" }],
+				checks:
+					'(defcheck prelude-ran (eventually (called "memory/remember")))',
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		expect(result.checks[0]).toMatchObject({
+			name: "prelude-ran",
+			verdict: "true",
+		});
+		expect(result.transcript[0]).toEqual({
+			role: "user",
+			content: "open hyko.ai",
+		});
+	});
+
+	test("a prelude the reader will not run fails the case loudly", async () => {
+		turn = 0;
+		await expect(
+			runCase(
+				{
+					min: 4,
+					max: 8,
+					mocks: { servers: { playwright } },
+					prelude: '(memory/remember "k" "a body\nthat wraps")',
+					seed: [{ user: "open hyko.ai" }],
+					checks: "(defcheck stops (within 6 (halted)))",
+					system: "answer in lisptc.",
+				},
+				{ provider: "digitalocean", model: "stub" },
+			),
+		).rejects.toThrow(/prelude/);
+	});
+
+	test("a memory a seeded turn fires reaches the model", async () => {
+		turn = 0;
+		sent.length = 0;
+		await runCase(
+			{
+				min: 4,
+				max: 8,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "navigate" "browser_navigate, not navigate" :on '(call (load-mcp "playwright")))`,
+				seed: [
+					{ user: "open hyko.ai" },
+					{ assistant: '(await (load-mcp "playwright"))' },
+				],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		expect(sent[0]).toContain("browser_navigate, not navigate");
 	});
 
 	test("a check that fails grades the run a failure", async () => {

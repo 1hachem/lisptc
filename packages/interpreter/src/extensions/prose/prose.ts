@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { isNumeric } from "./arith.ts";
+import { isNumeric } from "../../arith.ts";
 import {
 	Cell,
 	endOfForm,
@@ -10,7 +10,7 @@ import {
 	readFailure,
 	Sym,
 	str,
-} from "./lisp.ts";
+} from "../../lisp.ts";
 
 export type ProseClassifier = (
 	interp: Interp,

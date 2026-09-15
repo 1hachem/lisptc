@@ -8,6 +8,7 @@ import {
 	type ChatMessage,
 	isGreetingMessage,
 	isToolMessage,
+	isUserMessage,
 	messageReasoning,
 	messageText,
 	toolResult,
@@ -18,11 +19,8 @@ import { Greeting } from "./greeting.tsx";
 import { LispText } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
+import { MessageMemories } from "./message-memories.tsx";
 import { MessageMeta } from "./message-meta.tsx";
-
-function isUser(m: ChatMessage): boolean {
-	return m.type === "human" || m.type === "user";
-}
 
 const FOLD_LINES = 25;
 
@@ -80,7 +78,7 @@ function ScrollToLatest() {
 
 export function ChatView() {
 	const { messages, meta, error } = useChatSession();
-	const lastSent = messages.filter(isUser).at(-1)?.id;
+	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
@@ -90,7 +88,7 @@ export function ChatView() {
 				{messages
 					.filter((m) => !isGreetingMessage(m))
 					.map((m, i) => {
-						const reasoning = isUser(m) ? "" : messageReasoning(m);
+						const reasoning = isUserMessage(m) ? "" : messageReasoning(m);
 						const stats = m.id ? meta[m.id] : undefined;
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
@@ -103,7 +101,7 @@ export function ChatView() {
 												{reasoning}
 											</div>
 										)}
-										{isUser(m) ? (
+										{isUserMessage(m) ? (
 											<div className="flex min-w-0 gap-1">
 												<span className="select-none text-dim">›</span>
 												<div className="min-w-0 whitespace-pre-wrap break-words">
@@ -115,8 +113,11 @@ export function ChatView() {
 										)}
 									</div>
 								)}
+								{stats?.memories && (
+									<MessageMemories memories={stats.memories} />
+								)}
 								{stats && <MessageMeta meta={stats} />}
-								{!isUser(m) && !isToolMessage(m) && (
+								{!isUserMessage(m) && !isToolMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
 								)}
 							</div>

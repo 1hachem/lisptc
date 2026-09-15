@@ -43,6 +43,17 @@ tasks:
     desc: run the nvim integration test
     cmd: bash editors/nvim/tests/run.sh
 
+  r2:
+    desc: mount the R2 bucket at .r2 (pass umount to unmount)
+    vars:
+      ACTION: '{{.CLI_ARGS | default "mount"}}'
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: dev
+          PATHS: "/assets"
+          CMD: 'r2mount {{.ACTION}}'
+
   evals:run:
     desc: run the agent eval suite against real models
     vars:

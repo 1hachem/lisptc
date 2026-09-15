@@ -3,7 +3,13 @@ import { dirname, join } from "node:path";
 import { replEnv } from "@repo/env/repl";
 import * as dotenv from "dotenv";
 import { z } from "zod";
-import { compare, isNumeric, type Numeric, quotient, ZERO } from "./arith.ts";
+import {
+	compare,
+	isNumeric,
+	type Numeric,
+	quotient,
+	ZERO,
+} from "../../arith.ts";
 import {
 	Cell,
 	EvalException,
@@ -12,8 +18,8 @@ import {
 	type List,
 	str,
 	zList,
-} from "./lisp.ts";
-import type { ToJson } from "./types.ts";
+} from "../../lisp.ts";
+import type { ToJson } from "../../types.ts";
 
 export type SecretSpec = string | { value: string; description?: string };
 

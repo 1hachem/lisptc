@@ -1,4 +1,5 @@
-import { compactionExtension } from "../src/compaction.ts";
+import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
+import { secretsExtension } from "../src/extensions/secrets/secrets.ts";
 import {
 	Interp,
 	prelude,
@@ -7,7 +8,6 @@ import {
 	setWriter,
 	str,
 } from "../src/lisp.ts";
-import { secretsExtension } from "../src/secrets.ts";
 
 export function freshInterp(): Interp {
 	const interp = new Interp({

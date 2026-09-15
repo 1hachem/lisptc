@@ -26,6 +26,7 @@
         src = ./.;
         pnpm = pkgs.pnpm_10;
       };
+      r2mount = pkgs.callPackage ./nix/r2mount.nix {};
 
       # Dev-shell tools: run straight from the working tree, reflecting live edits.
       ptcrepl-dev = pkgs.writeShellScriptBin "ptcrepl" ''
@@ -45,6 +46,7 @@
     in {
       packages.ptcfmt = ptcfmt;
       packages.ptcrepl = ptcrepl;
+      packages.r2mount = r2mount;
 
       checks.ptcfmt = pkgs.callPackage ./nix/tests/ptcfmt-check.nix {
         src = ./.;
@@ -57,6 +59,9 @@
       apps.ptcrepl =
         flake-utils.lib.mkApp {drv = ptcrepl;}
         // {meta.description = "Lisptc interpreter REPL";};
+      apps.r2mount =
+        flake-utils.lib.mkApp {drv = r2mount;}
+        // {meta.description = "Mount the project's Cloudflare R2 bucket under the working tree";};
 
       devShells.default = pkgs.mkShell {
         packages = with pkgs; [
@@ -71,6 +76,7 @@
           imagemagick
           ptcrepl-dev
           ptcfmt-dev
+          r2mount
           # Nix-built browsers with system deps, used via PLAYWRIGHT_MCP_EXECUTABLE.
           playwright-driver.browsers
         ];
