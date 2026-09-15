@@ -4,6 +4,7 @@ import {
 	useStickToBottomContext,
 } from "@repo/ui";
 import { useEffect, useState } from "react";
+import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
 	isGreetingMessage,
@@ -11,10 +12,16 @@ import {
 	isUserMessage,
 	messageReasoning,
 	messageText,
+	toolFailed,
+	toolModelOutput,
 	toolResult,
+	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
+import { useUI } from "../lib/ui.tsx";
+import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { GenerativeUI } from "./generative-ui.tsx";
 import { Greeting } from "./greeting.tsx";
 import { LispText } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
@@ -23,31 +30,125 @@ import { MessageMemories } from "./message-memories.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 
 const FOLD_LINES = 25;
+const PAGE_LINES = 200;
+
+const channel = (id: string) =>
+	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
+
+function ChannelLabel({ id }: { id: string }) {
+	const { label, dot, text } = channel(id);
+	return (
+		<div className="mt-2 mb-1 flex items-center gap-2">
+			<span aria-hidden className={`size-1.5 flex-none rounded-full ${dot}`} />
+			<span className={`flex-none text-[11px] tracking-[0.1em] ${text}`}>
+				{label}
+			</span>
+			<span aria-hidden className="h-px flex-1 bg-dim/20" />
+		</div>
+	);
+}
+
+function ChannelText({ text, tone }: { text: string; tone: string }) {
+	const [expanded, setExpanded] = useState(false);
+	const [page, setPage] = useState(0);
+	const lines = text.split("\n");
+	const long = lines.length > FOLD_LINES;
+	const folded = long && !expanded;
+	const pages = Math.ceil(lines.length / PAGE_LINES);
+	const paged = !folded && pages > 1;
+	const shown = folded
+		? lines.slice(0, FOLD_LINES)
+		: paged
+			? lines.slice(page * PAGE_LINES, (page + 1) * PAGE_LINES)
+			: lines;
+	const step = (by: number) =>
+		setPage((p) => Math.min(pages - 1, Math.max(0, p + by)));
+	return (
+		<div className={`min-w-0 break-words ${tone}`}>
+			<div className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined}>
+				<Markdown>{shown.join("\n")}</Markdown>
+			</div>
+			{long && (
+				<div className="mt-1 flex items-center gap-3 text-dim">
+					<button
+						type="button"
+						onClick={() => {
+							setExpanded(!expanded);
+							setPage(0);
+						}}
+						className="underline decoration-dim/40 hover:text-fg"
+					>
+						{folded
+							? `see ${lines.length - FOLD_LINES} more lines`
+							: "see less"}
+					</button>
+					{paged && (
+						<span className="flex items-center gap-2">
+							<button
+								type="button"
+								disabled={page === 0}
+								onClick={() => step(-1)}
+								className="hover:text-fg disabled:opacity-30"
+							>
+								‹
+							</button>
+							<span>
+								{page + 1}/{pages}
+							</span>
+							<button
+								type="button"
+								disabled={page === pages - 1}
+								onClick={() => step(1)}
+								className="hover:text-fg disabled:opacity-30"
+							>
+								›
+							</button>
+						</span>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
 
 function ToolMessage({ message }: { message: ChatMessage }) {
-	const { output, error } = toolResult(message);
-	const [expanded, setExpanded] = useState(false);
-	const lines = output.split("\n");
-	const folded = lines.length > FOLD_LINES && !expanded;
+	const { shown } = useUI();
+	const { output } = toolResult(message);
+	const ui = toUiNode(toolUi(message));
+	const model = toolModelOutput(message);
+	const drawsUi = ui !== undefined && shown.ui;
+	const drawsUser = shown.user && output !== "";
+	const drawsError = shown.errors && toolFailed(message);
+	const drawsModel = shown.model && model.output !== "";
+	const labelled =
+		[drawsUi, drawsUser, drawsModel].filter(Boolean).length > 1 ||
+		(drawsError && drawsModel);
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
-				error ? "border-red/60 text-red" : "border-dim/40 text-dim"
+				drawsError ? "border-red/60" : "border-dim/40"
 			}`}
 		>
-			<Markdown>
-				{folded ? lines.slice(0, FOLD_LINES).join("\n") : output}
-			</Markdown>
-			{lines.length > FOLD_LINES && (
-				<button
-					type="button"
-					onClick={() => setExpanded(!expanded)}
-					className="text-dim underline decoration-dim/40 hover:text-fg"
-				>
-					{folded
-						? `show ${lines.length - FOLD_LINES} more lines`
-						: "show less"}
-				</button>
+			{drawsUi && (
+				<>
+					{labelled && <ChannelLabel id="ui" />}
+					<GenerativeUI node={ui} />
+				</>
+			)}
+			{drawsUser && (
+				<>
+					{labelled && <ChannelLabel id="user" />}
+					<ChannelText text={output} tone="text-dim" />
+				</>
+			)}
+			{drawsError && (
+				<div className={channel("errors").text}>a form in this step failed</div>
+			)}
+			{drawsModel && (
+				<>
+					{labelled && <ChannelLabel id="model" />}
+					<ChannelText text={model.output} tone={channel("model").text} />
+				</>
 			)}
 		</div>
 	);
@@ -78,6 +179,7 @@ function ScrollToLatest() {
 
 export function ChatView() {
 	const { messages, meta, error } = useChatSession();
+	const { shown } = useUI();
 	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
 
 	return (
@@ -88,7 +190,8 @@ export function ChatView() {
 				{messages
 					.filter((m) => !isGreetingMessage(m))
 					.map((m, i) => {
-						const reasoning = isUserMessage(m) ? "" : messageReasoning(m);
+						const reasoning =
+							isUserMessage(m) || !shown.thinking ? "" : messageReasoning(m);
 						const stats = m.id ? meta[m.id] : undefined;
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
@@ -97,8 +200,11 @@ export function ChatView() {
 								) : (
 									<div className="min-w-0 break-words text-fg">
 										{reasoning && (
-											<div className="mb-2 whitespace-pre-wrap break-words border-dim/40 border-l pl-3 text-dim italic">
-												{reasoning}
+											<div className="mb-2">
+												<ChannelLabel id="thinking" />
+												<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
+													{reasoning}
+												</div>
 											</div>
 										)}
 										{isUserMessage(m) ? (
@@ -113,7 +219,7 @@ export function ChatView() {
 										)}
 									</div>
 								)}
-								{stats?.memories && (
+								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
 								)}
 								{stats && <MessageMeta meta={stats} />}

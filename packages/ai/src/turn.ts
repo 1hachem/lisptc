@@ -1,4 +1,5 @@
 import type { FiredMemory } from "@repo/interpreter/memory";
+import type { UiNode } from "@repo/interpreter/ui";
 import type { AgentRepl } from "@repo/repl/repl";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -56,6 +57,8 @@ export type TurnEvent =
 			display: string;
 			error: boolean;
 			memories: FiredMemory[];
+			failed: boolean;
+			ui?: UiNode;
 	  }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -172,7 +175,10 @@ export async function* runAgentTurn(
 			transcript.push({ role: "assistant", content: code });
 
 			const evalStartedAt = Date.now();
-			const { output, display, error, memories } = await evalCode(repl, code);
+			const { output, display, error, memories, failed, ui } = await evalCode(
+				repl,
+				code,
+			);
 			steps += 1;
 
 			if (repl.takeFinished()) {
@@ -190,7 +196,16 @@ export async function* runAgentTurn(
 				latencyMs: Date.now() - evalStartedAt,
 			});
 
-			yield { type: "result", step: steps, output, display, error, memories };
+			yield {
+				type: "result",
+				step: steps,
+				output,
+				display,
+				error,
+				memories,
+				failed,
+				ui,
+			};
 			transcript.push({
 				role: "tool",
 				content: replResultContent(output, error, memories),

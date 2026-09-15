@@ -337,6 +337,11 @@ export function callableKind(x: unknown): "function" | "macro" | undefined {
 	return undefined;
 }
 
+export function callableArity(x: unknown): Arity | undefined {
+	if (!(x instanceof Func)) return undefined;
+	return { min: x.fixedArgs, max: x.hasRest ? undefined : x.arity };
+}
+
 class Arg {
 	constructor(
 		public readonly level: number,

@@ -24,7 +24,9 @@
     "./secrets-host": "./src/extensions/secrets/secrets-host.ts",
     "./source": "./src/source.ts",
     "./topics": "./src/topics.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./ui": "./src/extensions/ui/ui.ts",
+    "./ui-host": "./src/extensions/ui/ui-host.ts"
   },
   "engines": {
     "node": ">=22.6.0"

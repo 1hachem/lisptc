@@ -27,6 +27,14 @@ import { isTruncated } from "@repo/interpreter/prose";
 import { type SecretsStore, storeOf } from "@repo/interpreter/secrets";
 import { type Note, note } from "@repo/interpreter/topics";
 import {
+	joinMessages,
+	rendered,
+	sent,
+	surfaceOf,
+	type UiNode,
+	type UiSurface,
+} from "@repo/interpreter/ui";
+import {
 	isLlmExtension,
 	type LlmExtension,
 	type LlmObserver,
@@ -47,6 +55,9 @@ export interface ReplOptions {
 
 export interface EvalOutput extends Bounded {
 	memories: FiredMemory[];
+	failed: boolean;
+	ui?: UiNode;
+	message?: string;
 }
 
 interface StepResult extends EvalOutput {
@@ -91,9 +102,16 @@ function skipNotes(skipped: string[]): string {
 	return skipped.map((what) => `skipped ${what}\n`).join("");
 }
 
-function render({ model, user, skipped, memories }: StepResult): EvalOutput {
-	const notes = skipNotes(skipped);
-	return { model: model + notes, user: user + notes, memories };
+function render(result: StepResult): EvalOutput {
+	const notes = skipNotes(result.skipped);
+	return {
+		model: result.model + notes,
+		user: result.user + notes,
+		memories: result.memories,
+		failed: result.failed,
+		ui: result.ui,
+		message: result.message,
+	};
 }
 
 export class MemoryRepl implements InMemoryRepl {
@@ -104,12 +122,14 @@ export class MemoryRepl implements InMemoryRepl {
 	private readonly llm?: LlmExtension;
 	readonly secrets?: SecretsStore;
 	readonly memories?: MemoryBank;
+	readonly surface?: UiSurface;
 
 	constructor(options: ReplOptions) {
 		this.extensions = options.extensions;
 		this.compactor = find(this.extensions, compactorOf);
 		this.secrets = find(this.extensions, storeOf);
 		this.memories = find(this.extensions, bankOf);
+		this.surface = find(this.extensions, surfaceOf);
 		this.llm = this.extensions.find(isLlmExtension);
 		this.currentInterp = this.freshInterp();
 	}
@@ -140,9 +160,30 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	protected evaluate(code: string): Promise<StepResult> {
+		return this.serialize(async () => {
+			this.memories?.beginStep(code, this.currentInterp);
+			try {
+				await runAsync(this.currentInterp, code);
+			} finally {
+				this.memories?.endStep();
+			}
+		});
+	}
+
+	async invokeUi(
+		action: string,
+		values: Record<string, unknown> = {},
+	): Promise<EvalOutput> {
+		const surface = this.surface;
+		if (surface === undefined)
+			throw new EvalException("no ui surface on this repl", action, false);
+		return this.serialize(() => surface.invoke(action, values));
+	}
+
+	private serialize(body: () => Promise<unknown>): Promise<StepResult> {
 		const done = this.inFlight.then(
-			() => this.evaluateOne(code),
-			() => this.evaluateOne(code),
+			() => this.runStep(body),
+			() => this.runStep(body),
 		);
 		this.inFlight = done.then(
 			() => undefined,
@@ -151,7 +192,7 @@ export class MemoryRepl implements InMemoryRepl {
 		return done;
 	}
 
-	private async evaluateOne(code: string): Promise<StepResult> {
+	private async runStep(body: () => Promise<unknown>): Promise<StepResult> {
 		this.compactor?.beginStep();
 		const { channels } = this.currentInterp;
 		channels.step += 1;
@@ -159,20 +200,18 @@ export class MemoryRepl implements InMemoryRepl {
 		const detach = channels.pipe(buffer);
 		let thrown: unknown;
 		try {
-			this.memories?.beginStep(code, this.currentInterp);
-			await runAsync(this.currentInterp, code);
+			await body();
 		} catch (ex) {
 			if (!(ex instanceof EvalException) && ex !== EndOfFile) throw ex;
 			thrown = ex;
 		} finally {
-			this.memories?.endStep();
 			detach();
 		}
 		const { skipped, failed } = partition(buffer.payloads(note));
 		let error: Bounded = { model: "", user: "" };
 		if (thrown === EndOfFile) {
 			const text = "unbalanced expression (unexpected end of input)\n";
-			error = { model: text, user: text };
+			error = { model: text, user: "" };
 		} else if (thrown !== undefined) {
 			const text = `${failed.at(-1)?.text ?? String(thrown)}\n`;
 			error = this.compactor?.error(text) ?? { model: text, user: text };
@@ -183,6 +222,9 @@ export class MemoryRepl implements InMemoryRepl {
 				buffer.text("model") + (this.compactor?.endStep() ?? "") + error.model,
 			user: buffer.text("user") + error.user,
 			memories: buffer.payloads(fired),
+			failed: thrown !== undefined,
+			ui: buffer.payloads(rendered).at(-1),
+			message: joinMessages(buffer.payloads(sent)),
 			skipped,
 		};
 	}
@@ -216,6 +258,9 @@ export class AgentRepl extends MemoryRepl {
 			model: result.model,
 			user: result.user,
 			memories: result.memories,
+			failed: result.failed,
+			ui: result.ui,
+			message: result.message,
 		};
 	}
 
@@ -250,9 +295,9 @@ export class AgentRepl extends MemoryRepl {
 	}
 }
 
-function isAnswer(code: string, { user, skipped }: StepResult): boolean {
+function isAnswer(code: string, { model, skipped }: StepResult): boolean {
 	if (stripProse(code).trim() === "") return true;
-	if (user !== "" || skipped.length === 0) return false;
+	if (model !== "" || skipped.length === 0) return false;
 	return !isTruncated(code);
 }
 
