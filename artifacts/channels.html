@@ -348,6 +348,89 @@ pre.code {
 .stage .t { font-size: .88rem; font-weight: 600; }
 .stage .d { font-size: .82rem; color: var(--muted); }
 
+/* ---------- aside ---------- */
+
+.aside {
+	margin-top: 1.5rem;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--user);
+	border-radius: 3px;
+	padding: 1.2rem 1.35rem;
+	display: flex; flex-direction: column; gap: .8rem;
+}
+
+.aside h3 { font-size: 1.02rem; }
+.aside .prose { gap: .7rem; }
+.aside .prose p { font-size: .93rem; max-width: 68ch; }
+
+.sub-head {
+	font-family: var(--sans); font-size: .74rem; font-weight: 600;
+	letter-spacing: .15em; text-transform: uppercase; color: var(--faint);
+	margin-bottom: .85rem;
+}
+
+/* ---------- rules table ---------- */
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
+
+table.rules { border-collapse: collapse; width: 100%; min-width: 620px; }
+
+table.rules th {
+	text-align: left; font-family: var(--sans); font-size: .7rem; font-weight: 600;
+	letter-spacing: .13em; text-transform: uppercase; color: var(--faint);
+	padding: .7rem .9rem; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+
+table.rules td { padding: .7rem .9rem; font-size: .89rem; color: var(--ink); border-bottom: 1px solid var(--line); vertical-align: top; }
+table.rules tbody tr:last-child td { border-bottom: 0; }
+table.rules tr.dim td { color: var(--muted); }
+table.rules td.mono { font-family: var(--mono); font-size: .82rem; }
+table.rules td.small { font-size: .76rem; color: var(--muted); }
+
+.aud {
+	font-family: var(--mono); font-size: .74rem;
+	padding: .14rem .45rem; border-radius: 2px; white-space: nowrap;
+	border: 1px solid currentColor;
+}
+.aud.user { color: var(--user); }
+.aud.model { color: var(--model); }
+
+/* ---------- path ---------- */
+
+.path {
+	display: flex; align-items: stretch; gap: 0;
+	overflow-x: auto; padding-bottom: .5rem;
+}
+
+.hop {
+	flex: 1 0 auto; min-width: 128px; max-width: 200px;
+	display: flex; flex-direction: column; gap: .3rem;
+	padding: .8rem .85rem;
+	border: 1px solid var(--line);
+	border-right: 0;
+	background: var(--surface);
+}
+
+.hop:first-child { border-radius: 3px 0 0 3px; }
+.hop:last-child { border-right: 1px solid var(--line); border-radius: 0 3px 3px 0; }
+
+.hop .stage { font-family: var(--mono); font-size: .68rem; color: var(--faint); letter-spacing: .05em; }
+.hop .name { font-family: var(--mono); font-size: .81rem; font-weight: 500; color: var(--ink); }
+.hop .carries { font-size: .78rem; color: var(--muted); }
+
+.hop.rich { border-top: 3px solid var(--memory); }
+.hop.flat { border-top: 3px solid var(--dead); }
+.hop.cut { border-top: 3px solid var(--user); background: var(--user-soft); }
+.hop.cut .name { color: var(--user); }
+
+.path-key {
+	display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin-top: .7rem;
+	font-size: .78rem; color: var(--faint); font-family: var(--mono);
+}
+.path-key span { display: inline-flex; align-items: center; gap: .35rem; }
+.path-key i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+
 footer { border-top: 1px solid var(--line); padding: 2.5rem 0 4rem; color: var(--faint); font-size: .86rem; }
 footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
 </style>
@@ -411,6 +494,32 @@ footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
 				<pre class="code" id="roCode"></pre>
 			</div>
 		</div>
+
+		<div class="aside">
+			<h3>The one that confuses everyone: <code>write()</code></h3>
+			<div class="prose">
+				<p><code>write</code> is <strong>not</strong> the transport. It is a module-level global in
+					<code>lisp.ts</code> whose default is a no-op, and every <code>Interp</code> subscribes it
+					to its own <code>USER</code> channel in the constructor.</p>
+			</div>
+			<pre class="code">// lisp.ts:29 — one global, shared by every Interp in the process
+let write: (s: string) => void = () =&gt; {};
+
+export function setWriter(fn) { const prev = write; write = fn; return prev; }
+
+// lisp.ts:569 — in the constructor of every interpreter
+this.channels.on(USER, (d) =&gt; write(d.text));</pre>
+			<div class="prose">
+				<p>Only <code>cli.ts</code> ever installs a real one (<code>process.stdout.write</code>); the
+					tests swap it to capture output and restore it afterwards. <strong>Nothing in
+					<code>apps/api</code> calls <code>setWriter</code></strong>, so on the server every
+					<code>USER</code> record reaches a function that does nothing and is discarded.</p>
+				<p>Output reaches the browser by an entirely separate route: the REPL <em>accumulates</em> the
+					channels into two strings and returns them as a value. <code>write()</code> is a
+					vestigial second exit that only the terminal uses &mdash; which is why adding a channel
+					the frontend can listen to is not a matter of pointing <code>write</code> somewhere new.</p>
+			</div>
+		</div>
 	</div>
 </section>
 
@@ -436,6 +545,76 @@ footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
 				&mdash; that constraint is what rules out the obvious fix of one big discriminated union.</p>
 		</div>
 		<div class="shape" id="shape"></div>
+	</div>
+</section>
+
+<section class="section">
+	<div class="wrap">
+		<div class="section-head spine">
+			<span class="eyebrow">The new requirement</span>
+			<h2>A channel the frontend listens to</h2>
+			<p>Generative UI: the interpreter emits a component, the browser renders it. JSON describing a
+				component at first, a serialised component later. This is the requirement that turns the
+				refactor from tidying into work that has to happen &mdash; because today there is no way to
+				get a structured payload out of the interpreter at all.</p>
+		</div>
+
+		<h3 class="sub-head">Where the structure is lost</h3>
+		<div class="path" id="path"></div>
+
+		<div class="prose spine" style="margin-top: 1.5rem">
+			<p>The two-audience split already survives all the way to the wire: <code>content</code> is what
+				the model reads, <code>additional_kwargs.display</code> is what the person reads. <strong>It
+				survives as two flat strings.</strong> A component spec would have to be smuggled inside the
+				display string and re-parsed in the browser, and every channel record that is not
+				<code>USER</code> or <code>MODEL</code> text is dropped before it reaches the stream at all.</p>
+		</div>
+
+		<div class="shape" id="ui"></div>
+
+		<h3 class="sub-head" style="margin-top: 2.25rem">What the browser does with each envelope</h3>
+		<div class="tablewrap">
+			<table class="rules">
+				<thead>
+					<tr><th>topic</th><th>to</th><th>the frontend</th><th>payload</th></tr>
+				</thead>
+				<tbody id="rules"></tbody>
+			</table>
+		</div>
+
+		<div class="prose spine" style="margin-top: 1.5rem">
+			<p><strong>Routing is <code>to</code>, not topic.</strong> The rule you want &mdash; render what
+				is for the person, hide what is for the model behind a debug toggle &mdash; is a filter on
+				one field, which is only possible once audience stops being encoded in the channel name.</p>
+		</div>
+
+		<h3 class="sub-head" style="margin-top: 2.25rem">What a transport costs that an in-process bus did not</h3>
+		<div class="guard">
+			<div class="guard-item">
+				<span class="k">ordering across a reconnect</span>
+				<p>An in-process listener cannot miss a record. An SSE client can drop and resume, so every
+					envelope needs a <code>seq</code> and the stream needs to honour
+					<code>Last-Event-ID</code> &mdash; or the browser silently renders a hole.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">backpressure and closure</span>
+				<p><code>emit</code> returns <code>void</code> today. <code>stream.ts</code> already tracks a
+					closed controller and breaks its loop on a failed write; a transport that cannot report
+					failure throws that away. Hence <code>send(): boolean</code>.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">a second serialisation boundary</span>
+				<p>Payloads stop being any JS value and become whatever survives <code>JSON.stringify</code>.
+					That is a real constraint on <code>value?: unknown</code> today &mdash; a Lisp
+					<code>Cell</code> in an error's <code>value</code> does not cross the wire intact.</p>
+			</div>
+			<div class="guard-item">
+				<span class="k">the step boundary becomes load-bearing</span>
+				<p>Batching per step is what the REPL's accumulate-then-return does for free. Streaming
+					envelope-by-envelope means the browser sees a partial step, so <code>step</code> has to
+					ride on the envelope and the UI has to tolerate a step still in flight.</p>
+			</div>
+		</div>
 	</div>
 </section>
 
@@ -473,9 +652,16 @@ footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
 			<h2>What I would actually do</h2>
 		</div>
 		<div class="verdict">
-			<p><strong>Not all of it, and not at once.</strong> The switchboard shows one defect that costs
-				correctness and three that cost clarity. Only the first is worth a migration on its own; the
-				rest are worth doing while you are already in the file.</p>
+			<p><strong>The generative-UI channel changes this answer.</strong> Read on its own, the bus has
+				one defect that costs correctness and several that cost clarity, and I would have said the
+				audience work buys tidiness rather than correctness &mdash; not worth touching every emit
+				site for. A channel the frontend listens to makes that wrong: you cannot route on audience
+				from the browser while audience is spelled as a channel name, and you cannot stream a
+				component through a pair of accumulated strings. <strong>Audience and payload typing become
+				load-bearing, so they move to the front.</strong></p>
+			<p>What does not change: the bus stays open. A discriminated union over every record would close
+				the set an extension can contribute to, which fights the plugin model the rest of the
+				interpreter is built on. Typed topics give the compiler the same grip without that.</p>
 			<p>The <code>Step</code> recorder is the one I would push back on hardest if someone proposed it
 				to me. It makes the current implicit behaviour explicit, which is good, but it does not fix
 				attribution for work that settles after the step ends &mdash; a promise from
@@ -485,10 +671,11 @@ footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
 				getting those out. It would have to arrive as a port, and at that point the cure is bigger
 				than the disease.</p>
 			<div class="stage">
-				<div><span class="n">first</span><span class="t">Split the MODEL lanes</span><span class="d">Give notes their own channel. Deletes the severity partition from all three consumers and stops <code>critical</code> vanishing.</span></div>
-				<div><span class="n">then</span><span class="t">Type the payloads</span><span class="d"><code>Topic&lt;T&gt;</code> removes the <code>as FiredMemory</code> cast and the misspelled-channel trap, without closing the set.</span></div>
-				<div><span class="n">then</span><span class="t">Stop swallowing</span><span class="d">A one-line change with no migration: report listener failures instead of discarding them.</span></div>
-				<div><span class="n">leave</span><span class="t">Audience &amp; Step</span><span class="d">Real improvements, but they touch every emit site to buy tidiness rather than correctness.</span></div>
+				<div><span class="n">first</span><span class="t">Envelope: topic + to</span><span class="d">Pull audience out of the channel name. Everything else depends on it, and it is what lets the browser filter without parsing.</span></div>
+				<div><span class="n">first</span><span class="t">Split the MODEL lanes</span><span class="d">Notes get their own topic. Falls out of the envelope work, deletes the severity partition from all three consumers, and stops <code>critical</code> vanishing.</span></div>
+				<div><span class="n">then</span><span class="t">ChannelTransport</span><span class="d">One port, three implementations. Retires the <code>write()</code> global and the REPL's hand-rolled accumulation in the same move.</span></div>
+				<div><span class="n">then</span><span class="t">The ui topic</span><span class="d">Only meaningful once an envelope can carry a typed payload to a named audience over a real transport.</span></div>
+				<div><span class="n">last</span><span class="t">Stop swallowing</span><span class="d">Independent of all of it and a one-line change: report listener failures instead of discarding them.</span></div>
 			</div>
 		</div>
 	</div>
@@ -886,6 +1073,95 @@ footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
 				'<div class="new"><h4>Proposed</h4><pre class="code">' + esc(s.neu) + "</pre></div>" +
 			"</div>";
 		shapeEl.appendChild(div);
+	});
+
+	/* ================================================================= path */
+
+	var PATH = [
+		{ stage: "emit", name: "Compactor.say()", carries: "{ channel, severity?, text, value? }", cls: "rich" },
+		{ stage: "bus", name: "channels.emit", carries: "the record, structure intact", cls: "rich" },
+		{ stage: "collect", name: "evaluateOne", carries: "user += d.text", cls: "cut" },
+		{ stage: "return", name: "EvalOutput", carries: "{ model, user, memories }", cls: "flat" },
+		{ stage: "adapt", name: "evalCode", carries: "{ output, display }", cls: "flat" },
+		{ stage: "yield", name: "turn.ts result", carries: "one event per step", cls: "flat" },
+		{ stage: "wire", name: "sse(\"values\")", carries: "content + display, as strings", cls: "flat" },
+		{ stage: "browser", name: "the chat UI", carries: "two strings to render", cls: "flat" }
+	];
+
+	var pathEl = document.getElementById("path");
+	pathEl.innerHTML = PATH.map(function (h) {
+		return '<div class="hop ' + h.cls + '">' +
+			'<span class="stage">' + h.stage + "</span>" +
+			'<span class="name">' + esc(h.name) + "</span>" +
+			'<span class="carries">' + esc(h.carries) + "</span>" +
+		"</div>";
+	}).join("");
+
+	var key = document.createElement("div");
+	key.className = "path-key";
+	key.innerHTML =
+		'<span><i style="background: var(--memory)"></i> structured</span>' +
+		'<span><i style="background: var(--user)"></i> flattened to a string here</span>' +
+		'<span><i style="background: var(--dead)"></i> string from here on</span>';
+	pathEl.parentNode.insertBefore(key, pathEl.nextSibling);
+
+	var UI = [
+		{
+			title: "Two axes, not one: topic and audience",
+			note: "USER and MODEL are audiences wearing a channel's clothes. Generative UI is a KIND of thing that happens to be destined for the person, so the two have to come apart before a ui channel makes sense.",
+			old: "// a channel that is really an audience\nemit({ channel: USER,  text });\nemit({ channel: MODEL, text });\n\n// there is nowhere to put a component",
+			neu: "type Audience = \"user\" | \"model\";\n\ninterface Envelope<T> {\n  topic: string;      // output | ui | note | memory\n  to: Audience[];     // who should see it\n  step: number;\n  seq: number;        // ordering across a reconnect\n  payload: T;\n}"
+		},
+		{
+			title: "The transport is a host port",
+			note: "SSE is one deployment's answer, not the interpreter's. Same shape as McpHost and OAuthStore: the extension declares the interface, the colocated host wires the default, a composition root picks. This is also what finally kills the write() global — stdout becomes one transport among several.",
+			old: "// two exits, neither swappable\nlet write = () => {};          // process-global, no-op on the server\n// …and a string accumulator the REPL hand-rolls",
+			neu: "interface ChannelTransport {\n  send(envelope: Envelope<unknown>): boolean;  // false = closed\n  close?(): void;\n}\n\nsseTransport(controller)   // apps/api\nstdoutTransport()          // cli.ts, replaces write()\nbufferTransport()          // the REPL and the eval harness"
+		},
+		{
+			title: "The ui topic, versioned by its payload",
+			note: "JSON now, a serialised component later. The transport never needs to know which — it is serialising an envelope either way, and an SSE stream carries an RSC-style flight payload as happily as it carries JSON.",
+			old: "// today: smuggle it through the display string\nuser += JSON.stringify(node);\n// …and re-parse it in the browser",
+			neu: "const ui = topic<UiNode>(\"ui\");\n\n// v1: a component description\ntype UiNode = { component: string; props: Record<string, unknown> };\n\n// v2: whatever the renderer streams, unchanged at the transport\nui.emit(channels, { to: [\"user\"], payload: node });"
+		},
+		{
+			title: "What the model sees when a component renders",
+			note: "The question worth settling before writing any of it. If the UI goes only to the person, the model does not know what it showed and will repeat itself. The Compactor already solves this shape for text — full value to the user, bounded summary to the model — so generalise that rather than inventing a rule.",
+			old: "// Compactor, today: the same idea, text only\nemit({ channel: USER,  text: bounded.user });   // the whole echo\nemit({ channel: MODEL, text: bounded.model });  // the bounded one",
+			neu: "ui.emit(channels,     { to: [\"user\"],  payload: node });\noutput.emit(channels, { to: [\"model\"], payload:\n  `rendered a ${node.component} over ${rows} rows` });\n\n// one call site, two audiences, different payloads"
+		}
+	];
+
+	var RULES = [
+		["output", "user", "render as chat text", "string"],
+		["ui", "user", "render the component", "UiNode → serialised component"],
+		["output", "model", "hidden; shown by the debug toggle", "string"],
+		["note", "model", "hidden; shown by the debug toggle", "{ kind, text }"],
+		["memory", "user", "the memory-fired affordance", "FiredMemory"]
+	];
+
+	var rulesEl = document.getElementById("rules");
+	rulesEl.innerHTML = RULES.map(function (r) {
+		var hidden = r[1] === "model";
+		return "<tr" + (hidden ? ' class="dim"' : "") + ">" +
+			'<td class="mono">' + r[0] + "</td>" +
+			'<td><span class="aud ' + r[1] + '">' + r[1] + "</span></td>" +
+			"<td>" + r[2] + "</td>" +
+			'<td class="mono small">' + esc(r[3]) + "</td>" +
+		"</tr>";
+	}).join("");
+
+	var uiEl = document.getElementById("ui");
+	UI.forEach(function (s) {
+		var div = document.createElement("div");
+		div.className = "shape-part";
+		div.innerHTML =
+			'<div class="title"><h3>' + s.title + "</h3><p>" + s.note + "</p></div>" +
+			'<div class="swap">' +
+				'<div class="old"><h4>Today</h4><pre class="code">' + esc(s.old) + "</pre></div>" +
+				'<div class="new"><h4>Proposed</h4><pre class="code">' + esc(s.neu) + "</pre></div>" +
+			"</div>";
+		uiEl.appendChild(div);
 	});
 
 	/* ============================================================== balance */
