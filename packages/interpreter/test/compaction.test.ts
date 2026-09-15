@@ -4,14 +4,19 @@ import {
 	Compactor,
 	compactionExtension,
 } from "../src/extensions/compaction/compaction.ts";
+import { compactionHost } from "../src/extensions/compaction/compaction-host.ts";
 import { secretsExtension } from "../src/extensions/secrets/secrets.ts";
+import { secretsHost } from "../src/extensions/secrets/secrets-host.ts";
 import { Cell, Interp, newSym, prelude, runSync, str } from "../src/lisp.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
 function interpWithLimit(limit: number): { interp: Interp; c: Compactor } {
 	const c = new Compactor(limit);
 	const interp = new Interp({
-		extensions: [secretsExtension(), compactionExtension(c)],
+		extensions: [
+			secretsExtension(),
+			compactionExtension(compactionHost, { compactor: c }),
+		],
 	});
 	runSync(interp, prelude);
 	return { interp, c };
@@ -224,13 +229,14 @@ describe("secret taint", () => {
 		const interp = new Interp({
 			extensions: [
 				secretsExtension({
+					...secretsHost,
 					store: {
 						get: () => ({ value, description: "" }),
 						list: () => [["REPL_K", ""]],
 						set: () => {},
 					},
 				}),
-				compactionExtension(c),
+				compactionExtension(compactionHost, { compactor: c }),
 			],
 		});
 		runSync(interp, prelude);
@@ -263,7 +269,9 @@ describe("reporting a promise", () => {
 
 	function withPromise(value: unknown): { interp: Interp; c: Compactor } {
 		const c = new Compactor(400);
-		const interp = new Interp({ extensions: [compactionExtension(c)] });
+		const interp = new Interp({
+			extensions: [compactionExtension(compactionHost, { compactor: c })],
+		});
 		runSync(interp, prelude);
 		interp.defineGlobal(newSym("started"), value, {
 			signature: "started",
@@ -305,7 +313,9 @@ describe("reporting a result", () => {
 
 	function fresh(limit = 400): { interp: Interp; c: Compactor } {
 		const c = new Compactor(limit);
-		const interp = new Interp({ extensions: [compactionExtension(c)] });
+		const interp = new Interp({
+			extensions: [compactionExtension(compactionHost, { compactor: c })],
+		});
 		runSync(interp, prelude);
 		return { interp, c };
 	}
@@ -420,6 +430,7 @@ describe("reporting a result", () => {
 		const interp = new Interp({
 			extensions: [
 				secretsExtension({
+					...secretsHost,
 					store: {
 						get: () => ({ value: "shh", description: "" }),
 						list: () => [["REPL_K", ""]],
@@ -436,7 +447,9 @@ describe("reporting a result", () => {
 describe("the step's echo budget", () => {
 	function stepping(limit: number): { interp: Interp; c: Compactor } {
 		const c = new Compactor(limit);
-		const interp = new Interp({ extensions: [compactionExtension(c)] });
+		const interp = new Interp({
+			extensions: [compactionExtension(compactionHost, { compactor: c })],
+		});
 		runSync(interp, prelude);
 		return { interp, c };
 	}

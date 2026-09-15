@@ -1,22 +1,26 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Clock } from "@repo/shared/host";
 import { describe, expect, it } from "vitest";
 import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
 import {
-	FileMemoryStore,
 	FORGET_BELOW,
 	HALF_LIFE_MS,
 	LINKED_FIRES_AT,
 	MAX_CASCADE_DEPTH,
 	MAX_RECALL_WORDS,
 	MemoryBank,
-	memoryDirFor,
 	memoryExtension,
 	REINFORCEMENT,
-	scopedMemoryStore,
 	VolatileStore,
 } from "../src/extensions/memory/memory.ts";
+import {
+	FileMemoryStore,
+	memoryDirFor,
+	memoryHost,
+	scopedMemoryStore,
+} from "../src/extensions/memory/memory-host.ts";
 import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 
 interface Fixture {
@@ -29,7 +33,7 @@ function fixture(
 	bank: MemoryBank = new MemoryBank(new VolatileStore()),
 ): Fixture {
 	const interp = new Interp({
-		extensions: [compactionExtension(), memoryExtension(bank)],
+		extensions: [compactionExtension(), memoryExtension(memoryHost, { bank })],
 	});
 	runSync(interp, prelude);
 	return {
@@ -47,8 +51,8 @@ async function ev(f: Fixture, code: string): Promise<string> {
 	return str((await runAsync(f.interp, code)).value);
 }
 
-function clockAt(ms: { now: number }): () => number {
-	return () => ms.now;
+function clockAt(ms: { now: number }): Clock {
+	return { now: () => ms.now };
 }
 
 describe("remembering and recalling", () => {
@@ -289,7 +293,10 @@ describe("triggers", () => {
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
 
 		const quiet = new Interp({
-			extensions: [compactionExtension(), memoryExtension(bank)],
+			extensions: [
+				compactionExtension(),
+				memoryExtension(memoryHost, { bank }),
+			],
 		});
 		runSync(quiet, prelude);
 

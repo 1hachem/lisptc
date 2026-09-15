@@ -3,18 +3,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-	EnvSecretsStore,
-	loadSecretsFromFile,
 	type SecretSpec,
 	secretsExtension,
 } from "../src/extensions/secrets/secrets.ts";
+import {
+	envSecretsStore,
+	loadSecretsFromFile,
+	secretsHost,
+} from "../src/extensions/secrets/secrets-host.ts";
 import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { ev } from "./helpers.ts";
 
 function interpWithSecrets(record: Record<string, SecretSpec>): Interp {
-	const store = new EnvSecretsStore();
+	const store = envSecretsStore();
 	store.set(record);
-	const interp = new Interp({ extensions: [secretsExtension({ store })] });
+	const interp = new Interp({
+		extensions: [secretsExtension({ ...secretsHost, store })],
+	});
 	runSync(interp, prelude);
 	return interp;
 }
@@ -159,9 +164,11 @@ describe("secret registry (.env file loading)", () => {
 		const path = writeEnvFile(
 			"# a comment\nREPL_LINEAR_API_KEY=lin_abc123\nNOT_A_SECRET=nope\n",
 		);
-		const store = new EnvSecretsStore();
+		const store = envSecretsStore();
 		loadSecretsFromFile(store, path);
-		const interp = new Interp({ extensions: [secretsExtension({ store })] });
+		const interp = new Interp({
+			extensions: [secretsExtension({ ...secretsHost, store })],
+		});
 		runSync(interp, prelude);
 		const keys = ev("(secrets)", interp);
 		expect(keys).toContain("REPL_LINEAR_API_KEY");

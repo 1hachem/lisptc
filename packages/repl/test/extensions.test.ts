@@ -1,12 +1,16 @@
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
+import { compactionHost } from "@repo/interpreter/compaction-host";
 import {
 	MemoryBank,
 	memoryExtension,
 	VolatileStore,
 } from "@repo/interpreter/memory";
+import { memoryHost } from "@repo/interpreter/memory-host";
 import { proseExtension } from "@repo/interpreter/prose";
-import { EnvSecretsStore, secretsExtension } from "@repo/interpreter/secrets";
+import { secretsExtension } from "@repo/interpreter/secrets";
+import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
 import { type LlmCall, llmExtension } from "@repo/llm/llm";
+import { llmHost } from "@repo/llm/llm-host";
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";
@@ -25,7 +29,10 @@ describe("a REPL built from the model-facing list", () => {
 describe("a REPL built from a list of its own", () => {
 	it("gets exactly the extensions it was handed", async () => {
 		const r = new MemoryRepl({
-			extensions: [compactionExtension(new Compactor(4)), proseExtension()],
+			extensions: [
+				compactionExtension(compactionHost, { compactor: new Compactor(4) }),
+				proseExtension(),
+			],
 		});
 
 		expect(r.secrets).toBeUndefined();
@@ -42,9 +49,12 @@ describe("a REPL built from a list of its own", () => {
 	});
 
 	it("takes the secrets store from the extension that was configured", async () => {
-		const store = new EnvSecretsStore();
+		const store = envSecretsStore();
 		store.set({ REPL_SHARED: { value: "s", description: "shared" } });
-		const r = memoryRepl([secretsExtension({ store }), compactionExtension()]);
+		const r = memoryRepl([
+			secretsExtension({ ...secretsHost, store }),
+			compactionExtension(),
+		]);
 
 		expect(r.secrets).toBe(store);
 		expect(await r.eval("(secrets)")).toContain("shared");
@@ -52,7 +62,10 @@ describe("a REPL built from a list of its own", () => {
 
 	it("takes the memory bank from the extension that was configured", async () => {
 		const bank = new MemoryBank(new VolatileStore());
-		const r = memoryRepl([compactionExtension(), memoryExtension(bank)]);
+		const r = memoryRepl([
+			compactionExtension(),
+			memoryExtension(memoryHost, { bank }),
+		]);
 
 		expect(r.memories).toBe(bank);
 		await r.eval('(memory/remember "k" "a note worth keeping")');
@@ -62,7 +75,10 @@ describe("a REPL built from a list of its own", () => {
 
 	it("hands a fired memory back on its own lane, not in the REPL output", async () => {
 		const bank = new MemoryBank(new VolatileStore());
-		const r = memoryRepl([compactionExtension(), memoryExtension(bank)]);
+		const r = memoryRepl([
+			compactionExtension(),
+			memoryExtension(memoryHost, { bank }),
+		]);
 		await r.eval(`(memory/remember "k" "the note" :on '(step))`);
 
 		const { model, memories } = await r.evalOutput("(+ 1 1)");
@@ -75,7 +91,9 @@ describe("a REPL built from a list of its own", () => {
 	it("reports no memories on a step that fired none", async () => {
 		const r = memoryRepl([
 			compactionExtension(),
-			memoryExtension(new MemoryBank(new VolatileStore())),
+			memoryExtension(memoryHost, {
+				bank: new MemoryBank(new VolatileStore()),
+			}),
 		]);
 
 		expect((await r.evalOutput("(+ 1 1)")).memories).toEqual([]);
@@ -89,6 +107,7 @@ describe("a REPL built from a list of its own", () => {
 		const calls: LlmCall[] = [];
 		const r = memoryRepl([
 			llmExtension({
+				...llmHost,
 				generate: async () => ({ text: "pong", provider: "x", model: "y" }),
 			}),
 		]);
