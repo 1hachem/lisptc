@@ -34,7 +34,15 @@ function glyphFor(seed: string): IconSvgElement {
 	return GLYPHS[(hash >>> 0) % GLYPHS.length] as IconSvgElement;
 }
 
-export function Building({ heads, busy }: { heads: string[]; busy: boolean }) {
+export function Building({
+	id,
+	heads,
+	busy,
+}: {
+	id: string;
+	heads: string[];
+	busy: boolean;
+}) {
 	const [beat, setBeat] = useState(0);
 	useEffect(() => {
 		if (!busy) return;
@@ -57,7 +65,12 @@ export function Building({ heads, busy }: { heads: string[]; busy: boolean }) {
 			/>
 			<span className="flex min-w-0 flex-wrap items-center gap-x-2">
 				{heads.map((head) => (
-					<Scramble key={head} text={head} />
+					<Scramble
+						key={head}
+						text={head}
+						enabled={busy}
+						once={`${id} ${head}`}
+					/>
 				))}
 			</span>
 		</div>

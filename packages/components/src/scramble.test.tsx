@@ -12,7 +12,11 @@ beforeAll(() => {
 	).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
-async function shownAfter(ms: number, enabled = true): Promise<string> {
+async function shownAfter(
+	ms: number,
+	enabled = true,
+	once?: string,
+): Promise<string> {
 	vi.useFakeTimers();
 	const host = document.createElement("div");
 	document.body.append(host);
@@ -20,7 +24,7 @@ async function shownAfter(ms: number, enabled = true): Promise<string> {
 	await act(async () => {
 		root.render(
 			<StrictMode>
-				<Scramble text={TEXT} enabled={enabled} />
+				<Scramble text={TEXT} enabled={enabled} once={once} />
 			</StrictMode>,
 		);
 	});
@@ -63,5 +67,20 @@ describe("Scramble", () => {
 
 	it("starts as something other than the text", async () => {
 		expect(await shownAfter(0)).not.toBe(TEXT);
+	});
+
+	it("plays a key once, so a remount hands the text over settled", async () => {
+		expect(await shownAfter(4000, true, "step one")).toBe(TEXT);
+		expect(await shownAfter(0, true, "step one")).toBe(TEXT);
+	});
+
+	it("plays again under a key it has not settled yet", async () => {
+		expect(await shownAfter(4000, true, "step two")).toBe(TEXT);
+		expect(await shownAfter(0, true, "step three")).not.toBe(TEXT);
+	});
+
+	it("remembers nothing of a run it was told not to play", async () => {
+		expect(await shownAfter(4000, false, "step four")).toBe(TEXT);
+		expect(await shownAfter(0, true, "step four")).not.toBe(TEXT);
 	});
 });

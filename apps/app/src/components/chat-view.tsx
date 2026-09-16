@@ -115,10 +115,12 @@ function ChannelText({ text, tone }: { text: string; tone: string }) {
 }
 
 function AssistantText({
+	id,
 	text,
 	skipped,
 	busy,
 }: {
+	id: string;
 	text: string;
 	skipped: string[];
 	busy: boolean;
@@ -128,11 +130,11 @@ function AssistantText({
 		() => formsIn(text, skipped),
 		[text, skipped],
 	);
-	if (shown.lisp) return <Markdown>{text}</Markdown>;
+	if (shown.lisp) return <Markdown lisp>{text}</Markdown>;
 	return (
 		<>
 			{prose && <Markdown>{prose}</Markdown>}
-			<Building heads={heads} busy={busy} />
+			<Building id={id} heads={heads} busy={busy} />
 		</>
 	);
 }
@@ -243,6 +245,7 @@ export function ChatView() {
 											</div>
 										) : (
 											<AssistantText
+												id={m.id ?? String(i)}
 												text={messageText(m)}
 												skipped={messageProse(m)}
 												busy={isLoading && i === last}

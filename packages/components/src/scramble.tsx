@@ -18,26 +18,35 @@ function maskedAt(text: string, beat: number): string {
 	return out;
 }
 
+const played = new Set<string>();
+
 export interface ScrambleProps {
 	text: string;
 	className?: string;
 	enabled?: boolean;
+	once?: string;
 }
 
-export function Scramble({ text, className, enabled = true }: ScrambleProps) {
+export function Scramble({
+	text,
+	className,
+	enabled = true,
+	once,
+}: ScrambleProps) {
 	const beats = text.length * BEATS_PER_CHAR;
+	const plays = enabled && (once === undefined || !played.has(once));
 	const [shownFor, setShownFor] = useState(text);
-	const [beat, setBeat] = useState(enabled ? 0 : beats);
+	const [beat, setBeat] = useState(plays ? 0 : beats);
 	const reached = useRef(beat);
 	reached.current = beat;
 
 	if (shownFor !== text) {
 		setShownFor(text);
-		setBeat(enabled ? 0 : beats);
+		setBeat(plays ? 0 : beats);
 	}
 
 	useEffect(() => {
-		if (!enabled) {
+		if (!plays) {
 			setBeat(beats);
 			return;
 		}
@@ -46,10 +55,12 @@ export function Scramble({ text, className, enabled = true }: ScrambleProps) {
 		const id = setInterval(() => {
 			b += 1;
 			setBeat(b);
-			if (b >= beats) clearInterval(id);
+			if (b < beats) return;
+			clearInterval(id);
+			if (once !== undefined) played.add(once);
 		}, BEAT_MS);
 		return () => clearInterval(id);
-	}, [enabled, beats]);
+	}, [plays, beats, once]);
 
 	return (
 		<span className={cn("whitespace-pre", className)}>
