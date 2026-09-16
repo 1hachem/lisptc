@@ -22,6 +22,9 @@ export interface ChatMessage {
 		reasoning_content?: unknown;
 		meta?: unknown;
 		display?: unknown;
+		ui?: unknown;
+		prose?: unknown;
+		failed?: unknown;
 	};
 }
 
@@ -230,6 +233,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 				type: m.type,
 				content: m.content,
 				id: m.id,
+				additional_kwargs: m.additional_kwargs,
 			}));
 			const turn = [
 				...history,
@@ -282,6 +286,39 @@ export function isToolMessage(message: ChatMessage): boolean {
 
 export function isUserMessage(message: ChatMessage): boolean {
 	return message.type === "human" || message.type === "user";
+}
+
+export function messageProse(message: ChatMessage): string[] {
+	const prose = message.additional_kwargs?.prose;
+	return Array.isArray(prose) ? prose.map(String) : [];
+}
+
+export function toolFailed(message: ChatMessage): boolean {
+	return message.additional_kwargs?.failed === true;
+}
+
+export function toolUi(message: ChatMessage): unknown {
+	return message.additional_kwargs?.ui;
+}
+
+export function toolModelOutput(message: ChatMessage): {
+	output: string;
+	error: boolean;
+} {
+	const text = messageText(message);
+	try {
+		const parsed = JSON.parse(text) as {
+			source?: unknown;
+			output?: unknown;
+			error?: unknown;
+		};
+		if (parsed?.source === "lisp-repl")
+			return {
+				output: String(parsed.output ?? ""),
+				error: Boolean(parsed.error),
+			};
+	} catch {}
+	return { output: text, error: false };
 }
 
 export function toolResult(message: ChatMessage): {

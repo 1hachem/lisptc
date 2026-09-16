@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { checkSyntax } from "@repo/interpreter";
+import { checkSyntax } from "@repo/interpreter/prose";
 import { z } from "zod";
 import { newRepl } from "./repl.ts";
 

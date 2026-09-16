@@ -167,8 +167,9 @@ describe("capping echo output", () => {
 		expect(model).toContain("not shown to you");
 		expect(user).not.toContain("not shown to you");
 		expect(user).toContain("19\n");
+		expect(user.endsWith("19\n")).toBe(true);
 		expect(model).toContain("nil\n");
-		expect(user.endsWith("nil\n")).toBe(true);
+		expect(user).not.toContain("nil");
 		expect(model.endsWith("echo a named value you can page through\n")).toBe(
 			true,
 		);

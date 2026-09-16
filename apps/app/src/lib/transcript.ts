@@ -5,7 +5,9 @@ import {
 	isUserMessage,
 	messageText,
 	toolResult,
+	toolUi,
 } from "./chat.tsx";
+import { toUiNode, uiText } from "./ui-node.ts";
 
 function section(label: string, body: string): string | null {
 	const trimmed = body.trim();
@@ -14,6 +16,8 @@ function section(label: string, body: string): string | null {
 
 function render(message: ChatMessage): string | null {
 	if (isToolMessage(message)) {
+		const ui = toUiNode(toolUi(message));
+		if (ui) return section("ui", uiText(ui));
 		const { output, error } = toolResult(message);
 		return section(error ? "repl (error)" : "repl", output);
 	}

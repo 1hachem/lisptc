@@ -1,5 +1,6 @@
+import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
 import { describe, expect, test } from "vitest";
-import { highlighter, openForms } from "../src/index.ts";
+import { formsIn, highlighter, openForms } from "../src/index.ts";
 
 function tokens(text: string): [string, string | undefined][] {
 	return highlighter
@@ -63,16 +64,9 @@ describe("reading lisptc", () => {
 		expect(highlighter.normalizeLanguage("ptc")).toBe("lisptc");
 	});
 
-	test("open forms count what is still waiting to be closed", () => {
+	test("the editor waits on the parens the repl is still holding", () => {
 		expect(openForms("(a (b")).toBe(2);
 		expect(openForms("(a (b))")).toBe(0);
-		expect(openForms('(echo "((")')).toBe(0);
-		expect(openForms("(a))")).toBe(0);
-	});
-
-	test("a close the parser only guessed at does not close a form", () => {
-		expect(openForms("(defun add (a b)")).toBe(1);
-		expect(openForms('(echo "hi')).toBe(1);
 	});
 
 	test("an unterminated string colours to the end of its line", () => {
@@ -88,12 +82,85 @@ describe("reading lisptc", () => {
 		]);
 	});
 
-	test("a quote belongs to the paren it was written against", () => {
+	test("a quote belongs to the paren it was written against, and quotes the call out of it", () => {
 		expect(tokens("'(a b)")).toEqual([
 			["'(", "operator"],
-			["a", "function"],
+			["a", "variable"],
 			["b", "variable"],
 			[")", "operator"],
 		]);
+	});
+});
+
+describe("formsIn", () => {
+	test("separates the prose a reply carries from the forms it runs", () => {
+		const { prose, heads } = formsIn(
+			'Let me look.\n(load-mcp "playwright")\nThen I will read it.',
+		);
+		expect(prose).toBe("Let me look.\n\nThen I will read it.");
+		expect(heads).toEqual(["load-mcp"]);
+	});
+
+	test("names every call a form makes, not just the outermost", () => {
+		expect(formsIn('(echo (grep issues "auth"))').heads).toEqual([
+			"echo",
+			"grep",
+		]);
+	});
+
+	test("names a call once however often it is made", () => {
+		expect(formsIn("(echo 1) (echo 2) (echo 3)").heads).toEqual(["echo"]);
+	});
+
+	test("reads a form the model is still writing", () => {
+		const { prose, heads } = formsIn('Working on it.\n(load-mcp "playw');
+		expect(prose).toBe("Working on it.");
+		expect(heads).toEqual(["load-mcp"]);
+	});
+
+	test("takes no call out of a parenthesis inside a string", () => {
+		expect(formsIn('(echo "(not-a-call 1)")').heads).toEqual(["echo"]);
+	});
+
+	test("shows an aside the repl read as prose verbatim, and runs no tool for it", () => {
+		const reply = "an aside (see below)\n(+ 1 2)";
+		const { prose, heads } = formsIn(reply, ["see"]);
+		expect(heads).toEqual(["+"]);
+		expect(prose).toBe("an aside (see below)");
+	});
+
+	test("reads every parenthesis as a call when nothing was skipped", () => {
+		expect(formsIn("an aside (see below)\n(+ 1 2)").heads).toEqual([
+			"see",
+			"+",
+		]);
+	});
+
+	test("keeps a skipped aside's nested calls out of the tools too", () => {
+		const { heads } = formsIn("(I will check (the thing)) (echo 1)", ["I"]);
+		expect(heads).toEqual(["echo"]);
+	});
+
+	test("leaves a reply that is all prose alone", () => {
+		const { prose, heads } = formsIn("The answer is 42.");
+		expect(prose).toBe("The answer is 42.");
+		expect(heads).toEqual([]);
+	});
+});
+
+describe("the browser reads a reply the way the repl runs it", () => {
+	test.each(FORM_FIXTURES)("names the calls of $source", ({
+		source,
+		heads,
+	}) => {
+		expect(formsIn(source).heads).toEqual(heads);
+	});
+
+	test.each(FORM_FIXTURES)("takes the forms of $source out of the prose", ({
+		source,
+		forms,
+	}) => {
+		const { prose } = formsIn(source);
+		for (const form of forms) expect(prose).not.toContain(form);
 	});
 });

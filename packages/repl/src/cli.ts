@@ -11,7 +11,6 @@ import {
 	runAsync,
 	runSync,
 	setExit,
-	stripProse,
 } from "@repo/interpreter/lisp";
 import { MemoryBank, memoryExtension } from "@repo/interpreter/memory";
 import { memoryHost } from "@repo/interpreter/memory-host";
@@ -22,6 +21,7 @@ import { secretsHostFor } from "@repo/interpreter/secrets-host";
 import { type Note, note, output } from "@repo/interpreter/topics";
 import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
+import { formsOnly } from "@repo/shared/lisp-forms";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,
@@ -116,7 +116,7 @@ class InteractiveRepl implements Repl {
 
 export function isComplete(text: string): boolean {
 	const reader = new Reader();
-	reader.push(stripProse(text));
+	reader.push(formsOnly(text));
 	while (!reader.isEmpty()) {
 		try {
 			reader.read();

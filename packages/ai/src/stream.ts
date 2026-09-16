@@ -1,3 +1,4 @@
+import { nodeToJson } from "@repo/interpreter/ui";
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
@@ -8,6 +9,7 @@ export interface ChatMessageInput {
 	type?: string;
 	role?: string;
 	content?: unknown;
+	additional_kwargs?: Record<string, unknown>;
 }
 
 export interface ChatInput {
@@ -73,6 +75,9 @@ export function streamChatResponse(
 					type: wireType(m.type ?? m.role),
 					content: contentToText(m.content),
 					id: m.id ?? `msg-${i}`,
+					...(m.additional_kwargs
+						? { additional_kwargs: m.additional_kwargs }
+						: undefined),
 				}),
 			);
 
@@ -112,6 +117,7 @@ export function streamChatResponse(
 								...(event.reasoning
 									? { reasoning_content: event.reasoning }
 									: {}),
+								prose: event.prose,
 								meta: lastMeta,
 							},
 						});
@@ -119,12 +125,16 @@ export function streamChatResponse(
 						steps = event.step;
 						if (lastMeta && event.memories.length > 0)
 							lastMeta.memories = event.memories;
+						const extras: Record<string, unknown> = {};
+						if (event.display !== event.output) extras.display = event.display;
+						if (event.ui) extras.ui = nodeToJson(event.ui);
+						if (event.failed) extras.failed = true;
 						wire.push({
 							type: "tool",
 							content: replResultContent(event.output, event.error),
 							id: crypto.randomUUID(),
-							...(event.display !== event.output
-								? { additional_kwargs: { display: event.display } }
+							...(Object.keys(extras).length > 0
+								? { additional_kwargs: extras }
 								: undefined),
 						});
 						if (!write(sse("values", { messages: wire }))) break;

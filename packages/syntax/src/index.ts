@@ -1,1 +1,2 @@
-export { highlighter, lisptc, openForms } from "./lisptc.ts";
+export { openForms } from "@repo/shared/lisp-forms";
+export { type Forms, formsIn, highlighter, lisptc } from "./lisptc.ts";

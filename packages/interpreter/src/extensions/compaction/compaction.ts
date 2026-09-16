@@ -252,10 +252,10 @@ export class Compactor {
 	error(text: string): Bounded {
 		const spans = wordSpans(text);
 		const s = sliceWords(text, spans, 0, this.limit, this.charBudget);
-		if (s.below === 0 && !s.cut) return { model: text, user: text };
+		if (s.below === 0 && !s.cut) return { model: text, user: "" };
 		return {
 			model: `${s.text}\n... ${position(s)} (error message truncated)\n`,
-			user: text,
+			user: "",
 		};
 	}
 
@@ -714,7 +714,7 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 		const value = yield* next(interp, form);
 		const report = c.result(interp, form, value);
 		if (report !== "")
-			output.emit(interp.channels, { model: report, user: report });
+			output.emit(interp.channels, { model: report, user: "" });
 		return value;
 	});
 	interp.def(

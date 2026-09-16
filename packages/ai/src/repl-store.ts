@@ -9,6 +9,8 @@ import { proseExtension } from "@repo/interpreter/prose";
 import { proseHost } from "@repo/interpreter/prose-host";
 import { secretsExtension } from "@repo/interpreter/secrets";
 import { secretsHost } from "@repo/interpreter/secrets-host";
+import { uiExtension } from "@repo/interpreter/ui";
+import { uiHost } from "@repo/interpreter/ui-host";
 import { llmExtension } from "@repo/llm/llm";
 import { llmHost } from "@repo/llm/llm-host";
 import { mcpExtension } from "@repo/mcp";
@@ -26,6 +28,7 @@ export function agentExtensions(scope?: string): InterpExtension[] {
 		compactionExtension(compactionHost),
 		memoryExtension(memoryHostFor(scope)),
 		proseExtension(proseHost),
+		uiExtension(uiHost),
 	];
 }
 
@@ -34,6 +37,14 @@ function newAgentRepl(scope?: string): AgentRepl {
 }
 
 const repls = new Map<string, AgentRepl>();
+
+export function peekThreadRepl(threadId: string): AgentRepl | undefined {
+	const existing = repls.get(threadId);
+	if (!existing) return undefined;
+	repls.delete(threadId);
+	repls.set(threadId, existing);
+	return existing;
+}
 
 export function getThreadRepl(
 	threadId: string | undefined,

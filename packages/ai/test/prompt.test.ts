@@ -343,3 +343,63 @@ describe("memory", () => {
 		expect(PROMPT).toMatch(/Outside the window revise is an error/);
 	});
 });
+
+describe("interactive views", () => {
+	const FLAT = PROMPT.replace(/\s+/g, " ");
+
+	it("says an action runs in the REPL with no model turn", () => {
+		expect(FLAT).toMatch(/runs IN THIS REPL/);
+		expect(FLAT).toMatch(/NO model turn in between/);
+	});
+
+	it("says the widget is not sent back into its context", () => {
+		expect(FLAT).toMatch(/the widget is never sent back to you/i);
+	});
+
+	it("names the render entry point and every constructor the renderer draws", () => {
+		expect(PROMPT).toMatch(names("ui/render"));
+		for (const tag of [
+			"ui/stack",
+			"ui/row",
+			"ui/card",
+			"ui/text",
+			"ui/heading",
+			"ui/markdown",
+			"ui/kpi",
+			"ui/badge",
+			"ui/link",
+			"ui/table",
+			"ui/input",
+			"ui/select",
+			"ui/checkbox",
+			"ui/button",
+			"ui/form",
+		])
+			expect(PROMPT).toMatch(names(tag));
+	});
+
+	it("says a select or checkbox can act on change with no submit", () => {
+		expect(FLAT).toMatch(names("on-change"));
+		expect(FLAT).toMatch(/no submit button/);
+	});
+
+	it("draws the line between echoing and rendering", () => {
+		expect(FLAT).toMatch(
+			/Echo when the answer is something to read; render when it is something to use/,
+		);
+	});
+
+	it("says a handler can hand the turn back with ui/send", () => {
+		expect(FLAT).toMatch(names("ui/send"));
+		expect(FLAT).toMatch(/joins the conversation as a message from the user/);
+	});
+
+	it("says which clicks are worth a turn and which are not", () => {
+		expect(FLAT).toMatch(/Send for judgement, handle it in Lisp for work/);
+	});
+
+	it("names every tone the renderer can colour, and no others", () => {
+		expect(FLAT).toMatch(/"ok", "warn", "bad", "info" or "muted"/);
+		expect(FLAT).toMatch(/do not invent one/);
+	});
+});

@@ -21,7 +21,15 @@ import {
 	memoryHost,
 	scopedMemoryStore,
 } from "../src/extensions/memory/memory-host.ts";
-import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
+import { proseExtension } from "../src/extensions/prose/prose.ts";
+import {
+	Interp,
+	type InterpExtension,
+	prelude,
+	runAsync,
+	runSync,
+	str,
+} from "../src/lisp.ts";
 
 interface Fixture {
 	interp: Interp;
@@ -31,9 +39,14 @@ interface Fixture {
 
 function fixture(
 	bank: MemoryBank = new MemoryBank(new VolatileStore()),
+	extras: InterpExtension[] = [],
 ): Fixture {
 	const interp = new Interp({
-		extensions: [compactionExtension(), memoryExtension(memoryHost, { bank })],
+		extensions: [
+			compactionExtension(),
+			memoryExtension(memoryHost, { bank }),
+			...extras,
+		],
 	});
 	runSync(interp, prelude);
 	return {
@@ -45,6 +58,10 @@ function fixture(
 			return before + bank.endStep();
 		},
 	};
+}
+
+function proseFixture(): Fixture {
+	return fixture(new MemoryBank(new VolatileStore()), [proseExtension()]);
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
@@ -167,7 +184,7 @@ describe("triggers", () => {
 	});
 
 	it("fires on words in the prose around the forms", async () => {
-		const f = fixture();
+		const f = proseFixture();
 		await ev(f, `(memory/remember "todos" "finish it" :on '(prose "TODO"))`);
 
 		expect(await f.step("TODO check this\n(+ 1 1)")).toContain(
@@ -253,7 +270,7 @@ describe("triggers", () => {
 	});
 
 	it("combines text patterns for the kinds that match text", async () => {
-		const f = fixture();
+		const f = proseFixture();
 		await ev(
 			f,
 			`(memory/remember "u" "note" :on '(prose (any-of "deploy" "ship")))`,

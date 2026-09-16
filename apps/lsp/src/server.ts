@@ -1,12 +1,7 @@
-import {
-	checkSyntax,
-	type DocArg,
-	Interp,
-	prelude,
-	runSync,
-} from "@repo/interpreter";
+import { type DocArg, Interp, prelude, runSync } from "@repo/interpreter";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { promisesExtension } from "@repo/interpreter/promises";
+import { checkSyntax } from "@repo/interpreter/prose";
 import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
 import {

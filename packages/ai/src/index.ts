@@ -33,3 +33,4 @@ export {
 	type TurnEvent,
 	type TurnOptions,
 } from "./turn.ts";
+export { runUiAction, type UiActionResult } from "./ui-action.ts";

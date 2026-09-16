@@ -8,6 +8,7 @@ const chatMessageSchema = z.object({
 	type: z.string().optional(),
 	role: z.string().optional(),
 	content: z.unknown().optional(),
+	additional_kwargs: z.record(z.string(), z.unknown()).optional(),
 });
 
 const chatRequestSchema = z.object({

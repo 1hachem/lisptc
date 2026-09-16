@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bufferTransport } from "../src/channels-host.ts";
-import { proseExtension } from "../src/extensions/prose/prose.ts";
-import { checkSyntax, Interp, prelude, runSync, str } from "../src/lisp.ts";
+import { checkSyntax, proseExtension } from "../src/extensions/prose/prose.ts";
+import { Interp, prelude, runSync, str } from "../src/lisp.ts";
 import { note } from "../src/topics.ts";
 
 type Run = { value: string; output: string; skipped: string[] };

@@ -15,7 +15,7 @@ export const PROVIDER_NAMES = [
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 
-export const DEFAULT_PROVIDER: ProviderName = "digitalocean";
+export const DEFAULT_PROVIDER: ProviderName = "openrouter";
 
 export function isProviderName(name: string): name is ProviderName {
 	return (PROVIDER_NAMES as readonly string[]).includes(name);
