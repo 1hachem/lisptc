@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 
 const ALLOWED = [
 	/^(.+\/)?README\.md$/,
+	/^(.+\/)?AGENTS\.md$/,
 	/^(.+\/)?CLAUDE\.md$/,
 	/^\.github\//,
 	/^\.claude\/skills\//,
@@ -45,7 +46,7 @@ console.error(
 );
 console.error("truth. A constraint worth keeping goes in a name, a type or a");
 console.error(
-	"test. Only README, a package README.md, a CLAUDE.md and .github/",
+	"test. Only README, a package README.md, an AGENTS.md and .github/",
 );
 console.error("may be markdown. Run `pnpm fix:docs` to delete them, or widen");
 console.error(
