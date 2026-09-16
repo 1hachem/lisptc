@@ -2,6 +2,7 @@ import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
 import { compactionHost } from "@repo/interpreter/compaction-host";
+import { formsOnly } from "@repo/interpreter/forms";
 import {
 	EndOfFile,
 	EvalException,
@@ -11,7 +12,6 @@ import {
 	runAsync,
 	runSync,
 	setExit,
-	stripProse,
 } from "@repo/interpreter/lisp";
 import { MemoryBank, memoryExtension } from "@repo/interpreter/memory";
 import { memoryHost } from "@repo/interpreter/memory-host";
@@ -116,7 +116,7 @@ class InteractiveRepl implements Repl {
 
 export function isComplete(text: string): boolean {
 	const reader = new Reader();
-	reader.push(stripProse(text));
+	reader.push(formsOnly(text));
 	while (!reader.isEmpty()) {
 		try {
 			reader.read();

@@ -1,6 +1,7 @@
 import { type Clock, type PromptSource, systemClock } from "@repo/shared/host";
 import { z } from "zod";
 import { type Channels, topic } from "../../channels.ts";
+import { formsOnly } from "../../forms.ts";
 import {
 	arrayToList,
 	Cell,
@@ -14,7 +15,6 @@ import {
 	newSym,
 	Sym,
 	str,
-	stripProse,
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
@@ -460,7 +460,7 @@ export class MemoryBank {
 }
 
 function proseIn(code: string): string {
-	const forms = stripProse(code);
+	const forms = formsOnly(code);
 	let prose = "";
 	for (let i = 0; i < code.length; i++)
 		if (forms[i] === " " && code[i] !== " ") prose += code[i];

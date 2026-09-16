@@ -1635,74 +1635,6 @@ function qqExpand2(y: unknown, level: number): unknown {
 	return new Cell(listSym, new Cell(qqExpand0(y, level), null));
 }
 
-function endOfString(text: string, i: number): number {
-	for (let j = i + 1; j < text.length; j++) {
-		const c = text[j];
-		if (c === "\n") return j;
-		if (c === "\\") j++;
-		else if (c === '"') return j + 1;
-	}
-	return text.length;
-}
-
-export function endOfForm(text: string, i: number): number {
-	let depth = 0;
-	for (let j = i; j < text.length; j++) {
-		const c = text[j];
-		if (c === '"') {
-			j = endOfString(text, j) - 1;
-		} else if (c === "(") {
-			depth++;
-		} else if (c === ")") {
-			depth--;
-			if (depth === 0) return j + 1;
-		}
-	}
-	return -1;
-}
-
-function startOfForm(text: string, i: number): number {
-	let j = i;
-	while (j > 0 && "'`,@".includes(text[j - 1])) j--;
-	return j === 0 || /\s/.test(text[j - 1]) ? j : i;
-}
-
-export function stripProse(
-	text: string,
-	hooks?: Hooks,
-	onSkip?: (what: string) => void,
-): string {
-	const out: string[] = Array.from(text, (c) => (c === "\n" ? "\n" : " "));
-	let i = 0;
-	while (i < text.length) {
-		if (text[i] !== "(") {
-			i++;
-			continue;
-		}
-		const end = endOfForm(text, i);
-		if (end < 0) {
-			const stray = hooks?.unclosedForm.run(noOpinion, text, i);
-			if (stray !== undefined) {
-				onSkip?.(stray);
-				i++;
-				continue;
-			}
-			for (let j = startOfForm(text, i); j < text.length; j++) out[j] = text[j];
-			break;
-		}
-		const start = startOfForm(text, i);
-		const unreadable = hooks?.unreadableForm.run(noOpinion, text, start, end);
-		if (unreadable !== undefined) {
-			onSkip?.(unreadable);
-			i = end;
-			continue;
-		}
-		for (let j = start; j < end; j++) out[j] = text[j];
-		i = end;
-	}
-	return out.join("");
-}
-
 export interface SyntaxFailure {
 	reason: string;
 	line: number;
@@ -1988,36 +1920,22 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 	}
 }
 
-export function proseHeads(interp: Interp, text: string): string[] {
-	const tokens = new Reader();
-	tokens.push(stripProse(text, interp.hooks));
-	const heads: string[] = [];
-	while (!tokens.isEmpty()) {
-		let exp: unknown;
-		try {
-			exp = tokens.read();
-		} catch {
-			break;
-		}
-		if (interp.hooks.skipForm.run(noOpinion, interp, exp) === undefined)
-			continue;
-		if (exp instanceof Cell && exp.car instanceof Sym) heads.push(exp.car.name);
-	}
-	return heads;
+function sourceAsWritten(_: Interp, text: string): string {
+	return text;
 }
 
 export function* runGen(interp: Interp, text: string): Eval {
 	const { hooks } = interp;
-	const skipped = (what: string) =>
-		note.emit(interp.channels, { model: { kind: "skipped", text: what } });
 	const tokens = new Reader();
-	tokens.push(stripProse(text, hooks, skipped));
+	tokens.push(hooks.readSource.run(sourceAsWritten, interp, text));
 	let result: unknown = Unspecified;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
-		const note = hooks.skipForm.run(noOpinion, interp, exp);
-		if (note !== undefined) {
-			skipped(note);
+		const skipped = hooks.skipForm.run(noOpinion, interp, exp);
+		if (skipped !== undefined) {
+			note.emit(interp.channels, {
+				model: { kind: "skipped", text: skipped },
+			});
 			continue;
 		}
 		result = yield* hooks.evalForm.run(evalTopLevel, interp, exp);
@@ -2063,33 +1981,6 @@ export async function driveAsync<T>(gen: Eval<T>): Promise<Outcome<T>> {
 
 export function runAsync(interp: Interp, text: string): Promise<Outcome> {
 	return driveAsync(runGen(interp, text));
-}
-
-export interface SyntaxError_ {
-	message: string;
-	line: number;
-}
-
-export function checkSyntax(text: string): SyntaxError_[] {
-	const tokens = new Reader();
-	tokens.push(stripProse(text));
-	while (!tokens.isEmpty()) {
-		try {
-			tokens.read();
-		} catch (ex) {
-			if (ex === EndOfFile)
-				return [
-					{
-						message: "unexpected end of input (unbalanced parentheses?)",
-						line: tokens.line,
-					},
-				];
-			if (ex instanceof EvalException)
-				return [{ message: String(ex.message), line: tokens.line }];
-			throw ex;
-		}
-	}
-	return [];
 }
 
 export const prelude = `
@@ -2412,10 +2303,6 @@ export const prelude = `
   (list 'progn
         (list 'apply 'echo (list 'quasiquote body))
         nil))
-
---- String library ---
-Built on the native primitives char, concat, string-upcase and
-string-downcase, plus length, which works on strings too.
 
 (defun substring (s start &rest end)
   "Return the substring of s from index start up to (but not including) end (default: end of s)."

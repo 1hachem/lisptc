@@ -5,6 +5,7 @@ import {
 	type Compactor,
 	compactorOf,
 } from "@repo/interpreter/compaction";
+import { formsOnly } from "@repo/interpreter/forms";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
@@ -15,7 +16,6 @@ import {
 	prelude,
 	runAsync,
 	runSync,
-	stripProse,
 } from "@repo/interpreter/lisp";
 import {
 	bankOf,
@@ -296,7 +296,7 @@ export class AgentRepl extends MemoryRepl {
 }
 
 function isAnswer(code: string, { model, skipped }: StepResult): boolean {
-	if (stripProse(code).trim() === "") return true;
+	if (formsOnly(code).trim() === "") return true;
 	if (model !== "" || skipped.length === 0) return false;
 	return !isTruncated(code);
 }

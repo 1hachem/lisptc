@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { isTruncated, proseExtension } from "../src/extensions/prose/prose.ts";
-import { proseHost } from "../src/extensions/prose/prose-host.ts";
 import {
 	checkSyntax,
-	Interp,
-	prelude,
-	runSync,
-	str,
+	isTruncated,
+	proseExtension,
 	stripProse,
-} from "../src/lisp.ts";
+} from "../src/extensions/prose/prose.ts";
+import { proseHost } from "../src/extensions/prose/prose-host.ts";
+import { formsOnly } from "../src/forms.ts";
+import { Interp, prelude, runSync, str } from "../src/lisp.ts";
 import { note } from "../src/topics.ts";
-import { ev, evWithOutput, freshInterp } from "./helpers.ts";
+import {
+	ev,
+	evProse,
+	evWithOutput,
+	freshInterp,
+	proseInterp,
+} from "./helpers.ts";
 
 function collectSkips(interp: Interp): string[] {
 	const skipped: string[] = [];
@@ -22,31 +27,33 @@ function collectSkips(interp: Interp): string[] {
 
 describe("prose around forms", () => {
 	it("evaluates the forms and ignores the text between them", () => {
-		expect(ev("Here we go: (+ 1 2) and that is the answer.")).toBe("3");
+		expect(evProse("Here we go: (+ 1 2) and that is the answer.")).toBe("3");
 		expect(
-			ev("First define it.\n(defun sq (x) (* x x))\nThen use it: (sq 5)"),
+			evProse("First define it.\n(defun sq (x) (* x x))\nThen use it: (sq 5)"),
 		).toBe("25");
 	});
 
 	it("ignores punctuation that would otherwise be read as code", () => {
-		expect(ev("(+ 1 2) happy to help :)")).toBe("3");
-		expect(ev("a stray ) close paren is just text (+ 1 2)")).toBe("3");
-		expect(ev("don't worry about apostrophes (+ 1 2)")).toBe("3");
+		expect(evProse("(+ 1 2) happy to help :)")).toBe("3");
+		expect(evProse("a stray ) close paren is just text (+ 1 2)")).toBe("3");
+		expect(evProse("don't worry about apostrophes (+ 1 2)")).toBe("3");
 	});
 
 	it("evaluates a program with no form at all to nothing", () => {
-		expect(ev("just thinking out loud, no code here")).toBe("#<unspecified>");
-		expect(ev("")).toBe("#<unspecified>");
+		expect(evProse("just thinking out loud, no code here")).toBe(
+			"#<unspecified>",
+		);
+		expect(evProse("")).toBe("#<unspecified>");
 	});
 
 	it("treats a bare top-level atom as prose", () => {
-		expect(ev("16")).toBe("#<unspecified>");
-		expect(ev("no-such-var")).toBe("#<unspecified>");
+		expect(evProse("16")).toBe("#<unspecified>");
+		expect(evProse("no-such-var")).toBe("#<unspecified>");
 	});
 
 	it("keeps reader sugar written against a top-level form", () => {
-		expect(ev("the list is '(1 2 3)")).toBe("(1 2 3)");
-		expect(ev("(setq x 2) quasiquoted: `(1 ,x)")).toBe("(1 2)");
+		expect(evProse("the list is '(1 2 3)")).toBe("(1 2 3)");
+		expect(evProse("(setq x 2) quasiquoted: `(1 ,x)")).toBe("(1 2)");
 	});
 
 	it("does not read prose punctuation touching a form as sugar", () => {
@@ -54,13 +61,9 @@ describe("prose around forms", () => {
 	});
 
 	it("does not end a form at a paren inside a string", () => {
-		expect(evWithOutput('look: (echo "(not a form)") done').output).toBe(
-			"(not a form)\n",
-		);
-	});
-
-	it("still reports an unclosed form rather than swallowing it", () => {
-		expect(() => ev("here it comes (+ 1 2")).toThrow();
+		expect(
+			evWithOutput('look: (echo "(not a form)") done', proseInterp()).output,
+		).toBe("(not a form)\n");
 	});
 
 	it("reports syntax errors at their line in the original text", () => {
@@ -83,7 +86,7 @@ describe("no comment syntax", () => {
 	});
 
 	it("ignores a `;` line outside a form, like any other prose", () => {
-		expect(ev(";; a section header\n(+ 1 2)")).toBe("3");
+		expect(evProse(";; a section header\n(+ 1 2)")).toBe("3");
 	});
 });
 
@@ -253,12 +256,16 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		});
 	});
 
-	it("tolerates nothing without the prose extension", () => {
+	it("reads the text as plain lisp without the prose extension", () => {
 		const bare = freshInterp();
 		const skipped = collectSkips(bare);
+		expect(str(runSync(bare, "(+ 1 2)"))).toBe("3");
 		expect(() => runSync(bare, "(see below)")).toThrow(/undefined: see/);
+		expect(() => runSync(bare, "Here we go: (+ 1 2)")).toThrow(
+			/void variable: Here/,
+		);
 		expect(() => runSync(bare, "a stray (paren\n(+ 1 2)")).toThrow();
-		expect(() => runSync(bare, "an aside (see `x`)")).toThrow(/syntax error/);
+		expect(() => runSync(bare, "(+ 1 2")).toThrow();
 		expect(skipped).toEqual([]);
 	});
 
@@ -275,17 +282,14 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		expect(skipped).toEqual(["everything is prose here"]);
 	});
 
-	it("changes nothing on an interp without the extension", () => {
-		expect(() => ev("Here is the plan (see below)")).toThrow(/undefined: see/);
-		expect(() => ev("here it comes (+ 1 2")).toThrow();
-		expect(() => ev("an aside (see `x`)")).toThrow(/syntax error/);
+	it("judges a form only through stripProse, not the bare form scan", () => {
+		expect(formsOnly("a (b")).toBe("  (b");
+		expect(stripProse("a (b")).toBe("    ");
+		expect(formsOnly("a (see `x`)")).toBe("  (see `x`)");
+		expect(stripProse("a (see `x`)")).toBe("           ");
 		expect(checkSyntax("an aside (see `x`)")).toEqual([
 			{ message: 'syntax error: unexpected ")" at 1', line: 1 },
 		]);
-		expect(stripProse("a (b")).toBe("  (b");
-		const { hooks } = new Interp({ extensions: [proseExtension()] });
-		expect(stripProse("a (b", hooks)).toBe("    ");
-		expect(stripProse("a (see `x`)", hooks)).toBe("           ");
 	});
 });
 

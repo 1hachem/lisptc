@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
-import { checkSyntax } from "../src/lisp.ts";
+import { checkSyntax } from "../src/extensions/prose/prose.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
-import { ev } from "./helpers.ts";
+import { evProse } from "./helpers.ts";
 
 const REPLIES: [source: string, value: string][] = [
 	["Let me square it: (* 5 5)", "25"],
@@ -27,7 +27,7 @@ describe("prose is allowed on every surface the model meets", () => {
 	it.each(
 		REPLIES,
 	)("%j evaluates to the value of its last form", (src, value) => {
-		expect(ev(src)).toBe(value);
+		expect(evProse(src)).toBe(value);
 	});
 });
 

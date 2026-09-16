@@ -1,5 +1,5 @@
-import { proseHeads } from "@repo/interpreter/lisp";
 import type { FiredMemory } from "@repo/interpreter/memory";
+import { proseHeads } from "@repo/interpreter/prose";
 import type { UiNode } from "@repo/interpreter/ui";
 import type { AgentRepl } from "@repo/repl/repl";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";

@@ -1,16 +1,21 @@
 import type { PromptSource } from "@repo/shared/host";
 import { isNumeric } from "../../arith.ts";
+import { endOfForm, type FormJudge, formsOnly } from "../../forms.ts";
+import { noOpinion } from "../../hooks.ts";
 import {
 	Cell,
-	endOfForm,
+	EndOfFile,
+	EvalException,
 	type Interp,
 	type InterpExtension,
 	isSpecialForm,
 	LispKeyword,
+	Reader,
 	readFailure,
 	Sym,
 	str,
 } from "../../lisp.ts";
+import { note } from "../../topics.ts";
 import { proseHost } from "./prose-host.ts";
 
 export type ProseClassifier = (
@@ -32,12 +37,15 @@ export function proseExtension(
 ): InterpExtension {
 	const classify = options.classify ?? readsAsProse;
 	const extension = (interp: Interp): void => {
-		interp.hooks.unclosedForm.use(
-			(text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
-		);
-		interp.hooks.unreadableForm.use(
-			(text, start, end, next) =>
-				unreadable(text, start, end) ?? next(text, start, end),
+		interp.hooks.readSource.use((interp, text, next) =>
+			next(
+				interp,
+				stripProse(text, (what) =>
+					note.emit(interp.channels, {
+						model: { kind: "skipped", text: what },
+					}),
+				),
+			),
 		);
 		interp.hooks.skipForm.use(
 			(interp, form, next) => classify(interp, form) ?? next(interp, form),
@@ -46,16 +54,67 @@ export function proseExtension(
 	return Object.assign(extension, { prompt: host.prompt() });
 }
 
-function unreadable(
+const proseJudge: FormJudge = {
+	unclosed: (text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
+	unreadable(text, start, end) {
+		const source = text.slice(start, end);
+		const failure = readFailure(source);
+		if (failure === undefined) return undefined;
+		const line = lineAt(text, start) + failure.line - 1;
+		return `${abbreviate(source)} — ${failure.reason} on line ${line}, so this was read as prose`;
+	},
+};
+
+export function stripProse(
 	text: string,
-	start: number,
-	end: number,
-): string | undefined {
-	const source = text.slice(start, end);
-	const failure = readFailure(source);
-	if (failure === undefined) return undefined;
-	const line = lineAt(text, start) + failure.line - 1;
-	return `${abbreviate(source)} — ${failure.reason} on line ${line}, so this was read as prose`;
+	onSkip?: (what: string) => void,
+): string {
+	return formsOnly(text, proseJudge, onSkip);
+}
+
+export function proseHeads(interp: Interp, text: string): string[] {
+	const tokens = new Reader();
+	tokens.push(stripProse(text));
+	const heads: string[] = [];
+	while (!tokens.isEmpty()) {
+		let exp: unknown;
+		try {
+			exp = tokens.read();
+		} catch {
+			break;
+		}
+		if (interp.hooks.skipForm.run(noOpinion, interp, exp) === undefined)
+			continue;
+		if (exp instanceof Cell && exp.car instanceof Sym) heads.push(exp.car.name);
+	}
+	return heads;
+}
+
+export interface SyntaxError_ {
+	message: string;
+	line: number;
+}
+
+export function checkSyntax(text: string): SyntaxError_[] {
+	const tokens = new Reader();
+	tokens.push(formsOnly(text));
+	while (!tokens.isEmpty()) {
+		try {
+			tokens.read();
+		} catch (ex) {
+			if (ex === EndOfFile)
+				return [
+					{
+						message: "unexpected end of input (unbalanced parentheses?)",
+						line: tokens.line,
+					},
+				];
+			if (ex instanceof EvalException)
+				return [{ message: String(ex.message), line: tokens.line }];
+			throw ex;
+		}
+	}
+	return [];
 }
 
 export const readsAsProse: ProseClassifier = (interp, form) => {

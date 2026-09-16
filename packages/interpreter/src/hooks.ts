@@ -31,11 +31,7 @@ export function noOpinion(): undefined {
 }
 
 export interface Hooks {
-	readonly unclosedForm: Chain<[text: string, at: number], string | undefined>;
-	readonly unreadableForm: Chain<
-		[text: string, start: number, end: number],
-		string | undefined
-	>;
+	readonly readSource: Chain<[interp: Interp, text: string], string>;
 	readonly skipForm: Chain<[interp: Interp, form: unknown], string | undefined>;
 	readonly evalForm: Chain<[interp: Interp, form: unknown], Eval>;
 	readonly dispose: Chain<[], void>;
@@ -43,8 +39,7 @@ export interface Hooks {
 
 export function newHooks(): Hooks {
 	return {
-		unclosedForm: new Chain(),
-		unreadableForm: new Chain(),
+		readSource: new Chain(),
 		skipForm: new Chain(),
 		evalForm: new Chain(),
 		dispose: new Chain(),

@@ -1,14 +1,14 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { runSync, str } from "../src/lisp.ts";
-import { freshInterp } from "./helpers.ts";
+import { freshInterp, proseInterp } from "./helpers.ts";
 
 function fixture(name: string): string {
 	return fileURLToPath(new URL(`./fixtures/imports/${name}`, import.meta.url));
 }
 
 function evFrom(dir: string, code: string): string {
-	const interp = freshInterp();
+	const interp = proseInterp();
 	interp.importStack.push(fileURLToPath(new URL(dir, import.meta.url)));
 	try {
 		return str(runSync(interp, code));
@@ -19,14 +19,14 @@ function evFrom(dir: string, code: string): string {
 
 describe("(import path)", () => {
 	it("imports every definition from a file (import *)", () => {
-		const interp = freshInterp();
+		const interp = proseInterp();
 		runSync(interp, `(import "${fixture("util.ptc")}")`);
 		expect(str(runSync(interp, "(double 21)"))).toBe("42");
 		expect(str(runSync(interp, "(progn greeting)"))).toBe('"hello from util"');
 	});
 
 	it("resolves relative imports against the importing file's directory", () => {
-		const interp = freshInterp();
+		const interp = proseInterp();
 		runSync(interp, `(import "${fixture("math.ptc")}")`);
 		expect(str(runSync(interp, "(quad 3)"))).toBe("18");
 		expect(str(runSync(interp, "(double 5)"))).toBe("10");
@@ -38,7 +38,7 @@ describe("(import path)", () => {
 	});
 
 	it("does not loop forever on circular imports", () => {
-		const interp = freshInterp();
+		const interp = proseInterp();
 		runSync(interp, `(import "${fixture("cycle-a.ptc")}")`);
 		expect(str(runSync(interp, "(a-fn)"))).toBe("1");
 		expect(str(runSync(interp, "(b-fn)"))).toBe("2");
