@@ -23,7 +23,8 @@
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*"
+    "@repo/mcp": "workspace:*",
+    "@repo/shared": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

@@ -5,7 +5,6 @@ import {
 	type Compactor,
 	compactorOf,
 } from "@repo/interpreter/compaction";
-import { formsOnly } from "@repo/interpreter/forms";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
@@ -39,6 +38,7 @@ import {
 	type LlmExtension,
 	type LlmObserver,
 } from "@repo/llm/llm";
+import { formsOnly } from "@repo/shared/lisp-forms";
 
 export interface Repl {
 	readonly interp: Interp;

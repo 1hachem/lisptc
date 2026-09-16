@@ -1,6 +1,6 @@
 import type { PromptSource } from "@repo/shared/host";
+import { endOfForm, type FormJudge, formsOnly } from "@repo/shared/lisp-forms";
 import { isNumeric } from "../../arith.ts";
-import { endOfForm, type FormJudge, formsOnly } from "../../forms.ts";
 import { noOpinion } from "../../hooks.ts";
 import {
 	Cell,

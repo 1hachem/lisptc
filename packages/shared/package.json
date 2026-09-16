@@ -6,6 +6,8 @@
   "exports": {
     "./host": "./src/host.ts",
     "./host-node": "./src/host-node.ts",
+    "./lisp-form-fixtures": "./src/lisp-form-fixtures.ts",
+    "./lisp-forms": "./src/lisp-forms.ts",
     "./lisp-tokens": "./src/lisp-tokens.ts",
     "./messages": "./src/messages.ts",
     "./providers": "./src/providers.ts"

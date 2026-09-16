@@ -1,7 +1,7 @@
 import { type Clock, type PromptSource, systemClock } from "@repo/shared/host";
+import { formsOnly } from "@repo/shared/lisp-forms";
 import { z } from "zod";
 import { type Channels, topic } from "../../channels.ts";
-import { formsOnly } from "../../forms.ts";
 import {
 	arrayToList,
 	Cell,

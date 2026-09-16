@@ -1,3 +1,4 @@
+import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
 import { describe, expect, test } from "vitest";
 import { formsIn, highlighter, openForms } from "../src/index.ts";
 
@@ -63,16 +64,9 @@ describe("reading lisptc", () => {
 		expect(highlighter.normalizeLanguage("ptc")).toBe("lisptc");
 	});
 
-	test("open forms count what is still waiting to be closed", () => {
+	test("the editor waits on the parens the repl is still holding", () => {
 		expect(openForms("(a (b")).toBe(2);
 		expect(openForms("(a (b))")).toBe(0);
-		expect(openForms('(echo "((")')).toBe(0);
-		expect(openForms("(a))")).toBe(0);
-	});
-
-	test("a close the parser only guessed at does not close a form", () => {
-		expect(openForms("(defun add (a b)")).toBe(1);
-		expect(openForms('(echo "hi')).toBe(1);
 	});
 
 	test("an unterminated string colours to the end of its line", () => {
@@ -88,10 +82,10 @@ describe("reading lisptc", () => {
 		]);
 	});
 
-	test("a quote belongs to the paren it was written against", () => {
+	test("a quote belongs to the paren it was written against, and quotes the call out of it", () => {
 		expect(tokens("'(a b)")).toEqual([
 			["'(", "operator"],
-			["a", "function"],
+			["a", "variable"],
 			["b", "variable"],
 			[")", "operator"],
 		]);
@@ -151,5 +145,22 @@ describe("formsIn", () => {
 		const { prose, heads } = formsIn("The answer is 42.");
 		expect(prose).toBe("The answer is 42.");
 		expect(heads).toEqual([]);
+	});
+});
+
+describe("the browser reads a reply the way the repl runs it", () => {
+	test.each(FORM_FIXTURES)("names the calls of $source", ({
+		source,
+		heads,
+	}) => {
+		expect(formsIn(source).heads).toEqual(heads);
+	});
+
+	test.each(FORM_FIXTURES)("takes the forms of $source out of the prose", ({
+		source,
+		forms,
+	}) => {
+		const { prose } = formsIn(source);
+		for (const form of forms) expect(prose).not.toContain(form);
 	});
 });

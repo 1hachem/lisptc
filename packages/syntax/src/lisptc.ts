@@ -1,3 +1,4 @@
+import { formSpans } from "@repo/shared/lisp-forms";
 import { tokenPattern } from "@repo/shared/lisp-tokens";
 import {
 	createHighlighter,
@@ -7,12 +8,12 @@ import {
 
 const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 const QUOTE = new Set(["'", "`", "~", ",", ",@"]);
+const QUOTES = new Set(["'", "`"]);
+const UNQUOTES = new Set([",", ",@"]);
 
 interface Scan {
 	ranges: TokenRange[];
-	openForms: number;
 	heads: string[];
-	spans: [number, number][];
 }
 
 export interface Forms {
@@ -30,10 +31,11 @@ function scan(text: string): Scan {
 	const token = tokenPattern();
 	const ranges: TokenRange[] = [];
 	const heads: string[] = [];
-	const spans: [number, number][] = [];
-	let formStart = -1;
+	const enclosing: boolean[] = [];
 	let depth = 0;
 	let head = false;
+	let quoted = false;
+	let mark: "quote" | "unquote" | undefined;
 	let base = 0;
 	let quoteAt = -1;
 	let quoteEnd = -1;
@@ -57,6 +59,8 @@ function scan(text: string): Scan {
 				if (depth > 0) push(start, end, "operator");
 				else if (quoteEnd !== start) quoteAt = start;
 				quoteEnd = end;
+				if (QUOTES.has(word)) mark = "quote";
+				else if (UNQUOTES.has(word)) mark = "unquote";
 				continue;
 			}
 
@@ -65,38 +69,44 @@ function scan(text: string): Scan {
 			quoteEnd = -1;
 
 			if (word === "(") {
-				if (depth === 0) formStart = from;
+				enclosing.push(quoted);
+				if (mark !== undefined) quoted = mark === "quote";
 				depth += 1;
 				head = true;
 				push(from, end, "operator");
 			} else if (word === ")") {
 				push(start, end, "operator");
-				if (depth > 0) depth -= 1;
-				if (depth === 0 && formStart >= 0) {
-					spans.push([formStart, end]);
-					formStart = -1;
+				if (depth > 0) {
+					depth -= 1;
+					quoted = enclosing.pop() ?? false;
 				}
-			} else if (word === '"') {
-				push(start, base + line.length, "string");
-				token.lastIndex = 0;
-				break;
-			} else if (word.startsWith('"')) {
-				push(start, end, "string");
 				head = false;
+			} else if (word.startsWith('"')) {
+				if (depth === 0) {
+					const paren = word.indexOf("(", 1);
+					if (paren >= 0) token.lastIndex = m.index + paren;
+				} else if (word === '"') {
+					push(start, base + line.length, "string");
+					token.lastIndex = 0;
+					break;
+				} else {
+					push(start, end, "string");
+					head = false;
+				}
 			} else {
-				push(start, end, atomClass(word, head));
-				if (head) heads.push(word);
+				push(start, end, atomClass(word, head && !quoted));
+				if (head && !quoted) heads.push(word);
 				head = false;
 			}
+			mark = undefined;
 		}
 		base += line.length + 1;
 		quoteAt = -1;
 		quoteEnd = -1;
+		mark = undefined;
 	}
 
-	if (formStart >= 0) spans.push([formStart, text.length]);
-
-	return { ranges, openForms: depth, heads, spans };
+	return { ranges, heads };
 }
 
 export const lisptc = defineLanguage({
@@ -108,17 +118,15 @@ export const lisptc = defineLanguage({
 export const highlighter = createHighlighter({ languages: [lisptc] });
 
 export function formsIn(text: string, skipped: readonly string[] = []): Forms {
-	const { spans } = scan(text);
 	const heads: string[] = [];
 	let prose = "";
 	let at = 0;
-	for (const [start, end] of spans) {
-		const inner = scan(text.slice(start, end));
-		if (inner.heads[0] !== undefined && skipped.includes(inner.heads[0]))
-			continue;
+	for (const [start, end] of formSpans(text)) {
+		const inner = scan(text.slice(start, end)).heads;
+		if (inner[0] !== undefined && skipped.includes(inner[0])) continue;
 		prose += text.slice(at, start);
 		at = end;
-		heads.push(...inner.heads);
+		heads.push(...inner);
 	}
 	prose += text.slice(at);
 	return {
@@ -128,8 +136,4 @@ export function formsIn(text: string, skipped: readonly string[] = []): Forms {
 			.trim(),
 		heads: [...new Set(heads)],
 	};
-}
-
-export function openForms(text: string): number {
-	return scan(text).openForms;
 }

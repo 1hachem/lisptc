@@ -2,7 +2,6 @@ import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
 import { compactionHost } from "@repo/interpreter/compaction-host";
-import { formsOnly } from "@repo/interpreter/forms";
 import {
 	EndOfFile,
 	EvalException,
@@ -22,6 +21,7 @@ import { secretsHostFor } from "@repo/interpreter/secrets-host";
 import { type Note, note, output } from "@repo/interpreter/topics";
 import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
+import { formsOnly } from "@repo/shared/lisp-forms";
 import type { Repl } from "./repl.ts";
 import {
 	connectOrSpawn,

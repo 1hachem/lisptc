@@ -1,3 +1,4 @@
+import { formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, it } from "vitest";
 import {
 	checkSyntax,
@@ -6,7 +7,6 @@ import {
 	stripProse,
 } from "../src/extensions/prose/prose.ts";
 import { proseHost } from "../src/extensions/prose/prose-host.ts";
-import { formsOnly } from "../src/forms.ts";
 import { Interp, prelude, runSync, str } from "../src/lisp.ts";
 import { note } from "../src/topics.ts";
 import {
