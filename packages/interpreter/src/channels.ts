@@ -1,4 +1,8 @@
-export type Audience = "user" | "model";
+export const AUDIENCES = ["user", "model"] as const;
+
+export type Audience = (typeof AUDIENCES)[number];
+
+export type Addressed<T> = Partial<Record<Audience, T>>;
 
 export const NOTE_TOPIC = "note";
 
@@ -13,7 +17,7 @@ export type Listener = (e: Envelope) => void;
 
 export interface Topic<T> {
 	readonly name: string;
-	emit(channels: Channels, to: readonly Audience[], payload: T): void;
+	emit(channels: Channels | undefined, addressed: Addressed<T>): void;
 	on(
 		channels: Channels,
 		listener: (payload: T, e: Envelope<T>) => void,
@@ -23,8 +27,18 @@ export interface Topic<T> {
 export function topic<T>(name: string): Topic<T> {
 	return {
 		name,
-		emit(channels, to, payload) {
-			channels.emit({ topic: name, to, payload });
+		emit(channels, addressed) {
+			if (channels === undefined) return;
+			const groups = new Map<T, Audience[]>();
+			for (const audience of AUDIENCES) {
+				const payload = addressed[audience];
+				if (payload === undefined) continue;
+				const to = groups.get(payload);
+				if (to === undefined) groups.set(payload, [audience]);
+				else to.push(audience);
+			}
+			for (const [payload, to] of groups)
+				channels.emit({ topic: name, to, payload });
 		},
 		on(channels, listener) {
 			return channels.on(name, (e) =>

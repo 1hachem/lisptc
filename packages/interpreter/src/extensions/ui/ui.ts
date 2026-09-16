@@ -93,12 +93,12 @@ export class UiSurface {
 
 	render(node: UiNode): void {
 		const channels = this.channels;
-		if (channels) rendered.emit(channels, ["user"], node);
+		if (channels) rendered.emit(channels, { user: node });
 	}
 
 	send(text: string): void {
 		const channels = this.channels;
-		if (channels) sent.emit(channels, ["model"], text);
+		if (channels) sent.emit(channels, { model: text });
 	}
 
 	hasAction(id: string): boolean {

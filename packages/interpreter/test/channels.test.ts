@@ -18,7 +18,7 @@ describe("Channels", () => {
 		const channels = new Channels();
 		const printed = record(channels, output.name);
 		const noted = record(channels, note.name);
-		output.emit(channels, ["user"], "printed");
+		output.emit(channels, { user: "printed" });
 		expect(printed.map((e) => e.payload)).toEqual(["printed"]);
 		expect(noted).toEqual([]);
 	});
@@ -27,8 +27,8 @@ describe("Channels", () => {
 		const channels = new Channels();
 		const everything: Envelope[] = [];
 		channels.onAny((e) => everything.push(e));
-		output.emit(channels, ["user"], "printed");
-		weather.emit(channels, ["model"], { sky: "clear" });
+		output.emit(channels, { user: "printed" });
+		weather.emit(channels, { model: { sky: "clear" } });
 		expect(everything.map((e) => e.topic)).toEqual([output.name, "weather"]);
 	});
 
@@ -36,16 +36,16 @@ describe("Channels", () => {
 		const channels = new Channels();
 		const seen: { sky: string }[] = [];
 		weather.on(channels, (payload) => seen.push(payload));
-		weather.emit(channels, ["model"], { sky: "clear" });
+		weather.emit(channels, { model: { sky: "clear" } });
 		expect(seen).toEqual([{ sky: "clear" }]);
 	});
 
 	it("stamps the channels' current step onto what it sends", () => {
 		const channels = new Channels();
 		const seen = record(channels, output.name);
-		output.emit(channels, ["user"], "first");
+		output.emit(channels, { user: "first" });
 		channels.step = 7;
-		output.emit(channels, ["user"], "second");
+		output.emit(channels, { user: "second" });
 		expect(seen.map((e) => e.step)).toEqual([0, 7]);
 	});
 
@@ -53,9 +53,9 @@ describe("Channels", () => {
 		const channels = new Channels();
 		const seen: string[] = [];
 		const off = output.on(channels, (text) => seen.push(text));
-		output.emit(channels, ["user"], "first");
+		output.emit(channels, { user: "first" });
 		off();
-		output.emit(channels, ["user"], "second");
+		output.emit(channels, { user: "second" });
 		expect(seen).toEqual(["first"]);
 	});
 
@@ -65,7 +65,7 @@ describe("Channels", () => {
 			throw new Error("subscriber is broken");
 		});
 		const seen = record(channels, output.name);
-		expect(() => output.emit(channels, ["user"], "printed")).not.toThrow();
+		expect(() => output.emit(channels, { user: "printed" })).not.toThrow();
 		expect(seen).toHaveLength(1);
 	});
 
@@ -76,7 +76,7 @@ describe("Channels", () => {
 		output.on(channels, () => {
 			throw new Error("subscriber is broken");
 		});
-		output.emit(channels, ["user"], "printed");
+		output.emit(channels, { user: "printed" });
 		expect(notes).toEqual([
 			"failed: a listener on output threw: subscriber is broken",
 		]);
@@ -88,9 +88,9 @@ describe("a piped transport", () => {
 		const channels = new Channels();
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
-		output.emit(channels, ["user"], "first");
+		output.emit(channels, { user: "first" });
 		detach();
-		output.emit(channels, ["user"], "second");
+		output.emit(channels, { user: "second" });
 		expect(buffer.text("user")).toBe("first");
 	});
 
@@ -103,9 +103,9 @@ describe("a piped transport", () => {
 				return sent.length < 2;
 			},
 		});
-		output.emit(channels, ["user"], "while open");
-		output.emit(channels, ["user"], "the last one it accepts");
-		output.emit(channels, ["user"], "never seen");
+		output.emit(channels, { user: "while open" });
+		output.emit(channels, { user: "the last one it accepts" });
+		output.emit(channels, { user: "never seen" });
 		expect(sent).toEqual(["while open", "the last one it accepts"]);
 	});
 
@@ -113,10 +113,10 @@ describe("a piped transport", () => {
 		const channels = new Channels();
 		const buffer = bufferTransport();
 		channels.pipe(buffer);
-		output.emit(channels, ["user"], "for the person");
-		output.emit(channels, ["model"], "for the model");
-		output.emit(channels, ["user", "model"], " for both");
-		weather.emit(channels, ["model"], { sky: "clear" });
+		output.emit(channels, { user: "for the person" });
+		output.emit(channels, { model: "for the model" });
+		output.emit(channels, { user: " for both", model: " for both" });
+		weather.emit(channels, { model: { sky: "clear" } });
 		expect(buffer.text("user")).toBe("for the person for both");
 		expect(buffer.text("model")).toBe("for the model for both");
 		expect(buffer.payloads(weather)).toEqual([{ sky: "clear" }]);
