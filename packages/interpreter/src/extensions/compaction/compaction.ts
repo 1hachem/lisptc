@@ -1,6 +1,6 @@
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { type Channels, MODEL, USER } from "../../channels.ts";
+import type { Addressed, Channels } from "../../channels.ts";
 import {
 	Cell,
 	callableKind,
@@ -21,6 +21,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
+import { output } from "../../topics.ts";
 import { compactionHost } from "./compaction-host.ts";
 
 export const MAX_WORDS = 400;
@@ -53,10 +54,7 @@ function wordSpans(text: string): [number, number][] {
 	return spans;
 }
 
-export interface Bounded {
-	model: string;
-	user: string;
-}
+export type Bounded = Required<Addressed<string>>;
 
 interface Slice {
 	text: string;
@@ -231,20 +229,13 @@ export class Compactor {
 	private echo(model: string, user: string, dropped: number): Bounded {
 		this.spent += wordSpans(model).length;
 		this.dropped += dropped;
-		this.say({ model, user });
+		output.emit(this.channels, { model, user });
 		return { model, user };
-	}
-
-	say(bounded: Bounded): void {
-		if (bounded.user !== "")
-			this.channels?.emit({ channel: USER, text: bounded.user });
-		if (bounded.model !== "")
-			this.channels?.emit({ channel: MODEL, text: bounded.model });
 	}
 
 	doc(text: string): Bounded {
 		const bounded = { model: text, user: text };
-		this.say(bounded);
+		output.emit(this.channels, bounded);
 		return bounded;
 	}
 
@@ -722,7 +713,8 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 	interp.hooks.evalForm.use(function* (interp, form, next) {
 		const value = yield* next(interp, form);
 		const report = c.result(interp, form, value);
-		if (report !== "") c.say({ model: report, user: report });
+		if (report !== "")
+			output.emit(interp.channels, { model: report, user: report });
 		return value;
 	});
 	interp.def(

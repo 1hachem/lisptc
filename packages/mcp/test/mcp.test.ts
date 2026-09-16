@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { USER } from "@repo/interpreter/channels";
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
 	Interp,
 	prelude,
@@ -18,15 +18,13 @@ async function evalStr(interp: Interp, code: string): Promise<string> {
 }
 
 async function evalOutput(interp: Interp, code: string): Promise<string> {
-	let output = "";
-	const stop = interp.channels.on(USER, (d) => {
-		output += d.text;
-	});
+	const buffer = bufferTransport();
+	const detach = interp.channels.pipe(buffer);
 	try {
 		await runAsync(interp, code);
-		return output;
+		return buffer.text("user");
 	} finally {
-		stop();
+		detach();
 	}
 }
 

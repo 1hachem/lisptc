@@ -8,6 +8,7 @@
     "./arith": "./src/arith.ts",
     "./async": "./src/async.ts",
     "./channels": "./src/channels.ts",
+    "./channels-host": "./src/channels-host.ts",
     "./compaction": "./src/extensions/compaction/compaction.ts",
     "./compaction-host": "./src/extensions/compaction/compaction-host.ts",
     "./hooks": "./src/hooks.ts",
@@ -22,6 +23,7 @@
     "./secrets": "./src/extensions/secrets/secrets.ts",
     "./secrets-host": "./src/extensions/secrets/secrets-host.ts",
     "./source": "./src/source.ts",
+    "./topics": "./src/topics.ts",
     "./types": "./src/types.ts"
   },
   "engines": {

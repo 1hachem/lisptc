@@ -18,22 +18,16 @@ import {
 	ZERO,
 } from "./arith.ts";
 import { AsyncWork } from "./async.ts";
-import { Channels, MODEL, USER } from "./channels.ts";
+import { Channels } from "./channels.ts";
 import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
+import { note, output } from "./topics.ts";
 
 function assert(x: boolean, message?: string): asserts x {
 	if (!x) throw new Error(`Assertion Failure: ${message || ""}`);
 }
 
-let write: (s: string) => void = () => {};
 let exit: (n: number) => void = () => {};
-
-export function setWriter(fn: (s: string) => void): (s: string) => void {
-	const prev = write;
-	write = fn;
-	return prev;
-}
 
 export function setExit(fn: (n: number) => void): void {
 	exit = fn;
@@ -566,7 +560,6 @@ export class Interp {
 	}
 
 	constructor(options: InterpOptions = {}) {
-		this.channels.on(USER, (d) => write(d.text));
 		this.def(
 			"car",
 			1,
@@ -776,13 +769,13 @@ export class Interp {
 			"Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. `(echo)` alone prints a blank line. Returns an unspecified value, so the REPL reports nothing for a step that ends in an echo — what was printed IS the report.",
 			z.tuple([zList]),
 			([rest]) => {
-				this.say(`${echoText(rest)}\n`);
+				output.emit(this.channels, { user: `${echoText(rest)}\n` });
 				return Unspecified;
 			},
 		);
 		this.def("doc", -1, DOC_SIGNATURE, DOC_DOC, z.tuple([zList]), ([rest]) => {
 			const answer = lookupDoc(this, rest);
-			this.tell(answer.text);
+			output.emit(this.channels, { user: answer.text, model: answer.text });
 			return answer.value;
 		});
 
@@ -1108,15 +1101,6 @@ export class Interp {
 
 	globalEntries(): IterableIterator<[Sym, unknown]> {
 		return this.globals.entries();
-	}
-
-	private say(text: string): void {
-		this.channels.emit({ channel: USER, text });
-	}
-
-	private tell(text: string): void {
-		this.channels.emit({ channel: USER, text });
-		this.channels.emit({ channel: MODEL, text });
 	}
 
 	dispose(): void {
@@ -1992,11 +1976,8 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 				? new EvalException("break/return used outside of a loop", null, false)
 				: ex;
 		if (failure instanceof EvalException)
-			interp.channels.emit({
-				channel: MODEL,
-				severity: "critical",
-				text: String(failure),
-				value: failure.value,
+			note.emit(interp.channels, {
+				model: { kind: "failed", text: String(failure) },
 			});
 		throw failure;
 	}
@@ -2005,11 +1986,7 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 export function* runGen(interp: Interp, text: string): Eval {
 	const { hooks } = interp;
 	const skipped = (what: string) =>
-		interp.channels.emit({
-			channel: MODEL,
-			severity: "warning",
-			text: what,
-		});
+		note.emit(interp.channels, { model: { kind: "skipped", text: what } });
 	const tokens = new Reader();
 	tokens.push(stripProse(text, hooks, skipped));
 	let result: unknown = Unspecified;

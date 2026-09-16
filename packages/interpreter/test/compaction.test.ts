@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODEL, USER } from "../src/channels.ts";
+import { bufferTransport } from "../src/channels-host.ts";
 import {
 	Compactor,
 	compactionExtension,
@@ -28,22 +28,18 @@ function stepped(
 ): { user: string; model: string } {
 	const { interp, c } = given ?? { interp: freshInterp(), c: undefined };
 	c?.beginStep();
-	let user = "";
-	let model = "";
-	const off = [
-		interp.channels.on(USER, (d) => {
-			user += d.text;
-		}),
-		interp.channels.on(MODEL, (d) => {
-			if (d.severity === undefined) model += d.text;
-		}),
-	];
+	const buffer = bufferTransport();
+	const detach = interp.channels.pipe(buffer);
 	try {
 		runSync(interp, code);
 	} finally {
-		for (const stop of off) stop();
+		detach();
 	}
-	return { user, model: c === undefined ? user : model + c.endStep() };
+	const user = buffer.text("user");
+	return {
+		user,
+		model: c === undefined ? user : buffer.text("model") + c.endStep(),
+	};
 }
 
 function echoed(
