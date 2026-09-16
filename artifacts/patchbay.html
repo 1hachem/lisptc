@@ -1,0 +1,976 @@
+<title>The Channel Patchbay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;600&family=Newsreader:opsz,wght@6..72,300..600&display=swap">
+
+<style>
+:root{
+  --paper:#EDF1EE;
+  --surface:#F8FAF7;
+  --sunk:#E3E9E4;
+  --ink:#0F1917;
+  --ink-soft:#3C4A46;
+  --ink-faint:#6B7A75;
+  --rule:#C9D3CE;
+  --rule-soft:#DCE4DF;
+  --user:#0B6E6C;
+  --model:#A94C22;
+  --user-wash:#DAEAE7;
+  --model-wash:#F2E1D6;
+  --shadow:0 1px 2px rgba(15,25,23,.06),0 8px 24px -16px rgba(15,25,23,.3);
+}
+:root:not([data-theme="light"]){
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#0B1211;
+    --surface:#121D1B;
+    --sunk:#0A100F;
+    --ink:#DFE8E4;
+    --ink-soft:#A4B3AE;
+    --ink-faint:#72837D;
+    --rule:#26332F;
+    --rule-soft:#1B2724;
+    --user:#46CBBF;
+    --model:#EE9257;
+    --user-wash:#12302C;
+    --model-wash:#2C1D14;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0B1211;
+  --surface:#121D1B;
+  --sunk:#0A100F;
+  --ink:#DFE8E4;
+  --ink-soft:#A4B3AE;
+  --ink-faint:#72837D;
+  --rule:#26332F;
+  --rule-soft:#1B2724;
+  --user:#46CBBF;
+  --model:#EE9257;
+  --user-wash:#12302C;
+  --model-wash:#2C1D14;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -18px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Newsreader",Georgia,"Times New Roman",serif;
+  font-size:19px;
+  line-height:1.62;
+  font-optical-sizing:auto;
+  -webkit-font-smoothing:antialiased;
+}
+.shell{max-width:1120px;margin:0 auto;padding:0 clamp(18px,4vw,48px)}
+.col{max-width:67ch}
+
+h1,h2,h3,.label,.btn,th,.chip,.badge{font-family:"Archivo","Helvetica Neue",Arial,sans-serif}
+h1{
+  font-size:clamp(2.6rem,6.4vw,4.6rem);
+  font-variation-settings:"wdth" 112,"wght" 700;
+  line-height:.98;
+  letter-spacing:-.022em;
+  margin:0 0 .35em;
+  text-wrap:balance;
+}
+h2{
+  font-size:clamp(1.5rem,2.7vw,2rem);
+  font-variation-settings:"wdth" 108,"wght" 650;
+  letter-spacing:-.015em;
+  line-height:1.1;
+  margin:0 0 .5rem;
+  text-wrap:balance;
+}
+h3{
+  font-size:1.03rem;
+  font-variation-settings:"wdth" 100,"wght" 640;
+  letter-spacing:.005em;
+  margin:2.2rem 0 .4rem;
+}
+p{margin:0 0 1.05em}
+a{color:inherit}
+strong{font-weight:600}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+code{font-size:.82em;background:var(--sunk);padding:.12em .36em;border-radius:3px;border:1px solid var(--rule-soft)}
+pre{
+  font-size:13px;line-height:1.6;margin:0;
+  background:var(--sunk);border:1px solid var(--rule-soft);border-radius:6px;
+  padding:14px 16px;overflow-x:auto;color:var(--ink-soft);
+}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+.label{
+  font-size:11px;font-variation-settings:"wdth" 92,"wght" 640;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+}
+
+/* ---- masthead ---- */
+header.top{padding:clamp(56px,10vh,110px) 0 0}
+.rule-row{display:flex;align-items:center;gap:14px;margin-bottom:28px}
+.rule-row .line{flex:1;height:1px;background:var(--rule)}
+.deck{font-size:1.22rem;color:var(--ink-soft);max-width:60ch;margin-bottom:1.6rem}
+.meta{display:flex;flex-wrap:wrap;gap:8px 10px;margin-bottom:clamp(40px,8vh,80px)}
+.badge{
+  font-size:11px;letter-spacing:.04em;font-variation-settings:"wdth" 95,"wght" 600;
+  border:1px solid var(--rule);border-radius:100px;padding:4px 11px;color:var(--ink-soft);
+  background:var(--surface);
+}
+
+/* ---- section spine ---- */
+main{padding-bottom:120px}
+section{position:relative;padding:clamp(34px,6vh,64px) 0 0}
+@media(min-width:900px){
+  main{padding-left:34px;border-left:1px solid var(--rule-soft);margin-left:2px}
+  section::before{
+    content:"";position:absolute;left:-39px;top:calc(clamp(34px,6vh,64px) + .55em);
+    width:9px;height:9px;border-radius:50%;background:var(--paper);
+    border:1.5px solid var(--rule);
+  }
+  section.live::before{background:var(--user);border-color:var(--user)}
+}
+.sec-head{display:flex;flex-direction:column;gap:.25rem;margin-bottom:1.3rem}
+
+/* ---- figures / panels ---- */
+figure{margin:1.9rem 0}
+figure svg{display:block;width:100%;height:auto;max-width:100%;color:var(--ink)}
+figcaption{font-size:.86rem;color:var(--ink-faint);margin-top:.7rem;max-width:62ch;line-height:1.5}
+.panel{
+  background:var(--surface);border:1px solid var(--rule);border-radius:10px;
+  box-shadow:var(--shadow);
+}
+
+/* svg wire classes */
+.wire{stroke:var(--rule);stroke-width:1.5;fill:none}
+.wire-user{stroke:var(--user);stroke-width:1.5;fill:none}
+.wire-model{stroke:var(--model);stroke-width:1.5;fill:none}
+.box{fill:var(--surface);stroke:var(--rule);stroke-width:1.5}
+.box-sunk{fill:var(--sunk);stroke:var(--rule);stroke-width:1.5}
+.t{fill:currentColor;font-family:"JetBrains Mono",monospace;font-size:12px}
+.t-s{fill:var(--ink-faint);font-family:"JetBrains Mono",monospace;font-size:10.5px}
+.t-h{fill:currentColor;font-family:"Archivo",sans-serif;font-size:12.5px;font-variation-settings:"wdth" 95,"wght" 640;letter-spacing:.06em}
+
+/* ---- demo ---- */
+.demo{margin:1.8rem 0 0;overflow:hidden}
+.demo-controls{display:flex;flex-wrap:wrap;gap:18px 26px;padding:16px 18px;border-bottom:1px solid var(--rule-soft);align-items:flex-end}
+.ctl{display:flex;flex-direction:column;gap:7px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.btn{
+  font-size:12.5px;font-variation-settings:"wdth" 96,"wght" 600;letter-spacing:.01em;
+  background:var(--surface);color:var(--ink-soft);border:1px solid var(--rule);
+  border-radius:5px;padding:6px 11px;cursor:pointer;line-height:1.35;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.btn:hover{border-color:var(--ink-faint);color:var(--ink)}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn:focus-visible,.node:focus-visible{outline:2px solid var(--user);outline-offset:2px}
+.btn-run{background:var(--user);border-color:var(--user);color:var(--paper);padding:7px 16px}
+.btn-run:hover{color:var(--paper);filter:brightness(1.08)}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+@media(min-width:860px){.stage{grid-template-columns:minmax(0,340px) minmax(0,1fr)}}
+.tape{border-right:1px solid var(--rule-soft);padding:16px 18px;min-height:280px;background:var(--sunk)}
+@media(max-width:859px){.tape{border-right:0;border-bottom:1px solid var(--rule-soft)}}
+.tape-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.env{
+  border:1px solid var(--rule);border-left-width:3px;border-radius:5px;background:var(--surface);
+  padding:8px 10px;margin-bottom:8px;font-size:12px;
+  animation:pop .34s cubic-bezier(.2,.9,.3,1) both;
+}
+.env.to-user{border-left-color:var(--user)}
+.env.to-model{border-left-color:var(--model)}
+.env.to-both{border-left-color:var(--ink-faint)}
+.env-top{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px}
+.chip{
+  font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:2px 6px;border-radius:3px;
+  font-variation-settings:"wdth" 92,"wght" 640;border:1px solid transparent;
+}
+.chip.topic{background:var(--sunk);border-color:var(--rule);color:var(--ink-soft)}
+.chip.user{background:var(--user-wash);color:var(--user)}
+.chip.model{background:var(--model-wash);color:var(--model)}
+.env-payload{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--ink-soft);white-space:pre-wrap;word-break:break-word;max-height:4.6em;overflow:hidden;position:relative}
+.env-payload.open{max-height:none}
+.env-more{font-size:10.5px;color:var(--user);background:none;border:0;padding:4px 0 0;cursor:pointer;font-family:"Archivo",sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.empty{color:var(--ink-faint);font-size:12.5px;font-style:italic}
+
+.sinks{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;background:var(--rule-soft)}
+@media(min-width:620px){.sinks{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sink{background:var(--surface);padding:13px 15px 15px;min-height:150px;transition:background .3s}
+.sink.off{background:var(--sunk);opacity:.55}
+.sink.hit{animation:flash .6s ease-out}
+.sink-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.sink-name{font-family:"Archivo",sans-serif;font-size:12.5px;font-variation-settings:"wdth" 96,"wght" 650;letter-spacing:.02em}
+.sink-kind{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--ink-faint)}
+.sink-sub{font-size:11.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4}
+.sink-out{font-family:"JetBrains Mono",monospace;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--ink-soft);max-height:190px;overflow-y:auto}
+.sink-out .line{display:block;animation:pop .3s ease-out both}
+.sink-out .k{color:var(--ink-faint)}
+.sink-out .u{color:var(--user)}
+.sink-out .m{color:var(--model)}
+.offbus{border-top:1px dashed var(--rule);margin-top:8px;padding-top:6px;color:var(--ink-faint);font-style:italic}
+.toggle{margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px}
+
+@keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes flash{0%{background:var(--user-wash)}100%{background:var(--surface)}}
+@media(prefers-reduced-motion:reduce){
+  .env,.sink-out .line{animation:none}
+  .sink.hit{animation:none}
+}
+
+/* topology interaction */
+.node{cursor:pointer}
+.node rect{transition:opacity .25s}
+.node.off rect,.node.off text{opacity:.32}
+.wire.off,.wire-user.off,.wire-model.off{opacity:.22;stroke-dasharray:4 4}
+
+/* ---- tables ---- */
+.tbl-wrap{overflow-x:auto;margin:1.5rem 0;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:540px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top;line-height:1.45}
+th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-variation-settings:"wdth" 92,"wght" 640;background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+td code{font-size:12px}
+.tbl-wrap.compact td:first-child{white-space:nowrap;font-family:"JetBrains Mono",monospace;font-size:12.5px}
+
+/* ---- trade-off cards ---- */
+.cards{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;background:var(--rule-soft);border:1px solid var(--rule);border-radius:8px;overflow:hidden;margin:1.6rem 0}
+@media(min-width:720px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.card{background:var(--surface);padding:16px 18px}
+.card h4{margin:0 0 .3rem;font-family:"Archivo",sans-serif;font-size:13.5px;font-variation-settings:"wdth" 98,"wght" 650;letter-spacing:.01em}
+.card p{margin:0;font-size:14.5px;color:var(--ink-soft);line-height:1.5}
+.card .cost{display:block;margin-top:.55rem;font-size:12.5px;color:var(--ink-faint)}
+.card .cost b{font-family:"Archivo",sans-serif;font-variation-settings:"wdth" 92,"wght" 640;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--model)}
+
+.aside{
+  border-left:2px solid var(--user);background:var(--user-wash);
+  padding:14px 18px;margin:1.6rem 0;border-radius:0 6px 6px 0;font-size:15.5px;color:var(--ink-soft);
+}
+.aside p{margin:0}
+.aside p+p{margin-top:.6em}
+
+.split{display:grid;gap:14px;margin:1.5rem 0}
+@media(min-width:760px){.split{grid-template-columns:1fr 1fr}}
+.split .lane .label{display:block;margin-bottom:6px}
+
+footer{border-top:1px solid var(--rule);padding:26px 0 70px;color:var(--ink-faint);font-size:13.5px}
+</style>
+
+<div class="shell">
+  <header class="top">
+    <div class="rule-row">
+      <span class="label">lisptc &middot; packages/interpreter/src/channels.ts</span>
+      <span class="line"></span>
+    </div>
+    <h1>The Channel Patchbay</h1>
+    <p class="deck">The interpreter never writes to a screen. It addresses an utterance to an audience and hands it to a bus. Who is listening &mdash; a terminal, a step buffer, an eval recorder, a socket that did not exist last week &mdash; is somebody else&rsquo;s decision.</p>
+    <div class="meta">
+      <span class="badge">4 emitters</span>
+      <span class="badge">3 topics</span>
+      <span class="badge">2 audiences</span>
+      <span class="badge">~100 lines of bus</span>
+    </div>
+  </header>
+
+  <main>
+
+  <section>
+    <div class="sec-head col">
+      <span class="label">01 &middot; The one idea</span>
+      <h2>An emission is a payload addressed per audience</h2>
+    </div>
+    <div class="col">
+      <p>Two audiences read this REPL. A <strong>person</strong> watches a transcript scroll past. A <strong>model</strong> reads a step report and decides what to evaluate next. They want different things from the same act of speaking: the person wants the whole 1,200-word table, the model wants 250 words and a note saying what it is missing.</p>
+      <p>Until this refactor that asymmetry was spelled three ways. The core interpreter had a private <code>say</code> (user only) and a private <code>tell</code> (both), the compactor had its own <code>say</code> taking a <code>{model, user}</code> pair, and the memory bank had a third <code>say</code> that was not really an emission at all. Four call sites, three vocabularies, one act.</p>
+    </div>
+
+    <div class="split">
+      <div class="lane">
+        <span class="label">Before &mdash; three verbs</span>
+        <pre><code>// lisp.ts
+private say(text)  { output.emit(ch, ["user"], text) }
+private tell(text) { output.emit(ch, ["user","model"], text) }
+
+// compaction.ts
+say(bounded) {
+  if (bounded.user  !== "") output.emit(ch, ["user"],  bounded.user)
+  if (bounded.model !== "") output.emit(ch, ["model"], bounded.model)
+}
+
+// memory.ts
+private say(key, body) { ...budget; fired.emit(ch, ["user"], …) }</code></pre>
+      </div>
+      <div class="lane">
+        <span class="label">After &mdash; one verb</span>
+        <pre><code>type Addressed&lt;T&gt; = Partial&lt;Record&lt;Audience, T&gt;&gt;
+
+output.emit(ch, { user: text })                  // echo
+output.emit(ch, { user: text, model: text })     // doc
+output.emit(ch, { user: full, model: clipped })  // compacted echo
+fired.emit(ch,  { user: { key, body } })         // a memory fires
+
+// and Bounded is now what it always was:
+type Bounded = Required&lt;Addressed&lt;string&gt;&gt;</code></pre>
+      </div>
+    </div>
+
+    <div class="col">
+      <p><code>say</code> was <code>Addressed</code> with the model dropped. <code>tell</code> was <code>Addressed</code> with both fields equal. The compactor&rsquo;s <code>Bounded</code> was <code>Addressed</code> with both fields required. Once the payload carries its own addressing, the three verbs collapse into the one the bus already had: <code>emit</code>.</p>
+      <p>The grouping moved with it. <code>emit</code> now folds audiences that received an identical payload into a single envelope addressed to both &mdash; which is exactly what <code>tell</code> used to hand-write, and what the compactor used to get wrong by sending the same doc string twice.</p>
+    </div>
+
+    <figure class="col">
+      <svg viewBox="0 0 660 230" role="img" aria-label="One emit call with a per-audience payload becomes one envelope when the payloads are identical and two envelopes when they differ">
+        <text class="t-h" x="0" y="14">SAME PAYLOAD</text>
+        <rect class="box" x="0" y="26" width="196" height="46" rx="5"/>
+        <text class="t" x="12" y="45">emit(ch, {</text>
+        <text class="t" x="12" y="62">  user: d, model: d })</text>
+        <line class="wire" x1="196" y1="49" x2="286" y2="49" marker-end="url(#ar)"/>
+        <rect class="box-sunk" x="290" y="26" width="240" height="46" rx="5"/>
+        <text class="t" x="302" y="45">{ to: ["user","model"],</text>
+        <text class="t" x="302" y="62">  payload: d }</text>
+        <text class="t-s" x="540" y="53">1 envelope</text>
+
+        <text class="t-h" x="0" y="120">DIFFERENT PAYLOAD</text>
+        <rect class="box" x="0" y="132" width="196" height="46" rx="5"/>
+        <text class="t" x="12" y="151">emit(ch, {</text>
+        <text class="t" x="12" y="168">  user: f, model: c })</text>
+        <path class="wire-user" d="M196 150 H240 Q252 150 252 140 V126 H286" marker-end="url(#aru)"/>
+        <path class="wire-model" d="M196 160 H240 Q252 160 252 170 V186 H286" marker-end="url(#arm)"/>
+        <rect class="box-sunk" x="290" y="106" width="240" height="38" rx="5"/>
+        <text class="t" x="302" y="129">{ to: ["user"], payload: f }</text>
+        <rect class="box-sunk" x="290" y="166" width="240" height="38" rx="5"/>
+        <text class="t" x="302" y="189">{ to: ["model"], payload: c }</text>
+        <text class="t-s" x="540" y="159">2 envelopes</text>
+        <defs>
+          <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--rule)"/></marker>
+          <marker id="aru" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--user)"/></marker>
+          <marker id="arm" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--model)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>One call, one or two envelopes. The caller never chooses; <code>emit</code> groups by payload identity, so envelope count reflects how many <em>distinct things were said</em>, not how many audiences heard them. Consumers read <code>to</code>, never the count.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head col">
+      <span class="label">02 &middot; Anatomy</span>
+      <h2>Four types, and only one of them is a class</h2>
+    </div>
+    <div class="col">
+      <p>The whole bus is about a hundred lines. It is worth reading in full before trusting any diagram of it.</p>
+    </div>
+    <pre class="col"><code>interface Envelope&lt;T = unknown&gt; {
+  topic: string
+  to: readonly Audience[]     // "user" | "model"
+  step?: number               // stamped by Channels if absent
+  payload: T
+}
+
+interface Topic&lt;T&gt; {                        // a typed door onto the bus
+  readonly name: string
+  emit(ch: Channels | undefined, addressed: Addressed&lt;T&gt;): void
+  on(ch: Channels, listener: (payload: T, e: Envelope&lt;T&gt;) =&gt; void): () =&gt; void
+}
+
+interface ChannelTransport {                // a sink that takes everything
+  send(envelope: Envelope): boolean         // false =&gt; unsubscribe me
+  close?(): void
+}
+
+class Channels {
+  on(topic, listener): () =&gt; void           // one topic, typed via Topic.on
+  onAny(listener): () =&gt; void               // every envelope
+  pipe(transport): () =&gt; void               // every envelope, sink-shaped
+  emit(envelope): void                      // fan out, synchronously
+  step = 0
+}</code></pre>
+    <div class="col">
+      <h3>Topic vs transport is the whole split</h3>
+      <p>A <strong>topic</strong> is typed and narrow: <code>output</code> carries strings, <code>note</code> carries <code>{kind, text}</code>, <code>memory</code> carries <code>{key, body}</code>. Code that cares about one kind of event subscribes through the topic and gets its payload type back.</p>
+      <p>A <strong>transport</strong> is untyped and wide: it receives every envelope on the bus and decides for itself what to do. That is the port a terminal, a socket, or a log file plugs into. It returns <code>false</code> to unsubscribe itself, which is how a dead client cleans up without anyone tracking it.</p>
+      <p>Emitting through <code>Topic.emit</code> also accepts <code>undefined</code> channels and no-ops &mdash; extensions hold <code>channels?: Channels</code> until they are attached, and that used to mean a guard at every call site.</p>
+    </div>
+  </section>
+
+  <section class="live">
+    <div class="sec-head col">
+      <span class="label">03 &middot; Interactive</span>
+      <h2>Run a step and watch the fan-out</h2>
+    </div>
+    <div class="col">
+      <p>Pick a form, choose which extensions are loaded, and patch sinks in or out by clicking them in the diagram. The bus never changes. What each consumer ends up holding changes completely.</p>
+    </div>
+
+    <figure>
+      <svg id="topo" viewBox="0 0 980 300" role="img" aria-label="Emitters on the left send envelopes into the Channels bus in the middle, which fans out to four sinks on the right; sinks can be toggled off">
+        <text class="t-h" x="8" y="18">EMITTERS</text>
+        <text class="t-h" x="382" y="18">BUS</text>
+        <text class="t-h" x="700" y="18">SINKS &mdash; CLICK TO PATCH</text>
+
+        <g id="emitters">
+          <rect class="box" x="8" y="34" width="210" height="42" rx="5"/>
+          <text class="t" x="20" y="52">core: echo, doc</text>
+          <text class="t-s" x="20" y="68">topic output</text>
+
+          <rect class="box" x="8" y="90" width="210" height="42" rx="5"/>
+          <text class="t" x="20" y="108">compaction</text>
+          <text class="t-s" x="20" y="124">topic output (user ≠ model)</text>
+
+          <rect class="box" x="8" y="146" width="210" height="42" rx="5"/>
+          <text class="t" x="20" y="164">memory</text>
+          <text class="t-s" x="20" y="180">topic memory</text>
+
+          <rect class="box" x="8" y="202" width="210" height="42" rx="5"/>
+          <text class="t" x="20" y="220">prose, eval errors</text>
+          <text class="t-s" x="20" y="236">topic note</text>
+        </g>
+
+        <path class="wire" d="M218 55 H300 Q318 55 318 76 V130" marker-end="url(#a2)"/>
+        <path class="wire" d="M218 111 H300 Q318 111 318 126 V130" marker-end="url(#a2)"/>
+        <path class="wire" d="M218 167 H300 Q318 167 318 152 V148" marker-end="url(#a2)"/>
+        <path class="wire" d="M218 223 H300 Q318 223 318 200 V148" marker-end="url(#a2)"/>
+
+        <rect class="box-sunk" x="330" y="34" width="150" height="212" rx="6"/>
+        <text class="t-h" x="352" y="126">Channels</text>
+        <text class="t-s" x="352" y="146">step = 7</text>
+        <text class="t-s" x="352" y="162">stamps + fans out</text>
+
+        <g class="node" id="n-stdout" data-sink="stdout" tabindex="0" role="button" aria-pressed="true">
+          <rect class="box" x="640" y="26" width="330" height="46" rx="5"/>
+          <text class="t" x="656" y="45">CLI &mdash; stdoutTransport</text>
+          <text class="t-s" x="656" y="61">pipe() &middot; writes output where to includes user</text>
+        </g>
+        <g class="node" id="n-buffer" data-sink="buffer" tabindex="0" role="button" aria-pressed="true">
+          <rect class="box" x="640" y="84" width="330" height="46" rx="5"/>
+          <text class="t" x="656" y="103">REPL step &mdash; bufferTransport</text>
+          <text class="t-s" x="656" y="119">pipe() &middot; collects, then splits by audience</text>
+        </g>
+        <g class="node" id="n-trace" data-sink="trace" tabindex="0" role="button" aria-pressed="true">
+          <rect class="box" x="640" y="142" width="330" height="46" rx="5"/>
+          <text class="t" x="656" y="161">evals &mdash; note.on(...)</text>
+          <text class="t-s" x="656" y="177">on() &middot; one topic, typed payload</text>
+        </g>
+        <g class="node" id="n-extra" data-sink="extra" tabindex="0" role="button" aria-pressed="false">
+          <rect class="box" x="640" y="200" width="330" height="46" rx="5" stroke-dasharray="5 4"/>
+          <text class="t" x="656" y="219">your socket &mdash; wsTransport</text>
+          <text class="t-s" x="656" y="235">pipe() &middot; 12 lines, no upstream change</text>
+        </g>
+
+        <path class="wire" id="w-stdout" d="M480 120 H560 Q580 120 580 100 V49 H636" marker-end="url(#a2)"/>
+        <path class="wire" id="w-buffer" d="M480 132 H560 Q580 132 580 118 V107 H636" marker-end="url(#a2)"/>
+        <path class="wire" id="w-trace"  d="M480 148 H560 Q580 148 580 158 V165 H636" marker-end="url(#a2)"/>
+        <path class="wire" id="w-extra"  d="M480 160 H560 Q580 160 580 190 V223 H636" marker-end="url(#a2)"/>
+        <defs>
+          <marker id="a2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--rule)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>Unpatching a sink greys its wire and nothing else. No emitter holds a reference to a consumer, so the CLI, the step buffer and the eval recorder are genuinely interchangeable &mdash; and the dashed one is the point: adding a sink is additive.</figcaption>
+    </figure>
+
+    <div class="panel demo">
+      <div class="demo-controls">
+        <div class="ctl">
+          <span class="label">The step</span>
+          <div class="seg" id="scenarios"></div>
+        </div>
+        <div class="ctl">
+          <span class="label">Extensions loaded</span>
+          <div class="seg" id="exts"></div>
+        </div>
+        <div class="ctl">
+          <button class="btn btn-run" id="run">Run step &rarr;</button>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="tape">
+          <div class="tape-head">
+            <span class="label">On the bus</span>
+            <span class="label" id="env-count"></span>
+          </div>
+          <div id="tape-body"></div>
+        </div>
+        <div class="sinks" id="sinks"></div>
+      </div>
+    </div>
+    <p class="col" style="font-size:14.5px;color:var(--ink-faint);margin-top:1rem">Lines marked <em>not from the bus</em> are the honest part: the compactor&rsquo;s end-of-step truncation note and the memory bank&rsquo;s recall buffer are returned strings, assembled into the step report after the step ends. They never become envelopes.</p>
+  </section>
+
+  <section>
+    <div class="sec-head col">
+      <span class="label">04 &middot; Who speaks</span>
+      <h2>Extensions widen what is said, not who hears it</h2>
+    </div>
+    <div class="col">
+      <p>Every extension in the repo reaches the outside world through a declared host port &mdash; the filesystem, the clock, a model provider. The bus is the same discipline pointed the other way: the one way <em>out</em> of an extension is a topic.</p>
+    </div>
+    <div class="tbl-wrap compact">
+      <table>
+        <thead><tr><th>Emitter</th><th>Topic</th><th>Addressed</th><th>Why that shape</th></tr></thead>
+        <tbody>
+          <tr><td>core <code>echo</code></td><td>output</td><td>user</td><td>Printing is for the person. Bare, the model sees nothing from an echo.</td></tr>
+          <tr><td>core <code>doc</code></td><td>output</td><td>user + model</td><td>Documentation is quoted back to the model whole &mdash; it is how it checks a binding.</td></tr>
+          <tr><td>compaction</td><td>output</td><td>user + model, differing</td><td>The person gets the full window; the model gets a word-budgeted slice plus a marker.</td></tr>
+          <tr><td>compaction</td><td>output</td><td>user + model, same</td><td>The per-form result line (<code>issues-1: a list of 40 records</code>).</td></tr>
+          <tr><td>memory</td><td>memory</td><td>user</td><td>A fired memory is rendered in the UI. The model gets it as text in the step report instead.</td></tr>
+          <tr><td>prose stripper</td><td>note</td><td>model</td><td><code>skipped</code>: the model wrote prose where code belongs. Private feedback.</td></tr>
+          <tr><td>evaluator</td><td>note</td><td>model</td><td><code>failed</code>: the exception, before the REPL decides how to render it.</td></tr>
+          <tr><td>the bus itself</td><td>note</td><td>model</td><td>A listener threw. Reported as a note, guarded so a note about a note cannot loop.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head col">
+      <span class="label">05 &middot; Who listens</span>
+      <h2>The same step, four destinations</h2>
+    </div>
+    <div class="col">
+      <p>The CLI is the simple case: a transport that writes the user&rsquo;s half of <code>output</code> to stdout as it arrives, live, mid-step. The web UI is the interesting one, because it is <em>not</em> a transport. It sits downstream of the step buffer.</p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 980 260" role="img" aria-label="The CLI transport writes to stdout live, while the buffer transport collects a step and hands an EvalOutput record to the agent loop, which streams it over SSE to the React UI">
+        <rect class="box-sunk" x="8" y="96" width="120" height="58" rx="6"/>
+        <text class="t-h" x="24" y="122">Channels</text>
+        <text class="t-s" x="24" y="139">per step</text>
+
+        <path class="wire" d="M128 112 H190 Q206 112 206 96 V56 H256" marker-end="url(#a3)"/>
+        <rect class="box" x="260" y="34" width="180" height="44" rx="5"/>
+        <text class="t" x="274" y="52">stdoutTransport</text>
+        <text class="t-s" x="274" y="68">writes as it arrives</text>
+        <path class="wire" d="M440 56 H520" marker-end="url(#a3)"/>
+        <rect class="box-sunk" x="524" y="34" width="150" height="44" rx="5"/>
+        <text class="t" x="538" y="60">terminal</text>
+        <text class="t-s" x="690" y="60">live, unbuffered</text>
+
+        <path class="wire" d="M128 138 H190 Q206 138 206 156 V176 H256" marker-end="url(#a3)"/>
+        <rect class="box" x="260" y="154" width="180" height="44" rx="5"/>
+        <text class="t" x="274" y="172">bufferTransport</text>
+        <text class="t-s" x="274" y="188">collects the whole step</text>
+
+        <path class="wire" d="M440 176 H500" marker-end="url(#a3)"/>
+        <rect class="box" x="504" y="144" width="200" height="64" rx="5"/>
+        <text class="t" x="518" y="163">EvalOutput</text>
+        <text class="t-s" x="518" y="180">model / user / memories</text>
+        <text class="t-s" x="518" y="196">+ endStep() strings</text>
+
+        <path class="wire-model" d="M704 164 H760 Q776 164 776 150 V132 H840" marker-end="url(#a3m)"/>
+        <text class="t-s" x="712" y="126">model</text>
+        <rect class="box" x="844" y="110" width="128" height="42" rx="5"/>
+        <text class="t" x="858" y="136">agent loop</text>
+
+        <path class="wire-user" d="M704 190 H760 Q776 190 776 206 V222 H840" marker-end="url(#a3u)"/>
+        <text class="t-s" x="712" y="232">user</text>
+        <rect class="box" x="844" y="200" width="128" height="42" rx="5"/>
+        <text class="t" x="858" y="226">SSE &rarr; UI</text>
+        <defs>
+          <marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--rule)"/></marker>
+          <marker id="a3u" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--user)"/></marker>
+          <marker id="a3m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--model)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>The buffer is attached for the duration of one step and detached in a <code>finally</code>. It turns a stream into a record, which is what the agent loop wants and what the UI currently receives. The consequence: the browser sees a step only once it is finished, while the terminal sees it as it happens.</figcaption>
+    </figure>
+
+    <div class="aside col">
+      <p><strong>The unfinished half.</strong> Streaming the web UI mid-step is not a redesign. The envelopes already exist, already carry <code>to</code> and <code>step</code>, and already flow while the step runs. What is missing is a transport on the API process that forwards <code>to.includes("user")</code> envelopes down the SSE connection the browser is already holding.</p>
+      <p>That is the return on the decoupling: the capability was built the day the bus was, and nobody had to know about it.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head col">
+      <span class="label">06 &middot; Extension point</span>
+      <h2>Connecting another service is twelve lines</h2>
+    </div>
+    <div class="col">
+      <p>A transport needs one method. It gets every envelope, filters for what it cares about, and returns <code>false</code> when it is finished &mdash; at which point the bus drops it without anyone calling a teardown.</p>
+    </div>
+    <pre class="col"><code>import type { ChannelTransport } from "@repo/interpreter/channels"
+import { output } from "@repo/interpreter/topics"
+
+function wsTransport(socket: WebSocket): ChannelTransport {
+  return {
+    send(e) {
+      if (socket.readyState !== socket.OPEN) return false   // drop me
+      if (e.topic !== output.name) return true              // not mine
+      if (!e.to.includes("user")) return true               // not my audience
+      socket.send(JSON.stringify({ step: e.step, text: e.payload }))
+      return true
+    },
+    close() { socket.close() },
+  }
+}
+
+const detach = interp.channels.pipe(wsTransport(socket))</code></pre>
+    <div class="col">
+      <p>No emitter changes. No extension changes. No type in the interpreter changes. The same shape covers an OpenTelemetry exporter (map <code>topic</code> to an event name, <code>step</code> to a span attribute), a JSONL run recorder, a Slack relay, or a second terminal watching a shared session.</p>
+      <p>The one thing a transport must not do is throw. A throwing transport is removed from the set silently, and it will not be told.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head col">
+      <span class="label">07 &middot; Trade-offs</span>
+      <h2>What this costs, stated plainly</h2>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <h4>Synchronous fan-out</h4>
+        <p><code>emit</code> returns only after every listener and transport has run. Ordering is total and trivially debuggable, allocation is near zero, and a stack trace crosses the bus intact.</p>
+        <span class="cost"><b>Cost</b> A slow transport slows the interpreter. There is no backpressure and no queue: a socket write that blocks blocks evaluation.</span>
+      </div>
+      <div class="card">
+        <h4>Failures degrade to a note</h4>
+        <p>A listener that throws is caught, and the bus emits a <code>note</code> to the model saying which topic broke. A REPL that must keep running does not die because a renderer had a bad day.</p>
+        <span class="cost"><b>Cost</b> A throwing transport is deleted from the set with no report at all. A CLI whose stdout sink died goes quiet and never learns why.</span>
+      </div>
+      <div class="card">
+        <h4>No history, no replay</h4>
+        <p><code>Channels</code> keeps nothing. Anything that wants a transcript pipes a buffer for as long as it needs one, which is exactly what the REPL does per step.</p>
+        <span class="cost"><b>Cost</b> A transport attached mid-step sees only the rest of the step. There is no offset, no resume, no audit log without adding a sink that keeps one.</span>
+      </div>
+      <div class="card">
+        <h4>Two audiences, closed set</h4>
+        <p><code>Audience</code> is derived from the <code>AUDIENCES</code> tuple, so the type and the iteration order cannot drift. Adding one is a one-line change with a compiler-checked blast radius.</p>
+        <span class="cost"><b>Cost</b> Audience is a global enum, not a subscriber identity. Two humans on a shared session are one <code>"user"</code>; per-recipient routing would need a different key.</span>
+      </div>
+      <div class="card">
+        <h4>Typed at the topic, untyped at the transport</h4>
+        <p>Subscribers using <code>Topic.on</code> get their payload type. It is the right trade: the narrow consumers get safety, the wide one stays open.</p>
+        <span class="cost"><b>Cost</b> <code>Envelope&lt;unknown&gt;</code> means every transport casts. A transport that switches on <code>topic</code> and casts wrong compiles fine and fails at runtime.</span>
+      </div>
+      <div class="card">
+        <h4>Two paths reach the model</h4>
+        <p>The bus carries what is said during the step. The step <em>report</em> is assembled after it: truncation notes, the recall buffer, the error record.</p>
+        <span class="cost"><b>Cost</b> The real tension in the design. &ldquo;What did the model see?&rdquo; cannot be answered from envelopes alone, which makes the bus an incomplete audit surface.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head col">
+      <span class="label">08 &middot; Alternatives</span>
+      <h2>What the industry does instead</h2>
+    </div>
+    <div class="col">
+      <p>None of this is novel machinery. It is a publish-subscribe bus with one unusual dimension &mdash; routing by <em>recipient</em> rather than by severity or type &mdash; and it is worth being precise about which established pattern it is a small version of.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Approach</th><th>What it would give</th><th>What it would cost here</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Node <code>EventEmitter</code></strong></td>
+            <td>Zero code. The same synchronous fan-out, already in the runtime.</td>
+            <td>Untyped payloads, no envelope metadata, no <code>to</code>, and listener errors that crash the process by default. The custom bus exists mostly to add those four things.</td>
+          </tr>
+          <tr>
+            <td><strong>RxJS / observables</strong></td>
+            <td>Composition: filter, buffer, debounce, backpressure operators, and a per-step window as a first-class object.</td>
+            <td>A dependency in the interpreter, which the layering forbids on purpose. Real operator power for a bus with three topics and four sinks.</td>
+          </tr>
+          <tr>
+            <td><strong>Redux-style middleware</strong></td>
+            <td>One action, many observers, with interception: a middleware could rewrite an envelope before it lands.</td>
+            <td>Middleware couples the chain in order. The compactor already <em>is</em> the interception layer, expressed as a different payload rather than a wrapper.</td>
+          </tr>
+          <tr>
+            <td><strong>OpenTelemetry signals + exporters</strong></td>
+            <td>The closest mature analogue: topic&nbsp;=&nbsp;signal, transport&nbsp;=&nbsp;exporter, plus batching, retry, sampling and a wire format.</td>
+            <td>Heavy for in-process rendering. Worth adopting the moment envelopes leave the process &mdash; batching and retry are the two things a hand-written socket transport will get wrong.</td>
+          </tr>
+          <tr>
+            <td><strong>CloudEvents envelope</strong></td>
+            <td>A standardised envelope (<code>id</code>, <code>source</code>, <code>type</code>, <code>time</code>, <code>data</code>) that other services already parse.</td>
+            <td>Nothing, really. <code>Envelope</code> is a private CloudEvent with <code>to</code> added and <code>id</code>/<code>time</code> missing. If envelopes ever cross a boundary, renaming toward it removes a translation layer.</td>
+          </tr>
+          <tr>
+            <td><strong>Structured logging sinks</strong> (pino, bunyan)</td>
+            <td>The daily-driver version of this pattern: one call, many sinks, filtered by level.</td>
+            <td>Levels are a severity dimension. <code>to</code> is a recipient dimension, and no logger models it &mdash; which is the one genuinely unusual thing in this design.</td>
+          </tr>
+          <tr>
+            <td><strong>Actor mailboxes</strong> (Erlang, Akka)</td>
+            <td>Addressed, asynchronous messages with supervision and isolation &mdash; a real answer to the slow-transport problem.</td>
+            <td>Point-to-point, not broadcast. Every sink would need an address and the emitter would need to know it, undoing the decoupling.</td>
+          </tr>
+          <tr>
+            <td><strong>Durable log</strong> (Kafka, event sourcing)</td>
+            <td>Replay, offsets, audit, multiple independent readers at different positions.</td>
+            <td>Absurd for a single-process REPL &mdash; until runs need to be replayed or audited after the fact, which is the one scenario that would justify it.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col">
+      <h3>The honest summary</h3>
+      <p>For an in-process interpreter with a handful of sinks, a hand-rolled synchronous bus is the right size: a hundred lines, no dependency, total ordering, and a transport interface anyone can implement in a sitting. It buys the one property that matters &mdash; the interpreter does not know who is listening &mdash; at a price that is currently zero.</p>
+      <p>It starts costing when envelopes leave the process. At that point the missing pieces are all the same missing piece: asynchrony. Batching, retry, backpressure, replay. The fix is not to replace the bus but to write one transport that owns a queue, and to steal OpenTelemetry&rsquo;s exporter semantics rather than inventing them.</p>
+    </div>
+  </section>
+
+  </main>
+
+  <footer class="shell" style="padding-left:0;padding-right:0">
+    Drawn from <span class="mono">packages/interpreter/src/channels.ts</span>, <span class="mono">topics.ts</span>, <span class="mono">channels-host.ts</span>, the compaction and memory extensions, and <span class="mono">packages/repl</span>. The demo reproduces the real grouping and routing rules; payload text is abbreviated.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var ISSUES_FULL = "#1  flaky login test on CI\n#2  429 from the toolkit registry\n#3  compaction drops the last word\n… 37 more rows, 1,240 words total";
+  var ISSUES_CLIP = "#1  flaky login test on CI\n#2  429 from the toolkit registry\n… 990 more words of echo output not shown to you";
+  var DOC_TEXT = "(grep pattern text [:group n] [:max n])\nKeep the parts of TEXT matching PATTERN…";
+  var MEM_BODY = "deploys go out on green CI only";
+
+  var SCENARIOS = [
+    { id:"echo", label:"(echo issues)", note:"Prints a 1,240-word table.",
+      build:function(s){
+        var out = [];
+        if (s.compaction) out.push({topic:"output", addressed:{user:ISSUES_FULL, model:ISSUES_CLIP}});
+        else out.push({topic:"output", addressed:{user:ISSUES_FULL}});
+        return out;
+      },
+      offbus:function(s){ return s.compaction ? ["… 990 more words of echo output not shown to you (a step may echo 250 words)"] : []; }
+    },
+    { id:"doc", label:"(doc 'grep)", note:"Quoted back whole, to both.",
+      build:function(s){ return [{topic:"output", addressed:{user:DOC_TEXT, model:DOC_TEXT}}]; },
+      offbus:function(){ return []; }
+    },
+    { id:"recall", label:'(recall "deploy")', note:"A memory fires mid-step.",
+      build:function(s){
+        var out = [];
+        if (s.memory) out.push({topic:"memory", addressed:{user:{key:"deploy", body:MEM_BODY}}});
+        if (s.compaction) out.push({topic:"output", addressed:{user:"deploy-1: a record\n", model:"deploy-1: a record\n"}});
+        return out;
+      },
+      offbus:function(s){ return s.memory ? ["deploy: " + MEM_BODY] : []; }
+    },
+    { id:"bad", label:"prose + (car 42)", note:"Two private notes to the model.",
+      build:function(s){
+        return [
+          {topic:"note", addressed:{model:{kind:"skipped", text:"let me check the queue depth"}}},
+          {topic:"note", addressed:{model:{kind:"failed", text:"car: 42 is not a pair"}}}
+        ];
+      },
+      offbus:function(s){ return ["car: 42 is not a pair" + (s.compaction ? "  (via compactor.error)" : "")]; }
+    }
+  ];
+
+  var SINKS = [
+    { id:"stdout", name:"CLI stdout", kind:"pipe()", sub:"output where to includes user, plus skipped notes." },
+    { id:"buffer", name:"REPL step buffer", kind:"pipe()", sub:"Everything, split by audience into EvalOutput." },
+    { id:"trace",  name:"evals recorder", kind:"on(note)", sub:"Notes only, typed payload." },
+    { id:"extra",  name:"your socket", kind:"pipe()", sub:"Every envelope, as JSON." }
+  ];
+
+  var state = {
+    scenario:"echo", compaction:true, memory:true,
+    sinks:{ stdout:true, buffer:true, trace:true, extra:false }
+  };
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var timers = [];
+  function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function envelopesOf(em){
+    var groups = [];
+    ["user","model"].forEach(function(a){
+      var p = em.addressed[a];
+      if (p === undefined) return;
+      for (var i=0;i<groups.length;i++) if (groups[i].payload === p){ groups[i].to.push(a); return; }
+      groups.push({ topic:em.topic, to:[a], payload:p });
+    });
+    return groups;
+  }
+
+  function scenario(){ for (var i=0;i<SCENARIOS.length;i++) if (SCENARIOS[i].id===state.scenario) return SCENARIOS[i]; }
+
+  function accepts(sinkId, e){
+    if (sinkId === "stdout") return (e.topic === "output" && e.to.indexOf("user") !== -1) ||
+                                    (e.topic === "note" && e.payload.kind === "skipped");
+    if (sinkId === "buffer") return true;
+    if (sinkId === "trace")  return e.topic === "note";
+    if (sinkId === "extra")  return true;
+    return false;
+  }
+
+  function renderFor(sinkId, e){
+    if (sinkId === "stdout"){
+      if (e.topic === "note") return '<span class="k">skipped ' + esc(e.payload.text) + '</span>';
+      return '<span class="u">' + esc(e.payload) + '</span>';
+    }
+    if (sinkId === "buffer"){
+      if (e.topic === "memory") return '<span class="k">memories += </span>' + esc(e.payload.key);
+      if (e.topic === "note")   return '<span class="k">notes += </span>' + esc(e.payload.kind);
+      var out = [];
+      if (e.to.indexOf("user")!==-1)  out.push('<span class="u">user   += </span>' + esc(firstLine(e.payload)));
+      if (e.to.indexOf("model")!==-1) out.push('<span class="m">model  += </span>' + esc(firstLine(e.payload)));
+      return out.join("\n");
+    }
+    if (sinkId === "trace") return '<span class="k">' + esc(e.payload.kind) + ': </span>' + esc(e.payload.text);
+    return esc(JSON.stringify({ topic:e.topic, to:e.to, step:7, payload:shortPayload(e.payload) }));
+  }
+
+  function firstLine(p){ var t = String(p).split("\n")[0]; return t.length > 42 ? t.slice(0,42) + "…" : t; }
+  function shortPayload(p){ return typeof p === "string" ? firstLine(p) : p; }
+
+  function buildControls(){
+    var sc = document.getElementById("scenarios");
+    sc.innerHTML = "";
+    SCENARIOS.forEach(function(s){
+      var b = document.createElement("button");
+      b.className = "btn"; b.type = "button"; b.textContent = s.label;
+      b.setAttribute("aria-pressed", String(state.scenario === s.id));
+      b.addEventListener("click", function(){ state.scenario = s.id; buildControls(); run(); });
+      sc.appendChild(b);
+    });
+    var ex = document.getElementById("exts");
+    ex.innerHTML = "";
+    [["compaction","compaction"],["memory","memory"]].forEach(function(pair){
+      var b = document.createElement("button");
+      b.className = "btn"; b.type = "button"; b.textContent = pair[1];
+      b.setAttribute("aria-pressed", String(state[pair[0]]));
+      b.addEventListener("click", function(){ state[pair[0]] = !state[pair[0]]; buildControls(); run(); });
+      ex.appendChild(b);
+    });
+  }
+
+  function buildSinks(){
+    var host = document.getElementById("sinks");
+    host.innerHTML = "";
+    SINKS.forEach(function(s){
+      var card = document.createElement("div");
+      card.className = "sink" + (state.sinks[s.id] ? "" : " off");
+      card.id = "sink-" + s.id;
+      card.innerHTML =
+        '<div class="sink-head"><span class="sink-name">' + s.name + '</span>' +
+        '<span class="sink-kind">' + s.kind + '</span>' +
+        '<button class="btn toggle" type="button" data-toggle="' + s.id + '" aria-pressed="' + state.sinks[s.id] + '">' +
+        (state.sinks[s.id] ? "patched" : "off") + '</button></div>' +
+        '<div class="sink-sub">' + s.sub + '</div>' +
+        '<div class="sink-out" id="out-' + s.id + '"></div>';
+      host.appendChild(card);
+    });
+    host.querySelectorAll("[data-toggle]").forEach(function(b){
+      b.addEventListener("click", function(){ toggleSink(b.getAttribute("data-toggle")); });
+    });
+  }
+
+  function toggleSink(id){
+    state.sinks[id] = !state.sinks[id];
+    syncTopology();
+    buildSinks();
+    run();
+  }
+
+  function syncTopology(){
+    SINKS.forEach(function(s){
+      var node = document.getElementById("n-" + s.id);
+      var wire = document.getElementById("w-" + s.id);
+      if (!node || !wire) return;
+      node.classList.toggle("off", !state.sinks[s.id]);
+      node.setAttribute("aria-pressed", String(state.sinks[s.id]));
+      wire.classList.toggle("off", !state.sinks[s.id]);
+    });
+  }
+
+  function run(){
+    clearTimers();
+    var sc = scenario();
+    var ems = sc.build(state);
+    var envs = [];
+    ems.forEach(function(em){ envs = envs.concat(envelopesOf(em)); });
+
+    var tape = document.getElementById("tape-body");
+    tape.innerHTML = "";
+    document.getElementById("env-count").textContent =
+      envs.length + (envs.length === 1 ? " envelope" : " envelopes");
+    SINKS.forEach(function(s){ document.getElementById("out-" + s.id).innerHTML = ""; });
+
+    if (envs.length === 0){
+      tape.innerHTML = '<p class="empty">Nothing emitted. With this extension unloaded the step is silent on the bus.</p>';
+    }
+
+    envs.forEach(function(e, i){
+      var delay = reduced ? 0 : i * 420;
+      timers.push(setTimeout(function(){ deliver(e); }, delay));
+    });
+
+    var last = reduced ? 0 : Math.max(0, envs.length - 1) * 420 + 260;
+    timers.push(setTimeout(function(){ deliverOffBus(sc.offbus(state)); }, last));
+  }
+
+  function deliver(e){
+    var tape = document.getElementById("tape-body");
+    var toClass = e.to.length === 2 ? "to-both" : (e.to[0] === "user" ? "to-user" : "to-model");
+    var div = document.createElement("div");
+    div.className = "env " + toClass;
+    var payload = typeof e.payload === "string" ? e.payload : JSON.stringify(e.payload, null, 1);
+    var long = payload.length > 90;
+    div.innerHTML =
+      '<div class="env-top"><span class="chip topic">' + e.topic + '</span>' +
+      e.to.map(function(a){ return '<span class="chip ' + a + '">' + a + '</span>'; }).join("") +
+      '<span class="sink-kind" style="margin-left:auto">step 7</span></div>' +
+      '<div class="env-payload">' + esc(payload) + '</div>' +
+      (long ? '<button class="env-more" type="button">show all</button>' : "");
+    tape.appendChild(div);
+    if (long){
+      var body = div.querySelector(".env-payload");
+      var btn = div.querySelector(".env-more");
+      btn.addEventListener("click", function(){
+        var open = body.classList.toggle("open");
+        btn.textContent = open ? "collapse" : "show all";
+      });
+    }
+
+    SINKS.forEach(function(s){
+      if (!state.sinks[s.id]) return;
+      if (!accepts(s.id, e)) return;
+      var card = document.getElementById("sink-" + s.id);
+      var out = document.getElementById("out-" + s.id);
+      var line = document.createElement("span");
+      line.className = "line";
+      line.innerHTML = renderFor(s.id, e);
+      out.appendChild(line);
+      card.classList.remove("hit");
+      void card.offsetWidth;
+      card.classList.add("hit");
+    });
+  }
+
+  function deliverOffBus(lines){
+    if (!lines.length || !state.sinks.buffer) return;
+    var out = document.getElementById("out-buffer");
+    lines.forEach(function(t){
+      var el = document.createElement("span");
+      el.className = "line offbus";
+      el.textContent = "not from the bus — " + t;
+      out.appendChild(el);
+    });
+  }
+
+  document.querySelectorAll("#topo .node").forEach(function(node){
+    node.addEventListener("click", function(){ toggleSink(node.getAttribute("data-sink")); });
+    node.addEventListener("keydown", function(ev){
+      if (ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); toggleSink(node.getAttribute("data-sink")); }
+    });
+  });
+  document.getElementById("run").addEventListener("click", run);
+
+  buildControls();
+  buildSinks();
+  syncTopology();
+  run();
+})();
+</script>
