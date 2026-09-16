@@ -130,6 +130,26 @@ this file. Two guards back the rule: a `PreToolUse` hook in
 `.claude/settings.json` refuses to create a new markdown file, and
 `pnpm check:docs` fails CI on any tracked markdown outside that allowlist.
 
+## Icons
+
+**Every icon comes from hugeicons.** `@hugeicons/core-free-icons` holds the icon
+data and `@hugeicons/react` draws it:
+
+```tsx
+import { Search01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+
+<HugeiconsIcon icon={Search01Icon} className="size-4" />;
+```
+
+An icon is data (`IconSvgElement`), not a component, so it is passed as the
+`icon` prop rather than rendered. `size`, `strokeWidth` and every SVG attribute
+go on `HugeiconsIcon`.
+
+**Do not add `lucide-react`**, or any other icon package. `pnpm check:arch`
+fails on an import of it. `shadcn add` still scaffolds lucide imports: swap them
+for the hugeicons equivalent before committing.
+
 ## Host ports
 
 An extension owns a language surface and a prompt. **Everything it does that

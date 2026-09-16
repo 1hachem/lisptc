@@ -1,37 +1,37 @@
-import { Scramble } from "@repo/components";
 import {
-	Anvil,
-	Cog,
-	Drill,
-	Hammer,
-	type LucideIcon,
-	PencilRuler,
-	Pickaxe,
-	Ruler,
-	Wrench,
-} from "lucide-react";
+	Atom02Icon,
+	CodeIcon,
+	FirstBracketIcon,
+	FlowIcon,
+	FunctionIcon,
+	GitForkIcon,
+	SigmaIcon,
+	TerminalIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { Scramble } from "@repo/components";
 import { useEffect, useState } from "react";
 
-const TOOLS: LucideIcon[] = [
-	Hammer,
-	Wrench,
-	Drill,
-	Cog,
-	PencilRuler,
-	Pickaxe,
-	Anvil,
-	Ruler,
+const GLYPHS: IconSvgElement[] = [
+	FirstBracketIcon,
+	FunctionIcon,
+	SigmaIcon,
+	TerminalIcon,
+	CodeIcon,
+	GitForkIcon,
+	FlowIcon,
+	Atom02Icon,
 ];
 
 const BEAT_MS = 110;
 
-function toolFor(seed: string): LucideIcon {
+function glyphFor(seed: string): IconSvgElement {
 	let hash = 0x811c9dc5;
 	for (let i = 0; i < seed.length; i++) {
 		hash ^= seed.charCodeAt(i);
 		hash = Math.imul(hash, 0x01000193);
 	}
-	return TOOLS[(hash >>> 0) % TOOLS.length] as LucideIcon;
+	return GLYPHS[(hash >>> 0) % GLYPHS.length] as IconSvgElement;
 }
 
 export function Building({ heads, busy }: { heads: string[]; busy: boolean }) {
@@ -43,12 +43,13 @@ export function Building({ heads, busy }: { heads: string[]; busy: boolean }) {
 	}, [busy]);
 
 	if (heads.length === 0) return null;
-	const Tool = busy
-		? (TOOLS[beat % TOOLS.length] as LucideIcon)
-		: toolFor(heads.join(" "));
+	const glyph = busy
+		? (GLYPHS[beat % GLYPHS.length] as IconSvgElement)
+		: glyphFor(heads.join(" "));
 	return (
 		<div className="flex min-w-0 items-center gap-2 text-dim">
-			<Tool
+			<HugeiconsIcon
+				icon={glyph}
 				aria-hidden
 				size={busy ? 11 : 14}
 				strokeWidth={1.5}

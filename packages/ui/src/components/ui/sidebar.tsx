@@ -1,7 +1,8 @@
 "use client";
 
+import { SidebarLeft01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
 import { Slot } from "radix-ui";
 import * as React from "react";
 
@@ -264,7 +265,7 @@ function SidebarTrigger({
 			}}
 			{...props}
 		>
-			<PanelLeftIcon />
+			<HugeiconsIcon icon={SidebarLeft01Icon} />
 			<span className="sr-only">Toggle Sidebar</span>
 		</Button>
 	);

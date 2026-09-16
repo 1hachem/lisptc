@@ -59,6 +59,12 @@ const IMPORTS: ImportRule[] = [
 		reason:
 			"Only the eval cases run a suite. Read reports through @repo/evals/report, /review and /storage instead.",
 	},
+	{
+		modules: ["lucide-react"],
+		allow: [],
+		reason:
+			"Icons come from @hugeicons/core-free-icons, drawn with <HugeiconsIcon icon={...} />.",
+	},
 ];
 
 const EXTENSION_DIRS = ["packages/interpreter/src/extensions/"];
