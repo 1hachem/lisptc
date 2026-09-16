@@ -769,13 +769,13 @@ export class Interp {
 			"Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. `(echo)` alone prints a blank line. Returns an unspecified value, so the REPL reports nothing for a step that ends in an echo — what was printed IS the report.",
 			z.tuple([zList]),
 			([rest]) => {
-				this.say(`${echoText(rest)}\n`);
+				output.emit(this.channels, { user: `${echoText(rest)}\n` });
 				return Unspecified;
 			},
 		);
 		this.def("doc", -1, DOC_SIGNATURE, DOC_DOC, z.tuple([zList]), ([rest]) => {
 			const answer = lookupDoc(this, rest);
-			this.tell(answer.text);
+			output.emit(this.channels, { user: answer.text, model: answer.text });
 			return answer.value;
 		});
 
@@ -1101,14 +1101,6 @@ export class Interp {
 
 	globalEntries(): IterableIterator<[Sym, unknown]> {
 		return this.globals.entries();
-	}
-
-	private say(text: string): void {
-		output.emit(this.channels, ["user"], text);
-	}
-
-	private tell(text: string): void {
-		output.emit(this.channels, ["user", "model"], text);
 	}
 
 	dispose(): void {
@@ -1984,9 +1976,8 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 				? new EvalException("break/return used outside of a loop", null, false)
 				: ex;
 		if (failure instanceof EvalException)
-			note.emit(interp.channels, ["model"], {
-				kind: "failed",
-				text: String(failure),
+			note.emit(interp.channels, {
+				model: { kind: "failed", text: String(failure) },
 			});
 		throw failure;
 	}
@@ -1995,7 +1986,7 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 export function* runGen(interp: Interp, text: string): Eval {
 	const { hooks } = interp;
 	const skipped = (what: string) =>
-		note.emit(interp.channels, ["model"], { kind: "skipped", text: what });
+		note.emit(interp.channels, { model: { kind: "skipped", text: what } });
 	const tokens = new Reader();
 	tokens.push(stripProse(text, hooks, skipped));
 	let result: unknown = Unspecified;

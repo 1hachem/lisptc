@@ -397,7 +397,7 @@ export class MemoryBank {
 		this.fired.add(memory.key);
 		this.open.add(memory.key);
 		this.reinforce(memory);
-		this.say(memory.key, bodyText(memory.body));
+		this.surface(memory.key, bodyText(memory.body));
 		this.depth++;
 		try {
 			this.dispatch({ kind: "recall", text: memory.key }, interp);
@@ -446,7 +446,7 @@ export class MemoryBank {
 		}
 	}
 
-	private say(key: string, body: string): void {
+	private surface(key: string, body: string): void {
 		const line = `${key}: ${body}\n`;
 		const words = line.split(/\s+/).filter((w) => w !== "").length;
 		if (this.spent >= MAX_RECALL_WORDS) {
@@ -455,7 +455,7 @@ export class MemoryBank {
 		}
 		this.spent += words;
 		this.pending += line;
-		if (this.channels) fired.emit(this.channels, ["user"], { key, body });
+		fired.emit(this.channels, { user: { key, body } });
 	}
 }
 
