@@ -175,3 +175,41 @@ describe("llm built-in calls", () => {
 		expect(errored[0].properties.$ai_provider).toBeUndefined();
 	});
 });
+
+describe("error tracking", () => {
+	test("an exception hangs off the turn it failed in", async () => {
+		const { captureException } = await import("../src/telemetry.ts");
+
+		captureException(new Error("the model refused to answer"), CTX, {
+			steps: 3,
+		});
+		const exception = (await drain()).find((e) => e.event === "$exception");
+
+		expect(exception?.distinct_id).toBe("dev-1");
+		expect(exception?.properties).toMatchObject({
+			environment: "test",
+			$session_id: "session-xyz",
+			$ai_trace_id: "thread-abc",
+			$ai_span_id: "turn-1",
+			steps: 3,
+		});
+		expect(
+			(exception?.properties.$exception_list as { value: string }[])[0].value,
+		).toBe("the model refused to answer");
+	});
+
+	test("an exception with no distinct id creates no person", async () => {
+		const { captureException } = await import("../src/telemetry.ts");
+
+		captureException(new Error("nobody was logged in"), {}, {});
+		const anonymous = (await drain()).find(
+			(e) =>
+				e.event === "$exception" &&
+				(e.properties.$exception_list as { value: string }[])[0].value ===
+					"nobody was logged in",
+		);
+
+		expect(anonymous?.properties.$process_person_profile).toBe(false);
+		expect(anonymous?.properties.$ai_trace_id).toBeUndefined();
+	});
+});

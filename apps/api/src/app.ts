@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { chat } from "./chat.ts";
 import { errorHandler } from "./error.ts";
+import { telemetry } from "./telemetry.ts";
 import { uiAction } from "./ui-action.ts";
 
 const app = new Hono();
@@ -21,6 +22,7 @@ app.use(
 		],
 	}),
 );
+app.use(telemetry());
 app.use(logger());
 
 app.get("/health", (c) => c.json({ ok: true }));
