@@ -1,3 +1,4 @@
+import { proseHeads } from "@repo/interpreter/lisp";
 import type { FiredMemory } from "@repo/interpreter/memory";
 import type { UiNode } from "@repo/interpreter/ui";
 import type { AgentRepl } from "@repo/repl/repl";
@@ -47,6 +48,7 @@ export type TurnEvent =
 			type: "assistant";
 			stepId: string;
 			code: string;
+			prose: string[];
 			reasoning?: string;
 			meta: StepMeta;
 	  }
@@ -169,6 +171,7 @@ export async function* runAgentTurn(
 				type: "assistant",
 				stepId,
 				code,
+				prose: proseHeads(repl.interp, code),
 				...(reasoning ? { reasoning } : {}),
 				meta: stepMeta(stepStartedAt, usage, ran),
 			};

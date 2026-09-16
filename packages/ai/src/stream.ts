@@ -117,6 +117,7 @@ export function streamChatResponse(
 								...(event.reasoning
 									? { reasoning_content: event.reasoning }
 									: {}),
+								prose: event.prose,
 								meta: lastMeta,
 							},
 						});

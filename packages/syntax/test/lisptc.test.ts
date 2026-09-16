@@ -128,6 +128,25 @@ describe("formsIn", () => {
 		expect(formsIn('(echo "(not-a-call 1)")').heads).toEqual(["echo"]);
 	});
 
+	test("shows an aside the repl read as prose verbatim, and runs no tool for it", () => {
+		const reply = "an aside (see below)\n(+ 1 2)";
+		const { prose, heads } = formsIn(reply, ["see"]);
+		expect(heads).toEqual(["+"]);
+		expect(prose).toBe("an aside (see below)");
+	});
+
+	test("reads every parenthesis as a call when nothing was skipped", () => {
+		expect(formsIn("an aside (see below)\n(+ 1 2)").heads).toEqual([
+			"see",
+			"+",
+		]);
+	});
+
+	test("keeps a skipped aside's nested calls out of the tools too", () => {
+		const { heads } = formsIn("(I will check (the thing)) (echo 1)", ["I"]);
+		expect(heads).toEqual(["echo"]);
+	});
+
 	test("leaves a reply that is all prose alone", () => {
 		const { prose, heads } = formsIn("The answer is 42.");
 		expect(prose).toBe("The answer is 42.");

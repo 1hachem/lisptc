@@ -107,13 +107,18 @@ export const lisptc = defineLanguage({
 
 export const highlighter = createHighlighter({ languages: [lisptc] });
 
-export function formsIn(text: string): Forms {
-	const { heads, spans } = scan(text);
+export function formsIn(text: string, skipped: readonly string[] = []): Forms {
+	const { spans } = scan(text);
+	const heads: string[] = [];
 	let prose = "";
 	let at = 0;
 	for (const [start, end] of spans) {
+		const inner = scan(text.slice(start, end));
+		if (inner.heads[0] !== undefined && skipped.includes(inner.heads[0]))
+			continue;
 		prose += text.slice(at, start);
 		at = end;
+		heads.push(...inner.heads);
 	}
 	prose += text.slice(at);
 	return {

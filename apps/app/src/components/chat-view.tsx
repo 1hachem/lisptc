@@ -11,6 +11,7 @@ import {
 	isGreetingMessage,
 	isToolMessage,
 	isUserMessage,
+	messageProse,
 	messageReasoning,
 	messageText,
 	toolFailed,
@@ -113,9 +114,20 @@ function ChannelText({ text, tone }: { text: string; tone: string }) {
 	);
 }
 
-function AssistantText({ text, busy }: { text: string; busy: boolean }) {
+function AssistantText({
+	text,
+	skipped,
+	busy,
+}: {
+	text: string;
+	skipped: string[];
+	busy: boolean;
+}) {
 	const { shown } = useUI();
-	const { prose, heads } = useMemo(() => formsIn(text), [text]);
+	const { prose, heads } = useMemo(
+		() => formsIn(text, skipped),
+		[text, skipped],
+	);
 	if (shown.lisp) return <Markdown>{text}</Markdown>;
 	return (
 		<>
@@ -232,6 +244,7 @@ export function ChatView() {
 										) : (
 											<AssistantText
 												text={messageText(m)}
+												skipped={messageProse(m)}
 												busy={isLoading && i === last}
 											/>
 										)}

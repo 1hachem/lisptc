@@ -23,6 +23,7 @@ export interface ChatMessage {
 		meta?: unknown;
 		display?: unknown;
 		ui?: unknown;
+		prose?: unknown;
 		failed?: unknown;
 	};
 }
@@ -285,6 +286,11 @@ export function isToolMessage(message: ChatMessage): boolean {
 
 export function isUserMessage(message: ChatMessage): boolean {
 	return message.type === "human" || message.type === "user";
+}
+
+export function messageProse(message: ChatMessage): string[] {
+	const prose = message.additional_kwargs?.prose;
+	return Array.isArray(prose) ? prose.map(String) : [];
 }
 
 export function toolFailed(message: ChatMessage): boolean {

@@ -1997,6 +1997,24 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 	}
 }
 
+export function proseHeads(interp: Interp, text: string): string[] {
+	const tokens = new Reader();
+	tokens.push(stripProse(text, interp.hooks));
+	const heads: string[] = [];
+	while (!tokens.isEmpty()) {
+		let exp: unknown;
+		try {
+			exp = tokens.read();
+		} catch {
+			break;
+		}
+		if (interp.hooks.skipForm.run(noOpinion, interp, exp) === undefined)
+			continue;
+		if (exp instanceof Cell && exp.car instanceof Sym) heads.push(exp.car.name);
+	}
+	return heads;
+}
+
 export function* runGen(interp: Interp, text: string): Eval {
 	const { hooks } = interp;
 	const skipped = (what: string) =>
