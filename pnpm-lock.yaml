@@ -293,6 +293,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui

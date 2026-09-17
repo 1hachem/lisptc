@@ -5,6 +5,8 @@ import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
 import { memoryHost } from "@repo/interpreter/memory-host";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
+import { llmHost } from "@repo/llm/llm-host";
+import { judgeWith } from "@repo/llm/memory-judge";
 import { playwright } from "./fixtures/playwright.ts";
 
 const extensions = () => [
@@ -13,6 +15,18 @@ const extensions = () => [
 	compactionExtension(),
 	proseExtension(),
 	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
+];
+
+const judgedExtensions = () => [
+	promisesExtension(),
+	mockedMcpExtension(),
+	compactionExtension(),
+	proseExtension(),
+	memoryExtension({
+		...memoryHost,
+		store: new VolatileStore(),
+		judge: judgeWith(llmHost.generate),
+	}),
 ];
 
 evalCase("navigates with the tool name a memory handed it", {
@@ -51,6 +65,31 @@ evalCase("navigates with the tool name a memory handed it", {
 
 (defcheck answers-with-the-heading
   (eventually (answered (matches "Build AI workflows"))))
+`,
+});
+
+evalCase("recalls a memory by meaning when its words do not match", {
+	min: 2,
+	max: 6,
+	extensions: judgedExtensions,
+	prelude: `
+(memory/remember "sandbox-reset"
+  "Anything started after 23:30 loses its work: the environment wipes itself at 00:00 with no warning. Start long tasks earlier in the day.")
+`,
+	seed: [
+		{
+			user: "I kicked off a long export just before midnight and it came back empty. Why would that happen?",
+		},
+	],
+	checks: `
+(defcheck retrieves-the-memory
+  (eventually (called "memory/recall")))
+
+(defcheck answers-from-the-recalled-fact
+  (eventually (answered (matches "wipe|reset|00:00|23:30"))))
+
+(defcheck runs-without-an-error
+  (never (errored)))
 `,
 });
 

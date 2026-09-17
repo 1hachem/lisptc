@@ -18,6 +18,7 @@ import { getThreadRepl } from "./repl-store.ts";
 import {
 	captureException,
 	captureLlmCall,
+	captureMemory,
 	captureReplEval,
 	captureTurn,
 	type TraceContext,
@@ -121,6 +122,7 @@ export async function* runAgentTurn(
 	try {
 		const repl = options.repl ?? getThreadRepl(threadId, identity?.distinctId);
 		repl.llmObserver = (call) => captureLlmCall(trace, call);
+		repl.memoryObserver = (span) => captureMemory(trace, span);
 
 		const tracedConfig: AgentConfig = {
 			...config,

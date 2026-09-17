@@ -1,6 +1,7 @@
 import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { LangChainCallbackHandler } from "@posthog/ai/langchain";
 import { analyticsEnv } from "@repo/env/analytics";
+import type { MemorySpan } from "@repo/interpreter/memory";
 import type { LlmCall } from "@repo/llm/llm";
 import { PostHog } from "posthog-node";
 
@@ -198,6 +199,41 @@ export function captureLlmCall(ctx: TraceContext, span: LlmCall): void {
 						$ai_output_choices: [
 							{ role: "assistant", content: span.output ?? "" },
 						],
+					}),
+		},
+	});
+}
+
+export function captureMemory(ctx: TraceContext, span: MemorySpan): void {
+	const ph = posthog();
+	if (!ph) return;
+	const { distinctId, anonymous } = identify(ctx);
+	ph.capture({
+		distinctId,
+		event: "$ai_span",
+		properties: {
+			...turnCommon(ctx),
+			...anonymous,
+			$ai_span_id: crypto.randomUUID(),
+			$ai_parent_id: ctx.turnId,
+			$ai_span_name: `memory ${span.op}`,
+			$ai_is_error: Boolean(span.error),
+			...(span.latencyMs === undefined
+				? {}
+				: { $ai_latency: span.latencyMs / 1000 }),
+			memory_op: span.op,
+			...(span.strategy ? { memory_strategy: span.strategy } : {}),
+			...(span.candidates === undefined
+				? {}
+				: { memory_candidates: span.candidates }),
+			...(span.hits === undefined ? {} : { memory_hits: span.hits }),
+			...(span.trigger ? { memory_trigger: span.trigger } : {}),
+			...(span.error ? { $ai_error: span.error } : {}),
+			...(PRIVACY_MODE
+				? {}
+				: {
+						...(span.key ? { memory_key: span.key } : {}),
+						...(span.query ? { memory_query: span.query } : {}),
 					}),
 		},
 	});

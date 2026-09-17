@@ -21,6 +21,7 @@ import {
 	type FiredMemory,
 	fired,
 	type MemoryBank,
+	type MemoryObserver,
 } from "@repo/interpreter/memory";
 import { isTruncated } from "@repo/interpreter/prose";
 import { type SecretsStore, storeOf } from "@repo/interpreter/secrets";
@@ -144,6 +145,14 @@ export class MemoryRepl implements InMemoryRepl {
 
 	set llmObserver(observer: LlmObserver | undefined) {
 		if (this.llm) this.llm.observe = observer;
+	}
+
+	get memoryObserver(): MemoryObserver | undefined {
+		return this.memories?.observer;
+	}
+
+	set memoryObserver(observer: MemoryObserver | undefined) {
+		if (this.memories) this.memories.observer = observer;
 	}
 
 	private freshInterp(): Interp {

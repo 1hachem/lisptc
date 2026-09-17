@@ -11,6 +11,7 @@ import {
 	MAX_CASCADE_DEPTH,
 	MAX_RECALL_WORDS,
 	MemoryBank,
+	type MemorySpan,
 	memoryExtension,
 	REINFORCEMENT,
 	VolatileStore,
@@ -672,6 +673,74 @@ describe("the file store", () => {
 		await ev(mine, '(memory/remember "k" "mine")');
 
 		expect(await ev(yours, '(length (memory/recall "k"))')).toBe("0");
+	});
+});
+
+describe("judged recall", () => {
+	it("surfaces a memory whose words do not match the query", async () => {
+		const judge = async (_query: string, candidates: { key: string }[]) =>
+			candidates.map((memory) => memory.key);
+		const f = fixture(new MemoryBank(new VolatileStore(), undefined, judge));
+		await ev(
+			f,
+			'(memory/remember "sandbox-reset" "the environment wipes at midnight")',
+		);
+
+		expect(
+			await f.step('(memory/recall "why did my export vanish")'),
+		).toContain("sandbox-reset:");
+	});
+
+	it("misses that memory without a judge", async () => {
+		const f = fixture(new MemoryBank(new VolatileStore()));
+		await ev(
+			f,
+			'(memory/remember "sandbox-reset" "the environment wipes at midnight")',
+		);
+
+		expect(
+			await ev(f, '(length (memory/recall "why did my export vanish"))'),
+		).toBe("0");
+	});
+
+	it("falls back to regex when the judge throws", async () => {
+		const judge = async () => {
+			throw new Error("judge down");
+		};
+		const spans: MemorySpan[] = [];
+		const f = fixture(new MemoryBank(new VolatileStore(), undefined, judge));
+		f.bank.observer = (span) => spans.push(span);
+		await ev(f, '(memory/remember "friday" "deploy freeze on fridays")');
+
+		expect(await ev(f, '(length (memory/recall "friday"))')).toBe("1");
+		const failed = spans.find(
+			(span) => span.op === "recall" && span.strategy === "judge",
+		);
+		expect(failed?.error).toContain("judge down");
+		const served = spans.find(
+			(span) => span.op === "recall" && span.strategy === "regex",
+		);
+		expect(served?.hits).toBe(1);
+	});
+});
+
+describe("telemetry", () => {
+	it("reports remember, recall and fire to the observer", async () => {
+		const spans: MemorySpan[] = [];
+		const f = fixture(new MemoryBank(new VolatileStore()));
+		f.bank.observer = (span) => spans.push(span);
+		await ev(f, '(memory/remember "k" "v")');
+		await f.step('(memory/recall "k")');
+
+		expect(
+			spans.some((span) => span.op === "remember" && span.key === "k"),
+		).toBe(true);
+		const recall = spans.find((span) => span.op === "recall");
+		expect(recall?.strategy).toBe("regex");
+		expect(recall?.hits).toBe(1);
+		expect(spans.some((span) => span.op === "fire" && span.key === "k")).toBe(
+			true,
+		);
 	});
 });
 
