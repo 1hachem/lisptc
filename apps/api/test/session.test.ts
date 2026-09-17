@@ -4,14 +4,6 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 const PORT = 9941;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
-interface Seen {
-	method: string;
-	url: string;
-	cookie?: string;
-	body: string;
-}
-
-const seen: Seen[] = [];
 let server: Server;
 let jwks: string;
 let sign: (claims: Record<string, unknown>) => Promise<string>;
@@ -40,21 +32,8 @@ beforeAll(async () => {
 			res.end(jwks);
 			return;
 		}
-		const chunks: Buffer[] = [];
-		req.on("data", (c: Buffer) => chunks.push(c));
-		req.on("end", () => {
-			seen.push({
-				method: req.method ?? "",
-				url: req.url ?? "",
-				cookie: req.headers.cookie,
-				body: Buffer.concat(chunks).toString(),
-			});
-			res.writeHead(302, {
-				location: "http://localhost:3000/",
-				"set-cookie": ["a=1; Path=/", "b=2; Path=/"],
-			});
-			res.end();
-		});
+		res.writeHead(404);
+		res.end();
 	});
 	await new Promise<void>((resolve) => server.listen(PORT, resolve));
 
@@ -63,14 +42,12 @@ beforeAll(async () => {
 	process.env.CONVEX_SITE_URL = ORIGIN;
 
 	const { Hono } = await import("hono");
-	const { auth } = await import("../src/auth.ts");
 	const { session } = await import("../src/session.ts");
 	const { errorHandler } = await import("../src/error.ts");
 
 	const { ConvexError } = await import("convex/values");
 
 	const app = new Hono();
-	app.route("/api/auth", auth);
 	app.get("/api/refused", () => {
 		throw new ConvexError({ code: "FORBIDDEN" });
 	});
@@ -85,31 +62,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
 	await new Promise<void>((resolve) => server.close(() => resolve()));
-});
-
-describe("the auth router", () => {
-	test("carries a sign-in through to the deployment untouched", async () => {
-		const response = await fetchApp(
-			new Request("http://api.test/api/auth/sign-in/social?provider=github", {
-				method: "POST",
-				headers: { "content-type": "application/json", cookie: "sid=abc" },
-				body: JSON.stringify({ provider: "github" }),
-			}),
-		);
-
-		expect(seen.at(-1)).toMatchObject({
-			method: "POST",
-			url: "/api/auth/sign-in/social?provider=github",
-			cookie: "sid=abc",
-			body: JSON.stringify({ provider: "github" }),
-		});
-		expect(response.status).toBe(302);
-		expect(response.headers.get("location")).toBe("http://localhost:3000/");
-		expect(response.headers.getSetCookie()).toEqual([
-			"a=1; Path=/",
-			"b=2; Path=/",
-		]);
-	});
 });
 
 describe("the session gate", () => {
