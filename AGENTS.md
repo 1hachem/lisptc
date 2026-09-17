@@ -63,23 +63,9 @@ finished runs through `/report`, `/review` and `/storage` instead, so a Next.js
 page never pulls in vitest or a model provider. `apps/trace-viewer` declares
 `@repo/evals` once, which is why the rule has to be about imports.
 
-Three more rules in the same file hold the session seam open. An extension says
-what it does at each point of a step in a `session` field beside its `prompt`,
-and hands a capability over through a slot, so nothing goes looking through the
-extension list for one: `check:arch` fails on an exported function that takes a
-single `InterpExtension` and digs a capability out of it. The files that drive
-the lifecycle, `DRIVERS` in the script, import an extension module for types
-only. Each carries a short list of the value imports it has not shed yet, and
-the check fails both on a name missing from that list and on a name on it the
-file no longer imports, so the list only shrinks.
-
-`BLIND` goes further, for `@repo/ai`: the agent loop names no extension at all,
-type imports included. A step reports what it did in `StepAnnotations`, two
-bags of keys the extensions themselves fill through the `annotate` chain —
-`step`, which rides the tool result the model reads, and `output`, which rides
-the wire the browser reads. The loop merges them without knowing a key. The
-only exception is the roster listed beside the rule, `repl-store.ts`, where
-building the REPL is the job.
+Three more rules in the same file keep the layers above an extension from
+naming it. They are the enforcement half of **The session seam** below, which
+is where to read before changing anything that crosses it.
 
 ## Commands
 
@@ -212,6 +198,97 @@ share and neither owns; `@repo/shared/host-node` holds the node-side
 **Adding an extension, or a new outward reach in one, means adding a port.**
 Do not import `node:fs` "just for this one path" — that is the decision the
 pattern exists to keep out of the extension.
+
+## The session seam
+
+Host ports keep an extension from reaching the world. The seam keeps the world
+from reaching into an extension.
+
+**Nothing above an extension names it.** Not the REPL, not the agent loop, not
+the HTTP layer, not the browser. An extension declares what it does at each
+point of a step and what it hands over. Everything above runs it and carries
+its bytes without knowing which extension produced them, or that it exists.
+
+Three kinds of thing cross the seam, and each has exactly one mechanism. Reach
+for the matching one, never for an import.
+
+### Behaviour goes through a chain
+
+An extension declares a `session` field beside its `prompt` and hooks the
+points it cares about. `SessionHooks` in `@repo/interpreter/session` holds
+them, built on the same `Chain` the interpreter already uses for `readSource`,
+`skipForm` and `evalForm`:
+
+- `beginTurn` speaks before the model generates, and what it says rides the
+  user's own message.
+- `evalStep` wraps the evaluation.
+- `stepOutput` and `stepError` shape what comes back.
+- `answered` decides that a step ended the turn.
+- `unrun` names the forms a step did not run.
+- `annotate` reports what the step did.
+- `invoke` runs a ui action.
+
+`openSession(extensions)` collects them once. A driver runs a chain with a base
+case and never asks who is on it. Give every new chain a base that is correct
+when nobody hooks it, because a REPL built without that extension will take it.
+
+### A capability goes through a slot
+
+`slot<T>(name)` mints a key. The extension fills it with `hooks.fill`, the
+consumer reads it with `hooks.filled`, and neither imports the other's module.
+`memorySlot` and `secretsSlot` sit in their extensions. `llmSlot` sits in
+`@repo/llm/observe` beside the observer contract it hands over, so watching
+model calls does not pull in the extension that makes them.
+
+Never search the extension list for a capability. An exported function taking a
+single `InterpExtension` and digging a field out of it fails `check:arch` by
+shape, with no allowlist.
+
+### Data goes through an annotation
+
+A step reports what it did in `StepAnnotations`, filled through the `annotate`
+chain. Two bags of string keys, split by audience and by nothing else:
+
+- `step` rides the tool result the model reads. A fired memory goes here.
+- `output` rides the wire only the browser reads. A rendered view goes here.
+
+The extension picks the key and owns the shape; `annotating(into, lane, entry)`
+adds one. Everything above merges without naming a key. `replResultContent`
+spreads `step` into the tool-result JSON. `stream.ts` merges `step` into
+`meta`, concatenating where two arrays land on one key, and spreads `output`
+into `additional_kwargs`.
+
+This is the part that rots first. `FiredMemory` and `UiNode` were once typed
+into `EvalOutput`, then into `TurnEvent`, then into the SSE writer, so
+`@repo/ai` named an extension's type to move bytes it never read. One type
+import is all it takes.
+
+### Adding to it
+
+Needing something new is never a reason to import across the seam.
+
+- A new point in the lifecycle: add a chain to `SessionHooks`.
+- A new capability to hand over: mint a slot.
+- A new thing to report: pick a key, pick the lane by who reads it, write it in
+  `annotate`.
+- A payload a layer above would have to interpret: that interpretation belongs
+  below the seam. Move it into the extension. `nodeToJson` moved into the ui
+  extension for exactly this reason.
+
+### Enforcement
+
+`check:arch` holds three lines.
+
+- The sniffing shape fails everywhere, as above.
+- `DRIVERS` names the files that run the lifecycle. They import an extension
+  module for types only, and each carries the value imports it has not shed
+  yet. The check fails on a name missing from that list and on a name on it the
+  file no longer imports, so the list only shrinks.
+- `BLIND` names a whole tree, `packages/ai/src`, where no extension module may
+  be imported at all, type imports included. Its roster is the exception list:
+  `repl-store.ts`, where building the REPL is the job.
+
+Every failure prints the way out. Take it. Do not widen a list to get past one.
 
 ## Environment variables
 
