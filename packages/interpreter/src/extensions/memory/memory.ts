@@ -28,6 +28,7 @@ export const MAX_CASCADE_DEPTH = 3;
 export const MAX_RECALL_WORDS = 200;
 export const LINKED_FIRES_AT = 2;
 export const DEFAULT_RECALL_LIMIT = 5;
+export const JUDGE_CANDIDATES = 50;
 
 export const TRIGGER_KINDS = [
 	"call",
@@ -62,6 +63,24 @@ export interface MemoryStore {
 	put(memory: Memory): void;
 	delete(key: string): boolean;
 }
+
+export type Judge = (query: string, candidates: Memory[]) => Promise<string[]>;
+
+export interface MemorySpan {
+	op: "remember" | "recall" | "fire";
+	key?: string;
+	query?: string;
+	strategy?: "judge" | "regex";
+	candidates?: number;
+	hits?: number;
+	latencyMs?: number;
+	trigger?: string;
+	error?: string;
+}
+
+export type MemoryObserver = (span: MemorySpan) => void;
+
+type FireVia = TriggerKind | "link";
 
 export class VolatileStore implements MemoryStore {
 	private readonly memories = new Map<string, Memory>();
@@ -190,8 +209,12 @@ function matches(pattern: string, text: string): boolean {
 	}
 }
 
-function bodyText(body: unknown): string {
+export function bodyText(body: unknown): string {
 	return typeof body === "string" ? body : str(body);
+}
+
+function message(ex: unknown): string {
+	return ex instanceof Error ? ex.message : String(ex);
 }
 
 function unreadable(body: unknown): boolean {
@@ -300,11 +323,21 @@ export class MemoryBank {
 	private dropped = 0;
 	private stepping = false;
 	private heard = "";
+	observer?: MemoryObserver;
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
 		readonly clock: Clock = systemClock,
+		readonly judge?: Judge,
 	) {}
+
+	private report(span: MemorySpan): void {
+		const observer = this.observer;
+		if (observer === undefined) return;
+		try {
+			observer(span);
+		} catch {}
+	}
 
 	private now(): number {
 		return this.clock.now();
@@ -378,33 +411,95 @@ export class MemoryBank {
 
 	remember(memory: Memory): void {
 		this.store.put(memory);
+		this.report({ op: "remember", key: memory.key });
 	}
 
 	recall(interp: Interp, query: string, limit: number): Memory[] {
 		this.sweep();
-		const found = this.store
-			.all()
+		const all = this.store.all();
+		const found = all
 			.filter((m) => matches(query, m.key) || matches(query, bodyText(m.body)))
 			.sort((a, b) => this.strength(b) - this.strength(a))
 			.slice(0, limit);
-		for (const memory of found) this.fire(memory, interp);
+		for (const memory of found) this.fire(memory, interp, "recall");
+		this.report({
+			op: "recall",
+			query,
+			strategy: "regex",
+			candidates: all.length,
+			hits: found.length,
+		});
 		return found;
 	}
 
-	fire(memory: Memory, interp: Interp): void {
+	*recallGen(interp: Interp, query: string, limit: number): Eval<Memory[]> {
+		if (this.judge === undefined) return this.recall(interp, query, limit);
+		this.sweep();
+		const candidates = this.candidates();
+		const startedAt = this.now();
+		try {
+			const keys = (yield this.judge(query, candidates)) as string[];
+			const found = this.pick(keys, limit);
+			for (const memory of found) this.fire(memory, interp, "recall");
+			this.report({
+				op: "recall",
+				query,
+				strategy: "judge",
+				candidates: candidates.length,
+				hits: found.length,
+				latencyMs: this.now() - startedAt,
+			});
+			return found;
+		} catch (ex) {
+			this.report({
+				op: "recall",
+				query,
+				strategy: "judge",
+				candidates: candidates.length,
+				hits: 0,
+				latencyMs: this.now() - startedAt,
+				error: message(ex),
+			});
+			return this.recall(interp, query, limit);
+		}
+	}
+
+	private candidates(): Memory[] {
+		const all = this.store.all();
+		if (all.length <= JUDGE_CANDIDATES) return all;
+		return [...all]
+			.sort((a, b) => this.strength(b) - this.strength(a))
+			.slice(0, JUDGE_CANDIDATES);
+	}
+
+	private pick(keys: string[], limit: number): Memory[] {
+		const found: Memory[] = [];
+		const seen = new Set<string>();
+		for (const key of keys) {
+			if (found.length >= limit) break;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			const memory = this.store.get(key);
+			if (memory !== undefined) found.push(memory);
+		}
+		return found;
+	}
+
+	fire(memory: Memory, interp: Interp, via: FireVia): void {
 		if (this.fired.has(memory.key)) return;
 		if (this.depth >= MAX_CASCADE_DEPTH) return;
 		this.fired.add(memory.key);
 		this.open.add(memory.key);
 		this.reinforce(memory);
 		this.surface(memory.key, bodyText(memory.body));
+		this.report({ op: "fire", key: memory.key, trigger: via });
 		this.depth++;
 		try {
 			this.dispatch({ kind: "recall", text: memory.key }, interp);
 			for (const [key, weight] of memory.links) {
 				if (weight < LINKED_FIRES_AT) continue;
 				const linked = this.store.get(key);
-				if (linked !== undefined) this.fire(linked, interp);
+				if (linked !== undefined) this.fire(linked, interp, "link");
 			}
 		} finally {
 			this.depth--;
@@ -442,7 +537,7 @@ export class MemoryBank {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
 			if (!fires(on, event)) continue;
-			this.fire(memory, interp);
+			this.fire(memory, interp, event.kind);
 		}
 	}
 
@@ -471,6 +566,7 @@ export interface MemoryHost {
 	store: MemoryStore;
 	clock: Clock;
 	prompt: PromptSource;
+	judge?: Judge;
 }
 
 export interface MemoryOptions {
@@ -485,7 +581,8 @@ export function memoryExtension(
 	host: MemoryHost = memoryHost,
 	options: MemoryOptions = {},
 ): MemoryExtension {
-	const bank = options.bank ?? new MemoryBank(host.store, host.clock);
+	const bank =
+		options.bank ?? new MemoryBank(host.store, host.clock, host.judge);
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
 		prompt: host.prompt(),
@@ -589,13 +686,13 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		REMEMBER_ARGS,
 	);
 
-	interp.def(
+	interp.defGen(
 		"memory/recall",
 		-1,
 		"(recall query [:limit n])",
-		"Retrieve the memories whose key or body matches `query`, strongest first, and load them into your context. Retrieval strengthens what it finds, and opens it for `(revise key body)` until the step ends.",
+		"Retrieve the memories that answer `query`, strongest first, and load them into your context. It matches on key or body text, and where a relevance judge is configured it ranks by meaning instead, so a memory whose wording does not overlap the query still surfaces. Retrieval strengthens what it finds, and opens it for `(revise key body)` until the step ends.",
 		z.tuple([zList]),
-		([rest]) => {
+		function* ([rest]): Eval {
 			const { values, options } = splitKeywordArgs(rest, ["limit"]);
 			const query = listToArray(values)[0];
 			if (typeof query !== "string")
@@ -603,11 +700,8 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			const opts = plistOptions(options, ["limit"]);
 			const raw = opts.get("limit");
 			const limit = raw === undefined ? DEFAULT_RECALL_LIMIT : Number(raw);
-			return arrayToList(
-				bank
-					.recall(interp, query, limit)
-					.map((memory) => memoryToAlist(bank, memory)),
-			);
+			const found = yield* bank.recallGen(interp, query, limit);
+			return arrayToList(found.map((memory) => memoryToAlist(bank, memory)));
 		},
 		RECALL_ARGS,
 	);

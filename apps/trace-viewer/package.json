@@ -20,6 +20,7 @@
     "@repo/env": "workspace:*",
     "@repo/evals": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*",
     "@repo/ui": "workspace:*",
     "next": "^15.5.4",
     "posthog-js": "^1.425.1",
