@@ -45,6 +45,8 @@ tasks:
 
   up:
     desc: build and run the whole stack in docker with live reload, secrets from infisical
+    aliases:
+      - dev
     cmds:
       - task: _infisical-run
         vars:
@@ -70,19 +72,6 @@ tasks:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/db /convex"
           CMD: "docker compose down {{.CLI_ARGS}}"
-
-  convex:up:
-    desc: start the self-hosted convex backend, dashboard and postgres
-    cmds:
-      - task: _infisical-run
-        vars: { ENV: dev, PATHS: "/convex /db", CMD: "docker compose up -d postgres convex-backend convex-dashboard" }
-      - echo "backend http://127.0.0.1:3210 · dashboard http://127.0.0.1:6791"
-
-  convex:down:
-    desc: stop just the convex stack, leaving its data alone
-    cmds:
-      - task: _infisical-run
-        vars: { ENV: dev, PATHS: "/convex /db", CMD: "docker compose stop postgres convex-backend convex-dashboard" }
 
   convex:key:
     desc: mint an admin key, push the deployment's env, and push the functions
@@ -153,11 +142,6 @@ tasks:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/assets /trace-viewer"
           CMD: 'PORT={{.PORT}} pnpm run dev --filter @lisptc/trace-viewer'
-
-  dev:
-    desc: alias for `task up`
-    cmds:
-      - task: up
 
   dev-app:
     desc: run the web app with access to secrets

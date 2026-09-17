@@ -5,9 +5,9 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?comes from infisical /db — run `task convex:up`}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?comes from infisical /db — run `task convex:up`}
-      POSTGRES_DB: ${POSTGRES_DB:?comes from infisical /db — run `task convex:up`}
+      POSTGRES_USER: ${POSTGRES_USER:?comes from infisical /db — run `task up`}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?comes from infisical /db — run `task up`}
+      POSTGRES_DB: ${POSTGRES_DB:?comes from infisical /db — run `task up`}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -33,7 +33,7 @@ services:
       - convex-data:/convex/data
     environment:
       INSTANCE_NAME: ${POSTGRES_DB}
-      INSTANCE_SECRET: ${CONVEX_INSTANCE_SECRET:?comes from infisical /convex — run `task convex:up`}
+      INSTANCE_SECRET: ${CONVEX_INSTANCE_SECRET:?comes from infisical /convex — run `task up`}
       CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
       CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
       POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432

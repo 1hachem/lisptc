@@ -263,7 +263,7 @@ pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
-task convex:up               # postgres + convex backend + dashboard, in docker compose
+task up                      # build and run the whole stack in docker, with live reload
 task convex:key              # mint an admin key, push the deployment's env, push the functions
 
 # Single test file / by name — run inside the package that owns it:
