@@ -173,6 +173,9 @@ export function captureLlmCall(ctx: TraceContext, span: LlmCall): void {
 			...(span.outputTokens === undefined
 				? {}
 				: { $ai_output_tokens: span.outputTokens }),
+			...(span.cachedInputTokens === undefined || span.cachedInputTokens <= 0
+				? {}
+				: { $ai_cache_read_input_tokens: span.cachedInputTokens }),
 			...(span.error ? { $ai_error: span.error } : {}),
 			structured: span.structured,
 			...(PRIVACY_MODE

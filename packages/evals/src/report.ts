@@ -35,6 +35,7 @@ export const reportRowSchema = z.object({
 	answer: z.string(),
 	inputTokens: z.number(),
 	outputTokens: z.number(),
+	cachedInputTokens: z.number().optional(),
 	durationMs: z.number(),
 	errors: z.number(),
 	skips: z.number(),

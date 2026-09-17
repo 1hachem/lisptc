@@ -19,22 +19,48 @@ export function listProviders(): ProviderReport[] {
 interface Usage {
 	inputTokens?: number;
 	outputTokens?: number;
+	cachedInputTokens?: number;
+}
+
+type Counts = Record<string, unknown> | undefined;
+
+function countAt(counts: Counts, key: string): number | undefined {
+	const value = counts?.[key];
+	return typeof value === "number" ? value : undefined;
+}
+
+function nested(counts: Counts, key: string): Counts {
+	const value = counts?.[key];
+	return typeof value === "object" && value !== null
+		? (value as Record<string, unknown>)
+		: undefined;
+}
+
+function cacheReadTokens(counts: Counts): number | undefined {
+	return (
+		countAt(nested(counts, "input_token_details"), "cache_read") ??
+		countAt(nested(counts, "prompt_tokens_details"), "cached_tokens") ??
+		countAt(counts, "cache_read_input_tokens") ??
+		countAt(counts, "cached_tokens")
+	);
 }
 
 function usageCollector(usage: Usage): CallbackHandlerMethods {
 	return {
 		handleLLMEnd(output: LLMResult) {
-			const counts = output.llmOutput?.tokenUsage as
-				| { promptTokens?: number; completionTokens?: number }
-				| undefined;
+			const counts = output.llmOutput?.tokenUsage as Counts;
 			const metadata = output.generations[0]?.[0] as
-				| { message?: { usage_metadata?: Record<string, number> } }
+				| { message?: { usage_metadata?: Record<string, unknown> } }
 				| undefined;
 			const meta = metadata?.message?.usage_metadata;
-			const input = counts?.promptTokens ?? meta?.input_tokens;
-			const completion = counts?.completionTokens ?? meta?.output_tokens;
+			const input =
+				countAt(counts, "promptTokens") ?? countAt(meta, "input_tokens");
+			const completion =
+				countAt(counts, "completionTokens") ?? countAt(meta, "output_tokens");
+			const cached = cacheReadTokens(meta) ?? cacheReadTokens(counts);
 			if (input !== undefined) usage.inputTokens = input;
 			if (completion !== undefined) usage.outputTokens = completion;
+			if (cached !== undefined) usage.cachedInputTokens = cached;
 		},
 	};
 }

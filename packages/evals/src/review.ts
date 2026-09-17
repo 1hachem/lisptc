@@ -119,6 +119,9 @@ export function traceEvents(
 				$ai_output_state: row.answer,
 				$ai_input_tokens: row.inputTokens,
 				$ai_output_tokens: row.outputTokens,
+				...(row.cachedInputTokens
+					? { $ai_cache_read_input_tokens: row.cachedInputTokens }
+					: {}),
 				eval_grade: row.grade,
 				eval_steps: row.steps,
 				eval_halted: row.halted,

@@ -153,6 +153,53 @@ describe("llm built-in calls", () => {
 		});
 	});
 
+	test("carries the cached input tokens when the provider served some from cache", async () => {
+		const { captureLlmCall } = await import("../src/telemetry.ts");
+
+		captureLlmCall(CTX, {
+			builtin: "llm/answer",
+			messages: [{ role: "user", content: "again" }],
+			structured: false,
+			latencyMs: 100,
+			output: "hi",
+			inputTokens: 1200,
+			outputTokens: 7,
+			cachedInputTokens: 1024,
+		});
+		const cached = (await drain()).filter(
+			(e) => e.properties.$ai_span_name === "llm/answer",
+		);
+
+		expect(cached).toHaveLength(1);
+		expect(cached[0].properties).toMatchObject({
+			$ai_input_tokens: 1200,
+			$ai_cache_read_input_tokens: 1024,
+		});
+	});
+
+	test("omits the cached input tokens when nothing was served from cache", async () => {
+		const { captureLlmCall } = await import("../src/telemetry.ts");
+
+		captureLlmCall(CTX, {
+			builtin: "llm/chat",
+			messages: [{ role: "user", content: "again" }],
+			structured: false,
+			latencyMs: 100,
+			output: "hi",
+			inputTokens: 1200,
+			outputTokens: 7,
+			cachedInputTokens: 0,
+		});
+		const uncached = (await drain()).filter(
+			(e) => e.properties.$ai_span_name === "llm/chat",
+		);
+
+		expect(uncached).toHaveLength(1);
+		expect(uncached[0].properties).not.toHaveProperty(
+			"$ai_cache_read_input_tokens",
+		);
+	});
+
 	test("a failed call is a generation marked as an error", async () => {
 		const { captureLlmCall } = await import("../src/telemetry.ts");
 

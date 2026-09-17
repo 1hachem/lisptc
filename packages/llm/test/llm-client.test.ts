@@ -6,6 +6,7 @@ import {
 	str,
 } from "@repo/interpreter/lisp";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import type { LlmCall } from "../src/llm.ts";
 
 interface Seen {
 	url: string;
@@ -14,6 +15,7 @@ interface Seen {
 
 const seen: Seen[] = [];
 let llmExtension: typeof import("../src/llm.ts").llmExtension;
+let llmHost: typeof import("../src/llm-host.ts").llmHost;
 
 const completion = {
 	id: "1",
@@ -53,6 +55,17 @@ function answers(): Promise<Response> {
 	);
 }
 
+function answersWithUsage(
+	usage: Record<string, unknown>,
+): () => Promise<Response> {
+	return () =>
+		Promise.resolve(
+			new Response(JSON.stringify({ ...completion, usage }), {
+				headers: { "content-type": "application/json" },
+			}),
+		);
+}
+
 function neverAnswers(
 	signal: AbortSignal | null | undefined,
 ): Promise<Response> {
@@ -67,6 +80,7 @@ beforeAll(async () => {
 	process.env.FIREWORKS_API_KEY = "test-key";
 	process.env.FIREWORKS_BASE_URL = "http://fireworks.test/v1";
 	llmExtension = (await import("../src/llm.ts")).llmExtension;
+	llmHost = (await import("../src/llm-host.ts")).llmHost;
 	await import("@langchain/openai");
 });
 
@@ -78,6 +92,17 @@ function clientInterp(): Interp {
 	const interp = new Interp({ extensions: [llmExtension()] });
 	runSync(interp, prelude);
 	return interp;
+}
+
+function tracedInterp(): { interp: Interp; traced: LlmCall[] } {
+	const traced: LlmCall[] = [];
+	const interp = new Interp({
+		extensions: [
+			llmExtension(llmHost, { observe: (call) => traced.push(call) }),
+		],
+	});
+	runSync(interp, prelude);
+	return { interp, traced };
 }
 
 describe("the langchain client against a stubbed fetch", () => {
@@ -118,6 +143,31 @@ describe("the langchain client against a stubbed fetch", () => {
 				},
 			},
 		});
+	});
+
+	it("counts the cached input tokens an OpenAI-shaped usage reports", async () => {
+		stubFetch(
+			answersWithUsage({
+				prompt_tokens: 120,
+				completion_tokens: 9,
+				prompt_tokens_details: { cached_tokens: 96 },
+			}),
+		);
+		const { interp, traced } = tracedInterp();
+		await runAsync(interp, '(llm/complete "hi" :provider :fireworks)');
+		expect(traced[0]).toMatchObject({
+			inputTokens: 120,
+			outputTokens: 9,
+			cachedInputTokens: 96,
+		});
+	});
+
+	it("leaves the cached count off when the provider reports no cache hit", async () => {
+		stubFetch(answersWithUsage({ prompt_tokens: 120, completion_tokens: 9 }));
+		const { interp, traced } = tracedInterp();
+		await runAsync(interp, '(llm/complete "hi" :provider :fireworks)');
+		expect(traced[0].inputTokens).toBe(120);
+		expect(traced[0].cachedInputTokens).toBeUndefined();
 	});
 
 	it("reports an unknown provider without calling out", async () => {

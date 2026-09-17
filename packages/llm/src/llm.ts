@@ -53,6 +53,7 @@ export interface LlmResult {
 	model?: string;
 	inputTokens?: number;
 	outputTokens?: number;
+	cachedInputTokens?: number;
 }
 
 export type Generate = (
@@ -70,6 +71,7 @@ export interface LlmCall {
 	output?: string;
 	inputTokens?: number;
 	outputTokens?: number;
+	cachedInputTokens?: number;
 	error?: string;
 }
 
@@ -410,6 +412,8 @@ function traceOf(
 		call.output = res.text;
 		if (res.inputTokens !== undefined) call.inputTokens = res.inputTokens;
 		if (res.outputTokens !== undefined) call.outputTokens = res.outputTokens;
+		if (res.cachedInputTokens !== undefined)
+			call.cachedInputTokens = res.cachedInputTokens;
 	}
 	if (error !== undefined)
 		call.error = error instanceof Error ? error.message : String(error);

@@ -58,6 +58,7 @@ export interface RunResult {
 	answer: string;
 	inputTokens: number;
 	outputTokens: number;
+	cachedInputTokens?: number;
 	durationMs: number;
 	errors: number;
 	skips: number;
@@ -136,6 +137,7 @@ export async function runCase(
 	let answer = "";
 	let inputTokens = 0;
 	let outputTokens = 0;
+	let cachedInputTokens = 0;
 	const startedAt = Date.now();
 
 	for await (const event of runAgentTurn(transcript, {
@@ -154,6 +156,7 @@ export async function runCase(
 			seen.push({ role: "assistant", content: event.code });
 			inputTokens = event.meta.inputTokens ?? inputTokens;
 			outputTokens += event.meta.outputTokens ?? 0;
+			cachedInputTokens = event.meta.cachedInputTokens ?? cachedInputTokens;
 			continue;
 		}
 		if (event.type === "result") {
@@ -188,6 +191,7 @@ export async function runCase(
 		answer,
 		inputTokens,
 		outputTokens,
+		...(cachedInputTokens > 0 ? { cachedInputTokens } : {}),
 		durationMs: Date.now() - startedAt,
 		errors: trace.events.filter(
 			(e) =>

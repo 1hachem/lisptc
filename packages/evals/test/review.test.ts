@@ -17,7 +17,10 @@ function line(role: TranscriptLine["role"], content: string): TranscriptLine {
 	return { role, content };
 }
 
-function row(transcript: TranscriptLine[]): ReportRow {
+function row(
+	transcript: TranscriptLine[],
+	extra: Partial<ReportRow> = {},
+): ReportRow {
 	return {
 		case: "connect-and-query",
 		sample: 1,
@@ -39,6 +42,7 @@ function row(transcript: TranscriptLine[]): ReportRow {
 			{ name: "answers", verdict: "false" },
 		],
 		transcript,
+		...extra,
 	};
 }
 
@@ -124,6 +128,16 @@ describe("the run as a trace", () => {
 		expect(root.properties.$ai_is_error).toBe(false);
 		expect(root.properties.$ai_input_tokens).toBe(10);
 		expect(root.properties.eval_checks_failed).toEqual(["answers"]);
+	});
+
+	test("reports the cached input tokens only when the run had a cache hit", () => {
+		const [plain] = traceEvents(IDENTITY, subject);
+		expect(plain.properties).not.toHaveProperty("$ai_cache_read_input_tokens");
+		const [cached] = traceEvents(
+			IDENTITY,
+			row(subject.transcript, { cachedInputTokens: 8 }),
+		);
+		expect(cached.properties.$ai_cache_read_input_tokens).toBe(8);
 	});
 
 	test("makes a generation of every agent turn, under the run", () => {
