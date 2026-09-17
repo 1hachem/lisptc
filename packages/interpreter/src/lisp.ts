@@ -20,6 +20,7 @@ import {
 import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
 import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
+import type { SessionHooks } from "./session.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
 import { note, output } from "./topics.ts";
 
@@ -525,6 +526,7 @@ export function jsonToLisp(x: unknown): unknown {
 export interface InterpExtension {
 	(interp: Interp): void;
 	readonly prompt?: string;
+	readonly session?: (hooks: SessionHooks) => void;
 }
 
 export interface InterpOptions {

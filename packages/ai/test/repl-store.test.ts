@@ -1,4 +1,5 @@
-import { bankOf } from "@repo/interpreter/memory";
+import { memorySlot } from "@repo/interpreter/memory";
+import { openSession } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { agentExtensions, getThreadRepl } from "../src/repl-store.ts";
 
@@ -6,7 +7,7 @@ describe("the REPL every agent host builds", () => {
 	it("carries a memory, so the API remembers across turns", async () => {
 		const repl = getThreadRepl("thread-a");
 
-		expect(repl.memories).toBeDefined();
+		expect(repl.hooks.filled(memorySlot)).toBeDefined();
 		expect(await repl.eval('(memory/remember "k" "a note")')).toContain("k");
 		expect(await repl.eval('(memory/recall "note")')).toContain("a note");
 	});
@@ -52,8 +53,10 @@ describe("the REPL every agent host builds", () => {
 	});
 
 	it("gives an unscoped roster a bank of its own", () => {
-		const banks = agentExtensions().map(bankOf).filter(Boolean);
+		const one = openSession(agentExtensions()).filled(memorySlot);
+		const another = openSession(agentExtensions()).filled(memorySlot);
 
-		expect(banks).toHaveLength(1);
+		expect(one).toBeDefined();
+		expect(one).not.toBe(another);
 	});
 });

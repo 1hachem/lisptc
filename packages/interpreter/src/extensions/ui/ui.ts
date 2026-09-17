@@ -18,6 +18,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
+import { annotating, type SessionHooks } from "../../session.ts";
 import { uiHost } from "./ui-host.ts";
 
 const MAX_HANDLERS = 500;
@@ -557,10 +558,19 @@ export function uiExtension(
 	return Object.assign((interp: Interp): void => registerUi(interp, surface), {
 		surface,
 		prompt: host.prompt(),
+		session(hooks: SessionHooks): void {
+			hooks.invoke.use(async (ctx) => {
+				await surface.invoke(ctx.action, ctx.values);
+			});
+			hooks.annotate.use((buffer, into, next) => {
+				const view = buffer.payloads(rendered).at(-1);
+				return next(
+					buffer,
+					view === undefined
+						? into
+						: annotating(into, "output", { ui: nodeToJson(view) }),
+				);
+			});
+		},
 	});
-}
-
-export function surfaceOf(extension: InterpExtension): UiSurface | undefined {
-	const carried = (extension as Partial<UiExtension>).surface;
-	return carried instanceof UiSurface ? carried : undefined;
 }

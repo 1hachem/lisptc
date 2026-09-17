@@ -18,6 +18,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
+import { annotating, type SessionHooks, slot } from "../../session.ts";
 import { memoryHost } from "./memory-host.ts";
 
 export const INITIAL_SCORE = 1;
@@ -258,12 +259,10 @@ function someSubform(form: unknown, test: (s: unknown) => boolean): boolean {
 	return false;
 }
 
-function lastUserMessage(interp: Interp): string {
+function userMessages(interp: Interp): string[] {
 	const said = interp.getGlobal(newSym("user-messages"));
-	if (!(said instanceof Cell)) return "";
-	const all = listToArray(said);
-	const last = all[all.length - 1];
-	return typeof last === "string" ? last : "";
+	if (!(said instanceof Cell)) return [];
+	return listToArray(said).filter((m): m is string => typeof m === "string");
 }
 
 interface MemoryEvent {
@@ -294,12 +293,13 @@ export class MemoryBank {
 	private channels?: Channels;
 	private readonly fired = new Set<string>();
 	private readonly open = new Set<string>();
+	private surfaced: FiredMemory[] = [];
 	private depth = 0;
 	private pending = "";
 	private spent = 0;
 	private dropped = 0;
 	private stepping = false;
-	private heard = "";
+	private heard = 0;
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
@@ -317,6 +317,7 @@ export class MemoryBank {
 	reset(): void {
 		this.fired.clear();
 		this.open.clear();
+		this.surfaced = [];
 		this.depth = 0;
 		this.pending = "";
 		this.spent = 0;
@@ -333,26 +334,35 @@ export class MemoryBank {
 		return this.open.has(key);
 	}
 
+	hear(interp: Interp): FiredMemory[] {
+		const said = userMessages(interp);
+		if (said.length === this.heard) return [];
+		this.heard = said.length;
+		const last = said[said.length - 1];
+		if (last === undefined || last === "") return [];
+		this.stepping = true;
+		this.sweep();
+		const before = this.surfaced.length;
+		this.dispatch({ kind: "user", text: last }, interp);
+		this.stepping = false;
+		this.drain();
+		return this.surfaced.slice(before);
+	}
+
 	beginStep(code: string, interp: Interp): string {
-		this.reset();
 		this.stepping = true;
 		this.sweep();
 		this.dispatch({ kind: "step", text: code }, interp);
 		const prose = proseIn(code);
 		if (prose !== "") this.dispatch({ kind: "prose", text: prose }, interp);
-		const said = lastUserMessage(interp);
-		if (said !== "" && said !== this.heard) {
-			this.heard = said;
-			this.dispatch({ kind: "user", text: said }, interp);
-		}
 		return this.drain();
 	}
 
 	endStep(): string {
 		this.wireTogether();
-		this.open.clear();
-		this.stepping = false;
-		return this.drain();
+		const text = this.drain();
+		this.reset();
+		return text;
 	}
 
 	private drain(): string {
@@ -455,6 +465,7 @@ export class MemoryBank {
 		}
 		this.spent += words;
 		this.pending += line;
+		this.surfaced.push({ key, body });
 		fired.emit(this.channels, { user: { key, body } });
 	}
 }
@@ -481,6 +492,43 @@ export interface MemoryExtension extends InterpExtension {
 	readonly bank: MemoryBank;
 }
 
+function heardText(memories: FiredMemory[]): string {
+	return [
+		"<memories>",
+		"these fired on what the user just said. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).",
+		...memories.map((m) => `${m.key}: ${m.body}`),
+		"</memories>",
+	].join("\n");
+}
+
+export const memorySlot = slot<MemoryBank>("memory");
+
+function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
+	return (hooks) => {
+		hooks.fill(memorySlot, bank);
+		hooks.beginTurn.use((ctx, next) => {
+			const heard = bank.hear(ctx.interp);
+			if (heard.length > 0) ctx.say(heardText(heard));
+			next(ctx);
+		});
+		hooks.evalStep.use(async (ctx, next) => {
+			ctx.emit(bank.beginStep(ctx.code, ctx.interp));
+			try {
+				await next(ctx);
+			} finally {
+				ctx.emit(bank.endStep());
+			}
+		});
+		hooks.annotate.use((buffer, into, next) => {
+			const memories = buffer.payloads(fired);
+			return next(
+				buffer,
+				memories.length === 0 ? into : annotating(into, "step", { memories }),
+			);
+		});
+	};
+}
+
 export function memoryExtension(
 	host: MemoryHost = memoryHost,
 	options: MemoryOptions = {},
@@ -489,12 +537,8 @@ export function memoryExtension(
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
 		prompt: host.prompt(),
+		session: memorySession(bank),
 	});
-}
-
-export function bankOf(extension: InterpExtension): MemoryBank | undefined {
-	const carried = (extension as Partial<MemoryExtension>).bank;
-	return carried instanceof MemoryBank ? carried : undefined;
 }
 
 const zString = z.custom<string>(

@@ -16,6 +16,7 @@ import {
 	str,
 	zList,
 } from "../../lisp.ts";
+import { type SessionHooks, slot } from "../../session.ts";
 import type { ToJson } from "../../types.ts";
 import { secretsHost } from "./secrets-host.ts";
 
@@ -77,18 +78,21 @@ export interface SecretsExtension extends InterpExtension {
 	readonly store: SecretsStore;
 }
 
+export const secretsSlot = slot<SecretsStore>("secrets");
+
 export function secretsExtension(
 	host: SecretsHost = secretsHost,
 ): SecretsExtension {
 	return Object.assign(
 		(interp: Interp): void => registerSecrets(interp, host.store),
-		{ store: host.store, prompt: host.prompt() },
+		{
+			store: host.store,
+			prompt: host.prompt(),
+			session(hooks: SessionHooks): void {
+				hooks.fill(secretsSlot, host.store);
+			},
+		},
 	);
-}
-
-export function storeOf(extension: InterpExtension): SecretsStore | undefined {
-	const carried = (extension as Partial<SecretsExtension>).store;
-	return typeof carried?.get === "function" ? carried : undefined;
 }
 
 class Secret implements ToJson {

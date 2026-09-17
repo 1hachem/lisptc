@@ -21,6 +21,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
+import type { SessionHooks } from "../../session.ts";
 import { output } from "../../topics.ts";
 import { compactionHost } from "./compaction-host.ts";
 
@@ -822,6 +823,25 @@ export interface CompactionExtension extends InterpExtension {
 	readonly compactor: Compactor;
 }
 
+function compactionSession(
+	compactor: Compactor,
+): (hooks: SessionHooks) => void {
+	return (hooks) => {
+		hooks.evalStep.use(async (ctx, next) => {
+			compactor.beginStep();
+			await next(ctx);
+		});
+		hooks.stepOutput.use((ctx, out, next) => {
+			const withheld = compactor.endStep();
+			return next(
+				ctx,
+				withheld === "" ? out : { ...out, model: out.model + withheld },
+			);
+		});
+		hooks.stepError.use((_ctx, text) => compactor.error(text));
+	};
+}
+
 export function compactionExtension(
 	host: CompactionHost = compactionHost,
 	options: CompactionOptions = {},
@@ -829,11 +849,10 @@ export function compactionExtension(
 	const compactor = options.compactor ?? new Compactor();
 	return Object.assign(
 		(interp: Interp): void => registerCompaction(interp, compactor),
-		{ compactor, prompt: host.prompt() },
+		{
+			compactor,
+			prompt: host.prompt(),
+			session: compactionSession(compactor),
+		},
 	);
-}
-
-export function compactorOf(extension: InterpExtension): Compactor | undefined {
-	const carried = (extension as Partial<CompactionExtension>).compactor;
-	return carried instanceof Compactor ? carried : undefined;
 }

@@ -3,14 +3,16 @@ import { compactionHost } from "@repo/interpreter/compaction-host";
 import {
 	MemoryBank,
 	memoryExtension,
+	memorySlot,
 	VolatileStore,
 } from "@repo/interpreter/memory";
 import { memoryHost } from "@repo/interpreter/memory-host";
 import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension } from "@repo/interpreter/secrets";
+import { secretsExtension, secretsSlot } from "@repo/interpreter/secrets";
 import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
-import { type LlmCall, llmExtension } from "@repo/llm/llm";
+import { llmExtension } from "@repo/llm/llm";
 import { llmHost } from "@repo/llm/llm-host";
+import { type LlmCall, llmSlot } from "@repo/llm/observe";
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";
@@ -21,7 +23,7 @@ describe("a REPL built from the model-facing list", () => {
 
 		expect(await r.eval("(+ 1 2)")).toBe("+-1: 3\n");
 		expect(await r.eval("(list-toolkit)")).toContain("playwright");
-		expect(r.secrets).toBeDefined();
+		expect(r.hooks.filled(secretsSlot)).toBeDefined();
 		expect(await r.eval("(doc 'llm/complete)")).toContain("(llm/complete");
 	});
 });
@@ -35,7 +37,7 @@ describe("a REPL built from a list of its own", () => {
 			],
 		});
 
-		expect(r.secrets).toBeUndefined();
+		expect(r.hooks.filled(secretsSlot)).toBeUndefined();
 		expect(await r.eval('(secret "REPL_X")')).toContain("undefined");
 		expect(await r.eval('(echo "a b c d e f")')).toContain("4 of 6 words");
 	});
@@ -56,7 +58,7 @@ describe("a REPL built from a list of its own", () => {
 			compactionExtension(),
 		]);
 
-		expect(r.secrets).toBe(store);
+		expect(r.hooks.filled(secretsSlot)).toBe(store);
 		expect(await r.eval("(secrets)")).toContain("shared");
 	});
 
@@ -67,7 +69,7 @@ describe("a REPL built from a list of its own", () => {
 			memoryExtension(memoryHost, { bank }),
 		]);
 
-		expect(r.memories).toBe(bank);
+		expect(r.hooks.filled(memorySlot)).toBe(bank);
 		await r.eval('(memory/remember "k" "a note worth keeping")');
 
 		expect(bank.store.get("k")?.body).toBe("a note worth keeping");
@@ -81,9 +83,9 @@ describe("a REPL built from a list of its own", () => {
 		]);
 		await r.eval(`(memory/remember "k" "the note" :on '(step))`);
 
-		const { model, memories } = await r.evalOutput("(+ 1 1)");
+		const { model, annotations } = await r.evalOutput("(+ 1 1)");
 
-		expect(memories).toEqual([{ key: "k", body: "the note" }]);
+		expect(annotations.step.memories).toEqual([{ key: "k", body: "the note" }]);
 		expect(model).not.toContain("the note");
 		expect(model).toContain("2");
 	});
@@ -96,11 +98,15 @@ describe("a REPL built from a list of its own", () => {
 			}),
 		]);
 
-		expect((await r.evalOutput("(+ 1 1)")).memories).toEqual([]);
+		expect((await r.evalOutput("(+ 1 1)")).annotations.step).not.toHaveProperty(
+			"memories",
+		);
 	});
 
 	it("has no bank when no memory extension is in it", () => {
-		expect(memoryRepl([compactionExtension()]).memories).toBeUndefined();
+		expect(
+			memoryRepl([compactionExtension()]).hooks.filled(memorySlot),
+		).toBeUndefined();
 	});
 
 	it("points the llm observer at the llm extension it carries", async () => {
@@ -111,7 +117,8 @@ describe("a REPL built from a list of its own", () => {
 				generate: async () => ({ text: "pong", provider: "x", model: "y" }),
 			}),
 		]);
-		r.llmObserver = (call) => calls.push(call);
+		const observed = r.hooks.filled(llmSlot);
+		if (observed) observed.observe = (call) => calls.push(call);
 
 		await r.eval('(llm/complete "ping")');
 		r.reset();

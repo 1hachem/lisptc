@@ -1,10 +1,5 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	type Bounded,
-	type Compactor,
-	compactorOf,
-} from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
@@ -17,28 +12,15 @@ import {
 	runSync,
 } from "@repo/interpreter/lisp";
 import {
-	bankOf,
-	type FiredMemory,
-	fired,
-	type MemoryBank,
-} from "@repo/interpreter/memory";
-import { isTruncated } from "@repo/interpreter/prose";
-import { type SecretsStore, storeOf } from "@repo/interpreter/secrets";
+	type Bounded,
+	noAnnotations,
+	openSession,
+	type SessionHooks,
+	type StepAnnotations,
+	type StepContext,
+} from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
-import {
-	joinMessages,
-	rendered,
-	sent,
-	surfaceOf,
-	type UiNode,
-	type UiSurface,
-} from "@repo/interpreter/ui";
-import {
-	isLlmExtension,
-	type LlmExtension,
-	type LlmObserver,
-} from "@repo/llm/llm";
-import { formsOnly } from "@repo/shared/lisp-forms";
+import { joinMessages, sent } from "@repo/interpreter/ui";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -54,15 +36,15 @@ export interface ReplOptions {
 }
 
 export interface EvalOutput extends Bounded {
-	memories: FiredMemory[];
+	annotations: StepAnnotations;
 	failed: boolean;
-	ui?: UiNode;
 	message?: string;
 }
 
 interface StepResult extends EvalOutput {
 	envelopes: readonly Envelope[];
 	skipped: string[];
+	feedback: string;
 }
 
 function partition(notes: readonly Note[]): {
@@ -87,17 +69,6 @@ function partition(notes: readonly Note[]): {
 	return { skipped, failed };
 }
 
-function find<T>(
-	extensions: readonly InterpExtension[],
-	carried: (extension: InterpExtension) => T | undefined,
-): T | undefined {
-	for (const extension of extensions) {
-		const value = carried(extension);
-		if (value !== undefined) return value;
-	}
-	return undefined;
-}
-
 function skipNotes(skipped: string[]): string {
 	return skipped.map((what) => `skipped ${what}\n`).join("");
 }
@@ -107,9 +78,8 @@ function render(result: StepResult): EvalOutput {
 	return {
 		model: result.model + notes,
 		user: result.user + notes,
-		memories: result.memories,
+		annotations: result.annotations,
 		failed: result.failed,
-		ui: result.ui,
 		message: result.message,
 	};
 }
@@ -118,32 +88,16 @@ export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private inFlight: Promise<void> = Promise.resolve();
 	private readonly extensions: InterpExtension[];
-	private readonly compactor?: Compactor;
-	private readonly llm?: LlmExtension;
-	readonly secrets?: SecretsStore;
-	readonly memories?: MemoryBank;
-	readonly surface?: UiSurface;
+	readonly hooks: SessionHooks;
 
 	constructor(options: ReplOptions) {
 		this.extensions = options.extensions;
-		this.compactor = find(this.extensions, compactorOf);
-		this.secrets = find(this.extensions, storeOf);
-		this.memories = find(this.extensions, bankOf);
-		this.surface = find(this.extensions, surfaceOf);
-		this.llm = this.extensions.find(isLlmExtension);
+		this.hooks = openSession(this.extensions);
 		this.currentInterp = this.freshInterp();
 	}
 
 	get interp(): Interp {
 		return this.currentInterp;
-	}
-
-	get llmObserver(): LlmObserver | undefined {
-		return this.llm?.observe;
-	}
-
-	set llmObserver(observer: LlmObserver | undefined) {
-		if (this.llm) this.llm.observe = observer;
 	}
 
 	private freshInterp(): Interp {
@@ -160,31 +114,39 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	protected evaluate(code: string): Promise<StepResult> {
-		return this.serialize(async () => {
-			this.memories?.beginStep(code, this.currentInterp);
-			try {
-				await runAsync(this.currentInterp, code);
-			} finally {
-				this.memories?.endStep();
-			}
-		});
+		return this.serialize(code, (ctx) =>
+			this.hooks.evalStep.run(async (c) => {
+				await runAsync(c.interp, c.code);
+			}, ctx),
+		);
 	}
 
 	async invokeUi(
 		action: string,
 		values: Record<string, unknown> = {},
 	): Promise<EvalOutput> {
-		const surface = this.surface;
-		if (surface === undefined)
-			throw new EvalException("no ui surface on this repl", action, false);
-		return this.serialize(() => surface.invoke(action, values));
+		return render(
+			await this.serialize("", (ctx) =>
+				this.hooks.invoke.run(
+					() => {
+						throw new EvalException(
+							"no ui surface on this repl",
+							action,
+							false,
+						);
+					},
+					{ interp: ctx.interp, action, values },
+				),
+			),
+		);
 	}
 
-	private serialize(body: () => Promise<unknown>): Promise<StepResult> {
-		const done = this.inFlight.then(
-			() => this.runStep(body),
-			() => this.runStep(body),
-		);
+	private serialize(
+		code: string,
+		body: (ctx: StepContext) => Promise<void>,
+	): Promise<StepResult> {
+		const run = () => this.runStep(code, body);
+		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
 			() => undefined,
 			() => undefined,
@@ -192,15 +154,26 @@ export class MemoryRepl implements InMemoryRepl {
 		return done;
 	}
 
-	private async runStep(body: () => Promise<unknown>): Promise<StepResult> {
-		this.compactor?.beginStep();
-		const { channels } = this.currentInterp;
+	private async runStep(
+		code: string,
+		body: (ctx: StepContext) => Promise<void>,
+	): Promise<StepResult> {
+		let feedback = "";
+		const interp = this.currentInterp;
+		const ctx: StepContext = {
+			interp,
+			code,
+			emit: (text) => {
+				feedback += text;
+			},
+		};
+		const { channels } = interp;
 		channels.step += 1;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
 		let thrown: unknown;
 		try {
-			await body();
+			await body(ctx);
 		} catch (ex) {
 			if (!(ex instanceof EvalException) && ex !== EndOfFile) throw ex;
 			thrown = ex;
@@ -214,16 +187,27 @@ export class MemoryRepl implements InMemoryRepl {
 			error = { model: text, user: "" };
 		} else if (thrown !== undefined) {
 			const text = `${failed.at(-1)?.text ?? String(thrown)}\n`;
-			error = this.compactor?.error(text) ?? { model: text, user: text };
+			error = this.hooks.stepError.run(
+				() => ({ model: text, user: text }),
+				ctx,
+				text,
+			);
 		}
+		const bounded = this.hooks.stepOutput.run((_c, out) => out, ctx, {
+			model: buffer.text("model"),
+			user: buffer.text("user"),
+		});
 		return {
 			envelopes: buffer.envelopes,
-			model:
-				buffer.text("model") + (this.compactor?.endStep() ?? "") + error.model,
-			user: buffer.text("user") + error.user,
-			memories: buffer.payloads(fired),
+			model: bounded.model + error.model,
+			user: bounded.user + error.user,
+			feedback,
+			annotations: this.hooks.annotate.run(
+				(_b, into) => into,
+				buffer,
+				noAnnotations(),
+			),
 			failed: thrown !== undefined,
-			ui: buffer.payloads(rendered).at(-1),
 			message: joinMessages(buffer.payloads(sent)),
 			skipped,
 		};
@@ -251,16 +235,57 @@ export class AgentRepl extends MemoryRepl {
 
 	override async evalOutput(code: string): Promise<EvalOutput> {
 		const result = await this.evaluate(code);
-		if (!isAnswer(code, result)) return render(result);
+		if (!this.answered(code, result)) return render(result);
 		this.finished = true;
 		this.pendingProse.push(...result.skipped);
 		return {
 			model: result.model,
 			user: result.user,
-			memories: result.memories,
+			annotations: result.annotations,
 			failed: result.failed,
-			ui: result.ui,
 			message: result.message,
+		};
+	}
+
+	private answered(code: string, result: StepResult): boolean {
+		return this.hooks.answered.run(
+			() => false,
+			{ interp: this.interp, code, emit: () => {} },
+			{
+				model: result.model,
+				user: result.user,
+				skipped: result.skipped,
+				failed: result.failed,
+			},
+		);
+	}
+
+	unrun(code: string): string[] {
+		return this.hooks.unrun.run(() => [], this.interp, code);
+	}
+
+	beginTurn(): { said: string; annotations: StepAnnotations } {
+		let said = "";
+		const { channels } = this.interp;
+		const buffer = bufferTransport();
+		const detach = channels.pipe(buffer);
+		try {
+			this.hooks.beginTurn.run(() => {}, {
+				interp: this.interp,
+				say: (text) => {
+					said += said === "" ? text : `\n\n${text}`;
+				},
+			});
+		} finally {
+			detach();
+		}
+		return {
+			said,
+			annotations: this.hooks.annotate.run(
+				(_b, into) => into,
+				buffer,
+				noAnnotations(),
+			),
 		};
 	}
 
@@ -293,12 +318,6 @@ export class AgentRepl extends MemoryRepl {
 		super.reset();
 		this.clearTurnSignals();
 	}
-}
-
-function isAnswer(code: string, { model, skipped }: StepResult): boolean {
-	if (formsOnly(code).trim() === "") return true;
-	if (model !== "" || skipped.length === 0) return false;
-	return !isTruncated(code);
 }
 
 function defineVar(interp: Interp, name: string, value: unknown): void {
