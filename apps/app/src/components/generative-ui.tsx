@@ -213,10 +213,7 @@ function Node({
 				<form
 					onSubmit={(e) => {
 						e.preventDefault();
-						fire(
-							text(node.props, "action"),
-							formValues(e.currentTarget),
-						);
+						fire(text(node.props, "action"), formValues(e.currentTarget));
 					}}
 					className="flex min-w-0 flex-col items-start gap-2"
 				>

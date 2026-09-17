@@ -181,10 +181,7 @@ export function ChatProvider({
 	const { data: stored } = useQuery(
 		convexQuery(api.messages.transcript, chatId ? { chatId } : "skip"),
 	);
-	const persisted = useMemo(
-		() => toChatMessages(stored ?? []),
-		[stored],
-	);
+	const persisted = useMemo(() => toChatMessages(stored ?? []), [stored]);
 
 	useEffect(() => {
 		if (stream.error)

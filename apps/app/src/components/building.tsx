@@ -51,9 +51,7 @@ export function Building({
 	}, [busy]);
 
 	if (heads.length === 0) return null;
-	const glyph = busy
-		? GLYPHS[beat % GLYPHS.length]
-		: glyphFor(heads.join(" "));
+	const glyph = busy ? GLYPHS[beat % GLYPHS.length] : glyphFor(heads.join(" "));
 	return (
 		<div className="flex min-w-0 items-center gap-2 text-dim">
 			<HugeiconsIcon
