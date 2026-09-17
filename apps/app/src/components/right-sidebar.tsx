@@ -26,7 +26,7 @@ function ChannelToggle({ channel }: { channel: Channel }) {
 
 export function RightSidebar({ open }: { open: boolean }) {
 	return (
-		<SidePanel side="right" open={open} className="w-[268px]">
+		<SidePanel side="right" open={open} className="w-[214px]">
 			<div className="flex h-full flex-col gap-5 py-3.5">
 				<div className="flex items-baseline gap-2 px-4">
 					<span className="flex-1 text-[11px] text-dim uppercase tracking-[0.14em]">
