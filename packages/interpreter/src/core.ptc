@@ -262,6 +262,10 @@ Strings
 (string-count s sub) · (string-replace s old new) ·
 (string-split s sep) , where an empty sep gives characters · (string-join list sep) ·
 (string-trim s) .
+- (format template arg...) fill a template and return the string: ~a inserts the
+  next argument the way string would, ~% a newline, ~~ a tilde, and the letter
+  is case-insensitive. (format "The sum was ~a" n) is the way to write a
+  sentence around a value; it prints nothing, so echo the result.
 
 Misc
 - (identity x) return x.
