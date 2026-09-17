@@ -1,0 +1,3 @@
+export const CONVEX_DOCUMENT_BYTES = 1_048_576;
+
+export const MAX_MESSAGE_BYTES = 262_144;
