@@ -1,4 +1,4 @@
-import type { Eval, Interp } from "./lisp.ts";
+import type { Eval, Interp, UnresolvedHead } from "./lisp.ts";
 
 export type Middleware<A extends unknown[], R> = (
 	...args: [...A, next: (...a: A) => R]
@@ -34,6 +34,10 @@ export interface Hooks {
 	readonly readSource: Chain<[interp: Interp, text: string], string>;
 	readonly skipForm: Chain<[interp: Interp, form: unknown], string | undefined>;
 	readonly evalForm: Chain<[interp: Interp, form: unknown], Eval>;
+	readonly failedForm: Chain<
+		[interp: Interp, form: unknown, error: UnresolvedHead],
+		Eval<string | undefined>
+	>;
 	readonly dispose: Chain<[], void>;
 }
 
@@ -42,6 +46,7 @@ export function newHooks(): Hooks {
 		readSource: new Chain(),
 		skipForm: new Chain(),
 		evalForm: new Chain(),
+		failedForm: new Chain(),
 		dispose: new Chain(),
 	};
 }

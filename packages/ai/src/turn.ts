@@ -139,7 +139,7 @@ export async function* runAgentTurn(
 		while (!signal?.aborted) {
 			repl.setConversationVars(snapshotConversation(transcript));
 
-			const { said, annotations: heard } = repl.beginTurn();
+			const { said, annotations: heard } = await repl.beginTurn();
 			if (said !== "") riding = said;
 			if (Object.keys(heard.step).length > 0)
 				yield { type: "heard", annotations: heard.step };

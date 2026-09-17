@@ -117,10 +117,20 @@ The shape is the same everywhere:
   nothing and any other strategy is one spread away.
 - A port two packages share and neither owns lives in `@repo/shared/host`; its
   node-side implementation lives in `@repo/shared/host-node`.
+- A port whose work may have to wait is typed so that a value or a promise both
+  satisfy it, and the extension consumes it through the evaluator's own
+  suspension rather than through `async`. A synchronous host then never
+  suspends and the synchronous drivers keep running it; an asynchronous one
+  suspends only where it must.
 
 `pnpm check:arch` enforces the first bullet and names the `-host.ts` to move
 the offending import to. Type-only imports are allowed, so a port may still be
 typed in an SDK's own terms.
+
+Keep the ports a step consults on every form synchronous, and give work that
+can afford to wait a lifecycle point that only the exceptional path reaches. A
+port on the hot path buys latency for every form; one on a failure path is paid
+for only by the forms that failed.
 
 **Adding an extension, or a new outward reach in one, means adding a port.**
 Do not import `node:fs` "just for this one path" — that is the decision the
