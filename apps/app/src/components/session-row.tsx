@@ -10,6 +10,7 @@ import {
 } from "@repo/ui";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useAttempt } from "../lib/attempt.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
 
 const item =
@@ -25,6 +26,7 @@ export function SessionRow({
 	const navigate = useNavigate();
 	const renameChat = useConvexMutation(api.chats.rename);
 	const removeChat = useConvexMutation(api.chats.remove);
+	const { failure, attempt } = useAttempt("session action");
 	const [renaming, setRenaming] = useState(false);
 	const [title, setTitle] = useState(chat.title);
 
@@ -37,7 +39,7 @@ export function SessionRow({
 					const trimmed = title.trim();
 					setRenaming(false);
 					if (trimmed === "" || trimmed === chat.title) return;
-					void renameChat({ chatId: chat._id, title: trimmed });
+					attempt(() => renameChat({ chatId: chat._id, title: trimmed }));
 				}}
 			>
 				<input
@@ -56,57 +58,62 @@ export function SessionRow({
 	}
 
 	return (
-		<div className="group/row flex items-baseline">
-			<Link
-				to="/$workspaceId/$chatId"
-				params={{ workspaceId: chat.workspaceId, chatId: chat._id }}
-				className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 ${
-					current ? "text-fg" : "text-dim hover:text-fg"
-				}`}
-			>
-				{chat.title === "" ? "untitled" : chat.title}
-			</Link>
-			<DropdownMenu>
-				<DropdownMenuTrigger
-					title="session options"
-					className="flex-none cursor-pointer px-1.5 py-1 text-dim opacity-0 transition hover:text-fg focus:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
+		<>
+			<div className="group/row flex items-baseline">
+				<Link
+					to="/$workspaceId/$chatId"
+					params={{ workspaceId: chat.workspaceId, chatId: chat._id }}
+					className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 ${
+						current ? "text-fg" : "text-dim hover:text-fg"
+					}`}
 				>
-					⋯
-				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					align="end"
-					sideOffset={2}
-					className="min-w-[9rem] rounded-none border-bg2 bg-bg1 p-0 text-[11.5px] shadow-none"
-				>
-					<DropdownMenuItem
-						onSelect={() => {
-							setTitle(chat.title);
-							setRenaming(true);
-						}}
-						className={item}
+					{chat.title === "" ? "untitled" : chat.title}
+				</Link>
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						title="session options"
+						className="flex-none cursor-pointer px-1.5 py-1 text-dim opacity-0 transition hover:text-fg focus:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
 					>
-						rename
-					</DropdownMenuItem>
-					<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
-					<ConfirmItem
-						label="delete"
-						confirm="delete for good?"
-						className={`${item} focus:text-red`}
-						onConfirm={() => {
-							void (async () => {
-								if (current) {
-									await navigate({
-										to: "/$workspaceId",
-										params: { workspaceId: chat.workspaceId },
-										replace: true,
-									});
-								}
-								await removeChat({ chatId: chat._id });
-							})();
-						}}
-					/>
-				</DropdownMenuContent>
-			</DropdownMenu>
-		</div>
+						⋯
+					</DropdownMenuTrigger>
+					<DropdownMenuContent
+						align="end"
+						sideOffset={2}
+						className="min-w-[9rem] rounded-none border-bg2 bg-bg1 p-0 text-[11.5px] shadow-none"
+					>
+						<DropdownMenuItem
+							onSelect={() => {
+								setTitle(chat.title);
+								setRenaming(true);
+							}}
+							className={item}
+						>
+							rename
+						</DropdownMenuItem>
+						<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
+						<ConfirmItem
+							label="delete"
+							confirm="delete for good?"
+							className={`${item} focus:text-red`}
+							onConfirm={() => {
+								attempt(async () => {
+									if (current) {
+										await navigate({
+											to: "/$workspaceId",
+											params: { workspaceId: chat.workspaceId },
+											replace: true,
+										});
+									}
+									await removeChat({ chatId: chat._id });
+								});
+							}}
+						/>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+			{failure && (
+				<div className="px-2.5 py-1 text-[11px] text-red">{failure}</div>
+			)}
+		</>
 	);
 }
