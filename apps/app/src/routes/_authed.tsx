@@ -33,7 +33,8 @@ function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const navigate = useNavigate();
 
-	if (!isAuthenticated && !isLoading) return <Navigate to="/login" replace />;
+	if (isLoading) return null;
+	if (!isAuthenticated) return <Navigate to="/login" replace />;
 
 	return (
 		<WorkspaceProvider>
