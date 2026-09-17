@@ -101,6 +101,11 @@ boundaries → check:arch → knip → test.
 (conventional commits) on `commit-msg`, and `pnpm check:comments`,
 `pnpm boundaries` and `pnpm check:arch` on `pre-push`.
 
+A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
+longer than one line, so write the subject and stop unless a description was
+asked for, and then keep it to a single line after the blank one. Trailers
+like `Co-Authored-By` are footers and do not count.
+
 ## Comments
 
 **The code carries no comments**, enforced twice: a husky `pre-push` hook, and
