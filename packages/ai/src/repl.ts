@@ -1,5 +1,8 @@
-import type { FiredMemory } from "@repo/interpreter/memory";
-import type { UiNode } from "@repo/interpreter/ui";
+import {
+	type Annotations,
+	noAnnotations,
+	type StepAnnotations,
+} from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 
@@ -54,14 +57,14 @@ export function stripFences(text: string): string {
 export function replResultContent(
 	output: string,
 	error: boolean,
-	memories: FiredMemory[] = [],
+	annotations: Annotations = {},
 ): string {
 	return JSON.stringify({
 		type: "tool_result",
 		source: "lisp-repl",
 		error,
 		output: output || "(no output)",
-		...(memories.length > 0 ? { memories } : {}),
+		...annotations,
 	});
 }
 
@@ -84,13 +87,12 @@ export async function evalCode(
 	output: string;
 	display: string;
 	error: boolean;
-	memories: FiredMemory[];
+	annotations: StepAnnotations;
 	failed: boolean;
-	ui?: UiNode;
 }> {
 	try {
-		const { model, user, memories, failed, ui } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false, memories, failed, ui };
+		const { model, user, annotations, failed } = await repl.evalOutput(code);
+		return { output: model, display: user, error: false, annotations, failed };
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
@@ -99,7 +101,7 @@ export async function evalCode(
 			output: text,
 			display: text,
 			error: true,
-			memories: [],
+			annotations: noAnnotations(),
 			failed: true,
 		};
 	}

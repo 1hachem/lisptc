@@ -63,6 +63,24 @@ finished runs through `/report`, `/review` and `/storage` instead, so a Next.js
 page never pulls in vitest or a model provider. `apps/trace-viewer` declares
 `@repo/evals` once, which is why the rule has to be about imports.
 
+Three more rules in the same file hold the session seam open. An extension says
+what it does at each point of a step in a `session` field beside its `prompt`,
+and hands a capability over through a slot, so nothing goes looking through the
+extension list for one: `check:arch` fails on an exported function that takes a
+single `InterpExtension` and digs a capability out of it. The files that drive
+the lifecycle, `DRIVERS` in the script, import an extension module for types
+only. Each carries a short list of the value imports it has not shed yet, and
+the check fails both on a name missing from that list and on a name on it the
+file no longer imports, so the list only shrinks.
+
+`BLIND` goes further, for `@repo/ai`: the agent loop names no extension at all,
+type imports included. A step reports what it did in `StepAnnotations`, two
+bags of keys the extensions themselves fill through the `annotate` chain —
+`step`, which rides the tool result the model reads, and `output`, which rides
+the wire the browser reads. The loop merges them without knowing a key. The
+only exception is the roster listed beside the rule, `repl-store.ts`, where
+building the REPL is the job.
+
 ## Commands
 
 Root scripts delegate to Turbo, which fans out across workspaces:

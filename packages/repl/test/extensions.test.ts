@@ -10,8 +10,9 @@ import { memoryHost } from "@repo/interpreter/memory-host";
 import { proseExtension } from "@repo/interpreter/prose";
 import { secretsExtension, secretsSlot } from "@repo/interpreter/secrets";
 import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
-import { type LlmCall, llmExtension, llmSlot } from "@repo/llm/llm";
+import { llmExtension } from "@repo/llm/llm";
 import { llmHost } from "@repo/llm/llm-host";
+import { type LlmCall, llmSlot } from "@repo/llm/observe";
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";
@@ -82,9 +83,9 @@ describe("a REPL built from a list of its own", () => {
 		]);
 		await r.eval(`(memory/remember "k" "the note" :on '(step))`);
 
-		const { model, memories } = await r.evalOutput("(+ 1 1)");
+		const { model, annotations } = await r.evalOutput("(+ 1 1)");
 
-		expect(memories).toEqual([{ key: "k", body: "the note" }]);
+		expect(annotations.step.memories).toEqual([{ key: "k", body: "the note" }]);
 		expect(model).not.toContain("the note");
 		expect(model).toContain("2");
 	});
@@ -97,7 +98,9 @@ describe("a REPL built from a list of its own", () => {
 			}),
 		]);
 
-		expect((await r.evalOutput("(+ 1 1)")).memories).toEqual([]);
+		expect((await r.evalOutput("(+ 1 1)")).annotations.step).not.toHaveProperty(
+			"memories",
+		);
 	});
 
 	it("has no bank when no memory extension is in it", () => {

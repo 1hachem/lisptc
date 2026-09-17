@@ -55,6 +55,10 @@ export function proseExtension(
 	return Object.assign(extension, {
 		prompt: host.prompt(),
 		session(hooks: SessionHooks): void {
+			hooks.unrun.use((interp, code, next) => [
+				...next(interp, code),
+				...proseHeads(interp, code),
+			]);
 			hooks.answered.use((ctx, out, next) => {
 				if (formsOnly(ctx.code).trim() === "") return true;
 				if (out.model !== "" || out.skipped.length === 0) return next(ctx, out);

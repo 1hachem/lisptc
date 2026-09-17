@@ -9,12 +9,12 @@ import {
 import { describe, expect, it } from "vitest";
 import {
 	type Generate,
-	type LlmCall,
 	type LlmRequest,
 	type LlmResult,
 	llmExtension,
 } from "../src/llm.ts";
 import { llmHost } from "../src/llm-host.ts";
+import type { LlmCall } from "../src/observe.ts";
 
 type Reply = (req: LlmRequest) => LlmResult | string;
 

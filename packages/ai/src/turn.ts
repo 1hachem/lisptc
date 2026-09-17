@@ -1,7 +1,5 @@
-import type { FiredMemory } from "@repo/interpreter/memory";
-import { proseHeads } from "@repo/interpreter/prose";
-import type { UiNode } from "@repo/interpreter/ui";
-import { llmSlot } from "@repo/llm/llm";
+import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
+import { llmSlot } from "@repo/llm/observe";
 import type { AgentRepl } from "@repo/repl/repl";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -41,7 +39,6 @@ export interface StepMeta {
 	inputTokens?: number;
 	outputTokens?: number;
 	cachedInputTokens?: number;
-	memories?: FiredMemory[];
 }
 
 export type TurnEvent =
@@ -60,11 +57,10 @@ export type TurnEvent =
 			output: string;
 			display: string;
 			error: boolean;
-			memories: FiredMemory[];
+			annotations: StepAnnotations;
 			failed: boolean;
-			ui?: UiNode;
 	  }
-	| { type: "heard"; memories: FiredMemory[] }
+	| { type: "heard"; annotations: Annotations }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
@@ -143,9 +139,10 @@ export async function* runAgentTurn(
 		while (!signal?.aborted) {
 			repl.setConversationVars(snapshotConversation(transcript));
 
-			const { said, memories: heard } = repl.beginTurn();
+			const { said, annotations: heard } = repl.beginTurn();
 			if (said !== "") riding = said;
-			if (heard.length > 0) yield { type: "heard", memories: heard };
+			if (Object.keys(heard.step).length > 0)
+				yield { type: "heard", annotations: heard.step };
 
 			const stepId = crypto.randomUUID();
 			const stepStartedAt = Date.now();
@@ -181,14 +178,14 @@ export async function* runAgentTurn(
 				type: "assistant",
 				stepId,
 				code,
-				prose: proseHeads(repl.interp, code),
+				prose: repl.unrun(code),
 				...(reasoning ? { reasoning } : {}),
 				meta: stepMeta(stepStartedAt, usage, ran),
 			};
 			transcript.push({ role: "assistant", content: code });
 
 			const evalStartedAt = Date.now();
-			const { output, display, error, memories, failed, ui } = await evalCode(
+			const { output, display, error, annotations, failed } = await evalCode(
 				repl,
 				code,
 			);
@@ -215,13 +212,12 @@ export async function* runAgentTurn(
 				output,
 				display,
 				error,
-				memories,
+				annotations,
 				failed,
-				ui,
 			};
 			transcript.push({
 				role: "tool",
-				content: replResultContent(output, error, memories),
+				content: replResultContent(output, error, annotations.step),
 			});
 
 			if (steps >= maxSteps) {

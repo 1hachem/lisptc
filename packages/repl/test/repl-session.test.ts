@@ -1,4 +1,4 @@
-import { type LlmCall, llmSlot } from "@repo/llm/llm";
+import { type LlmCall, llmSlot } from "@repo/llm/observe";
 import { describe, expect, it } from "vitest";
 import { agentRepl } from "./helpers.ts";
 

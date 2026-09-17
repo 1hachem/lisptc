@@ -95,11 +95,6 @@ export function secretsExtension(
 	);
 }
 
-export function storeOf(extension: InterpExtension): SecretsStore | undefined {
-	const carried = (extension as Partial<SecretsExtension>).store;
-	return typeof carried?.get === "function" ? carried : undefined;
-}
-
 class Secret implements ToJson {
 	readonly keys: readonly string[];
 	constructor(

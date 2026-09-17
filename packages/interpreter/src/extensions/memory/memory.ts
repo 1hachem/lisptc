@@ -18,7 +18,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
-import { type SessionHooks, slot } from "../../session.ts";
+import { annotating, type SessionHooks, slot } from "../../session.ts";
 import { memoryHost } from "./memory-host.ts";
 
 export const INITIAL_SCORE = 1;
@@ -519,6 +519,13 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 				ctx.emit(bank.endStep());
 			}
 		});
+		hooks.annotate.use((buffer, into, next) => {
+			const memories = buffer.payloads(fired);
+			return next(
+				buffer,
+				memories.length === 0 ? into : annotating(into, "step", { memories }),
+			);
+		});
 	};
 }
 
@@ -532,11 +539,6 @@ export function memoryExtension(
 		prompt: host.prompt(),
 		session: memorySession(bank),
 	});
-}
-
-export function bankOf(extension: InterpExtension): MemoryBank | undefined {
-	const carried = (extension as Partial<MemoryExtension>).bank;
-	return carried instanceof MemoryBank ? carried : undefined;
 }
 
 const zString = z.custom<string>(

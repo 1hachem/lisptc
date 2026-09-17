@@ -11,20 +11,16 @@ import {
 	runAsync,
 	runSync,
 } from "@repo/interpreter/lisp";
-import { type FiredMemory, fired } from "@repo/interpreter/memory";
 import {
 	type Bounded,
+	noAnnotations,
 	openSession,
 	type SessionHooks,
+	type StepAnnotations,
 	type StepContext,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
-import {
-	joinMessages,
-	rendered,
-	sent,
-	type UiNode,
-} from "@repo/interpreter/ui";
+import { joinMessages, sent } from "@repo/interpreter/ui";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -40,9 +36,8 @@ export interface ReplOptions {
 }
 
 export interface EvalOutput extends Bounded {
-	memories: FiredMemory[];
+	annotations: StepAnnotations;
 	failed: boolean;
-	ui?: UiNode;
 	message?: string;
 }
 
@@ -83,9 +78,8 @@ function render(result: StepResult): EvalOutput {
 	return {
 		model: result.model + notes,
 		user: result.user + notes,
-		memories: result.memories,
+		annotations: result.annotations,
 		failed: result.failed,
-		ui: result.ui,
 		message: result.message,
 	};
 }
@@ -208,9 +202,12 @@ export class MemoryRepl implements InMemoryRepl {
 			model: bounded.model + error.model,
 			user: bounded.user + error.user,
 			feedback,
-			memories: buffer.payloads(fired),
+			annotations: this.hooks.annotate.run(
+				(_b, into) => into,
+				buffer,
+				noAnnotations(),
+			),
 			failed: thrown !== undefined,
-			ui: buffer.payloads(rendered).at(-1),
 			message: joinMessages(buffer.payloads(sent)),
 			skipped,
 		};
@@ -244,9 +241,8 @@ export class AgentRepl extends MemoryRepl {
 		return {
 			model: result.model,
 			user: result.user,
-			memories: result.memories,
+			annotations: result.annotations,
 			failed: result.failed,
-			ui: result.ui,
 			message: result.message,
 		};
 	}
@@ -264,7 +260,11 @@ export class AgentRepl extends MemoryRepl {
 		);
 	}
 
-	beginTurn(): { said: string; memories: FiredMemory[] } {
+	unrun(code: string): string[] {
+		return this.hooks.unrun.run(() => [], this.interp, code);
+	}
+
+	beginTurn(): { said: string; annotations: StepAnnotations } {
 		let said = "";
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
@@ -279,7 +279,14 @@ export class AgentRepl extends MemoryRepl {
 		} finally {
 			detach();
 		}
-		return { said, memories: buffer.payloads(fired) };
+		return {
+			said,
+			annotations: this.hooks.annotate.run(
+				(_b, into) => into,
+				buffer,
+				noAnnotations(),
+			),
+		};
 	}
 
 	setConversationVars(vars: Record<string, unknown>): void {

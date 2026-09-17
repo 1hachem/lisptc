@@ -856,8 +856,3 @@ export function compactionExtension(
 		},
 	);
 }
-
-export function compactorOf(extension: InterpExtension): Compactor | undefined {
-	const carried = (extension as Partial<CompactionExtension>).compactor;
-	return carried instanceof Compactor ? carried : undefined;
-}

@@ -22,11 +22,12 @@ import {
 	plistOptions,
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
-import { type SessionHooks, slot } from "@repo/interpreter/session";
+import type { SessionHooks } from "@repo/interpreter/session";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
 import { llmHost } from "./llm-host.ts";
+import { type LlmCall, type LlmObserver, llmSlot } from "./observe.ts";
 
 export const LLM_TIMEOUT_MS = 60_000;
 
@@ -60,21 +61,6 @@ export type Generate = (
 	req: LlmRequest,
 	signal?: AbortSignal,
 ) => Promise<LlmResult>;
-
-export interface LlmCall {
-	builtin: string;
-	provider?: string;
-	model?: string;
-	messages: LlmMessage[];
-	structured: boolean;
-	latencyMs: number;
-	output?: string;
-	inputTokens?: number;
-	outputTokens?: number;
-	error?: string;
-}
-
-export type LlmObserver = (call: LlmCall) => void;
 
 export interface ProviderReport {
 	name: string;
@@ -124,10 +110,6 @@ export interface LlmExtension extends InterpExtension {
 	observe?: LlmObserver;
 }
 
-export interface Observed {
-	observe?: LlmObserver;
-}
-
 export function llmExtension(
 	host: LlmHost = llmHost,
 	options: LlmOptions = {},
@@ -160,8 +142,6 @@ export function llmExtension(
 	});
 	return extension;
 }
-
-export const llmSlot = slot<Observed>("llm");
 
 function asText(x: unknown, what: string): string {
 	if (typeof x !== "string")

@@ -1,10 +1,8 @@
-import { nodeToJson, type UiValue } from "@repo/interpreter/ui";
 import { peekThreadRepl } from "./repl-store.ts";
 
-export interface UiActionResult {
+export interface UiActionResult extends Record<string, unknown> {
 	output: string;
 	error: boolean;
-	ui?: UiValue;
 	message?: string;
 }
 
@@ -16,11 +14,14 @@ export async function runUiAction(
 	const repl = peekThreadRepl(threadId);
 	if (!repl) return undefined;
 	try {
-		const { user, ui, message, failed } = await repl.invokeUi(action, values);
+		const { user, annotations, message, failed } = await repl.invokeUi(
+			action,
+			values,
+		);
 		return {
+			...annotations.output,
 			output: user,
 			error: failed,
-			ui: ui ? nodeToJson(ui) : undefined,
 			message,
 		};
 	} catch (ex) {

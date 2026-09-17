@@ -1,5 +1,3 @@
-import type { FiredMemory } from "@repo/interpreter/memory";
-import { nodeToJson } from "@repo/interpreter/ui";
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
@@ -18,6 +16,21 @@ export interface ChatInput {
 }
 
 const encoder = new TextEncoder();
+
+function merge(
+	into: Record<string, unknown>,
+	extra: Record<string, unknown>,
+): Record<string, unknown> {
+	const out = { ...into };
+	for (const [key, value] of Object.entries(extra)) {
+		const standing = out[key];
+		out[key] =
+			Array.isArray(standing) && Array.isArray(value)
+				? [...standing, ...value]
+				: value;
+	}
+	return out;
+}
 
 function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -84,7 +97,7 @@ export function streamChatResponse(
 
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
-			let heard: FiredMemory[] = [];
+			let heard: Record<string, unknown> = {};
 
 			try {
 				write(sse("values", { messages: wire }));
@@ -110,13 +123,10 @@ export function streamChatResponse(
 						}
 						if (!write(sse("messages", [chunk, {}]))) break;
 					} else if (event.type === "heard") {
-						heard = event.memories;
+						heard = event.annotations;
 					} else if (event.type === "assistant") {
-						lastMeta = {
-							...event.meta,
-							...(heard.length > 0 ? { memories: heard } : {}),
-						};
-						heard = [];
+						lastMeta = merge({ ...event.meta }, heard);
+						heard = {};
 						wire.push({
 							type: "ai",
 							content: event.code,
@@ -131,14 +141,11 @@ export function streamChatResponse(
 						});
 					} else if (event.type === "result") {
 						steps = event.step;
-						if (lastMeta && event.memories.length > 0)
-							lastMeta.memories = [
-								...((lastMeta.memories as FiredMemory[] | undefined) ?? []),
-								...event.memories,
-							];
-						const extras: Record<string, unknown> = {};
+						if (lastMeta) lastMeta = merge(lastMeta, event.annotations.step);
+						const extras: Record<string, unknown> = {
+							...event.annotations.output,
+						};
 						if (event.display !== event.output) extras.display = event.display;
-						if (event.ui) extras.ui = nodeToJson(event.ui);
 						if (event.failed) extras.failed = true;
 						wire.push({
 							type: "tool",

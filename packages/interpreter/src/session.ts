@@ -1,8 +1,28 @@
 import type { Addressed } from "./channels.ts";
+import type { ChannelBuffer } from "./channels-host.ts";
 import { Chain } from "./hooks.ts";
 import type { Interp, InterpExtension } from "./lisp.ts";
 
 export type Bounded = Required<Addressed<string>>;
+
+export type Annotations = Record<string, unknown>;
+
+export interface StepAnnotations {
+	readonly step: Annotations;
+	readonly output: Annotations;
+}
+
+export function noAnnotations(): StepAnnotations {
+	return { step: {}, output: {} };
+}
+
+export function annotating(
+	into: StepAnnotations,
+	where: keyof StepAnnotations,
+	entry: Annotations,
+): StepAnnotations {
+	return { ...into, [where]: { ...into[where], ...entry } };
+}
 
 export interface TurnContext {
 	readonly interp: Interp;
@@ -41,6 +61,11 @@ export interface SessionHooks {
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
 	readonly answered: Chain<[ctx: StepContext, out: StepOutcome], boolean>;
+	readonly unrun: Chain<[interp: Interp, code: string], string[]>;
+	readonly annotate: Chain<
+		[buffer: ChannelBuffer, into: StepAnnotations],
+		StepAnnotations
+	>;
 	readonly invoke: Chain<[ctx: ActionContext], Promise<void>>;
 	fill<T>(of: Slot<T>, value: T): void;
 	filled<T>(of: Slot<T>): T | undefined;
@@ -54,6 +79,8 @@ export function newSessionHooks(): SessionHooks {
 		stepOutput: new Chain(),
 		stepError: new Chain(),
 		answered: new Chain(),
+		unrun: new Chain(),
+		annotate: new Chain(),
 		invoke: new Chain(),
 		fill<T>(of: Slot<T>, value: T): void {
 			slots.set(of.name, value);

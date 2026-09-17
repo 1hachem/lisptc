@@ -1,7 +1,7 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
 import type { Interp, InterpExtension } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
-import { slot } from "@repo/interpreter/session";
+import { annotating, slot } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
@@ -79,6 +79,66 @@ describe("an extension hooking the session", () => {
 		});
 
 		expect(r.beginTurn().said).toBe("something worth knowing");
+	});
+
+	it("annotates the step on a lane of its own, beside the output", async () => {
+		const r = new MemoryRepl({
+			extensions: [
+				compactionExtension(),
+				extension((hooks) => {
+					hooks.annotate.use((buffer, into, next) =>
+						next(buffer, annotating(into, "step", { envelopes: 1 })),
+					);
+				}),
+			],
+		});
+
+		const { model, annotations } = await r.evalOutput('(echo "hi")');
+
+		expect(model).toBe("hi\n");
+		expect(annotations.step).toEqual({ envelopes: 1 });
+		expect(annotations.output).toEqual({});
+	});
+
+	it("annotates a ui action the same way it annotates a step", async () => {
+		const r = new MemoryRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.invoke.use(async () => {});
+					hooks.annotate.use((buffer, into, next) =>
+						next(buffer, annotating(into, "output", { view: "a1" })),
+					);
+				}),
+			],
+		});
+
+		expect((await r.invokeUi("a1")).annotations.output).toEqual({
+			view: "a1",
+		});
+	});
+
+	it("reports nothing on a lane no extension claimed", async () => {
+		const r = new MemoryRepl({ extensions: [] });
+
+		expect((await r.evalOutput("(+ 1 1)")).annotations).toEqual({
+			step: {},
+			output: {},
+		});
+	});
+
+	it("names the forms a step did not run", async () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.unrun.use((interp, code, next) => [
+						...next(interp, code),
+						code.trim(),
+					]);
+				}),
+			],
+		});
+
+		expect(r.unrun("(echo 1)")).toEqual(["(echo 1)"]);
 	});
 
 	it("hands a value to whoever holds the slot", () => {
