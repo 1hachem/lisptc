@@ -27,5 +27,5 @@ export const RUNTIME_ASSETS: URL[] = [
 ];
 
 export function assetName(asset: URL): string {
-	return asset.pathname.split("/").pop() as string;
+	return asset.pathname.slice(asset.pathname.lastIndexOf("/") + 1);
 }

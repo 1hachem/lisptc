@@ -1,22 +1,22 @@
 import { evalUserCode, streamChatResponse } from "@repo/ai";
 import { api } from "@repo/backend/api";
-import type { Id } from "@repo/backend/dataModel";
 import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
 import { toInput, toStored } from "./history.ts";
+import { convexId } from "./ids.ts";
 import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
 import { session } from "./session.ts";
 
 export const chatRequestSchema = z.object({
 	input: z.object({
-		chatId: z.string(),
+		chatId: convexId<"chats">(),
 		message: z.string(),
 	}),
 });
 
 const evalRequestSchema = z.object({
-	chatId: z.string(),
+	chatId: convexId<"chats">(),
 	code: z.string(),
 });
 
@@ -34,13 +34,12 @@ chat.post("/", async (c) => {
 	}
 	const { chatId, message } = parsed.data.input;
 	const convex = convexAs(c.get("session"));
-	const id = chatId as Id<"chats">;
 
 	await convex.mutation(api.messages.append, {
-		chatId: id,
+		chatId,
 		messages: [{ type: "human", content: message }],
 	});
-	const history = await convex.query(api.messages.transcript, { chatId: id });
+	const history = await convex.query(api.messages.transcript, { chatId });
 
 	console.log(
 		`chat chat=${chatId} messages=${history.length} ${CHAT_PROVIDER}/${CHAT_MODEL}`,
@@ -57,7 +56,7 @@ chat.post("/", async (c) => {
 		async (produced) => {
 			const messages = toStored(produced);
 			if (messages.length === 0) return;
-			await convex.mutation(api.messages.append, { chatId: id, messages });
+			await convex.mutation(api.messages.append, { chatId, messages });
 		},
 	);
 });
@@ -72,16 +71,15 @@ chat.post("/eval", async (c) => {
 	}
 	const { chatId, code } = parsed.data;
 	const convex = convexAs(c.get("session"));
-	const id = chatId as Id<"chats">;
 
 	await convex.mutation(api.messages.append, {
-		chatId: id,
+		chatId,
 		messages: [{ type: "human", content: code }],
 	});
 	console.log(`eval chat=${chatId} chars=${code.length}`);
 	const message = await evalUserCode(code, chatId);
 	await convex.mutation(api.messages.append, {
-		chatId: id,
+		chatId,
 		messages: toStored([{ ...message }]),
 	});
 	return c.json({ message });

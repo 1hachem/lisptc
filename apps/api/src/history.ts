@@ -1,11 +1,15 @@
-import type { ChatMessageInput } from "@repo/ai";
+import type { ChatMessageInput, WireMessage } from "@repo/ai";
 
-const TYPES = new Set(["human", "ai", "system", "tool"]);
+const TYPES = new Set<string>(["human", "ai", "system", "tool"]);
 
 export interface StoredMessage {
 	type: "human" | "ai" | "system" | "tool";
 	content: string;
 	kwargs?: Record<string, unknown>;
+}
+
+function isStoredType(value: string): value is StoredMessage["type"] {
+	return TYPES.has(value);
 }
 
 export function toInput(stored: StoredMessage[]): ChatMessageInput[] {
@@ -16,15 +20,14 @@ export function toInput(stored: StoredMessage[]): ChatMessageInput[] {
 	}));
 }
 
-export function toStored(wire: Record<string, unknown>[]): StoredMessage[] {
+export function toStored(wire: WireMessage[]): StoredMessage[] {
 	const stored: StoredMessage[] = [];
 	for (const message of wire) {
-		const type = message.type;
-		if (typeof type !== "string" || !TYPES.has(type)) continue;
+		if (!isStoredType(message.type)) continue;
 		stored.push({
-			type: type as StoredMessage["type"],
-			content: typeof message.content === "string" ? message.content : "",
-			kwargs: message.additional_kwargs as Record<string, unknown> | undefined,
+			type: message.type,
+			content: message.content,
+			kwargs: message.additional_kwargs,
 		});
 	}
 	return stored;

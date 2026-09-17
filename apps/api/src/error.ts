@@ -10,10 +10,14 @@ const REFUSALS: Record<string, 401 | 403> = {
 	FORBIDDEN: 403,
 };
 
-function refusal(err: unknown): 401 | 403 | undefined {
+function refusal(
+	err: unknown,
+): { code: string; status: 401 | 403 } | undefined {
 	if (!(err instanceof ConvexError)) return undefined;
-	const data = err.data as { code?: unknown } | undefined;
-	return typeof data?.code === "string" ? REFUSALS[data.code] : undefined;
+	const data: { code?: unknown } | undefined = err.data;
+	if (typeof data?.code !== "string") return undefined;
+	const status = REFUSALS[data.code];
+	return status === undefined ? undefined : { code: data.code, status };
 }
 
 export const errorHandler: ErrorHandler = (err, c) => {
@@ -24,12 +28,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
 	}
 
 	const refused = refusal(err);
-	if (refused) {
-		return c.json(
-			{ error: (err as ConvexError<{ code: string }>).data.code },
-			refused,
-		);
-	}
+	if (refused) return c.json({ error: refused.code }, refused.status);
 
 	if (err instanceof ZodError) {
 		return c.json({ error: "Validation failed", issues: err.issues }, 400);

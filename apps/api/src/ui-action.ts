@@ -1,13 +1,13 @@
 import { runUiAction } from "@repo/ai";
 import { api } from "@repo/backend/api";
-import type { Id } from "@repo/backend/dataModel";
 import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
+import { convexId } from "./ids.ts";
 import { session } from "./session.ts";
 
 const uiActionSchema = z.object({
-	chatId: z.string(),
+	chatId: convexId<"chats">(),
 	action: z.string(),
 	values: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
 });
@@ -23,9 +23,7 @@ uiAction.post("/", async (c) => {
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { chatId, action, values } = parsed.data;
-	await convexAs(c.get("session")).query(api.chats.get, {
-		chatId: chatId as Id<"chats">,
-	});
+	await convexAs(c.get("session")).query(api.chats.get, { chatId });
 	const result = await runUiAction(chatId, action, values ?? {});
 	if (!result) {
 		console.log(`ui action chat=${chatId} action=${action} no-session`);
