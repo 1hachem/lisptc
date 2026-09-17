@@ -1,0 +1,176 @@
+name: lisptc
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?comes from infisical /db — run `task convex:up`}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?comes from infisical /db — run `task convex:up`}
+      POSTGRES_DB: ${POSTGRES_DB:?comes from infisical /db — run `task convex:up`}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      start_period: 10s
+      retries: 10
+
+  convex-backend:
+    image: ghcr.io/get-convex/convex-backend:${CONVEX_BACKEND_TAG:-latest}
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${CONVEX_CLOUD_PORT:-3210}:3210"
+      - "${CONVEX_SITE_PORT:-3211}:3211"
+    volumes:
+      - convex-data:/convex/data
+    environment:
+      INSTANCE_NAME: ${POSTGRES_DB}
+      INSTANCE_SECRET: ${CONVEX_INSTANCE_SECRET:?comes from infisical /convex — run `task convex:up`}
+      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432
+      DO_NOT_REQUIRE_SSL: "true"
+      DISABLE_BEACON: "true"
+      REDACT_LOGS_TO_CLIENT: "false"
+      RUST_LOG: ${CONVEX_RUST_LOG:-info}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3210/version"]
+      interval: 5s
+      start_period: 10s
+      retries: 20
+
+  convex-dashboard:
+    # pinned: every dashboard build after 2026-08-19 500s on a turbopack
+    # barrel-optimizer bug (Cannot find module @radix-ui/react-icons-<hash>)
+    image: ghcr.io/get-convex/convex-dashboard:${CONVEX_DASHBOARD_TAG:-2cbcf8179207eb4521360e6d81ebee5e7abbfa07}
+    restart: unless-stopped
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    ports:
+      - "${CONVEX_DASHBOARD_PORT:-6791}:6791"
+    environment:
+      NEXT_PUBLIC_DEPLOYMENT_URL: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      # optional, not `:?`: the backend has to be up before `task convex:key` can mint one
+      NEXT_PUBLIC_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: ${DOCKER_TARGET:-dev}
+    restart: unless-stopped
+    init: true
+    extra_hosts:
+      - "localhost:127.0.0.1"
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/api/src
+          target: /app/apps/api/src
+        - action: sync
+          path: ./packages
+          target: /app/packages
+          ignore:
+            - node_modules/
+        - action: sync+restart
+          path: ./apps/api/vite.config.ts
+          target: /app/apps/api/vite.config.ts
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+    network_mode: host
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    volumes:
+      - api-state:/data
+    environment:
+      - PORT=${API_PORT:-3001}
+      - APP_URL
+      - CONVEX_URL
+      - CONVEX_SITE_URL
+      - LLM_PROVIDER
+      - DO_API_KEY
+      - DO_BASE_URL
+      - DO_MODEL
+      - FIREWORKS_API_KEY
+      - FIREWORKS_BASE_URL
+      - FIREWORKS_MODEL
+      - OPENROUTER_API_KEY
+      - OPENROUTER_BASE_URL
+      - OPENROUTER_MODEL
+      - POSTHOG_API_KEY
+      - POSTHOG_HOST
+      - POSTHOG_ENVIRONMENT
+      - POSTHOG_PRIVACY_MODE
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:${API_PORT:-3001}/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      start_period: 15s
+      retries: 6
+
+  app:
+    build:
+      context: .
+      dockerfile: apps/app/Dockerfile
+      target: ${DOCKER_TARGET:-dev}
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_CONVEX_URL: ${VITE_CONVEX_URL}
+        VITE_ENVIRONMENT: ${VITE_ENVIRONMENT}
+        VITE_POSTHOG_KEY: ${VITE_POSTHOG_KEY}
+        VITE_POSTHOG_SURVEY_ID: ${VITE_POSTHOG_SURVEY_ID}
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    extra_hosts:
+      - "localhost:127.0.0.1"
+    depends_on:
+      api:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/app/src
+          target: /app/apps/app/src
+        - action: sync
+          path: ./apps/app/server
+          target: /app/apps/app/server
+        - action: sync
+          path: ./apps/app/public
+          target: /app/apps/app/public
+        - action: sync
+          path: ./packages
+          target: /app/packages
+          ignore:
+            - node_modules/
+        - action: sync+restart
+          path: ./apps/app/vite.config.ts
+          target: /app/apps/app/vite.config.ts
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+    environment:
+      - PORT=${APP_PORT:-3000}
+      - VITE_API_URL
+      - VITE_CONVEX_URL
+      - VITE_ENVIRONMENT
+      - VITE_POSTHOG_KEY
+      - VITE_POSTHOG_SURVEY_ID
+      - POSTHOG_API_KEY
+      - POSTHOG_HOST
+      - POSTHOG_ASSET_HOST
+      - POSTHOG_ENVIRONMENT
+      - POSTHOG_PRIVACY_MODE
+
+volumes:
+  api-state:
+  postgres-data:
+  convex-data:
