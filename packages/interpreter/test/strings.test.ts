@@ -64,3 +64,26 @@ describe("string library", () => {
 	});
 	test("trim", () => expect(ev(`(string-trim "  hi \\n")`)).toBe(`"hi"`));
 });
+
+describe("format", () => {
+	test("~a fills the template with the printed argument", () => {
+		expect(ev(`(format "The sum computed was ~a" (+ 4 7))`)).toBe(
+			`"The sum computed was 11"`,
+		);
+		expect(ev(`(format "~a and ~a" "a string" '(1 2))`)).toBe(
+			`"a string and (1 2)"`,
+		);
+		expect(ev(`(format "no directives")`)).toBe(`"no directives"`);
+	});
+	test("~% is a newline and ~~ a literal tilde", () => {
+		expect(ev(`(format "a~%b")`)).toBe(`"a\\nb"`);
+		expect(ev(`(format "~~a is ~a" 1)`)).toBe(`"~a is 1"`);
+	});
+	test("directives are case-insensitive", () =>
+		expect(ev(`(format "~A" 3.0)`)).toBe(`"3.0"`));
+	test("rejects a template it cannot fill", () => {
+		expect(() => ev(`(format "~a ~a" 1)`)).toThrow(/not enough arguments/);
+		expect(() => ev(`(format "~z" 1)`)).toThrow(/unknown directive/);
+		expect(() => ev(`(format "ends with ~")`)).toThrow(/ends the template/);
+	});
+});
