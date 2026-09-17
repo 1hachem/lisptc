@@ -1,10 +1,16 @@
-import { type Clock, type PromptSource, systemClock } from "@repo/shared/host";
+import {
+	type Awaitable,
+	type Clock,
+	type PromptSource,
+	systemClock,
+} from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { z } from "zod";
 import { type Channels, topic } from "../../channels.ts";
 import {
 	arrayToList,
 	Cell,
+	driveAsync,
 	type Eval,
 	EvalException,
 	type Interp,
@@ -14,6 +20,7 @@ import {
 	newLispKeyword,
 	newSym,
 	Sym,
+	settled,
 	str,
 	zList,
 } from "../../lisp.ts";
@@ -58,10 +65,10 @@ export interface Memory {
 }
 
 export interface MemoryStore {
-	all(): Memory[];
-	get(key: string): Memory | undefined;
-	put(memory: Memory): void;
-	delete(key: string): boolean;
+	all(): Awaitable<Memory[]>;
+	get(key: string): Awaitable<Memory | undefined>;
+	put(memory: Memory): Awaitable<void>;
+	delete(key: string): Awaitable<boolean>;
 }
 
 export class VolatileStore implements MemoryStore {
@@ -334,32 +341,33 @@ export class MemoryBank {
 		return this.open.has(key);
 	}
 
-	hear(interp: Interp): FiredMemory[] {
+	*hear(interp: Interp): Eval<FiredMemory[]> {
 		const said = userMessages(interp);
 		if (said.length === this.heard) return [];
 		this.heard = said.length;
 		const last = said[said.length - 1];
 		if (last === undefined || last === "") return [];
 		this.stepping = true;
-		this.sweep();
+		yield* this.sweep();
 		const before = this.surfaced.length;
-		this.dispatch({ kind: "user", text: last }, interp);
+		yield* this.dispatch({ kind: "user", text: last }, interp);
 		this.stepping = false;
 		this.drain();
 		return this.surfaced.slice(before);
 	}
 
-	beginStep(code: string, interp: Interp): string {
+	*beginStep(code: string, interp: Interp): Eval<string> {
 		this.stepping = true;
-		this.sweep();
-		this.dispatch({ kind: "step", text: code }, interp);
+		yield* this.sweep();
+		yield* this.dispatch({ kind: "step", text: code }, interp);
 		const prose = proseIn(code);
-		if (prose !== "") this.dispatch({ kind: "prose", text: prose }, interp);
+		if (prose !== "")
+			yield* this.dispatch({ kind: "prose", text: prose }, interp);
 		return this.drain();
 	}
 
-	endStep(): string {
-		this.wireTogether();
+	*endStep(): Eval<string> {
+		yield* this.wireTogether();
 		const text = this.drain();
 		this.reset();
 		return text;
@@ -374,85 +382,89 @@ export class MemoryBank {
 		return text + withheld;
 	}
 
-	onCall(interp: Interp, form: unknown): void {
-		if (form instanceof Cell) this.dispatch({ kind: "call", form }, interp);
+	*onCall(interp: Interp, form: unknown): Eval<void> {
+		if (form instanceof Cell)
+			yield* this.dispatch({ kind: "call", form }, interp);
 	}
 
-	onResult(interp: Interp, value: unknown): void {
-		this.dispatch({ kind: "result", text: str(value) }, interp);
+	*onResult(interp: Interp, value: unknown): Eval<void> {
+		yield* this.dispatch({ kind: "result", text: str(value) }, interp);
 	}
 
-	onError(interp: Interp, error: unknown): void {
-		this.dispatch({ kind: "error", text: String(error) }, interp);
+	*onError(interp: Interp, error: unknown): Eval<void> {
+		yield* this.dispatch({ kind: "error", text: String(error) }, interp);
 	}
 
-	remember(memory: Memory): void {
-		this.store.put(memory);
+	*remember(memory: Memory): Eval<void> {
+		yield* settled(this.store.put(memory));
 	}
 
-	recall(interp: Interp, query: string, limit: number): Memory[] {
-		this.sweep();
-		const found = this.store
-			.all()
+	*recall(interp: Interp, query: string, limit: number): Eval<Memory[]> {
+		yield* this.sweep();
+		const all = yield* settled(this.store.all());
+		const found = all
 			.filter((m) => matches(query, m.key) || matches(query, bodyText(m.body)))
 			.sort((a, b) => this.strength(b) - this.strength(a))
 			.slice(0, limit);
-		for (const memory of found) this.fire(memory, interp);
+		for (const memory of found) yield* this.fire(memory, interp);
 		return found;
 	}
 
-	fire(memory: Memory, interp: Interp): void {
+	*fire(memory: Memory, interp: Interp): Eval<void> {
 		if (this.fired.has(memory.key)) return;
 		if (this.depth >= MAX_CASCADE_DEPTH) return;
 		this.fired.add(memory.key);
 		this.open.add(memory.key);
-		this.reinforce(memory);
+		yield* this.reinforce(memory);
 		this.surface(memory.key, bodyText(memory.body));
 		this.depth++;
 		try {
-			this.dispatch({ kind: "recall", text: memory.key }, interp);
+			yield* this.dispatch({ kind: "recall", text: memory.key }, interp);
 			for (const [key, weight] of memory.links) {
 				if (weight < LINKED_FIRES_AT) continue;
-				const linked = this.store.get(key);
-				if (linked !== undefined) this.fire(linked, interp);
+				const linked = yield* settled(this.store.get(key));
+				if (linked !== undefined) yield* this.fire(linked, interp);
 			}
 		} finally {
 			this.depth--;
 		}
 	}
 
-	private reinforce(memory: Memory): void {
+	private *reinforce(memory: Memory): Eval<void> {
 		memory.score = this.strength(memory) + REINFORCEMENT;
 		memory.used += 1;
 		memory.lastUsed = this.now();
-		this.store.put(memory);
+		yield* settled(this.store.put(memory));
 	}
 
-	private wireTogether(): void {
+	private *wireTogether(): Eval<void> {
 		const keys = [...this.fired];
 		if (keys.length < 2) return;
 		for (const key of keys) {
-			const memory = this.store.get(key);
+			const memory = yield* settled(this.store.get(key));
 			if (memory === undefined) continue;
 			for (const other of keys)
 				if (other !== key)
 					memory.links.set(other, (memory.links.get(other) ?? 0) + 1);
-			this.store.put(memory);
+			yield* settled(this.store.put(memory));
 		}
 	}
 
-	private sweep(): void {
-		for (const memory of this.store.all())
-			if (this.strength(memory) < FORGET_BELOW) this.store.delete(memory.key);
+	private *sweep(): Eval<void> {
+		const all = yield* settled(this.store.all());
+		for (const memory of all)
+			if (this.strength(memory) < FORGET_BELOW)
+				yield* settled(this.store.delete(memory.key));
 	}
 
-	private dispatch(event: MemoryEvent, interp: Interp): void {
+	private *dispatch(event: MemoryEvent, interp: Interp): Eval<void> {
 		if (!this.stepping) return;
-		for (const memory of this.store.all()) {
+		const all = yield* settled(this.store.all());
+		for (const memory of all) {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
 			if (!fires(on, event)) continue;
-			this.fire(memory, interp);
+			yield* this.fire(memory, interp);
 		}
 	}
 
@@ -506,17 +518,17 @@ export const memorySlot = slot<MemoryBank>("memory");
 function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
-		hooks.beginTurn.use((ctx, next) => {
-			const heard = bank.hear(ctx.interp);
+		hooks.beginTurn.use(function* (ctx, next) {
+			const heard = yield* bank.hear(ctx.interp);
 			if (heard.length > 0) ctx.say(heardText(heard));
-			next(ctx);
+			yield* next(ctx);
 		});
 		hooks.evalStep.use(async (ctx, next) => {
-			ctx.emit(bank.beginStep(ctx.code, ctx.interp));
+			ctx.emit((await driveAsync(bank.beginStep(ctx.code, ctx.interp))).value);
 			try {
 				await next(ctx);
 			} finally {
-				ctx.emit(bank.endStep());
+				ctx.emit((await driveAsync(bank.endStep())).value);
 			}
 		});
 		hooks.annotate.use((buffer, into, next) => {
@@ -585,24 +597,24 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
-		bank.onCall(i, form);
+		yield* bank.onCall(i, form);
 		try {
 			const value = yield* next(i, form);
-			bank.onResult(i, value);
+			yield* bank.onResult(i, value);
 			return value;
 		} catch (ex) {
-			bank.onError(i, ex);
+			yield* bank.onError(i, ex);
 			throw ex;
 		}
 	});
 
-	interp.def(
+	interp.defGen(
 		"memory/remember",
 		-1,
 		'(remember key body [:on (kind "pattern")] [:links (key...)])',
 		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:on` the memory fires by itself whenever that event happens. Returns the key.",
 		z.tuple([zList]),
-		([rest]) => {
+		function* ([rest]): Eval {
 			const { values, options } = splitKeywordArgs(rest, ["on", "links"]);
 			const args = listToArray(values);
 			const key = args[0];
@@ -618,8 +630,8 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			const links = new Map<string, number>();
 			for (const linked of listToArray((opts.get("links") ?? null) as List))
 				if (typeof linked === "string") links.set(linked, LINKED_FIRES_AT);
-			const existing = bank.store.get(key);
-			bank.remember({
+			const existing = yield* settled(bank.store.get(key));
+			yield* bank.remember({
 				key,
 				body,
 				on: parseTrigger(opts.get("on")),
@@ -633,13 +645,13 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		REMEMBER_ARGS,
 	);
 
-	interp.def(
+	interp.defGen(
 		"memory/recall",
 		-1,
 		"(recall query [:limit n])",
 		"Retrieve the memories whose key or body matches `query`, strongest first, and load them into your context. Retrieval strengthens what it finds, and opens it for `(revise key body)` until the step ends.",
 		z.tuple([zList]),
-		([rest]) => {
+		function* ([rest]): Eval {
 			const { values, options } = splitKeywordArgs(rest, ["limit"]);
 			const query = listToArray(values)[0];
 			if (typeof query !== "string")
@@ -647,25 +659,22 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			const opts = plistOptions(options, ["limit"]);
 			const raw = opts.get("limit");
 			const limit = raw === undefined ? DEFAULT_RECALL_LIMIT : Number(raw);
-			return arrayToList(
-				bank
-					.recall(interp, query, limit)
-					.map((memory) => memoryToAlist(bank, memory)),
-			);
+			const found = yield* bank.recall(interp, query, limit);
+			return arrayToList(found.map((memory) => memoryToAlist(bank, memory)));
 		},
 		RECALL_ARGS,
 	);
 
-	interp.def(
+	interp.defGen(
 		"memories",
 		0,
 		"(memories)",
 		"List every memory as (key score trigger), strongest first. Reading the list strengthens nothing.",
 		z.tuple([]),
-		() =>
-			arrayToList(
-				bank.store
-					.all()
+		function* (): Eval {
+			const all = yield* settled(bank.store.all());
+			return arrayToList(
+				all
 					.sort((a, b) => bank.strength(b) - bank.strength(a))
 					.map((memory) =>
 						arrayToList([
@@ -674,26 +683,29 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 							memory.on === undefined ? null : triggerToForm(memory.on),
 						]),
 					),
-			),
+			);
+		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"memory/forget",
 		1,
 		"(forget key)",
 		"Drop a memory for good; returns t if there was one. Memories also fade on their own: unused, one loses half its strength in a week, and below a floor it is swept away.",
 		z.tuple([zString]),
-		([key]) => bank.store.delete(key) || null,
+		function* ([key]): Eval {
+			return (yield* settled(bank.store.delete(key))) || null;
+		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"memory/revise",
 		2,
 		"(revise key body)",
 		"Replace the body of a memory that fired this step. Retrieval opens a memory for revision and the step closes it again, so revising one you have not recalled is an error: recall it first, then correct what it says.",
 		z.tuple([zString, z.unknown()]),
-		([key, body]) => {
-			const memory = bank.store.get(key);
+		function* ([key, body]): Eval {
+			const memory = yield* settled(bank.store.get(key));
 			if (memory === undefined)
 				throw new EvalException("unknown memory", key, false);
 			if (!bank.isOpen(key))
@@ -708,7 +720,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 					body,
 				);
 			memory.body = body;
-			bank.remember(memory);
+			yield* bank.remember(memory);
 			return key;
 		},
 	);
@@ -720,7 +732,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Evaluate a memory whose body is a form, and return what it produced. This is how a remembered recipe runs: a memory holding a `defun` installs that function when you replay it. A memory holding prose has nothing to run.",
 		z.tuple([zString]),
 		function* ([key]): Eval {
-			const memory = bank.store.get(key);
+			const memory = yield* settled(bank.store.get(key));
 			if (memory === undefined)
 				throw new EvalException("unknown memory", key, false);
 			if (typeof memory.body === "string")

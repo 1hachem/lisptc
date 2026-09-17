@@ -3,11 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
 	checkSyntax,
 	isTruncated,
+	type ProseExcuse,
 	proseExtension,
 	stripProse,
 } from "../src/extensions/prose/prose.ts";
 import { proseHost } from "../src/extensions/prose/prose-host.ts";
-import { Interp, prelude, runSync, str } from "../src/lisp.ts";
+import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
 import { note } from "../src/topics.ts";
 import {
 	ev,
@@ -272,7 +273,8 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 	it("takes a host's own classifier in place of the bundled one", () => {
 		const interp = new Interp({
 			extensions: [
-				proseExtension(proseHost, {
+				proseExtension({
+					...proseHost,
 					classify: () => "everything is prose here",
 				}),
 			],
@@ -313,5 +315,86 @@ describe("truncation", () => {
 		'(echo "a (b")',
 	])("sees %s as finished", (text) => {
 		expect(isTruncated(text)).toBe(false);
+	});
+});
+
+describe("a second look at a form that failed", () => {
+	function excusingInterp(
+		excuse: ProseExcuse,
+	): [Interp, string[], { calls: unknown[] }] {
+		const seen: { calls: unknown[] } = { calls: [] };
+		const interp = new Interp({
+			extensions: [
+				proseExtension({
+					...proseHost,
+					excuse: (i, form, error) => {
+						seen.calls.push(form);
+						return excuse(i, form, error);
+					},
+				}),
+			],
+		});
+		runSync(interp, prelude);
+		return [interp, collectSkips(interp), seen];
+	}
+
+	it("reads a failed form as prose when an async host says so", async () => {
+		const [interp, skipped] = excusingInterp(async () =>
+			Promise.resolve('(deploy "the thing") — read as prose on a second look'),
+		);
+
+		const outcome = await runAsync(interp, '(deploy "the thing")');
+
+		expect(str(outcome.value)).toBe("#<unspecified>");
+		expect(skipped).toEqual([
+			'(deploy "the thing") — read as prose on a second look',
+		]);
+	});
+
+	it("raises as before when the host offers no excuse", async () => {
+		const [interp, skipped] = excusingInterp(() => undefined);
+
+		await expect(runAsync(interp, '(deploy "the thing")')).rejects.toThrow(
+			/undefined/,
+		);
+		expect(skipped).toEqual([]);
+	});
+
+	it("never asks about a failure raised under an argument, where code already ran", async () => {
+		const [interp, skipped, seen] = excusingInterp(() => "excused");
+		runSync(interp, "(defun keep (x) x)");
+
+		await expect(runAsync(interp, "(keep (nope))")).rejects.toThrow(
+			/undefined/,
+		);
+		expect(seen.calls).toEqual([]);
+		expect(skipped).toEqual([]);
+	});
+
+	it("never asks about a failure the form's own body raised", async () => {
+		const [interp, skipped, seen] = excusingInterp(() => "excused");
+		runSync(interp, "(defun boom () (nope))");
+
+		await expect(runAsync(interp, "(boom)")).rejects.toThrow(/undefined/);
+		expect(seen.calls).toEqual([]);
+		expect(skipped).toEqual([]);
+	});
+
+	it("asks when the head names something that is not applicable", async () => {
+		const [interp, skipped] = excusingInterp(() => "read as prose");
+		runSync(interp, "(setq total 3)");
+
+		await runAsync(interp, "(total number of things)");
+
+		expect(skipped).toEqual(["read as prose"]);
+	});
+
+	it("leaves the failure alone when nothing hooks the chain", async () => {
+		const interp = new Interp({ extensions: [proseExtension()] });
+		runSync(interp, prelude);
+
+		await expect(runAsync(interp, '(deploy "the thing")')).rejects.toThrow(
+			/undefined/,
+		);
 	});
 });

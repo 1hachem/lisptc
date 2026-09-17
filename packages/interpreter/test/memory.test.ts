@@ -22,9 +22,12 @@ import {
 	scopedMemoryStore,
 } from "../src/extensions/memory/memory-host.ts";
 import { proseExtension } from "../src/extensions/prose/prose.ts";
+import { proseHost } from "../src/extensions/prose/prose-host.ts";
 import {
 	arrayToList,
 	Cell,
+	driveAsync,
+	type Eval,
 	Interp,
 	type InterpExtension,
 	listToArray,
@@ -34,6 +37,10 @@ import {
 	runSync,
 	str,
 } from "../src/lisp.ts";
+
+function drive<T>(gen: Eval<T>): Promise<T> {
+	return driveAsync(gen).then((outcome) => outcome.value);
+}
 
 interface Fixture {
 	interp: Interp;
@@ -57,13 +64,11 @@ function fixture(
 		interp,
 		bank,
 		async step(code: string): Promise<string> {
-			const heard = bank
-				.hear(interp)
-				.map((m) => `${m.key}: ${m.body}\n`)
-				.join("");
-			const before = bank.beginStep(code, interp);
+			const fired = await drive(bank.hear(interp));
+			const heard = fired.map((m) => `${m.key}: ${m.body}\n`).join("");
+			const before = await drive(bank.beginStep(code, interp));
 			await runAsync(interp, code);
-			return heard + before + bank.endStep();
+			return heard + before + (await drive(bank.endStep()));
 		},
 	};
 }
@@ -191,10 +196,22 @@ describe("triggers", () => {
 			`(memory/remember "voids" "define it first" :on '(error "undefined"))`,
 		);
 
-		f.bank.beginStep("(nope)", f.interp);
+		await drive(f.bank.beginStep("(nope)", f.interp));
 		await expect(runAsync(f.interp, "(nope)")).rejects.toThrow(/undefined/);
 
-		expect(f.bank.endStep()).toContain("voids: define it first");
+		expect(await drive(f.bank.endStep())).toContain("voids: define it first");
+	});
+
+	it("stays quiet when a failed form was excused as prose", async () => {
+		const f = fixture(new MemoryBank(new VolatileStore()), [
+			proseExtension({ ...proseHost, excuse: () => "read as prose" }),
+		]);
+		await ev(
+			f,
+			`(memory/remember "voids" "define it first" :on '(error "undefined"))`,
+		);
+
+		expect(await f.step('(deploy "the thing")')).not.toContain("voids");
 	});
 
 	it("fires on words in the prose around the forms", async () => {
@@ -275,8 +292,10 @@ describe("triggers", () => {
 		await ev(f, `(memory/remember "h" "note" :on '(user "world go"))`);
 
 		said(f, "world go(done)");
-		expect(f.bank.hear(f.interp)).toEqual([{ key: "h", body: "note" }]);
-		expect(f.bank.beginStep("(+ 1 1)", f.interp)).toBe("");
+		expect(await drive(f.bank.hear(f.interp))).toEqual([
+			{ key: "h", body: "note" },
+		]);
+		expect(await drive(f.bank.beginStep("(+ 1 1)", f.interp))).toBe("");
 	});
 
 	it("keeps a memory the user's words fired open for revision", async () => {
@@ -286,7 +305,7 @@ describe("triggers", () => {
 		said(f, "world go(done)");
 		await f.step(`(memory/revise "r" "new")`);
 
-		expect(f.bank.store.get("r")?.body).toBe("new");
+		expect((await f.bank.store.get("r"))?.body).toBe("new");
 	});
 
 	it("fires once for a message however many steps a turn takes", async () => {
@@ -423,7 +442,7 @@ describe("triggers", () => {
 		});
 		runSync(quiet, prelude);
 
-		expect(bank.endStep()).toBe("");
+		expect(await drive(bank.endStep())).toBe("");
 	});
 });
 
@@ -453,8 +472,8 @@ describe("chaining", () => {
 
 		await f.step("(+ 1 1)");
 
-		expect(f.bank.store.get("a")?.links.get("b")).toBe(1);
-		expect(f.bank.store.get("b")?.links.get("a")).toBe(1);
+		expect((await f.bank.store.get("a"))?.links.get("b")).toBe(1);
+		expect((await f.bank.store.get("b"))?.links.get("a")).toBe(1);
 	});
 
 	it("fires each memory at most once a step, however they chain", async () => {
@@ -468,7 +487,7 @@ describe("chaining", () => {
 		expect(out.match(/b: two/g)).toHaveLength(1);
 	});
 
-	it("stops a chain at the cascade depth", () => {
+	it("stops a chain at the cascade depth", async () => {
 		const store = new VolatileStore();
 		const bank = new MemoryBank(store);
 		const depth = MAX_CASCADE_DEPTH + 3;
@@ -484,10 +503,10 @@ describe("chaining", () => {
 			});
 		const f = fixture(bank);
 
-		const fired = f.bank.beginStep("", f.interp);
+		const fired = await drive(f.bank.beginStep("", f.interp));
 		expect(fired).toBe("");
-		f.bank.recall(f.interp, "^m0$", 1);
-		const out = f.bank.endStep();
+		await drive(f.bank.recall(f.interp, "^m0$", 1));
+		const out = await drive(f.bank.endStep());
 
 		expect(out).toContain("m0: body 0");
 		expect(out).not.toContain(`m${depth - 1}:`);
@@ -509,8 +528,8 @@ describe("strength, reinforcement and forgetting", () => {
 		await ev(f, '(memory/remember "k" "v")');
 		const before = f.bank.strength(f.bank.store.get("k") as never);
 
-		f.bank.beginStep("", f.interp);
-		f.bank.recall(f.interp, "k", 1);
+		await drive(f.bank.beginStep("", f.interp));
+		await drive(f.bank.recall(f.interp, "k", 1));
 
 		expect(f.bank.strength(f.bank.store.get("k") as never)).toBeCloseTo(
 			before + REINFORCEMENT,
@@ -538,7 +557,7 @@ describe("strength, reinforcement and forgetting", () => {
 		expect(bank.strength(store.get("k") as never)).toBeCloseTo(0.25, 5);
 	});
 
-	it("sweeps away a memory that has faded under the floor", () => {
+	it("sweeps away a memory that has faded under the floor", async () => {
 		const clock = { now: 1_000_000 };
 		const store = new VolatileStore();
 		const bank = new MemoryBank(store, clockAt(clock));
@@ -553,7 +572,7 @@ describe("strength, reinforcement and forgetting", () => {
 		const f = fixture(bank);
 
 		clock.now += HALF_LIFE_MS * Math.ceil(-Math.log2(FORGET_BELOW) + 1);
-		f.bank.beginStep("", f.interp);
+		await drive(f.bank.beginStep("", f.interp));
 
 		expect(store.get("k")).toBeUndefined();
 	});
@@ -563,9 +582,9 @@ describe("strength, reinforcement and forgetting", () => {
 		await ev(f, '(memory/remember "note-a" "alpha")');
 		await ev(f, '(memory/remember "note-b" "beta")');
 
-		f.bank.beginStep("", f.interp);
-		f.bank.recall(f.interp, "^note-b$", 1);
-		f.bank.endStep();
+		await drive(f.bank.beginStep("", f.interp));
+		await drive(f.bank.recall(f.interp, "^note-b$", 1));
+		await drive(f.bank.endStep());
 
 		expect(await ev(f, '(car (car (memory/recall "note")))')).toBe(
 			'("key" . "note-b")',
@@ -578,12 +597,12 @@ describe("the plasticity window", () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "k" "the old note")');
 
-		f.bank.beginStep("", f.interp);
+		await drive(f.bank.beginStep("", f.interp));
 		await ev(f, '(memory/recall "k")');
 		await ev(f, '(memory/revise "k" "the corrected note")');
-		f.bank.endStep();
+		await drive(f.bank.endStep());
 
-		expect(f.bank.store.get("k")?.body).toBe("the corrected note");
+		expect((await f.bank.store.get("k"))?.body).toBe("the corrected note");
 	});
 
 	it("refuses to revise a memory that has not been recalled", async () => {
@@ -599,9 +618,9 @@ describe("the plasticity window", () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "k" "v")');
 
-		f.bank.beginStep("", f.interp);
+		await drive(f.bank.beginStep("", f.interp));
 		await ev(f, '(memory/recall "k")');
-		f.bank.endStep();
+		await drive(f.bank.endStep());
 
 		await expect(ev(f, '(memory/revise "k" "w")')).rejects.toThrow(
 			/recall it first/,
@@ -795,6 +814,6 @@ describe("the listing", () => {
 		await ev(f, '(memory/remember "k" "v")');
 		await ev(f, "(memories)");
 
-		expect(f.bank.store.get("k")?.used).toBe(0);
+		expect((await f.bank.store.get("k"))?.used).toBe(0);
 	});
 });

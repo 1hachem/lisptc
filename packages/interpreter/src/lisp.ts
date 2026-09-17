@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
+import type { Awaitable } from "@repo/shared/host";
 import { tokenPattern } from "@repo/shared/lisp-tokens";
 import { z } from "zod";
 import {
@@ -183,6 +184,10 @@ function parseArgs<T extends z.ZodType>(schema: T, a: unknown[]): z.infer<T> {
 }
 
 export type Eval<T = unknown> = Generator<Promise<unknown>, T, unknown>;
+
+export function* settled<T>(value: Awaitable<T>): Eval<T> {
+	return value instanceof Promise ? ((yield value) as T) : value;
+}
 
 abstract class Func {
 	constructor(public readonly carity: number) {}
@@ -378,6 +383,16 @@ export class EvalException extends Error {
 		let s = `EvalException: ${this.message}`;
 		for (const line of this.trace) s += `\n\t${line}`;
 		return s;
+	}
+}
+
+export class UnresolvedHead extends EvalException {
+	constructor(
+		msg: string,
+		readonly form: Cell,
+		head: unknown,
+	) {
+		super(msg, head);
 	}
 }
 
@@ -1184,7 +1199,8 @@ export class Interp {
 					} else {
 						if (fn instanceof Sym) {
 							fn = this.globals.get(fn);
-							if (fn === undefined) throw new EvalException("undefined", x.car);
+							if (fn === undefined)
+								throw new UnresolvedHead("undefined", x, x.car);
 						} else if (fn instanceof Cell) {
 							fn = yield* this.evalGen(fn, env);
 						} else {
@@ -1235,6 +1251,8 @@ export class Interp {
 								body !== null && body.cdr === null
 									? body.car
 									: yield* this.evalProgN(body, env);
+						} else if (x.car instanceof Sym) {
+							throw new UnresolvedHead("not applicable", x, fn);
 						} else {
 							throw new EvalException("not applicable", fn);
 						}
@@ -1914,6 +1932,20 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 			ex instanceof LoopSignal
 				? new EvalException("break/return used outside of a loop", null, false)
 				: ex;
+		if (failure instanceof UnresolvedHead && failure.form === exp) {
+			const excused = yield* interp.hooks.failedForm.run(
+				() => settled(undefined),
+				interp,
+				exp,
+				failure,
+			);
+			if (excused !== undefined) {
+				note.emit(interp.channels, {
+					model: { kind: "skipped", text: excused },
+				});
+				return Unspecified;
+			}
+		}
 		if (failure instanceof EvalException)
 			note.emit(interp.channels, {
 				model: { kind: "failed", text: String(failure) },

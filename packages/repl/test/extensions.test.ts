@@ -72,7 +72,7 @@ describe("a REPL built from a list of its own", () => {
 		expect(r.hooks.filled(memorySlot)).toBe(bank);
 		await r.eval('(memory/remember "k" "a note worth keeping")');
 
-		expect(bank.store.get("k")?.body).toBe("a note worth keeping");
+		expect((await bank.store.get("k"))?.body).toBe("a note worth keeping");
 	});
 
 	it("hands a fired memory back on its own lane, not in the REPL output", async () => {
