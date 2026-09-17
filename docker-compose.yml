@@ -59,7 +59,6 @@ services:
       - "${CONVEX_DASHBOARD_PORT:-6791}:6791"
     environment:
       NEXT_PUBLIC_DEPLOYMENT_URL: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
-      # optional, not `:?`: the backend has to be up before `task convex:key` can mint one
       NEXT_PUBLIC_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
 
   api:

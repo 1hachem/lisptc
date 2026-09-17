@@ -8,7 +8,6 @@
     "./analytics": "./src/analytics.ts",
     "./api": "./src/api.ts",
     "./app": "./src/app.ts",
-    "./convex": "./src/convex.ts",
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",
     "./mcps/google/sheets": "./src/mcps/google/sheets.ts",

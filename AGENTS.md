@@ -214,12 +214,11 @@ A lint rule enforces this; `packages/env/src` and the test directories are the
 only paths where it is off. Every exemption in `src` carries a `biome-ignore`
 naming the reason.
 
-The Convex deployment carries an environment of its own. `@repo/env/convex`
-declares every variable pushed onto it and `scripts/convex-deploy.ts` pushes
-them, so adding a deployment secret means declaring it there and storing it in
-Infisical under `/auth`, never writing it to a file. An OAuth app's callback
-points at the web app's origin, where the auth router is served, not at the
-deployment.
+The Convex deployment carries an environment of its own, and nothing in this
+repo pushes it. A deployment secret is stored in Infisical under `/auth` and set
+on the deployment by hand, from the dashboard, never written to a file. An OAuth
+app's callback points at the web app's origin, where the auth router is served,
+not at the deployment.
 
 ## Icons
 
@@ -264,7 +263,6 @@ pnpm test:evals              # agent evals against real models (NOT part of `pnp
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
 task up                      # build and run the whole stack in docker, with live reload
-task convex:key              # mint an admin key, push the deployment's env, push the functions
 
 # Single test file / by name — run inside the package that owns it:
 pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts
@@ -273,9 +271,10 @@ pnpm --filter @repo/interpreter exec vitest run -t "name of test"
 
 Every `task` runs under Infisical: `/db` holds the postgres credentials and the
 database name, `/convex` the deployment's secret and its origins, `/auth`
-everything Better Auth signs and calls out with. `convex:key` writes the local
-credentials `@repo/backend` reads and is safe to re-run; `pnpm --filter
-@repo/backend dev` then pushes on save and watches.
+everything Better Auth signs and calls out with, the deployment's admin key
+included, so the convex CLI is credentialed wherever that environment reaches.
+`pnpm --filter @repo/backend dev` pushes the functions on save and watches, and
+wants `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` in its own.
 
 Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via
 `--experimental-transform-types` (no build step). CI (`.github/workflows/ci.yml`)
