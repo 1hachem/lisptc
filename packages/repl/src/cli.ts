@@ -2,6 +2,7 @@ import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
 import { compactionHost } from "@repo/interpreter/compaction-host";
+import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
 	EvalException,
@@ -12,12 +13,13 @@ import {
 	runSync,
 	setExit,
 } from "@repo/interpreter/lisp";
-import { MemoryBank, memoryExtension } from "@repo/interpreter/memory";
+import { memoryExtension } from "@repo/interpreter/memory";
 import { memoryHost } from "@repo/interpreter/memory-host";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { secretsExtension } from "@repo/interpreter/secrets";
 import { secretsHostFor } from "@repo/interpreter/secrets-host";
+import { openSession } from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
 import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
@@ -49,12 +51,17 @@ const stdoutTransport = (): ChannelTransport => ({
 
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
-	private readonly compactor = new Compactor();
 	private readonly secrets = secretsHostFor({ envFile: true });
-	private readonly memories = new MemoryBank(
-		memoryHost.store,
-		memoryHost.clock,
-	);
+	private readonly extensions: InterpExtension[] = [
+		secretsExtension(this.secrets),
+		promisesExtension(),
+		mcpExtension(),
+		llmExtension(),
+		compactionExtension(compactionHost, { compactor: new Compactor() }),
+		memoryExtension(memoryHost),
+		proseExtension(),
+	];
+	private readonly hooks = openSession(this.extensions);
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -65,17 +72,7 @@ class InteractiveRepl implements Repl {
 	}
 
 	private freshInterp(): Interp {
-		const interp = new Interp({
-			extensions: [
-				secretsExtension(this.secrets),
-				promisesExtension(),
-				mcpExtension(),
-				llmExtension(),
-				compactionExtension(compactionHost, { compactor: this.compactor }),
-				memoryExtension(memoryHost, { bank: this.memories }),
-				proseExtension(),
-			],
-		});
+		const interp = new Interp({ extensions: this.extensions });
 		runSync(interp, prelude);
 		interp.channels.pipe(stdoutTransport());
 		return interp;
@@ -99,16 +96,17 @@ class InteractiveRepl implements Repl {
 			const text = buffer;
 			buffer = "";
 			try {
-				this.compactor.beginStep();
-				write(this.memories.beginStep(text, this.currentInterp));
-				await runAsync(this.currentInterp, text);
+				await this.hooks.evalStep.run(
+					async (ctx) => {
+						await runAsync(ctx.interp, ctx.code);
+					},
+					{ interp: this.currentInterp, code: text, emit: write },
+				);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)
 					write("unbalanced expression (unexpected end of input)\n");
 				else throw ex;
-			} finally {
-				write(this.memories.endStep());
 			}
 		}
 	}

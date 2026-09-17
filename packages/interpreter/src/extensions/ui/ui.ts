@@ -18,6 +18,7 @@ import {
 	zList,
 } from "../../lisp.ts";
 import { plistOptions, splitKeywordArgs } from "../../plist.ts";
+import type { SessionHooks } from "../../session.ts";
 import { uiHost } from "./ui-host.ts";
 
 const MAX_HANDLERS = 500;
@@ -557,6 +558,11 @@ export function uiExtension(
 	return Object.assign((interp: Interp): void => registerUi(interp, surface), {
 		surface,
 		prompt: host.prompt(),
+		session(hooks: SessionHooks): void {
+			hooks.invoke.use(async (ctx) => {
+				await surface.invoke(ctx.action, ctx.values);
+			});
+		},
 	});
 }
 

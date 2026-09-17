@@ -1,6 +1,7 @@
 import type { FiredMemory } from "@repo/interpreter/memory";
 import { proseHeads } from "@repo/interpreter/prose";
 import type { UiNode } from "@repo/interpreter/ui";
+import { llmSlot } from "@repo/llm/llm";
 import type { AgentRepl } from "@repo/repl/repl";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -63,6 +64,7 @@ export type TurnEvent =
 			failed: boolean;
 			ui?: UiNode;
 	  }
+	| { type: "heard"; memories: FiredMemory[] }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
@@ -120,7 +122,8 @@ export async function* runAgentTurn(
 
 	try {
 		const repl = options.repl ?? getThreadRepl(threadId, identity?.distinctId);
-		repl.llmObserver = (call) => captureLlmCall(trace, call);
+		const observed = repl.hooks.filled(llmSlot);
+		if (observed) observed.observe = (call) => captureLlmCall(trace, call);
 
 		const tracedConfig: AgentConfig = {
 			...config,
@@ -135,8 +138,14 @@ export async function* runAgentTurn(
 				content: proseFeedbackContent(withheld),
 			});
 
+		let riding = "";
+
 		while (!signal?.aborted) {
 			repl.setConversationVars(snapshotConversation(transcript));
+
+			const { said, memories: heard } = repl.beginTurn();
+			if (said !== "") riding = said;
+			if (heard.length > 0) yield { type: "heard", memories: heard };
 
 			const stepId = crypto.randomUUID();
 			const stepStartedAt = Date.now();
@@ -145,7 +154,7 @@ export async function* runAgentTurn(
 			let usage: TokenUsage | undefined;
 
 			for await (const delta of streamAgent(
-				toLlmMessages(transcript),
+				toLlmMessages(transcript, riding),
 				tracedConfig,
 				{ signal },
 			)) {

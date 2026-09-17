@@ -23,8 +23,12 @@ import {
 } from "../src/extensions/memory/memory-host.ts";
 import { proseExtension } from "../src/extensions/prose/prose.ts";
 import {
+	arrayToList,
+	Cell,
 	Interp,
 	type InterpExtension,
+	listToArray,
+	newSym,
 	prelude,
 	runAsync,
 	runSync,
@@ -53,9 +57,13 @@ function fixture(
 		interp,
 		bank,
 		async step(code: string): Promise<string> {
+			const heard = bank
+				.hear(interp)
+				.map((m) => `${m.key}: ${m.body}\n`)
+				.join("");
 			const before = bank.beginStep(code, interp);
 			await runAsync(interp, code);
-			return before + bank.endStep();
+			return heard + before + bank.endStep();
 		},
 	};
 }
@@ -66,6 +74,12 @@ function proseFixture(): Fixture {
 
 async function ev(f: Fixture, code: string): Promise<string> {
 	return str((await runAsync(f.interp, code)).value);
+}
+
+function said(f: Fixture, text: string): void {
+	const before = f.interp.getGlobal(newSym("user-messages"));
+	const all = before instanceof Cell ? listToArray(before) : [];
+	f.interp.defineGlobal(newSym("user-messages"), arrayToList([...all, text]));
 }
 
 function clockAt(ms: { now: number }): Clock {
@@ -190,6 +204,98 @@ describe("triggers", () => {
 		expect(await f.step("TODO check this\n(+ 1 1)")).toContain(
 			"todos: finish it",
 		);
+	});
+
+	it("matches what the user said by regular expression", async () => {
+		const f = fixture();
+		await ev(
+			f,
+			`(memory/remember "f" "docs live in /docs" :on '(user "file.*"))`,
+		);
+
+		said(f, "read file.md");
+		expect(await f.step("(+ 1 1)")).toContain("f: docs live in /docs");
+		said(f, "read file.pdf");
+		expect(await f.step("(+ 1 1)")).toContain("f: docs live in /docs");
+		said(f, "read the folder");
+		expect(await f.step("(+ 1 1)")).not.toContain("f:");
+	});
+
+	it("honours an anchor in what the user said", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "d" "note" :on '(user "^deploy"))`);
+
+		said(f, "deploy the api");
+		expect(await f.step("(+ 1 1)")).toContain("d: note");
+		said(f, "do not deploy the api");
+		expect(await f.step("(+ 1 1)")).not.toContain("d: note");
+	});
+
+	it("matches what the user said whatever its case", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "c" "note" :on '(user "file.*"))`);
+
+		said(f, "read FILE.MD");
+		expect(await f.step("(+ 1 1)")).toContain("c: note");
+	});
+
+	it("reads a pattern that is no regular expression as plain text", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "p" "note" :on '(user "c++"))`);
+
+		said(f, "port it to c++ first");
+		expect(await f.step("(+ 1 1)")).toContain("p: note");
+	});
+
+	it("combines regular expressions over what the user said", async () => {
+		const f = fixture();
+		await ev(
+			f,
+			`(memory/remember "m" "note" :on '(user (any-of "file.*" "doc.*")))`,
+		);
+
+		said(f, "open doc.txt");
+		expect(await f.step("(+ 1 1)")).toContain("m: note");
+		said(f, "open the drawer");
+		expect(await f.step("(+ 1 1)")).not.toContain("m: note");
+	});
+
+	it("fires again when the user repeats the message word for word", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "w" "note" :on '(user "world go"))`);
+
+		said(f, "world go(done)");
+		expect(await f.step("(+ 1 1)")).toContain("w: note");
+		said(f, "world go(done)");
+		expect(await f.step("(+ 1 1)")).toContain("w: note");
+	});
+
+	it("hands over what the user said before the step runs", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "h" "note" :on '(user "world go"))`);
+
+		said(f, "world go(done)");
+		expect(f.bank.hear(f.interp)).toEqual([{ key: "h", body: "note" }]);
+		expect(f.bank.beginStep("(+ 1 1)", f.interp)).toBe("");
+	});
+
+	it("keeps a memory the user's words fired open for revision", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "r" "old" :on '(user "world go"))`);
+
+		said(f, "world go(done)");
+		await f.step(`(memory/revise "r" "new")`);
+
+		expect(f.bank.store.get("r")?.body).toBe("new");
+	});
+
+	it("fires once for a message however many steps a turn takes", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "o" "note" :on '(user "world go"))`);
+
+		said(f, "world go(done)");
+		expect(await f.step("(+ 1 1)")).toContain("o: note");
+		expect(await f.step("(+ 2 2)")).not.toContain("o: note");
 	});
 
 	it("never fires a memory that was stored without a trigger", async () => {

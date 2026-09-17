@@ -1,4 +1,4 @@
-import type { LlmCall } from "@repo/llm/llm";
+import { type LlmCall, llmSlot } from "@repo/llm/llm";
 import { describe, expect, it } from "vitest";
 import { agentRepl } from "./helpers.ts";
 
@@ -268,7 +268,8 @@ describe("the llm observer", () => {
 	it("hands every model call the REPL's host installed observer, across a reset", async () => {
 		const calls: LlmCall[] = [];
 		const r = agentRepl();
-		r.llmObserver = (call) => calls.push(call);
+		const observed = r.hooks.filled(llmSlot);
+		if (observed) observed.observe = (call) => calls.push(call);
 
 		await r.eval('(llm/complete "hi" :provider :nowhere)');
 		r.reset();

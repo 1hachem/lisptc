@@ -48,7 +48,14 @@ matched structurally. This is what gives you precision about arguments:
 
 A pattern list matches a PREFIX of the call, so naming fewer arguments is looser
 and naming more is tighter. Every other kind matches text, so its pattern is a
-string used as a regular expression.
+string used as a regular expression, matched case-insensitively anywhere in the
+text:
+
+(user "file.*") whatever the user says about file.md, file.pdf or any other one
+(user "^deploy") only what the user opens with the word
+
+A pattern that is not a regular expression is read as plain text instead, so a
+literal with a stray bracket in it still matches.
 
 Combine patterns with all, any-of and not, in either sort of trigger:
 

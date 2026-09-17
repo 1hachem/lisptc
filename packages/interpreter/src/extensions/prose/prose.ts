@@ -15,6 +15,7 @@ import {
 	Sym,
 	str,
 } from "../../lisp.ts";
+import type { SessionHooks } from "../../session.ts";
 import { note } from "../../topics.ts";
 import { proseHost } from "./prose-host.ts";
 
@@ -51,7 +52,16 @@ export function proseExtension(
 			(interp, form, next) => classify(interp, form) ?? next(interp, form),
 		);
 	};
-	return Object.assign(extension, { prompt: host.prompt() });
+	return Object.assign(extension, {
+		prompt: host.prompt(),
+		session(hooks: SessionHooks): void {
+			hooks.answered.use((ctx, out, next) => {
+				if (formsOnly(ctx.code).trim() === "") return true;
+				if (out.model !== "" || out.skipped.length === 0) return next(ctx, out);
+				return !isTruncated(ctx.code);
+			});
+		},
+	});
 }
 
 const proseJudge: FormJudge = {

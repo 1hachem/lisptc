@@ -22,11 +22,28 @@ export function snapshotConversation(
 	};
 }
 
-export function toLlmMessages(transcript: TranscriptEntry[]): AgentMessage[] {
-	return transcript.map((e) => ({
+export function toLlmMessages(
+	transcript: TranscriptEntry[],
+	riding = "",
+): AgentMessage[] {
+	const messages = transcript.map((e) => ({
 		role: e.role === "tool" ? "user" : e.role,
 		content: e.content,
 	}));
+	if (riding === "") return messages;
+	let last = -1;
+	for (let i = transcript.length - 1; i >= 0; i--)
+		if (transcript[i].role === "user") {
+			last = i;
+			break;
+		}
+	if (last === -1) return messages;
+	const carried = messages[last];
+	messages[last] = {
+		...carried,
+		content: `${carried.content}\n\n${riding}`,
+	};
+	return messages;
 }
 
 export function stripFences(text: string): string {

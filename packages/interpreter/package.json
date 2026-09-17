@@ -22,6 +22,7 @@
     "./prose-host": "./src/extensions/prose/prose-host.ts",
     "./secrets": "./src/extensions/secrets/secrets.ts",
     "./secrets-host": "./src/extensions/secrets/secrets-host.ts",
+    "./session": "./src/session.ts",
     "./source": "./src/source.ts",
     "./topics": "./src/topics.ts",
     "./types": "./src/types.ts",

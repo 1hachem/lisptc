@@ -1,3 +1,4 @@
+import type { FiredMemory } from "@repo/interpreter/memory";
 import { nodeToJson } from "@repo/interpreter/ui";
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
@@ -83,6 +84,7 @@ export function streamChatResponse(
 
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
+			let heard: FiredMemory[] = [];
 
 			try {
 				write(sse("values", { messages: wire }));
@@ -107,8 +109,14 @@ export function streamChatResponse(
 							chunk.content = event.text ?? "";
 						}
 						if (!write(sse("messages", [chunk, {}]))) break;
+					} else if (event.type === "heard") {
+						heard = event.memories;
 					} else if (event.type === "assistant") {
-						lastMeta = { ...event.meta };
+						lastMeta = {
+							...event.meta,
+							...(heard.length > 0 ? { memories: heard } : {}),
+						};
+						heard = [];
 						wire.push({
 							type: "ai",
 							content: event.code,
@@ -124,7 +132,10 @@ export function streamChatResponse(
 					} else if (event.type === "result") {
 						steps = event.step;
 						if (lastMeta && event.memories.length > 0)
-							lastMeta.memories = event.memories;
+							lastMeta.memories = [
+								...((lastMeta.memories as FiredMemory[] | undefined) ?? []),
+								...event.memories,
+							];
 						const extras: Record<string, unknown> = {};
 						if (event.display !== event.output) extras.display = event.display;
 						if (event.ui) extras.ui = nodeToJson(event.ui);

@@ -1,4 +1,4 @@
-import { bankOf } from "@repo/interpreter/memory";
+import { bankOf, memorySlot } from "@repo/interpreter/memory";
 import { describe, expect, it } from "vitest";
 import { agentExtensions, getThreadRepl } from "../src/repl-store.ts";
 
@@ -6,7 +6,7 @@ describe("the REPL every agent host builds", () => {
 	it("carries a memory, so the API remembers across turns", async () => {
 		const repl = getThreadRepl("thread-a");
 
-		expect(repl.memories).toBeDefined();
+		expect(repl.hooks.filled(memorySlot)).toBeDefined();
 		expect(await repl.eval('(memory/remember "k" "a note")')).toContain("k");
 		expect(await repl.eval('(memory/recall "note")')).toContain("a note");
 	});

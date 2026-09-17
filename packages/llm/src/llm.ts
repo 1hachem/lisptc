@@ -22,6 +22,7 @@ import {
 	plistOptions,
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
+import { type SessionHooks, slot } from "@repo/interpreter/session";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
@@ -123,6 +124,10 @@ export interface LlmExtension extends InterpExtension {
 	observe?: LlmObserver;
 }
 
+export interface Observed {
+	observe?: LlmObserver;
+}
+
 export function llmExtension(
 	host: LlmHost = llmHost,
 	options: LlmOptions = {},
@@ -132,7 +137,19 @@ export function llmExtension(
 		(interp: Interp): void => {
 			registerLlm(interp, host, () => config.observe);
 		},
-		{ prompt: host.prompt() },
+		{
+			prompt: host.prompt(),
+			session(hooks: SessionHooks): void {
+				hooks.fill(llmSlot, {
+					set observe(observer: LlmObserver | undefined) {
+						config.observe = observer;
+					},
+					get observe(): LlmObserver | undefined {
+						return config.observe;
+					},
+				});
+			},
+		},
 	);
 	Object.defineProperty(extension, "observe", {
 		enumerable: true,
@@ -144,11 +161,7 @@ export function llmExtension(
 	return extension;
 }
 
-export function isLlmExtension(
-	extension: InterpExtension,
-): extension is LlmExtension {
-	return "observe" in extension;
-}
+export const llmSlot = slot<Observed>("llm");
 
 function asText(x: unknown, what: string): string {
 	if (typeof x !== "string")
