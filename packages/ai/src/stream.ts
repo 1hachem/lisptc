@@ -15,6 +15,13 @@ export interface ChatInput {
 	messages?: ChatMessageInput[];
 }
 
+export interface WireMessage {
+	type: string;
+	content: string;
+	id: string;
+	additional_kwargs?: Record<string, unknown>;
+}
+
 const encoder = new TextEncoder();
 
 function merge(
@@ -65,7 +72,7 @@ export function streamChatResponse(
 	signal?: AbortSignal,
 	threadId?: string,
 	identity?: { distinctId?: string; sessionId?: string },
-	onTurn?: (messages: Record<string, unknown>[]) => Promise<void> | void,
+	onTurn?: (messages: WireMessage[]) => Promise<void> | void,
 ): Response {
 	const abort = new AbortController();
 	if (signal)
@@ -85,16 +92,14 @@ export function streamChatResponse(
 				}
 			};
 
-			const wire: Record<string, unknown>[] = (input.messages ?? []).map(
-				(m, i) => ({
-					type: wireType(m.type ?? m.role),
-					content: contentToText(m.content),
-					id: m.id ?? `msg-${i}`,
-					...(m.additional_kwargs
-						? { additional_kwargs: m.additional_kwargs }
-						: undefined),
-				}),
-			);
+			const wire: WireMessage[] = (input.messages ?? []).map((m, i) => ({
+				type: wireType(m.type ?? m.role),
+				content: contentToText(m.content),
+				id: m.id ?? `msg-${i}`,
+				...(m.additional_kwargs
+					? { additional_kwargs: m.additional_kwargs }
+					: undefined),
+			}));
 
 			const carried = wire.length;
 			let steps = 0;

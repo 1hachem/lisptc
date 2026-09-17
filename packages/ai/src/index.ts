@@ -25,6 +25,7 @@ export {
 	type ChatInput,
 	type ChatMessageInput,
 	streamChatResponse,
+	type WireMessage,
 } from "./stream.ts";
 export {
 	captureException,
