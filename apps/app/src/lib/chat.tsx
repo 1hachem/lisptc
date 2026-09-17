@@ -26,6 +26,7 @@ export interface ChatMessage {
 		ui?: unknown;
 		prose?: unknown;
 		failed?: unknown;
+		graph?: unknown;
 	};
 }
 

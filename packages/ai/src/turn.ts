@@ -1,3 +1,4 @@
+import type { GraphNode } from "@repo/interpreter/graph";
 import type { FiredMemory } from "@repo/interpreter/memory";
 import { proseHeads } from "@repo/interpreter/prose";
 import type { UiNode } from "@repo/interpreter/ui";
@@ -62,6 +63,7 @@ export type TurnEvent =
 			memories: FiredMemory[];
 			failed: boolean;
 			ui?: UiNode;
+			graph: GraphNode[];
 	  }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -179,10 +181,8 @@ export async function* runAgentTurn(
 			transcript.push({ role: "assistant", content: code });
 
 			const evalStartedAt = Date.now();
-			const { output, display, error, memories, failed, ui } = await evalCode(
-				repl,
-				code,
-			);
+			const { output, display, error, memories, failed, ui, graph } =
+				await evalCode(repl, code);
 			steps += 1;
 
 			captureReplEval(trace, {
@@ -209,6 +209,7 @@ export async function* runAgentTurn(
 				memories,
 				failed,
 				ui,
+				graph,
 			};
 			transcript.push({
 				role: "tool",

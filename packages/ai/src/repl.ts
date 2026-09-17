@@ -1,3 +1,4 @@
+import type { GraphNode } from "@repo/interpreter/graph";
 import type { FiredMemory } from "@repo/interpreter/memory";
 import type { UiNode } from "@repo/interpreter/ui";
 import type { AgentRepl } from "@repo/repl/repl";
@@ -70,10 +71,20 @@ export async function evalCode(
 	memories: FiredMemory[];
 	failed: boolean;
 	ui?: UiNode;
+	graph: GraphNode[];
 }> {
 	try {
-		const { model, user, memories, failed, ui } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false, memories, failed, ui };
+		const { model, user, memories, failed, ui, graph } =
+			await repl.evalOutput(code);
+		return {
+			output: model,
+			display: user,
+			error: false,
+			memories,
+			failed,
+			ui,
+			graph,
+		};
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
@@ -84,6 +95,7 @@ export async function evalCode(
 			error: true,
 			memories: [],
 			failed: true,
+			graph: [],
 		};
 	}
 }
