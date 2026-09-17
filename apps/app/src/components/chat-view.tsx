@@ -25,7 +25,6 @@ import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
-import { Greeting } from "./greeting.tsx";
 import { LispText } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
@@ -206,7 +205,12 @@ function ScrollToLatest() {
 }
 
 export function ChatView() {
-	const { messages, meta, error, isLoading } = useChatSession();
+	const { messages, meta, error, isLoading } = useChatSession((state) => ({
+		messages: state.messages,
+		meta: state.meta,
+		error: state.error,
+		isLoading: state.isLoading,
+	}));
 	const { shown } = useUI();
 	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
 
@@ -214,7 +218,6 @@ export function ChatView() {
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
 			<StickOnSend turn={lastSent} />
 			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
-				<Greeting />
 				{messages
 					.filter((m) => !isGreetingMessage(m))
 					.map((m, i, all) => {
@@ -271,7 +274,7 @@ export function ChatView() {
 						{error}
 					</div>
 				)}
-				<div aria-hidden className="h-[10vh]" />
+				<div aria-hidden className="h-[6em]" />
 			</ConversationContent>
 			<ScrollToLatest />
 		</Conversation>

@@ -273,7 +273,10 @@ function Table({ node }: { node: UiNode }) {
 }
 
 export function GenerativeUI({ node }: { node: UiNode }) {
-	const { threadId, send } = useChatSession();
+	const { chatId, send } = useChatSession((state) => ({
+		chatId: state.chatId,
+		send: state.send,
+	}));
 	const [ui, setUi] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
@@ -286,8 +289,8 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 			try {
 				const res = await fetch(`${API_URL}/api/ui-action`, {
 					method: "POST",
-					headers: apiHeaders(),
-					body: JSON.stringify({ thread_id: threadId, action, values }),
+					headers: await apiHeaders(),
+					body: JSON.stringify({ chatId, action, values }),
 				});
 				if (res.status === 409) {
 					setFailed(true);

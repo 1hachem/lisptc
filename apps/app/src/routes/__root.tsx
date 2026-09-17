@@ -1,21 +1,22 @@
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { defaultThemeId, fontLinks } from "@repo/ui";
-import appCss from "@repo/ui/styles/app.css?url";
 import type { QueryClient } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
 	Scripts,
+	useRouteContext,
 } from "@tanstack/react-router";
-import { AnimatedFavicon } from "../components/animated-favicon.tsx";
-import { AppShell } from "../components/app-shell.tsx";
-import { AgentProvider } from "../lib/agent.tsx";
 import { Analytics } from "../lib/analytics.tsx";
-import { ChatProvider } from "../lib/chat.tsx";
-import { UIProvider } from "../lib/ui.tsx";
+import { providerClient } from "../lib/auth-client.ts";
+import appCss from "../styles/app.css?url";
 
 export interface RouterContext {
 	queryClient: QueryClient;
+	convexQueryClient: ConvexQueryClient;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -36,20 +37,22 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
+	const { queryClient, convexQueryClient } = useRouteContext({
+		from: Route.id,
+	});
+
 	return (
 		<RootDocument>
-			<Analytics>
-				<UIProvider>
-					<ChatProvider>
-						<AgentProvider>
-							<AnimatedFavicon />
-							<AppShell>
-								<Outlet />
-							</AppShell>
-						</AgentProvider>
-					</ChatProvider>
-				</UIProvider>
-			</Analytics>
+			<ConvexBetterAuthProvider
+				client={convexQueryClient.convexClient}
+				authClient={providerClient}
+			>
+				<QueryClientProvider client={queryClient}>
+					<Analytics>
+						<Outlet />
+					</Analytics>
+				</QueryClientProvider>
+			</ConvexBetterAuthProvider>
 		</RootDocument>
 	);
 }

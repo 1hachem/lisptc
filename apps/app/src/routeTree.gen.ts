@@ -9,50 +9,169 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
+import { Route as AuthedWorkspaceIdRouteRouteImport } from './routes/_authed/$workspaceId/route'
+import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
+import { Route as AuthedWorkspaceIdChatIdRouteImport } from './routes/_authed/$workspaceId/$chatId'
 
-const IndexRoute = IndexRouteImport.update({
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedIndexRoute = AuthedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedWorkspaceIdRouteRoute = AuthedWorkspaceIdRouteRouteImport.update({
+  id: '/$workspaceId',
+  path: '/$workspaceId',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedWorkspaceIdIndexRoute = AuthedWorkspaceIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+} as any)
+const AuthedWorkspaceIdChatIdRoute = AuthedWorkspaceIdChatIdRouteImport.update({
+  id: '/$chatId',
+  path: '/$chatId',
+  getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AuthedIndexRoute
+  '/login': typeof LoginRoute
+  '/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/': typeof AuthedIndexRoute
+  '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_authed': typeof AuthedRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_authed/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/_authed/': typeof AuthedIndexRoute
+  '/_authed/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/$workspaceId'
+    | '/$workspaceId/$chatId'
+    | '/$workspaceId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/login' | '/' | '/$workspaceId/$chatId' | '/$workspaceId'
+  id:
+    | '__root__'
+    | '/_authed'
+    | '/login'
+    | '/_authed/$workspaceId'
+    | '/_authed/'
+    | '/_authed/$workspaceId/$chatId'
+    | '/_authed/$workspaceId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed/': {
+      id: '/_authed/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthedIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$workspaceId': {
+      id: '/_authed/$workspaceId'
+      path: '/$workspaceId'
+      fullPath: '/$workspaceId'
+      preLoaderRoute: typeof AuthedWorkspaceIdRouteRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$workspaceId/': {
+      id: '/_authed/$workspaceId/'
+      path: '/'
+      fullPath: '/$workspaceId/'
+      preLoaderRoute: typeof AuthedWorkspaceIdIndexRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
+    '/_authed/$workspaceId/$chatId': {
+      id: '/_authed/$workspaceId/$chatId'
+      path: '/$chatId'
+      fullPath: '/$workspaceId/$chatId'
+      preLoaderRoute: typeof AuthedWorkspaceIdChatIdRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
   }
 }
 
+interface AuthedWorkspaceIdRouteRouteChildren {
+  AuthedWorkspaceIdChatIdRoute: typeof AuthedWorkspaceIdChatIdRoute
+  AuthedWorkspaceIdIndexRoute: typeof AuthedWorkspaceIdIndexRoute
+}
+
+const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
+  {
+    AuthedWorkspaceIdChatIdRoute: AuthedWorkspaceIdChatIdRoute,
+    AuthedWorkspaceIdIndexRoute: AuthedWorkspaceIdIndexRoute,
+  }
+
+const AuthedWorkspaceIdRouteRouteWithChildren =
+  AuthedWorkspaceIdRouteRoute._addFileChildren(
+    AuthedWorkspaceIdRouteRouteChildren,
+  )
+
+interface AuthedRouteChildren {
+  AuthedWorkspaceIdRouteRoute: typeof AuthedWorkspaceIdRouteRouteWithChildren
+  AuthedIndexRoute: typeof AuthedIndexRoute
+}
+
+const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedWorkspaceIdRouteRoute: AuthedWorkspaceIdRouteRouteWithChildren,
+  AuthedIndexRoute: AuthedIndexRoute,
+}
+
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  AuthedRoute: AuthedRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

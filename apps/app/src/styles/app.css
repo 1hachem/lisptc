@@ -1,0 +1,14 @@
+@import "@repo/ui/styles/app.css";
+
+@layer base {
+	:root {
+		--app-zoom: 1.75;
+		zoom: var(--app-zoom);
+	}
+	[data-radix-popper-content-wrapper] {
+		zoom: calc(1 / var(--app-zoom));
+	}
+	[data-radix-popper-content-wrapper] > * {
+		zoom: var(--app-zoom);
+	}
+}
