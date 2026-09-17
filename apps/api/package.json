@@ -17,12 +17,15 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@repo/ai": "workspace:*",
+    "@repo/backend": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm": "workspace:*",
     "@repo/mcp": "workspace:*",
     "@repo/shared": "workspace:*",
+    "convex": "^1.46.0",
     "hono": "^4.13.5",
+    "jose": "^6.2.12",
     "zod": "^4.4.3"
   },
   "devDependencies": {

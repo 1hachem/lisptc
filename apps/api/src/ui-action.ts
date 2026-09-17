@@ -1,14 +1,20 @@
 import { runUiAction } from "@repo/ai";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import { Hono } from "hono";
 import { z } from "zod";
+import { convexAs } from "./convex.ts";
+import { session } from "./session.ts";
 
 const uiActionSchema = z.object({
-	thread_id: z.string(),
+	chatId: z.string(),
 	action: z.string(),
 	values: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
 });
 
 export const uiAction = new Hono();
+
+uiAction.use(session);
 
 uiAction.post("/", async (c) => {
 	const parsed = uiActionSchema.safeParse(await c.req.json().catch(() => null));
@@ -16,14 +22,17 @@ uiAction.post("/", async (c) => {
 		console.warn("rejected ui action:", z.treeifyError(parsed.error));
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
-	const { thread_id, action, values } = parsed.data;
-	const result = await runUiAction(thread_id, action, values ?? {});
+	const { chatId, action, values } = parsed.data;
+	await convexAs(c.get("session")).query(api.chats.get, {
+		chatId: chatId as Id<"chats">,
+	});
+	const result = await runUiAction(chatId, action, values ?? {});
 	if (!result) {
-		console.log(`ui action thread=${thread_id} action=${action} no-session`);
+		console.log(`ui action chat=${chatId} action=${action} no-session`);
 		return c.json({ error: "session expired" }, 409);
 	}
 	console.log(
-		`ui action thread=${thread_id} action=${action}${result.message ? " sent" : ""}${result.error ? " error" : ""}`,
+		`ui action chat=${chatId} action=${action}${result.message ? " sent" : ""}${result.error ? " error" : ""}`,
 	);
 	return c.json(result);
 });

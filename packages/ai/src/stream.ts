@@ -65,6 +65,7 @@ export function streamChatResponse(
 	signal?: AbortSignal,
 	threadId?: string,
 	identity?: { distinctId?: string; sessionId?: string },
+	onTurn?: (messages: Record<string, unknown>[]) => Promise<void> | void,
 ): Response {
 	const abort = new AbortController();
 	if (signal)
@@ -95,6 +96,7 @@ export function streamChatResponse(
 				}),
 			);
 
+			const carried = wire.length;
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
 			let heard: Record<string, unknown> = {};
@@ -178,6 +180,13 @@ export function streamChatResponse(
 					}
 				}
 			} finally {
+				if (onTurn) {
+					try {
+						await onTurn(wire.slice(carried));
+					} catch (error) {
+						console.error("[ai] the turn was not recorded:", error);
+					}
+				}
 				console.log(
 					`[ai] chat stream closed after ${steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);

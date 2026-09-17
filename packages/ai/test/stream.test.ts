@@ -97,6 +97,36 @@ describe("chat stream", () => {
 		});
 	});
 
+	test("reports the turn it produced, not the history it was given", async () => {
+		const recorded: Record<string, unknown>[][] = [];
+		const response = streamChatResponse(
+			{
+				messages: [
+					{ type: "human", content: "what is 1 + 2?" },
+					{ type: "ai", content: "an older answer" },
+				],
+			},
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			(messages) => {
+				recorded.push(messages);
+			},
+		);
+		await response.text();
+
+		expect(recorded).toHaveLength(1);
+		expect(recorded[0].map((m) => m.content)).toEqual([
+			"(+ 1 2)",
+			expect.any(String),
+			"three.",
+		]);
+		expect(recorded[0].some((m) => m.content === "an older answer")).toBe(
+			false,
+		);
+	});
+
 	test("carries what a turn attached to a message into the next turn", async () => {
 		const carried = {
 			reasoning_content: "thinking out loud",
