@@ -12,7 +12,7 @@ const DIRECTIVES = [
 	/^\/\*\s*eslint-disable/,
 ];
 
-const GENERATED = [/routeTree\.gen\.ts$/];
+const GENERATED = [/routeTree\.gen\.ts$/, /\/_generated\//];
 
 interface Found {
 	pos: number;

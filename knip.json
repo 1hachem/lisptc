@@ -35,6 +35,10 @@
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
+    "packages/backend": {
+      "entry": ["convex/**/*.ts", "test/**/*.ts"],
+      "project": ["convex/**/*.ts", "test/**/*.ts"]
+    },
     "packages/bloub": {
       "entry": ["src/**/*.test.{ts,tsx}"],
       "project": ["src/**/*.{ts,tsx}"]
