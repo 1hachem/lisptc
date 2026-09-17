@@ -48,6 +48,7 @@ workspaces `packages/*` and `apps/*`.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer, for what two packages both need and neither owns.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter, tokenized with the reader's own tokens.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
+- `packages/backend` (`@repo/backend`) — the Convex deployment: the schema every other package reads through, the functions that guard it, and the Better Auth instance whose database is Convex itself. Its source lives in `convex/` instead of `src/`.
 - `packages/ui` (`@repo/ui`) — the base design system. Depends on no other workspace package.
 - `packages/components` (`@repo/components`) — the components we wrote, on top of `@repo/ui`. Both front-ends import them.
 - `packages/bloub` (`@repo/bloub`) — the avatar component and its engine. It ships raw `.ts`/`.tsx` with no path aliases, its tests sit beside the source instead of in `test/`, and it carries the repo's only lint and tsconfig carve-outs.
@@ -77,6 +78,11 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
 - The agent depends on the REPL, not on any extension.
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
   workspace package.
+- `@repo/backend` depends on no workspace package that reads it, and nothing
+  above it reaches past the entrypoints its `package.json` exports into the
+  deployment's files. `apps/app` subscribes to its functions directly and its
+  server routes serve the auth router against the deployment's HTTP origin;
+  `apps/api` verifies a token against that origin's JWKS instead.
 - A package that runs an eval suite is imported only where the cases live. What
   reads finished runs imports the reading entrypoints instead, so a page never
   pulls in a test runner or a model provider.
@@ -208,6 +214,13 @@ A lint rule enforces this; `packages/env/src` and the test directories are the
 only paths where it is off. Every exemption in `src` carries a `biome-ignore`
 naming the reason.
 
+The Convex deployment carries an environment of its own. `@repo/env/convex`
+declares every variable pushed onto it and `scripts/convex-deploy.ts` pushes
+them, so adding a deployment secret means declaring it there and storing it in
+Infisical under `/auth`, never writing it to a file. An OAuth app's callback
+points at the web app's origin, where the auth router is served, not at the
+deployment.
+
 ## Icons
 
 **Every icon comes from hugeicons**: `@hugeicons/core-free-icons` holds the icon
@@ -250,10 +263,19 @@ pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
+task convex:up               # postgres + convex backend + dashboard, in docker compose
+task convex:key              # mint an admin key, push the deployment's env, push the functions
+
 # Single test file / by name — run inside the package that owns it:
 pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts
 pnpm --filter @repo/interpreter exec vitest run -t "name of test"
 ```
+
+Every `task` runs under Infisical: `/db` holds the postgres credentials and the
+database name, `/convex` the deployment's secret and its origins, `/auth`
+everything Better Auth signs and calls out with. `convex:key` writes the local
+credentials `@repo/backend` reads and is safe to re-run; `pnpm --filter
+@repo/backend dev` then pushes on save and watches.
 
 Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via
 `--experimental-transform-types` (no build step). CI (`.github/workflows/ci.yml`)
