@@ -7,21 +7,15 @@ import { useWorkspace } from "../lib/workspace.tsx";
 import { SidePanel } from "./side-panel.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
 
-export interface SignedInUser {
-	name: string;
-	email: string;
-}
-
 export function LeftSidebar({
 	open,
-	user,
 	onSignOut,
 }: {
 	open: boolean;
-	user: SignedInUser;
 	onSignOut: () => void;
 }) {
 	const newChat = useNewChat();
+	const { data: user } = useQuery(convexQuery(api.users.me, {}));
 	const { workspace } = useWorkspace();
 	const current = useParams({ strict: false }).chatId;
 	const { data: chats } = useQuery(
@@ -83,9 +77,13 @@ export function LeftSidebar({
 				<div className="flex items-baseline gap-2 px-2.5 text-[11px] text-dim">
 					<span
 						className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-						title={user.email}
+						title={user?.email}
 					>
-						{user.name === "" ? user.email : user.name}
+						{user === undefined
+							? ""
+							: user.name === ""
+								? user.email
+								: user.name}
 					</span>
 					<button
 						type="button"

@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { Analytics } from "../lib/analytics.tsx";
 import { providerClient } from "../lib/auth-client.ts";
-import { ssrAuthToken } from "../lib/auth-server.ts";
+import { ssrAuth } from "../lib/auth-server.ts";
 import appCss from "../styles/app.css?url";
 
 export interface RouterContext {
@@ -22,9 +22,11 @@ export interface RouterContext {
 
 export const Route = createRootRouteWithContext<RouterContext>()({
 	beforeLoad: async ({ context }) => {
-		const token = await ssrAuthToken();
-		if (token) context.convexQueryClient.serverHttpClient?.setAuth(token);
-		return { token };
+		const auth = await ssrAuth();
+		if (auth.source === "server" && auth.token !== null) {
+			context.convexQueryClient.serverHttpClient?.setAuth(auth.token);
+		}
+		return { auth };
 	},
 	head: () => ({
 		meta: [
@@ -43,7 +45,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-	const { queryClient, convexQueryClient, token } = useRouteContext({
+	const { queryClient, convexQueryClient, auth } = useRouteContext({
 		from: Route.id,
 	});
 
@@ -52,7 +54,9 @@ function RootComponent() {
 			<ConvexBetterAuthProvider
 				client={convexQueryClient.convexClient}
 				authClient={providerClient}
-				initialToken={token}
+				initialToken={
+					auth.source === "server" ? (auth.token ?? undefined) : undefined
+				}
 			>
 				<QueryClientProvider client={queryClient}>
 					<Analytics>

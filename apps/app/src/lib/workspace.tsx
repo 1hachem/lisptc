@@ -12,7 +12,6 @@ type Workspace = Doc<"workspaces">;
 interface WorkspaceSelection {
 	workspaces: Workspace[];
 	workspace: Workspace | null;
-	loading: boolean;
 }
 
 const WorkspaceContext = createContext<WorkspaceSelection | null>(null);
@@ -46,9 +45,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 	}, [workspace]);
 
 	return (
-		<WorkspaceContext.Provider
-			value={{ workspaces, workspace, loading: data === undefined }}
-		>
+		<WorkspaceContext.Provider value={{ workspaces, workspace }}>
 			{children}
 		</WorkspaceContext.Provider>
 	);

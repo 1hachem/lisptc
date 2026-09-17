@@ -1,5 +1,5 @@
 import { useUI } from "../lib/ui.tsx";
-import { LeftSidebar, type SignedInUser } from "./left-sidebar.tsx";
+import { LeftSidebar } from "./left-sidebar.tsx";
 import { RightSidebar } from "./right-sidebar.tsx";
 
 function PanelToggle({
@@ -29,11 +29,9 @@ function PanelToggle({
 
 export function AppShell({
 	children,
-	user,
 	onSignOut,
 }: {
 	children: React.ReactNode;
-	user: SignedInUser;
 	onSignOut: () => void;
 }) {
 	const { leftOpen, toggleLeft, rightOpen, toggleRight } = useUI();
@@ -41,7 +39,7 @@ export function AppShell({
 	return (
 		<div className="relative h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
 			<main className="flex h-full min-w-0 flex-col">{children}</main>
-			<LeftSidebar open={leftOpen} user={user} onSignOut={onSignOut} />
+			<LeftSidebar open={leftOpen} onSignOut={onSignOut} />
 			<RightSidebar open={rightOpen} />
 			<PanelToggle side="left" open={leftOpen} onToggle={toggleLeft} />
 			<PanelToggle side="right" open={rightOpen} onToggle={toggleRight} />
