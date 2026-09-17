@@ -1,17 +1,13 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import type { Id } from "@repo/backend/dataModel";
+import type { Doc } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { createContext, useContext, useEffect } from "react";
 
 const PICKED_KEY = "lisptc.workspace";
 
-interface Workspace {
-	_id: Id<"workspaces">;
-	name: string;
-	slug: string;
-}
+type Workspace = Doc<"workspaces">;
 
 interface WorkspaceSelection {
 	workspaces: Workspace[];
@@ -33,7 +29,7 @@ function remembered(): string | null {
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 	const { data, error } = useQuery(convexQuery(api.workspaces.list, {}));
 	if (error) throw error;
-	const workspaces = (data ?? []) as Workspace[];
+	const workspaces = data ?? [];
 	const inRoute = useParams({ strict: false }).workspaceId;
 
 	const workspace =

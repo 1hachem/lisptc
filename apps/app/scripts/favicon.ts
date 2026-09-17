@@ -26,12 +26,13 @@ async function loadEngine() {
 		const shape = skins.SHAPE_BY_ID.get(ICON_SHAPE);
 		const face = expressions.EXPRESSION_BY_ID.get(ICON_FACE);
 		if (!shape || !face) throw new Error(`no shape ${ICON_SHAPE} or face ${ICON_FACE}`);
-		return new engine.BotEngine(
+		const frame: BotFrame = new engine.BotEngine(
 			repere.RAYON,
 			"idle",
 			shape.radii,
 			face,
-		).sample(0) as BotFrame;
+		).sample(0);
+		return frame;
 	} finally {
 		await vite.close();
 	}

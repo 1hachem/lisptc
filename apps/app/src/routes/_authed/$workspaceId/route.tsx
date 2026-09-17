@@ -5,6 +5,14 @@ import { AgentProvider } from "../../../lib/agent.tsx";
 import { ChatProvider } from "../../../lib/chat.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId")({
+	params: {
+		parse: ({ workspaceId }: { workspaceId: string }) => ({
+			workspaceId: workspaceId as Id<"workspaces">,
+		}),
+		stringify: ({ workspaceId }: { workspaceId: Id<"workspaces"> }) => ({
+			workspaceId,
+		}),
+	},
 	component: WorkspaceLayout,
 });
 
@@ -13,10 +21,7 @@ function WorkspaceLayout() {
 	const chatId = useParams({ strict: false }).chatId;
 
 	return (
-		<ChatProvider
-			workspaceId={workspaceId as Id<"workspaces">}
-			chatId={(chatId as Id<"chats"> | undefined) ?? null}
-		>
+		<ChatProvider workspaceId={workspaceId} chatId={chatId ?? null}>
 			<AgentProvider>
 				<AnimatedFavicon />
 				<Outlet />

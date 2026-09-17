@@ -7,6 +7,7 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import type { FunctionReturnType } from "convex/server";
 import {
 	createContext,
 	useCallback,
@@ -121,19 +122,14 @@ async function evalLisp(
 	if (!response.ok) throw new Error(`the repl returned ${response.status}`);
 }
 
-interface StoredMessage {
-	_id: string;
-	type: string;
-	content: string;
-	kwargs?: Record<string, unknown>;
-}
+type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
 
 function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	return stored.map((message) => ({
 		id: message._id,
 		type: message.type,
 		content: message.content,
-		additional_kwargs: message.kwargs as ChatMessage["additional_kwargs"],
+		additional_kwargs: message.kwargs,
 	}));
 }
 
@@ -179,14 +175,14 @@ export function ChatProvider({
 		[],
 	);
 	const stream = useStream({ transport });
-	const streamed = stream.messages as ChatMessage[];
+	const streamed: ChatMessage[] = stream.messages;
 	const streamingFor = useRef<Id<"chats"> | null>(null);
 
 	const { data: stored } = useQuery(
 		convexQuery(api.messages.transcript, chatId ? { chatId } : "skip"),
 	);
 	const persisted = useMemo(
-		() => toChatMessages((stored ?? []) as StoredMessage[]),
+		() => toChatMessages(stored ?? []),
 		[stored],
 	);
 
@@ -445,7 +441,7 @@ export function messageText(message: ChatMessage): string {
 				typeof part === "string"
 					? part
 					: part && typeof part === "object" && "text" in part
-						? String((part as { text: unknown }).text)
+						? String(part.text)
 						: "",
 			)
 			.join("");

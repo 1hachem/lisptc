@@ -1,5 +1,6 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -23,7 +24,7 @@ export function WorkspaceMenu() {
 	const [naming, setNaming] = useState(false);
 	const [name, setName] = useState("");
 
-	const open = (workspaceId: string) =>
+	const open = (workspaceId: Id<"workspaces">) =>
 		navigate({ to: "/$workspaceId", params: { workspaceId } });
 
 	if (naming) {

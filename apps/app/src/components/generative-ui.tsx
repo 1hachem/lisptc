@@ -215,7 +215,7 @@ function Node({
 						e.preventDefault();
 						fire(
 							text(node.props, "action"),
-							formValues(e.currentTarget as HTMLElement),
+							formValues(e.currentTarget),
 						);
 					}}
 					className="flex min-w-0 flex-col items-start gap-2"
@@ -297,7 +297,7 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 					setOutput("this view is no longer live — ask again to rebuild it");
 					return;
 				}
-				const data = (await res.json()) as ActionResponse;
+				const data: ActionResponse = await res.json();
 				const next = toUiNode(data.ui);
 				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
