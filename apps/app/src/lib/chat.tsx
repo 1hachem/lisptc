@@ -11,6 +11,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
 
@@ -150,6 +151,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 	});
 	const streamed = stream.messages as ChatMessage[];
 
+	useEffect(() => {
+		if (stream.error)
+			reportIssue(stream.error, {
+				$exception_source: "chat stream",
+				thread_id: threadId,
+			});
+	}, [stream.error, threadId]);
+
 	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
 	useEffect(() => {
 		setGreeting(greetingMessage());
@@ -199,6 +208,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 				setEntries((prev) => [...prev, result]);
 			} catch (ex) {
 				if (run.signal.aborted) return;
+				reportIssue(ex, {
+					$exception_source: "lisp eval",
+					thread_id: threadId,
+				});
 				setEvalError(ex instanceof Error ? ex.message : String(ex));
 			} finally {
 				if (running.current === run) {

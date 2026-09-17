@@ -26,7 +26,13 @@ export {
 	type ChatMessageInput,
 	streamChatResponse,
 } from "./stream.ts";
-export { shutdownTelemetry } from "./telemetry.ts";
+export {
+	captureException,
+	initTelemetry,
+	type RequestContext,
+	shutdownTelemetry,
+	withRequestContext,
+} from "./telemetry.ts";
 export {
 	runAgentTurn,
 	type StepMeta,

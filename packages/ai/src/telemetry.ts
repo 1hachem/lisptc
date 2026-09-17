@@ -27,8 +27,24 @@ function posthog(): PostHog | null {
 		host: analyticsEnv.POSTHOG_HOST ?? "https://us.i.posthog.com",
 		flushAt: 20,
 		flushInterval: 5_000,
+		enableExceptionAutocapture: true,
 	});
 	return globals.__lisptcPosthog;
+}
+
+export function initTelemetry(): void {
+	posthog();
+}
+
+export interface RequestContext {
+	distinctId?: string;
+	sessionId?: string;
+	properties?: Record<string, unknown>;
+}
+
+export function withRequestContext<T>(ctx: RequestContext, fn: () => T): T {
+	const ph = posthog();
+	return ph ? ph.withContext(ctx, fn) : fn();
 }
 
 export interface TraceContext {
@@ -184,6 +200,24 @@ export function captureLlmCall(ctx: TraceContext, span: LlmCall): void {
 						],
 					}),
 		},
+	});
+}
+
+export function captureException(
+	error: unknown,
+	ctx: Partial<TraceContext> = {},
+	properties: Record<string, unknown> = {},
+): void {
+	const ph = posthog();
+	if (!ph) return;
+	ph.captureException(error, ctx.distinctId, {
+		environment: analyticsEnv.POSTHOG_ENVIRONMENT ?? "local",
+		...(ctx.sessionId ? { $session_id: ctx.sessionId } : {}),
+		...(ctx.threadId
+			? { $ai_trace_id: ctx.threadId, thread_id: ctx.threadId }
+			: {}),
+		...(ctx.turnId ? { $ai_span_id: ctx.turnId } : {}),
+		...properties,
 	});
 }
 

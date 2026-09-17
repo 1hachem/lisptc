@@ -16,6 +16,7 @@ import {
 } from "./repl.ts";
 import { getThreadRepl } from "./repl-store.ts";
 import {
+	captureException,
 	captureLlmCall,
 	captureReplEval,
 	captureTurn,
@@ -184,20 +185,20 @@ export async function* runAgentTurn(
 			);
 			steps += 1;
 
+			captureReplEval(trace, {
+				step: steps,
+				source: code,
+				output,
+				error: error || failed,
+				latencyMs: Date.now() - evalStartedAt,
+			});
+
 			if (repl.takeFinished()) {
 				answer = code;
 				halted = true;
 				yield { type: "halt", answer, steps };
 				break;
 			}
-
-			captureReplEval(trace, {
-				step: steps,
-				source: code,
-				output,
-				error,
-				latencyMs: Date.now() - evalStartedAt,
-			});
 
 			yield {
 				type: "result",
@@ -221,8 +222,10 @@ export async function* runAgentTurn(
 		}
 	} catch (err) {
 		failure = err instanceof Error ? err.message : String(err);
-		if (!signal?.aborted)
+		if (!signal?.aborted) {
+			captureException(err, trace, { steps });
 			yield { type: "failed", message: failure, error: err };
+		}
 	} finally {
 		captureTurn(trace, {
 			prompt,

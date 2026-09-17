@@ -31,6 +31,14 @@ const OPTIONS: Partial<PostHogConfig> = {
 	},
 };
 
+export function reportIssue(
+	error: unknown,
+	properties: Record<string, unknown> = {},
+): void {
+	if (IS_DEV) return;
+	posthog.captureException(error, properties);
+}
+
 export function captureFeedback(properties: Record<string, unknown>): void {
 	posthog.capture("survey sent", {
 		$survey_id: webEnv.VITE_POSTHOG_SURVEY_ID,

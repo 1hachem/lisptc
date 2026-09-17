@@ -14,6 +14,19 @@ let script: AgentDelta[][] = [];
 let throws: string | undefined;
 let calls = 0;
 
+const spans = vi.hoisted(
+	() => [] as { step: number; source: string; error: boolean }[],
+);
+
+vi.mock("../src/telemetry.ts", () => ({
+	captureReplEval: (_ctx: unknown, span: (typeof spans)[number]) => {
+		spans.push(span);
+	},
+	captureTurn: () => {},
+	captureLlmCall: () => {},
+	captureException: () => {},
+}));
+
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (messages: AgentMessage[]) {
 		seen.push({ messages });
@@ -41,6 +54,7 @@ describe("the agent turn", () => {
 
 	beforeEach(() => {
 		seen.length = 0;
+		spans.length = 0;
 		script = [];
 		throws = undefined;
 		calls = 0;
@@ -57,6 +71,31 @@ describe("the agent turn", () => {
 	}
 
 	const ask: TranscriptEntry[] = [{ role: "user", content: "what is 1 + 2?" }];
+
+	test("a step whose code throws is captured as an error span", async () => {
+		script = [[{ text: "(car 5)" }], [{ text: "done." }]];
+
+		await drain(ask);
+
+		expect(spans[0]).toMatchObject({ step: 1, error: true });
+		expect(spans[0].source).toBe("(car 5)");
+	});
+
+	test("a step that evaluates cleanly is not an error span", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		await drain(ask);
+
+		expect(spans[0]).toMatchObject({ step: 1, error: false });
+	});
+
+	test("the finishing step is captured as a span", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		await drain(ask);
+
+		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
+	});
 
 	test("a prose reply ends the loop and reports the answer", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];

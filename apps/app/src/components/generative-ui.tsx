@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { reportIssue } from "../lib/analytics.tsx";
 import { API_URL, apiHeaders } from "../lib/api.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { toUiNode, type UiNode } from "../lib/ui-node.ts";
@@ -300,6 +301,7 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 				setFailed(Boolean(data.error));
 				if (data.message) send(data.message);
 			} catch (ex) {
+				reportIssue(ex, { $exception_source: "ui action" });
 				setFailed(true);
 				setOutput(ex instanceof Error ? ex.message : String(ex));
 			} finally {
