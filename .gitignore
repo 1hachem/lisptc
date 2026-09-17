@@ -27,3 +27,6 @@ apps/trace-viewer/.evals/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+.claude/canvas/sessions/
+.claude/canvas/server.log

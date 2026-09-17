@@ -1,8 +1,20 @@
 {
   "permissions": {
+    "allow": ["Edit(./.claude/canvas/sessions/**)"],
     "deny": ["Read(./artifacts/**)"]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/canvas/bootstrap.mjs\"",
+            "statusMessage": "Starting canvas"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write",
