@@ -4,7 +4,6 @@ import { z } from "zod";
 export const convexDeployEnv = createEnv({
 	server: {
 		SITE_URL: z.url(),
-		AUTH_BASE_URL: z.url(),
 		BETTER_AUTH_SECRET: z.string().min(32),
 		GITHUB_CLIENT_ID: z.string().optional(),
 		GITHUB_CLIENT_SECRET: z.string().optional(),

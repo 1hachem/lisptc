@@ -5,7 +5,6 @@ import { v } from "convex/values";
 
 const app = defineApp({
 	env: {
-		AUTH_BASE_URL: v.string(),
 		SITE_URL: v.string(),
 		BETTER_AUTH_SECRET: v.string(),
 		GITHUB_CLIENT_ID: v.optional(v.string()),

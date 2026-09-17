@@ -1,24 +1,36 @@
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
+import { useQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Navigate,
 	Outlet,
 	useNavigate,
 } from "@tanstack/react-router";
+import { useConvexAuth } from "convex/react";
 import { AppShell } from "../components/app-shell.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
 export const Route = createFileRoute("/_authed")({
+	loader: async ({ context }) => {
+		if (!context.token) return;
+		await context.queryClient.ensureQueryData(convexQuery(api.users.me, {}));
+	},
 	component: AuthedLayout,
 });
 
 function AuthedLayout() {
-	const { data: session, isPending } = authClient.useSession();
+	const { isAuthenticated, isLoading } = useConvexAuth();
+	const { data: user } = useQuery(
+		convexQuery(api.users.me, isAuthenticated ? {} : "skip"),
+	);
 	const navigate = useNavigate();
 
-	if (isPending) return <Waiting />;
-	if (!session) return <Navigate to="/login" replace />;
+	if (isLoading) return <Waiting />;
+	if (!isAuthenticated) return <Navigate to="/login" replace />;
+	if (!user) return <Waiting />;
 
 	return (
 		<WorkspaceProvider>
@@ -28,7 +40,7 @@ function AuthedLayout() {
 						await authClient.signOut();
 						await navigate({ to: "/login", replace: true });
 					}}
-					user={{ name: session.user.name, email: session.user.email }}
+					user={{ name: user.name, email: user.email }}
 				>
 					<Outlet />
 				</AppShell>

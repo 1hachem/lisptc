@@ -1,6 +1,6 @@
 import { passkey } from "@better-auth/passkey";
 import { type AuthFunctions, createClient } from "@convex-dev/better-auth";
-import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
+import { convex } from "@convex-dev/better-auth/plugins";
 import type { GenericCtx } from "@convex-dev/better-auth/utils";
 import { betterAuth } from "better-auth/minimal";
 import { components, internal } from "./_generated/api.js";
@@ -59,8 +59,8 @@ export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
 
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
 	betterAuth({
-		baseURL: env.AUTH_BASE_URL,
-		trustedOrigins: [env.SITE_URL, env.AUTH_BASE_URL],
+		baseURL: env.SITE_URL,
+		trustedOrigins: [env.SITE_URL],
 		database: authComponent.adapter(ctx),
 		emailAndPassword: { enabled: true, requireEmailVerification: false },
 		socialProviders: {
@@ -87,7 +87,6 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 				rpName: "lisptc",
 				origin: env.SITE_URL,
 			}),
-			crossDomain({ siteUrl: env.SITE_URL }),
 			convex({ authConfig }),
 		],
 	});
