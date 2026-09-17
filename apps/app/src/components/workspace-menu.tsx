@@ -12,35 +12,51 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useWorkspace } from "../lib/workspace.tsx";
+import { ConfirmItem } from "./confirm-item.tsx";
 
 const item =
 	"rounded-none px-2.5 py-1 text-[11.5px] text-dim focus:bg-bg2 focus:text-fg";
+
+type Editing = "create" | "rename";
 
 export function WorkspaceMenu() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { workspaces, workspace } = useWorkspace();
 	const createWorkspace = useConvexMutation(api.workspaces.create);
-	const [naming, setNaming] = useState(false);
+	const renameWorkspace = useConvexMutation(api.workspaces.rename);
+	const removeWorkspace = useConvexMutation(api.workspaces.remove);
+	const [editing, setEditing] = useState<Editing | null>(null);
 	const [name, setName] = useState("");
 
 	const open = (workspaceId: Id<"workspaces">) =>
 		navigate({ to: "/$workspaceId", params: { workspaceId } });
 
-	if (naming) {
+	const refresh = () =>
+		queryClient.invalidateQueries(convexQuery(api.workspaces.list, {}));
+
+	if (editing !== null) {
 		return (
 			<form
 				className="px-1.5"
 				onSubmit={async (event) => {
 					event.preventDefault();
 					const trimmed = name.trim();
-					if (!trimmed) return;
-					setNaming(false);
+					const mode = editing;
+					setEditing(null);
 					setName("");
+					if (!trimmed) return;
+					if (mode === "rename") {
+						if (!workspace || trimmed === workspace.name) return;
+						await renameWorkspace({
+							workspaceId: workspace._id,
+							name: trimmed,
+						});
+						await refresh();
+						return;
+					}
 					const created = await createWorkspace({ name: trimmed });
-					await queryClient.invalidateQueries(
-						convexQuery(api.workspaces.list, {}),
-					);
+					await refresh();
 					await open(created);
 				}}
 			>
@@ -49,7 +65,10 @@ export function WorkspaceMenu() {
 					autoFocus
 					value={name}
 					onChange={(event) => setName(event.target.value)}
-					onBlur={() => setNaming(false)}
+					onBlur={() => setEditing(null)}
+					onKeyDown={(event) => {
+						if (event.key === "Escape") setEditing(null);
+					}}
 					placeholder="workspace name"
 					className="w-full bg-bg2 px-2.5 py-1 text-[11.5px] outline-none"
 				/>
@@ -80,9 +99,42 @@ export function WorkspaceMenu() {
 					</DropdownMenuItem>
 				))}
 				<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
-				<DropdownMenuItem onSelect={() => setNaming(true)} className={item}>
+				<DropdownMenuItem
+					onSelect={() => {
+						setName("");
+						setEditing("create");
+					}}
+					className={item}
+				>
 					new workspace
 				</DropdownMenuItem>
+				{workspace && (
+					<>
+						<DropdownMenuItem
+							onSelect={() => {
+								setName(workspace.name);
+								setEditing("rename");
+							}}
+							className={item}
+						>
+							rename workspace
+						</DropdownMenuItem>
+						<ConfirmItem
+							label="delete workspace"
+							confirm="delete it and every session?"
+							className={`${item} focus:text-red`}
+							onConfirm={() => {
+								void (async () => {
+									const landing = await removeWorkspace({
+										workspaceId: workspace._id,
+									});
+									await refresh();
+									await open(landing);
+								})();
+							}}
+						/>
+					</>
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

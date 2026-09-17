@@ -1,11 +1,14 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server.js";
+import { internal } from "./_generated/api.js";
+import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireChat } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
+
+const PURGE_BATCH = 256;
 
 const message = v.object({
 	_id: v.id("messages"),
@@ -84,5 +87,21 @@ export const append = mutation({
 		}
 		await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
 		return ids;
+	},
+});
+
+export const purge = internalMutation({
+	args: { chatId: v.id("chats") },
+	returns: v.null(),
+	handler: async (ctx, { chatId }) => {
+		const messages = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+			.take(PURGE_BATCH);
+		for (const message of messages) await ctx.db.delete(message._id);
+		if (messages.length === PURGE_BATCH) {
+			await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
+		}
+		return null;
 	},
 });

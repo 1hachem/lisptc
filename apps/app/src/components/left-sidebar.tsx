@@ -1,9 +1,10 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
+import { useParams } from "@tanstack/react-router";
 import { useNewChat } from "../lib/chats.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
+import { SessionRow } from "./session-row.tsx";
 import { SidePanel } from "./side-panel.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
 
@@ -57,19 +58,11 @@ export function LeftSidebar({
 						<div className="px-2.5 text-dim">no sessions yet</div>
 					) : (
 						chats.map((chat) => (
-							<Link
+							<SessionRow
 								key={chat._id}
-								to="/$workspaceId/$chatId"
-								params={{
-									workspaceId: chat.workspaceId,
-									chatId: chat._id,
-								}}
-								className={`block overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 ${
-									chat._id === current ? "text-fg" : "text-dim hover:text-fg"
-								}`}
-							>
-								{chat.title === "" ? "untitled" : chat.title}
-							</Link>
+								chat={chat}
+								current={chat._id === current}
+							/>
 						))
 					)}
 				</div>

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api.js";
 import { mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 
@@ -65,6 +66,17 @@ export const archive = mutation({
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
 		await ctx.db.patch(chatId, { archivedAt: Date.now() });
+		return null;
+	},
+});
+
+export const remove = mutation({
+	args: { chatId: v.id("chats") },
+	returns: v.null(),
+	handler: async (ctx, { chatId }) => {
+		await requireChat(ctx, chatId);
+		await ctx.db.delete(chatId);
+		await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
 		return null;
 	},
 });
