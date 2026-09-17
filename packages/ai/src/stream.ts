@@ -129,6 +129,7 @@ export function streamChatResponse(
 						if (event.display !== event.output) extras.display = event.display;
 						if (event.ui) extras.ui = nodeToJson(event.ui);
 						if (event.failed) extras.failed = true;
+						if (event.graph.length > 0) extras.graph = event.graph;
 						wire.push({
 							type: "tool",
 							content: replResultContent(event.output, event.error),

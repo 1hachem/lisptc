@@ -5,6 +5,7 @@ import {
 	type Compactor,
 	compactorOf,
 } from "@repo/interpreter/compaction";
+import { type GraphNode, graphed } from "@repo/interpreter/graph";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
@@ -57,6 +58,7 @@ export interface EvalOutput extends Bounded {
 	memories: FiredMemory[];
 	failed: boolean;
 	ui?: UiNode;
+	graph: GraphNode[];
 	message?: string;
 }
 
@@ -110,6 +112,7 @@ function render(result: StepResult): EvalOutput {
 		memories: result.memories,
 		failed: result.failed,
 		ui: result.ui,
+		graph: result.graph,
 		message: result.message,
 	};
 }
@@ -224,6 +227,7 @@ export class MemoryRepl implements InMemoryRepl {
 			memories: buffer.payloads(fired),
 			failed: thrown !== undefined,
 			ui: buffer.payloads(rendered).at(-1),
+			graph: buffer.payloads(graphed),
 			message: joinMessages(buffer.payloads(sent)),
 			skipped,
 		};
@@ -260,6 +264,7 @@ export class AgentRepl extends MemoryRepl {
 			memories: result.memories,
 			failed: result.failed,
 			ui: result.ui,
+			graph: result.graph,
 			message: result.message,
 		};
 	}

@@ -11,6 +11,7 @@
     "./channels-host": "./src/channels-host.ts",
     "./compaction": "./src/extensions/compaction/compaction.ts",
     "./compaction-host": "./src/extensions/compaction/compaction-host.ts",
+    "./graph": "./src/extensions/graph/graph.ts",
     "./hooks": "./src/hooks.ts",
     "./lisp": "./src/lisp.ts",
     "./memory": "./src/extensions/memory/memory.ts",

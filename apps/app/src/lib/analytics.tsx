@@ -46,6 +46,16 @@ export function captureFeedback(properties: Record<string, unknown>): void {
 	});
 }
 
+export function captureGraphOpened(properties: Record<string, unknown>): void {
+	posthog.capture("agent graph opened", properties);
+}
+
+export function captureGraphNodeSelected(
+	properties: Record<string, unknown>,
+): void {
+	posthog.capture("agent graph node selected", properties);
+}
+
 export function Analytics({ children }: { children: ReactNode }) {
 	return (
 		<PostHogProvider apiKey={webEnv.VITE_POSTHOG_KEY} options={OPTIONS}>

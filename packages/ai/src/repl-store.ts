@@ -1,5 +1,6 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { compactionHost } from "@repo/interpreter/compaction-host";
+import { graphExtension } from "@repo/interpreter/graph";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import { memoryExtension } from "@repo/interpreter/memory";
 import { memoryHostFor } from "@repo/interpreter/memory-host";
@@ -29,6 +30,7 @@ export function agentExtensions(scope?: string): InterpExtension[] {
 		memoryExtension(memoryHostFor(scope)),
 		proseExtension(proseHost),
 		uiExtension(uiHost),
+		graphExtension(),
 	];
 }
 
