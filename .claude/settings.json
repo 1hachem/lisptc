@@ -1,7 +1,11 @@
 {
   "permissions": {
-    "allow": ["Edit(./.claude/canvas/sessions/**)"],
-    "deny": ["Read(./artifacts/**)"]
+    "allow": [
+      "Edit(./.claude/canvas/sessions/**)"
+    ],
+    "deny": [
+      "Read(./artifacts/**)"
+    ]
   },
   "hooks": {
     "SessionStart": [
@@ -27,5 +31,9 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "convex@claude-plugins-official": true,
+    "typesafe@typesafe-ai": true
   }
 }
