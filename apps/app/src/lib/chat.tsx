@@ -22,6 +22,7 @@ import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
+import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
 	id?: string;
@@ -200,8 +201,10 @@ export function ChatProvider({
 	const [evalError, setEvalError] = useState<string | undefined>(undefined);
 	const running = useRef<AbortController | null>(null);
 
-	const live = stream.isLoading && streamingFor.current === chatId;
-	const turns = live ? streamed : persisted;
+	const turns =
+		streamingFor.current === chatId
+			? turnsToShow(streamed, persisted, stream.isLoading)
+			: persisted;
 
 	const messages = useMemo(
 		() =>
@@ -288,13 +291,15 @@ export function ChatProvider({
 		stream.stop();
 	}, [stream]);
 
+	const fresh = isFreshChat(chatId, turns);
+
 	const storeRef = useRef<ChatStore | null>(null);
 	if (storeRef.current === null) {
 		storeRef.current = create<ChatSession>(() => ({
 			messages: [],
 			greeting: null,
 			meta: {},
-			fresh: true,
+			fresh,
 			isLoading: false,
 			chatId,
 			send: () => {},
@@ -309,7 +314,7 @@ export function ChatProvider({
 			messages,
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
-			fresh: turns.length === 0,
+			fresh,
 			isLoading: stream.isLoading || evaluating,
 			chatId,
 			error:
@@ -331,7 +336,7 @@ export function ChatProvider({
 		messages,
 		meta,
 		greeting,
-		turns.length,
+		fresh,
 		stream.isLoading,
 		stream.error,
 		evaluating,
