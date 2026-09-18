@@ -10,6 +10,18 @@ describe("evaluation errors that must be signalled", () => {
 		expect(() => ev("(no-such-fn 1 2)")).toThrow(/undefined/);
 	});
 
+	it("suggests a defined name when a call differs only in its separators", () => {
+		expect(() =>
+			ev("(progn (setq my-tool (lambda (x) x)) (my_tool 1))"),
+		).toThrow(/did you mean `my-tool`/);
+	});
+
+	it("suggests a defined name for a small typo", () => {
+		expect(() => ev("(progn (setq widget (lambda (x) x)) (widgt 1))")).toThrow(
+			/did you mean `widget`/,
+		);
+	});
+
 	it("throws when applying a non-function", () => {
 		expect(() => ev("(5 6)")).toThrow(/not applicable/);
 	});

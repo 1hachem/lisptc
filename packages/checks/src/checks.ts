@@ -377,6 +377,20 @@ export class Checks {
 		);
 
 		interp.def(
+			"called-unknown",
+			0,
+			"(called-unknown)",
+			"Trace positions where the agent called a name that is not defined, such as an invented or misspelled tool.",
+			z.tuple([]),
+			() =>
+				toList(
+					this.positions(
+						(event) => event.kind === "form" && event.unknownCall === true,
+					),
+				),
+		);
+
+		interp.def(
 			"skipped",
 			0,
 			"(skipped)",

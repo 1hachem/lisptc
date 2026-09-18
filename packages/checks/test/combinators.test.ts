@@ -24,6 +24,21 @@ class Fixture {
 		return this;
 	}
 
+	invented(source: string): this {
+		this.trace.add(
+			{
+				kind: "form",
+				step: this.step,
+				form: source,
+				value: "",
+				error: `undefined: ${source}`,
+				unknownCall: true,
+			},
+			form(source),
+		);
+		return this;
+	}
+
 	connected(server: string, ok = true): this {
 		this.trace.add({ kind: "connect", step: this.step, server, ok });
 		return this;
@@ -380,6 +395,24 @@ describe("a call seen at both seams counts once", () => {
 		f.tick()
 			.wrote('(playwright/browser_navigate :url "https://hyko.ai")')
 			.settle();
+		expect(f.verdict("it")).toBe("true");
+	});
+});
+
+describe("called-unknown catches invented names", () => {
+	const source = "(defcheck it (never (called-unknown)))";
+
+	test("a call to a name that does not exist is flagged", () => {
+		const f = new Fixture().watch(source);
+		f.tick().invented('(search_mcps "browser")').settle();
+		expect(f.verdict("it")).toBe("false");
+		expect(f.decidedAt("it")).toBe(1);
+	});
+
+	test("a run that only calls real names stays clean", () => {
+		const f = new Fixture().watch(source);
+		f.tick().wrote('(search-mcps "browser")').settle();
+		f.tick().wrote('(load-mcp "playwright")').settle();
 		expect(f.verdict("it")).toBe("true");
 	});
 });

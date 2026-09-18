@@ -35,6 +35,9 @@ evalCase("navigates to hyko.ai by the book", {
 
 (defcheck calls-nothing-that-does-not-exist
   (at-most (errored) 1))
+
+(defcheck invents-no-tool-names
+  (never (called-unknown)))
 `,
 });
 
@@ -71,6 +74,9 @@ evalCase("finds a browser, loads it, and opens the page", {
 
 (defcheck answers-with-the-heading
   (eventually (answered (matches "Build AI workflows"))))
+
+(defcheck invents-no-tool-names
+  (never (called-unknown)))
 `,
 });
 
@@ -90,5 +96,8 @@ evalCase("recovers when the server it wants will not connect", {
 
 (defcheck says-it-could-not
   (eventually (answered (matches "[Cc]hromium|not installed|could not|unable|cannot"))))
+
+(defcheck invents-no-tool-names
+  (never (called-unknown)))
 `,
 });

@@ -23,6 +23,7 @@ import { Channels } from "./channels.ts";
 import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
 import type { SessionHooks } from "./session.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
+import { suggestNames } from "./suggest.ts";
 import { note, output } from "./topics.ts";
 
 function assert(x: boolean, message?: string): asserts x {
@@ -393,6 +394,20 @@ export class UnresolvedHead extends EvalException {
 		head: unknown,
 	) {
 		super(msg, head);
+	}
+}
+
+function didYouMean(suggestions: string[]): string {
+	if (suggestions.length === 0) return "undefined";
+	const quoted = suggestions.map((s) => `\`${s}\``);
+	const last = quoted.pop() as string;
+	const list = quoted.length ? `${quoted.join(", ")} or ${last}` : last;
+	return `undefined (did you mean ${list}?)`;
+}
+
+export class UndefinedError extends UnresolvedHead {
+	constructor(form: Cell, head: Sym, suggestions: string[] = []) {
+		super(didYouMean(suggestions), form, head);
 	}
 }
 
@@ -1198,9 +1213,14 @@ export class Interp {
 						}
 					} else {
 						if (fn instanceof Sym) {
-							fn = this.globals.get(fn);
+							const sym = fn;
+							fn = this.globals.get(sym);
 							if (fn === undefined)
-								throw new UnresolvedHead("undefined", x, x.car);
+								throw new UndefinedError(
+									x,
+									sym,
+									suggestNames(this.globalNames(), sym.name),
+								);
 						} else if (fn instanceof Cell) {
 							fn = yield* this.evalGen(fn, env);
 						} else {
