@@ -13,7 +13,6 @@ import type { OAuthRecord } from "@repo/mcp/ports";
 import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
-import { toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
 import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
 import { currentSession, session } from "./session.ts";
@@ -72,7 +71,7 @@ chat.post("/", async (c) => {
 		`chat chat=${chatId} messages=${history.length} ${CHAT_PROVIDER}/${CHAT_MODEL}`,
 	);
 	return streamChatResponse(
-		{ messages: toInput(history) },
+		{ messages: history },
 		{ provider: CHAT_PROVIDER, model: CHAT_MODEL },
 		c.req.raw.signal,
 		chatId,
@@ -81,9 +80,11 @@ chat.post("/", async (c) => {
 			sessionId: c.req.header("x-posthog-session-id"),
 		},
 		async (produced) => {
-			const messages = toStored(produced);
-			if (messages.length === 0) return;
-			await convex.mutation(api.messages.append, { chatId, messages });
+			if (produced.length === 0) return;
+			await convex.mutation(api.messages.append, {
+				chatId,
+				messages: produced.map(({ id: _id, ...message }) => message),
+			});
 		},
 		replOptions,
 	);
@@ -105,14 +106,11 @@ chat.post("/eval", async (c) => {
 		messages: [{ type: "human", content: code }],
 	});
 	console.log(`eval chat=${chatId} chars=${code.length}`);
-	const message = await evalUserCode(
+	const { id: _id, ...message } = await evalUserCode(
 		code,
 		chatId,
 		await replOptionsFor(chatId),
 	);
-	await convex.mutation(api.messages.append, {
-		chatId,
-		messages: toStored([{ ...message }]),
-	});
+	await convex.mutation(api.messages.append, { chatId, messages: [message] });
 	return c.json({ message });
 });

@@ -4,16 +4,19 @@ import { CONVEX_DOCUMENT_BYTES, MAX_MESSAGE_BYTES } from "../convex/limits.ts";
 
 const encoder = new TextEncoder();
 
-function size(content: string, kwargs: Record<string, unknown> | undefined) {
-	return encoder.encode(JSON.stringify({ content, kwargs })).length;
+function size(
+	content: string,
+	additional_kwargs: Record<string, unknown> | undefined,
+) {
+	return encoder.encode(JSON.stringify({ content, additional_kwargs })).length;
 }
 
 describe("clamp", () => {
 	it("keeps a message that fits", () => {
-		const kwargs = { meta: { durationMs: 12 } };
-		expect(clamp("hello", kwargs)).toEqual({
+		const additional_kwargs = { meta: { durationMs: 12 } };
+		expect(clamp("hello", additional_kwargs)).toEqual({
 			content: "hello",
-			kwargs,
+			additional_kwargs,
 			truncated: false,
 		});
 	});
@@ -24,7 +27,7 @@ describe("clamp", () => {
 			meta: { durationMs: 12 },
 		});
 		expect(clamped.truncated).toBe(true);
-		expect(size(clamped.content, clamped.kwargs)).toBeLessThan(
+		expect(size(clamped.content, clamped.additional_kwargs)).toBeLessThan(
 			MAX_MESSAGE_BYTES,
 		);
 		expect(MAX_MESSAGE_BYTES).toBeLessThan(CONVEX_DOCUMENT_BYTES);
@@ -35,7 +38,7 @@ describe("clamp", () => {
 			ui: "y".repeat(MAX_MESSAGE_BYTES * 4),
 			meta: { durationMs: 12 },
 		});
-		expect(clamped.kwargs).toEqual({ meta: { durationMs: 12 } });
+		expect(clamped.additional_kwargs).toEqual({ meta: { durationMs: 12 } });
 	});
 
 	it("never splits a multi-byte character", () => {

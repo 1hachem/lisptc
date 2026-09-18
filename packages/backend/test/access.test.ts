@@ -90,7 +90,11 @@ describe("messages", () => {
 			chatId,
 			messages: [
 				{ type: "ai", content: "two" },
-				{ type: "tool", content: "three", kwargs: { ui: { kind: "text" } } },
+				{
+					type: "tool",
+					content: "three",
+					additional_kwargs: { ui: { kind: "text" } },
+				},
 			],
 		});
 		const transcript = await alice.as.query(api.messages.transcript, {
@@ -101,7 +105,7 @@ describe("messages", () => {
 			[1, "ai", "two"],
 			[2, "tool", "three"],
 		]);
-		expect(transcript[2].kwargs).toEqual({ ui: { kind: "text" } });
+		expect(transcript[2].additional_kwargs).toEqual({ ui: { kind: "text" } });
 	});
 
 	it("stamps the chat with its last activity", async () => {

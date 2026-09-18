@@ -130,7 +130,7 @@ function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 		id: message._id,
 		type: message.type,
 		content: message.content,
-		additional_kwargs: message.kwargs,
+		additional_kwargs: message.additional_kwargs,
 	}));
 }
 

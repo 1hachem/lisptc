@@ -18,6 +18,7 @@ const message = v.object({
 	seq: v.number(),
 	type: messageType,
 	content: v.string(),
+	additional_kwargs: v.optional(v.record(v.string(), v.any())),
 	kwargs: v.optional(v.record(v.string(), v.any())),
 	truncated: v.optional(v.boolean()),
 });
@@ -25,7 +26,7 @@ const message = v.object({
 const incoming = v.object({
 	type: messageType,
 	content: v.string(),
-	kwargs: v.optional(v.record(v.string(), v.any())),
+	additional_kwargs: v.optional(v.record(v.string(), v.any())),
 });
 
 export const list = query({
@@ -71,7 +72,7 @@ export const append = mutation({
 		let seq = last === null ? 0 : last.seq + 1;
 		const ids = [];
 		for (const entry of messages) {
-			const clamped = clamp(entry.content, entry.kwargs);
+			const clamped = clamp(entry.content, entry.additional_kwargs);
 			ids.push(
 				await ctx.db.insert("messages", {
 					chatId,
@@ -79,7 +80,7 @@ export const append = mutation({
 					seq,
 					type: entry.type,
 					content: clamped.content,
-					kwargs: clamped.kwargs,
+					additional_kwargs: clamped.additional_kwargs,
 					truncated: clamped.truncated ? true : undefined,
 				}),
 			);

@@ -16,8 +16,10 @@ export interface ChatInput {
 	messages?: ChatMessageInput[];
 }
 
+type MessageType = "human" | "ai" | "system" | "tool";
+
 export interface WireMessage {
-	type: string;
+	type: MessageType;
 	content: string;
 	id: string;
 	additional_kwargs?: Record<string, unknown>;
@@ -51,9 +53,7 @@ function agentRole(type: string | undefined): TranscriptEntry["role"] {
 	return "user";
 }
 
-function wireType(
-	type: string | undefined,
-): "human" | "ai" | "system" | "tool" {
+function wireType(type: string | undefined): MessageType {
 	if (type === "ai" || type === "assistant") return "ai";
 	if (type === "system") return "system";
 	if (type === "tool") return "tool";

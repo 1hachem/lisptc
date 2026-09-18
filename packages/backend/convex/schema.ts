@@ -40,6 +40,7 @@ export default defineSchema({
 		seq: v.number(),
 		type: messageType,
 		content: v.string(),
+		additional_kwargs: v.optional(v.record(v.string(), v.any())),
 		kwargs: v.optional(v.record(v.string(), v.any())),
 		truncated: v.optional(v.boolean()),
 	}).index("by_chat_seq", ["chatId", "seq"]),

@@ -19,19 +19,19 @@ function truncate(text: string, limit: number): string {
 
 export function clamp(
 	content: string,
-	kwargs?: Record<string, unknown>,
+	additional_kwargs?: Record<string, unknown>,
 ): {
 	content: string;
-	kwargs: Record<string, unknown> | undefined;
+	additional_kwargs: Record<string, unknown> | undefined;
 	truncated: boolean;
 } {
-	if (bytes(content) + bytes(kwargs) <= MAX_MESSAGE_BYTES) {
-		return { content, kwargs, truncated: false };
+	if (bytes(content) + bytes(additional_kwargs) <= MAX_MESSAGE_BYTES) {
+		return { content, additional_kwargs, truncated: false };
 	}
 	const head = truncate(content, CONTENT_SHARE);
 	let budget = MAX_MESSAGE_BYTES - bytes(head);
 	const kept: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(kwargs ?? {})) {
+	for (const [key, value] of Object.entries(additional_kwargs ?? {})) {
 		const cost = bytes(key) + bytes(value);
 		if (cost > budget) continue;
 		kept[key] = value;
@@ -39,7 +39,7 @@ export function clamp(
 	}
 	return {
 		content: head,
-		kwargs: Object.keys(kept).length === 0 ? undefined : kept,
+		additional_kwargs: Object.keys(kept).length === 0 ? undefined : kept,
 		truncated: true,
 	};
 }
