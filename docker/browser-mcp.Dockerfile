@@ -6,7 +6,7 @@ ENV NODE_ENV=production
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN npm install --global @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} \
- && npx --yes playwright@1.63.0 install --with-deps chromium \
+ && playwright-mcp install-browser chrome-for-testing \
  && npm cache clean --force
 
 USER pwuser
