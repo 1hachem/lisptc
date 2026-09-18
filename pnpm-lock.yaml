@@ -220,6 +220,40 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
 
+  apps/cli:
+    dependencies:
+      '@repo/env':
+        specifier: workspace:*
+        version: link:../../packages/env
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../../packages/interpreter
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@repo/repl':
+        specifier: workspace:*
+        version: link:../../packages/repl
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../../packages/tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
+
   apps/lsp:
     dependencies:
       '@repo/interpreter':
@@ -709,9 +743,6 @@ importers:
       '@repo/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@repo/shared':
-        specifier: workspace:*
-        version: link:../shared
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*

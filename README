@@ -23,10 +23,9 @@ packages/mcp           @repo/mcp — the MCP extension (mcp.ts), its client
                        bundled server list (mcp.toolkit.json).
 packages/repl          @repo/repl — REPL front-ends on top of the
                        interpreter: an embeddable string-in/string-out REPL
-                       (repl.ts), the interactive CLI (cli.ts), and a
-                       shared-session server over a unix socket so an
-                       editor's LSP and a terminal REPL can share one
-                       interpreter (session-server.ts).
+                       (repl.ts), and a shared-session server over a unix
+                       socket so an editor's LSP and a terminal REPL can
+                       share one interpreter (session-server.ts).
 packages/env           @repo/env — small env/secret loading helpers shared
                        across apps.
 apps/pi                A pi coding-agent extension that runs the interpreter
@@ -34,6 +33,10 @@ apps/pi                A pi coding-agent extension that runs the interpreter
                        lisp source evaluated straight into the REPL, and
                        replies are constrained to valid lisptc via
                        grammar-based structured output.
+apps/cli               The interactive terminal REPL, shipped as the lisptc
+                       binary: it runs .ptc files, drops into a prompt, or
+                       attaches to the shared session server instead of a
+                       local interpreter.
 apps/lsp               A stdio language server for the lisptc dialect:
                        diagnostics from static syntax/arity checking, plus
                        completion and hover against a live shared session

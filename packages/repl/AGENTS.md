@@ -14,14 +14,16 @@ agent loop drives.
 
 `src/session-server.ts` is the long-lived REPL behind a socket, with the client
 that speaks to it and the protocol version they agree on. It assembles its own
-extension list. `src/cli.ts` is the interactive REPL, and it assembles a list
-too, or attaches to a running session instead.
+extension list.
+
+The interactive terminal REPL is not here. It is `@lisptc/cli`, which builds on
+this package's exports.
 
 ## Rules
 
 Three places build an extension list: the options a caller passes, the session
-server, and the CLI. Adding an extension to the REPL means adding it to the ones
-that should have it, and there is no registry that would do it for you.
+server, and `@lisptc/cli`. Adding an extension to the REPL means adding it to
+the ones that should have it, and there is no registry that would do it for you.
 
 `src/repl.ts` is a driver, and `check:arch` pins what it may carry across the
 seam by name. If a new value from an extension has to reach it, that list is the

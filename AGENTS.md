@@ -94,6 +94,7 @@ for working in it.
 
 - `apps/api` (`api`) — an HTTP server streaming the agent loop.
 - `apps/app` (`app`) — the web frontend.
+- `apps/cli` (`@lisptc/cli`) — the interactive terminal REPL.
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.

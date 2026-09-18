@@ -25,13 +25,13 @@ import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
 import { DockerHost } from "@repo/mcp/docker-host";
 import { mcpHostFor } from "@repo/mcp/mcp-host";
-import { formsOnly } from "@repo/shared/lisp-forms";
-import type { Repl } from "./repl.ts";
+import type { Repl } from "@repo/repl/repl";
 import {
 	connectOrSpawn,
 	killSession,
 	socketPathFor,
-} from "./session-server.ts";
+} from "@repo/repl/session-server";
+import { formsOnly } from "@repo/shared/lisp-forms";
 
 let readLine: (prompt: string) => Promise<string | null>;
 
