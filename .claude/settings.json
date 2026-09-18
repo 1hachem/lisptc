@@ -1,7 +1,12 @@
 {
   "permissions": {
-    "allow": ["Edit(./.claude/canvas/sessions/**)"],
-    "deny": ["Read(./artifacts/**)"]
+    "allow": [
+      "Edit(./.claude/canvas/sessions/**)"
+    ],
+    "deny": [
+      "Read(./artifacts/**)",
+      "Agent(Explore)"
+    ]
   },
   "hooks": {
     "SessionStart": [
@@ -21,11 +26,25 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r \".tool_input.file_path // empty\" | { read -r f || exit 0; case \"$f\" in *.md|*.mdx|*.markdown) ;; *) exit 0 ;; esac; case \"${f##*/}\" in README.md|AGENTS.md|CLAUDE.md) exit 0 ;; esac; case \"$f\" in */.claude/skills/*) exit 0 ;; esac; root=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; case \"$f\" in /*) case \"$f\" in \"$root\"/*) ;; *) exit 0 ;; esac ;; esac; if [ -e \"$f\" ]; then exit 0; fi; echo \"Blocked: this repo adds no new markdown files. The code is the only source of truth, so put the reason in a name, a type or a test. Editing an existing .md is fine, and README.md, AGENTS.md and agent skills under .claude/skills/ are the exceptions.\" >&2; exit 2; }",
+            "command": "jq -r \".tool_input.file_path // empty\" | { read -r f || exit 0; case \"$f\" in *.md|*.mdx|*.markdown) ;; *) exit 0 ;; esac; case \"${f##*/}\" in README.md|AGENTS.md|CLAUDE.md) exit 0 ;; esac; case \"$f\" in */.claude/skills/*|*/.claude/agents/*) exit 0 ;; esac; root=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; case \"$f\" in /*) case \"$f\" in \"$root\"/*) ;; *) exit 0 ;; esac ;; esac; if [ -e \"$f\" ]; then exit 0; fi; echo \"Blocked: this repo adds no new markdown files. The code is the only source of truth, so put the reason in a name, a type or a test. Editing an existing .md is fine, and README.md, AGENTS.md and the skills and agent definitions under .claude/skills/ and .claude/agents/ are the exceptions.\" >&2; exit 2; }",
             "statusMessage": "Checking for new docs"
+          }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks/io-budget.sh\"",
+            "statusMessage": "Checking the IO budget"
           }
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "convex@claude-plugins-official": true,
+    "typesafe@typesafe-ai": true
   }
 }
