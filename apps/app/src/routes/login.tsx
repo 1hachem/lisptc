@@ -1,8 +1,19 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Navigate,
+	redirect,
+	useNavigate,
+} from "@tanstack/react-router";
+import { useConvexAuth } from "convex/react";
 import { useState } from "react";
 import { authClient } from "../lib/auth-client.ts";
 
 export const Route = createFileRoute("/login")({
+	beforeLoad: ({ context }) => {
+		if (context.auth.source === "server" && context.auth.token !== null) {
+			throw redirect({ to: "/" });
+		}
+	},
 	component: Login,
 });
 
@@ -10,6 +21,7 @@ type Mode = "sign-in" | "sign-up";
 
 function Login() {
 	const navigate = useNavigate();
+	const { isAuthenticated, isLoading } = useConvexAuth();
 	const [mode, setMode] = useState<Mode>("sign-in");
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
@@ -37,6 +49,9 @@ function Login() {
 			setBusy(false);
 		}
 	};
+
+	if (isLoading) return null;
+	if (isAuthenticated) return <Navigate to="/" replace />;
 
 	return (
 		<div className="flex h-full items-center justify-center bg-bg font-mono text-[13px] text-fg">
