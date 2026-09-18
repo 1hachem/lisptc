@@ -73,6 +73,24 @@ tasks:
           PATHS: "/db /convex"
           CMD: "docker compose down {{.CLI_ARGS}}"
 
+  convex:push:
+    desc: push the convex functions and schema to the running deployment, once
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/convex /auth"
+          CMD: "pnpm --filter @repo/backend exec convex dev --once"
+
+  convex:dev:
+    desc: watch convex/ and push the functions on every save
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/convex /auth"
+          CMD: "pnpm --filter @repo/backend dev"
+
   r2:
     desc: mount the R2 bucket at .r2 (pass umount to unmount)
     vars:
