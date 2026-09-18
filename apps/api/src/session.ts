@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { apiEnv } from "@repo/env/api";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
@@ -18,6 +19,16 @@ declare module "hono" {
 	}
 }
 
+const inFlight = new AsyncLocalStorage<Session>();
+
+export function currentSession(): Session {
+	const found = inFlight.getStore();
+	if (found === undefined) {
+		throw new HTTPException(401, { message: "no session on this request" });
+	}
+	return found;
+}
+
 export const session = createMiddleware(async (c, next) => {
 	const header = c.req.header("authorization") ?? "";
 	const token = header.toLowerCase().startsWith("bearer ")
@@ -33,6 +44,7 @@ export const session = createMiddleware(async (c, next) => {
 	if (verified === null || typeof verified.payload.sub !== "string") {
 		throw new HTTPException(401, { message: "invalid bearer token" });
 	}
-	c.set("session", { token, subject: verified.payload.sub });
-	await next();
+	const current: Session = { token, subject: verified.payload.sub };
+	c.set("session", current);
+	await inFlight.run(current, next);
 });

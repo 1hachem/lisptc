@@ -1,12 +1,19 @@
-import { evalUserCode, streamChatResponse } from "@repo/ai";
+import {
+	type AgentReplOptions,
+	evalUserCode,
+	streamChatResponse,
+} from "@repo/ai";
 import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
+import { ConvexMemoryStore } from "@repo/backend/memory-store";
 import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
 import { toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
+import { lispMemoryCodec } from "./memory-codec.ts";
 import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
-import { session } from "./session.ts";
+import { currentSession, session } from "./session.ts";
 
 export const chatRequestSchema = z.object({
 	input: z.object({
@@ -24,6 +31,20 @@ export const chat = new Hono();
 
 chat.use(session);
 
+async function replOptionsFor(chatId: Id<"chats">): Promise<AgentReplOptions> {
+	const { workspaceId } = await convexAs(currentSession()).query(
+		api.chats.get,
+		{ chatId },
+	);
+	return {
+		memory: new ConvexMemoryStore(
+			workspaceId,
+			() => convexAs(currentSession()),
+			lispMemoryCodec,
+		),
+	};
+}
+
 chat.post("/", async (c) => {
 	const parsed = chatRequestSchema.safeParse(
 		await c.req.json().catch(() => null),
@@ -40,6 +61,7 @@ chat.post("/", async (c) => {
 		messages: [{ type: "human", content: message }],
 	});
 	const history = await convex.query(api.messages.transcript, { chatId });
+	const replOptions = await replOptionsFor(chatId);
 
 	console.log(
 		`chat chat=${chatId} messages=${history.length} ${CHAT_PROVIDER}/${CHAT_MODEL}`,
@@ -58,6 +80,7 @@ chat.post("/", async (c) => {
 			if (messages.length === 0) return;
 			await convex.mutation(api.messages.append, { chatId, messages });
 		},
+		replOptions,
 	);
 });
 
@@ -77,7 +100,11 @@ chat.post("/eval", async (c) => {
 		messages: [{ type: "human", content: code }],
 	});
 	console.log(`eval chat=${chatId} chars=${code.length}`);
-	const message = await evalUserCode(code, chatId);
+	const message = await evalUserCode(
+		code,
+		chatId,
+		await replOptionsFor(chatId),
+	);
 	await convex.mutation(api.messages.append, {
 		chatId,
 		messages: toStored([{ ...message }]),
