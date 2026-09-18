@@ -2,6 +2,7 @@ import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
+	driveAsync,
 	EndOfFile,
 	EvalException,
 	Interp,
@@ -10,6 +11,7 @@ import {
 	prelude,
 	runAsync,
 	runSync,
+	settled,
 } from "@repo/interpreter/lisp";
 import {
 	type Bounded,
@@ -264,18 +266,20 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.unrun.run(() => [], this.interp, code);
 	}
 
-	beginTurn(): { said: string; annotations: StepAnnotations } {
+	async beginTurn(): Promise<{ said: string; annotations: StepAnnotations }> {
 		let said = "";
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
 		try {
-			this.hooks.beginTurn.run(() => {}, {
-				interp: this.interp,
-				say: (text) => {
-					said += said === "" ? text : `\n\n${text}`;
-				},
-			});
+			await driveAsync(
+				this.hooks.beginTurn.run(() => settled(undefined), {
+					interp: this.interp,
+					say: (text) => {
+						said += said === "" ? text : `\n\n${text}`;
+					},
+				}),
+			);
 		} finally {
 			detach();
 		}

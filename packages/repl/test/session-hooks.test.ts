@@ -66,19 +66,19 @@ describe("an extension hooking the session", () => {
 		expect(r.takeFinished()).toBe(true);
 	});
 
-	it("speaks before the model does, and its words ride the turn", () => {
+	it("speaks before the model does, and its words ride the turn", async () => {
 		const r = new AgentRepl({
 			extensions: [
 				extension((hooks) => {
-					hooks.beginTurn.use((ctx, next) => {
+					hooks.beginTurn.use(function* (ctx, next) {
 						ctx.say("something worth knowing");
-						next(ctx);
+						yield* next(ctx);
 					});
 				}),
 			],
 		});
 
-		expect(r.beginTurn().said).toBe("something worth knowing");
+		expect((await r.beginTurn()).said).toBe("something worth knowing");
 	});
 
 	it("annotates the step on a lane of its own, beside the output", async () => {

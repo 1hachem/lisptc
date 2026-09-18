@@ -9,7 +9,7 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { memoryEnv } from "@repo/env/memory";
-import { systemClock } from "@repo/shared/host";
+import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { EvalException, Reader, str } from "../../lisp.ts";
 import {
@@ -105,30 +105,52 @@ export class FileMemoryStore implements MemoryStore {
 	}
 }
 
+function then<A, B>(
+	value: Awaitable<A>,
+	next: (value: A) => Awaitable<B>,
+): Awaitable<B> {
+	return value instanceof Promise ? value.then(next) : next(value);
+}
+
+function both<A, B, C>(
+	left: Awaitable<A>,
+	right: Awaitable<B>,
+	join: (left: A, right: B) => C,
+): Awaitable<C> {
+	if (left instanceof Promise || right instanceof Promise)
+		return Promise.all([left, right]).then(([a, b]) => join(a, b));
+	return join(left, right);
+}
+
 export class LayeredStore implements MemoryStore {
 	constructor(
 		private readonly own: MemoryStore,
 		private readonly shared: MemoryStore,
 	) {}
 
-	all(): Memory[] {
-		const byKey = new Map<string, Memory>();
-		for (const memory of this.shared.all()) byKey.set(memory.key, memory);
-		for (const memory of this.own.all()) byKey.set(memory.key, memory);
-		return [...byKey.values()];
+	all(): Awaitable<Memory[]> {
+		return both(this.shared.all(), this.own.all(), (shared, own) => {
+			const byKey = new Map<string, Memory>();
+			for (const memory of shared) byKey.set(memory.key, memory);
+			for (const memory of own) byKey.set(memory.key, memory);
+			return [...byKey.values()];
+		});
 	}
 
-	get(key: string): Memory | undefined {
-		return this.own.get(key) ?? this.shared.get(key);
+	get(key: string): Awaitable<Memory | undefined> {
+		return then(this.own.get(key), (mine) => mine ?? this.shared.get(key));
 	}
 
-	put(memory: Memory): void {
-		this.own.put(memory);
+	put(memory: Memory): Awaitable<void> {
+		return this.own.put(memory);
 	}
 
-	delete(key: string): boolean {
-		const mine = this.own.delete(key);
-		return this.shared.delete(key) || mine;
+	delete(key: string): Awaitable<boolean> {
+		return both(
+			this.own.delete(key),
+			this.shared.delete(key),
+			(mine, theirs) => theirs || mine,
+		);
 	}
 }
 

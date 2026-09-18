@@ -1,7 +1,7 @@
 import type { Addressed } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
 import { Chain } from "./hooks.ts";
-import type { Interp, InterpExtension } from "./lisp.ts";
+import type { Eval, Interp, InterpExtension } from "./lisp.ts";
 
 export type Bounded = Required<Addressed<string>>;
 
@@ -56,7 +56,7 @@ export function slot<T>(name: string): Slot<T> {
 }
 
 export interface SessionHooks {
-	readonly beginTurn: Chain<[ctx: TurnContext], void>;
+	readonly beginTurn: Chain<[ctx: TurnContext], Eval<void>>;
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
