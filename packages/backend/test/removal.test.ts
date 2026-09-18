@@ -1,10 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import { harness, signIn } from "./helpers.ts";
-
-beforeEach(() => {
-	vi.useFakeTimers();
-});
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -22,6 +18,7 @@ describe("removing a chat", () => {
 			messages: [{ type: "human", content: "hello" }],
 		});
 
+		vi.useFakeTimers();
 		await alice.as.mutation(api.chats.remove, { chatId });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -79,6 +76,7 @@ describe("removing a workspace", () => {
 			messages: [{ type: "human", content: "hello" }],
 		});
 
+		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
