@@ -14,10 +14,7 @@ direct evaluation, `src/ui-action.ts` serves an action the browser sent back.
 `src/session.ts` is the seam with auth: it verifies a bearer token against the
 deployment's JWKS, and it is the only place a caller identity is established.
 `src/convex.ts` and `src/ids.ts` talk to the deployment as that caller.
-`src/history.ts` converts between a wire message and a stored one,
-`src/memory-codec.ts` between a stored memory row and the dialect's shape.
-`src/secrets-store.ts` holds the workspace's secrets behind the synchronous
-port the evaluator consults, hydrated once and written through.
+`src/history.ts` converts between a wire message and a stored one.
 `src/model.ts` names the provider and model, `src/telemetry.ts` wires PostHog.
 
 ## Rules
@@ -29,6 +26,14 @@ the interpretation belongs below the seam, in the extension that produced it.
 
 A route never names an extension. It builds a turn and streams what comes back.
 
+`src/` holds routes and the wiring a route needs, and no logic of its own. A
+codec, a cache, a store belongs to the layer whose shape it knows: a store the
+REPL talks to arrives whole from `@repo/backend/src`, already satisfying the
+port, and anything an extension has to interpret belongs in its `-host.ts`.
+This app constructs what it is handed and passes it on. `check:arch` reads
+`apps/api/src` as a carrier tree and fails on a value imported from an
+extension module. A type import is all a composition root needs.
+
 Identity comes from the verified token, never from the request body. A handler
 reads it through the session, and a new route that touches the deployment goes
 through the same middleware.
@@ -38,6 +43,6 @@ schema before reading it in a handler.
 
 ## Tests
 
-`test/chat-request.test.ts` pins the request envelope,
-`test/session.test.ts` the token path, `test/memory-codec.test.ts` the
-round trip. A test hits the app rather than a handler in isolation.
+`test/chat-request.test.ts` pins the request envelope and
+`test/session.test.ts` the token path. A test hits the app rather than a handler
+in isolation.
