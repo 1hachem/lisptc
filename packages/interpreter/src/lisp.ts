@@ -398,16 +398,17 @@ export class UnresolvedHead extends EvalException {
 }
 
 function didYouMean(suggestions: string[]): string {
-	if (suggestions.length === 0) return "undefined";
+	if (suggestions.length === 0) return "";
 	const quoted = suggestions.map((s) => `\`${s}\``);
 	const last = quoted.pop() as string;
 	const list = quoted.length ? `${quoted.join(", ")} or ${last}` : last;
-	return `undefined (did you mean ${list}?)`;
+	return ` (did you mean ${list}?)`;
 }
 
 export class UndefinedError extends UnresolvedHead {
 	constructor(form: Cell, head: Sym, suggestions: string[] = []) {
-		super(didYouMean(suggestions), form, head);
+		super("undefined", form, head);
+		this.message += didYouMean(suggestions);
 	}
 }
 

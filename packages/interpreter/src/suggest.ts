@@ -42,13 +42,9 @@ export function suggestNames(
 		if (name === missing) continue;
 		const candidate = normalize(name);
 		if (candidate.length === 0) continue;
-		const nameTokens = tokens(name);
 		let score: number;
 		if (candidate === target) score = 0;
-		else if (
-			subset(targetTokens, nameTokens) ||
-			subset(nameTokens, targetTokens)
-		)
+		else if (subset(targetTokens, tokens(name)))
 			score = 1 + Math.abs(candidate.length - target.length) / 1000;
 		else {
 			const d = distance(candidate, target);
