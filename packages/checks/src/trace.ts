@@ -1,4 +1,9 @@
-import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
+import {
+	type Interp,
+	type InterpExtension,
+	str,
+	UndefinedError,
+} from "@repo/interpreter/lisp";
 import type { SecretsStore } from "@repo/interpreter/secrets";
 import { note } from "@repo/interpreter/topics";
 import type { ConnectResult, McpClient, ToolCall } from "@repo/mcp/ports";
@@ -17,6 +22,7 @@ export type TraceEvent =
 			form: string;
 			value: string;
 			error?: string;
+			unknownCall?: boolean;
 	  }
 	| {
 			kind: "tool";
@@ -98,6 +104,7 @@ export class Trace {
 							form: clip(str(form)),
 							value: "",
 							error: message(err),
+							...(err instanceof UndefinedError ? { unknownCall: true } : {}),
 						},
 						form,
 					);
