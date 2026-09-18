@@ -104,6 +104,15 @@ tasks:
           PATHS: "/convex /auth"
           CMD: "pnpm --filter @repo/backend dev"
 
+  convex:migrate:
+    desc: run a migration runner on the deployment (pass -- the runner name)
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/convex /auth"
+          CMD: "pnpm --filter @repo/backend exec convex run migrations:{{.CLI_ARGS}}"
+
   r2:
     desc: mount the R2 bucket at .r2 (pass umount to unmount)
     vars:
