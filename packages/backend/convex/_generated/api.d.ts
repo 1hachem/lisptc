@@ -15,6 +15,7 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as lib_clamp from "../lib/clamp.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as limits from "../limits.js";
+import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as users from "../users.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   "lib/clamp": typeof lib_clamp;
   "lib/slug": typeof lib_slug;
   limits: typeof limits;
+  memories: typeof memories;
   messages: typeof messages;
   migrations: typeof migrations;
   users: typeof users;

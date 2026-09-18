@@ -43,4 +43,17 @@ export default defineSchema({
 		kwargs: v.optional(v.record(v.string(), v.any())),
 		truncated: v.optional(v.boolean()),
 	}).index("by_chat_seq", ["chatId", "seq"]),
+
+	memories: defineTable({
+		workspaceId: v.id("workspaces"),
+		key: v.string(),
+		body: v.string(),
+		on: v.optional(v.string()),
+		links: v.array(v.object({ key: v.string(), weight: v.number() })),
+		score: v.number(),
+		used: v.number(),
+		lastUsed: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_key", ["workspaceId", "key"]),
 });

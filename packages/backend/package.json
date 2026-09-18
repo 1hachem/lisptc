@@ -14,7 +14,8 @@
     "./dataModel": {
       "types": "./convex/_generated/dataModel.d.ts"
     },
-    "./limits": "./convex/limits.ts"
+    "./limits": "./convex/limits.ts",
+    "./memory-store": "./src/memory-store.ts"
   },
   "scripts": {
     "dev": "convex dev",
@@ -27,6 +28,7 @@
     "@better-auth/passkey": "~1.6.33",
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/migrations": "^0.3.6",
+    "@repo/shared": "workspace:*",
     "better-auth": "~1.6.33",
     "convex": "^1.46.0"
   },

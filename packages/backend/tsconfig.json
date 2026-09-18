@@ -8,5 +8,5 @@
     "allowSyntheticDefaultImports": true,
     "types": []
   },
-  "include": ["convex", "test", "vitest.config.ts"]
+  "include": ["convex", "src", "test", "vitest.config.ts"]
 }
