@@ -20,15 +20,8 @@
       "headless",
       "automation"
     ],
-    "command": "npx",
-    "args": [
-      "-y",
-      "@playwright/mcp@latest",
-      "--browser",
-      "chromium",
-      "--executable-path",
-      "${PLAYWRIGHT_MCP_EXECUTABLE}"
-    ]
+    "url": "http://127.0.0.1:8931/mcp",
+    "image": "lisptc/browser-mcp:v1.63.0"
   },
   {
     "name": "fs",

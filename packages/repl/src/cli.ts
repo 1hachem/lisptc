@@ -23,6 +23,8 @@ import { openSession } from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
 import { llmExtension } from "@repo/llm/llm";
 import { mcpExtension } from "@repo/mcp";
+import { DockerHost } from "@repo/mcp/docker-host";
+import { mcpHostFor } from "@repo/mcp/mcp-host";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import type { Repl } from "./repl.ts";
 import {
@@ -55,7 +57,7 @@ class InteractiveRepl implements Repl {
 	private readonly extensions: InterpExtension[] = [
 		secretsExtension(this.secrets),
 		promisesExtension(),
-		mcpExtension(),
+		mcpExtension(mcpHostFor({ host: new DockerHost() })),
 		llmExtension(),
 		compactionExtension(compactionHost, { compactor: new Compactor() }),
 		memoryExtension(memoryHost),

@@ -91,6 +91,7 @@ services:
         condition: service_healthy
     volumes:
       - api-state:/data
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - PORT=${API_PORT:-3001}
       - APP_URL

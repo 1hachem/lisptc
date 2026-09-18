@@ -11,6 +11,7 @@ RUN turbo prune api --docker
 
 FROM base AS dev
 ENV XDG_CONFIG_HOME=/data
+COPY --from=docker:29-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile

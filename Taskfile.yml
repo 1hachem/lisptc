@@ -43,10 +43,23 @@ tasks:
     desc: run the nvim integration test
     cmd: bash editors/nvim/tests/run.sh
 
+  mcp:browser:build:
+    desc: build the browser MCP image the playwright toolkit entry runs
+    vars:
+      TAG: '{{.TAG | default "v1.63.0"}}'
+    cmd: docker build -f docker/browser-mcp.Dockerfile -t lisptc/browser-mcp:{{.TAG}} .
+
+  mcp:reap:
+    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
+    cmd: |
+      ids=$(docker ps -aq --filter label=lisptc.mcp.host)
+      if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
+
   up:
     desc: build and run the whole stack in docker with live reload, secrets from infisical
     aliases:
       - dev
+    deps: [mcp:browser:build]
     cmds:
       - task: _infisical-run
         vars:

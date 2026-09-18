@@ -114,9 +114,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		signal?: AbortSignal,
 	): Promise<ConnectResult> {
 		const http = "url" in conf ? conf : undefined;
-		const handle: ServerHandle | undefined = http
-			? await ports.host.ensure(http)
-			: undefined;
+		const handle: ServerHandle | undefined = await ports.host.ensure(conf);
 		if (handle && http?.oauth) {
 			const scope = http.scopes?.length ? http.scopes.join(" ") : undefined;
 			const { provider, authUrl } = await ensureAuthorized(handle.url, scope);
@@ -215,7 +213,10 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		async login(conf: HttpConnConfig): Promise<{ authUrl: string | null }> {
 			const handle = await ports.host.ensure(conf);
 			const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
-			const { authUrl } = await ensureAuthorized(handle.url, scope);
+			const { authUrl } = await ensureAuthorized(
+				handle?.url ?? conf.url,
+				scope,
+			);
 			return { authUrl };
 		},
 
