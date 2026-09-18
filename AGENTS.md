@@ -115,7 +115,9 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
   workspace package.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
-  above it reaches past the entrypoints its `package.json` exports.
+  above it reaches past the entrypoints its `package.json` exports. Its stores
+  satisfy the language's ports, so it names the language; the language never
+  names it.
 - A package that runs an eval suite is imported only where the cases live. What
   reads finished runs imports the reading entrypoints instead.
 

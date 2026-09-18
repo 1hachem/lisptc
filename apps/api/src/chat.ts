@@ -8,16 +8,14 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { ConvexMemoryStore } from "@repo/backend/memory-store";
 import { ConvexOAuthStore } from "@repo/backend/oauth-store";
-import { ConvexSecrets } from "@repo/backend/secrets-store";
+import { ConvexSecretsStore } from "@repo/backend/secrets-store";
 import type { OAuthRecord } from "@repo/mcp/ports";
 import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
 import { toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
-import { lispMemoryCodec } from "./memory-codec.ts";
 import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
-import { WriteThroughSecretsStore } from "./secrets-store.ts";
 import { currentSession, session } from "./session.ts";
 
 export const chatRequestSchema = z.object({
@@ -46,10 +44,8 @@ async function replOptionsFor(chatId: Id<"chats">): Promise<AgentReplOptions> {
 	const connect = () => convexAs(currentSession());
 	return {
 		scope: workspaceId,
-		memory: new ConvexMemoryStore(workspaceId, connect, lispMemoryCodec),
-		secrets: await WriteThroughSecretsStore.open(
-			new ConvexSecrets(workspaceId, connect),
-		),
+		memory: new ConvexMemoryStore(workspaceId, connect),
+		secrets: await ConvexSecretsStore.open(workspaceId, connect),
 		oauth: new ConvexOAuthStore<OAuthRecord>(workspaceId, connect),
 	};
 }

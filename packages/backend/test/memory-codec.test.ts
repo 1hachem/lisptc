@@ -1,10 +1,10 @@
 import { arrayToList, newSym, str } from "@repo/interpreter";
 import type { Memory } from "@repo/interpreter/memory";
 import { describe, expect, it } from "vitest";
-import { lispMemoryCodec } from "../src/memory-codec.ts";
+import { decodeMemory, encodeMemory } from "../src/memory-store.ts";
 
 function roundTrip(memory: Memory): Memory {
-	return lispMemoryCodec.decode(lispMemoryCodec.encode(memory));
+	return decodeMemory(encodeMemory(memory));
 }
 
 const base: Memory = {
@@ -16,7 +16,7 @@ const base: Memory = {
 	lastUsed: 1_700_000_000_000,
 };
 
-describe("the lisp memory codec", () => {
+describe("the memory codec", () => {
 	it("carries prose, links and strength through the table", () => {
 		expect(roundTrip(base)).toEqual(base);
 	});

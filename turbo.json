@@ -18,19 +18,19 @@
       },
       "platform": {
         "dependencies": {
+          "deny": ["extension", "runtime", "agent", "frontend", "product"]
+        }
+      },
+      "language": {
+        "dependencies": {
           "deny": [
-            "language",
+            "platform",
             "extension",
             "runtime",
             "agent",
             "frontend",
             "product"
           ]
-        }
-      },
-      "language": {
-        "dependencies": {
-          "deny": ["extension", "runtime", "agent", "frontend", "product"]
         }
       },
       "extension": {

@@ -30,6 +30,7 @@
     "@better-auth/passkey": "~1.6.33",
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/migrations": "^0.3.6",
+    "@repo/interpreter": "workspace:*",
     "@repo/shared": "workspace:*",
     "better-auth": "~1.6.33",
     "convex": "^1.46.0"

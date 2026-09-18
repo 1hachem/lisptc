@@ -422,6 +422,9 @@ importers:
       '@convex-dev/migrations':
         specifier: ^0.3.6
         version: 0.3.6(convex-helpers@0.1.124(@standard-schema/spec@1.1.0)(convex@1.46.0(react@19.2.8))(hono@4.13.5)(react@19.2.8)(typescript@5.9.3)(zod@4.4.3))(convex@1.46.0(react@19.2.8))
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared

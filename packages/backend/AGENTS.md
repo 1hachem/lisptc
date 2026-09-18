@@ -28,12 +28,13 @@ and the cascade that runs when one is deleted. `convex/auth.config.ts` and
 belongs there.
 
 `src/` holds what runs outside the deployment against it: the stores a REPL
-talks to, and the codec between a stored row and a domain value. A store here
-is generic over the domain type and never names the port it satisfies, because
-`platform` may not depend on `language` or `extension`. The composition root
-that holds both types is where it is assigned to the port and type-checked. Anything
-reaching in from another package goes through an entrypoint in `package.json`,
-never into the deployment's files.
+talks to. A store here implements the port it satisfies and holds the codec
+between the row and the domain value, so a caller constructs it with a
+workspace and a client and hands it over whole. `platform` may depend on
+`language` for that, and `language` may not depend on `platform`: a port is
+declared with the extension and satisfied here, never the other way round.
+Anything reaching in from another package goes through an entrypoint in
+`package.json`, never into the deployment's files.
 
 ## Rules
 
