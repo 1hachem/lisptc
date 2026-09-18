@@ -1,7 +1,7 @@
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { compactionHost } from "@repo/interpreter/compaction-host";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
+import { type MemoryStore, memoryExtension } from "@repo/interpreter/memory";
 import { memoryHostFor } from "@repo/interpreter/memory-host";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { promisesHost } from "@repo/interpreter/promises-host";
@@ -19,21 +19,32 @@ import { AgentRepl } from "@repo/repl/repl";
 
 const MAX_THREADS = 50;
 
-export function agentExtensions(scope?: string): InterpExtension[] {
+export interface AgentReplOptions {
+	scope?: string;
+	memory?: MemoryStore;
+}
+
+export function agentExtensions(
+	options: AgentReplOptions = {},
+): InterpExtension[] {
+	const { scope, memory } = options;
 	return [
 		secretsExtension(secretsHost),
 		promisesExtension(promisesHost),
 		mcpExtension(mcpHostFor(scope)),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
-		memoryExtension(memoryHostFor(scope)),
+		memoryExtension({
+			...memoryHostFor(scope),
+			...(memory === undefined ? {} : { store: memory }),
+		}),
 		proseExtension(proseHost),
 		uiExtension(uiHost),
 	];
 }
 
-function newAgentRepl(scope?: string): AgentRepl {
-	return new AgentRepl({ extensions: agentExtensions(scope) });
+function newAgentRepl(options: AgentReplOptions): AgentRepl {
+	return new AgentRepl({ extensions: agentExtensions(options) });
 }
 
 const repls = new Map<string, AgentRepl>();
@@ -48,9 +59,9 @@ export function peekThreadRepl(threadId: string): AgentRepl | undefined {
 
 export function getThreadRepl(
 	threadId: string | undefined,
-	scope?: string,
+	options: AgentReplOptions = {},
 ): AgentRepl {
-	if (!threadId) return newAgentRepl(scope);
+	if (!threadId) return newAgentRepl(options);
 
 	const existing = repls.get(threadId);
 	if (existing) {
@@ -59,7 +70,7 @@ export function getThreadRepl(
 		return existing;
 	}
 
-	const repl = newAgentRepl(scope);
+	const repl = newAgentRepl(options);
 	repls.set(threadId, repl);
 	while (repls.size > MAX_THREADS) {
 		const oldest = repls.keys().next().value;

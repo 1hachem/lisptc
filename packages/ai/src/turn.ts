@@ -13,7 +13,7 @@ import {
 	type TranscriptEntry,
 	toLlmMessages,
 } from "./repl.ts";
-import { getThreadRepl } from "./repl-store.ts";
+import { type AgentReplOptions, getThreadRepl } from "./repl-store.ts";
 import {
 	captureException,
 	captureLlmCall,
@@ -29,6 +29,7 @@ export interface TurnOptions {
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
+	replOptions?: AgentReplOptions;
 }
 
 export interface StepMeta {
@@ -117,7 +118,12 @@ export async function* runAgentTurn(
 	let failure: string | undefined;
 
 	try {
-		const repl = options.repl ?? getThreadRepl(threadId, identity?.distinctId);
+		const repl =
+			options.repl ??
+			getThreadRepl(threadId, {
+				scope: identity?.distinctId,
+				...options.replOptions,
+			});
 		const observed = repl.hooks.filled(llmSlot);
 		if (observed) observed.observe = (call) => captureLlmCall(trace, call);
 

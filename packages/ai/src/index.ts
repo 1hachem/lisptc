@@ -21,6 +21,7 @@ export {
 	replResultContent,
 	type TranscriptEntry,
 } from "./repl.ts";
+export type { AgentReplOptions } from "./repl-store.ts";
 export {
 	type ChatInput,
 	type ChatMessageInput,

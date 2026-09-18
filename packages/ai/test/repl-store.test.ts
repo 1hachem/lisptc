@@ -21,24 +21,24 @@ describe("the REPL every agent host builds", () => {
 	});
 
 	it("carries what one conversation learned into the next", async () => {
-		await getThreadRepl("thread-c", "someone").eval(
+		await getThreadRepl("thread-c", { scope: "someone" }).eval(
 			'(memory/remember "k" "learned in the first conversation")',
 		);
 
 		expect(
-			await getThreadRepl("a-brand-new-thread", "someone").eval(
+			await getThreadRepl("a-brand-new-thread", { scope: "someone" }).eval(
 				'(memory/recall "k")',
 			),
 		).toContain("learned in the first conversation");
 	});
 
 	it("keeps one person's memories out of another's", async () => {
-		await getThreadRepl("thread-d", "someone").eval(
+		await getThreadRepl("thread-d", { scope: "someone" }).eval(
 			'(memory/remember "secret" "mine")',
 		);
 
 		expect(
-			await getThreadRepl("thread-e", "someone-else").eval(
+			await getThreadRepl("thread-e", { scope: "someone-else" }).eval(
 				'(memory/recall "secret")',
 			),
 		).not.toContain("mine");

@@ -1,5 +1,5 @@
 import { evalCode, replResultContent } from "./repl.ts";
-import { getThreadRepl } from "./repl-store.ts";
+import { type AgentReplOptions, getThreadRepl } from "./repl-store.ts";
 
 export interface EvalMessage {
 	type: "tool";
@@ -11,8 +11,9 @@ export interface EvalMessage {
 export async function evalUserCode(
 	code: string,
 	threadId?: string,
+	replOptions?: AgentReplOptions,
 ): Promise<EvalMessage> {
-	const repl = getThreadRepl(threadId);
+	const repl = getThreadRepl(threadId, replOptions);
 	const { output, display, error, failed, annotations } = await evalCode(
 		repl,
 		code,

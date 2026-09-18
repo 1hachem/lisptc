@@ -1,6 +1,7 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
+import type { AgentReplOptions } from "./repl-store.ts";
 import { runAgentTurn } from "./turn.ts";
 
 export interface ChatMessageInput {
@@ -73,6 +74,7 @@ export function streamChatResponse(
 	threadId?: string,
 	identity?: { distinctId?: string; sessionId?: string },
 	onTurn?: (messages: WireMessage[]) => Promise<void> | void,
+	replOptions?: AgentReplOptions,
 ): Response {
 	const abort = new AbortController();
 	if (signal)
@@ -114,6 +116,7 @@ export function streamChatResponse(
 					config,
 					signal: abort.signal,
 					identity,
+					replOptions,
 				})) {
 					if (event.type === "delta") {
 						const chunk: Record<string, unknown> = {
