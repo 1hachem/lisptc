@@ -4,7 +4,8 @@
       "Edit(./.claude/canvas/sessions/**)"
     ],
     "deny": [
-      "Read(./artifacts/**)"
+      "Read(./artifacts/**)",
+      "Agent(Explore)"
     ]
   },
   "hooks": {

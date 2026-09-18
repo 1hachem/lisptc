@@ -47,9 +47,9 @@ nothing but what they say.
   console error to catch, a request to watch, a screenshot to take.
 
 Send one before you do the work yourself, with the question and the scope.
-Independent questions go out as several agents in one message. Use the lowercase
-names: `subagent_type: "explore"` is this one, `Explore` is the built-in that
-runs on the parent model.
+Independent questions go out as several agents in one message. Claude's built-in
+`Explore` is denied in `.claude/settings.json`, so the three above are the only
+ones there are.
 
 Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
