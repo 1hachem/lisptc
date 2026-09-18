@@ -15,7 +15,9 @@
       "types": "./convex/_generated/dataModel.d.ts"
     },
     "./limits": "./convex/limits.ts",
-    "./memory-store": "./src/memory-store.ts"
+    "./memory-store": "./src/memory-store.ts",
+    "./secrets-store": "./src/secrets-store.ts",
+    "./oauth-store": "./src/oauth-store.ts"
   },
   "scripts": {
     "dev": "convex dev",

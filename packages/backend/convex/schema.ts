@@ -44,6 +44,23 @@ export default defineSchema({
 		truncated: v.optional(v.boolean()),
 	}).index("by_chat_seq", ["chatId", "seq"]),
 
+	secrets: defineTable({
+		workspaceId: v.id("workspaces"),
+		key: v.string(),
+		value: v.string(),
+		description: v.string(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	oauthRecords: defineTable({
+		workspaceId: v.id("workspaces"),
+		serverKey: v.string(),
+		record: v.string(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_server", ["workspaceId", "serverKey"]),
+
 	memories: defineTable({
 		workspaceId: v.id("workspaces"),
 		key: v.string(),

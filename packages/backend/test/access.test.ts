@@ -118,3 +118,142 @@ describe("messages", () => {
 		expect(chat.lastMessageAt).toBeTypeOf("number");
 	});
 });
+
+describe("secret access", () => {
+	it("refuses listing another user's secrets", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.secrets.put, {
+			workspaceId: bob.workspace,
+			secret: { key: "REPL_TOKEN", value: "bob's", description: "" },
+		});
+		await expect(
+			alice.as.query(api.secrets.list, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+	});
+
+	it("refuses writing into another user's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await expect(
+			alice.as.mutation(api.secrets.put, {
+				workspaceId: bob.workspace,
+				secret: { key: "REPL_TOKEN", value: "stolen", description: "" },
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.secrets.remove, {
+				workspaceId: bob.workspace,
+				key: "REPL_TOKEN",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses a key without the REPL_ prefix", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.secrets.put, {
+				workspaceId: alice.workspace,
+				secret: { key: "TOKEN", value: "unprefixed", description: "" },
+			}),
+		).rejects.toThrow();
+	});
+
+	it("keeps one workspace's secrets out of another's", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const other = await alice.as.mutation(api.workspaces.create, {
+			name: "other",
+		});
+		await alice.as.mutation(api.secrets.put, {
+			workspaceId: alice.workspace,
+			secret: { key: "REPL_TOKEN", value: "first", description: "" },
+		});
+
+		const listed = await alice.as.query(api.secrets.list, {
+			workspaceId: other,
+		});
+		expect(listed).toEqual([]);
+	});
+
+	it("replaces a secret rather than adding a second row", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.secrets.put, {
+			workspaceId: alice.workspace,
+			secret: { key: "REPL_TOKEN", value: "first", description: "" },
+		});
+		await alice.as.mutation(api.secrets.put, {
+			workspaceId: alice.workspace,
+			secret: { key: "REPL_TOKEN", value: "second", description: "again" },
+		});
+
+		const listed = await alice.as.query(api.secrets.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(listed.map((s) => [s.key, s.value, s.description])).toEqual([
+			["REPL_TOKEN", "second", "again"],
+		]);
+	});
+});
+
+describe("oauth record access", () => {
+	it("refuses reading another user's record", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.oauth.put, {
+			workspaceId: bob.workspace,
+			serverKey: "https://sheets.example.com",
+			record: JSON.stringify({ tokens: { access_token: "bob's" } }),
+		});
+		await expect(
+			alice.as.query(api.oauth.get, {
+				workspaceId: bob.workspace,
+				serverKey: "https://sheets.example.com",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses writing into another user's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await expect(
+			alice.as.mutation(api.oauth.put, {
+				workspaceId: bob.workspace,
+				serverKey: "https://sheets.example.com",
+				record: "{}",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.oauth.remove, {
+				workspaceId: bob.workspace,
+				serverKey: "https://sheets.example.com",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("keeps one workspace's record out of another's", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const other = await alice.as.mutation(api.workspaces.create, {
+			name: "other",
+		});
+		await alice.as.mutation(api.oauth.put, {
+			workspaceId: alice.workspace,
+			serverKey: "https://sheets.example.com",
+			record: JSON.stringify({ tokens: { access_token: "mine" } }),
+		});
+
+		expect(
+			await alice.as.query(api.oauth.get, {
+				workspaceId: other,
+				serverKey: "https://sheets.example.com",
+			}),
+		).toBeNull();
+	});
+});
