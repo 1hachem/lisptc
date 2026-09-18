@@ -119,11 +119,7 @@ export async function* runAgentTurn(
 
 	try {
 		const repl =
-			options.repl ??
-			getThreadRepl(threadId, {
-				scope: identity?.distinctId,
-				...options.replOptions,
-			});
+			options.repl ?? getThreadRepl(threadId, { ...options.replOptions });
 		const observed = repl.hooks.filled(llmSlot);
 		if (observed) observed.observe = (call) => captureLlmCall(trace, call);
 
