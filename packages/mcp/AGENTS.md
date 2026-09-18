@@ -20,6 +20,14 @@ imports it without pulling in the extension. `src/mcp-client.ts`,
 against it. `src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server
 registry.
 
+The OAuth callback server is bound once per port for the whole process, not
+once per client, and it is reached through `sharedAuthCallback`. Every REPL in
+the process shares it and registers its own `state` on it, so a link one REPL
+handed out is still answered after another has started. It is keyed on
+`globalThis`, so a dev-server module reload rebinds nothing and loses no
+pending flow. Never give a client a callback server of its own. Its links
+would reach the one that won the port, which has never heard of their `state`.
+
 `DockerHost` is the one strategy the extension is handed, and it covers every
 modality a toolkit entry can have. An entry naming an `image` runs as that
 image. An entry with a `command` and no `url` is a stdio server, and runs

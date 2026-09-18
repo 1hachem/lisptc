@@ -163,6 +163,23 @@ interface Pending {
 	exchange?: CodeExchange;
 }
 
+const BOUND_CALLBACK_SERVERS: unique symbol = Symbol.for(
+	"lisptc.mcp.bound-callback-servers",
+);
+
+type BoundCallbackServers = Map<string, Promise<CallbackServer>>;
+
+function boundCallbackServers(): BoundCallbackServers {
+	const outlivingReload = globalThis as {
+		[BOUND_CALLBACK_SERVERS]?: BoundCallbackServers;
+	};
+	const existing = outlivingReload[BOUND_CALLBACK_SERVERS];
+	if (existing) return existing;
+	const created: BoundCallbackServers = new Map();
+	outlivingReload[BOUND_CALLBACK_SERVERS] = created;
+	return created;
+}
+
 function escapeHtml(s: string): string {
 	return s.replace(
 		/[&<>]/g,
@@ -172,6 +189,7 @@ function escapeHtml(s: string): string {
 
 export class CallbackServer {
 	private boundPort = 0;
+	private shareKey?: string;
 	private readonly pending = new Map<string, Pending>();
 
 	private constructor(
@@ -278,7 +296,13 @@ export class CallbackServer {
 		return this.advertised ?? `http://127.0.0.1:${this.boundPort}${this.path}`;
 	}
 
+	share(key: string): void {
+		this.shareKey = key;
+	}
+
 	close(): Promise<void> {
+		if (this.shareKey !== undefined)
+			boundCallbackServers().delete(this.shareKey);
 		for (const p of this.pending.values()) {
 			clearTimeout(p.timer);
 			p.reject(new Error("callback server closed"));
@@ -297,4 +321,27 @@ export function createAuthCallback(
 		return CallbackServer.start({ host: "0.0.0.0", port, path, redirectUrl });
 	}
 	return CallbackServer.start({ host: "127.0.0.1", port, path: "/callback" });
+}
+
+export function sharedAuthCallback(
+	port: number,
+	redirectUrl?: string,
+): Promise<CallbackServer> {
+	if (port === 0) return createAuthCallback(port, redirectUrl);
+	const shared = boundCallbackServers();
+	const key = `${port}\u0000${redirectUrl ?? ""}`;
+	const running = shared.get(key);
+	if (running) return running;
+	const starting = createAuthCallback(port, redirectUrl).then(
+		(cb) => {
+			cb.share(key);
+			return cb;
+		},
+		(ex: unknown) => {
+			shared.delete(key);
+			throw ex;
+		},
+	);
+	shared.set(key, starting);
+	return starting;
 }
