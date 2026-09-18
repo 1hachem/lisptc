@@ -1,11 +1,15 @@
 import {
 	type AgentReplOptions,
 	evalUserCode,
+	peekThreadRepl,
 	streamChatResponse,
 } from "@repo/ai";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { ConvexMemoryStore } from "@repo/backend/memory-store";
+import { ConvexOAuthStore } from "@repo/backend/oauth-store";
+import { ConvexSecrets } from "@repo/backend/secrets-store";
+import type { OAuthRecord } from "@repo/mcp/ports";
 import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
@@ -13,6 +17,7 @@ import { toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
 import { lispMemoryCodec } from "./memory-codec.ts";
 import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
+import { WriteThroughSecretsStore } from "./secrets-store.ts";
 import { currentSession, session } from "./session.ts";
 
 export const chatRequestSchema = z.object({
@@ -32,16 +37,20 @@ export const chat = new Hono();
 chat.use(session);
 
 async function replOptionsFor(chatId: Id<"chats">): Promise<AgentReplOptions> {
+	const alreadyBuilt = peekThreadRepl(chatId) !== undefined;
+	if (alreadyBuilt) return {};
 	const { workspaceId } = await convexAs(currentSession()).query(
 		api.chats.get,
 		{ chatId },
 	);
+	const connect = () => convexAs(currentSession());
 	return {
-		memory: new ConvexMemoryStore(
-			workspaceId,
-			() => convexAs(currentSession()),
-			lispMemoryCodec,
+		scope: workspaceId,
+		memory: new ConvexMemoryStore(workspaceId, connect, lispMemoryCodec),
+		secrets: await WriteThroughSecretsStore.open(
+			new ConvexSecrets(workspaceId, connect),
 		),
+		oauth: new ConvexOAuthStore<OAuthRecord>(workspaceId, connect),
 	};
 }
 

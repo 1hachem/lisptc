@@ -7,14 +7,16 @@ import { promisesExtension } from "@repo/interpreter/promises";
 import { promisesHost } from "@repo/interpreter/promises-host";
 import { proseExtension } from "@repo/interpreter/prose";
 import { proseHost } from "@repo/interpreter/prose-host";
-import { secretsExtension } from "@repo/interpreter/secrets";
+import { type SecretsStore, secretsExtension } from "@repo/interpreter/secrets";
 import { secretsHost } from "@repo/interpreter/secrets-host";
 import { uiExtension } from "@repo/interpreter/ui";
 import { uiHost } from "@repo/interpreter/ui-host";
 import { llmExtension } from "@repo/llm/llm";
 import { llmHost } from "@repo/llm/llm-host";
 import { mcpExtension } from "@repo/mcp";
+import { DockerHost } from "@repo/mcp/docker-host";
 import { mcpHostFor } from "@repo/mcp/mcp-host";
+import type { OAuthStore } from "@repo/mcp/ports";
 import { AgentRepl } from "@repo/repl/repl";
 
 const MAX_THREADS = 50;
@@ -22,16 +24,21 @@ const MAX_THREADS = 50;
 export interface AgentReplOptions {
 	scope?: string;
 	memory?: MemoryStore;
+	secrets?: SecretsStore;
+	oauth?: OAuthStore;
 }
 
 export function agentExtensions(
 	options: AgentReplOptions = {},
 ): InterpExtension[] {
-	const { scope, memory } = options;
+	const { scope, memory, secrets, oauth } = options;
 	return [
-		secretsExtension(secretsHost),
+		secretsExtension({
+			...secretsHost,
+			...(secrets === undefined ? {} : { store: secrets }),
+		}),
 		promisesExtension(promisesHost),
-		mcpExtension(mcpHostFor(scope)),
+		mcpExtension(mcpHostFor({ scope, oauth, host: new DockerHost() })),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
 		memoryExtension({

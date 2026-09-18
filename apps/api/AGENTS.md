@@ -16,6 +16,8 @@ deployment's JWKS, and it is the only place a caller identity is established.
 `src/convex.ts` and `src/ids.ts` talk to the deployment as that caller.
 `src/history.ts` converts between a wire message and a stored one,
 `src/memory-codec.ts` between a stored memory row and the dialect's shape.
+`src/secrets-store.ts` holds the workspace's secrets behind the synchronous
+port the evaluator consults, hydrated once and written through.
 `src/model.ts` names the provider and model, `src/telemetry.ts` wires PostHog.
 
 ## Rules
