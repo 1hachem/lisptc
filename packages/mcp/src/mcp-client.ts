@@ -40,7 +40,7 @@ class NeedsAuthError extends Error {
 }
 
 export function mcpClient(ports: McpClientPorts): McpClient {
-	const clients = new Map<string, Client>();
+	const clients = new Map<string, { client: Client; name: string }>();
 	let callbackServer: CallbackServer | undefined;
 
 	const tokenKey = (serverUrl: string): string => {
@@ -154,7 +154,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			throw new Error("connected but the server exposed no tools");
 		}
 		const serverId = randomUUID();
-		clients.set(serverId, client);
+		clients.set(serverId, { client, name: conf.name });
 		return { serverId, tools: tools as Tool[] };
 	}
 
@@ -176,9 +176,9 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		},
 
 		async callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown> {
-			const client = clients.get(call.serverId);
-			if (!client) throw new Error(`no such server: ${call.serverId}`);
-			const result = await client.callTool(
+			const entry = clients.get(call.serverId);
+			if (!entry) throw new Error(`no such server: ${call.serverId}`);
+			const result = await entry.client.callTool(
 				{ name: call.tool, arguments: call.args },
 				undefined,
 				{ signal },
@@ -204,10 +204,11 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		},
 
 		async disconnect(serverId: string): Promise<void> {
-			const client = clients.get(serverId);
-			if (!client) throw new Error(`no such server: ${serverId}`);
-			await client.close();
+			const entry = clients.get(serverId);
+			if (!entry) throw new Error(`no such server: ${serverId}`);
 			clients.delete(serverId);
+			await entry.client.close().catch(() => {});
+			await ports.host.stop(entry.name);
 		},
 
 		async login(conf: HttpConnConfig): Promise<{ authUrl: string | null }> {
