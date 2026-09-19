@@ -4,7 +4,7 @@ The Convex deployment: the schema every other package reads through, the
 functions that guard it, and the Better Auth instance whose database is Convex
 itself. Its source lives in `convex/`, not `src/`.
 
-Turbo tag: `platform`.
+Turbo tag: `backend`.
 
 ## Shape
 
@@ -30,9 +30,15 @@ belongs there.
 `src/` holds what runs outside the deployment against it: the stores a REPL
 talks to. A store here implements the port it satisfies and holds the codec
 between the row and the domain value, so a caller constructs it with a
-workspace and a client and hands it over whole. `platform` may depend on
-`language` for that, and `language` may not depend on `platform`: a port is
-declared with the extension and satisfied here, never the other way round.
+workspace and a client and hands it over whole. A port is declared with the
+extension and satisfied here, never the other way round.
+
+`src/agent-repl.ts` is where the agent's REPL is assembled: it names every
+extension, hands each one its host, and satisfies the stores from the
+deployment. It is where the served agent is composed. A product app asks it
+for a REPL and knows nothing of what is in one, so giving that agent another
+extension is an edit here.
+
 Anything reaching in from another package goes through an entrypoint in
 `package.json`, never into the deployment's files.
 

@@ -45,9 +45,9 @@ An image built here lives in a Dockerfile under `docker/`;
 `task mcp:browser:build` builds the browser one.
 
 `mcpHostFor` defaults to `LocalProcessHost`, so this package needs no daemon to
-be used or tested. `DockerHost` is chosen at a composition root instead: the
-agent's `repl-store.ts` and the CLI both pass it. A test that wants containers
-has to ask for them.
+be used or tested. `DockerHost` is chosen at a composition root instead:
+`@repo/backend`'s `agent-repl.ts` and the CLI both pass it. A test that wants
+containers has to ask for them.
 
 Every container it starts carries a `lisptc.mcp.host` label naming the host
 instance, and `stopAll` reaps that instance's own. A process that dies without

@@ -416,12 +416,6 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
-      '@repo/llm':
-        specifier: workspace:*
-        version: link:../llm
-      '@repo/mcp':
-        specifier: workspace:*
-        version: link:../mcp
       '@repo/repl':
         specifier: workspace:*
         version: link:../repl
@@ -459,6 +453,15 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@repo/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@repo/repl':
+        specifier: workspace:*
+        version: link:../repl
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared

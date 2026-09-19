@@ -15,6 +15,7 @@
       "types": "./convex/_generated/dataModel.d.ts"
     },
     "./limits": "./convex/limits.ts",
+    "./agent-repl": "./src/agent-repl.ts",
     "./memory-store": "./src/memory-store.ts",
     "./secrets-store": "./src/secrets-store.ts",
     "./oauth-store": "./src/oauth-store.ts"
@@ -31,6 +32,9 @@
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/migrations": "^0.3.6",
     "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*",
+    "@repo/mcp": "workspace:*",
+    "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
     "better-auth": "~1.6.33",
     "convex": "^1.46.0"

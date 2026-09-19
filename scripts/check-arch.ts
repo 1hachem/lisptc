@@ -102,9 +102,7 @@ interface BlindRule {
 	roster: string[];
 }
 
-const BLIND: BlindRule[] = [
-	{ dir: "packages/ai/src/", roster: ["packages/ai/src/repl-store.ts"] },
-];
+const BLIND: BlindRule[] = [{ dir: "packages/ai/src/", roster: [] }];
 
 const CARRIERS = ["apps/api/src/"];
 

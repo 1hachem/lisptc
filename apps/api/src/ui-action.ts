@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
 import { convexId } from "./ids.ts";
+import { repls } from "./repls.ts";
 import { session } from "./session.ts";
 
 const uiActionSchema = z.object({
@@ -24,7 +25,7 @@ uiAction.post("/", async (c) => {
 	}
 	const { chatId, action, values } = parsed.data;
 	await convexAs(c.get("session")).query(api.chats.get, { chatId });
-	const result = await runUiAction(chatId, action, values ?? {});
+	const result = await runUiAction(repls, chatId, action, values ?? {});
 	if (!result) {
 		console.log(`ui action chat=${chatId} action=${action} no-session`);
 		return c.json({ error: "session expired" }, 409);

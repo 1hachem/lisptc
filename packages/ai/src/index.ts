@@ -21,10 +21,16 @@ export {
 	replResultContent,
 	type TranscriptEntry,
 } from "./repl.ts";
-export { type AgentReplOptions, peekThreadRepl } from "./repl-store.ts";
+export {
+	type OpenRepl,
+	type ReplSource,
+	ReplStore,
+	replFrom,
+} from "./repl-store.ts";
 export {
 	type ChatInput,
 	type ChatMessageInput,
+	type ChatStreamOptions,
 	streamChatResponse,
 	type WireMessage,
 } from "./stream.ts";

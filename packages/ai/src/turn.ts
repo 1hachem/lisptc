@@ -1,5 +1,5 @@
+import { llmSlot } from "@repo/interpreter/observe";
 import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
-import { llmSlot } from "@repo/llm/observe";
 import type { AgentRepl } from "@repo/repl/repl";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -13,7 +13,6 @@ import {
 	type TranscriptEntry,
 	toLlmMessages,
 } from "./repl.ts";
-import { type AgentReplOptions, getThreadRepl } from "./repl-store.ts";
 import {
 	captureException,
 	captureLlmCall,
@@ -23,13 +22,12 @@ import {
 } from "./telemetry.ts";
 
 export interface TurnOptions {
-	repl?: AgentRepl;
+	repl: AgentRepl;
 	threadId?: string;
 	config?: AgentConfig;
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
-	replOptions?: AgentReplOptions;
 }
 
 export interface StepMeta {
@@ -95,9 +93,16 @@ function stepMeta(
 
 export async function* runAgentTurn(
 	messages: TranscriptEntry[],
-	options: TurnOptions = {},
+	options: TurnOptions,
 ): AsyncGenerator<TurnEvent> {
-	const { threadId, config, signal, identity, maxSteps = MAX_STEPS } = options;
+	const {
+		repl,
+		threadId,
+		config,
+		signal,
+		identity,
+		maxSteps = MAX_STEPS,
+	} = options;
 	const transcript = [...messages];
 
 	const ran = resolveModel(config?.provider, config?.model);
@@ -118,8 +123,6 @@ export async function* runAgentTurn(
 	let failure: string | undefined;
 
 	try {
-		const repl =
-			options.repl ?? getThreadRepl(threadId, { ...options.replOptions });
 		const observed = repl.hooks.filled(llmSlot);
 		if (observed) observed.observe = (call) => captureLlmCall(trace, call);
 

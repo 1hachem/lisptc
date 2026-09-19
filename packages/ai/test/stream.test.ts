@@ -2,6 +2,8 @@ import { providerSpecs } from "@repo/env/providers";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
+import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
+import { testRepl } from "./helpers.ts";
 
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
@@ -67,13 +69,20 @@ describe("chat stream", () => {
 		({ streamChatResponse } = await import("../src/stream.ts"));
 	});
 
+	function stream(
+		input: ChatInput,
+		options: Partial<ChatStreamOptions> = {},
+	): Response {
+		return streamChatResponse(input, { repl: testRepl(), ...options });
+	}
+
 	beforeEach(() => {
 		turn = 0;
 	});
 
 	test("every model call reports what it cost, and only its own", async () => {
 		const messages = await finalMessages(
-			streamChatResponse({
+			stream({
 				messages: [{ type: "human", content: "what is 1 + 2?" }],
 			}),
 		);
@@ -99,19 +108,17 @@ describe("chat stream", () => {
 
 	test("reports the turn it produced, not the history it was given", async () => {
 		const recorded: Record<string, unknown>[][] = [];
-		const response = streamChatResponse(
+		const response = stream(
 			{
 				messages: [
 					{ type: "human", content: "what is 1 + 2?" },
 					{ type: "ai", content: "an older answer" },
 				],
 			},
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-			(messages) => {
-				recorded.push(messages);
+			{
+				onTurn: (messages) => {
+					recorded.push(messages);
+				},
 			},
 		);
 		await response.text();
@@ -134,7 +141,7 @@ describe("chat stream", () => {
 			display: "for the person",
 		};
 		const messages = await finalMessages(
-			streamChatResponse({
+			stream({
 				messages: [
 					{ type: "human", content: "what is 1 + 2?" },
 					{ type: "ai", content: "(+ 1 2)", additional_kwargs: carried },
@@ -149,9 +156,9 @@ describe("chat stream", () => {
 
 	test("every model call names the model that was billed for it", async () => {
 		const messages = await finalMessages(
-			streamChatResponse(
+			stream(
 				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
-				{ provider: "fireworks", model: "a-pinned-one" },
+				{ config: { provider: "fireworks", model: "a-pinned-one" } },
 			),
 		);
 
@@ -164,7 +171,7 @@ describe("chat stream", () => {
 
 	test("an unpinned call names the default it actually ran on", async () => {
 		const messages = await finalMessages(
-			streamChatResponse({
+			stream({
 				messages: [{ type: "human", content: "what is 1 + 2?" }],
 			}),
 		);
@@ -179,7 +186,7 @@ describe("chat stream", () => {
 
 	test("a REPL result carries no cost of its own", async () => {
 		const messages = await finalMessages(
-			streamChatResponse({
+			stream({
 				messages: [{ type: "human", content: "what is 1 + 2?" }],
 			}),
 		);
@@ -188,7 +195,7 @@ describe("chat stream", () => {
 		expect(tool?.additional_kwargs?.meta).toBeUndefined();
 	});
 	test("the wire contract the app reads", async () => {
-		const text = await streamChatResponse({
+		const text = await stream({
 			messages: [{ type: "human", content: "what is 1 + 2?" }],
 		}).text();
 		const seen = records(text);

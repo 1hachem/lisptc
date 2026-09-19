@@ -1,7 +1,7 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
-import type { AgentReplOptions } from "./repl-store.ts";
+import { type ReplSource, replFrom } from "./repl-store.ts";
 import { runAgentTurn } from "./turn.ts";
 
 export interface ChatMessageInput {
@@ -67,15 +67,18 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	}));
 }
 
-export function streamChatResponse(
+export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
+	config?: AgentConfig;
+	signal?: AbortSignal;
+	identity?: { distinctId?: string; sessionId?: string };
+	onTurn?: (messages: WireMessage[]) => Promise<void> | void;
+};
+
+export function streamChatResponse<Id extends string>(
 	input: ChatInput,
-	config?: AgentConfig,
-	signal?: AbortSignal,
-	threadId?: string,
-	identity?: { distinctId?: string; sessionId?: string },
-	onTurn?: (messages: WireMessage[]) => Promise<void> | void,
-	replOptions?: AgentReplOptions,
+	options: ChatStreamOptions<Id>,
 ): Response {
+	const { threadId, config, identity, onTurn, signal } = options;
 	const abort = new AbortController();
 	if (signal)
 		signal.addEventListener("abort", () => abort.abort(), { once: true });
@@ -111,12 +114,14 @@ export function streamChatResponse(
 			try {
 				write(sse("values", { messages: wire }));
 
+				const repl = await replFrom(options);
+
 				for await (const event of runAgentTurn(toTranscript(input), {
+					repl,
 					threadId,
 					config,
 					signal: abort.signal,
 					identity,
-					replOptions,
 				})) {
 					if (event.type === "delta") {
 						const chunk: Record<string, unknown> = {
@@ -187,6 +192,14 @@ export function streamChatResponse(
 						);
 					}
 				}
+			} catch (error) {
+				console.error("[ai] the turn could not run:", error);
+				write(
+					sse("error", {
+						error: "AgentError",
+						message: error instanceof Error ? error.message : String(error),
+					}),
+				);
 			} finally {
 				if (onTurn) {
 					try {
