@@ -22,6 +22,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/format-patch.sh\"",
+            "statusMessage": "Formatting changed files"
+          }
+        ]
+      }
     ]
   }
 }

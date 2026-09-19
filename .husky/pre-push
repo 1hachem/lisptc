@@ -1,3 +1,4 @@
+pnpm lint
 pnpm check:comments
 pnpm boundaries
 pnpm check:arch

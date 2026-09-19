@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mapfile -d '' -t files < <(git diff --cached --name-only --diff-filter=ACMR -z)
+[ "${#files[@]}" -gt 0 ] || exit 0
+
+root=$(git rev-parse --show-toplevel)
+"$root/.agents/hooks/format-files.sh" "${files[@]}"
+git add -- "${files[@]}"
