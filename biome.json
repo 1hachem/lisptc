@@ -39,7 +39,8 @@
     "rules": {
       "recommended": true,
       "correctness": {
-        "noUndeclaredDependencies": "error"
+        "noUndeclaredDependencies": "error",
+        "noUnusedImports": { "level": "warn", "fix": "safe" }
       },
       "style": {
         "noProcessEnv": "error"
