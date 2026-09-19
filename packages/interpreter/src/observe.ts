@@ -1,5 +1,5 @@
-import { slot } from "@repo/interpreter/session";
 import type { ChatMessage } from "@repo/shared/messages";
+import { slot } from "./session.ts";
 
 export interface LlmCall {
 	builtin: string;

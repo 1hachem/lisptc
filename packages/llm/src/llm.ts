@@ -18,6 +18,11 @@ import {
 	zList,
 } from "@repo/interpreter/lisp";
 import {
+	type LlmCall,
+	type LlmObserver,
+	llmSlot,
+} from "@repo/interpreter/observe";
+import {
 	keyName,
 	plistOptions,
 	splitKeywordArgs,
@@ -27,7 +32,6 @@ import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
 import { llmHost } from "./llm-host.ts";
-import { type LlmCall, type LlmObserver, llmSlot } from "./observe.ts";
 
 export const LLM_TIMEOUT_MS = 60_000;
 

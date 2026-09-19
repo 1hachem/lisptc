@@ -7,12 +7,12 @@ import {
 	VolatileStore,
 } from "@repo/interpreter/memory";
 import { memoryHost } from "@repo/interpreter/memory-host";
+import { type LlmCall, llmSlot } from "@repo/interpreter/observe";
 import { proseExtension } from "@repo/interpreter/prose";
 import { secretsExtension, secretsSlot } from "@repo/interpreter/secrets";
 import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
 import { llmExtension } from "@repo/llm/llm";
 import { llmHost } from "@repo/llm/llm-host";
-import { type LlmCall, llmSlot } from "@repo/llm/observe";
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";

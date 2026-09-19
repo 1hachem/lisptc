@@ -14,6 +14,7 @@
     "./hooks": "./src/hooks.ts",
     "./lisp": "./src/lisp.ts",
     "./memory": "./src/extensions/memory/memory.ts",
+    "./observe": "./src/observe.ts",
     "./memory-host": "./src/extensions/memory/memory-host.ts",
     "./plist": "./src/plist.ts",
     "./promises": "./src/extensions/promises/promises.ts",
