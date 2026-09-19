@@ -7,6 +7,8 @@ const ALLOWED = [
 	/^\.github\//,
 	/^\.claude\/skills\//,
 	/^\.claude\/agents\//,
+	/^\.agents\/skills\//,
+	/^\.agents\/agents\//,
 ];
 
 function tracked(): string[] {
@@ -49,7 +51,7 @@ console.error("truth. A constraint worth keeping goes in a name, a type or a");
 console.error(
 	"test. Only README, a package README.md, an AGENTS.md, .github/ and",
 );
-console.error("the skills and agents under .claude/ may be markdown. Run");
+console.error("the skills and agents under .agents/ or .claude/ may be markdown. Run");
 console.error("`pnpm fix:docs` to delete them, or widen");
 console.error(
 	"ALLOWED in scripts/check-docs.ts if the repo really gained one.",

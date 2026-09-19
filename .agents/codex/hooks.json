@@ -1,0 +1,27 @@
+{
+  "description": "Repository lifecycle hooks shared by Codex and Claude.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/markdown-policy.sh\"",
+            "statusMessage": "Checking for new docs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/io-budget.sh\"",
+            "statusMessage": "Checking the IO budget"
+          }
+        ]
+      }
+    ]
+  }
+}
