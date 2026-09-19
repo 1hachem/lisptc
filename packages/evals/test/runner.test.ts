@@ -1,8 +1,25 @@
 import { createServer, type Server } from "node:http";
+import { mockedMcpExtension, tracedSecretsExtension } from "@repo/checks/mocks";
+import { compactionExtension } from "@repo/interpreter/compaction";
+import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
+import { memoryHost } from "@repo/interpreter/memory-host";
+import { promisesExtension } from "@repo/interpreter/promises";
+import { proseExtension } from "@repo/interpreter/prose";
+import { llmExtension } from "@repo/llm/llm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Verdict } from "../src/report.ts";
 import type { EvalSpec, RunResult } from "../src/runner.ts";
 import { playwright } from "./fixtures/server.ts";
+
+const extensions = () => [
+	tracedSecretsExtension(),
+	promisesExtension(),
+	mockedMcpExtension(),
+	llmExtension(),
+	compactionExtension(),
+	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
+	proseExtension(),
+];
 
 const TURNS: string[] = [
 	'(await (search-mcps "browser"))',
@@ -92,6 +109,7 @@ describe("a case runs against a scripted model", () => {
 			{
 				min: 4,
 				max: 8,
+				extensions,
 				mocks: { servers: { playwright } },
 				seed: [{ user: "open hyko.ai and tell me the headline" }],
 				checks: CHECKS,
@@ -124,6 +142,7 @@ describe("a case runs against a scripted model", () => {
 			{
 				min: 4,
 				max: 8,
+				extensions,
 				mocks: { servers: { playwright } },
 				prelude: `(memory/remember "navigate" "browser_navigate, not navigate" :on '(call (load-mcp "playwright")))`,
 				seed: [{ user: "open hyko.ai" }],
@@ -151,6 +170,7 @@ describe("a case runs against a scripted model", () => {
 				{
 					min: 4,
 					max: 8,
+					extensions,
 					mocks: { servers: { playwright } },
 					prelude: '(memory/remember "k" "a body\nthat wraps")',
 					seed: [{ user: "open hyko.ai" }],
@@ -169,6 +189,7 @@ describe("a case runs against a scripted model", () => {
 			{
 				min: 4,
 				max: 8,
+				extensions,
 				mocks: { servers: { playwright } },
 				prelude: `(memory/remember "navigate" "browser_navigate, not navigate" :on '(call (load-mcp "playwright")))`,
 				seed: [
@@ -190,6 +211,7 @@ describe("a case runs against a scripted model", () => {
 			{
 				min: 4,
 				max: 8,
+				extensions,
 				mocks: { servers: { playwright } },
 				seed: [{ user: "open hyko.ai" }],
 				checks: '(defcheck never-searches (never (called "search-mcps")))',
@@ -238,7 +260,7 @@ describe("the gate scores a case instead of failing on any miss", () => {
 		};
 	}
 
-	const spec: EvalSpec = { min: 4, max: 8, checks: "" };
+	const spec: EvalSpec = { min: 4, max: 8, checks: "", extensions };
 
 	test("a minority of failed checks still passes", () => {
 		const result = gate(spec, [run(["true", "true", "false"])]);

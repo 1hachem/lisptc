@@ -1,26 +1,15 @@
-import {
-	type MockSpec,
-	mockedMcpExtension,
-	tracedSecretsExtension,
-	withRun,
-} from "@repo/checks/mocks";
+import { type MockSpec, withRun } from "@repo/checks/mocks";
 import { Trace } from "@repo/checks/trace";
-import { compactionExtension } from "@repo/interpreter/compaction";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
 import type { SecretsStore } from "@repo/interpreter/secrets";
 import { envSecretsStore } from "@repo/interpreter/secrets-host";
-import { llmExtension } from "@repo/llm/llm";
 import { AgentRepl } from "@repo/repl/repl";
 
 export type ExtensionsFor = () => InterpExtension[];
 
 export interface HarnessOptions {
 	mocks?: MockSpec;
-	extensions?: ExtensionsFor;
+	extensions: ExtensionsFor;
 }
 
 export interface Harness {
@@ -29,22 +18,12 @@ export interface Harness {
 	secrets: SecretsStore;
 }
 
-const modelFacing: ExtensionsFor = () => [
-	tracedSecretsExtension(),
-	promisesExtension(),
-	mockedMcpExtension(),
-	llmExtension(),
-	compactionExtension(),
-	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
-	proseExtension(),
-];
-
-export function tracedRepl(options: HarnessOptions = {}): Harness {
+export function tracedRepl(options: HarnessOptions): Harness {
 	const secrets = envSecretsStore();
 	const trace = new Trace({ secrets });
 	const mocks = options.mocks ?? { servers: {} };
 	const extensions = withRun({ trace, mocks, secrets }, () => [
-		...(options.extensions ?? modelFacing)(),
+		...options.extensions(),
 		trace.extension(),
 	]);
 	return { repl: new AgentRepl({ extensions }), trace, secrets };

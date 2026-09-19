@@ -3,14 +3,17 @@
 The eval suite around `@repo/checks`, and all of its reporting. It holds no
 cases of its own. The cases live in `apps/trace-viewer/evals`.
 
-Turbo tag: `extension`.
+Turbo tag: `runtime`.
 
 ## Shape
 
 Two halves, and the split is the point.
 
-**The half that runs a suite.** `src/harness.ts` builds a traced REPL,
-`src/runner.ts` runs a case and scores it, `src/judge.ts` is the model judge,
+**The half that runs a suite.** `src/harness.ts` builds a traced REPL from the
+extension list the case hands it — it holds no roster of its own and names no
+extension, so what a case can do is decided in `apps/trace-viewer/evals`, and
+the harness only adds the recorder. `src/runner.ts` runs a case and scores it,
+`src/judge.ts` is the model judge,
 `src/targets.ts` reads the matrix of models to run against, and
 `src/global-setup.ts` prepares a run and merges the shards at the end.
 `src/shards.ts` holds the shard paths.

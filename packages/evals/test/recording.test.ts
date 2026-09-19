@@ -1,5 +1,6 @@
-import type { MockSpec } from "@repo/checks/mocks";
+import { type MockSpec, mockedMcpExtension } from "@repo/checks/mocks";
 import type { Trace } from "@repo/checks/trace";
+import { promisesExtension } from "@repo/interpreter/promises";
 import type { SecretsStore } from "@repo/interpreter/secrets";
 import type { AgentRepl } from "@repo/repl/repl";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -30,7 +31,10 @@ const PLAYWRIGHT: MockSpec = {
 };
 
 function replFor(spec: MockSpec): Harness {
-	return tracedRepl({ mocks: spec });
+	return tracedRepl({
+		mocks: spec,
+		extensions: () => [promisesExtension(), mockedMcpExtension()],
+	});
 }
 
 describe("a mocked MCP server", () => {

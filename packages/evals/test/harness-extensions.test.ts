@@ -35,13 +35,6 @@ describe("a case that lists its own extensions", () => {
 		expect(prompt).not.toMatch(/LANGUAGE MODELS/);
 	});
 
-	test("speaks the whole language when it says nothing", async () => {
-		const { repl } = tracedRepl();
-
-		expect(await repl.eval("(doc 'llm/complete)")).toContain("(llm/complete");
-		expect(systemPromptFor(repl.interp)).toMatch(/MCP SERVERS/);
-	});
-
 	test("records the calls of the mock it was handed", async () => {
 		const { repl, trace } = tracedRepl({
 			mocks: {

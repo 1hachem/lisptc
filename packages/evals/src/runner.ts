@@ -43,7 +43,7 @@ export interface EvalSpec {
 	samples?: number;
 	minScore?: number;
 	system?: string;
-	extensions?: ExtensionsFor;
+	extensions: ExtensionsFor;
 }
 
 export interface RunResult {
@@ -96,7 +96,7 @@ export async function runCase(
 ): Promise<RunResult> {
 	const { repl, trace } = tracedRepl({
 		...(spec.mocks ? { mocks: spec.mocks } : {}),
-		...(spec.extensions ? { extensions: spec.extensions } : {}),
+		extensions: spec.extensions,
 	});
 	const checks = new Checks(trace, spec.checks);
 	const transcript: TranscriptEntry[] = [];

@@ -77,6 +77,12 @@ evalCase("finds a browser, loads it, and opens the page", {
 evalCase("recovers when the server it wants will not connect", {
 	min: 3,
 	max: 15,
+	extensions: () => [
+		promisesExtension(),
+		mockedMcpExtension(),
+		compactionExtension(),
+		proseExtension(),
+	],
 	mocks: {
 		servers: { playwright: { tools: [], fails: "chromium is not installed" } },
 	},
