@@ -14,7 +14,7 @@ import { uiHost } from "@repo/interpreter/ui-host";
 import { llmExtension } from "@repo/llm/llm";
 import { llmHost } from "@repo/llm/llm-host";
 import { mcpExtension } from "@repo/mcp";
-import { DockerHost } from "@repo/mcp/docker-host";
+import { LocalProcessHost } from "@repo/mcp/local-host";
 import { mcpHostFor } from "@repo/mcp/mcp-host";
 import type { OAuthRecord } from "@repo/mcp/ports";
 import { AgentRepl } from "@repo/repl/repl";
@@ -43,7 +43,7 @@ export async function workspaceExtensions(
 			mcpHostFor({
 				scope: workspaceId,
 				oauth: new ConvexOAuthStore<OAuthRecord>(workspaceId, connect),
-				host: new DockerHost(),
+				host: new LocalProcessHost(),
 			}),
 		),
 		llmExtension(llmHost),

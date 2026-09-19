@@ -8,6 +8,7 @@
     "./client": "./src/mcp-client.ts",
     "./docker-host": "./src/docker-host.ts",
     "./mcp-host": "./src/mcp-host.ts",
+    "./local-host": "./src/local-host.ts",
     "./ports": "./src/ports.ts",
     "./toolkit": "./src/toolkit.ts",
     "./mcp.toolkit.json": "./mcp.toolkit.json"
