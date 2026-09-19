@@ -1,8 +1,6 @@
+import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
-import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
-import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
 	EvalException,
@@ -13,18 +11,8 @@ import {
 	runSync,
 	setExit,
 } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { secretsHostFor } from "@repo/interpreter/secrets-host";
 import { openSession } from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
-import { llmExtension } from "@repo/llm/llm";
-import { mcpExtension } from "@repo/mcp";
-import { DockerHost } from "@repo/mcp/docker-host";
-import { mcpHostFor } from "@repo/mcp/mcp-host";
 import type { Repl } from "@repo/repl/repl";
 import {
 	connectOrSpawn,
@@ -32,6 +20,9 @@ import {
 	socketPathFor,
 } from "@repo/repl/session-server";
 import { formsOnly } from "@repo/shared/lisp-forms";
+import { cliExtensions } from "./extensions.ts";
+
+const SESSION_ENTRY = fileURLToPath(new URL("./session.ts", import.meta.url));
 
 let readLine: (prompt: string) => Promise<string | null>;
 
@@ -53,16 +44,7 @@ const stdoutTransport = (): ChannelTransport => ({
 
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
-	private readonly secrets = secretsHostFor({ envFile: true });
-	private readonly extensions: InterpExtension[] = [
-		secretsExtension(this.secrets),
-		promisesExtension(),
-		mcpExtension(mcpHostFor({ host: new DockerHost() })),
-		llmExtension(),
-		compactionExtension(compactionHost, { compactor: new Compactor() }),
-		memoryExtension(memoryHost),
-		proseExtension(),
-	];
+	private readonly extensions = cliExtensions();
 	private readonly hooks = openSession(this.extensions);
 
 	constructor() {
@@ -129,7 +111,7 @@ export function isComplete(text: string): boolean {
 }
 
 async function attachLoop(): Promise<void> {
-	const client = await connectOrSpawn(socketPathFor());
+	const client = await connectOrSpawn(socketPathFor(), SESSION_ENTRY);
 	let accum = "";
 	for (;;) {
 		const line = await readLine(accum === "" ? "> " : "  ");

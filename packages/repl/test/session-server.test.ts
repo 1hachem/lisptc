@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	connectOrSpawn,
@@ -9,6 +10,8 @@ import {
 	SessionClient,
 	serve,
 } from "../src/session-server.ts";
+
+const ENTRY = fileURLToPath(new URL("./fixture-session.ts", import.meta.url));
 
 function tempPath(): string {
 	return join(tmpdir(), `lisptc-test-${randomUUID()}.sock`);
@@ -63,7 +66,7 @@ async function killClient(client: SessionClient): Promise<void> {
 describe("serve", () => {
 	it("answers a version request with the current protocol version", async () => {
 		const path = tempPath();
-		const server = await serve(path);
+		const server = await serve(path, []);
 		cleanups.push(() => {
 			server.close();
 		});
@@ -76,11 +79,11 @@ describe("serve", () => {
 describe("connectOrSpawn", () => {
 	it("returns a client straight through when the server already speaks the current protocol", async () => {
 		const path = tempPath();
-		const server = await serve(path);
+		const server = await serve(path, []);
 		cleanups.push(() => {
 			server.close();
 		});
-		const client = await connectOrSpawn(path);
+		const client = await connectOrSpawn(path, ENTRY);
 		cleanups.push(() => client.destroy());
 		expect(await client.version()).toBe(PROTOCOL_VERSION);
 	});
@@ -99,7 +102,7 @@ describe("connectOrSpawn", () => {
 			stale.close();
 		});
 
-		const client = await connectOrSpawn(path);
+		const client = await connectOrSpawn(path, ENTRY);
 		cleanups.push(() => killClient(client));
 
 		expect(shutdownCalls).toBe(1);
@@ -115,7 +118,7 @@ describe("connectOrSpawn", () => {
 			ancient.close();
 		});
 
-		const client = await connectOrSpawn(path);
+		const client = await connectOrSpawn(path, ENTRY);
 		cleanups.push(() => client.destroy());
 
 		await expect(client.version()).rejects.toThrow(/unknown op/);

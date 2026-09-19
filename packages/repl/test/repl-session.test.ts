@@ -1,6 +1,6 @@
 import { type LlmCall, llmSlot } from "@repo/interpreter/observe";
 import { describe, expect, it } from "vitest";
-import { agentRepl } from "./helpers.ts";
+import { agentRepl, modelFacing, observedExtension } from "./helpers.ts";
 
 describe("AgentRepl (in-process REPL binding)", () => {
 	it("returns the value of the last form", async () => {
@@ -265,25 +265,21 @@ describe("prose with parentheses in it", () => {
 });
 
 describe("the llm observer", () => {
-	it("hands every model call the REPL's host installed observer, across a reset", async () => {
+	it("keeps the observer its host installed across a reset", () => {
 		const calls: LlmCall[] = [];
-		const r = agentRepl();
+		const r = agentRepl([...modelFacing(), observedExtension()]);
 		const observed = r.hooks.filled(llmSlot);
 		if (observed) observed.observe = (call) => calls.push(call);
 
-		await r.eval('(llm/complete "hi" :provider :nowhere)');
 		r.reset();
-		await r.eval('(llm/complete "again" :provider :nowhere)');
 
-		expect(calls.map((call) => [call.builtin, call.error])).toEqual([
-			[
-				"llm/complete",
-				'unknown provider "nowhere", expected one of digitalocean, fireworks, openrouter',
-			],
-			[
-				"llm/complete",
-				'unknown provider "nowhere", expected one of digitalocean, fireworks, openrouter',
-			],
-		]);
+		expect(r.hooks.filled(llmSlot)).toBe(observed);
+		r.hooks.filled(llmSlot)?.observe?.({
+			builtin: "llm/complete",
+			messages: [],
+			structured: false,
+			latencyMs: 0,
+		});
+		expect(calls.map((call) => call.builtin)).toEqual(["llm/complete"]);
 	});
 });

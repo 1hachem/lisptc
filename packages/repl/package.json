@@ -17,9 +17,7 @@
   },
   "dependencies": {
     "@repo/env": "workspace:*",
-    "@repo/interpreter": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*"
+    "@repo/interpreter": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
