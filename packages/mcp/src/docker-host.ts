@@ -17,7 +17,7 @@ const LOGS_KEEP = 8192;
 
 const GATEWAY_IMAGE = "supercorp/supergateway:3.4.3";
 const GATEWAY_PORT = "8000";
-const GATEWAY_PATH = "/mcp";
+const MCP_PATH = "/mcp";
 
 const HOST_LABEL = "lisptc.mcp.host";
 const SERVER_LABEL = "lisptc.mcp.server";
@@ -63,20 +63,18 @@ function stdioCommand(conf: ConnConfig): string {
 }
 
 export function launchFor(conf: ConnConfig): Launch | undefined {
-	if ("url" in conf) {
-		if (conf.image === undefined) return undefined;
-		const declared = new URL(conf.url);
+	if ("image" in conf)
 		return {
 			image: conf.image,
-			exposed: declared.port === "" ? "80" : declared.port,
-			path: `${declared.pathname}${declared.search}`,
-			args: [],
+			exposed: String(conf.port),
+			path: conf.path ?? MCP_PATH,
+			args: conf.args ?? [],
 		};
-	}
+	if ("url" in conf) return undefined;
 	return {
 		image: GATEWAY_IMAGE,
 		exposed: GATEWAY_PORT,
-		path: GATEWAY_PATH,
+		path: MCP_PATH,
 		args: [
 			"--stdio",
 			stdioCommand(conf),
@@ -86,7 +84,7 @@ export function launchFor(conf: ConnConfig): Launch | undefined {
 			"--port",
 			GATEWAY_PORT,
 			"--streamableHttpPath",
-			GATEWAY_PATH,
+			MCP_PATH,
 		],
 	};
 }

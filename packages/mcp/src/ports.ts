@@ -32,9 +32,18 @@ export type HttpConnConfig = ConnMeta & {
 	headers?: Record<string, string>;
 	oauth?: boolean;
 	scopes?: string[];
-	image?: string;
 	command?: string;
 	args?: string[];
+	env?: Record<string, string>;
+};
+
+export type ContainerConnConfig = ConnMeta & {
+	name: string;
+	image: string;
+	port: number;
+	path?: string;
+	args?: string[];
+	headers?: Record<string, string>;
 	env?: Record<string, string>;
 };
 
@@ -45,7 +54,7 @@ export type StdioConnConfig = ConnMeta & {
 	env?: Record<string, string>;
 };
 
-export type ConnConfig = HttpConnConfig | StdioConnConfig;
+export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
 
 export interface ConnectResult {
 	serverId: string;

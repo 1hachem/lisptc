@@ -37,9 +37,12 @@ which is `LocalProcessHost` by default.
 
 `ensure` takes any `ConnConfig` and returns a handle, or `undefined` when the
 client should open stdio itself. A container's port is published on a free
-loopback port and the real address comes back on the `ServerHandle`, so a `url`
-in the manifest names the port the server listens on inside its own container,
-never the one a client dials.
+loopback port and the real address comes back on the `ServerHandle`, so an
+entry that names an `image` gives the `port` its server listens on inside the
+container and never a `url`: where it is reachable is the host's to decide, not
+the manifest's. A `url` in the manifest is an address a client dials as
+written, so only a remote server, or one a `command` starts on a fixed local
+port, carries one.
 
 An image built here lives in a Dockerfile under `docker/`;
 `task mcp:browser:build` builds the browser one.

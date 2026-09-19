@@ -23,6 +23,23 @@ import type {
 	ToolCall,
 } from "./ports.ts";
 
+function stdioTransport(conf: ConnConfig): StdioClientTransport {
+	const command = "command" in conf ? conf.command : undefined;
+	if (command === undefined)
+		throw new Error(
+			`${conf.name}: runs as a container image and the host started none`,
+		);
+	return new StdioClientTransport({
+		command,
+		args: conf.args ?? [],
+		env: {
+			// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
+			...(process.env as Record<string, string>),
+			...(conf.env ?? {}),
+		},
+	});
+}
+
 export interface McpClientPorts {
 	host: McpHost;
 	oauth: OAuthStore;
@@ -148,15 +165,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 							? { headers: handle.headers }
 							: undefined,
 					})
-				: new StdioClientTransport({
-						command: (conf as { command: string }).command,
-						args: conf.args ?? [],
-						env: {
-							// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
-							...(process.env as Record<string, string>),
-							...(conf.env ?? {}),
-						},
-					});
+				: stdioTransport(conf);
 			await client.connect(transport, { signal });
 		}
 		const { tools } = await client.listTools(undefined, { signal });

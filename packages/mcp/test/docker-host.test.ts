@@ -20,8 +20,8 @@ describe("what the docker host does with each toolkit modality", () => {
 	it("runs an image-backed server from its own image", () => {
 		const launch = launchFor({
 			name: "playwright",
-			url: "http://127.0.0.1:8931/mcp",
 			image: "lisptc/browser-mcp:v1.63.0",
+			port: 8931,
 		});
 
 		expect(launch).toEqual({
