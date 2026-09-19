@@ -4,7 +4,7 @@ import { compactionExtension } from "@repo/interpreter/compaction";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { describe, expect, test } from "vitest";
-import { tracedRepl } from "../src/harness.ts";
+import { tracedRepl } from "./harness.ts";
 
 describe("a case that lists its own extensions", () => {
 	test("gets those and the recorder, and nothing else", async () => {

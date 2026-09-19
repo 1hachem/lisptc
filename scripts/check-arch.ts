@@ -45,13 +45,7 @@ interface ImportRule {
 
 const IMPORTS: ImportRule[] = [
 	{
-		modules: [
-			"@repo/evals/global-setup",
-			"@repo/evals/harness",
-			"@repo/evals/judge",
-			"@repo/evals/runner",
-			"@repo/evals/targets",
-		],
+		modules: ["@repo/evals/global-setup", "@repo/evals/runner"],
 		allow: [
 			"apps/trace-viewer/evals/",
 			"apps/trace-viewer/vitest.evals.config.ts",
@@ -93,7 +87,7 @@ interface DriverRule {
 const DRIVERS: DriverRule[] = [
 	{
 		file: "packages/repl/src/repl.ts",
-		carried: ["joinMessages", "sent"],
+		carried: [],
 	},
 ];
 

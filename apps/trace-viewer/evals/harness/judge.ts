@@ -1,8 +1,8 @@
 import { providerSpecs } from "@repo/env/providers";
+import type { CaseInfo, ReportRow } from "@repo/evals/report";
 import { langchainGenerate } from "@repo/llm/client";
 import type { Generate } from "@repo/llm/llm";
 import { isProviderName, providerSpecFor } from "@repo/shared/providers";
-import type { CaseInfo, ReportRow } from "./report.ts";
 
 const TIMEOUT_MS = 60_000;
 

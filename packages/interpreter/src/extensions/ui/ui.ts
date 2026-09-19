@@ -571,6 +571,9 @@ export function uiExtension(
 						: annotating(into, "output", { ui: nodeToJson(view) }),
 				);
 			});
+			hooks.message.use(
+				(buffer, next) => joinMessages(buffer.payloads(sent)) ?? next(buffer),
+			);
 		},
 	});
 }

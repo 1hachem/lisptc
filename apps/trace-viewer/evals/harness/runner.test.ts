@@ -1,21 +1,19 @@
 import { createServer, type Server } from "node:http";
 import { mockedMcpExtension, tracedSecretsExtension } from "@repo/checks/mocks";
+import type { Verdict } from "@repo/evals/report";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
 import { memoryHost } from "@repo/interpreter/memory-host";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
-import { llmExtension } from "@repo/llm/llm";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import type { Verdict } from "../src/report.ts";
-import type { EvalSpec, RunResult } from "../src/runner.ts";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { playwright } from "./fixtures/server.ts";
+import type { EvalSpec, RunResult } from "./runner.ts";
 
 const extensions = () => [
 	tracedSecretsExtension(),
 	promisesExtension(),
 	mockedMcpExtension(),
-	llmExtension(),
 	compactionExtension(),
 	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
 	proseExtension(),
@@ -32,7 +30,7 @@ const TURNS: string[] = [
 let turn = 0;
 const sent: string[] = [];
 let server: Server;
-let runCase: typeof import("../src/runner.ts").runCase;
+let runCase: typeof import("./runner.ts").runCase;
 
 function chunk(content: string): string {
 	return `data: ${JSON.stringify({
@@ -92,10 +90,8 @@ describe("a case runs against a scripted model", () => {
 		const address = server.address();
 		const port =
 			typeof address === "object" && address !== null ? address.port : 0;
-		process.env.DO_BASE_URL = `http://127.0.0.1:${port}/v1`;
-		process.env.DO_API_KEY = "stub";
-		process.env.LLM_PROVIDER = "digitalocean";
-		({ runCase } = await import("../src/runner.ts"));
+		vi.stubEnv("DO_BASE_URL", `http://127.0.0.1:${port}/v1`);
+		({ runCase } = await import("./runner.ts"));
 	});
 
 	afterAll(() => {
@@ -230,10 +226,10 @@ describe("a case runs against a scripted model", () => {
 });
 
 describe("the gate scores a case instead of failing on any miss", () => {
-	let gate: typeof import("../src/runner.ts").gate;
+	let gate: typeof import("@repo/evals/runner").gate;
 
 	beforeAll(async () => {
-		({ gate } = await import("../src/runner.ts"));
+		({ gate } = await import("@repo/evals/runner"));
 	});
 
 	function run(verdicts: Verdict[], halted = true): RunResult {

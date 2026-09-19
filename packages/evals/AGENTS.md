@@ -1,42 +1,36 @@
 # @repo/evals
 
-The eval suite around `@repo/checks`, and all of its reporting. It holds no
-cases of its own. The cases live in `apps/trace-viewer/evals`.
+The eval driver, what a finished run is written as, and everything that reads
+one back. It holds no cases, extensions or hosts: the app that owns the cases
+supplies those to the runner.
 
 Turbo tag: `runtime`.
 
 ## Shape
 
-Two halves, and the split is the point.
-
-**The half that runs a suite.** `src/harness.ts` builds a traced REPL from the
-extension list the case hands it — it holds no roster of its own and names no
-extension, so what a case can do is decided in `apps/trace-viewer/evals`, and
-the harness only adds the recorder. `src/runner.ts` runs a case and scores it,
-`src/judge.ts` is the model judge,
-`src/targets.ts` reads the matrix of models to run against, and
-`src/global-setup.ts` prepares a run and merges the shards at the end.
-`src/shards.ts` holds the shard paths.
-
-**The half that reads a finished run.** `src/report.ts` holds the schemas a
-report is parsed with, `src/review.ts` turns a run into trace events and
-review properties, and `src/storage.ts` reads and writes reports to disk or R2.
+`src/runner.ts` drives a case through the agent loop and writes report shards.
+It is handed a REPL, a check evaluator, trace hooks and an optional reviewer.
+`src/targets.ts` reads the matrix of models to run against. `src/report.ts` is
+the contract: every schema a report is parsed with, the verdict and outcome
+shapes included, so a run and everything that reads one agree on a single
+vocabulary. `src/review.ts` turns a run into trace events and review
+properties. `src/storage.ts` reads and writes reports to disk or R2.
+`src/shards.ts` holds the shard paths a running suite writes into, and
+`src/global-setup.ts` prepares a run and merges those shards at the end.
 
 ## Rules
 
-**The running half is importable only where the cases live.**
-`check:arch` allows `@repo/evals/harness`, `/runner`, `/judge`, `/targets` and
-`/global-setup` in `apps/trace-viewer/evals/` and its vitest config, and
-nowhere else. Everything that reads finished runs imports `/report`, `/review`
-and `/storage` instead, so a page never pulls in a test runner or a model
-provider. If a page needs something from the running half, the thing to move is
-the shape, into the reading half.
+**This package names no extension and no host.** It may drive the agent loop,
+but it never imports a concrete extension, a `-host` module, a model client or
+the check DSL. Running a case composes those pieces in the app, then passes the
+small adapter this package needs. If something here starts wanting a concrete
+REPL roster, mocked server shape or judge implementation, it belongs on the
+other side of that line.
 
 A report is parsed through its schema, never cast. The schemas are the contract
-between a run and everything that reads it.
+between a run and everything that reads it, and `CheckOutcome` is part of it.
 
-## Commands
+## Tests
 
-```bash
-pnpm test:evals    # real models, NOT part of pnpm test
-```
+`test/storage.test.ts` and `test/review.test.ts`. Product adapter tests live
+with their app.

@@ -346,6 +346,9 @@ importers:
 
   apps/trace-viewer:
     dependencies:
+      '@repo/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@repo/checks':
         specifier: workspace:*
         version: link:../../packages/checks
@@ -361,6 +364,15 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../../packages/interpreter
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@repo/repl':
+        specifier: workspace:*
+        version: link:../../packages/repl
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -601,24 +613,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.700.0
         version: 3.1131.0
-      '@repo/ai':
-        specifier: workspace:*
-        version: link:../ai
-      '@repo/checks':
-        specifier: workspace:*
-        version: link:../checks
       '@repo/env':
         specifier: workspace:*
         version: link:../env
-      '@repo/interpreter':
-        specifier: workspace:*
-        version: link:../interpreter
-      '@repo/llm':
-        specifier: workspace:*
-        version: link:../llm
-      '@repo/repl':
-        specifier: workspace:*
-        version: link:../repl
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared

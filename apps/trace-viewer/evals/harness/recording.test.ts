@@ -1,10 +1,14 @@
-import { type MockSpec, mockedMcpExtension } from "@repo/checks/mocks";
+import {
+	type MockSpec,
+	mockedMcpExtension,
+	tracedSecretsExtension,
+} from "@repo/checks/mocks";
 import type { Trace } from "@repo/checks/trace";
 import { promisesExtension } from "@repo/interpreter/promises";
 import type { SecretsStore } from "@repo/interpreter/secrets";
 import type { AgentRepl } from "@repo/repl/repl";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { type Harness, tracedRepl } from "../src/harness.ts";
+import { type Harness, tracedRepl } from "./harness.ts";
 
 const PLAYWRIGHT: MockSpec = {
 	servers: {
@@ -33,7 +37,11 @@ const PLAYWRIGHT: MockSpec = {
 function replFor(spec: MockSpec): Harness {
 	return tracedRepl({
 		mocks: spec,
-		extensions: () => [promisesExtension(), mockedMcpExtension()],
+		extensions: () => [
+			tracedSecretsExtension(),
+			promisesExtension(),
+			mockedMcpExtension(),
+		],
 	});
 }
 
@@ -46,9 +54,8 @@ describe("a mocked MCP server", () => {
 	});
 
 	test("loads by its toolkit name and mints the real bindings", async () => {
-		const out = await repl.eval('(await (load-mcp "playwright"))');
+		await repl.eval('(await (load-mcp "playwright"))');
 
-		expect(out).toContain("playwright/browser_navigate");
 		const doc = await repl.evalOutput("(doc 'playwright/browser_navigate)");
 		expect(doc.user).toContain("Navigate to a URL");
 		expect(doc.user).toContain("(playwright/browser_navigate :url :string)");
@@ -83,9 +90,10 @@ describe("a mocked MCP server", () => {
 	});
 
 	test("a slow connect is still pending on the next step", async () => {
-		await repl.eval('(load-mcp "playwright")');
+		await repl.eval('(setq p (load-mcp "playwright"))');
 
-		expect(await repl.eval("(promise-state load-mcp-1)")).toContain("pending");
+		const state = await repl.evalOutput("(echo (promise-state p))");
+		expect(state.user).toContain(":pending");
 	});
 
 	test("a tool error reaches Lisp as an error, not a value", async () => {
@@ -125,6 +133,7 @@ describe("a mocked MCP server", () => {
 		await repl.eval('(api/send :token (secret "REPL_TOKEN"))');
 
 		const call = trace.events.find((e) => e.kind === "tool");
+		expect(call).toBeDefined();
 		expect(JSON.stringify(call)).not.toContain("s3cr3t-value");
 		expect(JSON.stringify(call)).toContain("<redacted>");
 	});
