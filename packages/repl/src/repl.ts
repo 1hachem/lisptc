@@ -1,5 +1,6 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { noOpinion } from "@repo/interpreter/hooks";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	driveAsync,
@@ -22,7 +23,6 @@ import {
 	type StepContext,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
-import { joinMessages, sent } from "@repo/interpreter/ui";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -210,7 +210,7 @@ export class MemoryRepl implements InMemoryRepl {
 				noAnnotations(),
 			),
 			failed: thrown !== undefined,
-			message: joinMessages(buffer.payloads(sent)),
+			message: this.hooks.message.run(noOpinion, buffer),
 			skipped,
 		};
 	}

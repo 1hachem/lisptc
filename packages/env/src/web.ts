@@ -5,6 +5,7 @@ export const webEnv = createEnv({
 	clientPrefix: "VITE_",
 	client: {
 		VITE_API_URL: z.string(),
+		VITE_CONVEX_URL: z.url(),
 		VITE_ENVIRONMENT: z.enum(["dev", "staging", "prod"]),
 		VITE_POSTHOG_KEY: z.string(),
 		VITE_POSTHOG_SURVEY_ID: z.string(),

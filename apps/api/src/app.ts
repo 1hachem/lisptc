@@ -14,6 +14,7 @@ app.use(
 	cors({
 		origin: apiEnv.APP_URL,
 		allowHeaders: [
+			"authorization",
 			"content-type",
 			"x-distinct-id",
 			"x-posthog-distinct-id",
@@ -25,7 +26,14 @@ app.use(
 app.use(telemetry());
 app.use(logger());
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", async (c) => {
+	const convex = await fetch(new URL("/version", apiEnv.CONVEX_URL), {
+		signal: AbortSignal.timeout(2000),
+	})
+		.then((response) => response.ok)
+		.catch(() => false);
+	return c.json({ ok: convex, convex }, convex ? 200 : 503);
+});
 
 app.route("/api/chat", chat);
 app.route("/api/ui-action", uiAction);

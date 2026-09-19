@@ -5,8 +5,7 @@
   "private": true,
   "exports": {
     "./repl": "./src/repl.ts",
-    "./session-server": "./src/session-server.ts",
-    "./cli": "./src/cli.ts"
+    "./session-server": "./src/session-server.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -14,17 +13,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "repl": "node --no-warnings --experimental-transform-types src/cli.ts",
-    "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach",
-    "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@repo/env": "workspace:*",
-    "@repo/interpreter": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*",
-    "@repo/shared": "workspace:*"
+    "@repo/interpreter": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

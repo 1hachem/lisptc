@@ -1,0 +1,12 @@
+{
+  "extends": "@repo/tsconfigs/base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "types": []
+  },
+  "include": ["convex", "src", "test", "vitest.config.ts"]
+}

@@ -7,8 +7,7 @@
     "./client": "./src/llm-client.ts",
     "./langchain": "./src/langchain.ts",
     "./llm": "./src/llm.ts",
-    "./llm-host": "./src/llm-host.ts",
-    "./observe": "./src/observe.ts"
+    "./llm-host": "./src/llm-host.ts"
   },
   "engines": {
     "node": ">=22.6.0"

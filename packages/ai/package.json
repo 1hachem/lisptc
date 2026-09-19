@@ -21,8 +21,6 @@
     "@posthog/ai": "^8.9.3",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
     "posthog-node": "^5.51.6"

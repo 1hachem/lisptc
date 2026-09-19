@@ -66,6 +66,7 @@ export interface SessionHooks {
 		[buffer: ChannelBuffer, into: StepAnnotations],
 		StepAnnotations
 	>;
+	readonly message: Chain<[buffer: ChannelBuffer], string | undefined>;
 	readonly invoke: Chain<[ctx: ActionContext], Promise<void>>;
 	fill<T>(of: Slot<T>, value: T): void;
 	filled<T>(of: Slot<T>): T | undefined;
@@ -81,6 +82,7 @@ export function newSessionHooks(): SessionHooks {
 		answered: new Chain(),
 		unrun: new Chain(),
 		annotate: new Chain(),
+		message: new Chain(),
 		invoke: new Chain(),
 		fill<T>(of: Slot<T>, value: T): void {
 			slots.set(of.name, value);

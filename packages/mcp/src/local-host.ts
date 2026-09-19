@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type {
-	HttpConnConfig,
+	ConnConfig,
 	McpHost,
 	ServerHandle,
 	ServerState,
@@ -32,7 +32,8 @@ function whyItDied(server: LocalServer): string {
 export class LocalProcessHost implements McpHost {
 	private readonly started = new Map<string, LocalServer>();
 
-	async ensure(conf: HttpConnConfig): Promise<ServerHandle> {
+	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
+		if (!("url" in conf)) return undefined;
 		const handle: ServerHandle = conf.headers
 			? { url: conf.url, headers: conf.headers }
 			: { url: conf.url };

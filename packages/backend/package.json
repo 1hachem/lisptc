@@ -1,0 +1,50 @@
+{
+  "name": "@repo/backend",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "exports": {
+    "./api": {
+      "types": "./convex/_generated/api.d.ts",
+      "default": "./convex/_generated/api.js"
+    },
+    "./dataModel": {
+      "types": "./convex/_generated/dataModel.d.ts"
+    },
+    "./limits": "./convex/limits.ts",
+    "./agent-repl": "./src/agent-repl.ts",
+    "./memory-store": "./src/memory-store.ts",
+    "./secrets-store": "./src/secrets-store.ts",
+    "./oauth-store": "./src/oauth-store.ts"
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@better-auth/passkey": "~1.6.33",
+    "@convex-dev/better-auth": "^0.12.5",
+    "@convex-dev/migrations": "^0.3.6",
+    "@repo/interpreter": "workspace:*",
+    "@repo/llm": "workspace:*",
+    "@repo/mcp": "workspace:*",
+    "@repo/repl": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "better-auth": "~1.6.33",
+    "convex": "^1.46.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@repo/tsconfigs": "workspace:*",
+    "convex-test": "^0.0.58",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^3.0.0"
+  }
+}

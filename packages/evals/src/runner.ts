@@ -1,19 +1,7 @@
 import { writeFileSync } from "node:fs";
-import {
-	evalCode,
-	replResultContent,
-	runAgentTurn,
-	systemPromptFor,
-	type TranscriptEntry,
-} from "@repo/ai";
-import { Checks } from "@repo/checks/checks";
-import type { MockSpec } from "@repo/checks/mocks";
-import { Trace } from "@repo/checks/trace";
 import { evalsEnv } from "@repo/env/evals";
 import type { ProviderName } from "@repo/shared/providers";
 import { test } from "vitest";
-import { type ExtensionsFor, tracedRepl } from "./harness.ts";
-import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
 import type {
 	CaseInfo,
 	CheckOutcome,
@@ -33,17 +21,77 @@ export { evalConcurrency, evalMatrix, reachable } from "./targets.ts";
 
 export type SeedEntry = { user: string } | { assistant: string };
 
+export interface CheckEvaluator {
+	evaluate(step: number): void;
+	results(): CheckOutcome[];
+}
+
+export type TranscriptEntry =
+	| { role: "user"; content: string }
+	| { role: "assistant"; content: string }
+	| { role: "tool"; content: string };
+
+export type EvalTurnEvent =
+	| {
+			type: "assistant";
+			code: string;
+			meta: { inputTokens?: number; outputTokens?: number };
+	  }
+	| { type: "result"; output: string }
+	| { type: "halt"; answer: string }
+	| { type: "silent" }
+	| { type: "failed"; message: string };
+
+export interface EvalResult {
+	output: string;
+	error: boolean;
+	annotations: { step: Record<string, unknown> };
+}
+
+export interface AgentDriver<Repl> {
+	eval(repl: Repl, code: string): Promise<EvalResult>;
+	resultContent(
+		output: string,
+		error: boolean,
+		step: Record<string, unknown>,
+	): string;
+	systemPrompt(repl: Repl): string;
+	turn(
+		transcript: TranscriptEntry[],
+		options: {
+			repl: Repl;
+			maxSteps: number;
+			target: Target;
+			system: string;
+		},
+	): AsyncIterable<EvalTurnEvent>;
+}
+
+export interface EvalTrace {
+	beginStep(step: number): void;
+	reply(code: string): void;
+	halt(answer: string): void;
+	mark(): number;
+	refusedSince(mark: number): boolean;
+	errors(): number;
+	skips(): number;
+}
+
+export interface EvalRunContext<Repl> {
+	repl: Repl;
+	trace: EvalTrace;
+	checks: CheckEvaluator;
+}
+
 export interface EvalSpec {
 	min: number;
 	max: number;
 	checks: string;
 	prelude?: string;
-	mocks?: MockSpec;
 	seed?: SeedEntry[];
 	samples?: number;
 	minScore?: number;
 	system?: string;
-	extensions?: ExtensionsFor;
 }
 
 export interface RunResult {
@@ -65,6 +113,25 @@ export interface RunResult {
 	transcript: TranscriptLine[];
 }
 
+export interface EvalReviewer<Spec extends EvalSpec> {
+	describe(): string;
+	recap(
+		info: CaseInfo | undefined,
+		row: ReportRow,
+		spec: Spec,
+	): Promise<string>;
+}
+
+export interface EvalRuntime<Spec extends EvalSpec, Repl> {
+	agent: AgentDriver<Repl>;
+	open(spec: Spec): EvalRunContext<Repl>;
+	validateChecks(checks: string): void;
+	mocks(spec: Spec): MockedServer[];
+	reviewer?(): EvalReviewer<Spec> | undefined;
+}
+
+const DEFAULT_MIN_SCORE = 0.5;
+
 const STARTED_AT = new Date()
 	.toISOString()
 	.replace(/\.\d+Z$/, "")
@@ -72,138 +139,7 @@ const STARTED_AT = new Date()
 
 const SHARD_ID = `${STARTED_AT}-${process.pid}`;
 
-const rows: ReportRow[] = [];
-
-const cases: CaseInfo[] = [];
-
-let judge: Judge | undefined;
-let judgeChecked = false;
-
-function activeJudge(): Judge | undefined {
-	if (!judgeChecked) {
-		judgeChecked = true;
-		const wanted = judgeFrom(evalsEnv.EVAL_JUDGE);
-		if (wanted && !judgeReachable(wanted))
-			console.log(`[evals] no recaps: ${wanted.provider} has no API key set`);
-		else judge = wanted;
-	}
-	return judge;
-}
-
-export async function runCase(
-	spec: EvalSpec,
-	target: Target,
-): Promise<RunResult> {
-	const { repl, trace } = tracedRepl({
-		...(spec.mocks ? { mocks: spec.mocks } : {}),
-		...(spec.extensions ? { extensions: spec.extensions } : {}),
-	});
-	const checks = new Checks(trace, spec.checks);
-	const transcript: TranscriptEntry[] = [];
-	const seen: TranscriptLine[] = [];
-
-	if (spec.prelude !== undefined) {
-		const before = trace.events.length;
-		const { output, error } = await evalCode(repl, spec.prelude);
-		repl.takeFinished();
-		const refused = trace.events
-			.slice(before)
-			.some((e) => e.kind === "note" || (e.kind === "form" && e.error));
-		if (error || refused) throw new Error(`the prelude did not run: ${output}`);
-	}
-
-	trace.beginStep(0);
-	for (const entry of spec.seed ?? []) {
-		if ("user" in entry) {
-			transcript.push({ role: "user", content: entry.user });
-			seen.push({ role: "user", content: entry.user });
-			continue;
-		}
-		const { output, error, annotations } = await evalCode(
-			repl,
-			entry.assistant,
-		);
-		repl.takeFinished();
-		transcript.push({ role: "assistant", content: entry.assistant });
-		transcript.push({
-			role: "tool",
-			content: replResultContent(output, error, annotations.step),
-		});
-		seen.push({ role: "assistant", content: entry.assistant });
-		seen.push({ role: "tool", content: output });
-	}
-
-	let steps = 0;
-	let halted = false;
-	let silent = false;
-	let answer = "";
-	let inputTokens = 0;
-	let outputTokens = 0;
-	const startedAt = Date.now();
-
-	for await (const event of runAgentTurn(transcript, {
-		repl,
-		maxSteps: spec.max,
-		config: {
-			provider: target.provider,
-			model: target.model,
-			system: spec.system ?? systemPromptFor(repl.interp),
-		},
-	})) {
-		if (event.type === "assistant") {
-			steps += 1;
-			trace.beginStep(steps);
-			trace.reply(event.code);
-			seen.push({ role: "assistant", content: event.code });
-			inputTokens = event.meta.inputTokens ?? inputTokens;
-			outputTokens += event.meta.outputTokens ?? 0;
-			continue;
-		}
-		if (event.type === "result") {
-			seen.push({ role: "tool", content: event.output });
-			checks.evaluate(steps);
-			continue;
-		}
-		if (event.type === "halt") {
-			halted = true;
-			answer = event.answer;
-			trace.halt(event.answer);
-			checks.evaluate(steps);
-			continue;
-		}
-		if (event.type === "silent") {
-			silent = true;
-			continue;
-		}
-		if (event.type === "failed") throw new Error(event.message);
-	}
-
-	const verdicts = checks.results();
-	return {
-		provider: target.provider,
-		model: target.model,
-		grade: grade(spec, verdicts, steps, halted),
-		steps,
-		min: spec.min,
-		max: spec.max,
-		halted,
-		silent,
-		answer,
-		inputTokens,
-		outputTokens,
-		durationMs: Date.now() - startedAt,
-		errors: trace.events.filter(
-			(e) =>
-				(e.kind === "form" && e.error !== undefined) ||
-				(e.kind === "note" && e.severity === "critical"),
-		).length,
-		skips: trace.events.filter(
-			(e) => e.kind === "note" && e.severity === "warning",
-		).length,
-		checks: verdicts,
-		transcript: seen,
-	};
-}
+const RULE = "─".repeat(72);
 
 function grade(
 	spec: EvalSpec,
@@ -216,10 +152,6 @@ function grade(
 	if (steps > spec.max) return "fail";
 	return steps <= spec.min ? "pass" : "degraded";
 }
-
-const DEFAULT_MIN_SCORE = 0.5;
-
-const RULE = "─".repeat(72);
 
 function speaker(line: TranscriptLine): string {
 	if (line.role === "user") return "user";
@@ -310,19 +242,6 @@ function failures(runs: RunResult[]): string {
 		.join(", ");
 }
 
-function mockedServers(spec: EvalSpec): MockedServer[] {
-	return Object.entries(spec.mocks?.servers ?? {}).map(([name, server]) => ({
-		name,
-		tools: server.tools.map((tool) => tool.name),
-		answers: Object.keys(server.calls ?? {}),
-		...(server.connectDelayMs === undefined
-			? {}
-			: { connectDelayMs: server.connectDelayMs }),
-		...(server.fails === undefined ? {} : { fails: server.fails }),
-		...(server.otherwise === undefined ? {} : { answersAnythingElse: true }),
-	}));
-}
-
 function seedOf(spec: EvalSpec): SeedTurn[] {
 	return (spec.seed ?? []).map((entry) =>
 		"user" in entry
@@ -331,7 +250,11 @@ function seedOf(spec: EvalSpec): SeedTurn[] {
 	);
 }
 
-function describeCase(name: string, spec: EvalSpec): CaseInfo {
+function describeCase<Spec extends EvalSpec, Repl>(
+	runtime: EvalRuntime<Spec, Repl>,
+	name: string,
+	spec: Spec,
+): CaseInfo {
 	return {
 		name,
 		min: spec.min,
@@ -341,45 +264,152 @@ function describeCase(name: string, spec: EvalSpec): CaseInfo {
 		systemPrompt: spec.system === undefined ? "default" : "custom",
 		checks: spec.checks.trim(),
 		seed: seedOf(spec),
-		mocks: mockedServers(spec),
+		mocks: runtime.mocks(spec),
 	};
 }
 
-export function evalCase(name: string, spec: EvalSpec): void {
-	new Checks(new Trace(), spec.checks).evaluate(0);
-	cases.push(describeCase(name, spec));
-	const samples = spec.samples ?? 1;
-	for (const target of evalMatrix()) {
-		const label = `${name} [${target.provider} · ${target.model}]`;
-		test.skipIf(!reachable(target.provider))(label, async () => {
-			const runs: RunResult[] = [];
-			for (let sample = 0; sample < samples; sample++) {
-				const run = await runCase(spec, target);
-				const row: ReportRow = { ...run, case: name, sample: sample + 1 };
-				const reviewer = activeJudge();
-				if (reviewer) {
-					row.judge = `${reviewer.provider} · ${reviewer.model}`;
-					const recap = await recapOf(
-						reviewer,
-						cases.find((info) => info.name === name),
-						row,
-					);
-					if (recap) row.recap = recap;
-				}
-				runs.push(run);
-				rows.push(row);
-				console.log(formatRun(name, row));
-			}
-			writeReport();
+export async function runCase<Spec extends EvalSpec, Repl>(
+	runtime: EvalRuntime<Spec, Repl>,
+	spec: Spec,
+	target: Target,
+): Promise<RunResult> {
+	const { repl, trace, checks } = runtime.open(spec);
+	const transcript: TranscriptEntry[] = [];
+	const seen: TranscriptLine[] = [];
 
-			const verdict = gate(spec, runs);
-			console.log(`${label}: ${verdict.line}`);
-			if (!verdict.ok) throw new Error(verdict.line);
-		});
+	if (spec.prelude !== undefined) {
+		const before = trace.mark();
+		const { output, error } = await runtime.agent.eval(repl, spec.prelude);
+		if (error || trace.refusedSince(before))
+			throw new Error(`the prelude did not run: ${output}`);
 	}
+
+	trace.beginStep(0);
+	for (const entry of spec.seed ?? []) {
+		if ("user" in entry) {
+			transcript.push({ role: "user", content: entry.user });
+			seen.push({ role: "user", content: entry.user });
+			continue;
+		}
+		const { output, error, annotations } = await runtime.agent.eval(
+			repl,
+			entry.assistant,
+		);
+		transcript.push({ role: "assistant", content: entry.assistant });
+		transcript.push({
+			role: "tool",
+			content: runtime.agent.resultContent(output, error, annotations.step),
+		});
+		seen.push({ role: "assistant", content: entry.assistant });
+		seen.push({ role: "tool", content: output });
+	}
+
+	let steps = 0;
+	let halted = false;
+	let silent = false;
+	let answer = "";
+	let inputTokens = 0;
+	let outputTokens = 0;
+	const startedAt = Date.now();
+
+	for await (const event of runtime.agent.turn(transcript, {
+		repl,
+		maxSteps: spec.max,
+		target,
+		system: spec.system ?? runtime.agent.systemPrompt(repl),
+	})) {
+		if (event.type === "assistant") {
+			steps += 1;
+			trace.beginStep(steps);
+			trace.reply(event.code);
+			seen.push({ role: "assistant", content: event.code });
+			inputTokens = event.meta.inputTokens ?? inputTokens;
+			outputTokens += event.meta.outputTokens ?? 0;
+			continue;
+		}
+		if (event.type === "result") {
+			seen.push({ role: "tool", content: event.output });
+			checks.evaluate(steps);
+			continue;
+		}
+		if (event.type === "halt") {
+			halted = true;
+			answer = event.answer;
+			trace.halt(event.answer);
+			checks.evaluate(steps);
+			continue;
+		}
+		if (event.type === "silent") {
+			silent = true;
+			continue;
+		}
+		if (event.type === "failed") throw new Error(event.message);
+	}
+
+	const verdicts = checks.results();
+	return {
+		provider: target.provider,
+		model: target.model,
+		grade: grade(spec, verdicts, steps, halted),
+		steps,
+		min: spec.min,
+		max: spec.max,
+		halted,
+		silent,
+		answer,
+		inputTokens,
+		outputTokens,
+		durationMs: Date.now() - startedAt,
+		errors: trace.errors(),
+		skips: trace.skips(),
+		checks: verdicts,
+		transcript: seen,
+	};
 }
 
-function writeReport(): void {
+export function createEvalSuite<Spec extends EvalSpec, Repl>(
+	runtime: EvalRuntime<Spec, Repl>,
+): { evalCase(name: string, spec: Spec): void } {
+	const rows: ReportRow[] = [];
+	const cases: CaseInfo[] = [];
+	return {
+		evalCase(name, spec) {
+			runtime.validateChecks(spec.checks);
+			cases.push(describeCase(runtime, name, spec));
+			const samples = spec.samples ?? 1;
+			for (const target of evalMatrix()) {
+				const label = `${name} [${target.provider} · ${target.model}]`;
+				test.skipIf(!reachable(target.provider))(label, async () => {
+					const runs: RunResult[] = [];
+					for (let sample = 0; sample < samples; sample++) {
+						const run = await runCase(runtime, spec, target);
+						const row: ReportRow = { ...run, case: name, sample: sample + 1 };
+						const reviewer = runtime.reviewer?.();
+						if (reviewer) {
+							row.judge = reviewer.describe();
+							const recap = await reviewer.recap(
+								cases.find((info) => info.name === name),
+								row,
+								spec,
+							);
+							if (recap) row.recap = recap;
+						}
+						runs.push(run);
+						rows.push(row);
+						console.log(formatRun(name, row));
+					}
+					writeReport(cases, rows);
+
+					const verdict = gate(spec, runs);
+					console.log(`${label}: ${verdict.line}`);
+					if (!verdict.ok) throw new Error(verdict.line);
+				});
+			}
+		},
+	};
+}
+
+function writeReport(cases: CaseInfo[], rows: ReportRow[]): void {
 	const targets = evalMatrix();
 	const report: Report = {
 		startedAt: STARTED_AT,

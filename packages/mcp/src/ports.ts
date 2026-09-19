@@ -32,6 +32,7 @@ export type HttpConnConfig = ConnMeta & {
 	headers?: Record<string, string>;
 	oauth?: boolean;
 	scopes?: string[];
+	image?: string;
 	command?: string;
 	args?: string[];
 	env?: Record<string, string>;
@@ -75,7 +76,7 @@ export interface ServerHandle {
 export type ServerState = "running" | "stopped" | "unknown";
 
 export interface McpHost {
-	ensure(conf: HttpConnConfig): Promise<ServerHandle>;
+	ensure(conf: ConnConfig): Promise<ServerHandle | undefined>;
 	stop(name: string): Promise<void>;
 	stopAll(): Promise<void>;
 	status(name: string): ServerState;

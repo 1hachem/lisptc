@@ -1,10 +1,10 @@
 import { mockedMcpExtension } from "@repo/checks/mocks";
-import { evalCase } from "@repo/evals/runner";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { promisesExtension } from "@repo/interpreter/promises";
 import { proseExtension } from "@repo/interpreter/prose";
 import { linear } from "./fixtures/linear.ts";
 import { playwright } from "./fixtures/playwright.ts";
+import { evalCase } from "./harness/runner.ts";
 
 evalCase("navigates to hyko.ai by the book", {
 	min: 5,
@@ -77,6 +77,12 @@ evalCase("finds a browser, loads it, and opens the page", {
 evalCase("recovers when the server it wants will not connect", {
 	min: 3,
 	max: 15,
+	extensions: () => [
+		promisesExtension(),
+		mockedMcpExtension(),
+		compactionExtension(),
+		proseExtension(),
+	],
 	mocks: {
 		servers: { playwright: { tools: [], fails: "chromium is not installed" } },
 	},

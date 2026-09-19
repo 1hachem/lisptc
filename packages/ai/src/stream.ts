@@ -1,6 +1,7 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
+import { type ReplSource, replFrom } from "./repl-store.ts";
 import { runAgentTurn } from "./turn.ts";
 
 export interface ChatMessageInput {
@@ -13,6 +14,13 @@ export interface ChatMessageInput {
 
 export interface ChatInput {
 	messages?: ChatMessageInput[];
+}
+
+export interface WireMessage {
+	type: string;
+	content: string;
+	id: string;
+	additional_kwargs?: Record<string, unknown>;
 }
 
 const encoder = new TextEncoder();
@@ -59,13 +67,18 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	}));
 }
 
-export function streamChatResponse(
+export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
+	config?: AgentConfig;
+	signal?: AbortSignal;
+	identity?: { distinctId?: string; sessionId?: string };
+	onTurn?: (messages: WireMessage[]) => Promise<void> | void;
+};
+
+export function streamChatResponse<Id extends string>(
 	input: ChatInput,
-	config?: AgentConfig,
-	signal?: AbortSignal,
-	threadId?: string,
-	identity?: { distinctId?: string; sessionId?: string },
+	options: ChatStreamOptions<Id>,
 ): Response {
+	const { threadId, config, identity, onTurn, signal } = options;
 	const abort = new AbortController();
 	if (signal)
 		signal.addEventListener("abort", () => abort.abort(), { once: true });
@@ -84,17 +97,16 @@ export function streamChatResponse(
 				}
 			};
 
-			const wire: Record<string, unknown>[] = (input.messages ?? []).map(
-				(m, i) => ({
-					type: wireType(m.type ?? m.role),
-					content: contentToText(m.content),
-					id: m.id ?? `msg-${i}`,
-					...(m.additional_kwargs
-						? { additional_kwargs: m.additional_kwargs }
-						: undefined),
-				}),
-			);
+			const wire: WireMessage[] = (input.messages ?? []).map((m, i) => ({
+				type: wireType(m.type ?? m.role),
+				content: contentToText(m.content),
+				id: m.id ?? `msg-${i}`,
+				...(m.additional_kwargs
+					? { additional_kwargs: m.additional_kwargs }
+					: undefined),
+			}));
 
+			const carried = wire.length;
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
 			let heard: Record<string, unknown> = {};
@@ -102,7 +114,10 @@ export function streamChatResponse(
 			try {
 				write(sse("values", { messages: wire }));
 
+				const repl = await replFrom(options);
+
 				for await (const event of runAgentTurn(toTranscript(input), {
+					repl,
 					threadId,
 					config,
 					signal: abort.signal,
@@ -177,7 +192,22 @@ export function streamChatResponse(
 						);
 					}
 				}
+			} catch (error) {
+				console.error("[ai] the turn could not run:", error);
+				write(
+					sse("error", {
+						error: "AgentError",
+						message: error instanceof Error ? error.message : String(error),
+					}),
+				);
 			} finally {
+				if (onTurn) {
+					try {
+						await onTurn(wire.slice(carried));
+					} catch (error) {
+						console.error("[ai] the turn was not recorded:", error);
+					}
+				}
 				console.log(
 					`[ai] chat stream closed after ${steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);

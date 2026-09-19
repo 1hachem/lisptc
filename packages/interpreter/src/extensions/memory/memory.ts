@@ -91,7 +91,7 @@ export class VolatileStore implements MemoryStore {
 	}
 }
 
-function triggerToForm(trigger: Trigger): unknown {
+export function triggerToForm(trigger: Trigger): unknown {
 	const parts: unknown[] = [newSym(trigger.kind)];
 	if (trigger.pattern !== undefined) parts.push(trigger.pattern);
 	return arrayToList(parts);

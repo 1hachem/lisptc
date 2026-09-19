@@ -1,4 +1,5 @@
 import { webEnv } from "@repo/env/web";
+import { authToken } from "./auth-client.ts";
 
 export const API_URL = webEnv.VITE_API_URL;
 
@@ -17,10 +18,12 @@ export function distinctId(): string | undefined {
 	}
 }
 
-export function apiHeaders(): Record<string, string> {
+export async function apiHeaders(): Promise<Record<string, string>> {
 	const id = distinctId();
+	const token = await authToken();
 	return {
 		"content-type": "application/json",
 		...(id ? { "x-distinct-id": id } : {}),
+		...(token ? { authorization: `Bearer ${token}` } : {}),
 	};
 }

@@ -4,29 +4,9 @@ import { existsSync, unlinkSync } from "node:fs";
 import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { replEnv } from "@repo/env/repl";
-import { compactionExtension } from "@repo/interpreter/compaction";
 import type { Arity, DocArg, InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { llmExtension } from "@repo/llm/llm";
-import { mcpExtension } from "@repo/mcp";
 import { MemoryRepl } from "./repl.ts";
-
-export function sessionExtensions(): InterpExtension[] {
-	return [
-		secretsExtension(),
-		promisesExtension(),
-		mcpExtension(),
-		llmExtension(),
-		compactionExtension(),
-		memoryExtension(),
-		proseExtension(),
-	];
-}
 
 export interface CompletionEntry {
 	name: string;
@@ -137,6 +117,7 @@ function isListening(path: string): Promise<boolean> {
 
 export async function serve(
 	path: string,
+	extensions: InterpExtension[],
 ): Promise<ReturnType<typeof createServer>> {
 	if (existsSync(path)) {
 		if (await isListening(path)) {
@@ -152,7 +133,7 @@ export async function serve(
 		} catch {}
 	}
 
-	const repl = new MemoryRepl({ extensions: sessionExtensions() });
+	const repl = new MemoryRepl({ extensions });
 
 	const server = createServer((socket: Socket) => {
 		let buffer = "";
@@ -312,13 +293,16 @@ async function speaksCurrentProtocol(client: SessionClient): Promise<boolean> {
 	}
 }
 
-export async function connectOrSpawn(path: string): Promise<SessionClient> {
+export async function connectOrSpawn(
+	path: string,
+	entry: string,
+): Promise<SessionClient> {
 	try {
 		const client = await SessionClient.connect(path);
 		if (await speaksCurrentProtocol(client)) return client;
 		client.destroy();
 		if (await shutdownAt(path)) {
-			await spawnServer(path);
+			await spawnServer(path, entry);
 			return connectWithRetry(path);
 		}
 		return await SessionClient.connect(path);
@@ -332,20 +316,17 @@ export async function connectOrSpawn(path: string): Promise<SessionClient> {
 			throw ex;
 		}
 	}
-	await spawnServer(path);
+	await spawnServer(path, entry);
 	return connectWithRetry(path);
 }
 
-const selfPath = fileURLToPath(import.meta.url);
-
-function spawnServer(path: string): Promise<void> {
+function spawnServer(path: string, entry: string): Promise<void> {
 	const child: ChildProcess = spawn(
 		process.execPath,
 		[
 			"--no-warnings",
 			"--experimental-transform-types",
-			selfPath,
-			"--serve",
+			entry,
 			"--socket",
 			path,
 		],
@@ -377,14 +358,13 @@ function delay(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-async function main(): Promise<void> {
-	const entry = process.argv[1];
-	if (!entry || import.meta.url !== pathToFileURL(entry).href) return;
-	if (!process.argv.includes("--serve")) return;
+export async function serveFromArgv(
+	extensions: InterpExtension[],
+): Promise<void> {
 	const i = process.argv.indexOf("--socket");
 	const path = i !== -1 ? process.argv[i + 1] : socketPathFor();
 	try {
-		await serve(path);
+		await serve(path, extensions);
 	} catch (ex) {
 		if ((ex as NodeJS.ErrnoException).code === "EADDRINUSE") {
 			process.exit(0);
@@ -392,5 +372,3 @@ async function main(): Promise<void> {
 		throw ex;
 	}
 }
-
-main();

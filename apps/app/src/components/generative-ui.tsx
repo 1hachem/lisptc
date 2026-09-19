@@ -213,10 +213,7 @@ function Node({
 				<form
 					onSubmit={(e) => {
 						e.preventDefault();
-						fire(
-							text(node.props, "action"),
-							formValues(e.currentTarget as HTMLElement),
-						);
+						fire(text(node.props, "action"), formValues(e.currentTarget));
 					}}
 					className="flex min-w-0 flex-col items-start gap-2"
 				>
@@ -273,7 +270,10 @@ function Table({ node }: { node: UiNode }) {
 }
 
 export function GenerativeUI({ node }: { node: UiNode }) {
-	const { threadId, send } = useChatSession();
+	const { chatId, send } = useChatSession((state) => ({
+		chatId: state.chatId,
+		send: state.send,
+	}));
 	const [ui, setUi] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
@@ -286,15 +286,15 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 			try {
 				const res = await fetch(`${API_URL}/api/ui-action`, {
 					method: "POST",
-					headers: apiHeaders(),
-					body: JSON.stringify({ thread_id: threadId, action, values }),
+					headers: await apiHeaders(),
+					body: JSON.stringify({ chatId, action, values }),
 				});
 				if (res.status === 409) {
 					setFailed(true);
 					setOutput("this view is no longer live — ask again to rebuild it");
 					return;
 				}
-				const data = (await res.json()) as ActionResponse;
+				const data: ActionResponse = await res.json();
 				const next = toUiNode(data.ui);
 				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");

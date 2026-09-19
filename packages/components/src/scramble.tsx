@@ -11,7 +11,7 @@ function maskedAt(text: string, beat: number): string {
 	const settled = Math.floor(beat / BEATS_PER_CHAR);
 	let out = "";
 	for (let i = 0; i < text.length; i++) {
-		const ch = text[i] as string;
+		const ch = text[i];
 		if (i < settled || ch === " ") out += ch;
 		else out += GLYPHS[(beat * 7 + i * 13) % GLYPHS.length];
 	}

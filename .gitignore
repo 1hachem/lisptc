@@ -30,3 +30,7 @@ next-env.d.ts
 
 .claude/canvas/sessions/
 .claude/canvas/server.log
+
+packages/backend/.env.local
+
+.env.local

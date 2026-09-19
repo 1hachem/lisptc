@@ -21,7 +21,7 @@ function unbalanced(value: string) {
 function trimTrailing(value: string) {
 	let end = value.length;
 	while (end > 0) {
-		const char = value[end - 1] as string;
+		const char = value[end - 1];
 		if (TRAILING.includes(char)) {
 			end -= 1;
 			continue;
@@ -30,9 +30,9 @@ function trimTrailing(value: string) {
 			end -= 1;
 			continue;
 		}
-		const entity = char === ";" && value.slice(0, end).match(ENTITY);
-		if (entity) {
-			end = entity.index as number;
+		const entity = char === ";" ? value.slice(0, end).match(ENTITY) : null;
+		if (entity?.index !== undefined) {
+			end = entity.index;
 			continue;
 		}
 		break;
@@ -53,7 +53,8 @@ function autolink(value: string): InlineNode[] {
 	AUTOLINK.lastIndex = 0;
 	for (let match = AUTOLINK.exec(value); match; match = AUTOLINK.exec(value)) {
 		const bracketed = match.groups?.bracketed;
-		const text = bracketed ?? trimTrailing(match.groups?.bare as string);
+		const bare = match.groups?.bare;
+		const text = bracketed ?? (bare === undefined ? "" : trimTrailing(bare));
 		const href = text ? hrefFor(text, bracketed !== undefined) : undefined;
 		if (!href) continue;
 		if (match.index > at)

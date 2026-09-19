@@ -3,7 +3,7 @@ import { useChatSession } from "../lib/chat.tsx";
 import { usePrefersReducedMotion } from "../lib/motion.ts";
 
 export function Greeting() {
-	const { greeting } = useChatSession();
+	const greeting = useChatSession((state) => state.greeting);
 	const reduced = usePrefersReducedMotion();
 
 	return (

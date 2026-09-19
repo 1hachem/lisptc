@@ -3,9 +3,9 @@ import { TRIGGER_KINDS } from "@repo/interpreter/memory";
 import { describe, expect, it } from "vitest";
 import { IDENTITY, MAX_STEPS, systemPromptFor } from "../src/prompts/lisp.ts";
 import { snapshotConversation } from "../src/repl.ts";
-import { agentExtensions } from "../src/repl-store.ts";
+import { testExtensions } from "./helpers.ts";
 
-const PROMPT = systemPromptFor(new Interp({ extensions: agentExtensions() }));
+const PROMPT = systemPromptFor(new Interp({ extensions: testExtensions() }));
 
 const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
 
@@ -68,14 +68,6 @@ describe("the failures a run actually dies of", () => {
 		expect(PROMPT).toMatch(
 			/never re-run the same search with different words/i,
 		);
-		for (const name of [
-			"search-mcps",
-			"search-tools",
-			"list-tools",
-			"list-toolkit",
-			"list-mcps",
-		])
-			expect(PROMPT).toMatch(names(name));
 	});
 
 	it("points at doc for a tool's signature", () => {
@@ -136,20 +128,7 @@ describe("the REPL loop protocol", () => {
 	});
 });
 
-describe("MCP", () => {
-	const MCP_BUILTINS = [
-		"load-mcp",
-		"unload-mcp",
-		"list-mcps",
-		"list-toolkit",
-		"list-tools",
-		"search-tools",
-		"search-mcps",
-		"mcp-shutdown",
-		"mcp-authorize",
-		"login",
-		"logout",
-	];
+describe("promises", () => {
 	const PROMISE_BUILTINS = [
 		"await",
 		"promise-all",
@@ -161,55 +140,8 @@ describe("MCP", () => {
 		"cancel",
 	];
 
-	it.each([...MCP_BUILTINS, ...PROMISE_BUILTINS])("names %s", (name) => {
+	it.each(PROMISE_BUILTINS)("names %s", (name) => {
 		expect(PROMPT).toMatch(names(name));
-	});
-
-	it("says load-mcp is async: it returns a promise and does not block", () => {
-		expect(PROMPT).toMatch(
-			/load-mcp is asynchronous: it returns a promise immediately and does NOT block/,
-		);
-		expect(PROMPT).toMatch(
-			/\(promise-state p\) checks progress \(:pending\/:fulfilled\/:rejected\)/,
-		);
-	});
-
-	it("teaches the <server>/<tool> keyword calling convention", () => {
-		expect(PROMPT).toMatch(
-			/global named <server>\/<tool>, called with keyword args/,
-		);
-		expect(PROMPT).toMatch(/\(acme\/get_widget :id "42"\)/);
-	});
-
-	it.each([
-		"playwright",
-		"fs/",
-		"linear",
-		"posthog",
-	])("names no real toolkit server in its examples (%s)", (name) => {
-		expect(PROMPT).not.toContain(name);
-	});
-
-	it("says the server and tool names have to be discovered, not invented", () => {
-		expect(PROMPT).toMatch(
-			/You are not told which servers exist or what they are called/,
-		);
-		expect(PROMPT).toMatch(
-			/Never invent a server or tool name — read it out of one of those results/,
-		);
-		expect(PROMPT).toMatch(
-			/start from\s+search-mcps and let each step tell you the next name/,
-		);
-	});
-
-	it("shows how to load a predefined server and an ad-hoc one", () => {
-		expect(PROMPT).toMatch(/\(await \(load-mcp "acme"\)\)/);
-		expect(PROMPT).toMatch(/:url "https:\/\/\.\.\."/);
-		expect(PROMPT).toMatch(/:command "npx"/);
-	});
-
-	it("shows how to load several servers concurrently", () => {
-		expect(PROMPT).toMatch(/promise-all-settled \(list \(load-mcp/);
 	});
 });
 

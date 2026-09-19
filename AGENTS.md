@@ -80,7 +80,7 @@ for working in it.
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter.
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
-- `packages/evals` (`@repo/evals`) — the eval suite around `@repo/checks`, and all of its reporting.
+- `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
@@ -94,10 +94,11 @@ for working in it.
 
 - `apps/api` (`api`) — an HTTP server streaming the agent loop.
 - `apps/app` (`app`) — the web frontend.
+- `apps/cli` (`@lisptc/cli`) — the interactive terminal REPL.
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.
-- `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases.
+- `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases and their concrete hosts.
 
 ## Dependency flow
 
@@ -110,14 +111,20 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
 - The interpreter depends on no workspace package that depends on it.
 - An extension package depends on the interpreter, and carries the SDK its
   surface needs so the interpreter never does.
-- A REPL front-end depends on the interpreter and on extensions.
-- The agent depends on the REPL, not on any extension.
+- A REPL front-end and the agent depend on the interpreter, and on no
+  extension. A REPL is built from the extension list it is handed.
+- An extension is named at a composition root, and there are only two: an app
+  that runs a REPL itself, and `@repo/backend` for the agent the API serves.
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
   workspace package.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
-  above it reaches past the entrypoints its `package.json` exports.
-- A package that runs an eval suite is imported only where the cases live. What
-  reads finished runs imports the reading entrypoints instead.
+  above it reaches past the entrypoints its `package.json` exports. Its stores
+  satisfy the language's ports and its `agent-repl` composes the extensions the
+  served agent runs on, so it names the language and the extensions; neither
+  ever names it.
+- `@repo/evals` drives an eval suite, but it names no extension and no host.
+  The app that owns the cases supplies the REPL, check evaluator, mocked hosts
+  and judge. `@repo/evals` writes the finished run and reads one back.
 
 That layering is declared, not described. Each package carries a `turbo.json`
 naming its tag, and `boundaries.tags` in the root `turbo.json` says which tags a
@@ -197,6 +204,12 @@ port and is handed the value.
 
 The Convex deployment carries an environment of its own, and nothing in this
 repo pushes it. `packages/backend/AGENTS.md` has the rule.
+
+The Convex deployment carries an environment of its own, and nothing in this
+repo pushes it. A deployment secret is stored in Infisical under `/auth` and set
+on the deployment by hand, from the dashboard, never written to a file. An OAuth
+app's callback points at the web app's origin, where the auth router is served,
+not at the deployment.
 
 ## Icons
 

@@ -1,74 +1,60 @@
-import { compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
-import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
-import { memoryHostFor } from "@repo/interpreter/memory-host";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { promisesHost } from "@repo/interpreter/promises-host";
-import { proseExtension } from "@repo/interpreter/prose";
-import { proseHost } from "@repo/interpreter/prose-host";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { secretsHost } from "@repo/interpreter/secrets-host";
-import { uiExtension } from "@repo/interpreter/ui";
-import { uiHost } from "@repo/interpreter/ui-host";
-import { llmExtension } from "@repo/llm/llm";
-import { llmHost } from "@repo/llm/llm-host";
-import { mcpExtension } from "@repo/mcp";
-import { mcpHostFor } from "@repo/mcp/mcp-host";
-import { AgentRepl } from "@repo/repl/repl";
+import type { AgentRepl } from "@repo/repl/repl";
+import type { Awaitable } from "@repo/shared/host";
 
 const MAX_THREADS = 50;
 
-export function agentExtensions(scope?: string): InterpExtension[] {
-	return [
-		secretsExtension(secretsHost),
-		promisesExtension(promisesHost),
-		mcpExtension(mcpHostFor(scope)),
-		llmExtension(llmHost),
-		compactionExtension(compactionHost),
-		memoryExtension(memoryHostFor(scope)),
-		proseExtension(proseHost),
-		uiExtension(uiHost),
-	];
-}
+export type OpenRepl<Id extends string = string> = (
+	threadId: Id,
+) => Awaitable<AgentRepl>;
 
-function newAgentRepl(scope?: string): AgentRepl {
-	return new AgentRepl({ extensions: agentExtensions(scope) });
-}
+export class ReplStore<Id extends string = string> {
+	private readonly repls = new Map<Id, AgentRepl>();
+	private readonly opening = new Map<Id, Promise<AgentRepl>>();
 
-const repls = new Map<string, AgentRepl>();
+	constructor(
+		private readonly open: OpenRepl<Id>,
+		private readonly max: number = MAX_THREADS,
+	) {}
 
-export function peekThreadRepl(threadId: string): AgentRepl | undefined {
-	const existing = repls.get(threadId);
-	if (!existing) return undefined;
-	repls.delete(threadId);
-	repls.set(threadId, existing);
-	return existing;
-}
-
-export function getThreadRepl(
-	threadId: string | undefined,
-	scope?: string,
-): AgentRepl {
-	if (!threadId) return newAgentRepl(scope);
-
-	const existing = repls.get(threadId);
-	if (existing) {
-		repls.delete(threadId);
-		repls.set(threadId, existing);
-		return existing;
+	peek(threadId: Id): AgentRepl | undefined {
+		const standing = this.repls.get(threadId);
+		if (standing === undefined) return undefined;
+		this.keep(threadId, standing);
+		return standing;
 	}
 
-	const repl = newAgentRepl(scope);
-	repls.set(threadId, repl);
-	while (repls.size > MAX_THREADS) {
-		const oldest = repls.keys().next().value;
-		if (oldest === undefined) break;
-		evict(oldest);
+	get(threadId: Id): Awaitable<AgentRepl> {
+		const standing = this.peek(threadId);
+		if (standing !== undefined) return standing;
+		const opening = this.opening.get(threadId);
+		if (opening !== undefined) return opening;
+		const started = Promise.resolve(this.open(threadId))
+			.then((repl) => {
+				this.keep(threadId, repl);
+				return repl;
+			})
+			.finally(() => this.opening.delete(threadId));
+		this.opening.set(threadId, started);
+		return started;
 	}
-	return repl;
+
+	private keep(threadId: Id, repl: AgentRepl): void {
+		this.repls.delete(threadId);
+		this.repls.set(threadId, repl);
+		while (this.repls.size > this.max) {
+			const oldest = this.repls.keys().next().value;
+			if (oldest === undefined) break;
+			this.repls.delete(oldest);
+		}
+	}
 }
 
-function evict(threadId: string): void {
-	repls.delete(threadId);
+export type ReplSource<Id extends string = string> =
+	| { repl: AgentRepl; threadId?: string }
+	| { repls: ReplStore<Id>; threadId: Id };
+
+export function replFrom<Id extends string>(
+	source: ReplSource<Id>,
+): Awaitable<AgentRepl> {
+	return "repl" in source ? source.repl : source.repls.get(source.threadId);
 }

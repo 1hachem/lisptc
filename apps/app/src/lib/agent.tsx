@@ -52,11 +52,15 @@ interface Agent extends Mood {
 const AgentContext = createContext<Agent | null>(null);
 
 export function AgentProvider({ children }: { children: React.ReactNode }) {
-	const { messages, isLoading, error, fresh } = useChatSession();
+	const { lastType, isLoading, error, fresh } = useChatSession((state) => ({
+		lastType: state.messages[state.messages.length - 1]?.type,
+		isLoading: state.isLoading,
+		error: state.error,
+		fresh: state.fresh,
+	}));
 
-	const last = messages[messages.length - 1];
 	const deciding =
-		isLoading && (!last || last.type === "human" || last.type === "user");
+		isLoading && (!lastType || lastType === "human" || lastType === "user");
 
 	const mood: MoodId = error
 		? "failed"

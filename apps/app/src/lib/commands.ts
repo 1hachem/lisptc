@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { useChatSession } from "./chat.tsx";
+import { useChatStore } from "./chat.tsx";
+import { useNewChat } from "./chats.ts";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
 
@@ -31,16 +32,17 @@ async function copyConversation(text: string): Promise<string> {
 
 export function useCommandRunner() {
 	const { toggleLeft, toggleRight, toggleChannel, shown } = useUI();
-	const { clear, messages } = useChatSession();
+	const store = useChatStore();
+	const newChat = useNewChat();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
 			switch (name) {
 				case "/clear":
-					clear();
+					await newChat();
 					return null;
 				case "/copy":
-					return await copyConversation(transcript(messages));
+					return await copyConversation(transcript(store.getState().messages));
 				case "/sidebar":
 					toggleLeft();
 					return null;
@@ -56,6 +58,6 @@ export function useCommandRunner() {
 					return null;
 			}
 		},
-		[toggleLeft, toggleRight, toggleChannel, shown, clear, messages],
+		[toggleLeft, toggleRight, toggleChannel, shown, newChat, store],
 	);
 }
