@@ -12,49 +12,60 @@ function sampleVars() {
 	};
 }
 
+const echoed = async (code: string, vars = sampleVars()): Promise<string> => {
+	const r = agentRepl();
+	r.setConversationVars(vars);
+	return (await r.evalOutput(code)).user;
+};
+
 describe("AgentRepl conversation variables", () => {
 	it("exposes messages as alists readable with assoc/car/cdr", async () => {
-		const r = agentRepl();
-		r.setConversationVars(sampleVars());
-		expect(await r.eval('(cdr (assoc "role" (car conversation)))')).toBe(
-			'cdr-1: "user"\n',
+		expect(await echoed('(echo (cdr (assoc "role" (car conversation))))')).toBe(
+			"user\n",
 		);
-		expect(await r.eval('(cdr (assoc "content" (car conversation)))')).toBe(
-			'cdr-2: "hi"\n',
-		);
+		expect(
+			await echoed('(echo (cdr (assoc "content" (car conversation))))'),
+		).toBe("hi\n");
 	});
 
 	it("supports mapcar over a filtered message list", async () => {
-		const r = agentRepl();
-		r.setConversationVars(sampleVars());
-		expect(await r.eval("(length user-messages)")).toBe("length-1: 1\n");
-		expect(await r.eval("(car user-messages)")).toBe('car-1: "hi"\n');
+		expect(await echoed("(echo (length user-messages))")).toBe("1\n");
+		expect(await echoed("(echo (car user-messages))")).toBe("hi\n");
 		expect(
-			await r.eval('(mapcar (lambda (m) (cdr (assoc "role" m))) conversation)'),
-		).toBe('mapcar-1: ("user" "assistant")\n');
+			await echoed(
+				'(echo (mapcar (lambda (m) (cdr (assoc "role" m))) conversation))',
+			),
+		).toBe('("user" "assistant")\n');
 	});
 
 	it("re-injection restores a global the user reassigned (not hard read-only)", async () => {
 		const r = agentRepl();
 		r.setConversationVars(sampleVars());
-		expect(await r.eval("(setq conversation 1)")).toBe("conversation: 1\n");
-		expect(await r.eval("(progn conversation)")).toBe("progn-1: 1\n");
+		await r.eval("(setq conversation 1)");
+		expect((await r.evalOutput("(echo conversation)")).user).toBe("1\n");
 		r.setConversationVars(sampleVars());
-		expect(await r.eval("(length conversation)")).toBe("length-1: 2\n");
+		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
+			"2\n",
+		);
 	});
 
 	it("reset() keeps the injected globals (post-error survival)", async () => {
 		const r = agentRepl();
 		r.setConversationVars(sampleVars());
 		r.reset();
-		expect(await r.eval("(length conversation)")).toBe("length-1: 2\n");
+		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
+			"2\n",
+		);
 	});
 
 	it("an empty snapshot yields nil lists", async () => {
-		const r = agentRepl();
-		r.setConversationVars({ conversation: [], "user-messages": [] });
-		expect(await r.eval("(progn conversation)")).toBe("nil\n");
-		expect(await r.eval("(length user-messages)")).toBe("length-1: 0\n");
+		const empty = {
+			conversation: [],
+			"user-messages": [],
+			"assistant-messages": [],
+		};
+		expect(await echoed("(echo (length conversation))", empty)).toBe("0\n");
+		expect(await echoed("(echo (length user-messages))", empty)).toBe("0\n");
 	});
 });
 

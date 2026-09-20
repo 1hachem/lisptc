@@ -23,6 +23,7 @@
     "@repo/evals": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm-extension": "workspace:*",
+    "@repo/mcp-extension": "workspace:*",
     "@repo/memory-extension": "workspace:*",
     "@repo/promises-extension": "workspace:*",
     "@repo/prose-extension": "workspace:*",

@@ -1,5 +1,5 @@
-import { type ProseSense, proseExtension } from "@repo/interpreter/prose";
-import { proseHost } from "@repo/interpreter/prose-host";
+import { type ProseSense, proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import { describe, expect, it } from "vitest";
 import { memoryRepl } from "./helpers.ts";
 

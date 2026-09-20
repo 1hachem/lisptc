@@ -133,7 +133,9 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
 - An extension package depends on the interpreter, and carries the SDK its
   surface needs so the interpreter never does.
 - A REPL front-end and the agent depend on the interpreter, and on no
-  extension. A REPL is built from the extension list it is handed.
+  extension. A REPL is built from the extension list it is handed. The `runtime`
+  tag denies `extension`, so naming one in a manifest fails `pnpm boundaries`,
+  in a test as much as in `src/`.
 - An extension is named at a composition root, and there are only two: an app
   that runs a REPL itself, and `@repo/backend` for the agent the API serves.
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
@@ -253,9 +255,12 @@ should use them rather than assembling the world by hand.
 
 A test belongs to the package that owns what it asserts. A surface an extension
 owns is tested in that extension's package, never in the interpreter, whose
-helpers build an interpreter with nothing installed. A test that needs two
-extensions at once belongs in `@repo/backend`, the composition root that
-already names them all.
+helpers build an interpreter with nothing installed. A runtime package's tests
+name no extension either: a REPL there is built from stubs that hook the chains
+and fill the slots, so what is pinned is the seam rather than whoever happens to
+be on it. A test that needs a real extension, or two at once, belongs in
+`@repo/backend/test/extensions`, the composition root that already names them
+all.
 
 The agent evals are separate: the cases live in `apps/trace-viewer/evals` as
 `*.eval.ts`, they run against real models, and `pnpm test` does not include them.

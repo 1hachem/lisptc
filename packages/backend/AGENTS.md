@@ -79,3 +79,10 @@ environment. Under `task`, Infisical supplies them.
 identities by hand. `test/access.test.ts` and `test/removal.test.ts` are where
 the ownership and cascade rules are pinned, and a new resource needs a case in
 both.
+
+`test/extensions/` is the other project in `vitest.config.ts`, and it runs on
+node rather than the deployment's runtime. This is the only package that may
+name an extension in a test, so a case that needs a real one lives here: what
+the composed roster teaches the model, what the model-facing REPL reports back,
+and anything that takes two extensions at once. `test/extensions/helpers.ts`
+builds that roster.

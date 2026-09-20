@@ -1,4 +1,3 @@
-import { memorySlot } from "@repo/memory-extension";
 import type { AgentRepl } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
 import { ReplStore } from "../src/repl-store.ts";
@@ -7,11 +6,11 @@ import { testRepl, testRepls } from "./helpers.ts";
 describe("the store a host keeps its threads in", () => {
 	it("hands the same thread the same repl on a later turn", async () => {
 		const repls = testRepls();
-		await (await repls.get("thread-a")).eval('(memory/remember "k" "kept")');
+		await (await repls.get("thread-a")).eval("(setq x 41)");
 
 		expect(
-			await (await repls.get("thread-a")).eval('(memory/recall "k")'),
-		).toContain("kept");
+			(await (await repls.get("thread-a")).evalOutput("(echo x)")).user,
+		).toBe("41\n");
 	});
 
 	it("gives another thread a repl of its own", async () => {
@@ -52,42 +51,5 @@ describe("the store a host keeps its threads in", () => {
 
 		expect(repls.peek("thread-f")).toBeUndefined();
 		expect(repls.peek("thread-g")).toBeDefined();
-	});
-
-	it("carries a memory, so a thread remembers across turns", async () => {
-		const repl = await testRepls().get("thread-i");
-
-		expect(repl.hooks.filled(memorySlot)).toBeDefined();
-		expect(await repl.eval('(memory/remember "k" "a note")')).toContain("k");
-		expect(await repl.eval('(memory/recall "note")')).toContain("a note");
-	});
-
-	it("carries what one conversation learned into the next", async () => {
-		const repls = testRepls("someone");
-		await (await repls.get("thread-j")).eval(
-			'(memory/remember "k" "learned in the first conversation")',
-		);
-
-		expect(
-			await (await repls.get("a-brand-new-thread")).eval('(memory/recall "k")'),
-		).toContain("learned in the first conversation");
-	});
-
-	it("keeps one person's memories out of another's", async () => {
-		await (await testRepls("someone").get("thread-k")).eval(
-			'(memory/remember "secret" "mine")',
-		);
-
-		expect(
-			await (await testRepls("someone-else").get("thread-l")).eval(
-				'(memory/recall "secret")',
-			),
-		).not.toContain("mine");
-	});
-
-	it("gives an unscoped roster a bank of its own", () => {
-		expect(testRepl().hooks.filled(memorySlot)).not.toBe(
-			testRepl().hooks.filled(memorySlot),
-		);
 	});
 });

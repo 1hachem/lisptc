@@ -1,6 +1,6 @@
 import { Compactor } from "@repo/compaction-extension";
+import type { EvalOutput } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
-import type { EvalOutput } from "../src/repl.ts";
 import { memoryRepl, modelFacing } from "./helpers.ts";
 
 const PANEL = `
