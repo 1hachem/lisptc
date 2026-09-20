@@ -232,17 +232,28 @@ export function ChatProvider({
 
 	const runLisp = useCallback(
 		async (code: string) => {
-			if (!chatId) return;
 			const run = new AbortController();
 			running.current?.abort();
 			running.current = run;
 			setEvalError(undefined);
 			setEvaluating(true);
 			try {
-				await evalLisp(code, chatId, run.signal);
+				const opened =
+					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
+				if (!chatId) {
+					await navigate({
+						to: "/$workspaceId/$chatId",
+						params: { workspaceId, chatId: opened },
+						replace: true,
+					});
+				}
+				await evalLisp(code, opened, run.signal);
 			} catch (ex) {
 				if (run.signal.aborted) return;
-				reportIssue(ex, { $exception_source: "lisp eval", thread_id: chatId });
+				reportIssue(ex, {
+					$exception_source: "lisp eval",
+					thread_id: chatId ?? "draft",
+				});
 				setEvalError(ex instanceof Error ? ex.message : String(ex));
 			} finally {
 				if (running.current === run) {
@@ -251,7 +262,7 @@ export function ChatProvider({
 				}
 			}
 		},
-		[chatId],
+		[chatId, workspaceId, createChat, navigate],
 	);
 
 	const send = useCallback(
