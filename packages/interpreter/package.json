@@ -27,6 +27,9 @@
     "test:watch": "vitest",
     "bench": "node --experimental-transform-types --no-warnings bench/eval.ts"
   },
+  "dependencies": {
+    "@repo/shared": "workspace:*"
+  },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
