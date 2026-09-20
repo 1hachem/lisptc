@@ -1,5 +1,6 @@
+import { bufferTransport } from "@repo/interpreter/channels-host";
+import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
-import { bufferTransport } from "../src/channels-host.ts";
 import {
 	joinMessages,
 	nodeToJson,
@@ -9,9 +10,8 @@ import {
 	UiSurface,
 	type UiValue,
 	uiExtension,
-} from "../src/extensions/ui/ui.ts";
-import { uiHost } from "../src/extensions/ui/ui-host.ts";
-import { Interp, prelude, runSync, str } from "../src/lisp.ts";
+} from "../src/ui.ts";
+import { uiHost } from "../src/ui-host.ts";
 
 function collector(interp: Interp) {
 	let view: UiNode | undefined;

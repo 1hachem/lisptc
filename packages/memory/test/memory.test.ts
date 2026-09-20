@@ -1,28 +1,6 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Clock } from "@repo/shared/host";
-import { describe, expect, it } from "vitest";
-import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
-import {
-	FORGET_BELOW,
-	HALF_LIFE_MS,
-	LINKED_FIRES_AT,
-	MAX_CASCADE_DEPTH,
-	MAX_RECALL_WORDS,
-	MemoryBank,
-	memoryExtension,
-	REINFORCEMENT,
-	VolatileStore,
-} from "../src/extensions/memory/memory.ts";
-import {
-	FileMemoryStore,
-	memoryDirFor,
-	memoryHost,
-	scopedMemoryStore,
-} from "../src/extensions/memory/memory-host.ts";
-import { proseExtension } from "../src/extensions/prose/prose.ts";
-import { proseHost } from "../src/extensions/prose/prose-host.ts";
 import {
 	arrayToList,
 	Cell,
@@ -36,7 +14,26 @@ import {
 	runAsync,
 	runSync,
 	str,
-} from "../src/lisp.ts";
+} from "@repo/interpreter/lisp";
+import type { Clock } from "@repo/shared/host";
+import { describe, expect, it } from "vitest";
+import {
+	FORGET_BELOW,
+	HALF_LIFE_MS,
+	LINKED_FIRES_AT,
+	MAX_CASCADE_DEPTH,
+	MAX_RECALL_WORDS,
+	MemoryBank,
+	memoryExtension,
+	REINFORCEMENT,
+	VolatileStore,
+} from "../src/memory.ts";
+import {
+	FileMemoryStore,
+	memoryDirFor,
+	memoryHost,
+	scopedMemoryStore,
+} from "../src/memory-host.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
@@ -53,11 +50,7 @@ function fixture(
 	extras: InterpExtension[] = [],
 ): Fixture {
 	const interp = new Interp({
-		extensions: [
-			compactionExtension(),
-			memoryExtension(memoryHost, { bank }),
-			...extras,
-		],
+		extensions: [memoryExtension(memoryHost, { bank }), ...extras],
 	});
 	runSync(interp, prelude);
 	return {
@@ -71,10 +64,6 @@ function fixture(
 			return heard + before + (await drive(bank.endStep()));
 		},
 	};
-}
-
-function proseFixture(): Fixture {
-	return fixture(new MemoryBank(new VolatileStore()), [proseExtension()]);
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
@@ -200,27 +189,6 @@ describe("triggers", () => {
 		await expect(runAsync(f.interp, "(nope)")).rejects.toThrow(/undefined/);
 
 		expect(await drive(f.bank.endStep())).toContain("voids: define it first");
-	});
-
-	it("stays quiet when a failed form was excused as prose", async () => {
-		const f = fixture(new MemoryBank(new VolatileStore()), [
-			proseExtension({ ...proseHost, excuse: () => "read as prose" }),
-		]);
-		await ev(
-			f,
-			`(memory/remember "voids" "define it first" :on '(error "undefined"))`,
-		);
-
-		expect(await f.step('(deploy "the thing")')).not.toContain("voids");
-	});
-
-	it("fires on words in the prose around the forms", async () => {
-		const f = proseFixture();
-		await ev(f, `(memory/remember "todos" "finish it" :on '(prose "TODO"))`);
-
-		expect(await f.step("TODO check this\n(+ 1 1)")).toContain(
-			"todos: finish it",
-		);
 	});
 
 	it("matches what the user said by regular expression", async () => {
@@ -394,17 +362,6 @@ describe("triggers", () => {
 		expect(await f.step('(concat "skip")')).not.toContain("c: note");
 	});
 
-	it("combines text patterns for the kinds that match text", async () => {
-		const f = proseFixture();
-		await ev(
-			f,
-			`(memory/remember "u" "note" :on '(prose (any-of "deploy" "ship")))`,
-		);
-
-		expect(await f.step("ship it now\n(+ 1 1)")).toContain("u: note");
-		expect(await f.step("nothing here\n(+ 1 1)")).not.toContain("u: note");
-	});
-
 	it("says a call trigger needs a form when handed the old string", async () => {
 		const f = fixture();
 
@@ -435,10 +392,7 @@ describe("triggers", () => {
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
 
 		const quiet = new Interp({
-			extensions: [
-				compactionExtension(),
-				memoryExtension(memoryHost, { bank }),
-			],
+			extensions: [memoryExtension(memoryHost, { bank })],
 		});
 		runSync(quiet, prelude);
 

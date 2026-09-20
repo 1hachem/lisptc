@@ -1,22 +1,30 @@
-import { describe, expect, it } from "vitest";
-import { bufferTransport } from "../src/channels-host.ts";
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
-	Compactor,
-	compactionExtension,
-} from "../src/extensions/compaction/compaction.ts";
-import { compactionHost } from "../src/extensions/compaction/compaction-host.ts";
-import { secretsExtension } from "../src/extensions/secrets/secrets.ts";
-import { secretsHost } from "../src/extensions/secrets/secrets-host.ts";
-import { Cell, Interp, newSym, prelude, runSync, str } from "../src/lisp.ts";
-import { ev, freshInterp } from "./helpers.ts";
+	Cell,
+	Interp,
+	newSym,
+	prelude,
+	runSync,
+	str,
+} from "@repo/interpreter/lisp";
+import { describe, expect, it } from "vitest";
+import { Compactor, compactionExtension } from "../src/compaction.ts";
+import { compactionHost } from "../src/compaction-host.ts";
+
+function freshInterp(): Interp {
+	const interp = new Interp({ extensions: [compactionExtension()] });
+	runSync(interp, prelude);
+	return interp;
+}
+
+function ev(code: string, interp: Interp = freshInterp()): string {
+	return str(runSync(interp, code));
+}
 
 function interpWithLimit(limit: number): { interp: Interp; c: Compactor } {
 	const c = new Compactor(limit);
 	const interp = new Interp({
-		extensions: [
-			secretsExtension(),
-			compactionExtension(compactionHost, { compactor: c }),
-		],
+		extensions: [compactionExtension(compactionHost, { compactor: c })],
 	});
 	runSync(interp, prelude);
 	return { interp, c };
@@ -49,9 +57,39 @@ function echoed(
 	return stepped(code, given).user;
 }
 
+function modelEchoed(code: string): string {
+	const given = interpWithLimit(400);
+	return stepped(code, given).model;
+}
+
 const words = '(setq w "a b c d e f g h i j k l")';
 
 describe("echo respects the compactor's limit", () => {
+	it("rejects unknown options and missing option values", () => {
+		expect(() => modelEchoed('(echo "x" :ofset 2)')).toThrow(/unknown option/);
+		expect(() => modelEchoed('(echo :pending "and counting")')).toThrow(
+			/unknown option/,
+		);
+		expect(() => modelEchoed("(echo :offset)")).toThrow(
+			/odd-length keyword list/,
+		);
+	});
+
+	it("windows output and names the value to continue from", () => {
+		const windowed = modelEchoed('(echo "a b c d e" :length 2)');
+		expect(windowed).toContain("a b\n");
+		expect(windowed).toContain("2 of 5 words shown, 3 below");
+		expect(windowed).toContain(":offset 2");
+		expect(modelEchoed('(echo "a b c d e" :offset 3)')).toContain("d e");
+		expect(modelEchoed('(echo "a b" :offset 9)')).toContain(
+			"nothing at :offset 9",
+		);
+		const given = interpWithLimit(400);
+		runSync(given.interp, '(setq doc "a b c d e")');
+		expect(stepped("(echo doc :length 2)", given).model).toContain(
+			"(echo doc :offset 2)",
+		);
+	});
 	it("caps the model's copy at the limit however much was asked for", () => {
 		const given = interpWithLimit(4);
 		runSync(given.interp, words);
@@ -93,6 +131,24 @@ describe("echo respects the compactor's limit", () => {
 });
 
 describe("echo :match", () => {
+	it("marks hits, handles misses and validates patterns", () => {
+		const marked = modelEchoed(
+			'(echo "the auth token expires" :match "auth" :context 1)',
+		);
+		expect(marked).toContain("@1");
+		expect(marked).toContain("[[auth]]");
+		expect(marked).toContain('1 match for "auth"');
+		expect(modelEchoed('(echo "AUTH" :match "auth")')).toContain("[[AUTH]]");
+		expect(
+			modelEchoed('(echo "AUTH" :match "auth" :ignore-case nil)'),
+		).toContain("no match");
+		expect(modelEchoed('(echo "abc" :match "zzz")')).toContain(
+			'no match for "zzz"',
+		);
+		expect(() => modelEchoed('(echo "x" :match "(")')).toThrow(
+			/invalid regular expression/,
+		);
+	});
 	it("feeds its offset straight back into echo", () => {
 		const given = interpWithLimit(20);
 		runSync(given.interp, words);
@@ -216,41 +272,6 @@ describe("the character backstop", () => {
 		expect(model).toContain("012345678901234567890123");
 		expect(model).toContain("24 of 40 characters shown (one unbroken word)");
 		expect(model).toContain("(echo (substring blob 24 40))");
-	});
-});
-
-describe("secret taint", () => {
-	function withSecret(value: string): { interp: Interp; c: Compactor } {
-		const c = new Compactor();
-		const interp = new Interp({
-			extensions: [
-				secretsExtension({
-					...secretsHost,
-					store: {
-						get: () => ({ value, description: "" }),
-						list: () => [["REPL_K", ""]],
-						set: () => {},
-					},
-				}),
-				compactionExtension(compactionHost, { compactor: c }),
-			],
-		});
-		runSync(interp, prelude);
-		return { interp, c };
-	}
-
-	it("cannot be read around by echo, head or grep", () => {
-		const given = withSecret("open-sesame");
-		expect(echoed('(echo (secret "REPL_K"))', given)).toBe(
-			"#<secret:REPL_K>\n",
-		);
-		expect(ev('(head (secret "REPL_K") 5)', given.interp)).toBe(
-			'"#<secret:REPL_K>"',
-		);
-		expect(ev('(grep (secret "REPL_K") "sesame")', given.interp)).toBe("nil");
-		expect(ev('(grep (list (secret "REPL_K")) "sesame")', given.interp)).toBe(
-			"nil",
-		);
 	});
 });
 
@@ -420,23 +441,6 @@ describe("reporting a result", () => {
 			.globalNames()
 			.filter((name) => !name.startsWith("_") && !docs.has(name));
 		expect(undocumented).toEqual([]);
-	});
-
-	it("leaves a Secret's printed form alone", () => {
-		const interp = new Interp({
-			extensions: [
-				secretsExtension({
-					...secretsHost,
-					store: {
-						get: () => ({ value: "shh", description: "" }),
-						list: () => [["REPL_K", ""]],
-						set: () => {},
-					},
-				}),
-			],
-		});
-		runSync(interp, prelude);
-		expect(str(runSync(interp, '(secret "REPL_K")'))).toBe("#<secret:REPL_K>");
 	});
 });
 

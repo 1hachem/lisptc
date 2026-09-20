@@ -1,20 +1,20 @@
-import type { PromptSource } from "@repo/shared/host";
-import { describe, expect, it } from "vitest";
-import { compactionExtension } from "../src/extensions/compaction/compaction.ts";
-import { compactionHost } from "../src/extensions/compaction/compaction-host.ts";
+import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
+import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	type MemoryStore,
 	memoryExtension,
 	VolatileStore,
-} from "../src/extensions/memory/memory.ts";
-import { memoryHost } from "../src/extensions/memory/memory-host.ts";
-import { promisesExtension } from "../src/extensions/promises/promises.ts";
-import { promisesHost } from "../src/extensions/promises/promises-host.ts";
-import { proseExtension } from "../src/extensions/prose/prose.ts";
-import { proseHost } from "../src/extensions/prose/prose-host.ts";
-import { secretsExtension } from "../src/extensions/secrets/secrets.ts";
-import { secretsHost } from "../src/extensions/secrets/secrets-host.ts";
-import type { InterpExtension } from "../src/lisp.ts";
+} from "@repo/memory-extension";
+import { memoryHost } from "@repo/memory-extension/host";
+import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
+import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
+import { secretsExtension } from "@repo/secrets-extension";
+import { secretsHost } from "@repo/secrets-extension/host";
+import type { PromptSource } from "@repo/shared/host";
+import { describe, expect, it } from "vitest";
 
 const said: PromptSource = () => "a prompt the host supplied";
 

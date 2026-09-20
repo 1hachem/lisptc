@@ -1,8 +1,8 @@
+import { bufferTransport } from "@repo/interpreter/channels-host";
+import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
+import { note } from "@repo/interpreter/topics";
 import { describe, expect, it } from "vitest";
-import { bufferTransport } from "../src/channels-host.ts";
-import { checkSyntax, proseExtension } from "../src/extensions/prose/prose.ts";
-import { Interp, prelude, runSync, str } from "../src/lisp.ts";
-import { note } from "../src/topics.ts";
+import { checkSyntax, proseExtension } from "../src/prose.ts";
 
 type Run = { value: string; output: string; skipped: string[] };
 

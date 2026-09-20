@@ -231,7 +231,7 @@ describe("MCP search engine", () => {
 		expect(documents[1]).toContainEqual({
 			id: "search-fixture/echo",
 			name: "search-fixture/echo",
-			description: "Echo back the given message",
+			description: "Echo back the given message.",
 		});
 	});
 });

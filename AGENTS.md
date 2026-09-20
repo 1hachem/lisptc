@@ -74,12 +74,28 @@ for working in it.
 
 ### Packages
 
-- `packages/interpreter` (`@repo/interpreter`) — the language, and the extensions that ship with it. Owns the host-port and seam patterns.
-- `packages/mcp` (`@repo/mcp`) — the MCP extension.
-- `packages/llm` (`@repo/llm`) — the language-model extension.
+The core language, and nothing else:
+
+- `packages/interpreter` (`@repo/interpreter`) — the reader, the evaluator, the drivers, the prelude, and the three seam mechanisms an extension plugs into. It ships no extension and names none. Owns the host-port and seam patterns.
+
+The extensions, one language surface each. Every one depends on the
+interpreter, reaches the world only through ports it declares itself, and is
+named only at a composition root:
+
+- `packages/compaction` (`@repo/compaction-extension`) — bounded output.
+- `packages/llm` (`@repo/llm-extension`) — the language-model extension.
+- `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
+- `packages/memory` (`@repo/memory-extension`) — the memory extension.
+- `packages/promises` (`@repo/promises-extension`) — asynchrony.
+- `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
+- `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
+- `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
+- `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
+
+Everything else:
+
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter.
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
-- `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
@@ -109,6 +125,11 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
 ```
 
 - The interpreter depends on no workspace package that depends on it.
+- The interpreter is the core dialect and the seams, and stops there. It
+  defines the shape an extension satisfies, the chains an extension hooks and
+  the slots an extension fills, and it ships none of its own. Every surface
+  past the core dialect lives in an extension package, so a new form belongs in
+  an extension unless the evaluator cannot run without it.
 - An extension package depends on the interpreter, and carries the SDK its
   surface needs so the interpreter never does.
 - A REPL front-end and the agent depend on the interpreter, and on no
@@ -230,6 +251,12 @@ instead; their own `AGENTS.md` says so.
 A package with shared test helpers has them in `test/helpers.ts`, and a test
 should use them rather than assembling the world by hand.
 
+A test belongs to the package that owns what it asserts. A surface an extension
+owns is tested in that extension's package, never in the interpreter, whose
+helpers build an interpreter with nothing installed. A test that needs two
+extensions at once belongs in `@repo/backend`, the composition root that
+already names them all.
+
 The agent evals are separate: the cases live in `apps/trace-viewer/evals` as
 `*.eval.ts`, they run against real models, and `pnpm test` does not include them.
 `pnpm test:evals` runs them.
@@ -272,8 +299,8 @@ runs, in order: typecheck → lint → check:comments → check:docs →
 boundaries → check:arch → knip → test.
 `lint`, the `check:*` scripts and `knip` run once at the root;
 `typecheck` and `test` fan out through Turbo. Husky runs commitlint
-(conventional commits) on `commit-msg`, and `pnpm check:comments`,
-`pnpm boundaries` and `pnpm check:arch` on `pre-push`.
+(conventional commits) on `commit-msg`, and `pnpm lint`, `pnpm typecheck`,
+`pnpm check:comments`, `pnpm boundaries` and `pnpm check:arch` on `pre-push`.
 
 A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
 longer than one line, so write the subject and stop unless a description was

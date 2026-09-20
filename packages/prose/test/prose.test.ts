@@ -1,3 +1,11 @@
+import {
+	Interp,
+	prelude,
+	runAsync,
+	runSync,
+	str,
+} from "@repo/interpreter/lisp";
+import { note } from "@repo/interpreter/topics";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,10 +14,8 @@ import {
 	type ProseExcuse,
 	proseExtension,
 	stripProse,
-} from "../src/extensions/prose/prose.ts";
-import { proseHost } from "../src/extensions/prose/prose-host.ts";
-import { Interp, prelude, runAsync, runSync, str } from "../src/lisp.ts";
-import { note } from "../src/topics.ts";
+} from "../src/prose.ts";
+import { proseHost } from "../src/prose-host.ts";
 import {
 	ev,
 	evProse,

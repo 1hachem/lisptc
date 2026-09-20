@@ -1,12 +1,3 @@
-import { describe, expect, it } from "vitest";
-import {
-	type Memory,
-	MemoryBank,
-	type MemoryStore,
-	memoryExtension,
-	VolatileStore,
-} from "../src/extensions/memory/memory.ts";
-import { memoryHost } from "../src/extensions/memory/memory-host.ts";
 import {
 	driveAsync,
 	driveSync,
@@ -16,7 +7,16 @@ import {
 	runSync,
 	settled,
 	str,
-} from "../src/lisp.ts";
+} from "@repo/interpreter/lisp";
+import { describe, expect, it } from "vitest";
+import {
+	type Memory,
+	MemoryBank,
+	type MemoryStore,
+	memoryExtension,
+	VolatileStore,
+} from "../src/memory.ts";
+import { memoryHost } from "../src/memory-host.ts";
 
 class PromisedStore implements MemoryStore {
 	private readonly inner = new VolatileStore();
