@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "type": "module",
   "private": true,
-  "engines": {
-    "node": ">=22.6.0"
-  },
   "exports": {
     ".": "./src/index.ts",
     "./styles/app.css": "./src/styles/app.css",
@@ -13,6 +10,9 @@
     "./themes": "./src/themes.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./*": "./src/*"
+  },
+  "engines": {
+    "node": ">=22.6.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

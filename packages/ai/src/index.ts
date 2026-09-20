@@ -22,9 +22,17 @@ export {
 	type TranscriptEntry,
 } from "./repl.ts";
 export {
+	type OpenRepl,
+	type ReplSource,
+	ReplStore,
+	replFrom,
+} from "./repl-store.ts";
+export {
 	type ChatInput,
 	type ChatMessageInput,
+	type ChatStreamOptions,
 	streamChatResponse,
+	type WireMessage,
 } from "./stream.ts";
 export {
 	captureException,

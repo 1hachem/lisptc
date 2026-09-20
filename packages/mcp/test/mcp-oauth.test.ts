@@ -1,12 +1,13 @@
 import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	CallbackServer,
 	createAuthCallback,
 	FileOAuthStore,
 	StoredOAuthProvider,
+	sharedAuthCallback,
 } from "../src/mcp-oauth.ts";
 import type { OAuthRecord, OAuthStore } from "../src/ports.ts";
 
@@ -289,6 +290,60 @@ describe("createAuthCallback", () => {
 			expect(cb.redirectUrl()).toBe("http://127.0.0.1:8920/callback");
 		} finally {
 			await cb.close();
+		}
+	});
+});
+
+describe("sharedAuthCallback", () => {
+	it("hands every caller on a fixed port the one server that bound it", async () => {
+		const redirect = "http://127.0.0.1:8921/callback";
+		const first = await sharedAuthCallback(8921, redirect);
+		const second = await sharedAuthCallback(8921, redirect);
+		try {
+			expect(second).toBe(first);
+			const waiting = second.waitForCode("late-arrival");
+			await fetch(`${redirect}?code=captured&state=late-arrival`);
+			expect(await waiting).toBe("captured");
+		} finally {
+			await first.close();
+		}
+	});
+
+	it("binds again once the shared server is closed", async () => {
+		const redirect = "http://127.0.0.1:8922/callback";
+		const first = await sharedAuthCallback(8922, redirect);
+		await first.close();
+		const second = await sharedAuthCallback(8922, redirect);
+		try {
+			expect(second).not.toBe(first);
+		} finally {
+			await second.close();
+		}
+	});
+
+	it("keeps the bound server, and its pending flows, across a module reload", async () => {
+		const redirect = "http://127.0.0.1:8923/callback";
+		const before = await sharedAuthCallback(8923, redirect);
+		const waiting = before.waitForCode("survives-reload");
+		vi.resetModules();
+		const reloaded = await import("../src/mcp-oauth.ts");
+		try {
+			expect(await reloaded.sharedAuthCallback(8923, redirect)).toBe(before);
+			await fetch(`${redirect}?code=still-here&state=survives-reload`);
+			expect(await waiting).toBe("still-here");
+		} finally {
+			await before.close();
+		}
+	});
+
+	it("shares nothing when the port is ephemeral", async () => {
+		const first = await sharedAuthCallback(0);
+		const second = await sharedAuthCallback(0);
+		try {
+			expect(second).not.toBe(first);
+		} finally {
+			await first.close();
+			await second.close();
 		}
 	});
 });

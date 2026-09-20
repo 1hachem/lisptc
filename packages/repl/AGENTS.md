@@ -1,0 +1,51 @@
+# @repo/repl
+
+The REPL front-ends over the interpreter. It names no extension: a REPL is
+built from the list it is handed, and what is on that list is decided above.
+
+Turbo tag: `runtime`.
+
+## Shape
+
+`src/repl.ts` is the in-memory REPL. It takes its extension list through
+options, builds an `Interp` with them, and serialises evaluation through the
+session hooks. The agent-facing REPL extends it with the turn lifecycle the
+agent loop drives.
+
+`src/session-server.ts` is the long-lived REPL behind a socket, with the client
+that speaks to it and the protocol version they agree on. `serve` takes the
+extension list. The server is not an entry point here: `connectOrSpawn` is told
+which file to spawn, and that file is the caller's, so the process that serves
+the session is the one that decides what is in it. `spawnServer` writes the
+argv `serveFromArgv` reads, which is why they live in the same file.
+
+The interactive terminal REPL is not here. It is `@lisptc/cli`, which builds on
+this package's exports.
+
+## Rules
+
+**No file here names an extension**, and `check:arch` holds the tree to it with
+`src/repl.ts` as the single listed exception. Adding an extension is an edit at
+a composition root: `@lisptc/cli`, `@lisptc/lsp` or `@repo/backend`. There is no
+registry that would do it for you, and a test that wants a roster builds one.
+
+`src/repl.ts` is a driver, and `check:arch` pins what it may carry across the
+seam by name. If a new value from an extension has to reach it, that list is the
+thing to extend deliberately, in the script, and the failure names it.
+
+Everything else here runs the chains without knowing who is on them. Give a new
+chain a base case that is correct when no extension hooks it, because a REPL
+built without that extension takes the base.
+
+## Tests
+
+`test/helpers.ts` holds the shared setup, and the roster it builds is the
+test's own, not a list this package ships. It reaches for no extension package:
+what a REPL does with a capability is pinned here with a stub that fills the
+slot, and what an extension does with it is pinned in that extension's own
+tests. A case that needs a real extension belongs where that extension is
+composed, which is why the discovery-call cases live in `@lisptc/cli`.
+
+`test/extensions.test.ts` and `test/session-hooks.test.ts` are where a change
+to the lifecycle shows up first. `test/session-server.test.ts` spawns
+`test/fixture-session.ts`, which stands in for the entry an app would pass.

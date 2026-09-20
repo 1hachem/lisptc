@@ -1,3 +1,2 @@
-A leaf module: no imports of its own.
 (defun double (x) (* x 2))
 (setq greeting "hello from util")

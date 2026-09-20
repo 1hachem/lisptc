@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Channels, type Envelope, topic } from "../src/channels.ts";
 import { bufferTransport } from "../src/channels-host.ts";
-import { proseExtension } from "../src/extensions/prose/prose.ts";
-import { Interp, runSync, str } from "../src/lisp.ts";
+import { Interp, runSync } from "../src/lisp.ts";
 import { note, output } from "../src/topics.ts";
 
 const weather = topic<{ sky: string }>("weather");
@@ -140,16 +139,6 @@ describe("an interp's channels", () => {
 		first.channels.pipe(buffer);
 		runSync(second, '(echo "not yours")');
 		expect(buffer.envelopes).toEqual([]);
-	});
-
-	it("notes a skipped aside for the model alone", () => {
-		const interp = new Interp({ extensions: [proseExtension()] });
-		const buffer = bufferTransport();
-		interp.channels.pipe(buffer);
-		expect(str(runSync(interp, "an aside (see below)\n(+ 1 2)"))).toBe("3");
-		expect(buffer.payloads(note).map((n) => n.kind)).toEqual(["skipped"]);
-		expect(buffer.payloads(note)[0]?.text).toContain("(see below)");
-		expect(buffer.envelopes.every((e) => !e.to.includes("user"))).toBe(true);
 	});
 
 	it("notes a failing top-level form, and the note reaches a subscriber", () => {

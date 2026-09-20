@@ -14,9 +14,9 @@
     "test:watch": "turbo run test:watch",
     "test:evals": "turbo run test:evals",
     "test:nvim": "bash editors/nvim/tests/run.sh",
-    "repl": "pnpm --filter @repo/repl repl",
-    "repl:attach": "pnpm --silent --filter @repo/repl repl:attach",
-    "repl:kill": "pnpm --silent --filter @repo/repl repl:kill",
+    "repl": "pnpm --filter @lisptc/cli repl",
+    "repl:attach": "pnpm --silent --filter @lisptc/cli repl:attach",
+    "repl:kill": "pnpm --silent --filter @lisptc/cli repl:kill",
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
@@ -33,7 +33,8 @@
   "pnpm": {
     "overrides": {
       "@types/react": "^19.2.2",
-      "@types/react-dom": "^19.2.2"
+      "@types/react-dom": "^19.2.2",
+      "@better-auth/utils": "0.4.2"
     }
   },
   "devDependencies": {

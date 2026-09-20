@@ -4,7 +4,8 @@ import { LocalProcessHost } from "./local-host.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
 import { FileOAuthStore } from "./mcp-oauth.ts";
-import type { McpClient } from "./ports.ts";
+import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
+import { keywordSearchEngine } from "./search.ts";
 import { bundledToolkit } from "./toolkit.ts";
 
 function callbackPort(): number {
@@ -18,22 +19,29 @@ function redirectUri(): string {
 	);
 }
 
-export function localMcpClient(scope?: string): McpClient {
+export interface McpHostOptions {
+	scope?: string;
+	oauth?: OAuthStore;
+	host?: McpHost;
+}
+
+export function localMcpClient(options: McpHostOptions = {}): McpClient {
 	return mcpClient({
-		host: new LocalProcessHost(),
-		oauth: new FileOAuthStore(),
+		host: options.host ?? new LocalProcessHost(),
+		oauth: options.oauth ?? new FileOAuthStore(),
 		redirectUri: redirectUri(),
 		callbackPort: callbackPort(),
-		scope,
+		scope: options.scope,
 	});
 }
 
-const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
+export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
-export function mcpHostFor(scope?: string): McpExtensionHost {
+export function mcpHostFor(options: McpHostOptions = {}): McpExtensionHost {
 	return {
-		client: localMcpClient(scope),
+		client: localMcpClient(options),
 		toolkit: bundledToolkit(),
+		search: keywordSearchEngine,
 		prompt: mcpPrompt,
 	};
 }

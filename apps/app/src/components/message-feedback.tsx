@@ -13,7 +13,7 @@ export function MessageFeedback({
 	messageId?: string;
 	index: number;
 }) {
-	const { threadId } = useChatSession();
+	const chatId = useChatSession((state) => state.chatId);
 	const { say } = useAgent();
 
 	return (
@@ -21,7 +21,7 @@ export function MessageFeedback({
 			capture={(properties) =>
 				captureFeedback({
 					...properties,
-					$ai_trace_id: threadId,
+					$ai_trace_id: chatId ?? undefined,
 					...(messageId ? { message_id: messageId } : {}),
 					message_index: index,
 				})

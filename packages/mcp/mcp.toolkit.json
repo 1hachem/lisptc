@@ -20,14 +20,19 @@
       "headless",
       "automation"
     ],
+    "image": "lisptc/browser-mcp:v1.63.0",
+    "port": 8931,
     "command": "npx",
     "args": [
       "-y",
-      "@playwright/mcp@latest",
+      "@playwright/mcp@0.0.81",
       "--browser",
       "chromium",
       "--executable-path",
-      "${PLAYWRIGHT_MCP_EXECUTABLE}"
+      "${PLAYWRIGHT_MCP_EXECUTABLE}",
+      "--headless",
+      "--no-sandbox",
+      "--isolated"
     ]
   },
   {

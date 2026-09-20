@@ -9,25 +9,14 @@
     "./async": "./src/async.ts",
     "./channels": "./src/channels.ts",
     "./channels-host": "./src/channels-host.ts",
-    "./compaction": "./src/extensions/compaction/compaction.ts",
-    "./compaction-host": "./src/extensions/compaction/compaction-host.ts",
     "./hooks": "./src/hooks.ts",
     "./lisp": "./src/lisp.ts",
-    "./memory": "./src/extensions/memory/memory.ts",
-    "./memory-host": "./src/extensions/memory/memory-host.ts",
+    "./observe": "./src/observe.ts",
     "./plist": "./src/plist.ts",
-    "./promises": "./src/extensions/promises/promises.ts",
-    "./promises-host": "./src/extensions/promises/promises-host.ts",
-    "./prose": "./src/extensions/prose/prose.ts",
-    "./prose-host": "./src/extensions/prose/prose-host.ts",
-    "./secrets": "./src/extensions/secrets/secrets.ts",
-    "./secrets-host": "./src/extensions/secrets/secrets-host.ts",
     "./session": "./src/session.ts",
     "./source": "./src/source.ts",
     "./topics": "./src/topics.ts",
-    "./types": "./src/types.ts",
-    "./ui": "./src/extensions/ui/ui.ts",
-    "./ui-host": "./src/extensions/ui/ui-host.ts"
+    "./types": "./src/types.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -39,9 +28,7 @@
     "bench": "node --experimental-transform-types --no-warnings bench/eval.ts"
   },
   "dependencies": {
-    "@repo/env": "workspace:*",
-    "@repo/shared": "workspace:*",
-    "dotenv": "^17.4.2"
+    "@repo/shared": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

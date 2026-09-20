@@ -6,6 +6,7 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
+import type { LlmCall } from "@repo/interpreter/observe";
 import { describe, expect, it } from "vitest";
 import {
 	type Generate,
@@ -14,7 +15,6 @@ import {
 	llmExtension,
 } from "../src/llm.ts";
 import { llmHost } from "../src/llm-host.ts";
-import type { LlmCall } from "../src/observe.ts";
 
 type Reply = (req: LlmRequest) => LlmResult | string;
 

@@ -15,10 +15,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "@repo/interpreter": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*",
-    "@repo/repl": "workspace:*"
+    "@repo/compaction-extension": "workspace:*",
+    "@repo/llm-extension": "workspace:*",
+    "@repo/mcp-extension": "workspace:*",
+    "@repo/memory-extension": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/prose-extension": "workspace:*",
+    "@repo/repl": "workspace:*",
+    "@repo/secrets-extension": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

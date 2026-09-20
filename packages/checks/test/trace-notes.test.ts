@@ -1,5 +1,5 @@
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
-import { proseExtension } from "@repo/interpreter/prose";
+import { proseExtension } from "@repo/prose-extension";
 import { describe, expect, test } from "vitest";
 import { Checks } from "../src/checks.ts";
 import { Trace } from "../src/trace.ts";

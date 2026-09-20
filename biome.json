@@ -10,6 +10,7 @@
     "includes": [
       "packages/*/src/**",
       "packages/*/test/**",
+      "packages/*/convex/**",
       "packages/*/*.ts",
       "packages/*/*.json",
       "apps/*/src/**",
@@ -25,7 +26,8 @@
       "!**/node_modules",
       "!.claude",
       "!apps/app/src/routeTree.gen.ts",
-      "!apps/trace-viewer/next-env.d.ts"
+      "!apps/trace-viewer/next-env.d.ts",
+      "!packages/backend/convex/_generated"
     ]
   },
   "formatter": {
@@ -37,7 +39,8 @@
     "rules": {
       "recommended": true,
       "correctness": {
-        "noUndeclaredDependencies": "error"
+        "noUndeclaredDependencies": "error",
+        "noUnusedImports": { "level": "warn", "fix": "safe" }
       },
       "style": {
         "noProcessEnv": "error"

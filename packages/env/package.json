@@ -8,8 +8,11 @@
     "./analytics": "./src/analytics.ts",
     "./api": "./src/api.ts",
     "./decisions": "./src/decisions.ts",
+    "./app": "./src/app.ts",
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",
+    "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
+    "./mcps/mistral/api": "./src/mcps/mistral/api.ts",
     "./memory": "./src/memory.ts",
     "./oauth": "./src/oauth.ts",
     "./providers": "./src/providers.ts",
@@ -17,9 +20,7 @@
     "./repl": "./src/repl.ts",
     "./server": "./src/server.ts",
     "./trace-viewer": "./src/trace-viewer.ts",
-    "./web": "./src/web.ts",
-    "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
-    "./mcps/mistral/api": "./src/mcps/mistral/api.ts"
+    "./web": "./src/web.ts"
   },
   "engines": {
     "node": ">=22.6.0"

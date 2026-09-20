@@ -1,0 +1,540 @@
+import { bufferTransport } from "@repo/interpreter/channels-host";
+import {
+	Cell,
+	Interp,
+	newSym,
+	prelude,
+	runSync,
+	str,
+} from "@repo/interpreter/lisp";
+import { describe, expect, it } from "vitest";
+import { Compactor, compactionExtension } from "../src/compaction.ts";
+import { compactionHost } from "../src/compaction-host.ts";
+
+function freshInterp(): Interp {
+	const interp = new Interp({ extensions: [compactionExtension()] });
+	runSync(interp, prelude);
+	return interp;
+}
+
+function ev(code: string, interp: Interp = freshInterp()): string {
+	return str(runSync(interp, code));
+}
+
+function interpWithLimit(limit: number): { interp: Interp; c: Compactor } {
+	const c = new Compactor(limit);
+	const interp = new Interp({
+		extensions: [compactionExtension(compactionHost, { compactor: c })],
+	});
+	runSync(interp, prelude);
+	return { interp, c };
+}
+
+function stepped(
+	code: string,
+	given?: { interp: Interp; c: Compactor },
+): { user: string; model: string } {
+	const { interp, c } = given ?? { interp: freshInterp(), c: undefined };
+	c?.beginStep();
+	const buffer = bufferTransport();
+	const detach = interp.channels.pipe(buffer);
+	try {
+		runSync(interp, code);
+	} finally {
+		detach();
+	}
+	const user = buffer.text("user");
+	return {
+		user,
+		model: c === undefined ? user : buffer.text("model") + c.endStep(),
+	};
+}
+
+function echoed(
+	code: string,
+	given?: { interp: Interp; c: Compactor },
+): string {
+	return stepped(code, given).user;
+}
+
+function modelEchoed(code: string): string {
+	const given = interpWithLimit(400);
+	return stepped(code, given).model;
+}
+
+const words = '(setq w "a b c d e f g h i j k l")';
+
+describe("echo respects the compactor's limit", () => {
+	it("rejects unknown options and missing option values", () => {
+		expect(() => modelEchoed('(echo "x" :ofset 2)')).toThrow(/unknown option/);
+		expect(() => modelEchoed('(echo :pending "and counting")')).toThrow(
+			/unknown option/,
+		);
+		expect(() => modelEchoed("(echo :offset)")).toThrow(
+			/odd-length keyword list/,
+		);
+	});
+
+	it("windows output and names the value to continue from", () => {
+		const windowed = modelEchoed('(echo "a b c d e" :length 2)');
+		expect(windowed).toContain("a b\n");
+		expect(windowed).toContain("2 of 5 words shown, 3 below");
+		expect(windowed).toContain(":offset 2");
+		expect(modelEchoed('(echo "a b c d e" :offset 3)')).toContain("d e");
+		expect(modelEchoed('(echo "a b" :offset 9)')).toContain(
+			"nothing at :offset 9",
+		);
+		const given = interpWithLimit(400);
+		runSync(given.interp, '(setq doc "a b c d e")');
+		expect(stepped("(echo doc :length 2)", given).model).toContain(
+			"(echo doc :offset 2)",
+		);
+	});
+	it("caps the model's copy at the limit however much was asked for", () => {
+		const given = interpWithLimit(4);
+		runSync(given.interp, words);
+		const { user, model } = stepped("(echo w :length 99)", given);
+		expect(user).toBe("a b c d e f g h i j k l\n");
+		expect(model).toContain("a b c d\n");
+		expect(model).toContain("4 of 12 words shown");
+	});
+
+	it("reports the end of the value rather than a next offset", () => {
+		const given = interpWithLimit(4);
+		runSync(given.interp, words);
+		expect(stepped("(echo w :offset 8)", given).model).toBe(
+			"i j k l\n... 4 of 12 words shown, 8 above — back to the start with (echo w :offset 0)\n",
+		);
+	});
+
+	it("names the value in the marker only when a global holds it", () => {
+		const given = interpWithLimit(3);
+		runSync(given.interp, words);
+		expect(stepped("(echo w)", given).model).toContain("(echo w :offset 3)");
+		expect(stepped('(echo "a b c d e")', given).model).toContain(
+			"read on from :offset 3",
+		);
+	});
+
+	it("preserves interior newlines rather than re-joining words", () => {
+		expect(echoed('(echo "one\\ntwo\\nthree")')).toBe("one\ntwo\nthree\n");
+	});
+
+	it("rejects a negative offset", () => {
+		expect(() => echoed('(echo "a b" :offset -1)')).toThrow(
+			/non-negative integer expected for :offset/,
+		);
+		expect(() => echoed('(echo "a b" :offset)')).toThrow(
+			/odd-length keyword list/,
+		);
+	});
+});
+
+describe("echo :match", () => {
+	it("marks hits, handles misses and validates patterns", () => {
+		const marked = modelEchoed(
+			'(echo "the auth token expires" :match "auth" :context 1)',
+		);
+		expect(marked).toContain("@1");
+		expect(marked).toContain("[[auth]]");
+		expect(marked).toContain('1 match for "auth"');
+		expect(modelEchoed('(echo "AUTH" :match "auth")')).toContain("[[AUTH]]");
+		expect(
+			modelEchoed('(echo "AUTH" :match "auth" :ignore-case nil)'),
+		).toContain("no match");
+		expect(modelEchoed('(echo "abc" :match "zzz")')).toContain(
+			'no match for "zzz"',
+		);
+		expect(() => modelEchoed('(echo "x" :match "(")')).toThrow(
+			/invalid regular expression/,
+		);
+	});
+	it("feeds its offset straight back into echo", () => {
+		const given = interpWithLimit(20);
+		runSync(given.interp, words);
+		expect(echoed('(echo w :match "g" :context 0)', given)).toContain(
+			"@6  [[g]]",
+		);
+		expect(echoed("(echo w :offset 6 :length 1)", given)).toContain("g");
+	});
+
+	it("collapses hits that fall inside a window already shown", () => {
+		const given = interpWithLimit(20);
+		runSync(given.interp, words);
+		expect(echoed('(echo w :match "[a-l]" :context 3)', given)).toContain(
+			"in a region already shown",
+		);
+	});
+
+	it("honours :max", () => {
+		const out = echoed('(echo "x y x y x y x y" :match "x" :context 0 :max 2)');
+		expect(out.split("\n").filter((l) => l.startsWith("@"))).toHaveLength(2);
+	});
+
+	it("points at grep for keeping what matched", () => {
+		expect(echoed('(echo "cat cot" :match "c[ao]t")')).toContain(
+			'(grep <value> "c[ao]t")',
+		);
+	});
+
+	it("terminates on a pattern that matches the empty string", () => {
+		expect(echoed('(echo "a b c" :match "a*")')).toContain("matches");
+	});
+});
+
+describe("head and tail", () => {
+	it("take elements from a list, not words", () => {
+		expect(ev("(head '(1 2 3 4) 2)")).toBe("(1 2)");
+		expect(ev("(tail '(1 2 3 4) 2)")).toBe("(3 4)");
+	});
+
+	it("take words from text", () => {
+		expect(ev('(head "a b c d" 2)')).toBe('"a b"');
+		expect(ev('(tail "a b c d" 2)')).toBe('"c d"');
+	});
+
+	it("default to a handful of elements, or the word limit for text", () => {
+		expect(ev("(length (head '(1 2 3 4 5 6 7 8 9 10 11 12)))")).toBe("10");
+		expect(ev('(head "a b c d e")', interpWithLimit(3).interp)).toBe('"a b c"');
+	});
+
+	it("ask for more than there is without complaint", () => {
+		expect(ev("(head '(1 2) 9)")).toBe("(1 2)");
+		expect(ev("(tail '(1 2) 9)")).toBe("(1 2)");
+		expect(ev("(head nil 3)")).toBe("nil");
+	});
+
+	it("reject a count that is not a non-negative integer", () => {
+		expect(() => ev('(head "a b" -1)')).toThrow(
+			/non-negative integer expected/,
+		);
+	});
+});
+
+describe("grep returns what matched", () => {
+	it("returns the matching ELEMENTS of a list", () => {
+		expect(ev(`(grep (list "auth token" "billing" "oauth flow") "auth")`)).toBe(
+			'("auth token" "oauth flow")',
+		);
+	});
+
+	it("returns the matched SUBSTRINGS of text", () => {
+		expect(
+			ev(`(grep "see https://x.dev/a and https://y.dev/b" "https?://[^ ]+")`),
+		).toBe('("https://x.dev/a" "https://y.dev/b")');
+	});
+
+	it("keeps one capture group with :group", () => {
+		expect(ev(`(grep "a=1 b=2" "(\\\\w)=(\\\\d)" :group 2)`)).toBe('("1" "2")');
+	});
+
+	it("returns nil when nothing matched", () => {
+		expect(ev('(grep "a b c" "zzz")')).toBe("nil");
+		expect(ev('(grep (list "a") "zzz")')).toBe("nil");
+	});
+
+	it("honours :max on both shapes", () => {
+		expect(ev('(grep "x x x" "x" :max 2)')).toBe('("x" "x")');
+		expect(ev('(grep (list "x" "x" "x") "x" :max 1)')).toBe('("x")');
+	});
+
+	it("is case-insensitive unless told otherwise", () => {
+		expect(ev('(grep "Alpha" "alpha")')).toBe('("Alpha")');
+		expect(ev('(grep "Alpha" "alpha" :ignore-case nil)')).toBe("nil");
+	});
+
+	it("rejects an invalid regular expression", () => {
+		expect(() => ev('(grep "a b c" "[")')).toThrow(
+			/invalid regular expression/,
+		);
+	});
+
+	it("terminates on a pattern that matches the empty string", () => {
+		expect(ev('(grep "ab" "a*")')).toContain('"a"');
+	});
+
+	it("hands its result to the next form", () => {
+		expect(ev(`(car (grep "see https://x.dev/a now" "https?://[^ ]+"))`)).toBe(
+			'"https://x.dev/a"',
+		);
+	});
+});
+
+describe("the character backstop", () => {
+	it("hard-cuts a single word past the character budget", () => {
+		const given = interpWithLimit(2);
+		runSync(
+			given.interp,
+			'(setq blob "0123456789012345678901234567890123456789")',
+		);
+		const { user, model } = stepped("(echo blob)", given);
+		expect(user).toContain("0123456789012345678901234567890123456789");
+		expect(model).toContain("012345678901234567890123");
+		expect(model).toContain("24 of 40 characters shown (one unbroken word)");
+		expect(model).toContain("(echo (substring blob 24 40))");
+	});
+});
+
+describe("reporting a promise", () => {
+	function pending(): Promise<unknown> {
+		return new Promise(() => {});
+	}
+
+	function reportOf(interp: Interp, c: Compactor, code: string): string {
+		return stepped(code, { interp, c }).model;
+	}
+
+	function withPromise(value: unknown): { interp: Interp; c: Compactor } {
+		const c = new Compactor(400);
+		const interp = new Interp({
+			extensions: [compactionExtension(compactionHost, { compactor: c })],
+		});
+		runSync(interp, prelude);
+		interp.defineGlobal(newSym("started"), value, {
+			signature: "started",
+			doc: "A promise handed to the REPL by the host, as load-mcp would.",
+		});
+		return { interp, c };
+	}
+
+	it("reports the name and what to do with it, never the handle", () => {
+		const { interp, c } = withPromise(pending());
+		const line = reportOf(interp, c, "(identity started)");
+		expect(line).not.toContain("#<promise");
+		expect(line).toContain("(await started)");
+		expect(line).toContain("(promise-state started)");
+		expect(line).toContain("(cancel started)");
+		expect(line).toContain("nothing is owed");
+	});
+
+	it("keeps the handle out of every other description of it", () => {
+		const { interp, c } = withPromise(pending());
+		expect(reportOf(interp, c, "(quote started)")).toBe(
+			"started: a promise, still running\n",
+		);
+	});
+
+	it("describes a list of promises as promises, short as it looks", () => {
+		const both = new Cell(pending(), new Cell(pending(), null));
+		const { interp, c } = withPromise(both);
+		expect(reportOf(interp, c, "(identity started)")).toBe(
+			"started: list of 2 promises, still running\n",
+		);
+	});
+});
+
+describe("reporting a result", () => {
+	function reportOf(interp: Interp, c: Compactor, code: string): string {
+		return stepped(code, { interp, c }).model;
+	}
+
+	function fresh(limit = 400): { interp: Interp; c: Compactor } {
+		const c = new Compactor(limit);
+		const interp = new Interp({
+			extensions: [compactionExtension(compactionHost, { compactor: c })],
+		});
+		runSync(interp, prelude);
+		return { interp, c };
+	}
+
+	it("reports a small value as itself", () => {
+		const { interp, c } = fresh();
+		expect(reportOf(interp, c, "(+ 1 2)")).toBe("+-1: 3\n");
+		expect(reportOf(interp, c, '(progn "hi")')).toBe('progn-1: "hi"\n');
+	});
+
+	it("describes a long list by its size, never its contents", () => {
+		const { interp, c } = fresh();
+		const line = reportOf(interp, c, "(list 1 2 3 4 5 6 7 8 9 10 11 12)");
+		expect(line).toBe("list-1: list of 12 items, 12 words\n");
+		expect(ev("(length list-1)", interp)).toBe("12");
+	});
+
+	it("describes a list of alists by its keys", () => {
+		const { interp, c } = fresh();
+		const line = reportOf(
+			interp,
+			c,
+			`(list (list (cons "id" "a1f") (cons "title" "Auth token refresh fails"))
+			       (list (cons "id" "b2e") (cons "title" "OAuth callback drops state")))`,
+		);
+		expect(line).toBe('list-1: list of 2 alists, keys "id" "title"\n');
+	});
+
+	it("flags a list whose alists disagree on their keys", () => {
+		const { interp, c } = fresh();
+		const line = reportOf(
+			interp,
+			c,
+			`(list (list (cons "id" "a1f") (cons "title" "Auth token refresh fails"))
+			       (list (cons "id" "b2e") (cons "state" "OAuth callback drops state")))`,
+		);
+		expect(line).toContain("(keys vary)");
+	});
+
+	it("describes a single alist by its keys", () => {
+		const { interp, c } = fresh();
+		const line = reportOf(
+			interp,
+			c,
+			`(list (cons "id" "a1f") (cons "title" "Auth token refresh fails") (cons "state" "open"))`,
+		);
+		expect(line).toBe('list-1: alist, keys "id" "title" "state"\n');
+	});
+
+	it("describes long text by its word count, and a blob by its characters", () => {
+		const { interp, c } = fresh();
+		expect(reportOf(interp, c, '(concat "a b c d e f g h i j k" " l")')).toBe(
+			"concat-1: 12 words\n",
+		);
+		expect(
+			reportOf(interp, c, `(concat "${"0123456789".repeat(20)}" "")`),
+		).toBe("concat-2: 200 characters\n");
+	});
+
+	it("reports a definition as what it defined, not as interpreter internals", () => {
+		const { interp, c } = fresh();
+		expect(reportOf(interp, c, "(defun f (x) x)")).toBe("f: function\n");
+		expect(reportOf(interp, c, "(defmacro m (x) x)")).toBe("m: macro\n");
+	});
+
+	it("reports nil and t without minting a name", () => {
+		const { interp, c } = fresh();
+		expect(reportOf(interp, c, "(progn nil)")).toBe("nil\n");
+		expect(reportOf(interp, c, "(progn t)")).toBe("t\n");
+		expect(interp.globalNames().filter((n) => /-\d+$/.test(n))).toEqual([]);
+	});
+
+	it("says nothing at all for a step that ended in an echo", () => {
+		const { interp, c } = fresh();
+		expect(reportOf(interp, c, '(echo "hi")')).toBe("hi\n");
+	});
+
+	it("numbers per function name and never clobbers an existing global", () => {
+		const { interp, c } = fresh();
+		runSync(interp, "(setq list-1 999)");
+		expect(reportOf(interp, c, "(list 1 2 3 4)")).toContain("list-2:");
+		expect(reportOf(interp, c, "(list 1 2 3 4)")).toContain("list-3:");
+		expect(ev("(progn list-1)", interp)).toBe("999");
+	});
+
+	it("reuses the name a value is already bound under", () => {
+		const { interp, c } = fresh();
+		expect(reportOf(interp, c, "(setq mine (list 1 2 3 4))")).toContain(
+			"mine:",
+		);
+		expect(interp.globalNames().filter((n) => /^setq-/.test(n))).toEqual([]);
+	});
+
+	it("falls back to result-N for a form with no symbol at its head", () => {
+		const { interp, c } = fresh();
+		expect(reportOf(interp, c, "((lambda (x) (list x x x x)) 1)")).toContain(
+			"result-1:",
+		);
+	});
+
+	it("documents every global it binds", () => {
+		const { interp, c } = fresh();
+		reportOf(interp, c, "(list 1 2 3 4)");
+		const docs = interp.docs();
+		const undocumented = interp
+			.globalNames()
+			.filter((name) => !name.startsWith("_") && !docs.has(name));
+		expect(undocumented).toEqual([]);
+	});
+});
+
+describe("the step's echo budget", () => {
+	function stepping(limit: number): { interp: Interp; c: Compactor } {
+		const c = new Compactor(limit);
+		const interp = new Interp({
+			extensions: [compactionExtension(compactionHost, { compactor: c })],
+		});
+		runSync(interp, prelude);
+		return { interp, c };
+	}
+
+	it("caps the model's copy and leaves the human's whole", () => {
+		const given = stepping(3);
+		const { model, user } = stepped(
+			'(setq doc "a b c d e f") (echo doc)',
+			given,
+		);
+		expect(model).toBe(
+			'doc: "a b c d e f"\n' +
+				"a b c\n... 3 of 6 words shown, 3 below — read on with (echo doc :offset 3)\n",
+		);
+		expect(user).toContain("a b c d e f\n");
+	});
+
+	it("is shared across the echoes of one step", () => {
+		const echoed = stepped(
+			'(progn (echo "a b c") (echo "d e f") (echo "g h i"))',
+			stepping(4),
+		).model;
+		expect(echoed).toContain("a b c\n");
+		expect(echoed).toContain("not shown to you");
+		expect(echoed).not.toContain("g h i");
+	});
+
+	it("starts over on the next step", () => {
+		const given = stepping(4);
+		expect(
+			stepped('(progn (echo "a b c d") (echo "e f"))', given).model,
+		).toContain("not shown");
+		expect(stepped('(echo "x y")', given).model).toBe("x y\n");
+	});
+
+	it("passes short output through untouched", () => {
+		expect(stepped('(echo "a b")', stepping(400)).model).toBe("a b\n");
+	});
+});
+
+describe("the compaction built-ins are documented", () => {
+	it("carries a signature and doc for each", () => {
+		const docs = freshInterp().docs();
+		for (const name of ["echo", "head", "tail", "grep"]) {
+			expect(docs.get(name)?.signature).toContain(name);
+			expect(docs.get(name)?.doc.length ?? 0).toBeGreaterThan(20);
+		}
+	});
+});
+
+describe("doc is read in full and costs nothing", () => {
+	it("quotes the whole entry to the model and mints no result line", () => {
+		const { model, user } = stepped("(doc 'car)", interpWithLimit(400));
+		const whole =
+			"(car list)\n  Return the first element of `list`, or nil for nil.\n";
+		expect(model).toBe(whole);
+		expect(user).toBe(whole);
+	});
+
+	it("is never truncated, however small the step's limit", () => {
+		const whole =
+			"(car list)\n  Return the first element of `list`, or nil for nil.\n";
+		expect(stepped("(doc 'car)", interpWithLimit(1)).model).toBe(whole);
+		expect(stepped("(doc)", interpWithLimit(1)).model).toContain("mapcar\n");
+	});
+
+	it("binds no name for what it printed", () => {
+		const given = interpWithLimit(400);
+		const before = given.interp.globalNames().length;
+		stepped("(progn (doc 'car) (doc))", given);
+		expect(given.interp.globalNames().length).toBe(before);
+		expect(given.interp.hasGlobal(newSym("doc-1"))).toBe(false);
+	});
+
+	it("leaves the step's echo budget whole", () => {
+		const given = interpWithLimit(4);
+		const { model } = stepped('(progn (doc \'car) (echo "a b c d"))', given);
+		expect(model).toContain("a b c d\n");
+		expect(model).not.toContain("not shown to you");
+	});
+
+	it("still answers whether a name is documented", () => {
+		expect(ev("(doc 'car)", interpWithLimit(400).interp)).toBe("car");
+		expect(ev("(doc 'no-such-binding)", interpWithLimit(400).interp)).toBe(
+			"nil",
+		);
+	});
+});

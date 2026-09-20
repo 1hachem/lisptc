@@ -45,13 +45,7 @@ interface ImportRule {
 
 const IMPORTS: ImportRule[] = [
 	{
-		modules: [
-			"@repo/evals/global-setup",
-			"@repo/evals/harness",
-			"@repo/evals/judge",
-			"@repo/evals/runner",
-			"@repo/evals/targets",
-		],
+		modules: ["@repo/evals/global-setup", "@repo/evals/runner"],
 		allow: [
 			"apps/trace-viewer/evals/",
 			"apps/trace-viewer/vitest.evals.config.ts",
@@ -67,7 +61,14 @@ const IMPORTS: ImportRule[] = [
 	},
 ];
 
-const EXTENSION_DIRS = ["packages/interpreter/src/extensions/"];
+const EXTENSION_DIRS = [
+	"packages/compaction/src/",
+	"packages/memory/src/",
+	"packages/promises/src/",
+	"packages/prose/src/",
+	"packages/secrets/src/",
+	"packages/ui-extension/src/",
+];
 
 const EXTENSION_FILES = [
 	"packages/llm/src/llm.ts",
@@ -93,7 +94,7 @@ interface DriverRule {
 const DRIVERS: DriverRule[] = [
 	{
 		file: "packages/repl/src/repl.ts",
-		carried: ["joinMessages", "sent"],
+		carried: [],
 	},
 ];
 
@@ -103,8 +104,11 @@ interface BlindRule {
 }
 
 const BLIND: BlindRule[] = [
-	{ dir: "packages/ai/src/", roster: ["packages/ai/src/repl-store.ts"] },
+	{ dir: "packages/ai/src/", roster: [] },
+	{ dir: "packages/repl/src/", roster: ["packages/repl/src/repl.ts"] },
 ];
+
+const CARRIERS = ["apps/api/src/"];
 
 const SNIFFER = /export function (\w+)\([^)]*: InterpExtension[,)]/g;
 
@@ -241,6 +245,16 @@ const blinded = BLIND.flatMap(({ dir, roster }) =>
 		),
 );
 
+const interpreting = CARRIERS.flatMap((dir) =>
+	sources
+		.filter((file) => file.startsWith(dir))
+		.flatMap((file) =>
+			runtimeImports(readFileSync(file, "utf8"))
+				.filter(({ module }) => isExtensionModule(exported.get(module) ?? ""))
+				.map(({ module }) => ({ file, module })),
+		),
+);
+
 const sniffers = sources.flatMap((file) =>
 	[...readFileSync(file, "utf8").matchAll(SNIFFER)].map((found) => ({
 		file,
@@ -254,10 +268,11 @@ if (
 	hosted.length === 0 &&
 	drifted.length === 0 &&
 	blinded.length === 0 &&
+	interpreting.length === 0 &&
 	sniffers.length === 0
 ) {
 	console.log(
-		`No architecture violations in ${RULES.length} manifests, ${sources.length} sources, ${extensionModules.length} extension modules, ${many(DRIVERS.length, "session driver")} and ${many(BLIND.length, "extension-blind tree")}.`,
+		`No architecture violations in ${RULES.length} manifests, ${sources.length} sources, ${extensionModules.length} extension modules, ${many(DRIVERS.length, "session driver")}, ${many(BLIND.length, "extension-blind tree")} and ${many(CARRIERS.length, "carrier tree")}.`,
 	);
 	process.exit(0);
 }
@@ -310,6 +325,20 @@ for (const { file, module } of blinded) {
 	console.error("  extension module.");
 }
 
+for (const { file, module } of interpreting) {
+	console.error(`${file} runs ${module}`);
+	console.error(
+		"  A carrier builds a turn and writes what comes back. What reads or",
+	);
+	console.error(
+		"  writes an extension's own shape belongs below the seam, in that",
+	);
+	console.error(
+		"  extension's -host.ts, and the carrier is handed the result. Import the",
+	);
+	console.error("  extension for types only.");
+}
+
 for (const { file, name } of sniffers) {
 	console.error(
 		`${file} exports ${name}, which digs a capability out of an extension`,
@@ -330,6 +359,7 @@ const total =
 	hosted.length +
 	drifted.length +
 	blinded.length +
+	interpreting.length +
 	sniffers.length;
 console.error(`${total} forbidden dependenc${total === 1 ? "y" : "ies"}.`);
 console.error("");

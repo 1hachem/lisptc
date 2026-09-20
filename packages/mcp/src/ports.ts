@@ -37,6 +37,17 @@ export type HttpConnConfig = ConnMeta & {
 	env?: Record<string, string>;
 };
 
+export type ContainerConnConfig = ConnMeta & {
+	name: string;
+	image: string;
+	port: number;
+	path?: string;
+	command?: string;
+	args?: string[];
+	headers?: Record<string, string>;
+	env?: Record<string, string>;
+};
+
 export type StdioConnConfig = ConnMeta & {
 	name: string;
 	command: string;
@@ -44,7 +55,7 @@ export type StdioConnConfig = ConnMeta & {
 	env?: Record<string, string>;
 };
 
-export type ConnConfig = HttpConnConfig | StdioConnConfig;
+export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
 
 export interface ConnectResult {
 	serverId: string;
@@ -75,7 +86,7 @@ export interface ServerHandle {
 export type ServerState = "running" | "stopped" | "unknown";
 
 export interface McpHost {
-	ensure(conf: HttpConnConfig): Promise<ServerHandle>;
+	ensure(conf: ConnConfig): Promise<ServerHandle | undefined>;
 	stop(name: string): Promise<void>;
 	stopAll(): Promise<void>;
 	status(name: string): ServerState;
@@ -84,6 +95,25 @@ export interface McpHost {
 
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
+}
+
+export interface SearchDocument {
+	id: string;
+	name: string;
+	keywords?: readonly string[];
+	description?: string;
+}
+
+export interface SearchHit {
+	id: string;
+	score: number;
+}
+
+export interface SearchEngine {
+	search(
+		query: string,
+		documents: readonly SearchDocument[],
+	): readonly SearchHit[];
 }
 
 export interface OAuthRecord {

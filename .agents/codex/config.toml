@@ -1,0 +1,14 @@
+[agents]
+max_concurrent_threads_per_session = 3
+
+[agents.explore]
+description = "Read-only code explorer that gathers evidence before implementation."
+config_file = "./agents/explore.toml"
+
+[agents.script]
+description = "Runs verbose checks or probes and reports concise, verbatim evidence."
+config_file = "./agents/script.toml"
+
+[agents.browser]
+description = "Read-only Chrome debugger that reproduces UI behavior and reports evidence."
+config_file = "./agents/browser.toml"

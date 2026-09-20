@@ -43,6 +43,67 @@ tasks:
     desc: run the nvim integration test
     cmd: bash editors/nvim/tests/run.sh
 
+  mcp:browser:build:
+    desc: build the browser MCP image the playwright toolkit entry runs
+    vars:
+      TAG: '{{.TAG | default "v1.63.0"}}'
+    cmd: docker build -f docker/browser-mcp.Dockerfile -t lisptc/browser-mcp:{{.TAG}} .
+
+  mcp:reap:
+    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
+    cmd: |
+      ids=$(docker ps -aq --filter label=lisptc.mcp.host)
+      if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
+
+  up:
+    desc: build and run the whole stack in docker with live reload, secrets from infisical
+    aliases:
+      - dev
+    deps: [mcp:browser:build]
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          CMD: "DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}"
+
+  up:prod:
+    desc: build and start the whole stack from its production images
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          CMD: "DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}"
+      - echo "app http://localhost:3000 · api http://localhost:3001 · dashboard http://127.0.0.1:6791"
+
+  down:
+    desc: stop the whole stack (pass -- -v to drop its data)
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/db /convex"
+          CMD: "docker compose down {{.CLI_ARGS}}"
+
+  convex:push:
+    desc: push the convex functions and schema to the running deployment, once
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/convex /auth"
+          CMD: "pnpm --filter @repo/backend exec convex dev --once"
+
+  convex:dev:
+    desc: watch convex/ and push the functions on every save
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/convex /auth"
+          CMD: "pnpm --filter @repo/backend dev"
+
   r2:
     desc: mount the R2 bucket at .r2 (pass umount to unmount)
     vars:
@@ -103,9 +164,6 @@ tasks:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/assets /trace-viewer"
           CMD: 'PORT={{.PORT}} pnpm run dev --filter @lisptc/trace-viewer'
-
-  dev:
-    deps: [dev-app, dev-api]
 
   dev-app:
     desc: run the web app with access to secrets

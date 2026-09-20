@@ -1,9 +1,6 @@
+import { fileURLToPath } from "node:url";
 import { type DocArg, Interp, prelude, runSync } from "@repo/interpreter";
-import { compactionExtension } from "@repo/interpreter/compaction";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { checkSyntax } from "@repo/interpreter/prose";
-import { llmExtension } from "@repo/llm/llm";
-import { mcpExtension } from "@repo/mcp";
+import { checkSyntax } from "@repo/prose-extension";
 import {
 	type CompletionEntry,
 	connectOrSpawn,
@@ -24,25 +21,21 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { type CallDoc, callDiagnostics } from "./call-diagnostics.ts";
 import { argCompletionItems } from "./doc-args.ts";
 import { cachedResolver } from "./doc-cache.ts";
+import { docExtensions } from "./extensions.ts";
 import { loadMcpCompletions } from "./load-mcp.ts";
 import { enclosingCallHead, markdownFor, symbolAt } from "./symbols.ts";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-const interp = new Interp({
-	extensions: [
-		promisesExtension(),
-		mcpExtension(),
-		llmExtension(),
-		compactionExtension(),
-	],
-});
+const interp = new Interp({ extensions: docExtensions() });
 runSync(interp, prelude);
 const localDocs = interp.docs();
 
+const SESSION_ENTRY = fileURLToPath(new URL("./session.ts", import.meta.url));
+
 let session: SessionClient | undefined;
-connectOrSpawn(socketPathFor())
+connectOrSpawn(socketPathFor(), SESSION_ENTRY)
 	.then((client) => {
 		session = client;
 	})
