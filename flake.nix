@@ -80,9 +80,6 @@
           ptcfmt-dev
           r2mount
           chrome-agent.packages.${system}.default
-          # Nix-built browsers with system deps, used via CHROME_AGENT_CHROME.
-          # The browser MCP no longer reads from here: it runs from
-          # docker/browser-mcp.Dockerfile, which carries its own Chromium.
           playwright-driver.browsers
         ];
 
@@ -90,10 +87,9 @@
         PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
         PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
 
-        # Point chrome-agent at the Nix Chromium (globbed, rev-independent) rather
-        # than pulling a second Chromium into the closure.
         shellHook = ''
-          export CHROME_AGENT_CHROME="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"
+          export PLAYWRIGHT_MCP_EXECUTABLE="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"
+          export CHROME_AGENT_CHROME="$PLAYWRIGHT_MCP_EXECUTABLE"
         '';
       };
     });

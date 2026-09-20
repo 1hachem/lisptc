@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { ConnConfig, McpClient } from "../src/ports.ts";
+import { bundledToolkit } from "../src/toolkit.ts";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
 	const seen: ConnConfig[] = [];
@@ -27,10 +28,20 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 	};
 }
 
-function configFor(name: string): ConnConfig {
+function configFor(name: string, executable = ""): ConnConfig {
 	const { client, seen } = recording();
 	const interp = new Interp({
-		extensions: [promisesExtension(), mcpExtension({ ...mcpHost, client })],
+		extensions: [
+			promisesExtension(),
+			mcpExtension({
+				...mcpHost,
+				client,
+				toolkit: bundledToolkit({
+					get: (key) =>
+						key === "PLAYWRIGHT_MCP_EXECUTABLE" ? executable : undefined,
+				}),
+			}),
+		],
 	});
 	runSync(interp, prelude);
 	runSync(interp, `(load-mcp "${name}")`);
@@ -52,19 +63,23 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 	}
 
 	it("keeps Playwright's local command alongside its container image", () => {
-		expect(configFor("playwright")).toMatchObject({
-			image: "lisptc/browser-mcp:v1.63.0",
-			port: 8931,
-			command: "npx",
-			args: [
-				"-y",
-				"@playwright/mcp@0.0.81",
-				"--browser",
-				"chromium",
-				"--headless",
-				"--no-sandbox",
-				"--isolated",
-			],
-		});
+		expect(configFor("playwright", "/nix/store/chromium/chrome")).toMatchObject(
+			{
+				image: "lisptc/browser-mcp:v1.63.0",
+				port: 8931,
+				command: "npx",
+				args: [
+					"-y",
+					"@playwright/mcp@0.0.81",
+					"--browser",
+					"chromium",
+					"--executable-path",
+					"/nix/store/chromium/chrome",
+					"--headless",
+					"--no-sandbox",
+					"--isolated",
+				],
+			},
+		);
 	});
 });

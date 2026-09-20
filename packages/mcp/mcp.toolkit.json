@@ -28,6 +28,8 @@
       "@playwright/mcp@0.0.81",
       "--browser",
       "chromium",
+      "--executable-path",
+      "${PLAYWRIGHT_MCP_EXECUTABLE}",
       "--headless",
       "--no-sandbox",
       "--isolated"
