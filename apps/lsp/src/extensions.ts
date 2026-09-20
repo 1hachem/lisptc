@@ -1,11 +1,11 @@
-import { compactionExtension } from "@repo/interpreter/compaction";
+import { compactionExtension } from "@repo/compaction-extension";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { llmExtension } from "@repo/llm/llm";
-import { mcpExtension } from "@repo/mcp";
+import { memoryExtension } from "@repo/memory-extension";
+import { promisesExtension } from "@repo/promises-extension";
+import { proseExtension } from "@repo/prose-extension";
+import { secretsExtension } from "@repo/secrets-extension";
+import { llmExtension } from "@repo/llm-extension/llm-extension";
+import { mcpExtension } from "@repo/mcp-extension";
 
 export function docExtensions(): InterpExtension[] {
 	return [

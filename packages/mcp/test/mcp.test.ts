@@ -7,7 +7,7 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/interpreter/promises";
+import { promisesExtension } from "@repo/promises-extension";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -249,7 +249,7 @@ describe("a url server the interpreter starts for you", () => {
 		{
 			name: "managed",
 			description: "an http server with a start command",
-			url: "http://127.0.0.1:8998/mcp",
+			url: "http://127.0.0.1:8998/mcp-extension",
 			command: "node",
 			args: ["-e", "console.error('no secrets for you'); process.exit(3)"],
 		},

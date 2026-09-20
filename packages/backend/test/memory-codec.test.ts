@@ -1,5 +1,5 @@
 import { arrayToList, newSym, str } from "@repo/interpreter";
-import type { Memory } from "@repo/interpreter/memory";
+import type { Memory } from "@repo/memory-extension";
 import { describe, expect, it } from "vitest";
 import { decodeMemory, encodeMemory } from "../src/memory-store.ts";
 

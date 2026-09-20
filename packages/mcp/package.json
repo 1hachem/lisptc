@@ -1,5 +1,5 @@
 {
-  "name": "@repo/mcp",
+  "name": "@repo/mcp-extension",
   "version": "0.0.0",
   "type": "module",
   "private": true,
@@ -25,6 +25,8 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
     "@repo/shared": "workspace:*",
     "zod": "^4.4.3"
   },

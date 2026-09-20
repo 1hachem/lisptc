@@ -1,7 +1,7 @@
 import type { Awaitable, PromptSource } from "@repo/shared/host";
 import { endOfForm, type FormJudge, formsOnly } from "@repo/shared/lisp-forms";
-import { isNumeric } from "../../arith.ts";
-import { noOpinion } from "../../hooks.ts";
+import { isNumeric } from "@repo/interpreter/arith";
+import { noOpinion } from "@repo/interpreter/hooks";
 import {
 	Cell,
 	EndOfFile,
@@ -16,9 +16,9 @@ import {
 	settled,
 	str,
 	type UnresolvedHead,
-} from "../../lisp.ts";
-import type { SessionHooks } from "../../session.ts";
-import { note } from "../../topics.ts";
+} from "@repo/interpreter/lisp";
+import type { SessionHooks } from "@repo/interpreter/session";
+import { note } from "@repo/interpreter/topics";
 import { proseHost } from "./prose-host.ts";
 
 export type ProseClassifier = (

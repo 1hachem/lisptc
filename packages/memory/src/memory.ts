@@ -6,7 +6,7 @@ import {
 } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { z } from "zod";
-import { type Channels, topic } from "../../channels.ts";
+import { type Channels, topic } from "@repo/interpreter/channels";
 import {
 	arrayToList,
 	Cell,
@@ -23,9 +23,9 @@ import {
 	settled,
 	str,
 	zList,
-} from "../../lisp.ts";
-import { plistOptions, splitKeywordArgs } from "../../plist.ts";
-import { annotating, type SessionHooks, slot } from "../../session.ts";
+} from "@repo/interpreter/lisp";
+import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
+import { annotating, type SessionHooks, slot } from "@repo/interpreter/session";
 import { memoryHost } from "./memory-host.ts";
 
 export const INITIAL_SCORE = 1;

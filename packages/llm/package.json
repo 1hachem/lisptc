@@ -1,12 +1,12 @@
 {
-  "name": "@repo/llm",
+  "name": "@repo/llm-extension",
   "version": "0.0.0",
   "type": "module",
   "private": true,
   "exports": {
     "./client": "./src/llm-client.ts",
     "./langchain": "./src/langchain.ts",
-    "./llm": "./src/llm.ts",
+    "./llm-extension": "./src/llm.ts",
     "./llm-host": "./src/llm-host.ts"
   },
   "engines": {

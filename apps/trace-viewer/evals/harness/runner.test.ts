@@ -1,11 +1,11 @@
 import { createServer, type Server } from "node:http";
 import { mockedMcpExtension, tracedSecretsExtension } from "@repo/checks/mocks";
 import type { Verdict } from "@repo/evals/report";
-import { compactionExtension } from "@repo/interpreter/compaction";
-import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
+import { compactionExtension } from "@repo/compaction-extension";
+import { memoryExtension, VolatileStore } from "@repo/memory-extension";
+import { memoryHost } from "@repo/memory-extension/host";
+import { promisesExtension } from "@repo/promises-extension";
+import { proseExtension } from "@repo/prose-extension";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { playwright } from "./fixtures/server.ts";
 import type { EvalSpec, RunResult } from "./runner.ts";

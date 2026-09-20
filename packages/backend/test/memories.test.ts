@@ -1,4 +1,4 @@
-import type { Memory } from "@repo/interpreter/memory";
+import type { Memory } from "@repo/memory-extension";
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";

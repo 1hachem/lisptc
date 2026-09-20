@@ -1,4 +1,4 @@
-import { compactionExtension } from "@repo/interpreter/compaction";
+import { compactionExtension } from "@repo/compaction-extension";
 import type { Interp, InterpExtension } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { annotating, slot } from "@repo/interpreter/session";

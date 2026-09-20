@@ -1,5 +1,5 @@
 import { Interp } from "@repo/interpreter/lisp";
-import { TRIGGER_KINDS } from "@repo/interpreter/memory";
+import { TRIGGER_KINDS } from "@repo/memory-extension";
 import { describe, expect, it } from "vitest";
 import { IDENTITY, MAX_STEPS, systemPromptFor } from "../src/prompts/lisp.ts";
 import { snapshotConversation } from "../src/repl.ts";

@@ -1,16 +1,16 @@
-import { compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
+import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
-import { memoryHostFor } from "@repo/interpreter/memory-host";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { promisesHost } from "@repo/interpreter/promises-host";
-import { proseExtension } from "@repo/interpreter/prose";
-import { proseHost } from "@repo/interpreter/prose-host";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { secretsHost } from "@repo/interpreter/secrets-host";
-import { uiExtension } from "@repo/interpreter/ui";
-import { uiHost } from "@repo/interpreter/ui-host";
+import { memoryExtension } from "@repo/memory-extension";
+import { memoryHostFor } from "@repo/memory-extension/host";
+import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
+import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
+import { secretsExtension } from "@repo/secrets-extension";
+import { secretsHost } from "@repo/secrets-extension/host";
+import { uiExtension } from "@repo/ui-extension";
+import { uiHost } from "@repo/ui-extension/host";
 import { AgentRepl } from "@repo/repl/repl";
 import { ReplStore } from "../src/repl-store.ts";
 

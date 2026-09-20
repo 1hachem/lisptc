@@ -1,8 +1,8 @@
 import { type MockSpec, withRun } from "@repo/checks/mocks";
 import { Trace } from "@repo/checks/trace";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import type { SecretsStore } from "@repo/interpreter/secrets";
-import { envSecretsStore } from "@repo/interpreter/secrets-host";
+import type { SecretsStore } from "@repo/secrets-extension";
+import { envSecretsStore } from "@repo/secrets-extension/host";
 import { AgentRepl } from "@repo/repl/repl";
 
 export type ExtensionsFor = () => InterpExtension[];

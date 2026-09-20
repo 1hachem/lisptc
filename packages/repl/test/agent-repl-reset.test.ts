@@ -1,6 +1,6 @@
-import { compactionExtension } from "@repo/interpreter/compaction";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
+import { compactionExtension } from "@repo/compaction-extension";
+import { secretsExtension } from "@repo/secrets-extension";
+import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { describe, expect, it } from "vitest";
 import { agentRepl } from "./helpers.ts";
 

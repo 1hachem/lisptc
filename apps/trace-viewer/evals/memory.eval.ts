@@ -1,9 +1,9 @@
 import { mockedMcpExtension } from "@repo/checks/mocks";
-import { compactionExtension } from "@repo/interpreter/compaction";
-import { memoryExtension, VolatileStore } from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
+import { compactionExtension } from "@repo/compaction-extension";
+import { memoryExtension, VolatileStore } from "@repo/memory-extension";
+import { memoryHost } from "@repo/memory-extension/host";
+import { promisesExtension } from "@repo/promises-extension";
+import { proseExtension } from "@repo/prose-extension";
 import { playwright } from "./fixtures/playwright.ts";
 import { evalCase } from "./harness/runner.ts";
 

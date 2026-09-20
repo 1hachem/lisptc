@@ -64,9 +64,9 @@ const IMPORTS: ImportRule[] = [
 const EXTENSION_DIRS = ["packages/interpreter/src/extensions/"];
 
 const EXTENSION_FILES = [
-	"packages/llm/src/llm.ts",
-	"packages/mcp/src/mcp.ts",
-	"packages/mcp/src/ports.ts",
+	"packages/llm-extension/src/llm.ts",
+	"packages/mcp-extension/src/mcp.ts",
+	"packages/mcp-extension/src/ports.ts",
 ];
 
 const HOST_REACHES: { pattern: RegExp; what: string }[] = [

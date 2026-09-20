@@ -6,7 +6,7 @@ import {
 	type Numeric,
 	quotient,
 	ZERO,
-} from "../../arith.ts";
+} from "@repo/interpreter/arith";
 import {
 	Cell,
 	EvalException,
@@ -15,9 +15,9 @@ import {
 	type List,
 	str,
 	zList,
-} from "../../lisp.ts";
-import { type SessionHooks, slot } from "../../session.ts";
-import type { ToJson } from "../../types.ts";
+} from "@repo/interpreter/lisp";
+import { type SessionHooks, slot } from "@repo/interpreter/session";
+import type { ToJson } from "@repo/interpreter/types";
 import { secretsHost } from "./secrets-host.ts";
 
 export type SecretSpec = string | { value: string; description?: string };

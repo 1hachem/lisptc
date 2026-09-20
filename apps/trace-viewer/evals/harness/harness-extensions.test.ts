@@ -1,8 +1,8 @@
 import { systemPromptFor } from "@repo/ai";
 import { mockedMcpExtension } from "@repo/checks/mocks";
-import { compactionExtension } from "@repo/interpreter/compaction";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
+import { compactionExtension } from "@repo/compaction-extension";
+import { promisesExtension } from "@repo/promises-extension";
+import { proseExtension } from "@repo/prose-extension";
 import { describe, expect, test } from "vitest";
 import { tracedRepl } from "./harness.ts";
 

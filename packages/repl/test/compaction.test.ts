@@ -1,6 +1,6 @@
-import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
-import { proseExtension } from "@repo/interpreter/prose";
+import { Compactor, compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
+import { proseExtension } from "@repo/prose-extension";
 import { describe, expect, it } from "vitest";
 import type { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";

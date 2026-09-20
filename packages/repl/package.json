@@ -16,8 +16,14 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@repo/compaction-extension": "workspace:*",
     "@repo/env": "workspace:*",
-    "@repo/interpreter": "workspace:*"
+    "@repo/interpreter": "workspace:*",
+    "@repo/memory-extension": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/prose-extension": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
+    "@repo/ui-extension": "workspace:*"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

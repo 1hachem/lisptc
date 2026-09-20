@@ -1,4 +1,4 @@
-import { Compactor } from "@repo/interpreter/compaction";
+import { Compactor } from "@repo/compaction-extension";
 import { describe, expect, it } from "vitest";
 import type { EvalOutput } from "../src/repl.ts";
 import { memoryRepl, modelFacing } from "./helpers.ts";

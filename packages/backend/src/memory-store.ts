@@ -4,7 +4,7 @@ import {
 	type MemoryStore,
 	parseTrigger,
 	triggerToForm,
-} from "@repo/interpreter/memory";
+} from "@repo/memory-extension";
 import type { Awaitable } from "@repo/shared/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";

@@ -1,4 +1,4 @@
-import { memorySlot } from "@repo/interpreter/memory";
+import { memorySlot } from "@repo/memory-extension";
 import type { AgentRepl } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
 import { ReplStore } from "../src/repl-store.ts";

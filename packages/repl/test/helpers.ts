@@ -1,15 +1,15 @@
 import {
 	type Compactor,
 	compactionExtension,
-} from "@repo/interpreter/compaction";
+} from "@repo/compaction-extension";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
+import { memoryExtension } from "@repo/memory-extension";
 import { llmSlot, type Observed } from "@repo/interpreter/observe";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension } from "@repo/interpreter/secrets";
+import { promisesExtension } from "@repo/promises-extension";
+import { proseExtension } from "@repo/prose-extension";
+import { secretsExtension } from "@repo/secrets-extension";
 import type { SessionHooks } from "@repo/interpreter/session";
-import { uiExtension } from "@repo/interpreter/ui";
+import { uiExtension } from "@repo/ui-extension";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
 export function modelFacing(compactor?: Compactor): InterpExtension[] {

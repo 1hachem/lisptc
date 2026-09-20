@@ -4,8 +4,8 @@ import {
 	tracedSecretsExtension,
 } from "@repo/checks/mocks";
 import type { Trace } from "@repo/checks/trace";
-import { promisesExtension } from "@repo/interpreter/promises";
-import type { SecretsStore } from "@repo/interpreter/secrets";
+import { promisesExtension } from "@repo/promises-extension";
+import type { SecretsStore } from "@repo/secrets-extension";
 import type { AgentRepl } from "@repo/repl/repl";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { type Harness, tracedRepl } from "./harness.ts";

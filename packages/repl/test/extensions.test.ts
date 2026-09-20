@@ -1,16 +1,16 @@
-import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
+import { Compactor, compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import {
 	MemoryBank,
 	memoryExtension,
 	memorySlot,
 	VolatileStore,
-} from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
+} from "@repo/memory-extension";
+import { memoryHost } from "@repo/memory-extension/host";
 import { llmSlot } from "@repo/interpreter/observe";
-import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension, secretsSlot } from "@repo/interpreter/secrets";
-import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
+import { proseExtension } from "@repo/prose-extension";
+import { secretsExtension, secretsSlot } from "@repo/secrets-extension";
+import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";

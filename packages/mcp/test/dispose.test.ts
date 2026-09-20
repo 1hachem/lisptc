@@ -1,5 +1,5 @@
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/interpreter/promises";
+import { promisesExtension } from "@repo/promises-extension";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";

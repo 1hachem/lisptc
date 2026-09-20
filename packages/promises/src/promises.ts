@@ -1,6 +1,6 @@
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { withTimeout } from "../../async.ts";
+import { withTimeout } from "@repo/interpreter/async";
 import {
 	arrayToList,
 	Cell,
@@ -11,7 +11,7 @@ import {
 	listToArray,
 	newLispKeyword,
 	zList,
-} from "../../lisp.ts";
+} from "@repo/interpreter/lisp";
 import { promisesHost } from "./promises-host.ts";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
