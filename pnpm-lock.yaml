@@ -347,9 +347,6 @@ importers:
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../../packages/compaction
-      '@repo/interpreter':
-        specifier: workspace:*
-        version: link:../../packages/interpreter
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../../packages/llm

@@ -300,7 +300,8 @@ boundaries → check:arch → knip → test.
 `lint`, the `check:*` scripts and `knip` run once at the root;
 `typecheck` and `test` fan out through Turbo. Husky runs commitlint
 (conventional commits) on `commit-msg`, and `pnpm lint`, `pnpm typecheck`,
-`pnpm check:comments`, `pnpm boundaries` and `pnpm check:arch` on `pre-push`.
+`pnpm check:comments`, `pnpm boundaries`, `pnpm check:arch` and `pnpm knip` on
+`pre-push`.
 
 A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
 longer than one line, so write the subject and stop unless a description was

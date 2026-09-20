@@ -1,11 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	str,
-} from "@repo/interpreter/lisp";
+import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
 import { proseExtension } from "../src/prose.ts";
 
 export function proseInterp(): Interp {
@@ -26,13 +20,6 @@ export function ev(code: string, interp: Interp = proseInterp()): string {
 
 export function evProse(code: string, interp: Interp = proseInterp()): string {
 	return ev(code, interp);
-}
-
-export async function evAsync(
-	code: string,
-	interp: Interp = proseInterp(),
-): Promise<string> {
-	return str((await runAsync(interp, code)).value);
 }
 
 export function evWithOutput(
