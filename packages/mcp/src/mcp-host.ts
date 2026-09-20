@@ -5,6 +5,7 @@ import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
 import { FileOAuthStore } from "./mcp-oauth.ts";
 import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
+import { keywordSearchEngine } from "./search.ts";
 import { bundledToolkit } from "./toolkit.ts";
 
 function callbackPort(): number {
@@ -40,6 +41,7 @@ export function mcpHostFor(options: McpHostOptions = {}): McpExtensionHost {
 	return {
 		client: localMcpClient(options),
 		toolkit: bundledToolkit(),
+		search: keywordSearchEngine,
 		prompt: mcpPrompt,
 	};
 }

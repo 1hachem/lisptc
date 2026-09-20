@@ -11,6 +11,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
+import type { SearchDocument, SearchEngine } from "../src/ports.ts";
 import { jsonToolkit } from "../src/toolkit.ts";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
@@ -171,6 +172,67 @@ describe("MCP integration (stdio fixture)", () => {
 		await expect(runAsync(interp, '(fx/echo :message "hi")')).rejects.toThrow(
 			/void variable|undefined/,
 		);
+	});
+});
+
+describe("MCP search engine", () => {
+	const documents: SearchDocument[][] = [];
+	const search: SearchEngine = {
+		search(_query, candidates) {
+			documents.push([...candidates]);
+			return candidates.map((candidate, index) => ({
+				id: candidate.id,
+				score: index + 1,
+			}));
+		},
+	};
+	const toolkitJson = JSON.stringify([
+		{
+			name: "search-fixture",
+			description: "search description",
+			keywords: ["search-keyword"],
+			command: "node",
+			args: ["--no-warnings", "--experimental-transform-types", FIXTURE],
+		},
+	]);
+	const interp = new Interp({
+		extensions: [
+			promisesExtension(),
+			mcpExtension({
+				...mcpHost,
+				search,
+				toolkit: jsonToolkit(toolkitJson),
+			}),
+		],
+	});
+	runSync(interp, prelude);
+
+	afterAll(async () => {
+		await runAsync(interp, "(mcp-shutdown)");
+	});
+
+	it("delegates MCP and loaded-tool ranking through the injected engine", async () => {
+		expect(await evalStr(interp, '(search-mcps "anything")')).toContain(
+			"search-fixture",
+		);
+		expect(documents[0]).toEqual([
+			{
+				id: "search-fixture",
+				name: "search-fixture",
+				keywords: ["search-keyword"],
+				description: "search description",
+			},
+		]);
+
+		await evalStr(interp, '(await (load-mcp "search-fixture"))');
+		expect(await evalStr(interp, '(search-tools "anything")')).toContain(
+			"search-fixture/echo",
+		);
+		expect(documents[1]).toContainEqual({
+			id: "search-fixture/echo",
+			name: "search-fixture/echo",
+			description: "Echo back the given message",
+		});
 	});
 });
 
