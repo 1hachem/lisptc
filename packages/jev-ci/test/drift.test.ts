@@ -1,3 +1,4 @@
+import type { Ask, JevHost } from "@repo/jev/jev";
 import type { SystemOneRequest } from "@typesafe-ai/sdk";
 import { describe, expect, it } from "vitest";
 import type { Block } from "../src/blocks.ts";
@@ -18,7 +19,6 @@ import {
 	routeQuestions,
 	SUFFICIENT,
 } from "../src/drift.ts";
-import type { Ask, JevHost } from "@repo/jev/jev";
 
 const BLOCK: Block = {
 	id: "b0",

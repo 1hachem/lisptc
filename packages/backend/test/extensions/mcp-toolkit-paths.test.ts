@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { describe, expect, it } from "vitest";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type { ConnConfig, McpClient } from "@repo/mcp-extension/ports";
 import { bundledToolkit } from "@repo/mcp-extension/toolkit";
+import { promisesExtension } from "@repo/promises-extension";
+import { describe, expect, it } from "vitest";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
 	const seen: ConnConfig[] = [];

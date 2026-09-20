@@ -1,10 +1,6 @@
 import { str } from "@repo/interpreter/lisp";
-import {
-	type ProseExcuse,
-	type ProseSense,
-	type ProseSort,
-	skippedAsProse,
-} from "./prose.ts";
+import type { JevHost } from "@repo/jev/jev";
+import { jevHost } from "@repo/jev/jev-host";
 import {
 	type ChoiceQuestion,
 	choice,
@@ -12,8 +8,12 @@ import {
 	noul,
 	type Questions,
 } from "@typesafe-ai/sdk";
-import type { JevHost } from "@repo/jev/jev";
-import { jevHost } from "@repo/jev/jev-host";
+import {
+	type ProseExcuse,
+	type ProseSense,
+	type ProseSort,
+	skippedAsProse,
+} from "./prose.ts";
 
 const PROSE_ODDS = 0.5;
 const SPANS = 8;

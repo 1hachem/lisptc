@@ -1,10 +1,10 @@
 import { systemPromptFor } from "@repo/ai";
-import { mockedMcpExtension } from "./mocks.ts";
 import { compactionExtension } from "@repo/compaction-extension";
 import { promisesExtension } from "@repo/promises-extension";
 import { proseExtension } from "@repo/prose-extension";
 import { describe, expect, test } from "vitest";
 import { tracedRepl } from "./harness.ts";
+import { mockedMcpExtension } from "./mocks.ts";
 
 describe("a case that lists its own extensions", () => {
 	test("gets those and the recorder, and nothing else", async () => {

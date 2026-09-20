@@ -1,9 +1,9 @@
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { describe, expect, it } from "vitest";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type { McpClient } from "@repo/mcp-extension/ports";
+import { promisesExtension } from "@repo/promises-extension";
+import { describe, expect, it } from "vitest";
 
 function hangingClient(): { client: McpClient; aborts: () => number } {
 	let aborts = 0;

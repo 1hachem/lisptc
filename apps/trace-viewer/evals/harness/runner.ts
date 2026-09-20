@@ -5,7 +5,6 @@ import {
 	systemPromptFor,
 } from "@repo/ai";
 import { Checks } from "@repo/checks/checks";
-import type { MockSpec } from "./mocks.ts";
 import { Trace } from "@repo/checks/trace";
 import { evalsEnv } from "@repo/env/evals";
 import type { CaseInfo, ReportRow } from "@repo/evals/report";
@@ -21,6 +20,7 @@ import type { AgentRepl } from "@repo/repl/repl";
 import type { ExtensionsFor } from "./harness.ts";
 import { tracedRepl } from "./harness.ts";
 import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
+import type { MockSpec } from "./mocks.ts";
 
 export type { RunResult, Target } from "@repo/evals/runner";
 export {

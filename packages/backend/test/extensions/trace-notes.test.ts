@@ -1,8 +1,8 @@
+import { Checks } from "@repo/checks/checks";
+import { Trace } from "@repo/checks/trace";
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
 import { proseExtension } from "@repo/prose-extension";
 import { describe, expect, test } from "vitest";
-import { Checks } from "@repo/checks/checks";
-import { Trace } from "@repo/checks/trace";
 
 function ran(code: string): Trace {
 	const trace = new Trace();

@@ -7,12 +7,12 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type { SearchDocument, SearchEngine } from "@repo/mcp-extension/ports";
 import { jsonToolkit } from "@repo/mcp-extension/toolkit";
+import { promisesExtension } from "@repo/promises-extension";
+import { afterAll, describe, expect, it } from "vitest";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
 	return str((await runAsync(interp, code)).value);

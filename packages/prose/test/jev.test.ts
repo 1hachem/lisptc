@@ -4,11 +4,11 @@ import {
 	Reader,
 	UnresolvedHead,
 } from "@repo/interpreter/lisp";
-import type { ProseSpans } from "../src/prose.ts";
+import type { Ask, JevHost } from "@repo/jev/jev";
 import type { SystemOneRequest } from "@typesafe-ai/sdk";
 import { describe, expect, it } from "vitest";
-import type { Ask, JevHost } from "@repo/jev/jev";
 import { jevExcuse, jevSort } from "../src/jev.ts";
+import type { ProseSpans } from "../src/prose.ts";
 
 const ASIDE = "an aside about the program, not a call";
 const PHRASE = "a phrase that reads as English";

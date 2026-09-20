@@ -1,5 +1,4 @@
 import { createServer, type Server } from "node:http";
-import { mockedMcpExtension, tracedSecretsExtension } from "./mocks.ts";
 import { compactionExtension } from "@repo/compaction-extension";
 import type { Verdict } from "@repo/evals/report";
 import { memoryExtension, VolatileStore } from "@repo/memory-extension";
@@ -8,6 +7,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { proseExtension } from "@repo/prose-extension";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { playwright } from "./fixtures/server.ts";
+import { mockedMcpExtension, tracedSecretsExtension } from "./mocks.ts";
 import type { EvalSpec, RunResult } from "./runner.ts";
 
 const extensions = () => [

@@ -1,3 +1,4 @@
+import type { Ask, JevHost } from "@repo/jev/jev";
 import type { Questions, SystemOneRequest } from "@typesafe-ai/sdk";
 import { describe, expect, it } from "vitest";
 import type { Block } from "../src/blocks.ts";
@@ -12,7 +13,6 @@ import {
 	readCharter,
 	SURE,
 } from "../src/charter.ts";
-import type { Ask, JevHost } from "@repo/jev/jev";
 
 function block(text: string, id = "b0"): Block {
 	return { id, heading: "AGENTS.md > Testing", text, line: 1 };

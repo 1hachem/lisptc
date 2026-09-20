@@ -1,9 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { Interp, prelude, runAsync, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "@repo/mcp-extension";
 import { localMcpClient, mcpHost } from "@repo/mcp-extension/mcp-host";
+import { promisesExtension } from "@repo/promises-extension";
+import { describe, expect, it, vi } from "vitest";
 import { recordingHost } from "./mcp-helpers.ts";
 
 const FIXTURE = fileURLToPath(

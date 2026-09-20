@@ -1,3 +1,5 @@
+import type { JevHost } from "@repo/jev/jev";
+import { jevHost } from "@repo/jev/jev-host";
 import {
 	type ChoiceQuestion,
 	choice,
@@ -9,8 +11,6 @@ import {
 } from "@typesafe-ai/sdk";
 import type { Block } from "./blocks.ts";
 import type { Answers } from "./charter.ts";
-import type { JevHost } from "@repo/jev/jev";
-import { jevHost } from "@repo/jev/jev-host";
 
 export const MENTION_KINDS = {
 	path: "One literal file or directory in this repository, named so the reader can go and open it.",
