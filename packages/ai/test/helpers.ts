@@ -7,11 +7,11 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { uiExtension } from "@repo/ui-extension";
 import { uiHost } from "@repo/ui-extension/host";
-import { AgentRepl } from "@repo/repl/repl";
 import { ReplStore } from "../src/repl-store.ts";
 
 export function testExtensions(scope?: string): InterpExtension[] {

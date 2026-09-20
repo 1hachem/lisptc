@@ -9,9 +9,9 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { memoryEnv } from "@repo/env/memory";
+import { EvalException, Reader, str } from "@repo/interpreter/lisp";
 import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
-import { EvalException, Reader, str } from "@repo/interpreter/lisp";
 import {
 	formToMemory,
 	type Memory,

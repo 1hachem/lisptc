@@ -1,5 +1,3 @@
-import type { PromptSource } from "@repo/shared/host";
-import { z } from "zod";
 import type { Addressed, Channels } from "@repo/interpreter/channels";
 import {
 	Cell,
@@ -23,6 +21,8 @@ import {
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
+import type { PromptSource } from "@repo/shared/host";
+import { z } from "zod";
 import { compactionHost } from "./compaction-host.ts";
 
 export const MAX_WORDS = 400;

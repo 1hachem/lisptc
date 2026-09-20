@@ -1,5 +1,3 @@
-import type { PromptSource } from "@repo/shared/host";
-import { z } from "zod";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import {
 	Cell,
@@ -19,6 +17,8 @@ import {
 } from "@repo/interpreter/lisp";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { annotating, type SessionHooks } from "@repo/interpreter/session";
+import type { PromptSource } from "@repo/shared/host";
+import { z } from "zod";
 import { uiHost } from "./ui-host.ts";
 
 const MAX_HANDLERS = 500;

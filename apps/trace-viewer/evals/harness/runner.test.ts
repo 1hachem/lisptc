@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { mockedMcpExtension, tracedSecretsExtension } from "@repo/checks/mocks";
-import type { Verdict } from "@repo/evals/report";
 import { compactionExtension } from "@repo/compaction-extension";
+import type { Verdict } from "@repo/evals/report";
 import { memoryExtension, VolatileStore } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { promisesExtension } from "@repo/promises-extension";

@@ -1,11 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import {
-	type SecretsExtension,
-	type SecretsStore,
-	secretsExtension,
-} from "@repo/secrets-extension";
-import { secretsHost } from "@repo/secrets-extension/host";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type {
@@ -13,6 +7,12 @@ import type {
 	McpClient,
 	ToolCall,
 } from "@repo/mcp-extension/ports";
+import {
+	type SecretsExtension,
+	type SecretsStore,
+	secretsExtension,
+} from "@repo/secrets-extension";
+import { secretsHost } from "@repo/secrets-extension/host";
 
 import type { Trace } from "./trace.ts";
 

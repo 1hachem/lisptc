@@ -1,11 +1,11 @@
 import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
-import type { SecretsStore } from "@repo/secrets-extension";
 import { note } from "@repo/interpreter/topics";
 import type {
 	ConnectResult,
 	McpClient,
 	ToolCall,
 } from "@repo/mcp-extension/ports";
+import type { SecretsStore } from "@repo/secrets-extension";
 
 export const REDACTED = "<redacted>";
 

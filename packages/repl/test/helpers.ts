@@ -3,12 +3,12 @@ import {
 	compactionExtension,
 } from "@repo/compaction-extension";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/memory-extension";
 import { llmSlot, type Observed } from "@repo/interpreter/observe";
+import type { SessionHooks } from "@repo/interpreter/session";
+import { memoryExtension } from "@repo/memory-extension";
 import { promisesExtension } from "@repo/promises-extension";
 import { proseExtension } from "@repo/prose-extension";
 import { secretsExtension } from "@repo/secrets-extension";
-import type { SessionHooks } from "@repo/interpreter/session";
 import { uiExtension } from "@repo/ui-extension";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 

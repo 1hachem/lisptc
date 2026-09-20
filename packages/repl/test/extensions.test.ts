@@ -1,5 +1,6 @@
 import { Compactor, compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
+import { llmSlot } from "@repo/interpreter/observe";
 import {
 	MemoryBank,
 	memoryExtension,
@@ -7,7 +8,6 @@ import {
 	VolatileStore,
 } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
-import { llmSlot } from "@repo/interpreter/observe";
 import { proseExtension } from "@repo/prose-extension";
 import { secretsExtension, secretsSlot } from "@repo/secrets-extension";
 import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
