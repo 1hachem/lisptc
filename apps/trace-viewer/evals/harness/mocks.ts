@@ -68,9 +68,9 @@ export interface MockTool {
 	inputSchema?: Record<string, unknown>;
 }
 
-export type MockCall = (args: Record<string, unknown>) => unknown;
+type MockCall = (args: Record<string, unknown>) => unknown;
 
-export type MockResult =
+type MockResult =
 	| MockCall
 	| Record<string, unknown>
 	| unknown[]
@@ -112,7 +112,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
-export function mockClient(spec: MockSpec): McpClient {
+function mockClient(spec: MockSpec): McpClient {
 	const live = new Map<string, Live>();
 
 	async function connect(
