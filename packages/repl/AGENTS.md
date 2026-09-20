@@ -8,16 +8,14 @@ Turbo tag: `runtime`.
 ## Shape
 
 `src/repl.ts` is the in-memory REPL. It takes its extension list through
-options, builds an `Interp` with them, and serialises evaluation through the
-session hooks. The agent-facing REPL extends it with the turn lifecycle the
-agent loop drives.
+options, and the agent-facing REPL extends it with the turn lifecycle the agent
+loop drives.
 
 `src/session-server.ts` is the long-lived REPL behind a socket, with the client
 that speaks to it and the protocol version they agree on. `serve` takes the
 extension list. The server is not an entry point here: `connectOrSpawn` is told
 which file to spawn, and that file is the caller's, so the process that serves
-the session is the one that decides what is in it. `spawnServer` writes the
-argv `serveFromArgv` reads, which is why they live in the same file.
+the session is the one that decides what is in it.
 
 The interactive terminal REPL is not here. It is `@lisptc/cli`, which builds on
 this package's exports.

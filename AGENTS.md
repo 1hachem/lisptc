@@ -55,12 +55,10 @@ Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
 theirs.
 
-`.claude/hooks/io-budget.sh` holds you to it. It counts the heavy shapes the
-main thread runs, a repo-wide `Grep` or `Glob`, a recursive search, a test or
-build or log tail, a browser session, and once the budget is spent it refuses
-the next one and names the agent that should have had it. The refusal reaches
-you, never the user, so take it and spawn the agent instead of retrying. An
-agent's own calls are never counted and never refused.
+`.claude/hooks/io-budget.sh` holds you to it. Once the budget is spent it
+refuses the next heavy call and names the agent that should have had it. The
+refusal reaches you, never the user, so take it and spawn the agent instead of
+retrying.
 
 ## What this is
 

@@ -7,11 +7,9 @@ Turbo tag: `runtime`.
 
 ## Shape
 
-`src/turn.ts` holds the loop. One turn reads the transcript, asks the model for
-code, evaluates it in the REPL, and yields an event per thing that happened
-until the REPL says the turn finished or the step cap stops it. The event union
-in that file is the whole vocabulary of a turn. `src/stream.ts` puts that on the
-wire as server-sent events. `src/eval.ts` is the one-shot evaluation.
+`src/turn.ts` holds the loop, and `TurnEvent` in that file is the whole
+vocabulary of a turn. `src/stream.ts` puts that on the wire as server-sent
+events. `src/eval.ts` is the one-shot evaluation.
 
 `src/agent.ts` wraps the model call and yields deltas. `src/provider/` holds the
 provider registry and one file per provider. `src/prompts/lisp.ts` holds the
@@ -19,9 +17,8 @@ system prompt and the step cap. `src/repl.ts` turns a transcript into model
 messages and an eval result into content. `src/telemetry.ts` is the PostHog
 side. `src/ui-action.ts` runs an action the browser sent back.
 
-`src/repl-store.ts` keeps a REPL per thread. It builds none: a `ReplStore` is
-handed an `OpenRepl` and calls it on a miss, so what a REPL carries is decided
-by whoever constructed the store.
+`src/repl-store.ts` keeps a REPL per thread, and is handed an `OpenRepl` to
+open them with.
 
 ## Rules
 

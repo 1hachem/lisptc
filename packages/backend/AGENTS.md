@@ -17,12 +17,11 @@ guards those modules call to resolve the caller and check ownership, and every
 public function starts with one. `convex/lib/` also holds the small pure helpers
 beside them.
 
-`convex/auth.ts` sets up Better Auth against the deployment, with the triggers
-that keep the `users` table and a first workspace in step with the auth user,
-and the cascade that runs when one is deleted. `convex/auth.config.ts` and
-`convex/http.ts` serve it: the HTTP router registers the auth routes.
-`convex/convex.config.ts` declares the components the deployment uses, and
-`convex/migrations.ts` holds the runner.
+`convex/auth.ts` sets up Better Auth against the deployment, and
+`convex/auth.config.ts` and `convex/http.ts` serve it. `convex/convex.config.ts`
+declares the components the deployment uses, and `convex/migrations.ts` holds
+the runner. What the auth triggers keep in step, and what the cascade removes,
+are pinned in `test/access.test.ts` and `test/removal.test.ts`.
 
 `convex/_generated/` is generated. Never edit it, and never hand-write what
 belongs there.

@@ -19,10 +19,8 @@ readable part: they say what the agent should have done, one behaviour each.
 
 `evals/harness/` is the product adapter for `@repo/evals/runner`. Running a
 case composes the agent loop, the check extension and a mocked world, so the
-app supplies those concrete pieces. `harness.ts` builds the traced REPL from the
-list the case hands it, `runner.ts` wires that REPL and the check evaluator into
-the eval driver, and `judge.ts` is the model judge. Their unit tests sit beside
-them and run under `pnpm test`; the cases do not.
+app supplies those concrete pieces in `harness.ts`, `runner.ts` and `judge.ts`.
+Their unit tests sit beside them and run under `pnpm test`; the cases do not.
 
 ## Rules
 
