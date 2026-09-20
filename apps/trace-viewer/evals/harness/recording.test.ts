@@ -2,7 +2,7 @@ import {
 	type MockSpec,
 	mockedMcpExtension,
 	tracedSecretsExtension,
-} from "@repo/checks/mocks";
+} from "./mocks.ts";
 import type { Trace } from "@repo/checks/trace";
 import { promisesExtension } from "@repo/promises-extension";
 import type { AgentRepl } from "@repo/repl/repl";

@@ -27,8 +27,8 @@
     "check:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts",
     "fix:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts --fix",
     "prepare": "husky",
-    "check:charter": "node --no-warnings --experimental-transform-types ./packages/jev/src/charter-check.ts",
-    "check:drift": "node --no-warnings --experimental-transform-types ./packages/jev/src/drift-check.ts"
+    "check:charter": "node --no-warnings --experimental-transform-types ./packages/jev-ci/src/charter-check.ts",
+    "check:drift": "node --no-warnings --experimental-transform-types ./packages/jev-ci/src/drift-check.ts"
   },
   "pnpm": {
     "overrides": {

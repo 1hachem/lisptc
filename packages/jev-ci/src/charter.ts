@@ -9,8 +9,8 @@ import {
 	score,
 } from "@typesafe-ai/sdk";
 import type { Block } from "./blocks.ts";
-import type { JevHost } from "./jev.ts";
-import { jevHost } from "./jev-host.ts";
+import type { JevHost } from "@repo/jev/jev";
+import { jevHost } from "@repo/jev/jev-host";
 
 export const CHARTER =
 	"AGENTS.md tells a coding agent how this repository is shaped: which packages exist, which way dependencies run, where a kind of thing belongs, what is forbidden, and which command proves it. It carries no implementation. Names of types, functions, hook points and ports are read in the code, never here, because prose rots and the code does not. A sentence earns its place when it survives a rewrite of the code it talks about, or when a name, a type or a test fails the moment it stops being true.";

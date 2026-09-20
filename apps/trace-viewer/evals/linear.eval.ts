@@ -1,4 +1,4 @@
-import { mockedMcpExtension } from "@repo/checks/mocks";
+import { mockedMcpExtension } from "./harness/mocks.ts";
 import { compactionExtension } from "@repo/compaction-extension";
 import { promisesExtension } from "@repo/promises-extension";
 import { proseExtension } from "@repo/prose-extension";

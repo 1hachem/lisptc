@@ -5,7 +5,9 @@
   "private": true,
   "exports": {
     ".": "./src/prose.ts",
-    "./host": "./src/prose-host.ts"
+    "./host": "./src/prose-host.ts",
+    "./jev": "./src/jev.ts",
+    "./jev-host": "./src/jev-host.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -17,7 +19,9 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
-    "@repo/shared": "workspace:*"
+    "@repo/jev": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "@typesafe-ai/sdk": "^0.6.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

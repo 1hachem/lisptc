@@ -12,7 +12,7 @@ import {
 	readCharter,
 	SURE,
 } from "../src/charter.ts";
-import type { Ask, JevHost } from "../src/jev.ts";
+import type { Ask, JevHost } from "@repo/jev/jev";
 
 function block(text: string, id = "b0"): Block {
 	return { id, heading: "AGENTS.md > Testing", text, line: 1 };

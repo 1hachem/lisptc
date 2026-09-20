@@ -57,7 +57,14 @@ function paths(): string[] {
 }
 
 export function charterFiles(): string[] {
-	return git("ls-files", "-s", "AGENTS.md", "*/AGENTS.md")
+	return git(
+		"ls-files",
+		"-s",
+		"AGENTS.md",
+		"*/AGENTS.md",
+		"CLAUDE.md",
+		"*/CLAUDE.md",
+	)
 		.split("\n")
 		.filter((line) => line !== "" && !line.startsWith(SYMLINK))
 		.map((line) => line.split("\t")[1])
@@ -65,14 +72,14 @@ export function charterFiles(): string[] {
 }
 
 export function changedFiles(base: string): string[] {
-	return git("diff", "--name-only", `${base}...HEAD`)
+	return git("diff", "--name-only", base, "HEAD")
 		.split("\n")
 		.filter((file) => file !== "");
 }
 
 export function addedLines(base: string, file: string): Set<number> {
 	const added = new Set<number>();
-	const diff = git("diff", "--unified=0", `${base}...HEAD`, "--", file);
+	const diff = git("diff", "--unified=0", base, "HEAD", "--", file);
 	for (const line of diff.split("\n")) {
 		const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
 		if (hunk === null) continue;

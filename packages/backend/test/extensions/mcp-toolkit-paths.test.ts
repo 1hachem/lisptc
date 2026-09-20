@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
 import { describe, expect, it } from "vitest";
-import { mcpExtension } from "../src/mcp.ts";
-import { mcpHost } from "../src/mcp-host.ts";
-import type { ConnConfig, McpClient } from "../src/ports.ts";
-import { bundledToolkit } from "../src/toolkit.ts";
+import { mcpExtension } from "@repo/mcp-extension";
+import { mcpHost } from "@repo/mcp-extension/mcp-host";
+import type { ConnConfig, McpClient } from "@repo/mcp-extension/ports";
+import { bundledToolkit } from "@repo/mcp-extension/toolkit";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
 	const seen: ConnConfig[] = [];

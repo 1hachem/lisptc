@@ -14,7 +14,7 @@ import {
 } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 
-import type { Trace } from "./trace.ts";
+import type { Trace } from "@repo/checks/trace";
 
 export interface EvalRun {
 	trace: Trace;
@@ -43,7 +43,17 @@ function run(what: string): EvalRun {
 
 export function mockedMcpExtension(): InterpExtension {
 	const { trace, mocks } = run("mockedMcpExtension()");
-	return mcpExtension({ ...mcpHost, client: trace.client(mockClient(mocks)) });
+	const client = mockClient(mocks);
+	return mcpExtension({
+		...mcpHost,
+		client: {
+			...client,
+			connect: (conf, signal) =>
+				trace.connect(conf.name, () => client.connect(conf, signal)),
+			callTool: (call, signal) =>
+				trace.call(call, () => client.callTool(call, signal)),
+		},
+	});
 }
 
 export function tracedSecretsExtension(): SecretsExtension {

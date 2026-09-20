@@ -1,4 +1,4 @@
-import { mockedMcpExtension } from "@repo/checks/mocks";
+import { mockedMcpExtension } from "./harness/mocks.ts";
 import { compactionExtension } from "@repo/compaction-extension";
 import { memoryExtension, VolatileStore } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";

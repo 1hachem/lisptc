@@ -18,7 +18,7 @@ import {
 	routeQuestions,
 	SUFFICIENT,
 } from "../src/drift.ts";
-import type { Ask, JevHost } from "../src/jev.ts";
+import type { Ask, JevHost } from "@repo/jev/jev";
 
 const BLOCK: Block = {
 	id: "b0",

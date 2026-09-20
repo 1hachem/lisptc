@@ -20,9 +20,7 @@ had to happen. Read the form names there.
 interpreter and a wrapper around an MCP client. `src/verdict.ts` holds the
 shape of what the DSL decides, declared as plain types. The schema a report is
 parsed with is the same shape in `@repo/evals/report`, and the two meet in the
-trace-viewer adapter, where a mismatch fails to compile. `src/mocks.ts` builds
-the mocked world a case runs in, and it is the only file here that imports an
-extension.
+trace-viewer adapter, where a mismatch fails to compile.
 
 This package does not follow the `<name>.ts` + `<name>-host.ts` pattern. It has
 no host and reaches nothing outside the process.
@@ -37,8 +35,12 @@ Depend on nothing that runs a suite. Anything that needs this DSL and a model
 belongs in the app that owns the cases, and anything that drives or describes a
 finished run belongs in `@repo/evals`.
 
+Depend on no other extension. Compose mocked hosts in the app that owns the
+cases, and inject the values tracing needs through its own ports.
+
 ## Tests
 
-`test/trace-notes.test.ts` and `test/combinators.test.ts`. The cases themselves
+`test/combinators.test.ts`. Cross-extension tests belong in `@repo/backend`.
+The cases themselves
 live in `apps/trace-viewer/evals` and run under `pnpm test:evals`, not
 `pnpm test`.

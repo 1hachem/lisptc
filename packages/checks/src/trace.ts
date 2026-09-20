@@ -1,11 +1,5 @@
 import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
 import { note } from "@repo/interpreter/topics";
-import type {
-	ConnectResult,
-	McpClient,
-	ToolCall,
-} from "@repo/mcp-extension/ports";
-import type { SecretsStore } from "@repo/secrets-extension";
 
 export const REDACTED = "<redacted>";
 
@@ -47,10 +41,10 @@ export class Trace {
 	private readonly sources = new Map<number, unknown>();
 	private step = 0;
 	private readonly servers = new Map<string, string>();
-	private readonly secrets: SecretsStore | undefined;
+	private readonly secretValues: () => string[];
 
-	constructor(options: { secrets?: SecretsStore } = {}) {
-		this.secrets = options.secrets;
+	constructor(options: { secretValues?: () => string[] } = {}) {
+		this.secretValues = options.secretValues ?? (() => []);
 	}
 
 	beginStep(step: number): void {
@@ -119,22 +113,12 @@ export class Trace {
 		};
 	}
 
-	client(inner: McpClient): McpClient {
-		return {
-			...inner,
-			connect: (conf, signal) => this.recordConnect(inner, conf, signal),
-			callTool: (call, signal) => this.recordCall(inner, call, signal),
-		};
-	}
-
-	private async recordConnect(
-		inner: McpClient,
-		conf: Parameters<McpClient["connect"]>[0],
-		signal?: AbortSignal,
-	): Promise<ConnectResult> {
-		const server = conf.name;
+	async connect<T extends { serverId: string }>(
+		server: string,
+		connect: () => Promise<T>,
+	): Promise<T> {
 		try {
-			const result = await inner.connect(conf, signal);
+			const result = await connect();
 			this.servers.set(result.serverId, server);
 			this.add({ kind: "connect", step: this.step, server, ok: true });
 			return result;
@@ -144,15 +128,14 @@ export class Trace {
 		}
 	}
 
-	private async recordCall(
-		inner: McpClient,
-		call: ToolCall,
-		signal?: AbortSignal,
-	): Promise<unknown> {
+	async call<T>(
+		call: { serverId: string; tool: string; args: Record<string, unknown> },
+		invoke: () => Promise<T>,
+	): Promise<T> {
 		const server = this.servers.get(call.serverId) ?? call.serverId;
 		const safe = this.redact(call.args) as Record<string, unknown>;
 		try {
-			const result = await inner.callTool(call, signal);
+			const result = await invoke();
 			this.add({
 				kind: "tool",
 				step: this.step,
@@ -173,14 +156,6 @@ export class Trace {
 			});
 			throw err;
 		}
-	}
-
-	private secretValues(): string[] {
-		if (!this.secrets) return [];
-		return this.secrets
-			.list()
-			.map(([key]) => this.secrets?.get(key)?.value)
-			.filter((value): value is string => Boolean(value));
 	}
 
 	private redact(value: unknown): unknown {

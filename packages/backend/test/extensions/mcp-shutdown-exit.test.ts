@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const HOST = fileURLToPath(
-	new URL("./fixture-shutdown-host.ts", import.meta.url),
+	new URL("./mcp-fixture-shutdown-host.ts", import.meta.url),
 );
 
 function runHost(

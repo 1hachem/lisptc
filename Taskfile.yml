@@ -230,3 +230,8 @@ tasks:
     cmds:
       - task: repl:kill
       - task: repl:attach
+
+  check:charter:
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai", CMD: "pnpm check:charter" }

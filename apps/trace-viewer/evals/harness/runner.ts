@@ -5,7 +5,7 @@ import {
 	systemPromptFor,
 } from "@repo/ai";
 import { Checks } from "@repo/checks/checks";
-import type { MockSpec } from "@repo/checks/mocks";
+import type { MockSpec } from "./mocks.ts";
 import { Trace } from "@repo/checks/trace";
 import { evalsEnv } from "@repo/env/evals";
 import type { CaseInfo, ReportRow } from "@repo/evals/report";

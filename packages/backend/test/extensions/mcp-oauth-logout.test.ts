@@ -9,7 +9,7 @@ import {
 } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
 import { afterAll, describe, expect, it } from "vitest";
-import { mcpExtension } from "../src/mcp.ts";
+import { mcpExtension } from "@repo/mcp-extension";
 
 const dir = process.env.LISPTC_OAUTH_DIR as string;
 

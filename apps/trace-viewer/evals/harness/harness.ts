@@ -1,4 +1,4 @@
-import { type MockSpec, withRun } from "@repo/checks/mocks";
+import { type MockSpec, withRun } from "./mocks.ts";
 import { Trace } from "@repo/checks/trace";
 import type { InterpExtension } from "@repo/interpreter/lisp";
 import { AgentRepl } from "@repo/repl/repl";
@@ -20,7 +20,13 @@ export interface Harness {
 
 export function tracedRepl(options: HarnessOptions): Harness {
 	const secrets = envSecretsStore();
-	const trace = new Trace({ secrets });
+	const trace = new Trace({
+		secretValues: () =>
+			secrets
+				.list()
+				.map(([key]) => secrets.get(key)?.value)
+				.filter((value): value is string => Boolean(value)),
+	});
 	const mocks = options.mocks ?? { servers: {} };
 	const extensions = withRun({ trace, mocks, secrets }, () => [
 		...options.extensions(),

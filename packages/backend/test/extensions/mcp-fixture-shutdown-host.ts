@@ -1,10 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { Interp, prelude, runAsync, runSync } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
-import { mcpExtension } from "../src/mcp.ts";
+import { mcpExtension } from "@repo/mcp-extension";
 
 const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
+	new URL("./mcp-fixture-mcp-server.ts", import.meta.url),
 );
 
 const interp = new Interp({

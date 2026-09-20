@@ -1,12 +1,8 @@
 {
-  "name": "@repo/checks",
+  "name": "@repo/jev-ci",
   "version": "0.0.0",
   "type": "module",
   "private": true,
-  "exports": {
-    "./checks": "./src/checks.ts",
-    "./trace": "./src/trace.ts"
-  },
   "engines": {
     "node": ">=22.6.0"
   },
@@ -16,8 +12,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@repo/interpreter": "workspace:*",
-    "zod": "^4.4.3"
+    "@repo/env": "workspace:*",
+    "@repo/jev": "workspace:*",
+    "@typesafe-ai/sdk": "^0.6.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

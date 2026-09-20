@@ -9,10 +9,10 @@ import {
 } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
 import { afterAll, describe, expect, it } from "vitest";
-import { mcpExtension } from "../src/mcp.ts";
-import { mcpHost } from "../src/mcp-host.ts";
-import type { SearchDocument, SearchEngine } from "../src/ports.ts";
-import { jsonToolkit } from "../src/toolkit.ts";
+import { mcpExtension } from "@repo/mcp-extension";
+import { mcpHost } from "@repo/mcp-extension/mcp-host";
+import type { SearchDocument, SearchEngine } from "@repo/mcp-extension/ports";
+import { jsonToolkit } from "@repo/mcp-extension/toolkit";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
 	return str((await runAsync(interp, code)).value);
@@ -34,13 +34,13 @@ function mcpInterp(): Interp {
 }
 
 const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
+	new URL("./mcp-fixture-mcp-server.ts", import.meta.url),
 );
 const EMPTY_FIXTURE = fileURLToPath(
-	new URL("./fixture-empty-mcp-server.ts", import.meta.url),
+	new URL("./mcp-fixture-empty-mcp-server.ts", import.meta.url),
 );
 const ENUM_FIXTURE = fileURLToPath(
-	new URL("./fixture-enum-mcp-server.ts", import.meta.url),
+	new URL("./mcp-fixture-enum-mcp-server.ts", import.meta.url),
 );
 
 describe("self-evaluating keywords", () => {
@@ -344,7 +344,7 @@ describe("a toolkit server bundled with the repo", () => {
 			args: [
 				"--no-warnings",
 				"--experimental-transform-types",
-				"./test/fixture-mcp-server.ts",
+				"../backend/test/extensions/mcp-fixture-mcp-server.ts",
 			],
 		},
 	]);
