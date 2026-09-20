@@ -1,105 +1,115 @@
 import { jevConfigured } from "@repo/env/decisions";
 import {
-	affects,
+	addedLines,
 	annotate,
-	changedFiles,
+	changedCharter,
 	charterFiles,
 	flag,
-	guess,
+	type Hunk,
 	has,
+	hunks,
+	patch,
 	read,
 	resolve,
+	touched,
 } from "./agents-host.ts";
 import { type Block, chunk, mentions } from "./blocks.ts";
 import {
+	CONTRADICTED,
 	type DriftVerdict,
 	driftJudge,
 	driftRouter,
+	type Evidence,
 	type Mention,
+	SUFFICIENT,
 } from "./drift.ts";
 
 const MOST = 25;
-const WRONG_PLACE = 2;
 
 const base = flag("base", "origin/main");
 const all = has("all");
 const allow = has("allow");
 
-interface Anchored {
+interface Rule {
 	block: Block;
 	tokens: string[];
-	evidence: string[];
+	diff: string[];
 }
 
-function anchored(file: string): Anchored[] {
+interface Judged {
+	file: string;
+	rule: Rule;
+	evidence: Evidence[];
+	verdict: DriftVerdict;
+}
+
+function sure(odds: number): string {
+	return `${Math.round(odds * 100)}%`;
+}
+
+function rules(file: string): Rule[] {
+	const found: Hunk[] = all ? [] : hunks(base, file);
+	const added = addedLines(found);
 	return chunk(read(file))
-		.map((block) => {
-			const tokens = mentions(block);
-			return {
-				block,
-				tokens,
-				evidence: [...new Set(tokens.flatMap(guess))],
-			};
-		})
-		.filter((one) => one.tokens.length > 0);
+		.map((block) => ({
+			block,
+			tokens: mentions(block),
+			diff: patch(block, found),
+		}))
+		.filter(
+			(one) => one.tokens.length > 0 && (all || touched(one.block, added)),
+		);
 }
 
-function selected(
-	blocks: Anchored[],
-	changed: ReadonlySet<string>,
-): Anchored[] {
-	if (all) return blocks;
-	return blocks.filter((one) => affects(one.evidence, changed));
+function cure(drift: DriftVerdict["drift"]): string {
+	return drift === "deleted" || drift === "absent"
+		? "There is nothing left to point at. Delete the sentence."
+		: "Fix the sentence, or move the constraint into a check that fails.";
 }
 
-function report(file: string, verdict: DriftVerdict): void {
+function report(one: Judged): void {
+	const { file, rule, evidence, verdict } = one;
 	const { block, level, drift, weight, contradicted, sufficient } = verdict;
 	if (level === "holds") return;
 	if (level === "unanchored") {
-		annotate(
-			"notice",
-			file,
-			block.line,
-			"charter: unanchored",
+		annotate("notice", file, block.line, "charter: unanchored", [
 			"No evidence in the repository can confirm or deny this block. Nothing falsifies it, which is what the charter forbids.",
-		);
+		]);
 		return;
 	}
 	if (level === "unchecked") {
-		annotate(
-			"notice",
-			file,
-			block.line,
-			"drift: could not check",
-			`This block looks contradicted (${contradicted.toFixed(2)}) but the evidence gathered was not enough to decide (${sufficient.toFixed(2)}). Needs a human.`,
-		);
+		annotate("notice", file, block.line, "drift: could not check", [
+			`This block looks contradicted (${sure(contradicted)}) but the evidence gathered settles it only at ${sure(sufficient)}, under the ${sure(SUFFICIENT)} bar. Needs a human.`,
+		]);
 		return;
 	}
-	annotate(
-		weight >= WRONG_PLACE ? "error" : "warning",
-		file,
-		block.line,
-		`drift: ${drift}`,
-		[
-			`The code no longer matches this block: ${drift}.`,
-			`An agent that trusts it scores ${weight.toFixed(2)} of 3 for harm.`,
-			drift === "deleted" || drift === "absent"
-				? "There is nothing left to point at. Delete the sentence."
-				: "Fix the sentence, or move the constraint into a check that fails.",
-			`Under: ${block.heading}`,
-		].join("\n"),
-	);
+	annotate("error", file, block.line, `drift: ${drift}`, [
+		`The code contradicts this block, and jev is ${sure(contradicted)} sure of it. The bar is ${sure(CONTRADICTED)}.`,
+		`The evidence settles it at ${sure(sufficient)}. An agent that believes the block scores ${weight.toFixed(2)} of 3 for harm.`,
+		"",
+		`The rule that failed, under "${block.heading}":`,
+		...block.text.split("\n").map((text) => `  ${text}`),
+		"",
+		"The change that failed it:",
+		...(rule.diff.length === 0
+			? ["  nothing in this diff: the block was selected by --all"]
+			: rule.diff.map((text) => `  ${text}`)),
+		"",
+		"What the repository says now:",
+		...evidence.map((it) => `  ${it.token} (${it.kind}): ${it.found}`),
+		"",
+		cure(drift),
+	]);
 }
 
-const changed = new Set(all ? [] : changedFiles(base));
-const work = charterFiles().map((file) => ({
+const work = (all ? charterFiles() : changedCharter(base)).map((file) => ({
 	file,
-	blocks: selected(anchored(file), changed),
+	rules: rules(file),
 }));
-const total = work.reduce((sum, one) => sum + one.blocks.length, 0);
+const total = work.reduce((sum, one) => sum + one.rules.length, 0);
 
 if (total === 0) {
-	console.log("No charter block references anything this change touched.");
+	console.log("No changed charter block points at anything in the code.");
 	process.exit(0);
 }
 
@@ -112,14 +122,14 @@ if (!jevConfigured) {
 
 const router = driftRouter();
 const judge = driftJudge();
-const verdicts: { file: string; verdict: DriftVerdict }[] = [];
+const judged: Judged[] = [];
 
-for (const { file, blocks } of work) {
-	if (blocks.length === 0) continue;
-	const asking = blocks.slice(0, MOST);
-	if (blocks.length > MOST)
+for (const { file, rules: found } of work) {
+	if (found.length === 0) continue;
+	const asking = found.slice(0, MOST);
+	if (found.length > MOST)
 		console.log(
-			`::notice file=${file}::checking the first ${MOST} of ${blocks.length} affected blocks.`,
+			`::notice file=${file}::checking the first ${MOST} of ${found.length} changed blocks.`,
 		);
 	const flat: Mention[] = asking.flatMap((one) =>
 		one.tokens.map((token) => ({ block: one.block.id, token })),
@@ -130,23 +140,27 @@ for (const { file, blocks } of work) {
 		flat,
 	);
 	let at = 0;
-	for (const one of asking) {
-		const evidence = one.tokens.flatMap((token) =>
+	for (const rule of asking) {
+		const evidence = rule.tokens.flatMap((token) =>
 			resolve(token, routes[at++] ?? ["none"]),
 		);
 		if (evidence.length === 0) continue;
-		const verdict = await judge(file, one.block, evidence);
-		if (verdict !== undefined) verdicts.push({ file, verdict });
+		const verdict = await judge(file, rule.block, evidence);
+		if (verdict !== undefined) judged.push({ file, rule, evidence, verdict });
 	}
 }
 
-for (const { file, verdict } of verdicts) report(file, verdict);
+for (const one of judged) report(one);
 
-const drifted = verdicts.filter(({ verdict }) => verdict.level === "drift");
-const serious = drifted.filter(({ verdict }) => verdict.weight >= WRONG_PLACE);
+const drifted = judged.filter((one) => one.verdict.level === "drift");
 
 console.log(
-	`Checked ${verdicts.length} block(s) against the code: ${drifted.length} drifted, ${serious.length} of them seriously.`,
+	`Checked ${judged.length} changed block(s) against the code: ${drifted.length} drifted at or above ${sure(CONTRADICTED)} confidence.`,
 );
 
-if (serious.length > 0 && !allow) process.exit(1);
+for (const { file, verdict } of drifted)
+	console.log(
+		`  ${file}:${verdict.block.line} ${verdict.drift} (${sure(verdict.contradicted)}) — ${verdict.block.heading}`,
+	);
+
+if (drifted.length > 0 && !allow) process.exit(1);

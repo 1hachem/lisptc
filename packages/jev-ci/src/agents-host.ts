@@ -7,8 +7,7 @@ import type { Evidence, MentionKind } from "./drift.ts";
 const SYMLINK = "120000";
 const ENTRIES = 40;
 const SAMPLES = 6;
-const COMMON = 30;
-const BROAD = 0.2;
+const INDENT = "    ";
 
 let top: string | undefined;
 
@@ -71,40 +70,70 @@ export function charterFiles(): string[] {
 		.filter((file) => file !== undefined);
 }
 
-export function changedFiles(base: string): string[] {
+function changedFiles(base: string): string[] {
 	return git("diff", "--name-only", base, "HEAD")
 		.split("\n")
 		.filter((file) => file !== "");
 }
 
-export function addedLines(base: string, file: string): Set<number> {
-	const added = new Set<number>();
-	const diff = git("diff", "--unified=0", base, "HEAD", "--", file);
-	for (const line of diff.split("\n")) {
-		const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
-		if (hunk === null) continue;
-		const from = Number(hunk[1]);
-		const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
-		for (let n = from; n < from + count; n++) added.add(n);
+export function changedCharter(base: string): string[] {
+	const changed = new Set(changedFiles(base));
+	return charterFiles().filter((file) => changed.has(file));
+}
+
+export interface Hunk {
+	line: number;
+	span: number;
+	lines: string[];
+}
+
+const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+
+export function hunks(base: string, file: string): Hunk[] {
+	const found: Hunk[] = [];
+	let open: Hunk | undefined;
+	for (const line of git("diff", "--unified=0", base, "HEAD", "--", file).split(
+		"\n",
+	)) {
+		const head = HUNK.exec(line);
+		if (head !== null) {
+			open = {
+				line: Number(head[1]),
+				span: head[2] === undefined ? 1 : Number(head[2]),
+				lines: [],
+			};
+			found.push(open);
+			continue;
+		}
+		if (open !== undefined && /^[+-]/.test(line)) open.lines.push(line);
 	}
+	return found;
+}
+
+export function addedLines(found: readonly Hunk[]): Set<number> {
+	const added = new Set<number>();
+	for (const one of found)
+		for (let n = one.line; n < one.line + one.span; n++) added.add(n);
 	return added;
 }
 
+function span(block: Block): number {
+	return block.text.split("\n").length;
+}
+
 export function touched(block: Block, added: ReadonlySet<number>): boolean {
-	const span = block.text.split("\n").length;
-	for (let n = block.line; n < block.line + span; n++)
+	for (let n = block.line; n < block.line + span(block); n++)
 		if (added.has(n)) return true;
 	return false;
 }
 
-export function affects(
-	evidence: readonly string[],
-	changed: ReadonlySet<string>,
-): boolean {
-	for (const file of changed)
-		for (const entry of evidence)
-			if (file === entry || file.startsWith(`${entry}/`)) return true;
-	return false;
+export function patch(block: Block, found: readonly Hunk[]): string[] {
+	const end = block.line + span(block);
+	return found
+		.filter(
+			(one) => one.line < end && one.line + Math.max(one.span, 1) > block.line,
+		)
+		.flatMap((one) => one.lines);
 }
 
 function escaped(pattern: string): RegExp {
@@ -239,27 +268,6 @@ export function resolve(
 	return found;
 }
 
-function covers(entries: readonly string[]): number {
-	return tracked().filter((file) =>
-		entries.some((entry) => file === entry || file.startsWith(`${entry}/`)),
-	).length;
-}
-
-export function guess(token: string): string[] {
-	const found = new Set<string>();
-	const bare = token.replace(/\/$/, "");
-	if (bare !== "" && existsSync(join(root(), bare))) found.add(bare);
-	for (const file of matches(shape(token))) found.add(file);
-	const named = manifests().find((one) => one.name === token);
-	if (named !== undefined) found.add(join(named.file, ".."));
-	if (found.size === 0 && /^[\w@/.:-]+$/.test(token) && token.length >= 4) {
-		const hits = grepped(token);
-		if (hits.length <= COMMON) for (const file of hits) found.add(file);
-	}
-	const list = [...found];
-	return covers(list) > tracked().length * BROAD ? [] : list;
-}
-
 export function flag(name: string, fallback: string): string {
 	const at = process.argv.indexOf(`--${name}`);
 	return at === -1 ? fallback : (process.argv[at + 1] ?? fallback);
@@ -274,8 +282,19 @@ export function annotate(
 	file: string,
 	line: number,
 	title: string,
-	message: string,
+	message: readonly string[],
 ): void {
-	const body = message.replace(/\n/g, "%0A").replace(/\r/g, "");
-	console.log(`::${level} file=${file},line=${line},title=${title}::${body}`);
+	const body = message.join("\n");
+	console.log(
+		`::${level} file=${file},line=${line},title=${title}::${body.replace(/\n/g, "%0A").replace(/\r/g, "")}`,
+	);
+	if (level === "notice") return;
+	console.log(
+		[
+			"",
+			`${level.toUpperCase()} ${file}:${line} — ${title}`,
+			...message.map((one) => `${INDENT}${one}`),
+			"",
+		].join("\n"),
+	);
 }

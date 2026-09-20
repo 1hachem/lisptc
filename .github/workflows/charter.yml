@@ -3,8 +3,8 @@ name: Charter
 on:
   push:
     paths:
+      - "AGENTS.md"
       - "**/AGENTS.md"
-      - "**/CLAUDE.md"
 
 concurrency:
   group: charter-${{ github.workflow }}-${{ github.ref }}
@@ -59,7 +59,7 @@ jobs:
         run: pnpm check:charter --base "${{ steps.base.outputs.sha }}"
 
   drift:
-    name: Old prose against the code
+    name: Changed prose against the code
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -99,5 +99,5 @@ jobs:
           secret-path: /ai
           export-type: env
 
-      - name: Check what this change touched
+      - name: Judge
         run: pnpm check:drift --base "${{ steps.base.outputs.sha }}"
