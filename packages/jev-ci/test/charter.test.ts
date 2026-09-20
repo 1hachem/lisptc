@@ -9,6 +9,8 @@ import {
 	charterReview,
 	DESCRIBES,
 	KINDS,
+	type Kind,
+	PERMITTED,
 	ROTS,
 	readCharter,
 	SURE,
@@ -120,12 +122,12 @@ describe("readCharter", () => {
 	it.each([
 		["a pointer nothing can falsify silently", 0.1, 0.4, "pass"],
 		["a rule that survives a rewrite", 0.2, 1.1, "pass"],
-		["prose that rots but only points", 0.9, 1.0, "warn"],
+		["prose that rots but only points", ROTS, 1.0, "warn"],
 		["a mechanism a test still guards", 0.3, 2.6, "warn"],
-		["a mechanism nothing guards", 0.88, 2.4, "fail"],
+		["a mechanism nothing guards", ROTS + 0.02, DESCRIBES + 0.4, "fail"],
 		["exactly at both thresholds", ROTS, DESCRIBES, "fail"],
-		["just under the rot threshold", 0.74, 2.9, "warn"],
-		["just under the altitude threshold", 0.99, 1.99, "warn"],
+		["just under the rot threshold", ROTS - 0.01, 2.9, "warn"],
+		["just under the altitude threshold", 0.99, DESCRIBES - 0.01, "warn"],
 	])("reads %s as %s", (_name, rots, altitude, level) => {
 		const one = block("text");
 
@@ -156,6 +158,34 @@ describe("readCharter", () => {
 		const [verdict] = readCharter(
 			[one],
 			answered([one], () => peaked),
+		);
+
+		expect(verdict.level).toBe("fail");
+	});
+
+	it.each([
+		...PERMITTED,
+	])("never fails a block that is doing what an AGENTS.md is for: %s", (kind) => {
+		const one = block("text");
+		const both = { rots: 1, altitude: 3, confidence: 1, kind };
+
+		const [verdict] = readCharter(
+			[one],
+			answered([one], () => both),
+		);
+
+		expect(verdict.level).toBe("warn");
+	});
+
+	it.each(
+		Object.keys(KINDS).filter((kind) => !PERMITTED.has(kind as Kind)),
+	)("still fails a block that carries implementation: %s", (kind) => {
+		const one = block("text");
+		const both = { rots: 1, altitude: 3, confidence: 1, kind };
+
+		const [verdict] = readCharter(
+			[one],
+			answered([one], () => both),
 		);
 
 		expect(verdict.level).toBe("fail");

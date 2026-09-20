@@ -13,7 +13,14 @@ import {
 	touched,
 } from "./agents-host.ts";
 import { type Block, chunk } from "./blocks.ts";
-import { type CharterVerdict, charterReview, SURE } from "./charter.ts";
+import {
+	type CharterVerdict,
+	charterReview,
+	DESCRIBES,
+	PERMITTED,
+	ROTS,
+	SURE,
+} from "./charter.ts";
 
 const MOST = 40;
 
@@ -38,27 +45,69 @@ function rules(file: string): Rule[] {
 		.filter((one) => all || touched(one.block, added));
 }
 
+function tripped(rots: number, altitude: number): string[] {
+	const gates: string[] = [];
+	if (rots >= ROTS)
+		gates.push(`it rots at ${sure(rots)}, at or above the ${sure(ROTS)} bar`);
+	if (altitude >= DESCRIBES)
+		gates.push(
+			`it sits at altitude ${altitude.toFixed(2)} of 3, at or above ${DESCRIBES.toFixed(2)}`,
+		);
+	return gates;
+}
+
+function held(rots: number, altitude: number): string[] {
+	const gates: string[] = [];
+	if (rots < ROTS)
+		gates.push(`it rots at ${sure(rots)}, under the ${sure(ROTS)} bar`);
+	if (altitude < DESCRIBES)
+		gates.push(
+			`it sits at altitude ${altitude.toFixed(2)} of 3, under ${DESCRIBES.toFixed(2)}`,
+		);
+	return gates;
+}
+
+function verdictLines(verdict: CharterVerdict): string[] {
+	const { level, kind, rots, altitude, confidence } = verdict;
+	const crossed = tripped(rots, altitude);
+	const standing = held(rots, altitude);
+	if (level === "fail")
+		return [
+			`Against the charter. It reads as ${kind}, and both gates tripped: ${crossed.join("; ")}.`,
+			`The altitude score is ${sure(confidence)} confident, at or above the ${sure(SURE)} bar that turns a tripped pair into a failure.`,
+		];
+	return [
+		`Borderline, and nothing fails on it. It reads as ${kind}: ${crossed.join("; ")}.`,
+		standing.length > 0
+			? `The other gate held: ${standing.join("; ")}.`
+			: PERMITTED.has(kind)
+				? `Both gates tripped, but ${kind} is what an AGENTS.md is for, so this stays a warning.`
+				: `Both gates tripped, but the altitude score is only ${sure(confidence)} confident, under the ${sure(SURE)} bar, so this stays a warning.`,
+	];
+}
+
 function report(file: string, rule: Rule, verdict: CharterVerdict): void {
-	const { block, level, kind, rots, altitude, confidence } = verdict;
+	const { block, level } = verdict;
 	if (level === "pass") return;
 	annotate(
 		level === "fail" ? "error" : "warning",
 		file,
 		block.line,
-		`charter: ${kind}`,
+		`charter: ${verdict.kind}`,
 		[
-			`This block reads as ${kind}, not as a pointer or a rule, at ${sure(confidence)} confidence. The bar is ${sure(SURE)}.`,
-			`It rots at ${sure(rots)} and sits at altitude ${altitude.toFixed(2)} of 3.`,
+			...verdictLines(verdict),
 			"",
-			`The rule that failed, under "${block.heading}":`,
+			`The block, under "${block.heading}":`,
 			...block.text.split("\n").map((text) => `  ${text}`),
 			"",
-			"The change that failed it:",
+			"The change that raised it:",
 			...(rule.diff.length === 0
 				? ["  nothing in this diff: the block was selected by --all"]
 				: rule.diff.map((text) => `  ${text}`)),
 			"",
-			"The code is the only source of truth: put the constraint in a name, a type or a test, and delete the prose.",
+			level === "fail"
+				? "The code is the only source of truth: put the constraint in a name, a type or a test, and delete the prose."
+				: "Watch it. If it grows, put the constraint in a name, a type or a test and delete the prose.",
 		],
 	);
 }

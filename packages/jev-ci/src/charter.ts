@@ -29,7 +29,12 @@ export const KINDS = {
 		"Written for a reader who is not reading this code at all: what the project is, how to run it, who it is for.",
 } as const;
 
-type Kind = keyof typeof KINDS;
+export type Kind = keyof typeof KINDS;
+
+export const PERMITTED: ReadonlySet<Kind> = new Set<Kind>([
+	"pointer",
+	"audience",
+]);
 
 const ALTITUDE = [
 	"A pointer or a rule. It survives a rewrite of the code it talks about: renaming one function or moving one file does not make it false.",
@@ -38,9 +43,9 @@ const ALTITUDE = [
 	"Explains a mechanism or a design decision in enough depth that the code could change underneath it with nothing failing and nobody noticing.",
 ] as const;
 
-export const ROTS = 0.75;
+export const ROTS = 0.9;
 export const DESCRIBES = 2;
-export const SURE = 0.4;
+export const SURE = 0.6;
 
 type CharterLevel = "pass" | "warn" | "fail";
 
@@ -115,13 +120,15 @@ function charterState(
 }
 
 function level(
+	kind: Kind,
 	rotted: number,
 	described: number,
 	confidence: number,
 ): CharterLevel {
-	if (rotted >= ROTS && described >= DESCRIBES)
-		return confidence >= SURE ? "fail" : "warn";
-	return rotted >= ROTS || described >= DESCRIBES ? "warn" : "pass";
+	const gates = (rotted >= ROTS ? 1 : 0) + (described >= DESCRIBES ? 1 : 0);
+	if (gates === 0) return "pass";
+	if (gates === 2 && confidence >= SURE && !PERMITTED.has(kind)) return "fail";
+	return "warn";
 }
 
 export type Answers = SystemOneResult<Questions>["answers"];
@@ -136,10 +143,12 @@ export function readCharter(
 		const described = answers[`altitude_${block.id}`];
 		const named = answers[`kind_${block.id}`];
 		if (rotted?.type !== "noul" || described?.type !== "score") continue;
+		const kind =
+			named?.type === "choice" ? (named.choice as Kind) : "mechanism";
 		verdicts.push({
 			block,
-			level: level(rotted.noul, described.score, described.confidence),
-			kind: named?.type === "choice" ? (named.choice as Kind) : "mechanism",
+			level: level(kind, rotted.noul, described.score, described.confidence),
+			kind,
 			rots: rotted.noul,
 			altitude: described.score,
 			confidence: described.confidence,
