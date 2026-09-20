@@ -51,7 +51,7 @@ jobs:
         run: pnpm knip
 
       - name: Test
-        run: pnpm test
+        run: pnpm test --concurrency=2
 
   test-nix:
     runs-on: ubuntu-latest
