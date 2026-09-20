@@ -22,6 +22,8 @@ describe("what the docker host does with each toolkit modality", () => {
 			name: "playwright",
 			image: "lisptc/browser-mcp:v1.63.0",
 			port: 8931,
+			command: "npx",
+			args: ["-y", "@playwright/mcp@0.0.81"],
 		});
 
 		expect(launch).toEqual({

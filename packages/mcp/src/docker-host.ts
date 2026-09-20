@@ -68,7 +68,7 @@ export function launchFor(conf: ConnConfig): Launch | undefined {
 			image: conf.image,
 			exposed: String(conf.port),
 			path: conf.path ?? MCP_PATH,
-			args: conf.args ?? [],
+			args: conf.command ? [] : (conf.args ?? []),
 		};
 	if ("url" in conf) return undefined;
 	return {

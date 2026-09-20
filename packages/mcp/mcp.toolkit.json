@@ -21,7 +21,17 @@
       "automation"
     ],
     "image": "lisptc/browser-mcp:v1.63.0",
-    "port": 8931
+    "port": 8931,
+    "command": "npx",
+    "args": [
+      "-y",
+      "@playwright/mcp@0.0.81",
+      "--browser",
+      "chromium",
+      "--headless",
+      "--no-sandbox",
+      "--isolated"
+    ]
   },
   {
     "name": "fs",

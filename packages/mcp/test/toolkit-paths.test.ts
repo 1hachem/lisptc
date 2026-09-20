@@ -27,7 +27,7 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 	};
 }
 
-function argsFor(name: string): string[] {
+function configFor(name: string): ConnConfig {
 	const { client, seen } = recording();
 	const interp = new Interp({
 		extensions: [promisesExtension(), mcpExtension({ ...mcpHost, client })],
@@ -35,17 +35,36 @@ function argsFor(name: string): string[] {
 	runSync(interp, prelude);
 	runSync(interp, `(load-mcp "${name}")`);
 	const conf = seen[0];
-	if (!conf || !("args" in conf) || !conf.args)
-		throw new Error(`no stdio args recorded for "${name}"`);
-	return conf.args;
+	if (!conf) throw new Error(`no config recorded for "${name}"`);
+	return conf;
 }
 
 describe("bundled toolkit commands resolve against the manifest", () => {
 	for (const name of ["sheets", "ocr"]) {
 		it(`points ${name} at the directory holding Taskfile.yml`, () => {
-			const dir = argsFor(name)[1];
+			const conf = configFor(name);
+			if (!("args" in conf) || !conf.args)
+				throw new Error(`no stdio args recorded for "${name}"`);
+			const dir = conf.args[1];
 			expect(dir).toBeDefined();
 			expect(existsSync(join(dir as string, "Taskfile.yml"))).toBe(true);
 		});
 	}
+
+	it("keeps Playwright's local command alongside its container image", () => {
+		expect(configFor("playwright")).toMatchObject({
+			image: "lisptc/browser-mcp:v1.63.0",
+			port: 8931,
+			command: "npx",
+			args: [
+				"-y",
+				"@playwright/mcp@0.0.81",
+				"--browser",
+				"chromium",
+				"--headless",
+				"--no-sandbox",
+				"--isolated",
+			],
+		});
+	});
 });

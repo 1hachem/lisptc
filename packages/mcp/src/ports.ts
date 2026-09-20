@@ -42,6 +42,7 @@ export type ContainerConnConfig = ConnMeta & {
 	image: string;
 	port: number;
 	path?: string;
+	command?: string;
 	args?: string[];
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
