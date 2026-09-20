@@ -59,7 +59,7 @@
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "packages/jev": {
-      "entry": ["test/**/*.ts"],
+      "entry": ["test/**/*.ts", "src/*-check.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "packages/llm": {

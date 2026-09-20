@@ -1,0 +1,93 @@
+name: Charter
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      sweep:
+        description: "Judge every block, not just what this change touched"
+        type: boolean
+        default: true
+
+concurrency:
+  group: charter-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+jobs:
+  charter:
+    name: New prose against the charter
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the base
+        run: git fetch --no-tags origin ${{ github.base_ref }}
+
+      - name: Any charter file touched
+        id: touched
+        run: |
+          git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep -E '(^|/)AGENTS\.md$' > touched.txt || true
+          test -s touched.txt && echo "any=true" >> "$GITHUB_OUTPUT" || true
+
+      - name: Setup Node.js
+        if: steps.touched.outputs.any == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack (pnpm)
+        if: steps.touched.outputs.any == 'true'
+        run: corepack enable
+
+      - name: Install dependencies
+        if: steps.touched.outputs.any == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Judge
+        if: steps.touched.outputs.any == 'true'
+        run: pnpm check:charter --base origin/${{ github.base_ref }}
+
+  drift:
+    name: Old prose against the code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the base
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags origin ${{ github.base_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check what this change touched
+        if: github.event_name == 'pull_request'
+        run: pnpm check:drift --base origin/${{ github.base_ref }}
+
+      - name: Sweep every block
+        if: github.event_name != 'pull_request'
+        run: pnpm check:drift --all

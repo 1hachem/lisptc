@@ -257,6 +257,8 @@ pnpm check:comments          # fails on any non-directive comment (part of CI), 
 pnpm fix:comments            # strip them; follow with `pnpm format`
 pnpm check:docs              # fails on tracked markdown outside the allowlist (part of CI)
 pnpm fix:docs                # delete those files
+pnpm check:charter           # asks Jev whether prose a change added is implementation (needs a key)
+pnpm check:drift             # asks Jev whether the code still matches the prose (needs a key)
 pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
@@ -271,7 +273,10 @@ Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via
 runs, in order: typecheck → lint → check:comments → check:docs →
 boundaries → check:arch → knip → test.
 `lint`, the `check:*` scripts and `knip` run once at the root;
-`typecheck` and `test` fan out through Turbo. Husky runs commitlint
+`typecheck` and `test` fan out through Turbo.
+`.github/workflows/charter.yml` runs `check:charter` and `check:drift`
+separately, because they reach a model and skip themselves without a key.
+Husky runs commitlint
 (conventional commits) on `commit-msg`, and `pnpm check:comments`,
 `pnpm boundaries` and `pnpm check:arch` on `pre-push`.
 
