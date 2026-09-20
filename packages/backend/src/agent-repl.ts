@@ -4,7 +4,7 @@ import type { InterpExtension } from "@repo/interpreter/lisp";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
-import { LocalProcessHost } from "@repo/mcp-extension/local-host";
+import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import type { OAuthRecord } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
@@ -43,7 +43,7 @@ export async function workspaceExtensions(
 			mcpHostFor({
 				scope: workspaceId,
 				oauth: new ConvexOAuthStore<OAuthRecord>(workspaceId, connect),
-				host: new LocalProcessHost(),
+				host: new DockerHost(),
 			}),
 		),
 		llmExtension(llmHost),
