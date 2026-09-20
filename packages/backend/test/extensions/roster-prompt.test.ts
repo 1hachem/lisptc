@@ -1,27 +1,18 @@
-import { systemPromptFor } from "@repo/ai";
 import { Interp } from "@repo/interpreter/lisp";
 import { TRIGGER_KINDS } from "@repo/memory-extension";
 import { describe, expect, it } from "vitest";
 import { modelFacing } from "./helpers.ts";
 
-const PROMPT = systemPromptFor(new Interp({ extensions: modelFacing() }));
+const PROMPT = new Interp({ extensions: modelFacing() }).systemPrompt();
 
 const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
 
 describe("the failures a run actually dies of", () => {
-	it("forbids putting a sentence in parentheses", () => {
-		expect(PROMPT).toMatch(/NEVER PUT A SENTENCE IN PARENTHESES/);
-	});
-
 	it("says the aside tolerance is forgiveness, not a way to write", () => {
 		expect(PROMPT).toMatch(
 			/a mistake the reader forgives, NOT a way to write/i,
 		);
 		expect(PROMPT).toMatch(/narrow and unpredictable/i);
-	});
-
-	it("says a bare result name is the most expensive typo there is", () => {
-		expect(PROMPT).toMatch(/most expensive typo in the language/i);
 	});
 
 	it("says a discovery call prints itself and needs no echo", () => {
@@ -31,7 +22,7 @@ describe("the failures a run actually dies of", () => {
 		);
 	});
 
-	it("points at doc for a tool's signature", () => {
+	it("points at doc for a binding's signature", () => {
 		expect(PROMPT).toMatch(/prints (a tool's|a binding's|its) full signature/i);
 	});
 });
@@ -115,10 +106,6 @@ describe("memory", () => {
 
 	it("says a code body has to be quoted", () => {
 		expect(PROMPT).toMatch(/Quote a code body/);
-	});
-
-	it("shows the trigger the policy tells the agent to hook", () => {
-		expect(PROMPT).toContain(`:on '(call (load-mcp "acme"))`);
 	});
 });
 

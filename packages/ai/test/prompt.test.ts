@@ -46,10 +46,12 @@ describe("prose around the forms", () => {
 describe("the failures a run actually dies of", () => {
 	it("forbids wrapping a remark in parentheses, not just a lone paren", () => {
 		expect(PROMPT).toMatch(/NEVER WRAP A REMARK IN PARENTHESES/);
+		expect(PROMPT).toMatch(/NEVER PUT A SENTENCE IN PARENTHESES/);
 	});
 
 	it("says a bare result name ends the turn instead of showing it", () => {
 		expect(PROMPT).toMatch(/ENDS THE TURN/);
+		expect(PROMPT).toMatch(/most expensive typo in the language/i);
 	});
 
 	it("says to stop when the request is met", () => {
@@ -120,6 +122,7 @@ describe("learning from a mistake", () => {
 	it("says to hook the last step that worked before the mistake", () => {
 		expect(PROMPT).toMatch(/HOOK IT TO WHAT PRECEDES THE ERROR/);
 		expect(PROMPT).toMatch(/HOOK THE LAST THING THAT WORKED ON THE WAY IN/);
+		expect(PROMPT).toContain(`:on '(call (load-mcp "acme"))`);
 		expect(PROMPT).toMatch(/before you can name a single tool/);
 	});
 

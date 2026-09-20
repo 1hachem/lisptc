@@ -583,15 +583,6 @@ importers:
       '@edge-runtime/vm':
         specifier: ^5.0.0
         version: 5.0.0
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.12.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      '@repo/ai':
-        specifier: workspace:*
-        version: link:../ai
-      '@repo/checks':
-        specifier: workspace:*
-        version: link:../checks
       '@repo/tsconfigs':
         specifier: workspace:*
         version: link:../tsconfigs
