@@ -86,3 +86,7 @@ name an extension in a test, so a case that needs a real one lives here: what
 the composed roster teaches the model, what the model-facing REPL reports back,
 and anything that takes two extensions at once. `test/extensions/helpers.ts`
 builds that roster.
+
+It reaches no further up than the REPL. A case here composes an `Interp` or an
+`AgentRepl` and asserts on what the extensions did; the agent loop above them is
+tested where it lives.

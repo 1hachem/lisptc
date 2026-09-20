@@ -47,7 +47,6 @@
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
-    "@repo/ai": "workspace:*",
     "@repo/tsconfigs": "workspace:*",
     "convex-test": "^0.0.58",
     "typescript": "^5.9.3",

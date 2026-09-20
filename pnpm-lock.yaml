@@ -580,9 +580,6 @@ importers:
       '@edge-runtime/vm':
         specifier: ^5.0.0
         version: 5.0.0
-      '@repo/ai':
-        specifier: workspace:*
-        version: link:../ai
       '@repo/tsconfigs':
         specifier: workspace:*
         version: link:../tsconfigs
