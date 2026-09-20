@@ -22,6 +22,14 @@ const MCP_PATH = "/mcp";
 const HOST_LABEL = "lisptc.mcp.host";
 const SERVER_LABEL = "lisptc.mcp.server";
 
+export function hostLabel(instance: string): string {
+	return `${HOST_LABEL}=${instance}`;
+}
+
+export function strayArgs(instance: string): string[] {
+	return ["ps", "--all", "--quiet", "--filter", `label=${hostLabel(instance)}`];
+}
+
 interface Container {
 	id: string;
 	handle: ServerHandle;
@@ -133,7 +141,7 @@ export class DockerHost implements McpHost {
 			"--init",
 			"--shm-size=1g",
 			"--label",
-			`${HOST_LABEL}=${this.instance}`,
+			hostLabel(this.instance),
 			"--label",
 			`${SERVER_LABEL}=${conf.name}`,
 			"--publish",
@@ -222,13 +230,9 @@ export class DockerHost implements McpHost {
 	}
 
 	private async reapStrays(): Promise<void> {
-		const found = await exec("docker", [
-			"ps",
-			"--all",
-			"--quiet",
-			"--filter",
-			`label=${HOST_LABEL}=${this.instance}`,
-		]).catch(() => undefined);
+		const found = await exec("docker", strayArgs(this.instance)).catch(
+			() => undefined,
+		);
 		const ids = found?.stdout.trim().split("\n").filter(Boolean) ?? [];
 		for (const id of ids) await this.remove(id);
 	}

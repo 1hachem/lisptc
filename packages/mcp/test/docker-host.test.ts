@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DockerHost, launchFor } from "../src/docker-host.ts";
+import {
+	DockerHost,
+	hostLabel,
+	launchFor,
+	strayArgs,
+} from "../src/docker-host.ts";
 import type { HttpConnConfig } from "../src/ports.ts";
 import { recordingHost } from "./helpers.ts";
 
@@ -15,6 +20,22 @@ const remote: HttpConnConfig = {
 	url: "https://mcp.linear.app/mcp",
 	oauth: true,
 };
+
+describe("which containers a host may reap", () => {
+	const mine = "11111111-1111-4111-8111-111111111111";
+	const theirs = "22222222-2222-4222-8222-222222222222";
+
+	it("looks for its own instance and no other", () => {
+		const filters = strayArgs(mine).filter((arg) => arg.startsWith("label="));
+
+		expect(filters).toEqual([`label=${hostLabel(mine)}`]);
+		expect(filters).not.toContain(`label=${hostLabel(theirs)}`);
+	});
+
+	it("gives two instances labels that cannot match each other", () => {
+		expect(hostLabel(mine)).not.toBe(hostLabel(theirs));
+	});
+});
 
 describe("what the docker host does with each toolkit modality", () => {
 	it("runs an image-backed server from its own image", () => {
