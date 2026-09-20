@@ -4,7 +4,7 @@ The Convex deployment: the schema every other package reads through, the
 functions that guard it, and the Better Auth instance whose database is Convex
 itself. Its source lives in `convex/`, not `src/`.
 
-Turbo tag: `platform`.
+Turbo tag: `backend`.
 
 ## Shape
 
@@ -12,7 +12,7 @@ Turbo tag: `platform`.
 field, every index. Nothing else in the repo redeclares them.
 
 One module per resource, each holding the queries and mutations that guard it:
-workspaces, chats, messages, users, memories. `convex/lib/auth.ts` holds the
+workspaces, chats, messages, users, memories, secrets, oauth. `convex/lib/auth.ts` holds the
 guards those modules call to resolve the caller and check ownership, and every
 public function starts with one. `convex/lib/` also holds the small pure helpers
 beside them.
@@ -27,10 +27,20 @@ and the cascade that runs when one is deleted. `convex/auth.config.ts` and
 `convex/_generated/` is generated. Never edit it, and never hand-write what
 belongs there.
 
-`src/` holds what runs outside the deployment against it: the memory store a
-REPL talks to, and the codec between a stored row and a domain value. Anything
-reaching in from another package goes through an entrypoint in `package.json`,
-never into the deployment's files.
+`src/` holds what runs outside the deployment against it: the stores a REPL
+talks to. A store here implements the port it satisfies and holds the codec
+between the row and the domain value, so a caller constructs it with a
+workspace and a client and hands it over whole. A port is declared with the
+extension and satisfied here, never the other way round.
+
+`src/agent-repl.ts` is where the agent's REPL is assembled: it names every
+extension, hands each one its host, and satisfies the stores from the
+deployment. It is where the served agent is composed. A product app asks it
+for a REPL and knows nothing of what is in one, so giving that agent another
+extension is an edit here.
+
+Anything reaching in from another package goes through an entrypoint in
+`package.json`, never into the deployment's files.
 
 ## Rules
 

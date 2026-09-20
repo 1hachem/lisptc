@@ -11,8 +11,14 @@ function rootOf(entry: string): URL {
 
 export const PROMPT_ROOTS = [
 	rootOf(require.resolve("@repo/interpreter/source")),
-	rootOf(require.resolve("@repo/mcp")),
-	rootOf(require.resolve("@repo/llm/llm")),
+	rootOf(require.resolve("@repo/compaction-extension")),
+	rootOf(require.resolve("@repo/llm-extension/llm-extension")),
+	rootOf(require.resolve("@repo/mcp-extension")),
+	rootOf(require.resolve("@repo/memory-extension")),
+	rootOf(require.resolve("@repo/promises-extension")),
+	rootOf(require.resolve("@repo/prose-extension")),
+	rootOf(require.resolve("@repo/secrets-extension")),
+	rootOf(require.resolve("@repo/ui-extension")),
 ];
 
 function promptFiles(dir: URL): URL[] {
@@ -23,9 +29,9 @@ function promptFiles(dir: URL): URL[] {
 
 export const RUNTIME_ASSETS: URL[] = [
 	...PROMPT_ROOTS.flatMap(promptFiles),
-	pathToFileURL(require.resolve("@repo/mcp/mcp.toolkit.json")),
+	pathToFileURL(require.resolve("@repo/mcp-extension/mcp.toolkit.json")),
 ];
 
 export function assetName(asset: URL): string {
-	return asset.pathname.split("/").pop() as string;
+	return asset.pathname.slice(asset.pathname.lastIndexOf("/") + 1);
 }

@@ -6,9 +6,9 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
+import { promisesExtension } from "@repo/promises-extension";
+import { secretsExtension } from "@repo/secrets-extension";
+import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 

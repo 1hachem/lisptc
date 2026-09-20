@@ -1,12 +1,14 @@
 {
-  "name": "@repo/mcp",
+  "name": "@repo/mcp-extension",
   "version": "0.0.0",
   "type": "module",
   "private": true,
   "exports": {
     ".": "./src/mcp.ts",
     "./client": "./src/mcp-client.ts",
+    "./docker-host": "./src/docker-host.ts",
     "./mcp-host": "./src/mcp-host.ts",
+    "./local-host": "./src/local-host.ts",
     "./ports": "./src/ports.ts",
     "./toolkit": "./src/toolkit.ts",
     "./mcp.toolkit.json": "./mcp.toolkit.json"
@@ -23,6 +25,8 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
     "@repo/shared": "workspace:*",
     "zod": "^4.4.3"
   },

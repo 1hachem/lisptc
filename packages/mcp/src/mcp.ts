@@ -27,6 +27,8 @@ import type {
 	HttpConnConfig,
 	JsonSchema,
 	McpClient,
+	SearchDocument,
+	SearchEngine,
 	Tool,
 	ToolkitRegistry,
 } from "./ports.ts";
@@ -51,6 +53,7 @@ interface ServerRec {
 export interface McpExtensionHost {
 	client: McpClient;
 	toolkit: ToolkitRegistry;
+	search: SearchEngine;
 	prompt: PromptSource;
 }
 
@@ -318,9 +321,9 @@ export function mcpExtension(
 
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit">,
+	host: Pick<McpExtensionHost, "client" | "toolkit" | "search">,
 ): void {
-	const { client, toolkit } = host;
+	const { client, toolkit, search } = host;
 
 	const servers = new Map<string, ServerRec>();
 	const predefined = new Map<string, ConnConfig>();
@@ -473,17 +476,21 @@ export function registerMcp(
 		"Search the toolkit's MCP servers by name, keywords and description, best match first; each row is (name score description :loaded|:unloaded). Load a match by bare name with (load-mcp name); (list-toolkit) shows every server's keywords.",
 		z.tuple([zName]),
 		([rawQuery]) => {
-			const terms = rawQuery.toLowerCase().split(/\s+/).filter(Boolean);
-			const scored: { conf: ConnConfig; score: number }[] = [];
-			for (const conf of predefined.values()) {
-				const score = scoreToolkitEntry(terms, conf);
-				if (score > 0) scored.push({ conf, score });
-			}
-			scored.sort(
-				(a, b) => b.score - a.score || a.conf.name.localeCompare(b.conf.name),
+			const scored = searchDocuments(
+				search,
+				rawQuery,
+				[...predefined.values()].map((conf) => ({
+					value: conf,
+					document: {
+						id: conf.name,
+						name: conf.name,
+						keywords: conf.keywords,
+						description: conf.description,
+					},
+				})),
 			);
 			return arrayToList(
-				scored.map(({ conf, score }) =>
+				scored.map(({ value: conf, score }) =>
 					arrayToList([
 						conf.name,
 						BigInt(score),
@@ -534,22 +541,28 @@ export function registerMcp(
 		"Search the tools of all loaded MCP servers by name/description.",
 		z.tuple([zName]),
 		([rawQuery]) => {
-			const query = rawQuery.toLowerCase();
-			const terms = query.split(/\s+/).filter(Boolean);
-			const scored: { sym: Sym; score: number; doc: string }[] = [];
+			const candidates: {
+				value: { sym: Sym; doc: string };
+				document: SearchDocument;
+			}[] = [];
 			for (const rec of servers.values()) {
 				for (const sym of rec.toolSyms) {
 					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
-					const hay = `${sym.name} ${tool?.description ?? ""}`.toLowerCase();
-					let score = 0;
-					for (const t of terms) if (hay.includes(t)) score++;
-					if (score > 0)
-						scored.push({ sym, score, doc: firstLine(tool?.description) });
+					candidates.push({
+						value: { sym, doc: firstLine(tool?.description) },
+						document: {
+							id: sym.name,
+							name: sym.name,
+							description: tool?.description,
+						},
+					});
 				}
 			}
-			scored.sort((a, b) => b.score - a.score);
+			const scored = searchDocuments(search, rawQuery, candidates);
 			return arrayToList(
-				scored.map((s) => arrayToList([s.sym, BigInt(s.score), s.doc])),
+				scored.map(({ value, score }) =>
+					arrayToList([value.sym, BigInt(score), value.doc]),
+				),
 			);
 		},
 	);
@@ -605,21 +618,28 @@ function firstLine(s: string | undefined): string {
 	return s.split("\n")[0];
 }
 
-const SUBSTRING_MIN = 3;
-
-function scoreToolkitEntry(terms: string[], conf: ConnConfig): number {
-	const name = conf.name.toLowerCase();
-	const keywords = (conf.keywords ?? []).map((k) => k.toLowerCase());
-	const description = (conf.description ?? "").toLowerCase();
-	let score = 0;
-	for (const term of terms) {
-		if (name === term || keywords.includes(term)) score += 3;
-		else if (term.length < SUBSTRING_MIN) continue;
-		else if (name.includes(term) || keywords.some((k) => k.includes(term)))
-			score += 2;
-		else if (description.includes(term)) score += 1;
+function searchDocuments<T>(
+	search: SearchEngine,
+	query: string,
+	candidates: readonly { value: T; document: SearchDocument }[],
+): { value: T; score: number }[] {
+	const byId = new Map(
+		candidates.map((candidate) => [candidate.document.id, candidate]),
+	);
+	const seen = new Set<string>();
+	const matches: { value: T; id: string; score: number }[] = [];
+	for (const hit of search.search(
+		query,
+		candidates.map((candidate) => candidate.document),
+	)) {
+		if (!Number.isFinite(hit.score) || seen.has(hit.id)) continue;
+		const candidate = byId.get(hit.id);
+		if (!candidate) continue;
+		seen.add(hit.id);
+		matches.push({ value: candidate.value, id: hit.id, score: hit.score });
 	}
-	return score;
+	matches.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+	return matches;
 }
 
 function schemaType(spec: JsonSchema): string {

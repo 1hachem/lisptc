@@ -1,0 +1,39 @@
+{
+  "name": "@lisptc/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "bin": {
+    "lisptc": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "repl": "node --no-warnings --experimental-transform-types src/cli.ts",
+    "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach",
+    "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
+  },
+  "dependencies": {
+    "@repo/compaction-extension": "workspace:*",
+    "@repo/env": "workspace:*",
+    "@repo/interpreter": "workspace:*",
+    "@repo/llm-extension": "workspace:*",
+    "@repo/mcp-extension": "workspace:*",
+    "@repo/memory-extension": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/prose-extension": "workspace:*",
+    "@repo/repl": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
+    "@repo/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/tsconfigs": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

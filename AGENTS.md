@@ -74,13 +74,29 @@ for working in it.
 
 ### Packages
 
-- `packages/interpreter` (`@repo/interpreter`) — the language, and the extensions that ship with it. Owns the host-port and seam patterns.
-- `packages/mcp` (`@repo/mcp`) — the MCP extension.
-- `packages/llm` (`@repo/llm`) — the language-model extension.
+The core language, and nothing else:
+
+- `packages/interpreter` (`@repo/interpreter`) — the reader, the evaluator, the drivers, the prelude, and the three seam mechanisms an extension plugs into. It ships no extension and names none. Owns the host-port and seam patterns.
+
+The extensions, one language surface each. Every one depends on the
+interpreter, reaches the world only through ports it declares itself, and is
+named only at a composition root:
+
+- `packages/compaction` (`@repo/compaction-extension`) — bounded output.
+- `packages/llm` (`@repo/llm-extension`) — the language-model extension.
+- `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
+- `packages/memory` (`@repo/memory-extension`) — the memory extension.
+- `packages/promises` (`@repo/promises-extension`) — asynchrony.
+- `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
+- `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
+- `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
+- `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
+
+Everything else:
+
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter.
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
-- `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
-- `packages/evals` (`@repo/evals`) — the eval suite around `@repo/checks`, and all of its reporting.
+- `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
@@ -94,10 +110,11 @@ for working in it.
 
 - `apps/api` (`api`) — an HTTP server streaming the agent loop.
 - `apps/app` (`app`) — the web frontend.
+- `apps/cli` (`@lisptc/cli`) — the interactive terminal REPL.
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.
-- `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases.
+- `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases and their concrete hosts.
 
 ## Dependency flow
 
@@ -108,16 +125,27 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
 ```
 
 - The interpreter depends on no workspace package that depends on it.
+- The interpreter is the core dialect and the seams, and stops there. It
+  defines the shape an extension satisfies, the chains an extension hooks and
+  the slots an extension fills, and it ships none of its own. Every surface
+  past the core dialect lives in an extension package, so a new form belongs in
+  an extension unless the evaluator cannot run without it.
 - An extension package depends on the interpreter, and carries the SDK its
   surface needs so the interpreter never does.
-- A REPL front-end depends on the interpreter and on extensions.
-- The agent depends on the REPL, not on any extension.
+- A REPL front-end and the agent depend on the interpreter, and on no
+  extension. A REPL is built from the extension list it is handed.
+- An extension is named at a composition root, and there are only two: an app
+  that runs a REPL itself, and `@repo/backend` for the agent the API serves.
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
   workspace package.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
-  above it reaches past the entrypoints its `package.json` exports.
-- A package that runs an eval suite is imported only where the cases live. What
-  reads finished runs imports the reading entrypoints instead.
+  above it reaches past the entrypoints its `package.json` exports. Its stores
+  satisfy the language's ports and its `agent-repl` composes the extensions the
+  served agent runs on, so it names the language and the extensions; neither
+  ever names it.
+- `@repo/evals` drives an eval suite, but it names no extension and no host.
+  The app that owns the cases supplies the REPL, check evaluator, mocked hosts
+  and judge. `@repo/evals` writes the finished run and reads one back.
 
 That layering is declared, not described. Each package carries a `turbo.json`
 naming its tag, and `boundaries.tags` in the root `turbo.json` says which tags a
@@ -198,6 +226,12 @@ port and is handed the value.
 The Convex deployment carries an environment of its own, and nothing in this
 repo pushes it. `packages/backend/AGENTS.md` has the rule.
 
+The Convex deployment carries an environment of its own, and nothing in this
+repo pushes it. A deployment secret is stored in Infisical under `/auth` and set
+on the deployment by hand, from the dashboard, never written to a file. An OAuth
+app's callback points at the web app's origin, where the auth router is served,
+not at the deployment.
+
 ## Icons
 
 **Every icon comes from hugeicons**: `@hugeicons/core-free-icons` holds the icon
@@ -216,6 +250,12 @@ instead; their own `AGENTS.md` says so.
 
 A package with shared test helpers has them in `test/helpers.ts`, and a test
 should use them rather than assembling the world by hand.
+
+A test belongs to the package that owns what it asserts. A surface an extension
+owns is tested in that extension's package, never in the interpreter, whose
+helpers build an interpreter with nothing installed. A test that needs two
+extensions at once belongs in `@repo/backend`, the composition root that
+already names them all.
 
 The agent evals are separate: the cases live in `apps/trace-viewer/evals` as
 `*.eval.ts`, they run against real models, and `pnpm test` does not include them.
@@ -259,8 +299,9 @@ runs, in order: typecheck → lint → check:comments → check:docs →
 boundaries → check:arch → knip → test.
 `lint`, the `check:*` scripts and `knip` run once at the root;
 `typecheck` and `test` fan out through Turbo. Husky runs commitlint
-(conventional commits) on `commit-msg`, and `pnpm check:comments`,
-`pnpm boundaries` and `pnpm check:arch` on `pre-push`.
+(conventional commits) on `commit-msg`, and `pnpm lint`, `pnpm typecheck`,
+`pnpm check:comments`, `pnpm boundaries`, `pnpm check:arch` and `pnpm knip` on
+`pre-push`.
 
 A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
 longer than one line, so write the subject and stop unless a description was

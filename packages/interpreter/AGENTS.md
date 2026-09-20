@@ -1,8 +1,10 @@
 # @repo/interpreter
 
-The language, and the extensions that ship with it. Everything in the repo sits
-above this package. It depends on no workspace package that depends on it, and
-it carries no vendor SDK: `@repo/mcp` and `@repo/llm` hold theirs so this one
+The core language and the seams extensions plug into. It ships no extension and
+names none: every language surface past the core dialect lives in its own
+package above this one. Everything in the repo sits above this package. It
+depends on no workspace package that depends on it, and it carries no vendor
+SDK: `@repo/mcp-extension` and `@repo/llm-extension` hold theirs so this one
 never has to. `pnpm check:arch` fails if the MCP SDK or a langchain package
 appears in this manifest.
 
@@ -25,15 +27,20 @@ and `src/channels-host.ts` carry addressed output. `src/arith.ts`,
 `src/plist.ts`, `src/async.ts` and `src/types.ts` are the small supporting
 modules. `src/source.ts` holds the language reference the model reads.
 
-`src/extensions/` holds one directory per extension that ships with the
-language: `compaction`, `memory`, `promises`, `prose`, `secrets`, `ui`. Each is
-the same three files, and a new extension is those three files too:
+`src/core.ptc` is the core prompt. It is the only prompt here, because no
+extension lives in this package.
+
+An extension is its own workspace package, tagged `extension`, built around the
+same three files whichever one it is:
 
 - `<name>.ts`, the extension and its host interface.
 - `<name>-host.ts`, the implementations and the default host value.
 - `<name>.ptc`, the prompt, written in the dialect.
 
-`src/core.ptc` is the core prompt beside them.
+One whose host has real work to do carries more modules beside them, and those
+sit on the host side of the line. A new extension is a new package of those
+three files. Adding one here instead is the mistake this split exists to
+prevent.
 
 ## Host ports
 
@@ -86,7 +93,8 @@ Three kinds of thing cross, and each has one mechanism.
   the consumer reads it, and neither imports the other's module. Put a slot
   beside the contract it hands over, which may be a module separate from the
   extension so that consuming the capability does not pull in what provides it.
-  `memorySlot` and `secretsSlot` are the examples.
+  `memorySlot` and `secretsSlot`, each in its own extension package, are the
+  examples.
 - Data goes through an annotation. A step reports what it did in bags of string
   keys, split by audience and by nothing else. The extension picks the key and
   owns the shape.
@@ -98,10 +106,14 @@ below the seam instead: move the interpretation into the extension.
 
 ## Tests
 
-`test/helpers.ts` builds the interpreters. Use `freshInterp`, `proseInterp` and
-the `ev` family rather than assembling an `Interp` by hand, so a test picks up
-the extension set the helpers keep current. Fixtures for the import forms live
-in `test/fixtures/`.
+`test/helpers.ts` builds the interpreters, and every one it builds carries no
+extension. Use it rather than assembling an `Interp` by hand. A test that needs
+a surface an extension owns belongs in that extension's package, not here, and
+a fixture here is written in the core dialect because nothing strips prose from
+it. Fixtures for the import forms live in `test/fixtures/`.
+
+A test that needs two extensions at once belongs in `@repo/backend`, the
+composition root that already names them all.
 
 ```bash
 pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts

@@ -1,30 +1,27 @@
-import { Compactor, compactionExtension } from "@repo/interpreter/compaction";
-import { compactionHost } from "@repo/interpreter/compaction-host";
+import { Compactor, compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
+import { llmSlot } from "@repo/interpreter/observe";
 import {
 	MemoryBank,
 	memoryExtension,
 	memorySlot,
 	VolatileStore,
-} from "@repo/interpreter/memory";
-import { memoryHost } from "@repo/interpreter/memory-host";
-import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension, secretsSlot } from "@repo/interpreter/secrets";
-import { envSecretsStore, secretsHost } from "@repo/interpreter/secrets-host";
-import { llmExtension } from "@repo/llm/llm";
-import { llmHost } from "@repo/llm/llm-host";
-import { type LlmCall, llmSlot } from "@repo/llm/observe";
+} from "@repo/memory-extension";
+import { memoryHost } from "@repo/memory-extension/host";
+import { proseExtension } from "@repo/prose-extension";
+import { secretsExtension, secretsSlot } from "@repo/secrets-extension";
+import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { describe, expect, it } from "vitest";
 import { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";
 
-describe("a REPL built from the model-facing list", () => {
-	it("speaks the whole model-facing language", async () => {
+describe("a REPL built from a list of extensions", () => {
+	it("speaks the language every one of them contributed to", async () => {
 		const r = memoryRepl();
 
 		expect(await r.eval("(+ 1 2)")).toBe("+-1: 3\n");
-		expect(await r.eval("(list-toolkit)")).toContain("playwright");
+		expect(await r.eval('(memory/remember "k" "a note")')).toContain("k");
 		expect(r.hooks.filled(secretsSlot)).toBeDefined();
-		expect(await r.eval("(doc 'llm/complete)")).toContain("(llm/complete");
 	});
 });
 
@@ -109,21 +106,9 @@ describe("a REPL built from a list of its own", () => {
 		).toBeUndefined();
 	});
 
-	it("points the llm observer at the llm extension it carries", async () => {
-		const calls: LlmCall[] = [];
-		const r = memoryRepl([
-			llmExtension({
-				...llmHost,
-				generate: async () => ({ text: "pong", provider: "x", model: "y" }),
-			}),
-		]);
-		const observed = r.hooks.filled(llmSlot);
-		if (observed) observed.observe = (call) => calls.push(call);
-
-		await r.eval('(llm/complete "ping")');
-		r.reset();
-		await r.eval('(llm/complete "ping")');
-
-		expect(calls.map((call) => call.output)).toEqual(["pong", "pong"]);
+	it("has no observer to hand out when nothing fills the slot", () => {
+		expect(
+			memoryRepl([proseExtension()]).hooks.filled(llmSlot),
+		).toBeUndefined();
 	});
 });

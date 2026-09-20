@@ -16,11 +16,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@repo/compaction-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/shared": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*",
+    "@repo/llm-extension": "workspace:*",
+    "@repo/mcp-extension": "workspace:*",
+    "@repo/memory-extension": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/prose-extension": "workspace:*",
     "@repo/repl": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
   },

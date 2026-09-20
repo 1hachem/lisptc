@@ -1,3 +1,6 @@
+pnpm lint
+pnpm typecheck
 pnpm check:comments
 pnpm boundaries
 pnpm check:arch
+pnpm knip

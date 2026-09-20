@@ -6,8 +6,7 @@
   "exports": {
     "./checks": "./src/checks.ts",
     "./mocks": "./src/mocks.ts",
-    "./trace": "./src/trace.ts",
-    "./verdict": "./src/verdict.ts"
+    "./trace": "./src/trace.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -19,7 +18,9 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
-    "@repo/mcp": "workspace:*",
+    "@repo/mcp-extension": "workspace:*",
+    "@repo/prose-extension": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

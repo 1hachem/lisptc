@@ -1,4 +1,9 @@
-import { toLangchain } from "@repo/llm/langchain";
+import {
+	AIMessage,
+	type BaseMessage,
+	HumanMessage,
+	SystemMessage,
+} from "@langchain/core/messages";
 import type { ChatMessage } from "@repo/shared/messages";
 import { getProvider, type ProviderName } from "./provider.ts";
 import { type TraceContext, traceCallbacks } from "./telemetry.ts";
@@ -27,6 +32,12 @@ export interface AgentConfig {
 	model?: string;
 	system?: string;
 	trace?: TraceContext;
+}
+
+function toLangchain(message: ChatMessage): BaseMessage {
+	if (message.role === "system") return new SystemMessage(message.content);
+	if (message.role === "assistant") return new AIMessage(message.content);
+	return new HumanMessage(message.content);
 }
 
 function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {

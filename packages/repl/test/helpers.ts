@@ -1,28 +1,35 @@
 import {
 	type Compactor,
 	compactionExtension,
-} from "@repo/interpreter/compaction";
+} from "@repo/compaction-extension";
 import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/interpreter/memory";
-import { promisesExtension } from "@repo/interpreter/promises";
-import { proseExtension } from "@repo/interpreter/prose";
-import { secretsExtension } from "@repo/interpreter/secrets";
-import { uiExtension } from "@repo/interpreter/ui";
-import { llmExtension } from "@repo/llm/llm";
-import { mcpExtension } from "@repo/mcp";
+import { llmSlot, type Observed } from "@repo/interpreter/observe";
+import type { SessionHooks } from "@repo/interpreter/session";
+import { memoryExtension } from "@repo/memory-extension";
+import { promisesExtension } from "@repo/promises-extension";
+import { proseExtension } from "@repo/prose-extension";
+import { secretsExtension } from "@repo/secrets-extension";
+import { uiExtension } from "@repo/ui-extension";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
 export function modelFacing(compactor?: Compactor): InterpExtension[] {
 	return [
 		secretsExtension(),
 		promisesExtension(),
-		mcpExtension(),
-		llmExtension(),
 		compactionExtension(undefined, { compactor }),
 		memoryExtension(),
 		proseExtension(),
 		uiExtension(),
 	];
+}
+
+export function observedExtension(): InterpExtension {
+	const observed: Observed = {};
+	return Object.assign(() => {}, {
+		session(hooks: SessionHooks): void {
+			hooks.fill(llmSlot, observed);
+		},
+	});
 }
 
 export function memoryRepl(

@@ -1,38 +1,48 @@
-import { SidebarProvider } from "@repo/ui";
 import { useUI } from "../lib/ui.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
 import { RightSidebar } from "./right-sidebar.tsx";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
-	const { leftOpen, setLeftOpen, rightOpen, setRightOpen } = useUI();
+function PanelToggle({
+	side,
+	open,
+	onToggle,
+}: {
+	side: "left" | "right";
+	open: boolean;
+	onToggle: () => void;
+}) {
+	const noun = side === "left" ? "sidebar" : "panel";
+	const points = side === "left" ? open : !open;
+	return (
+		<button
+			type="button"
+			onClick={onToggle}
+			title={`${open ? "collapse" : "expand"} ${noun}`}
+			className={`absolute top-3.5 z-30 cursor-pointer text-dim hover:text-fg ${
+				side === "left" ? "left-4" : "right-4"
+			}`}
+		>
+			{points ? "«" : "»"}
+		</button>
+	);
+}
+
+export function AppShell({
+	children,
+	onSignOut,
+}: {
+	children: React.ReactNode;
+	onSignOut: () => void;
+}) {
+	const { leftOpen, toggleLeft, rightOpen, toggleRight } = useUI();
 
 	return (
-		<SidebarProvider
-			open={leftOpen}
-			onOpenChange={setLeftOpen}
-			style={
-				{
-					"--sidebar-width": "214px",
-					"--sidebar-width-icon": "34px",
-				} as React.CSSProperties
-			}
-			className="h-screen overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]"
-		>
-			<LeftSidebar />
-			<SidebarProvider
-				open={rightOpen}
-				onOpenChange={setRightOpen}
-				style={
-					{
-						"--sidebar-width": "268px",
-						"--sidebar-width-icon": "34px",
-					} as React.CSSProperties
-				}
-				className="min-h-0 min-w-0 flex-1"
-			>
-				<main className="flex min-w-0 flex-1 flex-col">{children}</main>
-				<RightSidebar />
-			</SidebarProvider>
-		</SidebarProvider>
+		<div className="relative h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
+			<main className="flex h-full min-w-0 flex-col">{children}</main>
+			<LeftSidebar open={leftOpen} onSignOut={onSignOut} />
+			<RightSidebar open={rightOpen} />
+			<PanelToggle side="left" open={leftOpen} onToggle={toggleLeft} />
+			<PanelToggle side="right" open={rightOpen} onToggle={toggleRight} />
+		</div>
 	);
 }

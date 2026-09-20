@@ -16,18 +16,6 @@
           ]
         }
       },
-      "platform": {
-        "dependencies": {
-          "deny": [
-            "language",
-            "extension",
-            "runtime",
-            "agent",
-            "frontend",
-            "product"
-          ]
-        }
-      },
       "language": {
         "dependencies": {
           "deny": ["extension", "runtime", "agent", "frontend", "product"]
@@ -43,12 +31,7 @@
           "deny": ["agent", "frontend", "product"]
         }
       },
-      "agent": {
-        "dependencies": {
-          "deny": ["frontend", "product"]
-        }
-      },
-      "frontend": {
+      "ui": {
         "dependencies": {
           "deny": ["language", "extension", "runtime", "agent", "product"]
         }

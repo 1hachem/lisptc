@@ -19,12 +19,16 @@
     "@langchain/core": "^1.2.9",
     "@langchain/openai": "^1.5.10",
     "@posthog/ai": "^8.9.3",
+    "@repo/compaction-extension": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*",
+    "@repo/memory-extension": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/prose-extension": "workspace:*",
     "@repo/repl": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
     "@repo/shared": "workspace:*",
+    "@repo/ui-extension": "workspace:*",
     "posthog-node": "^5.51.6"
   },
   "devDependencies": {

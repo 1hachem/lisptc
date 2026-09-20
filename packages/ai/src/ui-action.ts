@@ -1,4 +1,4 @@
-import { peekThreadRepl } from "./repl-store.ts";
+import type { ReplStore } from "./repl-store.ts";
 
 export interface UiActionResult extends Record<string, unknown> {
 	output: string;
@@ -6,12 +6,13 @@ export interface UiActionResult extends Record<string, unknown> {
 	message?: string;
 }
 
-export async function runUiAction(
-	threadId: string,
+export async function runUiAction<Id extends string>(
+	repls: ReplStore<Id>,
+	threadId: Id,
 	action: string,
 	values: Record<string, unknown>,
 ): Promise<UiActionResult | undefined> {
-	const repl = peekThreadRepl(threadId);
+	const repl = repls.peek(threadId);
 	if (!repl) return undefined;
 	try {
 		const { user, annotations, message, failed } = await repl.invokeUi(

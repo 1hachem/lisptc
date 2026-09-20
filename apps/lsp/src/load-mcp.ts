@@ -1,4 +1,6 @@
-import toolkitConfig from "@repo/mcp/mcp.toolkit.json" with { type: "json" };
+import toolkitConfig from "@repo/mcp-extension/mcp.toolkit.json" with {
+	type: "json",
+};
 import {
 	type CompletionItem,
 	CompletionItemKind,

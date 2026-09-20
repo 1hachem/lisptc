@@ -1,7 +1,13 @@
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import {
 	FetchStreamTransport,
 	useStream,
 } from "@langchain/langgraph-sdk/react";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import type { FunctionReturnType } from "convex/server";
 import {
 	createContext,
 	useCallback,
@@ -11,9 +17,12 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { create, type StoreApi, type UseBoundStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
+import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
 	id?: string;
@@ -93,31 +102,36 @@ interface ChatSession {
 	meta: Record<string, StepMeta>;
 	fresh: boolean;
 	isLoading: boolean;
-	threadId: string;
+	chatId: Id<"chats"> | null;
 	error?: string;
 	send: (text: string) => void;
 	runLisp: (code: string) => void;
 	stop: () => void;
-	clear: () => void;
 }
 
 async function evalLisp(
 	code: string,
-	threadId: string,
+	chatId: string,
 	signal: AbortSignal,
-): Promise<ChatMessage> {
+): Promise<void> {
 	const response = await fetch(`${API_URL}/api/chat/eval`, {
 		method: "POST",
-		headers: apiHeaders(),
-		body: JSON.stringify({
-			code,
-			config: { configurable: { thread_id: threadId } },
-		}),
+		headers: await apiHeaders(),
+		body: JSON.stringify({ chatId, code }),
 		signal,
 	});
 	if (!response.ok) throw new Error(`the repl returned ${response.status}`);
-	const { message } = (await response.json()) as { message: ChatMessage };
-	return message;
+}
+
+type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
+
+function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
+	return stored.map((message) => ({
+		id: message._id,
+		type: message.type,
+		content: message.content,
+		additional_kwargs: message.kwargs,
+	}));
 }
 
 const GREETING_ID = "greeting";
@@ -130,56 +144,80 @@ function greetingMessage(): ChatMessage {
 	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
 }
 
-const ChatContext = createContext<ChatSession | null>(null);
+type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
 
-export function ChatProvider({ children }: { children: React.ReactNode }) {
+const ChatContext = createContext<ChatStore | null>(null);
+
+function titleOf(message: string): string {
+	const line = message.trim().split("\n")[0] ?? "";
+	return line.length > 60 ? `${line.slice(0, 57)}…` : line;
+}
+
+export function ChatProvider({
+	workspaceId,
+	chatId,
+	children,
+}: {
+	workspaceId: Id<"workspaces">;
+	chatId: Id<"chats"> | null;
+	children: React.ReactNode;
+}) {
+	const navigate = useNavigate();
+	const createChat = useConvexMutation(api.chats.create);
 	const transport = useMemo(
 		() =>
 			new FetchStreamTransport({
 				apiUrl: `${API_URL}/api/chat`,
-				defaultHeaders: apiHeaders(),
+				onRequest: async (_url, init) => ({
+					...init,
+					headers: { ...init.headers, ...(await apiHeaders()) },
+				}),
 			}),
 		[],
 	);
-	const [threadId, setThreadId] = useState<string>(() => crypto.randomUUID());
-	const stream = useStream({
-		transport,
-		threadId,
-		onThreadId: (id) => {
-			if (id) setThreadId(id);
-		},
-	});
-	const streamed = stream.messages as ChatMessage[];
+	const stream = useStream({ transport });
+	const streamed: ChatMessage[] = stream.messages;
+	const streamingFor = useRef<Id<"chats"> | null>(null);
+
+	const { data: stored } = useQuery(
+		convexQuery(api.messages.transcript, chatId ? { chatId } : "skip"),
+	);
+	const persisted = useMemo(() => toChatMessages(stored ?? []), [stored]);
 
 	useEffect(() => {
 		if (stream.error)
 			reportIssue(stream.error, {
 				$exception_source: "chat stream",
-				thread_id: threadId,
+				thread_id: chatId ?? "draft",
 			});
-	}, [stream.error, threadId]);
+	}, [stream.error, chatId]);
 
 	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
 	useEffect(() => {
 		setGreeting(greetingMessage());
 	}, []);
 
-	const [entries, setEntries] = useState<ChatMessage[]>([]);
 	const [evaluating, setEvaluating] = useState(false);
 	const [evalError, setEvalError] = useState<string | undefined>(undefined);
 	const running = useRef<AbortController | null>(null);
 
-	const messages = useMemo(() => {
-		const shown = [...streamed, ...entries];
-		return !greeting || shown.some((m) => m.id === GREETING_ID)
-			? shown
-			: [greeting, ...shown];
-	}, [greeting, streamed, entries]);
+	const turns =
+		streamingFor.current === chatId
+			? turnsToShow(streamed, persisted, stream.isLoading)
+			: persisted;
+
+	const messages = useMemo(
+		() =>
+			!greeting || turns.some((m) => m.id === GREETING_ID)
+				? turns
+				: [greeting, ...turns],
+		[greeting, turns],
+	);
 
 	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
 	useEffect(() => {
 		const found: Record<string, StepMeta> = {};
-		for (const m of streamed) {
+		for (const m of turns) {
 			if (!m.id) continue;
 			const known = meta[m.id];
 			if (known?.memories) continue;
@@ -190,28 +228,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		}
 		if (Object.keys(found).length > 0)
 			setMeta((prev) => ({ ...prev, ...found }));
-	}, [streamed, meta]);
+	}, [turns, meta]);
 
 	const runLisp = useCallback(
 		async (code: string) => {
+			if (!chatId) return;
 			const run = new AbortController();
 			running.current?.abort();
 			running.current = run;
 			setEvalError(undefined);
 			setEvaluating(true);
-			setEntries((prev) => [
-				...prev,
-				{ id: crypto.randomUUID(), type: "human", content: code },
-			]);
 			try {
-				const result = await evalLisp(code, threadId, run.signal);
-				setEntries((prev) => [...prev, result]);
+				await evalLisp(code, chatId, run.signal);
 			} catch (ex) {
 				if (run.signal.aborted) return;
-				reportIssue(ex, {
-					$exception_source: "lisp eval",
-					thread_id: threadId,
-				});
+				reportIssue(ex, { $exception_source: "lisp eval", thread_id: chatId });
 				setEvalError(ex instanceof Error ? ex.message : String(ex));
 			} finally {
 				if (running.current === run) {
@@ -220,72 +251,119 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 				}
 			}
 		},
-		[threadId],
+		[chatId],
 	);
 
-	const value: ChatSession = {
-		messages,
-		meta,
-		greeting: greeting ? messageText(greeting) : null,
-		fresh: streamed.length === 0 && entries.length === 0,
-		isLoading: stream.isLoading || evaluating,
-		threadId,
-		error:
-			(stream.error
-				? stream.error instanceof Error
-					? stream.error.message
-					: String(stream.error)
-				: undefined) ?? evalError,
-		runLisp: (code) => {
-			void runLisp(code);
-		},
-		send: (text) => {
+	const send = useCallback(
+		async (text: string) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
-			const history = messages.map((m) => ({
-				type: m.type,
-				content: m.content,
-				id: m.id,
-				additional_kwargs: m.additional_kwargs,
-			}));
-			const turn = [
-				...history,
-				{ type: "human", content: trimmed, id: crypto.randomUUID() },
-			];
-			setEntries([]);
 			setEvalError(undefined);
+			const opened =
+				chatId ?? (await createChat({ workspaceId, title: titleOf(trimmed) }));
+			streamingFor.current = opened;
 			stream.submit(
-				{ messages: turn },
-				{ optimisticValues: { messages: turn } },
+				{ chatId: opened, message: trimmed },
+				{
+					optimisticValues: {
+						messages: [
+							...persisted,
+							{ type: "human", content: trimmed, id: crypto.randomUUID() },
+						],
+					},
+				},
 			);
+			if (!chatId) {
+				await navigate({
+					to: "/$workspaceId/$chatId",
+					params: { workspaceId, chatId: opened },
+					replace: true,
+				});
+			}
 		},
-		stop: () => {
-			running.current?.abort();
-			running.current = null;
-			setEvaluating(false);
-			stream.stop();
-		},
-		clear: () => {
-			running.current?.abort();
-			running.current = null;
-			setEvaluating(false);
-			setEntries([]);
-			setEvalError(undefined);
-			setThreadId(crypto.randomUUID());
-			setMeta({});
-			setGreeting(greetingMessage());
-		},
-	};
+		[chatId, workspaceId, createChat, navigate, persisted, stream],
+	);
 
-	return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+	const stop = useCallback(() => {
+		running.current?.abort();
+		running.current = null;
+		setEvaluating(false);
+		stream.stop();
+	}, [stream]);
+
+	const fresh = isFreshChat(chatId, turns);
+
+	const storeRef = useRef<ChatStore | null>(null);
+	if (storeRef.current === null) {
+		storeRef.current = create<ChatSession>(() => ({
+			messages: [],
+			greeting: null,
+			meta: {},
+			fresh,
+			isLoading: false,
+			chatId,
+			send: () => {},
+			runLisp: () => {},
+			stop: () => {},
+		}));
+	}
+	const store = storeRef.current;
+
+	useEffect(() => {
+		store.setState({
+			messages,
+			meta,
+			greeting: greeting ? messageText(greeting) : null,
+			fresh,
+			isLoading: stream.isLoading || evaluating,
+			chatId,
+			error:
+				(stream.error
+					? stream.error instanceof Error
+						? stream.error.message
+						: String(stream.error)
+					: undefined) ?? evalError,
+			send: (text) => {
+				void send(text);
+			},
+			runLisp: (code) => {
+				void runLisp(code);
+			},
+			stop,
+		});
+	}, [
+		store,
+		messages,
+		meta,
+		greeting,
+		fresh,
+		stream.isLoading,
+		stream.error,
+		evaluating,
+		evalError,
+		chatId,
+		send,
+		runLisp,
+		stop,
+	]);
+
+	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }
 
-export function useChatSession(): ChatSession {
-	const ctx = useContext(ChatContext);
-	if (!ctx) {
+export function useChatSession<U>(selector: (state: ChatSession) => U): U {
+	const store = useContext(ChatContext);
+	if (!store) {
 		throw new Error("useChatSession must be used within a ChatProvider");
 	}
-	return ctx;
+	return store(useShallow(selector));
+}
+
+export function useChatStore(): ChatStore {
+	const store = useContext(ChatContext);
+	if (!store) {
+		throw new Error("useChatStore must be used within a ChatProvider");
+	}
+	return store;
 }
 
 export function messageReasoning(message: ChatMessage): string {
@@ -365,7 +443,7 @@ export function messageText(message: ChatMessage): string {
 				typeof part === "string"
 					? part
 					: part && typeof part === "object" && "text" in part
-						? String((part as { text: unknown }).text)
+						? String(part.text)
 						: "",
 			)
 			.join("");

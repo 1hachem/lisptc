@@ -19,15 +19,21 @@ system prompt and the step cap. `src/repl.ts` turns a transcript into model
 messages and an eval result into content. `src/telemetry.ts` is the PostHog
 side. `src/ui-action.ts` runs an action the browser sent back.
 
-`src/repl-store.ts` keeps a REPL per thread and builds the extension list.
+`src/repl-store.ts` keeps a REPL per thread. It builds none: a `ReplStore` is
+handed an `OpenRepl` and calls it on a miss, so what a REPL carries is decided
+by whoever constructed the store.
 
 ## Rules
 
-**No file here names an extension, except `src/repl-store.ts`.** `check:arch`
-enforces that by directory, type imports included, with `repl-store.ts` as the
-single listed exception. Do not add a second one. If the loop needs something an
-extension knows, it arrives as an annotation or through a slot, and the way to
-add it is in `packages/interpreter/AGENTS.md`.
+**No file here names an extension.** `check:arch` enforces that by directory,
+type imports included, and the roster of exceptions is empty. Do not open one.
+If the loop needs something an extension knows, it arrives as an annotation or
+through a slot, and the way to add it is in `packages/interpreter/AGENTS.md`.
+
+**The turn is handed a REPL, it never builds one.** `runAgentTurn` takes one;
+`streamChatResponse` and `evalUserCode` take either a REPL or a store and the
+thread to draw it from. The extensions in it, and the hosts under them, are
+assembled in `@repo/backend` and injected by the product app.
 
 Annotations are read by lane, never by key. One lane rides the tool result the
 model reads, the other rides the wire the browser reads. The loop merges them

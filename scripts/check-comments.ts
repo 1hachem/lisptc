@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import ts from "typescript";
 
 const DIRECTIVES = [
@@ -12,7 +12,7 @@ const DIRECTIVES = [
 	/^\/\*\s*eslint-disable/,
 ];
 
-const GENERATED = [/routeTree\.gen\.ts$/];
+const GENERATED = [/routeTree\.gen\.ts$/, /\/_generated\//];
 
 interface Found {
 	pos: number;
@@ -29,6 +29,7 @@ function tracked(): string[] {
 	return out
 		.split("\n")
 		.filter(Boolean)
+		.filter(existsSync)
 		.filter((f) => !GENERATED.some((re) => re.test(f)));
 }
 
