@@ -234,4 +234,9 @@ tasks:
   check:charter:
     cmds:
       - task: _infisical-run
-        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai", CMD: "pnpm check:charter" }
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai", CMD: "pnpm check:charter {{.CLI_ARGS}}" }
+
+  check:drift:
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai", CMD: "pnpm check:drift {{.CLI_ARGS}}" }

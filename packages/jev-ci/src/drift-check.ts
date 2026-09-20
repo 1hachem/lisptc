@@ -87,10 +87,10 @@ function report(one: Judged): void {
 		`The code contradicts this block, and jev is ${sure(contradicted)} sure of it. The bar is ${sure(CONTRADICTED)}.`,
 		`The evidence settles it at ${sure(sufficient)}. An agent that believes the block scores ${weight.toFixed(2)} of 3 for harm.`,
 		"",
-		`The rule that failed, under "${block.heading}":`,
+		`The block, under "${block.heading}":`,
 		...block.text.split("\n").map((text) => `  ${text}`),
 		"",
-		"The change that failed it:",
+		"The change that raised it:",
 		...(rule.diff.length === 0
 			? ["  nothing in this diff: the block was selected by --all"]
 			: rule.diff.map((text) => `  ${text}`)),
