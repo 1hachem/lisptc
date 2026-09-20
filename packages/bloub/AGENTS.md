@@ -25,12 +25,10 @@ directly.
 vitest config here includes `src/**/*.test.{ts,tsx}` and runs in a node
 environment.
 
-**`src/bot/skins.test.ts` does not run in CI.** It sweeps every shape against
-every expression, which is a minute of straight compute, and starving the
-runner that long makes vitest's worker RPC time out and fail the job with all
-122 tests green. The config excludes it when `CI` is set, so `pnpm test` still
-runs it locally and that is where an eye escaping its silhouette is caught.
-Keep it passing there before you push a shape or an expression.
+**`src/bot/skins.test.ts` does not run in CI.** `STARVES_THE_CI_RUNNER` in
+`vitest.config.ts` excludes it there, so `pnpm test` still runs it locally and
+that is where an eye escaping its silhouette is caught. Keep it passing there
+before you push a shape or an expression.
 
 The root `biome.json` carries an override for `packages/bloub/**` that turns off
 `noNonNullAssertion`, and the tsconfig here turns on the stricter index and
