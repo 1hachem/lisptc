@@ -1,13 +1,7 @@
-import { compactionExtension } from "@repo/compaction-extension";
-import type { Interp, InterpExtension } from "@repo/interpreter/lisp";
-import type { SessionHooks } from "@repo/interpreter/session";
 import { annotating, slot } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
-
-function extension(session: (hooks: SessionHooks) => void): InterpExtension {
-	return Object.assign((_interp: Interp): void => {}, { session });
-}
+import { extension } from "./helpers.ts";
 
 describe("an extension hooking the session", () => {
 	it("wraps the evaluation and sees the code", async () => {
@@ -29,10 +23,9 @@ describe("an extension hooking the session", () => {
 		expect(seen).toEqual(["before (+ 1 1)", "after"]);
 	});
 
-	it("adds to what the model is shown", async () => {
+	it("adds to what the model is shown, beside what the human read", async () => {
 		const r = new MemoryRepl({
 			extensions: [
-				compactionExtension(),
 				extension((hooks) => {
 					hooks.stepOutput.use((ctx, out, next) =>
 						next(ctx, { ...out, model: `${out.model}and one more thing\n` }),
@@ -41,7 +34,9 @@ describe("an extension hooking the session", () => {
 			],
 		});
 
-		expect(await r.eval('(echo "hi")')).toBe("hi\nand one more thing\n");
+		const { model, user } = await r.evalOutput('(echo "hi")');
+		expect(model).toBe("and one more thing\n");
+		expect(user).toBe("hi\n");
 	});
 
 	it("rewrites how an error reads", async () => {
@@ -84,7 +79,6 @@ describe("an extension hooking the session", () => {
 	it("annotates the step on a lane of its own, beside the output", async () => {
 		const r = new MemoryRepl({
 			extensions: [
-				compactionExtension(),
 				extension((hooks) => {
 					hooks.annotate.use((buffer, into, next) =>
 						next(buffer, annotating(into, "step", { envelopes: 1 })),
@@ -93,9 +87,9 @@ describe("an extension hooking the session", () => {
 			],
 		});
 
-		const { model, annotations } = await r.evalOutput('(echo "hi")');
+		const { user, annotations } = await r.evalOutput('(echo "hi")');
 
-		expect(model).toBe("hi\n");
+		expect(user).toBe("hi\n");
 		expect(annotations.step).toEqual({ envelopes: 1 });
 		expect(annotations.output).toEqual({});
 	});

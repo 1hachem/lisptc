@@ -18,6 +18,7 @@ export default defineConfig({
 					name: "extensions",
 					environment: "node",
 					include: ["test/extensions/*.test.ts"],
+					setupFiles: ["./test/extensions/setup-env.ts"],
 				},
 			},
 		],

@@ -24,10 +24,13 @@ this package's exports.
 
 ## Rules
 
-**No file here names an extension**, and `check:arch` holds the tree to it with
-`src/repl.ts` as the single listed exception. Adding an extension is an edit at
-a composition root: `@lisptc/cli`, `@lisptc/lsp` or `@repo/backend`. There is no
-registry that would do it for you, and a test that wants a roster builds one.
+**No file here names an extension**, the tests included, and `check:arch` holds
+the `src/` tree to it with `src/repl.ts` as the single listed exception. The
+manifest carries none either: the `runtime` tag denies `extension` in the root
+`turbo.json`, so `pnpm boundaries` fails on a dependency as well as on an
+import. Adding an extension is an edit at a composition root: `@lisptc/cli`,
+`@lisptc/lsp` or `@repo/backend`. There is no registry that would do it for you,
+and a test that wants a roster builds one.
 
 `src/repl.ts` is a driver, and `check:arch` pins what it may carry across the
 seam by name. If a new value from an extension has to reach it, that list is the
@@ -42,10 +45,16 @@ built without that extension takes the base.
 `test/helpers.ts` holds the shared setup, and the roster it builds is the
 test's own, not a list this package ships. It reaches for no extension package:
 what a REPL does with a capability is pinned here with a stub that fills the
-slot, and what an extension does with it is pinned in that extension's own
-tests. A case that needs a real extension belongs where that extension is
-composed, which is why the discovery-call cases live in `@lisptc/cli`.
+slot or hooks the chain, and what an extension does with it is pinned in that
+extension's own tests. A case that needs a real extension belongs where that
+extension is composed, which is why the discovery-call cases live in
+`@lisptc/cli` and the model-facing REPL cases in `@repo/backend`.
 
-`test/extensions.test.ts` and `test/session-hooks.test.ts` are where a change
-to the lifecycle shows up first. `test/session-server.test.ts` spawns
-`test/fixture-session.ts`, which stands in for the entry an app would pass.
+A REPL with nothing installed writes to the human's lane and to the error lane,
+and to nothing else, so a case here reads `evalOutput().user` rather than what
+`eval()` returns. Asserting on the model's copy means asserting on an
+extension.
+
+`test/session-hooks.test.ts` is where a change to the lifecycle shows up first.
+`test/session-server.test.ts` spawns `test/fixture-session.ts`, which stands in
+for the entry an app would pass.

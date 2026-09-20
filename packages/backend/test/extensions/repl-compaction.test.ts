@@ -1,8 +1,8 @@
 import { Compactor, compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import type { MemoryRepl } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
-import type { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";
 
 const RANGE =
@@ -200,5 +200,15 @@ describe("reset", () => {
 		r.reset();
 		await r.eval(RANGE);
 		expect(await r.eval("(range 2)")).toBe("range-1: (1 0)\n");
+	});
+});
+
+describe("one eval at a time", () => {
+	it("keeps each step's result names in its own report", async () => {
+		const r = await repl();
+		const first = r.eval("(list 1 2 3)");
+		const second = r.eval("(list 4 5 6)");
+		expect(await first).toBe("list-1: (1 2 3)\n");
+		expect(await second).toBe("list-2: (4 5 6)\n");
 	});
 });

@@ -1,45 +1,41 @@
-import {
-	type Compactor,
-	compactionExtension,
-} from "@repo/compaction-extension";
-import type { InterpExtension } from "@repo/interpreter/lisp";
+import type { Interp, InterpExtension } from "@repo/interpreter/lisp";
 import { llmSlot, type Observed } from "@repo/interpreter/observe";
 import type { SessionHooks } from "@repo/interpreter/session";
-import { memoryExtension } from "@repo/memory-extension";
-import { promisesExtension } from "@repo/promises-extension";
-import { proseExtension } from "@repo/prose-extension";
-import { secretsExtension } from "@repo/secrets-extension";
-import { uiExtension } from "@repo/ui-extension";
+import { note } from "@repo/interpreter/topics";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
-export function modelFacing(compactor?: Compactor): InterpExtension[] {
-	return [
-		secretsExtension(),
-		promisesExtension(),
-		compactionExtension(undefined, { compactor }),
-		memoryExtension(),
-		proseExtension(),
-		uiExtension(),
-	];
+export function extension(
+	session: (hooks: SessionHooks) => void,
+): InterpExtension {
+	return Object.assign((_interp: Interp): void => {}, { session });
 }
 
 export function observedExtension(): InterpExtension {
 	const observed: Observed = {};
-	return Object.assign(() => {}, {
-		session(hooks: SessionHooks): void {
-			hooks.fill(llmSlot, observed);
-		},
-	});
+	return extension((hooks) => hooks.fill(llmSlot, observed));
 }
 
-export function memoryRepl(
-	extensions: InterpExtension[] = modelFacing(),
-): MemoryRepl {
+export function answering(): InterpExtension {
+	return extension((hooks) =>
+		hooks.answered.use((ctx, out, next) =>
+			ctx.code.includes("(") ? next(ctx, out) : true,
+		),
+	);
+}
+
+export function noting(text: string): InterpExtension {
+	return extension((hooks) =>
+		hooks.evalStep.use((ctx, next) => {
+			note.emit(ctx.interp.channels, { model: { kind: "skipped", text } });
+			return next(ctx);
+		}),
+	);
+}
+
+export function memoryRepl(extensions: InterpExtension[] = []): MemoryRepl {
 	return new MemoryRepl({ extensions });
 }
 
-export function agentRepl(
-	extensions: InterpExtension[] = modelFacing(),
-): AgentRepl {
+export function agentRepl(extensions: InterpExtension[] = []): AgentRepl {
 	return new AgentRepl({ extensions });
 }

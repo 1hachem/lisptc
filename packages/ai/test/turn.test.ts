@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import type { TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { testExtensions, testRepl } from "./helpers.ts";
+import { noting, testRepl } from "./helpers.ts";
 
 interface Seen {
 	messages: AgentMessage[];
@@ -138,8 +138,8 @@ describe("the agent turn", () => {
 	});
 
 	test("withheld prose feedback reaches the model, and the caller's transcript is untouched", async () => {
-		const repl = testRepl();
-		await repl.evalOutput("all done (see above)");
+		const repl = testRepl([noting("(see above)")]);
+		await repl.evalOutput("all done");
 		repl.takeFinished();
 		script = [[{ text: "three." }]];
 
@@ -152,7 +152,7 @@ describe("the agent turn", () => {
 	});
 
 	test("a consumer that stops consuming stops the loop", async () => {
-		const repl = new CountingRepl({ extensions: testExtensions() });
+		const repl = new CountingRepl({ extensions: [] });
 		script = [[{ text: "(+ 1 2)" }]];
 
 		for await (const event of runAgentTurn(ask, { repl })) {

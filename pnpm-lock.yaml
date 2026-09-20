@@ -497,36 +497,18 @@ importers:
       '@posthog/ai':
         specifier: ^8.9.3
         version: 8.9.3(@ai-sdk/provider@4.0.8)(@langchain/core@1.2.9(@opentelemetry/api@1.9.0)(ws@8.21.1))(@opentelemetry/api@1.9.0)(posthog-node@5.51.6)
-      '@repo/compaction-extension':
-        specifier: workspace:*
-        version: link:../compaction
       '@repo/env':
         specifier: workspace:*
         version: link:../env
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
-      '@repo/memory-extension':
-        specifier: workspace:*
-        version: link:../memory
-      '@repo/promises-extension':
-        specifier: workspace:*
-        version: link:../promises
-      '@repo/prose-extension':
-        specifier: workspace:*
-        version: link:../prose
       '@repo/repl':
         specifier: workspace:*
         version: link:../repl
-      '@repo/secrets-extension':
-        specifier: workspace:*
-        version: link:../secrets
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
-      '@repo/ui-extension':
-        specifier: workspace:*
-        version: link:../ui-extension
       posthog-node:
         specifier: ^5.51.6
         version: 5.51.6
@@ -598,6 +580,9 @@ importers:
       '@edge-runtime/vm':
         specifier: ^5.0.0
         version: 5.0.0
+      '@repo/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@repo/tsconfigs':
         specifier: workspace:*
         version: link:../tsconfigs
@@ -948,30 +933,12 @@ importers:
 
   packages/repl:
     dependencies:
-      '@repo/compaction-extension':
-        specifier: workspace:*
-        version: link:../compaction
       '@repo/env':
         specifier: workspace:*
         version: link:../env
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
-      '@repo/memory-extension':
-        specifier: workspace:*
-        version: link:../memory
-      '@repo/promises-extension':
-        specifier: workspace:*
-        version: link:../promises
-      '@repo/prose-extension':
-        specifier: workspace:*
-        version: link:../prose
-      '@repo/secrets-extension':
-        specifier: workspace:*
-        version: link:../secrets
-      '@repo/ui-extension':
-        specifier: workspace:*
-        version: link:../ui-extension
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*
