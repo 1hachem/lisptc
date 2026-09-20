@@ -1,4 +1,4 @@
-import { formsIn } from "@repo/syntax";
+import { type FormSpan, formsIn } from "@repo/syntax";
 import {
 	Conversation,
 	ConversationContent,
@@ -18,6 +18,7 @@ import {
 	toolModelOutput,
 	toolResult,
 	toolUi,
+	toolUnrun,
 	useChatSession,
 } from "../lib/chat.tsx";
 import { useUI } from "../lib/ui.tsx";
@@ -114,21 +115,29 @@ function ChannelText({ text, tone }: { text: string; tone: string }) {
 	);
 }
 
+function unrunOf(next: ChatMessage | undefined): FormSpan[] | undefined {
+	return next !== undefined && isToolMessage(next)
+		? toolUnrun(next)
+		: undefined;
+}
+
 function AssistantText({
 	id,
 	text,
 	skipped,
+	unrun,
 	busy,
 }: {
 	id: string;
 	text: string;
 	skipped: string[];
+	unrun: FormSpan[] | undefined;
 	busy: boolean;
 }) {
 	const { shown } = useUI();
 	const { prose, heads } = useMemo(
-		() => formsIn(text, skipped),
-		[text, skipped],
+		() => formsIn(text, skipped, unrun),
+		[text, skipped, unrun],
 	);
 	if (shown.lisp) return <Markdown lisp>{text}</Markdown>;
 	return (
@@ -248,6 +257,7 @@ export function ChatView() {
 												id={m.id ?? String(i)}
 												text={messageText(m)}
 												skipped={messageProse(m)}
+												unrun={unrunOf(all[i + 1])}
 												busy={isLoading && i === last}
 											/>
 										)}

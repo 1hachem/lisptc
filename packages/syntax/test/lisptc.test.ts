@@ -136,6 +136,18 @@ describe("formsIn", () => {
 		]);
 	});
 
+	test("takes the repl's own ranges over the heads it guessed", () => {
+		const reply = "an aside (see below)\n(+ 1 2)";
+		const { prose, heads } = formsIn(reply, ["+"], [[9, 20]]);
+		expect(heads).toEqual(["+"]);
+		expect(prose).toBe("an aside (see below)");
+	});
+
+	test("runs every form when the repl reports it skipped none", () => {
+		const { heads } = formsIn("an aside (see below)\n(+ 1 2)", ["see"], []);
+		expect(heads).toEqual(["see", "+"]);
+	});
+
 	test("keeps a skipped aside's nested calls out of the tools too", () => {
 		const { heads } = formsIn("(I will check (the thing)) (echo 1)", ["I"]);
 		expect(heads).toEqual(["echo"]);

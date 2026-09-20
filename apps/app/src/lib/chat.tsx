@@ -2,6 +2,7 @@ import {
 	FetchStreamTransport,
 	useStream,
 } from "@langchain/langgraph-sdk/react";
+import type { FormSpan } from "@repo/syntax";
 import {
 	createContext,
 	useCallback,
@@ -25,6 +26,7 @@ export interface ChatMessage {
 		display?: unknown;
 		ui?: unknown;
 		prose?: unknown;
+		unrun?: unknown;
 		failed?: unknown;
 	};
 }
@@ -308,6 +310,17 @@ export function messageProse(message: ChatMessage): string[] {
 
 export function toolFailed(message: ChatMessage): boolean {
 	return message.additional_kwargs?.failed === true;
+}
+
+export function toolUnrun(message: ChatMessage): FormSpan[] | undefined {
+	const unrun = message.additional_kwargs?.unrun;
+	if (!Array.isArray(unrun)) return undefined;
+	return unrun.filter(
+		(span): span is FormSpan =>
+			Array.isArray(span) &&
+			span.length === 2 &&
+			span.every((at) => typeof at === "number"),
+	);
 }
 
 export function toolUi(message: ChatMessage): unknown {

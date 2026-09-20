@@ -1,11 +1,13 @@
 {
-  "name": "@repo/ai",
+  "name": "@repo/jev",
   "version": "0.0.0",
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/index.ts",
-    "./repl-store": "./src/repl-store.ts"
+    "./jev": "./src/jev.ts",
+    "./jev-host": "./src/jev-host.ts",
+    "./prose": "./src/prose.ts",
+    "./prose-host": "./src/prose-host.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -16,17 +18,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.9",
-    "@langchain/openai": "^1.5.10",
-    "@posthog/ai": "^8.9.3",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
-    "@repo/jev": "workspace:*",
-    "@repo/llm": "workspace:*",
-    "@repo/mcp": "workspace:*",
-    "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
-    "posthog-node": "^5.51.6"
+    "@typesafe-ai/sdk": "^0.6.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

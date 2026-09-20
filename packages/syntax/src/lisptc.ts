@@ -1,4 +1,4 @@
-import { formSpans } from "@repo/shared/lisp-forms";
+import { type FormSpan, formSpans } from "@repo/shared/lisp-forms";
 import { tokenPattern } from "@repo/shared/lisp-tokens";
 import {
 	createHighlighter,
@@ -117,13 +117,22 @@ export const lisptc = defineLanguage({
 
 export const highlighter = createHighlighter({ languages: [lisptc] });
 
-export function formsIn(text: string, skipped: readonly string[] = []): Forms {
+export function formsIn(
+	text: string,
+	skipped: readonly string[] = [],
+	unrun?: readonly FormSpan[],
+): Forms {
 	const heads: string[] = [];
 	let prose = "";
 	let at = 0;
 	for (const [start, end] of formSpans(text)) {
 		const inner = scan(text.slice(start, end)).heads;
-		if (inner[0] !== undefined && skipped.includes(inner[0])) continue;
+		if (
+			unrun === undefined
+				? inner[0] !== undefined && skipped.includes(inner[0])
+				: unrun.some(([from, to]) => from === start && to === end)
+		)
+			continue;
 		prose += text.slice(at, start);
 		at = end;
 		heads.push(...inner);

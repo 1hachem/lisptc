@@ -1,5 +1,11 @@
 import type { Awaitable, PromptSource } from "@repo/shared/host";
-import { endOfForm, type FormJudge, formsOnly } from "@repo/shared/lisp-forms";
+import {
+	endOfForm,
+	type FormJudge,
+	type FormSpan,
+	formSpans,
+	formsOnly,
+} from "@repo/shared/lisp-forms";
 import { isNumeric } from "../../arith.ts";
 import { noOpinion } from "../../hooks.ts";
 import {
@@ -17,7 +23,7 @@ import {
 	str,
 	type UnresolvedHead,
 } from "../../lisp.ts";
-import type { SessionHooks } from "../../session.ts";
+import { annotating, type SessionHooks } from "../../session.ts";
 import { note } from "../../topics.ts";
 import { proseHost } from "./prose-host.ts";
 
@@ -32,14 +38,29 @@ export type ProseExcuse = (
 	error: UnresolvedHead,
 ) => Awaitable<string | undefined>;
 
+export type ProseSense = string | false;
+
+export interface ProseSpans {
+	readonly code: string;
+	readonly spans: readonly string[];
+	readonly bound: readonly string[];
+}
+
+export type ProseSort = (
+	spans: ProseSpans,
+) => Awaitable<ReadonlyMap<string, ProseSense>>;
+
 export interface ProseHost {
 	classify: ProseClassifier;
+	sort: ProseSort;
 	excuse: ProseExcuse;
 	prompt: PromptSource;
 }
 
 export function proseExtension(host: ProseHost = proseHost): InterpExtension {
-	const { classify, excuse } = host;
+	const { classify, sort, excuse } = host;
+	const sensed = new Map<string, ProseSense>();
+	const step = newStep();
 	const extension = (interp: Interp): void => {
 		interp.hooks.readSource.use((interp, text, next) =>
 			next(
@@ -51,19 +72,48 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 				),
 			),
 		);
-		interp.hooks.skipForm.use(
-			(interp, form, next) => classify(interp, form) ?? next(interp, form),
-		);
+		interp.hooks.skipForm.use((interp, form, next) => {
+			const span = str(form);
+			const sense = sensed.get(span);
+			const skipped =
+				sense === false
+					? next(interp, form)
+					: (sense ?? classify(interp, form) ?? next(interp, form));
+			if (skipped !== undefined) step.unrun.add(span);
+			return skipped;
+		});
 		interp.hooks.failedForm.use(function* (interp, form, error, next) {
-			return (
-				(yield* settled(excuse(interp, form, error))) ??
-				(yield* next(interp, form, error))
-			);
+			const span = str(form);
+			const excused =
+				sensed.get(span) === false
+					? yield* next(interp, form, error)
+					: ((yield* settled(excuse(interp, form, error))) ??
+						(yield* next(interp, form, error)));
+			if (excused !== undefined) step.unrun.add(span);
+			return excused;
 		});
 	};
 	return Object.assign(extension, {
 		prompt: host.prompt(),
 		session(hooks: SessionHooks): void {
+			hooks.evalStep.use(async (ctx, next) => {
+				sensed.clear();
+				openStep(step, ctx.interp, ctx.code);
+				const asking = unsureSpans(step, ctx.code);
+				if (asking.spans.length > 0)
+					for (const [span, sense] of await sort(asking))
+						sensed.set(span, sense);
+				await next(ctx);
+			});
+			hooks.annotate.use((buffer, into, next) => {
+				const ranges = closeStep(step);
+				return next(
+					buffer,
+					ranges === undefined
+						? into
+						: annotating(into, "output", { unrun: ranges }),
+				);
+			});
 			hooks.unrun.use((interp, code, next) => [
 				...next(interp, code),
 				...proseHeads(interp, code),
@@ -113,6 +163,91 @@ export function proseHeads(interp: Interp, text: string): string[] {
 	return heads;
 }
 
+interface StepSpan {
+	at: FormSpan;
+	span: string;
+	sure: boolean;
+	head: string | undefined;
+}
+
+interface Step {
+	opened: boolean;
+	spans: StepSpan[];
+	blanked: FormSpan[];
+	unrun: Set<string>;
+}
+
+function newStep(): Step {
+	return { opened: false, spans: [], blanked: [], unrun: new Set() };
+}
+
+function clearStep(step: Step): void {
+	step.opened = false;
+	step.spans = [];
+	step.blanked = [];
+	step.unrun.clear();
+}
+
+function openStep(step: Step, interp: Interp, text: string): void {
+	clearStep(step);
+	step.opened = true;
+	const judge: FormJudge = {
+		unclosed(source, at) {
+			const said = proseJudge.unclosed(source, at);
+			if (said !== undefined) step.blanked.push([at, source.length]);
+			return said;
+		},
+		unreadable(source, start, end) {
+			const said = proseJudge.unreadable(source, start, end);
+			if (said !== undefined) step.blanked.push([start, end]);
+			return said;
+		},
+	};
+	for (const at of formSpans(text, judge)) {
+		const form = readOne(text.slice(at[0], at[1]));
+		if (form === undefined) continue;
+		step.spans.push({
+			at,
+			span: str(form),
+			sure: certainly(interp, form) === false,
+			head:
+				form instanceof Cell && form.car instanceof Sym
+					? form.car.name
+					: undefined,
+		});
+	}
+}
+
+function closeStep(step: Step): FormSpan[] | undefined {
+	if (!step.opened) return undefined;
+	const ranges = [
+		...step.blanked,
+		...step.spans.filter((span) => step.unrun.has(span.span)).map((s) => s.at),
+	].sort((a, b) => a[0] - b[0]);
+	clearStep(step);
+	return ranges;
+}
+
+function readOne(source: string): unknown {
+	const tokens = new Reader();
+	tokens.push(source);
+	try {
+		return tokens.read();
+	} catch {
+		return undefined;
+	}
+}
+
+function unsureSpans(step: Step, code: string): ProseSpans {
+	const spans = new Set<string>();
+	const bound = new Set<string>();
+	for (const span of step.spans) {
+		if (!span.sure) spans.add(span.span);
+		else if (span.head !== undefined) bound.add(span.head);
+	}
+	return { code, spans: [...spans], bound: [...bound] };
+}
+
 export interface SyntaxError_ {
 	message: string;
 	line: number;
@@ -144,20 +279,35 @@ export function noExcuse(): undefined {
 	return undefined;
 }
 
+export function noSort(): ReadonlyMap<string, ProseSense> {
+	return new Map();
+}
+
+function certainly(interp: Interp, form: unknown): false | undefined {
+	if (!(form instanceof Cell)) return false;
+	const head = form.car;
+	if (head instanceof Sym && (isSpecialForm(head) || interp.hasGlobal(head)))
+		return false;
+	return undefined;
+}
+
+export function skippedAsProse(form: unknown, reason: string): string {
+	return `${abbreviate(str(form))} — ${reason}, so this was read as prose`;
+}
+
 export function readsAsProse(
 	interp: Interp,
 	form: unknown,
 ): string | undefined {
 	const reason = proseReason(interp, form);
 	if (reason === undefined) return undefined;
-	return `${abbreviate(str(form))} — ${reason}, so this was read as prose`;
+	return skippedAsProse(form, reason);
 }
 
 function proseReason(interp: Interp, form: unknown): string | undefined {
+	if (certainly(interp, form) === false) return undefined;
 	if (!(form instanceof Cell)) return undefined;
 	const head = form.car;
-	if (head instanceof Sym && (isSpecialForm(head) || interp.hasGlobal(head)))
-		return undefined;
 	if (readsAsSentence(form)) return "a comma-separated phrase";
 	if (!(head instanceof Sym))
 		return isLiteral(head) ? `${str(head)} is not a function` : undefined;
@@ -166,19 +316,12 @@ function proseReason(interp: Interp, form: unknown): string | undefined {
 	return `"${head.name}" is not defined`;
 }
 
-const SENTENCE_WORDS = 4;
+const CLAUSE = /,$/;
 
 function readsAsSentence(form: Cell): boolean {
-	let words = 0;
-	let clauses = 0;
-	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr) {
-		const word = rest.car;
-		if (word instanceof Cell || word instanceof LispKeyword) return false;
-		if (typeof word === "string") return false;
-		if (word instanceof Sym && word.name.endsWith(",")) clauses++;
-		words++;
-	}
-	return clauses > 0 && words >= SENTENCE_WORDS;
+	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr)
+		if (rest.car instanceof Sym && CLAUSE.test(rest.car.name)) return true;
+	return false;
 }
 
 function marksCode(interp: Interp, form: Cell): boolean {
@@ -202,7 +345,7 @@ function isLiteral(head: unknown): boolean {
 	return isNumeric(head) || typeof head === "string";
 }
 
-const NAMESPACED = /^[a-z][a-z0-9-]*[/_][a-z0-9_/-]*$/i;
+const NAMESPACED = /^[a-z][\w-]*[/_][\w/-]*$/i;
 
 function isNamespaced(name: string): boolean {
 	return NAMESPACED.test(name);

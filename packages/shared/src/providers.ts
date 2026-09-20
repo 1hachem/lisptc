@@ -31,3 +31,12 @@ export function providerSpecFor(
 		);
 	return specs[name];
 }
+
+export interface DecisionsSpec {
+	label: string;
+	apiKey: string | undefined;
+	apiKeyEnv: readonly string[];
+	endpoint: string;
+	model: string;
+	timeoutMs: number;
+}

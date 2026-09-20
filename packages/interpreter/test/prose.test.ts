@@ -229,6 +229,7 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		});
 
 		it.each([
+			"(one, two)",
 			"(2 agents, 10 MB storage)",
 			"(car, cdr and cons return values)",
 			"(50 GB, 12 seats, no support)",

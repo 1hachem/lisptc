@@ -41,6 +41,7 @@ workspaces `packages/*` and `apps/*`.
 - `packages/interpreter` (`@repo/interpreter`) — the language itself, and the extensions that ship with it.
 - `packages/mcp` (`@repo/mcp`) — the MCP extension. Carries the MCP SDK, so the interpreter does not.
 - `packages/llm` (`@repo/llm`) — the language-model extension. Carries the model SDK, so the interpreter does not.
+- `packages/jev` (`@repo/jev`) — the decision-model host: typed judgements from TypeSafe's Jev, and the extension ports it fills. Carries the TypeSafe SDK, so the interpreter does not.
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter.
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in and the surfaces it reads a run through. Core logic and language features only, so it depends on nothing that runs a suite.

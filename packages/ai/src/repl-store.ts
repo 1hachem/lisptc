@@ -1,3 +1,4 @@
+import { jevConfigured } from "@repo/env/decisions";
 import { compactionExtension } from "@repo/interpreter/compaction";
 import { compactionHost } from "@repo/interpreter/compaction-host";
 import type { InterpExtension } from "@repo/interpreter/lisp";
@@ -11,6 +12,7 @@ import { secretsExtension } from "@repo/interpreter/secrets";
 import { secretsHost } from "@repo/interpreter/secrets-host";
 import { uiExtension } from "@repo/interpreter/ui";
 import { uiHost } from "@repo/interpreter/ui-host";
+import { jevProseHost } from "@repo/jev/prose-host";
 import { llmExtension } from "@repo/llm/llm";
 import { llmHost } from "@repo/llm/llm-host";
 import { mcpExtension } from "@repo/mcp";
@@ -27,7 +29,7 @@ export function agentExtensions(scope?: string): InterpExtension[] {
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
 		memoryExtension(memoryHostFor(scope)),
-		proseExtension(proseHost),
+		proseExtension(jevConfigured ? jevProseHost() : proseHost),
 		uiExtension(uiHost),
 	];
 }
