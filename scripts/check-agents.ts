@@ -10,18 +10,15 @@ const RETRYABLE = new Set([408, 429, 500, 502, 503, 529]);
 const ATTEMPTS = 4;
 const BACKOFF_MS = 800;
 
-const FAIL_IMPLEMENTATION = 2.2;
-const WARN_IMPLEMENTATION = 1.6;
+const FAIL_IMPLEMENTATION = 0.8;
+const WARN_IMPLEMENTATION = 0.4;
+const IMPLEMENTATION_KIND = 0.5;
 const FAIL_PROBABILITY = 0.7;
 const OVERRIDE_PROBABILITY = 0.85;
 const WARN_PROBABILITY = 0.5;
 
-const NOT_IMPLEMENTATION = new Set([
-	"rule",
-	"placement",
-	"pointer",
-	"editorial",
-]);
+const IMPLEMENTATION_LEVELS = ["2", "3"];
+const IMPLEMENTATION_KINDS = ["mechanism", "rationale"];
 
 const FILE_PURPOSE =
 	"An AGENTS.md in this monorepo holds the rules a coding agent works under: how things are interfaced, which way dependencies run, where a thing belongs. It points the agent at the files, packages, commands and exported names it will need, and says in a phrase what each one is for. That is wanted. What it must never do is say how any of them works: the steps, the order they run in, the data that moves and what happens at runtime are read in the code, because prose rots and the code does not.";
@@ -125,6 +122,7 @@ type Answer = {
 	choice?: string;
 	score?: number;
 	confidence?: number;
+	probabilities?: Record<string, number>;
 };
 
 type Decision = { answers: Record<string, Answer> };
@@ -144,9 +142,13 @@ type Judged = Block & {
 	mechanism: number;
 	symbols: number;
 	rationale: number;
+	mass: number;
 	kind: string;
+	implicated: number;
 	scope: number;
 };
+
+type Unanswered = { block: Block; reason: string };
 
 function git(args: string[]): string {
 	return execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 26 });
@@ -280,6 +282,14 @@ async function decide(
 	}
 }
 
+function massOf(
+	probabilities: Record<string, number> | undefined,
+	keys: string[],
+): number | undefined {
+	if (probabilities === undefined) return undefined;
+	return keys.reduce((sum, key) => sum + (probabilities[key] ?? 0), 0);
+}
+
 async function judge(
 	key: string,
 	model: string,
@@ -305,52 +315,77 @@ async function judge(
 		},
 		questions,
 	);
+	if (process.argv.includes("--raw")) {
+		console.log(JSON.stringify(answers, null, 2));
+	}
+	const answered = <T>(value: T | undefined, id: string): T => {
+		if (value === undefined) throw new Error(`no answer to ${id}`);
+		return value;
+	};
 	return {
 		...block,
-		implementation: answers.implementation?.score ?? 0,
-		confidence: answers.implementation?.confidence ?? 0,
-		mechanism: answers.mechanism?.noul ?? 0,
-		symbols: answers.symbols?.noul ?? 0,
-		rationale: answers.rationale?.noul ?? 0,
-		kind: answers.kind?.choice ?? "unknown",
-		scope: answers.scope?.noul ?? 0,
+		implementation: answered(answers.implementation?.score, "implementation"),
+		confidence: answered(
+			answers.implementation?.confidence,
+			"implementation confidence",
+		),
+		mass: answered(
+			massOf(answers.implementation?.probabilities, IMPLEMENTATION_LEVELS),
+			"implementation probabilities",
+		),
+		mechanism: answered(answers.mechanism?.noul, "mechanism"),
+		symbols: answered(answers.symbols?.noul, "symbols"),
+		rationale: answered(answers.rationale?.noul, "rationale"),
+		kind: answered(answers.kind?.choice, "kind"),
+		implicated: answered(
+			massOf(answers.kind?.probabilities, IMPLEMENTATION_KINDS),
+			"kind probabilities",
+		),
+		scope: block.root ? answered(answers.scope?.noul, "scope") : 0,
 	};
 }
 
-async function pool<In, Out>(
-	items: In[],
+async function judgeAll(
+	key: string,
+	model: string,
+	blocks: Block[],
 	jobs: number,
-	worker: (item: In) => Promise<Out>,
-): Promise<Out[]> {
-	const out: Out[] = new Array(items.length);
+): Promise<{ judged: Judged[]; unanswered: Unanswered[] }> {
+	const judged: Judged[] = [];
+	const unanswered: Unanswered[] = [];
 	let next = 0;
 	const runner = async () => {
-		while (next < items.length) {
-			const at = next++;
-			const item = items[at];
-			if (item === undefined) continue;
-			out[at] = await worker(item);
+		while (next < blocks.length) {
+			const block = blocks[next++];
+			if (block === undefined) continue;
+			try {
+				judged.push(await judge(key, model, block));
+			} catch (error) {
+				unanswered.push({
+					block,
+					reason: error instanceof Error ? error.message : String(error),
+				});
+			}
 		}
 	};
 	await Promise.all(
-		Array.from({ length: Math.min(jobs, items.length) }, runner),
+		Array.from({ length: Math.min(jobs, blocks.length) }, runner),
 	);
-	return out;
+	return { judged, unanswered };
 }
 
 function fails(judged: Judged): boolean {
 	if (judged.mechanism >= OVERRIDE_PROBABILITY) return true;
-	if (NOT_IMPLEMENTATION.has(judged.kind)) return false;
-	if (judged.implementation >= FAIL_IMPLEMENTATION) return true;
+	if (judged.implicated < IMPLEMENTATION_KIND) return false;
+	if (judged.mass >= FAIL_IMPLEMENTATION) return true;
 	return (
-		judged.mechanism >= FAIL_PROBABILITY &&
-		judged.implementation >= WARN_IMPLEMENTATION
+		judged.mechanism >= FAIL_PROBABILITY && judged.mass >= WARN_IMPLEMENTATION
 	);
 }
 
 function warns(judged: Judged): boolean {
 	return (
-		judged.implementation >= WARN_IMPLEMENTATION ||
+		judged.mass >= WARN_IMPLEMENTATION ||
 		judged.mechanism >= WARN_PROBABILITY ||
 		judged.symbols >= WARN_PROBABILITY ||
 		judged.rationale >= FAIL_PROBABILITY ||
@@ -359,11 +394,11 @@ function warns(judged: Judged): boolean {
 }
 
 function severity(judged: Judged): number {
-	return judged.implementation + Math.max(judged.mechanism, judged.symbols);
+	return judged.mass + Math.max(judged.mechanism, judged.symbols);
 }
 
-function report(judged: Judged): string {
-	const head = `${judged.file}:${judged.line}  implementation ${judged.implementation.toFixed(2)} (confidence ${judged.confidence.toFixed(2)})  mechanism ${judged.mechanism.toFixed(2)}  identifiers ${judged.symbols.toFixed(2)}  design-note ${judged.rationale.toFixed(2)}${judged.root ? `  one-package ${judged.scope.toFixed(2)}` : ""}  kind=${judged.kind}`;
+function report(judged: Judged, mark: string): string {
+	const head = `${mark}  ${judged.file}:${judged.line}  implementation ${judged.implementation.toFixed(2)} mass ${judged.mass.toFixed(2)} (confidence ${judged.confidence.toFixed(2)})  mechanism ${judged.mechanism.toFixed(2)}  identifiers ${judged.symbols.toFixed(2)}  design-note ${judged.rationale.toFixed(2)}${judged.root ? `  one-package ${judged.scope.toFixed(2)}` : ""}  kind=${judged.kind} ${judged.implicated.toFixed(2)}`;
 	const quoted = judged.paragraph
 		.split("\n")
 		.map((line) => `    ${line}`)
@@ -431,9 +466,16 @@ if (key === undefined || key === "") {
 }
 
 const model = argValue("--model", MODEL);
-const judgements = await pool(blocks, jobs, (block) =>
-	judge(key, model, block),
+const { judged: judgements, unanswered } = await judgeAll(
+	key,
+	model,
+	blocks,
+	jobs,
 );
+
+for (const { block, reason } of unanswered) {
+	console.error(`${block.file}:${block.line} went unjudged: ${reason}`);
+}
 
 const failed = judgements
 	.filter(fails)
@@ -442,8 +484,8 @@ const warned = judgements
 	.filter((j) => !fails(j) && warns(j))
 	.sort((a, b) => severity(b) - severity(a));
 
-for (const judged of failed) console.error(report(judged));
-for (const judged of warned) console.warn(report(judged));
+for (const judged of failed) console.error(report(judged, "FAIL"));
+for (const judged of warned) console.log(report(judged, "warn"));
 
 if (sweep) {
 	for (const file of files) {
@@ -454,6 +496,13 @@ if (sweep) {
 			`${file}  ${mine.length} blocks, ${bad} failing, ${soft} warning`,
 		);
 	}
+}
+
+if (unanswered.length > 0) {
+	console.error(
+		`${unanswered.length} of ${blocks.length} blocks went unjudged. A block the model did not answer for is not a block that passed.`,
+	);
+	process.exit(1);
 }
 
 if (failed.length === 0) {
