@@ -27,6 +27,7 @@
     "fix:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts --fix",
     "check:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts",
     "fix:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts --fix",
+    "check:refs": "node --no-warnings --experimental-transform-types ./scripts/check-refs.ts",
     "prepare": "husky"
   },
   "pnpm": {

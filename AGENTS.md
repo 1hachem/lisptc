@@ -15,8 +15,8 @@ files, hook points and ports are read in the code, never here, because prose
 rots and the code does not.
 
 So do not add an explanation of how something works, and do not open another
-prose file for it either. No design notes, no architecture page, no `devdocs/`
-or `docs/` directory, no `NOTES.md`. There is nowhere to move a reason to.
+prose file for it either. No design notes, no architecture page, no devdocs/
+or docs/ directory, no NOTES.md. There is nowhere to move a reason to.
 
 A constraint worth keeping is kept in code: a name that states it, a type that
 makes the wrong thing unrepresentable, a test that fails when it is broken. A
@@ -25,7 +25,7 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: `README`, a package's own `README.md`, and the `AGENTS.md` files. Two
+code: `README`, a package's own README.md, and the `AGENTS.md` files. Two
 guards back the rule: a `PreToolUse` hook in `.claude/settings.json` refuses to
 create a new markdown file, and `pnpm check:docs` fails CI on any tracked
 markdown outside that allowlist.
@@ -39,7 +39,7 @@ nothing but what they say.
 
 - `explore` — reads the code. What something does, where it lives, what calls
   it, whether it already exists. It answers with the code quoted under
-  `file:line` anchors, and it can write nothing.
+  file:line anchors, and it can write nothing.
 - `script` — runs the verbose thing. A test run, a typecheck, a build, a
   container log, a throwaway probe against a running service. It reads the
   output and reports the failures verbatim, so the log never lands here.
@@ -279,6 +279,8 @@ pnpm check:comments          # fails on any non-directive comment (part of CI), 
 pnpm fix:comments            # strip them; follow with `pnpm format`
 pnpm check:docs              # fails on tracked markdown outside the allowlist (part of CI)
 pnpm fix:docs                # delete those files
+pnpm check:refs              # AGENTS.md references that no longer resolve (part of CI)
+pnpm check:refs --all        # sweep every AGENTS.md, not just the ones a PR changed
 pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
@@ -303,7 +305,7 @@ there fails the same way locally, under the command it names.
 A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
 longer than one line, so write the subject and stop unless a description was
 asked for, and then keep it to a single line after the blank one. Trailers
-like `Co-Authored-By` are footers and do not count.
+like Co-Authored-By are footers and do not count.
 
 ## Writing Style
 

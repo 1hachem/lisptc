@@ -28,5 +28,5 @@ component belongs in the app instead.
 
 ## Tests
 
-Tests live beside the source in `src/`, not in `test/`, and run under
+Tests live beside the source in `src/`, not in test/, and run under
 happy-dom.

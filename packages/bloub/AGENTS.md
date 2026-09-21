@@ -19,7 +19,7 @@ raw `.ts` and `.tsx` with no build step, so a consumer compiles the source.
 map points at raw files, and an alias would break a consumer that resolves them
 directly.
 
-**Tests sit beside the source** in `src/`, not in a `test/` directory.
+**Tests sit beside the source** in `src/`, not in a test/ directory.
 `vitest.config.ts` here is what says so.
 
 **`src/bot/skins.test.ts` does not run in CI**, and `vitest.config.ts` holds the
