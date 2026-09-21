@@ -43,10 +43,10 @@ function stepped(
 	} finally {
 		detach();
 	}
-	const user = buffer.text("user");
+	const user = buffer.collectText("user");
 	return {
 		user,
-		model: c === undefined ? user : buffer.text("model") + c.endStep(),
+		model: c === undefined ? user : buffer.collectText("model") + c.endStep(),
 	};
 }
 

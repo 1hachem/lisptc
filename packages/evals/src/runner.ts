@@ -37,7 +37,7 @@ export type EvalTurnEvent =
 			code: string;
 			meta: { inputTokens?: number; outputTokens?: number };
 	  }
-	| { type: "heard"; annotations: Record<string, unknown> }
+	| { type: "collected"; annotations: Record<string, unknown> }
 	| {
 			type: "result";
 			output: string;
@@ -281,9 +281,9 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 	const { repl, trace, checks } = runtime.open(spec);
 	const transcript: TranscriptEntry[] = [];
 	const seen: TranscriptLine[] = [];
-	let heard: Record<string, unknown> = {};
+	let collected: Record<string, unknown> = {};
 
-	const say = (
+	const see = (
 		line: TranscriptLine,
 		annotations: Record<string, unknown> = {},
 	): void => {
@@ -303,7 +303,7 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 	for (const entry of spec.seed ?? []) {
 		if ("user" in entry) {
 			transcript.push({ role: "user", content: entry.user });
-			say({ role: "user", content: entry.user });
+			see({ role: "user", content: entry.user });
 			continue;
 		}
 		const { output, error, annotations } = await runtime.agent.eval(
@@ -315,8 +315,8 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 			role: "tool",
 			content: runtime.agent.resultContent(output, error, annotations.step),
 		});
-		say({ role: "assistant", content: entry.assistant });
-		say({ role: "tool", content: output }, annotations.step);
+		see({ role: "assistant", content: entry.assistant });
+		see({ role: "tool", content: output }, annotations.step);
 	}
 
 	let steps = 0;
@@ -337,18 +337,18 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 			steps += 1;
 			trace.beginStep(steps);
 			trace.reply(event.code);
-			say({ role: "assistant", content: event.code }, heard);
-			heard = {};
+			see({ role: "assistant", content: event.code }, collected);
+			collected = {};
 			inputTokens = event.meta.inputTokens ?? inputTokens;
 			outputTokens += event.meta.outputTokens ?? 0;
 			continue;
 		}
-		if (event.type === "heard") {
-			heard = { ...heard, ...event.annotations };
+		if (event.type === "collected") {
+			collected = { ...collected, ...event.annotations };
 			continue;
 		}
 		if (event.type === "result") {
-			say({ role: "tool", content: event.output }, event.annotations.step);
+			see({ role: "tool", content: event.output }, event.annotations.step);
 			checks.evaluate(steps);
 			continue;
 		}

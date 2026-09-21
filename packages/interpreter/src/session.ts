@@ -26,7 +26,7 @@ export function annotating(
 
 export interface TurnContext {
 	readonly interp: Interp;
-	say(text: string): void;
+	emit(text: string): void;
 }
 
 export interface StepContext {

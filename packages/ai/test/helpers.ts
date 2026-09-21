@@ -37,7 +37,7 @@ export function reporting(text: string): InterpExtension {
 			return next(ctx);
 		});
 		hooks.annotate.use((buffer, into, next) => {
-			const seen = buffer.payloads(reported);
+			const seen = buffer.collect(reported);
 			return next(
 				buffer,
 				seen.length === 0 ? into : annotating(into, "step", { reported: seen }),

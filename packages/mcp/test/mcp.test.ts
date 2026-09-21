@@ -23,7 +23,7 @@ async function evalOutput(interp: Interp, code: string): Promise<string> {
 	const detach = interp.channels.pipe(buffer);
 	try {
 		await runAsync(interp, code);
-		return buffer.text("user");
+		return buffer.collectText("user");
 	} finally {
 		detach();
 	}

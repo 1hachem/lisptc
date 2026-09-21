@@ -10,10 +10,10 @@ describe("prose channel notes", () => {
 		const buffer = bufferTransport();
 		interp.channels.pipe(buffer);
 		expect(str(runSync(interp, "an aside (see below)\n(+ 1 2)"))).toBe("3");
-		expect(buffer.payloads(note).map((entry) => entry.kind)).toEqual([
+		expect(buffer.collect(note).map((entry) => entry.kind)).toEqual([
 			"skipped",
 		]);
-		expect(buffer.payloads(note)[0]?.text).toContain("(see below)");
+		expect(buffer.collect(note)[0]?.text).toContain("(see below)");
 		expect(buffer.envelopes.every((entry) => !entry.to.includes("user"))).toBe(
 			true,
 		);

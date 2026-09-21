@@ -66,14 +66,14 @@ describe("an extension hooking the session", () => {
 			extensions: [
 				extension((hooks) => {
 					hooks.beginTurn.use(function* (ctx, next) {
-						ctx.say("something worth knowing");
+						ctx.emit("something worth knowing");
 						yield* next(ctx);
 					});
 				}),
 			],
 		});
 
-		expect((await r.beginTurn()).said).toBe("something worth knowing");
+		expect((await r.beginTurn()).emitted).toBe("something worth knowing");
 	});
 
 	it("annotates the step on a lane of its own, beside the output", async () => {

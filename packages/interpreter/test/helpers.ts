@@ -18,7 +18,10 @@ export function evWithOutput(
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
 	try {
-		return { value: str(runSync(interp, code)), output: buffer.text("user") };
+		return {
+			value: str(runSync(interp, code)),
+			output: buffer.collectText("user"),
+		};
 	} finally {
 		detach();
 	}

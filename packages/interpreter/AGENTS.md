@@ -99,6 +99,12 @@ Three kinds of thing cross, and each has one mechanism.
   keys, split by audience and by nothing else. The extension picks the key and
   owns the shape.
 
+One verb each way, and they are `emit` and `collect`. An extension emits, at a
+lifecycle point through the context it is handed or on a topic it declares, and
+collects only from a topic it declares itself. A driver collects. Nothing reads
+a payload it did not emit, and no other spelling for either direction survives
+review.
+
 Needing something new is never a reason to import across the seam. A new point
 in the lifecycle is a new chain. A new capability is a new slot. A new thing to
 report is a new key. A payload a layer above would have to interpret belongs

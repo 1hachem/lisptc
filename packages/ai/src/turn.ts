@@ -59,7 +59,7 @@ export type TurnEvent =
 			annotations: StepAnnotations;
 			failed: boolean;
 	  }
-	| { type: "heard"; annotations: Annotations }
+	| { type: "collected"; annotations: Annotations }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
@@ -144,10 +144,10 @@ export async function* runAgentTurn(
 		while (!signal?.aborted) {
 			repl.setConversationVars(snapshotConversation(transcript));
 
-			const { said, annotations: heard } = await repl.beginTurn();
-			if (said !== "") riding = said;
-			if (Object.keys(heard.step).length > 0)
-				yield { type: "heard", annotations: heard.step };
+			const { emitted, annotations: collected } = await repl.beginTurn();
+			if (emitted !== "") riding = emitted;
+			if (Object.keys(collected.step).length > 0)
+				yield { type: "collected", annotations: collected.step };
 
 			const stepId = crypto.randomUUID();
 			const stepStartedAt = Date.now();

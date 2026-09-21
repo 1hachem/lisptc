@@ -107,7 +107,7 @@ export function streamChatResponse<Id extends string>(
 			const carried = wire.length;
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
-			let heard: Record<string, unknown> = {};
+			let collected: Record<string, unknown> = {};
 
 			try {
 				write(sse("values", { messages: wire }));
@@ -135,12 +135,12 @@ export function streamChatResponse<Id extends string>(
 							chunk.content = event.text ?? "";
 						}
 						if (!write(sse("messages", [chunk, {}]))) break;
-					} else if (event.type === "heard") {
-						heard = event.annotations;
+					} else if (event.type === "collected") {
+						collected = event.annotations;
 					} else if (event.type === "assistant") {
 						lastMeta = { ...event.meta };
-						mergeInto(lastMeta, heard);
-						heard = {};
+						mergeInto(lastMeta, collected);
+						collected = {};
 						wire.push({
 							type: "ai",
 							content: event.code,

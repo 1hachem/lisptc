@@ -125,7 +125,7 @@ const runtime = {
 			})) {
 				if (
 					event.type === "assistant" ||
-					event.type === "heard" ||
+					event.type === "collected" ||
 					event.type === "result" ||
 					event.type === "halt" ||
 					event.type === "silent" ||
