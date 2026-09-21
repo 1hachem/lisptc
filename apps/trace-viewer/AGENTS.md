@@ -17,11 +17,11 @@ conversation, declares the extensions it runs on, mocks the servers it needs,
 and declares its checks in the DSL from `@repo/checks`. The check names are the
 readable part: they say what the agent should have done, one behaviour each.
 
-`evals/harness/` is the product adapter for `@repo/evals/runner`. Running a
-case composes the agent loop, the check extension and a mocked world, so the
-app supplies those concrete pieces. `harness.ts` builds the traced REPL from the
-list the case hands it, `runner.ts` wires that REPL and the check evaluator into
-the eval driver, and `judge.ts` is the model judge. Their unit tests sit beside
+`evals/harness/` is the product adapter for `@repo/evals/runner`, because a
+case needs the agent loop, the check extension and a mocked world, and this app
+is where those concrete pieces live. `harness.ts` is the traced REPL,
+`runner.ts` the adapter onto the eval driver, and `judge.ts` the model judge.
+Their unit tests sit beside
 them and run under `pnpm test`; the cases do not.
 
 ## Rules
@@ -46,5 +46,5 @@ A report is parsed through its schema before a page touches it.
 pnpm test:evals    # real models, NOT part of pnpm test
 ```
 
-`pnpm test` runs the harness's unit tests and then lists the cases, which is
-enough to catch a case that no longer parses. It never runs one.
+**`pnpm test` never runs a case.** It covers the harness's unit tests, and it
+lists the cases, which is enough to catch one that no longer parses.

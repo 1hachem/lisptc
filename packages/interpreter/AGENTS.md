@@ -55,13 +55,12 @@ own prompt all go through one field of that interface.
 - `<name>-host.ts` sits beside it, holds the implementations, and exports the
   default host value. It is the only file of the pair that touches the world.
 - The default arrives as a default argument, so the ordinary call passes
-  nothing and another strategy is one spread away.
+  nothing.
 - A port two packages share and neither owns lives in `@repo/shared/host`, with
   its node-side implementation in `@repo/shared/host-node`.
 - A port whose work may have to wait is typed so a value or a promise both
-  satisfy it, and the extension consumes it through the evaluator's own
-  suspension rather than through `async`. A synchronous host then never
-  suspends, and the synchronous drivers keep running it.
+  satisfy it, and is consumed through the evaluator's own suspension rather
+  than through `async`.
 
 `check:arch` enforces the first bullet and names the `-host.ts` to move the
 offending import to. Type-only imports are allowed, so a port may still be
@@ -86,24 +85,19 @@ without knowing it exists.
 Three kinds of thing cross, and each has one mechanism.
 
 - Behaviour goes through a chain. Declare a `session` field beside `prompt` and
-  hook the points in `SessionHooks`. A driver runs a chain with a base case and
-  never asks who is on it, so give every new chain a base that is correct when
-  nobody hooks it. A REPL built without this extension will take that base.
-- A capability goes through a slot. `slot` mints a key, the extension fills it,
-  the consumer reads it, and neither imports the other's module. Put a slot
-  beside the contract it hands over, which may be a module separate from the
-  extension so that consuming the capability does not pull in what provides it.
-  `memorySlot` and `secretsSlot`, each in its own extension package, are the
-  examples.
-- Data goes through an annotation. A step reports what it did in bags of string
-  keys, split by audience and by nothing else. The extension picks the key and
-  owns the shape.
+  hook the points in `SessionHooks`. Give every new chain a base that is correct
+  when nobody hooks it.
+- A capability goes through a slot. Put a slot beside the contract it hands
+  over, which may be a module separate from the extension, so that consuming a
+  capability does not pull in what provides it. `memorySlot` and `secretsSlot`,
+  each in its own extension package, are the examples.
+- Data goes through an annotation. Split a report by audience and by nothing
+  else. The extension picks the key and owns the shape.
 
-One verb each way, and they are `emit` and `collect`. An extension emits, at a
-lifecycle point through the context it is handed or on a topic it declares, and
-collects only from a topic it declares itself. A driver collects. Nothing reads
-a payload it did not emit, and no other spelling for either direction survives
-review.
+One verb each way, and they are `emit` and `collect`. An extension emits at a
+lifecycle point or on a topic it declares, and collects only from a topic it
+declares itself. A driver collects. Nothing reads a payload it did not emit, and
+no other spelling for either direction survives review.
 
 Needing something new is never a reason to import across the seam. A new point
 in the lifecycle is a new chain. A new capability is a new slot. A new thing to

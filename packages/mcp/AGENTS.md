@@ -20,29 +20,20 @@ imports it without pulling in the extension. `src/mcp-client.ts`,
 against it. `src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server
 registry.
 
-The OAuth callback server is bound once per port for the whole process, not
-once per client, and it is reached through `sharedAuthCallback`. Every REPL in
-the process shares it and registers its own `state` on it, so a link one REPL
-handed out is still answered after another has started. It is keyed on
-`globalThis`, so a dev-server module reload rebinds nothing and loses no
-pending flow. Never give a client a callback server of its own. Its links
-would reach the one that won the port, which has never heard of their `state`.
+**Never give a client a callback server of its own.** The OAuth callback server
+is one per port for the whole process, shared by every REPL in it, and reached
+through `sharedAuthCallback`. A client that binds its own loses the flows the
+shared one is holding.
 
 `DockerHost` is the one strategy the extension is handed, and it covers every
-modality a toolkit entry can have. An entry naming an `image` runs as that
-image. An entry with a `command` and no `url` is a stdio server, and runs
-inside a `supergateway` container that turns its stdio into streamable HTTP.
-An entry that already speaks HTTP goes to the `McpHost` it composes over,
-which is `LocalProcessHost` by default.
+modality a toolkit entry can have. Read the modalities off the entry shapes in
+`src/toolkit.ts`, not from prose.
 
-`ensure` takes any `ConnConfig` and returns a handle, or `undefined` when the
-client should open stdio itself. A container's port is published on a free
-loopback port and the real address comes back on the `ServerHandle`, so an
-entry that names an `image` gives the `port` its server listens on inside the
-container and never a `url`: where it is reachable is the host's to decide, not
-the manifest's. A `url` in the manifest is an address a client dials as
-written, so only a remote server, or one a `command` starts on a fixed local
-port, carries one.
+**An entry that names an `image` carries a `port` and never a `url`.** The
+`port` is the one its server listens on inside the container, because where it
+is reachable from outside is the host's to decide, not the manifest's. A `url`
+is an address a client dials as written, so only a remote server, or one a
+`command` starts on a fixed local port, carries one.
 
 An image built here lives in a Dockerfile under `docker/`;
 `task mcp:browser:build` builds the browser one.
@@ -52,10 +43,8 @@ be used or tested. `DockerHost` is chosen at a composition root instead:
 `@repo/backend`'s `agent-repl.ts` and the CLI both pass it. A test that wants
 containers has to ask for them.
 
-Every container it starts carries a `lisptc.mcp.host` label naming the host
-instance, and `stopAll` reaps that instance's own. A process that dies without
-reaching shutdown leaves its containers behind, because no instance may reap
-another's; `task mcp:reap` clears whatever is left.
+**`task mcp:reap` clears the containers a dead process left behind.** No host
+instance reaps another's, so nothing else will.
 
 `check:arch` treats `src/mcp.ts` and `src/ports.ts` as extension modules. They
 import no `node:` builtin, no typed env module, no SDK and no `process.env`.

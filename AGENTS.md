@@ -55,18 +55,15 @@ Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
 theirs.
 
-`.claude/hooks/io-budget.sh` holds you to it. It counts the heavy shapes the
-main thread runs, a repo-wide `Grep` or `Glob`, a recursive search, a test or
-build or log tail, a browser session, and once the budget is spent it refuses
-the next one and names the agent that should have had it. The refusal reaches
-you, never the user, so take it and spawn the agent instead of retrying. An
-agent's own calls are never counted and never refused.
+`.claude/hooks/io-budget.sh` holds you to it, and it is where the heavy shapes
+and the budget are written. A refusal names the agent that should have had the
+call, so take it and spawn that agent instead of retrying. An agent's own calls
+are never refused.
 
 ## What this is
 
 A Lisp interpreter designed to be the deterministic "brain" of an AI agent in a
-neuro-symbolic architecture. The LLM writes Lisp code into a REPL, and the REPL's
-state and output steer the LLM's context back (see `README`).
+neuro-symbolic architecture. The `README` is where that idea is written out.
 
 It is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`),
 workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point
@@ -298,15 +295,10 @@ database name, `/convex` the deployment's secret and its origins, `/auth`
 everything Better Auth signs and calls out with, the deployment's admin key
 included, so the convex CLI is credentialed wherever that environment reaches.
 
-Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via
-`--experimental-transform-types` (no build step). CI (`.github/workflows/ci.yml`)
-runs, in order: typecheck → lint → check:comments → check:docs →
-boundaries → check:arch → knip → test.
-`lint`, the `check:*` scripts and `knip` run once at the root;
-`typecheck` and `test` fan out through Turbo. Husky runs commitlint
-(conventional commits) on `commit-msg`, and `pnpm lint`, `pnpm typecheck`,
-`pnpm check:comments`, `pnpm boundaries`, `pnpm check:arch` and `pnpm knip` on
-`pre-push`.
+Runtime requires **Node >= 22.6.0**, and `.ts` files run directly with no build
+step. `.github/workflows/` holds the CI jobs and the order their checks run in,
+`.husky/` what a commit and a push have to satisfy first. A check that fails
+there fails the same way locally, under the command it names.
 
 A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
 longer than one line, so write the subject and stop unless a description was

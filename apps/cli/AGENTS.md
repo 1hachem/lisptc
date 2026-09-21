@@ -10,9 +10,8 @@ Turbo tag: `product`.
 `src/cli.ts` is the binary: it parses the arguments, owns the readline loop and
 the prompt, and runs .ptc files given on the command line.
 
-It has two modes. Local, where it drives an `Interp` through the session hooks.
-Attached, where it forwards each complete form to the shared session server and
-prints what comes back.
+It has two modes: local, on an `Interp` of its own, and attached, on the shared
+session server.
 
 `src/extensions.ts` holds both rosters: the one the local mode runs on, which
 reaches the world through the hosts a terminal should have, and the one the
@@ -21,7 +20,7 @@ runs, and it exists so that the roster belongs to this app rather than to
 `@repo/repl`.
 
 `isComplete` decides when a buffer holds a whole form. Both modes read line by
-line, so the loop needs it before it can evaluate.
+line, so both need it.
 
 ## Rules
 
