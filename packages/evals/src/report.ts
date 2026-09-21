@@ -16,6 +16,7 @@ export const gradeSchema = z.enum(["pass", "degraded", "fail"]);
 export const transcriptLineSchema = z.object({
 	role: z.enum(["user", "assistant", "tool"]),
 	content: z.string(),
+	annotations: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const targetSchema = z.object({

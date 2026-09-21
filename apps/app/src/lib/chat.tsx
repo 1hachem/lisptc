@@ -5,6 +5,7 @@ import {
 } from "@langchain/langgraph-sdk/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { type FiredMemory, firedMemories } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
@@ -38,11 +39,6 @@ export interface ChatMessage {
 	};
 }
 
-export interface FiredMemory {
-	key: string;
-	body: string;
-}
-
 export interface StepMeta {
 	at?: string;
 	durationMs: number;
@@ -66,15 +62,7 @@ function text(value: unknown): string | undefined {
 }
 
 function parseMemories(value: unknown): FiredMemory[] | undefined {
-	if (!Array.isArray(value)) return undefined;
-	const fired: FiredMemory[] = [];
-	for (const entry of value) {
-		if (!entry || typeof entry !== "object") continue;
-		const raw = entry as Record<string, unknown>;
-		const key = text(raw.key);
-		if (key === undefined) continue;
-		fired.push({ key, body: text(raw.body) ?? "" });
-	}
+	const fired = firedMemories(value);
 	return fired.length > 0 ? fired : undefined;
 }
 
