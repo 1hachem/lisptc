@@ -83,9 +83,81 @@ function scriptNames(): Set<string> {
 	return names;
 }
 
-function taskNames(): Set<string> {
-	const names = new Set<string>();
-	const lines = readFileSync("Taskfile.yml", "utf8").split("\n");
+function unquote(value: string): string {
+	return value.replace(/^["']|["']$/g, "");
+}
+
+function includesOf(
+	file: string,
+	lines: string[],
+	prefix: string,
+): { path: string; prefix: string }[] {
+	const dir = dirname(file);
+	const found: { path: string; prefix: string }[] = [];
+	let inIncludes = false;
+	let name = "";
+	let path = "";
+	let flatten = false;
+
+	const flush = () => {
+		if (name !== "" && path !== "") {
+			found.push({
+				path: join(dir, path),
+				prefix: flatten ? prefix : `${prefix}${name}:`,
+			});
+		}
+		name = "";
+		path = "";
+		flatten = false;
+	};
+
+	for (const line of lines) {
+		if (/^includes:\s*$/.test(line)) {
+			inIncludes = true;
+			continue;
+		}
+		if (!inIncludes) continue;
+		if (/^\S/.test(line)) break;
+		const inline = /^ {2}([A-Za-z0-9_-]+):\s*(\S+)\s*$/.exec(line);
+		if (inline?.[1] && inline[2]) {
+			flush();
+			found.push({
+				path: join(dir, unquote(inline[2])),
+				prefix: `${prefix}${inline[1]}:`,
+			});
+			continue;
+		}
+		const header = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line);
+		if (header?.[1]) {
+			flush();
+			name = header[1];
+			continue;
+		}
+		const taskfile = /^\s+taskfile:\s*(\S+)\s*$/.exec(line);
+		if (taskfile?.[1]) {
+			path = unquote(taskfile[1]);
+			continue;
+		}
+		if (/^\s+flatten:\s*true\s*$/.test(line)) flatten = true;
+	}
+	flush();
+	return found;
+}
+
+function collectTasks(
+	file: string,
+	prefix: string,
+	names: Set<string>,
+	seen: Set<string>,
+): void {
+	const key = `${prefix}${file}`;
+	if (seen.has(key) || !existsSync(file)) return;
+	seen.add(key);
+	const lines = readFileSync(file, "utf8").split("\n");
+	for (const include of includesOf(file, lines, prefix)) {
+		collectTasks(include.path, include.prefix, names, seen);
+	}
+
 	let inTasks = false;
 	let inAliases = false;
 	for (const line of lines) {
@@ -97,7 +169,10 @@ function taskNames(): Set<string> {
 		if (/^\S/.test(line)) break;
 		const task = /^ {2}([A-Za-z0-9_:.-]+):\s*$/.exec(line);
 		if (task?.[1]) {
-			names.add(task[1]);
+			names.add(`${prefix}${task[1]}`);
+			if (task[1] === "default" && prefix !== "") {
+				names.add(prefix.slice(0, -1));
+			}
 			inAliases = false;
 			continue;
 		}
@@ -107,11 +182,16 @@ function taskNames(): Set<string> {
 		}
 		const alias = /^\s+- ([A-Za-z0-9_:.-]+)\s*$/.exec(line);
 		if (inAliases && alias?.[1]) {
-			names.add(alias[1]);
+			names.add(`${prefix}${alias[1]}`);
 			continue;
 		}
 		if (/^\s+\S+:/.test(line)) inAliases = false;
 	}
+}
+
+function taskNames(): Set<string> {
+	const names = new Set<string>();
+	collectTasks("Taskfile.yml", "", names, new Set());
 	return names;
 }
 

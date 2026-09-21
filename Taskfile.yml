@@ -1,60 +1,16 @@
 version: '3'
 dotenv: ['.env']
 silent: true
-vars:
-  PROJECTID: 2601ca1c-d740-482b-b0f9-62ad78773f62
+includes:
+  infisical:
+    taskfile: ./taskfiles/infisical.yml
+    flatten: true
+  test: ./taskfiles/test.yml
+  check: ./taskfiles/check.yml
 tasks:
   default:
     desc: prints this help
     cmd: task -l
-
-  _infisical-run:
-    requires:
-      vars: [ENV, PATHS, CMD]
-    vars:
-      DIR: '{{.DIR | default "."}}'
-    cmd: |
-      node --no-warnings --experimental-transform-types ./scripts/infisical-run.ts -e {{.ENV}} \
-       --projectId={{.PROJECTID}} \
-       --paths="{{.PATHS}}" --dir={{.DIR}} "{{.CMD}}"
-
-  test:
-    desc: run all tests (interpreter + nix flake checks)
-    cmds:
-      - task: test:pnpm
-      - task: test:nix
-      - task: test:nvim
-
-  test:pnpm:
-    desc: run the interpreter test suite (vitest via turbo)
-    cmd: pnpm test
-
-  test:nix:
-    desc: run the nix flake checks (includes the ptcfmt formatter test)
-    vars:
-      SYSTEM:
-        sh: nix eval --impure --raw --expr builtins.currentSystem
-    cmds:
-      - nix flake check --no-warn-dirty
-      - nix build --no-warn-dirty --no-link ".#checks.{{.SYSTEM}}.ptcfmt"
-      - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
-
-  test:nvim:
-    desc: run the nvim integration test
-    cmd: bash editors/nvim/tests/run.sh
-
-  check:agents:
-    desc: judge the AGENTS.md prose a PR adds, or all of it with -- --all
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/ai"
-          CMD: "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts {{.CLI_ARGS}}"
-
-  check:refs:
-    desc: resolve the AGENTS.md references a PR adds, or all of them with -- --all
-    cmd: pnpm check:refs {{.CLI_ARGS}}
 
   mcp:browser:build:
     desc: build the browser MCP image the playwright toolkit entry runs
@@ -140,7 +96,7 @@ tasks:
           ENV: dev
           PATHS: "/ai /assets"
           CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" EVAL_CONCURRENCY="{{.CONCURRENCY}}" pnpm test:evals'
-  
+
   evals:open:
     desc: build the eval trace viewer, serve it, and open a browser on it
     vars:
@@ -183,7 +139,7 @@ tasks:
     cmds:
       - task: _infisical-run
         vars: { ENV: dev, PATHS: "/web /analytics", CMD: "pnpm run dev --filter app" }
-    
+
   dev-api:
     desc: run api with access to secrets
     cmds:
