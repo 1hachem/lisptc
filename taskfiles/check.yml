@@ -1,0 +1,19 @@
+version: '3'
+silent: true
+includes:
+  infisical:
+    taskfile: ./infisical.yml
+    flatten: true
+tasks:
+  agents:
+    desc: judge the AGENTS.md prose a PR adds, or all of it with -- --all
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/ai"
+          CMD: "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts {{.CLI_ARGS}}"
+
+  refs:
+    desc: resolve the AGENTS.md references a PR adds, or all of them with -- --all
+    cmd: pnpm check:refs {{.CLI_ARGS}}

@@ -30,9 +30,8 @@ What a form means comes from the interpreter's doc records, read at runtime, not
 from a table kept here. A new form documented in the interpreter shows up in
 completion and hover with no change to this app.
 
-`@lisptc/cli` spawns the same kind of session with a roster of its own, and
-whichever runs first for a working directory is the one that serves it. Keep
-the session roster here in step with that one.
+`@lisptc/cli` keeps a session roster of its own. The two are one surface, so an
+extension added here is added there.
 
 Resolution is cached per document. A handler stays cheap enough to run on every
 keystroke, so work that can wait belongs behind the cache.

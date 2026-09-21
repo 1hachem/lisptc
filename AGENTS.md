@@ -15,8 +15,8 @@ files, hook points and ports are read in the code, never here, because prose
 rots and the code does not.
 
 So do not add an explanation of how something works, and do not open another
-prose file for it either. No design notes, no architecture page, no `devdocs/`
-or `docs/` directory, no `NOTES.md`. There is nowhere to move a reason to.
+prose file for it either. No design notes, no architecture page, no devdocs/
+or docs/ directory, no NOTES.md. There is nowhere to move a reason to.
 
 A constraint worth keeping is kept in code: a name that states it, a type that
 makes the wrong thing unrepresentable, a test that fails when it is broken. A
@@ -25,7 +25,7 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: `README`, a package's own `README.md`, and the `AGENTS.md` files. Two
+code: `README`, a package's own README.md, and the `AGENTS.md` files. Two
 guards back the rule: a `PreToolUse` hook in `.claude/settings.json` refuses to
 create a new markdown file, and `pnpm check:docs` fails CI on any tracked
 markdown outside that allowlist.
@@ -39,7 +39,7 @@ nothing but what they say.
 
 - `explore` — reads the code. What something does, where it lives, what calls
   it, whether it already exists. It answers with the code quoted under
-  `file:line` anchors, and it can write nothing.
+  file:line anchors, and it can write nothing.
 - `script` — runs the verbose thing. A test run, a typecheck, a build, a
   container log, a throwaway probe against a running service. It reads the
   output and reports the failures verbatim, so the log never lands here.
@@ -55,18 +55,15 @@ Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
 theirs.
 
-`.claude/hooks/io-budget.sh` holds you to it. It counts the heavy shapes the
-main thread runs, a repo-wide `Grep` or `Glob`, a recursive search, a test or
-build or log tail, a browser session, and once the budget is spent it refuses
-the next one and names the agent that should have had it. The refusal reaches
-you, never the user, so take it and spawn the agent instead of retrying. An
-agent's own calls are never counted and never refused.
+`.claude/hooks/io-budget.sh` holds you to it, and it is where the heavy shapes
+and the budget are written. A refusal names the agent that should have had the
+call, so take it and spawn that agent instead of retrying. An agent's own calls
+are never refused.
 
 ## What this is
 
 A Lisp interpreter designed to be the deterministic "brain" of an AI agent in a
-neuro-symbolic architecture. The LLM writes Lisp code into a REPL, and the REPL's
-state and output steer the LLM's context back (see `README`).
+neuro-symbolic architecture. The `README` is where that idea is written out.
 
 It is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`),
 workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point
@@ -228,12 +225,6 @@ port and is handed the value.
 The Convex deployment carries an environment of its own, and nothing in this
 repo pushes it. `packages/backend/AGENTS.md` has the rule.
 
-The Convex deployment carries an environment of its own, and nothing in this
-repo pushes it. A deployment secret is stored in Infisical under `/auth` and set
-on the deployment by hand, from the dashboard, never written to a file. An OAuth
-app's callback points at the web app's origin, where the auth router is served,
-not at the deployment.
-
 ## Icons
 
 **Every icon comes from hugeicons**: `@hugeicons/core-free-icons` holds the icon
@@ -268,7 +259,7 @@ The agent evals are separate: the cases live in `apps/trace-viewer/evals` as
 
 ## Commands
 
-Root scripts delegate to Turbo, which fans out across workspaces:
+Root scripts delegate to Turbo:
 
 ```bash
 pnpm test                    # turbo run test (vitest run in each package)
@@ -282,10 +273,14 @@ pnpm check:comments          # fails on any non-directive comment (part of CI), 
 pnpm fix:comments            # strip them; follow with `pnpm format`
 pnpm check:docs              # fails on tracked markdown outside the allowlist (part of CI)
 pnpm fix:docs                # delete those files
+pnpm check:refs              # AGENTS.md references that no longer resolve (part of CI)
+pnpm check:refs --all        # sweep every AGENTS.md, not just the ones a PR changed
 pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
+task check:agents            # judge the AGENTS.md prose a PR adds (needs the /ai secrets)
+task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
 task up                      # build and run the whole stack in docker, with live reload
 
 # Single test file / by name — run inside the package that owns it:
@@ -298,24 +293,20 @@ database name, `/convex` the deployment's secret and its origins, `/auth`
 everything Better Auth signs and calls out with, the deployment's admin key
 included, so the convex CLI is credentialed wherever that environment reaches.
 
-Runtime requires **Node >= 22.6.0**; `.ts` files are executed directly via
-`--experimental-transform-types` (no build step). CI (`.github/workflows/ci.yml`)
-runs, in order: typecheck → lint → check:comments → check:docs →
-boundaries → check:arch → knip → test.
-`lint`, the `check:*` scripts and `knip` run once at the root;
-`typecheck` and `test` fan out through Turbo. Husky runs commitlint
-(conventional commits) on `commit-msg`, and `pnpm lint`, `pnpm typecheck`,
-`pnpm check:comments`, `pnpm boundaries`, `pnpm check:arch` and `pnpm knip` on
-`pre-push`.
+Runtime requires **Node >= 22.6.0**, and `.ts` files run directly with no build
+step. `.github/workflows/` holds the CI jobs and the order their checks run in,
+`.husky/` what a commit and a push have to satisfy first. A check that fails
+there fails the same way locally, under the command it names.
 
 A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
 longer than one line, so write the subject and stop unless a description was
 asked for, and then keep it to a single line after the blank one. Trailers
-like `Co-Authored-By` are footers and do not count.
+like Co-Authored-By are footers and do not count.
 
 ## Writing Style
 
-When writing any prose, documentation or commit message:
+These rules cover everything written here. Prose, documentation, commit
+messages, and every reply to the person you are working with.
 
 - Do not use "It's not that X, it's that Y" constructions. Rewrite as a direct statement.
 - Do not open responses with affirmations ("Certainly!", "Of course!", "Absolutely!").

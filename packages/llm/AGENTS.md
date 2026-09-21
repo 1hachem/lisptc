@@ -8,16 +8,16 @@ Turbo tag: `extension`.
 
 ## Shape
 
-`src/llm.ts` is the extension. It declares `LlmHost`, one field per port
-(generation, the provider list, the clock, its own prompt), and exports
-`llmExtension`, which takes the host as a default argument. This extension
-contributes both a `prompt` and a `session`, and its session hook fills a slot.
-`src/llm-host.ts` holds the default host. `src/llm.ptc` is the prompt.
+`src/llm.ts` is the extension: it declares `LlmHost`, one field per port
+(generation, the provider list, the clock, its own prompt), and contributes a
+prompt and a session. `src/llm-host.ts` holds the default host. `src/llm.ptc`
+is the prompt.
 
-`src/observe.ts` is the observation contract and the slot it hands over. It is a
-module separate from the extension on purpose: a consumer reads the slot without
-importing what fills it. `src/llm-client.ts` and `src/langchain.ts` are the
-vendor-facing implementations, and they are the only files that speak langchain.
+`@repo/interpreter/observe` is the observation contract and the slot it hands
+over. It is a module separate from the extension on purpose: a consumer reads
+the slot without importing what fills it. `src/llm-client.ts` and
+`src/langchain.ts` are the vendor-facing implementations, and they are the only
+files that speak langchain.
 
 `check:arch` treats `src/llm.ts` as an extension module, so it imports no
 `node:` builtin, no typed env module, no langchain package and no

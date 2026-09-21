@@ -21,11 +21,13 @@
     "format": "biome check --write",
     "knip": "knip",
     "boundaries": "turbo boundaries",
+    "check:agents": "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts",
     "check:arch": "node --no-warnings --experimental-transform-types ./scripts/check-arch.ts",
     "check:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts",
     "fix:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts --fix",
     "check:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts",
     "fix:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts --fix",
+    "check:refs": "node --no-warnings --experimental-transform-types ./scripts/check-refs.ts",
     "prepare": "husky"
   },
   "pnpm": {

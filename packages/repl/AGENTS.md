@@ -7,17 +7,14 @@ Turbo tag: `runtime`.
 
 ## Shape
 
-`src/repl.ts` is the in-memory REPL. It takes its extension list through
-options, builds an `Interp` with them, and serialises evaluation through the
-session hooks. The agent-facing REPL extends it with the turn lifecycle the
-agent loop drives.
+`src/repl.ts` is the in-memory REPL, built from the extension list it is
+handed. The agent-facing REPL beside it owns the turn lifecycle.
 
 `src/session-server.ts` is the long-lived REPL behind a socket, with the client
 that speaks to it and the protocol version they agree on. `serve` takes the
-extension list. The server is not an entry point here: `connectOrSpawn` is told
-which file to spawn, and that file is the caller's, so the process that serves
-the session is the one that decides what is in it. `spawnServer` writes the
-argv `serveFromArgv` reads, which is why they live in the same file.
+extension list. **The server is not an entry point here.** The caller names the
+file to spawn, so the process that serves a session is the one that decides
+what is in it.
 
 The interactive terminal REPL is not here. It is `@lisptc/cli`, which builds on
 this package's exports.
@@ -50,10 +47,9 @@ extension's own tests. A case that needs a real extension belongs where that
 extension is composed, which is why the discovery-call cases live in
 `@lisptc/cli` and the model-facing REPL cases in `@repo/backend`.
 
-A REPL with nothing installed writes to the human's lane and to the error lane,
-and to nothing else, so a case here reads `evalOutput().user` rather than what
-`eval()` returns. Asserting on the model's copy means asserting on an
-extension.
+A case here asserts on the human's lane and on the error lane, and on nothing
+else. The model's copy belongs to an extension, and a runtime package's tests
+name none.
 
 `test/session-hooks.test.ts` is where a change to the lifecycle shows up first.
 `test/session-server.test.ts` spawns `test/fixture-session.ts`, which stands in

@@ -1,0 +1,27 @@
+version: '3'
+silent: true
+tasks:
+  default:
+    desc: run all tests (interpreter + nix flake checks)
+    cmds:
+      - task: pnpm
+      - task: nix
+      - task: nvim
+
+  pnpm:
+    desc: run the interpreter test suite (vitest via turbo)
+    cmd: pnpm test
+
+  nix:
+    desc: run the nix flake checks (includes the ptcfmt formatter test)
+    vars:
+      SYSTEM:
+        sh: nix eval --impure --raw --expr builtins.currentSystem
+    cmds:
+      - nix flake check --no-warn-dirty
+      - nix build --no-warn-dirty --no-link ".#checks.{{.SYSTEM}}.ptcfmt"
+      - nix log --no-warn-dirty ".#checks.{{.SYSTEM}}.ptcfmt"
+
+  nvim:
+    desc: run the nvim integration test
+    cmd: bash editors/nvim/tests/run.sh
