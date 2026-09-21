@@ -1,11 +1,9 @@
 import { Interp } from "@repo/interpreter/lisp";
-import { TRIGGER_KINDS } from "@repo/memory-extension";
 import { describe, expect, it } from "vitest";
 import { IDENTITY, MAX_STEPS, systemPromptFor } from "../src/prompts/lisp.ts";
 import { snapshotConversation } from "../src/repl.ts";
-import { testExtensions } from "./helpers.ts";
 
-const PROMPT = systemPromptFor(new Interp({ extensions: testExtensions() }));
+const PROMPT = systemPromptFor(new Interp());
 
 const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
 
@@ -51,27 +49,9 @@ describe("the failures a run actually dies of", () => {
 		expect(PROMPT).toMatch(/NEVER PUT A SENTENCE IN PARENTHESES/);
 	});
 
-	it("says the aside tolerance is forgiveness, not a way to write", () => {
-		expect(PROMPT).toMatch(
-			/a mistake the reader forgives, NOT a way to write/i,
-		);
-		expect(PROMPT).toMatch(/narrow and unpredictable/i);
-	});
-
 	it("says a bare result name ends the turn instead of showing it", () => {
 		expect(PROMPT).toMatch(/ENDS THE TURN/);
 		expect(PROMPT).toMatch(/most expensive typo in the language/i);
-	});
-
-	it("says a discovery call prints itself and needs no echo", () => {
-		expect(PROMPT).toMatch(/DISCOVERY CALLS PRINT THEMSELVES/);
-		expect(PROMPT).toMatch(
-			/never re-run the same search with different words/i,
-		);
-	});
-
-	it("points at doc for a tool's signature", () => {
-		expect(PROMPT).toMatch(/prints (a tool's|a binding's|its) full signature/i);
 	});
 
 	it("says to stop when the request is met", () => {
@@ -81,12 +61,6 @@ describe("the failures a run actually dies of", () => {
 });
 
 describe("the REPL loop protocol", () => {
-	it("says the REPL prints nothing and reports a name and shape instead", () => {
-		expect(PROMPT).toMatch(/The REPL prints nothing on its own/);
-		expect(PROMPT).toMatch(/name: shape/);
-		expect(PROMPT).toMatch(/the ONE command that prints/);
-	});
-
 	it("describes the tool_result envelope results actually come back in", () => {
 		expect(PROMPT).toContain('"type":"tool_result"');
 		expect(PROMPT).toContain('"source":"lisp-repl"');
@@ -128,124 +102,7 @@ describe("the REPL loop protocol", () => {
 	});
 });
 
-describe("promises", () => {
-	const PROMISE_BUILTINS = [
-		"await",
-		"promise-all",
-		"promise-all-settled",
-		"promise-any",
-		"promise-race",
-		"promise-state",
-		"promises",
-		"cancel",
-	];
-
-	it.each(PROMISE_BUILTINS)("names %s", (name) => {
-		expect(PROMPT).toMatch(names(name));
-	});
-});
-
-describe("the language reference", () => {
-	const CORE_BUILTINS = [
-		"car",
-		"cdr",
-		"cons",
-		"list",
-		"append",
-		"mapcar",
-		"assoc",
-		"length",
-		"concat",
-		"print",
-		"princ",
-		"terpri",
-		"doc",
-		"secret",
-		"secrets",
-	];
-
-	it.each(CORE_BUILTINS)("documents %s", (n) => {
-		expect(PROMPT).toMatch(names(n));
-	});
-
-	it.each([
-		"zerop",
-		"evenp",
-		"abs",
-		"min",
-		"max",
-		"floor",
-		"expt",
-		"sqrt",
-	])("warns that %s does not exist", (name) => {
-		expect(PROMPT).toMatch(new RegExp(`There are NO[^.]*\\b${name}\\b`, "s"));
-	});
-
-	it("states the closed-world rule outright", () => {
-		expect(PROMPT).toMatch(
-			/if a name is not listed there, it does not exist, so define it yourself/i,
-		);
-	});
-
-	it("documents the special forms and reader sugar", () => {
-		for (const form of ["defun", "defmacro", "lambda", "let", "cond", "try"]) {
-			expect(PROMPT).toMatch(names(form));
-		}
-		expect(PROMPT).toMatch(/Quasiquote/);
-	});
-
-	it("tells the model to refer to the result variable, not retype data", () => {
-		expect(PROMPT).toMatch(/NEVER retype data the REPL produced/);
-		expect(PROMPT).toMatch(/name: shape/);
-	});
-
-	it("tells the model to extract into a name, then echo it", () => {
-		expect(PROMPT).toMatch(/EXTRACT, THEN ECHO/);
-		expect(PROMPT).toMatch(/RETURN a value/);
-		expect(PROMPT).toMatch(/never read it off a printout and retype it/);
-		expect(PROMPT).toMatch(names("grep"));
-		expect(PROMPT).toMatch(names("echo"));
-	});
-
-	it("tells the model a truncated echo is not the whole output", () => {
-		expect(PROMPT).toMatch(
-			/Your view of echo output is capped; the user's is not/,
-		);
-		expect(PROMPT).toMatch(/page on with the offset/);
-	});
-});
-
-describe("memory", () => {
-	const MEMORY_BUILTINS = [
-		"memory/remember",
-		"memory/recall",
-		"memory/forget",
-		"memory/revise",
-		"memory/replay",
-		"memories",
-	];
-
-	it.each(MEMORY_BUILTINS)("names %s", (name) => {
-		expect(PROMPT).toContain(name);
-	});
-
-	it("names every trigger kind a memory can hook", () => {
-		for (const kind of TRIGGER_KINDS) expect(PROMPT).toMatch(names(kind));
-	});
-
-	it("says a fired memory reaches the model and not the user", () => {
-		expect(PROMPT).toMatch(/to you alone/);
-		expect(PROMPT).toMatch(/the user does not see it/);
-	});
-
-	it("says why the memory builtins are slashed", () => {
-		expect(PROMPT).toMatch(/ordinary English\s+verbs/);
-	});
-
-	it("says a code body has to be quoted", () => {
-		expect(PROMPT).toMatch(/Quote a code body/);
-	});
-
+describe("learning from a mistake", () => {
 	it("tells the agent to store the fix the moment a mistake is solved", () => {
 		expect(PROMPT).toMatch(/LEARN FROM EVERY MISTAKE/);
 		expect(PROMPT).toMatch(/before you move on/i);
@@ -276,62 +133,50 @@ describe("memory", () => {
 	});
 });
 
-describe("interactive views", () => {
-	const FLAT = PROMPT.replace(/\s+/g, " ");
+describe("the language reference", () => {
+	const CORE_BUILTINS = [
+		"car",
+		"cdr",
+		"cons",
+		"list",
+		"append",
+		"mapcar",
+		"assoc",
+		"length",
+		"concat",
+		"print",
+		"princ",
+		"terpri",
+		"doc",
+	];
 
-	it("says an action runs in the REPL with no model turn", () => {
-		expect(FLAT).toMatch(/runs IN THIS REPL/);
-		expect(FLAT).toMatch(/NO model turn in between/);
+	it.each(CORE_BUILTINS)("documents %s", (n) => {
+		expect(PROMPT).toMatch(names(n));
 	});
 
-	it("says the widget is not sent back into its context", () => {
-		expect(FLAT).toMatch(/the widget is never sent back to you/i);
+	it.each([
+		"zerop",
+		"evenp",
+		"abs",
+		"min",
+		"max",
+		"floor",
+		"expt",
+		"sqrt",
+	])("warns that %s does not exist", (name) => {
+		expect(PROMPT).toMatch(new RegExp(`There are NO[^.]*\\b${name}\\b`, "s"));
 	});
 
-	it("names the render entry point and every constructor the renderer draws", () => {
-		expect(PROMPT).toMatch(names("ui/render"));
-		for (const tag of [
-			"ui/stack",
-			"ui/row",
-			"ui/card",
-			"ui/text",
-			"ui/heading",
-			"ui/markdown",
-			"ui/kpi",
-			"ui/badge",
-			"ui/link",
-			"ui/table",
-			"ui/input",
-			"ui/select",
-			"ui/checkbox",
-			"ui/button",
-			"ui/form",
-		])
-			expect(PROMPT).toMatch(names(tag));
-	});
-
-	it("says a select or checkbox can act on change with no submit", () => {
-		expect(FLAT).toMatch(names("on-change"));
-		expect(FLAT).toMatch(/no submit button/);
-	});
-
-	it("draws the line between echoing and rendering", () => {
-		expect(FLAT).toMatch(
-			/Echo when the answer is something to read; render when it is something to use/,
+	it("states the closed-world rule outright", () => {
+		expect(PROMPT).toMatch(
+			/if a name is not listed there, it does not exist, so define it yourself/i,
 		);
 	});
 
-	it("says a handler can hand the turn back with ui/send", () => {
-		expect(FLAT).toMatch(names("ui/send"));
-		expect(FLAT).toMatch(/joins the conversation as a message from the user/);
-	});
-
-	it("says which clicks are worth a turn and which are not", () => {
-		expect(FLAT).toMatch(/Send for judgement, handle it in Lisp for work/);
-	});
-
-	it("names every tone the renderer can colour, and no others", () => {
-		expect(FLAT).toMatch(/"ok", "warn", "bad", "info" or "muted"/);
-		expect(FLAT).toMatch(/do not invent one/);
+	it("documents the special forms and reader sugar", () => {
+		for (const form of ["defun", "defmacro", "lambda", "let", "cond", "try"]) {
+			expect(PROMPT).toMatch(names(form));
+		}
+		expect(PROMPT).toMatch(/Quasiquote/);
 	});
 });

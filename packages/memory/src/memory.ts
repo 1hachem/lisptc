@@ -520,7 +520,7 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 		hooks.fill(memorySlot, bank);
 		hooks.beginTurn.use(function* (ctx, next) {
 			const heard = yield* bank.hear(ctx.interp);
-			if (heard.length > 0) ctx.say(heardText(heard));
+			if (heard.length > 0) ctx.emit(heardText(heard));
 			yield* next(ctx);
 		});
 		hooks.evalStep.use(async (ctx, next) => {
@@ -532,7 +532,7 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 			}
 		});
 		hooks.annotate.use((buffer, into, next) => {
-			const memories = buffer.payloads(fired);
+			const memories = buffer.collect(fired);
 			return next(
 				buffer,
 				memories.length === 0 ? into : annotating(into, "step", { memories }),

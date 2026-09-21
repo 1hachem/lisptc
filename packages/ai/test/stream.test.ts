@@ -3,7 +3,7 @@ import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { testRepl } from "./helpers.ts";
+import { reporting, testRepl } from "./helpers.ts";
 
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
@@ -34,6 +34,7 @@ interface WireMessage {
 			outputTokens?: number;
 			cachedInputTokens?: number;
 			steps?: number;
+			reported?: string[];
 		};
 	};
 }
@@ -182,6 +183,19 @@ describe("chat stream", () => {
 			provider: DEFAULT_PROVIDER,
 			model: providerSpecs[DEFAULT_PROVIDER].defaultModel,
 		});
+	});
+
+	test("what a step reported rides the message the model wrote", async () => {
+		const messages = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{ repl: testRepl([reporting("a step had something to say")]) },
+			),
+		);
+
+		expect(
+			messages.find((m) => m.type === "ai")?.additional_kwargs?.meta?.reported,
+		).toEqual(["a step had something to say"]);
 	});
 
 	test("a REPL result carries no cost of its own", async () => {

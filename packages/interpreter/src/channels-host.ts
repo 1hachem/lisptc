@@ -8,8 +8,8 @@ import { output } from "./topics.ts";
 
 export interface ChannelBuffer extends ChannelTransport {
 	readonly envelopes: readonly Envelope[];
-	payloads<T>(topic: Topic<T>): T[];
-	text(to: Audience): string;
+	collect<T>(topic: Topic<T>): T[];
+	collectText(to: Audience): string;
 }
 
 export function bufferTransport(): ChannelBuffer {
@@ -20,12 +20,12 @@ export function bufferTransport(): ChannelBuffer {
 			envelopes.push(envelope);
 			return true;
 		},
-		payloads<T>(topic: Topic<T>): T[] {
+		collect<T>(topic: Topic<T>): T[] {
 			return envelopes
 				.filter((e) => e.topic === topic.name)
 				.map((e) => e.payload as T);
 		},
-		text(to) {
+		collectText(to) {
 			return envelopes
 				.filter((e) => e.topic === output.name && e.to.includes(to))
 				.map((e) => e.payload as string)

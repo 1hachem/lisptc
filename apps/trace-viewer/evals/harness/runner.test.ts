@@ -201,6 +201,61 @@ describe("a case runs against a scripted model", () => {
 		expect(sent[0]).toContain("browser_navigate, not navigate");
 	});
 
+	test("a memory a step fires lands on the line it fired in", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "navigate" "browser_navigate, not navigate" :on '(call (load-mcp "playwright")))`,
+				seed: [
+					{ user: "open hyko.ai" },
+					{ assistant: '(await (load-mcp "playwright"))' },
+				],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		const navigate = [
+			{ key: "navigate", body: "browser_navigate, not navigate" },
+		];
+		const fired = result.transcript.filter((line) => line.annotations);
+		expect(fired.map((line) => line.role)).toEqual(["tool", "tool"]);
+		expect(fired.map((line) => line.annotations?.memories)).toEqual([
+			navigate,
+			navigate,
+		]);
+		expect(result.transcript[2]?.annotations?.memories).toEqual(navigate);
+	});
+
+	test("a memory the user's words fire lands on the reply that heard them", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "site" "hyko.ai is the product site" :on '(user "hyko"))`,
+				seed: [{ user: "open hyko.ai" }],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		expect(result.transcript[1]).toMatchObject({
+			role: "assistant",
+			annotations: {
+				memories: [{ key: "site", body: "hyko.ai is the product site" }],
+			},
+		});
+	});
+
 	test("a check that fails grades the run a failure", async () => {
 		turn = 0;
 		const result = await runCase(

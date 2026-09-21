@@ -3,7 +3,7 @@
 The agent loop and what it runs on. It depends on the REPL, and it is blind to
 extensions by rule.
 
-Turbo tag: `agent`.
+Turbo tag: `runtime`.
 
 ## Shape
 
@@ -25,8 +25,11 @@ by whoever constructed the store.
 
 ## Rules
 
-**No file here names an extension.** `check:arch` enforces that by directory,
-type imports included, and the roster of exceptions is empty. Do not open one.
+**No file here names an extension**, the tests included. `check:arch` enforces
+that over `src/` by directory, type imports included, and the roster of
+exceptions is empty. The manifest carries none either: the `runtime` tag denies
+`extension` in the root `turbo.json`, so `pnpm boundaries` fails on a dependency
+as well as on an import. Do not open one.
 If the loop needs something an extension knows, it arrives as an annotation or
 through a slot, and the way to add it is in `packages/interpreter/AGENTS.md`.
 
@@ -47,4 +50,7 @@ not a side channel.
 
 `test/annotation-lane.test.ts` is where the lane rule is pinned, and
 `test/turn.test.ts` covers the loop. A test drives a real REPL rather than a
-mocked one wherever it can.
+mocked one wherever it can, and that REPL is built from `test/helpers.ts`,
+whose extensions are stubs written here. A REPL with nothing installed shows the
+model only what a step failed with, so a case that needs the model-facing output
+belongs in `@repo/backend`, where the real roster is composed.

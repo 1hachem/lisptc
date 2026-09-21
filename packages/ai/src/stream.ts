@@ -25,19 +25,17 @@ export interface WireMessage {
 
 const encoder = new TextEncoder();
 
-function merge(
+function mergeInto(
 	into: Record<string, unknown>,
 	extra: Record<string, unknown>,
-): Record<string, unknown> {
-	const out = { ...into };
+): void {
 	for (const [key, value] of Object.entries(extra)) {
-		const standing = out[key];
-		out[key] =
+		const standing = into[key];
+		into[key] =
 			Array.isArray(standing) && Array.isArray(value)
 				? [...standing, ...value]
 				: value;
 	}
-	return out;
 }
 
 function sse(event: string, data: unknown): Uint8Array {
@@ -109,7 +107,7 @@ export function streamChatResponse<Id extends string>(
 			const carried = wire.length;
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
-			let heard: Record<string, unknown> = {};
+			let collected: Record<string, unknown> = {};
 
 			try {
 				write(sse("values", { messages: wire }));
@@ -137,11 +135,12 @@ export function streamChatResponse<Id extends string>(
 							chunk.content = event.text ?? "";
 						}
 						if (!write(sse("messages", [chunk, {}]))) break;
-					} else if (event.type === "heard") {
-						heard = event.annotations;
+					} else if (event.type === "collected") {
+						collected = event.annotations;
 					} else if (event.type === "assistant") {
-						lastMeta = merge({ ...event.meta }, heard);
-						heard = {};
+						lastMeta = { ...event.meta };
+						mergeInto(lastMeta, collected);
+						collected = {};
 						wire.push({
 							type: "ai",
 							content: event.code,
@@ -156,7 +155,7 @@ export function streamChatResponse<Id extends string>(
 						});
 					} else if (event.type === "result") {
 						steps = event.step;
-						if (lastMeta) lastMeta = merge(lastMeta, event.annotations.step);
+						if (lastMeta) mergeInto(lastMeta, event.annotations.step);
 						const extras: Record<string, unknown> = {
 							...event.annotations.output,
 						};

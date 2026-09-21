@@ -1,34 +1,55 @@
-import { compactionExtension } from "@repo/compaction-extension";
-import { compactionHost } from "@repo/compaction-extension/host";
-import type { InterpExtension } from "@repo/interpreter/lisp";
-import { memoryExtension } from "@repo/memory-extension";
-import { memoryHostFor } from "@repo/memory-extension/host";
-import { promisesExtension } from "@repo/promises-extension";
-import { promisesHost } from "@repo/promises-extension/host";
-import { proseExtension } from "@repo/prose-extension";
-import { proseHost } from "@repo/prose-extension/host";
+import { topic } from "@repo/interpreter/channels";
+import type { Interp, InterpExtension } from "@repo/interpreter/lisp";
+import { annotating, type SessionHooks } from "@repo/interpreter/session";
+import { note } from "@repo/interpreter/topics";
 import { AgentRepl } from "@repo/repl/repl";
-import { secretsExtension } from "@repo/secrets-extension";
-import { secretsHost } from "@repo/secrets-extension/host";
-import { uiExtension } from "@repo/ui-extension";
-import { uiHost } from "@repo/ui-extension/host";
 import { ReplStore } from "../src/repl-store.ts";
 
-export function testExtensions(scope?: string): InterpExtension[] {
-	return [
-		secretsExtension(secretsHost),
-		promisesExtension(promisesHost),
-		compactionExtension(compactionHost),
-		memoryExtension(memoryHostFor(scope)),
-		proseExtension(proseHost),
-		uiExtension(uiHost),
-	];
+export function extension(
+	session: (hooks: SessionHooks) => void,
+): InterpExtension {
+	return Object.assign((_interp: Interp): void => {}, { session });
 }
 
-export function testRepl(scope?: string): AgentRepl {
-	return new AgentRepl({ extensions: testExtensions(scope) });
+export function answering(): InterpExtension {
+	return extension((hooks) =>
+		hooks.answered.use((ctx, out, next) =>
+			ctx.code.includes("(") ? next(ctx, out) : true,
+		),
+	);
 }
 
-export function testRepls(scope?: string): ReplStore {
-	return new ReplStore(() => testRepl(scope));
+export function noting(text: string): InterpExtension {
+	return extension((hooks) =>
+		hooks.evalStep.use((ctx, next) => {
+			note.emit(ctx.interp.channels, { model: { kind: "skipped", text } });
+			return next(ctx);
+		}),
+	);
+}
+
+const reported = topic<string>("reported");
+
+export function reporting(text: string): InterpExtension {
+	return extension((hooks) => {
+		hooks.evalStep.use((ctx, next) => {
+			reported.emit(ctx.interp.channels, { user: text });
+			return next(ctx);
+		});
+		hooks.annotate.use((buffer, into, next) => {
+			const seen = buffer.collect(reported);
+			return next(
+				buffer,
+				seen.length === 0 ? into : annotating(into, "step", { reported: seen }),
+			);
+		});
+	});
+}
+
+export function testRepl(extensions: InterpExtension[] = []): AgentRepl {
+	return new AgentRepl({ extensions: [answering(), ...extensions] });
+}
+
+export function testRepls(extensions: InterpExtension[] = []): ReplStore {
+	return new ReplStore(() => testRepl(extensions));
 }

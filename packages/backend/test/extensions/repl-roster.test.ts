@@ -9,10 +9,10 @@ import {
 } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import { MemoryRepl } from "@repo/repl/repl";
 import { secretsExtension, secretsSlot } from "@repo/secrets-extension";
 import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { describe, expect, it } from "vitest";
-import { MemoryRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";
 
 describe("a REPL built from a list of extensions", () => {

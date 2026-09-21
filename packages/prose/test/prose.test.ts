@@ -1,36 +1,22 @@
-import {
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	str,
-} from "@repo/interpreter/lisp";
-import { note } from "@repo/interpreter/topics";
+import { type Interp, runAsync, runSync, str } from "@repo/interpreter/lisp";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, it } from "vitest";
 import {
 	checkSyntax,
 	isTruncated,
 	type ProseExcuse,
-	proseExtension,
 	stripProse,
 } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
 import {
+	collectSkips,
 	ev,
 	evProse,
 	evWithOutput,
 	freshInterp,
 	proseInterp,
+	tolerantly,
 } from "./helpers.ts";
-
-function collectSkips(interp: Interp): string[] {
-	const skipped: string[] = [];
-	note.on(interp.channels, (n) => {
-		if (n.kind === "skipped") skipped.push(n.text);
-	});
-	return skipped;
-}
 
 describe("prose around forms", () => {
 	it("evaluates the forms and ignores the text between them", () => {
@@ -98,14 +84,6 @@ describe("no comment syntax", () => {
 });
 
 describe("tolerant prose (an LLM's parentheses)", () => {
-	function tolerantly(text: string): { value: string; skipped: string[] } {
-		const interp = new Interp({ extensions: [proseExtension()] });
-		runSync(interp, prelude);
-		const skipped = collectSkips(interp);
-		const value = str(runSync(interp, text));
-		return { value, skipped };
-	}
-
 	it("reads a form whose head names nothing as prose", () => {
 		const { value, skipped } = tolerantly(
 			"Here is the plan (see below):\n(+ 1 2)",
@@ -277,13 +255,9 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 	});
 
 	it("takes a host's own classifier in place of the bundled one", () => {
-		const interp = new Interp({
-			extensions: [
-				proseExtension({
-					...proseHost,
-					classify: () => "everything is prose here",
-				}),
-			],
+		const interp = proseInterp({
+			...proseHost,
+			classify: () => "everything is prose here",
 		});
 		const skipped = collectSkips(interp);
 		expect(str(runSync(interp, "(+ 1 2)"))).toBe("#<unspecified>");
@@ -329,18 +303,13 @@ describe("a second look at a form that failed", () => {
 		excuse: ProseExcuse,
 	): [Interp, string[], { calls: unknown[] }] {
 		const seen: { calls: unknown[] } = { calls: [] };
-		const interp = new Interp({
-			extensions: [
-				proseExtension({
-					...proseHost,
-					excuse: (i, form, error) => {
-						seen.calls.push(form);
-						return excuse(i, form, error);
-					},
-				}),
-			],
+		const interp = proseInterp({
+			...proseHost,
+			excuse: (i, form, error) => {
+				seen.calls.push(form);
+				return excuse(i, form, error);
+			},
 		});
-		runSync(interp, prelude);
 		return [interp, collectSkips(interp), seen];
 	}
 
@@ -396,8 +365,7 @@ describe("a second look at a form that failed", () => {
 	});
 
 	it("leaves the failure alone when nothing hooks the chain", async () => {
-		const interp = new Interp({ extensions: [proseExtension()] });
-		runSync(interp, prelude);
+		const interp = proseInterp();
 
 		await expect(runAsync(interp, '(deploy "the thing")')).rejects.toThrow(
 			/undefined/,

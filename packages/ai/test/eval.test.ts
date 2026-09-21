@@ -8,12 +8,16 @@ function result(message: EvalMessage): { output: string; error: boolean } {
 	return JSON.parse(message.content) as { output: string; error: boolean };
 }
 
+function display(message: EvalMessage): string {
+	return (message.additional_kwargs?.display as string) ?? "";
+}
+
 describe("user code", () => {
 	test("runs in the thread's own repl", async () => {
 		const threadId = crypto.randomUUID();
 		await evalUserCode("(setq x 41)", { repls, threadId });
-		const message = await evalUserCode("(+ x 1)", { repls, threadId });
-		expect(result(message).output).toContain("42");
+		const message = await evalUserCode("(echo (+ x 1))", { repls, threadId });
+		expect(display(message)).toContain("42");
 	});
 
 	test("cannot reach another thread's definitions", async () => {

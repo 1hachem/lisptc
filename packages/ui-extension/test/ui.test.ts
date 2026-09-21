@@ -342,7 +342,7 @@ describe("actions", () => {
 		} finally {
 			detach();
 		}
-		expect(buffer.text("user")).toBe("from the click\n");
+		expect(buffer.collectText("user")).toBe("from the click\n");
 	});
 });
 

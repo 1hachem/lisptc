@@ -182,7 +182,7 @@ export class MemoryRepl implements InMemoryRepl {
 		} finally {
 			detach();
 		}
-		const { skipped, failed } = partition(buffer.payloads(note));
+		const { skipped, failed } = partition(buffer.collect(note));
 		let error: Bounded = { model: "", user: "" };
 		if (thrown === EndOfFile) {
 			const text = "unbalanced expression (unexpected end of input)\n";
@@ -196,8 +196,8 @@ export class MemoryRepl implements InMemoryRepl {
 			);
 		}
 		const bounded = this.hooks.stepOutput.run((_c, out) => out, ctx, {
-			model: buffer.text("model"),
-			user: buffer.text("user"),
+			model: buffer.collectText("model"),
+			user: buffer.collectText("user"),
 		});
 		return {
 			envelopes: buffer.envelopes,
@@ -266,8 +266,11 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.unrun.run(() => [], this.interp, code);
 	}
 
-	async beginTurn(): Promise<{ said: string; annotations: StepAnnotations }> {
-		let said = "";
+	async beginTurn(): Promise<{
+		emitted: string;
+		annotations: StepAnnotations;
+	}> {
+		let emitted = "";
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
@@ -275,8 +278,8 @@ export class AgentRepl extends MemoryRepl {
 			await driveAsync(
 				this.hooks.beginTurn.run(() => settled(undefined), {
 					interp: this.interp,
-					say: (text) => {
-						said += said === "" ? text : `\n\n${text}`;
+					emit: (text) => {
+						emitted += emitted === "" ? text : `\n\n${text}`;
 					},
 				}),
 			);
@@ -284,7 +287,7 @@ export class AgentRepl extends MemoryRepl {
 			detach();
 		}
 		return {
-			said,
+			emitted,
 			annotations: this.hooks.annotate.run(
 				(_b, into) => into,
 				buffer,

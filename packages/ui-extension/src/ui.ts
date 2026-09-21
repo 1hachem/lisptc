@@ -563,7 +563,7 @@ export function uiExtension(
 				await surface.invoke(ctx.action, ctx.values);
 			});
 			hooks.annotate.use((buffer, into, next) => {
-				const view = buffer.payloads(rendered).at(-1);
+				const view = buffer.collect(rendered).at(-1);
 				return next(
 					buffer,
 					view === undefined
@@ -572,7 +572,7 @@ export function uiExtension(
 				);
 			});
 			hooks.message.use(
-				(buffer, next) => joinMessages(buffer.payloads(sent)) ?? next(buffer),
+				(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
 			);
 		},
 	});

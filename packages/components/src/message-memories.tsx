@@ -1,5 +1,7 @@
+"use client";
+
 import { useState } from "react";
-import type { FiredMemory } from "../lib/chat.tsx";
+import type { FiredMemory } from "./memories.ts";
 
 export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
 	const [open, setOpen] = useState(false);

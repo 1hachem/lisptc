@@ -90,7 +90,7 @@ describe("a piped transport", () => {
 		output.emit(channels, { user: "first" });
 		detach();
 		output.emit(channels, { user: "second" });
-		expect(buffer.text("user")).toBe("first");
+		expect(buffer.collectText("user")).toBe("first");
 	});
 
 	it("is dropped once it reports itself closed", () => {
@@ -116,9 +116,9 @@ describe("a piped transport", () => {
 		output.emit(channels, { model: "for the model" });
 		output.emit(channels, { user: " for both", model: " for both" });
 		weather.emit(channels, { model: { sky: "clear" } });
-		expect(buffer.text("user")).toBe("for the person for both");
-		expect(buffer.text("model")).toBe("for the model for both");
-		expect(buffer.payloads(weather)).toEqual([{ sky: "clear" }]);
+		expect(buffer.collectText("user")).toBe("for the person for both");
+		expect(buffer.collectText("model")).toBe("for the model for both");
+		expect(buffer.collect(weather)).toEqual([{ sky: "clear" }]);
 	});
 });
 
@@ -128,8 +128,8 @@ describe("an interp's channels", () => {
 		const buffer = bufferTransport();
 		interp.channels.pipe(buffer);
 		runSync(interp, '(echo "hello")');
-		expect(buffer.text("user")).toBe("hello\n");
-		expect(buffer.text("model")).toBe("");
+		expect(buffer.collectText("user")).toBe("hello\n");
+		expect(buffer.collectText("model")).toBe("");
 	});
 
 	it("keeps one interp's output out of another's", () => {

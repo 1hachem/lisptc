@@ -1,30 +1,6 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
-import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
-import { note } from "@repo/interpreter/topics";
 import { describe, expect, it } from "vitest";
-import { checkSyntax, proseExtension } from "../src/prose.ts";
-
-type Run = { value: string; output: string; skipped: string[] };
-
-function tolerantly(text: string): Run {
-	const interp = new Interp({ extensions: [proseExtension()] });
-	runSync(interp, prelude);
-	const skipped: string[] = [];
-	note.on(interp.channels, (n) => {
-		if (n.kind === "skipped") skipped.push(n.text);
-	});
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
-	try {
-		return {
-			value: str(runSync(interp, text)),
-			output: buffer.text("user"),
-			skipped,
-		};
-	} finally {
-		detach();
-	}
-}
+import { checkSyntax } from "../src/prose.ts";
+import { tolerantly } from "./helpers.ts";
 
 const NOTHING = "#<unspecified>";
 

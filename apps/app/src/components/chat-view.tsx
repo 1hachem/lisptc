@@ -1,3 +1,4 @@
+import { MessageMemories } from "@repo/components";
 import { formsIn } from "@repo/syntax";
 import {
 	Conversation,
@@ -28,7 +29,6 @@ import { GenerativeUI } from "./generative-ui.tsx";
 import { LispText } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
-import { MessageMemories } from "./message-memories.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 
 const FOLD_LINES = 25;

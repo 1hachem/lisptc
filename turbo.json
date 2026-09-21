@@ -10,7 +10,6 @@
             "language",
             "extension",
             "runtime",
-            "agent",
             "frontend",
             "product"
           ]
@@ -18,22 +17,22 @@
       },
       "language": {
         "dependencies": {
-          "deny": ["extension", "runtime", "agent", "frontend", "product"]
+          "deny": ["extension", "runtime", "frontend", "product"]
         }
       },
       "extension": {
         "dependencies": {
-          "deny": ["runtime", "agent", "frontend", "product"]
+          "deny": ["runtime", "frontend", "product"]
         }
       },
       "runtime": {
         "dependencies": {
-          "deny": ["agent", "frontend", "product"]
+          "deny": ["extension", "backend", "frontend", "product"]
         }
       },
       "ui": {
         "dependencies": {
-          "deny": ["language", "extension", "runtime", "agent", "product"]
+          "deny": ["language", "extension", "runtime", "product"]
         }
       },
       "product": {
