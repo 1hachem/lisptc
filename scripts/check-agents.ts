@@ -49,7 +49,7 @@ type Question = NoulQuestion | ChoiceQuestion | ScoreQuestion;
 const IMPLEMENTATION: ScoreQuestion = {
 	type: "score",
 	instructions:
-		"Where does `added_lines` sit between saying what something is and explaining how it works? Naming a file, a package, a command or an exported name, and saying in a phrase what it is for, counts as saying what it is. Read `paragraph` and `section` as context, and judge `added_lines`.",
+		"Where does `passage` sit between saying what something is and explaining how it works? Naming a file, a package, a command or an exported name, and saying in a phrase what it is for, counts as saying what it is. Judge `passage` whole, as it now reads, and take `section` and `changed_lines` only as context for what the change touched.",
 	criteria: [
 		"A rule, a boundary, or a statement of where a thing belongs. It tells the reader what to do or not do, or which way a dependency runs, and points at nothing in particular.",
 		"A map or a pointer. It names files, packages, paths, commands, scripts or exported names, and gives each one a phrase saying what it is for. It says what a thing is, never how it does it.",
@@ -61,7 +61,7 @@ const IMPLEMENTATION: ScoreQuestion = {
 const MECHANISM: NoulQuestion = {
 	type: "noul",
 	instructions:
-		"Does `added_lines` explain how something works, rather than what it is for?",
+		"Does `passage` explain how something works, rather than what it is for?",
 	criteria: {
 		true: "It walks through what the code does while it runs: the steps it takes, the order they happen in, what it does with the data that passes through it, or the conditions under which one case is taken instead of another.",
 		false:
@@ -72,7 +72,7 @@ const MECHANISM: NoulQuestion = {
 const SYMBOLS: NoulQuestion = {
 	type: "noul",
 	instructions:
-		"Does `added_lines` name an identifier that exists in the source code, such as a type, a function, a class, a method, a variable, a field, an exported name, or a signature?",
+		"Does `passage` name an identifier that exists in the source code, such as a type, a function, a class, a method, a variable, a field, an exported name, or a signature?",
 	criteria: {
 		true: "At least one such identifier appears, however it is spelled or quoted.",
 		false:
@@ -83,7 +83,7 @@ const SYMBOLS: NoulQuestion = {
 const RATIONALE: NoulQuestion = {
 	type: "noul",
 	instructions:
-		"Does `added_lines` explain why something was designed or decided the way it is, instead of stating the rule that came out of the decision?",
+		"Does `passage` explain why something was designed or decided the way it is, instead of stating the rule that came out of the decision?",
 	criteria: {
 		true: "It gives a history, an alternative that was rejected, a tradeoff that was weighed, or a justification that reads as a design note.",
 		false:
@@ -93,7 +93,7 @@ const RATIONALE: NoulQuestion = {
 
 const KIND: ChoiceQuestion = {
 	type: "choice",
-	instructions: "What does `added_lines` do?",
+	instructions: "What does `passage` do?",
 	criteria: {
 		rule: "States something the reader must or must not do, or a constraint the repository holds itself to.",
 		placement:
@@ -112,7 +112,7 @@ const KIND: ChoiceQuestion = {
 const SCOPE: NoulQuestion = {
 	type: "noul",
 	instructions:
-		"Does `added_lines` state a rule that governs one single package or app, rather than the whole repository?",
+		"Does `passage` state a rule that governs one single package or app, rather than the whole repository?",
 	criteria: {
 		true: "It only makes sense for one package or app, so it belongs in that package's own AGENTS.md.",
 		false:
@@ -300,8 +300,8 @@ async function judge(
 			file_purpose: FILE_PURPOSE,
 			file: block.file,
 			section: block.section,
-			paragraph: block.paragraph,
-			added_lines: block.added,
+			passage: block.paragraph,
+			changed_lines: block.added,
 		},
 		questions,
 	);
@@ -364,7 +364,7 @@ function severity(judged: Judged): number {
 
 function report(judged: Judged): string {
 	const head = `${judged.file}:${judged.line}  implementation ${judged.implementation.toFixed(2)} (confidence ${judged.confidence.toFixed(2)})  mechanism ${judged.mechanism.toFixed(2)}  identifiers ${judged.symbols.toFixed(2)}  design-note ${judged.rationale.toFixed(2)}${judged.root ? `  one-package ${judged.scope.toFixed(2)}` : ""}  kind=${judged.kind}`;
-	const quoted = judged.added
+	const quoted = judged.paragraph
 		.split("\n")
 		.map((line) => `    ${line}`)
 		.join("\n");
@@ -408,8 +408,8 @@ if (process.argv.includes("--print")) {
 					file: block.file,
 					line: block.line,
 					section: block.section,
-					paragraph: block.paragraph,
-					added_lines: block.added,
+					passage: block.paragraph,
+					changed_lines: block.added,
 				},
 				null,
 				2,
@@ -464,7 +464,7 @@ if (failed.length === 0) {
 }
 
 console.error(
-	`${failed.length} block${failed.length === 1 ? "" : "s"} carry implementation detail.`,
+	`${failed.length} block${failed.length === 1 ? " carries" : "s carry"} implementation detail.`,
 );
 console.error("");
 console.error(
