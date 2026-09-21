@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SuccessTrend } from "@/components/trend.tsx";
 import {
 	Masthead,
 	Pill,
@@ -10,11 +11,13 @@ import {
 } from "@/components/ui.tsx";
 import { when } from "@/lib/format.ts";
 import { listReports, reportHome } from "@/lib/reports.ts";
+import { successTrend } from "@/lib/trend.ts";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
 	const runs = await listReports();
+	const trend = successTrend(runs);
 
 	return (
 		<Shell>
@@ -30,6 +33,7 @@ export default async function Home() {
 				</p>
 			) : (
 				<div className="grid gap-2.5">
+					<SuccessTrend trend={trend} />
 					{runs.map((run) =>
 						run.ok ? (
 							<Link

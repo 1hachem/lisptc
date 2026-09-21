@@ -41,6 +41,25 @@ export function targetOf(row: ReportRow): string {
 	return `${row.provider} · ${row.model}`;
 }
 
+export interface TargetScore {
+	target: string;
+	score: Score;
+}
+
+function scoresByTarget(rows: ReportRow[]): TargetScore[] {
+	const grouped = new Map<string, ReportRow[]>();
+	for (const row of rows) {
+		const target = targetOf(row);
+		const held = grouped.get(target);
+		if (held) held.push(row);
+		else grouped.set(target, [row]);
+	}
+	return [...grouped].map(([target, held]) => ({
+		target,
+		score: scoreOf(held),
+	}));
+}
+
 export type Loaded =
 	| { file: string; ok: true; report: Report }
 	| { file: string; ok: false; why: string };
@@ -63,16 +82,19 @@ export async function readReport(file: string): Promise<Loaded> {
 	}
 }
 
+export interface Ran {
+	ok: true;
+	file: string;
+	ranAt: number;
+	startedAt: string;
+	targets: string[];
+	byTarget: TargetScore[];
+	cases: number;
+	score: Score;
+}
+
 export type Listed =
-	| {
-			ok: true;
-			file: string;
-			ranAt: number;
-			startedAt: string;
-			targets: string[];
-			cases: number;
-			score: Score;
-	  }
+	| Ran
 	| { ok: false; file: string; ranAt: number; why: string };
 
 export async function listReports(): Promise<Listed[]> {
@@ -88,6 +110,7 @@ export async function listReports(): Promise<Listed[]> {
 				ranAt,
 				startedAt: report.startedAt,
 				targets: report.targets.map((t) => `${t.provider} · ${t.model}`),
+				byTarget: scoresByTarget(report.rows),
 				cases: report.rows.length,
 				score: scoreOf(report.rows),
 			};

@@ -14,6 +14,12 @@
     },
     "allowJs": true
   },
-  "include": ["src", "next-env.d.ts", "next.config.ts", ".next/types/**/*.ts"],
+  "include": [
+    "src",
+    "test",
+    "next-env.d.ts",
+    "next.config.ts",
+    ".next/types/**/*.ts"
+  ],
   "exclude": ["node_modules", "evals"]
 }
