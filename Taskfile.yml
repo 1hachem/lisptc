@@ -52,6 +52,10 @@ tasks:
           PATHS: "/ai"
           CMD: "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts {{.CLI_ARGS}}"
 
+  check:refs:
+    desc: resolve the AGENTS.md references a PR adds, or all of them with -- --all
+    cmd: pnpm check:refs {{.CLI_ARGS}}
+
   mcp:browser:build:
     desc: build the browser MCP image the playwright toolkit entry runs
     vars:
