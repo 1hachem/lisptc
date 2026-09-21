@@ -7,11 +7,10 @@ Turbo tag: `product`.
 
 ## Shape
 
-`src/cli.ts` is the binary: it parses the arguments, owns the readline loop and
-the prompt, and runs .ptc files given on the command line.
+`src/cli.ts` is the binary: the arguments, the readline loop, the prompt, and
+the .ptc files a command line names.
 
-It has two modes: local, on an `Interp` of its own, and attached, on the shared
-session server.
+It has two modes: local, and attached to the shared session server.
 
 `src/extensions.ts` holds both rosters: the one the local mode runs on, which
 reaches the world through the hosts a terminal should have, and the one the
@@ -28,9 +27,8 @@ terminal REPL can do. `@repo/repl` names none, so adding an extension to the
 terminal REPL means adding it in `src/extensions.ts`, to the roster that should
 have it, and there is no registry that would do it for you.
 
-`@lisptc/lsp` spawns the same kind of session with a roster of its own, and
-whichever runs first for a working directory is the one that serves it. Keep the
-session roster here in step with that one.
+`@lisptc/lsp` keeps a session roster of its own. The two are one surface, so an
+extension added here is added there.
 
 `USAGE` is the only documentation a user of the binary gets. An argument or an
 option that changes belongs in it, in the same change.

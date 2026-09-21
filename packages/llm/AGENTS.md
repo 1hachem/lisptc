@@ -8,11 +8,10 @@ Turbo tag: `extension`.
 
 ## Shape
 
-`src/llm.ts` is the extension. It declares `LlmHost`, one field per port
-(generation, the provider list, the clock, its own prompt), and exports
-`llmExtension`, which takes the host as a default argument. This extension
-contributes both a `prompt` and a `session`, and its session hook fills a slot.
-`src/llm-host.ts` holds the default host. `src/llm.ptc` is the prompt.
+`src/llm.ts` is the extension: it declares `LlmHost`, one field per port
+(generation, the provider list, the clock, its own prompt), and contributes a
+prompt and a session. `src/llm-host.ts` holds the default host. `src/llm.ptc`
+is the prompt.
 
 `@repo/interpreter/observe` is the observation contract and the slot it hands
 over. It is a module separate from the extension on purpose: a consumer reads

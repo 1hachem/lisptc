@@ -30,10 +30,10 @@ as well as on an import. Do not open one.
 If the loop needs something an extension knows, it arrives as an annotation or
 through a slot, and the way to add it is in `packages/interpreter/AGENTS.md`.
 
-**The turn is handed a REPL, it never builds one.** `runAgentTurn` takes one;
-`streamChatResponse` and `evalUserCode` take either a REPL or a store and the
-thread to draw it from. The extensions in it, and the hosts under them, are
-assembled in `@repo/backend` and injected by the product app.
+**The turn is handed a REPL, it never builds one.** Every entry point here
+takes one, or the store and the thread to draw one from. The extensions in it,
+and the hosts under them, are assembled in `@repo/backend` and injected by the
+product app.
 
 Annotations are read by lane, never by key. One lane is the tool result the
 model reads, the other is the wire the browser reads. The loop interprets no

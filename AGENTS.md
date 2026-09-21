@@ -225,12 +225,6 @@ port and is handed the value.
 The Convex deployment carries an environment of its own, and nothing in this
 repo pushes it. `packages/backend/AGENTS.md` has the rule.
 
-The Convex deployment carries an environment of its own, and nothing in this
-repo pushes it. A deployment secret is stored in Infisical under `/auth` and set
-on the deployment by hand, from the dashboard, never written to a file. An OAuth
-app's callback points at the web app's origin, where the auth router is served,
-not at the deployment.
-
 ## Icons
 
 **Every icon comes from hugeicons**: `@hugeicons/core-free-icons` holds the icon
@@ -265,7 +259,7 @@ The agent evals are separate: the cases live in `apps/trace-viewer/evals` as
 
 ## Commands
 
-Root scripts delegate to Turbo, which fans out across workspaces:
+Root scripts delegate to Turbo:
 
 ```bash
 pnpm test                    # turbo run test (vitest run in each package)
@@ -285,6 +279,8 @@ pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
+task check:agents            # judge the AGENTS.md prose a PR adds (needs the /ai secrets)
+task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
 task up                      # build and run the whole stack in docker, with live reload
 
 # Single test file / by name — run inside the package that owns it:

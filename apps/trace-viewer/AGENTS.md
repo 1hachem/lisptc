@@ -12,9 +12,9 @@ run with its setup and transcript. `src/lib/reports.ts` loads and scores them,
 `src/components/` holds the presentation. `src/middleware.ts` proxies analytics
 ingest.
 
-`evals/` holds the cases, one `*.eval.ts` per subject. A case seeds a
-conversation, declares the extensions it runs on, mocks the servers it needs,
-and declares its checks in the DSL from `@repo/checks`. The check names are the
+`evals/` holds the cases, one `*.eval.ts` per subject. A case is a seeded
+conversation, the extensions it runs on, the servers it mocks, and its checks
+in the DSL from `@repo/checks`. The check names are the
 readable part: they say what the agent should have done, one behaviour each.
 
 `evals/harness/` is the product adapter for `@repo/evals/runner`, because a
@@ -38,7 +38,7 @@ a test runner or a model provider. `check:arch` pins `/global-setup` and
 A case asserts through the DSL, not through helpers it imports. Something a case
 cannot say is a missing form in `@repo/checks`.
 
-A report is parsed through its schema before a page touches it.
+A page reads a report through its schema, never as raw JSON.
 
 ## Commands
 

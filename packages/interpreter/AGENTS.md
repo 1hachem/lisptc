@@ -48,14 +48,13 @@ An extension reaches the world only through an interface it declares itself.
 The filesystem, the environment, the network, a subprocess, the clock and its
 own prompt all go through one field of that interface.
 
-- `<name>.ts` declares the host interface, one field per port, and takes it as
-  its first argument. It imports no `node:` builtin, no typed env module, no
+- `<name>.ts` declares the host interface, one field per port, and is handed
+  one. It imports no `node:` builtin, no typed env module, no
   vendor SDK, and never touches `process.env`. What it cannot reach, it cannot
   hard-code.
 - `<name>-host.ts` sits beside it, holds the implementations, and exports the
   default host value. It is the only file of the pair that touches the world.
-- The default arrives as a default argument, so the ordinary call passes
-  nothing.
+- The default is already in place, so the ordinary call names no host.
 - A port two packages share and neither owns lives in `@repo/shared/host`, with
   its node-side implementation in `@repo/shared/host-node`.
 - A port whose work may have to wait is typed so a value or a promise both

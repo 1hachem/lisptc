@@ -17,21 +17,19 @@ guards those modules call to resolve the caller and check ownership, and every
 public function starts with one. `convex/lib/` also holds the small pure helpers
 beside them.
 
-`convex/auth.ts` sets up Better Auth against the deployment, with the triggers
-that keep the `users` table and a first workspace in step with the auth user,
-and the cascade that runs when one is deleted. `convex/auth.config.ts` and
-`convex/http.ts` serve it: the HTTP router registers the auth routes.
-`convex/convex.config.ts` declares the components the deployment uses, and
-`convex/migrations.ts` holds the runner.
+`convex/auth.ts` is where Better Auth is set up against the deployment, and
+where the `users` table and a workspace are kept in step with the auth user.
+`convex/auth.config.ts` and `convex/http.ts` serve it. `convex/convex.config.ts`
+declares the components the deployment uses, and `convex/migrations.ts` holds
+the migration runner.
 
 `convex/_generated/` is generated. Never edit it, and never hand-write what
 belongs there.
 
 `src/` holds what runs outside the deployment against it: the stores a REPL
-talks to. A store here implements the port it satisfies and holds the codec
-between the row and the domain value, so a caller constructs it with a
-workspace and a client and hands it over whole. A port is declared with the
-extension and satisfied here, never the other way round.
+talks to. A store here satisfies a port and owns the codec between the row and
+the domain value. A port is declared with the extension and satisfied here,
+never the other way round.
 
 `src/agent-repl.ts` is where the agent's REPL is assembled: it names every
 extension, hands each one its host, and satisfies the stores from the
