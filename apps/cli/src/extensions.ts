@@ -4,6 +4,7 @@ import type { InterpExtension } from "@repo/interpreter/lisp";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { mcpExtension } from "@repo/mcp-extension";
 import { DockerHost } from "@repo/mcp-extension/docker-host";
+import { LocalProcessHost } from "@repo/mcp-extension/local-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
@@ -28,7 +29,7 @@ export function sessionExtensions(): InterpExtension[] {
 	return [
 		secretsExtension(),
 		promisesExtension(),
-		mcpExtension(),
+		mcpExtension(mcpHostFor({ host: new LocalProcessHost() })),
 		llmExtension(),
 		compactionExtension(),
 		memoryExtension(),

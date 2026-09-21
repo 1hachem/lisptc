@@ -75,7 +75,6 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 					"chromium",
 					"--executable-path",
 					"/nix/store/chromium/chrome",
-					"--headless",
 					"--no-sandbox",
 					"--isolated",
 				],

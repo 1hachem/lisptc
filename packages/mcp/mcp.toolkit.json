@@ -30,7 +30,6 @@
       "chromium",
       "--executable-path",
       "${PLAYWRIGHT_MCP_EXECUTABLE}",
-      "--headless",
       "--no-sandbox",
       "--isolated"
     ]
