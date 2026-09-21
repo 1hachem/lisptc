@@ -305,7 +305,8 @@ like Co-Authored-By are footers and do not count.
 
 ## Writing Style
 
-When writing any prose, documentation or commit message:
+These rules cover everything written here. Prose, documentation, commit
+messages, and every reply to the person you are working with.
 
 - Do not use "It's not that X, it's that Y" constructions. Rewrite as a direct statement.
 - Do not open responses with affirmations ("Certainly!", "Of course!", "Absolutely!").
