@@ -12,89 +12,173 @@ They both write to each other.
 
 Write-up: https://d4shi.com/blog/lisptc/
 
+SHAPE
+
+The interpreter is the core dialect and nothing else. Every surface past it
+lives in an extension, and an extension is one language surface plus the
+prompt that teaches it.
+
+Three rules hold the thing together, and CI fails on each of them:
+
+- Dependencies run one way: interpreter, extensions, REPL front-ends, agent,
+  apps.
+- Everything an extension does that reaches outside the process goes through
+  a port it declares itself. It never picks where a server runs, where a
+  token is written, or which model answers.
+- Nothing above an extension names it. Behaviour crosses the seam as a chain
+  an extension hooks, a capability as a slot it fills, data as an annotation
+  it attaches. Extensions are named at a composition root, and there are only
+  two.
+
+Every workspace carries an AGENTS.md with the rules that govern it. That is
+the entry point for working in one. The code carries no comments and there
+are no design docs: a constraint worth keeping is a name, a type, or a test.
+
 REPO LAYOUT (pnpm + Turborepo monorepo)
 
-packages/interpreter  @repo/interpreter — the interpreter core (src/lisp.ts),
-                       arithmetic (arith.ts), and the grammar for structured
-                       output (grammar.ts). Pure TypeScript, no build step
-                       (run directly via Node's type-stripping).
-packages/mcp           @repo/mcp — the MCP extension (mcp.ts), its client
-                       and OAuth (mcp-client.ts, mcp-oauth.ts), and the
-                       bundled server list (mcp.toolkit.json).
-packages/repl          @repo/repl — REPL front-ends on top of the
-                       interpreter: an embeddable string-in/string-out REPL
-                       (repl.ts), and a shared-session server over a unix
-                       socket so an editor's LSP and a terminal REPL can
-                       share one interpreter (session-server.ts).
-packages/env           @repo/env — small env/secret loading helpers shared
-                       across apps.
-apps/pi                A pi coding-agent extension that runs the interpreter
-                       in-process: the agent has no tools, its replies are
-                       lisp source evaluated straight into the REPL, and
-                       replies are constrained to valid lisptc via
-                       grammar-based structured output.
-apps/cli               The interactive terminal REPL, shipped as the lisptc
-                       binary: it runs .ptc files, drops into a prompt, or
-                       attaches to the shared session server instead of a
-                       local interpreter.
-apps/lsp               A stdio language server for the lisptc dialect:
-                       diagnostics from static syntax/arity checking, plus
-                       completion and hover against a live shared session
-                       when one is reachable.
-apps/mcp               A stdio MCP server exposing the REPL itself as an MCP
-                       tool, backed by one persistent interpreter.
-editors/nvim           A Neovim plugin: filetype detection, LSP client
-                       wiring, and a REPL client against the shared session.
-examples/              Runnable .ptc walkthroughs: language basics, macros
-                       and closures, MCP usage, and Linear/Playwright over
-                       MCP.
+The language
 
-WHAT'S WORKING
+  packages/interpreter    @repo/interpreter. The reader, the evaluator, the
+                          drivers, the prelude, and the three seam mechanisms
+                          an extension plugs into. Ships no extension and
+                          names none.
 
-- core interpreter: reader, evaluator, tail-call optimization, macros,
-  closures, a small prelude (lists, strings, control flow)
-- docstrings on defun/defmacro, full doc coverage for every global binding
+The extensions, one language surface each
+
+  packages/compaction     @repo/compaction-extension. Bounded output, so a
+                          large result never floods the context.
+  packages/llm            @repo/llm-extension. The language model as a
+                          callable value.
+  packages/mcp            @repo/mcp-extension. MCP servers, their tools, and
+                          the OAuth to reach the remote ones.
+  packages/memory         @repo/memory-extension. What the agent keeps and
+                          recalls across sessions.
+  packages/promises       @repo/promises-extension. Asynchrony over a
+                          synchronous evaluator.
+  packages/prose          @repo/prose-extension. The prose the model writes
+                          around its forms.
+  packages/secrets        @repo/secrets-extension. The secret registry, with
+                          taint-tracked redaction.
+  packages/ui-extension   @repo/ui-extension. Widgets the agent renders to a
+                          client.
+  packages/checks         @repo/checks. The DSL an eval case is written in.
+
+Everything else
+
+  packages/repl           @repo/repl. REPL front-ends over the interpreter:
+                          an embeddable string-in/string-out REPL, and a
+                          shared-session server over a unix socket so an
+                          editor's LSP and a terminal REPL share one
+                          interpreter.
+  packages/ai             @repo/ai. The agent loop and what it runs on.
+  packages/evals          @repo/evals. The eval driver, the report it writes,
+                          and everything that reads one back.
+  packages/backend        @repo/backend. The Convex deployment, and the Better
+                          Auth instance whose database is Convex itself.
+  packages/env            @repo/env. Typed env. The only place process.env is
+                          read.
+  packages/shared         @repo/shared. The no-dependency utility layer.
+  packages/syntax         @repo/syntax. The lisptc language for the
+                          highlighter.
+  packages/ui             @repo/ui. The base design system.
+  packages/components     @repo/components. The components we wrote, on top of
+                          @repo/ui.
+  packages/bloub          @repo/bloub. The avatar component and its engine.
+  packages/tsconfigs      Shared tsconfig bases.
+
+Apps
+
+  apps/api                An HTTP server streaming the agent loop.
+  apps/app                The web frontend.
+  apps/cli                @lisptc/cli. The interactive terminal REPL, shipped
+                          as the lisptc binary: it runs .ptc files, drops into
+                          a prompt, or attaches to the shared session server
+                          instead of a local interpreter.
+  apps/lsp                @lisptc/lsp. A stdio language server: diagnostics
+                          from static syntax and arity checking, plus
+                          completion and hover against a live shared session.
+  apps/mcp                @lisptc/mcp-repl. A stdio MCP server exposing the
+                          REPL itself as an MCP tool.
+  apps/mcp-toolkit        @lisptc/mcp-toolkit. The MCP servers we write
+                          ourselves, pointing outward.
+  apps/trace-viewer       @lisptc/trace-viewer. A viewer for eval runs, and
+                          the home of the eval cases and their concrete hosts.
+
+Outside the workspaces
+
+  editors/nvim            A Neovim plugin: filetype detection, LSP client
+                          wiring, and a REPL client against the shared
+                          session.
+  tree-sitter-lisptc      The tree-sitter grammar for the dialect.
+  examples/               Runnable .ptc walkthroughs: basics, control flow,
+                          macros and functions, json, memory, secrets, and
+                          MCP including Linear and Playwright.
+  scripts/                The architecture, comment, docs and reference checks
+                          CI runs.
+
+THE LANGUAGE
+
+Core dialect:
+
+- reader, evaluator, tail-call optimisation, closures, macros
+- quote, quasiquote, unquote and unquote-splicing
+- try/catch and error
 - a module system: (import "path") with cycle detection
-- MCP integration: load-mcp/unload-mcp/list-tools/search-tools, loaded
-  tools become callable bindings (server/tool), async job model (load/unload
-  don't block; results apply automatically between evals or via explicit
-  await) over a worker_threads broker, since the interpreter itself is
-  synchronous
-- OAuth for remote MCP servers (e.g. Linear, PostHog) and a secret registry
-  with taint-tracked redaction so secrets never print in the clear
-- structured-output grammar so an LLM can be constrained to valid lisptc
-- LSP (diagnostics, completion, hover) and a Neovim client
-- CLI REPL with a shared session server so multiple clients (editor, pi
-  extension, terminal) can use one interpreter
+- docstrings on defun and defmacro, doc coverage for every global binding
+- a prelude in Lisp: lists and alists, strings and format, let, let*, letrec,
+  cond, when, unless, while, dolist, dotimes, case, mapcar, filter, reduce
 
-NOT YET BUILT (see AI-suggested language extensions, still open)
+What the extensions add on top:
 
-- pattern matching (match/case with destructuring)
-- hash tables and vectors (currently only cons lists and alists)
-- lazy evaluation (delay/force)
-- exception handling (try/catch/finally) — errors currently just throw
-- multiple return values
-- reader macros, deeper meta-programming/reflection
-- async/await as a language feature (MCP already runs async under the hood)
-- optional static type annotations
-
-ALSO ON THE ROADMAP
-
-- memory and hooks macros/helpers
-- a web client for the agent
-- a visualization tool: lisp script -> 3D force graph
-- kubernetes charts to deploy the agent as a CRD with its sandbox
-- a messaging gateway ("hermes") and hermes/claude extension
+- compaction   echo, doc, head, tail, grep
+- promises     await, promise-all, promise-all-settled, promise-any,
+               promise-race, promise-state, promises, cancel
+- llm          llm/complete, llm/chat, llm/extract, llm/providers, message,
+               and the shape macros that type an extraction
+- mcp          load-mcp, unload-mcp, list-mcps, search-mcps, list-tools,
+               search-tools, login, logout, mcp-authorize, mcp-shutdown.
+               A loaded tool becomes a callable binding (server/tool), and
+               loading never blocks: the work runs off an async broker and
+               applies between evaluations.
+- memory       memory/remember, memory/recall, memory/revise, memory/forget,
+               memory/replay, memories
+- secrets      secrets and secret, returning tainted strings the string
+               builtins carry through and the printer redacts
+- ui           ui/text, ui/heading, ui/markdown, ui/link, ui/badge, ui/kpi,
+               ui/stack, ui/row, ui/card, ui/button, ui/input, ui/select,
+               ui/checkbox, ui/form, ui/table, ui/send, ui/render
+- prose        no new bindings. It lets the model write prose around its
+               forms.
+- checks       the eval DSL: called, awaited, answered, errored, halted,
+               matches, contains, eventually, never, always, before, after,
+               within, once, at-most
 
 COMMANDS
 
-pnpm test              turbo run test (vitest per package)
-pnpm typecheck          turbo run typecheck (tsc --noEmit per package)
-pnpm lint               biome ci (matches CI)
-pnpm knip               dead-code / unused-dependency check
-pnpm repl               run the interactive REPL
-pnpm repl:attach        attach to (or spawn) the shared session server
-task test               everything: pnpm tests + nix flake checks + nvim tests
+  pnpm test              vitest in each package
+  pnpm typecheck         tsc --noEmit per package
+  pnpm lint              biome ci (matches CI)
+  pnpm format            biome check --write
+  pnpm knip              dead code and unused dependencies
+  pnpm boundaries        package layering and import rules
+  pnpm check:arch        the manifest rules boundaries cannot express
+  pnpm check:comments    fails on any non-directive comment
+  pnpm check:docs        fails on tracked markdown outside the allowlist
+  pnpm check:refs        AGENTS.md references that no longer resolve
+  pnpm repl              run the REPL against a local interpreter
+  pnpm repl:attach       attach to (or spawn) the shared session server
+  pnpm test:evals        the agent evals, against real models
+  pnpm test:nvim         the Neovim integration test
 
-Requires Node >= 22.6.0. .ts files run directly via
---experimental-transform-types, no build step.
+  task up                build and run the whole stack in docker, live reload
+  task down              stop it (pass -- -v to drop its data)
+  task evals:run         run the eval suite
+  task evals:open        build the trace viewer, serve it, open a browser
+  task test              pnpm tests, nix flake checks, and the nvim test
+  task check:agents      judge the AGENTS.md prose a PR adds
+
+A task that needs credentials runs under Infisical, so they reach the command
+without ever landing in a file.
+
+Requires Node >= 22.6.0 and pnpm 10.28.0. .ts files run directly through
+Node's type stripping, with no build step.
