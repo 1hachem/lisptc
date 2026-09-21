@@ -33,7 +33,8 @@
     "next": "^15.5.4",
     "posthog-js": "^1.425.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "recharts": "^2.15.4"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
