@@ -43,6 +43,15 @@ tasks:
     desc: run the nvim integration test
     cmd: bash editors/nvim/tests/run.sh
 
+  check:agents:
+    desc: judge the AGENTS.md prose a PR adds, or all of it with -- --all
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/ai"
+          CMD: "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts {{.CLI_ARGS}}"
+
   mcp:browser:build:
     desc: build the browser MCP image the playwright toolkit entry runs
     vars:
