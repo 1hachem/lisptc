@@ -19,8 +19,7 @@ shared session runs on. `src/session.ts` is the file the spawned session server
 runs, and it exists so that the roster belongs to this app rather than to
 `@repo/repl`.
 
-`isComplete` decides when a buffer holds a whole form. Both modes read line by
-line, so both need it.
+`isComplete` decides when a buffer holds a whole form. Both modes need it.
 
 ## Rules
 
