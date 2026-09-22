@@ -372,6 +372,20 @@ export interface Learned {
 
 export const learned = topic<Learned>("learn");
 
+export interface Assessment {
+	failed?: string;
+	worthKeeping?: number;
+	kind?: Keepable;
+	kindConfidence?: number;
+	candidate?: string;
+	covered?: Picked;
+	stale?: Picked;
+	calibrated?: boolean;
+	did: Learned["what"][];
+}
+
+export const assessed = topic<Assessment>("judged");
+
 export const ELIDED = "\n... elided ...\n";
 
 function clip(text: string, chars: number): string {
@@ -441,6 +455,7 @@ export class MemoryBank {
 		surfaced: FiredMemory[];
 	};
 	private outstanding?: Promise<Judgment | undefined>;
+	private failure?: string;
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
@@ -545,7 +560,8 @@ export class MemoryBank {
 				surfaced,
 				known: knownIn(await this.store.all(), (m) => this.strength(m)),
 			});
-		} catch {
+		} catch (ex) {
+			this.failure = ex instanceof Error ? ex.message : String(ex);
 			return undefined;
 		}
 	}
@@ -555,20 +571,28 @@ export class MemoryBank {
 		if (pending === undefined) return "";
 		this.outstanding = undefined;
 		const judgment = yield* settled(pending);
-		if (judgment === undefined) return "";
+		const failed = this.failure;
+		this.failure = undefined;
+		if (judgment === undefined) {
+			assessed.emit(this.channels, { user: { failed, did: [] } });
+			return "";
+		}
 		return yield* this.act(judgment);
 	}
 
 	private *act(judgment: Judgment): Eval<string> {
 		let text = "";
+		const did: Learned["what"][] = [];
 		const stale = judgment.stale;
 		if (stale !== undefined) {
 			if (stale.confidence >= FORGET_AT && judgment.calibrated) {
-				if (yield* settled(this.store.delete(stale.key)))
+				if (yield* settled(this.store.delete(stale.key))) {
 					text += this.note(
 						"dropped",
 						`${stale.key} is gone: the last steps showed it to be wrong.`,
 					);
+					did.push("dropped");
+				}
 			} else if (stale.confidence >= SUSPECT_AT) {
 				yield* this.doubt(stale.key);
 			}
@@ -578,8 +602,22 @@ export class MemoryBank {
 			judgment.worthKeeping >= LEARN_AT &&
 			judgment.kind !== "nothing" &&
 			!(covered !== undefined && covered.confidence >= COVERED_AT)
-		)
+		) {
 			text += this.note("candidate", nudgeFor(judgment));
+			did.push("candidate");
+		}
+		assessed.emit(this.channels, {
+			user: {
+				worthKeeping: judgment.worthKeeping,
+				kind: judgment.kind,
+				kindConfidence: judgment.kindConfidence,
+				candidate: judgment.candidate,
+				covered,
+				stale,
+				calibrated: judgment.calibrated,
+				did,
+			},
+		});
 		return text;
 	}
 
@@ -606,7 +644,13 @@ export class MemoryBank {
 			vetting = yield* settled(
 				this.learner.vet({ key, body: bodyText(body), known }),
 			);
-		} catch {
+		} catch (ex) {
+			assessed.emit(this.channels, {
+				user: {
+					failed: ex instanceof Error ? ex.message : String(ex),
+					did: [],
+				},
+			});
 			return;
 		}
 		if (vetting === undefined) return;
@@ -787,15 +831,20 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 		hooks.annotate.use((buffer, into, next) => {
 			const memories = buffer.collect(fired);
 			const notes = buffer.collect(learned);
+			const judgments = buffer.collect(assessed);
 			const entry = {
 				...(memories.length === 0 ? {} : { memories }),
 				...(notes.length === 0 ? {} : { learned: notes }),
 			};
-			return next(
-				buffer,
+			const told =
 				Object.keys(entry).length === 0
 					? into
-					: annotating(into, "step", entry),
+					: annotating(into, "step", entry);
+			return next(
+				buffer,
+				judgments.length === 0
+					? told
+					: annotating(told, "output", { judged: judgments }),
 			);
 		});
 	};

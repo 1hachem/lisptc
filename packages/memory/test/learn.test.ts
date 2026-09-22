@@ -9,12 +9,18 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { openSession, type StepContext } from "@repo/interpreter/session";
+import { bufferTransport } from "@repo/interpreter/channels-host";
+import {
+	noAnnotations,
+	openSession,
+	type StepContext,
+} from "@repo/interpreter/session";
 import type { Clock } from "@repo/shared/host";
 import type { Judge, JudgeRequest, Question } from "@repo/shared/judge";
 import { describe, expect, it } from "vitest";
 import { judgeLearner } from "../src/learn-client.ts";
 import {
+	type Assessment,
 	COVERED_AT,
 	FORGET_AT,
 	INITIAL_SCORE,
@@ -22,6 +28,7 @@ import {
 	KNOWN_BODY_CHARS,
 	KNOWN_SEEN,
 	LEARN_AT,
+	type Learned,
 	type Learner,
 	MemoryBank,
 	memoryExtension,
@@ -86,11 +93,20 @@ function learnerOf(
 	return fake;
 }
 
+interface Ran {
+	learned: Learned[];
+	judged: Assessment[];
+}
+
 interface Fixture {
 	interp: Interp;
 	bank: MemoryBank;
-	step(code: string): Promise<string>;
+	step(code: string): Promise<Ran>;
 	said(text: string): void;
+}
+
+function notes(step: Ran): string {
+	return step.learned.map((one) => one.text).join("\n");
 }
 
 function fixture(learner: Learner, clock: Clock = frozen): Fixture {
@@ -106,28 +122,35 @@ function fixture(learner: Learner, clock: Clock = frozen): Fixture {
 	return {
 		interp,
 		bank,
-		async step(code: string): Promise<string> {
-			let feedback = "";
-			const ctx: StepContext = {
-				interp,
-				code,
-				emit: (text) => {
-					feedback += text;
-				},
-			};
+		async step(code: string): Promise<Ran> {
+			const ctx: StepContext = { interp, code, emit: () => {} };
+			const buffer = bufferTransport();
+			const detach = interp.channels.pipe(buffer);
 			let output = "";
-			await hooks.evalStep.run(async (inner) => {
-				try {
-					output = str((await runAsync(interp, inner.code)).value);
-				} catch (ex) {
-					output = String(ex);
-				}
-			}, ctx);
-			hooks.stepOutput.run((_inner, out) => out, ctx, {
-				model: output,
-				user: output,
-			});
-			return feedback;
+			try {
+				await hooks.evalStep.run(async (inner) => {
+					try {
+						output = str((await runAsync(interp, inner.code)).value);
+					} catch (ex) {
+						output = String(ex);
+					}
+				}, ctx);
+				hooks.stepOutput.run((_inner, out) => out, ctx, {
+					model: output,
+					user: output,
+				});
+			} finally {
+				detach();
+			}
+			const annotations = hooks.annotate.run(
+				(_b, into) => into,
+				buffer,
+				noAnnotations(),
+			);
+			return {
+				learned: (annotations.step.learned ?? []) as Learned[],
+				judged: (annotations.output.judged ?? []) as Assessment[],
+			};
 		},
 		said(text: string): void {
 			const before = interp.getGlobal(newSym("user-messages"));
@@ -141,16 +164,16 @@ describe("the learning gate", () => {
 	it("emits the nudge at the next step, never at the one it judged", async () => {
 		const f = fixture(learnerOf([keeping()]));
 
-		expect(await f.step("(+ 1 2)")).not.toContain("<learn>");
+		expect((await f.step("(+ 1 2)")).learned).toHaveLength(0);
 
 		const next = await f.step("(+ 2 3)");
 
-		expect(next).toContain("<learn>");
-		expect(next).toContain("(procedure)");
-		expect(next).toContain(
+		expect(next.learned.map((one) => one.what)).toEqual(["candidate"]);
+		expect(notes(next)).toContain("(procedure)");
+		expect(notes(next)).toContain(
 			'candidate: (mcp/call "acme" "browser_navigate" url)',
 		);
-		expect(next).toContain("memory/remember");
+		expect(notes(next)).toContain("memory/remember");
 	});
 
 	it("hands the learner a window, so a failure and its fix arrive together", async () => {
@@ -217,11 +240,11 @@ describe("the learning gate", () => {
 			learnerOf([keeping({ worthKeeping: LEARN_AT - 0.1 })]),
 		);
 		await quiet.step("(+ 1 2)");
-		expect(await quiet.step("(+ 2 3)")).not.toContain("<learn>");
+		expect((await quiet.step("(+ 2 3)")).learned).toHaveLength(0);
 
 		const nothing = fixture(learnerOf([keeping({ kind: "nothing" })]));
 		await nothing.step("(+ 1 2)");
-		expect(await nothing.step("(+ 2 3)")).not.toContain("<learn>");
+		expect((await nothing.step("(+ 2 3)")).learned).toHaveLength(0);
 
 		const known = fixture(
 			learnerOf([
@@ -229,7 +252,7 @@ describe("the learning gate", () => {
 			]),
 		);
 		await known.step("(+ 1 2)");
-		expect(await known.step("(+ 2 3)")).not.toContain("<learn>");
+		expect((await known.step("(+ 2 3)")).learned).toHaveLength(0);
 	});
 });
 
@@ -247,9 +270,10 @@ describe("forgetting what a step contradicted", () => {
 		await runAsync(f.interp, '(memory/remember "acme-verb" "it is navigate")');
 
 		await f.step("(+ 1 2)");
-		const text = await f.step("(+ 2 3)");
+		const ran = await f.step("(+ 2 3)");
 
-		expect(text).toContain("acme-verb is gone");
+		expect(notes(ran)).toContain("acme-verb is gone");
+		expect(ran.judged.at(-1)?.did).toContain("dropped");
 		expect(await f.bank.store.get("acme-verb")).toBeUndefined();
 	});
 
@@ -363,9 +387,9 @@ describe("the veto", () => {
 			learnerOf([], { durable: 0.1, recomputable: 0, calibrated: false }),
 		);
 
-		const text = await f.step('(memory/remember "now" "the file is open")');
+		const ran = await f.step('(memory/remember "now" "the file is open")');
 
-		expect(text).toContain("this reads as situational");
+		expect(notes(ran)).toContain("this reads as situational");
 		expect(await f.bank.store.get("now")).toBeDefined();
 	});
 
@@ -395,8 +419,8 @@ describe("a learner that says nothing", () => {
 	it("changes no behaviour when it answers undefined", async () => {
 		const f = fixture(learnerOf([undefined, undefined]));
 
-		expect(await f.step("(+ 1 2)")).toBe("");
-		expect(await f.step("(+ 2 3)")).toBe("");
+		expect((await f.step("(+ 1 2)")).learned).toHaveLength(0);
+		expect((await f.step("(+ 2 3)")).learned).toHaveLength(0);
 	});
 
 	it("changes no behaviour when it throws", async () => {
@@ -410,8 +434,8 @@ describe("a learner that says nothing", () => {
 		};
 		const f = fixture(angry);
 
-		expect(await f.step('(memory/remember "k" "b")')).toBe("");
-		expect(await f.step("(+ 2 3)")).toBe("");
+		expect((await f.step('(memory/remember "k" "b")')).learned).toHaveLength(0);
+		expect((await f.step("(+ 2 3)")).learned).toHaveLength(0);
 		expect(await f.bank.store.get("k")).toBeDefined();
 	});
 });
