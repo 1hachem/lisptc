@@ -41,16 +41,21 @@ export type EvalTurnEvent =
 	| {
 			type: "result";
 			output: string;
-			annotations: { step: Record<string, unknown> };
+			annotations: Lanes;
 	  }
 	| { type: "halt"; answer: string }
 	| { type: "silent" }
 	| { type: "failed"; message: string };
 
+export interface Lanes {
+	step: Record<string, unknown>;
+	output: Record<string, unknown>;
+}
+
 export interface EvalResult {
 	output: string;
 	error: boolean;
-	annotations: { step: Record<string, unknown> };
+	annotations: Lanes;
 }
 
 export interface AgentDriver<Repl> {
@@ -286,10 +291,15 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 	const see = (
 		line: TranscriptLine,
 		annotations: Record<string, unknown> = {},
+		observed: Record<string, unknown> = {},
 	): void => {
-		seen.push(
-			Object.keys(annotations).length === 0 ? line : { ...line, annotations },
-		);
+		const some = (entries: Record<string, unknown>): boolean =>
+			Object.keys(entries).length > 0;
+		seen.push({
+			...line,
+			...(some(annotations) ? { annotations } : {}),
+			...(some(observed) ? { observed } : {}),
+		});
 	};
 
 	if (spec.prelude !== undefined) {
@@ -316,7 +326,11 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 			content: runtime.agent.resultContent(output, error, annotations.step),
 		});
 		see({ role: "assistant", content: entry.assistant });
-		see({ role: "tool", content: output }, annotations.step);
+		see(
+			{ role: "tool", content: output },
+			annotations.step,
+			annotations.output,
+		);
 	}
 
 	let steps = 0;
@@ -348,7 +362,11 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 			continue;
 		}
 		if (event.type === "result") {
-			see({ role: "tool", content: event.output }, event.annotations.step);
+			see(
+				{ role: "tool", content: event.output },
+				event.annotations.step,
+				event.annotations.output,
+			);
 			checks.evaluate(steps);
 			continue;
 		}
