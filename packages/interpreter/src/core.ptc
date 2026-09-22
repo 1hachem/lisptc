@@ -257,7 +257,8 @@ Defining
 - (defmacro name (args...) [doc] body...) define a macro.
 
 Strings
-- (substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
+- (string= s1 s2) content equality for strings, the same test equal makes ·
+(substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
 (string-index s sub [start]) giving an index or nil · (string-contains? s sub) ·
 (string-count s sub) · (string-replace s old new) ·
 (string-split s sep) , where an empty sep gives characters · (string-join list sep) ·

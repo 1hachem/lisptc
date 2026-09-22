@@ -2347,6 +2347,10 @@ export const prelude = `
       (setq start (+ start 1)))
     out))
 
+(defun string= (s1 s2)
+  "Return t if the strings s1 and s2 have the same characters in the same order (alias of equal)."
+  (equal s1 s2))
+
 (defun string-prefix? (prefix s)
   "Return t if the string s starts with prefix."
   (and (<= (length prefix) (length s))
