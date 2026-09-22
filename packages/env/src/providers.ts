@@ -1,4 +1,10 @@
 import {
+	DEFAULT_JUDGE,
+	JUDGE_NAMES,
+	type JudgeName,
+	type JudgeSpec,
+} from "@repo/shared/judge";
+import {
 	DEFAULT_PROVIDER,
 	PROVIDER_NAMES,
 	type ProviderName,
@@ -22,6 +28,11 @@ const providersEnv = createEnv({
 		OPENROUTER_API_KEY: z.string().optional(),
 		OPENROUTER_BASE_URL: z.url().default("https://openrouter.ai/api/v1"),
 		OPENROUTER_MODEL: z.string().default("google/gemma-4-31b-it"),
+		LISPTC_JUDGE: z.enum(JUDGE_NAMES).default(DEFAULT_JUDGE),
+		TYPESAFE_API_KEY: z.string().optional(),
+		TYPESAFE_BASE_URL: z.url().default("https://api.typesafe.ai"),
+		TYPESAFE_MODEL: z.string().default("jev-1"),
+		OPENROUTER_JUDGE_MODEL: z.string().default("google/gemma-4-31b-it"),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
@@ -54,5 +65,24 @@ export const providerSpecs: Record<ProviderName, ProviderSpec> = {
 		...key("OPENROUTER_API_KEY"),
 		baseUrl: providersEnv.OPENROUTER_BASE_URL,
 		defaultModel: providersEnv.OPENROUTER_MODEL,
+	},
+};
+
+export const defaultJudge: JudgeName = providersEnv.LISPTC_JUDGE;
+
+export const judgeSpecs: Record<JudgeName, JudgeSpec> = {
+	typesafe: {
+		label: "TypeSafe System One",
+		...key("TYPESAFE_API_KEY"),
+		baseUrl: providersEnv.TYPESAFE_BASE_URL,
+		defaultModel: providersEnv.TYPESAFE_MODEL,
+		protocol: "system-one",
+	},
+	openrouter: {
+		label: "OpenRouter",
+		...key("OPENROUTER_API_KEY"),
+		baseUrl: providersEnv.OPENROUTER_BASE_URL,
+		defaultModel: providersEnv.OPENROUTER_JUDGE_MODEL,
+		protocol: "chat",
 	},
 };

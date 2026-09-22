@@ -8,6 +8,21 @@ export {
 	streamAgent,
 } from "./agent.ts";
 export { type EvalMessage, evalUserCode } from "./eval.ts";
+export {
+	type Answer,
+	choice,
+	getJudge,
+	type Judge,
+	type Judged,
+	type JudgeName,
+	type JudgeReport,
+	type JudgeRequest,
+	judges,
+	listJudges,
+	noul,
+	type Question,
+	score,
+} from "./judge.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 export {
 	getProvider,

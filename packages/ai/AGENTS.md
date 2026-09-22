@@ -12,10 +12,12 @@ vocabulary of a turn. `src/stream.ts` puts a turn on the wire as server-sent
 events. `src/eval.ts` is the one-shot evaluation.
 
 `src/agent.ts` wraps the model call and yields deltas. `src/provider/` holds the
-provider registry and one file per provider. `src/prompts/lisp.ts` holds the
-system prompt and the step cap. `src/repl.ts` turns a transcript into model
-messages and an eval result into content. `src/telemetry.ts` is the PostHog
-side. `src/ui-action.ts` runs an action the browser sent back.
+provider registry and one file per provider, and `src/judge/` the same for the
+judgment providers, whose interface and transports live in `@repo/shared/judge`
+so an extension can be handed one without reaching up here. `src/prompts/lisp.ts`
+holds the system prompt and the step cap. `src/repl.ts` turns a transcript into
+model messages and an eval result into content. `src/telemetry.ts` is the
+PostHog side. `src/ui-action.ts` runs an action the browser sent back.
 
 `src/repl-store.ts` keeps a REPL per thread. It builds none, so what a REPL
 carries is decided by whoever constructed the store.

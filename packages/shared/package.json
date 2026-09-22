@@ -6,6 +6,7 @@
   "exports": {
     "./host": "./src/host.ts",
     "./host-node": "./src/host-node.ts",
+    "./judge": "./src/judge.ts",
     "./lisp-form-fixtures": "./src/lisp-form-fixtures.ts",
     "./lisp-forms": "./src/lisp-forms.ts",
     "./lisp-prose": "./src/lisp-prose.ts",

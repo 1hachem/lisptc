@@ -20,6 +20,13 @@ read the same definition. `src/lisp-form-fixtures.ts` holds the fixtures they
 are tested against. `src/messages.ts` and `src/providers.ts` hold the role and
 provider vocabularies.
 
+`src/judge.ts` holds the judgment provider: the question and answer shapes, the
+spec beside `ProviderSpec`, and the transports themselves. A transport here
+needs nothing but `fetch`, so it lives once rather than twice, and `calibrated`
+travels with the answers so a caller can hold a destructive decision to a
+calibrated judge. An extension reaching a judge is handed one through a port; it
+never names a spec.
+
 ## Rules
 
 Something belongs here only when two packages need it and neither owns it. One
