@@ -16,7 +16,13 @@ import {
 import type { SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 import type { Awaitable, PromptSource } from "@repo/shared/host";
-import { endOfForm, type FormJudge, formsOnly } from "@repo/shared/lisp-forms";
+import {
+	endOfForm,
+	type FormJudge,
+	formSpans,
+	formsOnly,
+	type Skipped,
+} from "@repo/shared/lisp-forms";
 import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 import { proseHost } from "./prose-host.ts";
 
@@ -60,7 +66,7 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 		session(hooks: SessionHooks): void {
 			hooks.unrun.use((interp, code, next) => [
 				...next(interp, code),
-				...proseHeads(interp, code),
+				...proseSkipped(interp, code),
 			]);
 			hooks.answered.use((ctx, out, next) => {
 				if (formsOnly(ctx.code).trim() === "") return true;
@@ -74,13 +80,21 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 const proseJudge: FormJudge = {
 	unclosed: (text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
 	unreadable(text, start, end) {
-		const source = text.slice(start, end);
-		const failure = readFailure(source);
-		if (failure === undefined) return undefined;
-		const line = lineAt(text, start) + failure.line - 1;
-		return `${abbreviate(source)} — ${failure.reason} on line ${line}, so this was read as prose`;
+		const reason = unreadableReason(text, start, end);
+		if (reason === undefined) return undefined;
+		return `${abbreviate(text.slice(start, end))} — ${reason}, so this was read as prose`;
 	},
 };
+
+function unreadableReason(
+	text: string,
+	start: number,
+	end: number,
+): string | undefined {
+	const failure = readFailure(text.slice(start, end));
+	if (failure === undefined) return undefined;
+	return `${failure.reason} on line ${lineAt(text, start) + failure.line - 1}`;
+}
 
 export function stripProse(
 	text: string,
@@ -89,21 +103,29 @@ export function stripProse(
 	return formsOnly(text, proseJudge, onSkip);
 }
 
-export function proseHeads(interp: Interp, text: string): string[] {
-	const tokens = new Reader();
-	tokens.push(stripProse(text));
-	const heads: string[] = [];
-	while (!tokens.isEmpty()) {
-		let exp: unknown;
-		try {
-			exp = tokens.read();
-		} catch {
-			break;
+export function proseSkipped(interp: Interp, text: string): Skipped[] {
+	const skipped: Skipped[] = [];
+	for (const span of formSpans(text)) {
+		const [start, end] = span;
+		const unreadable = unreadableReason(text, start, end);
+		if (unreadable !== undefined) {
+			skipped.push({ span, reason: unreadable });
+			continue;
 		}
-		if (readsAsProse(interp, exp) === undefined) continue;
-		if (exp instanceof Cell && exp.car instanceof Sym) heads.push(exp.car.name);
+		const classification = readsAsProse(
+			interp,
+			readForm(text.slice(start, end)),
+		);
+		if (classification !== undefined)
+			skipped.push({ span, reason: classification.reason });
 	}
-	return heads;
+	return skipped;
+}
+
+function readForm(source: string): unknown {
+	const tokens = new Reader();
+	tokens.push(source);
+	return tokens.read();
 }
 
 export interface SyntaxError_ {

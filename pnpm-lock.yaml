@@ -939,6 +939,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*

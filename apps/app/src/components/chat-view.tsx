@@ -1,5 +1,5 @@
 import { MessageMemories } from "@repo/components";
-import { formsIn } from "@repo/syntax";
+import { formsIn, type Skipped } from "@repo/syntax";
 import {
 	Conversation,
 	ConversationContent,
@@ -121,16 +121,14 @@ function AssistantText({
 }: {
 	id: string;
 	text: string;
-	skipped: string[];
+	skipped: Skipped[];
 	busy: boolean;
 }) {
 	const { shown } = useUI();
-	const { prose, heads } = useMemo(
-		() => formsIn(text, skipped),
-		[text, skipped],
-	);
+	const spans = useMemo(() => skipped.map((s) => s.span), [skipped]);
+	const { prose, heads } = useMemo(() => formsIn(text, spans), [text, spans]);
 	return (
-		<SkippedProse heads={skipped}>
+		<SkippedProse text={text} spans={spans}>
 			{shown.lisp ? (
 				<Markdown lisp>{text}</Markdown>
 			) : (

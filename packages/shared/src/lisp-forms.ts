@@ -5,6 +5,11 @@ export interface FormJudge {
 
 export type FormSpan = [start: number, end: number];
 
+export interface Skipped {
+	readonly span: FormSpan;
+	readonly reason: string;
+}
+
 function endOfString(text: string, i: number): number {
 	for (let j = i + 1; j < text.length; j++) {
 		const c = text[j];

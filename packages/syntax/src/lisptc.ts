@@ -134,47 +134,39 @@ export const lisptc = defineLanguage({
 
 export const highlighter = createHighlighter({ languages: [lisptc] });
 
-function readsAsProse(
-	source: string,
-	heads: readonly string[],
-	skipped: readonly string[],
+function within(
+	skipped: readonly FormSpan[],
+	start: number,
+	end: number,
 ): boolean {
-	if (looksLikeParenthesizedProse(source)) return true;
-	return heads[0] !== undefined && skipped.includes(heads[0]);
+	return skipped.some(([from, to]) => start >= from && end <= to);
 }
 
-function proseSpans(text: string, skipped: readonly string[]): FormSpan[] {
-	return formSpans(text).filter(([start, end]) => {
-		const source = text.slice(start, end);
-		return readsAsProse(source, scan(source).heads, skipped);
-	});
-}
-
-export function tokensIn(text: string, skipped: readonly string[] = []) {
+export function tokensIn(text: string, skipped: readonly FormSpan[] = []) {
 	const { tokens } = highlighter.tokenize(text, { lang: "lisptc" });
 	if (skipped.length === 0) return tokens;
-	const prose = proseSpans(text, skipped);
 	let at = 0;
 	return tokens.map((token) => {
 		const start = at;
 		at += token.value.length;
-		return prose.some(([from, to]) => start >= from && at <= to)
-			? { value: token.value }
-			: token;
+		return within(skipped, start, at) ? { value: token.value } : token;
 	});
 }
 
-export function formsIn(text: string, skipped: readonly string[] = []): Forms {
+export function formsIn(
+	text: string,
+	skipped: readonly FormSpan[] = [],
+): Forms {
 	const heads: string[] = [];
 	let prose = "";
 	let at = 0;
 	for (const [start, end] of formSpans(text)) {
 		const source = text.slice(start, end);
-		const inner = scan(source).heads;
-		if (readsAsProse(source, inner, skipped)) continue;
+		if (within(skipped, start, end) || looksLikeParenthesizedProse(source))
+			continue;
 		prose += text.slice(at, start);
 		at = end;
-		heads.push(...inner);
+		heads.push(...scan(source).heads);
 	}
 	prose += text.slice(at);
 	return {

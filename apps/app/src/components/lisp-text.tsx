@@ -1,22 +1,43 @@
-import { tokensIn } from "@repo/syntax";
-import { Children, createContext, type ReactNode, useContext } from "react";
+import { type FormSpan, tokensIn } from "@repo/syntax";
+import {
+	Children,
+	createContext,
+	type ReactNode,
+	useContext,
+	useMemo,
+} from "react";
 
-const Skipped = createContext<readonly string[]>([]);
+interface Skips {
+	readonly text: string;
+	readonly spans: readonly FormSpan[];
+}
+
+const Skipped = createContext<Skips>({ text: "", spans: [] });
 
 export function SkippedProse({
-	heads,
+	text,
+	spans,
 	children,
 }: {
-	heads: readonly string[];
+	text: string;
+	spans: readonly FormSpan[];
 	children: ReactNode;
 }) {
-	return <Skipped.Provider value={heads}>{children}</Skipped.Provider>;
+	const value = useMemo(() => ({ text, spans }), [text, spans]);
+	return <Skipped.Provider value={value}>{children}</Skipped.Provider>;
+}
+
+function spansOver(fragment: string, { text, spans }: Skips): FormSpan[] {
+	if (spans.length === 0) return [];
+	const at = text.indexOf(fragment);
+	if (at < 0) return [];
+	return spans.map(([from, to]) => [from - at, to - at]);
 }
 
 export function LispText({ children }: { children: string }) {
 	const skipped = useContext(Skipped);
 	let at = 0;
-	return tokensIn(children, skipped).map((t) => {
+	return tokensIn(children, spansOver(children, skipped)).map((t) => {
 		const key = at;
 		at += t.value.length;
 		return (

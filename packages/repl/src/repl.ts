@@ -23,6 +23,7 @@ import {
 	type StepContext,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
+import type { Skipped } from "@repo/shared/lisp-forms";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -262,7 +263,7 @@ export class AgentRepl extends MemoryRepl {
 		);
 	}
 
-	unrun(code: string): string[] {
+	unrun(code: string): Skipped[] {
 		return this.hooks.unrun.run(() => [], this.interp, code);
 	}
 

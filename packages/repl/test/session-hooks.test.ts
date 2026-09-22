@@ -120,19 +120,21 @@ describe("an extension hooking the session", () => {
 		});
 	});
 
-	it("names the forms a step did not run", async () => {
+	it("spans the forms a step did not run", async () => {
 		const r = new AgentRepl({
 			extensions: [
 				extension((hooks) => {
 					hooks.unrun.use((interp, code, next) => [
 						...next(interp, code),
-						code.trim(),
+						{ span: [0, code.trimEnd().length], reason: "left alone" },
 					]);
 				}),
 			],
 		});
 
-		expect(r.unrun("(echo 1)")).toEqual(["(echo 1)"]);
+		expect(r.unrun("(echo 1)")).toEqual([
+			{ span: [0, 8], reason: "left alone" },
+		]);
 	});
 
 	it("hands a value to whoever holds the slot", () => {

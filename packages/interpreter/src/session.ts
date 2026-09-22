@@ -1,3 +1,4 @@
+import type { Skipped } from "@repo/shared/lisp-forms";
 import type { Addressed } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
 import { Chain } from "./hooks.ts";
@@ -61,7 +62,7 @@ export interface SessionHooks {
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
 	readonly answered: Chain<[ctx: StepContext, out: StepOutcome], boolean>;
-	readonly unrun: Chain<[interp: Interp, code: string], string[]>;
+	readonly unrun: Chain<[interp: Interp, code: string], Skipped[]>;
 	readonly annotate: Chain<
 		[buffer: ChannelBuffer, into: StepAnnotations],
 		StepAnnotations
