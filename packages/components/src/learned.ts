@@ -11,6 +11,7 @@ export interface Picked {
 export interface Judgment {
 	failed?: string;
 	worthKeeping?: number;
+	lesson?: number;
 	kind?: string;
 	kindConfidence?: number;
 	candidate?: string;
@@ -65,6 +66,7 @@ export function judgments(value: unknown): Judgment[] {
 		judged.push({
 			failed: text(raw.failed),
 			worthKeeping: number(raw.worthKeeping),
+			lesson: number(raw.lesson),
 			kind: text(raw.kind),
 			kindConfidence: number(raw.kindConfidence),
 			candidate: text(raw.candidate),

@@ -77,6 +77,7 @@ describe("a host with no filesystem behind it still builds", () => {
 			store,
 			clock: { now: () => 0 },
 			learn: noLearner,
+			watch: () => {},
 			prompt: () => "",
 		});
 		expect(extension.bank.store).toBe(store);

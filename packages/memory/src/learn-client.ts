@@ -29,6 +29,10 @@ const NOT_STALE = "none of them was contradicted";
 
 const NONE = "none";
 
+const ERROR_TRIGGER_CHARS = 60;
+
+const NO_TRIGGER = "nothing here will repeat in a way worth hooking";
+
 function stateOf(observed: Observed): JsonValue {
 	return {
 		said: observed.said ?? null,
@@ -86,6 +90,33 @@ function topLevel(code: string): string[] {
 	return out;
 }
 
+function callShape(form: string): string | undefined {
+	const head = /^\(([^\s()]+)/.exec(form);
+	if (head === null) return undefined;
+	const first = /^\([^\s()]+\s+("(?:[^"\\]|\\.)*")/.exec(form);
+	return first === null
+		? `(call (${head[1]}))`
+		: `(call (${head[1]} ${first[1]}))`;
+}
+
+function errorShape(output: string): string | undefined {
+	const said = output.replace(/^error:\s*/i, "").trim();
+	if (said === "") return undefined;
+	return `(error ${JSON.stringify(said.slice(0, ERROR_TRIGGER_CHARS))})`;
+}
+
+function triggersIn(observed: Observed): string[] {
+	const out: string[] = [];
+	const add = (shape: string | undefined): void => {
+		if (shape !== undefined && !out.includes(shape)) out.push(shape);
+	};
+	for (const step of observed.recent) {
+		if (step.failed) add(errorShape(step.output));
+		for (const form of topLevel(step.ran)) add(callShape(form));
+	}
+	return out.slice(0, SPANS_SEEN);
+}
+
 function formsIn(observed: Observed): string[] {
 	const order = [
 		...observed.recent.filter((step) => !step.failed),
@@ -115,15 +146,16 @@ function questionsFor(
 	observed: Observed,
 	spans: readonly string[],
 	forms: readonly string[],
+	triggers: readonly string[],
 ): Record<string, Question> {
 	const memories = keyed(observed.known);
 	const questions: Record<string, Question> = {
 		worth_keeping: noul(
-			"Something in `recent` is worth carrying into a later, unrelated session.",
+			"Something in `recent` is worth carrying into a later, unrelated session, and the session had to find it out rather than read it off the platform.",
 			{
 				true: "a correction, a name that turned out wrong, a constraint found the hard way, a recipe that worked",
 				false:
-					"routine work, anything the REPL can recompute on demand, anything true only of this task",
+					"routine work; anything true only of this task; anything the platform will say again whenever it is asked, such as what a search, a listing, a catalogue, a doc lookup or a server's own description of itself returned",
 			},
 		),
 		kind: choice("What kind of thing is worth keeping from `recent`?", {
@@ -132,6 +164,15 @@ function questionsFor(
 			nothing: "nothing here is worth keeping",
 		}),
 	};
+	if (observed.recent.some((step) => step.failed))
+		questions.lesson = noul(
+			"A step in `recent` failed, and what made it fail will be true again the next time the same thing is tried.",
+			{
+				true: "a wrong name, a missing or misordered argument, a constraint the call has to satisfy, a state the tool has to be in first",
+				false:
+					"a transient fault: a timeout, a rate limit, a network blip, or a one-off value that happened to be wrong",
+			},
+		);
 	if (spans.length > 0)
 		questions.fact_span = choice(
 			"Which of these, exactly as it stands, states the durable fact?",
@@ -141,6 +182,11 @@ function questionsFor(
 		questions.procedure_form = choice(
 			"Which of these forms is worth replaying in a later session, rather than a one-off of this task?",
 			enumerated(forms, "f", NO_FORM),
+		);
+	if (triggers.length > 0)
+		questions.trigger = choice(
+			"What will be happening when this is needed again? Pick the event that will repeat, so the memory arrives before the mistake can.",
+			enumerated(triggers, "t", NO_TRIGGER),
 		);
 	if (Object.keys(memories).length > 0) {
 		questions.covered = choice(
@@ -184,22 +230,29 @@ function noulIn(answer: Answer | undefined): number {
 	return answer?.type === "noul" ? answer.noul : 0;
 }
 
+function noulOr(answer: Answer | undefined): number | undefined {
+	return answer?.type === "noul" ? answer.noul : undefined;
+}
+
 export function judgeLearner(judge: Judge): Learner {
 	return {
 		async consider(observed, signal) {
 			const spans = spansIn(observed);
 			const forms = formsIn(observed);
+			const triggers = triggersIn(observed);
 			const judged = await judge(
 				{
 					state: stateOf(observed),
-					questions: questionsFor(observed, spans, forms),
+					questions: questionsFor(observed, spans, forms, triggers),
 				},
 				signal,
 			);
 			const { answers } = judged;
 			const kind = kindIn(answers.kind);
 			return {
+				cost: judged.usage?.cost,
 				worthKeeping: noulIn(answers.worth_keeping),
+				lesson: noulOr(answers.lesson),
 				kind,
 				kindConfidence:
 					answers.kind?.type === "choice" ? answers.kind.confidence : 0,
@@ -209,6 +262,7 @@ export function judgeLearner(judge: Judge): Learner {
 						: kind === "procedure"
 							? chosen(answers.procedure_form, "f", forms)
 							: undefined,
+				trigger: chosen(answers.trigger, "t", triggers),
 				covered: picked(answers.covered),
 				stale: picked(answers.stale),
 				calibrated: judged.calibrated,
@@ -228,7 +282,7 @@ export function judgeLearner(judge: Judge): Learner {
 				recomputable: noul(
 					"The REPL could produce this on demand: a doc listing, a discovery call, anything recomputable.",
 					{
-						true: "a listing, a signature, a value any call would hand back again",
+						true: "a listing, a signature, what a server or tool says about itself, or any value a search or catalogue call would hand back again",
 						false: "something that had to be found out the hard way",
 					},
 				),
@@ -250,6 +304,7 @@ export function judgeLearner(judge: Judge): Learner {
 			);
 			const { answers } = judged;
 			return {
+				cost: judged.usage?.cost,
 				durable: noulIn(answers.durable),
 				recomputable: noulIn(answers.recomputable),
 				covered: picked(answers.covered),

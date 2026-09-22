@@ -61,6 +61,7 @@ export interface Judged {
 	readonly usage?: {
 		readonly inputTokens: number;
 		readonly outputTokens: number;
+		readonly cost?: number;
 	};
 }
 
@@ -262,7 +263,12 @@ function usageIn(value: unknown): Judged["usage"] {
 	const output =
 		value.outputTokens ?? value.output_tokens ?? value.completion_tokens;
 	if (typeof input !== "number" || typeof output !== "number") return undefined;
-	return { inputTokens: input, outputTokens: output };
+	const cost = value.cost;
+	return {
+		inputTokens: input,
+		outputTokens: output,
+		...(typeof cost === "number" && Number.isFinite(cost) ? { cost } : {}),
+	};
 }
 
 async function post(

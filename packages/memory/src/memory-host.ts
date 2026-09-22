@@ -22,11 +22,13 @@ import { judgeLearner } from "./learn-client.ts";
 import {
 	formToMemory,
 	type Learner,
+	type Learning,
 	type Memory,
 	type MemoryHost,
 	type MemoryStore,
 	memoryToForm,
 	noLearner,
+	type Watcher,
 } from "./memory.ts";
 
 export function memoryDirFor(scope?: string): string {
@@ -191,6 +193,34 @@ async function configuredLearner(): Promise<Learner> {
 	return configured;
 }
 
+function money(cost: number | undefined): string {
+	return cost === undefined ? "" : ` $${cost.toFixed(6)}`;
+}
+
+function pick(picked: { key: string; confidence: number } | undefined): string {
+	return picked === undefined
+		? "-"
+		: `${picked.key}/${picked.confidence.toFixed(2)}`;
+}
+
+function line(event: Learning): string {
+	const head = `learn ${event.at} ${event.ms}ms`;
+	if (event.failed !== undefined) return `${head} FAILED ${event.failed}`;
+	if (event.at === "vet") {
+		const vetted = event.vetted;
+		if (vetted === undefined) return `${head} no answer`;
+		return `${head} durable=${vetted.durable.toFixed(2)} recomputable=${vetted.recomputable.toFixed(2)} covered=${pick(vetted.covered)}${money(vetted.cost)}${event.refusal === undefined ? "" : ` REFUSED ${event.refusal}`}`;
+	}
+	const judged = event.judged;
+	if (judged === undefined) return `${head} no answer`;
+	return `${head} worth=${judged.worthKeeping.toFixed(2)} kind=${judged.kind}/${judged.kindConfidence.toFixed(2)} covered=${pick(judged.covered)} stale=${pick(judged.stale)}${judged.calibrated ? "" : " uncalibrated"}${money(judged.cost)}`;
+}
+
+const memoryWatcher: Watcher = (event) => {
+	if (event.failed === undefined && !memoryEnv.LISPTC_LEARN_LOG) return;
+	console.error(line(event));
+};
+
 const memoryLearner: Learner = {
 	async consider(observed, signal) {
 		return await (await configuredLearner()).consider(observed, signal);
@@ -205,6 +235,7 @@ export function memoryHostFor(scope?: string): MemoryHost {
 		store: scopedMemoryStore(scope),
 		clock: systemClock,
 		learn: memoryLearner,
+		watch: memoryWatcher,
 		prompt: memoryPrompt,
 	};
 }
@@ -215,5 +246,6 @@ export const memoryHost: MemoryHost = {
 	},
 	clock: systemClock,
 	learn: memoryLearner,
+	watch: memoryWatcher,
 	prompt: memoryPrompt,
 };

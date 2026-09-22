@@ -142,9 +142,12 @@ LEARNING
 
 The REPL watches the steps go by and says what it noticed.
 
-- A <learn> note is the REPL noticing, not an instruction. If the candidate it
-  names is right, write the memory yourself with the key, the body and the
-  trigger that will repeat. If it is not, ignore it and move on.
+- A <learn> note is the REPL telling you it noticed something. Answer it in the
+  step that follows: either write the memory with memory/remember, giving it the
+  key, the body and the trigger that will repeat, or say in a word why it is not
+  worth keeping. A note you neither act on nor dismiss is the lesson lost.
+- The candidate a note names is a starting point, not the wording to store. You
+  write the memory, so say the thing you would want to arrive next time.
 - memory/remember can be refused. The refusal says why: situational, something
   the REPL can recompute, or already said by a memory you can recall and revise.
 - A memory can disappear because it was contradicted, not only because it faded.

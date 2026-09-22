@@ -30,6 +30,7 @@ import {
 	LEARN_AT,
 	type Learned,
 	type Learner,
+	type Learning,
 	MemoryBank,
 	memoryExtension,
 	type Observed,
@@ -39,8 +40,10 @@ import {
 	SAID_CHARS,
 	SPANS_SEEN,
 	SUSPECT_AT,
+	slugFor,
 	type Vetting,
 	VolatileStore,
+	type Watcher,
 	WINDOW,
 } from "../src/memory.ts";
 
@@ -101,6 +104,7 @@ interface Ran {
 interface Fixture {
 	interp: Interp;
 	bank: MemoryBank;
+	watched: Learning[];
 	step(code: string): Promise<Ran>;
 	said(text: string): void;
 }
@@ -111,9 +115,13 @@ function notes(step: Ran): string {
 
 function fixture(learner: Learner, clock: Clock = frozen): Fixture {
 	const store = new VolatileStore();
-	const bank = new MemoryBank(store, clock, learner);
+	const watched: Learning[] = [];
+	const watch: Watcher = (event) => {
+		watched.push(event);
+	};
+	const bank = new MemoryBank(store, clock, learner, watch);
 	const extension = memoryExtension(
-		{ store, clock, learn: learner, prompt: () => "" },
+		{ store, clock, learn: learner, watch, prompt: () => "" },
 		{ bank },
 	);
 	const interp = new Interp({ extensions: [extension] });
@@ -122,6 +130,7 @@ function fixture(learner: Learner, clock: Clock = frozen): Fixture {
 	return {
 		interp,
 		bank,
+		watched,
 		async step(code: string): Promise<Ran> {
 			const ctx: StepContext = { interp, code, emit: () => {} };
 			const buffer = bufferTransport();
@@ -169,11 +178,8 @@ describe("the learning gate", () => {
 		const next = await f.step("(+ 2 3)");
 
 		expect(next.learned.map((one) => one.what)).toEqual(["candidate"]);
-		expect(notes(next)).toContain("(procedure)");
-		expect(notes(next)).toContain(
-			'candidate: (mcp/call "acme" "browser_navigate" url)',
-		);
 		expect(notes(next)).toContain("memory/remember");
+		expect(notes(next)).toContain('(mcp/call "acme" "browser_navigate" url)');
 	});
 
 	it("hands the learner a window, so a failure and its fix arrive together", async () => {
@@ -571,5 +577,144 @@ describe("what the judge is asked", () => {
 			stale: { key: "acme-url", confidence: 0.85 },
 			calibrated: true,
 		});
+	});
+});
+
+describe("the threshold sits in the gap jev leaves", () => {
+	const KEEP = [0.79, 0.79, 0.75, 0.74, 0.69];
+	const SKIP = [0.06, 0.12, 0.16, 0.07, 0.08];
+	const PLATFORM = [0.1, 0.14, 0.15, 0.09, 0.1];
+
+	it("clears every measured correction", () => {
+		for (const noul of KEEP) expect(noul).toBeGreaterThanOrEqual(LEARN_AT);
+	});
+
+	it("clears none of the measured routine work", () => {
+		for (const noul of SKIP) expect(noul).toBeLessThan(LEARN_AT);
+	});
+
+	it("clears nothing the platform restates on demand", () => {
+		for (const noul of PLATFORM) expect(noul).toBeLessThan(LEARN_AT);
+	});
+
+	it("sits in the gap rather than on either edge", () => {
+		const floor = Math.min(...KEEP);
+		const ceiling = Math.max(...SKIP, ...PLATFORM);
+		expect(LEARN_AT - ceiling).toBeGreaterThan(0.15);
+		expect(floor - LEARN_AT).toBeGreaterThan(0.15);
+	});
+});
+
+describe("what the watcher is told", () => {
+	it("reports a judgment that came back, with how long it took", async () => {
+		const f = fixture(learnerOf([keeping()]));
+
+		await f.step("(+ 1 2)");
+		await f.step("(+ 2 3)");
+
+		const seen = f.watched.filter((one) => one.at === "consider");
+		expect(seen[0].failed).toBeUndefined();
+		expect(seen[0].judged?.kind).toBe("procedure");
+		expect(typeof seen[0].ms).toBe("number");
+	});
+
+	it("reports a judgment that threw, rather than swallowing it", async () => {
+		const angry: Learner = {
+			consider() {
+				throw new Error("jev answered 401");
+			},
+			vet: () => undefined,
+		};
+		const f = fixture(angry);
+
+		await f.step("(+ 1 2)");
+		await f.step("(+ 2 3)");
+
+		const seen = f.watched.filter((one) => one.at === "consider");
+		expect(seen.length).toBeGreaterThan(0);
+		expect(seen[0].failed).toContain("401");
+		expect(seen[0].judged).toBeUndefined();
+	});
+
+	it("reports a veto and the sentence it refused with", async () => {
+		const f = fixture(
+			learnerOf([], { durable: 0.1, recomputable: 0, calibrated: true }),
+		);
+
+		await expect(
+			runAsync(f.interp, '(memory/remember "now" "the file is open")'),
+		).rejects.toThrow("situational");
+
+		const seen = f.watched.filter((one) => one.at === "vet");
+		expect(seen).toHaveLength(1);
+		expect(seen[0].vetted?.durable).toBe(0.1);
+		expect(seen[0].refusal).toContain("situational");
+	});
+});
+
+describe("a note is a form, not a suggestion", () => {
+	it("hands over a remember call with the trigger jev picked", async () => {
+		const f = fixture(
+			learnerOf([
+				keeping({
+					kind: "fact",
+					candidate: "acme calls its navigation tool browser_navigate",
+					trigger: '(call (mcp/call "acme"))',
+				}),
+			]),
+		);
+
+		await f.step("(+ 1 2)");
+		const text = notes(await f.step("(+ 2 3)"));
+
+		expect(text).toContain('(memory/remember "acme-calls-its-navigation-tool"');
+		expect(text).toContain('"acme calls its navigation tool browser_navigate"');
+		expect(text).toContain(':on \'(call (mcp/call "acme"))');
+	});
+
+	it("quotes a procedure body and does not quote a fact body", async () => {
+		const asCode = fixture(
+			learnerOf([keeping({ kind: "procedure", candidate: '(acme/go "x")' })]),
+		);
+		await asCode.step("(+ 1 2)");
+		expect(notes(await asCode.step("(+ 2 3)"))).toContain('\'(acme/go "x")');
+	});
+
+	it("still asks for one when nothing in the window states it", async () => {
+		const f = fixture(learnerOf([keeping({ candidate: undefined })]));
+
+		await f.step("(+ 1 2)");
+		const text = notes(await f.step("(+ 2 3)"));
+
+		expect(text).toContain("in your own words");
+		expect(text).not.toContain('(memory/remember "');
+	});
+
+	it("slugs a key out of the body, skipping the small words", () => {
+		expect(slugFor("the revenue column is stored in cents, not dollars")).toBe(
+			"revenue-column-stored-cents-dollars",
+		);
+		expect(slugFor("!!!")).toBe("lesson");
+	});
+});
+
+describe("a note holds the turn open", () => {
+	it("refuses to call the step answered, once", async () => {
+		const f = fixture(learnerOf([keeping()]));
+
+		await f.step("(+ 1 2)");
+		await f.step("(+ 2 3)");
+
+		expect(f.bank.takeUnanswered()).toBe(true);
+		expect(f.bank.takeUnanswered()).toBe(false);
+	});
+
+	it("leaves the turn alone when nothing was worth keeping", async () => {
+		const f = fixture(learnerOf([keeping({ kind: "nothing" })]));
+
+		await f.step("(+ 1 2)");
+		await f.step("(+ 2 3)");
+
+		expect(f.bank.takeUnanswered()).toBe(false);
 	});
 });

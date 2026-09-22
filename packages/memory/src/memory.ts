@@ -44,8 +44,32 @@ export const OUTPUT_CHARS = 2000;
 export const KNOWN_SEEN = 20;
 export const KNOWN_BODY_CHARS = 200;
 export const SPANS_SEEN = 24;
+export const SLUG_WORDS = 5;
 
-export const LEARN_AT = 0.7;
+const SLUG_SKIPS = new Set([
+	"a",
+	"an",
+	"and",
+	"as",
+	"at",
+	"for",
+	"in",
+	"is",
+	"it",
+	"not",
+	"of",
+	"on",
+	"or",
+	"that",
+	"the",
+	"to",
+	"was",
+	"with",
+]);
+
+export const LEARN_AT = 0.5;
+export const LESSON_AT = 0.5;
+export const LEARN_AFTER_LESSON_AT = 0.3;
 export const COVERED_AT = 0.6;
 export const SUSPECT_AT = 0.5;
 export const FORGET_AT = 0.8;
@@ -333,10 +357,13 @@ export interface Picked {
 export type Keepable = "fact" | "procedure" | "nothing";
 
 export interface Judgment {
+	readonly cost?: number;
 	readonly worthKeeping: number;
+	readonly lesson?: number;
 	readonly kind: Keepable;
 	readonly kindConfidence: number;
 	readonly candidate?: string;
+	readonly trigger?: string;
 	readonly covered?: Picked;
 	readonly stale?: Picked;
 	readonly calibrated: boolean;
@@ -349,6 +376,7 @@ export interface Proposed {
 }
 
 export interface Vetting {
+	readonly cost?: number;
 	readonly durable: number;
 	readonly recomputable: number;
 	readonly covered?: Picked;
@@ -365,6 +393,19 @@ export const noLearner: Learner = {
 	vet: () => undefined,
 };
 
+export interface Learning {
+	readonly at: "consider" | "vet";
+	readonly ms: number;
+	readonly failed?: string;
+	readonly judged?: Judgment;
+	readonly vetted?: Vetting;
+	readonly refusal?: string;
+}
+
+export type Watcher = (event: Learning) => void;
+
+export const noWatcher: Watcher = () => {};
+
 export interface Learned {
 	what: "candidate" | "dropped" | "advice";
 	text: string;
@@ -375,6 +416,7 @@ export const learned = topic<Learned>("learn");
 export interface Assessment {
 	failed?: string;
 	worthKeeping?: number;
+	lesson?: number;
 	kind?: Keepable;
 	kindConfidence?: number;
 	candidate?: string;
@@ -400,16 +442,29 @@ function tail(text: string, chars: number): string {
 	return text.length <= chars ? text : text.slice(text.length - chars);
 }
 
+export function slugFor(body: string): string {
+	const words = body
+		.toLowerCase()
+		.replace(/[^a-z0-9\s-]/g, " ")
+		.split(/\s+/)
+		.filter((word) => word !== "" && !SLUG_SKIPS.has(word));
+	const slug = words.slice(0, SLUG_WORDS).join("-");
+	return slug === "" ? "lesson" : slug;
+}
+
 function nudgeFor(judgment: Judgment): string {
-	const lines = [
-		`something in the last step looks worth keeping (${judgment.kind}).`,
-	];
-	if (judgment.candidate !== undefined)
-		lines.push(`candidate: ${judgment.candidate}`);
-	lines.push(
-		"write it with memory/remember and give it the trigger that will repeat, or ignore this.",
-	);
-	return lines.join("\n");
+	const body = judgment.candidate;
+	if (body === undefined)
+		return `the last steps taught something worth keeping (${judgment.kind}), but nothing in them states it on its own. Write it in your own words with memory/remember, and hook it to the event that will bring it back.`;
+	const quoted =
+		judgment.kind === "procedure" ? `'${body}` : JSON.stringify(body);
+	const on =
+		judgment.trigger === undefined ? "" : `\n  :on '${judgment.trigger}`;
+	return [
+		`this is worth keeping. run it, or change the wording and run yours:`,
+		`(memory/remember "${slugFor(body)}"`,
+		`  ${quoted}${on})`,
+	].join("\n");
 }
 
 function knownIn(
@@ -456,11 +511,13 @@ export class MemoryBank {
 	};
 	private outstanding?: Promise<Judgment | undefined>;
 	private failure?: string;
+	private unanswered = false;
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
 		readonly clock: Clock = systemClock,
 		readonly learner: Learner = noLearner,
+		readonly watcher: Watcher = noWatcher,
 	) {}
 
 	private now(): number {
@@ -552,16 +609,28 @@ export class MemoryBank {
 		interp: Interp,
 		surfaced: FiredMemory[],
 	): Promise<Judgment | undefined> {
+		const began = this.now();
 		try {
 			const said = userMessages(interp).at(-1);
-			return await this.learner.consider({
+			const judged = await this.learner.consider({
 				said: said === undefined ? undefined : tail(said, SAID_CHARS),
 				recent: [...this.window],
 				surfaced,
 				known: knownIn(await this.store.all(), (m) => this.strength(m)),
 			});
+			this.watcher({
+				at: "consider",
+				ms: this.now() - began,
+				judged,
+			});
+			return judged;
 		} catch (ex) {
 			this.failure = ex instanceof Error ? ex.message : String(ex);
+			this.watcher({
+				at: "consider",
+				ms: this.now() - began,
+				failed: this.failure,
+			});
 			return undefined;
 		}
 	}
@@ -598,12 +667,17 @@ export class MemoryBank {
 			}
 		}
 		const covered = judgment.covered;
+		const lesson = judgment.lesson ?? 0;
+		const worth =
+			judgment.worthKeeping >= LEARN_AT ||
+			(lesson >= LESSON_AT && judgment.worthKeeping >= LEARN_AFTER_LESSON_AT);
 		if (
-			judgment.worthKeeping >= LEARN_AT &&
+			worth &&
 			judgment.kind !== "nothing" &&
 			!(covered !== undefined && covered.confidence >= COVERED_AT)
 		) {
 			text += this.note("candidate", nudgeFor(judgment));
+			this.unanswered = true;
 			did.push("candidate");
 		}
 		assessed.emit(this.channels, {
@@ -611,6 +685,7 @@ export class MemoryBank {
 				worthKeeping: judgment.worthKeeping,
 				kind: judgment.kind,
 				kindConfidence: judgment.kindConfidence,
+				lesson: judgment.lesson,
 				candidate: judgment.candidate,
 				covered,
 				stale,
@@ -629,6 +704,12 @@ export class MemoryBank {
 		yield* settled(this.store.put(memory));
 	}
 
+	takeUnanswered(): boolean {
+		const held = this.unanswered;
+		this.unanswered = false;
+		return held;
+	}
+
 	private note(what: Learned["what"], text: string): string {
 		learned.emit(this.channels, { user: { what, text } });
 		return `<learn>\n${text}\n</learn>\n`;
@@ -636,6 +717,7 @@ export class MemoryBank {
 
 	*vetted(key: string, body: unknown): Eval<void> {
 		if (this.learner === noLearner) return;
+		const began = this.now();
 		let vetting: Vetting | undefined;
 		try {
 			const known = knownIn(yield* settled(this.store.all()), (m) =>
@@ -645,17 +727,19 @@ export class MemoryBank {
 				this.learner.vet({ key, body: bodyText(body), known }),
 			);
 		} catch (ex) {
-			assessed.emit(this.channels, {
-				user: {
-					failed: ex instanceof Error ? ex.message : String(ex),
-					did: [],
-				},
-			});
+			const failed = ex instanceof Error ? ex.message : String(ex);
+			this.watcher({ at: "vet", ms: this.now() - began, failed });
+			assessed.emit(this.channels, { user: { failed, did: [] } });
 			return;
 		}
-		if (vetting === undefined) return;
-		const refusal = refusalIn(vetting);
-		if (refusal === undefined) return;
+		const refusal = vetting === undefined ? undefined : refusalIn(vetting);
+		this.watcher({
+			at: "vet",
+			ms: this.now() - began,
+			vetted: vetting,
+			refusal,
+		});
+		if (vetting === undefined || refusal === undefined) return;
 		if (vetting.calibrated) throw new EvalException(refusal, key, false);
 		this.pending += this.note("advice", `${key}: ${refusal}`);
 	}
@@ -786,6 +870,7 @@ export interface MemoryHost {
 	store: MemoryStore;
 	clock: Clock;
 	learn: Learner;
+	watch: Watcher;
 	prompt: PromptSource;
 }
 
@@ -828,6 +913,9 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 			bank.observe(ctx.interp, out.model);
 			return next(ctx, out);
 		});
+		hooks.answered.use((ctx, out, next) =>
+			bank.takeUnanswered() ? false : next(ctx, out),
+		);
 		hooks.annotate.use((buffer, into, next) => {
 			const memories = buffer.collect(fired);
 			const notes = buffer.collect(learned);
@@ -855,7 +943,8 @@ export function memoryExtension(
 	options: MemoryOptions = {},
 ): MemoryExtension {
 	const bank =
-		options.bank ?? new MemoryBank(host.store, host.clock, host.learn);
+		options.bank ??
+		new MemoryBank(host.store, host.clock, host.learn, host.watch);
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
 		prompt: host.prompt(),

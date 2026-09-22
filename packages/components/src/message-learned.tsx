@@ -14,6 +14,8 @@ function summary(judgment: Judgment): string {
 		`worth ${pct(judgment.worthKeeping)}`,
 		`${judgment.kind ?? "—"} ${pct(judgment.kindConfidence)}`,
 	];
+	if (judgment.lesson !== undefined)
+		parts.push(`lesson ${pct(judgment.lesson)}`);
 	if (judgment.covered !== undefined)
 		parts.push(
 			`covered by ${judgment.covered.key} ${pct(judgment.covered.confidence)}`,
