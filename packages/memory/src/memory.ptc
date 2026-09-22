@@ -12,6 +12,8 @@ kinds, because in this language they are the same material.
   reading and there is no echo step to write after it.
 - (memories) every memory as key, score and trigger, strongest first.
 - (memory/forget key) drop one for good.
+- (memory/wipe) drop every one for good, and say how many went. There is no second
+  copy and no undo, so run it only when the user asks for a clean slate.
 - (memory/replay key) evaluate a memory whose body is a form, and return what it
   produced. A memory holding a defun installs that function when you replay it.
   This is how a remembered recipe becomes a running one.

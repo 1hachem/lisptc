@@ -303,6 +303,19 @@ longer than one line, so write the subject and stop unless a description was
 asked for, and then keep it to a single line after the blank one. Trailers
 like Co-Authored-By are footers and do not count.
 
+## When to run them
+
+**The checks wait for the commit.** `typecheck`, `lint`, `knip`, `boundaries`,
+`check:arch`, `check:comments`, `check:docs` and `check:refs` are what a change
+has to satisfy before it goes in, so run them when the user asks to commit or
+push, and not while the work is still moving. Do not stop mid-feature to make
+one green.
+
+**The tests wait for the milestone.** When the user is happy with the feature in
+hand, that is when its tests get written, and when the suite gets run to see
+that nothing which passed before has stopped passing. Run them then, and
+whenever a change is meant to alter behaviour that a test already pins.
+
 ## Writing Style
 
 These rules cover everything written here. Prose, documentation, commit

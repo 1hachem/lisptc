@@ -24,7 +24,11 @@ function summary(judgment: Judgment): string {
 		parts.push(`stale ${judgment.stale.key} ${pct(judgment.stale.confidence)}`);
 	if (judgment.calibrated === false) parts.push("uncalibrated");
 	parts.push(
-		judgment.did.length === 0 ? "did nothing" : judgment.did.join(", "),
+		judgment.repeated === true
+			? "already asked"
+			: judgment.did.length === 0
+				? "did nothing"
+				: judgment.did.join(", "),
 	);
 	return parts.join(" · ");
 }

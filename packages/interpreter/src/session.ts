@@ -60,6 +60,10 @@ export interface SessionHooks {
 	readonly beginTurn: Chain<[ctx: TurnContext], Eval<void>>;
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
+	readonly stepSettled: Chain<
+		[ctx: StepContext, out: Bounded],
+		Promise<Bounded>
+	>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
 	readonly answered: Chain<[ctx: StepContext, out: StepOutcome], boolean>;
 	readonly unrun: Chain<[interp: Interp, code: string], Skipped[]>;
@@ -79,6 +83,7 @@ export function newSessionHooks(): SessionHooks {
 		beginTurn: new Chain(),
 		evalStep: new Chain(),
 		stepOutput: new Chain(),
+		stepSettled: new Chain(),
 		stepError: new Chain(),
 		answered: new Chain(),
 		unrun: new Chain(),

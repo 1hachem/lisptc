@@ -73,8 +73,8 @@ export const LEARN_AFTER_LESSON_AT = 0.3;
 export const COVERED_AT = 0.6;
 export const SUSPECT_AT = 0.5;
 export const FORGET_AT = 0.8;
-export const DURABLE_AT = 0.5;
-export const RECOMPUTABLE_AT = 0.7;
+export const DURABLE_AT = 0.35;
+export const COPIED_AT = 0.6;
 
 export const TRIGGER_KINDS = [
 	"call",
@@ -378,7 +378,7 @@ export interface Proposed {
 export interface Vetting {
 	readonly cost?: number;
 	readonly durable: number;
-	readonly recomputable: number;
+	readonly copied: number;
 	readonly covered?: Picked;
 	readonly calibrated: boolean;
 }
@@ -397,6 +397,8 @@ export interface Learning {
 	readonly at: "consider" | "vet";
 	readonly ms: number;
 	readonly failed?: string;
+	readonly repeated?: boolean;
+	readonly did?: readonly string[];
 	readonly judged?: Judgment;
 	readonly vetted?: Vetting;
 	readonly refusal?: string;
@@ -415,6 +417,7 @@ export const learned = topic<Learned>("learn");
 
 export interface Assessment {
 	failed?: string;
+	repeated?: boolean;
 	worthKeeping?: number;
 	lesson?: number;
 	kind?: Keepable;
@@ -483,8 +486,8 @@ function knownIn(
 function refusalIn(vetting: Vetting): string | undefined {
 	if (vetting.durable < DURABLE_AT)
 		return "this reads as situational; it will not be true in another session";
-	if (vetting.recomputable >= RECOMPUTABLE_AT)
-		return "the REPL can tell you this; look it up instead";
+	if (vetting.copied >= COPIED_AT)
+		return "this is the platform describing itself; ask it again when you need it";
 	const covered = vetting.covered;
 	if (covered !== undefined && covered.confidence >= COVERED_AT)
 		return `${covered.key} already says this; recall it and revise`;
@@ -509,9 +512,10 @@ export class MemoryBank {
 	private awaiting?: Omit<Stepped, "output"> & { trailing: string } & {
 		surfaced: FiredMemory[];
 	};
-	private outstanding?: Promise<Judgment | undefined>;
 	private failure?: string;
 	private unanswered = false;
+	private readonly asked = new Set<string>();
+	private asking = 0;
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
@@ -567,7 +571,6 @@ export class MemoryBank {
 	}
 
 	*beginStep(code: string, interp: Interp): Eval<string> {
-		const learnt = yield* this.settle();
 		this.stepping = true;
 		this.ran = code;
 		yield* this.sweep();
@@ -575,7 +578,7 @@ export class MemoryBank {
 		const prose = proseIn(code);
 		if (prose !== "")
 			yield* this.dispatch({ kind: "prose", text: prose }, interp);
-		return learnt + this.drain();
+		return this.drain();
 	}
 
 	*endStep(): Eval<string> {
@@ -592,17 +595,25 @@ export class MemoryBank {
 		return text;
 	}
 
-	observe(interp: Interp, output: string): void {
+	*observe(interp: Interp, output: string): Eval<string> {
 		const record = this.awaiting;
 		this.awaiting = undefined;
-		if (record === undefined) return;
+		if (record === undefined) return "";
 		const { trailing, surfaced, ...rest } = record;
 		const whole = [output, trailing].filter((part) => part !== "").join("\n");
 		this.window.push({ ...rest, output: clip(whole, OUTPUT_CHARS) });
 		while (this.window.length > WINDOW) this.window.shift();
-		if (this.learner === noLearner) return;
-		if (this.outstanding !== undefined) return;
-		this.outstanding = this.ask(interp, surfaced);
+		if (this.learner === noLearner) return "";
+		const judgment = yield* settled(this.ask(interp, surfaced));
+		const failed = this.failure;
+		this.failure = undefined;
+		if (judgment === undefined) {
+			if (failed !== undefined)
+				this.watcher({ at: "consider", ms: this.asking, failed });
+			assessed.emit(this.channels, { user: { failed, did: [] } });
+			return "";
+		}
+		return yield* this.act(judgment);
 	}
 
 	private async ask(
@@ -618,11 +629,7 @@ export class MemoryBank {
 				surfaced,
 				known: knownIn(await this.store.all(), (m) => this.strength(m)),
 			});
-			this.watcher({
-				at: "consider",
-				ms: this.now() - began,
-				judged,
-			});
+			this.asking = this.now() - began;
 			return judged;
 		} catch (ex) {
 			this.failure = ex instanceof Error ? ex.message : String(ex);
@@ -633,20 +640,6 @@ export class MemoryBank {
 			});
 			return undefined;
 		}
-	}
-
-	private *settle(): Eval<string> {
-		const pending = this.outstanding;
-		if (pending === undefined) return "";
-		this.outstanding = undefined;
-		const judgment = yield* settled(pending);
-		const failed = this.failure;
-		this.failure = undefined;
-		if (judgment === undefined) {
-			assessed.emit(this.channels, { user: { failed, did: [] } });
-			return "";
-		}
-		return yield* this.act(judgment);
 	}
 
 	private *act(judgment: Judgment): Eval<string> {
@@ -671,17 +664,31 @@ export class MemoryBank {
 		const worth =
 			judgment.worthKeeping >= LEARN_AT ||
 			(lesson >= LESSON_AT && judgment.worthKeeping >= LEARN_AFTER_LESSON_AT);
+		const again =
+			judgment.candidate !== undefined &&
+			this.asked.has(slugFor(judgment.candidate));
 		if (
 			worth &&
+			!again &&
 			judgment.kind !== "nothing" &&
 			!(covered !== undefined && covered.confidence >= COVERED_AT)
 		) {
+			if (judgment.candidate !== undefined)
+				this.asked.add(slugFor(judgment.candidate));
 			text += this.note("candidate", nudgeFor(judgment));
 			this.unanswered = true;
 			did.push("candidate");
 		}
+		this.watcher({
+			at: "consider",
+			ms: this.asking,
+			judged: judgment,
+			repeated: again ? true : undefined,
+			did,
+		});
 		assessed.emit(this.channels, {
 			user: {
+				repeated: again ? true : undefined,
 				worthKeeping: judgment.worthKeeping,
 				kind: judgment.kind,
 				kindConfidence: judgment.kindConfidence,
@@ -773,6 +780,22 @@ export class MemoryBank {
 
 	*remember(memory: Memory): Eval<void> {
 		yield* settled(this.store.put(memory));
+	}
+
+	*wipe(): Eval<number> {
+		const all = yield* settled(this.store.all());
+		let gone = 0;
+		for (const memory of all)
+			if (yield* settled(this.store.delete(memory.key))) gone += 1;
+		this.asked.clear();
+		this.fired.clear();
+		this.open.clear();
+		if (gone > 0)
+			this.pending += this.note(
+				"dropped",
+				`every memory is gone: ${gone} dropped, nothing kept.`,
+			);
+		return gone;
 	}
 
 	*recall(interp: Interp, query: string, limit: number): Eval<Memory[]> {
@@ -909,9 +932,13 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 				ctx.emit((await driveAsync(bank.endStep())).value);
 			}
 		});
-		hooks.stepOutput.use((ctx, out, next) => {
-			bank.observe(ctx.interp, out.model);
-			return next(ctx, out);
+		hooks.stepSettled.use(async (ctx, out, next) => {
+			const learnt = (await driveAsync(bank.observe(ctx.interp, out.model)))
+				.value;
+			return await next(
+				ctx,
+				learnt === "" ? out : { ...out, model: out.model + learnt },
+			);
 		});
 		hooks.answered.use((ctx, out, next) =>
 			bank.takeUnanswered() ? false : next(ctx, out),
@@ -1095,6 +1122,17 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		z.tuple([zString]),
 		function* ([key]): Eval {
 			return (yield* settled(bank.store.delete(key))) || null;
+		},
+	);
+
+	interp.defGen(
+		"memory/wipe",
+		0,
+		"(wipe)",
+		"Drop every memory for good and return how many went. Nothing is kept and nothing comes back, so run it when the user asks for a clean slate and at no other time.",
+		z.tuple([]),
+		function* (): Eval {
+			return yield* bank.wipe();
 		},
 	);
 

@@ -10,6 +10,7 @@ export interface Picked {
 
 export interface Judgment {
 	failed?: string;
+	repeated?: boolean;
 	worthKeeping?: number;
 	lesson?: number;
 	kind?: string;
@@ -65,6 +66,7 @@ export function judgments(value: unknown): Judgment[] {
 		if (raw === undefined) continue;
 		judged.push({
 			failed: text(raw.failed),
+			repeated: raw.repeated === true ? true : undefined,
 			worthKeeping: number(raw.worthKeeping),
 			lesson: number(raw.lesson),
 			kind: text(raw.kind),

@@ -200,10 +200,21 @@ export class MemoryRepl implements InMemoryRepl {
 			model: buffer.collectText("model"),
 			user: buffer.collectText("user"),
 		});
+		const rejoin = channels.pipe(buffer);
+		let settled = bounded;
+		try {
+			settled = await this.hooks.stepSettled.run(
+				async (_c, out) => out,
+				ctx,
+				bounded,
+			);
+		} finally {
+			rejoin();
+		}
 		return {
 			envelopes: buffer.envelopes,
-			model: bounded.model + error.model,
-			user: bounded.user + error.user,
+			model: settled.model + error.model,
+			user: settled.user + error.user,
 			feedback,
 			annotations: this.hooks.annotate.run(
 				(_b, into) => into,

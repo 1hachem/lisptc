@@ -279,11 +279,12 @@ export function judgeLearner(judge: Judge): Learner {
 						false: "something true only of what is happening right now",
 					},
 				),
-				recomputable: noul(
-					"The REPL could produce this on demand: a doc listing, a discovery call, anything recomputable.",
+				copied: noul(
+					"The proposed memory is a description the REPL handed over — read off a search, a listing, a catalogue or a doc — rather than something the session got wrong and then put right.",
 					{
-						true: "a listing, a signature, what a server or tool says about itself, or any value a search or catalogue call would hand back again",
-						false: "something that had to be found out the hard way",
+						true: "a description of what a server, a tool or a function is or offers, taken from what some call returned, which was never wrong",
+						false:
+							"a correction, a constraint the session ran into, or a name that turned out to be wrong",
 					},
 				),
 			};
@@ -306,7 +307,7 @@ export function judgeLearner(judge: Judge): Learner {
 			return {
 				cost: judged.usage?.cost,
 				durable: noulIn(answers.durable),
-				recomputable: noulIn(answers.recomputable),
+				copied: noulIn(answers.copied),
 				covered: picked(answers.covered),
 				calibrated: judged.calibrated,
 			} satisfies Vetting;

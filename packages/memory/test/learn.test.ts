@@ -11,6 +11,7 @@ import {
 	str,
 } from "@repo/interpreter/lisp";
 import {
+	type Bounded,
 	noAnnotations,
 	openSession,
 	type StepContext,
@@ -21,6 +22,7 @@ import { describe, expect, it } from "vitest";
 import { judgeLearner } from "../src/learn-client.ts";
 import {
 	type Assessment,
+	COPIED_AT,
 	COVERED_AT,
 	FORGET_AT,
 	INITIAL_SCORE,
@@ -99,6 +101,7 @@ function learnerOf(
 interface Ran {
 	learned: Learned[];
 	judged: Assessment[];
+	model: string;
 }
 
 interface Fixture {
@@ -136,6 +139,7 @@ function fixture(learner: Learner, clock: Clock = frozen): Fixture {
 			const buffer = bufferTransport();
 			const detach = interp.channels.pipe(buffer);
 			let output = "";
+			let settled: Bounded = { model: "", user: "" };
 			try {
 				await hooks.evalStep.run(async (inner) => {
 					try {
@@ -144,10 +148,15 @@ function fixture(learner: Learner, clock: Clock = frozen): Fixture {
 						output = String(ex);
 					}
 				}, ctx);
-				hooks.stepOutput.run((_inner, out) => out, ctx, {
+				const bounded = hooks.stepOutput.run((_inner, out) => out, ctx, {
 					model: output,
 					user: output,
 				});
+				settled = await hooks.stepSettled.run(
+					async (_inner, out) => out,
+					ctx,
+					bounded,
+				);
 			} finally {
 				detach();
 			}
@@ -159,6 +168,7 @@ function fixture(learner: Learner, clock: Clock = frozen): Fixture {
 			return {
 				learned: (annotations.step.learned ?? []) as Learned[],
 				judged: (annotations.output.judged ?? []) as Assessment[],
+				model: settled.model,
 			};
 		},
 		said(text: string): void {
@@ -170,12 +180,10 @@ function fixture(learner: Learner, clock: Clock = frozen): Fixture {
 }
 
 describe("the learning gate", () => {
-	it("emits the nudge at the next step, never at the one it judged", async () => {
+	it("emits the nudge on the step it judged", async () => {
 		const f = fixture(learnerOf([keeping()]));
 
-		expect((await f.step("(+ 1 2)")).learned).toHaveLength(0);
-
-		const next = await f.step("(+ 2 3)");
+		const next = await f.step("(+ 1 2)");
 
 		expect(next.learned.map((one) => one.what)).toEqual(["candidate"]);
 		expect(notes(next)).toContain("memory/remember");
@@ -231,7 +239,7 @@ describe("the learning gate", () => {
 			expect(memory.body.length).toBe(KNOWN_BODY_CHARS);
 	});
 
-	it("runs at most one judgment at a time", async () => {
+	it("asks once per step, never twice at once", async () => {
 		const learner = learnerOf([]);
 		const f = fixture(learner);
 
@@ -243,22 +251,19 @@ describe("the learning gate", () => {
 
 	it("says nothing below LEARN_AT, and nothing a memory already covers", async () => {
 		const quiet = fixture(
-			learnerOf([keeping({ worthKeeping: LEARN_AT - 0.1 })]),
+			learnerOf([keeping({ worthKeeping: LEARN_AT - 0.1, lesson: 0 })]),
 		);
-		await quiet.step("(+ 1 2)");
-		expect((await quiet.step("(+ 2 3)")).learned).toHaveLength(0);
+		expect((await quiet.step("(+ 1 2)")).learned).toHaveLength(0);
 
 		const nothing = fixture(learnerOf([keeping({ kind: "nothing" })]));
-		await nothing.step("(+ 1 2)");
-		expect((await nothing.step("(+ 2 3)")).learned).toHaveLength(0);
+		expect((await nothing.step("(+ 1 2)")).learned).toHaveLength(0);
 
 		const known = fixture(
 			learnerOf([
 				keeping({ covered: { key: "acme-url", confidence: COVERED_AT + 0.1 } }),
 			]),
 		);
-		await known.step("(+ 1 2)");
-		expect((await known.step("(+ 2 3)")).learned).toHaveLength(0);
+		expect((await known.step("(+ 1 2)")).learned).toHaveLength(0);
 	});
 });
 
@@ -275,8 +280,7 @@ describe("forgetting what a step contradicted", () => {
 		);
 		await runAsync(f.interp, '(memory/remember "acme-verb" "it is navigate")');
 
-		await f.step("(+ 1 2)");
-		const ran = await f.step("(+ 2 3)");
+		const ran = await f.step("(+ 1 2)");
 
 		expect(notes(ran)).toContain("acme-verb is gone");
 		expect(ran.judged.at(-1)?.did).toContain("dropped");
@@ -297,7 +301,6 @@ describe("forgetting what a step contradicted", () => {
 		await runAsync(f.interp, '(memory/remember "acme-verb" "it is navigate")');
 
 		await f.step("(+ 1 2)");
-		await f.step("(+ 2 3)");
 
 		const memory = await f.bank.store.get("acme-verb");
 		expect(memory).toBeDefined();
@@ -351,7 +354,7 @@ describe("forgetting what a step contradicted", () => {
 describe("the veto", () => {
 	it("refuses a memory that will not be true in another session", async () => {
 		const f = fixture(
-			learnerOf([], { durable: 0.1, recomputable: 0, calibrated: true }),
+			learnerOf([], { durable: 0.1, copied: 0, calibrated: true }),
 		);
 
 		await expect(
@@ -360,9 +363,9 @@ describe("the veto", () => {
 		expect(await f.bank.store.get("now")).toBeUndefined();
 	});
 
-	it("refuses a memory the REPL could recompute", async () => {
+	it("refuses a memory that is the platform describing itself", async () => {
 		const f = fixture(
-			learnerOf([], { durable: 1, recomputable: 0.9, calibrated: true }),
+			learnerOf([], { durable: 1, copied: 0.9, calibrated: true }),
 		);
 
 		await expect(
@@ -370,14 +373,14 @@ describe("the veto", () => {
 				f.interp,
 				'(memory/remember "tools" "acme exposes three tools")',
 			),
-		).rejects.toThrow("the REPL can tell you this");
+		).rejects.toThrow("the platform describing itself");
 	});
 
 	it("refuses a memory another one already says", async () => {
 		const f = fixture(
 			learnerOf([], {
 				durable: 1,
-				recomputable: 0,
+				copied: 0,
 				covered: { key: "acme-url", confidence: COVERED_AT + 0.2 },
 				calibrated: true,
 			}),
@@ -390,7 +393,7 @@ describe("the veto", () => {
 
 	it("advises instead of refusing when the judge is not calibrated", async () => {
 		const f = fixture(
-			learnerOf([], { durable: 0.1, recomputable: 0, calibrated: false }),
+			learnerOf([], { durable: 0.1, copied: 0, calibrated: false }),
 		);
 
 		const ran = await f.step('(memory/remember "now" "the file is open")');
@@ -402,7 +405,7 @@ describe("the veto", () => {
 	it("shows the learner what is already stored", async () => {
 		const learner = learnerOf([], {
 			durable: 1,
-			recomputable: 0,
+			copied: 0,
 			calibrated: true,
 		});
 		const f = fixture(learner);
@@ -610,7 +613,6 @@ describe("what the watcher is told", () => {
 		const f = fixture(learnerOf([keeping()]));
 
 		await f.step("(+ 1 2)");
-		await f.step("(+ 2 3)");
 
 		const seen = f.watched.filter((one) => one.at === "consider");
 		expect(seen[0].failed).toBeUndefined();
@@ -628,7 +630,6 @@ describe("what the watcher is told", () => {
 		const f = fixture(angry);
 
 		await f.step("(+ 1 2)");
-		await f.step("(+ 2 3)");
 
 		const seen = f.watched.filter((one) => one.at === "consider");
 		expect(seen.length).toBeGreaterThan(0);
@@ -638,7 +639,7 @@ describe("what the watcher is told", () => {
 
 	it("reports a veto and the sentence it refused with", async () => {
 		const f = fixture(
-			learnerOf([], { durable: 0.1, recomputable: 0, calibrated: true }),
+			learnerOf([], { durable: 0.1, copied: 0, calibrated: true }),
 		);
 
 		await expect(
@@ -664,8 +665,7 @@ describe("a note is a form, not a suggestion", () => {
 			]),
 		);
 
-		await f.step("(+ 1 2)");
-		const text = notes(await f.step("(+ 2 3)"));
+		const text = notes(await f.step("(+ 1 2)"));
 
 		expect(text).toContain('(memory/remember "acme-calls-its-navigation-tool"');
 		expect(text).toContain('"acme calls its navigation tool browser_navigate"');
@@ -676,15 +676,13 @@ describe("a note is a form, not a suggestion", () => {
 		const asCode = fixture(
 			learnerOf([keeping({ kind: "procedure", candidate: '(acme/go "x")' })]),
 		);
-		await asCode.step("(+ 1 2)");
-		expect(notes(await asCode.step("(+ 2 3)"))).toContain('\'(acme/go "x")');
+		expect(notes(await asCode.step("(+ 1 2)"))).toContain('\'(acme/go "x")');
 	});
 
 	it("still asks for one when nothing in the window states it", async () => {
 		const f = fixture(learnerOf([keeping({ candidate: undefined })]));
 
-		await f.step("(+ 1 2)");
-		const text = notes(await f.step("(+ 2 3)"));
+		const text = notes(await f.step("(+ 1 2)"));
 
 		expect(text).toContain("in your own words");
 		expect(text).not.toContain('(memory/remember "');
@@ -703,7 +701,6 @@ describe("a note holds the turn open", () => {
 		const f = fixture(learnerOf([keeping()]));
 
 		await f.step("(+ 1 2)");
-		await f.step("(+ 2 3)");
 
 		expect(f.bank.takeUnanswered()).toBe(true);
 		expect(f.bank.takeUnanswered()).toBe(false);
@@ -713,8 +710,102 @@ describe("a note holds the turn open", () => {
 		const f = fixture(learnerOf([keeping({ kind: "nothing" })]));
 
 		await f.step("(+ 1 2)");
-		await f.step("(+ 2 3)");
 
 		expect(f.bank.takeUnanswered()).toBe(false);
+	});
+});
+
+describe("the same lesson is asked for once", () => {
+	it("suppresses a candidate it has already handed over", async () => {
+		const same = keeping({ kind: "fact", candidate: "acme wants a full url" });
+		const f = fixture(learnerOf([same, same, same]));
+
+		const first = await f.step("(+ 1 2)");
+		const second = await f.step("(+ 2 3)");
+		const third = await f.step("(+ 3 4)");
+
+		expect(first.learned).toHaveLength(1);
+		expect(second.learned).toHaveLength(0);
+		expect(third.learned).toHaveLength(0);
+		expect(second.judged.at(-1)?.repeated).toBe(true);
+	});
+
+	it("still hands over a different candidate", async () => {
+		const f = fixture(
+			learnerOf([
+				keeping({ kind: "fact", candidate: "acme wants a full url" }),
+				keeping({ kind: "fact", candidate: "linear needs a team id" }),
+			]),
+		);
+
+		const first = await f.step("(+ 1 2)");
+		const second = await f.step("(+ 2 3)");
+
+		expect(first.learned).toHaveLength(1);
+		expect(second.learned).toHaveLength(1);
+	});
+});
+
+describe("the veto tells a description from a correction", () => {
+	const COPIED = [0.75, 0.75, 0.78, 0.72, 0.79, 0.78];
+	const CORRECTED = [0.49, 0.39, 0.43, 0.48, 0.37, 0.2];
+
+	it("refuses every measured description the platform handed over", () => {
+		for (const noul of COPIED) expect(noul).toBeGreaterThanOrEqual(COPIED_AT);
+	});
+
+	it("allows every measured correction", () => {
+		for (const noul of CORRECTED) expect(noul).toBeLessThan(COPIED_AT);
+	});
+
+	it("sits in the gap rather than on either edge", () => {
+		expect(Math.min(...COPIED) - COPIED_AT).toBeGreaterThan(0.1);
+		expect(COPIED_AT - Math.max(...CORRECTED)).toBeGreaterThan(0.1);
+	});
+});
+
+describe("wiping the slate", () => {
+	it("drops every memory and says how many went", async () => {
+		const f = fixture(learnerOf([]));
+		await runAsync(f.interp, '(memory/remember "a" "one")');
+		await runAsync(f.interp, '(memory/remember "b" "two")');
+
+		expect(str((await runAsync(f.interp, "(memory/wipe)")).value)).toBe("2.0");
+		expect(await f.bank.store.all()).toHaveLength(0);
+	});
+
+	it("counts nothing when there was nothing", async () => {
+		const f = fixture(learnerOf([]));
+
+		expect(str((await runAsync(f.interp, "(memory/wipe)")).value)).toBe("0.0");
+	});
+
+	it("lets the gate ask again for a lesson it had already asked for", async () => {
+		const same = keeping({ kind: "fact", candidate: "acme wants a full url" });
+		const f = fixture(learnerOf([same, same]));
+
+		expect((await f.step("(+ 1 2)")).learned).toHaveLength(1);
+		await runAsync(f.interp, "(memory/wipe)");
+		expect((await f.step("(+ 2 3)")).learned).toHaveLength(1);
+	});
+});
+
+describe("the note reaches the model, not just the trace", () => {
+	it("lands in the step's model-facing output", async () => {
+		const f = fixture(learnerOf([keeping()]));
+
+		const ran = await f.step("(+ 1 2)");
+
+		expect(ran.model).toContain("<learn>");
+		expect(ran.model).toContain("memory/remember");
+		expect(ran.model.indexOf("<learn>")).toBeGreaterThan(-1);
+	});
+
+	it("leaves the output alone when there is nothing to say", async () => {
+		const f = fixture(learnerOf([keeping({ kind: "nothing" })]));
+
+		const ran = await f.step("(+ 1 2)");
+
+		expect(ran.model).not.toContain("<learn>");
 	});
 });

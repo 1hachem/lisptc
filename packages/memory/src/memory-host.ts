@@ -209,11 +209,19 @@ function line(event: Learning): string {
 	if (event.at === "vet") {
 		const vetted = event.vetted;
 		if (vetted === undefined) return `${head} no answer`;
-		return `${head} durable=${vetted.durable.toFixed(2)} recomputable=${vetted.recomputable.toFixed(2)} covered=${pick(vetted.covered)}${money(vetted.cost)}${event.refusal === undefined ? "" : ` REFUSED ${event.refusal}`}`;
+		return `${head} durable=${vetted.durable.toFixed(2)} copied=${vetted.copied.toFixed(2)} covered=${pick(vetted.covered)}${money(vetted.cost)}${event.refusal === undefined ? "" : ` REFUSED ${event.refusal}`}`;
 	}
 	const judged = event.judged;
 	if (judged === undefined) return `${head} no answer`;
-	return `${head} worth=${judged.worthKeeping.toFixed(2)} kind=${judged.kind}/${judged.kindConfidence.toFixed(2)} covered=${pick(judged.covered)} stale=${pick(judged.stale)}${judged.calibrated ? "" : " uncalibrated"}${money(judged.cost)}`;
+	const did =
+		event.repeated === true
+			? " already asked"
+			: event.did === undefined || event.did.length === 0
+				? ""
+				: ` did=${event.did.join(",")}`;
+	const lesson =
+		judged.lesson === undefined ? "" : ` lesson=${judged.lesson.toFixed(2)}`;
+	return `${head} worth=${judged.worthKeeping.toFixed(2)}${lesson} kind=${judged.kind}/${judged.kindConfidence.toFixed(2)} covered=${pick(judged.covered)} stale=${pick(judged.stale)}${judged.calibrated ? "" : " uncalibrated"}${money(judged.cost)}${did}`;
 }
 
 const memoryWatcher: Watcher = (event) => {
