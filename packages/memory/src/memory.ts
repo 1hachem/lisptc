@@ -37,6 +37,21 @@ export const MAX_RECALL_WORDS = 200;
 export const LINKED_FIRES_AT = 2;
 export const DEFAULT_RECALL_LIMIT = 5;
 
+export const WINDOW = 3;
+export const SAID_CHARS = 1000;
+export const RAN_CHARS = 4000;
+export const OUTPUT_CHARS = 2000;
+export const KNOWN_SEEN = 20;
+export const KNOWN_BODY_CHARS = 200;
+export const SPANS_SEEN = 24;
+
+export const LEARN_AT = 0.7;
+export const COVERED_AT = 0.6;
+export const SUSPECT_AT = 0.5;
+export const FORGET_AT = 0.8;
+export const DURABLE_AT = 0.5;
+export const RECOMPUTABLE_AT = 0.7;
+
 export const TRIGGER_KINDS = [
 	"call",
 	"result",
@@ -296,6 +311,117 @@ export interface FiredMemory {
 
 export const fired = topic<FiredMemory>("memory");
 
+export interface Stepped {
+	readonly ran: string;
+	readonly prose: string;
+	readonly output: string;
+	readonly failed: boolean;
+}
+
+export interface Observed {
+	readonly said?: string;
+	readonly recent: readonly Stepped[];
+	readonly surfaced: readonly FiredMemory[];
+	readonly known: readonly FiredMemory[];
+}
+
+export interface Picked {
+	readonly key: string;
+	readonly confidence: number;
+}
+
+export type Keepable = "fact" | "procedure" | "nothing";
+
+export interface Judgment {
+	readonly worthKeeping: number;
+	readonly kind: Keepable;
+	readonly kindConfidence: number;
+	readonly candidate?: string;
+	readonly covered?: Picked;
+	readonly stale?: Picked;
+	readonly calibrated: boolean;
+}
+
+export interface Proposed {
+	readonly key: string;
+	readonly body: string;
+	readonly known: readonly FiredMemory[];
+}
+
+export interface Vetting {
+	readonly durable: number;
+	readonly recomputable: number;
+	readonly covered?: Picked;
+	readonly calibrated: boolean;
+}
+
+export interface Learner {
+	consider(o: Observed, signal?: AbortSignal): Awaitable<Judgment | undefined>;
+	vet(p: Proposed, signal?: AbortSignal): Awaitable<Vetting | undefined>;
+}
+
+export const noLearner: Learner = {
+	consider: () => undefined,
+	vet: () => undefined,
+};
+
+export interface Learned {
+	what: "candidate" | "dropped" | "advice";
+	text: string;
+}
+
+export const learned = topic<Learned>("learn");
+
+export const ELIDED = "\n... elided ...\n";
+
+function clip(text: string, chars: number): string {
+	if (text.length <= chars) return text;
+	if (ELIDED.length >= chars) return text.slice(0, chars);
+	const head = Math.ceil((chars - ELIDED.length) / 2);
+	const tail = chars - ELIDED.length - head;
+	return text.slice(0, head) + ELIDED + text.slice(text.length - tail);
+}
+
+function tail(text: string, chars: number): string {
+	return text.length <= chars ? text : text.slice(text.length - chars);
+}
+
+function nudgeFor(judgment: Judgment): string {
+	const lines = [
+		`something in the last step looks worth keeping (${judgment.kind}).`,
+	];
+	if (judgment.candidate !== undefined)
+		lines.push(`candidate: ${judgment.candidate}`);
+	lines.push(
+		"write it with memory/remember and give it the trigger that will repeat, or ignore this.",
+	);
+	return lines.join("\n");
+}
+
+function knownIn(
+	all: Memory[],
+	strength: (memory: Memory) => number,
+): FiredMemory[] {
+	return [...all]
+		.sort((a, b) => strength(b) - strength(a))
+		.slice(0, KNOWN_SEEN)
+		.map((memory) => ({
+			key: memory.key,
+			body: clip(bodyText(memory.body), KNOWN_BODY_CHARS),
+		}));
+}
+
+function refusalIn(vetting: Vetting): string | undefined {
+	if (vetting.durable < DURABLE_AT)
+		return "this reads as situational; it will not be true in another session";
+	if (vetting.recomputable >= RECOMPUTABLE_AT)
+		return "the REPL can tell you this; look it up instead";
+	const covered = vetting.covered;
+	if (covered !== undefined && covered.confidence >= COVERED_AT)
+		return `${covered.key} already says this; recall it and revise`;
+	return undefined;
+}
+
 export class MemoryBank {
 	private channels?: Channels;
 	private readonly fired = new Set<string>();
@@ -307,10 +433,19 @@ export class MemoryBank {
 	private dropped = 0;
 	private stepping = false;
 	private heard = 0;
+	private ran = "";
+	private errored = false;
+	private lastError = "";
+	private readonly window: Stepped[] = [];
+	private awaiting?: Omit<Stepped, "output"> & { trailing: string } & {
+		surfaced: FiredMemory[];
+	};
+	private outstanding?: Promise<Judgment | undefined>;
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
 		readonly clock: Clock = systemClock,
+		readonly learner: Learner = noLearner,
 	) {}
 
 	private now(): number {
@@ -330,6 +465,9 @@ export class MemoryBank {
 		this.spent = 0;
 		this.dropped = 0;
 		this.stepping = false;
+		this.errored = false;
+		this.lastError = "";
+		this.ran = "";
 	}
 
 	strength(memory: Memory): number {
@@ -357,20 +495,125 @@ export class MemoryBank {
 	}
 
 	*beginStep(code: string, interp: Interp): Eval<string> {
+		const learnt = yield* this.settle();
 		this.stepping = true;
+		this.ran = code;
 		yield* this.sweep();
 		yield* this.dispatch({ kind: "step", text: code }, interp);
 		const prose = proseIn(code);
 		if (prose !== "")
 			yield* this.dispatch({ kind: "prose", text: prose }, interp);
-		return this.drain();
+		return learnt + this.drain();
 	}
 
 	*endStep(): Eval<string> {
 		yield* this.wireTogether();
+		this.awaiting = {
+			ran: clip(this.ran, RAN_CHARS),
+			prose: proseIn(this.ran),
+			surfaced: [...this.surfaced],
+			failed: this.errored,
+			trailing: this.lastError,
+		};
 		const text = this.drain();
 		this.reset();
 		return text;
+	}
+
+	observe(interp: Interp, output: string): void {
+		const record = this.awaiting;
+		this.awaiting = undefined;
+		if (record === undefined) return;
+		const { trailing, surfaced, ...rest } = record;
+		const whole = [output, trailing].filter((part) => part !== "").join("\n");
+		this.window.push({ ...rest, output: clip(whole, OUTPUT_CHARS) });
+		while (this.window.length > WINDOW) this.window.shift();
+		if (this.learner === noLearner) return;
+		if (this.outstanding !== undefined) return;
+		this.outstanding = this.ask(interp, surfaced);
+	}
+
+	private async ask(
+		interp: Interp,
+		surfaced: FiredMemory[],
+	): Promise<Judgment | undefined> {
+		try {
+			const said = userMessages(interp).at(-1);
+			return await this.learner.consider({
+				said: said === undefined ? undefined : tail(said, SAID_CHARS),
+				recent: [...this.window],
+				surfaced,
+				known: knownIn(await this.store.all(), (m) => this.strength(m)),
+			});
+		} catch {
+			return undefined;
+		}
+	}
+
+	private *settle(): Eval<string> {
+		const pending = this.outstanding;
+		if (pending === undefined) return "";
+		this.outstanding = undefined;
+		const judgment = yield* settled(pending);
+		if (judgment === undefined) return "";
+		return yield* this.act(judgment);
+	}
+
+	private *act(judgment: Judgment): Eval<string> {
+		let text = "";
+		const stale = judgment.stale;
+		if (stale !== undefined) {
+			if (stale.confidence >= FORGET_AT && judgment.calibrated) {
+				if (yield* settled(this.store.delete(stale.key)))
+					text += this.note(
+						"dropped",
+						`${stale.key} is gone: the last steps showed it to be wrong.`,
+					);
+			} else if (stale.confidence >= SUSPECT_AT) {
+				yield* this.doubt(stale.key);
+			}
+		}
+		const covered = judgment.covered;
+		if (
+			judgment.worthKeeping >= LEARN_AT &&
+			judgment.kind !== "nothing" &&
+			!(covered !== undefined && covered.confidence >= COVERED_AT)
+		)
+			text += this.note("candidate", nudgeFor(judgment));
+		return text;
+	}
+
+	private *doubt(key: string): Eval<void> {
+		const memory = yield* settled(this.store.get(key));
+		if (memory === undefined) return;
+		memory.score = this.strength(memory) / 2;
+		memory.lastUsed = this.now();
+		yield* settled(this.store.put(memory));
+	}
+
+	private note(what: Learned["what"], text: string): string {
+		learned.emit(this.channels, { user: { what, text } });
+		return `<learn>\n${text}\n</learn>\n`;
+	}
+
+	*vetted(key: string, body: unknown): Eval<void> {
+		if (this.learner === noLearner) return;
+		let vetting: Vetting | undefined;
+		try {
+			const known = knownIn(yield* settled(this.store.all()), (m) =>
+				this.strength(m),
+			);
+			vetting = yield* settled(
+				this.learner.vet({ key, body: bodyText(body), known }),
+			);
+		} catch {
+			return;
+		}
+		if (vetting === undefined) return;
+		const refusal = refusalIn(vetting);
+		if (refusal === undefined) return;
+		if (vetting.calibrated) throw new EvalException(refusal, key, false);
+		this.pending += this.note("advice", `${key}: ${refusal}`);
 	}
 
 	private drain(): string {
@@ -392,7 +635,12 @@ export class MemoryBank {
 	}
 
 	*onError(interp: Interp, error: unknown): Eval<void> {
-		yield* this.dispatch({ kind: "error", text: String(error) }, interp);
+		const text = String(error);
+		if (this.stepping) {
+			this.errored = true;
+			this.lastError = text;
+		}
+		yield* this.dispatch({ kind: "error", text }, interp);
 	}
 
 	*remember(memory: Memory): Eval<void> {
@@ -493,6 +741,7 @@ function proseIn(code: string): string {
 export interface MemoryHost {
 	store: MemoryStore;
 	clock: Clock;
+	learn: Learner;
 	prompt: PromptSource;
 }
 
@@ -531,11 +780,22 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 				ctx.emit((await driveAsync(bank.endStep())).value);
 			}
 		});
+		hooks.stepOutput.use((ctx, out, next) => {
+			bank.observe(ctx.interp, out.model);
+			return next(ctx, out);
+		});
 		hooks.annotate.use((buffer, into, next) => {
 			const memories = buffer.collect(fired);
+			const notes = buffer.collect(learned);
+			const entry = {
+				...(memories.length === 0 ? {} : { memories }),
+				...(notes.length === 0 ? {} : { learned: notes }),
+			};
 			return next(
 				buffer,
-				memories.length === 0 ? into : annotating(into, "step", { memories }),
+				Object.keys(entry).length === 0
+					? into
+					: annotating(into, "step", entry),
 			);
 		});
 	};
@@ -545,7 +805,8 @@ export function memoryExtension(
 	host: MemoryHost = memoryHost,
 	options: MemoryOptions = {},
 ): MemoryExtension {
-	const bank = options.bank ?? new MemoryBank(host.store, host.clock);
+	const bank =
+		options.bank ?? new MemoryBank(host.store, host.clock, host.learn);
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
 		prompt: host.prompt(),
@@ -630,6 +891,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			const links = new Map<string, number>();
 			for (const linked of listToArray((opts.get("links") ?? null) as List))
 				if (typeof linked === "string") links.set(linked, LINKED_FIRES_AT);
+			yield* bank.vetted(key, body);
 			const existing = yield* settled(bank.store.get(key));
 			yield* bank.remember({
 				key,

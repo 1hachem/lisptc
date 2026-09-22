@@ -12,12 +12,16 @@ import { memoryEnv } from "@repo/env/memory";
 import { EvalException, Reader, str } from "@repo/interpreter/lisp";
 import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
+import { defineJudge, judgeReports, judgeSpecFor } from "@repo/shared/judge";
+import { judgeLearner } from "./learn-client.ts";
 import {
 	formToMemory,
+	type Learner,
 	type Memory,
 	type MemoryHost,
 	type MemoryStore,
 	memoryToForm,
+	noLearner,
 } from "./memory.ts";
 
 export function memoryDirFor(scope?: string): string {
@@ -162,10 +166,39 @@ export function scopedMemoryStore(scope?: string): MemoryStore {
 
 const memoryPrompt = filePrompt(new URL("./memory.ptc", import.meta.url));
 
+let configured: Learner | undefined;
+
+async function configuredLearner(): Promise<Learner> {
+	if (configured !== undefined) return configured;
+	try {
+		const { defaultJudge, judgeSpecs } = await import("@repo/env/providers");
+		const report = judgeReports(judgeSpecs, defaultJudge).find(
+			(one) => one.name === defaultJudge,
+		);
+		configured =
+			report?.ready === true
+				? judgeLearner(defineJudge(judgeSpecFor(defaultJudge, judgeSpecs)))
+				: noLearner;
+	} catch {
+		configured = noLearner;
+	}
+	return configured;
+}
+
+const memoryLearner: Learner = {
+	async consider(observed, signal) {
+		return await (await configuredLearner()).consider(observed, signal);
+	},
+	async vet(proposed, signal) {
+		return await (await configuredLearner()).vet(proposed, signal);
+	},
+};
+
 export function memoryHostFor(scope?: string): MemoryHost {
 	return {
 		store: scopedMemoryStore(scope),
 		clock: systemClock,
+		learn: memoryLearner,
 		prompt: memoryPrompt,
 	};
 }
@@ -175,5 +208,6 @@ export const memoryHost: MemoryHost = {
 		return scopedMemoryStore();
 	},
 	clock: systemClock,
+	learn: memoryLearner,
 	prompt: memoryPrompt,
 };

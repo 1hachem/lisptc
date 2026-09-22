@@ -137,3 +137,15 @@ RULES
   for what you had to find out the hard way.
 - Recall before you guess. When you are about to write a name you are not sure of
   and the session has not told you, that is the cheapest possible recall.
+
+LEARNING
+
+The REPL watches the steps go by and says what it noticed.
+
+- A <learn> note is the REPL noticing, not an instruction. If the candidate it
+  names is right, write the memory yourself with the key, the body and the
+  trigger that will repeat. If it is not, ignore it and move on.
+- memory/remember can be refused. The refusal says why: situational, something
+  the REPL can recompute, or already said by a memory you can recall and revise.
+- A memory can disappear because it was contradicted, not only because it faded.
+  When a step proves one wrong, it goes, and the note says which.

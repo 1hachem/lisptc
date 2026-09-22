@@ -4,6 +4,7 @@ import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	type MemoryStore,
 	memoryExtension,
+	noLearner,
 	VolatileStore,
 } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
@@ -75,6 +76,7 @@ describe("a host with no filesystem behind it still builds", () => {
 		const extension = memoryExtension({
 			store,
 			clock: { now: () => 0 },
+			learn: noLearner,
 			prompt: () => "",
 		});
 		expect(extension.bank.store).toBe(store);

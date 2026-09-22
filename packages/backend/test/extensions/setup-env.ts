@@ -6,3 +6,5 @@ const file = join(mkdtempSync(join(tmpdir(), "lisptc-secrets-")), ".env");
 writeFileSync(file, "REPL_PI_TOKEN=t0ken\n");
 process.env.LISPTC_SECRETS_FILE = file;
 process.env.LISPTC_MEMORY_DIR = mkdtempSync(join(tmpdir(), "lisptc-memory-"));
+process.env.LISPTC_JUDGE = "typesafe";
+process.env.TYPESAFE_API_KEY = "";
