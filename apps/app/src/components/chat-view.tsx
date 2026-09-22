@@ -1,4 +1,4 @@
-import { MessageMemories } from "@repo/components";
+import { MessageLearned, MessageMemories } from "@repo/components";
 import { formsIn, type Skipped } from "@repo/syntax";
 import {
 	Conversation,
@@ -261,6 +261,9 @@ export function ChatView() {
 								)}
 								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
+								)}
+								{stats?.learned && shown.learn && (
+									<MessageLearned notes={stats.learned} />
 								)}
 								{stats && <MessageMeta meta={stats} />}
 								{!isUserMessage(m) && !isToolMessage(m) && (

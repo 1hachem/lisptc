@@ -1,7 +1,9 @@
 "use client";
 
+import { judgments, learnedNotes } from "@repo/components/learned.ts";
 import { firedMemories } from "@repo/components/memories.ts";
 import { MessageFeedback } from "@repo/components/message-feedback.tsx";
+import { MessageLearned } from "@repo/components/message-learned.tsx";
 import { MessageMemories } from "@repo/components/message-memories.tsx";
 import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
@@ -25,6 +27,8 @@ export function Transcript({
 		<div className="pt-1 pb-2.5">
 			{row.transcript.map((line, i) => {
 				const memories = firedMemories(line.annotations?.memories);
+				const notes = learnedNotes(line.annotations?.learned);
+				const judged = judgments(line.observed?.judged);
 				return (
 					// biome-ignore lint/suspicious/noArrayIndexKey: a transcript is static and repeated identical turns are the signal, not a bug
 					<div className="group relative" key={i}>
@@ -32,6 +36,11 @@ export function Transcript({
 						{memories.length > 0 ? (
 							<div className="pr-4 pl-[66px]">
 								<MessageMemories memories={memories} />
+							</div>
+						) : null}
+						{notes.length > 0 || judged.length > 0 ? (
+							<div className="pr-4 pl-[66px]">
+								<MessageLearned notes={notes} judged={judged} />
 							</div>
 						) : null}
 						{target && line.role === "assistant" ? (

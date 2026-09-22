@@ -1,3 +1,4 @@
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
 	arrayToList,
 	Cell,
@@ -9,7 +10,6 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
 	noAnnotations,
 	openSession,

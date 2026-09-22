@@ -5,7 +5,12 @@ import {
 } from "@langchain/langgraph-sdk/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { type FiredMemory, firedMemories } from "@repo/components";
+import {
+	type FiredMemory,
+	firedMemories,
+	type LearnedNote,
+	learnedNotes,
+} from "@repo/components";
 import type { Skipped } from "@repo/syntax";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -50,6 +55,7 @@ export interface StepMeta {
 	cachedInputTokens?: number;
 	steps?: number;
 	memories?: FiredMemory[];
+	learned?: LearnedNote[];
 }
 
 function num(value: unknown): number | undefined {
@@ -67,6 +73,11 @@ function parseMemories(value: unknown): FiredMemory[] | undefined {
 	return fired.length > 0 ? fired : undefined;
 }
 
+function parseLearned(value: unknown): LearnedNote[] | undefined {
+	const notes = learnedNotes(value);
+	return notes.length > 0 ? notes : undefined;
+}
+
 function parseMeta(value: unknown): StepMeta | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const raw = value as Record<string, unknown>;
@@ -82,6 +93,7 @@ function parseMeta(value: unknown): StepMeta | undefined {
 		cachedInputTokens: num(raw.cachedInputTokens),
 		steps: num(raw.steps),
 		memories: parseMemories(raw.memories),
+		learned: parseLearned(raw.learned),
 	};
 }
 

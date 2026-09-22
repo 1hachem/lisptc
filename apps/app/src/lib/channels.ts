@@ -4,6 +4,7 @@ export type ChannelId =
 	| "lisp"
 	| "thinking"
 	| "memory"
+	| "learn"
 	| "errors"
 	| "model";
 
@@ -55,6 +56,14 @@ export const CHANNELS: Channel[] = [
 		hint: "what a step recalled",
 		dot: "bg-orange",
 		text: "text-orange",
+		shownByDefault: true,
+	},
+	{
+		id: "learn",
+		label: "learning",
+		hint: "what a step turned out to be worth keeping, or worth dropping",
+		dot: "bg-green",
+		text: "text-green",
 		shownByDefault: true,
 	},
 	{
