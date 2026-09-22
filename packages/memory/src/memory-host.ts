@@ -12,7 +12,12 @@ import { memoryEnv } from "@repo/env/memory";
 import { EvalException, Reader, str } from "@repo/interpreter/lisp";
 import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
-import { defineJudge, judgeReports, judgeSpecFor } from "@repo/shared/judge";
+import {
+	defineJudge,
+	isJudgeName,
+	judgeReports,
+	judgeSpecFor,
+} from "@repo/shared/judge";
 import { judgeLearner } from "./learn-client.ts";
 import {
 	formToMemory,
@@ -172,13 +177,14 @@ async function configuredLearner(): Promise<Learner> {
 	if (configured !== undefined) return configured;
 	try {
 		const { defaultJudge, judgeSpecs } = await import("@repo/env/providers");
-		const report = judgeReports(judgeSpecs, defaultJudge).find(
-			(one) => one.name === defaultJudge,
-		);
-		configured =
-			report?.ready === true
-				? judgeLearner(defineJudge(judgeSpecFor(defaultJudge, judgeSpecs)))
-				: noLearner;
+		const ready =
+			isJudgeName(defaultJudge) &&
+			judgeReports(judgeSpecs, defaultJudge).some(
+				(one) => one.name === defaultJudge && one.ready,
+			);
+		configured = ready
+			? judgeLearner(defineJudge(judgeSpecFor(defaultJudge, judgeSpecs)))
+			: noLearner;
 	} catch {
 		configured = noLearner;
 	}

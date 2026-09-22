@@ -6,5 +6,4 @@ import { vi } from "vitest";
 vi.stubEnv("LISPTC_MEMORY_DIR", mkdtempSync(join(tmpdir(), "lisptc-memory-")));
 vi.stubEnv("DO_API_KEY", "stub");
 vi.stubEnv("LLM_PROVIDER", "digitalocean");
-vi.stubEnv("LISPTC_JUDGE", "typesafe");
-vi.stubEnv("TYPESAFE_API_KEY", "");
+vi.stubEnv("LISPTC_JUDGE", "off");

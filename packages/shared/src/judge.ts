@@ -92,7 +92,7 @@ export function score(
 	return { type: "score", instructions, criteria };
 }
 
-export type JudgeProtocol = "system-one" | "chat";
+export type JudgeProtocol = "decisions" | "chat";
 
 export interface JudgeSpec {
 	readonly label: string;
@@ -103,11 +103,17 @@ export interface JudgeSpec {
 	readonly protocol: JudgeProtocol;
 }
 
-export const JUDGE_NAMES = ["typesafe", "openrouter"] as const;
+export const JUDGE_NAMES = ["jev", "openrouter"] as const;
 
 export type JudgeName = (typeof JUDGE_NAMES)[number];
 
-export const DEFAULT_JUDGE: JudgeName = "typesafe";
+export const JUDGE_OFF = "off";
+
+export type JudgeChoice = JudgeName | typeof JUDGE_OFF;
+
+export const JUDGE_CHOICES = [...JUDGE_NAMES, JUDGE_OFF] as const;
+
+export const DEFAULT_JUDGE: JudgeName = "jev";
 
 export interface JudgeReport {
 	readonly name: JudgeName;
@@ -139,12 +145,18 @@ export function judgeReports(
 	return order.map((name) => ({
 		name,
 		model: specs[name].defaultModel,
-		calibrated: specs[name].protocol === "system-one",
+		calibrated: specs[name].protocol === "decisions",
 		ready: specs[name].apiKey !== undefined,
 	}));
 }
 
 const ERROR_BODY_CHARS = 400;
+
+export const RETRYABLE = new Set([408, 429, 500, 502, 503, 529]);
+
+export const ATTEMPTS = 4;
+
+export const BACKOFF_MS = 800;
 
 const TOP_LOGPROBS = 20;
 
@@ -260,25 +272,35 @@ async function post(
 	body: unknown,
 	signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
-	const response = await fetch(url, {
-		method: "POST",
-		headers: {
-			"content-type": "application/json",
-			authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify(body),
-		signal,
-	});
-	if (!response.ok) {
-		const text = await response.text().catch(() => "");
-		throw new Error(
-			`${spec.label} answered ${response.status}: ${text.slice(0, ERROR_BODY_CHARS)}`,
-		);
+	const sent = JSON.stringify(body);
+	let wait = BACKOFF_MS;
+	for (let attempt = 1; ; attempt += 1) {
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				authorization: `Bearer ${apiKey}`,
+			},
+			body: sent,
+			signal,
+		});
+		if (response.ok) {
+			const parsed: unknown = await response.json().catch(() => undefined);
+			if (!isRecord(parsed))
+				throw new Error(
+					`${spec.label} answered with a body that is not an object`,
+				);
+			return parsed;
+		}
+		if (!RETRYABLE.has(response.status) || attempt === ATTEMPTS) {
+			const text = await response.text().catch(() => "");
+			throw new Error(
+				`${spec.label} answered ${response.status}: ${text.slice(0, ERROR_BODY_CHARS)}`,
+			);
+		}
+		await new Promise((resolve) => setTimeout(resolve, wait));
+		wait *= 2;
 	}
-	const parsed: unknown = await response.json().catch(() => undefined);
-	if (!isRecord(parsed))
-		throw new Error(`${spec.label} answered with a body that is not an object`);
-	return parsed;
 }
 
 function answersIn(
@@ -294,7 +316,7 @@ function answersIn(
 	return out;
 }
 
-async function systemOne(
+async function decisions(
 	spec: JudgeSpec,
 	apiKey: string,
 	model: string,
@@ -302,10 +324,10 @@ async function systemOne(
 	signal?: AbortSignal,
 ): Promise<Judged> {
 	const reply = await post(
-		`${spec.baseUrl}/v1/systemone`,
+		`${spec.baseUrl}/alpha/decisions`,
 		spec,
 		apiKey,
-		{ state: req.state, model, questions: req.questions },
+		{ model, state: req.state, questions: req.questions },
 		signal,
 	);
 	return {
@@ -506,8 +528,8 @@ export function defineJudge(spec: JudgeSpec): Judge {
 				`${spec.apiKeyEnv} is not set — add it to your environment (.env) to talk to ${spec.label}.`,
 			);
 		const model = req.model ?? spec.defaultModel;
-		return spec.protocol === "system-one"
-			? await systemOne(spec, apiKey, model, req, signal)
+		return spec.protocol === "decisions"
+			? await decisions(spec, apiKey, model, req, signal)
 			: await chat(spec, apiKey, model, req, signal);
 	};
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	type Answer,
+	ATTEMPTS,
 	choice,
 	DEFAULT_JUDGE,
 	defineJudge,
@@ -44,13 +45,13 @@ const ANSWERS: Record<string, Answer> = {
 	},
 };
 
-const systemOneSpec: JudgeSpec = {
-	label: "TypeSafe System One",
+const decisionsSpec: JudgeSpec = {
+	label: "Jev",
 	apiKey: "sk-test",
-	apiKeyEnv: "TYPESAFE_API_KEY",
-	baseUrl: "https://judge.test",
-	defaultModel: "jev-test",
-	protocol: "system-one",
+	apiKeyEnv: "OPENROUTER_API_KEY",
+	baseUrl: "https://judge.test/api",
+	defaultModel: "~typesafe/jev-latest",
+	protocol: "decisions",
 };
 
 const chatSpec: JudgeSpec = {
@@ -96,6 +97,7 @@ function chatReply(content: unknown): unknown {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
 });
 
 describe("the spec", () => {
@@ -117,41 +119,41 @@ describe("the spec", () => {
 				ready: true,
 			},
 			{
-				name: "typesafe",
-				model: "jev-test",
+				name: "jev",
+				model: "~typesafe/jev-latest",
 				calibrated: true,
 				ready: false,
 			},
 		]);
 	});
 
-	function specs(): Record<"typesafe" | "openrouter", JudgeSpec> {
+	function specs(): Record<"jev" | "openrouter", JudgeSpec> {
 		return {
-			typesafe: { ...systemOneSpec, apiKey: undefined },
+			jev: { ...decisionsSpec, apiKey: undefined },
 			openrouter: chatSpec,
 		};
 	}
 });
 
-describe("the system-one transport", () => {
+describe("the decisions transport", () => {
 	it("posts state, model and questions, and nothing else", async () => {
 		const calls = stubFetch({
-			model: "jev-test",
+			model: "~typesafe/jev-latest",
 			answers: ANSWERS,
 			usage: { inputTokens: 900, outputTokens: 12 },
 		});
 
-		const judged = await defineJudge(systemOneSpec)({
+		const judged = await defineJudge(decisionsSpec)({
 			state: { said: "hello" },
 			questions: QUESTIONS,
 		});
 
 		expect(calls).toHaveLength(1);
-		expect(calls[0].url).toBe("https://judge.test/v1/systemone");
+		expect(calls[0].url).toBe("https://judge.test/api/alpha/decisions");
 		expect(calls[0].headers.authorization).toBe("Bearer sk-test");
 		expect(calls[0].body).toEqual({
 			state: { said: "hello" },
-			model: "jev-test",
+			model: "~typesafe/jev-latest",
 			questions: QUESTIONS,
 		});
 		expect(judged.answers).toEqual(ANSWERS);
@@ -160,15 +162,15 @@ describe("the system-one transport", () => {
 	});
 
 	it("takes the model the request names", async () => {
-		const calls = stubFetch({ model: "jev-other", answers: ANSWERS });
+		const calls = stubFetch({ model: "~typesafe/jev-2", answers: ANSWERS });
 
-		await defineJudge(systemOneSpec)({
+		await defineJudge(decisionsSpec)({
 			state: null,
 			questions: QUESTIONS,
-			model: "jev-other",
+			model: "~typesafe/jev-2",
 		});
 
-		expect(calls[0].body.model).toBe("jev-other");
+		expect(calls[0].body.model).toBe("~typesafe/jev-2");
 	});
 });
 
@@ -203,7 +205,7 @@ describe("the chat transport", () => {
 		expect(judged.answers).toEqual(ANSWERS);
 	});
 
-	it("says it is not calibrated, where system-one says it is", async () => {
+	it("says it is not calibrated, where the decisions endpoint says it is", async () => {
 		stubFetch(
 			chatReply({
 				worth_keeping: 0.1,
@@ -262,43 +264,90 @@ describe("the chat transport", () => {
 
 describe("what goes wrong", () => {
 	it("names the environment variable when the key is missing", async () => {
-		stubFetch({ model: "jev-test", answers: ANSWERS });
+		stubFetch({ model: "~typesafe/jev-latest", answers: ANSWERS });
 
 		await expect(
-			defineJudge({ ...systemOneSpec, apiKey: undefined })({
+			defineJudge({ ...decisionsSpec, apiKey: undefined })({
 				state: null,
 				questions: QUESTIONS,
 			}),
-		).rejects.toThrow("TYPESAFE_API_KEY is not set");
+		).rejects.toThrow("OPENROUTER_API_KEY is not set");
 	});
 
-	it("throws on a status that is not ok", async () => {
-		stubFetch({ error: "over quota" }, 429);
+	it("gives up at once on a status it cannot retry", async () => {
+		const calls = stubFetch({ error: "no key" }, 401);
 
 		await expect(
-			defineJudge(systemOneSpec)({ state: null, questions: QUESTIONS }),
-		).rejects.toThrow("TypeSafe System One answered 429");
+			defineJudge(decisionsSpec)({ state: null, questions: QUESTIONS }),
+		).rejects.toThrow("Jev answered 401");
+		expect(calls).toHaveLength(1);
+	});
+
+	it("retries a retryable status and takes the answer", async () => {
+		vi.useFakeTimers();
+		const calls: string[] = [];
+		vi.stubGlobal("fetch", (url: string) => {
+			calls.push(url);
+			return Promise.resolve(
+				calls.length === 1
+					? new Response("busy", { status: 429 })
+					: new Response(
+							JSON.stringify({
+								model: "~typesafe/jev-latest",
+								answers: ANSWERS,
+							}),
+							{ status: 200 },
+						),
+			);
+		});
+
+		const judging = defineJudge(decisionsSpec)({
+			state: null,
+			questions: QUESTIONS,
+		});
+		await vi.runAllTimersAsync();
+
+		expect((await judging).answers).toEqual(ANSWERS);
+		expect(calls).toHaveLength(2);
+	});
+
+	it("stops retrying after ATTEMPTS and reports the last status", async () => {
+		vi.useFakeTimers();
+		const calls = stubFetch({ error: "over quota" }, 429);
+
+		const judging = defineJudge(decisionsSpec)({
+			state: null,
+			questions: QUESTIONS,
+		});
+		const settled = expect(judging).rejects.toThrow("Jev answered 429");
+		await vi.runAllTimersAsync();
+		await settled;
+
+		expect(calls).toHaveLength(ATTEMPTS);
 	});
 
 	it("throws on a body that is not an object", async () => {
 		stubFetch("[]");
 
 		await expect(
-			defineJudge(systemOneSpec)({ state: null, questions: QUESTIONS }),
+			defineJudge(decisionsSpec)({ state: null, questions: QUESTIONS }),
 		).rejects.toThrow("answered with a body that is not an object");
 	});
 
 	it("throws on an answer that is missing", async () => {
-		stubFetch({ model: "jev-test", answers: { kind: ANSWERS.kind } });
+		stubFetch({
+			model: "~typesafe/jev-latest",
+			answers: { kind: ANSWERS.kind },
+		});
 
 		await expect(
-			defineJudge(systemOneSpec)({ state: null, questions: QUESTIONS }),
+			defineJudge(decisionsSpec)({ state: null, questions: QUESTIONS }),
 		).rejects.toThrow("worth_keeping");
 	});
 
 	it("throws on a choice outside the criteria it was offered", async () => {
 		stubFetch({
-			model: "jev-test",
+			model: "~typesafe/jev-latest",
 			answers: {
 				...ANSWERS,
 				kind: { ...ANSWERS.kind, choice: "something-else" },
@@ -306,7 +355,7 @@ describe("what goes wrong", () => {
 		});
 
 		await expect(
-			defineJudge(systemOneSpec)({ state: null, questions: QUESTIONS }),
+			defineJudge(decisionsSpec)({ state: null, questions: QUESTIONS }),
 		).rejects.toThrow("which is not one of fact, procedure, nothing");
 	});
 
