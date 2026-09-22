@@ -205,11 +205,15 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 					"PRO: €199.99/month (Unlimited agents, 15 GB storage, 5,000 credits)",
 			);
 			expect(value).toBe("#<unspecified>");
-			expect(skipped).toEqual([
-				"(2 agents, 10 MB storage, 100 credits) — a comma-separated phrase, so this was read as prose",
-				"(5 agents, 5 GB storage, 1,000 credits) — a comma-separated phrase, so this was read as prose",
-				"(Unlimited agents, 15 GB storage, 5,000 credits) — a comma-separated phrase, so this was read as prose",
-			]);
+			expect(skipped).toHaveLength(3);
+			for (const [index, source] of [
+				"(2 agents, 10 MB storage, 100 credits)",
+				"(5 agents, 5 GB storage, 1,000 credits)",
+				"(Unlimited agents, 15 GB storage, 5,000 credits)",
+			].entries()) {
+				expect(skipped[index]).toContain(source);
+				expect(skipped[index]).toMatch(/so this was read as prose$/);
+			}
 		});
 
 		it.each([
@@ -217,7 +221,7 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			"(car, cdr and cons return values)",
 			"(50 GB, 12 seats, no support)",
 		])("reads %s as a phrase, though no head could say so", (text) => {
-			expect(tolerantly(text).skipped[0]).toContain("a comma-separated phrase");
+			expect(tolerantly(text).skipped[0]).toMatch(/so this was read as prose$/);
 		});
 
 		it("does not read a call with a comma in a string as a phrase", () => {

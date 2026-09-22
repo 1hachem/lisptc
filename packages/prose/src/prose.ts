@@ -17,6 +17,7 @@ import type { SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 import type { Awaitable, PromptSource } from "@repo/shared/host";
 import { endOfForm, type FormJudge, formsOnly } from "@repo/shared/lisp-forms";
+import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 import { proseHost } from "./prose-host.ts";
 
 export interface ProseClassification {
@@ -146,33 +147,23 @@ function proseReason(interp: Interp, form: unknown): string | undefined {
 	const head = form.car;
 	if (head instanceof Sym && (isSpecialForm(head) || interp.hasGlobal(head)))
 		return undefined;
-	if (readsAsSentence(form)) return "a comma-separated phrase";
+	if (hasKnownCall(interp, form)) return undefined;
+	if (looksLikeParenthesizedProse(str(form)))
+		return head instanceof Sym
+			? `"${head.name}" is not defined`
+			: isLiteral(head)
+				? `${str(head)} is not a function`
+				: "the parenthesized text looks like prose";
 	if (!(head instanceof Sym))
 		return isLiteral(head) ? `${str(head)} is not a function` : undefined;
-	if (marksCode(interp, form)) return undefined;
+	if (marksCode(form)) return undefined;
 	if (isNamespaced(head.name) && !hasWord(form)) return undefined;
 	return `"${head.name}" is not defined`;
 }
 
-const SENTENCE_WORDS = 4;
-
-function readsAsSentence(form: Cell): boolean {
-	let words = 0;
-	let clauses = 0;
-	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr) {
-		const word = rest.car;
-		if (word instanceof Cell || word instanceof LispKeyword) return false;
-		if (typeof word === "string") return false;
-		if (word instanceof Sym && word.name.endsWith(",")) clauses++;
-		words++;
-	}
-	return clauses > 0 && words >= SENTENCE_WORDS;
-}
-
-function marksCode(interp: Interp, form: Cell): boolean {
+function hasKnownCall(interp: Interp, form: Cell): boolean {
 	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr) {
 		const arg = rest.car;
-		if (arg instanceof LispKeyword || typeof arg === "string") return true;
 		if (arg instanceof Cell) {
 			const inner = arg.car;
 			if (
@@ -182,6 +173,14 @@ function marksCode(interp: Interp, form: Cell): boolean {
 			)
 				return true;
 		}
+	}
+	return false;
+}
+
+function marksCode(form: Cell): boolean {
+	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr) {
+		const arg = rest.car;
+		if (arg instanceof LispKeyword || typeof arg === "string") return true;
 	}
 	return false;
 }

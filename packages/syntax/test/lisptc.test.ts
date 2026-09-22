@@ -44,6 +44,12 @@ describe("reading lisptc", () => {
 		]);
 	});
 
+	test("parenthesized prose stays unhighlighted", () => {
+		expect(tokens("Choose this (Best for quick tests) today")).toEqual([
+			["Choose this (Best for quick tests) today", undefined],
+		]);
+	});
+
 	test("a paren inside a string stays in the string", () => {
 		expect(tokens('(echo "a ( b")')).toEqual([
 			["(", "operator"],
@@ -129,7 +135,7 @@ describe("formsIn", () => {
 		expect(prose).toBe("an aside (see below)");
 	});
 
-	test("reads every parenthesis as a call when nothing was skipped", () => {
+	test("reads an ambiguous parenthesis as a call without a skipped-head hint", () => {
 		expect(formsIn("an aside (see below)\n(+ 1 2)").heads).toEqual([
 			"see",
 			"+",

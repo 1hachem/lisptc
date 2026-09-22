@@ -1,4 +1,5 @@
 import { formSpans } from "@repo/shared/lisp-forms";
+import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 import { tokenPattern } from "@repo/shared/lisp-tokens";
 import {
 	createHighlighter,
@@ -29,6 +30,9 @@ function atomClass(text: string, head: boolean): TokenRange["className"] {
 
 function scan(text: string): Scan {
 	const token = tokenPattern();
+	const prose = formSpans(text).filter(([start, end]) =>
+		looksLikeParenthesizedProse(text.slice(start, end)),
+	);
 	const ranges: TokenRange[] = [];
 	const heads: string[] = [];
 	const enclosing: boolean[] = [];
@@ -45,7 +49,13 @@ function scan(text: string): Scan {
 		end: number,
 		className: TokenRange["className"],
 	) => {
-		if (depth > 0) ranges.push({ className, start, end });
+		if (
+			depth > 0 &&
+			!prose.some(
+				([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
+			)
+		)
+			ranges.push({ className, start, end });
 	};
 
 	for (const line of text.split("\n")) {
@@ -95,7 +105,14 @@ function scan(text: string): Scan {
 				}
 			} else {
 				push(start, end, atomClass(word, head && !quoted));
-				if (head && !quoted) heads.push(word);
+				if (
+					head &&
+					!quoted &&
+					!prose.some(
+						([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
+					)
+				)
+					heads.push(word);
 				head = false;
 			}
 			mark = undefined;
@@ -122,7 +139,13 @@ export function formsIn(text: string, skipped: readonly string[] = []): Forms {
 	let prose = "";
 	let at = 0;
 	for (const [start, end] of formSpans(text)) {
-		const inner = scan(text.slice(start, end)).heads;
+		const source = text.slice(start, end);
+		if (looksLikeParenthesizedProse(source)) {
+			prose += text.slice(at, end);
+			at = end;
+			continue;
+		}
+		const inner = scan(source).heads;
 		if (inner[0] !== undefined && skipped.includes(inner[0])) continue;
 		prose += text.slice(at, start);
 		at = end;
