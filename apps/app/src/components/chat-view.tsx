@@ -16,6 +16,7 @@ import {
 	messageReasoning,
 	messageText,
 	toolFailed,
+	toolJudged,
 	toolModelOutput,
 	toolResult,
 	toolUi,
@@ -146,6 +147,7 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 	const { output } = toolResult(message);
 	const ui = toUiNode(toolUi(message));
 	const model = toolModelOutput(message);
+	const judged = shown.learn ? toolJudged(message) : [];
 	const drawsUi = ui !== undefined && shown.ui;
 	const drawsUser = shown.user && output !== "";
 	const drawsError = shown.errors && toolFailed(message);
@@ -180,6 +182,7 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 					<ChannelText text={model.output} tone={channel("model").text} />
 				</>
 			)}
+			{judged.length > 0 && <MessageLearned notes={[]} judged={judged} />}
 		</div>
 	);
 }

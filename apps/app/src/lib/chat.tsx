@@ -8,6 +8,8 @@ import type { Id } from "@repo/backend/dataModel";
 import {
 	type FiredMemory,
 	firedMemories,
+	type Judgment,
+	judgments,
 	type LearnedNote,
 	learnedNotes,
 } from "@repo/components";
@@ -42,6 +44,7 @@ export interface ChatMessage {
 		ui?: unknown;
 		prose?: unknown;
 		failed?: unknown;
+		judged?: unknown;
 	};
 }
 
@@ -414,6 +417,10 @@ export function toolFailed(message: ChatMessage): boolean {
 
 export function toolUi(message: ChatMessage): unknown {
 	return message.additional_kwargs?.ui;
+}
+
+export function toolJudged(message: ChatMessage): Judgment[] {
+	return judgments(message.additional_kwargs?.judged);
 }
 
 export function toolModelOutput(message: ChatMessage): {
