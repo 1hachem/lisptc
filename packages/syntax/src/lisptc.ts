@@ -1,4 +1,5 @@
-import { formSpans } from "@repo/shared/lisp-forms";
+import { type FormSpan, formSpans } from "@repo/shared/lisp-forms";
+import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 import { tokenPattern } from "@repo/shared/lisp-tokens";
 import {
 	createHighlighter,
@@ -29,6 +30,9 @@ function atomClass(text: string, head: boolean): TokenRange["className"] {
 
 function scan(text: string): Scan {
 	const token = tokenPattern();
+	const prose = formSpans(text).filter(([start, end]) =>
+		looksLikeParenthesizedProse(text.slice(start, end)),
+	);
 	const ranges: TokenRange[] = [];
 	const heads: string[] = [];
 	const enclosing: boolean[] = [];
@@ -45,7 +49,13 @@ function scan(text: string): Scan {
 		end: number,
 		className: TokenRange["className"],
 	) => {
-		if (depth > 0) ranges.push({ className, start, end });
+		if (
+			depth > 0 &&
+			!prose.some(
+				([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
+			)
+		)
+			ranges.push({ className, start, end });
 	};
 
 	for (const line of text.split("\n")) {
@@ -95,7 +105,14 @@ function scan(text: string): Scan {
 				}
 			} else {
 				push(start, end, atomClass(word, head && !quoted));
-				if (head && !quoted) heads.push(word);
+				if (
+					head &&
+					!quoted &&
+					!prose.some(
+						([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
+					)
+				)
+					heads.push(word);
 				head = false;
 			}
 			mark = undefined;
@@ -117,16 +134,39 @@ export const lisptc = defineLanguage({
 
 export const highlighter = createHighlighter({ languages: [lisptc] });
 
-export function formsIn(text: string, skipped: readonly string[] = []): Forms {
+function within(
+	skipped: readonly FormSpan[],
+	start: number,
+	end: number,
+): boolean {
+	return skipped.some(([from, to]) => start >= from && end <= to);
+}
+
+export function tokensIn(text: string, skipped: readonly FormSpan[] = []) {
+	const { tokens } = highlighter.tokenize(text, { lang: "lisptc" });
+	if (skipped.length === 0) return tokens;
+	let at = 0;
+	return tokens.map((token) => {
+		const start = at;
+		at += token.value.length;
+		return within(skipped, start, at) ? { value: token.value } : token;
+	});
+}
+
+export function formsIn(
+	text: string,
+	skipped: readonly FormSpan[] = [],
+): Forms {
 	const heads: string[] = [];
 	let prose = "";
 	let at = 0;
 	for (const [start, end] of formSpans(text)) {
-		const inner = scan(text.slice(start, end)).heads;
-		if (inner[0] !== undefined && skipped.includes(inner[0])) continue;
+		const source = text.slice(start, end);
+		if (within(skipped, start, end) || looksLikeParenthesizedProse(source))
+			continue;
 		prose += text.slice(at, start);
 		at = end;
-		heads.push(...inner);
+		heads.push(...scan(source).heads);
 	}
 	prose += text.slice(at);
 	return {

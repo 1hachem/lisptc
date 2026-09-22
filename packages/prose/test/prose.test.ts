@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
 	checkSyntax,
 	isTruncated,
-	type ProseExcuse,
+	type ProseClassifier,
 	stripProse,
 } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
@@ -205,11 +205,15 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 					"PRO: €199.99/month (Unlimited agents, 15 GB storage, 5,000 credits)",
 			);
 			expect(value).toBe("#<unspecified>");
-			expect(skipped).toEqual([
-				"(2 agents, 10 MB storage, 100 credits) — a comma-separated phrase, so this was read as prose",
-				"(5 agents, 5 GB storage, 1,000 credits) — a comma-separated phrase, so this was read as prose",
-				"(Unlimited agents, 15 GB storage, 5,000 credits) — a comma-separated phrase, so this was read as prose",
-			]);
+			expect(skipped).toHaveLength(3);
+			for (const [index, source] of [
+				"(2 agents, 10 MB storage, 100 credits)",
+				"(5 agents, 5 GB storage, 1,000 credits)",
+				"(Unlimited agents, 15 GB storage, 5,000 credits)",
+			].entries()) {
+				expect(skipped[index]).toContain(source);
+				expect(skipped[index]).toMatch(/so this was read as prose$/);
+			}
 		});
 
 		it.each([
@@ -217,7 +221,7 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			"(car, cdr and cons return values)",
 			"(50 GB, 12 seats, no support)",
 		])("reads %s as a phrase, though no head could say so", (text) => {
-			expect(tolerantly(text).skipped[0]).toContain("a comma-separated phrase");
+			expect(tolerantly(text).skipped[0]).toMatch(/so this was read as prose$/);
 		});
 
 		it("does not read a call with a comma in a string as a phrase", () => {
@@ -254,14 +258,17 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		expect(skipped).toEqual([]);
 	});
 
-	it("takes a host's own classifier in place of the bundled one", () => {
+	it("only asks a host's classifier after evaluation fails", () => {
 		const interp = proseInterp({
 			...proseHost,
-			classify: () => "everything is prose here",
+			classifiers: [() => ({ reason: "everything is prose here" })],
 		});
 		const skipped = collectSkips(interp);
-		expect(str(runSync(interp, "(+ 1 2)"))).toBe("#<unspecified>");
-		expect(skipped).toEqual(["everything is prose here"]);
+		expect(str(runSync(interp, "(+ 1 2)"))).toBe("3");
+		expect(str(runSync(interp, "(missing 1 2)"))).toBe("#<unspecified>");
+		expect(skipped).toEqual([
+			"(missing 1 2) — everything is prose here, so this was read as prose",
+		]);
 	});
 
 	it("judges a form only through stripProse, not the bare form scan", () => {
@@ -300,30 +307,81 @@ describe("truncation", () => {
 
 describe("a second look at a form that failed", () => {
 	function excusingInterp(
-		excuse: ProseExcuse,
+		classify: ProseClassifier,
 	): [Interp, string[], { calls: unknown[] }] {
 		const seen: { calls: unknown[] } = { calls: [] };
 		const interp = proseInterp({
 			...proseHost,
-			excuse: (i, form, error) => {
-				seen.calls.push(form);
-				return excuse(i, form, error);
-			},
+			classifiers: [
+				(i, form) => {
+					seen.calls.push(form);
+					return classify(i, form);
+				},
+			],
 		});
 		return [interp, collectSkips(interp), seen];
 	}
 
 	it("reads a failed form as prose when an async host says so", async () => {
 		const [interp, skipped] = excusingInterp(async () =>
-			Promise.resolve('(deploy "the thing") — read as prose on a second look'),
+			Promise.resolve({ reason: "read as prose on a second look" }),
 		);
 
 		const outcome = await runAsync(interp, '(deploy "the thing")');
 
 		expect(str(outcome.value)).toBe("#<unspecified>");
 		expect(skipped).toEqual([
-			'(deploy "the thing") — read as prose on a second look',
+			'(deploy "the thing") — read as prose on a second look, so this was read as prose',
 		]);
+	});
+
+	it("runs classifiers in order and stops at the first match", async () => {
+		const calls: string[] = [];
+		const interp = proseInterp({
+			...proseHost,
+			classifiers: [
+				() => {
+					calls.push("regex");
+					return undefined;
+				},
+				async () => {
+					calls.push("judge");
+					return { reason: "the judge classified it" };
+				},
+				() => {
+					calls.push("fallback");
+					return { reason: "the fallback classified it" };
+				},
+			],
+		});
+		const skipped = collectSkips(interp);
+
+		await runAsync(interp, "(review this phrase)");
+
+		expect(calls).toEqual(["regex", "judge"]);
+		expect(skipped).toEqual([
+			"(review this phrase) — the judge classified it, so this was read as prose",
+		]);
+	});
+
+	it("falls through when every classifier declines", async () => {
+		const calls: string[] = [];
+		const interp = proseInterp({
+			...proseHost,
+			classifiers: [
+				() => {
+					calls.push("regex");
+					return undefined;
+				},
+				async () => {
+					calls.push("judge");
+					return undefined;
+				},
+			],
+		});
+
+		await expect(runAsync(interp, "(deploy 1 2)")).rejects.toThrow(/undefined/);
+		expect(calls).toEqual(["regex", "judge"]);
 	});
 
 	it("raises as before when the host offers no excuse", async () => {
@@ -336,7 +394,9 @@ describe("a second look at a form that failed", () => {
 	});
 
 	it("never asks about a failure raised under an argument, where code already ran", async () => {
-		const [interp, skipped, seen] = excusingInterp(() => "excused");
+		const [interp, skipped, seen] = excusingInterp(() => ({
+			reason: "excused",
+		}));
 		runSync(interp, "(defun keep (x) x)");
 
 		await expect(runAsync(interp, "(keep (nope))")).rejects.toThrow(
@@ -347,7 +407,9 @@ describe("a second look at a form that failed", () => {
 	});
 
 	it("never asks about a failure the form's own body raised", async () => {
-		const [interp, skipped, seen] = excusingInterp(() => "excused");
+		const [interp, skipped, seen] = excusingInterp(() => ({
+			reason: "excused",
+		}));
 		runSync(interp, "(defun boom () (nope))");
 
 		await expect(runAsync(interp, "(boom)")).rejects.toThrow(/undefined/);
@@ -356,12 +418,16 @@ describe("a second look at a form that failed", () => {
 	});
 
 	it("asks when the head names something that is not applicable", async () => {
-		const [interp, skipped] = excusingInterp(() => "read as prose");
+		const [interp, skipped] = excusingInterp(() => ({
+			reason: "read as prose",
+		}));
 		runSync(interp, "(setq total 3)");
 
 		await runAsync(interp, "(total number of things)");
 
-		expect(skipped).toEqual(["read as prose"]);
+		expect(skipped).toEqual([
+			"(total number of things) — read as prose, so this was read as prose",
+		]);
 	});
 
 	it("leaves the failure alone when nothing hooks the chain", async () => {

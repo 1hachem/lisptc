@@ -57,6 +57,12 @@ describe("string library", () => {
 		expect(ev(`(string-join '("a" "b" "c") "-")`)).toBe(`"a-b-c"`);
 		expect(ev(`(string-join (string-split "x.y.z" ".") "/")`)).toBe(`"x/y/z"`);
 	});
+	test("string= compares content, not identity", () => {
+		expect(ev(`(string= "ab" (concat "a" "b"))`)).toBe("t");
+		expect(ev(`(string= "ab" "ba")`)).toBe("nil");
+		expect(ev(`(string= "ab" "abc")`)).toBe("nil");
+		expect(ev(`(string= "" "")`)).toBe("t");
+	});
 	test("prefix / suffix", () => {
 		expect(ev(`(string-prefix? "he" "hello")`)).toBe("t");
 		expect(ev(`(string-suffix? "lo" "hello")`)).toBe("t");

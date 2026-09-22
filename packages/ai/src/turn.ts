@@ -1,6 +1,7 @@
 import { llmSlot } from "@repo/interpreter/observe";
 import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
+import type { Skipped } from "@repo/shared/lisp-forms";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
@@ -46,7 +47,7 @@ export type TurnEvent =
 			type: "assistant";
 			stepId: string;
 			code: string;
-			prose: string[];
+			prose: Skipped[];
 			reasoning?: string;
 			meta: StepMeta;
 	  }

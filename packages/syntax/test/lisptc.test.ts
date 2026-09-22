@@ -1,6 +1,12 @@
 import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
 import { describe, expect, test } from "vitest";
-import { formsIn, highlighter, openForms } from "../src/index.ts";
+import {
+	type FormSpan,
+	formsIn,
+	highlighter,
+	openForms,
+	tokensIn,
+} from "../src/index.ts";
 
 function tokens(text: string): [string, string | undefined][] {
 	return highlighter
@@ -41,6 +47,12 @@ describe("reading lisptc", () => {
 			["2", "number"],
 			[")", "operator"],
 			[" gives three", undefined],
+		]);
+	});
+
+	test("parenthesized prose stays unhighlighted", () => {
+		expect(tokens("Choose this (Best for quick tests) today")).toEqual([
+			["Choose this (Best for quick tests) today", undefined],
 		]);
 	});
 
@@ -92,6 +104,55 @@ describe("reading lisptc", () => {
 	});
 });
 
+function classed(text: string, skipped: FormSpan[] = []): string[] {
+	return tokensIn(text, skipped)
+		.filter((t) => t.className !== undefined)
+		.map((t) => t.value);
+}
+
+describe("what the repl skipped as prose", () => {
+	test("loses the highlighting, while the forms it ran keep theirs", () => {
+		expect(classed("an aside (see below)\n(+ 1 2)", [[9, 20]])).toEqual([
+			"(",
+			"+",
+			"1",
+			"2",
+			")",
+		]);
+	});
+
+	test("reads as a call again without the hint", () => {
+		expect(classed("an aside (see below)")).toEqual(["(", "see", "below", ")"]);
+	});
+
+	test("takes the calls nested inside it down with it", () => {
+		expect(classed("(I will check (the thing)) (echo 1)", [[0, 26]])).toEqual([
+			"(",
+			"echo",
+			"1",
+			")",
+		]);
+	});
+
+	test("obeys the span over a call it can see inside it", () => {
+		expect(classed("(I will check (echo 1)) (echo 2)", [[0, 23]])).toEqual([
+			"(",
+			"echo",
+			"2",
+			")",
+		]);
+	});
+
+	test("still puts the text back together", () => {
+		const text = "an aside (see below)\n(+ 1 2)";
+		expect(
+			tokensIn(text, [[9, 20]])
+				.map((t) => t.value)
+				.join(""),
+		).toBe(text);
+	});
+});
+
 describe("formsIn", () => {
 	test("separates the prose a reply carries from the forms it runs", () => {
 		const { prose, heads } = formsIn(
@@ -124,12 +185,12 @@ describe("formsIn", () => {
 
 	test("shows an aside the repl read as prose verbatim, and runs no tool for it", () => {
 		const reply = "an aside (see below)\n(+ 1 2)";
-		const { prose, heads } = formsIn(reply, ["see"]);
+		const { prose, heads } = formsIn(reply, [[9, 20]]);
 		expect(heads).toEqual(["+"]);
 		expect(prose).toBe("an aside (see below)");
 	});
 
-	test("reads every parenthesis as a call when nothing was skipped", () => {
+	test("reads an ambiguous parenthesis as a call without a skipped-head hint", () => {
 		expect(formsIn("an aside (see below)\n(+ 1 2)").heads).toEqual([
 			"see",
 			"+",
@@ -137,7 +198,7 @@ describe("formsIn", () => {
 	});
 
 	test("keeps a skipped aside's nested calls out of the tools too", () => {
-		const { heads } = formsIn("(I will check (the thing)) (echo 1)", ["I"]);
+		const { heads } = formsIn("(I will check (the thing)) (echo 1)", [[0, 26]]);
 		expect(heads).toEqual(["echo"]);
 	});
 

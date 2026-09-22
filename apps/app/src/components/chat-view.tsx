@@ -1,5 +1,5 @@
 import { MessageMemories } from "@repo/components";
-import { formsIn } from "@repo/syntax";
+import { formsIn, type Skipped } from "@repo/syntax";
 import {
 	Conversation,
 	ConversationContent,
@@ -26,7 +26,7 @@ import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
-import { LispText } from "./lisp-text.tsx";
+import { LispText, SkippedProse } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
@@ -121,20 +121,23 @@ function AssistantText({
 }: {
 	id: string;
 	text: string;
-	skipped: string[];
+	skipped: Skipped[];
 	busy: boolean;
 }) {
 	const { shown } = useUI();
-	const { prose, heads } = useMemo(
-		() => formsIn(text, skipped),
-		[text, skipped],
-	);
-	if (shown.lisp) return <Markdown lisp>{text}</Markdown>;
+	const spans = useMemo(() => skipped.map((s) => s.span), [skipped]);
+	const { prose, heads } = useMemo(() => formsIn(text, spans), [text, spans]);
 	return (
-		<>
-			{prose && <Markdown>{prose}</Markdown>}
-			<Building id={id} heads={heads} busy={busy} />
-		</>
+		<SkippedProse text={text} spans={spans}>
+			{shown.lisp ? (
+				<Markdown lisp>{text}</Markdown>
+			) : (
+				<>
+					{prose && <Markdown>{prose}</Markdown>}
+					<Building id={id} heads={heads} busy={busy} />
+				</>
+			)}
+		</SkippedProse>
 	);
 }
 

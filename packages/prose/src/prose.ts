@@ -1,8 +1,8 @@
 import { isNumeric } from "@repo/interpreter/arith";
-import { noOpinion } from "@repo/interpreter/hooks";
 import {
 	Cell,
 	EndOfFile,
+	type Eval,
 	EvalException,
 	type Interp,
 	type InterpExtension,
@@ -13,33 +13,36 @@ import {
 	Sym,
 	settled,
 	str,
-	type UnresolvedHead,
 } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 import type { Awaitable, PromptSource } from "@repo/shared/host";
-import { endOfForm, type FormJudge, formsOnly } from "@repo/shared/lisp-forms";
+import {
+	endOfForm,
+	type FormJudge,
+	type FormSpan,
+	formSpans,
+	formsOnly,
+	type Skipped,
+} from "@repo/shared/lisp-forms";
+import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 import { proseHost } from "./prose-host.ts";
+
+export interface ProseClassification {
+	readonly reason: string;
+}
 
 export type ProseClassifier = (
 	interp: Interp,
 	form: unknown,
-) => string | undefined;
-
-export type ProseExcuse = (
-	interp: Interp,
-	form: unknown,
-	error: UnresolvedHead,
-) => Awaitable<string | undefined>;
+) => Awaitable<ProseClassification | undefined>;
 
 export interface ProseHost {
-	classify: ProseClassifier;
-	excuse: ProseExcuse;
-	prompt: PromptSource;
+	readonly classifiers: readonly ProseClassifier[];
+	readonly prompt: PromptSource;
 }
 
 export function proseExtension(host: ProseHost = proseHost): InterpExtension {
-	const { classify, excuse } = host;
 	const extension = (interp: Interp): void => {
 		interp.hooks.readSource.use((interp, text, next) =>
 			next(
@@ -51,14 +54,17 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 				),
 			),
 		);
-		interp.hooks.skipForm.use(
-			(interp, form, next) => classify(interp, form) ?? next(interp, form),
-		);
 		interp.hooks.failedForm.use(function* (interp, form, error, next) {
-			return (
-				(yield* settled(excuse(interp, form, error))) ??
-				(yield* next(interp, form, error))
-			);
+			for (const classifier of host.classifiers) {
+				const classification = yield* settled(classifier(interp, form));
+				if (classification === undefined) continue;
+				const ran = form instanceof Cell ? yield* runNested(interp, form) : 0;
+				const read = `${abbreviate(str(form))} — ${classification.reason}, so this was read as prose`;
+				return ran === 0
+					? read
+					: `${read}, and the ${ran === 1 ? "form" : "forms"} inside it ran`;
+			}
+			return yield* next(interp, form, error);
 		});
 	};
 	return Object.assign(extension, {
@@ -66,7 +72,7 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 		session(hooks: SessionHooks): void {
 			hooks.unrun.use((interp, code, next) => [
 				...next(interp, code),
-				...proseHeads(interp, code),
+				...proseSkipped(interp, code),
 			]);
 			hooks.answered.use((ctx, out, next) => {
 				if (formsOnly(ctx.code).trim() === "") return true;
@@ -80,13 +86,21 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 const proseJudge: FormJudge = {
 	unclosed: (text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
 	unreadable(text, start, end) {
-		const source = text.slice(start, end);
-		const failure = readFailure(source);
-		if (failure === undefined) return undefined;
-		const line = lineAt(text, start) + failure.line - 1;
-		return `${abbreviate(source)} — ${failure.reason} on line ${line}, so this was read as prose`;
+		const reason = unreadableReason(text, start, end);
+		if (reason === undefined) return undefined;
+		return `${abbreviate(text.slice(start, end))} — ${reason}, so this was read as prose`;
 	},
 };
+
+function unreadableReason(
+	text: string,
+	start: number,
+	end: number,
+): string | undefined {
+	const failure = readFailure(text.slice(start, end));
+	if (failure === undefined) return undefined;
+	return `${failure.reason} on line ${lineAt(text, start) + failure.line - 1}`;
+}
 
 export function stripProse(
 	text: string,
@@ -95,22 +109,64 @@ export function stripProse(
 	return formsOnly(text, proseJudge, onSkip);
 }
 
-export function proseHeads(interp: Interp, text: string): string[] {
-	const tokens = new Reader();
-	tokens.push(stripProse(text));
-	const heads: string[] = [];
-	while (!tokens.isEmpty()) {
-		let exp: unknown;
-		try {
-			exp = tokens.read();
-		} catch {
-			break;
-		}
-		if (interp.hooks.skipForm.run(noOpinion, interp, exp) === undefined)
+export function proseSkipped(interp: Interp, text: string): Skipped[] {
+	const skipped: Skipped[] = [];
+	for (const span of formSpans(text)) {
+		const [start, end] = span;
+		const unreadable = unreadableReason(text, start, end);
+		if (unreadable !== undefined) {
+			skipped.push({ span, reason: unreadable });
 			continue;
-		if (exp instanceof Cell && exp.car instanceof Sym) heads.push(exp.car.name);
+		}
+		const classification = readsAsProse(
+			interp,
+			readForm(text.slice(start, end)),
+		);
+		if (classification === undefined) continue;
+		for (const gap of around(ranSpans(interp, text, start, end), start, end))
+			skipped.push({ span: gap, reason: classification.reason });
 	}
-	return heads;
+	return skipped;
+}
+
+function ranSpans(
+	interp: Interp,
+	text: string,
+	start: number,
+	end: number,
+): FormSpan[] {
+	const open = text.indexOf("(", start);
+	if (open < 0 || open >= end) return [];
+	const at = open + 1;
+	const spans: FormSpan[] = [];
+	for (const [from, to] of formSpans(text.slice(at, end - 1))) {
+		const inner = text.slice(at + from, at + to);
+		if (unreadableReason(text, at + from, at + to) !== undefined) continue;
+		if (isKnownCall(interp, readForm(inner))) spans.push([at + from, at + to]);
+		else spans.push(...ranSpans(interp, text, at + from, at + to));
+	}
+	return spans;
+}
+
+function around(
+	ran: readonly FormSpan[],
+	start: number,
+	end: number,
+): FormSpan[] {
+	const gaps: FormSpan[] = [];
+	let at = start;
+	for (const [from, to] of ran) {
+		if (from > at) gaps.push([at, from]);
+		at = to;
+	}
+	if (end > at) gaps.push([at, end]);
+	return gaps;
+}
+
+function readForm(source: string): unknown {
+	const tokens = new Reader();
+	tokens.push(source);
+	return tokens.read();
 }
 
 export interface SyntaxError_ {
@@ -140,17 +196,13 @@ export function checkSyntax(text: string): SyntaxError_[] {
 	return [];
 }
 
-export function noExcuse(): undefined {
-	return undefined;
-}
-
 export function readsAsProse(
 	interp: Interp,
 	form: unknown,
-): string | undefined {
+): ProseClassification | undefined {
 	const reason = proseReason(interp, form);
 	if (reason === undefined) return undefined;
-	return `${abbreviate(str(form))} — ${reason}, so this was read as prose`;
+	return { reason };
 }
 
 function proseReason(interp: Interp, form: unknown): string | undefined {
@@ -158,42 +210,48 @@ function proseReason(interp: Interp, form: unknown): string | undefined {
 	const head = form.car;
 	if (head instanceof Sym && (isSpecialForm(head) || interp.hasGlobal(head)))
 		return undefined;
-	if (readsAsSentence(form)) return "a comma-separated phrase";
+	if (hasKnownCall(interp, form) && !hasWord(form)) return undefined;
+	if (looksLikeParenthesizedProse(str(form)))
+		return head instanceof Sym
+			? `"${head.name}" is not defined`
+			: isLiteral(head)
+				? `${str(head)} is not a function`
+				: "the parenthesized text looks like prose";
 	if (!(head instanceof Sym))
 		return isLiteral(head) ? `${str(head)} is not a function` : undefined;
-	if (marksCode(interp, form)) return undefined;
+	if (marksCode(form)) return undefined;
 	if (isNamespaced(head.name) && !hasWord(form)) return undefined;
 	return `"${head.name}" is not defined`;
 }
 
-const SENTENCE_WORDS = 4;
-
-function readsAsSentence(form: Cell): boolean {
-	let words = 0;
-	let clauses = 0;
-	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr) {
-		const word = rest.car;
-		if (word instanceof Cell || word instanceof LispKeyword) return false;
-		if (typeof word === "string") return false;
-		if (word instanceof Sym && word.name.endsWith(",")) clauses++;
-		words++;
-	}
-	return clauses > 0 && words >= SENTENCE_WORDS;
+function isKnownCall(interp: Interp, form: unknown): form is Cell {
+	if (!(form instanceof Cell)) return false;
+	const head = form.car;
+	return head instanceof Sym && !isSpecialForm(head) && interp.hasGlobal(head);
 }
 
-function marksCode(interp: Interp, form: Cell): boolean {
+function hasKnownCall(interp: Interp, form: Cell): boolean {
+	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr)
+		if (isKnownCall(interp, rest.car)) return true;
+	return false;
+}
+
+function* runNested(interp: Interp, form: Cell): Eval<number> {
+	let ran = 0;
+	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr) {
+		const arg = rest.car;
+		if (isKnownCall(interp, arg)) {
+			yield* interp.evalGen(arg, null);
+			ran++;
+		} else if (arg instanceof Cell) ran += yield* runNested(interp, arg);
+	}
+	return ran;
+}
+
+function marksCode(form: Cell): boolean {
 	for (let rest: unknown = form.cdr; rest instanceof Cell; rest = rest.cdr) {
 		const arg = rest.car;
 		if (arg instanceof LispKeyword || typeof arg === "string") return true;
-		if (arg instanceof Cell) {
-			const inner = arg.car;
-			if (
-				inner instanceof Sym &&
-				!isSpecialForm(inner) &&
-				interp.hasGlobal(inner)
-			)
-				return true;
-		}
 	}
 	return false;
 }

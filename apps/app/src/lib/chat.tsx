@@ -6,6 +6,7 @@ import {
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { type FiredMemory, firedMemories } from "@repo/components";
+import type { Skipped } from "@repo/syntax";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
@@ -378,9 +379,21 @@ export function isUserMessage(message: ChatMessage): boolean {
 	return message.type === "human" || message.type === "user";
 }
 
-export function messageProse(message: ChatMessage): string[] {
+export function messageProse(message: ChatMessage): Skipped[] {
 	const prose = message.additional_kwargs?.prose;
-	return Array.isArray(prose) ? prose.map(String) : [];
+	return Array.isArray(prose) ? prose.filter(isSkipped) : [];
+}
+
+function isSkipped(value: unknown): value is Skipped {
+	if (typeof value !== "object" || value === null) return false;
+	const { span, reason } = value as { span?: unknown; reason?: unknown };
+	return (
+		typeof reason === "string" &&
+		Array.isArray(span) &&
+		span.length === 2 &&
+		typeof span[0] === "number" &&
+		typeof span[1] === "number"
+	);
 }
 
 export function toolFailed(message: ChatMessage): boolean {

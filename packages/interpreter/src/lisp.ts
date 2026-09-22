@@ -20,7 +20,7 @@ import {
 } from "./arith.ts";
 import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
-import { type Hooks, newHooks, noOpinion } from "./hooks.ts";
+import { type Hooks, newHooks } from "./hooks.ts";
 import type { SessionHooks } from "./session.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
 import { note, output } from "./topics.ts";
@@ -1251,10 +1251,8 @@ export class Interp {
 								body !== null && body.cdr === null
 									? body.car
 									: yield* this.evalProgN(body, env);
-						} else if (x.car instanceof Sym) {
-							throw new UnresolvedHead("not applicable", x, fn);
 						} else {
-							throw new EvalException("not applicable", fn);
+							throw new UnresolvedHead("not applicable", x, fn);
 						}
 					}
 				} else if (x instanceof Lambda) {
@@ -1924,7 +1922,11 @@ function strListBody(x: Cell, count?: number, printed?: Cell[]): string {
 	return s.join(" ");
 }
 
-export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
+export function* evalTopLevel(
+	interp: Interp,
+	exp: unknown,
+	previous: unknown = Unspecified,
+): Eval {
 	try {
 		return yield* interp.evalGen(exp, null);
 	} catch (ex) {
@@ -1943,7 +1945,7 @@ export function* evalTopLevel(interp: Interp, exp: unknown): Eval {
 				note.emit(interp.channels, {
 					model: { kind: "skipped", text: excused },
 				});
-				return Unspecified;
+				return previous;
 			}
 		}
 		if (failure instanceof EvalException)
@@ -1965,14 +1967,12 @@ export function* runGen(interp: Interp, text: string): Eval {
 	let result: unknown = Unspecified;
 	while (!tokens.isEmpty()) {
 		const exp = tokens.read();
-		const skipped = hooks.skipForm.run(noOpinion, interp, exp);
-		if (skipped !== undefined) {
-			note.emit(interp.channels, {
-				model: { kind: "skipped", text: skipped },
-			});
-			continue;
-		}
-		result = yield* hooks.evalForm.run(evalTopLevel, interp, exp);
+		const previous = result;
+		result = yield* hooks.evalForm.run(
+			(i, form) => evalTopLevel(i, form, previous),
+			interp,
+			exp,
+		);
 	}
 	return result;
 }
@@ -2346,6 +2346,10 @@ export const prelude = `
       (setq out (concat out (char s start)))
       (setq start (+ start 1)))
     out))
+
+(defun string= (s1 s2)
+  "Return t if the strings s1 and s2 have the same characters in the same order (alias of equal)."
+  (equal s1 s2))
 
 (defun string-prefix? (prefix s)
   "Return t if the string s starts with prefix."
