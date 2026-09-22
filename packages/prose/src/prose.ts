@@ -12,7 +12,6 @@ import {
 	Sym,
 	settled,
 	str,
-	type UnresolvedHead,
 } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
@@ -20,19 +19,21 @@ import type { Awaitable, PromptSource } from "@repo/shared/host";
 import { endOfForm, type FormJudge, formsOnly } from "@repo/shared/lisp-forms";
 import { proseHost } from "./prose-host.ts";
 
+export interface ProseClassification {
+	readonly reason: string;
+}
+
 export type ProseClassifier = (
 	interp: Interp,
 	form: unknown,
-	error: UnresolvedHead,
-) => Awaitable<string | undefined>;
+) => Awaitable<ProseClassification | undefined>;
 
 export interface ProseHost {
-	classify: ProseClassifier;
-	prompt: PromptSource;
+	readonly classifiers: readonly ProseClassifier[];
+	readonly prompt: PromptSource;
 }
 
 export function proseExtension(host: ProseHost = proseHost): InterpExtension {
-	const { classify } = host;
 	const extension = (interp: Interp): void => {
 		interp.hooks.readSource.use((interp, text, next) =>
 			next(
@@ -45,10 +46,12 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 			),
 		);
 		interp.hooks.failedForm.use(function* (interp, form, error, next) {
-			return (
-				(yield* settled(classify(interp, form, error))) ??
-				(yield* next(interp, form, error))
-			);
+			for (const classifier of host.classifiers) {
+				const classification = yield* settled(classifier(interp, form));
+				if (classification !== undefined)
+					return `${abbreviate(str(form))} — ${classification.reason}, so this was read as prose`;
+			}
+			return yield* next(interp, form, error);
 		});
 	};
 	return Object.assign(extension, {
@@ -132,11 +135,10 @@ export function checkSyntax(text: string): SyntaxError_[] {
 export function readsAsProse(
 	interp: Interp,
 	form: unknown,
-	_error?: UnresolvedHead,
-): string | undefined {
+): ProseClassification | undefined {
 	const reason = proseReason(interp, form);
 	if (reason === undefined) return undefined;
-	return `${abbreviate(str(form))} — ${reason}, so this was read as prose`;
+	return { reason };
 }
 
 function proseReason(interp: Interp, form: unknown): string | undefined {
