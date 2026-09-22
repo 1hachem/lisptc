@@ -26,7 +26,7 @@ import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
-import { LispText } from "./lisp-text.tsx";
+import { LispText, SkippedProse } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
@@ -129,12 +129,17 @@ function AssistantText({
 		() => formsIn(text, skipped),
 		[text, skipped],
 	);
-	if (shown.lisp) return <Markdown lisp>{text}</Markdown>;
 	return (
-		<>
-			{prose && <Markdown>{prose}</Markdown>}
-			<Building id={id} heads={heads} busy={busy} />
-		</>
+		<SkippedProse heads={skipped}>
+			{shown.lisp ? (
+				<Markdown lisp>{text}</Markdown>
+			) : (
+				<>
+					{prose && <Markdown>{prose}</Markdown>}
+					<Building id={id} heads={heads} busy={busy} />
+				</>
+			)}
+		</SkippedProse>
 	);
 }
 

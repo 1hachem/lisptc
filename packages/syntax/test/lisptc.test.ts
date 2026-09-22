@@ -1,6 +1,6 @@
 import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
 import { describe, expect, test } from "vitest";
-import { formsIn, highlighter, openForms } from "../src/index.ts";
+import { formsIn, highlighter, openForms, tokensIn } from "../src/index.ts";
 
 function tokens(text: string): [string, string | undefined][] {
 	return highlighter
@@ -95,6 +95,46 @@ describe("reading lisptc", () => {
 			["b", "variable"],
 			[")", "operator"],
 		]);
+	});
+});
+
+function classed(text: string, skipped: string[] = []): string[] {
+	return tokensIn(text, skipped)
+		.filter((t) => t.className !== undefined)
+		.map((t) => t.value);
+}
+
+describe("what the repl skipped as prose", () => {
+	test("loses the highlighting, while the forms it ran keep theirs", () => {
+		expect(classed("an aside (see below)\n(+ 1 2)", ["see"])).toEqual([
+			"(",
+			"+",
+			"1",
+			"2",
+			")",
+		]);
+	});
+
+	test("reads as a call again without the hint", () => {
+		expect(classed("an aside (see below)")).toEqual(["(", "see", "below", ")"]);
+	});
+
+	test("takes the calls nested inside it down with it", () => {
+		expect(classed("(I will check (the thing)) (echo 1)", ["I"])).toEqual([
+			"(",
+			"echo",
+			"1",
+			")",
+		]);
+	});
+
+	test("still puts the text back together", () => {
+		const text = "an aside (see below)\n(+ 1 2)";
+		expect(
+			tokensIn(text, ["see"])
+				.map((t) => t.value)
+				.join(""),
+		).toBe(text);
 	});
 });
 

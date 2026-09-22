@@ -1,9 +1,22 @@
-import { highlighter } from "@repo/syntax";
-import { Children, type ReactNode } from "react";
+import { tokensIn } from "@repo/syntax";
+import { Children, createContext, type ReactNode, useContext } from "react";
+
+const Skipped = createContext<readonly string[]>([]);
+
+export function SkippedProse({
+	heads,
+	children,
+}: {
+	heads: readonly string[];
+	children: ReactNode;
+}) {
+	return <Skipped.Provider value={heads}>{children}</Skipped.Provider>;
+}
 
 export function LispText({ children }: { children: string }) {
+	const skipped = useContext(Skipped);
 	let at = 0;
-	return highlighter.tokenize(children, { lang: "lisptc" }).tokens.map((t) => {
+	return tokensIn(children, skipped).map((t) => {
 		const key = at;
 		at += t.value.length;
 		return (

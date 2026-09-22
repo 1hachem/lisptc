@@ -1,4 +1,4 @@
-import { formSpans } from "@repo/shared/lisp-forms";
+import { type FormSpan, formSpans } from "@repo/shared/lisp-forms";
 import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 import { tokenPattern } from "@repo/shared/lisp-tokens";
 import {
@@ -134,19 +134,44 @@ export const lisptc = defineLanguage({
 
 export const highlighter = createHighlighter({ languages: [lisptc] });
 
+function readsAsProse(
+	source: string,
+	heads: readonly string[],
+	skipped: readonly string[],
+): boolean {
+	if (looksLikeParenthesizedProse(source)) return true;
+	return heads[0] !== undefined && skipped.includes(heads[0]);
+}
+
+function proseSpans(text: string, skipped: readonly string[]): FormSpan[] {
+	return formSpans(text).filter(([start, end]) => {
+		const source = text.slice(start, end);
+		return readsAsProse(source, scan(source).heads, skipped);
+	});
+}
+
+export function tokensIn(text: string, skipped: readonly string[] = []) {
+	const { tokens } = highlighter.tokenize(text, { lang: "lisptc" });
+	if (skipped.length === 0) return tokens;
+	const prose = proseSpans(text, skipped);
+	let at = 0;
+	return tokens.map((token) => {
+		const start = at;
+		at += token.value.length;
+		return prose.some(([from, to]) => start >= from && at <= to)
+			? { value: token.value }
+			: token;
+	});
+}
+
 export function formsIn(text: string, skipped: readonly string[] = []): Forms {
 	const heads: string[] = [];
 	let prose = "";
 	let at = 0;
 	for (const [start, end] of formSpans(text)) {
 		const source = text.slice(start, end);
-		if (looksLikeParenthesizedProse(source)) {
-			prose += text.slice(at, end);
-			at = end;
-			continue;
-		}
 		const inner = scan(source).heads;
-		if (inner[0] !== undefined && skipped.includes(inner[0])) continue;
+		if (readsAsProse(source, inner, skipped)) continue;
 		prose += text.slice(at, start);
 		at = end;
 		heads.push(...inner);
