@@ -1,5 +1,4 @@
 import { isNumeric } from "@repo/interpreter/arith";
-import { noOpinion } from "@repo/interpreter/hooks";
 import {
 	Cell,
 	EndOfFile,
@@ -24,22 +23,16 @@ import { proseHost } from "./prose-host.ts";
 export type ProseClassifier = (
 	interp: Interp,
 	form: unknown,
-) => string | undefined;
-
-export type ProseExcuse = (
-	interp: Interp,
-	form: unknown,
 	error: UnresolvedHead,
 ) => Awaitable<string | undefined>;
 
 export interface ProseHost {
 	classify: ProseClassifier;
-	excuse: ProseExcuse;
 	prompt: PromptSource;
 }
 
 export function proseExtension(host: ProseHost = proseHost): InterpExtension {
-	const { classify, excuse } = host;
+	const { classify } = host;
 	const extension = (interp: Interp): void => {
 		interp.hooks.readSource.use((interp, text, next) =>
 			next(
@@ -51,12 +44,9 @@ export function proseExtension(host: ProseHost = proseHost): InterpExtension {
 				),
 			),
 		);
-		interp.hooks.skipForm.use(
-			(interp, form, next) => classify(interp, form) ?? next(interp, form),
-		);
 		interp.hooks.failedForm.use(function* (interp, form, error, next) {
 			return (
-				(yield* settled(excuse(interp, form, error))) ??
+				(yield* settled(classify(interp, form, error))) ??
 				(yield* next(interp, form, error))
 			);
 		});
@@ -106,8 +96,7 @@ export function proseHeads(interp: Interp, text: string): string[] {
 		} catch {
 			break;
 		}
-		if (interp.hooks.skipForm.run(noOpinion, interp, exp) === undefined)
-			continue;
+		if (readsAsProse(interp, exp) === undefined) continue;
 		if (exp instanceof Cell && exp.car instanceof Sym) heads.push(exp.car.name);
 	}
 	return heads;
@@ -140,13 +129,10 @@ export function checkSyntax(text: string): SyntaxError_[] {
 	return [];
 }
 
-export function noExcuse(): undefined {
-	return undefined;
-}
-
 export function readsAsProse(
 	interp: Interp,
 	form: unknown,
+	_error?: UnresolvedHead,
 ): string | undefined {
 	const reason = proseReason(interp, form);
 	if (reason === undefined) return undefined;

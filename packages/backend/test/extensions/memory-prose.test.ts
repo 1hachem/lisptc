@@ -40,7 +40,7 @@ async function step(
 describe("memory and prose", () => {
 	it("keeps an error trigger quiet when prose excuses the form", async () => {
 		const { interp, bank } = fixture(
-			proseExtension({ ...proseHost, excuse: () => "read as prose" }),
+			proseExtension({ ...proseHost, classify: () => "read as prose" }),
 		);
 		await runAsync(
 			interp,

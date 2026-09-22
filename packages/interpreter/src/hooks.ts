@@ -32,7 +32,6 @@ export function noOpinion(): undefined {
 
 export interface Hooks {
 	readonly readSource: Chain<[interp: Interp, text: string], string>;
-	readonly skipForm: Chain<[interp: Interp, form: unknown], string | undefined>;
 	readonly evalForm: Chain<[interp: Interp, form: unknown], Eval>;
 	readonly failedForm: Chain<
 		[interp: Interp, form: unknown, error: UnresolvedHead],
@@ -44,7 +43,6 @@ export interface Hooks {
 export function newHooks(): Hooks {
 	return {
 		readSource: new Chain(),
-		skipForm: new Chain(),
 		evalForm: new Chain(),
 		failedForm: new Chain(),
 		dispose: new Chain(),

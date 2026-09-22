@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
 	checkSyntax,
 	isTruncated,
-	type ProseExcuse,
+	type ProseClassifier,
 	stripProse,
 } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
@@ -254,13 +254,14 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		expect(skipped).toEqual([]);
 	});
 
-	it("takes a host's own classifier in place of the bundled one", () => {
+	it("only asks a host's classifier after evaluation fails", () => {
 		const interp = proseInterp({
 			...proseHost,
 			classify: () => "everything is prose here",
 		});
 		const skipped = collectSkips(interp);
-		expect(str(runSync(interp, "(+ 1 2)"))).toBe("#<unspecified>");
+		expect(str(runSync(interp, "(+ 1 2)"))).toBe("3");
+		expect(str(runSync(interp, "(missing 1 2)"))).toBe("#<unspecified>");
 		expect(skipped).toEqual(["everything is prose here"]);
 	});
 
@@ -300,14 +301,14 @@ describe("truncation", () => {
 
 describe("a second look at a form that failed", () => {
 	function excusingInterp(
-		excuse: ProseExcuse,
+		classify: ProseClassifier,
 	): [Interp, string[], { calls: unknown[] }] {
 		const seen: { calls: unknown[] } = { calls: [] };
 		const interp = proseInterp({
 			...proseHost,
-			excuse: (i, form, error) => {
+			classify: (i, form, error) => {
 				seen.calls.push(form);
-				return excuse(i, form, error);
+				return classify(i, form, error);
 			},
 		});
 		return [interp, collectSkips(interp), seen];
