@@ -3,6 +3,7 @@ import { Stat, Stats } from "@/components/ui.tsx";
 import { Arcs } from "@/components/views/arcs.tsx";
 import { Cycles } from "@/components/views/cycles.tsx";
 import { Dsm } from "@/components/views/dsm.tsx";
+import { Layers } from "@/components/views/layers.tsx";
 import { Matrix } from "@/components/views/matrix.tsx";
 import { Quadrant } from "@/components/views/quadrant.tsx";
 import { Treemap } from "@/components/views/treemap.tsx";
@@ -37,6 +38,8 @@ export function Atlas({
 	const early = leader(view, 0, Math.ceil(weeks / 3));
 	const late = leader(view, weeks - Math.ceil(weeks / 3), weeks);
 	const tangled = view.cycles[0];
+	const tags = new Set(view.nodes.map((node) => node.tag));
+	const busiest = mostDependedOn(view);
 
 	return (
 		<>
@@ -170,6 +173,56 @@ export function Atlas({
 			<Frame
 				compact={compact}
 				finding={
+					busiest === null ? null : (
+						<>
+							{view.nodes.length} workspaces over {tags.size} layers and{" "}
+							{view.edges.length} edges, laid out by the tags{" "}
+							<span className="text-fg">turbo.json</span> already declares.{" "}
+							<span className="text-fg">{busiest.id}</span> carries the graph
+							with {busiest.dependents} dependents.
+						</>
+					)
+				}
+				name="Layered dependency graph"
+				spec={{
+					input: "workspace dependencies plus each package's turbo tag",
+					ceiling:
+						"~60 nodes and ~200 edges, then read the matrix below instead",
+					fails: "the nodes have no natural layer, leaving a prettier hairball",
+				}}
+				tags={["Sugiyama DAG", "node-link"]}
+				why={
+					<>
+						A force layout of this many nodes is a hairball. Pinning every node
+						to the layer the architecture already declares, then ordering within
+						the layer to cut crossings, makes the same edges readable. A
+						violation is an edge that climbs.
+					</>
+				}
+			>
+				<Layers edges={view.edges} layers={view.layers} nodes={view.nodes} />
+				<Legend
+					items={[
+						{
+							color: "var(--s1)",
+							label: "dependency, running down",
+							line: true,
+						},
+						{
+							color: "var(--crit)",
+							label:
+								violations.length === 0
+									? "layer violation, none present"
+									: `layer violation, ${violations.length} present`,
+							line: true,
+						},
+					]}
+				/>
+			</Frame>
+
+			<Frame
+				compact={compact}
+				finding={
 					violations.length === 0 ? (
 						<>
 							{view.edges.length} edges, zero violations. Every dependency runs
@@ -295,4 +348,15 @@ function leader(
 	}));
 	const top = totals.sort((a, b) => b.total - a.total)[0];
 	return top === undefined || top.total === 0 ? null : top;
+}
+
+function mostDependedOn(
+	view: Snapshot,
+): { id: string; dependents: number } | null {
+	const counted = view.nodes.map((node) => ({
+		id: node.id,
+		dependents: view.edges.filter((edge) => edge.to === node.id).length,
+	}));
+	const top = counted.sort((a, b) => b.dependents - a.dependents)[0];
+	return top === undefined || top.dependents === 0 ? null : top;
 }
