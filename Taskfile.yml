@@ -7,6 +7,8 @@ includes:
     flatten: true
   test: ./taskfiles/test.yml
   check: ./taskfiles/check.yml
+  dashi-codes: ./taskfiles/dashi-codes.yml
+  evals: ./taskfiles/evals.yml
 tasks:
   default:
     desc: prints this help
@@ -83,56 +85,6 @@ tasks:
           ENV: dev
           PATHS: "/assets"
           CMD: 'r2mount {{.ACTION}}'
-
-  evals:run:
-    desc: run the agent eval suite against real models
-    vars:
-      MATRIX: '{{.EVAL_MATRIX | default "digitalocean:gemma-4-31B-it"}}'
-      JUDGE: '{{.EVAL_JUDGE | default "digitalocean:gemma-4-31B-it"}}'
-      CONCURRENCY: '{{.EVAL_CONCURRENCY | default "4"}}'
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: dev
-          PATHS: "/ai /assets"
-          CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" EVAL_CONCURRENCY="{{.CONCURRENCY}}" pnpm test:evals'
-
-  evals:open:
-    desc: build the eval trace viewer, serve it, and open a browser on it
-    vars:
-      PORT: '{{.PORT | default "3200"}}'
-      URL: 'http://localhost:{{.PORT}}'
-    cmds:
-      - |
-        (
-          for _ in $(seq 480); do
-            if curl -sf -o /dev/null "{{.URL}}"; then
-              if command -v xdg-open >/dev/null 2>&1; then xdg-open "{{.URL}}"
-              elif command -v open >/dev/null 2>&1; then open "{{.URL}}"
-              else echo "the tracer is at {{.URL}}"
-              fi
-              exit 0
-            fi
-            sleep 0.5
-          done
-          echo "the tracer never answered on {{.URL}}"
-        ) >/dev/null 2>&1 &
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/assets /trace-viewer"
-          CMD: 'PORT={{.PORT}} pnpm run build --filter @lisptc/trace-viewer && pnpm --filter @lisptc/trace-viewer start'
-
-  evals:dev:
-    desc: run the eval trace viewer in dev mode with access to secrets
-    vars:
-      PORT: '{{.PORT | default "3200"}}'
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/assets /trace-viewer"
-          CMD: 'PORT={{.PORT}} pnpm run dev --filter @lisptc/trace-viewer'
 
   dev-app:
     desc: run the web app with access to secrets

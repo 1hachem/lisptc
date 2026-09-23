@@ -8,6 +8,7 @@
     "./analytics": "./src/analytics.ts",
     "./api": "./src/api.ts",
     "./app": "./src/app.ts",
+    "./dashi-codes": "./src/dashi-codes.ts",
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",
     "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
