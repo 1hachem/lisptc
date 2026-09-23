@@ -9,7 +9,8 @@ import {
 	str,
 } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
-import { type SecretSpec, secretsExtension } from "../src/secrets.ts";
+import type { SecretSpec } from "../src/ports.ts";
+import { secretsExtension } from "../src/secrets.ts";
 import {
 	envSecretsStore,
 	loadSecretsFromFile,
@@ -140,7 +141,9 @@ describe("secret registry (env seeding)", () => {
 		const prev = process.env.REPL_FOO;
 		process.env.REPL_FOO = "from-env";
 		try {
-			const interp = new Interp({ extensions: [secretsExtension()] });
+			const interp = new Interp({
+				extensions: [secretsExtension(secretsHost)],
+			});
 			runSync(interp, prelude);
 			expect(str((await runAsync(interp, "(secrets)")).value)).toBe(
 				'(("REPL_FOO" . ""))',

@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/memory.ts",
-    "./host": "./src/memory-host.ts"
+    "./host": "./src/memory-host.ts",
+    "./ports": "./src/ports.ts"
   },
   "engines": {
     "node": ">=22.6.0"

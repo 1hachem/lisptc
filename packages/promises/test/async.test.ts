@@ -11,9 +11,10 @@ import {
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { promisesExtension } from "../src/promises.ts";
+import { promisesHost } from "../src/promises-host.ts";
 
 function interpWithSlow(): Interp {
-	const interp = new Interp({ extensions: [promisesExtension()] });
+	const interp = new Interp({ extensions: [promisesExtension(promisesHost)] });
 	runSync(interp, prelude);
 	interp.def(
 		"slow",

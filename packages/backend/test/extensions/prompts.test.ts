@@ -1,10 +1,15 @@
 import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import { Interp } from "@repo/interpreter/lisp";
 import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
 import { memoryExtension } from "@repo/memory-extension";
+import { memoryHost } from "@repo/memory-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import { secretsExtension } from "@repo/secrets-extension";
+import { secretsHost } from "@repo/secrets-extension/host";
 import { describe, expect, it } from "vitest";
 
 describe("the system prompt an interpreter composes", () => {
@@ -14,7 +19,10 @@ describe("the system prompt an interpreter composes", () => {
 
 	it("carries a section per extension, in the order they were given", () => {
 		const prompt = new Interp({
-			extensions: [secretsExtension(), promisesExtension()],
+			extensions: [
+				secretsExtension(secretsHost),
+				promisesExtension(promisesHost),
+			],
 		}).systemPrompt();
 
 		expect(prompt).toContain(LANGUAGE_REFERENCE);
@@ -23,7 +31,7 @@ describe("the system prompt an interpreter composes", () => {
 
 	it("says nothing about what the interpreter cannot do", () => {
 		const prompt = new Interp({
-			extensions: [proseExtension()],
+			extensions: [proseExtension(proseHost)],
 		}).systemPrompt();
 
 		expect(prompt).not.toMatch(/\(await /);
@@ -34,7 +42,7 @@ describe("the system prompt an interpreter composes", () => {
 
 	it("teaches remembering only when memory is installed", () => {
 		const prompt = new Interp({
-			extensions: [memoryExtension()],
+			extensions: [memoryExtension(memoryHost)],
 		}).systemPrompt();
 
 		expect(prompt).toMatch(/MEMORY/);
@@ -44,7 +52,10 @@ describe("the system prompt an interpreter composes", () => {
 
 	it("puts memory after compaction, so recall is read the way results are", () => {
 		const prompt = new Interp({
-			extensions: [compactionExtension(), memoryExtension()],
+			extensions: [
+				compactionExtension(compactionHost),
+				memoryExtension(memoryHost),
+			],
 		}).systemPrompt();
 
 		expect(prompt.indexOf("EXTRACT, THEN ECHO")).toBeLessThan(
@@ -54,7 +65,7 @@ describe("the system prompt an interpreter composes", () => {
 
 	it("teaches windowing only when compaction is installed", () => {
 		const prompt = new Interp({
-			extensions: [compactionExtension()],
+			extensions: [compactionExtension(compactionHost)],
 		}).systemPrompt();
 
 		expect(prompt).toMatch(/:offset/);

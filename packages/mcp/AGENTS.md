@@ -9,8 +9,8 @@ Turbo tag: `extension`.
 ## Shape
 
 `src/mcp.ts` is the extension. It declares `McpExtensionHost` and exports
-`mcpExtension`, which takes that host as a default argument and contributes a
-`prompt`. `src/mcp-host.ts` holds the implementations and the default value.
+`mcpExtension`, which takes that host and contributes a `prompt`.
+`src/mcp-host.ts` holds the implementations and the host value a root passes in.
 `src/mcp.ptc` is the prompt, written in the dialect.
 
 `src/ports.ts` is the contract layer: the client, host, registry and store
@@ -64,3 +64,9 @@ direct import of the SDK into `mcp.ts`.
 
 `test/` holds fixture servers beside the tests (`fixture-*.ts`). A test that
 needs a server should use one rather than reaching for a real process.
+
+**A test here installs this extension and no other.** A load is asynchronous
+without the promises extension installed, so reach for the evaluator's own
+async surface rather than that extension's forms. What those forms make of a
+load is two extensions at once, and belongs in
+`@repo/backend/test/extensions`.

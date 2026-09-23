@@ -1,12 +1,9 @@
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
-import type { InterpExtension } from "@repo/interpreter/lisp";
-import {
-	type MemoryStore,
-	memoryExtension,
-	VolatileStore,
-} from "@repo/memory-extension";
+import type { InterpExtension } from "@repo/interpreter/session";
+import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
+import { type MemoryStore, VolatileStore } from "@repo/memory-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -29,12 +26,12 @@ const swapped: [string, () => InterpExtension][] = [
 	["secrets", () => secretsExtension({ ...secretsHost, prompt: said })],
 ];
 
-const defaults: [string, () => InterpExtension][] = [
-	["compaction", () => compactionExtension()],
-	["memory", () => memoryExtension()],
-	["promises", () => promisesExtension()],
-	["prose", () => proseExtension()],
-	["secrets", () => secretsExtension()],
+const colocated: [string, () => InterpExtension][] = [
+	["compaction", () => compactionExtension(compactionHost)],
+	["memory", () => memoryExtension(memoryHost)],
+	["promises", () => promisesExtension(promisesHost)],
+	["prose", () => proseExtension(proseHost)],
+	["secrets", () => secretsExtension(secretsHost)],
 ];
 
 describe("every extension takes its prompt from the host", () => {
@@ -42,7 +39,7 @@ describe("every extension takes its prompt from the host", () => {
 		expect(build().prompt).toBe("a prompt the host supplied");
 	});
 
-	it.each(defaults)("%s falls back to its colocated .ptc", (_name, build) => {
+	it.each(colocated)("%s reads its colocated .ptc", (_name, build) => {
 		expect(build().prompt).toBeTruthy();
 	});
 });

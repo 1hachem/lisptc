@@ -13,34 +13,42 @@ Turbo tag: `language`.
 ## Shape
 
 `src/lisp.ts` is the language. The reader, the evaluator, the `Interp` a driver
-runs, the `InterpExtension` shape an extension satisfies, and `prelude`, the
-standard library written in the dialect itself. Both drivers live here too: the
+runs, the `Installable` shape `Interp` installs, and `prelude`, the standard
+library written in the dialect itself. Both drivers live here too: the
 synchronous pair and the asynchronous pair. A change to evaluation is a change
 to this file.
 
 `src/session.ts` is the seam. It declares `SessionHooks`, the chains an
-extension hooks, the annotation lanes, and `slot`, which mints a capability key.
-Read the hook names there, never from prose.
+extension hooks, the annotation lanes, `slot`, which mints a capability key, and
+`InterpExtension`, the shape an extension satisfies. Read the hook names there,
+never from prose. `InterpExtension` is declared here rather than in
+`src/lisp.ts` because it names `SessionHooks`, and the seam may know the
+language while the language may not know the seam.
 
 `src/hooks.ts` holds the chain machinery the seam is built on. `src/channels.ts`
 and `src/channels-host.ts` carry addressed output. `src/arith.ts`,
-`src/plist.ts`, `src/async.ts` and `src/types.ts` are the small supporting
-modules. `src/source.ts` holds the language reference the model reads.
+`src/plist.ts`, `src/async.ts`, `src/timeout.ts` and `src/types.ts` are the
+small supporting modules. `src/source.ts` holds the language reference the model
+reads.
+
+Nothing `src/lisp.ts` imports imports it back. A helper that needs the
+language's own types or errors goes in a module `src/lisp.ts` does not import,
+the way `src/plist.ts` and `src/timeout.ts` do.
 
 `src/core.ptc` is the core prompt. It is the only prompt here, because no
 extension lives in this package.
 
 An extension is its own workspace package, tagged `extension`, built around the
-same three files whichever one it is:
+same files whichever one it is:
 
 - `<name>.ts`, the extension and its host interface.
-- `<name>-host.ts`, the implementations and the default host value.
+- `<name>-host.ts`, the implementations and the host value a root passes in.
+- `ports.ts`, what both sides need and the host does not own, when there is any.
 - `<name>.ptc`, the prompt, written in the dialect.
 
 One whose host has real work to do carries more modules beside them, and those
 sit on the host side of the line. A new extension is a new package of those
-three files. Adding one here instead is the mistake this split exists to
-prevent.
+files. Adding one here instead is the mistake this split exists to prevent.
 
 ## Host ports
 
@@ -53,16 +61,20 @@ own prompt all go through one field of that interface.
   vendor SDK, and never touches `process.env`. What it cannot reach, it cannot
   hard-code.
 - `<name>-host.ts` sits beside it, holds the implementations, and exports the
-  default host value. It is the only file of the pair that touches the world.
-- The default is already in place, so the ordinary call names no host.
+  host value. It is the only file of the pair that touches the world.
+- `<name>.ts` never imports `<name>-host.ts`. There is no default host, so
+  every caller is handed one and a composition root is the only place that
+  names an implementation.
+- A type or function both sides need, which does not itself depend on the
+  host, lives in the package's `ports.ts` and neither side owns it.
 - A port two packages share and neither owns lives in `@repo/shared/host`, with
   its node-side implementation in `@repo/shared/host-node`.
 - A port whose work may have to wait is typed so a value or a promise both
   satisfy it, and is consumed through the evaluator's own suspension rather
   than through `async`.
 
-`check:arch` enforces the first bullet and names the `-host.ts` to move the
-offending import to. Type-only imports are allowed, so a port may still be
+`check:arch` enforces the first three bullets and names the `-host.ts` to move
+the offending import to. Type-only imports are allowed, so a port may still be
 typed in an SDK's own terms.
 
 Keep a port the evaluator consults on every form synchronous. Give work that

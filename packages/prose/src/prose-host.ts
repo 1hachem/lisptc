@@ -1,5 +1,5 @@
 import { filePrompt } from "@repo/shared/host-node";
-import { type ProseHost, readsAsProse } from "./prose.ts";
+import { type ProseHost, readsAsProse } from "./ports.ts";
 
 export const proseHost: ProseHost = {
 	classifiers: [readsAsProse],

@@ -128,7 +128,13 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   past the core dialect lives in an extension package, so a new form belongs in
   an extension unless the evaluator cannot run without it.
 - An extension package depends on the interpreter, and carries the SDK its
-  surface needs so the interpreter never does.
+  surface needs so the interpreter never does. **It depends on no other
+  extension.** The `extension` tag denies itself, so naming a sibling in a
+  manifest fails `pnpm boundaries`. What one extension needs to read off
+  another it borrows as a contract type, never as a dependency. Borrowing one
+  is deliberate and costly: every check that guards the layering has to be told
+  in place, and `packages/checks` is the worked example to copy. It buys a type
+  and nothing else, so a value still comes through a port or a slot.
 - A REPL front-end and the agent depend on the interpreter, and on no
   extension. A REPL is built from the extension list it is handed. The `runtime`
   tag denies `extension`, so naming one in a manifest fails `pnpm boundaries`,
@@ -150,7 +156,9 @@ That layering is declared, not described. Each package carries a `turbo.json`
 naming its tag, and `boundaries.tags` in the root `turbo.json` says which tags a
 tag may not depend on. `pnpm boundaries` fails on a wrong-direction dependency,
 on an import of a package missing from a `package.json`, on an import that
-reaches into another package's files, and on a cycle. `scripts/check-arch.ts`
+reaches into another package's files, and on cycles between workspace packages.
+It does not detect circular imports between files within a package. Do not add
+circular imports between files in a package. `scripts/check-arch.ts`
 (`pnpm check:arch`) holds the rules a manifest cannot express, including the two
 below. Every failure prints the way out. Take it. Do not widen a list to get
 past one.
@@ -249,9 +257,9 @@ owns is tested in that extension's package, never in the interpreter, whose
 helpers build an interpreter with nothing installed. A runtime package's tests
 name no extension either: a REPL there is built from stubs that hook the chains
 and fill the slots, so what is pinned is the seam rather than whoever happens to
-be on it. A test that needs a real extension, or two at once, belongs in
-`@repo/backend/test/extensions`, the composition root that already names them
-all.
+be on it. An extension's own tests install that extension and no other. A test that needs
+two at once belongs in `@repo/backend/test/extensions`, the composition root
+that already names them all.
 
 The agent evals are separate: the cases live in `apps/trace-viewer/evals` as
 `*.eval.ts`, they run against real models, and `pnpm test` does not include them.

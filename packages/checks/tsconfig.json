@@ -1,4 +1,10 @@
 {
   "extends": "@repo/tsconfigs/base.json",
+  "compilerOptions": {
+    "paths": {
+      "@repo/mcp-extension/ports": ["../mcp/src/ports.ts"],
+      "@repo/secrets-extension/ports": ["../secrets/src/ports.ts"]
+    }
+  },
   "include": ["src", "test", "vitest.config.ts"]
 }

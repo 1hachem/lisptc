@@ -1,8 +1,11 @@
 import { Interp } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
+import { mcpHost } from "../src/mcp-host.ts";
 
-const PROMPT = new Interp({ extensions: [mcpExtension()] }).systemPrompt();
+const PROMPT = new Interp({
+	extensions: [mcpExtension(mcpHost)],
+}).systemPrompt();
 
 const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
 

@@ -1,7 +1,6 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { noOpinion } from "@repo/interpreter/hooks";
-import type { InterpExtension } from "@repo/interpreter/lisp";
 import {
 	driveAsync,
 	EndOfFile,
@@ -16,6 +15,7 @@ import {
 } from "@repo/interpreter/lisp";
 import {
 	type Bounded,
+	type InterpExtension,
 	noAnnotations,
 	openSession,
 	type SessionHooks,

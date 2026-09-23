@@ -5,7 +5,6 @@
   "private": true,
   "exports": {
     "./checks": "./src/checks.ts",
-    "./mocks": "./src/mocks.ts",
     "./trace": "./src/trace.ts"
   },
   "engines": {
@@ -18,9 +17,6 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
-    "@repo/mcp-extension": "workspace:*",
-    "@repo/prose-extension": "workspace:*",
-    "@repo/secrets-extension": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

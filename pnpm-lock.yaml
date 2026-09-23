@@ -430,6 +430,9 @@ importers:
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@repo/mcp-extension':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@repo/memory-extension':
         specifier: workspace:*
         version: link:../../packages/memory
@@ -631,15 +634,6 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
-      '@repo/mcp-extension':
-        specifier: workspace:*
-        version: link:../mcp
-      '@repo/prose-extension':
-        specifier: workspace:*
-        version: link:../prose
-      '@repo/secrets-extension':
-        specifier: workspace:*
-        version: link:../secrets
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -830,12 +824,6 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
-      '@repo/promises-extension':
-        specifier: workspace:*
-        version: link:../promises
-      '@repo/secrets-extension':
-        specifier: workspace:*
-        version: link:../secrets
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared

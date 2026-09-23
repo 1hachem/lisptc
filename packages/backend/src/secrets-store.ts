@@ -2,7 +2,7 @@ import {
 	MapSecretsStore,
 	type SecretSpec,
 	type SecretsStore,
-} from "@repo/secrets-extension";
+} from "@repo/secrets-extension/ports";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";

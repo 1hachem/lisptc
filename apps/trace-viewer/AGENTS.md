@@ -20,9 +20,10 @@ readable part: they say what the agent should have done, one behaviour each.
 `evals/harness/` is the product adapter for `@repo/evals/runner`, because a
 case needs the agent loop, the check extension and a mocked world, and this app
 is where those concrete pieces live. `harness.ts` is the traced REPL,
-`runner.ts` the adapter onto the eval driver, and `judge.ts` the model judge.
-Their unit tests sit beside
-them and run under `pnpm test`; the cases do not.
+`runner.ts` the adapter onto the eval driver, `judge.ts` the model judge, and
+`mocks.ts` the mocked world: it names the MCP and secrets extensions, which is
+why it is here and not in `@repo/checks`. Their unit tests sit beside them and
+run under `pnpm test`; the cases do not.
 
 ## Rules
 

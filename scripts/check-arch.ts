@@ -217,6 +217,18 @@ const hosted = extensionModules.flatMap((file) =>
 
 const exported = exportedFiles();
 
+function resolved(file: string, module: string): string {
+	if (module.startsWith(".")) return join(dirname(file), module);
+	return exported.get(module) ?? "";
+}
+
+const hostBound = extensionModules.flatMap((file) =>
+	[...readFileSync(file, "utf8").matchAll(/from\s+"([^"]+)"/g)]
+		.map((found) => found[1])
+		.filter((module) => resolved(file, module).endsWith("-host.ts"))
+		.map((module) => ({ file, module })),
+);
+
 const drifted = DRIVERS.flatMap(({ file, carried }) => {
 	const crossings = runtimeImports(readFileSync(file, "utf8"))
 		.filter(({ module }) => isExtensionModule(exported.get(module) ?? ""))
@@ -266,6 +278,7 @@ if (
 	offenders.length === 0 &&
 	reaches.length === 0 &&
 	hosted.length === 0 &&
+	hostBound.length === 0 &&
 	drifted.length === 0 &&
 	blinded.length === 0 &&
 	interpreting.length === 0 &&
@@ -293,7 +306,23 @@ for (const { file, what } of hosted) {
 		"  An extension defines the interface; the host lives in its colocated",
 	);
 	console.error(
-		`  -host.ts and arrives as the default argument. Move it to ${file.replace(/\.ts$/, "-host.ts")}.`,
+		`  -host.ts, which a composition root passes in. Move it to ${file.replace(/\.ts$/, "-host.ts")}.`,
+	);
+}
+
+for (const { file, module } of hostBound) {
+	console.error(`${file} imports ${module}`);
+	console.error(
+		"  An extension declares its host interface and is handed one. It never",
+	);
+	console.error(
+		"  names the implementation, so there is no default argument to fall back",
+	);
+	console.error(
+		"  on and a composition root passes the host. What the host needs but does",
+	);
+	console.error(
+		"  not depend on belongs in the package's ports.ts, which both sides import.",
 	);
 }
 
@@ -357,6 +386,7 @@ const total =
 	offenders.length +
 	reaches.length +
 	hosted.length +
+	hostBound.length +
 	drifted.length +
 	blinded.length +
 	interpreting.length +

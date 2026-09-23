@@ -1,14 +1,15 @@
+import type { Trace } from "@repo/checks/trace";
+import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
+import type { AgentRepl } from "@repo/repl/repl";
+import type { SecretsStore } from "@repo/secrets-extension/ports";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { type Harness, tracedRepl } from "./harness.ts";
 import {
 	type MockSpec,
 	mockedMcpExtension,
 	tracedSecretsExtension,
-} from "@repo/checks/mocks";
-import type { Trace } from "@repo/checks/trace";
-import { promisesExtension } from "@repo/promises-extension";
-import type { AgentRepl } from "@repo/repl/repl";
-import type { SecretsStore } from "@repo/secrets-extension";
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import { type Harness, tracedRepl } from "./harness.ts";
+} from "./mocks.ts";
 
 const PLAYWRIGHT: MockSpec = {
 	servers: {
@@ -39,7 +40,7 @@ function replFor(spec: MockSpec): Harness {
 		mocks: spec,
 		extensions: () => [
 			tracedSecretsExtension(),
-			promisesExtension(),
+			promisesExtension(promisesHost),
 			mockedMcpExtension(),
 		],
 	});

@@ -22,7 +22,7 @@
       },
       "extension": {
         "dependencies": {
-          "deny": ["runtime", "frontend", "product"]
+          "deny": ["extension", "runtime", "frontend", "product"]
         }
       },
       "runtime": {

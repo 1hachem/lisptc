@@ -6,7 +6,6 @@ import {
 	driveAsync,
 	EvalException,
 	type Interp,
-	type InterpExtension,
 	jsonToLisp,
 	type List,
 	newSym,
@@ -16,10 +15,13 @@ import {
 	zList,
 } from "@repo/interpreter/lisp";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
-import { annotating, type SessionHooks } from "@repo/interpreter/session";
+import {
+	annotating,
+	type InterpExtension,
+	type SessionHooks,
+} from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { uiHost } from "./ui-host.ts";
 
 const MAX_HANDLERS = 500;
 
@@ -551,7 +553,7 @@ export interface UiOptions {
 export type UiExtension = InterpExtension & { surface: UiSurface };
 
 export function uiExtension(
-	host: UiHost = uiHost,
+	host: UiHost,
 	options: UiOptions = {},
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
