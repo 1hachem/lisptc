@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Atlas } from "@/components/atlas.tsx";
+import { Fragment } from "react";
+import { atlasPanels } from "@/components/atlas.tsx";
 import { Empty, Masthead, Pill, Shell, Title } from "@/components/ui.tsx";
 import { count, when } from "@/lib/format.ts";
 import type { Snapshot } from "@/lib/snapshot.ts";
@@ -60,8 +61,11 @@ export default async function Compare({
 			</Shell>
 		);
 
+	const leftPanels = atlasPanels(left.view, true);
+	const rightPanels = atlasPanels(right.view, true);
+
 	return (
-		<Shell>
+		<Shell wide>
 			<Masthead>
 				<Title>compare</Title>
 				<Link className="text-[12px] text-dim hover:text-fg" href="/versions">
@@ -71,23 +75,28 @@ export default async function Compare({
 
 			<Deltas left={left} right={right} />
 
-			<div className="grid min-w-0 gap-4 lg:grid-cols-2">
-				<Column side={left} />
-				<Column side={right} />
+			<div className="grid min-w-0 gap-2.5 lg:grid-cols-2">
+				<ColumnHead side={left} />
+				<ColumnHead side={right} />
+				{leftPanels.map((panel, index) => (
+					<Fragment key={panel.key}>
+						<div className="grid min-w-0">{panel.node}</div>
+						<div className="grid min-w-0">
+							{rightPanels[index]?.node ?? null}
+						</div>
+					</Fragment>
+				))}
 			</div>
 		</Shell>
 	);
 }
 
-function Column({ side }: { side: Side }) {
+function ColumnHead({ side }: { side: Side }) {
 	return (
-		<section className="grid min-w-0 gap-2.5">
-			<header className="flex flex-wrap items-baseline justify-between gap-2 border-bg2 border-b pb-2">
-				<span className="text-[13px] text-fg">{when(side.takenAt)}</span>
-				<Pill>{side.head}</Pill>
-			</header>
-			<Atlas compact view={side.view} />
-		</section>
+		<header className="flex flex-wrap items-baseline justify-between gap-2 border-bg2 border-b pb-2">
+			<span className="text-[13px] text-fg">{when(side.takenAt)}</span>
+			<Pill>{side.head}</Pill>
+		</header>
 	);
 }
 

@@ -10,9 +10,17 @@ const toneText: Record<Tone, string> = {
 	neutral: "text-dim",
 };
 
-export function Shell({ children }: { children: ReactNode }) {
+export function Shell({
+	children,
+	wide = false,
+}: {
+	children: ReactNode;
+	wide?: boolean;
+}) {
 	return (
-		<main className="mx-auto grid max-w-[1100px] gap-4 px-5 py-8">
+		<main
+			className={`mx-auto grid gap-4 px-5 py-8 ${wide ? "max-w-[1800px]" : "max-w-[1100px]"}`}
+		>
 			{children}
 		</main>
 	);
