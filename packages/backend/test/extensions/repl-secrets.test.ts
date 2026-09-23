@@ -1,4 +1,5 @@
 import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import { secretsExtension } from "@repo/secrets-extension";
 import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { describe, expect, it } from "vitest";
@@ -26,7 +27,7 @@ describe("AgentRepl secret handling", () => {
 		const store = envSecretsStore();
 		const repl = agentRepl([
 			secretsExtension({ ...secretsHost, store }),
-			compactionExtension(),
+			compactionExtension(compactionHost),
 		]);
 		store.set({
 			REPL_HOST_TOKEN: { value: "h0st", description: "from host" },
@@ -46,7 +47,7 @@ describe("AgentRepl secret handling", () => {
 		store.set({ REPL_SHARED_TOKEN: "shared" });
 		const repl = agentRepl([
 			secretsExtension({ ...secretsHost, store }),
-			compactionExtension(),
+			compactionExtension(compactionHost),
 		]);
 		expect(await repl.eval('(secret "REPL_SHARED_TOKEN")')).toContain(
 			"#<secret:REPL_SHARED_TOKEN>",

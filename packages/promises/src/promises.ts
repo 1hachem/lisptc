@@ -12,7 +12,6 @@ import {
 } from "@repo/interpreter/lisp";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { promisesHost } from "./promises-host.ts";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
 
@@ -44,9 +43,7 @@ export interface PromisesHost {
 	prompt: PromptSource;
 }
 
-export function promisesExtension(
-	host: PromisesHost = promisesHost,
-): InterpExtension {
+export function promisesExtension(host: PromisesHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerPromises(interp), {
 		prompt: host.prompt(),
 	});

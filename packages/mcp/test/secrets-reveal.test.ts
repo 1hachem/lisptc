@@ -7,10 +7,12 @@ import {
 	str,
 } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { secretsExtension } from "@repo/secrets-extension";
 import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
+import { mcpHost } from "../src/mcp-host.ts";
 
 const FIXTURE = fileURLToPath(
 	new URL("./fixture-mcp-server.ts", import.meta.url),
@@ -22,8 +24,8 @@ describe("secret registry (revealed only into an MCP call)", () => {
 	const interp = new Interp({
 		extensions: [
 			secretsExtension({ ...secretsHost, store }),
-			promisesExtension(),
-			mcpExtension(),
+			promisesExtension(promisesHost),
+			mcpExtension(mcpHost),
 		],
 	});
 	runSync(interp, prelude);

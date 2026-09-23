@@ -9,8 +9,8 @@ Turbo tag: `extension`.
 ## Shape
 
 `src/mcp.ts` is the extension. It declares `McpExtensionHost` and exports
-`mcpExtension`, which takes that host as a default argument and contributes a
-`prompt`. `src/mcp-host.ts` holds the implementations and the default value.
+`mcpExtension`, which takes that host and contributes a `prompt`.
+`src/mcp-host.ts` holds the implementations and the host value a root passes in.
 `src/mcp.ptc` is the prompt, written in the dialect.
 
 `src/ports.ts` is the contract layer: the client, host, registry and store

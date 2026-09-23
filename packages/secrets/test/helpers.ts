@@ -1,5 +1,6 @@
 import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
-import { MapSecretsStore, secretsExtension } from "../src/secrets.ts";
+import { MapSecretsStore } from "../src/ports.ts";
+import { secretsExtension } from "../src/secrets.ts";
 import { secretsHost } from "../src/secrets-host.ts";
 
 export function ev(code: string, interp: Interp = freshInterp()): string {

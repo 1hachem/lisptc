@@ -8,6 +8,7 @@ import {
 	str,
 } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -30,7 +31,9 @@ async function evalOutput(interp: Interp, code: string): Promise<string> {
 }
 
 function mcpInterp(): Interp {
-	return new Interp({ extensions: [promisesExtension(), mcpExtension()] });
+	return new Interp({
+		extensions: [promisesExtension(promisesHost), mcpExtension(mcpHost)],
+	});
 }
 
 const FIXTURE = fileURLToPath(
@@ -197,7 +200,7 @@ describe("MCP search engine", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			promisesExtension(),
+			promisesExtension(promisesHost),
 			mcpExtension({
 				...mcpHost,
 				search,
@@ -270,7 +273,7 @@ describe("loading a toolkit server by name", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			promisesExtension(),
+			promisesExtension(promisesHost),
 			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
 		],
 	});
@@ -318,7 +321,7 @@ describe("a url server the interpreter starts for you", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			promisesExtension(),
+			promisesExtension(promisesHost),
 			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
 		],
 	});
@@ -350,7 +353,7 @@ describe("a toolkit server bundled with the repo", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			promisesExtension(),
+			promisesExtension(promisesHost),
 			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
 		],
 	});
@@ -398,7 +401,7 @@ function loadForm(name: string, delayMs = 0): string {
 }
 
 describe("MCP without the promises extension", () => {
-	const interp = new Interp({ extensions: [mcpExtension()] });
+	const interp = new Interp({ extensions: [mcpExtension(mcpHost)] });
 	runSync(interp, prelude);
 
 	afterAll(async () => {

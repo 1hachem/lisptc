@@ -31,7 +31,6 @@ import type { SessionHooks } from "@repo/interpreter/session";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
-import { llmHost } from "./llm-host.ts";
 
 export const LLM_TIMEOUT_MS = 60_000;
 
@@ -115,7 +114,7 @@ export interface LlmExtension extends InterpExtension {
 }
 
 export function llmExtension(
-	host: LlmHost = llmHost,
+	host: LlmHost,
 	options: LlmOptions = {},
 ): LlmExtension {
 	const config = { observe: options.observe };

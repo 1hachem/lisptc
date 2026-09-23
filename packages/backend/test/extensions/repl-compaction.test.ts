@@ -1,6 +1,7 @@
 import { Compactor, compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import type { MemoryRepl } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
 import { memoryRepl } from "./helpers.ts";
@@ -13,7 +14,7 @@ async function repl(wordLimit = 6): Promise<MemoryRepl> {
 		compactionExtension(compactionHost, {
 			compactor: new Compactor(wordLimit),
 		}),
-		proseExtension(),
+		proseExtension(proseHost),
 	]);
 	await r.eval(RANGE);
 	return r;

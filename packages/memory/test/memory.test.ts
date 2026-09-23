@@ -26,7 +26,6 @@ import {
 	MemoryBank,
 	memoryExtension,
 	REINFORCEMENT,
-	VolatileStore,
 } from "../src/memory.ts";
 import {
 	FileMemoryStore,
@@ -34,6 +33,7 @@ import {
 	memoryHost,
 	scopedMemoryStore,
 } from "../src/memory-host.ts";
+import { VolatileStore } from "../src/ports.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
@@ -650,7 +650,7 @@ describe("the file store", () => {
 	it("round-trips a form body, which is what makes a recipe survive", () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const store = new FileMemoryStore(dir);
-		const interp = new Interp({ extensions: [memoryExtension()] });
+		const interp = new Interp({ extensions: [memoryExtension(memoryHost)] });
 		runSync(interp, prelude);
 		const body = runSync(interp, "(quote (defun double (x) (* x 2)))");
 		store.put({

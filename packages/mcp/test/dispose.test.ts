@@ -1,5 +1,6 @@
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -29,7 +30,10 @@ function hangingClient(): { client: McpClient; aborts: () => number } {
 
 function loading(client: McpClient): Interp {
 	const interp = new Interp({
-		extensions: [promisesExtension(), mcpExtension({ ...mcpHost, client })],
+		extensions: [
+			promisesExtension(promisesHost),
+			mcpExtension({ ...mcpHost, client }),
+		],
 	});
 	runSync(interp, prelude);
 	runSync(interp, '(load-mcp :name "x" :command "node")');
@@ -62,7 +66,10 @@ describe("starting a promise does not suspend", () => {
 	it("lets a synchronous host begin background work", () => {
 		const { client } = hangingClient();
 		const interp = new Interp({
-			extensions: [promisesExtension(), mcpExtension({ ...mcpHost, client })],
+			extensions: [
+				promisesExtension(promisesHost),
+				mcpExtension({ ...mcpHost, client }),
+			],
 		});
 		runSync(interp, prelude);
 		expect(

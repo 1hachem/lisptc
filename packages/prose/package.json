@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/prose.ts",
-    "./host": "./src/prose-host.ts"
+    "./host": "./src/prose-host.ts",
+    "./ports": "./src/ports.ts"
   },
   "engines": {
     "node": ">=22.6.0"

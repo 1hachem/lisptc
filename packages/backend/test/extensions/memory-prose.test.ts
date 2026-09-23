@@ -5,17 +5,14 @@ import {
 	runAsync,
 	runSync,
 } from "@repo/interpreter/lisp";
-import {
-	MemoryBank,
-	memoryExtension,
-	VolatileStore,
-} from "@repo/memory-extension";
+import { MemoryBank, memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
+import { VolatileStore } from "@repo/memory-extension/ports";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { describe, expect, it } from "vitest";
 
-function fixture(prose = proseExtension()): {
+function fixture(prose = proseExtension(proseHost)): {
 	interp: Interp;
 	bank: MemoryBank;
 } {

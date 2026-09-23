@@ -14,6 +14,7 @@ interface Seen {
 
 const seen: Seen[] = [];
 let llmExtension: typeof import("../src/llm.ts").llmExtension;
+let llmHost: typeof import("../src/llm-host.ts").llmHost;
 
 const completion = {
 	id: "1",
@@ -67,6 +68,7 @@ beforeAll(async () => {
 	process.env.FIREWORKS_API_KEY = "test-key";
 	process.env.FIREWORKS_BASE_URL = "http://fireworks.test/v1";
 	llmExtension = (await import("../src/llm.ts")).llmExtension;
+	llmHost = (await import("../src/llm-host.ts")).llmHost;
 	await import("@langchain/openai");
 });
 
@@ -75,7 +77,7 @@ afterEach(() => {
 });
 
 function clientInterp(): Interp {
-	const interp = new Interp({ extensions: [llmExtension()] });
+	const interp = new Interp({ extensions: [llmExtension(llmHost)] });
 	runSync(interp, prelude);
 	return interp;
 }

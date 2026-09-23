@@ -1,14 +1,16 @@
 import { fileURLToPath } from "node:url";
 import { Interp, prelude, runAsync, runSync } from "@repo/interpreter/lisp";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { mcpExtension } from "../src/mcp.ts";
+import { mcpHost } from "../src/mcp-host.ts";
 
 const FIXTURE = fileURLToPath(
 	new URL("./fixture-mcp-server.ts", import.meta.url),
 );
 
 const interp = new Interp({
-	extensions: [promisesExtension(), mcpExtension()],
+	extensions: [promisesExtension(promisesHost), mcpExtension(mcpHost)],
 });
 runSync(interp, prelude);
 await runAsync(

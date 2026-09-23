@@ -5,7 +5,7 @@ import type {
 	McpClient,
 	ToolCall,
 } from "@repo/mcp-extension/ports";
-import type { SecretsStore } from "@repo/secrets-extension";
+import type { SecretsStore } from "@repo/secrets-extension/ports";
 
 export const REDACTED = "<redacted>";
 

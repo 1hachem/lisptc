@@ -31,16 +31,16 @@ modules. `src/source.ts` holds the language reference the model reads.
 extension lives in this package.
 
 An extension is its own workspace package, tagged `extension`, built around the
-same three files whichever one it is:
+same files whichever one it is:
 
 - `<name>.ts`, the extension and its host interface.
-- `<name>-host.ts`, the implementations and the default host value.
+- `<name>-host.ts`, the implementations and the host value a root passes in.
+- `ports.ts`, what both sides need and the host does not own, when there is any.
 - `<name>.ptc`, the prompt, written in the dialect.
 
 One whose host has real work to do carries more modules beside them, and those
 sit on the host side of the line. A new extension is a new package of those
-three files. Adding one here instead is the mistake this split exists to
-prevent.
+files. Adding one here instead is the mistake this split exists to prevent.
 
 ## Host ports
 
@@ -53,16 +53,20 @@ own prompt all go through one field of that interface.
   vendor SDK, and never touches `process.env`. What it cannot reach, it cannot
   hard-code.
 - `<name>-host.ts` sits beside it, holds the implementations, and exports the
-  default host value. It is the only file of the pair that touches the world.
-- The default is already in place, so the ordinary call names no host.
+  host value. It is the only file of the pair that touches the world.
+- `<name>.ts` never imports `<name>-host.ts`. There is no default host, so
+  every caller is handed one and a composition root is the only place that
+  names an implementation.
+- A type or function both sides need, which does not itself depend on the
+  host, lives in the package's `ports.ts` and neither side owns it.
 - A port two packages share and neither owns lives in `@repo/shared/host`, with
   its node-side implementation in `@repo/shared/host-node`.
 - A port whose work may have to wait is typed so a value or a promise both
   satisfy it, and is consumed through the evaluator's own suspension rather
   than through `async`.
 
-`check:arch` enforces the first bullet and names the `-host.ts` to move the
-offending import to. Type-only imports are allowed, so a port may still be
+`check:arch` enforces the first three bullets and names the `-host.ts` to move
+the offending import to. Type-only imports are allowed, so a port may still be
 typed in an SDK's own terms.
 
 Keep a port the evaluator consults on every form synchronous. Give work that

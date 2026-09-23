@@ -9,14 +9,9 @@ import {
 	str,
 } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
-import {
-	type Memory,
-	MemoryBank,
-	type MemoryStore,
-	memoryExtension,
-	VolatileStore,
-} from "../src/memory.ts";
+import { MemoryBank, memoryExtension } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
+import { type Memory, type MemoryStore, VolatileStore } from "../src/ports.ts";
 
 class PromisedStore implements MemoryStore {
 	private readonly inner = new VolatileStore();

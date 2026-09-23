@@ -9,10 +9,10 @@ import type {
 } from "@repo/mcp-extension/ports";
 import {
 	type SecretsExtension,
-	type SecretsStore,
 	secretsExtension,
 } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
+import type { SecretsStore } from "@repo/secrets-extension/ports";
 
 import type { Trace } from "./trace.ts";
 

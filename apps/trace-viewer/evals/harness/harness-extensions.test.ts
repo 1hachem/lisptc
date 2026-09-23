@@ -1,8 +1,11 @@
 import { systemPromptFor } from "@repo/ai";
 import { mockedMcpExtension } from "@repo/checks/mocks";
 import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import { describe, expect, test } from "vitest";
 import { tracedRepl } from "./harness.ts";
 
@@ -10,10 +13,10 @@ describe("a case that lists its own extensions", () => {
 	test("gets those and the recorder, and nothing else", async () => {
 		const { repl } = tracedRepl({
 			extensions: () => [
-				promisesExtension(),
+				promisesExtension(promisesHost),
 				mockedMcpExtension(),
-				compactionExtension(),
-				proseExtension(),
+				compactionExtension(compactionHost),
+				proseExtension(proseHost),
 			],
 		});
 
@@ -26,7 +29,7 @@ describe("a case that lists its own extensions", () => {
 
 	test("is prompted with those sections alone", () => {
 		const { repl } = tracedRepl({
-			extensions: () => [compactionExtension()],
+			extensions: () => [compactionExtension(compactionHost)],
 		});
 		const prompt = systemPromptFor(repl.interp);
 
@@ -45,7 +48,7 @@ describe("a case that lists its own extensions", () => {
 					},
 				},
 			},
-			extensions: () => [promisesExtension(), mockedMcpExtension()],
+			extensions: () => [promisesExtension(promisesHost), mockedMcpExtension()],
 		});
 
 		await repl.eval('(await (load-mcp "playwright"))');

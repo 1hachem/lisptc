@@ -20,7 +20,6 @@ import { keyName, parsePlist } from "@repo/interpreter/plist";
 import type { ToJson } from "@repo/interpreter/types";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { mcpHost } from "./mcp-host.ts";
 import type {
 	ConnConfig,
 	ConnectResult,
@@ -311,9 +310,7 @@ function installServer(
 	return arrayToList(toolSyms);
 }
 
-export function mcpExtension(
-	host: McpExtensionHost = mcpHost,
-): InterpExtension {
+export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
 	});
