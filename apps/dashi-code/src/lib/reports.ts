@@ -38,8 +38,12 @@ export async function readReport(file: string): Promise<Loaded> {
 	try {
 		const raw = decodeReport(await store().read(file));
 		const kind = kindOf(raw);
-		if (kind !== null && kind !== "health")
-			return { file, ok: false, why: `${kind} document, not a health report` };
+		if (kind !== "health")
+			return {
+				file,
+				ok: false,
+				why: `${kind ?? "untyped"} document, not a health report`,
+			};
 		const parsed = parseReport(raw);
 		return parsed.ok
 			? { file, ok: true, report: parsed.report }

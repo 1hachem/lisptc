@@ -52,24 +52,33 @@ export interface Snapshot {
 	cycles: Cycle[];
 }
 
-async function newestCycles(): Promise<Cycle[]> {
+interface Cycles {
+	file: string | null;
+	cycles: Cycle[];
+}
+
+async function newestCycles(): Promise<Cycles> {
 	const stored = [...(await listDocuments())].sort(
 		(a, b) => b.modifiedAt - a.modifiedAt,
 	);
 	for (const row of stored) {
 		const found = cyclesOf(await readDocument(row.name));
-		if (found.length > 0) return found;
+		if (found !== null) return { file: row.name, cycles: found };
 	}
-	return [];
+	return { file: null, cycles: [] };
 }
 
 let cached: { key: string; value: Snapshot } | undefined;
 
 export async function snapshot(): Promise<Snapshot> {
-	const [history, latest] = await Promise.all([readHistory(), newest()]);
-	const key = `${history.head}:${latest?.file ?? "none"}`;
+	const [history, latest, cycles] = await Promise.all([
+		readHistory(),
+		newest(),
+		newestCycles(),
+	]);
+	const key = `${history.head}:${latest?.file ?? "none"}:${cycles.file ?? "none"}`;
 	if (cached?.key === key) return cached.value;
-	const value = await compose(history, latest);
+	const value = await compose(history, latest, cycles.cycles);
 	cached = { key, value };
 	return value;
 }
@@ -88,6 +97,7 @@ async function newest(): Promise<{ file: string; report: Report } | null> {
 async function compose(
 	history: History,
 	latest: { file: string; report: Report } | null,
+	cycles: Cycle[],
 ): Promise<Snapshot> {
 	const tree = await readTree();
 	const report = latest?.report;
@@ -106,7 +116,7 @@ async function compose(
 		functions,
 		timeline: history.timeline,
 		cochange: history.cochange,
-		cycles: await newestCycles(),
+		cycles,
 		report: latest?.file ?? null,
 	};
 }

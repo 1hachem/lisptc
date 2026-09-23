@@ -19,6 +19,23 @@ export async function git(args: string[]): Promise<string> {
 	return stdout;
 }
 
+function reportedFailure(stdout: string | undefined): string | null {
+	if (typeof stdout !== "string") return null;
+	const brace = stdout.indexOf("{");
+	if (brace < 0) return null;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(stdout.slice(brace));
+	} catch {
+		return null;
+	}
+	const held = parsed as { error?: unknown; message?: unknown } | null;
+	if (held?.error !== true) return null;
+	return typeof held.message === "string"
+		? held.message
+		: "the command reported an error";
+}
+
 export async function exec(
 	command: string,
 	args: string[],
@@ -27,6 +44,8 @@ export async function exec(
 		return await run(command, args, { cwd: repoRoot(), maxBuffer: MAX_OUTPUT });
 	} catch (err) {
 		const held = err as { stdout?: string; stderr?: string };
+		const failure = reportedFailure(held.stdout);
+		if (failure !== null) throw new Error(failure);
 		if (typeof held.stdout === "string" && held.stdout.includes("{"))
 			return { stdout: held.stdout, stderr: held.stderr ?? "" };
 		throw err;

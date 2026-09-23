@@ -49,7 +49,7 @@ const cycleEntry = z.union([
 ]);
 
 const deadCodeSchema = z.object({
-	kind: z.string().nullish(),
+	kind: z.literal("dead-code"),
 	circular_dependencies: z.array(cycleEntry).default([]),
 });
 
@@ -58,9 +58,9 @@ export interface Cycle {
 	length: number;
 }
 
-export function cyclesOf(raw: unknown): Cycle[] {
+export function cyclesOf(raw: unknown): Cycle[] | null {
 	const parsed = deadCodeSchema.safeParse(raw);
-	if (!parsed.success) return [];
+	if (!parsed.success) return null;
 	return parsed.data.circular_dependencies
 		.map((entry): Cycle => {
 			const members = Array.isArray(entry)
