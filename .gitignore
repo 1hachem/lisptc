@@ -24,6 +24,9 @@ apps/trace-viewer/.evals/
 .r2/
 .r2-cache/
 
+# V8 coverage dumps the containers write, and the rebased copies fallow reads
+.coverage/
+
 .next/
 next-env.d.ts
 *.tsbuildinfo

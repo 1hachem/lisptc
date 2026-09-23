@@ -92,7 +92,9 @@ services:
     volumes:
       - api-state:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./.coverage/api:/coverage
     environment:
+      - NODE_V8_COVERAGE
       - PORT=${API_PORT:-3001}
       - APP_URL
       - CONVEX_URL
@@ -157,7 +159,10 @@ services:
           target: /app/apps/app/vite.config.ts
         - action: rebuild
           path: ./pnpm-lock.yaml
+    volumes:
+      - ./.coverage/app:/coverage
     environment:
+      - NODE_V8_COVERAGE
       - PORT=${APP_PORT:-3000}
       - CONVEX_URL
       - CONVEX_SITE_URL
