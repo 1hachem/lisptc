@@ -12,3 +12,7 @@ config_file = "./agents/script.toml"
 [agents.browser]
 description = "Read-only Chrome debugger that reproduces UI behavior and reports evidence."
 config_file = "./agents/browser.toml"
+
+[mcp_servers.fallow]
+command = "npx"
+args = ["--no", "fallow-mcp"]

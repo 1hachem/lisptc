@@ -50,6 +50,9 @@ jobs:
       - name: Knip
         run: pnpm knip
 
+      - name: Fallow
+        run: pnpm fallow
+
       - name: Test
         run: pnpm test --concurrency=2
 
