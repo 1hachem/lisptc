@@ -24,16 +24,11 @@ trace-viewer adapter, where a mismatch fails to compile. The mocked world a
 case runs in is not here: it names extensions, so it lives with the cases, in
 `apps/trace-viewer/evals/harness`.
 
-`src/trace.ts` wraps an MCP client and reads a secrets store, and it names
-neither package as a dependency. It takes those two contracts as types only,
-which costs four things: an `import type`, a `@boundaries-ignore` carrying a
-reason on the line above it, a `paths` entry in `tsconfig.json` **and** in
-`apps/trace-viewer/tsconfig.evals.json`, because a consumer's program compiles
-this file and resolves from here, and `noUndeclaredDependencies` turned off for
-this one path in `biome.json`. A third contract pays all four again. None of it
-is ever a line in `package.json`: the `extension` tag denies `extension`, and a
-dependency there fails `pnpm boundaries`. This buys a type and nothing else, so
-a value comes through a port or a slot.
+`src/trace.ts` wraps an MCP client and reads a secrets store, and this package
+depends on neither. It borrows both contracts as types only, which the root
+`AGENTS.md` governs and each import states in place. A borrowed contract buys a
+type and nothing else: a value still comes through a port or a slot, and
+neither package is ever a line in `package.json`.
 
 This package does not follow the `<name>.ts` + `<name>-host.ts` pattern. It has
 no host and reaches nothing outside the process.

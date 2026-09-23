@@ -131,14 +131,10 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   surface needs so the interpreter never does. **It depends on no other
   extension.** The `extension` tag denies itself, so naming a sibling in a
   manifest fails `pnpm boundaries`. What one extension needs to read off
-  another is a contract type, never a dependency, and three checks guard the
-  difference: turbo reads the specifier, biome's `noUndeclaredDependencies`
-  reads the manifest, and `tsc` resolves from the importing file. Taking one
-  means an `import type`, a `@boundaries-ignore` **with a reason** on the line
-  directly above it, a `paths` entry in every `tsconfig.json` whose program
-  compiles that file, and the rule turned off for that one path in
-  `biome.json`. `packages/checks` is the worked example. That buys a type and
-  nothing else, so a value still comes through a port or a slot.
+  another it borrows as a contract type, never as a dependency. Borrowing one
+  is deliberate and costly: every check that guards the layering has to be told
+  in place, and `packages/checks` is the worked example to copy. It buys a type
+  and nothing else, so a value still comes through a port or a slot.
 - A REPL front-end and the agent depend on the interpreter, and on no
   extension. A REPL is built from the extension list it is handed. The `runtime`
   tag denies `extension`, so naming one in a manifest fails `pnpm boundaries`,
