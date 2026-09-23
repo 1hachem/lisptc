@@ -1,18 +1,23 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    # 25.11's wrangler fails on Hydra, so it is absent from cache.nixos.org and
+    # every shell would build the whole workers-sdk monorepo from source.
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     chrome-agent.url = "github:1hachem/chrome-agent";
   };
 
   outputs = {
     nixpkgs,
+    nixpkgs-unstable,
     flake-utils,
     chrome-agent,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
+      unstable = nixpkgs-unstable.legacyPackages.${system};
 
       # Hermetic topiary grammar/config, independent of the working tree.
       topiaryConfig = pkgs.callPackage ./nix/topiary-config.nix {
@@ -79,6 +84,7 @@
           ptcrepl-dev
           ptcfmt-dev
           r2mount
+          unstable.wrangler
           chrome-agent.packages.${system}.default
           playwright-driver.browsers
         ];
