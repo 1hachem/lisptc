@@ -32,7 +32,3 @@ export async function exec(
 		throw err;
 	}
 }
-
-export async function head(): Promise<string> {
-	return (await git(["rev-parse", "HEAD"])).trim();
-}

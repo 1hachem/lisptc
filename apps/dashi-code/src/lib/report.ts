@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const verdictSchema = z.enum([
+const verdictSchema = z.enum([
 	"safe_to_delete",
 	"review_required",
 	"low_traffic",
@@ -10,7 +10,7 @@ export const verdictSchema = z.enum([
 
 export type Verdict = z.infer<typeof verdictSchema>;
 
-export const riskBandSchema = z.enum(["low", "medium", "high"]);
+const riskBandSchema = z.enum(["low", "medium", "high"]);
 
 const evidenceSchema = z.object({
 	static_status: z.string().nullish(),
@@ -21,7 +21,7 @@ const evidenceSchema = z.object({
 	deployments_observed: z.number().nullish(),
 });
 
-export const runtimeFindingSchema = z.object({
+const runtimeFindingSchema = z.object({
 	id: z.string(),
 	stable_id: z.string().nullish(),
 	source_hash: z.string().nullish(),
@@ -33,7 +33,7 @@ export const runtimeFindingSchema = z.object({
 	evidence: evidenceSchema.nullish(),
 });
 
-export const blastRadiusSchema = z.object({
+const blastRadiusSchema = z.object({
 	id: z.string(),
 	stable_id: z.string().nullish(),
 	file: z.string(),
@@ -45,7 +45,7 @@ export const blastRadiusSchema = z.object({
 	risk_band: riskBandSchema,
 });
 
-export const importanceSchema = z.object({
+const importanceSchema = z.object({
 	id: z.string(),
 	stable_id: z.string().nullish(),
 	file: z.string(),
@@ -58,14 +58,14 @@ export const importanceSchema = z.object({
 	reason: z.string().nullish(),
 });
 
-export const captureQualitySchema = z.object({
+const captureQualitySchema = z.object({
 	window_seconds: z.number().nullish(),
 	instances_observed: z.number().nullish(),
 	lazy_parse_warning: z.boolean().nullish(),
 	untracked_ratio_percent: z.number().nullish(),
 });
 
-export const runtimeSummarySchema = z.object({
+const runtimeSummarySchema = z.object({
 	data_source: z.string(),
 	last_received_at: z.string().nullish(),
 	functions_tracked: z.number(),
@@ -79,7 +79,7 @@ export const runtimeSummarySchema = z.object({
 	capture_quality: captureQualitySchema.nullish(),
 });
 
-export const runtimeCoverageSchema = z.object({
+const runtimeCoverageSchema = z.object({
 	verdict: z.string().nullish(),
 	signals: z.array(z.string()).default([]),
 	actionable: z.boolean().nullish(),
@@ -89,7 +89,7 @@ export const runtimeCoverageSchema = z.object({
 	importance: z.array(importanceSchema).default([]),
 });
 
-export const complexityFindingSchema = z.object({
+const complexityFindingSchema = z.object({
 	path: z.string(),
 	name: z.string(),
 	line: z.number(),
@@ -101,7 +101,7 @@ export const complexityFindingSchema = z.object({
 	coverage_tier: z.string().nullish(),
 });
 
-export const hotspotSchema = z.object({
+const hotspotSchema = z.object({
 	path: z.string(),
 	score: z.number().nullish(),
 	commits: z.number().nullish(),
@@ -113,7 +113,7 @@ export const hotspotSchema = z.object({
 	trend: z.string().nullish(),
 });
 
-export const healthScoreSchema = z.union([
+const healthScoreSchema = z.union([
 	z.number(),
 	z.object({
 		score: z.number(),
@@ -121,7 +121,7 @@ export const healthScoreSchema = z.union([
 	}),
 ]);
 
-export const reportSchema = z.object({
+const reportSchema = z.object({
 	schema_version: z.union([z.string(), z.number()]).nullish(),
 	health_score: healthScoreSchema.nullish(),
 	elapsed_ms: z.number().nullish(),
@@ -138,7 +138,7 @@ const cycleEntry = z.union([
 	z.object({ paths: z.array(z.string()) }),
 ]);
 
-export const deadCodeSchema = z.object({
+const deadCodeSchema = z.object({
 	kind: z.string().nullish(),
 	circular_dependencies: z.array(cycleEntry).default([]),
 });
@@ -167,11 +167,7 @@ export function cyclesOf(raw: unknown): Cycle[] {
 }
 
 export type Report = z.infer<typeof reportSchema>;
-export type RuntimeFinding = z.infer<typeof runtimeFindingSchema>;
-export type BlastRadius = z.infer<typeof blastRadiusSchema>;
-export type Importance = z.infer<typeof importanceSchema>;
 export type ComplexityFinding = z.infer<typeof complexityFindingSchema>;
-export type Hotspot = z.infer<typeof hotspotSchema>;
 
 export function healthOf(
 	report: Report,

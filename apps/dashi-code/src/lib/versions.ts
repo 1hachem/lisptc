@@ -44,7 +44,7 @@ const pairSchema = z.object({
 	strength: z.number(),
 });
 
-export const storedSchema = z.object({
+const storedSchema = z.object({
 	kind: z.literal(KIND),
 	generated: z.number(),
 	head: z.string(),

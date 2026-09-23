@@ -10,20 +10,20 @@ const COOLING = 0.7;
 
 export type Trend = "accelerating" | "stable" | "cooling";
 
-export interface Touch {
+interface Touch {
 	path: string;
 	added: number;
 	deleted: number;
 }
 
-export interface Commit {
+interface Commit {
 	sha: string;
 	date: string;
 	author: string;
 	touches: Touch[];
 }
 
-export interface FileHistory {
+interface FileHistory {
 	path: string;
 	pkg: string;
 	isTest: boolean;
@@ -35,7 +35,7 @@ export interface FileHistory {
 	trend: Trend;
 }
 
-export interface Series {
+interface Series {
 	key: string;
 	counts: number[];
 	churn: number[];
@@ -65,7 +65,7 @@ export interface History {
 	cochange: { files: Pair[]; packages: Pair[] };
 }
 
-export function packageOf(path: string): string {
+function packageOf(path: string): string {
 	return /^((?:packages|apps)\/[^/]+)\//.exec(path)?.[1] ?? "root";
 }
 

@@ -18,7 +18,7 @@ export async function listDocuments(): Promise<StoredDocument[]> {
 	return await store().list();
 }
 
-export function kindOf(raw: unknown): string | null {
+function kindOf(raw: unknown): string | null {
 	const held = (raw as { kind?: unknown } | null)?.kind;
 	return typeof held === "string" ? held : null;
 }
@@ -68,7 +68,7 @@ export async function readReport(file: string): Promise<Loaded> {
 	}
 }
 
-export const VERDICTS: Verdict[] = [
+const VERDICTS: Verdict[] = [
 	"safe_to_delete",
 	"review_required",
 	"low_traffic",

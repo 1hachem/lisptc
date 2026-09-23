@@ -30,7 +30,7 @@ export interface FileRow {
 	score: number | null;
 }
 
-export interface FunctionRow {
+interface FunctionRow {
 	file: string;
 	name: string;
 	line: number;

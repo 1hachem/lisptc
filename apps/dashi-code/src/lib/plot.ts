@@ -1,4 +1,4 @@
-export const clamp = (value: number, low: number, high: number): number =>
+const clamp = (value: number, low: number, high: number): number =>
 	Math.max(low, Math.min(high, value));
 
 export const scale =
@@ -23,12 +23,10 @@ export function ticks(d0: number, d1: number, count = 5): number[] {
 	return out;
 }
 
-export const QUANTS = 7;
+const QUANTS = 7;
 
 export const quant = (t: number): string =>
 	`var(--q${(clamp(Math.round(t * (QUANTS - 1)), 0, QUANTS - 1) + 1) * 100})`;
-
-export const series = (index: number): string => `var(--s${(index % 8) + 1})`;
 
 export const trendColor: Record<string, string> = {
 	accelerating: "var(--crit)",
