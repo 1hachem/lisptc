@@ -301,10 +301,8 @@ database name, `/convex` the deployment's secret and its origins, `/auth`
 everything Better Auth signs and calls out with, the deployment's admin key
 included, so the convex CLI is credentialed wherever that environment reaches.
 
-Turbo caches to the shared remote `turbo.json` names. The token for it is read
-from the environment, `.env` here and the `/turbo` Infisical path in CI, so a
-`pnpm` command picks it up with no wrapper and a shell without it falls back to
-the local cache.
+The remote Turbo cache is shared, and `turbo.json` is where it is named. Its
+token is a secret like any other, kept at the `/turbo` Infisical path.
 
 Runtime requires **Node >= 22.6.0**, and `.ts` files run directly with no build
 step. `.github/workflows/` holds the CI jobs and the order their checks run in,
