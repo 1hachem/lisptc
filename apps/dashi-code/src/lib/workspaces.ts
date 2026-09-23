@@ -62,49 +62,68 @@ async function tagOf(dir: string): Promise<string> {
 }
 
 export async function readTree(): Promise<Tree> {
-	const tracked = (await git(["ls-files"]))
-		.split("\n")
-		.filter((path) => path !== "");
+	const tracked = pathsOf(await git(["ls-files"]));
+	const [nodes, { layers, deny }] = await Promise.all([
+		workspacesOf(tracked),
+		denyRules(),
+	]);
+	return {
+		layers,
+		deny,
+		nodes,
+		edges: edgesOf(nodes, deny),
+		sizes: await sizesOf(tracked),
+	};
+}
+
+function pathsOf(raw: string): string[] {
+	return raw.split("\n").filter((path) => path !== "");
+}
+
+async function workspacesOf(tracked: string[]): Promise<Workspace[]> {
 	const manifests = tracked.filter(
 		(path) =>
 			path.endsWith("/package.json") &&
 			/^(packages|apps)\/[^/]+\/package\.json$/.test(path),
 	);
+	const nodes = await Promise.all(manifests.map(workspaceOf));
+	return nodes.filter((node): node is Workspace => node !== null);
+}
 
-	const nodes: Workspace[] = [];
-	for (const manifest of manifests) {
-		const dir = manifest.slice(0, -"/package.json".length);
-		const held = await json(manifest);
-		if (held === null || typeof held.name !== "string") continue;
-		const declared = {
-			...((held.dependencies ?? {}) as Record<string, string>),
-			...((held.devDependencies ?? {}) as Record<string, string>),
-		};
-		nodes.push({
-			id: held.name,
-			dir,
-			tag: await tagOf(dir),
-			deps: Object.entries(declared)
-				.filter(([, range]) => range.startsWith("workspace:"))
-				.map(([name]) => name),
-		});
-	}
+async function workspaceOf(manifest: string): Promise<Workspace | null> {
+	const dir = manifest.slice(0, -"/package.json".length);
+	const held = await json(manifest);
+	if (held === null || typeof held.name !== "string") return null;
+	const declared = {
+		...((held.dependencies ?? {}) as Record<string, string>),
+		...((held.devDependencies ?? {}) as Record<string, string>),
+	};
+	return {
+		id: held.name,
+		dir,
+		tag: await tagOf(dir),
+		deps: Object.entries(declared)
+			.filter(([, range]) => range.startsWith("workspace:"))
+			.map(([name]) => name),
+	};
+}
 
+function edgesOf(nodes: Workspace[], deny: Record<string, string[]>): Edge[] {
 	const known = new Map(nodes.map((node) => [node.id, node]));
-	const { layers, deny } = await denyRules();
-	const edges: Edge[] = [];
-	for (const node of nodes)
-		for (const dep of node.deps) {
+	return nodes.flatMap((node) =>
+		node.deps.flatMap((dep) => {
 			const target = known.get(dep);
-			if (target === undefined) continue;
-			edges.push({
-				from: node.id,
-				to: dep,
-				violates: (deny[node.tag] ?? []).includes(target.tag),
-			});
-		}
-
-	return { layers, deny, nodes, edges, sizes: await sizesOf(tracked) };
+			return target === undefined
+				? []
+				: [
+						{
+							from: node.id,
+							to: dep,
+							violates: (deny[node.tag] ?? []).includes(target.tag),
+						},
+					];
+		}),
+	);
 }
 
 async function sizesOf(tracked: string[]): Promise<Record<string, number>> {

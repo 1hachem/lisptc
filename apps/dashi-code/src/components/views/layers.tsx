@@ -88,27 +88,14 @@ export function Layers({
 						</g>
 					);
 				})}
-				{drawn.map((edge) => {
-					const from = at.get(edge.from) as Placed;
-					const to = at.get(edge.to) as Placed;
-					const lit = held === null || held === edge.from || held === edge.to;
-					const level = to.y === from.y;
-					const down = to.y > from.y;
-					const y0 = level || down ? from.y + BOX : from.y;
-					const y1 = down ? to.y - HEAD : to.y + BOX + HEAD;
-					const mid = level ? y0 + LH / 3 : (y0 + y1) / 2;
-					return (
-						<path
-							d={`M${from.x},${y0} C${from.x},${mid} ${to.x},${mid} ${to.x},${y1}`}
-							fill="none"
-							key={`${edge.from}>${edge.to}`}
-							markerEnd="url(#layers-arrow)"
-							opacity={lit ? (held === null ? 0.28 : 1) : 0.05}
-							stroke={edge.violates ? "var(--crit)" : "var(--s1)"}
-							strokeWidth={edge.violates || held !== null ? 1.8 : 1}
-						/>
-					);
-				})}
+				{drawn.map((edge) => (
+					<EdgePath
+						at={at}
+						edge={edge}
+						held={held}
+						key={`${edge.from}>${edge.to}`}
+					/>
+				))}
 				{placed.map((one) => {
 					const name = shorten(one.node.dir);
 					const tip = bind(
@@ -162,6 +149,55 @@ export function Layers({
 			{layer}
 		</>
 	);
+}
+
+function EdgePath({
+	at,
+	edge,
+	held,
+}: {
+	at: Map<string, Placed>;
+	edge: Snapshot["edges"][number];
+	held: string | null;
+}) {
+	const from = at.get(edge.from);
+	const to = at.get(edge.to);
+	if (from === undefined || to === undefined) return null;
+	const level = to.y === from.y;
+	const down = to.y > from.y;
+	const { start, end } = edgeEnds(from, to, level, down);
+	const lit = edgeIsLit(edge, held);
+	return (
+		<path
+			d={`M${from.x},${start} C${from.x},${(start + end) / 2} ${to.x},${(start + end) / 2} ${to.x},${end}`}
+			fill="none"
+			markerEnd="url(#layers-arrow)"
+			opacity={lit ? (held === null ? 0.28 : 1) : 0.05}
+			stroke={edge.violates ? "var(--crit)" : "var(--s1)"}
+			strokeWidth={edge.violates || held !== null ? 1.8 : 1}
+		/>
+	);
+}
+
+function edgeEnds(
+	from: Placed,
+	to: Placed,
+	level: boolean,
+	down: boolean,
+): { start: number; end: number } {
+	const start = level || down ? from.y + BOX : from.y;
+	const end = down ? to.y - HEAD : to.y + BOX + HEAD;
+	return {
+		start,
+		end: level ? start + LH / 3 : end,
+	};
+}
+
+function edgeIsLit(
+	edge: Snapshot["edges"][number],
+	held: string | null,
+): boolean {
+	return held === null || held === edge.from || held === edge.to;
 }
 
 function rowsOf(nodes: Snapshot["nodes"], layers: string[]): Node[][] {
@@ -235,20 +271,30 @@ function place(rows: Node[][]): Placed[] {
 
 function crossings(placed: Placed[], edges: Snapshot["edges"]): number {
 	const at = new Map(placed.map((one) => [one.node.id, one]));
-	const spans = edges.flatMap((edge) => {
-		const from = at.get(edge.from);
-		const to = at.get(edge.to);
-		return from === undefined || to === undefined || from.y === to.y
-			? []
-			: [{ top: from.y, bottom: to.y, a: from.x, b: to.x }];
-	});
+	return crossingSpans(
+		edges.flatMap((edge) => {
+			const from = at.get(edge.from);
+			const to = at.get(edge.to);
+			return from === undefined || to === undefined || from.y === to.y
+				? []
+				: [{ top: from.y, bottom: to.y, a: from.x, b: to.x }];
+		}),
+	);
+}
+
+function crossingSpans(
+	spans: { top: number; bottom: number; a: number; b: number }[],
+): number {
 	let total = 0;
-	for (let i = 0; i < spans.length; i += 1)
+	for (let i = 0; i < spans.length; i += 1) {
+		const one = spans[i];
+		if (one === undefined) continue;
 		for (let j = i + 1; j < spans.length; j += 1) {
-			const one = spans[i] as (typeof spans)[number];
-			const other = spans[j] as (typeof spans)[number];
+			const other = spans[j];
+			if (other === undefined) continue;
 			if (one.top !== other.top || one.bottom !== other.bottom) continue;
 			if ((one.a - other.a) * (one.b - other.b) < 0) total += 1;
 		}
+	}
 	return total;
 }

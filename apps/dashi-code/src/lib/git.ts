@@ -23,6 +23,15 @@ interface Commit {
 	touches: Touch[];
 }
 
+interface FileStats {
+	commits: number;
+	added: number;
+	deleted: number;
+	first: string;
+	last: string;
+	recent: number;
+}
+
 export interface FileHistory {
 	path: string;
 	pkg: string;
@@ -91,27 +100,42 @@ export async function readHistory(): Promise<History> {
 		"--pretty=format:%x00%H%x1f%ad%x1f%an",
 	]);
 
-	const commits: Commit[] = [];
-	for (const block of raw.split(RECORD)) {
-		if (block.trim() === "") continue;
-		const [header, ...lines] = block.split("\n");
-		const [sha, date, author] = header.split(FIELD);
-		if (sha === undefined || date === undefined) continue;
-		const touches: Touch[] = [];
-		for (const line of lines) {
-			if (line.trim() === "") continue;
-			const [added, deleted, path] = line.split("\t");
-			if (path === undefined) continue;
-			touches.push({
-				path,
-				added: added === "-" ? 0 : Number(added),
-				deleted: deleted === "-" ? 0 : Number(deleted),
-			});
-		}
-		commits.push({ sha, date, author: author ?? "", touches });
-	}
+	const [commits, head] = await Promise.all([
+		Promise.resolve(commitsOf(raw)),
+		git(["rev-parse", "HEAD"]).then((sha) => sha.trim()),
+	]);
+	return shape(commits, head);
+}
 
-	return shape(commits, (await git(["rev-parse", "HEAD"])).trim());
+function commitsOf(raw: string): Commit[] {
+	return raw
+		.split(RECORD)
+		.map(commitOf)
+		.filter((commit): commit is Commit => commit !== null);
+}
+
+function commitOf(block: string): Commit | null {
+	if (block.trim() === "") return null;
+	const [header, ...lines] = block.split("\n");
+	const [sha, date, author] = (header ?? "").split(FIELD);
+	if (sha === undefined || date === undefined) return null;
+	return { sha, date, author: author ?? "", touches: linesOf(lines) };
+}
+
+function linesOf(lines: string[]): Touch[] {
+	return lines.flatMap((line) => {
+		if (line.trim() === "") return [];
+		const [added, deleted, path] = line.split("\t");
+		return path === undefined
+			? []
+			: [
+					{
+						path,
+						added: added === "-" ? 0 : Number(added),
+						deleted: deleted === "-" ? 0 : Number(deleted),
+					},
+				];
+	});
 }
 
 function shape(commits: Commit[], head: string): History {
@@ -121,17 +145,7 @@ function shape(commits: Commit[], head: string): History {
 	const cutoff =
 		weeks[Math.max(0, Math.floor(weeks.length * (1 - RECENT_SHARE)))];
 
-	const stats = new Map<
-		string,
-		{
-			commits: number;
-			added: number;
-			deleted: number;
-			first: string;
-			last: string;
-			recent: number;
-		}
-	>();
+	const stats = new Map<string, FileStats>();
 	const perPackage = new Map<string, Series>();
 	const perFile = new Map<string, Series>();
 	const authors = new Set<string>();
@@ -149,40 +163,7 @@ function shape(commits: Commit[], head: string): History {
 	for (const commit of dated) {
 		authors.add(commit.author);
 		const at = weekAt.get(weekOf(commit.date)) ?? 0;
-		const touchedPackages = new Set<string>();
-		for (const touch of commit.touches) {
-			const held = stats.get(touch.path) ?? {
-				commits: 0,
-				added: 0,
-				deleted: 0,
-				first: commit.date,
-				last: commit.date,
-				recent: 0,
-			};
-			held.commits += 1;
-			held.added += touch.added;
-			held.deleted += touch.deleted;
-			held.first = held.first < commit.date ? held.first : commit.date;
-			held.last = held.last > commit.date ? held.last : commit.date;
-			if (cutoff !== undefined && commit.date >= cutoff) held.recent += 1;
-			stats.set(touch.path, held);
-
-			const pkg = packageOf(touch.path);
-			touchedPackages.add(pkg);
-			const packageRow = series(perPackage, pkg);
-			packageRow.churn[at] =
-				(packageRow.churn[at] ?? 0) + touch.added + touch.deleted;
-
-			const fileRow = series(perFile, touch.path);
-			fileRow.counts[at] = (fileRow.counts[at] ?? 0) + 1;
-			fileRow.churn[at] =
-				(fileRow.churn[at] ?? 0) + touch.added + touch.deleted;
-		}
-
-		for (const pkg of touchedPackages) {
-			const packageRow = series(perPackage, pkg);
-			packageRow.counts[at] = (packageRow.counts[at] ?? 0) + 1;
-		}
+		accumulateCommit(commit, at, cutoff, stats, perPackage, perFile, series);
 	}
 
 	const files: FileHistory[] = [...stats].map(([path, held]) => ({
@@ -216,6 +197,69 @@ function shape(commits: Commit[], head: string): History {
 		},
 		cochange: cochange(dated, files),
 	};
+}
+
+function accumulateCommit(
+	commit: Commit,
+	at: number,
+	cutoff: string | undefined,
+	stats: Map<string, FileStats>,
+	perPackage: Map<string, Series>,
+	perFile: Map<string, Series>,
+	series: (into: Map<string, Series>, key: string) => Series,
+): void {
+	const touchedPackages = new Set<string>();
+	for (const touch of commit.touches) {
+		accumulateTouch(
+			touch,
+			commit.date,
+			at,
+			cutoff,
+			stats,
+			perPackage,
+			perFile,
+			series,
+		);
+		touchedPackages.add(packageOf(touch.path));
+	}
+	for (const pkg of touchedPackages) {
+		const row = series(perPackage, pkg);
+		row.counts[at] = (row.counts[at] ?? 0) + 1;
+	}
+}
+
+function accumulateTouch(
+	touch: Touch,
+	date: string,
+	at: number,
+	cutoff: string | undefined,
+	stats: Map<string, FileStats>,
+	perPackage: Map<string, Series>,
+	perFile: Map<string, Series>,
+	series: (into: Map<string, Series>, key: string) => Series,
+): void {
+	const held = stats.get(touch.path) ?? {
+		commits: 0,
+		added: 0,
+		deleted: 0,
+		first: date,
+		last: date,
+		recent: 0,
+	};
+	held.commits += 1;
+	held.added += touch.added;
+	held.deleted += touch.deleted;
+	held.first = held.first < date ? held.first : date;
+	held.last = held.last > date ? held.last : date;
+	if (cutoff !== undefined && date >= cutoff) held.recent += 1;
+	stats.set(touch.path, held);
+
+	const packageRow = series(perPackage, packageOf(touch.path));
+	packageRow.churn[at] =
+		(packageRow.churn[at] ?? 0) + touch.added + touch.deleted;
+	const fileRow = series(perFile, touch.path);
+	fileRow.counts[at] = (fileRow.counts[at] ?? 0) + 1;
+	fileRow.churn[at] = (fileRow.churn[at] ?? 0) + touch.added + touch.deleted;
 }
 
 function trendOf(commits: number, recent: number): Trend {

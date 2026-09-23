@@ -91,49 +91,8 @@ async function compose(
 ): Promise<Snapshot> {
 	const tree = await readTree();
 	const report = latest?.report;
-
-	const perFile = new Map<
-		string,
-		{ total: number; max: number; count: number }
-	>();
-	const functions: FunctionRow[] = [];
-	for (const finding of report?.findings ?? []) {
-		const complexity = finding.cyclomatic ?? 0;
-		const held = perFile.get(finding.path) ?? { total: 0, max: 0, count: 0 };
-		held.total += complexity;
-		held.max = Math.max(held.max, complexity);
-		held.count += 1;
-		perFile.set(finding.path, held);
-		functions.push({
-			file: finding.path,
-			name: finding.name,
-			line: finding.line,
-			complexity,
-			cognitive: finding.cognitive ?? null,
-			loc: finding.line_count ?? null,
-			crap: finding.crap ?? null,
-			severity: finding.severity ?? null,
-		});
-	}
-
-	const spots = new Map(
-		(report?.hotspots ?? []).map((spot) => [spot.path, spot]),
-	);
-
-	const files: FileRow[] = history.files.map((file) => {
-		const complexity = perFile.get(file.path);
-		const spot = spots.get(file.path);
-		return {
-			...file,
-			tracked: tree.sizes[file.path] !== undefined,
-			loc: tree.sizes[file.path] ?? null,
-			totCx: complexity?.total ?? null,
-			maxCx: complexity?.max ?? null,
-			fns: complexity?.count ?? null,
-			fanIn: spot?.fan_in ?? null,
-			score: spot?.score ?? null,
-		};
-	});
+	const functions = functionsOf(report);
+	const files = filesOf(history, tree, complexityOf(functions), report);
 
 	return {
 		generated: Date.now(),
@@ -150,4 +109,87 @@ async function compose(
 		cycles: await newestCycles(),
 		report: latest?.file ?? null,
 	};
+}
+
+function functionsOf(report: Report | undefined): FunctionRow[] {
+	const functions: FunctionRow[] = [];
+	for (const finding of report?.findings ?? [])
+		functions.push({
+			file: finding.path,
+			name: finding.name,
+			line: finding.line,
+			complexity: finding.cyclomatic ?? 0,
+			cognitive: finding.cognitive ?? null,
+			loc: finding.line_count ?? null,
+			crap: finding.crap ?? null,
+			severity: finding.severity ?? null,
+		});
+	return functions;
+}
+
+function complexityOf(functions: FunctionRow[]): Map<string, FileComplexity> {
+	const perFile = new Map<string, FileComplexity>();
+	for (const finding of functions) {
+		const held = perFile.get(finding.file) ?? { total: 0, max: 0, count: 0 };
+		held.total += finding.complexity;
+		held.max = Math.max(held.max, finding.complexity);
+		held.count += 1;
+		perFile.set(finding.file, held);
+	}
+	return perFile;
+}
+
+function filesOf(
+	history: History,
+	tree: Awaited<ReturnType<typeof readTree>>,
+	perFile: Map<string, FileComplexity>,
+	report: Report | undefined,
+): FileRow[] {
+	const spots = new Map(
+		(report?.hotspots ?? []).map((spot) => [spot.path, spot]),
+	);
+
+	return history.files.map((file) =>
+		fileOf(file, tree.sizes, perFile.get(file.path), spots.get(file.path)),
+	);
+}
+
+function fileOf(
+	file: History["files"][number],
+	sizes: Record<string, number>,
+	complexity: FileComplexity | undefined,
+	spot: Report["hotspots"][number] | undefined,
+): FileRow {
+	return {
+		...file,
+		...sizeFields(sizes[file.path]),
+		...complexityFields(complexity),
+		...hotspotFields(spot),
+	};
+}
+
+function sizeFields(loc: number | undefined): Pick<FileRow, "tracked" | "loc"> {
+	return { tracked: loc !== undefined, loc: loc ?? null };
+}
+
+function complexityFields(
+	complexity: FileComplexity | undefined,
+): Pick<FileRow, "totCx" | "maxCx" | "fns"> {
+	return {
+		totCx: complexity?.total ?? null,
+		maxCx: complexity?.max ?? null,
+		fns: complexity?.count ?? null,
+	};
+}
+
+function hotspotFields(
+	spot: Report["hotspots"][number] | undefined,
+): Pick<FileRow, "fanIn" | "score"> {
+	return { fanIn: spot?.fan_in ?? null, score: spot?.score ?? null };
+}
+
+interface FileComplexity {
+	total: number;
+	max: number;
+	count: number;
 }

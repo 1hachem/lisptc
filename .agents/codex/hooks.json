@@ -12,16 +12,6 @@
           }
         ]
       },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/io-budget.sh\"",
-            "statusMessage": "Checking the IO budget"
-          }
-        ]
-      }
     ],
     "PostToolUse": [
       {

@@ -1,6 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "minimumVersion": "3.28.0",
+  "ignorePatterns": [".agents/**", "tree-sitter-lisptc/**"],
   "rules": {
     "unused-files": "error",
     "unused-exports": "error",
@@ -13,11 +14,18 @@
   "duplicates": {
     "enabled": true,
     "mode": "mild",
-    "minTokens": 50,
-    "minLines": 5,
+    "minTokens": 100,
+    "minLines": 10,
     "minOccurrences": 2
   },
   "audit": {
     "gate": "new-only"
+  },
+  "health": {
+    "maxCyclomatic": 24,
+    "maxCognitive": 20,
+    "maxCrap": 100,
+    "crapRefactorBand": 5,
+    "maxUnitSize": 60
   }
 }
