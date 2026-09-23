@@ -41,6 +41,11 @@
       "@better-auth/utils": "0.4.2"
     }
   },
+  "knip": {
+    "ignoreDependencies": [
+      "@fallow-cli/fallow-cov"
+    ]
+  },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
     "@commitlint/cli": "^21.2.1",
