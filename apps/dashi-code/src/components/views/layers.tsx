@@ -11,6 +11,7 @@ const BOX = 28;
 const GAP = 8;
 const LABEL = 140;
 const SWEEPS = 6;
+const HEAD = 6;
 
 type Node = Snapshot["nodes"][number];
 type Placed = { node: Node; x: number; y: number; w: number };
@@ -50,6 +51,19 @@ export function Layers({
 				viewBox={`0 0 ${W} ${H}`}
 			>
 				<title>every workspace dependency, layer by layer</title>
+				<defs>
+					<marker
+						id="layers-arrow"
+						markerHeight={6}
+						markerUnits="userSpaceOnUse"
+						markerWidth={6}
+						orient="auto"
+						refX={6}
+						refY={3}
+					>
+						<path d="M0,0 L6,3 L0,6 z" fill="context-stroke" />
+					</marker>
+				</defs>
 				{sorted.map((row, index) => {
 					const y = 18 + (sorted.length - 1 - index) * LH;
 					return (
@@ -78,14 +92,19 @@ export function Layers({
 					const from = at.get(edge.from) as Placed;
 					const to = at.get(edge.to) as Placed;
 					const lit = held === null || held === edge.from || held === edge.to;
-					const mid = (from.y + BOX + to.y) / 2;
+					const level = to.y === from.y;
+					const down = to.y > from.y;
+					const y0 = level || down ? from.y + BOX : from.y;
+					const y1 = down ? to.y - HEAD : to.y + BOX + HEAD;
+					const mid = level ? y0 + LH / 3 : (y0 + y1) / 2;
 					return (
 						<path
-							d={`M${from.x},${from.y + BOX} C${from.x},${mid} ${to.x},${mid} ${to.x},${to.y}`}
+							d={`M${from.x},${y0} C${from.x},${mid} ${to.x},${mid} ${to.x},${y1}`}
 							fill="none"
 							key={`${edge.from}>${edge.to}`}
+							markerEnd="url(#layers-arrow)"
+							opacity={lit ? (held === null ? 0.28 : 1) : 0.05}
 							stroke={edge.violates ? "var(--crit)" : "var(--s1)"}
-							strokeOpacity={lit ? (held === null ? 0.22 : 0.95) : 0.04}
 							strokeWidth={edge.violates || held !== null ? 1.8 : 1}
 						/>
 					);
@@ -135,9 +154,10 @@ export function Layers({
 				})}
 			</svg>
 			<p className="m-0 px-1 pt-2 text-[11.5px] text-dim">
-				{drawn.length} edges over {sorted.length} layers. Ordering each layer by
-				the barycentre of its neighbours cuts crossings from {before} to {after}
-				; hover a package to isolate its edges.
+				{drawn.length} edges over {sorted.length} layers, each arrow pointing
+				from a package to what it depends on. Ordering each layer by the
+				barycentre of its neighbours cuts crossings from {before} to {after}.
+				Hover a package to isolate its edges.
 			</p>
 			{layer}
 		</>
