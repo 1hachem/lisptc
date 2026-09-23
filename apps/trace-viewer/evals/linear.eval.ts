@@ -1,4 +1,3 @@
-import { mockedMcpExtension } from "@repo/checks/mocks";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
@@ -6,6 +5,7 @@ import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { linear } from "./fixtures/linear.ts";
+import { mockedMcpExtension } from "./harness/mocks.ts";
 import { evalCase } from "./harness/runner.ts";
 
 evalCase("lists its own linear issues and renders them", {

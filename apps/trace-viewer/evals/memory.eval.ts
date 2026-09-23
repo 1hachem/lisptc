@@ -1,4 +1,3 @@
-import { mockedMcpExtension } from "@repo/checks/mocks";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { memoryExtension } from "@repo/memory-extension";
@@ -9,6 +8,7 @@ import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { playwright } from "./fixtures/playwright.ts";
+import { mockedMcpExtension } from "./harness/mocks.ts";
 import { evalCase } from "./harness/runner.ts";
 
 const extensions = () => [

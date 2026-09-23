@@ -1,7 +1,5 @@
 import { fileURLToPath } from "node:url";
 import { Interp, prelude, runAsync, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { promisesHost } from "@repo/promises-extension/host";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 
@@ -10,13 +8,13 @@ const FIXTURE = fileURLToPath(
 );
 
 const interp = new Interp({
-	extensions: [promisesExtension(promisesHost), mcpExtension(mcpHost)],
+	extensions: [mcpExtension(mcpHost)],
 });
 runSync(interp, prelude);
-await runAsync(
+await (runSync(
 	interp,
-	`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
-);
+	`(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`,
+) as Promise<unknown>);
 await runAsync(interp, '(fx/echo :message "hi")');
 await runAsync(
 	interp,

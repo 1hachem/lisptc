@@ -1,6 +1,4 @@
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { promisesHost } from "@repo/promises-extension/host";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -28,15 +26,26 @@ function hangingClient(): { client: McpClient; aborts: () => number } {
 	};
 }
 
-function loading(client: McpClient): Interp {
+function mcpInterp(client: McpClient): Interp {
 	const interp = new Interp({
-		extensions: [
-			promisesExtension(promisesHost),
-			mcpExtension({ ...mcpHost, client }),
-		],
+		extensions: [mcpExtension({ ...mcpHost, client })],
 	});
 	runSync(interp, prelude);
-	runSync(interp, '(load-mcp :name "x" :command "node")');
+	return interp;
+}
+
+function startLoad(interp: Interp): Promise<unknown> {
+	const promise = runSync(
+		interp,
+		'(load-mcp :name "x" :command "node")',
+	) as Promise<unknown>;
+	promise.catch(() => {});
+	return promise;
+}
+
+function loading(client: McpClient): Interp {
+	const interp = mcpInterp(client);
+	startLoad(interp);
 	return interp;
 }
 
@@ -65,15 +74,8 @@ describe("Interp.dispose", () => {
 describe("starting a promise does not suspend", () => {
 	it("lets a synchronous host begin background work", () => {
 		const { client } = hangingClient();
-		const interp = new Interp({
-			extensions: [
-				promisesExtension(promisesHost),
-				mcpExtension({ ...mcpHost, client }),
-			],
-		});
-		runSync(interp, prelude);
-		expect(
-			runSync(interp, '(promise-state (load-mcp :name "x" :command "node"))'),
-		).toEqual(expect.objectContaining({ name: "pending" }));
+		const interp = mcpInterp(client);
+		expect(interp.async.stateOf(startLoad(interp))).toBe("pending");
+		interp.dispose();
 	});
 });

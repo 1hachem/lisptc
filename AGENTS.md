@@ -128,7 +128,17 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   past the core dialect lives in an extension package, so a new form belongs in
   an extension unless the evaluator cannot run without it.
 - An extension package depends on the interpreter, and carries the SDK its
-  surface needs so the interpreter never does.
+  surface needs so the interpreter never does. **It depends on no other
+  extension.** The `extension` tag denies itself, so naming a sibling in a
+  manifest fails `pnpm boundaries`. What one extension needs to read off
+  another is a contract type, never a dependency, and three checks guard the
+  difference: turbo reads the specifier, biome's `noUndeclaredDependencies`
+  reads the manifest, and `tsc` resolves from the importing file. Taking one
+  means an `import type`, a `@boundaries-ignore` **with a reason** on the line
+  directly above it, a `paths` entry in every `tsconfig.json` whose program
+  compiles that file, and the rule turned off for that one path in
+  `biome.json`. `packages/checks` is the worked example. That buys a type and
+  nothing else, so a value still comes through a port or a slot.
 - A REPL front-end and the agent depend on the interpreter, and on no
   extension. A REPL is built from the extension list it is handed. The `runtime`
   tag denies `extension`, so naming one in a manifest fails `pnpm boundaries`,
@@ -249,9 +259,9 @@ owns is tested in that extension's package, never in the interpreter, whose
 helpers build an interpreter with nothing installed. A runtime package's tests
 name no extension either: a REPL there is built from stubs that hook the chains
 and fill the slots, so what is pinned is the seam rather than whoever happens to
-be on it. A test that needs a real extension, or two at once, belongs in
-`@repo/backend/test/extensions`, the composition root that already names them
-all.
+be on it. An extension's own tests install that extension and no other. A test that needs
+two at once belongs in `@repo/backend/test/extensions`, the composition root
+that already names them all.
 
 The agent evals are separate: the cases live in `apps/trace-viewer/evals` as
 `*.eval.ts`, they run against real models, and `pnpm test` does not include them.

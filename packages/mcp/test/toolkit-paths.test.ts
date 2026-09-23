@@ -1,8 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { promisesHost } from "@repo/promises-extension/host";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -33,7 +31,6 @@ function configFor(name: string, executable = ""): ConnConfig {
 	const { client, seen } = recording();
 	const interp = new Interp({
 		extensions: [
-			promisesExtension(promisesHost),
 			mcpExtension({
 				...mcpHost,
 				client,

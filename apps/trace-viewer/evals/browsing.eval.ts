@@ -1,4 +1,3 @@
-import { mockedMcpExtension } from "@repo/checks/mocks";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
@@ -7,6 +6,7 @@ import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { linear } from "./fixtures/linear.ts";
 import { playwright } from "./fixtures/playwright.ts";
+import { mockedMcpExtension } from "./harness/mocks.ts";
 import { evalCase } from "./harness/runner.ts";
 
 evalCase("navigates to hyko.ai by the book", {

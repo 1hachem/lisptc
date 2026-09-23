@@ -1,10 +1,12 @@
 import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
 import { note } from "@repo/interpreter/topics";
+// @boundaries-ignore contract type only, never a value
 import type {
 	ConnectResult,
 	McpClient,
 	ToolCall,
 } from "@repo/mcp-extension/ports";
+// @boundaries-ignore contract type only, never a value
 import type { SecretsStore } from "@repo/secrets-extension/ports";
 
 export const REDACTED = "<redacted>";

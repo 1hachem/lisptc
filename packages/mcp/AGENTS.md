@@ -64,3 +64,10 @@ direct import of the SDK into `mcp.ts`.
 
 `test/` holds fixture servers beside the tests (`fixture-*.ts`). A test that
 needs a server should use one rather than reaching for a real process.
+
+**A test here installs this extension and no other.** `load-mcp` is registered
+with `interp.defPromise`, so it hands a JavaScript promise straight back to
+`runSync`: a test awaits that, and reads progress off `interp.async`, rather
+than installing the promises extension for `(await ...)` or `(promise-state
+...)`. What the promise *forms* make of an MCP load is two extensions at once,
+and lives in `@repo/backend/test/extensions`.

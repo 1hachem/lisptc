@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import {
 	Interp,
 	prelude,
@@ -6,26 +5,21 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
-import { promisesHost } from "@repo/promises-extension/host";
+import { mcpExtension } from "@repo/mcp-extension";
+import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import { secretsExtension } from "@repo/secrets-extension";
 import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
 import { afterAll, describe, expect, it } from "vitest";
-import { mcpExtension } from "../src/mcp.ts";
-import { mcpHost } from "../src/mcp-host.ts";
-
-const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
-);
+import { mockMcpClient } from "./helpers.ts";
 
 describe("secret registry (revealed only into an MCP call)", () => {
 	const store = envSecretsStore();
 	store.set({ REPL_FOO: "s3cr3t" });
+	const client = mockMcpClient({ fx: { tools: ["echo"] } });
 	const interp = new Interp({
 		extensions: [
 			secretsExtension({ ...secretsHost, store }),
-			promisesExtension(promisesHost),
-			mcpExtension(mcpHost),
+			mcpExtension({ ...mcpHost, client }),
 		],
 	});
 	runSync(interp, prelude);
@@ -35,10 +29,11 @@ describe("secret registry (revealed only into an MCP call)", () => {
 	});
 
 	it("passes the real (and composed) value into an MCP tool call", async () => {
-		await runAsync(
+		await (runSync(
 			interp,
-			`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
-		);
+			'(load-mcp :name "fx" :command "node")',
+		) as Promise<unknown>);
+
 		expect(
 			str(
 				(await runAsync(interp, '(fx/echo :message (secret "REPL_FOO"))'))
@@ -55,5 +50,16 @@ describe("secret registry (revealed only into an MCP call)", () => {
 				).value,
 			),
 		).toBe('"Bearer s3cr3t"');
+
+		expect(client.calls.map((call) => call.args.message)).toEqual([
+			"s3cr3t",
+			"Bearer s3cr3t",
+		]);
+	});
+
+	it("keeps the secret redacted everywhere else", async () => {
+		expect(str((await runAsync(interp, '(secret "REPL_FOO")')).value)).toBe(
+			"#<secret:REPL_FOO>",
+		);
 	});
 });

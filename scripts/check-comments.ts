@@ -7,6 +7,7 @@ const DIRECTIVES = [
 	/^\/\/\s*biome-ignore\b/,
 	/^\/\/\s*@vitest-environment\b/,
 	/^\/\/\s*@ts-(expect-error|ignore|nocheck)\b/,
+	/^\/\/\s*@boundaries-ignore\b/,
 	/^\/\*\s*@vite-ignore/,
 	/^\/\/\s*#__PURE__/,
 	/^\/\*\s*eslint-disable/,
