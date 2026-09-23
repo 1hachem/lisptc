@@ -1,19 +1,22 @@
-import { mockedMcpExtension } from "@repo/checks/mocks";
 import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import { linear } from "./fixtures/linear.ts";
 import { playwright } from "./fixtures/playwright.ts";
+import { mockedMcpExtension } from "./harness/mocks.ts";
 import { evalCase } from "./harness/runner.ts";
 
 evalCase("navigates to hyko.ai by the book", {
 	min: 5,
 	max: 10,
 	extensions: () => [
-		promisesExtension(),
+		promisesExtension(promisesHost),
 		mockedMcpExtension(),
-		compactionExtension(),
-		proseExtension(),
+		compactionExtension(compactionHost),
+		proseExtension(proseHost),
 	],
 	mocks: { servers: { playwright } },
 	seed: [{ user: "navigate to hyko.ai" }],
@@ -42,10 +45,10 @@ evalCase("finds a browser, loads it, and opens the page", {
 	min: 4,
 	max: 12,
 	extensions: () => [
-		promisesExtension(),
+		promisesExtension(promisesHost),
 		mockedMcpExtension(),
-		compactionExtension(),
-		proseExtension(),
+		compactionExtension(compactionHost),
+		proseExtension(proseHost),
 	],
 	mocks: { servers: { playwright, linear } },
 	seed: [{ user: "open hyko.ai and tell me the main heading" }],
@@ -78,10 +81,10 @@ evalCase("recovers when the server it wants will not connect", {
 	min: 3,
 	max: 15,
 	extensions: () => [
-		promisesExtension(),
+		promisesExtension(promisesHost),
 		mockedMcpExtension(),
-		compactionExtension(),
-		proseExtension(),
+		compactionExtension(compactionHost),
+		proseExtension(proseHost),
 	],
 	mocks: {
 		servers: { playwright: { tools: [], fails: "chromium is not installed" } },

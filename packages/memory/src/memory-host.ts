@@ -18,7 +18,7 @@ import {
 	type MemoryHost,
 	type MemoryStore,
 	memoryToForm,
-} from "./memory.ts";
+} from "./ports.ts";
 
 export function memoryDirFor(scope?: string): string {
 	const base =

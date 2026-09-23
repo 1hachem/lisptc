@@ -1,6 +1,6 @@
-import type { Interp, InterpExtension } from "@repo/interpreter/lisp";
+import type { Interp } from "@repo/interpreter/lisp";
 import { llmSlot, type Observed } from "@repo/interpreter/observe";
-import type { SessionHooks } from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 

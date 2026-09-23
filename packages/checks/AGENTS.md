@@ -20,9 +20,15 @@ had to happen. Read the form names there.
 interpreter and a wrapper around an MCP client. `src/verdict.ts` holds the
 shape of what the DSL decides, declared as plain types. The schema a report is
 parsed with is the same shape in `@repo/evals/report`, and the two meet in the
-trace-viewer adapter, where a mismatch fails to compile. `src/mocks.ts` builds
-the mocked world a case runs in, and it is the only file here that imports an
-extension.
+trace-viewer adapter, where a mismatch fails to compile. The mocked world a
+case runs in is not here: it names extensions, so it lives with the cases, in
+`apps/trace-viewer/evals/harness`.
+
+`src/trace.ts` wraps an MCP client and reads a secrets store, and this package
+depends on neither. It borrows both contracts as types only, which the root
+`AGENTS.md` governs and each import states in place. A borrowed contract buys a
+type and nothing else: a value still comes through a port or a slot, and
+neither package is ever a line in `package.json`.
 
 This package does not follow the `<name>.ts` + `<name>-host.ts` pattern. It has
 no host and reaches nothing outside the process.
@@ -39,6 +45,7 @@ finished run belongs in `@repo/evals`.
 
 ## Tests
 
-`test/trace-notes.test.ts` and `test/combinators.test.ts`. The cases themselves
-live in `apps/trace-viewer/evals` and run under `pnpm test:evals`, not
-`pnpm test`.
+`test/combinators.test.ts`. What the DSL makes of another extension's notes is
+tested where that extension can be named, in `apps/trace-viewer/evals/harness`.
+The cases themselves live in `apps/trace-viewer/evals` and run under
+`pnpm test:evals`, not `pnpm test`.

@@ -1,13 +1,14 @@
+import { Checks } from "@repo/checks/checks";
+import { Trace } from "@repo/checks/trace";
 import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
 import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import { describe, expect, test } from "vitest";
-import { Checks } from "../src/checks.ts";
-import { Trace } from "../src/trace.ts";
 
 function ran(code: string): Trace {
 	const trace = new Trace();
 	const interp = new Interp({
-		extensions: [proseExtension(), trace.extension()],
+		extensions: [proseExtension(proseHost), trace.extension()],
 	});
 	runSync(interp, prelude);
 	trace.beginStep(1);

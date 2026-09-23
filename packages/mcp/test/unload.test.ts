@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
 import { Interp, prelude, runAsync, runSync } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
 import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
@@ -13,15 +12,14 @@ const FIXTURE = fileURLToPath(
 async function loaded(host: ReturnType<typeof recordingHost>): Promise<Interp> {
 	const interp = new Interp({
 		extensions: [
-			promisesExtension(),
 			mcpExtension({ ...mcpHost, client: localMcpClient({ host }) }),
 		],
 	});
 	runSync(interp, prelude);
-	await runAsync(
+	await (runSync(
 		interp,
-		`(await (load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}"))))`,
-	);
+		`(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`,
+	) as Promise<unknown>);
 	return interp;
 }
 

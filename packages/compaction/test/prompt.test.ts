@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { compactionExtension } from "../src/compaction.ts";
+import { compactionHost } from "../src/compaction-host.ts";
 
 describe("the compaction extension teaches its own half of the language", () => {
-	const prompt = compactionExtension().prompt ?? "";
+	const prompt = compactionExtension(compactionHost).prompt ?? "";
 
 	it("reports a result rather than printing it", () => {
 		expect(prompt).toMatch(/reports? (one line|a result's name)/i);

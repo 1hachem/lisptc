@@ -7,15 +7,15 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
-import { promisesExtension } from "@repo/promises-extension";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
+import { mcpHost } from "../src/mcp-host.ts";
 
 const dir = process.env.LISPTC_OAUTH_DIR as string;
 
 describe("logout", () => {
 	const interp = new Interp({
-		extensions: [promisesExtension(), mcpExtension()],
+		extensions: [mcpExtension(mcpHost)],
 	});
 	runSync(interp, prelude);
 
@@ -47,7 +47,7 @@ describe("logout", () => {
 
 describe("login", () => {
 	const interp = new Interp({
-		extensions: [promisesExtension(), mcpExtension()],
+		extensions: [mcpExtension(mcpHost)],
 	});
 	runSync(interp, prelude);
 

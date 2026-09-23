@@ -1,5 +1,5 @@
 import { Interp } from "@repo/interpreter/lisp";
-import { TRIGGER_KINDS } from "@repo/memory-extension";
+import { TRIGGER_KINDS } from "@repo/memory-extension/ports";
 import { describe, expect, it } from "vitest";
 import { modelFacing } from "./helpers.ts";
 

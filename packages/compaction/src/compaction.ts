@@ -8,7 +8,6 @@ import {
 	EvalException,
 	echoText,
 	type Interp,
-	type InterpExtension,
 	type List,
 	lookupDoc,
 	newSym,
@@ -19,11 +18,10 @@ import {
 	zList,
 } from "@repo/interpreter/lisp";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
-import type { SessionHooks } from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { compactionHost } from "./compaction-host.ts";
 
 export const MAX_WORDS = 400;
 
@@ -843,7 +841,7 @@ function compactionSession(
 }
 
 export function compactionExtension(
-	host: CompactionHost = compactionHost,
+	host: CompactionHost,
 	options: CompactionOptions = {},
 ): CompactionExtension {
 	const compactor = options.compactor ?? new Compactor();

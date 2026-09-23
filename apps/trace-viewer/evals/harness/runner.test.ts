@@ -1,22 +1,26 @@
 import { createServer, type Server } from "node:http";
-import { mockedMcpExtension, tracedSecretsExtension } from "@repo/checks/mocks";
 import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import type { Verdict } from "@repo/evals/report";
-import { memoryExtension, VolatileStore } from "@repo/memory-extension";
+import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
+import { VolatileStore } from "@repo/memory-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { playwright } from "./fixtures/server.ts";
+import { mockedMcpExtension, tracedSecretsExtension } from "./mocks.ts";
 import type { EvalSpec, RunResult } from "./runner.ts";
 
 const extensions = () => [
 	tracedSecretsExtension(),
-	promisesExtension(),
+	promisesExtension(promisesHost),
 	mockedMcpExtension(),
-	compactionExtension(),
+	compactionExtension(compactionHost),
 	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
-	proseExtension(),
+	proseExtension(proseHost),
 ];
 
 const TURNS: string[] = [

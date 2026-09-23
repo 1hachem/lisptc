@@ -12,7 +12,9 @@ import { Compactor, compactionExtension } from "../src/compaction.ts";
 import { compactionHost } from "../src/compaction-host.ts";
 
 function freshInterp(): Interp {
-	const interp = new Interp({ extensions: [compactionExtension()] });
+	const interp = new Interp({
+		extensions: [compactionExtension(compactionHost)],
+	});
 	runSync(interp, prelude);
 	return interp;
 }

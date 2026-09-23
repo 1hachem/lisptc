@@ -9,20 +9,18 @@ import {
 	Cell,
 	EvalException,
 	type Interp,
-	type InterpExtension,
 	type List,
 	str,
 	zList,
 } from "@repo/interpreter/lisp";
-import { type SessionHooks, slot } from "@repo/interpreter/session";
+import {
+	type InterpExtension,
+	type SessionHooks,
+	slot,
+} from "@repo/interpreter/session";
 import type { ToJson } from "@repo/interpreter/types";
-import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import { secretsHost } from "./secrets-host.ts";
-
-export type SecretSpec = string | { value: string; description?: string };
-
-export const SECRET_ENV_PREFIX = "REPL_";
+import type { SecretsHost, SecretsStore } from "./ports.ts";
 
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
@@ -35,54 +33,13 @@ const zStringLike = z.custom<string | Secret>(
 	"string expected",
 );
 
-export interface SecretsStore {
-	get(key: string): { value: string; description: string } | undefined;
-	list(): Array<[string, string]>;
-	set(record: Record<string, SecretSpec>): void;
-}
-
-export class MapSecretsStore implements SecretsStore {
-	private readonly secrets = new Map<
-		string,
-		{ value: string; description: string }
-	>();
-
-	get(key: string): { value: string; description: string } | undefined {
-		return this.secrets.get(key);
-	}
-
-	list(): Array<[string, string]> {
-		return [...this.secrets].map(([key, { description }]) => [
-			key,
-			description,
-		]);
-	}
-
-	set(record: Record<string, SecretSpec>): void {
-		for (const [key, spec] of Object.entries(record)) {
-			if (!key.startsWith(SECRET_ENV_PREFIX)) continue;
-			const value = typeof spec === "string" ? spec : spec.value;
-			const description =
-				typeof spec === "string" ? "" : (spec.description ?? "");
-			this.secrets.set(key, { value, description });
-		}
-	}
-}
-
-export interface SecretsHost {
-	store: SecretsStore;
-	prompt: PromptSource;
-}
-
 export interface SecretsExtension extends InterpExtension {
 	readonly store: SecretsStore;
 }
 
 export const secretsSlot = slot<SecretsStore>("secrets");
 
-export function secretsExtension(
-	host: SecretsHost = secretsHost,
-): SecretsExtension {
+export function secretsExtension(host: SecretsHost): SecretsExtension {
 	return Object.assign(
 		(interp: Interp): void => registerSecrets(interp, host.store),
 		{

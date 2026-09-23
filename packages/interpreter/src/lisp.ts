@@ -20,8 +20,7 @@ import {
 } from "./arith.ts";
 import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
-import { type Hooks, newHooks } from "./hooks.ts";
-import type { SessionHooks } from "./session.ts";
+import { Chain } from "./hooks.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
 import { note, output } from "./topics.ts";
 
@@ -538,14 +537,32 @@ export function jsonToLisp(x: unknown): unknown {
 	return String(x);
 }
 
-export interface InterpExtension {
+export interface Hooks {
+	readonly readSource: Chain<[interp: Interp, text: string], string>;
+	readonly evalForm: Chain<[interp: Interp, form: unknown], Eval>;
+	readonly failedForm: Chain<
+		[interp: Interp, form: unknown, error: UnresolvedHead],
+		Eval<string | undefined>
+	>;
+	readonly dispose: Chain<[], void>;
+}
+
+export function newHooks(): Hooks {
+	return {
+		readSource: new Chain(),
+		evalForm: new Chain(),
+		failedForm: new Chain(),
+		dispose: new Chain(),
+	};
+}
+
+export interface Installable {
 	(interp: Interp): void;
 	readonly prompt?: string;
-	readonly session?: (hooks: SessionHooks) => void;
 }
 
 export interface InterpOptions {
-	extensions?: InterpExtension[];
+	extensions?: readonly Installable[];
 }
 
 export class Interp {

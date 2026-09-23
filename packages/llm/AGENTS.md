@@ -10,7 +10,7 @@ Turbo tag: `extension`.
 
 `src/llm.ts` is the extension: it declares `LlmHost`, one field per port
 (generation, the provider list, the clock, its own prompt), and contributes a
-prompt and a session. `src/llm-host.ts` holds the default host. `src/llm.ptc`
+prompt and a session. `src/llm-host.ts` holds the host a root passes in. `src/llm.ptc`
 is the prompt.
 
 `@repo/interpreter/observe` is the observation contract and the slot it hands

@@ -8,7 +8,7 @@ import {
 	SECRET_ENV_PREFIX,
 	type SecretsHost,
 	type SecretsStore,
-} from "./secrets.ts";
+} from "./ports.ts";
 
 export interface EnvSecretsOptions {
 	env?: NodeJS.ProcessEnv;

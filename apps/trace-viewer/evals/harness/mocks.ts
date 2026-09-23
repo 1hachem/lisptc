@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { InterpExtension } from "@repo/interpreter/lisp";
+import type { Trace } from "@repo/checks/trace";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type {
@@ -9,12 +10,10 @@ import type {
 } from "@repo/mcp-extension/ports";
 import {
 	type SecretsExtension,
-	type SecretsStore,
 	secretsExtension,
 } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
-
-import type { Trace } from "./trace.ts";
+import type { SecretsStore } from "@repo/secrets-extension/ports";
 
 export interface EvalRun {
 	trace: Trace;
@@ -59,9 +58,9 @@ export interface MockTool {
 	inputSchema?: Record<string, unknown>;
 }
 
-export type MockCall = (args: Record<string, unknown>) => unknown;
+type MockCall = (args: Record<string, unknown>) => unknown;
 
-export type MockResult =
+type MockResult =
 	| MockCall
 	| Record<string, unknown>
 	| unknown[]
@@ -103,7 +102,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
-export function mockClient(spec: MockSpec): McpClient {
+function mockClient(spec: MockSpec): McpClient {
 	const live = new Map<string, Live>();
 
 	async function connect(

@@ -1,9 +1,11 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
 import { note } from "@repo/interpreter/topics";
-import { type ProseHost, proseExtension } from "../src/prose.ts";
+import type { ProseHost } from "../src/ports.ts";
+import { proseExtension } from "../src/prose.ts";
+import { proseHost } from "../src/prose-host.ts";
 
-function installed(host?: ProseHost): Interp {
+function installed(host: ProseHost = proseHost): Interp {
 	return new Interp({ extensions: [proseExtension(host)] });
 }
 

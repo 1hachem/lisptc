@@ -1,17 +1,21 @@
-import { mockedMcpExtension } from "@repo/checks/mocks";
 import { compactionExtension } from "@repo/compaction-extension";
-import { memoryExtension, VolatileStore } from "@repo/memory-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
+import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
+import { VolatileStore } from "@repo/memory-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
+import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
+import { proseHost } from "@repo/prose-extension/host";
 import { playwright } from "./fixtures/playwright.ts";
+import { mockedMcpExtension } from "./harness/mocks.ts";
 import { evalCase } from "./harness/runner.ts";
 
 const extensions = () => [
-	promisesExtension(),
+	promisesExtension(promisesHost),
 	mockedMcpExtension(),
-	compactionExtension(),
-	proseExtension(),
+	compactionExtension(compactionHost),
+	proseExtension(proseHost),
 	memoryExtension({ ...memoryHost, store: new VolatileStore() }),
 ];
 
