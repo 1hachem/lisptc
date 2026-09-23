@@ -30,30 +30,6 @@ export function Title({ children }: { children: ReactNode }) {
 	return <h1 className="m-0 text-[18px] text-fg">{children}</h1>;
 }
 
-export function Panel({
-	title,
-	note,
-	children,
-}: {
-	title: string;
-	note?: string;
-	children: ReactNode;
-}) {
-	return (
-		<section className="min-w-0 border border-bg2 bg-bg1 p-4">
-			<div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-				<h2 className="m-0 text-[13px] text-fg uppercase tracking-wide">
-					{title}
-				</h2>
-				{note === undefined ? null : (
-					<span className="text-[11.5px] text-dim">{note}</span>
-				)}
-			</div>
-			{children}
-		</section>
-	);
-}
-
 export function Stat({
 	label,
 	value,

@@ -21,7 +21,6 @@
     "next": "^15.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^2.15.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

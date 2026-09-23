@@ -50,23 +50,3 @@ tasks:
   build:
     desc: build the dashboard
     cmd: pnpm run build --filter @lisptc/dashi-code
-
-  capture:docker:
-    desc: flush a container's V8 coverage so the dashboard can fold it in (needs NODE_V8_COVERAGE=/coverage)
-    vars:
-      SERVICE: '{{.SERVICE | default "api"}}'
-    cmds:
-      - mkdir -p .coverage/{{.SERVICE}}
-      - docker compose stop {{.SERVICE}}
-      - |
-        one=$(ls -S .coverage/{{.SERVICE}}/coverage-*.json 2>/dev/null | head -1)
-        if [ -z "$one" ]; then
-          echo "no dump in .coverage/{{.SERVICE}}/ — the container was not recording."
-          echo "bring the stack up with coverage on, exercise it, then run this again:"
-          echo "  NODE_V8_COVERAGE=/coverage task up"
-          docker compose start {{.SERVICE}}
-          exit 1
-        fi
-        sed 's|file:///app/||g' "$one" > .coverage/{{.SERVICE}}-rebased.json
-        echo "rebased $one — hit refresh in the dashboard to fold it in"
-      - docker compose start {{.SERVICE}}

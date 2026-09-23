@@ -23,7 +23,7 @@ interface Commit {
 	touches: Touch[];
 }
 
-interface FileHistory {
+export interface FileHistory {
 	path: string;
 	pkg: string;
 	isTest: boolean;
@@ -35,7 +35,7 @@ interface FileHistory {
 	trend: Trend;
 }
 
-interface Series {
+export interface Series {
 	key: string;
 	counts: number[];
 	churn: number[];

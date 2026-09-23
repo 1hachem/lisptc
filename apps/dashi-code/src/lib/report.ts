@@ -1,94 +1,5 @@
 import { z } from "zod";
 
-const verdictSchema = z.enum([
-	"safe_to_delete",
-	"review_required",
-	"low_traffic",
-	"coverage_unavailable",
-	"active",
-]);
-
-export type Verdict = z.infer<typeof verdictSchema>;
-
-const riskBandSchema = z.enum(["low", "medium", "high"]);
-
-const evidenceSchema = z.object({
-	static_status: z.string().nullish(),
-	test_coverage: z.string().nullish(),
-	v8_tracking: z.string().nullish(),
-	untracked_reason: z.string().nullish(),
-	observation_days: z.number().nullish(),
-	deployments_observed: z.number().nullish(),
-});
-
-const runtimeFindingSchema = z.object({
-	id: z.string(),
-	stable_id: z.string().nullish(),
-	source_hash: z.string().nullish(),
-	path: z.string(),
-	function: z.string(),
-	line: z.number(),
-	verdict: verdictSchema,
-	confidence: z.string().nullish(),
-	evidence: evidenceSchema.nullish(),
-});
-
-const blastRadiusSchema = z.object({
-	id: z.string(),
-	stable_id: z.string().nullish(),
-	file: z.string(),
-	function: z.string(),
-	line: z.number(),
-	caller_count: z.number().nullish(),
-	caller_count_weighted_by_traffic: z.number().nullish(),
-	deploys_touched: z.number().nullish(),
-	risk_band: riskBandSchema,
-});
-
-const importanceSchema = z.object({
-	id: z.string(),
-	stable_id: z.string().nullish(),
-	file: z.string(),
-	function: z.string(),
-	line: z.number(),
-	invocations: z.number(),
-	cyclomatic: z.number().nullish(),
-	owner_count: z.number().nullish(),
-	importance_score: z.number(),
-	reason: z.string().nullish(),
-});
-
-const captureQualitySchema = z.object({
-	window_seconds: z.number().nullish(),
-	instances_observed: z.number().nullish(),
-	lazy_parse_warning: z.boolean().nullish(),
-	untracked_ratio_percent: z.number().nullish(),
-});
-
-const runtimeSummarySchema = z.object({
-	data_source: z.string(),
-	last_received_at: z.string().nullish(),
-	functions_tracked: z.number(),
-	functions_hit: z.number(),
-	functions_unhit: z.number(),
-	functions_untracked: z.number(),
-	coverage_percent: z.number(),
-	trace_count: z.number(),
-	period_days: z.number().nullish(),
-	deployments_seen: z.number().nullish(),
-	capture_quality: captureQualitySchema.nullish(),
-});
-
-const runtimeCoverageSchema = z.object({
-	verdict: z.string().nullish(),
-	signals: z.array(z.string()).default([]),
-	actionable: z.boolean().nullish(),
-	summary: runtimeSummarySchema,
-	findings: z.array(runtimeFindingSchema).default([]),
-	blast_radius: z.array(blastRadiusSchema).default([]),
-	importance: z.array(importanceSchema).default([]),
-});
-
 const complexityFindingSchema = z.object({
 	path: z.string(),
 	name: z.string(),
@@ -125,7 +36,6 @@ const reportSchema = z.object({
 	schema_version: z.union([z.string(), z.number()]).nullish(),
 	health_score: healthScoreSchema.nullish(),
 	elapsed_ms: z.number().nullish(),
-	runtime_coverage: runtimeCoverageSchema.nullish(),
 	findings: z.array(complexityFindingSchema).default([]),
 	hotspots: z.array(hotspotSchema).default([]),
 });
@@ -167,17 +77,6 @@ export function cyclesOf(raw: unknown): Cycle[] {
 }
 
 export type Report = z.infer<typeof reportSchema>;
-export type ComplexityFinding = z.infer<typeof complexityFindingSchema>;
-
-export function healthOf(
-	report: Report,
-): { score: number; grade: string | null } | null {
-	const held = report.health_score;
-	if (held === null || held === undefined) return null;
-	if (typeof held === "number") return { score: held, grade: null };
-	return { score: held.score, grade: held.grade ?? null };
-}
-
 const SHOWN_ISSUES = 3;
 
 export type ParsedReport =

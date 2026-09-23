@@ -10,40 +10,21 @@ import {
 } from "@repo/ui/components/ui/dialog.tsx";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { discard, forget } from "@/app/actions.ts";
+import { forget } from "@/app/actions.ts";
 
-type Kind = "version" | "report";
+const WHY =
+	"The snapshot is deleted from the store for good, and anything comparing against it stops working. The repo itself is untouched.";
 
-const WORDING: Record<Kind, { title: string; why: string }> = {
-	version: {
-		title: "Remove this version?",
-		why: "The snapshot is deleted from the store for good, and anything comparing against it stops working. The repo itself is untouched.",
-	},
-	report: {
-		title: "Remove this report?",
-		why: "The analysis is deleted from the store for good. Panels that read it fall back to the next newest report, and the next refresh writes a new one.",
-	},
-};
-
-export function Forget({
-	file,
-	taken,
-	kind,
-}: {
-	file: string;
-	taken: string;
-	kind: Kind;
-}) {
+export function Forget({ file, taken }: { file: string; taken: string }) {
 	const router = useRouter();
 	const [open, setOpen] = useState(false);
 	const [failed, setFailed] = useState<string | null>(null);
 	const [pending, start] = useTransition();
-	const wording = WORDING[kind];
 
 	const confirm = () => {
 		start(async () => {
 			try {
-				await (kind === "version" ? forget(file) : discard(file));
+				await forget(file);
 				setOpen(false);
 				router.refresh();
 			} catch (err) {
@@ -69,10 +50,10 @@ export function Forget({
 				<DialogContent className="border-bg2 bg-bg1">
 					<DialogHeader>
 						<DialogTitle className="text-[15px] text-fg">
-							{wording.title}
+							Remove this version?
 						</DialogTitle>
 						<DialogDescription className="text-[13px] text-dim">
-							Taken {taken}. {wording.why}
+							Taken {taken}. {WHY}
 						</DialogDescription>
 					</DialogHeader>
 					<p className="m-0 truncate text-[11.5px] text-dim">{file}</p>

@@ -1,10 +1,7 @@
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
-import { exec, repoRoot } from "./repo.ts";
+import { exec } from "./repo.ts";
 import { documentStore } from "./store.ts";
 import { saveVersion } from "./versions.ts";
 
-const CAPTURES = ".coverage";
 const KEPT = 12;
 
 export interface Analysis {
@@ -20,19 +17,6 @@ export function analyse(): Promise<Analysis> {
 		running = null;
 	});
 	return running;
-}
-
-async function capture(): Promise<string | null> {
-	try {
-		const found = await readdir(join(repoRoot(), CAPTURES));
-		const rebased = found
-			.filter((name) => name.endsWith("-rebased.json"))
-			.sort()
-			.at(-1);
-		return rebased === undefined ? null : join(CAPTURES, rebased);
-	} catch {
-		return null;
-	}
 }
 
 async function write(name: string, body: string): Promise<void> {
@@ -72,12 +56,10 @@ async function perform(): Promise<Analysis> {
 	});
 
 	await attempt("health", async () => {
-		const dump = await capture();
 		const { stdout } = await exec("pnpm", [
 			"exec",
 			"fallow",
 			"health",
-			...(dump === null ? [] : ["--runtime-coverage", dump]),
 			"--format",
 			"json",
 			"--quiet",

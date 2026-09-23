@@ -18,9 +18,6 @@ export default async function Views() {
 					<Link className="text-[12px] text-dim hover:text-fg" href="/versions">
 						versions
 					</Link>
-					<Link className="text-[12px] text-dim hover:text-fg" href="/reports">
-						runtime reports
-					</Link>
 				</div>
 			</Masthead>
 			<Atlas view={view} />

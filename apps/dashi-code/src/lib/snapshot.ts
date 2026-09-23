@@ -2,12 +2,7 @@ import type { History, Pair, Timeline, Trend } from "./git.ts";
 import { readHistory } from "./git.ts";
 import type { Cycle, Report } from "./report.ts";
 import { cyclesOf } from "./report.ts";
-import {
-	listDocuments,
-	listReports,
-	readDocument,
-	readReport,
-} from "./reports.ts";
+import { listDocuments, readDocument, readReport } from "./reports.ts";
 import type { Edge, Workspace } from "./workspaces.ts";
 import { readTree } from "./workspaces.ts";
 
@@ -30,7 +25,7 @@ export interface FileRow {
 	score: number | null;
 }
 
-interface FunctionRow {
+export interface FunctionRow {
 	file: string;
 	name: string;
 	line: number;
@@ -54,7 +49,6 @@ export interface Snapshot {
 	timeline: Timeline;
 	cochange: { files: Pair[]; packages: Pair[] };
 	report: string | null;
-	analysedFunctions: number | null;
 	cycles: Cycle[];
 }
 
@@ -81,10 +75,11 @@ export async function snapshot(): Promise<Snapshot> {
 }
 
 async function newest(): Promise<{ file: string; report: Report } | null> {
-	const listed = await listReports();
-	for (const row of listed) {
-		if (!row.ok) continue;
-		const loaded = await readReport(row.file);
+	const stored = [...(await listDocuments())].sort(
+		(a, b) => b.modifiedAt - a.modifiedAt,
+	);
+	for (const row of stored) {
+		const loaded = await readReport(row.name);
 		if (loaded.ok) return { file: loaded.file, report: loaded.report };
 	}
 	return null;
@@ -154,7 +149,5 @@ async function compose(
 		cochange: history.cochange,
 		cycles: await newestCycles(),
 		report: latest?.file ?? null,
-		analysedFunctions:
-			report?.runtime_coverage?.summary.functions_untracked ?? null,
 	};
 }

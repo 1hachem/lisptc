@@ -44,7 +44,11 @@
   "knip": {
     "ignoreDependencies": [
       "@fallow-cli/fallow-cov"
-    ]
+    ],
+    "ignoreExportsUsedInFile": {
+      "interface": true,
+      "type": true
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",

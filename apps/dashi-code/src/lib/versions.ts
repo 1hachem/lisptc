@@ -88,7 +88,6 @@ const storedSchema = z.object({
 		z.object({ members: z.array(z.string()), length: z.number() }),
 	),
 	report: z.string().nullable(),
-	analysedFunctions: nullableNumber,
 });
 
 export interface Version {

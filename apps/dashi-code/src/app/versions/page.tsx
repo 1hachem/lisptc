@@ -52,11 +52,7 @@ export default async function Versions() {
 											against the one before
 										</Link>
 									)}
-									<Forget
-										file={version.file}
-										kind="version"
-										taken={when(version.takenAt)}
-									/>
+									<Forget file={version.file} taken={when(version.takenAt)} />
 								</span>
 							</div>
 						);

@@ -23,9 +23,7 @@ apps/trace-viewer/.evals/
 # the on-demand R2 mount and its vfs cache (task r2)
 .r2/
 .r2-cache/
-
-# V8 coverage dumps the containers write, and the rebased copies fallow reads
-.coverage/
+.r2-mount/
 
 .next/
 next-env.d.ts
