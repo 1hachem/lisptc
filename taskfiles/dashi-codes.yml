@@ -37,7 +37,7 @@ tasks:
           CMD: 'PORT={{.PORT}} pnpm run build --filter @lisptc/dashi-code && pnpm --filter @lisptc/dashi-code start'
 
   dev:
-    desc: run the dashboard in dev mode with access to secrets
+    desc: run the dashboard in dev mode, reading and writing the bucket
     vars:
       PORT: '{{.PORT | default "3300"}}'
     cmds:
@@ -50,13 +50,6 @@ tasks:
   build:
     desc: build the dashboard
     cmd: pnpm run build --filter @lisptc/dashi-code
-
-  local:
-    desc: run the dashboard against the mounted bucket, no secrets
-    vars:
-      PORT: '{{.PORT | default "3300"}}'
-      DIR: '{{.DIR | default ".r2/fallow"}}'
-    cmd: DASHI_CODES_STORAGE=local DASHI_CODES_DIR="{{.DIR}}" PORT={{.PORT}} pnpm run dev --filter @lisptc/dashi-code
 
   capture:docker:
     desc: flush a container's V8 coverage so the dashboard can fold it in (needs NODE_V8_COVERAGE=/coverage)

@@ -23,8 +23,8 @@ export default async function Reports() {
 
 			{runs.length === 0 ? (
 				<Empty>
-					No reports yet. Write one with{" "}
-					<span className="text-fg">task dashi-codes:capture</span>.
+					No reports yet. Hit <span className="text-fg">refresh</span> on the
+					views page and one is written.
 				</Empty>
 			) : (
 				<div className="grid gap-2.5">

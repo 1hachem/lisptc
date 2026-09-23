@@ -1,13 +1,4 @@
 import {
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	rmSync,
-	statSync,
-	writeFileSync,
-} from "node:fs";
-import { join, resolve } from "node:path";
-import {
 	DeleteObjectCommand,
 	GetObjectCommand,
 	ListObjectsV2Command,
@@ -30,33 +21,7 @@ export interface DocumentStore {
 	remove(name: string): Promise<void>;
 }
 
-export function fileStore(dir: string): DocumentStore {
-	return {
-		describe: () => `${dir}/`,
-		list: async () => {
-			let names: string[];
-			try {
-				names = readdirSync(dir).filter((name) => name.endsWith(".json"));
-			} catch {
-				return [];
-			}
-			return names.map((name) => ({
-				name,
-				modifiedAt: statSync(join(dir, name)).mtimeMs,
-			}));
-		},
-		read: async (name) => readFileSync(join(dir, name), "utf8"),
-		write: async (name, body) => {
-			mkdirSync(dir, { recursive: true });
-			writeFileSync(join(dir, name), body);
-		},
-		remove: async (name) => {
-			rmSync(join(dir, name), { force: true });
-		},
-	};
-}
-
-export function bucketStore(config: R2Config): DocumentStore {
+function bucketStore(config: R2Config): DocumentStore {
 	const s3 = new S3Client({
 		region: "auto",
 		endpoint: config.endpoint,
@@ -118,26 +83,16 @@ export function bucketStore(config: R2Config): DocumentStore {
 	};
 }
 
-function mountedDir(): string {
-	return resolve(
-		process.cwd(),
-		dashiCodesEnv.DASHI_CODES_DIR ?? "../../.r2/fallow",
-	);
-}
-
 function prefixed(config: R2Config): R2Config {
 	const trimmed = dashiCodesEnv.DASHI_CODES_PREFIX.replace(/^\/+|\/+$/g, "");
 	return { ...config, prefix: trimmed === "" ? "" : `${trimmed}/` };
 }
 
 export function documentStore(): DocumentStore {
-	if (dashiCodesEnv.DASHI_CODES_STORAGE === "local")
-		return fileStore(mountedDir());
 	const config = r2Config();
-	if (config) return bucketStore(prefixed(config));
-	if (dashiCodesEnv.DASHI_CODES_STORAGE === "r2")
+	if (config === undefined)
 		throw new Error(
-			"DASHI_CODES_STORAGE=r2 but no R2 credentials are set. They come from Infisical at /assets, or set DASHI_CODES_STORAGE=local to read the mounted bucket from the filesystem.",
+			"dashi-code reads and writes the bucket over the S3 API and has no filesystem mode. Its credentials come from Infisical at /assets, so start it through a task: `task dashi-codes:dev` or `task dashi-codes:open`.",
 		);
-	return fileStore(mountedDir());
+	return bucketStore(prefixed(config));
 }

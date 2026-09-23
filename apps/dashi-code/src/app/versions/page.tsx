@@ -20,8 +20,8 @@ export default async function Versions() {
 
 			{versions.length === 0 ? (
 				<Empty>
-					No versions stored yet. Write one with{" "}
-					<span className="text-fg">task dashi-codes:version</span>, then
+					No versions stored yet. Every refresh stores one, so hit{" "}
+					<span className="text-fg">refresh</span> on the views page, then
 					compare it against the live repo or against an older one.
 				</Empty>
 			) : (
