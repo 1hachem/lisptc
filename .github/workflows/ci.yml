@@ -28,6 +28,17 @@ jobs:
       - name: Enable corepack (pnpm)
         run: corepack enable
 
+      - name: Fetch the turbo remote cache credentials from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ci
+          secret-path: /turbo
+          export-type: env
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

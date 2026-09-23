@@ -19,7 +19,7 @@ import {
 import { ev } from "./helpers.ts";
 
 function interpWithSecrets(record: Record<string, SecretSpec>): Interp {
-	const store = envSecretsStore();
+	const store = envSecretsStore({ env: {} });
 	store.set(record);
 	const interp = new Interp({
 		extensions: [secretsExtension({ ...secretsHost, store })],
@@ -138,23 +138,19 @@ describe("secret registry (taint propagation)", () => {
 
 describe("secret registry (env seeding)", () => {
 	it("seeds secrets from REPL_* env vars, keeping the prefix (no description)", async () => {
-		const prev = process.env.REPL_FOO;
-		process.env.REPL_FOO = "from-env";
-		try {
-			const interp = new Interp({
-				extensions: [secretsExtension(secretsHost)],
-			});
-			runSync(interp, prelude);
-			expect(str((await runAsync(interp, "(secrets)")).value)).toBe(
-				'(("REPL_FOO" . ""))',
-			);
-			expect(str((await runAsync(interp, '(secret "REPL_FOO")')).value)).toBe(
-				"#<secret:REPL_FOO>",
-			);
-		} finally {
-			if (prev === undefined) delete process.env.REPL_FOO;
-			else process.env.REPL_FOO = prev;
-		}
+		const store = envSecretsStore({
+			env: { REPL_FOO: "from-env", PATH: "not-a-secret" },
+		});
+		const interp = new Interp({
+			extensions: [secretsExtension({ ...secretsHost, store })],
+		});
+		runSync(interp, prelude);
+		expect(str((await runAsync(interp, "(secrets)")).value)).toBe(
+			'(("REPL_FOO" . ""))',
+		);
+		expect(str((await runAsync(interp, '(secret "REPL_FOO")')).value)).toBe(
+			"#<secret:REPL_FOO>",
+		);
 	});
 });
 
@@ -170,7 +166,7 @@ describe("secret registry (.env file loading)", () => {
 		const path = writeEnvFile(
 			"# a comment\nREPL_LINEAR_API_KEY=lin_abc123\nNOT_A_SECRET=nope\n",
 		);
-		const store = envSecretsStore();
+		const store = envSecretsStore({ env: {} });
 		loadSecretsFromFile(store, path);
 		const interp = new Interp({
 			extensions: [secretsExtension({ ...secretsHost, store })],
