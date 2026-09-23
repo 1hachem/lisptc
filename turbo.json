@@ -3,6 +3,41 @@
   "envMode": "loose",
   "boundaries": {
     "tags": {
+      "product": {
+        "dependents": {
+          "allow": []
+        }
+      },
+      "frontend": {
+        "dependencies": {
+          "deny": ["product"]
+        }
+      },
+      "backend": {
+        "dependencies": {
+          "deny": ["frontend", "product"]
+        }
+      },
+      "runtime": {
+        "dependencies": {
+          "deny": ["extension", "backend", "frontend", "product"]
+        }
+      },
+      "extension": {
+        "dependencies": {
+          "deny": ["runtime", "frontend", "product"]
+        }
+      },
+      "language": {
+        "dependencies": {
+          "deny": ["extension", "runtime", "frontend", "product"]
+        }
+      },
+      "ui": {
+        "dependencies": {
+          "deny": ["language", "extension", "runtime", "product"]
+        }
+      },
       "foundation": {
         "dependencies": {
           "deny": [
@@ -13,31 +48,6 @@
             "frontend",
             "product"
           ]
-        }
-      },
-      "language": {
-        "dependencies": {
-          "deny": ["extension", "runtime", "frontend", "product"]
-        }
-      },
-      "extension": {
-        "dependencies": {
-          "deny": ["runtime", "frontend", "product"]
-        }
-      },
-      "runtime": {
-        "dependencies": {
-          "deny": ["extension", "backend", "frontend", "product"]
-        }
-      },
-      "ui": {
-        "dependencies": {
-          "deny": ["language", "extension", "runtime", "product"]
-        }
-      },
-      "product": {
-        "dependents": {
-          "allow": []
         }
       }
     }
