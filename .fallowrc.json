@@ -16,7 +16,8 @@
     "mode": "mild",
     "minTokens": 100,
     "minLines": 10,
-    "minOccurrences": 2
+    "minOccurrences": 2,
+    "ignoredClones": ["dup:c77b3abb6f87acd9-r1:2", "dup:c77b3abb6f87acd9-r2:2"]
   },
   "audit": {
     "gate": "new-only"

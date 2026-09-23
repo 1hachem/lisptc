@@ -25,9 +25,6 @@ importers:
       '@commitlint/types':
         specifier: ^21.2.0
         version: 21.2.0
-      '@fallow-cli/fallow-cov':
-        specifier: ^0.4.1
-        version: 0.4.1
       '@infisical/sdk':
         specifier: ^5.0.2
         version: 5.0.2
@@ -2175,46 +2172,6 @@ packages:
     resolution: {integrity: sha512-1lLxI8MIKUa9A3E5eGTY9Za4iovGPDCmsiph3OSjIvXAsey3C4iqygs+mIH307mu1yd5r3PqGHVKAdBOScZW4A==}
     cpu: [x64]
     os: [darwin]
-
-  '@fallow-cli/fallow-cov-darwin-arm64@0.4.1':
-    resolution: {integrity: sha512-pahht40+IUCi8GFaiY10yVGKy5iwsKg62FwM31G+6UvWAYnrtvh/RpqFBVS5QkvhxBfK0kRr3wugaEfFMBsgVQ==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@fallow-cli/fallow-cov-darwin-x64@0.4.1':
-    resolution: {integrity: sha512-hiX+xLSkxGI3UiB0MUleNAk8fHc8/iXaCLwJRRw3TMUlpdh/c/t4GFUUF9UIOcGq+lJtLScJHnfrhXL0u2BmqQ==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@fallow-cli/fallow-cov-linux-arm64-gnu@0.4.1':
-    resolution: {integrity: sha512-/NegKdrIOd1uc/f4i1jRFgYX7j9OZgKnN4M2numcM2ThoRPIomULb/ZYFJxhqheEj8mtJiq9LyVqpNmZM+XHpw==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@fallow-cli/fallow-cov-linux-arm64-musl@0.4.1':
-    resolution: {integrity: sha512-H1/fQ+tAaXSfCrnDFuGwmn6OYw0ZlQQVTwIPffBLTgZrud6uXkhKJKmZ68iodp6fG2AuEdRM4UJV+5/nkEb+ig==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@fallow-cli/fallow-cov-linux-x64-gnu@0.4.1':
-    resolution: {integrity: sha512-CBHoqxAjDxPm3G4JER4G6OQR6Zrg9RTdRqIHmd0+Pv34elib7htFSmB9P3HfcSr8TGVCa/fuKcdANIMamcNBcw==}
-    cpu: [x64]
-    os: [linux]
-
-  '@fallow-cli/fallow-cov-linux-x64-musl@0.4.1':
-    resolution: {integrity: sha512-/KR0kktHtf/ryO0bywaj1nzrj3XFLGP19aVG5iOiFYQJ1/a9ML5Tz+HFilSc0v6O+zSSvX7qaO98hOLjMHZOgQ==}
-    cpu: [x64]
-    os: [linux]
-
-  '@fallow-cli/fallow-cov-win32-x64-msvc@0.4.1':
-    resolution: {integrity: sha512-hs0z/jiXtrffOiwPz/Zk1XnAr52Wjybkywk8l5ZlmPuRV7Dz1sw97Y66aQ2AKODeTqLAwFPVrFnV+Qst1UdEBA==}
-    cpu: [x64]
-    os: [win32]
-
-  '@fallow-cli/fallow-cov@0.4.1':
-    resolution: {integrity: sha512-j6vKYolLyuOdgoONTFoFZ7RBp5vx/U8lHx9sa1oMZetdD7XAwo3nMd11gQHKuDs2JiBcDTra7YpqxhUyjmz4YA==}
-    engines: {node: '>=16'}
-    hasBin: true
 
   '@fallow-cli/linux-arm64-gnu@3.28.0':
     resolution: {integrity: sha512-GSKMesFLtA41HqhwApqACd1hCerdUCZ/GTuRoraVBtbl0p6Y5gZZpUWeARy/akAi0twbIBV1k7hCLy/sPv5B3w==}
@@ -8156,39 +8113,6 @@ snapshots:
 
   '@fallow-cli/darwin-x64@3.28.0':
     optional: true
-
-  '@fallow-cli/fallow-cov-darwin-arm64@0.4.1':
-    optional: true
-
-  '@fallow-cli/fallow-cov-darwin-x64@0.4.1':
-    optional: true
-
-  '@fallow-cli/fallow-cov-linux-arm64-gnu@0.4.1':
-    optional: true
-
-  '@fallow-cli/fallow-cov-linux-arm64-musl@0.4.1':
-    optional: true
-
-  '@fallow-cli/fallow-cov-linux-x64-gnu@0.4.1':
-    optional: true
-
-  '@fallow-cli/fallow-cov-linux-x64-musl@0.4.1':
-    optional: true
-
-  '@fallow-cli/fallow-cov-win32-x64-msvc@0.4.1':
-    optional: true
-
-  '@fallow-cli/fallow-cov@0.4.1':
-    dependencies:
-      detect-libc: 2.1.2
-    optionalDependencies:
-      '@fallow-cli/fallow-cov-darwin-arm64': 0.4.1
-      '@fallow-cli/fallow-cov-darwin-x64': 0.4.1
-      '@fallow-cli/fallow-cov-linux-arm64-gnu': 0.4.1
-      '@fallow-cli/fallow-cov-linux-arm64-musl': 0.4.1
-      '@fallow-cli/fallow-cov-linux-x64-gnu': 0.4.1
-      '@fallow-cli/fallow-cov-linux-x64-musl': 0.4.1
-      '@fallow-cli/fallow-cov-win32-x64-msvc': 0.4.1
 
   '@fallow-cli/linux-arm64-gnu@3.28.0':
     optional: true
