@@ -1,4 +1,5 @@
-import { type Interp, type InterpExtension, str } from "@repo/interpreter/lisp";
+import { type Interp, str } from "@repo/interpreter/lisp";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 // @boundaries-ignore contract type only, never a value
 import type {

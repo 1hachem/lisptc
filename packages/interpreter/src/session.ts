@@ -2,7 +2,7 @@ import type { Skipped } from "@repo/shared/lisp-forms";
 import type { Addressed } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
 import { Chain } from "./hooks.ts";
-import type { Eval, Interp, InterpExtension } from "./lisp.ts";
+import type { Eval, Installable, Interp } from "./lisp.ts";
 
 export type Bounded = Required<Addressed<string>>;
 
@@ -54,6 +54,10 @@ export interface Slot<T> {
 
 export function slot<T>(name: string): Slot<T> {
 	return { name };
+}
+
+export interface InterpExtension extends Installable {
+	readonly session?: (hooks: SessionHooks) => void;
 }
 
 export interface SessionHooks {

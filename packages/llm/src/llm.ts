@@ -1,11 +1,9 @@
 import { isNumeric } from "@repo/interpreter/arith";
-import { withTimeout } from "@repo/interpreter/async";
 import {
 	arrayToList,
 	Cell,
 	EvalException,
 	type Interp,
-	type InterpExtension,
 	jsonToLisp,
 	LispKeyword,
 	type List,
@@ -27,7 +25,8 @@ import {
 	plistOptions,
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
-import type { SessionHooks } from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { withTimeout } from "@repo/interpreter/timeout";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";

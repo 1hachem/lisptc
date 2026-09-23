@@ -1,6 +1,10 @@
 import { topic } from "@repo/interpreter/channels";
-import type { Interp, InterpExtension } from "@repo/interpreter/lisp";
-import { annotating, type SessionHooks } from "@repo/interpreter/session";
+import type { Interp } from "@repo/interpreter/lisp";
+import {
+	annotating,
+	type InterpExtension,
+	type SessionHooks,
+} from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 import { AgentRepl } from "@repo/repl/repl";
 import { ReplStore } from "../src/repl-store.ts";

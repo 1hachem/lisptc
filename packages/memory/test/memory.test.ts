@@ -7,7 +7,6 @@ import {
 	driveAsync,
 	type Eval,
 	Interp,
-	type InterpExtension,
 	listToArray,
 	newSym,
 	prelude,
@@ -15,6 +14,7 @@ import {
 	runSync,
 	str,
 } from "@repo/interpreter/lisp";
+import type { InterpExtension } from "@repo/interpreter/session";
 import type { Clock } from "@repo/shared/host";
 import { describe, expect, it } from "vitest";
 import {

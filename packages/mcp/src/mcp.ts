@@ -1,12 +1,10 @@
 import { isNumeric } from "@repo/interpreter/arith";
-import { withTimeout } from "@repo/interpreter/async";
 import {
 	arrayToList,
 	Cell,
 	type DocArg,
 	EvalException,
 	type Interp,
-	type InterpExtension,
 	jsonToLisp,
 	LispKeyword,
 	type List,
@@ -17,6 +15,8 @@ import {
 	zList,
 } from "@repo/interpreter/lisp";
 import { keyName, parsePlist } from "@repo/interpreter/plist";
+import type { InterpExtension } from "@repo/interpreter/session";
+import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";

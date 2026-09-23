@@ -1,6 +1,6 @@
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
-import type { InterpExtension } from "@repo/interpreter/lisp";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { type MemoryStore, VolatileStore } from "@repo/memory-extension/ports";

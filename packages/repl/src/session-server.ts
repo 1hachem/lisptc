@@ -5,7 +5,8 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replEnv } from "@repo/env/repl";
-import type { Arity, DocArg, InterpExtension } from "@repo/interpreter/lisp";
+import type { Arity, DocArg } from "@repo/interpreter/lisp";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {

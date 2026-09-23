@@ -1,5 +1,5 @@
 import { Trace } from "@repo/checks/trace";
-import type { InterpExtension } from "@repo/interpreter/lisp";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { AgentRepl } from "@repo/repl/repl";
 import { envSecretsStore } from "@repo/secrets-extension/host";
 import type { SecretsStore } from "@repo/secrets-extension/ports";

@@ -13,19 +13,27 @@ Turbo tag: `language`.
 ## Shape
 
 `src/lisp.ts` is the language. The reader, the evaluator, the `Interp` a driver
-runs, the `InterpExtension` shape an extension satisfies, and `prelude`, the
-standard library written in the dialect itself. Both drivers live here too: the
+runs, the `Installable` shape `Interp` installs, and `prelude`, the standard
+library written in the dialect itself. Both drivers live here too: the
 synchronous pair and the asynchronous pair. A change to evaluation is a change
 to this file.
 
 `src/session.ts` is the seam. It declares `SessionHooks`, the chains an
-extension hooks, the annotation lanes, and `slot`, which mints a capability key.
-Read the hook names there, never from prose.
+extension hooks, the annotation lanes, `slot`, which mints a capability key, and
+`InterpExtension`, the shape an extension satisfies. Read the hook names there,
+never from prose. `InterpExtension` is declared here rather than in
+`src/lisp.ts` because it names `SessionHooks`, and the seam may know the
+language while the language may not know the seam.
 
 `src/hooks.ts` holds the chain machinery the seam is built on. `src/channels.ts`
 and `src/channels-host.ts` carry addressed output. `src/arith.ts`,
-`src/plist.ts`, `src/async.ts` and `src/types.ts` are the small supporting
-modules. `src/source.ts` holds the language reference the model reads.
+`src/plist.ts`, `src/async.ts`, `src/timeout.ts` and `src/types.ts` are the
+small supporting modules. `src/source.ts` holds the language reference the model
+reads.
+
+Nothing `src/lisp.ts` imports imports it back. A helper that needs the
+language's own types or errors goes in a module `src/lisp.ts` does not import,
+the way `src/plist.ts` and `src/timeout.ts` do.
 
 `src/core.ptc` is the core prompt. It is the only prompt here, because no
 extension lives in this package.

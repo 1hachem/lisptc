@@ -15,6 +15,7 @@
     "./plist": "./src/plist.ts",
     "./session": "./src/session.ts",
     "./source": "./src/source.ts",
+    "./timeout": "./src/timeout.ts",
     "./topics": "./src/topics.ts",
     "./types": "./src/types.ts"
   },

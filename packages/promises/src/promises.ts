@@ -1,15 +1,15 @@
-import { withTimeout } from "@repo/interpreter/async";
 import {
 	arrayToList,
 	Cell,
 	EvalException,
 	type Interp,
-	type InterpExtension,
 	type List,
 	listToArray,
 	newLispKeyword,
 	zList,
 } from "@repo/interpreter/lisp";
+import type { InterpExtension } from "@repo/interpreter/session";
+import { withTimeout } from "@repo/interpreter/timeout";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 

@@ -9,12 +9,15 @@ import {
 	Cell,
 	EvalException,
 	type Interp,
-	type InterpExtension,
 	type List,
 	str,
 	zList,
 } from "@repo/interpreter/lisp";
-import { type SessionHooks, slot } from "@repo/interpreter/session";
+import {
+	type InterpExtension,
+	type SessionHooks,
+	slot,
+} from "@repo/interpreter/session";
 import type { ToJson } from "@repo/interpreter/types";
 import { z } from "zod";
 import type { SecretsHost, SecretsStore } from "./ports.ts";

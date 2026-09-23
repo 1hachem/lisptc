@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Trace } from "@repo/checks/trace";
-import type { InterpExtension } from "@repo/interpreter/lisp";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type {
