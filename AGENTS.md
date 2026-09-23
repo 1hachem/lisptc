@@ -156,7 +156,9 @@ That layering is declared, not described. Each package carries a `turbo.json`
 naming its tag, and `boundaries.tags` in the root `turbo.json` says which tags a
 tag may not depend on. `pnpm boundaries` fails on a wrong-direction dependency,
 on an import of a package missing from a `package.json`, on an import that
-reaches into another package's files, and on a cycle. `scripts/check-arch.ts`
+reaches into another package's files, and on cycles between workspace packages.
+It does not detect circular imports between files within a package. Do not add
+circular imports between files in a package. `scripts/check-arch.ts`
 (`pnpm check:arch`) holds the rules a manifest cannot express, including the two
 below. Every failure prints the way out. Take it. Do not widen a list to get
 past one.
