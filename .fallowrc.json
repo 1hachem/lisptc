@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "minimumVersion": "3.28.0",
+  "rules": {
+    "unused-files": "error",
+    "unused-exports": "error",
+    "unused-types": "error",
+    "unused-dependencies": "error",
+    "unused-dev-dependencies": "error",
+    "unused-enum-members": "error",
+    "unused-class-members": "error"
+  },
+  "duplicates": {
+    "enabled": true,
+    "mode": "mild",
+    "minTokens": 50,
+    "minLines": 5,
+    "minOccurrences": 2
+  },
+  "audit": {
+    "gate": "new-only"
+  }
+}
