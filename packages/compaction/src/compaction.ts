@@ -1,23 +1,23 @@
 import type { Addressed, Channels } from "@repo/interpreter/channels";
 import {
-	Cell,
-	callableKind,
 	DOC_DOC,
 	DOC_SIGNATURE,
 	type DocArg,
-	EvalException,
-	echoText,
-	type Interp,
-	type List,
 	lookupDoc,
+} from "@repo/interpreter/docs";
+import { EvalException } from "@repo/interpreter/errors";
+import { callableKind } from "@repo/interpreter/func";
+import type { Interp } from "@repo/interpreter/lisp";
+import {
+	Cell,
+	type List,
 	newSym,
 	Sym,
-	str,
 	Unspecified,
-	zAny,
-	zList,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
+import { echoText, str } from "@repo/interpreter/print";
+import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import type { PromptSource } from "@repo/shared/host";

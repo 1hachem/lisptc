@@ -1,12 +1,12 @@
 import { isNumeric } from "@repo/interpreter/arith";
+import type { Interp } from "@repo/interpreter/lisp";
 import {
 	Cell,
-	type Interp,
 	isSpecialForm,
 	LispKeyword,
 	Sym,
-	str,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
+import { str } from "@repo/interpreter/print";
 import type { Awaitable, PromptSource } from "@repo/shared/host";
 import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 

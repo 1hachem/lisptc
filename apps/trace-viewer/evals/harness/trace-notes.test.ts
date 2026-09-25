@@ -1,6 +1,7 @@
 import { Checks } from "@repo/checks/checks";
 import { Trace } from "@repo/checks/trace";
-import { Interp, prelude, runSync } from "@repo/interpreter/lisp";
+import { Interp, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { describe, expect, test } from "vitest";

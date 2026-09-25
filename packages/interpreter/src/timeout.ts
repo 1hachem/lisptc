@@ -1,4 +1,4 @@
-import { EvalException } from "./lisp.ts";
+import { EvalException } from "./errors.ts";
 
 export function withTimeout<T>(
 	promise: Promise<T>,

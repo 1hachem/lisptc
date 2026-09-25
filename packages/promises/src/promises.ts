@@ -1,13 +1,13 @@
+import { EvalException } from "@repo/interpreter/errors";
+import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
-	EvalException,
-	type Interp,
 	type List,
 	listToArray,
 	newLispKeyword,
-	zList,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
+import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { PromptSource } from "@repo/shared/host";

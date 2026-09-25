@@ -1,13 +1,9 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	str,
-} from "@repo/interpreter/lisp";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import type { SecretSpec } from "../src/ports.ts";
 import { secretsExtension } from "../src/secrets.ts";

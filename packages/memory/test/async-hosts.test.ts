@@ -1,13 +1,7 @@
-import {
-	driveAsync,
-	driveSync,
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	settled,
-	str,
-} from "@repo/interpreter/lisp";
+import { driveAsync, driveSync, settled } from "@repo/interpreter/drive";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { MemoryBank, memoryExtension } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";

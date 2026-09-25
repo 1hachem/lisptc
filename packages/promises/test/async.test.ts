@@ -1,13 +1,9 @@
-import {
-	Cell,
-	type Eval,
-	EvalException,
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	str,
-} from "@repo/interpreter/lisp";
+import type { Eval } from "@repo/interpreter/drive";
+import { EvalException } from "@repo/interpreter/errors";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { Cell } from "@repo/interpreter/objects";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { promisesExtension } from "../src/promises.ts";

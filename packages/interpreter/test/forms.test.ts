@@ -1,7 +1,8 @@
 import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, it } from "vitest";
-import { Cell, Reader, Sym } from "../src/lisp.ts";
+import { Cell, Sym } from "../src/objects.ts";
+import { Reader } from "../src/reader.ts";
 
 const QUOTING = new Set(["quote", "quasiquote"]);
 const UNQUOTING = new Set(["unquote", "unquote-splicing"]);

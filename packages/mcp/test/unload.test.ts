@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { Interp, prelude, runAsync, runSync } from "@repo/interpreter/lisp";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
 import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";

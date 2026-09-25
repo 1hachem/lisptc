@@ -1,4 +1,6 @@
-import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
+import { Interp, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { MapSecretsStore } from "../src/ports.ts";
 import { secretsExtension } from "../src/secrets.ts";
 import { secretsHost } from "../src/secrets-host.ts";
