@@ -5,14 +5,11 @@ import {
 	quotient,
 	ZERO,
 } from "@repo/interpreter/arith";
-import {
-	Cell,
-	EvalException,
-	type Interp,
-	type List,
-	str,
-	zList,
-} from "@repo/interpreter/lisp";
+import { EvalException } from "@repo/interpreter/errors";
+import type { Interp } from "@repo/interpreter/lisp";
+import { Cell, type List } from "@repo/interpreter/objects";
+import { str } from "@repo/interpreter/print";
+import { zList } from "@repo/interpreter/schema";
 import {
 	type InterpExtension,
 	type SessionHooks,

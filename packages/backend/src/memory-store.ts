@@ -1,4 +1,5 @@
-import { Reader, str } from "@repo/interpreter";
+import { str } from "@repo/interpreter/print";
+import { Reader } from "@repo/interpreter/reader";
 import {
 	type Memory,
 	type MemoryStore,

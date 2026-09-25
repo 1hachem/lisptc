@@ -1,10 +1,10 @@
 import { isNumeric } from "@repo/interpreter/arith";
+import type { DocArg } from "@repo/interpreter/docs";
+import { EvalException } from "@repo/interpreter/errors";
+import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
-	type DocArg,
-	EvalException,
-	type Interp,
 	jsonToLisp,
 	LispKeyword,
 	type List,
@@ -12,9 +12,9 @@ import {
 	newLispKeyword,
 	newSym,
 	Sym,
-	zList,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
 import { keyName, parsePlist } from "@repo/interpreter/plist";
+import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";

@@ -1,5 +1,7 @@
 import { fileURLToPath } from "node:url";
-import { type DocArg, Interp, prelude, runSync } from "@repo/interpreter";
+import { Interp, runSync } from "@repo/interpreter";
+import type { DocArg } from "@repo/interpreter/docs";
+import { prelude } from "@repo/interpreter/prelude";
 import { checkSyntax } from "@repo/prose-extension";
 import {
 	type CompletionEntry,

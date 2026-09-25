@@ -1,10 +1,6 @@
-import {
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	str,
-} from "@repo/interpreter/lisp";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import { secretsExtension } from "@repo/secrets-extension";

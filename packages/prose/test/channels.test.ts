@@ -1,5 +1,6 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { runSync, str } from "@repo/interpreter/lisp";
+import { runSync } from "@repo/interpreter/lisp";
+import { str } from "@repo/interpreter/print";
 import { note } from "@repo/interpreter/topics";
 import { describe, expect, it } from "vitest";
 import { proseInterp } from "./helpers.ts";

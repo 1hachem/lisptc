@@ -12,11 +12,35 @@ Turbo tag: `language`.
 
 ## Shape
 
-`src/lisp.ts` is the language. The reader, the evaluator, the `Interp` a driver
-runs, the `Installable` shape `Interp` installs, and `prelude`, the standard
-library written in the dialect itself. Both drivers live here too: the
-synchronous pair and the asynchronous pair. A change to evaluation is a change
-to this file.
+The language is a stack of modules, and imports run one way down it. A module
+names only what sits below it.
+
+- `src/objects.ts`, the data model: cells, symbols, the interned symbol table,
+  and the symbols the reader and the evaluator both compare against. It imports
+  nothing.
+- `src/print.ts`, the printed form of a value.
+- `src/errors.ts`, the exceptions and the signals thrown through the evaluator.
+- `src/drive.ts`, the suspension a form is evaluated under, and both drivers:
+  the synchronous pair and the asynchronous pair.
+- `src/docs.ts`, `src/schema.ts`, `src/func.ts` and `src/reader.ts`: the
+  documentation table, the argument schemas a builtin is declared with, the
+  callables, and the reader.
+- `src/quasiquote.ts` and `src/compile.ts`, expansion and the compile pass a
+  lambda goes through.
+- `src/core-builtins.ts`, every builtin of the core dialect.
+- `src/prelude.ts`, the standard library written in the dialect itself.
+- `src/lisp.ts`, `Interp`, the evaluator it runs, and the `Installable` shape it
+  installs. A change to evaluation is a change to this file.
+
+**No module below `src/lisp.ts` names `Interp`.** What one needs of the
+interpreter it declares as an interface of its own, which `Interp` satisfies by
+shape. `Evaluator`, `Compiler`, `DocSource` and `Definer` are the four, each
+declared in the module that consumes it. A low module reaching for something new
+adds to its interface. It does not import `./lisp.ts`.
+
+Every module a caller outside this package needs is its own entry in
+`package.json` `exports`, and that caller imports the one that owns the name.
+There is no barrel, so `src/lisp.ts` re-exports nothing.
 
 `src/session.ts` is the seam. It declares `SessionHooks`, the chains an
 extension hooks, the annotation lanes, `slot`, which mints a capability key, and
@@ -32,8 +56,8 @@ small supporting modules. `src/source.ts` holds the language reference the model
 reads.
 
 Nothing `src/lisp.ts` imports imports it back. A helper that needs the
-language's own types or errors goes in a module `src/lisp.ts` does not import,
-the way `src/plist.ts` and `src/timeout.ts` do.
+language's own types or errors names `src/objects.ts` or `src/errors.ts`, the
+way `src/plist.ts` and `src/timeout.ts` do.
 
 `src/core.ptc` is the core prompt. It is the only prompt here, because no
 extension lives in this package.

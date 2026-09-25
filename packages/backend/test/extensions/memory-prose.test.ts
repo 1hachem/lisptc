@@ -1,10 +1,6 @@
-import {
-	driveAsync,
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-} from "@repo/interpreter/lisp";
+import { driveAsync } from "@repo/interpreter/drive";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
 import { MemoryBank, memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";

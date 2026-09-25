@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { runSync, str } from "@repo/interpreter/lisp";
+import { runSync } from "@repo/interpreter/lisp";
+import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { proseInterp } from "./helpers.ts";
 

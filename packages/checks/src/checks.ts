@@ -1,16 +1,14 @@
 import { isNumeric, type Numeric } from "@repo/interpreter/arith";
+import { EvalException } from "@repo/interpreter/errors";
+import { Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	Cell,
-	EvalException,
-	Interp,
 	LispKeyword,
 	newLispKeyword,
-	prelude,
-	runSync,
 	Sym,
-	zAny,
-	zList,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
+import { prelude } from "@repo/interpreter/prelude";
+import { zAny, zList } from "@repo/interpreter/schema";
 import { z } from "zod";
 import type { Trace, TraceEvent } from "./trace.ts";
 import type { CheckOutcome, Verdict } from "./verdict.ts";

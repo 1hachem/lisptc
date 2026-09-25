@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { runSync, str } from "../src/lisp.ts";
+import { runSync } from "../src/lisp.ts";
+import { str } from "../src/print.ts";
 import { freshInterp } from "./helpers.ts";
 
 function fixture(name: string): string {

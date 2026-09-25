@@ -1,19 +1,16 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { driveAsync, type Eval } from "@repo/interpreter/drive";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
-	driveAsync,
-	type Eval,
-	Interp,
 	listToArray,
 	newSym,
-	prelude,
-	runAsync,
-	runSync,
-	str,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import type { InterpExtension } from "@repo/interpreter/session";
 import type { Clock } from "@repo/shared/host";
 import { describe, expect, it } from "vitest";

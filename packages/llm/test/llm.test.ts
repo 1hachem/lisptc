@@ -1,12 +1,8 @@
-import {
-	EvalException,
-	Interp,
-	prelude,
-	runAsync,
-	runSync,
-	str,
-} from "@repo/interpreter/lisp";
+import { EvalException } from "@repo/interpreter/errors";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import type { LlmCall } from "@repo/interpreter/observe";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import {
 	type Generate,

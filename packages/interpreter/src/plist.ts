@@ -1,12 +1,11 @@
+import { EvalException } from "./errors.ts";
 import {
 	Cell,
-	EvalException,
 	LispKeyword,
 	type List,
 	newLispKeyword,
 	Sym,
-} from "./lisp.ts";
-
+} from "./objects.ts";
 export function keyName(key: unknown): string {
 	if (key instanceof LispKeyword) return key.name;
 	if (key instanceof Sym) return key.name;

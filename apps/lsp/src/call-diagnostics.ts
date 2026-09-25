@@ -1,4 +1,4 @@
-import type { Arity, DocArg } from "@repo/interpreter";
+import type { Arity, DocArg } from "@repo/interpreter/docs";
 import {
 	type Diagnostic,
 	DiagnosticSeverity,

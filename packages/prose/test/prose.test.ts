@@ -1,4 +1,5 @@
-import { type Interp, runAsync, runSync, str } from "@repo/interpreter/lisp";
+import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { str } from "@repo/interpreter/print";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, it } from "vitest";
 import type { ProseClassifier } from "../src/ports.ts";
