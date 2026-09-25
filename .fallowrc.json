@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "minimumVersion": "3.28.0",
+  "ignorePatterns": [".agents/**", "tree-sitter-lisptc/**"],
+  "rules": {
+    "unused-files": "error",
+    "unused-exports": "error",
+    "unused-types": "error",
+    "unused-dependencies": "error",
+    "unused-dev-dependencies": "error",
+    "unused-enum-members": "error",
+    "unused-class-members": "error"
+  },
+  "duplicates": {
+    "enabled": true,
+    "mode": "mild",
+    "minTokens": 100,
+    "minLines": 10,
+    "minOccurrences": 2,
+    "ignoredClones": ["dup:c77b3abb6f87acd9-r1:2", "dup:c77b3abb6f87acd9-r2:2"]
+  },
+  "audit": {
+    "gate": "new-only"
+  },
+  "health": {
+    "maxCyclomatic": 24,
+    "maxCognitive": 20,
+    "maxCrap": 100,
+    "crapRefactorBand": 5,
+    "maxUnitSize": 60
+  }
+}

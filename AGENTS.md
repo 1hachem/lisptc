@@ -301,6 +301,9 @@ database name, `/convex` the deployment's secret and its origins, `/auth`
 everything Better Auth signs and calls out with, the deployment's admin key
 included, so the convex CLI is credentialed wherever that environment reaches.
 
+The remote Turbo cache is shared, and `turbo.json` is where it is named. Its
+token is a secret like any other, kept at the `/turbo` Infisical path.
+
 Runtime requires **Node >= 22.6.0**, and `.ts` files run directly with no build
 step. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails

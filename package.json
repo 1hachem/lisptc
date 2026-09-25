@@ -20,6 +20,10 @@
     "lint": "biome ci",
     "format": "biome check --write",
     "knip": "knip",
+    "fallow": "fallow audit --type-aware",
+    "fallow:health": "fallow health --css",
+    "fallow:dead-code": "fallow dead-code --type-aware",
+    "fallow:dupes": "fallow dupes",
     "boundaries": "turbo boundaries",
     "check:agents": "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts",
     "check:arch": "node --no-warnings --experimental-transform-types ./scripts/check-arch.ts",
@@ -37,6 +41,12 @@
       "@better-auth/utils": "0.4.2"
     }
   },
+  "knip": {
+    "ignoreExportsUsedInFile": {
+      "interface": true,
+      "type": true
+    }
+  },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
     "@commitlint/cli": "^21.2.1",
@@ -45,6 +55,7 @@
     "@infisical/sdk": "^5.0.2",
     "@repo/env": "workspace:*",
     "cmd-ts": "^0.15.0",
+    "fallow": "^3.28.0",
     "husky": "^9.1.7",
     "knip": "^6.27.0",
     "turbo": "^2.5.0",

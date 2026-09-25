@@ -7,6 +7,11 @@
         "--experimental-transform-types",
         "apps/mcp/src/server.ts"
       ]
+    },
+    "fallow": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--no", "fallow-mcp"]
     }
   }
 }

@@ -1,0 +1,32 @@
+{
+  "name": "@lisptc/dashi-code",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "dev": "next dev --port ${PORT:-3300}",
+    "build": "next build",
+    "start": "next start --port ${PORT:-3300}",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@repo/env": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "next": "^15.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@repo/tsconfigs": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.16",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,8 +1,49 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "envMode": "loose",
+  "remoteCache": {
+    "enabled": true,
+    "apiUrl": "https://turbo.d4shi.com",
+    "teamSlug": "lisptc",
+    "signature": true
+  },
   "boundaries": {
     "tags": {
+      "product": {
+        "dependents": {
+          "allow": []
+        }
+      },
+      "frontend": {
+        "dependencies": {
+          "deny": ["product"]
+        }
+      },
+      "backend": {
+        "dependencies": {
+          "deny": ["frontend", "product"]
+        }
+      },
+      "runtime": {
+        "dependencies": {
+          "deny": ["extension", "backend", "frontend", "product"]
+        }
+      },
+      "extension": {
+        "dependencies": {
+          "deny": ["extension", "runtime", "frontend", "product"]
+        }
+      },
+      "language": {
+        "dependencies": {
+          "deny": ["extension", "runtime", "frontend", "product"]
+        }
+      },
+      "ui": {
+        "dependencies": {
+          "deny": ["language", "extension", "runtime", "product"]
+        }
+      },
       "foundation": {
         "dependencies": {
           "deny": [
@@ -13,31 +54,6 @@
             "frontend",
             "product"
           ]
-        }
-      },
-      "language": {
-        "dependencies": {
-          "deny": ["extension", "runtime", "frontend", "product"]
-        }
-      },
-      "extension": {
-        "dependencies": {
-          "deny": ["extension", "runtime", "frontend", "product"]
-        }
-      },
-      "runtime": {
-        "dependencies": {
-          "deny": ["extension", "backend", "frontend", "product"]
-        }
-      },
-      "ui": {
-        "dependencies": {
-          "deny": ["language", "extension", "runtime", "product"]
-        }
-      },
-      "product": {
-        "dependents": {
-          "allow": []
         }
       }
     }
@@ -51,14 +67,19 @@
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
       "env": ["NEXT_PUBLIC_*", "VITE_*"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputLogs": "new-only"
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^typecheck"],
+      "outputLogs": "new-only"
     },
     "test": {
       "dependsOn": ["^typecheck"],
-      "outputs": []
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+      "env": ["CI"],
+      "outputs": [],
+      "outputLogs": "new-only"
     },
     "test:watch": {
       "cache": false,

@@ -1,0 +1,52 @@
+version: '3'
+silent: true
+includes:
+  infisical:
+    taskfile: ./infisical.yml
+    flatten: true
+tasks:
+  default:
+    desc: build the dashboard, serve it, and open a browser on it
+    cmds:
+      - task: open
+
+  open:
+    desc: build the dashboard, serve it, and open a browser on it
+    vars:
+      PORT: '{{.PORT | default "3300"}}'
+      URL: 'http://localhost:{{.PORT}}'
+    cmds:
+      - |
+        (
+          for _ in $(seq 480); do
+            if curl -sf -o /dev/null "{{.URL}}"; then
+              if command -v xdg-open >/dev/null 2>&1; then xdg-open "{{.URL}}"
+              elif command -v open >/dev/null 2>&1; then open "{{.URL}}"
+              else echo "the dashboard is at {{.URL}}"
+              fi
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "the dashboard never answered on {{.URL}}"
+        ) >/dev/null 2>&1 &
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/assets"
+          CMD: 'PORT={{.PORT}} pnpm run build --filter @lisptc/dashi-code && pnpm --filter @lisptc/dashi-code start'
+
+  dev:
+    desc: run the dashboard in dev mode, reading and writing the bucket
+    vars:
+      PORT: '{{.PORT | default "3300"}}'
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/assets"
+          CMD: 'PORT={{.PORT}} pnpm run dev --filter @lisptc/dashi-code'
+
+  build:
+    desc: build the dashboard
+    cmd: pnpm run build --filter @lisptc/dashi-code

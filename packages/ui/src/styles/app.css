@@ -9,6 +9,7 @@
 @source "../../../components/src";
 @source "../../../../apps/app/src";
 @source "../../../../apps/trace-viewer/src";
+@source "../../../../apps/dashi-code/src";
 
 @layer base {
 	html,
