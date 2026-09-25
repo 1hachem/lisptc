@@ -1,9 +1,9 @@
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { Addressed } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
+import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
-import type { Eval, Installable, Interp } from "./lisp.ts";
-
+import type { Installable, Interp } from "./lisp.ts";
 export type Bounded = Required<Addressed<string>>;
 
 export type Annotations = Record<string, unknown>;
