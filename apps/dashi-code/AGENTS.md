@@ -8,11 +8,13 @@ Turbo tag: `product`.
 ## Shape
 
 `src/app/` is the dashboard: the home page draws the atlas of views,
-`versions/` lists stored snapshots and `compare/` puts two of them side by
-side. `src/lib/store.ts` declares the document store and its adapter,
-`src/lib/report.ts` holds the schema a stored document is read through, and
-`src/lib/reports.ts` is what a page calls. `src/components/` holds the
-presentation.
+`pulls/` draws the forge's pull requests, `versions/` lists stored snapshots
+and `compare/` puts two of them side by side. `src/lib/store.ts` declares the
+document store and its adapter, `src/lib/report.ts` holds the schema a stored
+document is read through, and `src/lib/reports.ts` is what a page calls.
+`src/lib/forge.ts` declares the forge port and picks its adapter, and
+`src/lib/pulls.ts` composes what the forge answers with the dependency graph
+and the local history. `src/components/` holds the presentation.
 
 ## Rules
 
@@ -29,6 +31,16 @@ so what a page shows and what the store holds cannot disagree.
 
 **A stored document is parsed through its schema, never used as raw JSON.** A
 report that no longer matches says why on the page instead of throwing.
+
+**A forge is reached through the `Forge` port, never through a client.**
+`src/lib/forge.ts` declares what the app needs of a forge and holds the table
+of adapters; `src/lib/forge-gh.ts` drives the `gh` CLI and is the only file
+that knows it exists. A second forge, a Codeberg CLI or an HTTP API, is a file
+beside it and a name in that table, and `DASHI_CODES_FORGE` chooses. No page,
+component or composition names an adapter, and nothing outside one shells out
+to a forge or shapes its JSON. What the port answers is composed in
+`pulls.ts`, stored as a document like every other, and parsed back through its
+schema.
 
 Every icon comes from hugeicons, passed as the `icon` prop. `check:arch` fails
 on `lucide-react`.
