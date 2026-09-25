@@ -44,8 +44,9 @@ export function Dsm({
 			<svg
 				className="block h-auto w-full min-w-[620px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="which package depends on which"
+				role="img"
 			>
-				<title>which package depends on which</title>
 				{ordered.map((node, index) => (
 					<g key={node.dir}>
 						<text

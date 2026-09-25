@@ -84,7 +84,7 @@ function isTestPath(path: string): boolean {
 	);
 }
 
-function weekOf(date: string): string {
+export function weekOf(date: string): string {
 	const at = new Date(`${date}T00:00:00Z`);
 	const day = (at.getUTCDay() + 6) % 7;
 	at.setUTCDate(at.getUTCDate() - day);
@@ -346,4 +346,32 @@ function cochange(
 			60,
 		),
 	};
+}
+
+export interface Churn {
+	added: number;
+	deleted: number;
+	files: number;
+}
+
+export async function readChurn(): Promise<Map<string, Churn>> {
+	const raw = await git([
+		"log",
+		"--no-merges",
+		"--numstat",
+		"--pretty=format:%x00%H",
+	]);
+	const churn = new Map<string, Churn>();
+	for (const block of raw.split(RECORD)) {
+		if (block.trim() === "") continue;
+		const [sha, ...lines] = block.split("\n");
+		if (sha === undefined) continue;
+		const touches = linesOf(lines);
+		churn.set(sha.trim(), {
+			added: touches.reduce((sum, touch) => sum + touch.added, 0),
+			deleted: touches.reduce((sum, touch) => sum + touch.deleted, 0),
+			files: touches.length,
+		});
+	}
+	return churn;
 }

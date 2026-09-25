@@ -28,8 +28,9 @@ export function Matrix({ timeline }: { timeline: Timeline }) {
 			<svg
 				className="block h-auto w-full min-w-[640px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="commits per package per week"
+				role="img"
 			>
-				<title>commits per package per week</title>
 				{weeks.map((week, index) => (
 					<text
 						fill="var(--muted-plot)"

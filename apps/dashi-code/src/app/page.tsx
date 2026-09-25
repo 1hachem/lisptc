@@ -15,6 +15,9 @@ export default async function Views() {
 				<Title>views of this repo</Title>
 				<div className="flex flex-wrap items-center gap-3">
 					<Live generated={view.generated} head={view.head} />
+					<Link className="text-[12px] text-dim hover:text-fg" href="/pulls">
+						pull requests
+					</Link>
 					<Link className="text-[12px] text-dim hover:text-fg" href="/versions">
 						versions
 					</Link>

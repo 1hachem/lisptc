@@ -55,8 +55,12 @@ function Ring({
 					{n} files
 				</span>
 			</figcaption>
-			<svg className="block h-auto w-full" viewBox={`0 0 ${CELL} ${CELL}`}>
-				<title>{`import cycle of ${n} files`}</title>
+			<svg
+				className="block h-auto w-full"
+				viewBox={`0 0 ${CELL} ${CELL}`}
+				aria-label={`import cycle of ${n} files`}
+				role="img"
+			>
 				{cycle.members.map((member, index) => {
 					const from = at(index);
 					const to = at((index + 1) % n);

@@ -1,4 +1,5 @@
-import { exec } from "./repo.ts";
+import { savePulls } from "./pulls.ts";
+import { exec, git } from "./repo.ts";
 import { documentStore } from "./store.ts";
 import { saveVersion } from "./versions.ts";
 
@@ -70,6 +71,12 @@ async function perform(): Promise<Analysis> {
 	});
 
 	await attempt("version", async () => (await saveVersion()).file);
+
+	await attempt("pulls", async () => {
+		const head = (await git(["rev-parse", "HEAD"])).trim();
+		return (await savePulls(head)).file;
+	});
+
 	await prune();
 
 	return { at, wrote, failed };
@@ -80,7 +87,7 @@ async function prune(): Promise<void> {
 	const stored = await store.list();
 	const groups = new Map<string, typeof stored>();
 	for (const row of stored) {
-		const prefix = /^(deadcode|health|snapshot)-/.exec(row.name)?.[1];
+		const prefix = /^(deadcode|health|snapshot|pulls)-/.exec(row.name)?.[1];
 		if (prefix === undefined) continue;
 		const held = groups.get(prefix);
 		if (held === undefined) groups.set(prefix, [row]);

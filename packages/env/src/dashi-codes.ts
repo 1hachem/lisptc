@@ -6,6 +6,9 @@ export const dashiCodesEnv = createEnv({
 	server: {
 		DASHI_CODES_PREFIX: z.string().default("fallow/"),
 		DASHI_CODES_REPO: z.string().optional(),
+		DASHI_CODES_FORGE: z.enum(["gh"]).default("gh"),
+		DASHI_CODES_FORGE_REPO: z.string().optional(),
+		DASHI_CODES_FORGE_LIMIT: z.coerce.number().int().positive().default(60),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

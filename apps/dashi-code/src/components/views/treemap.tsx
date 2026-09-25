@@ -35,8 +35,9 @@ export function Treemap({ files }: { files: FileRow[] }) {
 			<svg
 				className="block h-auto w-full min-w-[520px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="lines of code by package, coloured by commits"
+				role="img"
 			>
-				<title>lines of code by package, coloured by commits</title>
 				{outer.map((group) => {
 					const inner = squarify(
 						group.item.rows.map((row) => ({ item: row, value: row.loc ?? 0 })),
