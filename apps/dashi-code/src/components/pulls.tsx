@@ -140,7 +140,7 @@ function LifetimeFrame({ span, view }: { span: Span; view: Pulls }) {
 				</>
 			}
 		>
-			<Lifetimes rows={rows} />
+			<Lifetimes asOf={view.generated} rows={rows} />
 			<Legend
 				items={[
 					{ color: "var(--crit)", label: "open" },

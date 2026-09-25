@@ -16,16 +16,16 @@ const stateColor: Record<PullRow["state"], string> = {
 	closed: "var(--muted-plot)",
 };
 
-function endOf(row: PullRow): number {
+function endOf(row: PullRow, asOf: number): number {
 	const closed = row.mergedAt ?? row.closedAt;
-	return closed === null ? Date.now() : Date.parse(closed);
+	return closed === null ? asOf : Date.parse(closed);
 }
 
 function churnOf(commit: PullRow["commits"][number]): number {
 	return (commit.added ?? 0) + (commit.deleted ?? 0);
 }
 
-export function Lifetimes({ rows }: { rows: PullRow[] }) {
+export function Lifetimes({ asOf, rows }: { asOf: number; rows: PullRow[] }) {
 	const { bind, layer } = useTip();
 	if (rows.length === 0)
 		return <p className="m-0 text-dim">no pull requests in the window</p>;
@@ -33,7 +33,7 @@ export function Lifetimes({ rows }: { rows: PullRow[] }) {
 	const H = M.top + rows.length * ROW + M.bottom;
 	const stamps = rows.flatMap((row) => [
 		Date.parse(row.openedAt),
-		endOf(row),
+		endOf(row, asOf),
 		...row.commits.map((commit) => Date.parse(commit.at)),
 	]);
 	const from = Math.min(...stamps);
@@ -90,7 +90,7 @@ export function Lifetimes({ rows }: { rows: PullRow[] }) {
 								strokeOpacity={0.45}
 								strokeWidth={3}
 								x1={x(Date.parse(row.openedAt))}
-								x2={x(endOf(row))}
+								x2={x(endOf(row, asOf))}
 								y1={y}
 								y2={y}
 								{...bind(
