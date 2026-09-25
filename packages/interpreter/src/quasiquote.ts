@@ -37,36 +37,26 @@ export function qqQuote(x: unknown): unknown {
 }
 
 function qqExpand1(x: unknown, level: number): Cell {
-	if (x instanceof Cell) {
-		if (x.car === unquoteSym) {
-			if (level === 0) return x.cdr as Cell;
-			level--;
-		} else if (x.car === quasiquoteSym) {
-			level++;
-		}
-		const h = qqExpand2(x.car, level);
-		const t = qqExpand1(x.cdr, level);
-		if (t.car === null && t.cdr === null) {
-			return new Cell(h, null);
-		} else if (h instanceof Cell) {
-			if (h.car === listSym) {
-				const tcar = t.car;
-				if (tcar instanceof Cell) {
-					if (tcar.car === listSym) {
-						const hh = qqConcat(h, tcar.cdr);
-						return new Cell(hh, t.cdr);
-					}
-				}
-				if (h.cdr instanceof Cell) {
-					const hh = qqConsCons(h.cdr, tcar);
-					return new Cell(hh, t.cdr);
-				}
-			}
-		}
-		return new Cell(h, t);
-	} else {
-		return new Cell(qqQuote(x), null);
+	if (!(x instanceof Cell)) return new Cell(qqQuote(x), null);
+	if (x.car === unquoteSym) {
+		if (level === 0) return x.cdr as Cell;
+		level--;
+	} else if (x.car === quasiquoteSym) {
+		level++;
 	}
+	const h = qqExpand2(x.car, level);
+	const t = qqExpand1(x.cdr, level);
+	if (t.car === null && t.cdr === null) return new Cell(h, null);
+	const merged = qqMerge(h, t.car);
+	return merged === undefined ? new Cell(h, t) : new Cell(merged, t.cdr);
+}
+
+function qqMerge(h: unknown, tcar: unknown): unknown {
+	if (!(h instanceof Cell) || h.car !== listSym) return undefined;
+	if (tcar instanceof Cell && tcar.car === listSym)
+		return qqConcat(h, tcar.cdr);
+	if (h.cdr instanceof Cell) return qqConsCons(h.cdr, tcar);
+	return undefined;
 }
 
 function qqConcat(x: Cell, y: unknown): unknown {

@@ -60,33 +60,8 @@ function expandMacros(interp: Compiler, j: unknown, count: number): unknown {
 				}
 				throw new EvalException("bad quasiquote", j);
 			}
-			case trySym: {
-				const argPart = cdrCell(j);
-				const clauseCell = argPart === null ? null : cdrCell(argPart);
-				const clause = clauseCell === null ? null : clauseCell.car;
-				if (
-					argPart === null ||
-					clauseCell === null ||
-					clauseCell.cdr !== null ||
-					!(clause instanceof Cell) ||
-					clause.car !== catchSym
-				)
-					throw new EvalException("bad try", j);
-				const bodyForm = expandMacros(interp, argPart.car, count);
-				const catchRest = cdrCell(clause);
-				if (catchRest === null) throw new EvalException("bad try", j);
-				const params = catchRest.car;
-				const handlers = mapcar(cdrCell(catchRest), (h) =>
-					expandMacros(interp, h, count),
-				);
-				return new Cell(
-					trySym,
-					new Cell(
-						bodyForm,
-						new Cell(new Cell(catchSym, new Cell(params, handlers)), null),
-					),
-				);
-			}
+			case trySym:
+				return expandTry(interp, j, count);
 			default:
 				if (k instanceof Sym) k = interp.getGlobal(k);
 				if (k instanceof Macro) {
@@ -99,6 +74,34 @@ function expandMacros(interp: Compiler, j: unknown, count: number): unknown {
 	} else {
 		return j;
 	}
+}
+
+function expandTry(interp: Compiler, j: Cell, count: number): unknown {
+	const argPart = cdrCell(j);
+	const clauseCell = argPart === null ? null : cdrCell(argPart);
+	const clause = clauseCell === null ? null : clauseCell.car;
+	if (
+		argPart === null ||
+		clauseCell === null ||
+		clauseCell.cdr !== null ||
+		!(clause instanceof Cell) ||
+		clause.car !== catchSym
+	)
+		throw new EvalException("bad try", j);
+	const bodyForm = expandMacros(interp, argPart.car, count);
+	const catchRest = cdrCell(clause);
+	if (catchRest === null) throw new EvalException("bad try", j);
+	const params = catchRest.car;
+	const handlers = mapcar(cdrCell(catchRest), (h) =>
+		expandMacros(interp, h, count),
+	);
+	return new Cell(
+		trySym,
+		new Cell(
+			bodyForm,
+			new Cell(new Cell(catchSym, new Cell(params, handlers)), null),
+		),
+	);
 }
 
 function compileInners(interp: Compiler, j: unknown): unknown {
@@ -121,36 +124,33 @@ function compileInners(interp: Compiler, j: unknown): unknown {
 	}
 }
 
+function variableOf(j: unknown): Sym {
+	if (j instanceof Sym) return j;
+	if (j instanceof Arg) return j.symbol;
+	throw new NotVariableException(j);
+}
+
 function makeArgTable(arg: unknown, table: Map<Sym, Arg>): [boolean, number] {
-	if (arg === null) {
-		return [false, 0];
-	} else if (arg instanceof Cell) {
-		let ag = arg as List;
-		let offset = 0;
-		let hasRest = false;
-		for (; ag !== null; ag = cdrCell(ag)) {
-			let j = ag.car;
-			if (hasRest) throw new EvalException("2nd rest", j);
-			if (j === restSym) {
-				ag = cdrCell(ag);
-				if (ag === null) throw new NotVariableException(ag);
-				j = ag.car;
-				if (j === restSym) throw new NotVariableException(j);
-				hasRest = true;
-			}
-			let sym: Sym;
-			if (j instanceof Sym) sym = j;
-			else if (j instanceof Arg) sym = j.symbol;
-			else throw new NotVariableException(j);
-			if (table.has(sym))
-				throw new EvalException("duplicated argument name", j);
-			table.set(sym, new Arg(0, offset, sym));
-			offset++;
+	if (arg === null) return [false, 0];
+	if (!(arg instanceof Cell)) throw new EvalException("arglist expected", arg);
+	let offset = 0;
+	let hasRest = false;
+	for (let ag: List = arg; ag !== null; ag = cdrCell(ag)) {
+		let j = ag.car;
+		if (hasRest) throw new EvalException("2nd rest", j);
+		if (j === restSym) {
+			ag = cdrCell(ag);
+			if (ag === null) throw new NotVariableException(ag);
+			j = ag.car;
+			if (j === restSym) throw new NotVariableException(j);
+			hasRest = true;
 		}
-		return [hasRest, offset];
-	} else {
-		throw new EvalException("arglist expected", arg);
+		const sym = variableOf(j);
+		if (table.has(sym)) throw new EvalException("duplicated argument name", j);
+		table.set(sym, new Arg(0, offset, sym));
+		offset++;
 	}
+	return [hasRest, offset];
 }
 
 function scanForArgs(j: unknown, table: Map<Sym, Arg>): unknown {

@@ -146,45 +146,41 @@ export class Reader {
 				this.token = newSym(t);
 				return;
 			} else {
-				if (t[0] === '"') {
-					let s = t;
-					const n = s.length - 1;
-					if (n < 1 || s[n] !== '"')
-						throw new FormatException(`bad string: ${s}`);
-					s = s.substring(1, n);
-					s = s.replace(/\\./g, (m: string) => {
-						const val = Reader.escapes[m];
-						return val === undefined ? m : val;
-					});
-					this.token = s;
-					return;
-				}
-				const n = tryToParse(t);
-				if (n !== null) this.token = n;
-				else if (t === "nil") this.token = null;
-				else if (t === "t") this.token = true;
-				else if (t.length > 1 && t[0] === ":")
-					this.token = newLispKeyword(t.slice(1));
-				else if (t.startsWith("#<"))
-					throw new EvalException(
-						"a #<…> form is a printed handle, not something that can be read back; use the name the REPL reported the value under",
-						t,
-						false,
-					);
-				else this.token = newSym(t);
+				this.token = t[0] === '"' ? unquoted(t) : atomFor(t);
 				return;
 			}
 		}
 	}
+}
 
-	private static escapes: { [key: string]: string } = {
-		"\\\\": "\\",
-		'\\"': '"',
-		"\\n": "\n",
-		"\\r": "\r",
-		"\\f": "\f",
-		"\\b": "\b",
-		"\\t": "\t",
-		"\\v": "\v",
-	};
+const escapes: { [key: string]: string } = {
+	"\\\\": "\\",
+	'\\"': '"',
+	"\\n": "\n",
+	"\\r": "\r",
+	"\\f": "\f",
+	"\\b": "\b",
+	"\\t": "\t",
+	"\\v": "\v",
+};
+
+function unquoted(t: string): string {
+	const n = t.length - 1;
+	if (n < 1 || t[n] !== '"') throw new FormatException(`bad string: ${t}`);
+	return t.substring(1, n).replace(/\\./g, (m: string) => escapes[m] ?? m);
+}
+
+function atomFor(t: string): unknown {
+	const n = tryToParse(t);
+	if (n !== null) return n;
+	if (t === "nil") return null;
+	if (t === "t") return true;
+	if (t.length > 1 && t[0] === ":") return newLispKeyword(t.slice(1));
+	if (t.startsWith("#<"))
+		throw new EvalException(
+			"a #<…> form is a printed handle, not something that can be read back; use the name the REPL reported the value under",
+			t,
+			false,
+		);
+	return newSym(t);
 }

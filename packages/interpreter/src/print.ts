@@ -16,6 +16,31 @@ const quotes: { [key: string]: string } = {
 	[unquoteSplicingSym.name]: ",@",
 };
 
+const escapes: { [key: string]: string } = {
+	"\b": "\\b",
+	"\t": "\\t",
+	"\n": "\\n",
+	"\v": "\\v",
+	"\f": "\\f",
+	"\r": "\\r",
+	'"': '\\"',
+	"\\": "\\\\",
+};
+
+function quoted(x: string): string {
+	const bf: string[] = ['"'];
+	for (const ch of x) bf.push(escapes[ch] ?? ch);
+	bf.push('"');
+	return bf.join("");
+}
+
+function strCell(x: Cell, count?: number, printed?: Cell[]): string {
+	const q = x.car instanceof Sym ? quotes[x.car.name] : undefined;
+	if (q !== undefined && x.cdr instanceof Cell && x.cdr.cdr == null)
+		return q + str(x.cdr.car, true, count, printed);
+	return `(${strListBody(x, count, printed)})`;
+}
+
 export function str(
 	x: unknown,
 	quoteString = true,
@@ -29,48 +54,9 @@ export function str(
 	} else if (x instanceof Promise) {
 		return "#<promise>";
 	} else if (x instanceof Cell) {
-		if (x.car instanceof Sym) {
-			const q = quotes[x.car.name];
-			if (q !== undefined && x.cdr instanceof Cell)
-				if (x.cdr.cdr == null) return q + str(x.cdr.car, true, count, printed);
-		}
-		return `(${strListBody(x, count, printed)})`;
+		return strCell(x, count, printed);
 	} else if (typeof x === "string") {
-		if (!quoteString) return x;
-		const bf: string[] = ['"'];
-		for (const ch of x) {
-			switch (ch) {
-				case "\b":
-					bf.push("\\b");
-					break;
-				case "\t":
-					bf.push("\\t");
-					break;
-				case "\n":
-					bf.push("\\n");
-					break;
-				case "\v":
-					bf.push("\\v");
-					break;
-				case "\f":
-					bf.push("\\f");
-					break;
-				case "\r":
-					bf.push("\\r");
-					break;
-				case '"':
-					bf.push('\\"');
-					break;
-				case "\\":
-					bf.push("\\\\");
-					break;
-				default:
-					bf.push(ch);
-					break;
-			}
-		}
-		bf.push('"');
-		return bf.join("");
+		return quoteString ? quoted(x) : x;
 	} else if (Array.isArray(x)) {
 		const s = x.map((e) => str(e, true, count, printed)).join(", ");
 		return `[${s}]`;
