@@ -38,8 +38,9 @@ export function Quadrant({ files }: { files: FileRow[] }) {
 			<svg
 				className="block h-auto w-full min-w-[520px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="churn against complexity"
+				role="img"
 			>
-				<title>churn against complexity</title>
 				{ticks(0, ymax, 5).map((tick) => (
 					<line
 						key={tick}

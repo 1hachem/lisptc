@@ -40,10 +40,9 @@ export function Blast({
 			<svg
 				className="block h-auto w-full min-w-[620px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="workspaces each pull request edits, and those that depend on them"
+				role="img"
 			>
-				<title>
-					workspaces each pull request edits, and those that depend on them
-				</title>
 				{marks.map((mark) => (
 					<line
 						key={mark}

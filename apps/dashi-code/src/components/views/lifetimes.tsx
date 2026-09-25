@@ -55,10 +55,9 @@ export function Lifetimes({ asOf, rows }: { asOf: number; rows: PullRow[] }) {
 			<svg
 				className="block h-auto w-full min-w-[620px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="every pull request from the day it opened to the day it closed"
+				role="img"
 			>
-				<title>
-					every pull request from the day it opened to the day it closed
-				</title>
 				{marks.map((mark) => (
 					<line
 						key={mark}

@@ -56,8 +56,9 @@ export function Arcs({
 			<svg
 				className="block h-auto w-full min-w-[560px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="packages that change together"
+				role="img"
 			>
-				<title>packages that change together</title>
 				<line stroke="var(--axis)" x1={12} x2={W - 12} y1={AH} y2={AH} />
 				{[...pairs]
 					.sort((a, b) => a.strength - b.strength)

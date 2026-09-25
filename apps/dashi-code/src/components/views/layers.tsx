@@ -49,8 +49,9 @@ export function Layers({
 			<svg
 				className="block h-auto w-full min-w-[620px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="every workspace dependency, layer by layer"
+				role="img"
 			>
-				<title>every workspace dependency, layer by layer</title>
 				<defs>
 					<marker
 						id="layers-arrow"

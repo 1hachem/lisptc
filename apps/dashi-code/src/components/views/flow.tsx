@@ -50,8 +50,9 @@ export function Flow({ flow }: { flow: PullFlow }) {
 			<svg
 				className="block h-auto w-full min-w-[560px]"
 				viewBox={`0 0 ${W} ${H}`}
+				aria-label="pull requests opened, resolved and left open, by week"
+				role="img"
 			>
-				<title>pull requests opened, resolved and left open, by week</title>
 				<line
 					stroke="var(--axis)"
 					x1={M.left}
