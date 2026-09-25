@@ -1,5 +1,7 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { Interp, prelude, runSync, str } from "@repo/interpreter/lisp";
+import { Interp, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { note } from "@repo/interpreter/topics";
 import type { ProseHost } from "../src/ports.ts";
 import { proseExtension } from "../src/prose.ts";

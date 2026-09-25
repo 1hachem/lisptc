@@ -1,18 +1,11 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { driveAsync, settled } from "@repo/interpreter/drive";
+import { EvalException } from "@repo/interpreter/errors";
 import { noOpinion } from "@repo/interpreter/hooks";
-import {
-	driveAsync,
-	EndOfFile,
-	EvalException,
-	Interp,
-	jsonToLisp,
-	newSym,
-	prelude,
-	runAsync,
-	runSync,
-	settled,
-} from "@repo/interpreter/lisp";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
+import { prelude } from "@repo/interpreter/prelude";
 import {
 	type Bounded,
 	type InterpExtension,

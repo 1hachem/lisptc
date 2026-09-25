@@ -1,13 +1,13 @@
+import { EvalException } from "@repo/interpreter/errors";
 import {
 	arrayToList,
 	Cell,
-	EvalException,
 	type List,
 	listToArray,
 	newLispKeyword,
 	newSym,
 	Sym,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 

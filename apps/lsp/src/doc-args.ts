@@ -1,4 +1,4 @@
-import type { DocArg } from "@repo/interpreter";
+import type { DocArg } from "@repo/interpreter/docs";
 import {
 	type CompletionItem,
 	CompletionItemKind,

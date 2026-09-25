@@ -1,16 +1,12 @@
 import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
-import {
-	EndOfFile,
-	EvalException,
-	Interp,
-	prelude,
-	Reader,
-	runAsync,
-	runSync,
-	setExit,
-} from "@repo/interpreter/lisp";
+import { setExit } from "@repo/interpreter/core-builtins";
+import { EvalException } from "@repo/interpreter/errors";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { EndOfFile } from "@repo/interpreter/objects";
+import { prelude } from "@repo/interpreter/prelude";
+import { Reader } from "@repo/interpreter/reader";
 import { openSession } from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
 import type { Repl } from "@repo/repl/repl";

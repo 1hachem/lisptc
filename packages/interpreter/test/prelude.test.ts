@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Interp, prelude, runSync } from "../src/lisp.ts";
+import { Interp, runSync } from "../src/lisp.ts";
+import { prelude } from "../src/prelude.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
 describe("prelude", () => {

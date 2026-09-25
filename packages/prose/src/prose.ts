@@ -1,14 +1,9 @@
-import {
-	Cell,
-	EndOfFile,
-	type Eval,
-	EvalException,
-	type Interp,
-	Reader,
-	readFailure,
-	settled,
-	str,
-} from "@repo/interpreter/lisp";
+import { type Eval, settled } from "@repo/interpreter/drive";
+import { EvalException } from "@repo/interpreter/errors";
+import type { Interp } from "@repo/interpreter/lisp";
+import { Cell, EndOfFile } from "@repo/interpreter/objects";
+import { str } from "@repo/interpreter/print";
+import { Reader, readFailure } from "@repo/interpreter/reader";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 import {

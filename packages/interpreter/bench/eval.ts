@@ -1,5 +1,5 @@
-import { Interp, prelude, runSync } from "../src/lisp.ts";
-
+import { Interp, runSync } from "../src/lisp.ts";
+import { prelude } from "../src/prelude.ts";
 const SETUP = `
 (defun loop (n acc) (if (= n 0) acc (loop (- n 1) (+ acc n))))
 (defun build (n) (if (= n 0) nil (cons n (build (- n 1)))))

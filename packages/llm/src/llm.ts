@@ -1,20 +1,16 @@
 import { isNumeric } from "@repo/interpreter/arith";
+import { EvalException } from "@repo/interpreter/errors";
+import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
-	EvalException,
-	type Interp,
 	jsonToLisp,
 	LispKeyword,
 	type List,
 	newLispKeyword,
 	newSym,
-	runSync,
 	Sym,
-	str,
-	zAny,
-	zList,
-} from "@repo/interpreter/lisp";
+} from "@repo/interpreter/objects";
 import {
 	type LlmCall,
 	type LlmObserver,
@@ -25,6 +21,8 @@ import {
 	plistOptions,
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
+import { str } from "@repo/interpreter/print";
+import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { Clock, PromptSource } from "@repo/shared/host";
