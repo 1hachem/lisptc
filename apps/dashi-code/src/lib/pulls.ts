@@ -3,6 +3,7 @@ import type { Pull } from "./forge.ts";
 import { forge, pullLimit } from "./forge.ts";
 import type { Churn } from "./git.ts";
 import { readChurn, weekOf } from "./git.ts";
+import { weeksBetween } from "./plot.ts";
 import { decodeReport } from "./report.ts";
 import { listDocuments } from "./reports.ts";
 import { documentStore } from "./store.ts";
@@ -67,17 +68,6 @@ const storedSchema = z.object({
 export type PullRow = z.infer<typeof rowSchema>;
 export type PullFlow = z.infer<typeof flowSchema>;
 export type Pulls = Omit<z.infer<typeof storedSchema>, "kind">;
-
-function weeksBetween(first: string, last: string): string[] {
-	const out: string[] = [];
-	for (
-		let at = Date.parse(`${first}T00:00:00Z`);
-		at <= Date.parse(`${last}T00:00:00Z`);
-		at += WEEK_MS
-	)
-		out.push(new Date(at).toISOString().slice(0, 10));
-	return out;
-}
 
 function day(stamp: string): string {
 	return stamp.slice(0, 10);

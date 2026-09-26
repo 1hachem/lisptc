@@ -40,6 +40,19 @@ export function median(values: number[]): number {
 	return sorted[Math.floor(sorted.length / 2)] ?? 0;
 }
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function weeksBetween(first: string, last: string): string[] {
+	const out: string[] = [];
+	for (
+		let at = Date.parse(`${first}T00:00:00Z`);
+		at <= Date.parse(`${last}T00:00:00Z`);
+		at += WEEK_MS
+	)
+		out.push(new Date(at).toISOString().slice(0, 10));
+	return out;
+}
+
 export function weekLabel(week: string): string {
 	return new Date(`${week}T00:00:00Z`).toLocaleDateString("en-US", {
 		month: "short",
