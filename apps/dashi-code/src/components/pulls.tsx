@@ -3,10 +3,13 @@ import { Empty, Stat, Stats } from "@/components/ui.tsx";
 import { Blast } from "@/components/views/blast.tsx";
 import { Flow } from "@/components/views/flow.tsx";
 import { Lifetimes } from "@/components/views/lifetimes.tsx";
+import { Merges } from "@/components/views/merges.tsx";
 import { count } from "@/lib/format.ts";
 import { median } from "@/lib/plot.ts";
 import type { PullRow, Pulls } from "@/lib/pulls.ts";
 import type { Span } from "@/lib/span.ts";
+import type { MergeTrend } from "@/lib/trend.ts";
+import { mergeTrendOf } from "@/lib/trend.ts";
 
 const LANES = 36;
 const BARS = 22;
@@ -60,6 +63,7 @@ export function PullsAtlas({ span, view }: { span: Span; view: Pulls }) {
 			<FlowFrame span={span} view={view} />
 			<LifetimeFrame span={span} view={view} />
 			<BlastFrame span={span} view={view} />
+			<MergeFrame span={span} view={view} />
 		</>
 	);
 }
@@ -219,6 +223,75 @@ function BlastFinding({ rows, view }: { rows: PullRow[]; view: Pulls }) {
 			workspaces from {widest.touched.length} it edits, putting{" "}
 			{count(widest.blastFiles)} source files in range. Median reach across the
 			window is {(median(view.rows.map((row) => row.reach)) * 100).toFixed(0)}%.
+		</>
+	);
+}
+
+function MergeFrame({ span, view }: { span: Span; view: Pulls }) {
+	const trend = mergeTrendOf(view.rows);
+	return (
+		<Frame
+			finding={<MergeFinding trend={trend} />}
+			name="Time to merge and blast radius"
+			spec={{
+				input: "merged pull requests, bucketed by the week they merged",
+				ceiling:
+					"~150 weeks before the dots collide and the lines need binning",
+				fails:
+					"a week merged one pull request, so its median is that single number",
+			}}
+			tags={["paired series", "median × mean", span.label]}
+			why={
+				<>
+					How long a pull request waits, and how far it reaches once it lands,
+					read against the same weeks. The median resists the one branch that
+					sat for a month; the dot above it carries how many merged, because a
+					median of two is not a rate. Both climbing together is the shape to
+					catch: branches growing wider and living longer feed each other.
+				</>
+			}
+		>
+			<Merges trend={trend} />
+			<Legend
+				items={[
+					{ color: "var(--s1)", label: "median days to merge", line: true },
+					{
+						color: "var(--crit)",
+						label: "average blast radius",
+						line: true,
+					},
+				]}
+			/>
+		</Frame>
+	);
+}
+
+function MergeFinding({ trend }: { trend: MergeTrend }) {
+	const days = trend.days.filter((value): value is number => value !== null);
+	const reach = trend.reach.filter((value): value is number => value !== null);
+	if (days.length === 0) return null;
+	if (days.length < 4)
+		return (
+			<>
+				Only {days.length} {days.length === 1 ? "week" : "weeks"} merged
+				anything, too few to call a direction. The median sits at{" "}
+				{median(days).toFixed(1)} days and the average pull request reaches{" "}
+				{(median(reach) * 100).toFixed(0)}% of the workspaces.
+			</>
+		);
+	const half = Math.floor(days.length / 2);
+	const early = median(days.slice(0, half));
+	const late = median(days.slice(half));
+	const earlyReach = median(reach.slice(0, half)) * 100;
+	const lateReach = median(reach.slice(half)) * 100;
+	return (
+		<>
+			Merging takes <span className="text-fg">{late.toFixed(1)} days</span>{" "}
+			across the recent half of the window against {early.toFixed(1)} across the
+			earlier half, and the average pull request reaches {lateReach.toFixed(0)}%
+			of the workspaces against {earlyReach.toFixed(0)}%. Slower and wider
+			together means scope is creeping into the branch; slower and narrower is
+			review sitting in the queue.
 		</>
 	);
 }
