@@ -1,0 +1,5 @@
+{
+  "extensions": ["*.ts", "*.tsx"],
+  "ignore": ["routeTree\\.gen\\.ts$", "/_generated/"],
+  "allow": ["^//\\s*@boundaries-ignore\\b"]
+}
