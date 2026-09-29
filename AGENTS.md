@@ -26,19 +26,17 @@ what to change.
 
 The only prose that stays is what is written for someone who is not reading the
 code: `README`, a package's own README.md, the `AGENTS.md` files, and what an
-agent runner itself reads, which is the skills and agents under `.agents/` and
-the workflows under `.github/`. Two guards back the rule: a `PreToolUse` hook
-in `.claude/settings.json` refuses to create a new markdown file, and
-`pnpm check:docs` fails CI on any tracked markdown outside that allowlist.
-`ALLOWED` in `scripts/check-docs.ts` is the allowlist, and it is the one to
-read before assuming a path is refused.
+agent runner itself reads under `.agents/` and `.github/`. Two guards back the
+rule: a `PreToolUse` hook in `.claude/settings.json` refuses to create a new
+markdown file, and `pnpm check:docs` fails CI on any tracked markdown outside
+that allowlist.
 
 ## The IO goes out to an agent
 
-Work that reads, runs or watches is delegated. `.agents/agents/` holds three
-agents for it. Each runs a small model, each holds only the tools its job needs,
-and each reports the answer instead of the output. What they read costs you
-nothing but what they say.
+Work that reads, runs or watches is delegated. Three agents hold it, each on a
+small model, each with only the tools its job needs, and each reporting the
+answer instead of the output. What they read costs you nothing but what they
+say.
 
 - `explore` — reads the code. What something does, where it lives, what calls
   it, whether it already exists. It answers with the code quoted under
@@ -64,10 +62,9 @@ Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
 theirs.
 
-`.agents/hooks/io-budget.sh` holds you to it, and it is where the heavy shapes
-and the budget are written. A refusal names the agent that should have had the
-call, so take it and spawn that agent instead of retrying. An agent's own calls
-are never refused.
+`.agents/hooks/io-budget.sh` holds you to it. A refusal names the agent that
+should have had the call, so take it and spawn that agent instead of retrying.
+An agent's own calls are never refused.
 
 ## What this is
 
@@ -221,12 +218,10 @@ it takes to lose it. The mechanisms and how to add to them are in
 
 ## Comments
 
-**The code carries no comments**, enforced three times: `.husky/pre-commit`
-strips them from what is staged, `.husky/pre-push` refuses a push that still
-carries one, and `check:comments` in CI is the backstop. The only ones
-allowed are directives a tool reads, and those are not prose. `no-comments.json`
-is where that allowance is written, so a new directive is added there rather
-than argued for in a review.
+**The code carries no comments.** Three guards hold it, at commit, at push and
+in CI, so one cannot reach main. The only ones allowed are directives a tool
+reads, and those are not prose. `no-comments.json` is where that allowance is
+written, so a new directive is added there rather than argued for in a review.
 
 So: **do not write explanatory comments.** Not a header block, not a JSDoc on an
 exported function, not a `// why` above a tricky line. The types say what a thing
