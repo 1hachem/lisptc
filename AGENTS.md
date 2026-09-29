@@ -25,14 +25,17 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: `README`, a package's own README.md, and the `AGENTS.md` files. Two
-guards back the rule: a `PreToolUse` hook in `.claude/settings.json` refuses to
-create a new markdown file, and `pnpm check:docs` fails CI on any tracked
-markdown outside that allowlist.
+code: `README`, a package's own README.md, the `AGENTS.md` files, and what an
+agent runner itself reads, which is the skills and agents under `.agents/` and
+the workflows under `.github/`. Two guards back the rule: a `PreToolUse` hook
+in `.claude/settings.json` refuses to create a new markdown file, and
+`pnpm check:docs` fails CI on any tracked markdown outside that allowlist.
+`ALLOWED` in `scripts/check-docs.ts` is the allowlist, and it is the one to
+read before assuming a path is refused.
 
 ## The IO goes out to an agent
 
-Work that reads, runs or watches is delegated. `.claude/agents/` holds three
+Work that reads, runs or watches is delegated. `.agents/agents/` holds three
 agents for it. Each runs a small model, each holds only the tools its job needs,
 and each reports the answer instead of the output. What they read costs you
 nothing but what they say.
@@ -51,11 +54,17 @@ Independent questions go out as several agents in one message. Claude's built-in
 `Explore` is denied in `.claude/settings.json`, so the three above are the only
 ones there are.
 
+`.agents/` is where everything an agent runner reads lives: the agents, the
+hooks, the skills, and `.agents/codex/` for the runner that reads a config
+instead. `.claude/agents`, `.claude/hooks` and `.claude/skills` are symlinks
+into it, so a rule is written once and every runner obeys it. Add a skill, an
+agent or a hook under `.agents/`, never under `.claude/`.
+
 Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
 theirs.
 
-`.claude/hooks/io-budget.sh` holds you to it, and it is where the heavy shapes
+`.agents/hooks/io-budget.sh` holds you to it, and it is where the heavy shapes
 and the budget are written. A refusal names the agent that should have had the
 call, so take it and spawn that agent instead of retrying. An agent's own calls
 are never refused.
@@ -68,6 +77,12 @@ neuro-symbolic architecture. The `README` is where that idea is written out.
 It is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`),
 workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point
 for working in it.
+
+Not all of it is a workspace. The dialect is served outside the node build too,
+and those parts answer to `task` rather than to `pnpm`: `tree-sitter-lisptc/` is
+the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
+`editors/nvim` is the editor plugin, and `examples/` is the dialect written out.
+A change to the language surface is not done until they still pass.
 
 ### Packages
 
@@ -108,6 +123,7 @@ Everything else:
 - `apps/api` (`api`) — an HTTP server streaming the agent loop.
 - `apps/app` (`app`) — the web frontend.
 - `apps/cli` (`@lisptc/cli`) — the interactive terminal REPL.
+- `apps/dashi-code` (`@lisptc/dashi-code`) — the code dashboard: what production runs, what it never touches, and what keeps changing.
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.
@@ -205,9 +221,12 @@ it takes to lose it. The mechanisms and how to add to them are in
 
 ## Comments
 
-**The code carries no comments**, enforced twice: a husky `pre-push` hook, and
-`check:comments` in CI as the backstop. The only ones allowed are directives a
-tool reads, and those are not prose.
+**The code carries no comments**, enforced three times: `.husky/pre-commit`
+strips them from what is staged, `.husky/pre-push` refuses a push that still
+carries one, and `check:comments` in CI is the backstop. The only ones
+allowed are directives a tool reads, and those are not prose. `no-comments.json`
+is where that allowance is written, so a new directive is added there rather
+than argued for in a review.
 
 So: **do not write explanatory comments.** Not a header block, not a JSDoc on an
 exported function, not a `// why` above a tricky line. The types say what a thing
@@ -275,14 +294,15 @@ pnpm typecheck               # turbo run typecheck (tsc --noEmit per package)
 pnpm lint                    # biome ci (lint + format check) — matches CI, run at root
 pnpm format                  # biome check --write (auto-fix)
 pnpm knip                    # dead-code / unused-dependency check (part of CI), run at root
+pnpm fallow                  # changed-code risk and dead code audit (part of CI), run at root
 pnpm boundaries              # package layering + import rules (part of CI), run at root
 pnpm check:arch              # manifest rules boundaries cannot express (part of CI)
 pnpm check:comments          # fails on any non-directive comment (part of CI), run at root
 pnpm fix:comments            # strip them; follow with `pnpm format`
 pnpm check:docs              # fails on tracked markdown outside the allowlist (part of CI)
 pnpm fix:docs                # delete those files
-pnpm check:refs              # AGENTS.md references that no longer resolve (part of CI)
-pnpm check:refs --all        # sweep every AGENTS.md, not just the ones a PR changed
+pnpm check:refs              # AGENTS.md references that no longer resolve
+pnpm check:refs --all        # sweep every AGENTS.md; what CI and `.husky/pre-push` run
 pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
@@ -290,6 +310,9 @@ pnpm repl                    # turbo run repl (run the interpreter REPL directly
 task check:agents            # judge the AGENTS.md prose a PR adds (needs the /ai secrets)
 task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
 task up                      # build and run the whole stack in docker, with live reload
+task test                    # the vitest suites and the nix flake checks together
+task test:nix                # the nix flake checks, the ptcfmt formatter test included
+task test:nvim               # the nvim integration test
 
 # Single test file / by name — run inside the package that owns it:
 pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts

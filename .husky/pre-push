@@ -3,5 +3,6 @@ pnpm typecheck
 pnpm check:comments
 pnpm boundaries
 pnpm check:arch
+pnpm check:refs --all
 pnpm knip
 pnpm fallow
