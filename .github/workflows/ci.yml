@@ -49,7 +49,7 @@ jobs:
         run: pnpm lint
 
       - name: No comments
-        run: pnpm check:comments
+        uses: 1hachem/no-comments@v1
 
       - name: No stray docs
         run: pnpm check:docs

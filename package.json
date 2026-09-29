@@ -27,8 +27,8 @@
     "boundaries": "turbo boundaries",
     "check:agents": "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts",
     "check:arch": "node --no-warnings --experimental-transform-types ./scripts/check-arch.ts",
-    "check:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts",
-    "fix:comments": "node --no-warnings --experimental-transform-types ./scripts/check-comments.ts --fix",
+    "check:comments": "no-comments",
+    "fix:comments": "no-comments --fix",
     "check:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts",
     "fix:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts --fix",
     "check:refs": "node --no-warnings --experimental-transform-types ./scripts/check-refs.ts",
@@ -58,6 +58,7 @@
     "fallow": "^3.28.0",
     "husky": "^9.1.7",
     "knip": "^6.27.0",
+    "no-comments": "github:1hachem/no-comments#v1",
     "turbo": "^2.5.0",
     "typescript": "^5.9.3"
   }
