@@ -1,0 +1,660 @@
+<title>Yield, Not Await</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --ground:#F3F3F7; --surface:#FFFFFF; --surface-2:#E9E9F1;
+    --ink:#16162A; --ink-2:#545470; --ink-3:#82829B;
+    --rule:#DDDDE8; --rule-2:#C4C4D6;
+    --susp:#4A44C4; --susp-soft:#E7E6F8;
+    --val:#9A5410; --val-soft:#F7EBDA;
+    --stop:#A32F3B; --stop-soft:#F8E3E7;
+    --code-bg:#EDEDF4;
+    --measure:66ch; --wide:1060px;
+    --s1:.35rem; --s2:.7rem; --s3:1.1rem; --s4:1.8rem; --s5:2.8rem; --s6:4.2rem;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0C0C14; --surface:#15151F; --surface-2:#1D1D2A;
+      --ink:#E3E3EF; --ink-2:#9A9AB4; --ink-3:#74748E;
+      --rule:#252534; --rule-2:#333347;
+      --susp:#9A95FF; --susp-soft:#1C1A3A;
+      --val:#E0A75C; --val-soft:#2C2214;
+      --stop:#F0808E; --stop-soft:#341A1F;
+      --code-bg:#101019;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0C0C14; --surface:#15151F; --surface-2:#1D1D2A;
+    --ink:#E3E3EF; --ink-2:#9A9AB4; --ink-3:#74748E;
+    --rule:#252534; --rule-2:#333347;
+    --susp:#9A95FF; --susp-soft:#1C1A3A;
+    --val:#E0A75C; --val-soft:#2C2214;
+    --stop:#F0808E; --stop-soft:#341A1F;
+    --code-bg:#101019;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground); color:var(--ink);
+    font-family:"Literata", Georgia, serif; font-size:17px; line-height:1.64;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:var(--wide); margin:0 auto; padding-inline:20px; padding-block:0 var(--s6);}
+  .col{max-width:var(--measure);}
+  h1,h2,h3,h4{font-family:"Archivo", system-ui, sans-serif; text-wrap:balance; margin:0;}
+  h1{font-size:clamp(2.2rem,6vw,3.7rem); font-weight:700; line-height:1.02; letter-spacing:-.03em;}
+  h2{font-size:clamp(1.45rem,3.1vw,2rem); font-weight:700; line-height:1.16; letter-spacing:-.018em;}
+  h3{font-size:1.15rem; font-weight:600; letter-spacing:-.006em;}
+  h4{font-size:.93rem; font-weight:700;}
+  p{margin:0;}
+  a{color:var(--susp);}
+  .mono,code{font-family:"JetBrains Mono", ui-monospace, monospace;}
+  code{font-size:.85em; background:var(--code-bg); padding:.1em .34em; border-radius:3px;}
+  pre{
+    margin:0; background:var(--code-bg); border:1px solid var(--rule); border-radius:5px;
+    padding:var(--s3); overflow-x:auto; font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:.78rem; line-height:1.7;
+  }
+  pre code{background:none; padding:0; font-size:1em;}
+  pre .c{color:var(--ink-3);}
+  pre .y{color:var(--susp); font-weight:700;}
+  pre .v{color:var(--val); font-weight:700;}
+  pre .x{color:var(--stop); font-weight:700;}
+  .filename{font-family:"JetBrains Mono",monospace; font-size:.7rem; color:var(--ink-3); display:block; margin-bottom:var(--s1);}
+  .eyebrow{font-family:"JetBrains Mono",monospace; font-size:.72rem; font-weight:500; letter-spacing:.1em; color:var(--ink-3);}
+
+  .mast{border-bottom:1px solid var(--rule-2); padding-block:var(--s5) var(--s4); margin-bottom:var(--s5); display:grid; gap:var(--s3);}
+  .thesis{font-size:1.22rem; color:var(--ink-2); max-width:56ch;}
+  .thesis strong{color:var(--ink); font-weight:600;}
+
+  section{margin-top:var(--s6);}
+  .sechead{border-top:2px solid var(--ink); padding-top:var(--s2); margin-bottom:var(--s4); display:grid; gap:var(--s2);}
+  .movement{display:flex; align-items:baseline; gap:var(--s2);}
+  .movement .no{font-family:"JetBrains Mono",monospace; font-size:.74rem; font-weight:700; color:var(--susp); letter-spacing:.06em;}
+  .lede{color:var(--ink-2); max-width:var(--measure);}
+  .body{display:grid; gap:var(--s3); max-width:var(--measure);}
+  .body.wide{max-width:none;}
+  .stack{display:grid; gap:var(--s3); margin-top:var(--s3);}
+
+  .callout{border-left:3px solid var(--susp); padding-left:var(--s3); display:grid; gap:var(--s2);}
+  .callout.val{border-left-color:var(--val);}
+  .callout.stop{border-left-color:var(--stop);}
+  .callout .k{font-family:"JetBrains Mono",monospace; font-size:.66rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--susp);}
+  .callout.val .k{color:var(--val);} .callout.stop .k{color:var(--stop);}
+
+  /* stepper */
+  .stepper{background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:var(--s4); display:grid; gap:var(--s3); margin-top:var(--s4);}
+  .stepper .form{font-family:"JetBrains Mono",monospace; font-size:.9rem; text-align:center; padding:var(--s2); background:var(--code-bg); border-radius:4px;}
+  .frames{display:grid; gap:4px;}
+  .frame{
+    display:grid; grid-template-columns:1fr auto; align-items:center; gap:var(--s2);
+    border:1px solid var(--rule); border-radius:4px; padding:.5rem .7rem;
+    font-family:"JetBrains Mono",monospace; font-size:.76rem;
+    background:var(--surface-2); color:var(--ink-3);
+    transition:background .18s ease, border-color .18s ease, color .18s ease;
+  }
+  .frame.on{background:var(--susp-soft); border-color:var(--susp); color:var(--ink);}
+  .frame .who{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .frame .tag{font-size:.64rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); white-space:nowrap;}
+  .chip{
+    font-family:"JetBrains Mono",monospace; font-size:.66rem; font-weight:700;
+    padding:.16em .5em; border-radius:3px; white-space:nowrap;
+  }
+  .chip.up{background:var(--susp); color:var(--surface);}
+  .chip.down{background:var(--val); color:var(--surface);}
+  :root[data-theme="dark"] .chip.up,:root[data-theme="dark"] .chip.down{color:#0C0C14;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chip.up,:root:not([data-theme="light"]) .chip.down{color:#0C0C14;}}
+  .note{min-height:4.2em; font-size:.95rem; color:var(--ink-2); border-top:1px solid var(--rule); padding-top:var(--s2);}
+  .note b{color:var(--ink); font-weight:600;}
+  .ctrls{display:flex; gap:var(--s2); align-items:center; flex-wrap:wrap;}
+  button{
+    font-family:"Archivo",sans-serif; font-size:.82rem; font-weight:600;
+    padding:.45rem .9rem; border-radius:4px; border:1px solid var(--rule-2);
+    background:var(--surface); color:var(--ink); cursor:pointer;
+  }
+  button:hover:not(:disabled){border-color:var(--susp); color:var(--susp);}
+  button:disabled{opacity:.4; cursor:default;}
+  button.primary{background:var(--susp); border-color:var(--susp); color:#fff;}
+  button.primary:hover{opacity:.9; color:#fff;}
+  button:focus-visible{outline:2px solid var(--susp); outline-offset:2px;}
+  .count{font-family:"JetBrains Mono",monospace; font-size:.72rem; color:var(--ink-3); margin-left:auto; font-variant-numeric:tabular-nums;}
+
+  .tablewrap{overflow-x:auto; border:1px solid var(--rule); border-radius:6px; margin-top:var(--s3);}
+  table{border-collapse:collapse; width:100%; min-width:600px; background:var(--surface);}
+  th,td{text-align:left; padding:.65rem var(--s3); border-bottom:1px solid var(--rule); vertical-align:top;}
+  th{font-family:"JetBrains Mono",monospace; font-size:.65rem; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); background:var(--surface-2);}
+  td{font-size:.88rem;} td.mono{font-size:.76rem;}
+  tr:last-child td{border-bottom:none;}
+
+  figure{margin:var(--s4) 0 0; display:grid; gap:var(--s2);}
+  .figwrap{overflow-x:auto; background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:var(--s3);}
+  figure svg{display:block; max-width:100%; height:auto; min-width:540px; color:var(--ink);}
+  figcaption{font-size:.85rem; color:var(--ink-2); max-width:var(--measure); font-family:"Archivo",sans-serif;}
+  figcaption b{color:var(--ink); font-weight:600;}
+  svg text{font-family:"JetBrains Mono",monospace; fill:currentColor;}
+  .sv-l{font-size:11.5px;} .sv-s{font-size:9.5px; fill:var(--ink-3);}
+  .sv-box{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1.2;}
+
+  ul{margin:0; padding-left:1.15rem;} li{margin-block:.25em;}
+  .foot{margin-top:var(--s6); border-top:1px solid var(--rule); padding-top:var(--s3); font-family:"JetBrains Mono",monospace; font-size:.7rem; color:var(--ink-3); line-height:1.7;}
+  @media (max-width:560px){ body{font-size:16px;} .stepper{padding:var(--s3);} .frame{font-size:.68rem;} }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="page">
+
+<header class="mast">
+  <span class="eyebrow">;; packages/interpreter/src/drive.ts</span>
+  <h1>Yield, Not Await</h1>
+  <p class="thesis">A tree-walking evaluator that can call a remote tool mid-form, without a single
+  <code>async</code> in the evaluation path. <strong>The entire mechanism is 44 lines and two
+  functions</strong>, and it is the reason one interpreter can serve both a language server that
+  must never block and an agent that waits on the network.</p>
+</header>
+
+<section style="margin-top:0">
+  <div class="sechead">
+    <div class="movement"><span class="no">01</span><h2>The problem is colour, not waiting</h2></div>
+  </div>
+  <div class="body">
+    <p>Waiting is easy. The hard part is that in JavaScript, waiting is <em>contagious</em>. Put one
+    <code>await</code> inside the evaluator and the keyword climbs the whole call graph: every
+    caller of <code>evalGen</code> becomes <code>async</code>, every caller of those becomes
+    <code>async</code>, and the type of "evaluate this form" changes everywhere at once.</p>
+    <p>For this interpreter that would not be an inconvenience, it would remove a feature. The
+    language server builds its own interpreter and loads the prelude with <code>runSync</code>, then
+    reads doc records straight out of it to answer completion and hover &mdash; a path that must
+    return a value, not a promise. The agent, on the very same evaluator, has to call an MCP tool in
+    the middle of an expression and wait for the network.</p>
+    <div class="callout stop">
+      <span class="k">the counterfactual</span>
+      <p>One evaluator that is <code>async</code> forces the LSP to either block or fork a second,
+      synchronous evaluator. Two evaluators means two sets of semantics, and they drift.</p>
+    </div>
+    <p>So the requirement is precise: <b>a form must be able to wait without the act of waiting
+    appearing in any signature between it and the top.</b> That is not a concurrency problem, it is
+    a plumbing problem, and generators are the plumbing.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">02</span><h2>One type carries the whole idea</h2></div>
+  </div>
+  <div class="body">
+    <p>Evaluation does not return a value. It returns a generator that will eventually produce one,
+    and that may hand out promises along the way.</p>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="filename">packages/interpreter/src/drive.ts:5</span>
+<pre><code>export type Eval&lt;T = unknown&gt; = Generator&lt;<span class="y">Promise&lt;unknown&gt;</span>, <span class="v">T</span>, unknown&gt;;
+<span class="c">//                                        ↑ what it yields  ↑ what it returns</span>
+<span class="c">//                                        a thing to wait   the actual value</span>
+<span class="c">//                                        for               of the form</span></code></pre>
+    </div>
+    <div class="body">
+      <p>Read the three parameters as a contract. <b>Yields</b> a promise: "I cannot continue until
+      this settles." <b>Returns</b> <code>T</code>: the real result of the form. <b>Receives</b>
+      <code>unknown</code>: whatever the driver sends back in when it resumes.</p>
+      <p>Nothing in that type says <em>how</em> waiting happens, or whether it is allowed at all.
+      That decision is deferred to whoever consumes the generator &mdash; which is the entire
+      trick.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">03</span><h2>Six lines bridge a port to the protocol</h2></div>
+  </div>
+  <div class="body">
+    <p>Extensions reach the world through ports they declare, and a port that may have to wait is
+    typed <code>Awaitable&lt;T&gt;</code> &mdash; <code>T | Promise&lt;T&gt;</code>. A file-backed
+    memory store answers immediately; a Convex-backed one answers with a promise. The call site is
+    identical for both, because of this:</p>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="filename">packages/interpreter/src/drive.ts:7</span>
+<pre><code>export function* settled&lt;T&gt;(value: Awaitable&lt;T&gt;): Eval&lt;T&gt; {
+  return value instanceof Promise ? ((<span class="y">yield value</span>) as T) : value;
+}</code></pre>
+    </div>
+    <div class="body">
+      <p>A plain value passes straight through and the generator never yields &mdash; no suspension,
+      no cost, not even a microtask. A promise becomes a <code>yield</code>, and the value the
+      driver sends back is returned as if it had been there all along.</p>
+      <p>At the call site the difference is invisible:</p>
+    </div>
+    <div>
+      <span class="filename">packages/memory/src/memory.ts:571 — inside a defGen builtin</span>
+<pre><code>const memory = <span class="y">yield*</span> settled(bank.store.get(key));
+<span class="c">// local file store  → returns immediately, no suspension</span>
+<span class="c">// Convex store      → suspends here, resumes with the Memory</span>
+<span class="c">// the code above does not change, and cannot tell which happened</span></code></pre>
+    </div>
+    <div class="callout">
+      <span class="k">why this matters for the layering</span>
+      <p>An extension declares a port and is handed an implementation by a composition root. Because
+      the port is <code>Awaitable</code> and consumed through <code>settled</code>, the root may hand
+      it a local store or a remote one <b>without the extension changing shape</b>. Suspension is
+      what makes host ports substitutable across the sync/async boundary.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">04</span><h2>Watch a suspension travel</h2></div>
+    <p class="lede">Six frames deep, one of them needs to wait. Step through what actually moves.
+    Nothing in this stack is declared <code>async</code>.</p>
+  </div>
+
+  <div class="stepper">
+    <div class="form" id="stepForm">(+ 1 (memory/recall "cfg"))</div>
+    <div class="frames" id="frames"></div>
+    <p class="note" id="note" aria-live="polite"></p>
+    <div class="ctrls">
+      <button id="prev" type="button">&larr; Back</button>
+      <button id="next" type="button" class="primary">Step &rarr;</button>
+      <button id="reset" type="button">Restart</button>
+      <span class="count" id="count"></span>
+    </div>
+  </div>
+
+  <div class="body" style="margin-top:var(--s4)">
+    <p>The two movements to notice: the promise climbing out, and the value dropping back in to the
+    <em>exact</em> point it left from. Between <code>settled</code> and the driver, four frames
+    forwarded a suspension they never knew about, because forwarding is what <code>yield*</code>
+    does.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">05</span><h2><code>yield*</code> is the whole propagation story</h2></div>
+  </div>
+  <div class="body">
+    <p>Every descent in the evaluator is a delegation, not a call:</p>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="filename">packages/interpreter/src/lisp.ts — inside evalGen</span>
+<pre><code>frame[i] = a instanceof Cell ? <span class="y">yield*</span> this.evalGen(a, env) : this.evalNow(a, env);
+x        = <span class="y">yield*</span> this.evalProgN(body, env);
+x        = <span class="y">yield*</span> this.evalCond(arg, env);
+[nx,env] = <span class="y">yield*</span> this.evalTry(arg, env);
+result   = <span class="y">yield*</span> hooks.evalForm.run(…)   <span class="c">// even the extension seam</span></code></pre>
+    </div>
+    <div class="body">
+      <p><code>yield*</code> forwards every yield outward and every sent value inward, through any
+      depth, for free. That is why adding a suspending builtin required no change to
+      <code>evalCond</code>, <code>evalProgN</code> or <code>evalTry</code>: they were already
+      delegating.</p>
+      <p>The last line is the one worth pausing on. <code>runGen</code> delegates into the
+      extension chain, and <code>SessionHooks.beginTurn</code> is typed
+      <code>Chain&lt;[ctx], Eval&lt;void&gt;&gt;</code>. <b>An extension's lifecycle hook can suspend
+      by exactly the same route as a builtin</b> &mdash; the memory extension waits on its store
+      during <code>beginTurn</code> and nothing above it becomes asynchronous.</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figwrap">
+      <svg viewBox="0 0 940 250" role="img" aria-label="With await, every frame in the call path becomes async. With yield star, the frames are unchanged and only the driver at the top decides what waiting means.">
+        <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" fill="currentColor"/></marker></defs>
+
+        <text class="sv-l" x="14" y="22" fill="var(--stop)">with await — colour spreads</text>
+        <line x1="14" y1="30" x2="430" y2="30" stroke="var(--stop)" stroke-width="1.2"/>
+        <rect class="sv-box" x="14" y="48" width="140" height="30" rx="3" stroke="var(--stop)"/><text class="sv-s" x="84" y="67" text-anchor="middle" fill="var(--stop)">async caller</text>
+        <rect class="sv-box" x="14" y="88" width="140" height="30" rx="3" stroke="var(--stop)"/><text class="sv-s" x="84" y="107" text-anchor="middle" fill="var(--stop)">async evalGen</text>
+        <rect class="sv-box" x="14" y="128" width="140" height="30" rx="3" stroke="var(--stop)"/><text class="sv-s" x="84" y="147" text-anchor="middle" fill="var(--stop)">async evalGen</text>
+        <rect class="sv-box" x="14" y="168" width="140" height="30" rx="3" stroke="var(--stop)"/><text class="sv-s" x="84" y="187" text-anchor="middle" fill="var(--stop)">async builtin</text>
+        <text class="sv-s" x="170" y="108">every signature changes;</text>
+        <text class="sv-s" x="170" y="122">a sync driver is now</text>
+        <text class="sv-s" x="170" y="136" fill="var(--stop)">impossible to write</text>
+        <text class="sv-s" x="170" y="188">↑ one await down here</text>
+
+        <line x1="470" y1="16" x2="470" y2="234" stroke="var(--rule-2)" stroke-dasharray="4 4"/>
+
+        <text class="sv-l" x="500" y="22" fill="var(--susp)">with yield* — colour stays at the top</text>
+        <line x1="500" y1="30" x2="926" y2="30" stroke="var(--susp)" stroke-width="1.2"/>
+        <rect class="sv-box" x="500" y="48" width="150" height="30" rx="3" stroke="var(--susp)" stroke-width="1.8"/><text class="sv-s" x="575" y="67" text-anchor="middle" fill="var(--susp)">driver — the only choice</text>
+        <rect class="sv-box" x="500" y="88" width="150" height="30" rx="3"/><text class="sv-s" x="575" y="107" text-anchor="middle">evalGen*</text>
+        <rect class="sv-box" x="500" y="128" width="150" height="30" rx="3"/><text class="sv-s" x="575" y="147" text-anchor="middle">evalGen*</text>
+        <rect class="sv-box" x="500" y="168" width="150" height="30" rx="3"/><text class="sv-s" x="575" y="187" text-anchor="middle">settled*</text>
+        <line x1="668" y1="183" x2="668" y2="80" stroke="var(--susp)" stroke-width="1.8" marker-end="url(#a1)" color="var(--susp)"/>
+        <text class="sv-s" x="678" y="120" fill="var(--susp)">the promise</text>
+        <text class="sv-s" x="678" y="134" fill="var(--susp)">travels, the</text>
+        <text class="sv-s" x="678" y="148" fill="var(--susp)">frames do not</text>
+        <text class="sv-s" x="678" y="196">driveSync or driveAsync</text>
+        <text class="sv-s" x="678" y="62">decides here ↓</text>
+      </svg>
+    </div>
+    <figcaption>The same waiting builtin under both schemes. <b>Generators move the decision to the
+    top instead of the requirement to the bottom</b>, which is what leaves room for two drivers over
+    one evaluator.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">06</span><h2>Two drivers, and a refusal that is a real error</h2></div>
+  </div>
+  <div class="body">
+    <p>Consuming a generator is where policy lives. There are exactly two policies, twenty-six lines
+    apart in the same file.</p>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="filename">packages/interpreter/src/drive.ts:15 — refuse to wait</span>
+<pre><code>export function driveSync&lt;T&gt;(gen: Eval&lt;T&gt;): T {
+  let step = gen.next();
+  while (!step.done)
+    step = gen.<span class="x">throw</span>(new EvalException(
+      "cannot suspend", "this host evaluates synchronously", false));
+  return step.value;
+}</code></pre>
+    </div>
+    <div class="body">
+      <p>The detail that makes this good: it does not return an error code or hang. It throws
+      <em>into the generator</em>, at the suspension point. So "cannot suspend" arrives as an
+      ordinary <code>EvalException</code>, carrying the form it happened in, catchable by a Lisp
+      <code>(try …)</code>. A synchronous host does not get a degraded language &mdash; it gets a
+      language where waiting is an error you can handle.</p>
+    </div>
+    <div>
+      <span class="filename">packages/interpreter/src/drive.ts:32 — agree to wait</span>
+<pre><code>export async function driveAsync&lt;T&gt;(gen: Eval&lt;T&gt;): Promise&lt;Outcome&lt;T&gt;&gt; {
+  let step = gen.next();
+  while (!step.done) {
+    let resumed: unknown;
+    try { resumed = <span class="y">await step.value</span>; }
+    catch (ex) { step = gen.<span class="x">throw</span>(ex); continue; }   <span class="c">// rejection → Lisp condition</span>
+    step = gen.<span class="v">next(resumed)</span>;                       <span class="c">// value → back into the yield</span>
+  }
+  return { value: step.value };
+}</code></pre>
+    </div>
+    <div class="body">
+      <p>Eight lines of loop. <code>await</code> appears exactly once in the entire evaluation path,
+      here, at the top, where it colours nothing beneath it.</p>
+    </div>
+    <div class="callout stop">
+      <span class="k">the error path is the same path</span>
+      <p>A rejected promise becomes <code>gen.throw(ex)</code> &mdash; thrown at the yield, inside
+      <code>evalGen</code>, inside whatever Lisp <code>try</code> form was active. <b>A network
+      failure in an MCP call arrives as a catchable Lisp condition with a stack trace</b>, not as an
+      unhandled rejection somewhere outside the language. That falls out of the design rather than
+      being built.</p>
+    </div>
+    <div>
+      <span class="filename">packages/interpreter/src/lisp.ts:550 — the two entry points</span>
+<pre><code>export function runSync(interp, text)  { return driveSync(runGen(interp, text)); }
+export function runAsync(interp, text) { return driveAsync(runGen(interp, text)); }</code></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">07</span><h2>Three kinds of builtin, one flag</h2></div>
+  </div>
+  <div class="body">
+    <p>A builtin declares how it relates to waiting, and the call site branches on it. This is the
+    part that repays close reading, because two of the three look identical from JavaScript.</p>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="filename">packages/interpreter/src/lisp.ts — the entire dispatch</span>
+<pre><code>if (fn instanceof BuiltInFunc) {
+  if (fn.kind === "generator") return <span class="y">yield* fn.callGen(frame)</span>;
+  const value = fn.call(frame);
+  if (value instanceof Promise)
+    return fn.kind === "plain"
+      ? <span class="y">yield* fn.settle(value)</span>      <span class="c">// SUSPEND — the program never sees a promise</span>
+      : <span class="v">this.async.watch(value)</span>;     <span class="c">// RETURN  — the promise IS the value</span>
+  return value;
+}</code></pre>
+    </div>
+    <div class="body">
+      <p>Note the asymmetry. The <code>plain</code> branch is <code>yield*</code>, so the form's
+      value is whatever the promise resolved to. The <code>promise</code> branch is a plain
+      <code>return</code> &mdash; no yield at all &mdash; so the form's value <em>is the promise</em>,
+      registered with the tracker and handed to the Lisp program as a first-class object it can
+      hold, inspect and cancel.</p>
+      <p>The promises extension demonstrates both in one file, which is the clearest illustration in
+      the codebase:</p>
+    </div>
+    <div>
+      <span class="filename">packages/promises/src/promises.ts — both return a JS Promise</span>
+<pre><code>interp.<span class="y">def</span>("await", …,           <span class="c">// kind "plain"</span>
+  ([rest]) =&gt; withTimeout(promise, parseTimeout(args[1]), "await"));
+<span class="c">// returns a Promise → evaluator SUSPENDS → (await p) yields p's value</span>
+
+interp.<span class="v">defPromise</span>("promise-all", …, <span class="c">// kind "promise"</span>
+  ([list]) =&gt; Promise.all(toPromises(list)).then(arrayToList));
+<span class="c">// returns a Promise → evaluator TRACKS it → (promise-all ps) yields a promise</span></code></pre>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>declared with</th><th>kind</th><th>at the call site</th><th>what the program sees</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">interp.def</td><td class="mono">plain</td><td class="mono">yield* fn.settle(p)</td><td>the resolved value — waiting is invisible</td></tr>
+          <tr><td class="mono">interp.defGen</td><td class="mono">generator</td><td class="mono">yield* fn.callGen(frame)</td><td>the return value; the builtin may suspend many times</td></tr>
+          <tr><td class="mono">interp.defPromise</td><td class="mono">promise</td><td class="mono">this.async.watch(p)</td><td>the promise itself, tracked and cancellable</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout val">
+      <span class="k">so the language gets both</span>
+      <p><code>(memory/recall "cfg")</code> waits and gives you a memory &mdash; you never learn it
+      was remote. <code>(promise-all ps)</code> gives you a handle you can pass around, race, or
+      cancel, and <code>(await p)</code> is the one form that converts a handle back into a value.
+      <b>Implicit waiting and explicit concurrency are the same machinery under one flag.</b></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">08</span><h2>What holds the promises the program keeps</h2></div>
+  </div>
+  <div class="body">
+    <p>Once a promise can be a Lisp value, something has to know about it. <code>AsyncWork</code> is
+    a <code>WeakMap</code> of state plus a live set, and it is what makes cancellation possible at
+    all.</p>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="filename">packages/interpreter/src/async.ts</span>
+<pre><code>start&lt;T&gt;(run: (signal: AbortSignal) =&gt; Promise&lt;T&gt;): Promise&lt;T&gt; {
+  const controller = new AbortController();
+  return this.record(run(controller.signal), controller);  <span class="c">// keeps the abort handle</span>
+}
+cancel(promise) {
+  this.live.delete(promise);
+  const controller = this.tracked.get(promise)?.controller;
+  if (!controller) return false;    <span class="c">// nothing to abort — see the docstring below</span>
+  controller.abort();
+  return true;
+}</code></pre>
+    </div>
+    <div class="body">
+      <p>The honesty in the language-facing docstring is worth quoting, because it admits the limit
+      rather than papering over it:</p>
+    </div>
+    <div>
+      <span class="filename">packages/promises/src/promises.ts — (cancel promise)</span>
+<pre><code>"Abort the work a promise came from and stop tracking it; returns t if there was
+ something to abort. <span class="c">A promise is not cancellable in itself</span>, so this aborts the
+ request behind it — one built by promise-all and friends has nothing of its
+ own to abort and returns nil."</code></pre>
+    </div>
+    <div class="body">
+      <p>A promise built by <code>start</code> carries an <code>AbortController</code> and really
+      stops. A promise built by <code>Promise.all</code> owns no request, so <code>cancel</code>
+      returns <code>nil</code> and says so. The model reading that prompt learns the actual rule
+      instead of discovering it by surprise.</p>
+      <p><code>abortAll()</code> is what a REPL reset calls: every live request is aborted, so a
+      cancelled turn does not leave work running against a session that no longer exists.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">09</span><h2>The claims, as tests</h2></div>
+    <p class="lede">This repo writes no design docs on principle: a constraint worth keeping is a
+    name, a type, or a test that fails when it breaks. So the argument above is checkable.</p>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="filename">packages/promises/test/async.test.ts:52 — suspension is position-independent</span>
+<pre><code>it("resolves in an argument position", …      <span class="c">// (+ 1 (slow 2))          → 3</span>
+it("resolves inside a closure body", …        <span class="c">// (defun twice …) (twice 21) → 42</span>
+it("resolves inside a loop that runs many times", …
+it("<span class="y">keeps tail calls from growing the stack while suspending</span>", async () =&gt; {
+  expect(await evAsync(
+    "(defun down (n) (if (= n 0) 'done (down (- (slow n) 1)))) (down 200)"
+  )).toBe("done");
+});</code></pre>
+    </div>
+    <div class="body">
+      <p>That last one is the test I would point at first. Two hundred tail calls, each suspending
+      in the middle, and the stack does not grow &mdash; because <code>evalGen</code> is a
+      <code>for(;;)</code> trampoline that reassigns <code>x</code> rather than recursing, and
+      generators preserve that across a suspension. <b>Tail calls and waiting are usually a
+      trade</b>; here they compose.</p>
+    </div>
+    <div>
+      <span class="filename">packages/promises/test/async.test.ts:81 — nothing blocks</span>
+<pre><code>it("lets the event loop turn during one eval", async () =&gt; {
+  let ticked = false;
+  setTimeout(() =&gt; { ticked = true; }, 0);
+  await evAsync("(slow 1)");
+  expect(ticked).toBe(true);        <span class="c">// the loop ran while the form was mid-evaluation</span>
+});</code></pre>
+    </div>
+    <div>
+      <span class="filename">packages/promises/test/async.test.ts:87, :116 — both halves of the error story</span>
+<pre><code>it("is catchable with try", async () =&gt;
+  expect(await evAsync('(try (boom) (catch (e) "caught"))')).toBe('"caught"'));
+
+it("<span class="x">raises rather than half-running the program</span>", () =&gt;
+  expect(() =&gt; runSync(interpWithSlow(), "(+ 1 (slow 2))")).toThrow(/cannot suspend/));
+
+it("still runs everything that does not suspend", () =&gt;
+  expect(str(runSync(interp, "(+ 1 2)"))).toBe("3"));</code></pre>
+    </div>
+    <div class="body">
+      <p>"Raises rather than half-running the program" is the whole synchronous contract in one test
+      name. A sync host does not get partial evaluation and a mystery; it gets a clean, catchable
+      failure at the point that wanted to wait &mdash; and everything that did not need to wait
+      still runs.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead">
+    <div class="movement"><span class="no">10</span><h2>What it costs</h2></div>
+  </div>
+  <div class="body">
+    <p>Three real prices, none of them hidden.</p>
+    <ul>
+      <li><b>Every frame is a generator frame.</b> A tree-walker already allocates heavily; making
+      <code>evalGen</code> and every helper a generator adds a constant factor to <em>all</em>
+      evaluation, including the overwhelming majority of forms that never suspend. No benchmark in
+      the repo pins that number, which is the gap worth closing &mdash; a measured figure belongs in
+      a test that asserts it.</li>
+      <li><b><code>yield*</code> is not optional.</b> A helper called with a plain <code>()</code>
+      instead of <code>yield*</code> silently loses the ability to suspend, and the failure shows up
+      far away as a "cannot suspend" or a generator that never advances. The compiler does help
+      here &mdash; the return type is <code>Eval&lt;T&gt;</code>, not <code>T</code> &mdash; but the
+      discipline is still a discipline.</li>
+      <li><b>Two drivers mean two behaviours to keep true.</b> Any form that suspends works in the
+      agent and fails under <code>runSync</code>, by design. That divergence is pinned by tests
+      rather than left to drift, which is the cost being paid properly.</li>
+    </ul>
+    <div class="callout">
+      <span class="k">the summary, in one line</span>
+      <p>Generators let this interpreter defer the question "am I allowed to wait?" from the place
+      that wants to wait all the way up to the place that knows the answer. Forty-four lines,
+      one flag on a builtin, and a language that can call the network mid-expression without
+      becoming an asynchronous language.</p>
+    </div>
+  </div>
+</section>
+
+<p class="foot">
+  Read from packages/interpreter/src — drive.ts, func.ts, lisp.ts, async.ts, timeout.ts —<br>
+  plus packages/promises/src/promises.ts and packages/memory/src/memory.ts.
+</p>
+
+</div>
+
+<script>
+(function(){
+  var FRAMES = [
+    { who: "driveAsync(gen)",                    tag: "driver" },
+    { who: "runGen — reader loop",               tag: "" },
+    { who: 'evalGen  (+ 1 _)',                   tag: "" },
+    { who: 'evalGen  (memory/recall "cfg")',     tag: "" },
+    { who: "callGen  memory/recall",             tag: "defGen" },
+    { who: 'settled(store.get "cfg")',           tag: "bridge" }
+  ];
+
+  var STEPS = [
+    { on:5, car:null, note:"<b>At rest.</b> The evaluator is six frames deep inside one form. Every frame here is a generator, and not one of them is declared <code>async</code>." },
+    { on:2, car:null, note:"<code>+</code> cannot run until both arguments have values, so the evaluator descends into the second one." },
+    { on:3, car:null, note:"Descending is <code>yield* this.evalGen(a, env)</code> — a delegation, not a call. That distinction is the entire mechanism." },
+    { on:4, car:null, note:"<code>memory/recall</code> was declared with <code>defGen</code>, so the call site runs <code>yield* fn.callGen(frame)</code>." },
+    { on:5, car:null, note:"<code>store.get(\"cfg\")</code> returns <code>Awaitable&lt;Memory&gt;</code>. Backed by Convex it is a Promise, so <code>settled</code> has to wait." },
+    { on:5, car:{at:5,dir:"up",label:"Promise ↑"}, note:"<b><code>yield value</code>.</b> The promise leaves <code>settled</code> and starts climbing. <code>settled</code> is now paused mid-expression." },
+    { on:4, car:{at:4,dir:"up",label:"Promise ↑"}, note:"<code>yield*</code> in <code>callGen</code> forwards it outward. <b>No code in this frame runs</b> — forwarding is what delegation means." },
+    { on:3, car:{at:3,dir:"up",label:"Promise ↑"}, note:"Forwarded again. This <code>evalGen</code> frame has no idea a wait is in progress, and needs no code to handle one." },
+    { on:2, car:{at:2,dir:"up",label:"Promise ↑"}, note:"And again. This is the part that costs nothing to write: suspension propagates for free through every <code>yield*</code>." },
+    { on:1, car:{at:1,dir:"up",label:"Promise ↑"}, note:"Through <code>runGen</code>'s <code>yield* hooks.evalForm.run(…)</code> — so an <b>extension's lifecycle hook suspends by this same route</b>." },
+    { on:0, car:{at:0,dir:"up",label:"Promise ↑"}, note:"It surfaces at the driver as <code>step.value</code>. Five frames forwarded a suspension none of them mentions in its signature." },
+    { on:0, car:null, note:"<b><code>await step.value</code>.</b> The one <code>await</code> in the whole evaluation path. The event loop is free — nothing is spinning or blocked." },
+    { on:0, car:{at:0,dir:"down",label:"Memory ↓"}, note:"The promise settles. The driver calls <code>gen.next(memory)</code> to send the value back in." },
+    { on:3, car:{at:3,dir:"down",label:"Memory ↓"}, note:"It descends through the same delegations, resuming each paused frame exactly where it yielded — not at the top of any function." },
+    { on:5, car:{at:5,dir:"down",label:"Memory ↓"}, note:"It arrives at the <code>yield</code> inside <code>settled</code>, which is the expression that produced it." },
+    { on:5, car:null, note:"<code>settled</code> returns the Memory. <b>It yielded once and returned a value</b>; the four frames between it and the driver observed nothing at all." },
+    { on:2, car:null, note:"<code>(+ 1 42)</code> → <code>43</code>. <code>step.done</code> is true and <code>driveAsync</code> returns <code>{ value: 43 }</code>. Zero <code>async</code> functions were involved below the driver." }
+  ];
+
+  var i = 0;
+  var framesEl = document.getElementById("frames");
+  var noteEl   = document.getElementById("note");
+  var countEl  = document.getElementById("count");
+  var prevEl   = document.getElementById("prev");
+  var nextEl   = document.getElementById("next");
+  var resetEl  = document.getElementById("reset");
+
+  function render(){
+    var s = STEPS[i];
+    var html = "";
+    for (var f = 0; f < FRAMES.length; f++){
+      var on  = s.on === f ? " on" : "";
+      var chip = (s.car && s.car.at === f)
+        ? '<span class="chip ' + s.car.dir + '">' + s.car.label + '</span>'
+        : '<span class="tag">' + FRAMES[f].tag + '</span>';
+      html += '<div class="frame' + on + '"><span class="who">' + FRAMES[f].who + '</span>' + chip + '</div>';
+    }
+    framesEl.innerHTML = html;
+    noteEl.innerHTML = s.note;
+    countEl.textContent = (i + 1) + " / " + STEPS.length;
+    prevEl.disabled = i === 0;
+    nextEl.disabled = i === STEPS.length - 1;
+  }
+
+  nextEl.addEventListener("click", function(){ if (i < STEPS.length - 1){ i++; render(); } });
+  prevEl.addEventListener("click", function(){ if (i > 0){ i--; render(); } });
+  resetEl.addEventListener("click", function(){ i = 0; render(); });
+
+  render();
+})();
+</script>

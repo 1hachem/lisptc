@@ -37,26 +37,6 @@ jobs:
           export-type: env
 
       - name: Rules, not implementation
-        run: >
-          node --no-warnings --experimental-transform-types
-          ./scripts/check-agents.ts
-          --base ${{ github.event.pull_request.base.sha }}
-
-  live-references:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+        uses: 1hachem/check-agents-md@v1
         with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: References that still resolve
-        run: >
-          node --no-warnings --experimental-transform-types
-          ./scripts/check-refs.ts
-          --base ${{ github.event.pull_request.base.sha }}
+          checks: rules

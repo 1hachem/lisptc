@@ -25,13 +25,13 @@
     "fallow:dead-code": "fallow dead-code --type-aware",
     "fallow:dupes": "fallow dupes",
     "boundaries": "turbo boundaries",
-    "check:agents": "node --no-warnings --experimental-transform-types ./scripts/check-agents.ts",
+    "check:agents": "check-agents-md --checks rules",
     "check:arch": "node --no-warnings --experimental-transform-types ./scripts/check-arch.ts",
     "check:comments": "no-comments",
     "fix:comments": "no-comments --fix",
     "check:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts",
     "fix:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts --fix",
-    "check:refs": "node --no-warnings --experimental-transform-types ./scripts/check-refs.ts",
+    "check:refs": "check-agents-md --checks refs",
     "prepare": "husky"
   },
   "pnpm": {
@@ -54,6 +54,7 @@
     "@commitlint/types": "^21.2.0",
     "@infisical/sdk": "^5.0.2",
     "@repo/env": "workspace:*",
+    "check-agents-md": "github:1hachem/check-agents-md#v1",
     "cmd-ts": "^0.15.0",
     "fallow": "^3.28.0",
     "husky": "^9.1.7",

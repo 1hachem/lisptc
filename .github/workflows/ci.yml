@@ -54,6 +54,12 @@ jobs:
       - name: No stray docs
         run: pnpm check:docs
 
+      - name: References that still resolve
+        uses: 1hachem/check-agents-md@v1
+        with:
+          checks: refs
+          all: true
+
       - name: Boundaries
         run: pnpm boundaries
 
