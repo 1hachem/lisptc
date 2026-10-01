@@ -306,8 +306,26 @@ function installServer(
 		});
 		toolSyms.push(sym);
 	}
-	servers.set(name, { name, serverId: res.serverId, toolSyms, tools: toolMap });
-	return arrayToList(toolSyms);
+	const rec = { name, serverId: res.serverId, toolSyms, tools: toolMap };
+	servers.set(name, rec);
+	return arrayToList(toolRows(rec));
+}
+
+function toolRow(rec: ServerRec, sym: Sym): List {
+	const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
+	return arrayToList([
+		sym,
+		BigInt(
+			tool?.inputSchema?.properties
+				? Object.keys(tool.inputSchema.properties).length
+				: 0,
+		),
+		firstLine(tool?.description),
+	]);
+}
+
+function toolRows(rec: ServerRec): List[] {
+	return rec.toolSyms.map((sym) => toolRow(rec, sym));
 }
 
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
@@ -343,7 +361,7 @@ export function registerMcp(
 		"load-mcp",
 		-1,
 		'(load-mcp "server") | (load-mcp :name "server")',
-		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns the tool list. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url or :command to load an ad-hoc server instead.',
+		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url or :command to load an ad-hoc server instead.',
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, predefined);
@@ -510,20 +528,7 @@ export function registerMcp(
 			const rows: unknown[] = [];
 			for (const rec of servers.values()) {
 				if (only !== null && rec.name !== only) continue;
-				for (const sym of rec.toolSyms) {
-					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
-					rows.push(
-						arrayToList([
-							sym,
-							BigInt(
-								tool?.inputSchema?.properties
-									? Object.keys(tool.inputSchema.properties).length
-									: 0,
-							),
-							firstLine(tool?.description),
-						]),
-					);
-				}
+				rows.push(...toolRows(rec));
 			}
 			if (only !== null && !servers.has(only))
 				throw new EvalException("MCP server not loaded", only, false);

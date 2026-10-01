@@ -8,7 +8,9 @@ MCP SERVERS
   go on with the task and call the tools on a later step. Use await for when
   you want the tool list in the SAME step, nothing else.
 - To load and use in one step, wrap the SINGLE load-mcp call in await:
-(await (load-mcp "acme")) blocks until ready and returns the tool list.
+(await (load-mcp "acme")) blocks until ready and returns its tools, each as
+(name argument-count description) — the same rows (list-tools) gives, so you
+  already have the names and do not need to list them after a load.
   Do NOT call (load-mcp "acme") and then (await (load-mcp "acme")) —
   that starts TWO separate connections. Either wrap it directly as above, or bind
   the one promise and await that: (setq p (load-mcp "acme")) then later (await p) .

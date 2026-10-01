@@ -12,8 +12,9 @@ blocks until the connection settles and the bindings appear.
 
 result:
 
-  => playwright/browser_navigate playwright/browser_snapshot
-     playwright/browser_find playwright/browser_click ... 24 symbols
+  => playwright/browser_navigate 1 "Navigate to a URL"
+     playwright/browser_snapshot 0 "Capture the accessibility tree"
+     playwright/browser_click 2 "Click an element" ... 24 rows
 
 agent:
 
