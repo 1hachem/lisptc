@@ -18,10 +18,8 @@ govern this package.
 Time is a port here, like the store. Nothing reads a real clock, so that decay
 stays testable.
 
-An alias is a port of its own, not a memory. What it holds is a pair of names,
-so it never fires, decays or is revised.
-
-An alias may name what does not exist yet. It never replaces a name that does.
+An alias is a port of its own, not a memory. It may name what does not exist
+yet, and never replaces a name that does.
 
 A store may answer with a promise, so nothing built on one may block, and it has
 to hold under both drivers.
