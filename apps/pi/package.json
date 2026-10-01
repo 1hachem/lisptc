@@ -1,0 +1,51 @@
+{
+  "name": "@lisptc/pi",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "bin": {
+    "lisptc-pi": "./src/cli.ts"
+  },
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/extension.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pi": "node --no-warnings --experimental-transform-types src/cli.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "dependencies": {
+    "@repo/ai": "workspace:*",
+    "@repo/compaction-extension": "workspace:*",
+    "@repo/interpreter": "workspace:*",
+    "@repo/llm-extension": "workspace:*",
+    "@repo/mcp-extension": "workspace:*",
+    "@repo/memory-extension": "workspace:*",
+    "@repo/promises-extension": "workspace:*",
+    "@repo/prose-extension": "workspace:*",
+    "@repo/repl": "workspace:*",
+    "@repo/secrets-extension": "workspace:*",
+    "@repo/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.99.2",
+    "@earendil-works/pi-tui": "^0.99.2",
+    "@repo/tsconfigs": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

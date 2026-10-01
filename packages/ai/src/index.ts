@@ -19,6 +19,7 @@ export {
 export {
 	evalCode,
 	replResultContent,
+	stripFences,
 	type TranscriptEntry,
 } from "./repl.ts";
 export {

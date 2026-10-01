@@ -123,6 +123,7 @@ Everything else:
 - `apps/dashi-code` (`@lisptc/dashi-code`) — the code dashboard: what production runs, what it never touches, and what keeps changing.
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
+- `apps/pi` (`@lisptc/pi`) — the lisptc extension for the pi coding agent CLI.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.
 - `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases and their concrete hosts.
 
