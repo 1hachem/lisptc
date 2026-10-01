@@ -8,7 +8,7 @@ export const prelude = `
           "Define a global macro named name. A leading docstring is registered as its documentation.")
 
 (defmacro defun (name args &rest body)
-  "Define a global function named name. A leading docstring is registered as its documentation; use &rest for variadic arguments."
+  "Define a global function named name. A leading docstring is registered as its documentation; use &rest for variadic arguments, or &key to make the arguments after it optional and callable by name."
   \`(progn (setq ,name (lambda ,args ,@body))
           (_set-doc ',name ',args ,(cond ((stringp (car body)) (car body))))
           ',name))

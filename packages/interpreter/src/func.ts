@@ -1,12 +1,13 @@
 import type { Arity } from "./docs.ts";
 import type { Eval, Evaluator } from "./drive.ts";
 import { cdrCell, EvalException, LoopSignal } from "./errors.ts";
-import { assert, Cell, type List, type Sym } from "./objects.ts";
+import { assert, Cell, LispKeyword, type List, type Sym } from "./objects.ts";
 import { str } from "./print.ts";
 
 export abstract class Func {
 	constructor(
 		public readonly carity: number,
+		readonly keys: readonly string[] = [],
 		readonly callName?: string,
 	) {}
 
@@ -22,9 +23,14 @@ export abstract class Func {
 		return this.carity < 0 ? -this.carity - 1 : this.carity;
 	}
 
+	get requiredArgs(): number {
+		return this.fixedArgs - this.keys.length;
+	}
+
 	makeFrame(arg: List): unknown[] {
-		const supplied = arg;
 		const frame = new Array(this.arity);
+		if (this.keys.length > 0) return this.keyedFrame(frame, arg);
+		const supplied = arg;
 		const n = this.fixedArgs;
 		let i = 0;
 		for (; i < n && arg !== null; i++) {
@@ -40,6 +46,48 @@ export abstract class Func {
 		if (this.hasRest) frame[n] = arg;
 		return frame;
 	}
+
+	private keyedFrame(frame: unknown[], supplied: List): unknown[] {
+		const required = this.requiredArgs;
+		const total = this.fixedArgs;
+		const taken = new Set<number>();
+		let arg = supplied;
+		let i = 0;
+		while (i < total && arg !== null && !(arg.car instanceof LispKeyword)) {
+			frame[i] = arg.car;
+			taken.add(i);
+			arg = cdrCell(arg);
+			i++;
+		}
+		if (i < required || (arg !== null && !(arg.car instanceof LispKeyword)))
+			throw new ArityException(
+				{ min: required, max: total },
+				countArgs(supplied),
+				this,
+			);
+		for (let j = i; j < total; j++) frame[j] = null;
+		while (arg !== null) {
+			const key = arg.car;
+			if (!(key instanceof LispKeyword))
+				throw new KeywordException(
+					"expected a keyword, not a value",
+					key,
+					this,
+				);
+			const at = this.keys.indexOf(key.name);
+			if (at < 0)
+				throw new KeywordException("no such keyword argument", key, this);
+			const rest = cdrCell(arg);
+			if (rest === null)
+				throw new KeywordException("keyword given with no value", key, this);
+			if (taken.has(required + at))
+				throw new KeywordException("argument given twice", key, this);
+			taken.add(required + at);
+			frame[required + at] = rest.car;
+			arg = cdrCell(rest);
+		}
+		return frame;
+	}
 }
 
 export class ArityException extends EvalException {
@@ -49,6 +97,18 @@ export class ArityException extends EvalException {
 		func: Func,
 	) {
 		super("arity not matched", func);
+		if (func.callName !== undefined) this.calledAs(func.callName);
+	}
+}
+
+export class KeywordException extends EvalException {
+	readonly key: string | undefined;
+	readonly accepted: readonly string[];
+
+	constructor(msg: string, key: unknown, func: Func) {
+		super(msg, key);
+		this.key = key instanceof LispKeyword ? key.name : undefined;
+		this.accepted = func.keys;
 		if (func.callName !== undefined) this.calledAs(func.callName);
 	}
 }
@@ -63,8 +123,9 @@ export abstract class DefinedFunc extends Func {
 	constructor(
 		carity: number,
 		public readonly body: List,
+		keys: readonly string[] = [],
 	) {
-		super(carity);
+		super(carity, keys);
 	}
 }
 
@@ -72,6 +133,7 @@ export type FuncFactory = (
 	carity: number,
 	body: List,
 	env: List,
+	keys: readonly string[],
 ) => DefinedFunc;
 
 export class Macro extends DefinedFunc {
@@ -88,9 +150,14 @@ export class Macro extends DefinedFunc {
 		return x;
 	}
 
-	static make(carity: number, body: List, env: List): DefinedFunc {
+	static make(
+		carity: number,
+		body: List,
+		env: List,
+		keys: readonly string[] = [],
+	): DefinedFunc {
 		assert(env === null);
-		return new Macro(carity, body);
+		return new Macro(carity, body, keys);
 	}
 }
 
@@ -99,9 +166,14 @@ export class Lambda extends DefinedFunc {
 		return `#<lambda:${this.carity}:${str(this.body)}>`;
 	}
 
-	static make(carity: number, body: List, env: List): DefinedFunc {
+	static make(
+		carity: number,
+		body: List,
+		env: List,
+		keys: readonly string[] = [],
+	): DefinedFunc {
 		assert(env === null);
-		return new Lambda(carity, body);
+		return new Lambda(carity, body, keys);
 	}
 }
 
@@ -110,20 +182,26 @@ export class Closure extends DefinedFunc {
 		carity: number,
 		body: List,
 		readonly env: List,
+		keys: readonly string[] = [],
 	) {
-		super(carity, body);
+		super(carity, body, keys);
 	}
 
 	static makeFrom(x: Lambda, env: List) {
-		return new Closure(x.carity, x.body, env);
+		return new Closure(x.carity, x.body, env, x.keys);
 	}
 
 	toString(): string {
 		return `#<closure:${this.carity}:${str(this.body)}>`;
 	}
 
-	static make(carity: number, body: List, env: List): DefinedFunc {
-		return new Closure(carity, body, env);
+	static make(
+		carity: number,
+		body: List,
+		env: List,
+		keys: readonly string[] = [],
+	): DefinedFunc {
+		return new Closure(carity, body, env, keys);
 	}
 }
 
@@ -138,8 +216,9 @@ export class BuiltInFunc extends Func {
 		carity: number,
 		private readonly body: BuiltInFuncBody | BuiltInFuncGen,
 		readonly kind: BuiltInKind = "plain",
+		keys: readonly string[] = [],
 	) {
-		super(carity, name);
+		super(carity, keys, name);
 	}
 
 	toString(): string {
@@ -197,7 +276,8 @@ export function callableKind(x: unknown): "function" | "macro" | undefined {
 
 export function callableArity(x: unknown): Arity | undefined {
 	if (!(x instanceof Func)) return undefined;
-	return { min: x.fixedArgs, max: x.hasRest ? undefined : x.arity };
+	if (x.hasRest) return { min: x.fixedArgs, max: undefined };
+	return { min: x.requiredArgs, max: x.arity };
 }
 
 export class Arg {

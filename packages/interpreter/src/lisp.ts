@@ -149,9 +149,13 @@ export class Interp {
 		schema: T,
 		body: (a: z.infer<T>) => unknown,
 		args?: DocArg[],
+		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
-		this.globals.set(newSym(name), new BuiltInFunc(name, carity, wrapped));
+		this.globals.set(
+			newSym(name),
+			new BuiltInFunc(name, carity, wrapped, "plain", keys),
+		);
 		this.docTable.set(name, { signature, doc, args });
 	}
 
@@ -163,11 +167,12 @@ export class Interp {
 		schema: T,
 		body: (a: z.infer<T>) => Eval,
 		args?: DocArg[],
+		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncGen = (a) => body(parseArgs(schema, a));
 		this.globals.set(
 			newSym(name),
-			new BuiltInFunc(name, carity, wrapped, "generator"),
+			new BuiltInFunc(name, carity, wrapped, "generator", keys),
 		);
 		this.docTable.set(name, { signature, doc, args });
 	}
@@ -180,11 +185,12 @@ export class Interp {
 		schema: T,
 		body: (a: z.infer<T>) => Promise<unknown>,
 		args?: DocArg[],
+		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
 		this.globals.set(
 			newSym(name),
-			new BuiltInFunc(name, carity, wrapped, "promise"),
+			new BuiltInFunc(name, carity, wrapped, "promise", keys),
 		);
 		this.docTable.set(name, { signature, doc, args });
 	}

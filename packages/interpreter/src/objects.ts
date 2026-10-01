@@ -101,6 +101,7 @@ export const appendSym = newSym("append");
 export const catchSym = newSym("catch");
 export const consSym = newSym("cons");
 export const listSym = newSym("list");
+export const keySym = newSym("&key");
 export const restSym = newSym("&rest");
 export const unquoteSym = newSym("unquote");
 export const unquoteSplicingSym = newSym("unquote-splicing");

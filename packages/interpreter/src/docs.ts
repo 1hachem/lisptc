@@ -42,7 +42,7 @@ export const specialFormDocs: Record<string, Doc> = {
 	},
 	lambda: {
 		signature: "(lambda (arg...) body...)",
-		doc: "Create an anonymous function. The argument list may end with `&rest name` to collect remaining arguments as a list.",
+		doc: "Create an anonymous function. The argument list may end with `&rest name` to collect remaining arguments as a list, or with `&key a b` to make the names after it optional and callable as `:a value`.",
 	},
 	macro: {
 		signature: "(macro (arg...) body...)",
