@@ -9,7 +9,12 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
-import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
+import type {
+	Awaitable,
+	Clock,
+	PromptSource,
+	SearchEngine,
+} from "@repo/shared/host";
 
 export const INITIAL_SCORE = 1;
 
@@ -223,4 +228,5 @@ export interface MemoryHost {
 	aliases: AliasStore;
 	clock: Clock;
 	prompt: PromptSource;
+	search: SearchEngine;
 }

@@ -8,7 +8,8 @@ kinds, because in this language they are the same material.
   A quoted form in the body is something to do, a recipe you run later. Quote it:
   the arguments are evaluated, so an unquoted form stores its result instead.
 - (memory/recall query) retrieve by key or body text, strongest first. The query is
-  a regular expression. What it finds is loaded into your context, so recalling IS
+  words, not a pattern: every word has to land somewhere in a memory, spelling is
+  forgiven and a prefix counts. What it finds is loaded into your context, so recalling IS
   reading and there is no echo step to write after it.
 - (memories) every memory as key, score and trigger, strongest first.
 - (memory/forget key) drop one for good.

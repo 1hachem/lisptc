@@ -49,6 +49,21 @@ describe("a bad call is answered with how it is called", () => {
 		expect(text).toContain("(car list)");
 	});
 
+	it("names the function rather than printing what it compiled to", () => {
+		const interp = freshInterp();
+		reportOf('(defun area (w h) "Area." (* w h))', interp);
+		const text = reportOf("(area 3)", interp);
+		expect(text).toContain("arity not matched: area");
+		expect(text).not.toContain("#<closure");
+	});
+
+	it("counts on the line that named the failure, not on the form", () => {
+		const interp = freshInterp();
+		reportOf('(defun area (w h) "Area." (* w h))', interp);
+		const text = reportOf("(area 3)", interp);
+		expect(text).toContain("arity not matched: area — given 1, takes 2");
+	});
+
 	it("gives the signature on a wrong argument shape", () => {
 		const interp = freshInterp();
 		interp.def(
@@ -73,5 +88,30 @@ describe("a bad call is answered with how it is called", () => {
 		const text = reportOf("(bare 1 2)", interp);
 		expect(text).toContain("arity not matched");
 		expect(text).not.toContain("takes");
+	});
+});
+
+describe("a name that is bound nowhere is answered with the nearest one", () => {
+	function withTotal() {
+		const interp = freshInterp();
+		reportOf("(setq total 10)", interp);
+		return interp;
+	}
+
+	it("names the variable the model meant", () => {
+		const text = reportOf("(list totl)", withTotal());
+		expect(text).toContain("void variable: totl");
+		expect(text).toContain("did you mean total");
+	});
+
+	it("does not answer with the signature of the call it sits in", () => {
+		const text = reportOf("(list totl)", withTotal());
+		expect(text).not.toContain("(list x...)");
+	});
+
+	it("stays quiet when nothing is close", () => {
+		const text = reportOf("(list utterly-unrelated-name)", withTotal());
+		expect(text).toContain("void variable: utterly-unrelated-name");
+		expect(text).not.toContain("did you mean");
 	});
 });

@@ -20,9 +20,11 @@ import {
 	type SessionHooks,
 	slot,
 } from "@repo/interpreter/session";
-import { type Clock, systemClock } from "@repo/shared/host";
+import type { Clock, SearchEngine } from "@repo/shared/host";
+import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { z } from "zod";
+import { memorySearchEngine } from "./memory-search.ts";
 import {
 	type Alias,
 	type AliasStore,
@@ -158,6 +160,7 @@ export class MemoryBank {
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
 		readonly clock: Clock = systemClock,
+		readonly search: SearchEngine = memorySearchEngine,
 	) {}
 
 	private now(): number {
@@ -249,8 +252,16 @@ export class MemoryBank {
 	*recall(interp: Interp, query: string, limit: number): Eval<Memory[]> {
 		yield* this.sweep();
 		const all = yield* settled(this.store.all());
+		const documents = all.map((m) => ({
+			id: m.key,
+			name: m.key,
+			description: bodyText(m.body),
+		}));
+		const hit = new Set(
+			this.search.search(query, documents).map((found) => found.id),
+		);
 		const found = all
-			.filter((m) => matches(query, m.key) || matches(query, bodyText(m.body)))
+			.filter((m) => hit.has(m.key))
 			.sort((a, b) => this.strength(b) - this.strength(a))
 			.slice(0, limit);
 		for (const memory of found) yield* this.fire(memory, interp);
@@ -448,7 +459,8 @@ export function memoryExtension(
 	host: MemoryHost,
 	options: MemoryOptions = {},
 ): MemoryExtension {
-	const bank = options.bank ?? new MemoryBank(host.store, host.clock);
+	const bank =
+		options.bank ?? new MemoryBank(host.store, host.clock, host.search);
 	const book = options.book ?? new AliasBook(host.aliases);
 	return Object.assign(
 		(interp: Interp): void => registerMemory(interp, bank, book),

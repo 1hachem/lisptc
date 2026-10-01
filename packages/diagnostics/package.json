@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
-    "@repo/shared": "workspace:*"
+    "@repo/shared": "workspace:*",
+    "minisearch": "^7.2.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

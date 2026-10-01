@@ -97,24 +97,11 @@ export interface ToolkitRegistry {
 	all(): ConnConfig[];
 }
 
-export interface SearchDocument {
-	id: string;
-	name: string;
-	keywords?: readonly string[];
-	description?: string;
-}
-
-export interface SearchHit {
-	id: string;
-	score: number;
-}
-
-export interface SearchEngine {
-	search(
-		query: string,
-		documents: readonly SearchDocument[],
-	): readonly SearchHit[];
-}
+export type {
+	SearchDocument,
+	SearchEngine,
+	SearchHit,
+} from "@repo/shared/host";
 
 export interface OAuthRecord {
 	clientInformation?: OAuthClientInformationFull;

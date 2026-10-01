@@ -80,6 +80,7 @@ describe("a host with no filesystem behind it still builds", () => {
 			aliases,
 			clock: { now: () => 0 },
 			prompt: () => "",
+			search: memoryHost.search,
 		});
 		expect(extension.bank.store).toBe(store);
 		expect(extension.book.store).toBe(aliases);

@@ -1,9 +1,14 @@
-import { beyondStopWords, STOP_WORDS } from "@repo/shared/host";
+import {
+	beyondStopWords,
+	type SearchDocument,
+	type SearchEngine,
+	type SearchHit,
+	STOP_WORDS,
+} from "@repo/shared/host";
 import MiniSearch from "minisearch";
-import type { SearchDocument, SearchEngine, SearchHit } from "./ports.ts";
 
-const FIELDS = ["name", "keywords", "description"];
-const BOOST = { name: 3, keywords: 2, description: 1 };
+const FIELDS = ["name", "description"];
+const BOOST = { name: 2, description: 1 };
 const FUZZY = 0.2;
 const MIN_PREFIX = 3;
 
@@ -13,7 +18,7 @@ function fieldText(document: SearchDocument, field: string): string {
 	return typeof value === "string" ? value : "";
 }
 
-export const miniSearchEngine: SearchEngine = {
+export const memorySearchEngine: SearchEngine = {
 	search(query, documents): readonly SearchHit[] {
 		const thinned = beyondStopWords(query);
 		const index = new MiniSearch<SearchDocument>({
@@ -27,6 +32,7 @@ export const miniSearchEngine: SearchEngine = {
 				prefix: (term) => term.length >= MIN_PREFIX,
 				fuzzy: FUZZY,
 				boost: BOOST,
+				combineWith: "AND",
 				processTerm: (term) => {
 					const lower = term.toLowerCase();
 					return thinned && STOP_WORDS.has(lower) ? null : lower;
