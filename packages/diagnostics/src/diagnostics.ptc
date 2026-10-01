@@ -1,0 +1,13 @@
+FAILURES
+
+A call that fails tells you how to fix it.
+
+- A name that does not exist is answered with the nearest name that does, and
+  that name's signature. Call it. Do not list a server's tools to find a name
+  the failure has already given you.
+- A wrong argument count or shape is answered with the signature of what you
+  called, and with how many arguments it takes. Correct the call from that line
+  rather than guessing a second time.
+
+A suggestion is the nearest match, not a promise. If the name it offers is not
+the one you meant, (doc) and the tool list are still there.

@@ -32,6 +32,7 @@
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/migrations": "^0.3.6",
     "@repo/compaction-extension": "workspace:*",
+    "@repo/diagnostics-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",
