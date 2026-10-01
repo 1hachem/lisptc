@@ -5,7 +5,10 @@ import { assert, Cell, type List, type Sym } from "./objects.ts";
 import { str } from "./print.ts";
 
 export abstract class Func {
-	constructor(public readonly carity: number) {}
+	constructor(
+		public readonly carity: number,
+		readonly callName?: string,
+	) {}
 
 	get arity(): number {
 		return this.carity < 0 ? -this.carity : this.carity;
@@ -20,6 +23,7 @@ export abstract class Func {
 	}
 
 	makeFrame(arg: List): unknown[] {
+		const supplied = arg;
 		const frame = new Array(this.arity);
 		const n = this.fixedArgs;
 		let i = 0;
@@ -28,10 +32,31 @@ export abstract class Func {
 			arg = cdrCell(arg);
 		}
 		if (i !== n || (arg !== null && !this.hasRest))
-			throw new EvalException("arity not matched", this);
+			throw new ArityException(
+				{ min: this.fixedArgs, max: this.hasRest ? undefined : this.arity },
+				countArgs(supplied),
+				this,
+			);
 		if (this.hasRest) frame[n] = arg;
 		return frame;
 	}
+}
+
+export class ArityException extends EvalException {
+	constructor(
+		readonly expected: Arity,
+		readonly given: number,
+		func: Func,
+	) {
+		super("arity not matched", func);
+		if (func.callName !== undefined) this.calledAs(func.callName);
+	}
+}
+
+function countArgs(list: List): number {
+	let n = 0;
+	for (let j = list; j !== null; j = cdrCell(j)) n++;
+	return n;
 }
 
 export abstract class DefinedFunc extends Func {
@@ -109,16 +134,16 @@ export type BuiltInKind = "plain" | "generator" | "promise";
 
 export class BuiltInFunc extends Func {
 	constructor(
-		private readonly name: string,
+		name: string,
 		carity: number,
 		private readonly body: BuiltInFuncBody | BuiltInFuncGen,
 		readonly kind: BuiltInKind = "plain",
 	) {
-		super(carity);
+		super(carity, name);
 	}
 
 	toString(): string {
-		return `#<${this.name}:${this.carity}>`;
+		return `#<${this.callName}:${this.carity}>`;
 	}
 
 	call(frame: unknown[]): unknown {
@@ -134,10 +159,12 @@ export class BuiltInFunc extends Func {
 			return yield promise;
 		} catch (ex) {
 			if (ex instanceof EvalException || ex instanceof LoopSignal) throw ex;
-			throw new EvalException(
-				`${this.name} failed`,
-				ex instanceof Error ? ex.message : String(ex),
-				false,
+			throw this.named(
+				new EvalException(
+					`${this.callName} failed`,
+					ex instanceof Error ? ex.message : String(ex),
+					false,
+				),
 			);
 		}
 	}
@@ -151,8 +178,14 @@ export class BuiltInFunc extends Func {
 	}
 
 	private failure(ex: unknown, frame: unknown[]): unknown {
-		if (ex instanceof EvalException || ex instanceof LoopSignal) return ex;
-		return new EvalException(`${ex} -- ${this.name}`, frame);
+		if (ex instanceof LoopSignal) return ex;
+		if (ex instanceof EvalException) return this.named(ex);
+		return this.named(new EvalException(`${ex} -- ${this.callName}`, frame));
+	}
+
+	private named(ex: EvalException): EvalException {
+		if (this.callName !== undefined) ex.calledAs(this.callName);
+		return ex;
 	}
 }
 

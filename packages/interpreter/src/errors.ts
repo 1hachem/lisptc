@@ -4,10 +4,19 @@ import { str } from "./print.ts";
 export class EvalException extends Error {
 	readonly trace: string[] = [];
 	readonly value: unknown;
+	private site: string | undefined;
 
 	constructor(msg: string, x: unknown, quoteString = true) {
 		super(`${msg}: ${str(x, quoteString)}`);
 		this.value = x;
+	}
+
+	get callee(): string | undefined {
+		return this.site;
+	}
+
+	calledAs(name: string): void {
+		this.site ??= name;
 	}
 
 	toString(): string {
@@ -17,13 +26,25 @@ export class EvalException extends Error {
 	}
 }
 
+export type HeadFailure = "undefined" | "not-applicable";
+
 export class UnresolvedHead extends EvalException {
 	constructor(
-		msg: string,
+		readonly why: HeadFailure,
 		readonly form: Cell,
 		head: unknown,
 	) {
-		super(msg, head);
+		super(why === "undefined" ? "undefined" : "not applicable", head);
+	}
+}
+
+export class ArgumentException extends EvalException {
+	constructor(
+		msg: string,
+		x: unknown,
+		readonly at: number | undefined,
+	) {
+		super(msg, x);
 	}
 }
 

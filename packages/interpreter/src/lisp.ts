@@ -59,12 +59,16 @@ import { parseArgs } from "./schema.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
 import { note } from "./topics.ts";
 
+export type FailedForm =
+	| { readonly skipped: string }
+	| { readonly reported: string };
+
 export interface Hooks {
 	readonly readSource: Chain<[interp: Interp, text: string], string>;
 	readonly evalForm: Chain<[interp: Interp, form: unknown], Eval>;
 	readonly failedForm: Chain<
-		[interp: Interp, form: unknown, error: UnresolvedHead],
-		Eval<string | undefined>
+		[interp: Interp, form: unknown, error: EvalException],
+		Eval<FailedForm | undefined>
 	>;
 	readonly dispose: Chain<[], void>;
 }
@@ -338,7 +342,7 @@ export class Interp {
 									? body.car
 									: yield* this.evalProgN(body, env);
 						} else {
-							throw new UnresolvedHead("not applicable", x, fn);
+							throw new UnresolvedHead("not-applicable", x, fn);
 						}
 					}
 				} else if (x instanceof Lambda) {
@@ -350,6 +354,7 @@ export class Interp {
 		} catch (ex) {
 			if (ex instanceof EvalException) {
 				if (ex.trace.length < 10) ex.trace.push(str(x));
+				if (x instanceof Cell && x.car instanceof Sym) ex.calledAs(x.car.name);
 			}
 			throw ex;
 		}
@@ -504,24 +509,26 @@ export function* evalTopLevel(
 			ex instanceof LoopSignal
 				? new EvalException("break/return used outside of a loop", null, false)
 				: ex;
-		if (failure instanceof UnresolvedHead && failure.form === exp) {
-			const excused = yield* interp.hooks.failedForm.run(
+		if (failure instanceof EvalException) {
+			const opinion = yield* interp.hooks.failedForm.run(
 				() => settled(undefined),
 				interp,
 				exp,
 				failure,
 			);
-			if (excused !== undefined) {
+			if (opinion !== undefined && "skipped" in opinion) {
 				note.emit(interp.channels, {
-					model: { kind: "skipped", text: excused },
+					model: { kind: "skipped", text: opinion.skipped },
 				});
 				return previous;
 			}
-		}
-		if (failure instanceof EvalException)
 			note.emit(interp.channels, {
-				model: { kind: "failed", text: String(failure) },
+				model: {
+					kind: "failed",
+					text: opinion === undefined ? String(failure) : opinion.reported,
+				},
 			});
+		}
 		throw failure;
 	}
 }

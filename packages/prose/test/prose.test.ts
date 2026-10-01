@@ -435,3 +435,26 @@ describe("a second look at a form that failed", () => {
 		);
 	});
 });
+
+describe("a failure that is not an unresolved head is not prose", () => {
+	it("lets an arity failure on a bound head through untouched", () => {
+		const interp = proseInterp();
+		const skipped = collectSkips(interp);
+		expect(() => runSync(interp, "(car 1 2)")).toThrow(/arity/);
+		expect(skipped).toEqual([]);
+	});
+
+	it("lets an argument failure on a bound head through untouched", () => {
+		const interp = proseInterp();
+		const skipped = collectSkips(interp);
+		expect(() => runSync(interp, '(car "x")')).toThrow();
+		expect(skipped).toEqual([]);
+	});
+
+	it("lets a nested unresolved head through rather than reading the outer form as prose", () => {
+		const interp = proseInterp();
+		const skipped = collectSkips(interp);
+		expect(() => runSync(interp, "(+ 1 (nope 2))")).toThrow(/undefined: nope/);
+		expect(skipped).toEqual([]);
+	});
+});
