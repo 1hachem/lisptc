@@ -1,4 +1,4 @@
-import { EvalException } from "@repo/interpreter/errors";
+import { ArgumentException, EvalException } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -43,10 +43,27 @@ export interface PromisesHost {
 	prompt: PromptSource;
 }
 
+function unawaited(error: EvalException): string | undefined {
+	if (!(error instanceof ArgumentException)) return undefined;
+	if (!(error.value instanceof Promise)) return undefined;
+	const where =
+		error.at === undefined ? "an argument" : `argument ${error.at + 1}`;
+	const of = error.callee === undefined ? "" : ` of ${error.callee}`;
+	return `${String(error)}\n${where}${of} is a job, not its value. Wrap it in (await ...) first.`;
+}
+
 export function promisesExtension(host: PromisesHost): InterpExtension {
-	return Object.assign((interp: Interp): void => registerPromises(interp), {
-		prompt: host.prompt(),
-	});
+	return Object.assign(
+		(interp: Interp): void => {
+			registerPromises(interp);
+			interp.hooks.failedForm.use(function* (interp, form, error, next) {
+				const reported = unawaited(error);
+				if (reported === undefined) return yield* next(interp, form, error);
+				return { reported };
+			});
+		},
+		{ prompt: host.prompt() },
+	);
 }
 
 export function registerPromises(interp: Interp): void {
