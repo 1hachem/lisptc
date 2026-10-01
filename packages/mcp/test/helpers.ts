@@ -1,3 +1,6 @@
+import { bufferTransport } from "@repo/interpreter/channels-host";
+import { type Interp, runSync } from "@repo/interpreter/lisp";
+import { note } from "@repo/interpreter/topics";
 import type {
 	ConnConfig,
 	McpHost,
@@ -32,4 +35,20 @@ export function recordingHost(): McpHost & {
 		status: (name): ServerState => (name === "known" ? "running" : "unknown"),
 		logs: (name) => (name === "known" ? "the fallback's log" : ""),
 	};
+}
+
+export function reportOf(interp: Interp, code: string): string {
+	const buffer = bufferTransport();
+	const detach = interp.channels.pipe(buffer);
+	try {
+		runSync(interp, code);
+	} catch {
+	} finally {
+		detach();
+	}
+	return buffer
+		.collect(note)
+		.filter((n) => n.kind === "failed")
+		.map((n) => n.text)
+		.join("");
 }

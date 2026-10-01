@@ -1,6 +1,6 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import type { DocArg } from "@repo/interpreter/docs";
-import { EvalException } from "@repo/interpreter/errors";
+import { EvalException, UnresolvedHead } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -278,6 +278,26 @@ function doUnload(
 	return rec.toolSyms;
 }
 
+function serverOf(error: EvalException): string | undefined {
+	if (!(error instanceof UnresolvedHead) || error.why !== "undefined")
+		return undefined;
+	const name = error.callee;
+	if (name === undefined) return undefined;
+	const at = name.lastIndexOf("/");
+	return at < 0 ? undefined : name.slice(0, at);
+}
+
+function notLoaded(
+	error: EvalException,
+	predefined: Map<string, ConnConfig>,
+	servers: Map<string, ServerRec>,
+): string | undefined {
+	const server = serverOf(error);
+	if (server === undefined || servers.has(server) || !predefined.has(server))
+		return undefined;
+	return `${String(error)}\n${server} is in the toolkit and not loaded: (load-mcp "${server}")`;
+}
+
 function installServer(
 	interp: Interp,
 	client: McpClient,
@@ -508,7 +528,7 @@ export function registerMcp(
 				scored.map(({ value: conf, score }) =>
 					arrayToList([
 						conf.name,
-						BigInt(score),
+						BigInt(Math.round(score)),
 						firstLine(conf.description),
 						newLispKeyword(servers.has(conf.name) ? "loaded" : "unloaded"),
 					]),
@@ -563,7 +583,7 @@ export function registerMcp(
 			const scored = searchDocuments(search, rawQuery, candidates);
 			return arrayToList(
 				scored.map(({ value, score }) =>
-					arrayToList([value.sym, BigInt(score), value.doc]),
+					arrayToList([value.sym, BigInt(Math.round(score)), value.doc]),
 				),
 			);
 		},
@@ -591,6 +611,12 @@ export function registerMcp(
 			return true;
 		},
 	);
+
+	interp.hooks.failedForm.use(function* (interp, form, error, next) {
+		const reported = notLoaded(error, predefined, servers);
+		if (reported === undefined) return yield* next(interp, form, error);
+		return { reported };
+	});
 
 	interp.hooks.dispose.use((next) => {
 		shutdown();
