@@ -41,6 +41,11 @@ through the same middleware.
 A request envelope is validated by its schema at the edge. Add the field to the
 schema before reading it in a handler.
 
+A prompt the served agent runs on ships only because this app says so. An
+extension added to that agent is named here too, or it is served without its
+prompt. `test/runtime-assets.test.ts` fails on a prompt a module asks for at
+runtime and the build does not ship.
+
 ## Tests
 
 `test/chat-request.test.ts` pins the request envelope and

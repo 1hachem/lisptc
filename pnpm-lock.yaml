@@ -70,6 +70,9 @@ importers:
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../../packages/compaction
+      '@repo/diagnostics-extension':
+        specifier: workspace:*
+        version: link:../../packages/diagnostics
       '@repo/env':
         specifier: workspace:*
         version: link:../../packages/env
