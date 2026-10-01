@@ -1,4 +1,4 @@
-import { Cell, type List } from "./objects.ts";
+import { Cell, type List, type Sym } from "./objects.ts";
 import { str } from "./print.ts";
 
 export class EvalException extends Error {
@@ -19,10 +19,14 @@ export class EvalException extends Error {
 		this.site ??= name;
 	}
 
-	toString(): string {
-		let s = `EvalException: ${this.message}`;
+	reportedAs(msg: string): string {
+		let s = `EvalException: ${msg}`;
 		for (const line of this.trace) s += `\n\t${line}`;
 		return s;
+	}
+
+	toString(): string {
+		return this.reportedAs(this.message);
 	}
 }
 
@@ -35,6 +39,15 @@ export class UnresolvedHead extends EvalException {
 		head: unknown,
 	) {
 		super(why === "undefined" ? "undefined" : "not applicable", head);
+	}
+}
+
+export class VoidVariable extends EvalException {
+	readonly variable: string;
+
+	constructor(sym: Sym) {
+		super("void variable", sym);
+		this.variable = sym.name;
 	}
 }
 

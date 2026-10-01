@@ -19,6 +19,7 @@ import {
 	LoopSignal,
 	NotVariableException,
 	UnresolvedHead,
+	VoidVariable,
 } from "./errors.ts";
 import {
 	Arg,
@@ -236,7 +237,7 @@ export class Interp {
 		}
 		if (x instanceof Sym) {
 			const value = this.globals.get(x);
-			if (value === undefined) throw new EvalException("void variable", x);
+			if (value === undefined) throw new VoidVariable(x);
 			return value;
 		}
 		if (x instanceof Lambda) return Closure.makeFrom(x, env);
@@ -251,7 +252,7 @@ export class Interp {
 					return x.getValue(env);
 				} else if (x instanceof Sym) {
 					const value = this.globals.get(x);
-					if (value === undefined) throw new EvalException("void variable", x);
+					if (value === undefined) throw new VoidVariable(x);
 					return value;
 				} else if (x instanceof Cell) {
 					let fn = x.car;
