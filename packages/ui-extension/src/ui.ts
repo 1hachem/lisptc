@@ -209,6 +209,61 @@ function withOptions(
 	return props;
 }
 
+function namesOf(args: DocArg[]): string[] {
+	return args.map((arg) => arg.name);
+}
+
+const KPI_ARGS: DocArg[] = [
+	{
+		name: "label",
+		type: "string",
+		required: false,
+		description: "what the number counts",
+	},
+	{
+		name: "value",
+		type: "any",
+		required: false,
+		description: "the number itself",
+	},
+	{
+		name: "hint",
+		type: "string",
+		required: false,
+		description: "a smaller line under it",
+	},
+];
+
+const LINK_ARGS: DocArg[] = [
+	{
+		name: "text",
+		type: "string",
+		required: false,
+		description: "what the link reads as",
+	},
+	{
+		name: "url",
+		type: "string",
+		required: false,
+		description: "where it goes",
+	},
+];
+
+const BUTTON_ARGS: DocArg[] = [
+	{
+		name: "label",
+		type: "string",
+		required: false,
+		description: "what the button reads as",
+	},
+	{
+		name: "action",
+		type: "function",
+		required: false,
+		description: "what running it does",
+	},
+];
+
 const ACTION_PROPS = ["action", "on-change"] as const;
 
 const TONES = ["ok", "warn", "bad", "info", "muted"] as const;
@@ -310,9 +365,11 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		"ui/link",
 		2,
 		"(ui/link text url)",
-		"A link, opened in a new tab. Nothing runs in the REPL — this is the one interactive widget with no handler. Use it for a URL a tool handed you (an issue, a PR, a dashboard) so the user can follow it instead of copying it out of a table.",
+		"A link, opened in a new tab. Both arguments are nameable, so `(ui/link :url u :text label)` is the same call. Nothing runs in the REPL — this is the one interactive widget with no handler. Use it for a URL a tool handed you (an issue, a PR, a dashboard) so the user can follow it instead of copying it out of a table.",
 		z.tuple([zString, zString]),
 		([text, url]) => new UiElement("link", { text, href: url }),
+		LINK_ARGS,
+		namesOf(LINK_ARGS),
 	);
 
 	interp.def(
@@ -338,24 +395,24 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 
 	interp.def(
 		"ui/kpi",
-		-3,
+		3,
 		'(ui/kpi label value [:hint "…"])',
-		'One number, big. The most understanding per token of anything here: `(ui/kpi "open" 27)` says at a glance what a 27-row table says in a screenful. `:hint` is a smaller line under it — a comparison, a unit, a caveat.',
-		z.tuple([zString, zAny, zList]),
-		([label, value, rest]) => {
-			const opts = plistOptions(rest, ["hint"]);
-			return new UiElement(
-				"kpi",
-				withOptions(
-					{
-						label,
-						value: typeof value === "string" ? value : str(value, false),
-					},
-					opts,
-					["hint"],
-				),
-			);
+		'One number, big. The most understanding per token of anything here: `(ui/kpi "open" 27)` says at a glance what a 27-row table says in a screenful. `:hint` is a smaller line under it — a comparison, a unit, a caveat. Every argument is nameable, so `(ui/kpi :value 27 :label "open")` is the same call.',
+		z.tuple([zString, zAny, zAny]),
+		([label, value, hint]) => {
+			const props: Record<string, UiValue> = {
+				label,
+				value: typeof value === "string" ? value : str(value, false),
+			};
+			if (hint !== null) {
+				if (typeof hint !== "string")
+					throw new EvalException("string expected for :hint", hint);
+				props.hint = hint;
+			}
+			return new UiElement("kpi", props);
 		},
+		KPI_ARGS,
+		namesOf(KPI_ARGS),
 	);
 
 	interp.def(
@@ -389,10 +446,12 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		"ui/button",
 		2,
 		"(ui/button label action)",
-		"A button. `action` is a function run IN THIS REPL when the user clicks it — with no model turn in between, so a button is how you offer something without spending a step on it. Write it as `(lambda () …)`; inside a `ui/form` write `(lambda (values) …)` to receive the fields. Whatever the action renders replaces the view.",
+		"A button. Both arguments are nameable, so `(ui/button :action (lambda () …) :label caption)` is the same call. `action` is a function run IN THIS REPL when the user clicks it — with no model turn in between, so a button is how you offer something without spending a step on it. Write it as `(lambda () …)`; inside a `ui/form` write `(lambda (values) …)` to receive the fields. Whatever the action renders replaces the view.",
 		z.tuple([zString, zAny]),
 		([label, action]) =>
 			new UiElement("button", { label, action: surface.action(action) }),
+		BUTTON_ARGS,
+		namesOf(BUTTON_ARGS),
 	);
 
 	interp.def(
