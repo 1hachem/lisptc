@@ -26,10 +26,13 @@ what to change.
 
 The only prose that stays is what is written for someone who is not reading the
 code: `README`, a package's own README.md, the `AGENTS.md` files, and what an
-agent runner itself reads under `.agents/` and `.github/`. Two guards back the
+agent runner itself reads under `.agents/` and `.github/`. Three guards back the
 rule: a `PreToolUse` hook in `.claude/settings.json` refuses to create a new
-markdown file, and `pnpm check:docs` fails CI on any tracked markdown outside
-that allowlist.
+markdown file, `pnpm check:docs` fails CI on any tracked markdown outside that
+allowlist, and `check:agents` judges the prose itself and fails a block that
+carries implementation instead of a rule. The last one is the one to write for:
+it catches a sequence of steps and a value traced as it moves, so state what has
+to stay true and leave the how to the code.
 
 ## The IO goes out to an agent
 
