@@ -18,6 +18,12 @@ govern this package.
 Time is a port here, like the store. Nothing reads a real clock, so that decay
 stays testable.
 
+An alias is kept beside the memories and not among them. It has its own store
+port, because what it holds is a pair of names rather than a body that can fire,
+decay or be revised. A name is bound late: the book keeps what it could not bind
+and tries again each step, so an alias to a tool lands when its server does. It
+never overwrites a name that is already taken.
+
 A store may answer with a promise, so nothing built on one may block, and it has
 to hold under both drivers.
 
