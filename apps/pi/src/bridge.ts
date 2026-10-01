@@ -23,8 +23,8 @@ export function stepCode(text: string): string | undefined {
 	return formsOnly(code).trim() === "" ? undefined : code;
 }
 
-export function capped(turnIndex: number, maxSteps: number): boolean {
-	return turnIndex + 1 >= maxSteps;
+export function capped(steps: number, maxSteps: number): boolean {
+	return steps >= maxSteps;
 }
 
 export function conversationVars(
@@ -39,7 +39,20 @@ export function conversationVars(
 	};
 }
 
-export function turnsFrom(messages: readonly unknown[]): Turn[] {
+export function transcriptOf(sessions: unknown): Turn[] {
+	const build = (sessions as { buildSessionContext?: () => unknown })
+		?.buildSessionContext;
+	if (typeof build !== "function") return [];
+	try {
+		const context = build.call(sessions) as { messages?: unknown };
+		return turnsFrom(context?.messages);
+	} catch {
+		return [];
+	}
+}
+
+export function turnsFrom(messages: unknown): Turn[] {
+	if (!Array.isArray(messages)) return [];
 	const turns: Turn[] = [];
 	for (const message of messages) {
 		if (typeof message !== "object" || message === null) continue;

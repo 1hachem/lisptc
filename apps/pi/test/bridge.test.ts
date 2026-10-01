@@ -4,6 +4,7 @@ import {
 	conversationVars,
 	messageText,
 	stepCode,
+	transcriptOf,
 	turnsFrom,
 } from "../src/bridge.ts";
 
@@ -51,10 +52,10 @@ describe("stepCode", () => {
 });
 
 describe("capped", () => {
-	it("stops on the step that reaches the cap", () => {
-		expect(capped(0, 3)).toBe(false);
+	it("counts steps taken, not an index pi handed us", () => {
 		expect(capped(1, 3)).toBe(false);
-		expect(capped(2, 3)).toBe(true);
+		expect(capped(2, 3)).toBe(false);
+		expect(capped(3, 3)).toBe(true);
 	});
 });
 
@@ -89,5 +90,63 @@ describe("turnsFrom", () => {
 			{ role: "user", content: "add them" },
 			{ role: "assistant", content: "(+ 1 2)" },
 		]);
+	});
+
+	it("is empty when pi hands us no context at all", () => {
+		expect(turnsFrom(undefined)).toEqual([]);
+		expect(turnsFrom(null)).toEqual([]);
+		expect(turnsFrom({})).toEqual([]);
+	});
+});
+
+describe("transcriptOf", () => {
+	const sessions = (messages: unknown) => ({
+		buildSessionContext: () => ({ messages, thinkingLevel: "medium" }),
+	});
+
+	it("reads the transcript pi builds, system messages left out", () => {
+		expect(
+			transcriptOf(
+				sessions([
+					{ role: "system", content: [{ type: "text", text: "preamble" }] },
+					{
+						role: "user",
+						content: [{ type: "text", text: "say hi" }],
+						timestamp: 1,
+					},
+					{
+						role: "assistant",
+						content: [{ type: "text", text: "hi" }],
+						stopReason: "stop",
+					},
+				]),
+			),
+		).toEqual([
+			{ role: "user", content: "say hi" },
+			{ role: "assistant", content: "hi" },
+		]);
+	});
+
+	it("survives an assistant turn that carried no content", () => {
+		expect(
+			transcriptOf(
+				sessions([{ role: "assistant", content: [], stopReason: "error" }]),
+			),
+		).toEqual([{ role: "assistant", content: "" }]);
+	});
+
+	it("is empty on a build with no such method", () => {
+		expect(transcriptOf({})).toEqual([]);
+		expect(transcriptOf(undefined)).toEqual([]);
+	});
+
+	it("is empty when building the transcript throws", () => {
+		expect(
+			transcriptOf({
+				buildSessionContext: () => {
+					throw new Error("no session");
+				},
+			}),
+		).toEqual([]);
 	});
 });

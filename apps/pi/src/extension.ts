@@ -14,7 +14,7 @@ import {
 	conversationVars,
 	messageText,
 	stepCode,
-	turnsFrom,
+	transcriptOf,
 } from "./bridge.ts";
 import { piExtensions } from "./extensions.ts";
 import { renderResult } from "./render.ts";
@@ -24,6 +24,7 @@ const RIDING = "lisptc-riding";
 
 export default function lisptc(pi: ExtensionAPI): void {
 	let repl: AgentRepl | undefined;
+	let steps = 0;
 
 	const open = (): AgentRepl => {
 		repl ??= new AgentRepl({ extensions: piExtensions() });
@@ -46,6 +47,7 @@ export default function lisptc(pi: ExtensionAPI): void {
 
 	pi.on("before_agent_start", () => {
 		const active = open();
+		steps = 0;
 		const withheld = active.takeProseFeedback();
 		return {
 			systemPrompt: systemPromptFor(active.interp),
@@ -61,7 +63,7 @@ export default function lisptc(pi: ExtensionAPI): void {
 		};
 	});
 
-	pi.on("turn_end", async (event) => {
+	pi.on("turn_end", async (event, ctx) => {
 		const { message } = event;
 		if (message.role !== "assistant") return;
 
@@ -69,9 +71,8 @@ export default function lisptc(pi: ExtensionAPI): void {
 		const code = stepCode(messageText(message.content));
 		if (code === undefined) return;
 
-		active.setConversationVars(
-			conversationVars(turnsFrom(event.context.contextMessages)),
-		);
+		const turns = transcriptOf(ctx.sessionManager);
+		if (turns.length > 0) active.setConversationVars(conversationVars(turns));
 
 		const { output, display, error, annotations, failed } = await evalCode(
 			active,
@@ -88,8 +89,8 @@ export default function lisptc(pi: ExtensionAPI): void {
 			},
 		];
 
-		if (active.takeFinished() || capped(event.turnIndex, MAX_STEPS))
-			return { entries };
+		steps += 1;
+		if (active.takeFinished() || capped(steps, MAX_STEPS)) return { entries };
 
 		const { emitted } = await active.beginTurn();
 		if (emitted !== "") entries.push(riding(emitted));
