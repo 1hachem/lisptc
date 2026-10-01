@@ -29,10 +29,11 @@ MCP SERVERS
     not — use this to find a server to load. It matches each server's keywords as
     well as its name and description, so search for the capability you want in
     your own words: vision, spreadsheet, tickets, analytics. Don't guess a product
-    name. Also (list-mcps) , and (list-toolkit) , which reports every server's
-    keywords.
+    name. A misspelling still lands and a prefix counts, so a near miss is worth
+    reading rather than retyping. Also (list-mcps) , and (list-toolkit) , which
+    reports every server's keywords.
   - (search-tools "query") searches the tools of already-loaded servers by
-    name and description, ranked best-first. It takes ONE query string and searches
+    name and description, ranked best-first, forgiving a misspelling. It takes ONE query string and searches
     ALL loaded servers — there is NO server argument. (search-tools "acme" "widget")
 is WRONG, an arity error. To search one server's tools, load it first, then
 (search-tools "widget") ; to list them use (list-tools "acme") .
