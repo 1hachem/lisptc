@@ -1,5 +1,12 @@
-import { llmSlot } from "@repo/interpreter/observe";
-import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
+import { noOpinion } from "@repo/interpreter/hooks";
+import type {
+	AgentFailure,
+	AgentStep,
+	AgentStop,
+	AgentTurn,
+	Annotations,
+	StepAnnotations,
+} from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
@@ -14,13 +21,8 @@ import {
 	type TranscriptEntry,
 	toLlmMessages,
 } from "./repl.ts";
-import {
-	captureException,
-	captureLlmCall,
-	captureReplEval,
-	captureTurn,
-	type TraceContext,
-} from "./telemetry.ts";
+import type { TraceContext } from "./telemetry.ts";
+import { tracedAgentHooks } from "./turn-telemetry.ts";
 
 export interface TurnOptions {
 	repl: AgentRepl;
@@ -63,6 +65,7 @@ export type TurnEvent =
 	| { type: "collected"; annotations: Annotations }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
+	| { type: "stopped"; reason: string; steps: number }
 	| { type: "silent"; steps: number }
 	| { type: "failed"; message: string; error: unknown };
 
@@ -116,16 +119,31 @@ export async function* runAgentTurn(
 		model: ran.model,
 	};
 	const startedAt = Date.now();
-	const prompt = lastUserPrompt(transcript);
+	const turn: AgentTurn = {
+		interp: repl.interp,
+		threadId: trace.threadId,
+		turnId: trace.turnId,
+		prompt: lastUserPrompt(transcript),
+		provider: ran.provider,
+		model: ran.model,
+	};
+	const hooks = tracedAgentHooks(repl.hooks, trace);
+	const capOrHalt = (
+		_turn: AgentTurn,
+		step: AgentStep,
+	): AgentStop | undefined => {
+		if (step.finished) return { kind: "halt" };
+		if (step.step >= maxSteps) return { kind: "cap" };
+		return undefined;
+	};
 
 	let steps = 0;
 	let answer = "";
 	let halted = false;
-	let failure: string | undefined;
+	let failure: AgentFailure | undefined;
 
 	try {
-		const observed = repl.hooks.filled(llmSlot);
-		if (observed) observed.observe = (call) => captureLlmCall(trace, call);
+		hooks.agentStarted.run(noOpinion, turn);
 
 		const tracedConfig: AgentConfig = {
 			...config,
@@ -197,15 +215,19 @@ export async function* runAgentTurn(
 			);
 			steps += 1;
 
-			captureReplEval(trace, {
+			const step: AgentStep = {
 				step: steps,
-				source: code,
+				code,
 				output,
-				error: error || failed,
+				error,
+				failed,
 				latencyMs: Date.now() - evalStartedAt,
-			});
+				finished: repl.takeFinished(),
+			};
+			hooks.agentStep.run(noOpinion, turn, step);
+			const stop = hooks.agentStop.run(capOrHalt, turn, step);
 
-			if (repl.takeFinished()) {
+			if (stop?.kind === "halt") {
 				answer = code;
 				halted = true;
 				yield { type: "halt", answer, steps };
@@ -226,25 +248,30 @@ export async function* runAgentTurn(
 				content: replResultContent(output, error, annotations.step),
 			});
 
-			if (steps >= maxSteps) {
+			if (stop?.kind === "cap") {
 				yield { type: "capped", steps };
+				break;
+			}
+			if (stop?.kind === "stop") {
+				yield { type: "stopped", reason: stop.reason, steps };
 				break;
 			}
 		}
 	} catch (err) {
-		failure = err instanceof Error ? err.message : String(err);
-		if (!signal?.aborted) {
-			captureException(err, trace, { steps });
-			yield { type: "failed", message: failure, error: err };
-		}
+		failure = {
+			message: err instanceof Error ? err.message : String(err),
+			error: err,
+			cancelled: signal?.aborted === true,
+		};
+		if (!failure.cancelled)
+			yield { type: "failed", message: failure.message, error: err };
 	} finally {
-		captureTurn(trace, {
-			prompt,
+		hooks.agentEnded.run(noOpinion, turn, {
 			answer,
 			steps,
 			halted,
 			latencyMs: Date.now() - startedAt,
-			error: failure,
+			...(failure ? { failure } : {}),
 		});
 	}
 }

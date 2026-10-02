@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import type { TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { noting, testRepl } from "./helpers.ts";
+import { extension, noting, testRepl } from "./helpers.ts";
 
 interface Seen {
 	messages: AgentMessage[];
@@ -149,6 +149,66 @@ describe("the agent turn", () => {
 		expect(sent.at(-1)?.content).toContain("your previous reply ran nothing");
 		expect(sent.at(-1)?.content).toContain("(see above)");
 		expect(ask).toHaveLength(1);
+	});
+
+	test("an extension on agentStop ends the turn as a stopped event", async () => {
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.agentStop.use((turn, step, next) =>
+					step.step === 1
+						? { kind: "stop", reason: "budget" }
+						: next(turn, step),
+				),
+			),
+		]);
+		script = [[{ text: "(+ 1 2)" }]];
+
+		const events = await drain(ask, { repl });
+
+		expect(events.filter((e) => e.type === "result")).toHaveLength(1);
+		expect(events.at(-1)).toEqual({
+			type: "stopped",
+			reason: "budget",
+			steps: 1,
+		});
+	});
+
+	test("telemetry still sees a step that an extension on agentStep does not pass on", async () => {
+		const stepped: string[] = [];
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.agentStep.use((_turn, step) => {
+					stepped.push(step.code);
+				}),
+			),
+		]);
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		await drain(ask, { repl });
+
+		expect(stepped).toEqual(["(+ 1 2)", "three."]);
+		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
+	});
+
+	test("agentStarted and agentEnded bracket the turn with its prompt and answer", async () => {
+		const seenEnds: string[] = [];
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.agentStarted.use((turn, next) => {
+					seenEnds.push(`start ${turn.prompt}`);
+					next(turn);
+				});
+				hooks.agentEnded.use((turn, end, next) => {
+					seenEnds.push(`end ${end.answer} ${end.steps} ${end.halted}`);
+					next(turn, end);
+				});
+			}),
+		]);
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		await drain(ask, { repl });
+
+		expect(seenEnds).toEqual(["start what is 1 + 2?", "end three. 2 true"]);
 	});
 
 	test("a consumer that stops consuming stops the loop", async () => {

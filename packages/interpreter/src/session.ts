@@ -47,6 +47,44 @@ export interface ActionContext {
 	readonly values: Record<string, unknown>;
 }
 
+export interface AgentTurn {
+	readonly interp: Interp;
+	readonly threadId: string;
+	readonly turnId: string;
+	readonly prompt: string;
+	readonly provider: string;
+	readonly model: string;
+}
+
+export interface AgentStep {
+	readonly step: number;
+	readonly code: string;
+	readonly output: string;
+	readonly error: boolean;
+	readonly failed: boolean;
+	readonly latencyMs: number;
+	readonly finished: boolean;
+}
+
+export type AgentStop =
+	| { readonly kind: "halt" }
+	| { readonly kind: "cap" }
+	| { readonly kind: "stop"; readonly reason: string };
+
+export interface AgentFailure {
+	readonly message: string;
+	readonly error: unknown;
+	readonly cancelled: boolean;
+}
+
+export interface AgentEnd {
+	readonly answer: string;
+	readonly steps: number;
+	readonly halted: boolean;
+	readonly latencyMs: number;
+	readonly failure?: AgentFailure;
+}
+
 export interface Slot<T> {
 	readonly name: string;
 	readonly held?: T;
@@ -73,6 +111,13 @@ export interface SessionHooks {
 	>;
 	readonly message: Chain<[buffer: ChannelBuffer], string | undefined>;
 	readonly invoke: Chain<[ctx: ActionContext], Promise<void>>;
+	readonly agentStarted: Chain<[turn: AgentTurn], void>;
+	readonly agentStep: Chain<[turn: AgentTurn, step: AgentStep], void>;
+	readonly agentStop: Chain<
+		[turn: AgentTurn, step: AgentStep],
+		AgentStop | undefined
+	>;
+	readonly agentEnded: Chain<[turn: AgentTurn, end: AgentEnd], void>;
 	fill<T>(of: Slot<T>, value: T): void;
 	filled<T>(of: Slot<T>): T | undefined;
 }
@@ -89,6 +134,10 @@ export function newSessionHooks(): SessionHooks {
 		annotate: new Chain(),
 		message: new Chain(),
 		invoke: new Chain(),
+		agentStarted: new Chain(),
+		agentStep: new Chain(),
+		agentStop: new Chain(),
+		agentEnded: new Chain(),
 		fill<T>(of: Slot<T>, value: T): void {
 			slots.set(of.name, value);
 		},

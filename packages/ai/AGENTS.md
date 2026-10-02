@@ -15,7 +15,8 @@ events. `src/eval.ts` is the one-shot evaluation.
 provider registry and one file per provider. `src/prompts/lisp.ts` holds the
 system prompt and the step cap. `src/repl.ts` turns a transcript into model
 messages and an eval result into content. `src/telemetry.ts` is the PostHog
-side. `src/ui-action.ts` runs an action the browser sent back.
+side, and `src/turn-telemetry.ts` lays it onto the agent chains of the REPL, so
+the loop names no capture. `src/ui-action.ts` runs an action the browser sent back.
 
 `src/repl-store.ts` keeps a REPL per thread. It builds none, so what a REPL
 carries is decided by whoever constructed the store.
@@ -41,6 +42,10 @@ key, and a payload that would need interpreting belongs below the seam instead.
 
 A new kind of thing a turn can report is a new variant of the turn event union,
 not a side channel.
+
+The loop runs the agent chains of `SessionHooks` at each point of a turn. A
+change to what a turn does at one of them is a middleware on that chain, not an
+edit to the loop.
 
 ## Tests
 
