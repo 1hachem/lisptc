@@ -16,10 +16,6 @@ import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
-	type Alias,
-	type AliasStore,
-	aliasToForm,
-	formToAlias,
 	formToMemory,
 	type Memory,
 	type MemoryHost,
@@ -112,61 +108,6 @@ export class FileMemoryStore implements MemoryStore {
 	}
 }
 
-const ALIAS_FILE = "aliases.ptc";
-
-export class FileAliasStore implements AliasStore {
-	constructor(private readonly dir?: string) {}
-
-	private file(): string {
-		return join(this.dir ?? memoryDirFor(), ALIAS_FILE);
-	}
-
-	all(): Alias[] {
-		const out: Alias[] = [];
-		try {
-			const file = this.file();
-			if (!existsSync(file)) return out;
-			const reader = new Reader();
-			reader.push(readFileSync(file, "utf8"));
-			while (!reader.isEmpty()) {
-				const alias = formToAlias(reader.read());
-				if (alias !== undefined) out.push(alias);
-			}
-		} catch {}
-		return out;
-	}
-
-	put(alias: Alias): void {
-		const kept = this.all().filter((a) => a.name !== alias.name);
-		this.write([...kept, alias]);
-	}
-
-	delete(name: string): boolean {
-		const kept = this.all().filter((a) => a.name !== name);
-		if (kept.length === this.all().length) return false;
-		this.write(kept);
-		return true;
-	}
-
-	private write(aliases: Alias[]): void {
-		const dir = this.dir ?? memoryDirFor();
-		try {
-			mkdirSync(dir, { recursive: true, mode: 0o700 });
-			writeFileSync(
-				join(dir, ALIAS_FILE),
-				aliases.map((a) => `${str(aliasToForm(a))}\n`).join(""),
-				{ mode: 0o600 },
-			);
-		} catch (ex) {
-			throw new EvalException(
-				"could not write this alias to disk",
-				ex instanceof Error ? ex.message : String(ex),
-				false,
-			);
-		}
-	}
-}
-
 function then<A, B>(
 	value: Awaitable<A>,
 	next: (value: A) => Awaitable<B>,
@@ -227,7 +168,6 @@ const memoryPrompt = filePrompt(new URL("./memory.ptc", import.meta.url));
 export function memoryHostFor(scope?: string): MemoryHost {
 	return {
 		store: scopedMemoryStore(scope),
-		aliases: new FileAliasStore(memoryDirFor(scope)),
 		clock: systemClock,
 		prompt: memoryPrompt,
 		search: memorySearchEngine,
@@ -237,9 +177,6 @@ export function memoryHostFor(scope?: string): MemoryHost {
 export const memoryHost: MemoryHost = {
 	get store(): MemoryStore {
 		return scopedMemoryStore();
-	},
-	get aliases(): AliasStore {
-		return new FileAliasStore(memoryDirFor());
 	},
 	clock: systemClock,
 	prompt: memoryPrompt,

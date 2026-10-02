@@ -182,50 +182,8 @@ export function formToMemory(form: unknown): Memory | undefined {
 	};
 }
 
-export interface Alias {
-	name: string;
-	target: string;
-}
-
-export interface AliasStore {
-	all(): Awaitable<Alias[]>;
-	put(alias: Alias): Awaitable<void>;
-	delete(name: string): Awaitable<boolean>;
-}
-
-export class VolatileAliases implements AliasStore {
-	private readonly aliases = new Map<string, Alias>();
-
-	all(): Alias[] {
-		return [...this.aliases.values()];
-	}
-
-	put(alias: Alias): void {
-		this.aliases.set(alias.name, alias);
-	}
-
-	delete(name: string): boolean {
-		return this.aliases.delete(name);
-	}
-}
-
-export function aliasToForm(alias: Alias): unknown {
-	return arrayToList([newSym("alias"), alias.name, alias.target]);
-}
-
-export function formToAlias(form: unknown): Alias | undefined {
-	if (!(form instanceof Cell)) return undefined;
-	if (!(form.car instanceof Sym) || form.car.name !== "alias") return undefined;
-	const rest = form.cdr;
-	if (!(rest instanceof Cell) || typeof rest.car !== "string") return undefined;
-	const then = rest.cdr;
-	if (!(then instanceof Cell) || typeof then.car !== "string") return undefined;
-	return { name: rest.car, target: then.car };
-}
-
 export interface MemoryHost {
 	store: MemoryStore;
-	aliases: AliasStore;
 	clock: Clock;
 	prompt: PromptSource;
 	search: SearchEngine;

@@ -3,12 +3,7 @@ import { compactionHost } from "@repo/compaction-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
-import {
-	type AliasStore,
-	type MemoryStore,
-	VolatileAliases,
-	VolatileStore,
-} from "@repo/memory-extension/ports";
+import { type MemoryStore, VolatileStore } from "@repo/memory-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -74,16 +69,13 @@ describe("a supplied store is the one the extension uses", () => {
 describe("a host with no filesystem behind it still builds", () => {
 	it("runs every port from values the caller owns", () => {
 		const store: MemoryStore = new VolatileStore();
-		const aliases: AliasStore = new VolatileAliases();
 		const extension = memoryExtension({
 			store,
-			aliases,
 			clock: { now: () => 0 },
 			prompt: () => "",
 			search: memoryHost.search,
 		});
 		expect(extension.bank.store).toBe(store);
-		expect(extension.book.store).toBe(aliases);
 		expect(extension.prompt).toBe("");
 	});
 });

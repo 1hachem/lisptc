@@ -22,27 +22,6 @@ kinds, because in this language they are the same material.
 The names are slashed because remember, recall and forget are ordinary English
 verbs, and a bare one in an aside would be read as code.
 
-A SECOND NAME
-
-A name you got wrong once does not have to be got right again. An alias binds the
-name you reached for to the one that exists, and it is kept the way a memory is.
-
-- (memory/alias name target) bind name to whatever target names, now and in every
-  later session. Both are a string or a quoted symbol.
-- (memory/unalias name) drop one.
-- (memory/aliases) every alias you keep, as (name target :bound) or :waiting when
-  its target has not appeared yet.
-
-(memory/alias "playwright/navigate" "playwright/browser_navigate")
-
-The binding appears as soon as the target exists, so aliasing a tool before its
-server has loaded is fine: it waits, and it lands when the load does. An alias
-never replaces a name that is already taken, so it cannot shadow a real one.
-
-Prefer an alias to a memory when what you learned is exactly "this name means that
-name". It costs no recall and no context: the call simply works next time. Keep a
-memory for everything an alias cannot say — an argument order, a shape, a caveat.
-
 FIRING BY ITSELF
 
 With :on a memory watches for an event and loads itself when that event happens,
@@ -154,9 +133,7 @@ RULES
   wrong thing about most of them. Hook the whole call, not just the name.
 - Remember the correction, not the transcript. "browser_navigate, not navigate" is
   worth keeping; the whole tool listing is not, and the next listing will be
-  different anyway. When the correction is only a name, make it an alias instead:
-(memory/alias "playwright/navigate" "playwright/browser_navigate") ends the
-  mistake rather than describing it.
+  different anyway.
 - Do not remember what the REPL can tell you. Anything doc prints, anything a
   discovery call returns, anything you can recompute: look it up instead. Memory is
   for what you had to find out the hard way.

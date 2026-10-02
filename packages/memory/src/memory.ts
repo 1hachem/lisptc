@@ -7,7 +7,6 @@ import {
 	Cell,
 	type List,
 	listToArray,
-	newLispKeyword,
 	newSym,
 	Sym,
 } from "@repo/interpreter/objects";
@@ -26,8 +25,6 @@ import { formsOnly } from "@repo/shared/lisp-forms";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
-	type Alias,
-	type AliasStore,
 	combinatorIn,
 	INITIAL_SCORE,
 	type Memory,
@@ -37,7 +34,6 @@ import {
 	type Trigger,
 	type TriggerKind,
 	triggerToForm,
-	VolatileAliases,
 	VolatileStore,
 } from "./ports.ts";
 
@@ -348,69 +344,12 @@ function proseIn(code: string): string {
 	return prose.trim();
 }
 
-export class AliasBook {
-	private loaded = false;
-	private waiting: Alias[] = [];
-	private readonly bound = new Set<string>();
-
-	constructor(readonly store: AliasStore = new VolatileAliases()) {}
-
-	*all(): Eval<Alias[]> {
-		return yield* settled(this.store.all());
-	}
-
-	isBound(name: string): boolean {
-		return this.bound.has(name);
-	}
-
-	*add(interp: Interp, alias: Alias): Eval<void> {
-		yield* settled(this.store.put(alias));
-		this.waiting = this.waiting.filter((a) => a.name !== alias.name);
-		this.waiting.push(alias);
-		yield* this.install(interp);
-	}
-
-	*remove(interp: Interp, name: string): Eval<boolean> {
-		const gone = yield* settled(this.store.delete(name));
-		this.waiting = this.waiting.filter((a) => a.name !== name);
-		if (this.bound.delete(name)) interp.undefineGlobal(newSym(name));
-		return gone;
-	}
-
-	*install(interp: Interp): Eval<void> {
-		if (!this.loaded) {
-			this.waiting = [...(yield* settled(this.store.all()))];
-			this.loaded = true;
-		}
-		this.waiting = this.waiting.filter((alias) => !this.bind(interp, alias));
-	}
-
-	private bind(interp: Interp, alias: Alias): boolean {
-		const sym = newSym(alias.name);
-		if (interp.hasGlobal(sym)) return true;
-		const value = interp.getGlobal(newSym(alias.target));
-		if (value === undefined) return false;
-		const doc = interp.docs().get(alias.target);
-		interp.defineGlobal(
-			sym,
-			value,
-			doc === undefined
-				? undefined
-				: { ...doc, doc: `Another name for \`${alias.target}\`. ${doc.doc}` },
-		);
-		this.bound.add(alias.name);
-		return true;
-	}
-}
-
 export interface MemoryOptions {
 	bank?: MemoryBank;
-	book?: AliasBook;
 }
 
 export interface MemoryExtension extends InterpExtension {
 	readonly bank: MemoryBank;
-	readonly book: AliasBook;
 }
 
 function heardText(memories: FiredMemory[]): string {
@@ -424,14 +363,10 @@ function heardText(memories: FiredMemory[]): string {
 
 export const memorySlot = slot<MemoryBank>("memory");
 
-function memorySession(
-	bank: MemoryBank,
-	book: AliasBook,
-): (hooks: SessionHooks) => void {
+function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
 		hooks.beginTurn.use(function* (ctx, next) {
-			yield* book.install(ctx.interp);
 			const heard = yield* bank.hear(ctx.interp);
 			if (heard.length > 0) ctx.emit(heardText(heard));
 			yield* next(ctx);
@@ -441,7 +376,6 @@ function memorySession(
 			try {
 				await next(ctx);
 			} finally {
-				await driveAsync(book.install(ctx.interp));
 				ctx.emit((await driveAsync(bank.endStep())).value);
 			}
 		});
@@ -461,16 +395,11 @@ export function memoryExtension(
 ): MemoryExtension {
 	const bank =
 		options.bank ?? new MemoryBank(host.store, host.clock, host.search);
-	const book = options.book ?? new AliasBook(host.aliases);
-	return Object.assign(
-		(interp: Interp): void => registerMemory(interp, bank, book),
-		{
-			bank,
-			book,
-			prompt: host.prompt(),
-			session: memorySession(bank, book),
-		},
-	);
+	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
+		bank,
+		prompt: host.prompt(),
+		session: memorySession(bank),
+	});
 }
 
 const zString = z.custom<string>(
@@ -512,11 +441,7 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 	]);
 }
 
-export function registerMemory(
-	interp: Interp,
-	bank: MemoryBank,
-	book: AliasBook,
-): void {
+export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.reset();
 	bank.attach(interp.channels);
 
@@ -668,56 +593,4 @@ export function registerMemory(
 			return yield* interp.evalGen(memory.body, null);
 		},
 	);
-
-	interp.defGen(
-		"memory/alias",
-		2,
-		"(memory/alias name target)",
-		"Give `target` a second name that you keep. `name` is bound to whatever `target` names, in this session and in every later one, so a name you had to correct once stays corrected. Both are a string or a quoted symbol. The binding appears as soon as `target` exists, which for a tool is after its server loads. An alias never replaces a name that is already taken.",
-		z.tuple([zName, zName]),
-		function* ([name, target]): Eval {
-			if (name === target)
-				throw new EvalException("an alias cannot name itself", name, false);
-			yield* book.add(interp, { name, target });
-			return name;
-		},
-	);
-
-	interp.defGen(
-		"memory/unalias",
-		1,
-		"(memory/unalias name)",
-		"Drop an alias and its binding. Returns t if there was one.",
-		z.tuple([zName]),
-		function* ([name]): Eval {
-			return (yield* book.remove(interp, name)) ? true : null;
-		},
-	);
-
-	interp.defGen(
-		"memory/aliases",
-		0,
-		"(memory/aliases)",
-		"Return every alias you keep, each as (name target :bound) or (name target :waiting) when its target has not appeared yet.",
-		z.tuple([]),
-		function* (): Eval {
-			const all = yield* book.all();
-			return arrayToList(
-				all.map((alias) =>
-					arrayToList([
-						alias.name,
-						alias.target,
-						newLispKeyword(book.isBound(alias.name) ? "bound" : "waiting"),
-					]),
-				),
-			);
-		},
-	);
 }
-
-const zName = z
-	.custom<string | Sym>(
-		(x) => typeof x === "string" || x instanceof Sym,
-		"a name expected, as a string or a quoted symbol",
-	)
-	.transform((x) => (typeof x === "string" ? x : x.name));
