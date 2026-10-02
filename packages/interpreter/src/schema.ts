@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isNumeric, type Numeric } from "./arith.ts";
-import { EvalException } from "./errors.ts";
+import { ArgumentException } from "./errors.ts";
 import { Cell, type List, Sym } from "./objects.ts";
 
 export const zAny = z.unknown();
@@ -24,8 +24,10 @@ export function parseArgs<T extends z.ZodType>(
 	if (result.success) return result.data;
 	const issue = result.error.issues[0];
 	const index = issue?.path[0];
-	throw new EvalException(
+	const at = typeof index === "number" ? index : undefined;
+	throw new ArgumentException(
 		issue?.message ?? "invalid argument",
-		typeof index === "number" ? a[index] : a,
+		at === undefined ? a : a[at],
+		at,
 	);
 }

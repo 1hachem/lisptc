@@ -11,7 +11,8 @@
     "./lisp-prose": "./src/lisp-prose.ts",
     "./lisp-tokens": "./src/lisp-tokens.ts",
     "./messages": "./src/messages.ts",
-    "./providers": "./src/providers.ts"
+    "./providers": "./src/providers.ts",
+    "./search": "./src/search.ts"
   },
   "engines": {
     "node": ">=22.6.0"

@@ -10,6 +10,7 @@ import {
 import {
 	Cell,
 	catchSym,
+	keySym,
 	type List,
 	lambdaSym,
 	macroSym,
@@ -36,12 +37,12 @@ export function compileFunc(
 ): DefinedFunc {
 	if (arg === null) throw new EvalException("arglist and body expected", arg);
 	const table = new Map<Sym, Arg>();
-	const [hasRest, arity] = makeArgTable(arg.car, table);
+	const { hasRest, arity, keys } = makeArgTable(arg.car, table);
 	let body = cdrCell(arg);
 	body = scanForArgs(body, table) as List;
 	body = expandMacros(interp, body, 20) as List;
 	body = compileInners(interp, body) as List;
-	return make(hasRest ? -arity : arity, body, env);
+	return make(hasRest ? -arity : arity, body, env, keys);
 }
 
 function expandMacros(interp: Compiler, j: unknown, count: number): unknown {
@@ -130,27 +131,52 @@ function variableOf(j: unknown): Sym {
 	throw new NotVariableException(j);
 }
 
-function makeArgTable(arg: unknown, table: Map<Sym, Arg>): [boolean, number] {
-	if (arg === null) return [false, 0];
+interface ArgTable {
+	hasRest: boolean;
+	arity: number;
+	keys: string[];
+}
+
+function afterRest(ag: Cell): Cell {
+	const next = cdrCell(ag);
+	if (next === null) throw new NotVariableException(next);
+	if (next.car === restSym) throw new NotVariableException(next.car);
+	return next;
+}
+
+function addArg(table: Map<Sym, Arg>, j: unknown, offset: number): Sym {
+	const sym = variableOf(j);
+	if (table.has(sym)) throw new EvalException("duplicated argument name", j);
+	table.set(sym, new Arg(0, offset, sym));
+	return sym;
+}
+
+function makeArgTable(arg: unknown, table: Map<Sym, Arg>): ArgTable {
+	if (arg === null) return { hasRest: false, arity: 0, keys: [] };
 	if (!(arg instanceof Cell)) throw new EvalException("arglist expected", arg);
 	let offset = 0;
 	let hasRest = false;
+	let keyed = false;
+	const keys: string[] = [];
 	for (let ag: List = arg; ag !== null; ag = cdrCell(ag)) {
-		let j = ag.car;
-		if (hasRest) throw new EvalException("2nd rest", j);
-		if (j === restSym) {
-			ag = cdrCell(ag);
-			if (ag === null) throw new NotVariableException(ag);
-			j = ag.car;
-			if (j === restSym) throw new NotVariableException(j);
+		if (hasRest) throw new EvalException("2nd rest", ag.car);
+		if (ag.car === keySym) {
+			if (keyed) throw new EvalException("2nd &key", ag.car);
+			keyed = true;
+			continue;
+		}
+		if (ag.car === restSym) {
+			if (keyed) throw new EvalException("&rest after &key", ag.car);
+			ag = afterRest(ag);
 			hasRest = true;
 		}
-		const sym = variableOf(j);
-		if (table.has(sym)) throw new EvalException("duplicated argument name", j);
-		table.set(sym, new Arg(0, offset, sym));
+		const sym = addArg(table, ag.car, offset);
+		if (keyed) keys.push(sym.name);
 		offset++;
 	}
-	return [hasRest, offset];
+	if (keyed && keys.length === 0)
+		throw new EvalException("&key with nothing after it", arg);
+	return { hasRest, arity: offset, keys };
 }
 
 function scanForArgs(j: unknown, table: Map<Sym, Arg>): unknown {

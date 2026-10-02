@@ -60,6 +60,10 @@ A new MCP capability is a new field on `McpExtensionHost`, or a new interface in
 `ports.ts` when something outside the extension has to consume it. Never a
 direct import of the SDK into `mcp.ts`.
 
+**A failure this extension can name, it names**, before any extension that
+guesses at a name sees it. Every composition root lists this one ahead of that
+one.
+
 ## Tests
 
 `test/` holds fixture servers beside the tests (`fixture-*.ts`). A test that

@@ -14,6 +14,10 @@ port. `src/host-node.ts` holds the node-side implementations. That pair is the
 only place the split lives for a shared port, and an extension's own ports stay
 in its own `<name>-host.ts`.
 
+`src/search.ts` holds the search engine port that three extensions each hand
+their own implementation of, along with the stop words every query is read
+against.
+
 `src/lisp-tokens.ts` and `src/lisp-forms.ts` hold the dialect's tokens and form
 boundaries, so a highlighter, a language server and the prose classifier all
 read the same definition. `src/lisp-form-fixtures.ts` holds the fixtures they

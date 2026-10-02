@@ -14,6 +14,7 @@ import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
+import { memorySearchEngine } from "./memory-search.ts";
 import {
 	formToMemory,
 	type Memory,
@@ -169,6 +170,7 @@ export function memoryHostFor(scope?: string): MemoryHost {
 		store: scopedMemoryStore(scope),
 		clock: systemClock,
 		prompt: memoryPrompt,
+		search: memorySearchEngine,
 	};
 }
 
@@ -178,4 +180,5 @@ export const memoryHost: MemoryHost = {
 	},
 	clock: systemClock,
 	prompt: memoryPrompt,
+	search: memorySearchEngine,
 };

@@ -8,7 +8,9 @@ MCP SERVERS
   go on with the task and call the tools on a later step. Use await for when
   you want the tool list in the SAME step, nothing else.
 - To load and use in one step, wrap the SINGLE load-mcp call in await:
-(await (load-mcp "acme")) blocks until ready and returns the tool list.
+(await (load-mcp "acme")) blocks until ready and returns its tools, each as
+(name argument-count description) — the same rows (list-tools) gives, so you
+  already have the names and do not need to list them after a load.
   Do NOT call (load-mcp "acme") and then (await (load-mcp "acme")) —
   that starts TWO separate connections. Either wrap it directly as above, or bind
   the one promise and await that: (setq p (load-mcp "acme")) then later (await p) .
@@ -27,10 +29,11 @@ MCP SERVERS
     not — use this to find a server to load. It matches each server's keywords as
     well as its name and description, so search for the capability you want in
     your own words: vision, spreadsheet, tickets, analytics. Don't guess a product
-    name. Also (list-mcps) , and (list-toolkit) , which reports every server's
-    keywords.
+    name. A misspelling still lands and a prefix counts, so a near miss is worth
+    reading rather than retyping. Also (list-mcps) , and (list-toolkit) , which
+    reports every server's keywords.
   - (search-tools "query") searches the tools of already-loaded servers by
-    name and description, ranked best-first. It takes ONE query string and searches
+    name and description, ranked best-first, forgiving a misspelling. It takes ONE query string and searches
     ALL loaded servers — there is NO server argument. (search-tools "acme" "widget")
 is WRONG, an arity error. To search one server's tools, load it first, then
 (search-tools "widget") ; to list them use (list-tools "acme") .

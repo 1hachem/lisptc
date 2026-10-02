@@ -1,35 +1,37 @@
+import { beyondStopWords, STOP_WORDS } from "@repo/shared/search";
+import MiniSearch from "minisearch";
 import type { SearchDocument, SearchEngine, SearchHit } from "./ports.ts";
 
-const SUBSTRING_MIN = 3;
+const FIELDS = ["name", "keywords", "description"];
+const BOOST = { name: 3, keywords: 2, description: 1 };
+const FUZZY = 0.2;
+const MIN_PREFIX = 3;
 
-export const keywordSearchEngine: SearchEngine = {
-	search(query, documents) {
-		const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-		const hits: SearchHit[] = [];
-		for (const document of documents) {
-			const score = scoreDocument(terms, document);
-			if (score > 0) hits.push({ id: document.id, score });
-		}
-		return hits;
+function fieldText(document: SearchDocument, field: string): string {
+	if (field === "keywords") return (document.keywords ?? []).join(" ");
+	const value = document[field as keyof SearchDocument];
+	return typeof value === "string" ? value : "";
+}
+
+export const miniSearchEngine: SearchEngine = {
+	search(query, documents): readonly SearchHit[] {
+		const thinned = beyondStopWords(query);
+		const index = new MiniSearch<SearchDocument>({
+			fields: FIELDS,
+			idField: "id",
+			extractField: fieldText,
+		});
+		index.addAll([...documents]);
+		return index
+			.search(query, {
+				prefix: (term) => term.length >= MIN_PREFIX,
+				fuzzy: FUZZY,
+				boost: BOOST,
+				processTerm: (term) => {
+					const lower = term.toLowerCase();
+					return thinned && STOP_WORDS.has(lower) ? null : lower;
+				},
+			})
+			.map((hit) => ({ id: String(hit.id), score: hit.score }));
 	},
 };
-
-function scoreDocument(terms: string[], document: SearchDocument): number {
-	const name = document.name.toLowerCase();
-	const keywords = (document.keywords ?? []).map((keyword) =>
-		keyword.toLowerCase(),
-	);
-	const description = (document.description ?? "").toLowerCase();
-	let score = 0;
-	for (const term of terms) {
-		if (name === term || keywords.includes(term)) score += 3;
-		else if (term.length < SUBSTRING_MIN) continue;
-		else if (
-			name.includes(term) ||
-			keywords.some((keyword) => keyword.includes(term))
-		)
-			score += 2;
-		else if (description.includes(term)) score += 1;
-	}
-	return score;
-}

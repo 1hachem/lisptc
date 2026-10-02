@@ -96,11 +96,18 @@ describe("remembering and recalling", () => {
 		expect(await ev(f, '(length (memory/recall "friday"))')).toBe("1");
 	});
 
-	it("treats the query as a regular expression", async () => {
+	it("forgives a misspelling in the query", async () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "eng-12" "an issue")');
 
-		expect(await ev(f, '(length (memory/recall "eng-[0-9]+"))')).toBe("1");
+		expect(await ev(f, '(length (memory/recall "isue"))')).toBe("1");
+	});
+
+	it("takes a prefix of a word in the body", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "eng-12" "an issue")');
+
+		expect(await ev(f, '(length (memory/recall "iss"))')).toBe("1");
 	});
 
 	it("forgets on request", async () => {
@@ -456,7 +463,7 @@ describe("chaining", () => {
 
 		const fired = await drive(f.bank.beginStep("", f.interp));
 		expect(fired).toBe("");
-		await drive(f.bank.recall(f.interp, "^m0$", 1));
+		await drive(f.bank.recall(f.interp, "m0", 1));
 		const out = await drive(f.bank.endStep());
 
 		expect(out).toContain("m0: body 0");
@@ -534,7 +541,7 @@ describe("strength, reinforcement and forgetting", () => {
 		await ev(f, '(memory/remember "note-b" "beta")');
 
 		await drive(f.bank.beginStep("", f.interp));
-		await drive(f.bank.recall(f.interp, "^note-b$", 1));
+		await drive(f.bank.recall(f.interp, "note-b", 1));
 		await drive(f.bank.endStep());
 
 		expect(await ev(f, '(car (car (memory/recall "note")))')).toBe(

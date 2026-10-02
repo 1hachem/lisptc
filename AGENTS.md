@@ -154,6 +154,8 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   in a test as much as in `src/`.
 - An extension is named at a composition root, and there are only two: an app
   that runs a REPL itself, and `@repo/backend` for the agent the API serves.
+  Adding one to the served agent means adding its prompt to what `apps/api`
+  ships, and `apps/api/AGENTS.md` carries that rule.
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
   workspace package.
 - `@repo/backend` depends on no workspace package that reads it, and nothing

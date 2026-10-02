@@ -1,5 +1,7 @@
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
+import { diagnosticsExtension } from "@repo/diagnostics-extension";
+import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
@@ -54,6 +56,7 @@ export async function workspaceExtensions(
 		}),
 		proseExtension(proseHost),
 		uiExtension(uiHost),
+		diagnosticsExtension(diagnosticsHost),
 	];
 }
 

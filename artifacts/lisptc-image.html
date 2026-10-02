@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Images, and lisptc</title>
+<style>
+:root {
+	--bg: #ffffff; --fg: #1a1a1a; --muted: #5d6368; --line: #d8dce0;
+	--card: #fafbfc; --accent: #0b5fa5; --good: #1a7f4b; --warn: #a8600c; --bad: #a32020;
+	--code-bg: #f3f5f7; --fade: #a8b0b6;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #15181b; --fg: #e3e6e8; --muted: #9aa3aa; --line: #2d3338;
+		--card: #1b1f23; --accent: #6db3f2; --good: #5ecf8f; --warn: #e0a95c;
+		--bad: #ef6b6b; --code-bg: #101316; --fade: #5a6268;
+	}
+}
+* { box-sizing: border-box; }
+body {
+	margin: 0 auto; padding: 2rem 1.5rem 5rem; background: var(--bg); color: var(--fg);
+	font: 15px/1.62 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+	max-width: 62rem;
+}
+h1 { font-size: 1.6rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+h2 {
+	font-size: 1.15rem; margin: 2.8rem 0 .8rem; padding-bottom: .35rem;
+	border-bottom: 1px solid var(--line); letter-spacing: -.01em;
+}
+h3 { font-size: .97rem; margin: 1.5rem 0 .5rem; }
+p { margin: .6rem 0; }
+.lede { color: var(--muted); margin: 0 0 1.4rem; }
+code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; font-size: .88em; }
+pre {
+	background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+	padding: .8rem 1rem; overflow-x: auto; font-size: .85em; line-height: 1.55; margin: .7rem 0;
+}
+pre code { background: none; padding: 0; font-size: 1em; }
+.cm { color: var(--muted); }
+.hl { color: var(--accent); font-weight: 600; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; background: var(--card); margin: .9rem 0; }
+.card > :first-child { margin-top: 0; } .card > :last-child { margin-bottom: 0; }
+.grid { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+.scroll { overflow-x: auto; margin: .9rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .9em; }
+th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: .82em; text-transform: uppercase; letter-spacing: .04em; }
+.tag {
+	display: inline-block; font-size: .72rem; font-weight: 600; padding: .12em .5em;
+	border-radius: 4px; border: 1px solid currentColor; letter-spacing: .02em; white-space: nowrap;
+}
+.t-have { color: var(--good); } .t-gap { color: var(--bad); } .t-part { color: var(--warn); }
+.anchor { color: var(--muted); font-size: .84em; }
+.anchor code { background: none; padding: 0; color: var(--accent); }
+ul, ol { margin: .5rem 0; padding-left: 1.3rem; }
+li { margin: .32rem 0; }
+.phase { border-left: 3px solid var(--accent); padding-left: 1rem; margin: 1.4rem 0; }
+.phase h3 { margin-top: 0; }
+.phase-n { color: var(--accent); font-variant-numeric: tabular-nums; }
+.note { border-left: 3px solid var(--warn); padding-left: .9rem; color: var(--muted); margin: 1rem 0; }
+.kicker { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .25rem; }
+svg { max-width: 100%; height: auto; display: block; margin: 1.2rem auto; }
+.s-label { fill: var(--fg); font: 500 12px ui-sans-serif, system-ui, sans-serif; }
+.s-mono { fill: var(--fg); font: 12px ui-monospace, monospace; }
+.s-sub { fill: var(--muted); font: 10.5px ui-monospace, monospace; }
+.s-sub-i { fill: var(--muted); font: italic 10.5px ui-sans-serif, system-ui, sans-serif; }
+.s-box { fill: var(--card); stroke: var(--line); }
+.s-hot { fill: none; stroke: var(--accent); stroke-width: 2; }
+.s-line { stroke: var(--muted); stroke-width: 1.3; fill: none; }
+.s-acc { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+.s-dead { stroke: var(--fade); stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+.s-fade { fill: var(--fade); font: 12px ui-monospace, monospace; }
+.toc { font-size: .9em; color: var(--muted); margin: 1.2rem 0 0; }
+.toc a { color: var(--accent); text-decoration: none; margin-right: 1.1rem; white-space: nowrap; }
+.toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Images, and what lisptc already is</h1>
+<p class="lede">What an image is from scratch, what ASDF adds on top, how much of both lisptc has today, and a staged plan for the rest.</p>
+<p class="toc">
+	<a href="#plain">1 · In plain terms</a>
+	<a href="#asdf">2 · What ASDF adds</a>
+	<a href="#score">3 · What lisptc has</a>
+	<a href="#macro">4 · The macro boundary</a>
+	<a href="#uses">5 · Three uses</a>
+	<a href="#plan">6 · The plan</a>
+	<a href="#risk">7 · Costs</a>
+</p>
+
+<h2 id="plain">1 · In plain terms</h2>
+
+<div class="card">
+<p class="kicker">The usual mental model</p>
+<p>You write source files. You build. You get a process. The process runs, then dies. Your <em>program</em> is the files on disk, and the process is a disposable thing you spin up from them. Change a line and you kill the process and start another. Every time.</p>
+</div>
+
+<div class="card">
+<p class="kicker">Lisp's model</p>
+<p>The live process <em>is</em> the program. Files are a convenient way to get things into it. That live process is called an <strong>image</strong>.</p>
+<p>The name is literal. In Common Lisp you can dump the whole running process to disk, memory and all, and boot it tomorrow in exactly the state you left it. SBCL's function for this is named <code>save-lisp-and-die</code>. It is an image the way a disk image is: a snapshot of everything.</p>
+</div>
+
+<h3>What is inside one</h3>
+<p>Every function you have defined. Every variable and its current value. Every class, macro and error type. A REPL waiting for input. And the compiler itself.</p>
+<p>That last one carries the weight. The compiler stays <em>inside</em> the running program, so the program can compile new code into itself while it runs. Most languages leave the compiler outside at build time, and the running process has no way to grow.</p>
+
+<h3>How you work with it</h3>
+<p>You do not run a file and wait for output. You start an image and it stays up for hours or days, with your editor connected to it. You write a function, hit a key, and that one definition goes into the live image. Nothing restarted. Nothing rebuilt. The variable you spent ten minutes setting up three hours ago is still sitting there holding its value.</p>
+<p>It is a workshop you stand inside of, rather than a thing you assemble and launch.</p>
+
+<h3>Why redefining works at all</h3>
+<p>Here is the whole mechanism, and it is simpler than it sounds. A caller does not hold a copy of the function it calls. It holds the <strong>name</strong>, and looks up what that name points to at the moment of the call.</p>
+
+<svg viewBox="0 0 740 258" role="img" aria-label="Late binding: the caller holds a name, the name points at a body, and swapping the body patches the caller">
+	<text class="s-sub-i" x="14" y="16">Lisp: the caller holds a name</text>
+
+	<rect class="s-box" x="14" y="30" width="150" height="54" rx="8"/>
+	<text class="s-mono" x="28" y="52">(defun serve ()</text>
+	<text class="s-mono" x="38" y="70">(greet "world"))</text>
+
+	<path class="s-acc" d="M168 57 L250 57" marker-end="url(#ar)"/>
+	<text class="s-sub-i" x="172" y="48">at call time</text>
+
+	<rect class="s-hot" x="254" y="30" width="130" height="54" rx="8"/>
+	<text class="s-sub" x="268" y="50">the shelf slot</text>
+	<text class="s-mono" x="268" y="72">greet</text>
+
+	<path class="s-dead" d="M388 50 L480 36" marker-end="url(#af)"/>
+	<path class="s-acc" d="M388 66 L480 88" marker-end="url(#ar)"/>
+
+	<rect class="s-box" x="484" y="14" width="240" height="38" rx="8" opacity=".5"/>
+	<text class="s-fade" x="496" y="38">(lambda (n) "hi ~a")</text>
+	<text class="s-sub" x="640" y="12">old, dropped</text>
+
+	<rect class="s-box" x="484" y="68" width="240" height="38" rx="8"/>
+	<text class="s-mono" x="496" y="92">(lambda (n) "hello, ~a!")</text>
+
+	<line x1="14" y1="138" x2="726" y2="138" stroke="var(--line)"/>
+
+	<text class="s-sub-i" x="14" y="166">Most languages: the caller captured the body at import time</text>
+
+	<rect class="s-box" x="14" y="180" width="150" height="54" rx="8"/>
+	<text class="s-mono" x="28" y="202">function serve()</text>
+	<text class="s-mono" x="38" y="220">{ greet(...) }</text>
+
+	<path class="s-line" d="M168 207 L480 207" marker-end="url(#ar)"/>
+	<text class="s-sub-i" x="230" y="198">bound once, at import</text>
+
+	<rect class="s-box" x="484" y="188" width="240" height="38" rx="8" opacity=".5"/>
+	<text class="s-fade" x="496" y="212">the old body, still held</text>
+
+	<defs>
+		<marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+			<path d="M0 0 L8 4 L0 8 z" fill="var(--accent)"/>
+		</marker>
+		<marker id="af" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+			<path d="M0 0 L8 4 L0 8 z" fill="var(--fade)"/>
+		</marker>
+	</defs>
+</svg>
+
+<p>Think of a labelled box on a shelf. <code>serve</code> knows "find the box labelled <code>greet</code>, use what is in it". It does not know or care what is in the box. Redefine <code>greet</code> and you have swapped the contents. Every caller in the image gets the new thing instantly, and none of them were touched.</p>
+<p>In most languages the caller grabs the actual function when the module is first imported and keeps it. Swapping the original later changes nothing, because everyone already holds their own reference. That is the real reason you restart.</p>
+
+<h3>The catch nobody mentions first</h3>
+<p>Images drift. After six hours your image holds functions you defined at the REPL and never wrote to a file, a variable you set by hand, and an old version of something you renamed that is still sitting in its box because nothing removed it. The image no longer matches your source, it works, and it will not work for anyone else. "Does it still run from a cold image?" is a question Lisp programmers learn to ask on purpose.</p>
+
+<h2 id="asdf">2 · What ASDF adds</h2>
+
+<p>One definition at a time is fine while you type. A real system is fifty files.</p>
+<p><strong>ASDF</strong> knows which files make up a system and what order they load in. <code>(asdf:load-system :my-app)</code> re-reads the files that changed and evaluates their top-level forms into the live image. Each <code>defun</code> swaps a box. Each <code>defclass</code> redefines a class, and CLOS walks existing instances to the new shape through <code>update-instance-for-redefined-class</code>. <code>define-condition</code> redefines an error type.</p>
+<p>It is the nearest thing Lisp has to a build step, except it produces no artifact. It pours changes into something already running.</p>
+
+<div class="card">
+<p>So the original paragraph has two halves, and they are different sizes of work:</p>
+<ul>
+	<li><strong>The Lisp half</strong> — globals in one mutable table, callers late-bound to it. This is a property of the evaluator.</li>
+	<li><strong>The ASDF half</strong> — a named system, a load order, change detection, reload. This is tooling built on top.</li>
+</ul>
+</div>
+
+<h2 id="score">3 · What lisptc has today</h2>
+
+<div class="scroll">
+<table>
+<thead><tr><th style="width:42%">Property</th><th>Status</th><th>Where</th></tr></thead>
+<tbody>
+<tr>
+	<td><strong>Globals live in one mutable table</strong><br><span class="anchor">Redefinition is a <code>Map.set</code>, not a new scope.</span></td>
+	<td><span class="tag t-have">HAVE</span></td>
+	<td class="anchor"><code>Interp.globals: Map&lt;Sym, unknown&gt;</code><br><code>lisp.ts:95</code>, written at <code>:486</code></td>
+</tr>
+<tr>
+	<td><strong>Callers are late-bound to globals</strong><br><span class="anchor">Locals compile to <code>Arg(level, offset)</code> against the env cell chain. Globals stay symbols, resolved at call time. The shelf slot, exactly.</span></td>
+	<td><span class="tag t-have">HAVE</span></td>
+	<td class="anchor"><code>Arg</code> at <code>func.ts:203</code></td>
+</tr>
+<tr>
+	<td><strong>Re-loading a file re-evaluates it</strong><br><span class="anchor">The <code>importing</code> set is a cycle guard, not a module cache: added before the run, deleted in the <code>finally</code>. A second <code>(import "x.ptc")</code> runs the file again.</span></td>
+	<td><span class="tag t-have">HAVE</span></td>
+	<td class="anchor"><code>importFile</code>, <code>lisp.ts:448-469</code><br>add <code>:453</code>, delete <code>:467</code></td>
+</tr>
+<tr>
+	<td><strong>The image outlives the request</strong><br><span class="anchor"><code>ReplStore</code> keeps one <code>AgentRepl</code> per thread across HTTP requests. <code>session-server</code> holds one <code>MemoryRepl</code> behind a socket, shared by the LSP and the terminal REPL.</span></td>
+	<td><span class="tag t-have">HAVE</span></td>
+	<td class="anchor"><code>ai/src/repl-store.ts</code><br><code>repl/src/session-server.ts:137</code></td>
+</tr>
+<tr>
+	<td><strong>Definitions can be grouped and withdrawn</strong><br><span class="anchor">The primitive exists and has a worked example: the MCP extension adds tool bindings on load and removes them on unload and shutdown. That is a reload in miniature.</span></td>
+	<td><span class="tag t-have">HAVE</span></td>
+	<td class="anchor"><code>undefineGlobal</code> <code>lisp.ts:197-216</code><br>called at <code>mcp/src/mcp.ts:276, :570</code></td>
+</tr>
+<tr>
+	<td><strong>Macro redefinition reaches existing callers</strong><br><span class="anchor">It does not. See section 4.</span></td>
+	<td><span class="tag t-part">BY DESIGN</span></td>
+	<td class="anchor"><code>expandMacros</code> at <code>compile.ts:42</code></td>
+</tr>
+<tr>
+	<td><strong>A hook fires when a global is defined</strong><br><span class="anchor">The four chains are <code>readSource</code>, <code>evalForm</code>, <code>failedForm</code>, <code>dispose</code>. None covers a global write; <code>defineGlobal</code> and <code>evalSetQ</code> set the map directly.</span></td>
+	<td><span class="tag t-gap">MISSING</span></td>
+	<td class="anchor"><code>Hooks</code>, <code>lisp.ts:66-83</code></td>
+</tr>
+<tr>
+	<td><strong>Something notices a file changed</strong></td>
+	<td><span class="tag t-gap">MISSING</span></td>
+	<td class="anchor">no watcher in <code>apps/cli</code> or <code>editors/nvim</code></td>
+</tr>
+<tr>
+	<td><strong>A way to ask for a reload</strong><br><span class="anchor">The CLI's meta-commands are <code>:clear</code> and <code>:up</code>, and nothing else.</span></td>
+	<td><span class="tag t-gap">MISSING</span></td>
+	<td class="anchor"><code>cli.ts:217-226</code></td>
+</tr>
+<tr>
+	<td><strong>Provenance: which file defined which name</strong></td>
+	<td><span class="tag t-gap">MISSING</span></td>
+	<td class="anchor">—</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="card">
+<p class="kicker">The headline</p>
+<p><strong>lisptc already has the Lisp half, and nothing in the repo says so.</strong> An agent that defines <code>(defun triage-issue ...)</code> on turn 4, watches it fail on turn 9, and redefines it on turn 10 gets the new body everywhere, immediately, with no reset. That works today.</p>
+<p>What is missing is the ASDF half. And section 4 is the reason that half is not optional.</p>
+</div>
+
+<h2 id="macro">4 · The macro boundary</h2>
+
+<p>This was the one open question on the previous version of this page. It is answered, and the answer reshapes the plan.</p>
+<p>A lambda body is compiled <strong>eagerly, at definition time</strong>. Compilation expands every macro in the body and stores the expanded form in the closure (<code>compile.ts:42</code>, reached from <code>lisp.ts:276</code>). The closure then runs that fixed body on every call.</p>
+
+<pre><code>(defmacro twice (x) `(progn ,x ,x))
+(defun go () (twice (step)))     <span class="cm">; compiled now; twice is already expanded away</span>
+
+(defmacro twice (x) `(progn ,x ,x ,x))   <span class="cm">; redefine the macro</span>
+(go)                             <span class="cm">; still two steps. go holds the old expansion.</span>
+
+(import "that-file.ptc")         <span class="cm">; re-evaluates the defun, recompiles, re-expands</span>
+(go)                             <span class="hl">; now three.</span></code></pre>
+
+<p>So the image has two tiers, and the distinction is the single most practical thing on this page:</p>
+
+<div class="grid">
+<div class="card">
+<p class="kicker">Live immediately</p>
+<p>Redefining a <strong>function</strong>. Every caller reaches it through the shelf slot at call time, so one <code>defun</code> patches the whole image.</p>
+</div>
+<div class="card">
+<p class="kicker">Needs the callers reloaded</p>
+<p>Redefining a <strong>macro</strong>. Callers compiled it away already. Only re-evaluating their definitions picks it up.</p>
+</div>
+</div>
+
+<p>This is not a lisptc defect. Common Lisp behaves the same way, and "redefining a macro means recompiling its callers" is standard knowledge there. It is also the clearest answer to <em>why ASDF exists at all</em>: if one-definition-at-a-time covered everything, nobody would need a system that reloads files in order.</p>
+
+<div class="note">
+<p>Which means a reload is not a convenience layered on an image that already works. It is the half that makes macro-level change possible at all, and the lisptc prelude is largely macros.</p>
+</div>
+
+<h2 id="uses">5 · Three uses, and they are not one feature</h2>
+
+<div class="grid">
+<div class="card">
+<p class="kicker">A · operator patches a live agent</p>
+<p>Fix a prelude bug or an extension's <code>.ptc</code> prompt without dropping in-flight threads out of <code>ReplStore</code>. The paragraph's literal claim, and the weakest fit here: most of what you would want to patch lives in TypeScript, where none of this applies.</p>
+</div>
+<div class="card">
+<p class="kicker">B · the agent patches itself</p>
+<p>It wrote <code>triage-issue</code>, the call failed, the diagnostics extension told it why, it redefines the function, the next call takes the new body. <strong>Already true today</strong> for functions. The work is naming it and teaching it in a prompt.</p>
+</div>
+<div class="card">
+<p class="kicker">C · durable skills</p>
+<p>The agent writes a definition to a file through a port, the image reloads it, and the skills come back across process restarts by reloading the system. Where ASDF's <em>system</em> concept earns its place, and the one with real product value.</p>
+</div>
+</div>
+
+<p>Worth stating plainly, because it shapes phase 4: the memory extension holds <strong>facts</strong> the agent recalls. An image holds <strong>procedures</strong> the agent runs. Complements, not competitors, and lisptc persists only the first today.</p>
+
+<h2 id="plan">6 · The plan</h2>
+
+<svg viewBox="0 0 760 300" role="img" aria-label="Where the image extension sits relative to the REPL store, agent loop and interpreter">
+	<rect class="s-box" x="8" y="8" width="744" height="284" rx="10"/>
+	<text class="s-sub" x="22" y="28">process (apps/api)</text>
+
+	<rect class="s-box" x="26" y="42" width="200" height="60" rx="8"/>
+	<text class="s-label" x="40" y="68">ReplStore</text>
+	<text class="s-sub" x="40" y="86">one AgentRepl per thread</text>
+
+	<rect class="s-box" x="26" y="120" width="200" height="60" rx="8"/>
+	<text class="s-label" x="40" y="146">agent loop</text>
+	<text class="s-sub" x="40" y="164">beginTurn chain</text>
+
+	<rect class="s-hot" x="266" y="42" width="300" height="230" rx="10"/>
+	<text class="s-label" x="282" y="66">the image</text>
+	<text class="s-sub" x="282" y="84">one Interp, alive across turns</text>
+
+	<rect class="s-box" x="284" y="100" width="264" height="52" rx="8"/>
+	<text class="s-mono" x="298" y="122">globals: Map&lt;Sym, unknown&gt;</text>
+	<text class="s-sub" x="298" y="140">defun / defmacro / setq write here</text>
+
+	<rect class="s-box" x="284" y="166" width="264" height="44" rx="8"/>
+	<text class="s-sub" x="298" y="192">closures, late-bound to the map above</text>
+
+	<rect class="s-box" x="284" y="222" width="264" height="36" rx="8"/>
+	<text class="s-sub" x="298" y="244">docTable, channels, async work</text>
+
+	<rect class="s-box" x="596" y="100" width="140" height="52" rx="8"/>
+	<text class="s-label" x="610" y="122">image ext</text>
+	<text class="s-sub" x="610" y="140">load / reload</text>
+
+	<rect class="s-box" x="596" y="178" width="140" height="52" rx="8"/>
+	<text class="s-label" x="610" y="200">its port</text>
+	<text class="s-sub" x="610" y="218">read, mtime, watch</text>
+
+	<path class="s-line" d="M226 72 L262 108" marker-end="url(#ar2)"/>
+	<path class="s-line" d="M226 150 L262 150" marker-end="url(#ar2)"/>
+	<path class="s-acc" d="M592 126 L552 126" marker-end="url(#ar)"/>
+	<path class="s-line" d="M666 174 L666 156" marker-end="url(#ar2)"/>
+	<defs>
+		<marker id="ar2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+			<path d="M0 0 L8 4 L0 8 z" fill="var(--muted)"/>
+		</marker>
+	</defs>
+</svg>
+
+<p>Three repo constraints decide the shape. A new language surface goes in an <strong>extension</strong>, never the interpreter. Everything reaching the filesystem goes through a <strong>port the extension declares</strong>. Nothing above an extension <strong>names</strong> it, so neither the REPL nor the agent loop can call a reload directly.</p>
+
+<div class="phase">
+<h3><span class="phase-n">Phase 0</span> — pin what already holds</h3>
+<p>Nothing new ships. Tests in <code>packages/interpreter/test</code> that fail if any HAVE row is ever broken:</p>
+<ul>
+	<li>redefining a global patches a caller compiled before the redefinition</li>
+	<li>importing the same file twice re-evaluates it</li>
+	<li><code>undefineGlobal</code> makes a name unresolvable again</li>
+	<li>and the negative: a redefined macro does <em>not</em> reach an existing caller until that caller is re-evaluated</li>
+</ul>
+<p>Today nothing fails if someone adds a module cache to <code>importFile</code> as an optimisation and silently kills reload. The repo's own rule is that a constraint worth keeping is a test that fails when it breaks. That last bullet matters most: it pins a surprising behaviour as deliberate rather than leaving the next reader to discover it.</p>
+</div>
+
+<div class="phase">
+<h3><span class="phase-n">Phase 1</span> — <code>packages/image</code>, one new extension</h3>
+<p><code>@repo/image-extension</code>, shaped like <code>packages/diagnostics</code>: <code>src/image.ts</code>, <code>src/ports.ts</code>, <code>src/image-host.ts</code>, <code>src/image.ptc</code>.</p>
+<p><strong>Surface</strong> <code>(image/load "path")</code>, <code>(image/reload)</code>, <code>(image/loaded)</code>, <code>(image/forget 'name)</code>.</p>
+<p><strong>Port</strong> <code>read(path)</code>, <code>mtime(path)</code>, <code>watch(paths, cb)</code>. The extension imports no <code>node:fs</code>, and <code>check:arch</code> will say so if it tries.</p>
+<p><strong>The model to copy is already in the repo.</strong> The MCP extension defines a group of bindings on load and withdraws them on unload with <code>undefineGlobal</code>. An image file is the same shape: a source, the names it owns, and a withdrawal. Read <code>mcp.ts:276</code> before designing anything.</p>
+<p><strong>Provenance</strong> is the one open design choice. There is no hook on global writes, so:</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Option</th><th>Cost</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>Diff <code>globalEntries()</code> around a load; new names belong to that file.</td><td>No interpreter change. Lossy when two files define one name.</td><td><strong>Start here.</strong></td></tr>
+<tr><td>Add a <code>defined</code> chain to the <code>Hooks</code> interface.</td><td>A fifth chain in the core, beside <code>readSource</code> / <code>evalForm</code> / <code>failedForm</code> / <code>dispose</code>.</td><td>Only if the diff proves wrong.</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Stale removal</strong> on reload of <code>F</code>, names attributed to <code>F</code> before and absent after get <code>undefineGlobal</code>. This is what a bare re-<code>import</code> cannot do, and the reason the extension exists rather than a one-line alias.</p>
+</div>
+
+<div class="phase">
+<h3><span class="phase-n">Phase 2</span> — asking for a reload from outside</h3>
+<p><strong>No protocol change.</strong> <code>session-server</code> already has an <code>eval</code> op, and <code>(image/reload)</code> is a form. A dedicated <code>reload</code> op would only matter in a REPL built without the extension, and the layering rules say you should not want that.</p>
+<p><code>apps/cli</code> gets <code>:reload</code> beside <code>:clear</code> and <code>:up</code>, plus a <code>--watch</code> flag that re-sends it on mtime change. The CLI is a composition root, so it may hold the watcher itself.</p>
+</div>
+
+<div class="phase">
+<h3><span class="phase-n">Phase 3</span> — reloading under a running agent</h3>
+<p>A reload must never land mid-evaluation. The extension hooks the <code>beginTurn</code> chain and applies pending reloads between steps.</p>
+<p>Again the worked example exists: MCP loading "runs off an async broker and applies between evaluations". Same problem, same answer. Do not invent a second mechanism.</p>
+<p>The reload should leave an <strong>annotation</strong> on the step, so an eval trace shows the image changed under the turn. Otherwise replaying that run is quietly not reproducible, which cuts against the deterministic-brain thesis.</p>
+</div>
+
+<div class="phase">
+<h3><span class="phase-n">Phase 4</span> — the system, and persistence</h3>
+<p>ASDF's actual contribution, and the payoff for use C.</p>
+<ul>
+	<li>A <code>system.ptc</code> per workspace: the files, in load order. Order matters more than it looks, because of section 4: a file defining macros must load before the files whose bodies expand them.</li>
+	<li><code>@repo/backend</code> supplies a store satisfying the image port, so a workspace's skills live in Convex rather than on a container's disk.</li>
+	<li><code>openWorkspaceRepl</code> loads the system when it opens a REPL, so learned procedures survive a deploy.</li>
+	<li><strong>Name it twice.</strong> An extension on the served agent is composed in <code>@repo/backend/src/agent-repl.ts</code> <em>and</em> named in <code>apps/api</code>, or it ships without its prompt. <code>apps/api/test/runtime-assets.test.ts</code> is what catches the omission.</li>
+</ul>
+<p>Only here does the comparison to ASDF hold end to end: a named system, a load order, change detection, reload into a live image.</p>
+</div>
+
+<div class="phase">
+<h3><span class="phase-n">Phase 5</span> — what not to build</h3>
+<ul>
+	<li><strong>No <code>eval</code> of strings in the core dialect.</strong> There is deliberately none. Adding one costs the static arity checking the LSP does and weakens what diagnostics and compaction can say. An agent defining something writes a form, not a string.</li>
+	<li><strong>No condition system or restarts.</strong> The CL story is "redefine the broken function and resume the frame". lisptc has <code>try</code>/<code>catch</code> and no frame resumption, so the honest version is <em>redefine and retry the turn</em>, which the agent loop already gives you. A large dialect change chasing a small gain.</li>
+	<li><strong>No CLOS-style instance migration.</strong> There are no instances.</li>
+</ul>
+</div>
+
+<h2 id="risk">7 · What this costs you</h2>
+
+<div class="scroll">
+<table>
+<thead><tr><th style="width:26%">Risk</th><th>Why</th><th>What to do</th></tr></thead>
+<tbody>
+<tr>
+	<td>Macro changes need their callers reloaded</td>
+	<td>Bodies are compiled eagerly and macros expanded away at <code>compile.ts:42</code>. Confirmed, and it matches Common Lisp.</td>
+	<td>Reload by file, never by single definition. It is the reason phase 1 exists. Pin it with a test in phase 0.</td>
+</tr>
+<tr>
+	<td>A closure already handed out keeps the old body</td>
+	<td>Late binding patches calls that go <em>through the name</em>. A function value stored in an alist, captured by a promise handler, or passed to a port is the old object and stays the old object.</td>
+	<td>Accept it. Reload between steps; in-flight promises finish on the old body. Do not chase references.</td>
+</tr>
+<tr>
+	<td>Image drift</td>
+	<td>The oldest problem in Lisp, inherited whole. After a long session the image holds definitions no file accounts for.</td>
+	<td>Make the system file the source of truth and make a cold reload routine. <code>(image/loaded)</code> should show what came from where.</td>
+</tr>
+<tr>
+	<td>A reload makes a turn non-reproducible</td>
+	<td>The run's result now depends on when a file changed, and no trace records that.</td>
+	<td>Annotate the step. Phase 3.</td>
+</tr>
+<tr>
+	<td>Stale removal by diff misattributes</td>
+	<td>Two files defining one name: the diff credits whichever loaded last, and reloading the other may delete a live definition.</td>
+	<td>Refuse to remove a name claimed by two files, and say so. Or take the <code>defined</code> chain.</td>
+</tr>
+<tr>
+	<td>Self-patching widens what the agent does to itself</td>
+	<td>Use B plus phase 4 means a model's output changes what later turns execute, durably, across sessions.</td>
+	<td>A deliberate decision, not a detail. Writes stay behind the port, the system file stays reviewable.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h3>Still open</h3>
+<p><strong>Per-workspace or per-thread?</strong> Extensions are composed per workspace in <code>agent-repl.ts</code>, but <code>ReplStore</code> keys REPLs per thread. A workspace's learned skills probably want to be shared across its threads, and that is not the shape the store has today. This is the only question left that blocks design rather than implementation.</p>
+
+<div class="note">
+<p>Smallest honest first step: phase 0, plus the prompt half of use B. No new package, and it names and protects a property the repo already has and documents nowhere.</p>
+</div>
+
+</body>
+</html>

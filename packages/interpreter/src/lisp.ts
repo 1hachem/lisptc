@@ -19,6 +19,7 @@ import {
 	LoopSignal,
 	NotVariableException,
 	UnresolvedHead,
+	VoidVariable,
 } from "./errors.ts";
 import {
 	Arg,
@@ -59,12 +60,16 @@ import { parseArgs } from "./schema.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
 import { note } from "./topics.ts";
 
+export type FailedForm =
+	| { readonly skipped: string }
+	| { readonly reported: string };
+
 export interface Hooks {
 	readonly readSource: Chain<[interp: Interp, text: string], string>;
 	readonly evalForm: Chain<[interp: Interp, form: unknown], Eval>;
 	readonly failedForm: Chain<
-		[interp: Interp, form: unknown, error: UnresolvedHead],
-		Eval<string | undefined>
+		[interp: Interp, form: unknown, error: EvalException],
+		Eval<FailedForm | undefined>
 	>;
 	readonly dispose: Chain<[], void>;
 }
@@ -145,9 +150,13 @@ export class Interp {
 		schema: T,
 		body: (a: z.infer<T>) => unknown,
 		args?: DocArg[],
+		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
-		this.globals.set(newSym(name), new BuiltInFunc(name, carity, wrapped));
+		this.globals.set(
+			newSym(name),
+			new BuiltInFunc(name, carity, wrapped, "plain", keys),
+		);
 		this.docTable.set(name, { signature, doc, args });
 	}
 
@@ -159,11 +168,12 @@ export class Interp {
 		schema: T,
 		body: (a: z.infer<T>) => Eval,
 		args?: DocArg[],
+		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncGen = (a) => body(parseArgs(schema, a));
 		this.globals.set(
 			newSym(name),
-			new BuiltInFunc(name, carity, wrapped, "generator"),
+			new BuiltInFunc(name, carity, wrapped, "generator", keys),
 		);
 		this.docTable.set(name, { signature, doc, args });
 	}
@@ -176,11 +186,12 @@ export class Interp {
 		schema: T,
 		body: (a: z.infer<T>) => Promise<unknown>,
 		args?: DocArg[],
+		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
 		this.globals.set(
 			newSym(name),
-			new BuiltInFunc(name, carity, wrapped, "promise"),
+			new BuiltInFunc(name, carity, wrapped, "promise", keys),
 		);
 		this.docTable.set(name, { signature, doc, args });
 	}
@@ -226,7 +237,7 @@ export class Interp {
 		}
 		if (x instanceof Sym) {
 			const value = this.globals.get(x);
-			if (value === undefined) throw new EvalException("void variable", x);
+			if (value === undefined) throw new VoidVariable(x);
 			return value;
 		}
 		if (x instanceof Lambda) return Closure.makeFrom(x, env);
@@ -241,7 +252,7 @@ export class Interp {
 					return x.getValue(env);
 				} else if (x instanceof Sym) {
 					const value = this.globals.get(x);
-					if (value === undefined) throw new EvalException("void variable", x);
+					if (value === undefined) throw new VoidVariable(x);
 					return value;
 				} else if (x instanceof Cell) {
 					let fn = x.car;
@@ -338,7 +349,7 @@ export class Interp {
 									? body.car
 									: yield* this.evalProgN(body, env);
 						} else {
-							throw new UnresolvedHead("not applicable", x, fn);
+							throw new UnresolvedHead("not-applicable", x, fn);
 						}
 					}
 				} else if (x instanceof Lambda) {
@@ -350,6 +361,7 @@ export class Interp {
 		} catch (ex) {
 			if (ex instanceof EvalException) {
 				if (ex.trace.length < 10) ex.trace.push(str(x));
+				if (x instanceof Cell && x.car instanceof Sym) ex.calledAs(x.car.name);
 			}
 			throw ex;
 		}
@@ -504,24 +516,26 @@ export function* evalTopLevel(
 			ex instanceof LoopSignal
 				? new EvalException("break/return used outside of a loop", null, false)
 				: ex;
-		if (failure instanceof UnresolvedHead && failure.form === exp) {
-			const excused = yield* interp.hooks.failedForm.run(
+		if (failure instanceof EvalException) {
+			const opinion = yield* interp.hooks.failedForm.run(
 				() => settled(undefined),
 				interp,
 				exp,
 				failure,
 			);
-			if (excused !== undefined) {
+			if (opinion !== undefined && "skipped" in opinion) {
 				note.emit(interp.channels, {
-					model: { kind: "skipped", text: excused },
+					model: { kind: "skipped", text: opinion.skipped },
 				});
 				return previous;
 			}
-		}
-		if (failure instanceof EvalException)
 			note.emit(interp.channels, {
-				model: { kind: "failed", text: String(failure) },
+				model: {
+					kind: "failed",
+					text: opinion === undefined ? String(failure) : opinion.reported,
+				},
 			});
+		}
 		throw failure;
 	}
 }

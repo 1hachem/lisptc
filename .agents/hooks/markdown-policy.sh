@@ -29,6 +29,12 @@ case "$path" in
 	;;
 esac
 
+case "$path" in
+"$HOME"/.claude/plans/*)
+	exit 0
+	;;
+esac
+
 if [ "$tool" = "apply_patch" ]; then
 	echo "Blocked: this repo adds no new markdown files. The code is the only source of truth, so put the reason in a name, a type or a test. README.md, AGENTS.md, CLAUDE.md, and files under .agents/skills/ and .agents/agents/ are the exceptions." >&2
 	exit 2

@@ -254,6 +254,11 @@ Loops, and they support (break) and (return value)
 
 Defining
 - (defun name (args...) [doc] body...) define a function; &rest x for variadic.
+- &key after the required arguments makes the ones that follow optional, and
+  nameable: (defun kpi (&key label value unit) ...) is called as
+(kpi "Revenue" 42000) or (kpi :label "Revenue" :value 42000 :unit "USD") .
+  Filling runs left to right until the first keyword; one not given is nil.
+  &key and &rest cannot both appear.
 - (defmacro name (args...) [doc] body...) define a macro.
 
 Strings

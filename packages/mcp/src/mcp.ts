@@ -1,6 +1,6 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import type { DocArg } from "@repo/interpreter/docs";
-import { EvalException } from "@repo/interpreter/errors";
+import { EvalException, UnresolvedHead } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -278,6 +278,26 @@ function doUnload(
 	return rec.toolSyms;
 }
 
+function serverOf(error: EvalException): string | undefined {
+	if (!(error instanceof UnresolvedHead) || error.why !== "undefined")
+		return undefined;
+	const name = error.callee;
+	if (name === undefined) return undefined;
+	const at = name.lastIndexOf("/");
+	return at < 0 ? undefined : name.slice(0, at);
+}
+
+function notLoaded(
+	error: EvalException,
+	predefined: Map<string, ConnConfig>,
+	servers: Map<string, ServerRec>,
+): string | undefined {
+	const server = serverOf(error);
+	if (server === undefined || servers.has(server) || !predefined.has(server))
+		return undefined;
+	return `${String(error)}\n${server} is in the toolkit and not loaded: (load-mcp "${server}")`;
+}
+
 function installServer(
 	interp: Interp,
 	client: McpClient,
@@ -306,8 +326,26 @@ function installServer(
 		});
 		toolSyms.push(sym);
 	}
-	servers.set(name, { name, serverId: res.serverId, toolSyms, tools: toolMap });
-	return arrayToList(toolSyms);
+	const rec = { name, serverId: res.serverId, toolSyms, tools: toolMap };
+	servers.set(name, rec);
+	return arrayToList(toolRows(rec));
+}
+
+function toolRow(rec: ServerRec, sym: Sym): List {
+	const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
+	return arrayToList([
+		sym,
+		BigInt(
+			tool?.inputSchema?.properties
+				? Object.keys(tool.inputSchema.properties).length
+				: 0,
+		),
+		firstLine(tool?.description),
+	]);
+}
+
+function toolRows(rec: ServerRec): List[] {
+	return rec.toolSyms.map((sym) => toolRow(rec, sym));
 }
 
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
@@ -343,7 +381,7 @@ export function registerMcp(
 		"load-mcp",
 		-1,
 		'(load-mcp "server") | (load-mcp :name "server")',
-		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns the tool list. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url or :command to load an ad-hoc server instead.',
+		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url or :command to load an ad-hoc server instead.',
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, predefined);
@@ -490,7 +528,7 @@ export function registerMcp(
 				scored.map(({ value: conf, score }) =>
 					arrayToList([
 						conf.name,
-						BigInt(score),
+						BigInt(Math.round(score)),
 						firstLine(conf.description),
 						newLispKeyword(servers.has(conf.name) ? "loaded" : "unloaded"),
 					]),
@@ -510,20 +548,7 @@ export function registerMcp(
 			const rows: unknown[] = [];
 			for (const rec of servers.values()) {
 				if (only !== null && rec.name !== only) continue;
-				for (const sym of rec.toolSyms) {
-					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
-					rows.push(
-						arrayToList([
-							sym,
-							BigInt(
-								tool?.inputSchema?.properties
-									? Object.keys(tool.inputSchema.properties).length
-									: 0,
-							),
-							firstLine(tool?.description),
-						]),
-					);
-				}
+				rows.push(...toolRows(rec));
 			}
 			if (only !== null && !servers.has(only))
 				throw new EvalException("MCP server not loaded", only, false);
@@ -558,7 +583,7 @@ export function registerMcp(
 			const scored = searchDocuments(search, rawQuery, candidates);
 			return arrayToList(
 				scored.map(({ value, score }) =>
-					arrayToList([value.sym, BigInt(score), value.doc]),
+					arrayToList([value.sym, BigInt(Math.round(score)), value.doc]),
 				),
 			);
 		},
@@ -586,6 +611,12 @@ export function registerMcp(
 			return true;
 		},
 	);
+
+	interp.hooks.failedForm.use(function* (interp, form, error, next) {
+		const reported = notLoaded(error, predefined, servers);
+		if (reported === undefined) return yield* next(interp, form, error);
+		return { reported };
+	});
 
 	interp.hooks.dispose.use((next) => {
 		shutdown();

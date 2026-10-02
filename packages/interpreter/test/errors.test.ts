@@ -1,9 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { VoidVariable } from "../src/errors.ts";
 import { ev } from "./helpers.ts";
 
 describe("evaluation errors that must be signalled", () => {
 	it("throws on an unbound variable", () => {
 		expect(() => ev("(progn no-such-var)")).toThrow(/void variable/);
+	});
+
+	it("carries the unbound name on the failure it throws", () => {
+		try {
+			ev("(progn no-such-var)");
+			expect.unreachable();
+		} catch (error) {
+			expect(error).toBeInstanceOf(VoidVariable);
+			expect((error as VoidVariable).variable).toBe("no-such-var");
+		}
 	});
 
 	it("throws on an undefined function", () => {

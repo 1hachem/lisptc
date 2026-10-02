@@ -81,6 +81,15 @@ function ensureNum(x: unknown): Numeric {
 	throw new EvalException("not a number", x);
 }
 
+function keywordArgsIn(tokens: string[]): DocArg[] | undefined {
+	const at = tokens.indexOf("&key");
+	if (at < 0) return undefined;
+	const named = tokens.slice(at + 1).filter((t) => t !== "&rest");
+	return named.length === 0
+		? undefined
+		: named.map((name) => ({ name, type: "any", required: false }));
+}
+
 function listToStrings(list: List): string[] {
 	const out: string[] = [];
 	for (let c = list; c !== null; c = c.cdr as Cell | null) out.push(str(c.car));
@@ -501,11 +510,17 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		]),
 		([sym, argsOrSig, docstring]) => {
 			if (sym instanceof Sym && typeof docstring === "string") {
+				const tokens =
+					typeof argsOrSig === "string" ? undefined : listToStrings(argsOrSig);
 				const sig =
-					typeof argsOrSig === "string"
-						? argsOrSig
-						: `(${[sym.name, ...listToStrings(argsOrSig)].join(" ")})`;
-				interp.setDoc(sym.name, { signature: sig, doc: docstring });
+					tokens === undefined
+						? (argsOrSig as string)
+						: `(${[sym.name, ...tokens].join(" ")})`;
+				interp.setDoc(sym.name, {
+					signature: sig,
+					doc: docstring,
+					args: tokens === undefined ? undefined : keywordArgsIn(tokens),
+				});
 			}
 			return sym;
 		},

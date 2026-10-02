@@ -29,7 +29,20 @@ fold via recursion
 (defun fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
 (echo (fib 15))
 => 610
-(echo "=== 3. macros & quasiquotation ===")
+(echo "=== 3. keyword arguments ===")
+
+&key makes the arguments after it optional, and callable by name
+(defun kpi (&key label value unit) (list label value unit))
+filled by position, left to right
+(echo (kpi "Revenue" 42000))
+=> Revenue 42000 nil
+or by name, in any order
+(echo (kpi :value 42000 :label "Revenue" :unit "USD"))
+=> Revenue 42000 USD
+positions first, names after
+(echo (kpi "Revenue" :unit "USD"))
+=> Revenue nil USD
+(echo "=== 4. macros & quasiquotation ===")
 
 define our own control macro with `,` unquote and `,@` splice
 (defmacro unless (test &rest body) `(cond ((not ,test) ,@body)))

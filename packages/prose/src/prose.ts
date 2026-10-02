@@ -1,5 +1,5 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
-import { EvalException } from "@repo/interpreter/errors";
+import { EvalException, UnresolvedHead } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { Cell, EndOfFile } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
@@ -29,14 +29,19 @@ export function proseExtension(host: ProseHost): InterpExtension {
 			),
 		);
 		interp.hooks.failedForm.use(function* (interp, form, error, next) {
+			if (!(error instanceof UnresolvedHead) || error.form !== form)
+				return yield* next(interp, form, error);
 			for (const classifier of host.classifiers) {
 				const classification = yield* settled(classifier(interp, form));
 				if (classification === undefined) continue;
 				const ran = form instanceof Cell ? yield* runNested(interp, form) : 0;
 				const read = `${abbreviate(str(form))} — ${classification.reason}, so this was read as prose`;
-				return ran === 0
-					? read
-					: `${read}, and the ${ran === 1 ? "form" : "forms"} inside it ran`;
+				return {
+					skipped:
+						ran === 0
+							? read
+							: `${read}, and the ${ran === 1 ? "form" : "forms"} inside it ran`,
+				};
 			}
 			return yield* next(interp, form, error);
 		});
