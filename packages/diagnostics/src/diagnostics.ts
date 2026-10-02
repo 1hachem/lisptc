@@ -7,7 +7,7 @@ import {
 import { ArityException, KeywordException } from "@repo/interpreter/func";
 import type { Interp } from "@repo/interpreter/lisp";
 import type { InterpExtension } from "@repo/interpreter/session";
-import type { SearchEngine } from "@repo/shared/host";
+import type { SearchEngine } from "@repo/shared/search";
 import { type DiagnosticsHost, nearest } from "./ports.ts";
 
 function shown(name: string, doc: Doc | undefined): string {

@@ -9,12 +9,8 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
-import type {
-	Awaitable,
-	Clock,
-	PromptSource,
-	SearchEngine,
-} from "@repo/shared/host";
+import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
+import type { SearchEngine } from "@repo/shared/search";
 
 export const INITIAL_SCORE = 1;
 

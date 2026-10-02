@@ -1,4 +1,4 @@
-import { beyondStopWords, STOP_WORDS } from "@repo/shared/host";
+import { beyondStopWords, STOP_WORDS } from "@repo/shared/search";
 import MiniSearch from "minisearch";
 import type { SearchDocument, SearchEngine, SearchHit } from "./ports.ts";
 

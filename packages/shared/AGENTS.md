@@ -9,11 +9,14 @@ Turbo tag: `foundation`.
 ## Shape
 
 `src/host.ts` holds the ports two packages share and neither owns: the clock,
-the prompt source, the search engine three extensions each hand their own
-implementation of, and the type that lets a value or a promise both satisfy a
+the prompt source, and the type that lets a value or a promise both satisfy a
 port. `src/host-node.ts` holds the node-side implementations. That pair is the
 only place the split lives for a shared port, and an extension's own ports stay
 in its own `<name>-host.ts`.
+
+`src/search.ts` holds the search engine port that three extensions each hand
+their own implementation of, along with the stop words every query is read
+against.
 
 `src/lisp-tokens.ts` and `src/lisp-forms.ts` hold the dialect's tokens and form
 boundaries, so a highlighter, a language server and the prose classifier all

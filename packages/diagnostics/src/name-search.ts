@@ -2,7 +2,7 @@ import type {
 	SearchDocument,
 	SearchEngine,
 	SearchHit,
-} from "@repo/shared/host";
+} from "@repo/shared/search";
 import MiniSearch from "minisearch";
 
 const MIN_PREFIX = 3;

@@ -19,9 +19,10 @@ import {
 	type SessionHooks,
 	slot,
 } from "@repo/interpreter/session";
-import type { Clock, SearchEngine } from "@repo/shared/host";
+import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
+import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {

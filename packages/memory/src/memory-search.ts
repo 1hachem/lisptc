@@ -4,7 +4,7 @@ import {
 	type SearchEngine,
 	type SearchHit,
 	STOP_WORDS,
-} from "@repo/shared/host";
+} from "@repo/shared/search";
 import MiniSearch from "minisearch";
 
 const FIELDS = ["name", "description"];

@@ -1,8 +1,5 @@
-import type {
-	PromptSource,
-	SearchDocument,
-	SearchEngine,
-} from "@repo/shared/host";
+import type { PromptSource } from "@repo/shared/host";
+import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 
 export interface DiagnosticsHost {
 	prompt: PromptSource;

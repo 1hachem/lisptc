@@ -101,7 +101,7 @@ export type {
 	SearchDocument,
 	SearchEngine,
 	SearchHit,
-} from "@repo/shared/host";
+} from "@repo/shared/search";
 
 export interface OAuthRecord {
 	clientInformation?: OAuthClientInformationFull;

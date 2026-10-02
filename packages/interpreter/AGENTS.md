@@ -91,7 +91,7 @@ own prompt all go through one field of that interface.
   names an implementation.
 - A type or function both sides need, which does not itself depend on the
   host, lives in the package's `ports.ts` and neither side owns it.
-- A port two packages share and neither owns lives in `@repo/shared/host`, with
+- A port two packages share and neither owns lives in `@repo/shared/host` (search in `@repo/shared/search`), with
   its node-side implementation in `@repo/shared/host-node`.
 - A port whose work may have to wait is typed so a value or a promise both
   satisfy it, and is consumed through the evaluator's own suspension rather
