@@ -60,10 +60,9 @@ A new MCP capability is a new field on `McpExtensionHost`, or a new interface in
 `ports.ts` when something outside the extension has to consume it. Never a
 direct import of the SDK into `mcp.ts`.
 
-**A failure this extension can name, it names.** A call into a server the
-toolkit carries and has not loaded is answered with the load that would define
-it. Only what is left reaches the extension that guesses at a name, and that one
-is listed after this one at every composition root.
+**A failure this extension can name, it names**, before any extension that
+guesses at a name sees it. Every composition root lists this one ahead of that
+one.
 
 ## Tests
 
