@@ -197,7 +197,7 @@ export function streamChatResponse<Id extends string>(
 						steps = event.steps;
 						if (lastMeta) lastMeta.steps = event.steps;
 						write(sse("values", { messages: wire }));
-					} else if (event.type === "capped") {
+					} else if (event.type === "capped" || event.type === "stopped") {
 						steps = event.steps;
 					} else if (event.type === "silent") {
 						steps = event.steps;

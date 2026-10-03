@@ -49,6 +49,28 @@ describe("Chain", () => {
 		expect(asked).toEqual(["first", "second"]);
 	});
 
+	it("wraps a copy in an outermost layer and leaves the original as it was", () => {
+		const trace: string[] = [];
+		const chain = new Chain<[], void>();
+		chain.use((next) => {
+			trace.push("registered");
+			next();
+		});
+		const wrapped = chain.wrappedBy((next) => {
+			trace.push("outer");
+			next();
+		});
+		wrapped.run(() => trace.push("base"));
+		chain.run(() => trace.push("base"));
+		expect(trace).toEqual([
+			"outer",
+			"registered",
+			"base",
+			"registered",
+			"base",
+		]);
+	});
+
 	it("falls through to noOpinion when every middleware defers", () => {
 		const chain = new Chain<[form: string], string | undefined>();
 		chain.use((form, next) => next(form));

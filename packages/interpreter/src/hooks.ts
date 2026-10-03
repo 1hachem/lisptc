@@ -13,6 +13,12 @@ export class Chain<A extends unknown[], R> {
 		this.middlewares.push(middleware);
 	}
 
+	wrappedBy(middleware: Middleware<A, R>): Chain<A, R> {
+		const chain = new Chain<A, R>();
+		chain.middlewares.push(middleware, ...this.middlewares);
+		return chain;
+	}
+
 	run(base: (...a: A) => R, ...args: A): R {
 		let next = base;
 		for (let i = this.middlewares.length - 1; i >= 0; i--) {
