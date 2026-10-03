@@ -144,6 +144,16 @@ function Editor({
 		editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
 	}, [editor, onSubmit, disabled]);
 
+	const steerOrStop = useCallback(() => {
+		const empty =
+			editor
+				.getEditorState()
+				.read(() => $getRoot().getTextContent())
+				.trim() === "";
+		if (empty) onStop?.();
+		else runText();
+	}, [editor, onStop, runText]);
+
 	const runCommand = useCallback(
 		(name: string) => {
 			editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
@@ -216,7 +226,7 @@ function Editor({
 				}}
 			/>
 			<EnterSubmitPlugin
-				onEnter={isStreaming ? (onStop ?? (() => {})) : runText}
+				onEnter={isStreaming ? steerOrStop : runText}
 				disabled={disabled}
 				isMenuOpen={() => menuOpen.current}
 			/>
