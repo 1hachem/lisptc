@@ -1,14 +1,7 @@
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-	Queue,
-	QueueItem,
-	QueueItemAction,
-	QueueItemActions,
-	QueueItemContent,
-	QueueList,
-} from "@repo/ui";
 import { useChatSession } from "../lib/chat.tsx";
+import { UserLine } from "./user-line.tsx";
 
 export function SteerQueue() {
 	const { queued, withdraw } = useChatSession((state) => ({
@@ -16,30 +9,20 @@ export function SteerQueue() {
 		withdraw: state.withdraw,
 	}));
 
-	if (queued.length === 0) return null;
-
-	return (
-		<Queue className="mx-auto w-full max-w-[680px] rounded-b-none border-b-0 font-mono text-[13px]">
-			<QueueList>
-				{queued.map((item) => (
-					<QueueItem
-						key={item.id}
-						className="px-2 py-0.5 text-[12px] leading-[1.6]"
-					>
-						<QueueItemContent className="text-dim">
-							{item.text}
-						</QueueItemContent>
-						<QueueItemActions>
-							<QueueItemAction
-								aria-label="remove from queue"
-								onClick={() => withdraw(item.id)}
-							>
-								<HugeiconsIcon icon={Cancel01Icon} size={12} />
-							</QueueItemAction>
-						</QueueItemActions>
-					</QueueItem>
-				))}
-			</QueueList>
-		</Queue>
-	);
+	return queued.map((item) => (
+		<div
+			key={item.id}
+			className="group relative flex min-w-0 items-start gap-2 text-dim opacity-60"
+		>
+			<UserLine text={item.text} />
+			<button
+				type="button"
+				aria-label="remove from queue"
+				onClick={() => withdraw(item.id)}
+				className="mt-[0.3em] flex-none opacity-0 hover:text-fg group-hover:opacity-100"
+			>
+				<HugeiconsIcon icon={Cancel01Icon} size={12} />
+			</button>
+		</div>
+	));
 }
