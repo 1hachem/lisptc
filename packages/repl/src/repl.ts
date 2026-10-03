@@ -1,22 +1,34 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { driveAsync, settled } from "@repo/interpreter/drive";
+import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { noOpinion } from "@repo/interpreter/hooks";
+import {
+	type Chain,
+	type Middleware,
+	noOpinion,
+} from "@repo/interpreter/hooks";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
+	type AgentEnd,
+	type AgentStep,
+	type AgentTurn,
 	type Bounded,
 	type InterpExtension,
+	type ModelDelta,
+	type ModelRequest,
 	noAnnotations,
 	openSession,
 	type SessionHooks,
 	type StepAnnotations,
 	type StepContext,
+	type StepVerdict,
+	type TurnContext,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Skipped } from "@repo/shared/lisp-forms";
+import type { ChatMessage } from "@repo/shared/messages";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -37,7 +49,7 @@ export interface EvalOutput extends Bounded {
 	message?: string;
 }
 
-interface StepResult extends EvalOutput {
+export interface StepResult extends EvalOutput {
 	envelopes: readonly Envelope[];
 	skipped: string[];
 	feedback: string;
@@ -260,27 +272,104 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.unrun.run(() => [], this.interp, code);
 	}
 
-	async beginTurn(): Promise<{
+	async turnStart(
+		around?: Middleware<[TurnContext], Eval<void>>,
+	): Promise<{ emitted: string; annotations: StepAnnotations }> {
+		const chain = outermost(this.hooks.turnStart, around);
+		const { emitted, annotations } = await this.emitting((ctx) =>
+			chain.run(() => settled(undefined), ctx),
+		);
+		return { emitted, annotations };
+	}
+
+	async system(
+		prompt: string,
+	): Promise<{ prompt: string; annotations: StepAnnotations }> {
+		const { value, annotations } = await this.emitting(() =>
+			this.hooks.system.run((_i, p) => settled(p), this.interp, prompt),
+		);
+		return { prompt: value, annotations };
+	}
+
+	beginStep(): Promise<{
 		emitted: string;
 		annotations: StepAnnotations;
 	}> {
+		return this.emitting((ctx) =>
+			this.hooks.beginStep.run(() => settled(undefined), ctx),
+		);
+	}
+
+	context(messages: readonly ChatMessage[]): readonly ChatMessage[] {
+		return this.hooks.context.run((_i, m) => m, this.interp, messages);
+	}
+
+	modelCall(
+		request: ModelRequest,
+		call: (request: ModelRequest) => AsyncIterable<ModelDelta>,
+	): AsyncIterable<ModelDelta> {
+		return this.hooks.modelCall.run((_i, r) => call(r), this.interp, request);
+	}
+
+	response(text: string, read: (text: string) => string): string {
+		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
+	}
+
+	stepEnd(
+		turn: AgentTurn,
+		step: AgentStep,
+		verdict: StepVerdict,
+		around?: Middleware<[AgentTurn, AgentStep, StepVerdict], StepVerdict>,
+	): StepVerdict {
+		return outermost(this.hooks.stepEnd, around).run(
+			(_t, _s, v) => v,
+			turn,
+			step,
+			verdict,
+		);
+	}
+
+	async beforeSettle(
+		more: boolean,
+	): Promise<{ more: boolean; emitted: string }> {
+		const { beforeSettle } = this.hooks;
+		let decided = more;
+		const { emitted } = await this.emitting(function* (ctx) {
+			decided = yield* beforeSettle.run((_c, m) => settled(m), ctx, more);
+		});
+		return { more: decided, emitted };
+	}
+
+	settled(
+		turn: AgentTurn,
+		end: AgentEnd,
+		around?: Middleware<[AgentTurn, AgentEnd], void>,
+	): void {
+		outermost(this.hooks.settled, around).run(() => {}, turn, end);
+	}
+
+	private async emitting<T>(
+		run: (ctx: TurnContext) => Eval<T>,
+	): Promise<{ value: T; emitted: string; annotations: StepAnnotations }> {
 		let emitted = "";
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
+		let value: T;
 		try {
-			await driveAsync(
-				this.hooks.beginTurn.run(() => settled(undefined), {
+			({ value } = await driveAsync(
+				run({
 					interp: this.interp,
 					emit: (text) => {
 						emitted += emitted === "" ? text : `\n\n${text}`;
 					},
 				}),
-			);
+			));
 		} finally {
 			detach();
 		}
 		return {
+			value,
 			emitted,
 			annotations: this.hooks.annotate.run(
 				(_b, into) => into,
@@ -319,6 +408,13 @@ export class AgentRepl extends MemoryRepl {
 		super.reset();
 		this.clearTurnSignals();
 	}
+}
+
+function outermost<A extends unknown[], R>(
+	chain: Chain<A, R>,
+	around: Middleware<A, R> | undefined,
+): Chain<A, R> {
+	return around === undefined ? chain : chain.wrappedBy(around);
 }
 
 function defineVar(interp: Interp, name: string, value: unknown): void {

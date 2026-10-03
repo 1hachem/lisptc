@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { driveAsync, type Eval } from "@repo/interpreter/drive";
+import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -11,7 +11,7 @@ import {
 } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import type { InterpExtension } from "@repo/interpreter/session";
+import { type InterpExtension, openSession } from "@repo/interpreter/session";
 import type { Clock } from "@repo/shared/host";
 import { describe, expect, it } from "vitest";
 import {
@@ -61,6 +61,11 @@ function fixture(
 			return heard + before + (await drive(bank.endStep()));
 		},
 	};
+}
+
+async function system(f: Fixture, prompt = "you are a repl"): Promise<string> {
+	const hooks = openSession([memoryExtension(memoryHost, { bank: f.bank })]);
+	return drive(hooks.system.run((_i, p) => settled(p), f.interp, prompt));
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
@@ -117,6 +122,16 @@ describe("remembering and recalling", () => {
 		expect(await ev(f, '(memory/forget "k")')).toBe("t");
 		expect(await ev(f, '(memory/forget "k")')).toBe("nil");
 		expect(await ev(f, "(length (memories))")).toBe("0");
+	});
+
+	it("forgets everything on request", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "a" "one")');
+		await ev(f, `(memory/remember "b" "two" :on '(start))`);
+
+		expect(await ev(f, "(memory/forget-all)")).toBe("2");
+		expect(await ev(f, "(length (memories))")).toBe("0");
+		expect(await ev(f, "(memory/forget-all)")).toBe("0");
 	});
 
 	it("keeps a form as a form, not as its value", async () => {
@@ -773,5 +788,61 @@ describe("the listing", () => {
 		await ev(f, "(memories)");
 
 		expect((await f.bank.store.get("k"))?.used).toBe(0);
+	});
+});
+
+describe("the start of a turn", () => {
+	it("leaves the system prompt alone when nothing fires on start", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "note" "unrelated")');
+
+		expect(await system(f)).toBe("you are a repl");
+	});
+
+	it("puts a start memory in the system prompt", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
+
+		const prompt = await system(f);
+
+		expect(prompt).toBe("you are a repl\n\nyou are a pirate");
+	});
+
+	it("fires again at the next turn", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
+
+		await system(f);
+		await f.step("(+ 1 1)");
+
+		expect(await system(f)).toContain("you are a pirate");
+	});
+
+	it("reads the body as it is now, so a revised goal takes effect next turn", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "goal" "ship the parser" :on '(start))`);
+		await system(f);
+
+		await ev(f, `(memory/remember "goal" "ship the printer" :on '(start))`);
+
+		const prompt = await system(f);
+		expect(prompt).toContain("ship the printer");
+		expect(prompt).not.toContain("ship the parser");
+	});
+
+	it("surfaces a form as a recipe and does not run it", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "boot" '(defun greet () "hi") :on '(start))`);
+
+		expect(await system(f)).toContain("(defun greet");
+		await expect(ev(f, "(greet)")).rejects.toThrow();
+	});
+
+	it("takes no pattern", async () => {
+		const f = fixture();
+
+		await expect(
+			ev(f, `(memory/remember "role" "x" :on '(start "hello"))`),
+		).rejects.toThrow("takes no pattern");
 	});
 });

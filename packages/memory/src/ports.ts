@@ -22,6 +22,7 @@ export const TRIGGER_KINDS = [
 	"prose",
 	"user",
 	"recall",
+	"start",
 ] as const;
 
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
@@ -106,6 +107,11 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 	if (!(rest instanceof Cell))
 		throw new EvalException("trigger pattern expected after the kind", rest);
 	const pattern = rest.car;
+	if (kind === "start")
+		throw new EvalException(
+			"a start trigger fires at every turn start and takes no pattern: write (start)",
+			pattern,
+		);
 	if (kind === "call" && typeof pattern === "string")
 		throw new EvalException(
 			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',

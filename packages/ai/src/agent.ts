@@ -4,6 +4,7 @@ import {
 	HumanMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
+import type { ModelDelta, ModelUsage } from "@repo/interpreter/session";
 import type { ChatMessage } from "@repo/shared/messages";
 import { getProvider, type ProviderName } from "./provider.ts";
 import { type TraceContext, traceCallbacks } from "./telemetry.ts";
@@ -15,17 +16,9 @@ export type { Role } from "@repo/shared/messages";
 
 export type AgentMessage = ChatMessage;
 
-export interface TokenUsage {
-	input: number;
-	output: number;
-	cachedInput?: number;
-}
+export type TokenUsage = ModelUsage;
 
-export interface AgentDelta {
-	text?: string;
-	reasoning?: string;
-	usage?: TokenUsage;
-}
+export type AgentDelta = ModelDelta;
 
 export interface AgentConfig {
 	provider?: ProviderName;

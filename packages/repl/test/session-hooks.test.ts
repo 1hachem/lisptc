@@ -1,4 +1,14 @@
-import { annotating, slot } from "@repo/interpreter/session";
+import { topic } from "@repo/interpreter/channels";
+import { settled } from "@repo/interpreter/drive";
+import {
+	type AgentStep,
+	type AgentTurn,
+	annotating,
+	type ModelDelta,
+	type ModelRequest,
+	slot,
+	type TurnOutcome,
+} from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 import { extension } from "./helpers.ts";
@@ -65,7 +75,7 @@ describe("an extension hooking the session", () => {
 		const r = new AgentRepl({
 			extensions: [
 				extension((hooks) => {
-					hooks.beginTurn.use(function* (ctx, next) {
+					hooks.beginStep.use(function* (ctx, next) {
 						ctx.emit("something worth knowing");
 						yield* next(ctx);
 					});
@@ -73,7 +83,7 @@ describe("an extension hooking the session", () => {
 			],
 		});
 
-		expect((await r.beginTurn()).emitted).toBe("something worth knowing");
+		expect((await r.beginStep()).emitted).toBe("something worth knowing");
 	});
 
 	it("annotates the step on a lane of its own, beside the output", async () => {
@@ -152,5 +162,245 @@ describe("an extension hooking the session", () => {
 		const r = new MemoryRepl({ extensions: [] });
 
 		expect(r.hooks.filled(counter)).toBeUndefined();
+	});
+});
+
+describe("an extension hooking the turn", () => {
+	const request: ModelRequest = {
+		system: "be brief",
+		messages: [{ role: "user", content: "hi" }],
+	};
+
+	const step: AgentStep = {
+		step: 1,
+		code: "three.",
+		output: "",
+		error: false,
+		failed: false,
+		latencyMs: 1,
+	};
+
+	function turn(r: AgentRepl): AgentTurn {
+		return {
+			interp: r.interp,
+			threadId: "thread",
+			turnId: "turn",
+			prompt: "what is 1 + 2?",
+			provider: "test",
+			model: "test",
+		};
+	}
+
+	async function* canned(text: string): AsyncIterable<ModelDelta> {
+		yield { text };
+	}
+
+	async function collect(stream: AsyncIterable<ModelDelta>): Promise<string> {
+		let text = "";
+		for await (const delta of stream) text += delta.text ?? "";
+		return text;
+	}
+
+	it("starts a turn with nothing to say when nobody hooks it", async () => {
+		const r = new AgentRepl({ extensions: [] });
+
+		expect((await r.turnStart()).emitted).toBe("");
+	});
+
+	it("speaks once at the start of the turn", async () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.turnStart.use(function* (ctx, next) {
+						ctx.emit("a fresh turn");
+						yield* next(ctx);
+					});
+				}),
+			],
+		});
+
+		expect((await r.turnStart()).emitted).toBe("a fresh turn");
+	});
+
+	it("hands the system prompt back unchanged when nobody hooks it", async () => {
+		const r = new AgentRepl({ extensions: [] });
+
+		expect((await r.system("you are a repl")).prompt).toBe("you are a repl");
+	});
+
+	it("adds to the system prompt, and may wait to do it", async () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.system.use(function* (interp, prompt, next) {
+						const role = yield* settled(Promise.resolve("you are a pirate"));
+						return yield* next(interp, `${prompt}\n\n${role}`);
+					});
+				}),
+			],
+		});
+
+		expect((await r.system("you are a repl")).prompt).toBe(
+			"you are a repl\n\nyou are a pirate",
+		);
+	});
+
+	it("carries what the system prompt emits on the channels, like a step", async () => {
+		const said = topic<string>("said");
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.system.use(function* (interp, prompt, next) {
+						said.emit(interp.channels, { user: "you are a pirate" });
+						return yield* next(interp, prompt);
+					});
+					hooks.annotate.use((buffer, into, next) =>
+						next(
+							buffer,
+							annotating(into, "step", { said: buffer.collect(said) }),
+						),
+					);
+				}),
+			],
+		});
+
+		expect((await r.system("you are a repl")).annotations.step).toEqual({
+			said: ["you are a pirate"],
+		});
+	});
+
+	it("rewrites what the model sees", () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.context.use((interp, messages, next) =>
+						next(interp, [...messages, { role: "user", content: "and more" }]),
+					);
+				}),
+			],
+		});
+
+		expect(r.context(request.messages).map((m) => m.content)).toEqual([
+			"hi",
+			"and more",
+		]);
+		expect(new AgentRepl({ extensions: [] }).context(request.messages)).toBe(
+			request.messages,
+		);
+	});
+
+	it("calls the model it is handed when nobody hooks the call", async () => {
+		const r = new AgentRepl({ extensions: [] });
+
+		expect(await collect(r.modelCall(request, () => canned("(+ 1 2)")))).toBe(
+			"(+ 1 2)",
+		);
+	});
+
+	it("answers in place of the model", async () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => hooks.modelCall.use(() => canned("replayed"))),
+			],
+		});
+
+		expect(await collect(r.modelCall(request, () => canned("live")))).toBe(
+			"replayed",
+		);
+	});
+
+	it("reads the response the way it is told, then lets a hook rewrite it", () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) =>
+					hooks.response.use((interp, text, next) =>
+						next(interp, text.toUpperCase()),
+					),
+				),
+			],
+		});
+
+		expect(r.response(" (car x) ", (t) => t.trim())).toBe("(CAR X)");
+	});
+
+	it("keeps the loop's verdict on a step unless a hook overrides it", () => {
+		const plain = new AgentRepl({ extensions: [] });
+		const stubborn = new AgentRepl({
+			extensions: [extension((hooks) => hooks.stepEnd.use(() => "continue"))],
+		});
+
+		expect(plain.stepEnd(turn(plain), step, "halt")).toBe("halt");
+		expect(stubborn.stepEnd(turn(stubborn), step, "halt")).toBe("continue");
+	});
+
+	it("runs the layer it is handed outside every hook on the chain", () => {
+		const order: string[] = [];
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) =>
+					hooks.stepEnd.use(() => {
+						order.push("hook");
+						return "continue";
+					}),
+				),
+			],
+		});
+
+		r.stepEnd(turn(r), step, "halt", (t, s, v, next) => {
+			order.push("outer");
+			return next(t, s, v);
+		});
+		r.stepEnd(turn(r), step, "halt");
+
+		expect(order).toEqual(["outer", "hook", "hook"]);
+	});
+
+	it("settles as the loop asked when nobody hooks it", async () => {
+		const r = new AgentRepl({ extensions: [] });
+
+		expect(await r.beforeSettle(false)).toEqual({ more: false, emitted: "" });
+		expect(await r.beforeSettle(true)).toEqual({ more: true, emitted: "" });
+	});
+
+	it("asks for one more step, and says why", async () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.beforeSettle.use(function* (ctx, more, next) {
+						ctx.emit("check your answer");
+						yield* next(ctx, more);
+						return true;
+					});
+				}),
+			],
+		});
+
+		expect(await r.beforeSettle(false)).toEqual({
+			more: true,
+			emitted: "check your answer",
+		});
+	});
+
+	it("sees how the turn ended", () => {
+		const outcomes: [TurnOutcome, number][] = [];
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) =>
+					hooks.settled.use((t, end, next) => {
+						outcomes.push([end.outcome, end.steps]);
+						next(t, end);
+					}),
+				),
+			],
+		});
+
+		r.settled(turn(r), {
+			outcome: "halt",
+			answer: "3",
+			steps: 3,
+			latencyMs: 1,
+		});
+
+		expect(outcomes).toEqual([["halt", 3]]);
 	});
 });

@@ -12,6 +12,7 @@ Built-ins, installed by the memory extension — src/memory.ts:
   memory/recall    — retrieve by key or body, strongest first
   memories         — list every memory with its strength
   memory/forget    — drop one
+  memory/forget-all — drop every one
   memory/replay    — evaluate a memory whose body is a form
   memory/revise    — correct one, inside the window retrieval opens
 =====================================================================

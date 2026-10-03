@@ -141,7 +141,7 @@ What the extensions add on top:
                loading never blocks: the work runs off an async broker and
                applies between evaluations.
 - memory       memory/remember, memory/recall, memory/revise, memory/forget,
-               memory/replay, memories
+               memory/forget-all, memory/replay, memories
 - secrets      secrets and secret, returning tainted strings the string
                builtins carry through and the printer redacts
 - ui           ui/text, ui/heading, ui/markdown, ui/link, ui/badge, ui/kpi,
