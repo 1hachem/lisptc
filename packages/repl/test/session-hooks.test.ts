@@ -1,5 +1,7 @@
 import { settled } from "@repo/interpreter/drive";
 import {
+	type AgentStep,
+	type AgentTurn,
 	annotating,
 	type ModelDelta,
 	type ModelRequest,
@@ -168,6 +170,26 @@ describe("an extension hooking the turn", () => {
 		messages: [{ role: "user", content: "hi" }],
 	};
 
+	const step: AgentStep = {
+		step: 1,
+		code: "three.",
+		output: "",
+		error: false,
+		failed: false,
+		latencyMs: 1,
+	};
+
+	function turn(r: AgentRepl): AgentTurn {
+		return {
+			interp: r.interp,
+			threadId: "thread",
+			turnId: "turn",
+			prompt: "what is 1 + 2?",
+			provider: "test",
+			model: "test",
+		};
+	}
+
 	async function* canned(text: string): AsyncIterable<ModelDelta> {
 		yield { text };
 	}
@@ -282,8 +304,30 @@ describe("an extension hooking the turn", () => {
 			extensions: [extension((hooks) => hooks.stepEnd.use(() => "continue"))],
 		});
 
-		expect(plain.stepEnd(1, "halt")).toBe("halt");
-		expect(stubborn.stepEnd(1, "halt")).toBe("continue");
+		expect(plain.stepEnd(turn(plain), step, "halt")).toBe("halt");
+		expect(stubborn.stepEnd(turn(stubborn), step, "halt")).toBe("continue");
+	});
+
+	it("runs the layer it is handed outside every hook on the chain", () => {
+		const order: string[] = [];
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) =>
+					hooks.stepEnd.use(() => {
+						order.push("hook");
+						return "continue";
+					}),
+				),
+			],
+		});
+
+		r.stepEnd(turn(r), step, "halt", (t, s, v, next) => {
+			order.push("outer");
+			return next(t, s, v);
+		});
+		r.stepEnd(turn(r), step, "halt");
+
+		expect(order).toEqual(["outer", "hook", "hook"]);
 	});
 
 	it("settles as the loop asked when nobody hooks it", async () => {
@@ -317,15 +361,20 @@ describe("an extension hooking the turn", () => {
 		const r = new AgentRepl({
 			extensions: [
 				extension((hooks) =>
-					hooks.settled.use((interp, outcome, steps, next) => {
-						outcomes.push([outcome, steps]);
-						next(interp, outcome, steps);
+					hooks.settled.use((t, end, next) => {
+						outcomes.push([end.outcome, end.steps]);
+						next(t, end);
 					}),
 				),
 			],
 		});
 
-		r.settled("halt", 3);
+		r.settled(turn(r), {
+			outcome: "halt",
+			answer: "3",
+			steps: 3,
+			latencyMs: 1,
+		});
 
 		expect(outcomes).toEqual([["halt", 3]]);
 	});

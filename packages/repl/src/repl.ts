@@ -2,11 +2,18 @@ import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { noOpinion } from "@repo/interpreter/hooks";
+import {
+	type Chain,
+	type Middleware,
+	noOpinion,
+} from "@repo/interpreter/hooks";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
+	type AgentEnd,
+	type AgentStep,
+	type AgentTurn,
 	type Bounded,
 	type InterpExtension,
 	type ModelDelta,
@@ -18,7 +25,6 @@ import {
 	type StepContext,
 	type StepVerdict,
 	type TurnContext,
-	type TurnOutcome,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Skipped } from "@repo/shared/lisp-forms";
@@ -266,11 +272,12 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.unrun.run(() => [], this.interp, code);
 	}
 
-	async turnStart(): Promise<string> {
+	async turnStart(
+		around?: Middleware<[TurnContext], Eval<void>>,
+	): Promise<string> {
+		const chain = outermost(this.hooks.turnStart, around);
 		return (
-			await this.emitting((ctx) =>
-				this.hooks.turnStart.run(() => settled(undefined), ctx),
-			)
+			await this.emitting((ctx) => chain.run(() => settled(undefined), ctx))
 		).emitted;
 	}
 
@@ -306,8 +313,18 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
 	}
 
-	stepEnd(step: number, verdict: StepVerdict): StepVerdict {
-		return this.hooks.stepEnd.run((_i, _s, v) => v, this.interp, step, verdict);
+	stepEnd(
+		turn: AgentTurn,
+		step: AgentStep,
+		verdict: StepVerdict,
+		around?: Middleware<[AgentTurn, AgentStep, StepVerdict], StepVerdict>,
+	): StepVerdict {
+		return outermost(this.hooks.stepEnd, around).run(
+			(_t, _s, v) => v,
+			turn,
+			step,
+			verdict,
+		);
 	}
 
 	async beforeSettle(
@@ -321,8 +338,12 @@ export class AgentRepl extends MemoryRepl {
 		return { more: decided, emitted };
 	}
 
-	settled(outcome: TurnOutcome, steps: number): void {
-		this.hooks.settled.run(() => {}, this.interp, outcome, steps);
+	settled(
+		turn: AgentTurn,
+		end: AgentEnd,
+		around?: Middleware<[AgentTurn, AgentEnd], void>,
+	): void {
+		outermost(this.hooks.settled, around).run(() => {}, turn, end);
 	}
 
 	private async emitting(
@@ -383,6 +404,13 @@ export class AgentRepl extends MemoryRepl {
 		super.reset();
 		this.clearTurnSignals();
 	}
+}
+
+function outermost<A extends unknown[], R>(
+	chain: Chain<A, R>,
+	around: Middleware<A, R> | undefined,
+): Chain<A, R> {
+	return around === undefined ? chain : chain.wrappedBy(around);
 }
 
 function defineVar(interp: Interp, name: string, value: unknown): void {

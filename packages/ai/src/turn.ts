@@ -1,5 +1,6 @@
-import { llmSlot } from "@repo/interpreter/observe";
 import type {
+	AgentFailure,
+	AgentTurn,
 	Annotations,
 	ModelRequest,
 	StepAnnotations,
@@ -26,13 +27,8 @@ import {
 	type TranscriptEntry,
 	toLlmMessages,
 } from "./repl.ts";
-import {
-	captureException,
-	captureLlmCall,
-	captureReplEval,
-	captureTurn,
-	type TraceContext,
-} from "./telemetry.ts";
+import type { TraceContext } from "./telemetry.ts";
+import { type TurnTelemetry, turnTelemetry } from "./turn-telemetry.ts";
 
 export interface TurnOptions {
 	repl: AgentRepl;
@@ -172,6 +168,8 @@ interface Turn {
 	readonly maxSteps: number;
 	readonly signal?: AbortSignal;
 	readonly inbox?: () => Promise<Steer[]>;
+	readonly agent: AgentTurn;
+	readonly telemetry: TurnTelemetry;
 	steps: number;
 }
 
@@ -182,14 +180,11 @@ async function openTurn(
 	config: AgentConfig | undefined,
 ): Promise<{ system: string; call: ModelCall }> {
 	const { repl, transcript, trace, signal } = turn;
-	const observed = repl.hooks.filled(llmSlot);
-	if (observed) observed.observe = (call) => captureLlmCall(trace, call);
-
 	const withheld = repl.takeProseFeedback();
 	if (withheld)
 		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
 
-	const started = await repl.turnStart();
+	const started = await repl.turnStart(turn.telemetry.turnStart);
 	if (started !== "") transcript.push(noteEntry(started));
 
 	const system = await repl.system(
@@ -218,7 +213,7 @@ async function* evaluateStep(
 	turn: Turn,
 	answered: Answered,
 ): AsyncGenerator<TurnEvent, StepVerdict> {
-	const { repl, transcript, trace, ran, maxSteps } = turn;
+	const { repl, transcript, ran, maxSteps } = turn;
 	const { stepId, startedAt, code, reply } = answered;
 	yield {
 		type: "assistant",
@@ -238,18 +233,19 @@ async function* evaluateStep(
 	turn.steps += 1;
 	const step = turn.steps;
 
-	captureReplEval(trace, {
-		step,
-		source: code,
-		output,
-		error: error || failed,
-		latencyMs: Date.now() - evalStartedAt,
-	});
-
 	const capped = step >= maxSteps;
 	const verdict = repl.stepEnd(
-		step,
+		turn.agent,
+		{
+			step,
+			code,
+			output,
+			error,
+			failed,
+			latencyMs: Date.now() - evalStartedAt,
+		},
 		repl.takeFinished() ? "halt" : capped ? "capped" : "continue",
+		turn.telemetry.stepEnd,
 	);
 	if (verdict === "halt") return verdict;
 
@@ -316,17 +312,29 @@ function ending(verdict: Ending, code: string, steps: number): TurnEvent {
 function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 	const { repl, threadId, config, signal, identity, inbox } = options;
 	const ran = resolveModel(config?.provider, config?.model);
+	const trace: TraceContext = {
+		threadId: threadId ?? crypto.randomUUID(),
+		turnId: crypto.randomUUID(),
+		distinctId: identity?.distinctId,
+		sessionId: identity?.sessionId,
+		provider: ran.provider,
+		model: ran.model,
+	};
 	return {
 		repl,
 		transcript: [...messages],
-		trace: {
-			threadId: threadId ?? crypto.randomUUID(),
-			turnId: crypto.randomUUID(),
-			distinctId: identity?.distinctId,
-			sessionId: identity?.sessionId,
+		trace,
+		agent: {
+			get interp() {
+				return repl.interp;
+			},
+			threadId: trace.threadId,
+			turnId: trace.turnId,
+			prompt: lastUserPrompt(messages),
 			provider: ran.provider,
 			model: ran.model,
 		},
+		telemetry: turnTelemetry(repl.hooks, trace),
 		ran,
 		maxSteps: options.maxSteps ?? MAX_STEPS,
 		signal,
@@ -340,12 +348,11 @@ export async function* runAgentTurn(
 	options: TurnOptions,
 ): AsyncGenerator<TurnEvent> {
 	const turn = newTurn(options, messages);
-	const { repl, transcript, trace, signal, inbox } = turn;
+	const { repl, transcript, signal, inbox } = turn;
 	const startedAt = Date.now();
-	const prompt = lastUserPrompt(transcript);
 
 	let answer = "";
-	let failure: string | undefined;
+	let failure: AgentFailure | undefined;
 	let outcome: TurnOutcome = "aborted";
 
 	try {
@@ -365,21 +372,26 @@ export async function* runAgentTurn(
 			break;
 		}
 	} catch (err) {
-		failure = err instanceof Error ? err.message : String(err);
-		if (!signal?.aborted) {
+		failure = {
+			message: err instanceof Error ? err.message : String(err),
+			error: err,
+			cancelled: signal?.aborted === true,
+		};
+		if (!failure.cancelled) {
 			outcome = "failed";
-			captureException(err, trace, { steps: turn.steps });
-			yield { type: "failed", message: failure, error: err };
+			yield { type: "failed", message: failure.message, error: err };
 		}
 	} finally {
-		repl.settled(outcome, turn.steps);
-		captureTurn(trace, {
-			prompt,
-			answer,
-			steps: turn.steps,
-			halted: outcome === "halt",
-			latencyMs: Date.now() - startedAt,
-			error: failure,
-		});
+		repl.settled(
+			turn.agent,
+			{
+				outcome,
+				answer,
+				steps: turn.steps,
+				latencyMs: Date.now() - startedAt,
+				...(failure ? { failure } : {}),
+			},
+			turn.telemetry.settled,
+		);
 	}
 }

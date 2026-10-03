@@ -17,6 +17,11 @@ let throws: string | undefined;
 let calls = 0;
 let onCall: (() => void) | undefined;
 
+const turns = vi.hoisted(
+	() => [] as { prompt: string; answer: string; halted: boolean }[],
+);
+const exceptions = vi.hoisted(() => [] as unknown[]);
+
 const spans = vi.hoisted(
 	() => [] as { step: number; source: string; error: boolean }[],
 );
@@ -25,9 +30,13 @@ vi.mock("../src/telemetry.ts", () => ({
 	captureReplEval: (_ctx: unknown, span: (typeof spans)[number]) => {
 		spans.push(span);
 	},
-	captureTurn: () => {},
+	captureTurn: (_ctx: unknown, turn: (typeof turns)[number]) => {
+		turns.push(turn);
+	},
 	captureLlmCall: () => {},
-	captureException: () => {},
+	captureException: (error: unknown) => {
+		exceptions.push(error);
+	},
 }));
 
 vi.mock("../src/agent.ts", () => ({
@@ -62,6 +71,8 @@ describe("the agent turn", () => {
 	beforeEach(() => {
 		seen.length = 0;
 		spans.length = 0;
+		turns.length = 0;
+		exceptions.length = 0;
 		script = [];
 		throws = undefined;
 		calls = 0;
@@ -302,9 +313,8 @@ describe("the agent turn", () => {
 		let overruled = false;
 		const repl = testRepl([
 			extension((hooks) =>
-				hooks.stepEnd.use((interp, step, verdict, next) => {
-					if (verdict !== "halt" || overruled)
-						return next(interp, step, verdict);
+				hooks.stepEnd.use((turn, step, verdict, next) => {
+					if (verdict !== "halt" || overruled) return next(turn, step, verdict);
 					overruled = true;
 					return "continue";
 				}),
@@ -385,9 +395,9 @@ describe("the agent turn", () => {
 		const outcomes: TurnOutcome[] = [];
 		const repl = testRepl([
 			extension((hooks) =>
-				hooks.settled.use((interp, outcome, steps, next) => {
-					outcomes.push(outcome);
-					next(interp, outcome, steps);
+				hooks.settled.use((turn, end, next) => {
+					outcomes.push(end.outcome);
+					next(turn, end);
 				}),
 			),
 		]);
@@ -395,5 +405,64 @@ describe("the agent turn", () => {
 		await drain(ask, { repl, maxSteps: 2 });
 
 		expect(outcomes).toEqual([expected]);
+	});
+
+	test("telemetry still sees a step that a hook does not pass on", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.stepEnd.use((_turn, step) =>
+					step.code === "three." ? "halt" : "continue",
+				),
+			),
+		]);
+
+		await drain(ask, { repl });
+
+		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
+	});
+
+	test("the turn is traced with its prompt and answer once it settles", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		await drain(ask);
+
+		expect(turns).toEqual([
+			expect.objectContaining({
+				prompt: "what is 1 + 2?",
+				answer: "three.",
+				halted: true,
+			}),
+		]);
+	});
+
+	test("a failed turn is traced as an exception, an aborted one is not", async () => {
+		throws = "upstream exploded";
+		await drain(ask);
+		expect(exceptions).toHaveLength(1);
+
+		exceptions.length = 0;
+		const abort = new AbortController();
+		onCall = () => abort.abort();
+		await drain(ask, { signal: abort.signal });
+		expect(exceptions).toHaveLength(0);
+	});
+
+	test("a hook that throws as the turn settles loses neither the trace nor the turn", async () => {
+		script = [[{ text: "three." }]];
+		const broken = new Error("observer broke");
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.settled.use(() => {
+					throw broken;
+				}),
+			),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "three." });
+		expect(turns).toHaveLength(1);
+		expect(exceptions).toEqual([broken]);
 	});
 });

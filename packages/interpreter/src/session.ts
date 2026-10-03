@@ -63,6 +63,38 @@ export type StepVerdict = "continue" | "halt" | "capped";
 
 export type TurnOutcome = "halt" | "capped" | "silent" | "failed" | "aborted";
 
+export interface AgentTurn {
+	readonly interp: Interp;
+	readonly threadId: string;
+	readonly turnId: string;
+	readonly prompt: string;
+	readonly provider: string;
+	readonly model: string;
+}
+
+export interface AgentStep {
+	readonly step: number;
+	readonly code: string;
+	readonly output: string;
+	readonly error: boolean;
+	readonly failed: boolean;
+	readonly latencyMs: number;
+}
+
+export interface AgentFailure {
+	readonly message: string;
+	readonly error: unknown;
+	readonly cancelled: boolean;
+}
+
+export interface AgentEnd {
+	readonly outcome: TurnOutcome;
+	readonly answer: string;
+	readonly steps: number;
+	readonly latencyMs: number;
+	readonly failure?: AgentFailure;
+}
+
 export interface ActionContext {
 	readonly interp: Interp;
 	readonly action: string;
@@ -96,17 +128,14 @@ export interface SessionHooks {
 	>;
 	readonly response: Chain<[interp: Interp, text: string], string>;
 	readonly stepEnd: Chain<
-		[interp: Interp, step: number, verdict: StepVerdict],
+		[turn: AgentTurn, step: AgentStep, verdict: StepVerdict],
 		StepVerdict
 	>;
 	readonly beforeSettle: Chain<
 		[ctx: TurnContext, more: boolean],
 		Eval<boolean>
 	>;
-	readonly settled: Chain<
-		[interp: Interp, outcome: TurnOutcome, steps: number],
-		void
-	>;
+	readonly settled: Chain<[turn: AgentTurn, end: AgentEnd], void>;
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
