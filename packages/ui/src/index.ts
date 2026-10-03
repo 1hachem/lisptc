@@ -1,5 +1,6 @@
 export * from "./components/ai-elements/conversation.tsx";
 export * from "./components/ai-elements/prompt-input.tsx";
+export * from "./components/ai-elements/queue.tsx";
 export * from "./components/ai-elements/suggestion.tsx";
 export { Button, buttonVariants } from "./components/ui/button.tsx";
 export {

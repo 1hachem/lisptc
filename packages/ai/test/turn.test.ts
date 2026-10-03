@@ -116,6 +116,39 @@ describe("the agent turn", () => {
 		expect(events.at(-1)).toMatchObject({ answer: "three.", steps: 2 });
 	});
 
+	test("a steer taken between steps reaches the next model call after the tool result", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+		const pending = [{ id: "s1", content: "use hex" }];
+
+		const events = await drain(ask, { inbox: async () => pending.splice(0) });
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"steered",
+			"delta",
+			"assistant",
+			"halt",
+		]);
+		expect(events[3]).toEqual({
+			type: "steered",
+			id: "s1",
+			content: "use hex",
+		});
+		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });
+		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
+	});
+
+	test("the inbox is not read before the first step", async () => {
+		script = [[{ text: "three." }]];
+		const inbox = vi.fn(async () => [{ id: "s1", content: "ignored" }]);
+
+		await drain(ask, { inbox });
+
+		expect(inbox).not.toHaveBeenCalled();
+	});
+
 	test("the loop stops at maxSteps without an answer", async () => {
 		script = [[{ text: "(+ 1 2)" }]];
 
