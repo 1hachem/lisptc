@@ -6,7 +6,6 @@ import {
 	QueueItemAction,
 	QueueItemActions,
 	QueueItemContent,
-	QueueItemIndicator,
 	QueueList,
 } from "@repo/ui";
 import { useChatSession } from "../lib/chat.tsx";
@@ -27,8 +26,9 @@ export function SteerQueue() {
 						key={item.id}
 						className="px-2 py-0.5 text-[12px] leading-[1.6]"
 					>
-						<QueueItemIndicator />
-						<QueueItemContent>{item.text}</QueueItemContent>
+						<QueueItemContent className="text-dim">
+							{item.text}
+						</QueueItemContent>
 						<QueueItemActions>
 							<QueueItemAction
 								aria-label="remove from queue"
