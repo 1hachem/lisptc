@@ -144,15 +144,21 @@ function Editor({
 		editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
 	}, [editor, onSubmit, disabled]);
 
+	const [empty, setEmpty] = useState(true);
+	useEffect(
+		() =>
+			editor.registerUpdateListener(({ editorState }) => {
+				setEmpty(
+					editorState.read(() => $getRoot().getTextContent()).trim() === "",
+				);
+			}),
+		[editor],
+	);
+
 	const steerOrStop = useCallback(() => {
-		const empty =
-			editor
-				.getEditorState()
-				.read(() => $getRoot().getTextContent())
-				.trim() === "";
 		if (empty) onStop?.();
 		else runText();
-	}, [editor, onStop, runText]);
+	}, [empty, onStop, runText]);
 
 	const runCommand = useCallback(
 		(name: string) => {
@@ -177,12 +183,19 @@ function Editor({
 				tone={disabled ? "text-dim" : "text-green"}
 				dim={disabled}
 				action={
-					isStreaming ? (
+					isStreaming && empty ? (
 						<InputAction
 							label="stop"
 							glyph="■"
 							tone="text-red hover:brightness-125"
 							onClick={onStop}
+						/>
+					) : isStreaming ? (
+						<InputAction
+							label="queue"
+							glyph="⏎"
+							tone="text-yellow hover:brightness-125"
+							onClick={runText}
 						/>
 					) : (
 						<InputAction

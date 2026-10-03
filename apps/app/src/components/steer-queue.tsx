@@ -23,7 +23,10 @@ export function SteerQueue() {
 		<Queue className="mx-auto w-full max-w-[680px] rounded-b-none border-b-0 font-mono text-[13px]">
 			<QueueList>
 				{queued.map((item) => (
-					<QueueItem key={item.id}>
+					<QueueItem
+						key={item.id}
+						className="px-2 py-0.5 text-[12px] leading-[1.6]"
+					>
 						<QueueItemIndicator />
 						<QueueItemContent>{item.text}</QueueItemContent>
 						<QueueItemActions>
