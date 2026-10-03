@@ -85,8 +85,14 @@ function parseMeta(value: unknown): StepMeta | undefined {
 	};
 }
 
+export interface QueuedMessage {
+	id: string;
+	text: string;
+}
+
 interface ChatSession {
 	messages: ChatMessage[];
+	queued: QueuedMessage[];
 	greeting: string | null;
 	meta: Record<string, StepMeta>;
 	fresh: boolean;
@@ -96,6 +102,19 @@ interface ChatSession {
 	send: (text: string) => void;
 	runLisp: (code: string) => void;
 	stop: () => void;
+	withdraw: (id: string) => void;
+}
+
+async function steer(
+	method: "POST" | "DELETE",
+	body: { chatId: string; id: string; message?: string },
+): Promise<boolean> {
+	const response = await fetch(`${API_URL}/api/chat/steer`, {
+		method,
+		headers: await apiHeaders(),
+		body: JSON.stringify(body),
+	});
+	return response.ok;
 }
 
 async function evalLisp(
@@ -254,11 +273,19 @@ export function ChatProvider({
 		[chatId, workspaceId, createChat, navigate],
 	);
 
+	const [queued, setQueued] = useState<QueuedMessage[]>([]);
+
 	const send = useCallback(
 		async (text: string) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
 			setEvalError(undefined);
+			if (stream.isLoading && chatId && streamingFor.current === chatId) {
+				const id = crypto.randomUUID();
+				setQueued((q) => [...q, { id, text: trimmed }]);
+				void steer("POST", { chatId, id, message: trimmed }).catch(() => false);
+				return;
+			}
 			const opened =
 				chatId ?? (await createChat({ workspaceId, title: titleOf(trimmed) }));
 			streamingFor.current = opened;
@@ -284,12 +311,31 @@ export function ChatProvider({
 		[chatId, workspaceId, createChat, navigate, persisted, stream],
 	);
 
+	useEffect(() => {
+		if (queued.length === 0) return;
+		const landed = new Set(streamed.map((m) => m.id));
+		const waiting = queued.filter((q) => !landed.has(q.id));
+		if (!stream.isLoading && waiting.length > 0) {
+			setQueued([]);
+			void send(waiting.map((q) => q.text).join("\n\n"));
+		} else if (waiting.length !== queued.length) setQueued(waiting);
+	}, [queued, streamed, stream.isLoading, send]);
+
+	const withdraw = useCallback(
+		(id: string) => {
+			setQueued((q) => q.filter((item) => item.id !== id));
+			if (chatId) void steer("DELETE", { chatId, id }).catch(() => false);
+		},
+		[chatId],
+	);
+
 	const stop = useCallback(() => {
+		for (const { id } of queued) withdraw(id);
 		running.current?.abort();
 		running.current = null;
 		setEvaluating(false);
 		stream.stop();
-	}, [stream]);
+	}, [stream, queued, withdraw]);
 
 	const fresh = isFreshChat(chatId, turns);
 
@@ -297,6 +343,7 @@ export function ChatProvider({
 	if (storeRef.current === null) {
 		storeRef.current = create<ChatSession>(() => ({
 			messages: [],
+			queued: [],
 			greeting: null,
 			meta: {},
 			fresh,
@@ -305,6 +352,7 @@ export function ChatProvider({
 			send: () => {},
 			runLisp: () => {},
 			stop: () => {},
+			withdraw: () => {},
 		}));
 	}
 	const store = storeRef.current;
@@ -312,6 +360,7 @@ export function ChatProvider({
 	useEffect(() => {
 		store.setState({
 			messages,
+			queued,
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
 			fresh,
@@ -330,10 +379,12 @@ export function ChatProvider({
 				void runLisp(code);
 			},
 			stop,
+			withdraw,
 		});
 	}, [
 		store,
 		messages,
+		queued,
 		meta,
 		greeting,
 		fresh,
@@ -345,6 +396,7 @@ export function ChatProvider({
 		send,
 		runLisp,
 		stop,
+		withdraw,
 	]);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;

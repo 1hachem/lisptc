@@ -1,5 +1,6 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
+import type { SteerInbox } from "./inbox.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import { runAgentTurn } from "./turn.ts";
@@ -70,13 +71,14 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	onTurn?: (messages: WireMessage[]) => Promise<void> | void;
+	steer?: { inbox: SteerInbox; key: string };
 };
 
 export function streamChatResponse<Id extends string>(
 	input: ChatInput,
 	options: ChatStreamOptions<Id>,
 ): Response {
-	const { threadId, config, identity, onTurn, signal } = options;
+	const { threadId, config, identity, onTurn, signal, steer } = options;
 	const abort = new AbortController();
 	if (signal)
 		signal.addEventListener("abort", () => abort.abort(), { once: true });
@@ -108,6 +110,7 @@ export function streamChatResponse<Id extends string>(
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
 			let collected: Record<string, unknown> = {};
+			steer?.inbox.open(steer.key);
 
 			try {
 				write(sse("values", { messages: wire }));
@@ -120,6 +123,7 @@ export function streamChatResponse<Id extends string>(
 					config,
 					signal: abort.signal,
 					identity,
+					...(steer ? { inbox: () => steer.inbox.take(steer.key) } : {}),
 				})) {
 					if (event.type === "delta") {
 						const chunk: Record<string, unknown> = {
@@ -135,6 +139,9 @@ export function streamChatResponse<Id extends string>(
 							chunk.content = event.text ?? "";
 						}
 						if (!write(sse("messages", [chunk, {}]))) break;
+					} else if (event.type === "steered") {
+						wire.push({ type: "human", content: event.content, id: event.id });
+						if (!write(sse("values", { messages: wire }))) break;
 					} else if (event.type === "collected") {
 						collected = event.annotations;
 					} else if (event.type === "assistant") {
@@ -200,6 +207,7 @@ export function streamChatResponse<Id extends string>(
 					}),
 				);
 			} finally {
+				steer?.inbox.close(steer.key);
 				if (onTurn) {
 					try {
 						await onTurn(wire.slice(carried));

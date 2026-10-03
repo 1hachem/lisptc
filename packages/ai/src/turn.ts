@@ -3,6 +3,7 @@ import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { type AgentConfig, streamAgent, type TokenUsage } from "./agent.ts";
+import type { Steer } from "./inbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
 import {
@@ -29,6 +30,7 @@ export interface TurnOptions {
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
+	inbox?: () => Steer[];
 }
 
 export interface StepMeta {
@@ -61,6 +63,7 @@ export type TurnEvent =
 			failed: boolean;
 	  }
 	| { type: "collected"; annotations: Annotations }
+	| { type: "steered"; id: string; content: string }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
@@ -103,6 +106,7 @@ export async function* runAgentTurn(
 		signal,
 		identity,
 		maxSteps = MAX_STEPS,
+		inbox,
 	} = options;
 	const transcript = [...messages];
 
@@ -143,6 +147,12 @@ export async function* runAgentTurn(
 		let riding = "";
 
 		while (!signal?.aborted) {
+			if (steps > 0)
+				for (const steer of inbox?.() ?? []) {
+					transcript.push({ role: "user", content: steer.content });
+					yield { type: "steered", ...steer };
+				}
+
 			repl.setConversationVars(snapshotConversation(transcript));
 
 			const { emitted, annotations: collected } = await repl.beginTurn();

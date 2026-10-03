@@ -1,4 +1,4 @@
-import { evalUserCode, streamChatResponse } from "@repo/ai";
+import { evalUserCode, SteerInbox, streamChatResponse } from "@repo/ai";
 import { api } from "@repo/backend/api";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -15,6 +15,22 @@ export const chatRequestSchema = z.object({
 		message: z.string(),
 	}),
 });
+
+export const steerRequestSchema = z.object({
+	chatId: convexId<"chats">(),
+	id: z.string().min(1),
+	message: z.string().trim().min(1),
+});
+
+export const withdrawRequestSchema = steerRequestSchema.pick({
+	chatId: true,
+	id: true,
+});
+
+const steers = new SteerInbox();
+
+const steerKey = (subject: string, chatId: string): string =>
+	`${subject}:${chatId}`;
 
 const evalRequestSchema = z.object({
 	chatId: convexId<"chats">(),
@@ -52,6 +68,10 @@ chat.post("/", async (c) => {
 			threadId: chatId,
 			config: { provider: CHAT_PROVIDER, model: CHAT_MODEL },
 			signal: c.req.raw.signal,
+			steer: {
+				inbox: steers,
+				key: steerKey(c.get("session").subject, chatId),
+			},
 			identity: {
 				distinctId: c.req.header("x-distinct-id"),
 				sessionId: c.req.header("x-posthog-session-id"),
@@ -63,6 +83,38 @@ chat.post("/", async (c) => {
 			},
 		},
 	);
+});
+
+chat.post("/steer", async (c) => {
+	const parsed = steerRequestSchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!parsed.success) {
+		console.warn("rejected steer request:", z.treeifyError(parsed.error));
+		return c.json({ error: z.treeifyError(parsed.error) }, 400);
+	}
+	const { chatId, id, message } = parsed.data;
+	const accepted = steers.post(steerKey(c.get("session").subject, chatId), {
+		id,
+		content: message,
+	});
+	return c.json({ accepted }, accepted ? 202 : 409);
+});
+
+chat.delete("/steer", async (c) => {
+	const parsed = withdrawRequestSchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!parsed.success) {
+		console.warn("rejected withdraw request:", z.treeifyError(parsed.error));
+		return c.json({ error: z.treeifyError(parsed.error) }, 400);
+	}
+	const { chatId, id } = parsed.data;
+	const withdrawn = steers.withdraw(
+		steerKey(c.get("session").subject, chatId),
+		id,
+	);
+	return c.json({ withdrawn }, withdrawn ? 200 : 409);
 });
 
 chat.post("/eval", async (c) => {
