@@ -43,6 +43,10 @@ is WRONG, an arity error. To search one server's tools, load it first, then
   - (login "name") begins authorization and returns the login URL to open, or
     :logged-in if already authenticated. After approving, (load-mcp "name")
 connects.
+  - When the user says they approved, run (await (load-mcp "name")) and carry
+    on with the original request: the redirect is captured for you. Only when
+    they hand back a bare code, run (mcp-authorize "name" "<code>") before
+    that load. Never ask for a code before that load has failed.
   - (logout "name") gives :logged-out. It unloads the server if it's loaded AND
     deletes its saved tokens, so the next (load-mcp "name") or (login "name")
 re-authorizes from scratch. Use it to sign out, or to force a fresh consent

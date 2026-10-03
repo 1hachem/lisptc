@@ -57,9 +57,11 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		serverKey: v.string(),
 		record: v.string(),
+		pendingState: v.optional(v.string()),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_server", ["workspaceId", "serverKey"]),
+		.index("by_workspace_server", ["workspaceId", "serverKey"])
+		.index("by_pending_state", ["pendingState"]),
 
 	memories: defineTable({
 		workspaceId: v.id("workspaces"),

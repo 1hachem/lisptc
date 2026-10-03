@@ -24,6 +24,16 @@ import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
+import {
+	awaitedState,
+	clearApproval,
+	OAUTH_APPROVED_KEY,
+	OAUTH_CHANNEL,
+	type OAuthSignal,
+	RESUME_MESSAGE,
+	readApproval,
+	rememberAwaitingChat,
+} from "./oauth-callback.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
@@ -307,6 +317,46 @@ export function ChatProvider({
 		},
 		[steering, enqueue, submitTurn],
 	);
+
+	const [approved, setApproved] = useState<string | null>(null);
+	useEffect(() => {
+		setApproved(readApproval());
+		const onStorage = (e: StorageEvent) => {
+			if (e.key === OAUTH_APPROVED_KEY) setApproved(e.newValue);
+		};
+		window.addEventListener("storage", onStorage);
+		return () => window.removeEventListener("storage", onStorage);
+	}, []);
+
+	const awaited = useMemo(
+		() =>
+			awaitedState(
+				persisted.map((m) => ({ type: m.type, text: messageText(m) })),
+			),
+		[persisted],
+	);
+
+	useEffect(() => {
+		if (!awaited || !chatId) return;
+		rememberAwaitingChat(awaited, { workspaceId, chatId });
+		const channel = new BroadcastChannel(OAUTH_CHANNEL);
+		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
+			if (e.data.type !== "approved" || e.data.state !== awaited) return;
+			channel.postMessage({
+				type: "resuming",
+				state: awaited,
+			} satisfies OAuthSignal);
+		};
+		return () => channel.close();
+	}, [awaited, chatId, workspaceId]);
+
+	useEffect(() => {
+		if (!approved || !chatId || stream.isLoading) return;
+		if (approved !== awaited) return;
+		clearApproval();
+		setApproved(null);
+		void submitTurn(RESUME_MESSAGE);
+	}, [approved, awaited, chatId, stream.isLoading, submitTurn]);
 
 	const stop = useCallback(() => {
 		clear();

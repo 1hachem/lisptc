@@ -8,6 +8,8 @@ export class ConvexOAuthStore<R> {
 	constructor(
 		private readonly workspaceId: Id<"workspaces">,
 		private readonly connect: () => OAuthClient,
+		private readonly pendingState: (record: R) => string | undefined = () =>
+			undefined,
 	) {}
 
 	async load(serverKey: string): Promise<R | undefined> {
@@ -28,6 +30,7 @@ export class ConvexOAuthStore<R> {
 			workspaceId: this.workspaceId,
 			serverKey,
 			record: JSON.stringify(record),
+			pendingState: this.pendingState(record),
 		});
 	}
 

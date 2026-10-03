@@ -53,9 +53,18 @@ class NeedsAuthError extends Error {
 		super(
 			captured
 				? `authorization required for "${server}": open ${authUrl} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "<code>"))`
-				: `authorization required for "${server}": open ${authUrl} — nothing is listening on the callback address, so the redirect cannot be captured: copy the code the page lands on and run (mcp-authorize "${server}" "<code>")`,
+				: `authorization required for "${server}": open ${authUrl} — once the user says they approved it, run (load-mcp "${server}") again (or, if they hand back a code instead, run (mcp-authorize "${server}" "<code>") first)`,
 		);
 	}
+}
+
+function landsOnCallbackPort(url: string, port: number): boolean {
+	const { hostname, port: target } = new URL(url);
+	const loopback =
+		hostname === "127.0.0.1" ||
+		hostname === "localhost" ||
+		hostname === "[::1]";
+	return loopback && (port === 0 || Number(target) === port);
 }
 
 export function mcpClient(ports: McpClientPorts): McpClient {
@@ -73,6 +82,8 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	};
 
 	function callbackServer(): Promise<CallbackServer | undefined> {
+		if (!landsOnCallbackPort(ports.redirectUri, ports.callbackPort))
+			return Promise.resolve(undefined);
 		return sharedAuthCallback(ports.callbackPort, ports.redirectUri).catch(
 			() => undefined,
 		);
@@ -120,6 +131,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		await auth(provider, { serverUrl, scope });
 		const authUrl = provider.authorizationUrl;
 		if (!authUrl) throw new Error("no authorization URL produced");
+		await provider.savePending(serverUrl);
 		const captured = await startCallbackCapture(
 			serverUrl,
 			scope,

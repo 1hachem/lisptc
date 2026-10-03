@@ -4,7 +4,10 @@ import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import {
+	auth,
+	type OAuthClientProvider,
+} from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
 	OAuthClientInformationFull,
 	OAuthClientMetadata,
@@ -77,7 +80,20 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 		redirectUrl: string,
 		scope?: string,
 	): Promise<StoredOAuthProvider> {
-		const serverKey = new URL(serverUrl).origin;
+		return StoredOAuthProvider.open(
+			store,
+			new URL(serverUrl).origin,
+			redirectUrl,
+			scope,
+		);
+	}
+
+	static async open(
+		store: OAuthStore,
+		serverKey: string,
+		redirectUrl: string,
+		scope?: string,
+	): Promise<StoredOAuthProvider> {
 		const record = (await store.load(serverKey)) ?? {};
 		return new StoredOAuthProvider(
 			store,
@@ -118,6 +134,16 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 
 	async saveTokens(tokens: OAuthTokens): Promise<void> {
 		this.record.tokens = tokens;
+		this.record.pending = undefined;
+		await this.persist();
+	}
+
+	async savePending(serverUrl: string): Promise<void> {
+		this.record.pending = {
+			state: this.state(),
+			serverUrl,
+			...(this.scope ? { scope: this.scope } : {}),
+		};
 		await this.persist();
 	}
 
@@ -150,6 +176,33 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 	private async persist(): Promise<void> {
 		await this.store.save(this.serverKey, this.record);
 	}
+}
+
+export async function completeAuthorization(
+	store: OAuthStore,
+	serverKey: string,
+	redirectUrl: string,
+	callbackUrl: string,
+): Promise<void> {
+	const params = new URL(callbackUrl).searchParams;
+	const code = params.get("code");
+	if (!code) throw new Error("the callback link carries no authorization code");
+	const { pending } = (await store.load(serverKey)) ?? {};
+	if (!pending || pending.state !== params.get("state"))
+		throw new Error("no authorization is waiting for this callback link");
+	const provider = await StoredOAuthProvider.open(
+		store,
+		serverKey,
+		redirectUrl,
+		pending.scope,
+	);
+	const result = await auth(provider, {
+		serverUrl: pending.serverUrl,
+		authorizationCode: code,
+		scope: pending.scope,
+	});
+	if (result !== "AUTHORIZED")
+		throw new Error("authorization did not complete (unexpected redirect)");
 }
 
 const DEFAULT_AUTH_TIMEOUT_MS = 300_000;

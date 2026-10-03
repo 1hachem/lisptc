@@ -13,6 +13,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedWorkspaceIdRouteRouteImport } from './routes/_authed/$workspaceId/route'
+import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
 import { Route as AuthedWorkspaceIdChatIdRouteImport } from './routes/_authed/$workspaceId/$chatId'
 
@@ -35,6 +36,11 @@ const AuthedWorkspaceIdRouteRoute = AuthedWorkspaceIdRouteRouteImport.update({
   path: '/$workspaceId',
   getParentRoute: () => AuthedRoute,
 } as any)
+const OauthCallbackRoute = OauthCallbackRouteImport.update({
+  id: '/oauth/callback',
+  path: '/oauth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthedWorkspaceIdIndexRoute = AuthedWorkspaceIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -50,11 +56,13 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/oauth/callback': typeof OauthCallbackRoute
   '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/oauth/callback': typeof OauthCallbackRoute
   '/': typeof AuthedIndexRoute
   '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
   '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
@@ -64,6 +72,7 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/oauth/callback': typeof OauthCallbackRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
   '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
@@ -74,15 +83,22 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/$workspaceId'
+    | '/oauth/callback'
     | '/$workspaceId/$chatId'
     | '/$workspaceId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/' | '/$workspaceId/$chatId' | '/$workspaceId'
+  to:
+    | '/login'
+    | '/oauth/callback'
+    | '/'
+    | '/$workspaceId/$chatId'
+    | '/$workspaceId'
   id:
     | '__root__'
     | '/_authed'
     | '/login'
     | '/_authed/$workspaceId'
+    | '/oauth/callback'
     | '/_authed/'
     | '/_authed/$workspaceId/$chatId'
     | '/_authed/$workspaceId/'
@@ -91,6 +107,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   LoginRoute: typeof LoginRoute
+  OauthCallbackRoute: typeof OauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -122,6 +139,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$workspaceId'
       preLoaderRoute: typeof AuthedWorkspaceIdRouteRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/oauth/callback': {
+      id: '/oauth/callback'
+      path: '/oauth/callback'
+      fullPath: '/oauth/callback'
+      preLoaderRoute: typeof OauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authed/$workspaceId/': {
       id: '/_authed/$workspaceId/'
@@ -172,6 +196,7 @@ const AuthedRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   LoginRoute: LoginRoute,
+  OauthCallbackRoute: OauthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
