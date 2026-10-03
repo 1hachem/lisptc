@@ -1,6 +1,6 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { driveAsync, settled } from "@repo/interpreter/drive";
+import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { noOpinion } from "@repo/interpreter/hooks";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
@@ -9,14 +9,20 @@ import { prelude } from "@repo/interpreter/prelude";
 import {
 	type Bounded,
 	type InterpExtension,
+	type ModelDelta,
+	type ModelRequest,
 	noAnnotations,
 	openSession,
 	type SessionHooks,
 	type StepAnnotations,
 	type StepContext,
+	type StepVerdict,
+	type TurnContext,
+	type TurnOutcome,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Skipped } from "@repo/shared/lisp-forms";
+import type { ChatMessage } from "@repo/shared/messages";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -37,7 +43,7 @@ export interface EvalOutput extends Bounded {
 	message?: string;
 }
 
-interface StepResult extends EvalOutput {
+export interface StepResult extends EvalOutput {
 	envelopes: readonly Envelope[];
 	skipped: string[];
 	feedback: string;
@@ -260,17 +266,75 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.unrun.run(() => [], this.interp, code);
 	}
 
-	async beginTurn(): Promise<{
+	async turnStart(): Promise<string> {
+		return (
+			await this.emitting((ctx) =>
+				this.hooks.turnStart.run(() => settled(undefined), ctx),
+			)
+		).emitted;
+	}
+
+	async system(prompt: string): Promise<string> {
+		return (
+			await driveAsync(
+				this.hooks.system.run((_i, p) => settled(p), this.interp, prompt),
+			)
+		).value;
+	}
+
+	beginStep(): Promise<{
 		emitted: string;
 		annotations: StepAnnotations;
 	}> {
+		return this.emitting((ctx) =>
+			this.hooks.beginStep.run(() => settled(undefined), ctx),
+		);
+	}
+
+	context(messages: readonly ChatMessage[]): readonly ChatMessage[] {
+		return this.hooks.context.run((_i, m) => m, this.interp, messages);
+	}
+
+	modelCall(
+		request: ModelRequest,
+		call: (request: ModelRequest) => AsyncIterable<ModelDelta>,
+	): AsyncIterable<ModelDelta> {
+		return this.hooks.modelCall.run((_i, r) => call(r), this.interp, request);
+	}
+
+	response(text: string, read: (text: string) => string): string {
+		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
+	}
+
+	stepEnd(step: number, verdict: StepVerdict): StepVerdict {
+		return this.hooks.stepEnd.run((_i, _s, v) => v, this.interp, step, verdict);
+	}
+
+	async beforeSettle(
+		more: boolean,
+	): Promise<{ more: boolean; emitted: string }> {
+		const { beforeSettle } = this.hooks;
+		let decided = more;
+		const { emitted } = await this.emitting(function* (ctx) {
+			decided = yield* beforeSettle.run((_c, m) => settled(m), ctx, more);
+		});
+		return { more: decided, emitted };
+	}
+
+	settled(outcome: TurnOutcome, steps: number): void {
+		this.hooks.settled.run(() => {}, this.interp, outcome, steps);
+	}
+
+	private async emitting(
+		run: (ctx: TurnContext) => Eval<void>,
+	): Promise<{ emitted: string; annotations: StepAnnotations }> {
 		let emitted = "";
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
 		try {
 			await driveAsync(
-				this.hooks.beginTurn.run(() => settled(undefined), {
+				run({
 					interp: this.interp,
 					emit: (text) => {
 						emitted += emitted === "" ? text : `\n\n${text}`;

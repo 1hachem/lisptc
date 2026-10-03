@@ -1,4 +1,5 @@
 import type { Skipped } from "@repo/shared/lisp-forms";
+import type { ChatMessage } from "@repo/shared/messages";
 import type { Addressed } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
 import type { Eval } from "./drive.ts";
@@ -41,6 +42,27 @@ export interface StepOutcome extends Bounded {
 	readonly failed: boolean;
 }
 
+export interface ModelUsage {
+	readonly input: number;
+	readonly output: number;
+	readonly cachedInput?: number;
+}
+
+export interface ModelDelta {
+	readonly text?: string;
+	readonly reasoning?: string;
+	readonly usage?: ModelUsage;
+}
+
+export interface ModelRequest {
+	readonly system: string;
+	readonly messages: readonly ChatMessage[];
+}
+
+export type StepVerdict = "continue" | "halt" | "capped";
+
+export type TurnOutcome = "halt" | "capped" | "silent" | "failed" | "aborted";
+
 export interface ActionContext {
 	readonly interp: Interp;
 	readonly action: string;
@@ -61,7 +83,30 @@ export interface InterpExtension extends Installable {
 }
 
 export interface SessionHooks {
-	readonly beginTurn: Chain<[ctx: TurnContext], Eval<void>>;
+	readonly turnStart: Chain<[ctx: TurnContext], Eval<void>>;
+	readonly system: Chain<[interp: Interp, prompt: string], Eval<string>>;
+	readonly beginStep: Chain<[ctx: TurnContext], Eval<void>>;
+	readonly context: Chain<
+		[interp: Interp, messages: readonly ChatMessage[]],
+		readonly ChatMessage[]
+	>;
+	readonly modelCall: Chain<
+		[interp: Interp, request: ModelRequest],
+		AsyncIterable<ModelDelta>
+	>;
+	readonly response: Chain<[interp: Interp, text: string], string>;
+	readonly stepEnd: Chain<
+		[interp: Interp, step: number, verdict: StepVerdict],
+		StepVerdict
+	>;
+	readonly beforeSettle: Chain<
+		[ctx: TurnContext, more: boolean],
+		Eval<boolean>
+	>;
+	readonly settled: Chain<
+		[interp: Interp, outcome: TurnOutcome, steps: number],
+		void
+	>;
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
@@ -80,7 +125,15 @@ export interface SessionHooks {
 export function newSessionHooks(): SessionHooks {
 	const slots = new Map<string, unknown>();
 	return {
-		beginTurn: new Chain(),
+		turnStart: new Chain(),
+		system: new Chain(),
+		beginStep: new Chain(),
+		context: new Chain(),
+		modelCall: new Chain(),
+		response: new Chain(),
+		stepEnd: new Chain(),
+		beforeSettle: new Chain(),
+		settled: new Chain(),
 		evalStep: new Chain(),
 		stepOutput: new Chain(),
 		stepError: new Chain(),

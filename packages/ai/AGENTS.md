@@ -42,6 +42,11 @@ key, and a payload that would need interpreting belongs below the seam instead.
 A new kind of thing a turn can report is a new variant of the turn event union,
 not a side channel.
 
+A new point in the turn where an extension may act is a chain in
+`SessionHooks`, run through a method on the REPL. The loop decides when it
+runs and never what it does. Do not add a REPL method the loop calls for one
+extension's sake.
+
 ## Tests
 
 `test/annotation-lane.test.ts` is where the lane rule is pinned, and

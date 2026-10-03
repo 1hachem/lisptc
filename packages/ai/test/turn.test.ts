@@ -1,12 +1,14 @@
+import type { TurnOutcome } from "@repo/interpreter/session";
 import { AgentRepl } from "@repo/repl/repl";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import type { TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { noting, testRepl } from "./helpers.ts";
+import { extension, noting, testRepl } from "./helpers.ts";
 
 interface Seen {
 	messages: AgentMessage[];
+	system?: string;
 }
 
 const seen: Seen[] = [];
@@ -29,8 +31,11 @@ vi.mock("../src/telemetry.ts", () => ({
 }));
 
 vi.mock("../src/agent.ts", () => ({
-	streamAgent: async function* (messages: AgentMessage[]) {
-		seen.push({ messages });
+	streamAgent: async function* (
+		messages: AgentMessage[],
+		config?: { system?: string },
+	) {
+		seen.push({ messages, system: config?.system });
 		onCall?.();
 		if (throws) throw new Error(throws);
 		const turn = script[Math.min(calls++, script.length - 1)];
@@ -145,11 +150,15 @@ describe("the agent turn", () => {
 
 	test("the inbox is not read before the first step", async () => {
 		script = [[{ text: "three." }]];
-		const inbox = vi.fn(async () => [{ id: "s1", content: "ignored" }]);
+		let readBeforeModel = false;
+		const inbox = vi.fn(async () => {
+			if (seen.length === 0) readBeforeModel = true;
+			return [];
+		});
 
 		await drain(ask, { inbox });
 
-		expect(inbox).not.toHaveBeenCalled();
+		expect(readBeforeModel).toBe(false);
 	});
 
 	test("the loop stops at maxSteps without an answer", async () => {
@@ -239,5 +248,152 @@ describe("the agent turn", () => {
 
 		expect(repl.evals).toBe(0);
 		expect(seen).toHaveLength(1);
+	});
+
+	test("the system prompt the model gets is the one the session shaped", async () => {
+		script = [[{ text: "three." }]];
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.system.use(function* (interp, prompt, next) {
+					return yield* next(interp, `${prompt}\n\nyou are a pirate`);
+				}),
+			),
+		]);
+
+		await drain(ask, { repl, config: { system: "base" } });
+
+		expect(seen[0].system).toBe("base\n\nyou are a pirate");
+	});
+
+	test("a hook can answer in place of the model", async () => {
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.modelCall.use(async function* () {
+					yield { text: "replayed." };
+				}),
+			),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(seen).toHaveLength(0);
+		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "replayed." });
+	});
+
+	test("a hook can rewrite the code before it runs", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.response.use((interp, text, next) =>
+					next(interp, text.replace("(+ 1 2)", "(+ 2 2)")),
+				),
+			),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(events.find((e) => e.type === "assistant")).toMatchObject({
+			code: "(+ 2 2)",
+		});
+	});
+
+	test("a hook can keep the turn going past an answer", async () => {
+		script = [[{ text: "three." }], [{ text: "really three." }]];
+		let overruled = false;
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.stepEnd.use((interp, step, verdict, next) => {
+					if (verdict !== "halt" || overruled)
+						return next(interp, step, verdict);
+					overruled = true;
+					return "continue";
+				}),
+			),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"delta",
+			"assistant",
+			"halt",
+		]);
+		expect(events.at(-1)).toMatchObject({ answer: "really three.", steps: 2 });
+	});
+
+	test("a hook that never lets the turn end still stops at the cap", async () => {
+		script = [[{ text: "three." }]];
+		const repl = testRepl([
+			extension((hooks) => hooks.stepEnd.use(() => "continue")),
+		]);
+
+		const events = await drain(ask, { repl, maxSteps: 3 });
+
+		expect(events.at(-1)).toEqual({ type: "capped", steps: 3 });
+	});
+
+	test("a steer that lands during the answering step buys one more step", async () => {
+		script = [[{ text: "three." }], [{ text: "0x3." }]];
+		const pending = [{ id: "s1", content: "use hex" }];
+
+		const events = await drain(ask, { inbox: async () => pending.splice(0) });
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"steered",
+			"delta",
+			"assistant",
+			"halt",
+		]);
+		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });
+		expect(events.at(-1)).toMatchObject({ answer: "0x3.", steps: 2 });
+	});
+
+	test("a hook can ask for one more step before the turn settles", async () => {
+		script = [[{ text: "three." }], [{ text: "checked: three." }]];
+		let asked = false;
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.beforeSettle.use(function* (ctx, more, next) {
+					if (asked) return yield* next(ctx, more);
+					asked = true;
+					ctx.emit("check your answer");
+					return true;
+				}),
+			),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(seen[1].messages.at(-1)?.content).toContain("check your answer");
+		expect(events.at(-1)).toMatchObject({
+			type: "halt",
+			answer: "checked: three.",
+		});
+	});
+
+	test.each<[string, AgentDelta[][], TurnOutcome]>([
+		["halt", [[{ text: "three." }]], "halt"],
+		["capped", [[{ text: "(+ 1 2)" }]], "capped"],
+		["silent", [[{ text: "" }]], "silent"],
+	])("the session sees a %s turn settle", async (_name, turns, expected) => {
+		script = turns;
+		const outcomes: TurnOutcome[] = [];
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.settled.use((interp, outcome, steps, next) => {
+					outcomes.push(outcome);
+					next(interp, outcome, steps);
+				}),
+			),
+		]);
+
+		await drain(ask, { repl, maxSteps: 2 });
+
+		expect(outcomes).toEqual([expected]);
 	});
 });
