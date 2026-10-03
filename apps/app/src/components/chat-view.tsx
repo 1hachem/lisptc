@@ -26,10 +26,12 @@ import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
-import { LispText, SkippedProse } from "./lisp-text.tsx";
+import { SkippedProse } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
+import { SteerQueue } from "./steer-queue.tsx";
+import { UserLine } from "./user-line.tsx";
 
 const FOLD_LINES = 25;
 const PAGE_LINES = 200;
@@ -243,12 +245,7 @@ export function ChatView() {
 											</div>
 										)}
 										{isUserMessage(m) ? (
-											<div className="flex min-w-0 gap-1">
-												<span className="select-none text-dim">›</span>
-												<div className="min-w-0 whitespace-pre-wrap break-words">
-													<LispText>{messageText(m)}</LispText>
-												</div>
-											</div>
+											<UserLine text={messageText(m)} />
 										) : (
 											<AssistantText
 												id={m.id ?? String(i)}
@@ -269,6 +266,7 @@ export function ChatView() {
 							</div>
 						);
 					})}
+				<SteerQueue />
 				<div className="-mt-5 pt-[1.7em]">
 					<AgentAvatar />
 				</div>

@@ -24,6 +24,7 @@ import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
+import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
@@ -85,8 +86,9 @@ function parseMeta(value: unknown): StepMeta | undefined {
 	};
 }
 
-interface ChatSession {
+export interface ChatSession {
 	messages: ChatMessage[];
+	queued: QueuedMessage[];
 	greeting: string | null;
 	meta: Record<string, StepMeta>;
 	fresh: boolean;
@@ -96,6 +98,7 @@ interface ChatSession {
 	send: (text: string) => void;
 	runLisp: (code: string) => void;
 	stop: () => void;
+	withdraw: (id: string) => void;
 }
 
 async function evalLisp(
@@ -133,7 +136,7 @@ function greetingMessage(): ChatMessage {
 	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
 }
 
-type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
+export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
 
 const ChatContext = createContext<ChatStore | null>(null);
 
@@ -254,7 +257,7 @@ export function ChatProvider({
 		[chatId, workspaceId, createChat, navigate],
 	);
 
-	const send = useCallback(
+	const submitTurn = useCallback(
 		async (text: string) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
@@ -284,12 +287,34 @@ export function ChatProvider({
 		[chatId, workspaceId, createChat, navigate, persisted, stream],
 	);
 
+	const resend = useCallback(
+		(text: string) => void submitTurn(text),
+		[submitTurn],
+	);
+	const { queued, enqueue, withdraw, clear } = useSteerQueue({
+		chatId,
+		landed: streamed,
+		streaming: stream.isLoading,
+		resend,
+	});
+	const steering = stream.isLoading && streamingFor.current === chatId;
+
+	const send = useCallback(
+		async (text: string) => {
+			const trimmed = text.trim();
+			if (steering && trimmed) enqueue(trimmed);
+			else await submitTurn(trimmed);
+		},
+		[steering, enqueue, submitTurn],
+	);
+
 	const stop = useCallback(() => {
+		clear();
 		running.current?.abort();
 		running.current = null;
 		setEvaluating(false);
 		stream.stop();
-	}, [stream]);
+	}, [stream, clear]);
 
 	const fresh = isFreshChat(chatId, turns);
 
@@ -297,6 +322,7 @@ export function ChatProvider({
 	if (storeRef.current === null) {
 		storeRef.current = create<ChatSession>(() => ({
 			messages: [],
+			queued: [],
 			greeting: null,
 			meta: {},
 			fresh,
@@ -305,6 +331,7 @@ export function ChatProvider({
 			send: () => {},
 			runLisp: () => {},
 			stop: () => {},
+			withdraw: () => {},
 		}));
 	}
 	const store = storeRef.current;
@@ -312,6 +339,7 @@ export function ChatProvider({
 	useEffect(() => {
 		store.setState({
 			messages,
+			queued,
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
 			fresh,
@@ -330,10 +358,12 @@ export function ChatProvider({
 				void runLisp(code);
 			},
 			stop,
+			withdraw,
 		});
 	}, [
 		store,
 		messages,
+		queued,
 		meta,
 		greeting,
 		fresh,
@@ -345,6 +375,7 @@ export function ChatProvider({
 		send,
 		runLisp,
 		stop,
+		withdraw,
 	]);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
