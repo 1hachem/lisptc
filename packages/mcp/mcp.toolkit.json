@@ -107,7 +107,7 @@
   },
   {
     "name": "linear",
-    "description": "Linear issue tracker over OAuth: search/list/create issues, projects, comments. First (load-mcp \"linear\") returns an authorization link; approve it, run (mcp-authorize \"linear\" \"<code>\"), then load again.",
+    "description": "Linear issue tracker over OAuth: search/list/create issues, projects, comments. First (load-mcp \"linear\") returns an authorization link; once approved, load again, running (mcp-authorize \"linear\" \"<link or code>\") first if the user hands one back.",
     "keywords": [
       "issue",
       "issues",
@@ -134,7 +134,7 @@
   },
   {
     "name": "posthog",
-    "description": "PostHog product analytics over OAuth: query insights, dashboards, feature flags, experiments, error tracking, events, and SQL. First (load-mcp \"posthog\") returns an authorization link; approve it, run (mcp-authorize \"posthog\" \"<code>\"), then load again. Edit `scopes` to grant more.",
+    "description": "PostHog product analytics over OAuth: query insights, dashboards, feature flags, experiments, error tracking, events, and SQL. First (load-mcp \"posthog\") returns an authorization link; once approved, load again, running (mcp-authorize \"posthog\" \"<link or code>\") first if the user hands one back. Edit `scopes` to grant more.",
     "keywords": [
       "analytics",
       "product-analytics",

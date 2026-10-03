@@ -24,6 +24,13 @@ import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
+import {
+	awaitsCallback,
+	clearCallback,
+	OAUTH_CALLBACK_KEY,
+	readCallback,
+	resumeMessage,
+} from "./oauth-callback.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
@@ -283,6 +290,28 @@ export function ChatProvider({
 		},
 		[chatId, workspaceId, createChat, navigate, persisted, stream],
 	);
+
+	const [callback, setCallback] = useState<string | null>(null);
+	useEffect(() => {
+		setCallback(readCallback());
+		const onStorage = (e: StorageEvent) => {
+			if (e.key === OAUTH_CALLBACK_KEY) setCallback(e.newValue);
+		};
+		window.addEventListener("storage", onStorage);
+		return () => window.removeEventListener("storage", onStorage);
+	}, []);
+
+	useEffect(() => {
+		if (!callback || !chatId || stream.isLoading) return;
+		const lines = persisted.map((m) => ({
+			type: m.type,
+			text: messageText(m),
+		}));
+		if (!awaitsCallback(lines, callback)) return;
+		clearCallback();
+		setCallback(null);
+		void send(resumeMessage(callback));
+	}, [callback, chatId, persisted, stream.isLoading, send]);
 
 	const stop = useCallback(() => {
 		running.current?.abort();
