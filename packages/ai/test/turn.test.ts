@@ -13,6 +13,7 @@ const seen: Seen[] = [];
 let script: AgentDelta[][] = [];
 let throws: string | undefined;
 let calls = 0;
+let onCall: (() => void) | undefined;
 
 const spans = vi.hoisted(
 	() => [] as { step: number; source: string; error: boolean }[],
@@ -30,6 +31,7 @@ vi.mock("../src/telemetry.ts", () => ({
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (messages: AgentMessage[]) {
 		seen.push({ messages });
+		onCall?.();
 		if (throws) throw new Error(throws);
 		const turn = script[Math.min(calls++, script.length - 1)];
 		for (const delta of turn) yield delta;
@@ -58,6 +60,7 @@ describe("the agent turn", () => {
 		script = [];
 		throws = undefined;
 		calls = 0;
+		onCall = undefined;
 	});
 
 	async function drain(
@@ -156,6 +159,48 @@ describe("the agent turn", () => {
 
 		expect(events.filter((e) => e.type === "result")).toHaveLength(2);
 		expect(events.at(-1)).toEqual({ type: "capped", steps: 2 });
+	});
+
+	test("an empty reply ends the turn silently", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "" }]];
+
+		const events = await drain(ask);
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"delta",
+			"silent",
+		]);
+		expect(events.at(-1)).toEqual({ type: "silent", steps: 1 });
+	});
+
+	test("an abort mid-stream ends the turn without reporting a failure", async () => {
+		const abort = new AbortController();
+		onCall = () => abort.abort();
+		throws = "aborted";
+
+		const events = await drain(ask, { signal: abort.signal });
+
+		expect(events).toEqual([]);
+	});
+
+	test("an abort between steps stops before the next model call", async () => {
+		const abort = new AbortController();
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		const events: TurnEvent[] = [];
+		for await (const event of runAgentTurn(ask, {
+			repl: testRepl(),
+			signal: abort.signal,
+		})) {
+			events.push(event);
+			if (event.type === "result") abort.abort();
+		}
+
+		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "result"]);
+		expect(seen).toHaveLength(1);
 	});
 
 	test("a failed model call is reported, not thrown", async () => {
