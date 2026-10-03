@@ -124,6 +124,16 @@ describe("remembering and recalling", () => {
 		expect(await ev(f, "(length (memories))")).toBe("0");
 	});
 
+	it("forgets everything on request", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "a" "one")');
+		await ev(f, `(memory/remember "b" "two" :on '(start))`);
+
+		expect(await ev(f, "(memory/forget-all)")).toBe("2");
+		expect(await ev(f, "(length (memories))")).toBe("0");
+		expect(await ev(f, "(memory/forget-all)")).toBe("0");
+	});
+
 	it("keeps a form as a form, not as its value", async () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "triage" \'(defun triage (i) (cdr i)))');

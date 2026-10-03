@@ -1,3 +1,4 @@
+import { quotient } from "@repo/interpreter/arith";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -565,6 +566,19 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		z.tuple([zString]),
 		function* ([key]): Eval {
 			return (yield* settled(bank.store.delete(key))) || null;
+		},
+	);
+
+	interp.defGen(
+		"memory/forget-all",
+		0,
+		"(forget-all)",
+		"Drop every memory for good; returns how many there were. Only when the user asks for a clean slate.",
+		z.tuple([]),
+		function* (): Eval {
+			const all = yield* settled(bank.store.all());
+			for (const memory of all) yield* settled(bank.store.delete(memory.key));
+			return quotient(all.length, 1);
 		},
 	);
 

@@ -82,6 +82,7 @@ describe("memory", () => {
 		"memory/remember",
 		"memory/recall",
 		"memory/forget",
+		"memory/forget-all",
 		"memory/revise",
 		"memory/replay",
 		"memories",
