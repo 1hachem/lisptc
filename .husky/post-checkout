@@ -1,0 +1,12 @@
+[ "$1" = "0000000000000000000000000000000000000000" ] || exit 0
+
+main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+[ "$main" = "$(pwd -P)" ] && exit 0
+
+[ -f "$main/.env" ] && cp "$main/.env" .env
+if command -v direnv >/dev/null; then
+  direnv allow
+  direnv exec . pnpm install
+else
+  pnpm install
+fi
