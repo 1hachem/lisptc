@@ -1,4 +1,7 @@
-export const OAUTH_CALLBACK_KEY = "lisptc:oauth-callback";
+export const OAUTH_APPROVED_KEY = "lisptc:oauth-approved";
+
+export const RESUME_MESSAGE =
+	"I approved the authorization. Carry on with what you were doing.";
 
 export interface TranscriptLine {
 	type: string;
@@ -13,42 +16,35 @@ export function callbackState(url: string): string | undefined {
 	}
 }
 
-export function awaitsCallback(
+export function awaitsApproval(
 	lines: readonly TranscriptLine[],
-	url: string,
+	state: string,
 ): boolean {
-	const state = callbackState(url);
-	if (!state) return false;
 	const needle = `state=${state}`;
-	const issued = lines.some(
-		(l) => l.type !== "human" && l.text.includes(needle),
-	);
-	const answered = lines.some(
-		(l) => l.type === "human" && l.text.includes(needle),
-	);
-	return issued && !answered;
+	let awaiting = false;
+	for (const line of lines) {
+		if (line.type === "human") awaiting = false;
+		else if (line.text.includes(needle)) awaiting = true;
+	}
+	return awaiting;
 }
 
-export function resumeMessage(url: string): string {
-	return `I approved the authorization. Finish it with this callback link and carry on: ${url}`;
-}
-
-export function storeCallback(url: string): void {
+export function storeApproval(state: string): void {
 	try {
-		localStorage.setItem(OAUTH_CALLBACK_KEY, url);
+		localStorage.setItem(OAUTH_APPROVED_KEY, state);
 	} catch {}
 }
 
-export function readCallback(): string | null {
+export function readApproval(): string | null {
 	try {
-		return localStorage.getItem(OAUTH_CALLBACK_KEY);
+		return localStorage.getItem(OAUTH_APPROVED_KEY);
 	} catch {
 		return null;
 	}
 }
 
-export function clearCallback(): void {
+export function clearApproval(): void {
 	try {
-		localStorage.removeItem(OAUTH_CALLBACK_KEY);
+		localStorage.removeItem(OAUTH_APPROVED_KEY);
 	} catch {}
 }

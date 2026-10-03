@@ -103,10 +103,17 @@ export type {
 	SearchHit,
 } from "@repo/shared/search";
 
+export interface PendingAuthorization {
+	state: string;
+	serverUrl: string;
+	scope?: string;
+}
+
 export interface OAuthRecord {
 	clientInformation?: OAuthClientInformationFull;
 	tokens?: OAuthTokens;
 	codeVerifier?: string;
+	pending?: PendingAuthorization;
 }
 
 export interface OAuthStore {

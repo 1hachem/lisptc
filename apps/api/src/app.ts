@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { chat } from "./chat.ts";
 import { errorHandler } from "./error.ts";
+import { oauthCallback } from "./oauth-callback.ts";
 import { telemetry } from "./telemetry.ts";
 import { uiAction } from "./ui-action.ts";
 
@@ -37,6 +38,7 @@ app.get("/health", async (c) => {
 
 app.route("/api/chat", chat);
 app.route("/api/ui-action", uiAction);
+app.route("/api/oauth/callback", oauthCallback);
 
 app.onError(errorHandler);
 

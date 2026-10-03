@@ -3,21 +3,10 @@ import { filePrompt } from "@repo/shared/host-node";
 import { LocalProcessHost } from "./local-host.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
-import { FileOAuthStore } from "./mcp-oauth.ts";
+import { completeAuthorization, FileOAuthStore } from "./mcp-oauth.ts";
 import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
 import { miniSearchEngine } from "./search.ts";
 import { bundledToolkit } from "./toolkit.ts";
-
-function callbackPort(): number {
-	return oauthEnv.LISPTC_OAUTH_CALLBACK_PORT ?? 8909;
-}
-
-function redirectUri(): string {
-	return (
-		oauthEnv.LISPTC_OAUTH_REDIRECT_URL ??
-		`http://127.0.0.1:${callbackPort()}/callback`
-	);
-}
 
 export interface McpHostOptions {
 	scope?: string;
@@ -29,10 +18,23 @@ export function localMcpClient(options: McpHostOptions = {}): McpClient {
 	return mcpClient({
 		host: options.host ?? new LocalProcessHost(),
 		oauth: options.oauth ?? new FileOAuthStore(),
-		redirectUri: redirectUri(),
-		callbackPort: callbackPort(),
+		redirectUri: oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
+		callbackPort: oauthEnv.LISPTC_OAUTH_CALLBACK_PORT,
 		scope: options.scope,
 	});
+}
+
+export function finishAuthorization(
+	oauth: OAuthStore,
+	serverKey: string,
+	callbackUrl: string,
+): Promise<void> {
+	return completeAuthorization(
+		oauth,
+		serverKey,
+		oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
+		callbackUrl,
+	);
 }
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));

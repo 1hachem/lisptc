@@ -18,7 +18,8 @@
     "./agent-repl": "./src/agent-repl.ts",
     "./memory-store": "./src/memory-store.ts",
     "./secrets-store": "./src/secrets-store.ts",
-    "./oauth-store": "./src/oauth-store.ts"
+    "./oauth-store": "./src/oauth-store.ts",
+    "./oauth-callback": "./src/oauth-callback.ts"
   },
   "scripts": {
     "dev": "convex dev",

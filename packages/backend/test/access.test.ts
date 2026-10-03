@@ -133,6 +133,27 @@ describe("secret access", () => {
 		).rejects.toThrow();
 	});
 
+	it("finds a pending login by its state for its owner only", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.oauth.put, {
+			workspaceId: bob.workspace,
+			serverKey: "https://sheets.example.com",
+			record: "{}",
+			pendingState: "bob-state",
+		});
+		expect(
+			await bob.as.query(api.oauth.pendingFor, { state: "bob-state" }),
+		).toEqual({
+			workspaceId: bob.workspace,
+			serverKey: "https://sheets.example.com",
+		});
+		expect(
+			await alice.as.query(api.oauth.pendingFor, { state: "bob-state" }),
+		).toBeNull();
+	});
+
 	it("refuses writing into another user's workspace", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

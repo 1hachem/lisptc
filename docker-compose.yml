@@ -95,7 +95,7 @@ services:
     environment:
       - PORT=${API_PORT:-3001}
       - APP_URL
-      - LISPTC_OAUTH_REDIRECT_URL=${LISPTC_OAUTH_REDIRECT_URL:-${APP_URL}/oauth/callback}
+      - LISPTC_OAUTH_REDIRECT_URL
       - CONVEX_URL
       - CONVEX_SITE_URL
       - LLM_PROVIDER

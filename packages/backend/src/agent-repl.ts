@@ -8,7 +8,6 @@ import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
 import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
-import type { OAuthRecord } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
@@ -24,7 +23,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { ConvexMemoryStore } from "./memory-store.ts";
-import { ConvexOAuthStore } from "./oauth-store.ts";
+import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 
 export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
@@ -44,7 +43,7 @@ export async function workspaceExtensions(
 		mcpExtension(
 			mcpHostFor({
 				scope: workspaceId,
-				oauth: new ConvexOAuthStore<OAuthRecord>(workspaceId, connect),
+				oauth: workspaceOAuthStore(workspaceId, connect),
 				host: new DockerHost(),
 			}),
 		),

@@ -53,7 +53,7 @@ class NeedsAuthError extends Error {
 		super(
 			captured
 				? `authorization required for "${server}": open ${authUrl} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "<code>"))`
-				: `authorization required for "${server}": open ${authUrl} — once the user approves and hands back the callback link or code, run (mcp-authorize "${server}" "<link or code>"), then (load-mcp "${server}") again`,
+				: `authorization required for "${server}": open ${authUrl} — once the user says they approved it, run (load-mcp "${server}") again (or, if they hand back a code instead, run (mcp-authorize "${server}" "<code>") first)`,
 		);
 	}
 }
@@ -131,6 +131,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		await auth(provider, { serverUrl, scope });
 		const authUrl = provider.authorizationUrl;
 		if (!authUrl) throw new Error("no authorization URL produced");
+		await provider.savePending(serverUrl);
 		const captured = await startCallbackCapture(
 			serverUrl,
 			scope,

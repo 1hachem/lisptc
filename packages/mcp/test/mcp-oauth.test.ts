@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
 	CallbackServer,
+	completeAuthorization,
 	createAuthCallback,
 	FileOAuthStore,
 	StoredOAuthProvider,
@@ -101,6 +102,48 @@ describe("StoredOAuthProvider", () => {
 		expect(rec?.codeVerifier).toBe("verifier-123");
 		expect(rec?.tokens?.refresh_token).toBe("rt");
 		expect(p.codeVerifier()).toBe("verifier-123");
+	});
+
+	it("remembers the pending login under its state until tokens arrive", async () => {
+		const store = memoryStore();
+		const p = await StoredOAuthProvider.create(
+			store,
+			"https://mcp.example.com/mcp",
+			REDIRECT,
+			"read",
+		);
+		await p.savePending("https://mcp.example.com/mcp");
+		expect(store.data.get("https://mcp.example.com")?.pending).toEqual({
+			state: p.state(),
+			serverUrl: "https://mcp.example.com/mcp",
+			scope: "read",
+		});
+		await p.saveTokens({ access_token: "at", token_type: "Bearer" });
+		expect(store.data.get("https://mcp.example.com")?.pending).toBeUndefined();
+	});
+
+	it("refuses to complete a callback whose state no login issued", async () => {
+		const store = memoryStore();
+		store.data.set("ws/https://mcp.example.com", {
+			codeVerifier: "v",
+			pending: { state: "issued", serverUrl: "https://mcp.example.com/mcp" },
+		});
+		await expect(
+			completeAuthorization(
+				store,
+				"ws/https://mcp.example.com",
+				REDIRECT,
+				"https://app.example/oauth/callback?code=abc&state=forged",
+			),
+		).rejects.toThrow(/no authorization is waiting/);
+		await expect(
+			completeAuthorization(
+				store,
+				"ws/https://mcp.example.com",
+				REDIRECT,
+				"https://app.example/oauth/callback?state=issued",
+			),
+		).rejects.toThrow(/no authorization code/);
 	});
 
 	it("captures the authorization URL instead of opening it", async () => {
