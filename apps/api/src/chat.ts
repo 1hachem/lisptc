@@ -1,4 +1,9 @@
-import { evalUserCode, SteerInbox, streamChatResponse } from "@repo/ai";
+import {
+	evalUserCode,
+	MemorySteerInbox,
+	type SteerInbox,
+	streamChatResponse,
+} from "@repo/ai";
 import { api } from "@repo/backend/api";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -27,7 +32,7 @@ const withdrawRequestSchema = steerRequestSchema.pick({
 	id: true,
 });
 
-const steers = new SteerInbox();
+const steers: SteerInbox = new MemorySteerInbox();
 
 const steerKey = (subject: string, chatId: string): string =>
 	`${subject}:${chatId}`;
@@ -94,10 +99,13 @@ chat.post("/steer", async (c) => {
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { chatId, id, message } = parsed.data;
-	const accepted = steers.post(steerKey(c.get("session").subject, chatId), {
-		id,
-		content: message,
-	});
+	const accepted = await steers.post(
+		steerKey(c.get("session").subject, chatId),
+		{
+			id,
+			content: message,
+		},
+	);
 	return c.json({ accepted }, accepted ? 202 : 409);
 });
 
@@ -110,7 +118,7 @@ chat.delete("/steer", async (c) => {
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { chatId, id } = parsed.data;
-	const withdrawn = steers.withdraw(
+	const withdrawn = await steers.withdraw(
 		steerKey(c.get("session").subject, chatId),
 		id,
 	);

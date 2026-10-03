@@ -30,7 +30,7 @@ export interface TurnOptions {
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
-	inbox?: () => Steer[];
+	inbox?: () => Promise<Steer[]>;
 }
 
 export interface StepMeta {
@@ -95,11 +95,11 @@ function stepMeta(
 	};
 }
 
-function* takeSteers(
-	inbox: (() => Steer[]) | undefined,
+async function* takeSteers(
+	inbox: (() => Promise<Steer[]>) | undefined,
 	transcript: TranscriptEntry[],
-): Generator<TurnEvent> {
-	for (const steer of inbox?.() ?? []) {
+): AsyncGenerator<TurnEvent> {
+	for (const steer of (await inbox?.()) ?? []) {
 		transcript.push({ role: "user", content: steer.content });
 		yield { type: "steered", ...steer };
 	}

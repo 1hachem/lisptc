@@ -3,36 +3,44 @@ export interface Steer {
 	content: string;
 }
 
-export class SteerInbox {
+export interface SteerInbox {
+	open(key: string): Promise<void>;
+	close(key: string): Promise<void>;
+	post(key: string, steer: Steer): Promise<boolean>;
+	withdraw(key: string, id: string): Promise<boolean>;
+	take(key: string): Promise<Steer[]>;
+}
+
+export class MemorySteerInbox implements SteerInbox {
 	private readonly pending = new Map<string, Steer[]>();
 
-	open(threadId: string): void {
-		this.pending.set(threadId, []);
+	async open(key: string): Promise<void> {
+		this.pending.set(key, []);
 	}
 
-	close(threadId: string): void {
-		this.pending.delete(threadId);
+	async close(key: string): Promise<void> {
+		this.pending.delete(key);
 	}
 
-	post(threadId: string, steer: Steer): boolean {
-		const queue = this.pending.get(threadId);
+	async post(key: string, steer: Steer): Promise<boolean> {
+		const queue = this.pending.get(key);
 		if (queue === undefined) return false;
 		queue.push(steer);
 		return true;
 	}
 
-	withdraw(threadId: string, id: string): boolean {
-		const queue = this.pending.get(threadId);
+	async withdraw(key: string, id: string): Promise<boolean> {
+		const queue = this.pending.get(key);
 		const at = queue?.findIndex((s) => s.id === id) ?? -1;
 		if (queue === undefined || at === -1) return false;
 		queue.splice(at, 1);
 		return true;
 	}
 
-	take(threadId: string): Steer[] {
-		const queue = this.pending.get(threadId);
+	async take(key: string): Promise<Steer[]> {
+		const queue = this.pending.get(key);
 		if (queue === undefined || queue.length === 0) return [];
-		this.pending.set(threadId, []);
+		this.pending.set(key, []);
 		return queue;
 	}
 }

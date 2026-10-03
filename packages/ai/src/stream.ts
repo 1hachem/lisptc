@@ -76,7 +76,11 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 
 function steerLine(steer: ChatStreamOptions["steer"]) {
 	if (steer === undefined)
-		return { open: () => {}, take: (): Steer[] => [], close: () => {} };
+		return {
+			open: async () => {},
+			take: async (): Promise<Steer[]> => [],
+			close: async () => {},
+		};
 	const { inbox, key } = steer;
 	return {
 		open: () => inbox.open(key),
@@ -122,9 +126,9 @@ export function streamChatResponse<Id extends string>(
 			let lastMeta: Record<string, unknown> | undefined;
 			let collected: Record<string, unknown> = {};
 			const steering = steerLine(steer);
-			steering.open();
 
 			try {
+				await steering.open();
 				write(sse("values", { messages: wire }));
 
 				const repl = await replFrom(options);
@@ -219,7 +223,11 @@ export function streamChatResponse<Id extends string>(
 					}),
 				);
 			} finally {
-				steering.close();
+				await steering
+					.close()
+					.catch((error) =>
+						console.error("[ai] the steer inbox did not close:", error),
+					);
 				if (onTurn) {
 					try {
 						await onTurn(wire.slice(carried));

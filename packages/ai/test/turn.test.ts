@@ -120,7 +120,7 @@ describe("the agent turn", () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 		const pending = [{ id: "s1", content: "use hex" }];
 
-		const events = await drain(ask, { inbox: () => pending.splice(0) });
+		const events = await drain(ask, { inbox: async () => pending.splice(0) });
 
 		expect(events.map((e) => e.type)).toEqual([
 			"delta",
@@ -142,7 +142,7 @@ describe("the agent turn", () => {
 
 	test("the inbox is not read before the first step", async () => {
 		script = [[{ text: "three." }]];
-		const inbox = vi.fn(() => [{ id: "s1", content: "ignored" }]);
+		const inbox = vi.fn(async () => [{ id: "s1", content: "ignored" }]);
 
 		await drain(ask, { inbox });
 

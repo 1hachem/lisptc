@@ -2,7 +2,7 @@ import { providerSpecs } from "@repo/env/providers";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
-import { SteerInbox } from "../src/inbox.ts";
+import { MemorySteerInbox } from "../src/inbox.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
 import { reporting, testRepl } from "./helpers.ts";
 
@@ -83,7 +83,7 @@ describe("chat stream", () => {
 	});
 
 	test("a steer posted mid-turn is recorded in order, and the inbox closes with the turn", async () => {
-		const inbox = new SteerInbox();
+		const inbox = new MemorySteerInbox();
 		const recorded: { type: string; content: string; id: string }[] = [];
 		const response = stream(
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
@@ -94,7 +94,7 @@ describe("chat stream", () => {
 				},
 			},
 		);
-		expect(inbox.post("t", { id: "s1", content: "use hex" })).toBe(true);
+		expect(await inbox.post("t", { id: "s1", content: "use hex" })).toBe(true);
 
 		const messages = await finalMessages(response);
 
@@ -107,7 +107,7 @@ describe("chat stream", () => {
 		]);
 		expect(recorded.map((m) => m.type)).toEqual(["ai", "tool", "human", "ai"]);
 		expect(recorded[2]).toMatchObject({ id: "s1", content: "use hex" });
-		expect(inbox.post("t", { id: "s2", content: "late" })).toBe(false);
+		expect(await inbox.post("t", { id: "s2", content: "late" })).toBe(false);
 	});
 
 	test("every model call reports what it cost, and only its own", async () => {
