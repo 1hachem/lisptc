@@ -95,6 +95,16 @@ function stepMeta(
 	};
 }
 
+function* takeSteers(
+	inbox: (() => Steer[]) | undefined,
+	transcript: TranscriptEntry[],
+): Generator<TurnEvent> {
+	for (const steer of inbox?.() ?? []) {
+		transcript.push({ role: "user", content: steer.content });
+		yield { type: "steered", ...steer };
+	}
+}
+
 export async function* runAgentTurn(
 	messages: TranscriptEntry[],
 	options: TurnOptions,
@@ -147,11 +157,7 @@ export async function* runAgentTurn(
 		let riding = "";
 
 		while (!signal?.aborted) {
-			if (steps > 0)
-				for (const steer of inbox?.() ?? []) {
-					transcript.push({ role: "user", content: steer.content });
-					yield { type: "steered", ...steer };
-				}
+			if (steps > 0) yield* takeSteers(inbox, transcript);
 
 			repl.setConversationVars(snapshotConversation(transcript));
 

@@ -22,7 +22,7 @@ export const steerRequestSchema = z.object({
 	message: z.string().trim().min(1),
 });
 
-export const withdrawRequestSchema = steerRequestSchema.pick({
+const withdrawRequestSchema = steerRequestSchema.pick({
 	chatId: true,
 	id: true,
 });

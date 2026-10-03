@@ -1,6 +1,6 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
-import type { SteerInbox } from "./inbox.ts";
+import type { Steer, SteerInbox } from "./inbox.ts";
 import { replResultContent, type TranscriptEntry } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import { runAgentTurn } from "./turn.ts";
@@ -74,6 +74,17 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	steer?: { inbox: SteerInbox; key: string };
 };
 
+function steerLine(steer: ChatStreamOptions["steer"]) {
+	if (steer === undefined)
+		return { open: () => {}, take: (): Steer[] => [], close: () => {} };
+	const { inbox, key } = steer;
+	return {
+		open: () => inbox.open(key),
+		take: () => inbox.take(key),
+		close: () => inbox.close(key),
+	};
+}
+
 export function streamChatResponse<Id extends string>(
 	input: ChatInput,
 	options: ChatStreamOptions<Id>,
@@ -110,7 +121,8 @@ export function streamChatResponse<Id extends string>(
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
 			let collected: Record<string, unknown> = {};
-			steer?.inbox.open(steer.key);
+			const steering = steerLine(steer);
+			steering.open();
 
 			try {
 				write(sse("values", { messages: wire }));
@@ -123,7 +135,7 @@ export function streamChatResponse<Id extends string>(
 					config,
 					signal: abort.signal,
 					identity,
-					...(steer ? { inbox: () => steer.inbox.take(steer.key) } : {}),
+					inbox: steering.take,
 				})) {
 					if (event.type === "delta") {
 						const chunk: Record<string, unknown> = {
@@ -207,7 +219,7 @@ export function streamChatResponse<Id extends string>(
 					}),
 				);
 			} finally {
-				steer?.inbox.close(steer.key);
+				steering.close();
 				if (onTurn) {
 					try {
 						await onTurn(wire.slice(carried));
