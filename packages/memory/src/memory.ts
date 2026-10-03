@@ -372,12 +372,7 @@ function heardText(memories: FiredMemory[]): string {
 }
 
 function startText(memories: FiredMemory[]): string {
-	return [
-		"<memories>",
-		"these fire at the start of every turn: they hold who you are and what you are working toward. you can revise them. a body that is a form is a recipe: run it with (memory/replay key).",
-		...memories.map((m) => `${m.key}: ${m.body}`),
-		"</memories>",
-	].join("\n");
+	return memories.map((m) => m.body).join("\n");
 }
 
 export const memorySlot = slot<MemoryBank>("memory");

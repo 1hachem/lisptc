@@ -795,8 +795,7 @@ describe("the start of a turn", () => {
 
 		const prompt = await system(f);
 
-		expect(prompt.startsWith("you are a repl\n\n<memories>")).toBe(true);
-		expect(prompt).toContain("role: you are a pirate");
+		expect(prompt).toBe("you are a repl\n\nyou are a pirate");
 	});
 
 	it("fires again at the next turn", async () => {
@@ -806,7 +805,7 @@ describe("the start of a turn", () => {
 		await system(f);
 		await f.step("(+ 1 1)");
 
-		expect(await system(f)).toContain("role: you are a pirate");
+		expect(await system(f)).toContain("you are a pirate");
 	});
 
 	it("reads the body as it is now, so a revised goal takes effect next turn", async () => {
@@ -817,7 +816,7 @@ describe("the start of a turn", () => {
 		await ev(f, `(memory/remember "goal" "ship the printer" :on '(start))`);
 
 		const prompt = await system(f);
-		expect(prompt).toContain("goal: ship the printer");
+		expect(prompt).toContain("ship the printer");
 		expect(prompt).not.toContain("ship the parser");
 	});
 
@@ -825,7 +824,7 @@ describe("the start of a turn", () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "boot" '(defun greet () "hi") :on '(start))`);
 
-		expect(await system(f)).toContain("boot: (defun greet");
+		expect(await system(f)).toContain("(defun greet");
 		await expect(ev(f, "(greet)")).rejects.toThrow();
 	});
 
