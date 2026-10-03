@@ -126,8 +126,7 @@ async function* prepareStep(
 ): AsyncGenerator<TurnEvent, string> {
 	repl.setConversationVars(snapshotConversation(transcript));
 	const { emitted, annotations } = await repl.beginStep();
-	if (Object.keys(annotations.step).length > 0)
-		yield { type: "collected", annotations: annotations.step };
+	yield* collect(annotations);
 	return emitted === "" ? riding : emitted;
 }
 
@@ -175,21 +174,28 @@ interface Turn {
 
 type ModelCall = (request: ModelRequest) => AsyncIterable<AgentDelta>;
 
-async function openTurn(
+function* collect(annotations: StepAnnotations): Generator<TurnEvent> {
+	if (Object.keys(annotations.step).length > 0)
+		yield { type: "collected", annotations: annotations.step };
+}
+
+async function* openTurn(
 	turn: Turn,
 	config: AgentConfig | undefined,
-): Promise<{ system: string; call: ModelCall }> {
+): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
 	const { repl, transcript, trace, signal } = turn;
 	const withheld = repl.takeProseFeedback();
 	if (withheld)
 		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
 
 	const started = await repl.turnStart(turn.telemetry.turnStart);
-	if (started !== "") transcript.push(noteEntry(started));
+	if (started.emitted !== "") transcript.push(noteEntry(started.emitted));
+	yield* collect(started.annotations);
 
-	const system = await repl.system(
+	const { prompt: system, annotations } = await repl.system(
 		config?.system ?? systemPromptFor(repl.interp),
 	);
+	yield* collect(annotations);
 	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,
@@ -356,7 +362,7 @@ export async function* runAgentTurn(
 	let outcome: TurnOutcome = "aborted";
 
 	try {
-		const opened = await openTurn(turn, options.config);
+		const opened = yield* openTurn(turn, options.config);
 		let riding = "";
 		let drained = false;
 

@@ -274,19 +274,21 @@ export class AgentRepl extends MemoryRepl {
 
 	async turnStart(
 		around?: Middleware<[TurnContext], Eval<void>>,
-	): Promise<string> {
+	): Promise<{ emitted: string; annotations: StepAnnotations }> {
 		const chain = outermost(this.hooks.turnStart, around);
-		return (
-			await this.emitting((ctx) => chain.run(() => settled(undefined), ctx))
-		).emitted;
+		const { emitted, annotations } = await this.emitting((ctx) =>
+			chain.run(() => settled(undefined), ctx),
+		);
+		return { emitted, annotations };
 	}
 
-	async system(prompt: string): Promise<string> {
-		return (
-			await driveAsync(
-				this.hooks.system.run((_i, p) => settled(p), this.interp, prompt),
-			)
-		).value;
+	async system(
+		prompt: string,
+	): Promise<{ prompt: string; annotations: StepAnnotations }> {
+		const { value, annotations } = await this.emitting(() =>
+			this.hooks.system.run((_i, p) => settled(p), this.interp, prompt),
+		);
+		return { prompt: value, annotations };
 	}
 
 	beginStep(): Promise<{
@@ -346,26 +348,28 @@ export class AgentRepl extends MemoryRepl {
 		outermost(this.hooks.settled, around).run(() => {}, turn, end);
 	}
 
-	private async emitting(
-		run: (ctx: TurnContext) => Eval<void>,
-	): Promise<{ emitted: string; annotations: StepAnnotations }> {
+	private async emitting<T>(
+		run: (ctx: TurnContext) => Eval<T>,
+	): Promise<{ value: T; emitted: string; annotations: StepAnnotations }> {
 		let emitted = "";
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
+		let value: T;
 		try {
-			await driveAsync(
+			({ value } = await driveAsync(
 				run({
 					interp: this.interp,
 					emit: (text) => {
 						emitted += emitted === "" ? text : `\n\n${text}`;
 					},
 				}),
-			);
+			));
 		} finally {
 			detach();
 		}
 		return {
+			value,
 			emitted,
 			annotations: this.hooks.annotate.run(
 				(_b, into) => into,

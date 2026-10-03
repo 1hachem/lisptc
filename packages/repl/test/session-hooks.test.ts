@@ -1,3 +1,4 @@
+import { topic } from "@repo/interpreter/channels";
 import { settled } from "@repo/interpreter/drive";
 import {
 	type AgentStep,
@@ -203,7 +204,7 @@ describe("an extension hooking the turn", () => {
 	it("starts a turn with nothing to say when nobody hooks it", async () => {
 		const r = new AgentRepl({ extensions: [] });
 
-		expect(await r.turnStart()).toBe("");
+		expect((await r.turnStart()).emitted).toBe("");
 	});
 
 	it("speaks once at the start of the turn", async () => {
@@ -218,13 +219,13 @@ describe("an extension hooking the turn", () => {
 			],
 		});
 
-		expect(await r.turnStart()).toBe("a fresh turn");
+		expect((await r.turnStart()).emitted).toBe("a fresh turn");
 	});
 
 	it("hands the system prompt back unchanged when nobody hooks it", async () => {
 		const r = new AgentRepl({ extensions: [] });
 
-		expect(await r.system("you are a repl")).toBe("you are a repl");
+		expect((await r.system("you are a repl")).prompt).toBe("you are a repl");
 	});
 
 	it("adds to the system prompt, and may wait to do it", async () => {
@@ -239,9 +240,33 @@ describe("an extension hooking the turn", () => {
 			],
 		});
 
-		expect(await r.system("you are a repl")).toBe(
+		expect((await r.system("you are a repl")).prompt).toBe(
 			"you are a repl\n\nyou are a pirate",
 		);
+	});
+
+	it("carries what the system prompt emits on the channels, like a step", async () => {
+		const said = topic<string>("said");
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.system.use(function* (interp, prompt, next) {
+						said.emit(interp.channels, { user: "you are a pirate" });
+						return yield* next(interp, prompt);
+					});
+					hooks.annotate.use((buffer, into, next) =>
+						next(
+							buffer,
+							annotating(into, "step", { said: buffer.collect(said) }),
+						),
+					);
+				}),
+			],
+		});
+
+		expect((await r.system("you are a repl")).annotations.step).toEqual({
+			said: ["you are a pirate"],
+		});
 	});
 
 	it("rewrites what the model sees", () => {

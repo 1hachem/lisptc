@@ -159,7 +159,7 @@ export function streamChatResponse<Id extends string>(
 						wire.push({ type: "human", content: event.content, id: event.id });
 						if (!write(sse("values", { messages: wire }))) break;
 					} else if (event.type === "collected") {
-						collected = event.annotations;
+						mergeInto(collected, event.annotations);
 					} else if (event.type === "assistant") {
 						lastMeta = { ...event.meta };
 						mergeInto(lastMeta, collected);
