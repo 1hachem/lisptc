@@ -26,7 +26,7 @@ FIRING BY ITSELF
 
 With :on a memory watches for an event and loads itself when that event happens,
 without you asking. The trigger is a quoted form of a kind and a pattern. The
-seven kinds:
+eight kinds:
 
   call     a form about to be evaluated, at any depth — so it catches a call
            nested inside a setq or a let
@@ -37,6 +37,7 @@ seven kinds:
   prose    words in the prose around your forms
   user     words in what the user just said
   recall   another memory being retrieved
+  start    the start of every turn, with no pattern: written (start)
 
 For call the pattern is A FORM, written the way the call itself is written, and
 matched structurally. This is what gives you precision about arguments:
@@ -67,6 +68,10 @@ Combine patterns with all, any-of and not, in either sort of trigger:
 A memory on a call to the loader surfaces what you know about a server the moment
 you load it. A memory on an error surfaces the fix the moment the same error
 comes back.
+
+A start memory lands in your system prompt at the start of every turn, so it is
+where your role and your goal belong. Revise it and the next turn reads the new
+body.
 
 A fired memory arrives as a line of REPL feedback, to you alone. It is not run and
 the user does not see it. To run one, replay it. To show the user something, echo
