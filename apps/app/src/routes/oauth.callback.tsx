@@ -1,33 +1,79 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import {
+	Alert02Icon,
+	CheckmarkCircle02Icon,
+	Loading03Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { API_URL, apiHeaders } from "../lib/api.ts";
-import { callbackState, storeApproval } from "../lib/oauth-callback.ts";
+import {
+	awaitingChat,
+	callbackState,
+	OAUTH_CHANNEL,
+	type OAuthSignal,
+	storeApproval,
+} from "../lib/oauth-callback.ts";
 
 export const Route = createFileRoute("/oauth/callback")({
 	component: OAuthCallback,
 });
 
-type Outcome = "pending" | "approved" | "failed";
+const CHAT_ANSWER_MS = 700;
+const CLOSE_AFTER_MS = 1200;
 
-async function finishCallback(url: string): Promise<string | null> {
+type Phase =
+	| { kind: "finishing" }
+	| { kind: "closing"; server: string }
+	| { kind: "resumed"; server: string }
+	| { kind: "orphaned"; server: string }
+	| { kind: "failed"; reason: string };
+
+type Finished = { server: string } | { failure: string };
+
+async function finishCallback(url: string): Promise<Finished> {
 	const response = await fetch(`${API_URL}/api/oauth/callback`, {
 		method: "POST",
 		headers: await apiHeaders(),
 		body: JSON.stringify({ url }),
 	}).catch(() => null);
-	if (response === null) return "the server could not be reached";
-	if (response.ok) return null;
+	if (response === null) return { failure: "the server could not be reached" };
 	const body = (await response.json().catch(() => null)) as {
 		error?: unknown;
+		server?: unknown;
 	} | null;
-	return typeof body?.error === "string"
-		? body.error
-		: `the server answered ${response.status}`;
+	if (response.ok) {
+		return {
+			server: typeof body?.server === "string" ? body.server : "the server",
+		};
+	}
+	return {
+		failure:
+			typeof body?.error === "string"
+				? body.error
+				: `the server answered ${response.status}`,
+	};
+}
+
+function askChatToResume(state: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		const channel = new BroadcastChannel(OAUTH_CHANNEL);
+		const settle = (answered: boolean) => {
+			clearTimeout(timer);
+			channel.close();
+			resolve(answered);
+		};
+		const timer = setTimeout(() => settle(false), CHAT_ANSWER_MS);
+		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
+			if (e.data.type === "resuming" && e.data.state === state) settle(true);
+		};
+		channel.postMessage({ type: "approved", state } satisfies OAuthSignal);
+	});
 }
 
 function OAuthCallback() {
-	const [outcome, setOutcome] = useState<Outcome>("pending");
-	const [reason, setReason] = useState<string | null>(null);
+	const navigate = useNavigate();
+	const [phase, setPhase] = useState<Phase>({ kind: "finishing" });
 	const handled = useRef(false);
 
 	useEffect(() => {
@@ -39,46 +85,144 @@ function OAuthCallback() {
 		const state = callbackState(url);
 		window.history.replaceState(null, "", window.location.pathname);
 		if (error || !params.get("code") || !state) {
-			setReason(params.get("error_description") ?? error);
-			setOutcome("failed");
+			setPhase({
+				kind: "failed",
+				reason:
+					params.get("error_description") ??
+					error ??
+					"the redirect carried no authorization code.",
+			});
 			return;
 		}
-		void finishCallback(url).then((failure) => {
-			if (failure !== null) {
-				setReason(failure);
-				setOutcome("failed");
+		void (async () => {
+			const finished = await finishCallback(url);
+			if ("failure" in finished) {
+				setPhase({ kind: "failed", reason: finished.failure });
 				return;
 			}
+			const { server } = finished;
 			storeApproval(state);
-			setOutcome("approved");
-		});
-	}, []);
+			if (await askChatToResume(state)) {
+				setPhase({ kind: "closing", server });
+				setTimeout(() => {
+					window.close();
+					setPhase({ kind: "resumed", server });
+				}, CLOSE_AFTER_MS);
+				return;
+			}
+			const chat = awaitingChat(state);
+			if (chat) {
+				await navigate({
+					to: "/$workspaceId/$chatId",
+					params: chat,
+					replace: true,
+				});
+				return;
+			}
+			setPhase({ kind: "orphaned", server });
+		})();
+	}, [navigate]);
 
 	return (
-		<main className="flex min-h-svh items-center justify-center p-6">
-			<div className="max-w-sm space-y-3 text-center">
-				{outcome === "pending" && <p>Finishing authorization…</p>}
-				{outcome === "approved" && (
-					<>
-						<h1 className="font-semibold text-lg">Authorization approved</h1>
-						<p className="text-muted-foreground text-sm">
-							Your chat picks this up on its own. You can close this tab.
-						</p>
-					</>
-				)}
-				{outcome === "failed" && (
-					<>
-						<h1 className="font-semibold text-lg">Authorization failed</h1>
-						<p className="text-muted-foreground text-sm">
-							{reason ?? "The redirect carried no authorization code."} Ask the
-							agent for a new login link.
-						</p>
-					</>
-				)}
-				<Link to="/" className="text-sm underline">
-					Back to the app
-				</Link>
+		<main className="flex h-full items-center justify-center bg-bg p-6 font-mono text-[13px] text-fg">
+			<div className="flex w-[320px] flex-col gap-3.5">
+				<div className="text-orange">ptc</div>
+				<Status phase={phase} />
+				{phase.kind === "orphaned" || phase.kind === "failed" ? (
+					<Link
+						to="/"
+						className="text-left text-[11.5px] text-dim hover:text-fg"
+					>
+						back to the app
+					</Link>
+				) : null}
 			</div>
 		</main>
+	);
+}
+
+function Status({ phase }: { phase: Phase }) {
+	switch (phase.kind) {
+		case "finishing":
+			return (
+				<Panel
+					icon={
+						<HugeiconsIcon
+							icon={Loading03Icon}
+							size={16}
+							strokeWidth={1.5}
+							className="animate-spin text-dim"
+						/>
+					}
+					title="connecting…"
+				>
+					finishing the authorization
+				</Panel>
+			);
+		case "closing":
+			return (
+				<Panel icon={<Approved />} title={`${phase.server} connected`}>
+					your chat is carrying on. closing this tab…
+				</Panel>
+			);
+		case "resumed":
+			return (
+				<Panel icon={<Approved />} title={`${phase.server} connected`}>
+					your chat is carrying on. you can close this tab.
+				</Panel>
+			);
+		case "orphaned":
+			return (
+				<Panel icon={<Approved />} title={`${phase.server} connected`}>
+					open the chat that asked for it and it carries on.
+				</Panel>
+			);
+		case "failed":
+			return (
+				<Panel
+					icon={
+						<HugeiconsIcon
+							icon={Alert02Icon}
+							size={16}
+							strokeWidth={1.5}
+							className="text-red"
+						/>
+					}
+					title="authorization failed"
+				>
+					{phase.reason} ask the agent for a new login link.
+				</Panel>
+			);
+	}
+}
+
+function Approved() {
+	return (
+		<HugeiconsIcon
+			icon={CheckmarkCircle02Icon}
+			size={16}
+			strokeWidth={1.5}
+			className="text-green"
+		/>
+	);
+}
+
+function Panel({
+	icon,
+	title,
+	children,
+}: {
+	icon: ReactNode;
+	title: string;
+	children: ReactNode;
+}) {
+	return (
+		<div className="flex items-start gap-2.5 bg-bg2 px-3 py-2.5">
+			<div className="flex h-[18px] flex-none items-center">{icon}</div>
+			<div className="flex min-w-0 flex-col gap-1">
+				<div className="break-words">{title}</div>
+				<div className="break-words text-[11.5px] text-dim">{children}</div>
+			</div>
+		</div>
 	);
 }

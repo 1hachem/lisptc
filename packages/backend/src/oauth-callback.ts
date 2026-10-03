@@ -18,15 +18,15 @@ export function workspaceOAuthStore(
 export async function finishOAuth(
 	connect: () => OAuthClient,
 	callbackUrl: string,
-): Promise<boolean> {
+): Promise<{ server: string } | null> {
 	const state = new URL(callbackUrl).searchParams.get("state");
-	if (!state) return false;
+	if (!state) return null;
 	const pending = await connect().query(api.oauth.pendingFor, { state });
-	if (pending === null) return false;
-	await finishAuthorization(
-		workspaceOAuthStore(pending.workspaceId, connect),
-		pending.serverKey,
-		callbackUrl,
-	);
-	return true;
+	if (pending === null) return null;
+	const store = workspaceOAuthStore(pending.workspaceId, connect);
+	const serverUrl = (await store.load(pending.serverKey))?.pending?.serverUrl;
+	await finishAuthorization(store, pending.serverKey, callbackUrl);
+	return {
+		server: serverUrl ? new URL(serverUrl).hostname : pending.serverKey,
+	};
 }

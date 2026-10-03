@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	awaitsApproval,
+	awaitedState,
 	callbackState,
 	RESUME_MESSAGE,
 } from "../src/lib/oauth-callback.ts";
@@ -8,18 +8,27 @@ import {
 const state = "378e720d-4dd0-41f9-a072-09eba84e7267";
 const authLink = `https://mcp.linear.app/authorize?response_type=code&state=${state}&scope=read+write`;
 
-describe("awaitsApproval", () => {
+describe("awaitedState", () => {
 	it("matches the chat whose repl output carries the login link", () => {
 		const lines = [
 			{ type: "human", text: "list my linear issues" },
 			{ type: "tool", text: JSON.stringify({ output: authLink }) },
 		];
-		expect(awaitsApproval(lines, state)).toBe(true);
+		expect(awaitedState(lines)).toBe(state);
 	});
 
 	it("ignores a chat that never issued that state", () => {
 		const lines = [{ type: "tool", text: "https://x/authorize?state=other" }];
-		expect(awaitsApproval(lines, state)).toBe(false);
+		expect(awaitedState(lines)).toBe(undefined);
+	});
+
+	it("follows the latest login link a chat issued", () => {
+		const other = "0d3c1f2e-7a6b-4c5d-9e8f-112233445566";
+		const lines = [
+			{ type: "tool", text: authLink },
+			{ type: "tool", text: `https://x/authorize?state=${other}` },
+		];
+		expect(awaitedState(lines)).toBe(other);
 	});
 
 	it("does not resume twice once the chat moved on", () => {
@@ -27,7 +36,7 @@ describe("awaitsApproval", () => {
 			{ type: "tool", text: authLink },
 			{ type: "human", text: RESUME_MESSAGE },
 		];
-		expect(awaitsApproval(lines, state)).toBe(false);
+		expect(awaitedState(lines)).toBe(undefined);
 	});
 
 	it("never carries the code into the resume message", () => {

@@ -20,9 +20,9 @@ oauthCallback.post("/", async (c) => {
 	}
 	const current = c.get("session");
 	const finished = await finishOAuth(() => convexAs(current), parsed.data.url);
-	if (!finished) {
+	if (finished === null) {
 		return c.json({ error: "no authorization is waiting for this link" }, 404);
 	}
 	console.log("oauth callback finished");
-	return c.json({ ok: true });
+	return c.json({ ok: true, server: finished.server });
 });

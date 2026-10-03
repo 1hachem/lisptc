@@ -25,11 +25,14 @@ import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import { pickGreeting } from "./greeting.ts";
 import {
-	awaitsApproval,
+	awaitedState,
 	clearApproval,
 	OAUTH_APPROVED_KEY,
+	OAUTH_CHANNEL,
+	type OAuthSignal,
 	RESUME_MESSAGE,
 	readApproval,
+	rememberAwaitingChat,
 } from "./oauth-callback.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
@@ -301,17 +304,35 @@ export function ChatProvider({
 		return () => window.removeEventListener("storage", onStorage);
 	}, []);
 
+	const awaited = useMemo(
+		() =>
+			awaitedState(
+				persisted.map((m) => ({ type: m.type, text: messageText(m) })),
+			),
+		[persisted],
+	);
+
+	useEffect(() => {
+		if (!awaited || !chatId) return;
+		rememberAwaitingChat(awaited, { workspaceId, chatId });
+		const channel = new BroadcastChannel(OAUTH_CHANNEL);
+		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
+			if (e.data.type !== "approved" || e.data.state !== awaited) return;
+			channel.postMessage({
+				type: "resuming",
+				state: awaited,
+			} satisfies OAuthSignal);
+		};
+		return () => channel.close();
+	}, [awaited, chatId, workspaceId]);
+
 	useEffect(() => {
 		if (!approved || !chatId || stream.isLoading) return;
-		const lines = persisted.map((m) => ({
-			type: m.type,
-			text: messageText(m),
-		}));
-		if (!awaitsApproval(lines, approved)) return;
+		if (approved !== awaited) return;
 		clearApproval();
 		setApproved(null);
 		void send(RESUME_MESSAGE);
-	}, [approved, chatId, persisted, stream.isLoading, send]);
+	}, [approved, awaited, chatId, stream.isLoading, send]);
 
 	const stop = useCallback(() => {
 		running.current?.abort();
