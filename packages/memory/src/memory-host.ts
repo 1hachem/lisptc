@@ -4,6 +4,7 @@ import {
 	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -16,10 +17,13 @@ import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
+	countersToForm,
+	formToCounters,
 	formToMemory,
 	type Memory,
 	type MemoryHost,
 	type MemoryStore,
+	memoryContentForm,
 	memoryToForm,
 } from "./ports.ts";
 
@@ -105,6 +109,80 @@ export class FileMemoryStore implements MemoryStore {
 		} catch {
 			return undefined;
 		}
+	}
+}
+
+function readForm(path: string): unknown {
+	try {
+		const reader = new Reader();
+		reader.push(readFileSync(path, "utf8"));
+		return reader.read();
+	} catch {
+		return undefined;
+	}
+}
+
+function writeIfChanged(path: string, text: string): void {
+	if (existsSync(path) && readFileSync(path, "utf8") === text) return;
+	writeFileSync(path, text);
+}
+
+export class SplitMemoryStore implements MemoryStore {
+	constructor(
+		private readonly dir: string,
+		private readonly countersDir: string,
+	) {}
+
+	all(): Memory[] {
+		if (!existsSync(this.dir)) return [];
+		return readdirSync(this.dir)
+			.filter((name) => name.endsWith(".ptc"))
+			.map((name) => this.readOne(name))
+			.filter((memory): memory is Memory => memory !== undefined);
+	}
+
+	get(key: string): Memory | undefined {
+		return this.readOne(keyToFileName(key));
+	}
+
+	put(memory: Memory): void {
+		try {
+			mkdirSync(this.dir, { recursive: true });
+			mkdirSync(this.countersDir, { recursive: true });
+			const file = keyToFileName(memory.key);
+			writeIfChanged(
+				join(this.dir, file),
+				`${str(memoryContentForm(memory))}\n`,
+			);
+			writeFileSync(
+				join(this.countersDir, file),
+				`${str(countersToForm(memory))}\n`,
+			);
+		} catch (ex) {
+			throw new EvalException(
+				"could not write this memory to disk",
+				ex instanceof Error ? ex.message : String(ex),
+				false,
+			);
+		}
+	}
+
+	delete(key: string): boolean {
+		const file = keyToFileName(key);
+		rmSync(join(this.countersDir, file), { force: true });
+		const path = join(this.dir, file);
+		if (!existsSync(path)) return false;
+		rmSync(path, { force: true });
+		return true;
+	}
+
+	private readOne(file: string): Memory | undefined {
+		const path = join(this.dir, file);
+		const memory = formToMemory(readForm(path));
+		if (memory === undefined) return undefined;
+		const counters = formToCounters(readForm(join(this.countersDir, file)));
+		if (counters !== undefined) return { ...memory, ...counters };
+		return { ...memory, lastUsed: statSync(path).mtimeMs };
 	}
 }
 

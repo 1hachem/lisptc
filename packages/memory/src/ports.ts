@@ -133,7 +133,7 @@ function readableTrigger(value: unknown): Trigger | undefined {
 	}
 }
 
-export function memoryToForm(memory: Memory): unknown {
+function contentParts(memory: Memory): unknown[] {
 	const parts: unknown[] = [
 		newSym("memory"),
 		memory.key,
@@ -145,6 +145,46 @@ export function memoryToForm(memory: Memory): unknown {
 	parts.push(
 		newLispKeyword("links"),
 		arrayToList([...memory.links].map(([k, w]) => new Cell(k, w))),
+	);
+	return parts;
+}
+
+export function memoryContentForm(memory: Memory): unknown {
+	return arrayToList(contentParts(memory));
+}
+
+export interface MemoryCounters {
+	score: number;
+	used: number;
+	lastUsed: number;
+}
+
+export function countersToForm(counters: MemoryCounters): unknown {
+	return arrayToList([
+		newSym("counters"),
+		newLispKeyword("score"),
+		counters.score,
+		newLispKeyword("used"),
+		counters.used,
+		newLispKeyword("last-used"),
+		counters.lastUsed,
+	]);
+}
+
+export function formToCounters(form: unknown): MemoryCounters | undefined {
+	if (!(form instanceof Cell) || !(form.car instanceof Sym)) return undefined;
+	if (form.car.name !== "counters") return undefined;
+	const opts = plistOptions(form.cdr as List, ["score", "used", "last-used"]);
+	return {
+		score: Number(opts.get("score") ?? INITIAL_SCORE),
+		used: Number(opts.get("used") ?? 0),
+		lastUsed: Number(opts.get("last-used") ?? 0),
+	};
+}
+
+export function memoryToForm(memory: Memory): unknown {
+	const parts = contentParts(memory);
+	parts.push(
 		newLispKeyword("score"),
 		memory.score,
 		newLispKeyword("used"),
