@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
@@ -150,6 +152,36 @@ async function checkWorkspace(root: string): Promise<boolean> {
 	return failures.length === 0;
 }
 
+type WorkspaceCommand = (
+	args: readonly string[],
+	launchDir: string,
+	workspace: string | undefined,
+) => Promise<boolean>;
+
+const WORKSPACE_COMMANDS = new Map<string, WorkspaceCommand>([
+	[
+		"init",
+		async (args, launchDir) => {
+			console.log(
+				`initialized ${initWorkspace(resolve(launchDir, args[0] ?? "."))}`,
+			);
+			return true;
+		},
+	],
+	[
+		"check",
+		async (_args, _launchDir, workspace) => {
+			if (workspace === undefined) {
+				console.error("not inside a workspace (run lisptc init)");
+				return false;
+			}
+			if (!(await checkWorkspace(workspace))) return false;
+			console.log(`${workspace}: every file loads`);
+			return true;
+		},
+	],
+]);
+
 async function main(): Promise<void> {
 	const { pathToFileURL } = await import("node:url");
 	const entry = process.argv[1];
@@ -163,23 +195,12 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	if (args[0] === "init") {
-		const { resolve } = await import("node:path");
-		console.log(
-			`initialized ${initWorkspace(resolve(launchDir, args[1] ?? "."))}`,
-		);
-		return;
-	}
-
 	const workspace = findWorkspace(launchDir);
-
-	if (args[0] === "check") {
-		if (workspace === undefined) {
-			console.error("not inside a workspace (run lisptc init)");
-			process.exit(1);
-		}
-		if (!(await checkWorkspace(workspace))) process.exit(1);
-		console.log(`${workspace}: every file loads`);
+	const command = WORKSPACE_COMMANDS.get(args[0] ?? "");
+	if (command !== undefined) {
+		process.exitCode = (await command(args.slice(1), launchDir, workspace))
+			? 0
+			: 1;
 		return;
 	}
 
@@ -195,16 +216,66 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
+	readLine = terminalReader(process.stdin.isTTY === true);
 
-	const isTTY = process.stdin.isTTY === true;
+	setExit(process.exit);
+
+	if (args.includes("--attach")) {
+		await attachLoop();
+		return;
+	}
+
+	try {
+		await runArguments(new InteractiveRepl(workspace), args, launchDir);
+	} catch (ex) {
+		console.log(ex);
+		process.exit(1);
+	}
+}
+
+async function runArguments(
+	repl: InteractiveRepl,
+	args: readonly string[],
+	launchDir: string,
+): Promise<void> {
+	let started = false;
+	for (const fileName of args.length > 0 ? args : ["-"]) {
+		if (fileName === "-") {
+			if (!started) {
+				started = true;
+				await repl.readEvalPrintLoop();
+			}
+		} else if (fileName.startsWith("--")) {
+			console.error(`unknown option "${fileName}" (try --help)`);
+			process.exit(1);
+		} else {
+			await runFile(repl, resolve(launchDir, fileName));
+		}
+	}
+}
+
+async function runFile(repl: InteractiveRepl, abs: string): Promise<void> {
+	const text = readFileSync(abs, "utf8");
+	repl.interp.importStack.push(dirname(abs));
+	try {
+		await runAsync(repl.interp, text);
+	} finally {
+		repl.interp.importStack.pop();
+	}
+}
+
+const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
+
+function terminalReader(
+	isTTY: boolean,
+): (prompt: string) => Promise<string | null> {
 	let rl: import("node:readline").Interface | null = null;
 	let closed = false;
 	let lastInput = "";
 	const pending: string[] = [];
 	let waiter: ((line: string | null) => void) | null = null;
 
-	readLine = async (prompt) => {
+	return async (prompt) => {
 		if (rl === null) {
 			const { createInterface } = await import("node:readline");
 			rl = createInterface({
@@ -269,46 +340,6 @@ async function main(): Promise<void> {
 		if (line.trim() !== "") lastInput = line;
 		return line;
 	};
-
-	setExit(process.exit);
-
-	if (args.includes("--attach")) {
-		await attachLoop();
-		return;
-	}
-
-	const repl = new InteractiveRepl(workspace);
-	let started = false;
-	let fs: typeof import("node:fs") | undefined;
-	const argv = args.length > 0 ? ["", "", ...args] : ["", "", "-"];
-	try {
-		for (let i = 2; i < argv.length; i++) {
-			const fileName = argv[i];
-			if (fileName === "-") {
-				if (!started) {
-					started = true;
-					await repl.readEvalPrintLoop();
-				}
-			} else if (fileName.startsWith("--")) {
-				console.error(`unknown option "${fileName}" (try --help)`);
-				process.exit(1);
-			} else {
-				fs = fs || (await import("node:fs")).default;
-				const path = await import("node:path");
-				const abs = path.resolve(launchDir, fileName);
-				const text = fs.readFileSync(abs, "utf8");
-				repl.interp.importStack.push(path.dirname(abs));
-				try {
-					await runAsync(repl.interp, text);
-				} finally {
-					repl.interp.importStack.pop();
-				}
-			}
-		}
-	} catch (ex) {
-		console.log(ex);
-		process.exit(1);
-	}
 }
 
 const USAGE = `lisptc REPL — the Lisp interpreter's interactive terminal
