@@ -46,7 +46,8 @@ describe("the permissions guard", () => {
 		expect(run.requests).toEqual([
 			expect.objectContaining({ name: "string-upcase", args: '"a"' }),
 		]);
-		expect(run.annotations.step).toEqual({
+		expect(run.requests[0].change).toBeUndefined();
+		expect(run.annotations.output).toEqual({
 			permissions: { requests: run.requests },
 		});
 	});
@@ -151,14 +152,14 @@ describe("evaluating a permissions form", () => {
 		expect((await s.step(UPCASE)).value).toBe('"A"');
 		expect(s.host.store.source()).toBe("");
 
-		await s.invoke(DECIDE_ACTION, {
+		const decided = await s.invoke(DECIDE_ACTION, {
 			id: asked.requests[0].id,
 			approved: true,
 			scope: "once",
 		});
-		expect((await s.step(tighten)).failed).toBe(false);
-		expect((await s.step(UPCASE)).failed).toBe(true);
+		expect(decided.failed).toBe(false);
 		expect(s.host.store.source()).toContain(tighten);
+		expect((await s.step(UPCASE)).failed).toBe(true);
 	});
 
 	it("applies at once when a rule names the operation", async () => {
@@ -208,26 +209,81 @@ describe("evaluating a permissions form", () => {
 		expect(asked.report).toContain(
 			"changes the permissions config and is waiting for the user's approval",
 		);
-		expect(asked.requests.map((r) => r.name)).toEqual([widen]);
+		expect(asked.report).toContain(
+			"once they approve it is applied, so do not run it again",
+		);
+		expect(asked.requests).toEqual([
+			expect.objectContaining({ name: widen, change: true }),
+		]);
 		expect(s.host.store.source()).not.toContain(widen);
 
-		await s.invoke(DECIDE_ACTION, {
+		const decided = await s.invoke(DECIDE_ACTION, {
 			id: asked.requests[0].id,
 			approved: true,
 			scope: "once",
 		});
-		expect((await s.step(widen)).failed).toBe(false);
-		expect(s.host.store.source()).toContain(widen);
+		expect(decided.failed).toBe(false);
+		expect(decided.message).toBe(
+			`I approved ${widen}, and it is applied to the permissions config.`,
+		);
+		expect(s.host.store.source()).toBe(
+			"(permission/deny string-upcase)\n(permission/allow string-upcase)\n",
+		);
+		expect(s.host.approvals.pending()).toEqual([]);
+	});
+
+	it("applies a change approved through any reply path", async () => {
+		const email = recordingApprover();
+		const s = session("", [email]);
+		const tighten = "(permission/deny string-upcase)";
+		await s.step(tighten);
+		const resolution = resolveApproval(s.host.approvals, {
+			id: email.asked[0].id,
+			approved: true,
+			scope: "once",
+			by: "email",
+		});
+		expect(resolution?.message).toBe(
+			`I approved ${tighten}, and it is applied to the permissions config.`,
+		);
+		expect(s.host.store.source()).toBe(`${tighten}\n`);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("asks again for a change that is already applied, rather than applying it twice", async () => {
+		const s = session("");
+		const tighten = "(permission/deny string-upcase)";
+		const first = await s.step(tighten);
+		await s.invoke(DECIDE_ACTION, {
+			id: first.requests[0].id,
+			approved: true,
+			scope: "session",
+		});
+		const applied = s.host.store.source();
+		expect(applied).toBe(`${tighten}\n`);
+
+		const again = await s.step(tighten);
+		expect(again.failed).toBe(false);
+		expect(again.held).toBe(true);
+		expect(again.requests).toEqual([
+			expect.objectContaining({ name: tighten, change: true }),
+		]);
+		expect(again.requests[0].id).not.toBe(first.requests[0].id);
+		expect(s.host.store.source()).toBe(applied);
 	});
 
 	it("never applies a widening form the user denied", async () => {
 		const s = session("(permission/deny string-upcase)");
 		const widen = "(permission/allow string-upcase)";
 		const asked = await s.step(widen);
-		await s.invoke(DECIDE_ACTION, {
+		const decided = await s.invoke(DECIDE_ACTION, {
 			id: asked.requests[0].id,
 			approved: false,
 		});
+		expect(decided.message).toBe(
+			`I denied ${widen}, so the permissions config is unchanged.`,
+		);
+		expect(s.host.store.source()).toBe("(permission/deny string-upcase)");
 		const retried = await s.step(widen);
 		expect(retried.failed).toBe(false);
 		expect(retried.held).toBe(true);
@@ -289,14 +345,17 @@ describe("deleting a permissions form", () => {
 			"(permission/deny string-upcase)\n(permission/deny eval)\n",
 		);
 		const [request] = (await s.step(DELETE)).requests;
-		await s.invoke(DECIDE_ACTION, {
+		expect(request.change).toBe(true);
+		const decided = await s.invoke(DECIDE_ACTION, {
 			id: request.id,
 			approved: true,
 			scope: "once",
 		});
-		expect((await s.step(DELETE)).failed).toBe(false);
-		expect((await s.step(UPCASE)).value).toBe('"A"');
+		expect(decided.message).toBe(
+			`I approved ${DELETE}, and it is applied to the permissions config.`,
+		);
 		expect(s.host.store.source()).toBe("(permission/deny eval)\n");
+		expect((await s.step(UPCASE)).value).toBe('"A"');
 		expect((await s.step("(permission/check 'eval)")).value).toBe("deny");
 	});
 
@@ -313,7 +372,14 @@ describe("deleting a permissions form", () => {
 	it("never deletes once the user denies it", async () => {
 		const s = session("(permission/deny string-upcase)");
 		const [request] = (await s.step(DELETE)).requests;
-		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
+		const decided = await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: false,
+		});
+		expect(decided.message).toBe(
+			`I denied ${DELETE}, so the permissions config is unchanged.`,
+		);
+		expect(s.host.store.source()).toBe("(permission/deny string-upcase)");
 		const retried = await s.step(DELETE);
 		expect(retried.failed).toBe(false);
 		expect(retried.held).toBe(true);
@@ -364,19 +430,19 @@ describe("reporting a decision", () => {
 			approved: true,
 			scope: "once",
 		});
-		expect(decided.annotations.step).toEqual({});
+		expect(decided.annotations.output).toEqual({});
 		const next = await s.step(UPCASE);
-		expect(next.annotations.step).toEqual({
+		expect(next.annotations.output).toEqual({
 			permissions: { decided: [{ id: request.id, approved: true }] },
 		});
-		expect((await s.step("(+ 1 2)")).annotations.step).toEqual({});
+		expect((await s.step("(+ 1 2)")).annotations.output).toEqual({});
 	});
 
 	it("reports a denial as a decision too", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const [request] = (await s.step(UPCASE)).requests;
 		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
-		expect((await s.step("(+ 1 2)")).annotations.step).toEqual({
+		expect((await s.step("(+ 1 2)")).annotations.output).toEqual({
 			permissions: { decided: [{ id: request.id, approved: false }] },
 		});
 	});

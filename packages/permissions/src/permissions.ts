@@ -87,12 +87,23 @@ export function permissionsExtension(
 		}
 	}
 
+	const awaiting = new Map<string, Cell>();
+
+	host.approvals.onResolved((request, decision) => {
+		const form = awaiting.get(request.id);
+		if (form === undefined) return;
+		awaiting.delete(request.id);
+		host.approvals.consume(request.name);
+		if (decision.approved) commit(form);
+	});
+
 	function askFor(
 		interp: Interp,
 		name: string,
 		args: string,
 		reason: string | undefined,
 		report: string,
+		change?: Cell,
 	): never {
 		const request: ApprovalRequest = {
 			id: `${host.clock.now().toString(36)}-${(issued++).toString(36)}`,
@@ -100,8 +111,10 @@ export function permissionsExtension(
 			args,
 			...(reason === undefined ? {} : { reason }),
 			at: host.clock.now(),
+			...(change === undefined ? {} : { change: true as const }),
 		};
 		host.approvals.open(request);
+		if (change !== undefined) awaiting.set(request.id, change);
 		requested.emit(interp.channels, { user: request });
 		for (const approver of host.approvers) approver.ask?.(request);
 		throw new StepHold(report);
@@ -134,10 +147,7 @@ export function permissionsExtension(
 		if (!(form instanceof Cell))
 			throw new EvalException("not a permissions form", given, false);
 		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
-		const next =
-			form.car === DELETE_SYM
-				? rules.current.without(deleted(form))
-				: rules.current.with(form);
+		changed(form);
 		const change = str(form);
 		const { verdict, reason } = rules.current.named(operation) ?? {
 			verdict: "ask",
@@ -147,17 +157,26 @@ export function permissionsExtension(
 				operation,
 				`${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`,
 			);
-		if (verdict === "ask") {
-			if (!host.approvals.granted(change))
-				askFor(
-					interp,
-					change,
-					"",
-					reason ?? "changes the permissions config",
-					`${change} changes the permissions config and is waiting for the user's approval. The turn ends here; you will be told when they answer, and after an approval run the same form again`,
-				);
-			host.approvals.consume(change);
-		}
+		if (verdict === "ask")
+			askFor(
+				interp,
+				change,
+				"",
+				reason ?? "changes the permissions config",
+				`${change} changes the permissions config and is waiting for the user's approval. The turn ends here; once they approve it is applied, so do not run it again`,
+				form,
+			);
+		return commit(form);
+	}
+
+	function changed(form: Cell): PermissionRules {
+		return form.car === DELETE_SYM
+			? rules.current.without(deleted(form))
+			: rules.current.with(form);
+	}
+
+	function commit(form: Cell): unknown {
+		const next = changed(form);
 		rules.replace(next);
 		const saved = host.store.save(next.source);
 		return saved instanceof Promise ? saved.then(() => form) : form;

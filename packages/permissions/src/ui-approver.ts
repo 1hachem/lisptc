@@ -48,7 +48,7 @@ export const uiApprover: Approver = {
 				buffer,
 				Object.keys(permissions).length === 0
 					? into
-					: annotating(into, "step", { permissions }),
+					: annotating(into, "output", { permissions }),
 			);
 		});
 		hooks.message.use((buffer, next) => {

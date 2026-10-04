@@ -56,6 +56,29 @@ describe("permissions over a loaded MCP server", () => {
 		expect(client.calls).toEqual([]);
 	});
 
+	it("applies a server change from the repl the moment the user approves it", async () => {
+		const { repl, client } = replWith("");
+		await repl.eval(LOAD);
+		const asked = await repl.evalOutput("(permission/server fx (hide echo))");
+		expect(asked.held).toBe(true);
+		const { requests } = asked.annotations.output.permissions as {
+			requests: { id: string; change?: true }[];
+		};
+		expect(requests).toEqual([expect.objectContaining({ change: true })]);
+		expect(await printed(repl, '(echo (fx/echo :message "x"))')).toContain("x");
+
+		const decided = await repl.invokeUi("permissions/decide", {
+			id: requests[0].id,
+			approved: true,
+			scope: "once",
+		});
+		expect(decided.message).toContain(
+			"it is applied to the permissions config",
+		);
+		expect((await repl.evalOutput('(fx/echo :message "y")')).failed).toBe(true);
+		expect(client.calls.map((c) => c.tool)).toEqual(["echo"]);
+	});
+
 	it("never binds a hidden tool, and leaves the rest callable", async () => {
 		const { repl } = replWith(CONFIG);
 		const tools = await printed(repl, LOAD);
@@ -91,7 +114,7 @@ describe("permissions over a loaded MCP server", () => {
 		const asked = await repl.evalOutput('(fx/send_mail :message "hello")');
 		expect(asked.failed).toBe(false);
 		expect(asked.held).toBe(true);
-		const { requests } = asked.annotations.step.permissions as {
+		const { requests } = asked.annotations.output.permissions as {
 			requests: { id: string; name: string }[];
 		};
 		expect(requests.map((r) => r.name)).toEqual(["fx/send_mail"]);

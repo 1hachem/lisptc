@@ -1,8 +1,11 @@
 import type { ApprovalRequest, Approvals, Decision, Scope } from "./ports.ts";
 
+type Resolved = (request: ApprovalRequest, decision: Decision) => void;
+
 export class MemoryApprovals implements Approvals {
 	private readonly open_ = new Map<string, ApprovalRequest>();
 	private readonly grants = new Map<string, Scope>();
+	private readonly listeners: Resolved[] = [];
 
 	open(request: ApprovalRequest): void {
 		for (const [id, held] of this.open_)
@@ -19,6 +22,7 @@ export class MemoryApprovals implements Approvals {
 		if (request === undefined) return undefined;
 		this.open_.delete(decision.id);
 		if (decision.approved) this.grants.set(request.name, decision.scope);
+		for (const listener of this.listeners) listener(request, decision);
 		return request;
 	}
 
@@ -28,6 +32,10 @@ export class MemoryApprovals implements Approvals {
 
 	consume(name: string): void {
 		if (this.grants.get(name) === "once") this.grants.delete(name);
+	}
+
+	onResolved(listener: Resolved): void {
+		this.listeners.push(listener);
 	}
 }
 
@@ -47,6 +55,10 @@ export function resolveApproval(
 }
 
 function followUp(request: ApprovalRequest, decision: Decision): string {
+	if (request.change)
+		return decision.approved
+			? `I approved ${request.name}, and it is applied to the permissions config.`
+			: `I denied ${request.name}, so the permissions config is unchanged.`;
 	if (!decision.approved)
 		return `I denied ${request.name}. Do not call it again; find another way or tell me what you need.`;
 	const lasting =

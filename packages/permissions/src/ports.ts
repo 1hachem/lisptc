@@ -36,6 +36,7 @@ export interface ApprovalRequest {
 	readonly args: string;
 	readonly reason?: string;
 	readonly at: number;
+	readonly change?: true;
 }
 
 export type Scope = "once" | "session";
@@ -53,6 +54,9 @@ export interface Approvals {
 	resolve(decision: Decision): ApprovalRequest | undefined;
 	granted(name: string): boolean;
 	consume(name: string): void;
+	onResolved(
+		listener: (request: ApprovalRequest, decision: Decision) => void,
+	): void;
 }
 
 export interface Approver {
