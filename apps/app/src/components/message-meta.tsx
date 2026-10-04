@@ -48,7 +48,13 @@ const SEGMENTS: {
 	render: (meta: StepMeta, show: Record<MetaField, boolean>) => string | null;
 }[] = [
 	{ field: "time", render: (m) => (m.at ? formatTime(m.at) : null) },
-	{ field: "duration", render: (m) => `took ${formatDuration(m.durationMs)}` },
+	{
+		field: "duration",
+		render: (m) =>
+			m.durationMs === undefined
+				? null
+				: `took ${formatDuration(m.durationMs)}`,
+	},
 	{
 		field: "steps",
 		render: (m) =>

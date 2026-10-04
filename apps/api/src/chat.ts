@@ -110,7 +110,20 @@ chat.post("/", async (c) => {
 				distinctId: c.req.header("x-distinct-id"),
 				sessionId: c.req.header("x-posthog-session-id"),
 			},
-			onTurn: async (produced) => {
+			onTurn: async (produced, revised) => {
+				for (const [at, message] of revised) {
+					const stored = history[at];
+					if (
+						stored?.wireId === undefined ||
+						message.additional_kwargs === undefined
+					)
+						continue;
+					await convex.mutation(api.messages.annotate, {
+						chatId,
+						id: stored.wireId,
+						kwargs: message.additional_kwargs,
+					});
+				}
 				const messages = toStored(produced);
 				if (messages.length === 0) return;
 				await convex.mutation(api.messages.append, { chatId, messages });
