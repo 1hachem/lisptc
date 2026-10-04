@@ -18,6 +18,7 @@ import {
 	EvalException,
 	LoopSignal,
 	NotVariableException,
+	StepHold,
 	UnresolvedHead,
 	VoidVariable,
 } from "./errors.ts";
@@ -71,6 +72,10 @@ export interface Hooks {
 		[interp: Interp, form: unknown, error: EvalException],
 		Eval<FailedForm | undefined>
 	>;
+	readonly call: Chain<
+		[interp: Interp, name: string, args: readonly unknown[]],
+		void
+	>;
 	readonly dispose: Chain<[], void>;
 }
 
@@ -79,6 +84,7 @@ export function newHooks(): Hooks {
 		readSource: new Chain(),
 		evalForm: new Chain(),
 		failedForm: new Chain(),
+		call: new Chain(),
 		dispose: new Chain(),
 	};
 }
@@ -226,6 +232,10 @@ export class Interp {
 		this.hooks.dispose.run(() => this.async.abortAll());
 	}
 
+	private guardCall(name: string, args: readonly unknown[]): void {
+		this.hooks.call.run(() => undefined, this, name, args);
+	}
+
 	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
 		return new BuiltInFunc(name, carity, body);
 	}
@@ -258,6 +268,7 @@ export class Interp {
 					let fn = x.car;
 					const arg = cdrCell(x);
 					if (fn instanceof Keyword) {
+						if (!this.hooks.call.isEmpty) this.guardCall(fn.name, []);
 						switch (<Keyword>fn) {
 							case quoteSym:
 								if (arg !== null && arg.cdr === null) return arg.car;
@@ -305,6 +316,8 @@ export class Interp {
 						}
 
 						if (fn instanceof Macro) {
+							if (!this.hooks.call.isEmpty && x.car instanceof Sym)
+								this.guardCall(x.car.name, []);
 							x = yield* fn.expandWith(this, arg);
 						} else if (fn instanceof Closure || fn instanceof BuiltInFunc) {
 							const frame = fn.makeFrame(arg);
@@ -334,6 +347,8 @@ export class Interp {
 								frame[fixed] = head;
 							}
 							if (fn instanceof BuiltInFunc) {
+								if (!this.hooks.call.isEmpty)
+									this.guardCall(fn.callName ?? "", frame);
 								if (fn.kind === "generator") return yield* fn.callGen(frame);
 								const value = fn.call(frame);
 								if (value instanceof Promise)
@@ -512,6 +527,10 @@ export function* evalTopLevel(
 	try {
 		return yield* interp.evalGen(exp, null);
 	} catch (ex) {
+		if (ex instanceof StepHold) {
+			note.emit(interp.channels, { model: { kind: "held", text: ex.reason } });
+			throw ex;
+		}
 		const failure =
 			ex instanceof LoopSignal
 				? new EvalException("break/return used outside of a loop", null, false)

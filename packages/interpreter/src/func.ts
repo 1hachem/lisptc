@@ -1,6 +1,6 @@
 import type { Arity } from "./docs.ts";
 import type { Eval, Evaluator } from "./drive.ts";
-import { cdrCell, EvalException, LoopSignal } from "./errors.ts";
+import { cdrCell, EvalException, LoopSignal, StepHold } from "./errors.ts";
 import { assert, Cell, LispKeyword, type List, type Sym } from "./objects.ts";
 import { str } from "./print.ts";
 
@@ -237,7 +237,12 @@ export class BuiltInFunc extends Func {
 		try {
 			return yield promise;
 		} catch (ex) {
-			if (ex instanceof EvalException || ex instanceof LoopSignal) throw ex;
+			if (
+				ex instanceof EvalException ||
+				ex instanceof LoopSignal ||
+				ex instanceof StepHold
+			)
+				throw ex;
 			throw this.named(
 				new EvalException(
 					`${this.callName} failed`,
@@ -257,7 +262,7 @@ export class BuiltInFunc extends Func {
 	}
 
 	private failure(ex: unknown, frame: unknown[]): unknown {
-		if (ex instanceof LoopSignal) return ex;
+		if (ex instanceof LoopSignal || ex instanceof StepHold) return ex;
 		if (ex instanceof EvalException) return this.named(ex);
 		return this.named(new EvalException(`${ex} -- ${this.callName}`, frame));
 	}
