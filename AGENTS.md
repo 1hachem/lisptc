@@ -330,6 +330,11 @@ step. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails
 there fails the same way locally, under the command it names.
 
+**Run `pnpm typecheck`, `pnpm knip` and `pnpm fallow` only at the end.** They
+are whole-repo sweeps. Run them when the user asks to commit or push, or says
+the work is done, and not after every change while it is still moving. Until
+then, check a change with the tests and the typecheck of the package it touches.
+
 A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
 longer than one line, so write the subject and stop unless a description was
 asked for, and then keep it to a single line after the blank one. Trailers
