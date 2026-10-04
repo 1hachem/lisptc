@@ -11,6 +11,8 @@ import { LocalProcessHost } from "@repo/mcp-extension/local-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
+import { permissionsExtension } from "@repo/permissions-extension";
+import { permissionsHostFor } from "@repo/permissions-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -19,10 +21,15 @@ import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost, secretsHostFor } from "@repo/secrets-extension/host";
 
 export function cliExtensions(): InterpExtension[] {
+	const permissions = permissionsExtension(permissionsHostFor());
 	return [
+		permissions,
 		secretsExtension(secretsHostFor({ envFile: true })),
 		promisesExtension(promisesHost),
-		mcpExtension(mcpHostFor({ host: new DockerHost() })),
+		mcpExtension({
+			...mcpHostFor({ host: new DockerHost() }),
+			policy: permissions.rules,
+		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost, { compactor: new Compactor() }),
 		memoryExtension(memoryHost),
@@ -32,10 +39,15 @@ export function cliExtensions(): InterpExtension[] {
 }
 
 export function sessionExtensions(): InterpExtension[] {
+	const permissions = permissionsExtension(permissionsHostFor());
 	return [
+		permissions,
 		secretsExtension(secretsHost),
 		promisesExtension(promisesHost),
-		mcpExtension(mcpHostFor({ host: new LocalProcessHost() })),
+		mcpExtension({
+			...mcpHostFor({ host: new LocalProcessHost() }),
+			policy: permissions.rules,
+		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
 		memoryExtension(memoryHost),
