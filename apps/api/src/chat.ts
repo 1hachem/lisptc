@@ -138,7 +138,7 @@ chat.post("/eval", async (c) => {
 
 	await convex.mutation(api.messages.append, {
 		chatId,
-		messages: [{ type: "human", content: code }],
+		messages: [{ id: crypto.randomUUID(), type: "human", content: code }],
 	});
 	console.log(`eval chat=${chatId} chars=${code.length}`);
 	const message = await evalUserCode(code, { repls, threadId: chatId });
