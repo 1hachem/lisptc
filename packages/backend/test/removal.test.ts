@@ -88,7 +88,7 @@ describe("removing a workspace", () => {
 		expect(messages).toEqual([]);
 	});
 
-	it("takes its secrets and oauth records with it", async () => {
+	it("takes its secrets, oauth records and permissions with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -103,17 +103,23 @@ describe("removing a workspace", () => {
 			serverKey: "https://sheets.example.com",
 			record: JSON.stringify({ tokens: { access_token: "doomed" } }),
 		});
+		await alice.as.mutation(api.permissions.put, {
+			workspaceId: doomed,
+			source: "(permission/deny eval)",
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords } = await t.run(async (ctx) => ({
+		const { secrets, oauthRecords, permissions } = await t.run(async (ctx) => ({
 			secrets: await ctx.db.query("secrets").collect(),
 			oauthRecords: await ctx.db.query("oauthRecords").collect(),
+			permissions: await ctx.db.query("permissions").collect(),
 		}));
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
+		expect(permissions).toEqual([]);
 	});
 
 	it("leaves the other workspaces alone", async () => {

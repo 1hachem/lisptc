@@ -53,6 +53,11 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
 
+	permissions: defineTable({
+		workspaceId: v.id("workspaces"),
+		source: v.string(),
+	}).index("by_workspace", ["workspaceId"]),
+
 	oauthRecords: defineTable({
 		workspaceId: v.id("workspaces"),
 		serverKey: v.string(),

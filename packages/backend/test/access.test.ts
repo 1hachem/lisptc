@@ -119,6 +119,53 @@ describe("messages", () => {
 	});
 });
 
+describe("permissions access", () => {
+	it("keeps a workspace's config to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.permissions.put, {
+			workspaceId: bob.workspace,
+			source: "(permission/deny eval)",
+		});
+		expect(
+			await bob.as.query(api.permissions.get, { workspaceId: bob.workspace }),
+		).toBe("(permission/deny eval)");
+		await expect(
+			alice.as.query(api.permissions.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.permissions.put, {
+				workspaceId: bob.workspace,
+				source: "(permission/default allow)",
+			}),
+		).rejects.toThrow();
+		await expect(
+			t.query(api.permissions.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+	});
+
+	it("holds one config per workspace, replaced on save", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.permissions.put, {
+			workspaceId: alice.workspace,
+			source: "(permission/deny eval)",
+		});
+		await alice.as.mutation(api.permissions.put, {
+			workspaceId: alice.workspace,
+			source: "(permission/ask eval)",
+		});
+		expect(
+			await alice.as.query(api.permissions.get, {
+				workspaceId: alice.workspace,
+			}),
+		).toBe("(permission/ask eval)");
+		const rows = await t.run((ctx) => ctx.db.query("permissions").collect());
+		expect(rows).toHaveLength(1);
+	});
+});
+
 describe("secret access", () => {
 	it("refuses listing another user's secrets", async () => {
 		const t = harness();
