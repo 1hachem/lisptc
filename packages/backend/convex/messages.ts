@@ -90,6 +90,28 @@ export const append = mutation({
 	},
 });
 
+export const annotate = mutation({
+	args: {
+		chatId: v.id("chats"),
+		messageId: v.id("messages"),
+		kwargs: v.record(v.string(), v.any()),
+	},
+	returns: v.null(),
+	handler: async (ctx, { chatId, messageId, kwargs }) => {
+		await requireChat(ctx, chatId);
+		const message = await ctx.db.get(messageId);
+		if (message === null || message.chatId !== chatId)
+			throw new Error("that message is not in this chat");
+		const clamped = clamp(message.content, kwargs);
+		await ctx.db.patch(messageId, {
+			content: clamped.content,
+			kwargs: clamped.kwargs,
+			truncated: clamped.truncated ? true : undefined,
+		});
+		return null;
+	},
+});
+
 export const purge = internalMutation({
 	args: { chatId: v.id("chats") },
 	returns: v.null(),

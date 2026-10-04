@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { reporting, testRepl } from "./helpers.ts";
+import { hearing, reporting, testRepl } from "./helpers.ts";
 
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
@@ -225,6 +225,34 @@ describe("chat stream", () => {
 		expect(
 			messages.find((m) => m.type === "ai")?.additional_kwargs?.meta?.reported,
 		).toEqual(["a step had something to say"]);
+	});
+
+	test("what fired before the model answered rides the user's message, on the wire before the answer", async () => {
+		let revised: ReadonlyMap<number, unknown> = new Map();
+		const text = await stream(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{
+				repl: testRepl([hearing("a memory fired")]),
+				onTurn: (_produced, touched) => {
+					revised = touched;
+				},
+			},
+		).text();
+		const seen = records(text);
+		const firstDelta = seen.findIndex((r) => r.event === "messages");
+		const early = seen
+			.slice(0, firstDelta)
+			.filter((r) => r.event === "values")
+			.at(-1)?.data as { messages: WireMessage[] };
+
+		expect(early.messages[0].additional_kwargs?.meta?.heard?.[0]).toBe(
+			"a memory fired",
+		);
+		const final = (seen.at(-1)?.data as { messages: WireMessage[] }).messages;
+		expect(
+			final.find((m) => m.type === "ai")?.additional_kwargs?.meta?.heard,
+		).toBeUndefined();
+		expect([...revised.keys()]).toEqual([0]);
 	});
 
 	test("a REPL result carries no cost of its own", async () => {

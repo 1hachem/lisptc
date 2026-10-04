@@ -53,7 +53,7 @@ export interface ChatMessage {
 
 export interface StepMeta {
 	at?: string;
-	durationMs: number;
+	durationMs?: number;
 	provider?: string;
 	model?: string;
 	inputTokens?: number;
@@ -82,7 +82,8 @@ function parseMeta(value: unknown): StepMeta | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const raw = value as Record<string, unknown>;
 	const durationMs = num(raw.durationMs);
-	if (durationMs === undefined) return undefined;
+	const memories = parseMemories(raw.memories);
+	if (durationMs === undefined && memories === undefined) return undefined;
 	return {
 		at: typeof raw.at === "string" ? raw.at : undefined,
 		durationMs,
@@ -92,7 +93,7 @@ function parseMeta(value: unknown): StepMeta | undefined {
 		outputTokens: num(raw.outputTokens),
 		cachedInputTokens: num(raw.cachedInputTokens),
 		steps: num(raw.steps),
-		memories: parseMemories(raw.memories),
+		memories,
 	};
 }
 

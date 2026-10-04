@@ -39,6 +39,22 @@ function mergeInto(
 	}
 }
 
+function lastHuman(wire: WireMessage[]): number {
+	for (let i = wire.length - 1; i >= 0; i--)
+		if (wire[i].type === "human") return i;
+	return -1;
+}
+
+function annotate(
+	message: WireMessage,
+	annotations: Record<string, unknown>,
+): WireMessage {
+	const kwargs = message.additional_kwargs ?? {};
+	const meta = { ...((kwargs.meta as Record<string, unknown>) ?? {}) };
+	mergeInto(meta, annotations);
+	return { ...message, additional_kwargs: { ...kwargs, meta } };
+}
+
 function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
@@ -70,7 +86,10 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	config?: AgentConfig;
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
-	onTurn?: (messages: WireMessage[]) => Promise<void> | void;
+	onTurn?: (
+		messages: WireMessage[],
+		revised: ReadonlyMap<number, WireMessage>,
+	) => Promise<void> | void;
 	steer?: { inbox: SteerInbox; key: string };
 };
 
@@ -124,7 +143,7 @@ export function streamChatResponse<Id extends string>(
 			const carried = wire.length;
 			let steps = 0;
 			let lastMeta: Record<string, unknown> | undefined;
-			let collected: Record<string, unknown> = {};
+			const revised = new Map<number, WireMessage>();
 			const steering = steerLine(steer);
 
 			try {
@@ -159,11 +178,13 @@ export function streamChatResponse<Id extends string>(
 						wire.push({ type: "human", content: event.content, id: event.id });
 						if (!write(sse("values", { messages: wire }))) break;
 					} else if (event.type === "collected") {
-						mergeInto(collected, event.annotations);
+						const at = lastHuman(wire);
+						if (at === -1) continue;
+						wire[at] = annotate(wire[at], event.annotations);
+						if (at < carried) revised.set(at, wire[at]);
+						if (!write(sse("values", { messages: wire }))) break;
 					} else if (event.type === "assistant") {
 						lastMeta = { ...event.meta };
-						mergeInto(lastMeta, collected);
-						collected = {};
 						wire.push({
 							type: "ai",
 							content: event.code,
@@ -230,7 +251,7 @@ export function streamChatResponse<Id extends string>(
 					);
 				if (onTurn) {
 					try {
-						await onTurn(wire.slice(carried));
+						await onTurn(wire.slice(carried), revised);
 					} catch (error) {
 						console.error("[ai] the turn was not recorded:", error);
 					}
