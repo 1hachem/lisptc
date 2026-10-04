@@ -1,3 +1,4 @@
+import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
 import { postUiAction } from "./ui-action.ts";
 
 export interface ApprovalRequest {
@@ -13,7 +14,7 @@ export interface ApprovalReply {
 }
 
 export type ApprovalOutcome =
-	| { readonly ok: true; readonly message?: string }
+	| { readonly ok: true; readonly event?: SystemEventTicket }
 	| { readonly ok: false; readonly error: string };
 
 export interface ApprovalTransport {
@@ -37,10 +38,11 @@ export const uiActionTransport: ApprovalTransport = {
 		);
 		if (!result.live)
 			return { ok: false, error: "this session is no longer live" };
-		const { error, output, message } = result.response;
+		const { error, output } = result.response;
 		if (error)
 			return { ok: false, error: output || "the decision was refused" };
-		return message === undefined ? { ok: true } : { ok: true, message };
+		const event = systemEventTicket(result.response.event);
+		return event === undefined ? { ok: true } : { ok: true, event };
 	},
 };
 

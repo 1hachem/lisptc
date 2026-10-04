@@ -30,16 +30,18 @@ import {
 } from "./approvals.ts";
 import { pickGreeting } from "./greeting.ts";
 import {
+	type Approval,
 	awaitedState,
 	clearApproval,
 	OAUTH_APPROVED_KEY,
 	OAUTH_CHANNEL,
 	type OAuthSignal,
-	RESUME_MESSAGE,
+	parseApproval,
 	readApproval,
 	rememberAwaitingChat,
 } from "./oauth-callback.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
+import type { SystemEventTicket } from "./system-event.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
@@ -54,6 +56,7 @@ export interface ChatMessage {
 		permissions?: unknown;
 		prose?: unknown;
 		failed?: unknown;
+		source?: unknown;
 	};
 }
 
@@ -112,6 +115,7 @@ export interface ChatSession {
 	chatId: Id<"chats"> | null;
 	error?: string;
 	send: (text: string) => void;
+	resume: (event: SystemEventTicket) => void;
 	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
@@ -273,24 +277,18 @@ export function ChatProvider({
 		[chatId, workspaceId, createChat, navigate],
 	);
 
-	const submitTurn = useCallback(
-		async (text: string) => {
-			const trimmed = text.trim();
-			if (!trimmed) return;
+	const submit = useCallback(
+		async (
+			input: { message: string } | { event: { token: string } },
+			shown: ChatMessage,
+			title: string,
+		) => {
 			setEvalError(undefined);
-			const opened =
-				chatId ?? (await createChat({ workspaceId, title: titleOf(trimmed) }));
+			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			stream.submit(
-				{ chatId: opened, message: trimmed },
-				{
-					optimisticValues: {
-						messages: [
-							...persisted,
-							{ type: "human", content: trimmed, id: crypto.randomUUID() },
-						],
-					},
-				},
+				{ chatId: opened, ...input },
+				{ optimisticValues: { messages: [...persisted, shown] } },
 			);
 			if (!chatId) {
 				await navigate({
@@ -301,6 +299,29 @@ export function ChatProvider({
 			}
 		},
 		[chatId, workspaceId, createChat, navigate, persisted, stream],
+	);
+
+	const submitTurn = useCallback(
+		async (text: string) => {
+			const trimmed = text.trim();
+			if (!trimmed) return;
+			await submit(
+				{ message: trimmed },
+				{ type: "human", content: trimmed, id: crypto.randomUUID() },
+				titleOf(trimmed),
+			);
+		},
+		[submit],
+	);
+
+	const resume = useCallback(
+		(event: SystemEventTicket) =>
+			void submit(
+				{ event: { token: event.token } },
+				systemMessage(event),
+				titleOf(event.text),
+			),
+		[submit],
 	);
 
 	const resend = useCallback(
@@ -324,11 +345,11 @@ export function ChatProvider({
 		[steering, enqueue, submitTurn],
 	);
 
-	const [approved, setApproved] = useState<string | null>(null);
+	const [approved, setApproved] = useState<Approval | null>(null);
 	useEffect(() => {
 		setApproved(readApproval());
 		const onStorage = (e: StorageEvent) => {
-			if (e.key === OAUTH_APPROVED_KEY) setApproved(e.newValue);
+			if (e.key === OAUTH_APPROVED_KEY) setApproved(parseApproval(e.newValue));
 		};
 		window.addEventListener("storage", onStorage);
 		return () => window.removeEventListener("storage", onStorage);
@@ -358,11 +379,11 @@ export function ChatProvider({
 
 	useEffect(() => {
 		if (!approved || !chatId || stream.isLoading) return;
-		if (approved !== awaited) return;
+		if (approved.state !== awaited) return;
 		clearApproval();
 		setApproved(null);
-		void submitTurn(RESUME_MESSAGE);
-	}, [approved, awaited, chatId, stream.isLoading, submitTurn]);
+		resume(approved.event);
+	}, [approved, awaited, chatId, stream.isLoading, resume]);
 
 	const stop = useCallback(() => {
 		clear();
@@ -385,6 +406,7 @@ export function ChatProvider({
 			isLoading: false,
 			chatId,
 			send: () => {},
+			resume: () => {},
 			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
@@ -410,6 +432,7 @@ export function ChatProvider({
 			send: (text) => {
 				void send(text);
 			},
+			resume,
 			runLisp: (code) => {
 				void runLisp(code);
 			},
@@ -429,6 +452,7 @@ export function ChatProvider({
 		evalError,
 		chatId,
 		send,
+		resume,
 		runLisp,
 		stop,
 		withdraw,
@@ -460,6 +484,19 @@ export function messageReasoning(message: ChatMessage): string {
 
 export function isToolMessage(message: ChatMessage): boolean {
 	return message.type === "tool";
+}
+
+export function isSystemMessage(message: ChatMessage): boolean {
+	return message.type === "system";
+}
+
+function systemMessage(event: SystemEventTicket): ChatMessage {
+	return {
+		type: "system",
+		content: event.text,
+		id: crypto.randomUUID(),
+		additional_kwargs: { source: event.source },
+	};
 }
 
 export function isUserMessage(message: ChatMessage): boolean {

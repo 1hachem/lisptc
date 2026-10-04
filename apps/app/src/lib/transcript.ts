@@ -1,6 +1,7 @@
 import {
 	type ChatMessage,
 	isGreetingMessage,
+	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
 	messageText,
@@ -21,6 +22,7 @@ function render(message: ChatMessage): string | null {
 		const { output, error } = toolResult(message);
 		return section(error ? "repl (error)" : "repl", output);
 	}
+	if (isSystemMessage(message)) return section("system", messageText(message));
 	return section(
 		isUserMessage(message) ? "user" : "assistant",
 		messageText(message),

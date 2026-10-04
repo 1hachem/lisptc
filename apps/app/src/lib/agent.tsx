@@ -60,7 +60,11 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
 	}));
 
 	const deciding =
-		isLoading && (!lastType || lastType === "human" || lastType === "user");
+		isLoading &&
+		(!lastType ||
+			lastType === "human" ||
+			lastType === "user" ||
+			lastType === "system");
 
 	const mood: MoodId = error
 		? "failed"

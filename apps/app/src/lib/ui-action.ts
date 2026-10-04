@@ -5,6 +5,7 @@ export interface UiActionResponse {
 	error?: boolean;
 	ui?: unknown;
 	message?: string;
+	event?: unknown;
 }
 
 export type UiActionResult =

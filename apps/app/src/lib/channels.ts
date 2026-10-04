@@ -6,7 +6,8 @@ export type ChannelId =
 	| "memory"
 	| "permissions"
 	| "errors"
-	| "model";
+	| "model"
+	| "system";
 
 export interface Channel {
 	id: ChannelId;
@@ -80,6 +81,14 @@ export const CHANNELS: Channel[] = [
 		hint: "what the step sent back to the model",
 		dot: "bg-purple",
 		text: "text-purple",
+		shownByDefault: false,
+	},
+	{
+		id: "system",
+		label: "system",
+		hint: "what the system told the agent between turns",
+		dot: "bg-dim",
+		text: "text-dim",
 		shownByDefault: false,
 	},
 ];

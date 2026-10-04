@@ -14,6 +14,10 @@ import {
 	type OAuthSignal,
 	storeApproval,
 } from "../lib/oauth-callback.ts";
+import {
+	type SystemEventTicket,
+	systemEventTicket,
+} from "../lib/system-event.ts";
 
 export const Route = createFileRoute("/oauth/callback")({
 	component: OAuthCallback,
@@ -29,7 +33,9 @@ type Phase =
 	| { kind: "orphaned"; server: string }
 	| { kind: "failed"; reason: string };
 
-type Finished = { server: string } | { failure: string };
+type Finished =
+	| { server: string; event?: SystemEventTicket }
+	| { failure: string };
 
 async function finishCallback(url: string): Promise<Finished> {
 	const response = await fetch(`${API_URL}/api/oauth/callback`, {
@@ -41,10 +47,12 @@ async function finishCallback(url: string): Promise<Finished> {
 	const body = (await response.json().catch(() => null)) as {
 		error?: unknown;
 		server?: unknown;
+		event?: unknown;
 	} | null;
 	if (response.ok) {
 		return {
 			server: typeof body?.server === "string" ? body.server : "the server",
+			event: systemEventTicket(body?.event),
 		};
 	}
 	return {
@@ -100,8 +108,8 @@ function OAuthCallback() {
 				setPhase({ kind: "failed", reason: finished.failure });
 				return;
 			}
-			const { server } = finished;
-			storeApproval(state);
+			const { server, event } = finished;
+			if (event) storeApproval({ state, event });
 			if (await askChatToResume(state)) {
 				setPhase({ kind: "closing", server });
 				setTimeout(() => {

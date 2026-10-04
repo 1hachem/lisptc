@@ -26,7 +26,11 @@ import {
 	approvalDecisions,
 } from "../src/lib/approvals.ts";
 
-const session = vi.hoisted(() => ({ chatId: "c1", send: vi.fn() }));
+const session = vi.hoisted(() => ({
+	chatId: "c1",
+	send: vi.fn(),
+	resume: vi.fn(),
+}));
 
 vi.mock("../src/lib/chat.tsx", () => ({
 	useChatSession: <U,>(selector: (state: typeof session) => U): U =>
@@ -79,6 +83,17 @@ function StoredCard({ transport }: { transport?: ApprovalTransport }) {
 }
 const CHOICES = ["Deny", "Allow for session", "Allow once"];
 
+const APPROVED = {
+	token: "t-approved",
+	source: "permissions/decide",
+	text: "I approved (permission/deny eval)",
+};
+const DENIED = {
+	token: "t-denied",
+	source: "permissions/decide",
+	text: "I denied (permission/deny eval)",
+};
+
 beforeAll(() => {
 	(
 		globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -89,6 +104,7 @@ const roots: Root[] = [];
 
 beforeEach(() => {
 	session.send.mockReset();
+	session.resume.mockReset();
 });
 
 afterEach(() => {
@@ -178,25 +194,21 @@ describe("the approval card", () => {
 			approved: true,
 			scope: "once",
 		});
-		expect(session.send).not.toHaveBeenCalled();
+		expect(session.resume).not.toHaveBeenCalled();
 
 		await act(async () => {
-			resolve({ ok: true, message: "I approved (permission/deny eval)" });
+			resolve({ ok: true, event: APPROVED });
 		});
 
-		expect(session.send).toHaveBeenCalledTimes(1);
-		expect(session.send).toHaveBeenCalledWith(
-			"I approved (permission/deny eval)",
-		);
+		expect(session.resume).toHaveBeenCalledTimes(1);
+		expect(session.resume).toHaveBeenCalledWith(APPROVED);
+		expect(session.send).not.toHaveBeenCalled();
 		expect(card.text()).toContain("Allowed");
 	});
 
 	it("drives the next turn on a denial too, once", async () => {
 		const client = clientHolding(transcript());
-		const transport = transportResolving({
-			ok: true,
-			message: "I denied (permission/deny eval)",
-		});
+		const transport = transportResolving({ ok: true, event: DENIED });
 		const card = await mount(client, transport);
 
 		await card.click("Deny");
@@ -207,10 +219,9 @@ describe("the approval card", () => {
 			approved: false,
 			scope: "once",
 		});
-		expect(session.send).toHaveBeenCalledTimes(1);
-		expect(session.send).toHaveBeenCalledWith(
-			"I denied (permission/deny eval)",
-		);
+		expect(session.resume).toHaveBeenCalledTimes(1);
+		expect(session.resume).toHaveBeenCalledWith(DENIED);
+		expect(session.send).not.toHaveBeenCalled();
 	});
 
 	it("stays decided on a remount that reads the patched message", async () => {
@@ -226,7 +237,7 @@ describe("the approval card", () => {
 		expect(remounted.text()).toContain("Denied");
 		expect(remounted.buttons()).toEqual([]);
 		expect(transport.decide).not.toHaveBeenCalled();
-		expect(session.send).not.toHaveBeenCalled();
+		expect(session.resume).not.toHaveBeenCalled();
 	});
 
 	it("rolls the message back and closes on a refused decision", async () => {
@@ -245,7 +256,7 @@ describe("the approval card", () => {
 		expect(card.text()).not.toContain("Allowed");
 		expect(card.buttons()).toEqual([]);
 		expect(client.getQueryData<Row[]>(KEY)).toEqual(transcript());
-		expect(session.send).not.toHaveBeenCalled();
+		expect(session.resume).not.toHaveBeenCalled();
 	});
 
 	it("rolls the message back and keeps the buttons when the request fails", async () => {

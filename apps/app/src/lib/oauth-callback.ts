@@ -1,4 +1,5 @@
 import type { Id } from "@repo/backend/dataModel";
+import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
 
 export const OAUTH_APPROVED_KEY = "lisptc:oauth-approved";
 
@@ -17,8 +18,10 @@ export interface AwaitingChat {
 
 const STATE_PARAM = /[?&]state=([0-9a-f-]{36})/;
 
-export const RESUME_MESSAGE =
-	"I approved the authorization. Carry on with what you were doing.";
+export interface Approval {
+	state: string;
+	event: SystemEventTicket;
+}
 
 export interface TranscriptLine {
 	type: string;
@@ -38,7 +41,7 @@ export function awaitedState(
 ): string | undefined {
 	let awaited: string | undefined;
 	for (const line of lines) {
-		if (line.type === "human") awaited = undefined;
+		if (line.type === "human" || line.type === "system") awaited = undefined;
 		else awaited = STATE_PARAM.exec(line.text)?.[1] ?? awaited;
 	}
 	return awaited;
@@ -65,15 +68,30 @@ export function awaitingChat(state: string): AwaitingChat | undefined {
 	}
 }
 
-export function storeApproval(state: string): void {
+export function storeApproval(approval: Approval): void {
 	try {
-		localStorage.setItem(OAUTH_APPROVED_KEY, state);
+		localStorage.setItem(OAUTH_APPROVED_KEY, JSON.stringify(approval));
 	} catch {}
 }
 
-export function readApproval(): string | null {
+export function parseApproval(raw: string | null): Approval | null {
 	try {
-		return localStorage.getItem(OAUTH_APPROVED_KEY);
+		const saved = JSON.parse(raw ?? "null") as {
+			state?: unknown;
+			event?: unknown;
+		} | null;
+		const event = systemEventTicket(saved?.event);
+		return typeof saved?.state === "string" && event
+			? { state: saved.state, event }
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+export function readApproval(): Approval | null {
+	try {
+		return parseApproval(localStorage.getItem(OAUTH_APPROVED_KEY));
 	} catch {
 		return null;
 	}

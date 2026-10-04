@@ -81,9 +81,9 @@ export function PermissionRequest({
 	decided?: boolean;
 	transport?: ApprovalTransport;
 }) {
-	const { chatId, send } = useChatSession((state) => ({
+	const { chatId, resume } = useChatSession((state) => ({
 		chatId: state.chatId,
-		send: state.send,
+		resume: state.resume,
 	}));
 	const queryClient = useQueryClient();
 	const rollback = (snapshot: Transcript | undefined) => {
@@ -111,7 +111,7 @@ export function PermissionRequest({
 				if (context) rollback(context.snapshot);
 				return;
 			}
-			if (outcome.message) send(outcome.message);
+			if (outcome.event) resume(outcome.event);
 		},
 	});
 	const refused =

@@ -10,6 +10,7 @@ import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
 	isGreetingMessage,
+	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
 	messageProse,
@@ -245,6 +246,20 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 	);
 }
 
+function SystemLine({ message }: { message: ChatMessage }) {
+	const { text } = channel("system");
+	return (
+		<div className="min-w-0 break-words">
+			<ChannelLabel id="system" />
+			<div
+				className={`whitespace-pre-wrap break-words border-dim/40 border-l pl-3 ${text}`}
+			>
+				{messageText(message)}
+			</div>
+		</div>
+	);
+}
+
 function ChatLine({
 	message,
 	index,
@@ -312,17 +327,28 @@ export function ChatView() {
 		isLoading: state.isLoading,
 	}));
 	const { shown } = useUI();
-	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
+	const lastSent = messages
+		.filter((m) => isUserMessage(m) || isSystemMessage(m))
+		.at(-1)?.id;
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
 			<StickOnSend turn={lastSent} />
 			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
 				{messages
-					.filter((m) => !isGreetingMessage(m))
+					.filter(
+						(m) =>
+							!isGreetingMessage(m) && (shown.system || !isSystemMessage(m)),
+					)
 					.map((m, i, all) => {
 						const stats = m.id ? meta[m.id] : undefined;
 						const tool = isToolMessage(m);
+						if (isSystemMessage(m))
+							return (
+								<div key={m.id ?? i} className="min-w-0">
+									<SystemLine message={m} />
+								</div>
+							);
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
 								{tool ? (

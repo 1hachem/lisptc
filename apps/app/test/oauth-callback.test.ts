@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	awaitedState,
 	callbackState,
-	RESUME_MESSAGE,
+	parseApproval,
 } from "../src/lib/oauth-callback.ts";
 
 const state = "378e720d-4dd0-41f9-a072-09eba84e7267";
@@ -34,13 +34,29 @@ describe("awaitedState", () => {
 	it("does not resume twice once the chat moved on", () => {
 		const lines = [
 			{ type: "tool", text: authLink },
-			{ type: "human", text: RESUME_MESSAGE },
+			{ type: "system", text: "the user completed the authorization" },
 		];
 		expect(awaitedState(lines)).toBe(undefined);
 	});
+});
 
-	it("never carries the code into the resume message", () => {
-		expect(RESUME_MESSAGE).not.toContain("code=");
+describe("parseApproval", () => {
+	const event = { token: "t1", source: "oauth", text: "linear connected" };
+
+	it("reads back the state and the event the server issued", () => {
+		expect(parseApproval(JSON.stringify({ state, event }))).toEqual({
+			state,
+			event,
+		});
+	});
+
+	it("refuses an approval that carries no server event", () => {
+		expect(parseApproval(state)).toBe(null);
+		expect(parseApproval(JSON.stringify({ state }))).toBe(null);
+		expect(
+			parseApproval(JSON.stringify({ state, event: { text: "I approved" } })),
+		).toBe(null);
+		expect(parseApproval(null)).toBe(null);
 	});
 });
 
