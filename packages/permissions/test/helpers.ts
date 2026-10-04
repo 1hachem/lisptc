@@ -1,4 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
@@ -40,6 +41,7 @@ export interface Session {
 	host: PermissionsHost;
 	step(code: string): Promise<StepRun>;
 	invoke(action: string, values: Record<string, unknown>): Promise<StepRun>;
+	turnStart(): Promise<StepRun>;
 }
 
 export function session(
@@ -121,6 +123,16 @@ export function session(
 					{ interp, action, values },
 				),
 			),
+		turnStart: () =>
+			within(async () => {
+				await driveAsync(
+					hooks.turnStart.run(() => settled(undefined), {
+						interp,
+						emit: () => {},
+					}),
+				);
+				return undefined;
+			}),
 	};
 }
 

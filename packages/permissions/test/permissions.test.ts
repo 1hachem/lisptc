@@ -422,7 +422,7 @@ describe("deleting a permissions form", () => {
 });
 
 describe("reporting a decision", () => {
-	it("carries a ui decision on the next step's annotation, once", async () => {
+	it("carries a ui decision on the decide action's output lane, once", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const [request] = (await s.step(UPCASE)).requests;
 		const decided = await s.invoke(DECIDE_ACTION, {
@@ -430,20 +430,29 @@ describe("reporting a decision", () => {
 			approved: true,
 			scope: "once",
 		});
-		expect(decided.annotations.output).toEqual({});
-		const next = await s.step(UPCASE);
-		expect(next.annotations.output).toEqual({
-			permissions: { decided: [{ id: request.id, approved: true }] },
+		expect(decided.annotations).toEqual({
+			step: {},
+			output: { permissions: { decided: { [request.id]: true } } },
 		});
-		expect((await s.step("(+ 1 2)")).annotations.output).toEqual({});
+		expect(decided.message).toMatch(/approved/);
+		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
+		expect((await s.step("(+ 1 2)")).annotations).toEqual({
+			step: {},
+			output: {},
+		});
 	});
 
 	it("reports a denial as a decision too", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const [request] = (await s.step(UPCASE)).requests;
-		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
-		expect((await s.step("(+ 1 2)")).annotations.output).toEqual({
-			permissions: { decided: [{ id: request.id, approved: false }] },
+		const denied = await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: false,
 		});
+		expect(denied.annotations.output).toEqual({
+			permissions: { decided: { [request.id]: false } },
+		});
+		expect(denied.message).toMatch(/denied/);
+		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
 	});
 });

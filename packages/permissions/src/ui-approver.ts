@@ -1,20 +1,14 @@
 import { EvalException } from "@repo/interpreter/errors";
 import { annotating, type SessionHooks } from "@repo/interpreter/session";
 import { resolveApproval } from "./approvals.ts";
-import { decided, requested } from "./channel.ts";
+import { decided, requested, settled } from "./channel.ts";
 import type { Approvals, Approver, Scope } from "./ports.ts";
 
 export const DECIDE_ACTION = "permissions/decide";
 
-export interface Settled {
-	readonly id: string;
-	readonly approved: boolean;
-}
-
 export const uiApprover: Approver = {
 	kind: "ui",
 	session(hooks: SessionHooks, approvals: Approvals): void {
-		let unreported: Settled[] = [];
 		hooks.invoke.use(async (ctx, next) => {
 			if (ctx.action !== DECIDE_ACTION) return next(ctx);
 			const { id, approved, scope } = ctx.values;
@@ -32,18 +26,20 @@ export const uiApprover: Approver = {
 					id,
 					false,
 				);
-			unreported.push({ id, approved: resolution.decision.approved });
+			settled.emit(ctx.interp.channels, {
+				user: { id, approved: resolution.decision.approved },
+			});
 			decided.emit(ctx.interp.channels, { user: resolution.message });
 		});
 		hooks.annotate.use((buffer, into, next) => {
 			const requests = buffer.collect(requested);
-			const deciding = buffer.collect(decided).length > 0;
-			const settled = deciding ? [] : unreported;
-			if (!deciding) unreported = [];
-			const permissions = {
-				...(requests.length === 0 ? {} : { requests }),
-				...(settled.length === 0 ? {} : { decided: settled }),
-			};
+			const decisions = buffer.collect(settled);
+			const permissions: Record<string, unknown> = {};
+			if (requests.length > 0) permissions.requests = requests;
+			if (decisions.length > 0)
+				permissions.decided = Object.fromEntries(
+					decisions.map((d) => [d.id, d.approved]),
+				);
 			return next(
 				buffer,
 				Object.keys(permissions).length === 0
