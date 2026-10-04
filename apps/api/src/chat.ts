@@ -3,23 +3,46 @@ import {
 	MemorySteerInbox,
 	type SteerInbox,
 	streamChatResponse,
+	systemEventMessage,
 } from "@repo/ai";
 import { api } from "@repo/backend/api";
 import { Hono } from "hono";
 import { z } from "zod";
 import { convexAs } from "./convex.ts";
-import { toInput, toStored } from "./history.ts";
+import { events } from "./events.ts";
+import { type StoredMessage, toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
 import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
 import { repls } from "./repls.ts";
 import { session } from "./session.ts";
 
 export const chatRequestSchema = z.object({
-	input: z.object({
-		chatId: convexId<"chats">(),
-		message: z.string(),
-	}),
+	input: z.union([
+		z.object({
+			chatId: convexId<"chats">(),
+			message: z.string(),
+		}),
+		z.object({
+			chatId: convexId<"chats">(),
+			event: z.object({ token: z.string().min(1) }),
+		}),
+	]),
 });
+
+type TurnInput = z.infer<typeof chatRequestSchema>["input"];
+
+async function openingMessage(
+	input: TurnInput,
+	subject: string,
+): Promise<StoredMessage | undefined> {
+	if ("message" in input) return { type: "human", content: input.message };
+	const event = await events.redeem(input.event.token, {
+		subject,
+		chatId: input.chatId,
+	});
+	if (event === undefined) return undefined;
+	return toStored([systemEventMessage(event, crypto.randomUUID())])[0];
+}
 
 export const steerRequestSchema = z.object({
 	chatId: convexId<"chats">(),
@@ -54,12 +77,18 @@ chat.post("/", async (c) => {
 		console.warn("rejected chat request:", z.treeifyError(parsed.error));
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
-	const { chatId, message } = parsed.data.input;
+	const { input } = parsed.data;
+	const { chatId } = input;
+	const opening = await openingMessage(input, c.get("session").subject);
+	if (opening === undefined) {
+		console.warn(`rejected chat event chat=${chatId}: unknown token`);
+		return c.json({ error: "no system event is waiting for this token" }, 403);
+	}
 	const convex = convexAs(c.get("session"));
 
 	await convex.mutation(api.messages.append, {
 		chatId,
-		messages: [{ type: "human", content: message }],
+		messages: [opening],
 	});
 	const history = await convex.query(api.messages.transcript, { chatId });
 
