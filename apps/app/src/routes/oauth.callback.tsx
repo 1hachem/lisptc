@@ -12,12 +12,8 @@ import {
 	callbackState,
 	OAUTH_CHANNEL,
 	type OAuthSignal,
-	storeApproval,
+	storeAuthorized,
 } from "../lib/oauth-callback.ts";
-import {
-	type SystemEventTicket,
-	systemEventTicket,
-} from "../lib/system-event.ts";
 
 export const Route = createFileRoute("/oauth/callback")({
 	component: OAuthCallback,
@@ -33,9 +29,7 @@ type Phase =
 	| { kind: "orphaned"; server: string }
 	| { kind: "failed"; reason: string };
 
-type Finished =
-	| { server: string; event?: SystemEventTicket }
-	| { failure: string };
+type Finished = { server: string } | { failure: string };
 
 async function finishCallback(url: string): Promise<Finished> {
 	const response = await fetch(`${API_URL}/api/oauth/callback`, {
@@ -47,14 +41,11 @@ async function finishCallback(url: string): Promise<Finished> {
 	const body = (await response.json().catch(() => null)) as {
 		error?: unknown;
 		server?: unknown;
-		event?: unknown;
 	} | null;
-	if (response.ok) {
+	if (response.ok)
 		return {
 			server: typeof body?.server === "string" ? body.server : "the server",
-			event: systemEventTicket(body?.event),
 		};
-	}
 	return {
 		failure:
 			typeof body?.error === "string"
@@ -73,9 +64,9 @@ function askChatToResume(state: string): Promise<boolean> {
 		};
 		const timer = setTimeout(() => settle(false), CHAT_ANSWER_MS);
 		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
-			if (e.data.type === "resuming" && e.data.state === state) settle(true);
+			if (e.data.type === "answering" && e.data.state === state) settle(true);
 		};
-		channel.postMessage({ type: "approved", state } satisfies OAuthSignal);
+		channel.postMessage({ type: "authorized", state } satisfies OAuthSignal);
 	});
 }
 
@@ -108,8 +99,8 @@ function OAuthCallback() {
 				setPhase({ kind: "failed", reason: finished.failure });
 				return;
 			}
-			const { server, event } = finished;
-			if (event) storeApproval({ state, event });
+			const { server } = finished;
+			storeAuthorized(state);
 			if (await askChatToResume(state)) {
 				setPhase({ kind: "closing", server });
 				setTimeout(() => {

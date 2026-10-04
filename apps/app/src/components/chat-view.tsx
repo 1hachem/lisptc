@@ -16,8 +16,8 @@ import {
 	messageProse,
 	messageReasoning,
 	messageText,
-	toolApprovals,
-	toolDecisions,
+	toolAnswers,
+	toolAsks,
 	toolFailed,
 	toolModelOutput,
 	toolResult,
@@ -27,13 +27,13 @@ import {
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { AskCard } from "./ask-card.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { SkippedProse } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
-import { PermissionRequest } from "./permission-request.tsx";
 import { SteerQueue } from "./steer-queue.tsx";
 import { UserLine } from "./user-line.tsx";
 
@@ -229,17 +229,17 @@ function ToolResult({ message }: { message: ChatMessage }) {
 
 function ToolMessage({ message }: { message: ChatMessage }) {
 	const { shown } = useUI();
-	const approvals = shown.permissions ? toolApprovals(message) : [];
-	const decisions = toolDecisions(message);
+	const asks = shown.asks ? toolAsks(message) : [];
+	const answers = toolAnswers(message);
 	return (
 		<>
 			<ToolResult message={message} />
-			{approvals.map((request) => (
-				<PermissionRequest
-					key={request.id}
-					request={request}
+			{asks.map((ask) => (
+				<AskCard
+					key={ask.id}
+					ask={ask}
 					messageId={message.id}
-					decided={decisions.get(request.id)}
+					answered={answers.get(ask.id)}
 				/>
 			))}
 		</>

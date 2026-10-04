@@ -1,31 +1,18 @@
 import type { Id } from "@repo/backend/dataModel";
-import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
 
-export const OAUTH_APPROVED_KEY = "lisptc:oauth-approved";
+export const OAUTH_AUTHORIZED_KEY = "lisptc:oauth-authorized";
 
 const OAUTH_CHAT_KEY = "lisptc:oauth-chat";
 
 export const OAUTH_CHANNEL = "lisptc:oauth";
 
 export type OAuthSignal =
-	| { type: "approved"; state: string }
-	| { type: "resuming"; state: string };
+	| { type: "authorized"; state: string }
+	| { type: "answering"; state: string };
 
 export interface AwaitingChat {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats">;
-}
-
-const STATE_PARAM = /[?&]state=([0-9a-f-]{36})/;
-
-export interface Approval {
-	state: string;
-	event: SystemEventTicket;
-}
-
-export interface TranscriptLine {
-	type: string;
-	text: string;
 }
 
 export function callbackState(url: string): string | undefined {
@@ -34,17 +21,6 @@ export function callbackState(url: string): string | undefined {
 	} catch {
 		return undefined;
 	}
-}
-
-export function awaitedState(
-	lines: readonly TranscriptLine[],
-): string | undefined {
-	let awaited: string | undefined;
-	for (const line of lines) {
-		if (line.type === "human" || line.type === "system") awaited = undefined;
-		else awaited = STATE_PARAM.exec(line.text)?.[1] ?? awaited;
-	}
-	return awaited;
 }
 
 export function rememberAwaitingChat(state: string, chat: AwaitingChat): void {
@@ -68,37 +44,22 @@ export function awaitingChat(state: string): AwaitingChat | undefined {
 	}
 }
 
-export function storeApproval(approval: Approval): void {
+export function storeAuthorized(state: string): void {
 	try {
-		localStorage.setItem(OAUTH_APPROVED_KEY, JSON.stringify(approval));
+		localStorage.setItem(OAUTH_AUTHORIZED_KEY, state);
 	} catch {}
 }
 
-export function parseApproval(raw: string | null): Approval | null {
+export function readAuthorized(): string | null {
 	try {
-		const saved = JSON.parse(raw ?? "null") as {
-			state?: unknown;
-			event?: unknown;
-		} | null;
-		const event = systemEventTicket(saved?.event);
-		return typeof saved?.state === "string" && event
-			? { state: saved.state, event }
-			: null;
+		return localStorage.getItem(OAUTH_AUTHORIZED_KEY);
 	} catch {
 		return null;
 	}
 }
 
-export function readApproval(): Approval | null {
+export function clearAuthorized(): void {
 	try {
-		return parseApproval(localStorage.getItem(OAUTH_APPROVED_KEY));
-	} catch {
-		return null;
-	}
-}
-
-export function clearApproval(): void {
-	try {
-		localStorage.removeItem(OAUTH_APPROVED_KEY);
+		localStorage.removeItem(OAUTH_AUTHORIZED_KEY);
 	} catch {}
 }

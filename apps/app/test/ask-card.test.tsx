@@ -19,15 +19,19 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { PermissionRequest } from "../src/components/permission-request.tsx";
+import { AskCard } from "../src/components/ask-card.tsx";
 import {
-	type ApprovalOutcome,
-	type ApprovalTransport,
-	approvalDecisions,
-} from "../src/lib/approvals.ts";
+	type Ask,
+	type AskOutcome,
+	type AskTransport,
+	answersOf,
+	asksOf,
+} from "../src/lib/asks.ts";
+import { OAUTH_AUTHORIZED_KEY } from "../src/lib/oauth-callback.ts";
 
 const session = vi.hoisted(() => ({
 	chatId: "c1",
+	workspaceId: "ws1",
 	send: vi.fn(),
 	resume: vi.fn(),
 }));
@@ -40,7 +44,58 @@ vi.mock("../src/lib/chat.tsx", () => ({
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/ui-action.ts", () => ({ postUiAction: vi.fn() }));
 
-const REQUEST = { id: "r1", name: "(permission/deny eval)", args: "" };
+const decide = (approved: boolean, scope: string) => ({
+	action: "permissions/decide",
+	values: { id: "r1", approved, scope },
+});
+
+const REQUEST: Ask = {
+	id: "r1",
+	title: "(permission/deny eval)",
+	prompt: "This call needs your approval.",
+	choices: [
+		{
+			label: "Deny",
+			done: "Denied",
+			accepts: false,
+			answer: decide(false, "once"),
+		},
+		{
+			label: "Allow for session",
+			done: "Allowed for session",
+			accepts: true,
+			answer: decide(true, "session"),
+		},
+		{
+			label: "Allow once",
+			done: "Allowed",
+			accepts: true,
+			answer: decide(true, "once"),
+			primary: true,
+		},
+	],
+};
+
+const STATE = "378e720d-4dd0-41f9-a072-09eba84e7267";
+
+const AUTHORIZE = {
+	label: "Authorize",
+	done: "Authorized",
+	accepts: true,
+	answer: {
+		action: "mcp/authorize",
+		values: { id: STATE, server: "linear", approved: true },
+	},
+	opens: `https://mcp.linear.app/authorize?response_type=code&state=${STATE}`,
+	primary: true as const,
+};
+
+const SIGN_IN: Ask = {
+	id: STATE,
+	title: "linear",
+	prompt: "linear needs you to sign in before the agent can use it.",
+	choices: [AUTHORIZE],
+};
 const MESSAGE_ID = "w1";
 const KEY = convexQuery(api.messages.transcript, {
 	chatId: session.chatId as Id<"chats">,
@@ -52,31 +107,44 @@ interface Row {
 	kwargs?: Record<string, unknown>;
 }
 
-function transcript(decided?: boolean): Row[] {
+function transcript(decided?: boolean, ask: Ask = REQUEST): Row[] {
 	return [
 		{
 			_id: "row1",
 			wireId: MESSAGE_ID,
 			kwargs: {
-				permissions: {
-					requests: [REQUEST],
+				asks: {
+					open: [ask],
 					...(decided === undefined
 						? {}
-						: { decided: { [REQUEST.id]: decided } }),
+						: {
+								answered: {
+									[ask.id]: {
+										accepted: decided,
+										label: decided ? "Allowed" : "Denied",
+									},
+								},
+							}),
 				},
 			},
 		},
 	];
 }
 
-function StoredCard({ transport }: { transport?: ApprovalTransport }) {
+function StoredCard({
+	transport,
+	ask = REQUEST,
+}: {
+	transport?: AskTransport;
+	ask?: Ask;
+}) {
 	const { data } = useQuery<Row[]>({ queryKey: KEY, queryFn: skipToken });
 	const row = data?.find((r) => (r.wireId ?? r._id) === MESSAGE_ID);
 	return (
-		<PermissionRequest
-			request={REQUEST}
+		<AskCard
+			ask={ask}
 			messageId={MESSAGE_ID}
-			decided={approvalDecisions(row?.kwargs?.permissions).get(REQUEST.id)}
+			answered={answersOf(row?.kwargs).get(ask.id)}
 			transport={transport}
 		/>
 	);
@@ -112,8 +180,8 @@ afterEach(() => {
 	document.body.replaceChildren();
 });
 
-function transportResolving(outcome: ApprovalOutcome): ApprovalTransport {
-	return { decide: vi.fn(async () => outcome) };
+function transportResolving(outcome: AskOutcome): AskTransport {
+	return { answer: vi.fn(async () => outcome) };
 }
 
 function clientHolding(rows: Row[]): QueryClient {
@@ -124,7 +192,11 @@ function clientHolding(rows: Row[]): QueryClient {
 	return client;
 }
 
-async function mount(client: QueryClient, transport?: ApprovalTransport) {
+async function mount(
+	client: QueryClient,
+	transport?: AskTransport,
+	ask: Ask = REQUEST,
+) {
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
@@ -132,7 +204,7 @@ async function mount(client: QueryClient, transport?: ApprovalTransport) {
 	await act(async () => {
 		root.render(
 			<QueryClientProvider client={client}>
-				<StoredCard transport={transport} />
+				<StoredCard transport={transport} ask={ask} />
 			</QueryClientProvider>,
 		);
 	});
@@ -161,14 +233,14 @@ async function mount(client: QueryClient, transport?: ApprovalTransport) {
 }
 
 function pending(): {
-	transport: ApprovalTransport;
-	resolve: (outcome: ApprovalOutcome) => void;
+	transport: AskTransport;
+	resolve: (outcome: AskOutcome) => void;
 } {
-	let resolve: (outcome: ApprovalOutcome) => void = () => {};
-	const transport: ApprovalTransport = {
-		decide: vi.fn(
+	let resolve: (outcome: AskOutcome) => void = () => {};
+	const transport: AskTransport = {
+		answer: vi.fn(
 			() =>
-				new Promise<ApprovalOutcome>((done) => {
+				new Promise<AskOutcome>((done) => {
 					resolve = done;
 				}),
 		),
@@ -188,12 +260,16 @@ describe("the approval card", () => {
 		expect(card.text()).toContain("Allowed");
 		expect(card.buttons()).toEqual([]);
 		expect(client.getQueryData<Row[]>(KEY)?.[0].kwargs).toEqual({
-			permissions: { requests: [REQUEST], decided: { [REQUEST.id]: true } },
+			asks: {
+				open: [REQUEST],
+				answered: { [REQUEST.id]: { accepted: true, label: "Allowed" } },
+			},
 		});
-		expect(transport.decide).toHaveBeenCalledWith("c1", MESSAGE_ID, REQUEST, {
-			approved: true,
-			scope: "once",
-		});
+		expect(transport.answer).toHaveBeenCalledWith(
+			"c1",
+			MESSAGE_ID,
+			REQUEST.choices[2],
+		);
 		expect(session.resume).not.toHaveBeenCalled();
 
 		await act(async () => {
@@ -215,10 +291,11 @@ describe("the approval card", () => {
 
 		expect(card.text()).toContain("Denied");
 		expect(card.buttons()).toEqual([]);
-		expect(transport.decide).toHaveBeenCalledWith("c1", MESSAGE_ID, REQUEST, {
-			approved: false,
-			scope: "once",
-		});
+		expect(transport.answer).toHaveBeenCalledWith(
+			"c1",
+			MESSAGE_ID,
+			REQUEST.choices[0],
+		);
 		expect(session.resume).toHaveBeenCalledTimes(1);
 		expect(session.resume).toHaveBeenCalledWith(DENIED);
 		expect(session.send).not.toHaveBeenCalled();
@@ -236,7 +313,7 @@ describe("the approval card", () => {
 
 		expect(remounted.text()).toContain("Denied");
 		expect(remounted.buttons()).toEqual([]);
-		expect(transport.decide).not.toHaveBeenCalled();
+		expect(transport.answer).not.toHaveBeenCalled();
 		expect(session.resume).not.toHaveBeenCalled();
 	});
 
@@ -262,7 +339,7 @@ describe("the approval card", () => {
 	it("rolls the message back and keeps the buttons when the request fails", async () => {
 		const client = clientHolding(transcript());
 		const card = await mount(client, {
-			decide: vi.fn(async () => {
+			answer: vi.fn(async () => {
 				throw new Error("network down");
 			}),
 		});
@@ -282,5 +359,68 @@ describe("the approval card", () => {
 
 		expect(card.text()).toContain("This call needs your approval.");
 		expect(card.buttons()).toEqual(CHOICES);
+	});
+});
+
+describe("a sign-in ask", () => {
+	afterEach(() => localStorage.clear());
+
+	it("opens the link and answers only once the sign-in came back", async () => {
+		const opened = vi.spyOn(window, "open").mockReturnValue(null);
+		const transport = transportResolving({ ok: true, event: APPROVED });
+		const card = await mount(
+			clientHolding(transcript(undefined, SIGN_IN)),
+			transport,
+			SIGN_IN,
+		);
+
+		await card.click("Authorize");
+
+		expect(opened).toHaveBeenCalledWith(AUTHORIZE.opens, "_blank", "noopener");
+		expect(transport.answer).not.toHaveBeenCalled();
+		expect(card.text()).toContain("Finish in the tab that opened");
+
+		await act(async () => {
+			localStorage.setItem(OAUTH_AUTHORIZED_KEY, STATE);
+			window.dispatchEvent(
+				new StorageEvent("storage", {
+					key: OAUTH_AUTHORIZED_KEY,
+					newValue: STATE,
+				}),
+			);
+		});
+		await act(async () => {
+			await new Promise((done) => setTimeout(done, 0));
+		});
+
+		expect(transport.answer).toHaveBeenCalledWith("c1", MESSAGE_ID, AUTHORIZE);
+		expect(session.resume).toHaveBeenCalledWith(APPROVED);
+		expect(localStorage.getItem(OAUTH_AUTHORIZED_KEY)).toBe(null);
+		opened.mockRestore();
+	});
+
+	it("answers on mount when the sign-in finished before the chat opened", async () => {
+		localStorage.setItem(OAUTH_AUTHORIZED_KEY, STATE);
+		const transport = transportResolving({ ok: true });
+		await mount(
+			clientHolding(transcript(undefined, SIGN_IN)),
+			transport,
+			SIGN_IN,
+		);
+		await act(async () => {
+			await new Promise((done) => setTimeout(done, 0));
+		});
+
+		expect(transport.answer).toHaveBeenCalledWith("c1", MESSAGE_ID, AUTHORIZE);
+	});
+});
+
+describe("reading an ask off a message", () => {
+	it("keeps a choice that names no answered label, labelled by itself", () => {
+		const { done: _done, ...bare } = AUTHORIZE;
+		const [ask] = asksOf({
+			asks: { open: [{ ...SIGN_IN, choices: [bare] }] },
+		});
+		expect(ask?.choices).toEqual([{ ...bare, done: "Authorize" }]);
 	});
 });

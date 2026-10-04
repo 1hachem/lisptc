@@ -19,94 +19,136 @@ import {
 } from "@repo/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { FunctionReturnType } from "convex/server";
+import { useEffect, useRef, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import {
-	type ApprovalReply,
-	type ApprovalRequest,
-	type ApprovalTransport,
+	type Answered,
+	type Ask,
+	type AskChoice,
+	type AskTransport,
 	uiActionTransport,
-	withDecision,
-} from "../lib/approvals.ts";
+	withAnswer,
+} from "../lib/asks.ts";
 import { useChatSession } from "../lib/chat.tsx";
+import {
+	callbackState,
+	clearAuthorized,
+	OAUTH_AUTHORIZED_KEY,
+	OAUTH_CHANNEL,
+	type OAuthSignal,
+	readAuthorized,
+	rememberAwaitingChat,
+} from "../lib/oauth-callback.ts";
 
 type Transcript = FunctionReturnType<typeof api.messages.transcript>;
-
-const CHOICES: readonly {
-	label: string;
-	reply: ApprovalReply;
-	variant: "default" | "outline";
-}[] = [
-	{
-		label: "Deny",
-		reply: { approved: false, scope: "once" },
-		variant: "outline",
-	},
-	{
-		label: "Allow for session",
-		reply: { approved: true, scope: "session" },
-		variant: "outline",
-	},
-	{
-		label: "Allow once",
-		reply: { approved: true, scope: "once" },
-		variant: "default",
-	},
-];
 
 function transcriptKey(chatId: Id<"chats">) {
 	return convexQuery(api.messages.transcript, { chatId }).queryKey;
 }
 
-function deciding(
+function answering(
 	transcript: Transcript | undefined,
 	messageId: string | undefined,
 	id: string,
-	approved: boolean,
+	answer: Answered,
 ): Transcript | undefined {
 	return transcript?.map((row) =>
 		(row.wireId ?? row._id) === messageId
-			? { ...row, kwargs: withDecision(row.kwargs, id, approved) }
+			? { ...row, kwargs: withAnswer(row.kwargs, id, answer) }
 			: row,
 	);
 }
 
-export function PermissionRequest({
-	request,
+function linkState(choice: AskChoice): string | undefined {
+	return choice.opens === undefined ? undefined : callbackState(choice.opens);
+}
+
+function useLinkReturn(
+	ask: Ask,
+	open: boolean,
+	answer: (choice: AskChoice) => void,
+): void {
+	const latest = useRef(answer);
+	latest.current = answer;
+	const links = ask.choices.flatMap((choice) => {
+		const state = linkState(choice);
+		return state === undefined ? [] : [{ state, choice }];
+	});
+	const awaited = links.map((l) => l.state).join(" ");
+	const chosen = useRef(links);
+	chosen.current = links;
+	useEffect(() => {
+		if (!open || awaited === "") return;
+		const waiting = new Set(awaited.split(" "));
+		const returned = (state: string | null): boolean => {
+			const link = chosen.current.find((l) => l.state === state);
+			if (link === undefined) return false;
+			clearAuthorized();
+			latest.current(link.choice);
+			return true;
+		};
+		if (returned(readAuthorized())) return;
+		const channel = new BroadcastChannel(OAUTH_CHANNEL);
+		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
+			if (e.data.type !== "authorized" || !waiting.has(e.data.state)) return;
+			channel.postMessage({
+				type: "answering",
+				state: e.data.state,
+			} satisfies OAuthSignal);
+		};
+		const onStorage = (e: StorageEvent) => {
+			if (e.key === OAUTH_AUTHORIZED_KEY) returned(e.newValue);
+		};
+		window.addEventListener("storage", onStorage);
+		return () => {
+			channel.close();
+			window.removeEventListener("storage", onStorage);
+		};
+	}, [awaited, open]);
+}
+
+export function AskCard({
+	ask,
 	messageId,
-	decided,
+	answered,
 	transport = uiActionTransport,
 }: {
-	request: ApprovalRequest;
+	ask: Ask;
 	messageId?: string;
-	decided?: boolean;
-	transport?: ApprovalTransport;
+	answered?: Answered;
+	transport?: AskTransport;
 }) {
-	const { chatId, resume } = useChatSession((state) => ({
+	const { chatId, workspaceId, resume } = useChatSession((state) => ({
 		chatId: state.chatId,
+		workspaceId: state.workspaceId,
 		resume: state.resume,
 	}));
 	const queryClient = useQueryClient();
+	const [linked, setLinked] = useState<string | undefined>(undefined);
 	const rollback = (snapshot: Transcript | undefined) => {
 		if (chatId) queryClient.setQueryData(transcriptKey(chatId), snapshot);
 	};
 	const mutation = useMutation({
-		mutationFn: (reply: ApprovalReply) =>
-			transport.decide(chatId, messageId, request, reply),
-		onMutate: async (reply) => {
+		mutationFn: (choice: AskChoice) =>
+			transport.answer(chatId, messageId, choice),
+		onMutate: async (choice) => {
 			if (!chatId) return undefined;
 			const key = transcriptKey(chatId);
 			await queryClient.cancelQueries({ queryKey: key });
 			const snapshot = queryClient.getQueryData<Transcript>(key);
 			queryClient.setQueryData<Transcript>(key, (current) =>
-				deciding(current, messageId, request.id, reply.approved),
+				answering(current, messageId, ask.id, {
+					accepted: choice.accepts,
+					label: choice.done,
+				}),
 			);
 			return { snapshot };
 		},
-		onError: (ex, _reply, context) => {
-			reportIssue(ex, { $exception_source: "permission decision" });
+		onError: (ex, _choice, context) => {
+			reportIssue(ex, { $exception_source: "ask answer" });
 			if (context) rollback(context.snapshot);
 		},
-		onSuccess: (outcome, _reply, context) => {
+		onSuccess: (outcome, _choice, context) => {
 			if (!outcome.ok) {
 				if (context) rollback(context.snapshot);
 				return;
@@ -124,14 +166,27 @@ export function PermissionRequest({
 			: String(mutation.error)
 		: undefined;
 	const approval: ConfirmationApproval =
-		decided === undefined || refused
-			? { id: request.id }
-			: { id: request.id, approved: decided };
+		answered === undefined || refused
+			? { id: ask.id }
+			: { id: ask.id, approved: answered.accepted };
 	const open = approval.approved === undefined && !refused;
 
-	const decide = (reply: ApprovalReply) => {
+	const answer = (choice: AskChoice) => {
 		if (mutation.isPending || !open) return;
-		mutation.mutate(reply);
+		mutation.mutate(choice);
+	};
+
+	useLinkReturn(ask, open, answer);
+
+	const choose = (choice: AskChoice) => {
+		const state = linkState(choice);
+		if (choice.opens === undefined || state === undefined) {
+			answer(choice);
+			return;
+		}
+		if (chatId) rememberAwaitingChat(state, { workspaceId, chatId });
+		window.open(choice.opens, "_blank", "noopener");
+		setLinked(choice.label);
 	};
 
 	return (
@@ -143,43 +198,45 @@ export function PermissionRequest({
 			<ConfirmationTitle>
 				<span className="flex items-center gap-2 text-yellow">
 					<HugeiconsIcon icon={SecurityCheckIcon} size={14} />
-					<span className="font-mono">{request.name}</span>
+					<span className="font-mono">{ask.title}</span>
 				</span>
-				{request.args && (
+				{ask.detail && (
 					<span className="block whitespace-pre-wrap break-words font-mono text-dim text-xs">
-						{request.args}
+						{ask.detail}
 					</span>
 				)}
 				<ConfirmationRequest>
 					<span className="block text-dim">
-						{request.reason ?? "This call needs your approval."}
+						{linked
+							? "Finish in the tab that opened; this carries on when you are back."
+							: ask.prompt}
 					</span>
 				</ConfirmationRequest>
 				<ConfirmationAccepted>
 					<span className="flex items-center gap-1 text-green">
 						<HugeiconsIcon icon={CheckmarkCircle02Icon} size={12} />
-						Allowed
+						{answered?.label}
 					</span>
 				</ConfirmationAccepted>
 				<ConfirmationRejected>
 					<span className="flex items-center gap-1 text-red">
 						<HugeiconsIcon icon={Cancel01Icon} size={12} />
-						Denied
+						{answered?.label}
 					</span>
 				</ConfirmationRejected>
 				{refused && <span className="block text-red">{refused}</span>}
 				{failure && <span className="block text-red">{failure}</span>}
 			</ConfirmationTitle>
 			<ConfirmationActions>
-				{CHOICES.map(({ label, reply, variant }) => (
+				{ask.choices.map((choice) => (
 					<ConfirmationAction
-						key={label}
+						key={choice.label}
 						className="h-7 px-2.5"
-						variant={variant}
+						variant={choice.primary ? "default" : "outline"}
 						disabled={mutation.isPending}
-						onClick={() => decide(reply)}
+						onClick={() => choose(choice)}
 					>
-						{label}
+						{choice.label}
 					</ConfirmationAction>
 				))}
 			</ConfirmationActions>

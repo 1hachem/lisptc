@@ -23,23 +23,8 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
-import {
-	type ApprovalRequest,
-	approvalDecisions,
-	approvalRequests,
-} from "./approvals.ts";
+import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
 import { pickGreeting } from "./greeting.ts";
-import {
-	type Approval,
-	awaitedState,
-	clearApproval,
-	OAUTH_APPROVED_KEY,
-	OAUTH_CHANNEL,
-	type OAuthSignal,
-	parseApproval,
-	readApproval,
-	rememberAwaitingChat,
-} from "./oauth-callback.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import type { SystemEventTicket } from "./system-event.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
@@ -53,7 +38,7 @@ export interface ChatMessage {
 		meta?: unknown;
 		display?: unknown;
 		ui?: unknown;
-		permissions?: unknown;
+		asks?: unknown;
 		prose?: unknown;
 		failed?: unknown;
 		source?: unknown;
@@ -113,6 +98,7 @@ export interface ChatSession {
 	fresh: boolean;
 	isLoading: boolean;
 	chatId: Id<"chats"> | null;
+	workspaceId: Id<"workspaces">;
 	error?: string;
 	send: (text: string) => void;
 	resume: (event: SystemEventTicket) => void;
@@ -345,46 +331,6 @@ export function ChatProvider({
 		[steering, enqueue, submitTurn],
 	);
 
-	const [approved, setApproved] = useState<Approval | null>(null);
-	useEffect(() => {
-		setApproved(readApproval());
-		const onStorage = (e: StorageEvent) => {
-			if (e.key === OAUTH_APPROVED_KEY) setApproved(parseApproval(e.newValue));
-		};
-		window.addEventListener("storage", onStorage);
-		return () => window.removeEventListener("storage", onStorage);
-	}, []);
-
-	const awaited = useMemo(
-		() =>
-			awaitedState(
-				persisted.map((m) => ({ type: m.type, text: messageText(m) })),
-			),
-		[persisted],
-	);
-
-	useEffect(() => {
-		if (!awaited || !chatId) return;
-		rememberAwaitingChat(awaited, { workspaceId, chatId });
-		const channel = new BroadcastChannel(OAUTH_CHANNEL);
-		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
-			if (e.data.type !== "approved" || e.data.state !== awaited) return;
-			channel.postMessage({
-				type: "resuming",
-				state: awaited,
-			} satisfies OAuthSignal);
-		};
-		return () => channel.close();
-	}, [awaited, chatId, workspaceId]);
-
-	useEffect(() => {
-		if (!approved || !chatId || stream.isLoading) return;
-		if (approved.state !== awaited) return;
-		clearApproval();
-		setApproved(null);
-		resume(approved.event);
-	}, [approved, awaited, chatId, stream.isLoading, resume]);
-
 	const stop = useCallback(() => {
 		clear();
 		running.current?.abort();
@@ -405,6 +351,7 @@ export function ChatProvider({
 			fresh,
 			isLoading: false,
 			chatId,
+			workspaceId,
 			send: () => {},
 			resume: () => {},
 			runLisp: () => {},
@@ -423,6 +370,7 @@ export function ChatProvider({
 			fresh,
 			isLoading: stream.isLoading || evaluating,
 			chatId,
+			workspaceId,
 			error:
 				(stream.error
 					? stream.error instanceof Error
@@ -451,6 +399,7 @@ export function ChatProvider({
 		evaluating,
 		evalError,
 		chatId,
+		workspaceId,
 		send,
 		resume,
 		runLisp,
@@ -528,14 +477,14 @@ export function toolUi(message: ChatMessage): unknown {
 	return message.additional_kwargs?.ui;
 }
 
-export function toolApprovals(message: ChatMessage): ApprovalRequest[] {
-	return approvalRequests(message.additional_kwargs?.permissions);
+export function toolAsks(message: ChatMessage): Ask[] {
+	return asksOf(message.additional_kwargs);
 }
 
-export function toolDecisions(
+export function toolAnswers(
 	message: ChatMessage,
-): ReadonlyMap<string, boolean> {
-	return approvalDecisions(message.additional_kwargs?.permissions);
+): ReadonlyMap<string, Answered> {
+	return answersOf(message.additional_kwargs);
 }
 
 export function toolModelOutput(message: ChatMessage): {
