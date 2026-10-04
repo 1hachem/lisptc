@@ -16,6 +16,8 @@ const FRAME_MS = 1000 / FPS;
 
 const REWIND_AFTER = 600;
 
+const HOLD_STILL_AFTER_ZOOM_MS = 3000;
+
 interface Live {
 	setState: (state: StateId) => void;
 	stop: () => void;
@@ -45,6 +47,7 @@ function start(initial: StateId): Live | null {
 	let due = 0;
 	let raf = 0;
 	let live = true;
+	let stillUntil = 0;
 
 	const paint = () => {
 		drawIcon(ctx, engine.sample(clock), {
@@ -83,6 +86,7 @@ function start(initial: StateId): Live | null {
 		due += dt * 1000;
 		if (due < FRAME_MS) return;
 		due = 0;
+		if (ms < stillUntil) return;
 		if (clock > REWIND_AFTER) {
 			engine.reset(engine.state, 0);
 			clock = 0;
@@ -100,16 +104,31 @@ function start(initial: StateId): Live | null {
 		if (!raf) raf = requestAnimationFrame(onFrame);
 	});
 
+	let zoomQuery: MediaQueryList | null = null;
+	const watchZoom = () => {
+		zoomQuery?.removeEventListener("change", onZoom);
+		zoomQuery =
+			window.matchMedia?.(`(resolution: ${window.devicePixelRatio}dppx)`) ??
+			null;
+		zoomQuery?.addEventListener("change", onZoom);
+	};
+	const onZoom = guard(() => {
+		stillUntil = performance.now() + HOLD_STILL_AFTER_ZOOM_MS;
+		watchZoom();
+	});
+
 	function stop() {
 		if (!live) return;
 		live = false;
 		cancelAnimationFrame(raf);
 		document.removeEventListener("visibilitychange", onVisibility);
+		zoomQuery?.removeEventListener("change", onZoom);
 		link.remove();
 		for (const l of taken) document.head.append(l);
 	}
 
 	document.addEventListener("visibilitychange", onVisibility);
+	watchZoom();
 	if (!document.hidden) raf = requestAnimationFrame(onFrame);
 
 	return {
