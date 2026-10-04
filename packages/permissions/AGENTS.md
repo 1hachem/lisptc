@@ -19,15 +19,15 @@ govern this package.
 
 **A config is ptc lisp, and one form is both a line of it and a call.** A store
 hands over source text and `parseRules` walks it as data, never evaluating it.
-The same `permission/` forms run in a session, and every one reaches the config
-through `permission/apply` alone. A new rule is a new form in both places, and
-its tests go in beside the others.
+The same forms, listed in `RULE_FORMS`, run in a session, and every one reaches
+the config through the single gate `permissionsExtension` installs. A new rule
+is a new form in both places, and its tests go in beside the others.
 
-**A session never changes its config on its own.** Every `permission/` form that
-changes the config, a delete included, waits on an approval like any other asked
-call, and is saved through the store once approved. Only a rule that names the
-form itself decides otherwise, and the config's default never does. A new
-operation goes through the same gate in `permission/apply`.
+**A session never changes its config on its own.** Every form that changes the
+config, a delete included, waits on an approval like any other asked call, and
+is saved through the store once approved. Only a rule that names the form itself
+decides otherwise, and the config's default never does. A new operation goes
+through the same gate.
 
 **Ask is three parts, and only an approver knows how a human is reached.**
 `Approvals` is the state and the only place a decision lands. An `Approver`
