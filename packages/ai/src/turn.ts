@@ -20,6 +20,7 @@ import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
 import {
 	evalCode,
+	isUserPrompt,
 	proseFeedbackContent,
 	replResultContent,
 	snapshotConversation,
@@ -77,7 +78,7 @@ export type TurnEvent =
 	| { type: "failed"; message: string; error: unknown };
 
 function lastUserPrompt(transcript: TranscriptEntry[]): string {
-	return transcript.filter((e) => e.role === "user").at(-1)?.content ?? "";
+	return transcript.filter(isUserPrompt).at(-1)?.content ?? "";
 }
 
 function stepMeta(

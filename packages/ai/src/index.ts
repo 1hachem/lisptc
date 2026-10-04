@@ -9,6 +9,11 @@ export {
 } from "./agent.ts";
 export { type EvalMessage, evalUserCode } from "./eval.ts";
 export {
+	type EventOwner,
+	MemorySystemEventBox,
+	type SystemEventBox,
+} from "./event-box.ts";
+export {
 	MemorySteerInbox,
 	type Steer,
 	type SteerInbox,
@@ -37,8 +42,10 @@ export {
 	type ChatMessageInput,
 	type ChatStreamOptions,
 	streamChatResponse,
+	systemEventMessage,
 	type WireMessage,
 } from "./stream.ts";
+export type { SystemEvent } from "./system-event.ts";
 export {
 	captureException,
 	initTelemetry,

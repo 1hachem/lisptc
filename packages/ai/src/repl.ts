@@ -5,20 +5,27 @@ import {
 } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
+import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
 export interface TranscriptEntry {
 	role: "user" | "assistant" | "system" | "tool";
 	content: string;
+	event?: { source: string };
+}
+
+export function isUserPrompt(entry: TranscriptEntry): boolean {
+	return entry.role === "user" && entry.event === undefined;
 }
 
 export function snapshotConversation(
 	transcript: TranscriptEntry[],
 ): Record<string, unknown> {
 	return {
-		conversation: transcript.map((e) => ({ role: e.role, content: e.content })),
-		"user-messages": transcript
-			.filter((e) => e.role === "user")
-			.map((e) => e.content),
+		conversation: transcript.map((e) => ({
+			role: e.event ? "system" : e.role,
+			content: e.content,
+		})),
+		"user-messages": transcript.filter(isUserPrompt).map((e) => e.content),
 		"assistant-messages": transcript
 			.filter((e) => e.role === "assistant")
 			.map((e) => e.content),
@@ -31,7 +38,7 @@ export function toLlmMessages(
 ): AgentMessage[] {
 	const messages = transcript.map((e) => ({
 		role: e.role === "tool" ? "user" : e.role,
-		content: e.content,
+		content: modelContent(e),
 	}));
 	if (riding === "") return messages;
 	let last = -1;
@@ -44,9 +51,20 @@ export function toLlmMessages(
 	const carried = messages[last];
 	messages[last] = {
 		...carried,
-		content: `${carried.content}\n\n${riding}`,
+		content: `${carried.content}\n\n${neutraliseSystemEvents(riding)}`,
 	};
 	return messages;
+}
+
+function modelContent(entry: TranscriptEntry): string {
+	if (entry.event)
+		return renderSystemEvent({
+			source: entry.event.source,
+			text: entry.content,
+		});
+	return entry.role === "assistant"
+		? entry.content
+		: neutraliseSystemEvents(entry.content);
 }
 
 export function stripFences(text: string): string {
