@@ -56,6 +56,35 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
+	it("refuses annotating a message in another user's chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		await bob.as.mutation(api.messages.append, {
+			chatId,
+			messages: [{ id: "w1", type: "tool", content: "one" }],
+		});
+		await expect(
+			alice.as.mutation(api.messages.annotate, {
+				chatId,
+				id: "w1",
+				kwargs: { extra: true },
+			}),
+		).rejects.toThrow();
+		await expect(
+			t.mutation(api.messages.annotate, {
+				chatId,
+				id: "w1",
+				kwargs: { extra: true },
+			}),
+		).rejects.toThrow();
+		const [row] = await bob.as.query(api.messages.transcript, { chatId });
+		expect(row.kwargs).toBeUndefined();
+	});
+
 	it("hides an archived chat from the list", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -102,6 +131,73 @@ describe("messages", () => {
 			[2, "tool", "three"],
 		]);
 		expect(transcript[2].kwargs).toEqual({ ui: { kind: "text" } });
+	});
+
+	it("keeps the wire id an appended message was sent with", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId,
+			messages: [
+				{ id: "w1", type: "tool", content: "one" },
+				{ type: "human", content: "two" },
+			],
+		});
+		const transcript = await alice.as.query(api.messages.transcript, {
+			chatId,
+		});
+		expect(transcript.map((m) => m.wireId)).toEqual(["w1", undefined]);
+	});
+
+	it("deep-merges an annotation into a message's kwargs by its wire id", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId,
+			messages: [
+				{
+					id: "w1",
+					type: "tool",
+					content: "one",
+					kwargs: {
+						display: "shown",
+						nested: { list: [1, 2], kept: "yes", inner: { a: 1 } },
+					},
+				},
+			],
+		});
+		await alice.as.mutation(api.messages.annotate, {
+			chatId,
+			id: "w1",
+			kwargs: { nested: { list: [3], inner: { b: 2 } }, added: 1 },
+		});
+		const [row] = await alice.as.query(api.messages.transcript, { chatId });
+		expect(row.kwargs).toEqual({
+			display: "shown",
+			nested: { list: [3], kept: "yes", inner: { a: 1, b: 2 } },
+			added: 1,
+		});
+	});
+
+	it("refuses annotating a message the chat does not hold", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			alice.as.mutation(api.messages.annotate, {
+				chatId,
+				id: "missing",
+				kwargs: { added: 1 },
+			}),
+		).rejects.toThrow(/MESSAGE_NOT_FOUND/);
 	});
 
 	it("stamps the chat with its last activity", async () => {

@@ -42,7 +42,10 @@ export default defineSchema({
 		content: v.string(),
 		kwargs: v.optional(v.record(v.string(), v.any())),
 		truncated: v.optional(v.boolean()),
-	}).index("by_chat_seq", ["chatId", "seq"]),
+		wireId: v.optional(v.string()),
+	})
+		.index("by_chat_seq", ["chatId", "seq"])
+		.index("by_chat_wire", ["chatId", "wireId"]),
 
 	secrets: defineTable({
 		workspaceId: v.id("workspaces"),
