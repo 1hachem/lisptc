@@ -52,6 +52,7 @@ export interface ChatMessage {
 		meta?: unknown;
 		display?: unknown;
 		ui?: unknown;
+		permissions?: unknown;
 		prose?: unknown;
 		failed?: unknown;
 	};
@@ -67,8 +68,6 @@ export interface StepMeta {
 	cachedInputTokens?: number;
 	steps?: number;
 	memories?: FiredMemory[];
-	permissions?: ApprovalRequest[];
-	decided?: ApprovalDecision[];
 }
 
 function num(value: unknown): number | undefined {
@@ -86,16 +85,6 @@ function parseMemories(value: unknown): FiredMemory[] | undefined {
 	return fired.length > 0 ? fired : undefined;
 }
 
-function parsePermissions(value: unknown): ApprovalRequest[] | undefined {
-	const requests = approvalRequests(value);
-	return requests.length > 0 ? requests : undefined;
-}
-
-function parseDecided(value: unknown): ApprovalDecision[] | undefined {
-	const decided = approvalDecisions(value);
-	return decided.length > 0 ? decided : undefined;
-}
-
 function parseMeta(value: unknown): StepMeta | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const raw = value as Record<string, unknown>;
@@ -111,8 +100,6 @@ function parseMeta(value: unknown): StepMeta | undefined {
 		cachedInputTokens: num(raw.cachedInputTokens),
 		steps: num(raw.steps),
 		memories: parseMemories(raw.memories),
-		permissions: parsePermissions(raw.permissions),
-		decided: parseDecided(raw.permissions),
 	};
 }
 
@@ -242,11 +229,10 @@ export function ChatProvider({
 		for (const m of turns) {
 			if (!m.id) continue;
 			const known = meta[m.id];
-			if (known?.memories || known?.permissions || known?.decided) continue;
+			if (known?.memories) continue;
 			const parsed = parseMeta(m.additional_kwargs?.meta);
 			if (!parsed) continue;
-			if (known && !parsed.memories && !parsed.permissions && !parsed.decided)
-				continue;
+			if (known && !parsed.memories) continue;
 			found[m.id] = parsed;
 		}
 		if (Object.keys(found).length > 0)
@@ -504,6 +490,14 @@ export function toolFailed(message: ChatMessage): boolean {
 
 export function toolUi(message: ChatMessage): unknown {
 	return message.additional_kwargs?.ui;
+}
+
+export function toolApprovals(message: ChatMessage): ApprovalRequest[] {
+	return approvalRequests(message.additional_kwargs?.permissions);
+}
+
+export function toolDecisions(message: ChatMessage): ApprovalDecision[] {
+	return approvalDecisions(message.additional_kwargs?.permissions);
 }
 
 export function toolModelOutput(message: ChatMessage): {

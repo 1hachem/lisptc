@@ -15,6 +15,8 @@ import {
 	messageProse,
 	messageReasoning,
 	messageText,
+	toolApprovals,
+	toolDecisions,
 	toolFailed,
 	toolModelOutput,
 	toolResult,
@@ -144,11 +146,18 @@ function AssistantText({
 	);
 }
 
-function ToolMessage({ message }: { message: ChatMessage }) {
+function ToolMessage({
+	message,
+	decisions,
+}: {
+	message: ChatMessage;
+	decisions: ReadonlyMap<string, boolean>;
+}) {
 	const { shown } = useUI();
 	const { output } = toolResult(message);
 	const ui = toUiNode(toolUi(message));
 	const model = toolModelOutput(message);
+	const approvals = shown.permissions ? toolApprovals(message) : [];
 	const drawsUi = ui !== undefined && shown.ui;
 	const drawsUser = shown.user && output !== "";
 	const drawsError = shown.errors && toolFailed(message);
@@ -174,6 +183,13 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 					<ChannelText text={output} tone="text-dim" />
 				</>
 			)}
+			{approvals.map((request) => (
+				<PermissionRequest
+					key={request.id}
+					request={request}
+					decided={decisions.get(request.id)}
+				/>
+			))}
 			{drawsError && (
 				<div className={channel("errors").text}>a form in this step failed</div>
 			)}
@@ -221,10 +237,10 @@ export function ChatView() {
 	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
 	const decisions = useMemo(() => {
 		const byId = new Map<string, boolean>();
-		for (const step of Object.values(meta))
-			for (const d of step.decided ?? []) byId.set(d.id, d.approved);
+		for (const m of messages)
+			for (const d of toolDecisions(m)) byId.set(d.id, d.approved);
 		return byId;
-	}, [meta]);
+	}, [messages]);
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
@@ -240,7 +256,7 @@ export function ChatView() {
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
 								{isToolMessage(m) ? (
-									<ToolMessage message={m} />
+									<ToolMessage message={m} decisions={decisions} />
 								) : (
 									<div className="min-w-0 break-words text-fg">
 										{reasoning && (
@@ -265,18 +281,6 @@ export function ChatView() {
 								)}
 								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
-								)}
-								{stats?.permissions && shown.permissions && (
-									<div className="mt-2">
-										<ChannelLabel id="permissions" />
-										{stats.permissions.map((request) => (
-											<PermissionRequest
-												key={request.id}
-												request={request}
-												decided={decisions.get(request.id)}
-											/>
-										))}
-									</div>
 								)}
 								{stats && <MessageMeta meta={stats} />}
 								{!isUserMessage(m) && !isToolMessage(m) && (
