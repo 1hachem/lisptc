@@ -11,6 +11,11 @@ const app = defineApp({
 		GITHUB_CLIENT_SECRET: v.optional(v.string()),
 		GOOGLE_CLIENT_ID: v.optional(v.string()),
 		GOOGLE_CLIENT_SECRET: v.optional(v.string()),
+		GIT_CREDENTIAL_KEY: v.optional(v.string()),
+		HOSTED_GIT_URL: v.optional(v.string()),
+		HOSTED_GIT_OWNER: v.optional(v.string()),
+		HOSTED_GIT_USERNAME: v.optional(v.string()),
+		HOSTED_GIT_TOKEN: v.optional(v.string()),
 	},
 });
 

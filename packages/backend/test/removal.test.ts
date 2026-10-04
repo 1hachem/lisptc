@@ -6,6 +6,26 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+describe("removing a workspace's remote", () => {
+	it("goes with the workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const doomed = await alice.as.mutation(api.workspaces.create, {
+			name: "doomed",
+		});
+		await alice.as.mutation(api.remotes.skip, { workspaceId: doomed });
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const remotes = await t.run(async (ctx) =>
+			ctx.db.query("remotes").collect(),
+		);
+		expect(remotes).toEqual([]);
+	});
+});
+
 describe("removing a chat", () => {
 	it("takes its messages with it", async () => {
 		const t = harness();

@@ -13,3 +13,7 @@ export const MAX_SECRETS = 200;
 export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
+
+export const MAX_REMOTE_URL_BYTES = 2_048;
+
+export const MAX_GIT_CREDENTIAL_BYTES = 4_096;

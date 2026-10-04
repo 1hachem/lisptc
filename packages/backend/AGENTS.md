@@ -12,7 +12,7 @@ Turbo tag: `backend`.
 field, every index. Nothing else in the repo redeclares them.
 
 One module per resource, each holding the queries and mutations that guard it:
-workspaces, chats, messages, users, memories, secrets, oauth. `convex/lib/auth.ts` holds the
+workspaces, chats, messages, users, memories, secrets, oauth, remotes. `convex/lib/auth.ts` holds the
 guards those modules call to resolve the caller and check ownership, and every
 public function starts with one. `convex/lib/` also holds the small pure helpers
 beside them.
@@ -60,6 +60,10 @@ already here.
 
 Size limits belong to the data, so they live in `convex/limits.ts` and are
 enforced where a row is written.
+
+A git credential is sealed before it is written and leaves `remotes` only
+through an internal function. No public function returns it, and it never
+reaches the `secrets` table, which the agent reads.
 
 ## Commands
 

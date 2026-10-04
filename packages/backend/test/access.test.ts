@@ -119,6 +119,28 @@ describe("messages", () => {
 	});
 });
 
+describe("remote access", () => {
+	it("refuses reading or setting another user's remote", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.remotes.skip, { workspaceId: bob.workspace });
+		await expect(
+			alice.as.query(api.remotes.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.remotes.skip, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.action(api.remotes.connect, {
+				workspaceId: bob.workspace,
+				url: "https://git.example.com/bob/notes.git",
+				token: "tok",
+			}),
+		).rejects.toThrow();
+	});
+});
+
 describe("secret access", () => {
 	it("refuses listing another user's secrets", async () => {
 		const t = harness();

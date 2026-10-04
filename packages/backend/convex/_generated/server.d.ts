@@ -33,8 +33,13 @@ type Env = {
   readonly BETTER_AUTH_SECRET: string;
   readonly GITHUB_CLIENT_ID: string | undefined;
   readonly GITHUB_CLIENT_SECRET: string | undefined;
+  readonly GIT_CREDENTIAL_KEY: string | undefined;
   readonly GOOGLE_CLIENT_ID: string | undefined;
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
+  readonly HOSTED_GIT_OWNER: string | undefined;
+  readonly HOSTED_GIT_TOKEN: string | undefined;
+  readonly HOSTED_GIT_URL: string | undefined;
+  readonly HOSTED_GIT_USERNAME: string | undefined;
   readonly SITE_URL: string;
 };
 

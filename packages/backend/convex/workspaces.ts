@@ -82,6 +82,7 @@ export const remove = mutation({
 		await ctx.scheduler.runAfter(0, internal.memories.purge, { workspaceId });
 		await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
 		await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
+		await ctx.scheduler.runAfter(0, internal.remotes.purge, { workspaceId });
 		const left = await ctx.db
 			.query("workspaces")
 			.withIndex("by_owner", (q) => q.eq("ownerId", user._id))

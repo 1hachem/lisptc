@@ -8,6 +8,20 @@ export const messageType = v.union(
 	v.literal("tool"),
 );
 
+export const remoteKind = v.union(
+	v.literal("own"),
+	v.literal("hosted"),
+	v.literal("none"),
+);
+
+export const remoteProblem = v.union(
+	v.literal("BAD_URL"),
+	v.literal("NOT_FOUND"),
+	v.literal("NO_ACCESS"),
+	v.literal("READ_ONLY"),
+	v.literal("UNREACHABLE"),
+);
+
 export default defineSchema({
 	users: defineTable({
 		authId: v.string(),
@@ -62,6 +76,16 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_server", ["workspaceId", "serverKey"])
 		.index("by_pending_state", ["pendingState"]),
+
+	remotes: defineTable({
+		workspaceId: v.id("workspaces"),
+		kind: remoteKind,
+		url: v.optional(v.string()),
+		username: v.optional(v.string()),
+		credential: v.optional(v.string()),
+		problem: v.optional(remoteProblem),
+		checkedAt: v.optional(v.number()),
+	}).index("by_workspace", ["workspaceId"]),
 
 	memories: defineTable({
 		workspaceId: v.id("workspaces"),
