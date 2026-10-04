@@ -1,6 +1,12 @@
 import { isNumeric } from "@repo/interpreter/arith";
+import { type Ask, asking } from "@repo/interpreter/asks";
+import { topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
-import { EvalException, UnresolvedHead } from "@repo/interpreter/errors";
+import {
+	EvalException,
+	StepHold,
+	UnresolvedHead,
+} from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -15,26 +21,120 @@ import {
 } from "@repo/interpreter/objects";
 import { keyName, parsePlist } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
-import type { InterpExtension } from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
-import type {
-	ConnConfig,
-	ConnectResult,
-	HttpConnConfig,
-	JsonSchema,
-	McpClient,
-	McpPolicy,
-	SearchDocument,
-	SearchEngine,
-	Tool,
-	ToolkitRegistry,
+import {
+	AuthorizationRequired,
+	type ConnConfig,
+	type ConnectResult,
+	type HttpConnConfig,
+	type JsonSchema,
+	type McpClient,
+	type McpPolicy,
+	openPolicy,
+	type SearchDocument,
+	type SearchEngine,
+	type Tool,
+	type ToolkitRegistry,
 } from "./ports.ts";
-import { openPolicy } from "./ports.ts";
 
 const CALL_TIMEOUT_MS = 30_000;
+
+const AUTHORIZE_ACTION = "mcp/authorize";
+
+const authorizationAsked = topic<Ask>("mcp-authorization");
+
+const authorizationAnswered = topic<{
+	id: string;
+	server: string;
+	approved: boolean;
+}>("mcp-authorization-answered");
+
+function authorizationAsk(server: string, url: string): Ask {
+	const id = new URL(url).searchParams.get("state") ?? url;
+	const answer = (approved: boolean) => ({
+		action: AUTHORIZE_ACTION,
+		values: { id, server, approved },
+	});
+	return {
+		id,
+		title: server,
+		prompt: `${server} needs you to sign in before the agent can use it.`,
+		choices: [
+			{
+				label: "Not now",
+				done: "Not authorized",
+				accepts: false,
+				answer: answer(false),
+			},
+			{
+				label: "Authorize",
+				done: "Authorized",
+				accepts: true,
+				answer: answer(true),
+				opens: url,
+				primary: true,
+			},
+		],
+	};
+}
+
+function holdForAuthorization(interp: Interp, error: unknown): unknown {
+	if (!(error instanceof AuthorizationRequired)) return error;
+	authorizationAsked.emit(interp.channels, {
+		user: authorizationAsk(error.server, error.url),
+	});
+	return new StepHold(
+		`${error.message}. The turn ends here; you will be told when they answer`,
+	);
+}
+
+function answerAuthorization(hooks: SessionHooks): void {
+	hooks.invoke.use(async (ctx, next) => {
+		if (ctx.action !== AUTHORIZE_ACTION) return next(ctx);
+		const { id, server, approved } = ctx.values;
+		if (typeof id !== "string" || typeof server !== "string")
+			throw new EvalException(
+				"an authorization answer names no server",
+				id ?? null,
+				false,
+			);
+		authorizationAnswered.emit(ctx.interp.channels, {
+			user: { id, server, approved: approved === true || approved === "true" },
+		});
+	});
+	hooks.annotate.use((buffer, into, next) =>
+		next(
+			buffer,
+			asking(into, {
+				open: buffer.collect(authorizationAsked),
+				answered: Object.fromEntries(
+					buffer.collect(authorizationAnswered).map((a) => [
+						a.id,
+						{
+							accepted: a.approved,
+							label: a.approved ? "Authorized" : "Not authorized",
+						},
+					]),
+				),
+			}),
+		),
+	);
+	hooks.message.use((buffer, next) => {
+		const answers = buffer.collect(authorizationAnswered);
+		if (answers.length === 0) return next(buffer);
+		return answers
+			.map(({ server, approved }) =>
+				approved
+					? `The user authorized "${server}". Run (load-mcp "${server}") again and carry on with what you were doing.`
+					: `The user declined to authorize "${server}". Do not load it again unless they ask.`,
+			)
+			.join("\n\n");
+	});
+}
 
 const zName = z
 	.custom<string | Sym | LispKeyword>(
@@ -257,7 +357,7 @@ const LOAD_MCP_ARGS: DocArg[] = [
 		type: "boolean",
 		required: false,
 		description:
-			"Treat the `:url` server as OAuth 2.1; load-mcp then returns an authorization link.",
+			"Treat the `:url` server as OAuth 2.1; load-mcp then asks the user to authorize it.",
 	},
 	{
 		name: "scopes",
@@ -356,6 +456,7 @@ function toolRows(rec: ServerRec): List[] {
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
+		session: answerAuthorization,
 	});
 }
 
@@ -386,11 +487,12 @@ export function registerMcp(
 				false,
 			);
 		const promise = interp.async.start((signal) =>
-			client
-				.connect(conf, signal)
-				.then((res) =>
-					installServer(interp, client, servers, conf.name, res, policy),
-				),
+			client.connect(conf, signal).then(
+				(res) => installServer(interp, client, servers, conf.name, res, policy),
+				(error: unknown) => {
+					throw holdForAuthorization(interp, error);
+				},
+			),
 		);
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
@@ -457,14 +559,20 @@ export function registerMcp(
 		"login",
 		-1,
 		'(login "server")',
-		'Log in to an OAuth MCP server: begin authorization and return the login URL to open (or :logged-in if already authenticated). After approving, (load-mcp "server") connects.',
+		'Log in to an OAuth MCP server: return :logged-in if already authenticated, otherwise ask the user to authorize it and end the turn. After they authorize, (load-mcp "server") connects.',
 		z.tuple([zList]),
 		([rest]) => {
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(predefined, name);
 			return withTimeout(client.login(conf), CALL_TIMEOUT_MS, "login").then(
-				(res) => res.authUrl ?? newLispKeyword("logged-in"),
+				({ authUrl }) => {
+					if (authUrl === null) return newLispKeyword("logged-in");
+					throw holdForAuthorization(
+						interp,
+						new AuthorizationRequired(name, authUrl, false),
+					);
+				},
 			);
 		},
 	);

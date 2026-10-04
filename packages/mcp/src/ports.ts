@@ -78,6 +78,20 @@ export interface McpClient {
 	shutdown(): Promise<void>;
 }
 
+export class AuthorizationRequired extends Error {
+	constructor(
+		readonly server: string,
+		readonly url: string,
+		captured: boolean,
+	) {
+		super(
+			captured
+				? `authorization required for "${server}": open ${url} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "<code>"))`
+				: `authorization required for "${server}": open ${url} — once the user says they approved it, run (load-mcp "${server}") again (or, if they hand back a code instead, run (mcp-authorize "${server}" "<code>") first)`,
+		);
+	}
+}
+
 export interface ServerHandle {
 	url: string;
 	headers?: Record<string, string>;
