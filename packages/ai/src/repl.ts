@@ -89,10 +89,19 @@ export async function evalCode(
 	error: boolean;
 	annotations: StepAnnotations;
 	failed: boolean;
+	held: boolean;
 }> {
 	try {
-		const { model, user, annotations, failed } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false, annotations, failed };
+		const { model, user, annotations, failed, held } =
+			await repl.evalOutput(code);
+		return {
+			output: model,
+			display: user,
+			error: false,
+			annotations,
+			failed,
+			held,
+		};
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
@@ -103,6 +112,7 @@ export async function evalCode(
 			error: true,
 			annotations: noAnnotations(),
 			failed: true,
+			held: false,
 		};
 	}
 }

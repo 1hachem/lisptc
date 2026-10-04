@@ -232,7 +232,7 @@ async function* evaluateStep(
 	transcript.push({ role: "assistant", content: code });
 
 	const evalStartedAt = Date.now();
-	const { output, display, error, annotations, failed } = await evalCode(
+	const { output, display, error, annotations, failed, held } = await evalCode(
 		repl,
 		code,
 	);
@@ -253,13 +253,14 @@ async function* evaluateStep(
 		repl.takeFinished() ? "halt" : capped ? "capped" : "continue",
 		turn.telemetry.stepEnd,
 	);
-	if (verdict === "halt") return verdict;
+	if (verdict === "halt" && !held) return verdict;
 
 	yield { type: "result", step, output, display, error, annotations, failed };
 	transcript.push({
 		role: "tool",
 		content: replResultContent(output, error, annotations.step),
 	});
+	if (verdict === "halt") return verdict;
 	return capped ? "capped" : verdict;
 }
 
