@@ -18,6 +18,17 @@
 
 	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
+	--text-xs: 11px;
+	--text-xs--line-height: 1.6;
+	--text-sm: 13px;
+	--text-sm--line-height: 1.7;
+	--text-base: 13px;
+	--text-base--line-height: 1.7;
+	--text-lg: 15px;
+	--text-lg--line-height: 1.6;
+	--text-xl: 17px;
+	--text-xl--line-height: 1.5;
+
 	--animate-blk: blk 1.06s steps(1, end) infinite;
 }
 
