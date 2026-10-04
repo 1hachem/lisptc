@@ -48,7 +48,19 @@ describe("the permissions guard", () => {
 		]);
 		expect(run.requests[0].change).toBeUndefined();
 		expect(run.annotations.output).toEqual({
-			permissions: { requests: run.requests },
+			asks: {
+				open: [
+					{
+						id: run.requests[0].id,
+						title: "string-upcase",
+						detail: '"a"',
+						prompt: "This call needs your approval.",
+						choices: ["Deny", "Allow for session", "Allow once"].map((label) =>
+							expect.objectContaining({ label }),
+						),
+					},
+				],
+			},
 		});
 	});
 
@@ -432,7 +444,11 @@ describe("reporting a decision", () => {
 		});
 		expect(decided.annotations).toEqual({
 			step: {},
-			output: { permissions: { decided: { [request.id]: true } } },
+			output: {
+				asks: {
+					answered: { [request.id]: { accepted: true, label: "Allowed" } },
+				},
+			},
 		});
 		expect(decided.message).toMatch(/approved/);
 		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
@@ -450,7 +466,9 @@ describe("reporting a decision", () => {
 			approved: false,
 		});
 		expect(denied.annotations.output).toEqual({
-			permissions: { decided: { [request.id]: false } },
+			asks: {
+				answered: { [request.id]: { accepted: false, label: "Denied" } },
+			},
 		});
 		expect(denied.message).toMatch(/denied/);
 		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });

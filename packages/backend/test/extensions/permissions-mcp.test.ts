@@ -61,10 +61,12 @@ describe("permissions over a loaded MCP server", () => {
 		await repl.eval(LOAD);
 		const asked = await repl.evalOutput("(permission/server fx (hide echo))");
 		expect(asked.held).toBe(true);
-		const { requests } = asked.annotations.output.permissions as {
-			requests: { id: string; change?: true }[];
+		const { open: requests } = asked.annotations.output.asks as {
+			open: { id: string; title: string }[];
 		};
-		expect(requests).toEqual([expect.objectContaining({ change: true })]);
+		expect(requests.map((r) => r.title)).toEqual([
+			"(permission/server fx (hide echo))",
+		]);
 		expect(await printed(repl, '(echo (fx/echo :message "x"))')).toContain("x");
 
 		const decided = await repl.invokeUi("permissions/decide", {
@@ -114,10 +116,10 @@ describe("permissions over a loaded MCP server", () => {
 		const asked = await repl.evalOutput('(fx/send_mail :message "hello")');
 		expect(asked.failed).toBe(false);
 		expect(asked.held).toBe(true);
-		const { requests } = asked.annotations.output.permissions as {
-			requests: { id: string; name: string }[];
+		const { open: requests } = asked.annotations.output.asks as {
+			open: { id: string; title: string }[];
 		};
-		expect(requests.map((r) => r.name)).toEqual(["fx/send_mail"]);
+		expect(requests.map((r) => r.title)).toEqual(["fx/send_mail"]);
 		expect(client.calls).toEqual([]);
 
 		const decided = await repl.invokeUi("permissions/decide", {
