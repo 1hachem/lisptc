@@ -15,11 +15,12 @@ export async function postUiAction(
 	chatId: string | null,
 	action: string,
 	values: Record<string, string | boolean>,
+	messageId?: string,
 ): Promise<UiActionResult> {
 	const res = await fetch(`${API_URL}/api/ui-action`, {
 		method: "POST",
 		headers: await apiHeaders(),
-		body: JSON.stringify({ chatId, action, values }),
+		body: JSON.stringify({ chatId, messageId, action, values }),
 	});
 	if (res.status === 409) return { live: false };
 	return { live: true, response: await res.json() };

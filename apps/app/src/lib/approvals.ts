@@ -19,6 +19,7 @@ export type ApprovalOutcome =
 export interface ApprovalTransport {
 	decide(
 		chatId: string | null,
+		messageId: string | undefined,
 		request: ApprovalRequest,
 		reply: ApprovalReply,
 	): Promise<ApprovalOutcome>;
@@ -27,12 +28,13 @@ export interface ApprovalTransport {
 const DECIDE_ACTION = "permissions/decide";
 
 export const uiActionTransport: ApprovalTransport = {
-	async decide(chatId, request, reply) {
-		const result = await postUiAction(chatId, DECIDE_ACTION, {
-			id: request.id,
-			approved: reply.approved,
-			scope: reply.scope,
-		});
+	async decide(chatId, messageId, request, reply) {
+		const result = await postUiAction(
+			chatId,
+			DECIDE_ACTION,
+			{ id: request.id, approved: reply.approved, scope: reply.scope },
+			messageId,
+		);
 		if (!result.live)
 			return { ok: false, error: "this session is no longer live" };
 		const { error, output, message } = result.response;
@@ -42,22 +44,35 @@ export const uiActionTransport: ApprovalTransport = {
 	},
 };
 
-export interface ApprovalDecision {
-	readonly id: string;
-	readonly approved: boolean;
+export function approvalDecisions(
+	value: unknown,
+): ReadonlyMap<string, boolean> {
+	const decided = new Map<string, boolean>();
+	if (!value || typeof value !== "object") return decided;
+	const map = (value as { decided?: unknown }).decided;
+	if (!map || typeof map !== "object" || Array.isArray(map)) return decided;
+	for (const [id, approved] of Object.entries(map))
+		if (typeof approved === "boolean") decided.set(id, approved);
+	return decided;
 }
 
-export function approvalDecisions(value: unknown): ApprovalDecision[] {
-	if (!value || typeof value !== "object") return [];
-	const decided = (value as { decided?: unknown }).decided;
-	if (!Array.isArray(decided)) return [];
-	return decided.flatMap((d): ApprovalDecision[] => {
-		if (!d || typeof d !== "object") return [];
-		const { id, approved } = d as Record<string, unknown>;
-		return typeof id === "string" && typeof approved === "boolean"
-			? [{ id, approved }]
-			: [];
-	});
+export function withDecision(
+	kwargs: Record<string, unknown> | undefined,
+	id: string,
+	approved: boolean,
+): Record<string, unknown> {
+	const permissions =
+		kwargs?.permissions && typeof kwargs.permissions === "object"
+			? (kwargs.permissions as Record<string, unknown>)
+			: {};
+	const decided =
+		permissions.decided && typeof permissions.decided === "object"
+			? (permissions.decided as Record<string, unknown>)
+			: {};
+	return {
+		...kwargs,
+		permissions: { ...permissions, decided: { ...decided, [id]: approved } },
+	};
 }
 
 export function approvalRequests(value: unknown): ApprovalRequest[] {

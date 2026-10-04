@@ -24,7 +24,6 @@ import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
 import {
-	type ApprovalDecision,
 	type ApprovalRequest,
 	approvalDecisions,
 	approvalRequests,
@@ -136,7 +135,7 @@ type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
 
 function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	return stored.map((message) => ({
-		id: message._id,
+		id: message.wireId ?? message._id,
 		type: message.type,
 		content: message.content,
 		additional_kwargs: message.kwargs,
@@ -496,7 +495,9 @@ export function toolApprovals(message: ChatMessage): ApprovalRequest[] {
 	return approvalRequests(message.additional_kwargs?.permissions);
 }
 
-export function toolDecisions(message: ChatMessage): ApprovalDecision[] {
+export function toolDecisions(
+	message: ChatMessage,
+): ReadonlyMap<string, boolean> {
 	return approvalDecisions(message.additional_kwargs?.permissions);
 }
 

@@ -146,58 +146,136 @@ function AssistantText({
 	);
 }
 
-function ToolMessage({
-	message,
-	decisions,
-}: {
-	message: ChatMessage;
-	decisions: ReadonlyMap<string, boolean>;
-}) {
-	const { shown } = useUI();
+type Shown = ReturnType<typeof useUI>["shown"];
+
+function toolChannels(message: ChatMessage, shown: Shown) {
 	const { output } = toolResult(message);
 	const ui = toUiNode(toolUi(message));
-	const model = toolModelOutput(message);
-	const approvals = shown.permissions ? toolApprovals(message) : [];
-	const drawsUi = ui !== undefined && shown.ui;
-	const drawsUser = shown.user && output !== "";
-	const drawsError = shown.errors && toolFailed(message);
-	const drawsModel = shown.model && model.output !== "";
-	const labelled =
-		[drawsUi, drawsUser, drawsModel].filter(Boolean).length > 1 ||
-		(drawsError && drawsModel);
+	const model = toolModelOutput(message).output;
+	return {
+		output,
+		ui: shown.ui ? ui : undefined,
+		model,
+		drawsUser: shown.user && output !== "",
+		drawsError: shown.errors && toolFailed(message),
+		drawsModel: shown.model && model !== "",
+	};
+}
+
+type ToolChannels = ReturnType<typeof toolChannels>;
+
+function drawsAny(channels: ToolChannels): boolean {
+	const { ui, drawsUser, drawsError, drawsModel } = channels;
+	return ui !== undefined || drawsUser || drawsError || drawsModel;
+}
+
+function isLabelled(channels: ToolChannels): boolean {
+	const { ui, drawsUser, drawsError, drawsModel } = channels;
+	const drawn = [ui !== undefined, drawsUser, drawsModel].filter(Boolean);
+	return drawn.length > 1 || (drawsError && drawsModel);
+}
+
+function Channel({
+	id,
+	labelled,
+	children,
+}: {
+	id: string;
+	labelled: boolean;
+	children: React.ReactNode;
+}) {
+	return (
+		<>
+			{labelled && <ChannelLabel id={id} />}
+			{children}
+		</>
+	);
+}
+
+function ToolResult({ message }: { message: ChatMessage }) {
+	const { shown } = useUI();
+	const channels = toolChannels(message, shown);
+	if (!drawsAny(channels)) return null;
+	const { output, ui, model, drawsUser, drawsError, drawsModel } = channels;
+	const labelled = isLabelled(channels);
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
 				drawsError ? "border-red/60" : "border-dim/40"
 			}`}
 		>
-			{drawsUi && (
-				<>
-					{labelled && <ChannelLabel id="ui" />}
+			{ui !== undefined && (
+				<Channel id="ui" labelled={labelled}>
 					<GenerativeUI node={ui} />
-				</>
+				</Channel>
 			)}
 			{drawsUser && (
-				<>
-					{labelled && <ChannelLabel id="user" />}
+				<Channel id="user" labelled={labelled}>
 					<ChannelText text={output} tone="text-dim" />
-				</>
+				</Channel>
 			)}
-			{approvals.map((request) => (
-				<PermissionRequest
-					key={request.id}
-					request={request}
-					decided={decisions.get(request.id)}
-				/>
-			))}
 			{drawsError && (
 				<div className={channel("errors").text}>a form in this step failed</div>
 			)}
 			{drawsModel && (
-				<>
-					{labelled && <ChannelLabel id="model" />}
-					<ChannelText text={model.output} tone={channel("model").text} />
-				</>
+				<Channel id="model" labelled={labelled}>
+					<ChannelText text={model} tone={channel("model").text} />
+				</Channel>
+			)}
+		</div>
+	);
+}
+
+function ToolMessage({ message }: { message: ChatMessage }) {
+	const { shown } = useUI();
+	const approvals = shown.permissions ? toolApprovals(message) : [];
+	const decisions = toolDecisions(message);
+	return (
+		<>
+			<ToolResult message={message} />
+			{approvals.map((request) => (
+				<PermissionRequest
+					key={request.id}
+					request={request}
+					messageId={message.id}
+					decided={decisions.get(request.id)}
+				/>
+			))}
+		</>
+	);
+}
+
+function ChatLine({
+	message,
+	index,
+	busy,
+}: {
+	message: ChatMessage;
+	index: number;
+	busy: boolean;
+}) {
+	const { shown } = useUI();
+	const reasoning =
+		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
+	return (
+		<div className="min-w-0 break-words text-fg">
+			{reasoning && (
+				<div className="mb-2">
+					<ChannelLabel id="thinking" />
+					<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
+						{reasoning}
+					</div>
+				</div>
+			)}
+			{isUserMessage(message) ? (
+				<UserLine text={messageText(message)} />
+			) : (
+				<AssistantText
+					id={message.id ?? String(index)}
+					text={messageText(message)}
+					skipped={messageProse(message)}
+					busy={busy}
+				/>
 			)}
 		</div>
 	);
@@ -235,12 +313,6 @@ export function ChatView() {
 	}));
 	const { shown } = useUI();
 	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
-	const decisions = useMemo(() => {
-		const byId = new Map<string, boolean>();
-		for (const m of messages)
-			for (const d of toolDecisions(m)) byId.set(d.id, d.approved);
-		return byId;
-	}, [messages]);
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
@@ -249,41 +321,24 @@ export function ChatView() {
 				{messages
 					.filter((m) => !isGreetingMessage(m))
 					.map((m, i, all) => {
-						const last = all.length - 1;
-						const reasoning =
-							isUserMessage(m) || !shown.thinking ? "" : messageReasoning(m);
 						const stats = m.id ? meta[m.id] : undefined;
+						const tool = isToolMessage(m);
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
-								{isToolMessage(m) ? (
-									<ToolMessage message={m} decisions={decisions} />
+								{tool ? (
+									<ToolMessage message={m} />
 								) : (
-									<div className="min-w-0 break-words text-fg">
-										{reasoning && (
-											<div className="mb-2">
-												<ChannelLabel id="thinking" />
-												<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
-													{reasoning}
-												</div>
-											</div>
-										)}
-										{isUserMessage(m) ? (
-											<UserLine text={messageText(m)} />
-										) : (
-											<AssistantText
-												id={m.id ?? String(i)}
-												text={messageText(m)}
-												skipped={messageProse(m)}
-												busy={isLoading && i === last}
-											/>
-										)}
-									</div>
+									<ChatLine
+										message={m}
+										index={i}
+										busy={isLoading && i === all.length - 1}
+									/>
 								)}
 								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
 								)}
 								{stats && <MessageMeta meta={stats} />}
-								{!isUserMessage(m) && !isToolMessage(m) && (
+								{!tool && !isUserMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
 								)}
 							</div>

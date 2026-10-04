@@ -1,9 +1,12 @@
+import { convexQuery } from "@convex-dev/react-query";
 import {
 	Cancel01Icon,
 	CheckmarkCircle02Icon,
 	SecurityCheckIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import {
 	Confirmation,
 	ConfirmationAccepted,
@@ -14,15 +17,19 @@ import {
 	ConfirmationRequest,
 	ConfirmationTitle,
 } from "@repo/ui";
-import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { FunctionReturnType } from "convex/server";
 import { reportIssue } from "../lib/analytics.tsx";
 import {
 	type ApprovalReply,
 	type ApprovalRequest,
 	type ApprovalTransport,
 	uiActionTransport,
+	withDecision,
 } from "../lib/approvals.ts";
 import { useChatSession } from "../lib/chat.tsx";
+
+type Transcript = FunctionReturnType<typeof api.messages.transcript>;
 
 const CHOICES: readonly {
 	label: string;
@@ -46,12 +53,31 @@ const CHOICES: readonly {
 	},
 ];
 
+function transcriptKey(chatId: Id<"chats">) {
+	return convexQuery(api.messages.transcript, { chatId }).queryKey;
+}
+
+function deciding(
+	transcript: Transcript | undefined,
+	messageId: string | undefined,
+	id: string,
+	approved: boolean,
+): Transcript | undefined {
+	return transcript?.map((row) =>
+		(row.wireId ?? row._id) === messageId
+			? { ...row, kwargs: withDecision(row.kwargs, id, approved) }
+			: row,
+	);
+}
+
 export function PermissionRequest({
 	request,
+	messageId,
 	decided,
 	transport = uiActionTransport,
 }: {
 	request: ApprovalRequest;
+	messageId?: string;
 	decided?: boolean;
 	transport?: ApprovalTransport;
 }) {
@@ -59,43 +85,59 @@ export function PermissionRequest({
 		chatId: state.chatId,
 		send: state.send,
 	}));
-	const [busy, setBusy] = useState(false);
-	const [chosen, setChosen] = useState<boolean>();
-	const [failure, setFailure] = useState<string>();
-	const approved = chosen ?? decided;
+	const queryClient = useQueryClient();
+	const rollback = (snapshot: Transcript | undefined) => {
+		if (chatId) queryClient.setQueryData(transcriptKey(chatId), snapshot);
+	};
+	const mutation = useMutation({
+		mutationFn: (reply: ApprovalReply) =>
+			transport.decide(chatId, messageId, request, reply),
+		onMutate: async (reply) => {
+			if (!chatId) return undefined;
+			const key = transcriptKey(chatId);
+			await queryClient.cancelQueries({ queryKey: key });
+			const snapshot = queryClient.getQueryData<Transcript>(key);
+			queryClient.setQueryData<Transcript>(key, (current) =>
+				deciding(current, messageId, request.id, reply.approved),
+			);
+			return { snapshot };
+		},
+		onError: (ex, _reply, context) => {
+			reportIssue(ex, { $exception_source: "permission decision" });
+			if (context) rollback(context.snapshot);
+		},
+		onSuccess: (outcome, _reply, context) => {
+			if (!outcome.ok) {
+				if (context) rollback(context.snapshot);
+				return;
+			}
+			if (outcome.message) send(outcome.message);
+		},
+	});
+	const refused =
+		mutation.data && !mutation.data.ok
+			? `${mutation.data.error}; ask again to get a new request`
+			: undefined;
+	const failure = mutation.error
+		? mutation.error instanceof Error
+			? mutation.error.message
+			: String(mutation.error)
+		: undefined;
 	const approval: ConfirmationApproval =
-		approved === undefined ? { id: request.id } : { id: request.id, approved };
+		decided === undefined || refused
+			? { id: request.id }
+			: { id: request.id, approved: decided };
+	const open = approval.approved === undefined && !refused;
 
 	const decide = (reply: ApprovalReply) => {
-		if (busy || approval.approved !== undefined) return;
-		setBusy(true);
-		setFailure(undefined);
-		void (async () => {
-			try {
-				const outcome = await transport.decide(chatId, request, reply);
-				if (!outcome.ok) {
-					setFailure(outcome.error);
-					return;
-				}
-				setChosen(reply.approved);
-				if (outcome.message) send(outcome.message);
-			} catch (ex) {
-				reportIssue(ex, { $exception_source: "permission decision" });
-				setFailure(ex instanceof Error ? ex.message : String(ex));
-			} finally {
-				setBusy(false);
-			}
-		})();
+		if (mutation.isPending || !open) return;
+		mutation.mutate(reply);
 	};
 
 	return (
 		<Confirmation
 			approval={approval}
-			state={
-				approval.approved === undefined
-					? "approval-requested"
-					: "approval-responded"
-			}
+			state={open ? "approval-requested" : "approval-responded"}
 			className="mt-2 gap-1.5 border-yellow/50 px-3 py-2"
 		>
 			<ConfirmationTitle>
@@ -125,6 +167,7 @@ export function PermissionRequest({
 						Denied
 					</span>
 				</ConfirmationRejected>
+				{refused && <span className="block text-red">{refused}</span>}
 				{failure && <span className="block text-red">{failure}</span>}
 			</ConfirmationTitle>
 			<ConfirmationActions>
@@ -133,7 +176,7 @@ export function PermissionRequest({
 						key={label}
 						className="h-7 px-2.5"
 						variant={variant}
-						disabled={busy}
+						disabled={mutation.isPending}
 						onClick={() => decide(reply)}
 					>
 						{label}
