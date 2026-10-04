@@ -50,6 +50,24 @@ export function reporting(text: string): InterpExtension {
 	});
 }
 
+const heard = topic<string>("heard");
+
+export function hearing(text: string): InterpExtension {
+	return extension((hooks) => {
+		hooks.beginStep.use(function* (ctx, next) {
+			heard.emit(ctx.interp.channels, { user: text });
+			yield* next(ctx);
+		});
+		hooks.annotate.use((buffer, into, next) => {
+			const seen = buffer.collect(heard);
+			return next(
+				buffer,
+				seen.length === 0 ? into : annotating(into, "step", { heard: seen }),
+			);
+		});
+	});
+}
+
 export function testRepl(extensions: InterpExtension[] = []): AgentRepl {
 	return new AgentRepl({ extensions: [answering(), ...extensions] });
 }
