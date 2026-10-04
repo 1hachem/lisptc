@@ -95,6 +95,7 @@ named only at a composition root:
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
+- `packages/permissions` (`@repo/permissions-extension`) — what a session may call: allowed, denied, or waiting on a human.
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.

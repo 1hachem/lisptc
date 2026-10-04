@@ -1,0 +1,37 @@
+A permissions config. Every form here also runs in a session: one that tightens
+the config takes effect at once and is saved with it, and one that loosens it
+waits for the user's approval. In a file it is read as data, and anything
+written outside a form is prose, like this paragraph.
+
+What a call gets when no rule names it.
+
+(permission/default allow)
+
+Forms by name. A trailing star is a glob; a bare star is multiplication.
+
+(permission/deny eval read :reason "no code built from strings")
+(permission/ask memory/forget-all exit)
+
+One MCP server. The names inside are its tool names, so this file never has to
+spell github/ in front of each one.
+
+(permission/server github
+  (allow list_* get_* search_*)
+  (ask create_* update_* merge_*)
+  (deny delete_* :reason "nothing destructive on github")
+  (hide admin_* *_token))
+
+A server can show only what it names, and hide every other tool it has.
+
+(permission/server playwright
+  (only browser_navigate))
+
+A whole server: denied stays discoverable and refuses to load, hidden is never
+seen at all.
+
+(permission/deny-server shell :reason "no shell access")
+(permission/hide-server internal-metrics)
+
+A single tool can be named from the top level too.
+
+(permission/ask github/create_release)
