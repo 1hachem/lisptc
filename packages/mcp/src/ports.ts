@@ -97,6 +97,21 @@ export interface ToolkitRegistry {
 	all(): ConnConfig[];
 }
 
+export type ServerAccess =
+	| { readonly access: "open" }
+	| { readonly access: "hidden" }
+	| { readonly access: "denied"; readonly reason?: string };
+
+export interface McpPolicy {
+	server(name: string): ServerAccess;
+	tool(server: string, tool: string): boolean;
+}
+
+export const openPolicy: McpPolicy = {
+	server: () => ({ access: "open" }),
+	tool: () => true,
+};
+
 export type {
 	SearchDocument,
 	SearchEngine,

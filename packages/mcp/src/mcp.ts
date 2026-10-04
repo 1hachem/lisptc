@@ -26,11 +26,13 @@ import type {
 	HttpConnConfig,
 	JsonSchema,
 	McpClient,
+	McpPolicy,
 	SearchDocument,
 	SearchEngine,
 	Tool,
 	ToolkitRegistry,
 } from "./ports.ts";
+import { openPolicy } from "./ports.ts";
 
 const CALL_TIMEOUT_MS = 30_000;
 
@@ -54,6 +56,7 @@ export interface McpExtensionHost {
 	toolkit: ToolkitRegistry;
 	search: SearchEngine;
 	prompt: PromptSource;
+	policy?: McpPolicy;
 }
 
 function extractAuthCode(raw: string): string {
@@ -304,10 +307,12 @@ function installServer(
 	servers: Map<string, ServerRec>,
 	name: string,
 	res: ConnectResult,
+	policy: McpPolicy,
 ): List {
 	const toolMap = new Map<string, Tool>();
 	const toolSyms: Sym[] = [];
 	for (const tool of res.tools) {
+		if (!policy.tool(name, tool.name)) continue;
 		toolMap.set(tool.name, tool);
 		const sym = newSym(`${name}/${tool.name}`);
 		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
@@ -356,20 +361,36 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit" | "search">,
+	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy">,
 ): void {
 	const { client, toolkit, search } = host;
+	const policy = host.policy ?? openPolicy;
 
 	const servers = new Map<string, ServerRec>();
 	const predefined = new Map<string, ConnConfig>();
 	const loading = new Set<Promise<unknown>>();
-	for (const conf of toolkit.all()) predefined.set(conf.name, conf);
+	for (const conf of toolkit.all())
+		if (policy.server(conf.name).access !== "hidden")
+			predefined.set(conf.name, conf);
 
 	function startLoad(conf: ConnConfig): Promise<unknown> {
+		const access = policy.server(conf.name);
+		if (access.access === "hidden")
+			throw new EvalException("unknown MCP server", conf.name, false);
+		if (access.access === "denied")
+			throw new EvalException(
+				access.reason === undefined
+					? "MCP server denied"
+					: `MCP server denied: ${access.reason}`,
+				conf.name,
+				false,
+			);
 		const promise = interp.async.start((signal) =>
 			client
 				.connect(conf, signal)
-				.then((res) => installServer(interp, client, servers, conf.name, res)),
+				.then((res) =>
+					installServer(interp, client, servers, conf.name, res, policy),
+				),
 		);
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
