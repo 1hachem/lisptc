@@ -17,11 +17,11 @@ approver that ships.
 Read the host-port and seam rules in `packages/interpreter/AGENTS.md`. They
 govern this package.
 
-**A config is ptc lisp, and one form is both a line of it and a call.** A store
-hands over source text and `parseRules` walks it as data, never evaluating it.
-The same forms, listed in `RULE_FORMS`, run in a session, and every one reaches
-the config through the single gate `permissionsExtension` installs. A new rule
-is a new form in both places, and its tests go in beside the others.
+**A config is written in the dialect and read as data, never run.** Each rule
+is one form, and the same form is a call a session may make. A call changes the
+config only through the one gate the extension installs, never around it. A new
+rule is a new form the reader and the session both learn, with its tests beside
+the others.
 
 **A session never changes its config on its own.** Every form that changes the
 config, a delete included, waits on an approval like any other asked call, and
