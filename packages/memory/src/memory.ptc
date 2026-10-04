@@ -38,7 +38,7 @@ eight kinds:
   prose    words in the prose around your forms
   user     words in what the user just said
   recall   another memory being retrieved
-  start    the start of every turn, with no pattern: written (start)
+  start    the user's first message, once, with no pattern: written (start)
 
 For call the pattern is A FORM, written the way the call itself is written, and
 matched structurally. This is what gives you precision about arguments:

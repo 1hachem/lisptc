@@ -109,7 +109,7 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 	const pattern = rest.car;
 	if (kind === "start")
 		throw new EvalException(
-			"a start trigger fires at every turn start and takes no pattern: write (start)",
+			"a start trigger fires once, on the user's first message, and takes no pattern: write (start)",
 			pattern,
 		);
 	if (kind === "call" && typeof pattern === "string")
