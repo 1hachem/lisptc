@@ -99,6 +99,7 @@ named only at a composition root:
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
+- `packages/workspace` (`@repo/workspace-extension`) — the git repository of .ptc files a session saves into and loads from.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
 
 Everything else:

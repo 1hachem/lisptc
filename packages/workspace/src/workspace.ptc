@@ -1,0 +1,15 @@
+WORKSPACE
+
+You run inside a workspace: a git repository of .ptc files the user can read
+and edit. What you save there loads by itself at the start of every later
+session. Everything else you define is gone when the session ends.
+
+- (proc/save 'name) save the defun or defmacro you last evaluated under name.
+  It is written to procedures/name.ptc and committed. Define it first, check it
+  works, then save it. A slashed name like git/status becomes a directory.
+- (proc/drop 'name) delete a saved procedure, so later sessions no longer load it.
+- (ws/files) the files that load at session start, in load order.
+
+Save a procedure when it is a tool you will want again: a recipe the user asked
+for, a helper you keep rewriting. Do not save scratch work. The user reviews
+every saved file in their history, so give it a docstring that says what it is for.

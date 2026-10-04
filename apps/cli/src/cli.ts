@@ -2,12 +2,17 @@ import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { setExit } from "@repo/interpreter/core-builtins";
+import { driveAsync } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { Reader } from "@repo/interpreter/reader";
-import { openSession } from "@repo/interpreter/session";
+import {
+	type InterpExtension,
+	openSession,
+	type SessionHooks,
+} from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
 import type { Repl } from "@repo/repl/repl";
 import {
@@ -16,6 +21,12 @@ import {
 	socketPathFor,
 } from "@repo/repl/session-server";
 import { formsOnly } from "@repo/shared/lisp-forms";
+import { workspaceExtension } from "@repo/workspace-extension";
+import {
+	findWorkspace,
+	initWorkspace,
+	workspaceHostFor,
+} from "@repo/workspace-extension/host";
 import { cliExtensions } from "./extensions.ts";
 
 const SESSION_ENTRY = fileURLToPath(new URL("./session.ts", import.meta.url));
@@ -40,10 +51,12 @@ const stdoutTransport = (): ChannelTransport => ({
 
 class InteractiveRepl implements Repl {
 	private currentInterp: Interp;
-	private readonly extensions = cliExtensions();
-	private readonly hooks = openSession(this.extensions);
+	private readonly extensions: InterpExtension[];
+	private readonly hooks: SessionHooks;
 
-	constructor() {
+	constructor(workspace: string | undefined) {
+		this.extensions = cliExtensions(workspace);
+		this.hooks = openSession(this.extensions);
 		this.currentInterp = this.freshInterp();
 	}
 
@@ -127,15 +140,46 @@ async function attachLoop(): Promise<void> {
 	}
 }
 
+async function checkWorkspace(root: string): Promise<boolean> {
+	const ws = workspaceExtension(workspaceHostFor(root));
+	const interp = new Interp({ extensions: [ws, ...cliExtensions()] });
+	runSync(interp, prelude);
+	const failures = (await driveAsync(ws.workspace.load(interp))).value;
+	interp.dispose();
+	for (const failure of failures) console.log(failure);
+	return failures.length === 0;
+}
+
 async function main(): Promise<void> {
 	const { pathToFileURL } = await import("node:url");
 	const entry = process.argv[1];
 	if (!entry || import.meta.url !== pathToFileURL(entry).href) return;
 
 	const args = process.argv.slice(2);
+	const launchDir = replEnv.INIT_CWD || process.cwd();
 
 	if (args.includes("--help") || args.includes("-h")) {
 		console.log(USAGE);
+		return;
+	}
+
+	if (args[0] === "init") {
+		const { resolve } = await import("node:path");
+		console.log(
+			`initialized ${initWorkspace(resolve(launchDir, args[1] ?? "."))}`,
+		);
+		return;
+	}
+
+	const workspace = findWorkspace(launchDir);
+
+	if (args[0] === "check") {
+		if (workspace === undefined) {
+			console.error("not inside a workspace (run lisptc init)");
+			process.exit(1);
+		}
+		if (!(await checkWorkspace(workspace))) process.exit(1);
+		console.log(`${workspace}: every file loads`);
 		return;
 	}
 
@@ -233,10 +277,9 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	const repl = new InteractiveRepl();
+	const repl = new InteractiveRepl(workspace);
 	let started = false;
 	let fs: typeof import("node:fs") | undefined;
-	const launchDir = replEnv.INIT_CWD || process.cwd();
 	const argv = args.length > 0 ? ["", "", ...args] : ["", "", "-"];
 	try {
 		for (let i = 2; i < argv.length; i++) {
@@ -272,6 +315,8 @@ const USAGE = `lisptc REPL — the Lisp interpreter's interactive terminal
 
 Usage:
   pnpm repl [options] [file.ptc ...] [-]
+  lisptc init [dir]
+  lisptc check
 
 With no arguments (or a bare "-") an interactive REPL starts. Each file
 argument is run in order on the same interpreter — so a trailing "-"
@@ -279,6 +324,17 @@ keeps the files' state and drops you into a prompt afterwards. Secrets
 (REPL_* env vars / nearest .env) and MCP are wired in both modes. At the
 prompt, text around the forms is prose and a parenthesised aside is
 skipped with a note; a .ptc file argument is read strictly.
+
+Inside a workspace (a directory with a workspace.ptc, or any directory
+below one) its procedures and main.ptc load at start, and what you save
+with (proc/save 'name) is written to procedures/ and committed.
+
+Commands:
+  init [dir]      make dir (default: the current directory) a workspace:
+                  workspace.ptc, main.ptc, procedures/, memories/, tasks/,
+                  and a git repository with a first commit
+  check           load every file of the current workspace and list the
+                  ones that fail; exits 1 if any does
 
 Arguments:
   file.ptc        run a .ptc script; relative paths resolve against the
