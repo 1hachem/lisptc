@@ -30,6 +30,7 @@ import { SkippedProse } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
+import { PermissionRequest } from "./permission-request.tsx";
 import { SteerQueue } from "./steer-queue.tsx";
 import { UserLine } from "./user-line.tsx";
 
@@ -218,6 +219,12 @@ export function ChatView() {
 	}));
 	const { shown } = useUI();
 	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
+	const decisions = useMemo(() => {
+		const byId = new Map<string, boolean>();
+		for (const step of Object.values(meta))
+			for (const d of step.decided ?? []) byId.set(d.id, d.approved);
+		return byId;
+	}, [meta]);
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
@@ -258,6 +265,18 @@ export function ChatView() {
 								)}
 								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
+								)}
+								{stats?.permissions && shown.permissions && (
+									<div className="mt-2">
+										<ChannelLabel id="permissions" />
+										{stats.permissions.map((request) => (
+											<PermissionRequest
+												key={request.id}
+												request={request}
+												decided={decisions.get(request.id)}
+											/>
+										))}
+									</div>
 								)}
 								{stats && <MessageMeta meta={stats} />}
 								{!isUserMessage(m) && !isToolMessage(m) && (

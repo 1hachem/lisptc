@@ -23,6 +23,12 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
+import {
+	type ApprovalDecision,
+	type ApprovalRequest,
+	approvalDecisions,
+	approvalRequests,
+} from "./approvals.ts";
 import { pickGreeting } from "./greeting.ts";
 import {
 	awaitedState,
@@ -61,6 +67,8 @@ export interface StepMeta {
 	cachedInputTokens?: number;
 	steps?: number;
 	memories?: FiredMemory[];
+	permissions?: ApprovalRequest[];
+	decided?: ApprovalDecision[];
 }
 
 function num(value: unknown): number | undefined {
@@ -78,6 +86,16 @@ function parseMemories(value: unknown): FiredMemory[] | undefined {
 	return fired.length > 0 ? fired : undefined;
 }
 
+function parsePermissions(value: unknown): ApprovalRequest[] | undefined {
+	const requests = approvalRequests(value);
+	return requests.length > 0 ? requests : undefined;
+}
+
+function parseDecided(value: unknown): ApprovalDecision[] | undefined {
+	const decided = approvalDecisions(value);
+	return decided.length > 0 ? decided : undefined;
+}
+
 function parseMeta(value: unknown): StepMeta | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const raw = value as Record<string, unknown>;
@@ -93,6 +111,8 @@ function parseMeta(value: unknown): StepMeta | undefined {
 		cachedInputTokens: num(raw.cachedInputTokens),
 		steps: num(raw.steps),
 		memories: parseMemories(raw.memories),
+		permissions: parsePermissions(raw.permissions),
+		decided: parseDecided(raw.permissions),
 	};
 }
 
@@ -222,10 +242,11 @@ export function ChatProvider({
 		for (const m of turns) {
 			if (!m.id) continue;
 			const known = meta[m.id];
-			if (known?.memories) continue;
+			if (known?.memories || known?.permissions || known?.decided) continue;
 			const parsed = parseMeta(m.additional_kwargs?.meta);
 			if (!parsed) continue;
-			if (known && !parsed.memories) continue;
+			if (known && !parsed.memories && !parsed.permissions && !parsed.decided)
+				continue;
 			found[m.id] = parsed;
 		}
 		if (Object.keys(found).length > 0)
