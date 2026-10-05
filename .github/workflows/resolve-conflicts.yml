@@ -5,7 +5,7 @@ on:
     types: [opened, reopened, synchronize]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   id-token: write
 
@@ -37,7 +37,7 @@ jobs:
           echo "PR $PR: $state"
           [ "$state" = CONFLICTING ] && echo "conflicting=true" >> "$GITHUB_OUTPUT" || true
 
-      - name: Fetch the Claude and push credentials from Infisical
+      - name: Fetch the Claude credentials from Infisical
         if: steps.state.outputs.conflicting == 'true'
         uses: Infisical/secrets-action@v1.0.9
         with:
@@ -54,7 +54,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
-          token: ${{ env.GH_PUSH_TOKEN }}
           fetch-depth: 0
 
       - name: Setup Node.js
