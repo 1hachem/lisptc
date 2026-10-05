@@ -9,6 +9,7 @@ const ALLOWED = [
 	/^\.claude\/agents\//,
 	/^\.agents\/skills\//,
 	/^\.agents\/agents\//,
+	/^\.agents\/plugins\//,
 ];
 
 function tracked(): string[] {
@@ -52,7 +53,7 @@ console.error(
 	"test. Only README, a package README.md, an AGENTS.md, .github/ and",
 );
 console.error(
-	"the skills and agents under .agents/ or .claude/ may be markdown. Run",
+	"the skills, agents and plugins under .agents/ or .claude/ may be markdown. Run",
 );
 console.error("`pnpm fix:docs` to delete them, or widen");
 console.error(
