@@ -62,6 +62,7 @@ export interface Definer extends DocSource {
 	getGlobal(sym: Sym): unknown;
 	globalEntries(): IterableIterator<[Sym, unknown]>;
 	setDoc(name: string, doc: Doc): void;
+	setSource(name: string, form: unknown): void;
 }
 
 export interface CoreOps {
@@ -88,6 +89,10 @@ function keywordArgsIn(tokens: string[]): DocArg[] | undefined {
 	return named.length === 0
 		? undefined
 		: named.map((name) => ({ name, type: "any", required: false }));
+}
+
+function copyTree(x: unknown): unknown {
+	return x instanceof Cell ? new Cell(copyTree(x.car), copyTree(x.cdr)) : x;
 }
 
 function listToStrings(list: List): string[] {
@@ -315,6 +320,17 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		output.emit(interp.channels, { user: answer.text, model: answer.text });
 		return answer.value;
 	});
+	interp.def(
+		"_set-source",
+		2,
+		"(_set-source 'name form)",
+		"Record `form` as the definition of `name`; return `name`.",
+		z.tuple([zAny, zAny]),
+		([name, form]) => {
+			if (name instanceof Sym) interp.setSource(name.name, copyTree(form));
+			return name;
+		},
+	);
 
 	const gensymCounter = newSym("*gensym-counter*");
 	interp.defineGlobal(gensymCounter, ONE, {

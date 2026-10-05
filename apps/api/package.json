@@ -20,6 +20,7 @@
     "@repo/backend": "workspace:*",
     "@repo/compaction-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
+    "@repo/introspection-extension": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm-extension": "workspace:*",

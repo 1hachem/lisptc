@@ -106,6 +106,8 @@ export class Interp {
 
 	private readonly docTable: Map<string, Doc> = new Map();
 
+	private readonly sources: Map<string, unknown> = new Map();
+
 	private readonly prompts: string[] = [];
 
 	globalNames(): string[] {
@@ -208,6 +210,14 @@ export class Interp {
 
 	setDoc(name: string, doc: Doc): void {
 		this.docTable.set(name, doc);
+	}
+
+	setSource(name: string, form: unknown): void {
+		this.sources.set(name, form);
+	}
+
+	sourceOf(name: string): unknown {
+		return this.sources.get(name);
 	}
 
 	hasGlobal(sym: Sym): boolean {

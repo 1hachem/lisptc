@@ -93,6 +93,7 @@ interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
+- `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.

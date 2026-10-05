@@ -3,6 +3,8 @@ import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
+import { introspectionExtension } from "@repo/introspection-extension";
+import { introspectionHost } from "@repo/introspection-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
@@ -40,6 +42,7 @@ export async function workspaceExtensions(
 			store: await ConvexSecretsStore.open(workspaceId, connect),
 		}),
 		promisesExtension(promisesHost),
+		introspectionExtension(introspectionHost),
 		mcpExtension(
 			mcpHostFor({
 				scope: workspaceId,
