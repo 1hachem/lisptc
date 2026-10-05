@@ -1,4 +1,4 @@
-import { globSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, globSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import libCoverage from "istanbul-lib-coverage";
 import libReport from "istanbul-lib-report";
 import reports from "istanbul-reports";
@@ -47,9 +47,15 @@ const writeBadge = (
 writeBadge(`${OUT}/badge.json`, "coverage", coverageMap);
 
 const INTERPRETER = "packages/interpreter/coverage/coverage-final.json";
-writeBadge(
-	`${OUT}/badge-interpreter.json`,
-	"interpreter coverage",
-	libCoverage.createCoverageMap(JSON.parse(readFileSync(INTERPRETER, "utf8"))),
-);
+if (existsSync(INTERPRETER)) {
+	writeBadge(
+		`${OUT}/badge-interpreter.json`,
+		"interpreter coverage",
+		libCoverage.createCoverageMap(
+			JSON.parse(readFileSync(INTERPRETER, "utf8")),
+		),
+	);
+} else {
+	console.error(`${INTERPRETER} is missing: skipping the interpreter badge`);
+}
 console.log(`merged ${inputs.length} reports into ${OUT}/`);
