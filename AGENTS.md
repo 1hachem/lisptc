@@ -1,7 +1,7 @@
 # AGENTS.md
 
 This file provides guidance to coding agents when working with code in this
-repository. `CLAUDE.md` is a symlink to it, so Claude Code reads the same file.
+repository.
 
 It holds what is true repo-wide. **Every workspace carries an `AGENTS.md` of its
 own**, with its shape and the rules that govern it. Read that one before working
@@ -96,6 +96,7 @@ named only at a composition root:
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
+- `packages/permissions` (`@repo/permissions-extension`) — what a session may call: allowed, denied, or waiting on a human.
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
@@ -250,6 +251,13 @@ port and is handed the value.
 The Convex deployment carries an environment of its own, and nothing in this
 repo pushes it. `packages/backend/AGENTS.md` has the rule.
 
+**Secrets live in Infisical, and nowhere else.** A `task` command fetches them
+at run time, so no secret is written into the tree. No `apps/*` or `packages/*`
+directory carries a `.env` file of any kind. The only one allowed is the
+repository's top-level `.env`. An agent never reads it, never writes it, and
+never copies it, so a value it needs comes through Infisical or is asked of the
+user.
+
 ## Icons
 
 **Every icon comes from hugeicons**: `@hugeicons/core-free-icons` holds the icon
@@ -330,10 +338,37 @@ step. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails
 there fails the same way locally, under the command it names.
 
-A commit is its title. `body-max-lines` in `.commitlintrc.ts` rejects a body
-longer than one line, so write the subject and stop unless a description was
-asked for, and then keep it to a single line after the blank one. Trailers
-like Co-Authored-By are footers and do not count.
+**Run `pnpm typecheck`, `pnpm knip` and `pnpm fallow` only at the end.** They
+are whole-repo sweeps. Run them when the user asks to commit or push, or says
+the work is done, and not after every change while it is still moving. Until
+then, check a change with the tests and the typecheck of the package it touches.
+
+## Commits
+
+A commit message is a conventional commit, `type(scope): subject`, and
+`.commitlintrc.ts` is where the allowed types and the limits are written, and
+`.husky/commit-msg` rejects a message that breaks them.
+
+- The scope names the workspace the change lives in, by its short name:
+  feat(permissions), fix(app) or chore(ui). A change that spans several
+  workspaces takes the one its point is about.
+- The subject is lower case, says what the change does, and ends without a
+  full stop. The whole header stays within 100 characters.
+- `harness` is the type for the harness: the checks that guard the repo, the
+  `AGENTS.md` files, and the agent rules under `.agents/`, with the hooks, the
+  agents and the skills that live there. It takes no scope:
+  `harness: add instruction to only run typecheck at the end`. A change to a
+  check script, a husky hook, a `no-comments.json` allowance or an `AGENTS.md`
+  is `harness`, never `docs` or `chore`.
+- `eval` is the type for a change to the eval cases.
+
+A commit is its title. `body-max-lines` rejects a body longer than one line, so
+write the subject and stop unless a description was asked for, and then keep it
+to a single line after the blank one. Trailers like Co-Authored-By are footers
+and do not count.
+
+One commit holds one concern. Unrelated changes in the tree go in commits of
+their own.
 
 ## Writing Style
 

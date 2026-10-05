@@ -10,6 +10,8 @@ import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
+import { permissionsExtension } from "@repo/permissions-extension";
+import { permissionsHostFor } from "@repo/permissions-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -24,6 +26,7 @@ import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
+import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 
 export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
@@ -34,19 +37,26 @@ export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
 ): Promise<InterpExtension[]> {
+	const permissions = permissionsExtension(
+		permissionsHostFor({
+			store: await ConvexPermissionsStore.open(workspaceId, connect),
+		}),
+	);
 	return [
+		permissions,
 		secretsExtension({
 			...secretsHost,
 			store: await ConvexSecretsStore.open(workspaceId, connect),
 		}),
 		promisesExtension(promisesHost),
-		mcpExtension(
-			mcpHostFor({
+		mcpExtension({
+			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
 				host: new DockerHost(),
 			}),
-		),
+			policy: permissions.rules,
+		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
 		memoryExtension({

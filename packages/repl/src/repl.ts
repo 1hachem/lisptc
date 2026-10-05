@@ -1,7 +1,7 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
-import { EvalException } from "@repo/interpreter/errors";
+import { EvalException, StepHold } from "@repo/interpreter/errors";
 import {
 	type Chain,
 	type Middleware,
@@ -46,6 +46,7 @@ export interface ReplOptions {
 export interface EvalOutput extends Bounded {
 	annotations: StepAnnotations;
 	failed: boolean;
+	held: boolean;
 	message?: string;
 }
 
@@ -58,9 +59,11 @@ export interface StepResult extends EvalOutput {
 function partition(notes: readonly Note[]): {
 	skipped: string[];
 	failed: Note[];
+	held: Note[];
 } {
 	const skipped: string[] = [];
 	const failed: Note[] = [];
+	const held: Note[] = [];
 	for (const n of notes)
 		switch (n.kind) {
 			case "skipped":
@@ -69,12 +72,15 @@ function partition(notes: readonly Note[]): {
 			case "failed":
 				failed.push(n);
 				break;
+			case "held":
+				held.push(n);
+				break;
 			default: {
 				const unhandled: never = n.kind;
 				throw new Error(`unhandled note kind ${String(unhandled)}`);
 			}
 		}
-	return { skipped, failed };
+	return { skipped, failed, held };
 }
 
 function skipNotes(skipped: string[]): string {
@@ -88,6 +94,7 @@ function render(result: StepResult): EvalOutput {
 		user: result.user + notes,
 		annotations: result.annotations,
 		failed: result.failed,
+		held: result.held,
 		message: result.message,
 	};
 }
@@ -183,12 +190,18 @@ export class MemoryRepl implements InMemoryRepl {
 		try {
 			await body(ctx);
 		} catch (ex) {
-			if (!(ex instanceof EvalException) && ex !== EndOfFile) throw ex;
-			thrown = ex;
+			if (
+				!(ex instanceof EvalException) &&
+				!(ex instanceof StepHold) &&
+				ex !== EndOfFile
+			)
+				throw ex;
+			if (!(ex instanceof StepHold)) thrown = ex;
 		} finally {
 			detach();
 		}
-		const { skipped, failed } = partition(buffer.collect(note));
+		const { skipped, failed, held } = partition(buffer.collect(note));
+		const holding = held.map((n) => `held: ${n.text}\n`).join("");
 		let error: Bounded = { model: "", user: "" };
 		if (thrown === EndOfFile) {
 			const text = "unbalanced expression (unexpected end of input)\n";
@@ -207,7 +220,7 @@ export class MemoryRepl implements InMemoryRepl {
 		});
 		return {
 			envelopes: buffer.envelopes,
-			model: bounded.model + error.model,
+			model: bounded.model + error.model + holding,
 			user: bounded.user + error.user,
 			feedback,
 			annotations: this.hooks.annotate.run(
@@ -216,6 +229,7 @@ export class MemoryRepl implements InMemoryRepl {
 				noAnnotations(),
 			),
 			failed: thrown !== undefined,
+			held: held.length > 0,
 			message: this.hooks.message.run(noOpinion, buffer),
 			skipped,
 		};
@@ -243,6 +257,10 @@ export class AgentRepl extends MemoryRepl {
 
 	override async evalOutput(code: string): Promise<EvalOutput> {
 		const result = await this.evaluate(code);
+		if (result.held) {
+			this.finished = true;
+			return render(result);
+		}
 		if (!this.answered(code, result)) return render(result);
 		this.finished = true;
 		this.pendingProse.push(...result.skipped);
@@ -251,6 +269,7 @@ export class AgentRepl extends MemoryRepl {
 			user: result.user,
 			annotations: result.annotations,
 			failed: result.failed,
+			held: result.held,
 			message: result.message,
 		};
 	}

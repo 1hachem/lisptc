@@ -12,7 +12,7 @@ import {
 	callbackState,
 	OAUTH_CHANNEL,
 	type OAuthSignal,
-	storeApproval,
+	storeAuthorized,
 } from "../lib/oauth-callback.ts";
 
 export const Route = createFileRoute("/oauth/callback")({
@@ -42,11 +42,10 @@ async function finishCallback(url: string): Promise<Finished> {
 		error?: unknown;
 		server?: unknown;
 	} | null;
-	if (response.ok) {
+	if (response.ok)
 		return {
 			server: typeof body?.server === "string" ? body.server : "the server",
 		};
-	}
 	return {
 		failure:
 			typeof body?.error === "string"
@@ -65,9 +64,9 @@ function askChatToResume(state: string): Promise<boolean> {
 		};
 		const timer = setTimeout(() => settle(false), CHAT_ANSWER_MS);
 		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
-			if (e.data.type === "resuming" && e.data.state === state) settle(true);
+			if (e.data.type === "answering" && e.data.state === state) settle(true);
 		};
-		channel.postMessage({ type: "approved", state } satisfies OAuthSignal);
+		channel.postMessage({ type: "authorized", state } satisfies OAuthSignal);
 	});
 }
 
@@ -101,7 +100,7 @@ function OAuthCallback() {
 				return;
 			}
 			const { server } = finished;
-			storeApproval(state);
+			storeAuthorized(state);
 			if (await askChatToResume(state)) {
 				setPhase({ kind: "closing", server });
 				setTimeout(() => {

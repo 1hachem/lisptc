@@ -1,3 +1,4 @@
+export * from "./components/ai-elements/confirmation.tsx";
 export * from "./components/ai-elements/conversation.tsx";
 export * from "./components/ai-elements/prompt-input.tsx";
 export * from "./components/ai-elements/queue.tsx";

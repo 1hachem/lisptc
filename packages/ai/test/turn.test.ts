@@ -1,4 +1,13 @@
-import type { TurnOutcome } from "@repo/interpreter/session";
+import { topic } from "@repo/interpreter/channels";
+import { StepHold } from "@repo/interpreter/errors";
+import type { Interp } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
+import {
+	annotating,
+	type InterpExtension,
+	type SessionHooks,
+	type TurnOutcome,
+} from "@repo/interpreter/session";
 import { AgentRepl } from "@repo/repl/repl";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
@@ -51,6 +60,34 @@ vi.mock("../src/agent.ts", () => ({
 		for (const delta of turn) yield delta;
 	},
 }));
+
+const waiting = topic<string>("waiting");
+
+function holding(name: string, reason: string): InterpExtension {
+	const session = (hooks: SessionHooks): void => {
+		hooks.annotate.use((buffer, into, next) => {
+			const seen = buffer.collect(waiting);
+			return next(
+				buffer,
+				seen.length === 0
+					? into
+					: annotating(into, "output", { waiting: seen }),
+			);
+		});
+	};
+	return Object.assign(
+		(interp: Interp): void => {
+			interp.defineGlobal(
+				newSym(name),
+				interp.makeBuiltIn(name, 0, () => {
+					waiting.emit(interp.channels, { user: reason });
+					throw new StepHold(reason);
+				}),
+			);
+		},
+		{ session },
+	);
+}
 
 class CountingRepl extends AgentRepl {
 	evals = 0;
@@ -133,6 +170,37 @@ describe("the agent turn", () => {
 			"halt",
 		]);
 		expect(events.at(-1)).toMatchObject({ answer: "three.", steps: 2 });
+	});
+
+	test("a held step reports its result and annotations before the turn halts", async () => {
+		script = [[{ text: "(wait-for-human)" }], [{ text: "never asked." }]];
+
+		const events = await drain(ask, {
+			repl: testRepl([holding("wait-for-human", "approve the write")]),
+		});
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"halt",
+		]);
+		expect(events[2]).toMatchObject({
+			type: "result",
+			step: 1,
+			failed: false,
+			annotations: { output: { waiting: ["approve the write"] } },
+		});
+		expect(calls).toBe(1);
+	});
+
+	test("an answered step halts without a result event", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask);
+
+		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "halt"]);
+		expect(calls).toBe(1);
 	});
 
 	test("what rode the user's message stays on it for every later step", async () => {

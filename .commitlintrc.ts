@@ -53,6 +53,7 @@ const Configuration: UserConfig = {
 				"revert",
 				"style",
 				"test",
+				"harness",
 			],
 		],
 	},

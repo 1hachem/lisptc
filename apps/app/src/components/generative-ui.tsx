@@ -1,16 +1,9 @@
 import { useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
-import { API_URL, apiHeaders } from "../lib/api.ts";
 import { useChatSession } from "../lib/chat.tsx";
+import { postUiAction } from "../lib/ui-action.ts";
 import { toUiNode, type UiNode } from "../lib/ui-node.ts";
 import { Markdown } from "./markdown.tsx";
-
-interface ActionResponse {
-	output?: string;
-	error?: boolean;
-	ui?: unknown;
-	message?: string;
-}
 
 function text(props: Record<string, unknown>, key: string): string {
 	const value = props[key];
@@ -284,17 +277,13 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 		setBusy(true);
 		void (async () => {
 			try {
-				const res = await fetch(`${API_URL}/api/ui-action`, {
-					method: "POST",
-					headers: await apiHeaders(),
-					body: JSON.stringify({ chatId, action, values }),
-				});
-				if (res.status === 409) {
+				const result = await postUiAction(chatId, action, values);
+				if (!result.live) {
 					setFailed(true);
 					setOutput("this view is no longer live — ask again to rebuild it");
 					return;
 				}
-				const data: ActionResponse = await res.json();
+				const data = result.response;
 				const next = toUiNode(data.ui);
 				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");

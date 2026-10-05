@@ -4,8 +4,10 @@ export type ChannelId =
 	| "lisp"
 	| "thinking"
 	| "memory"
+	| "asks"
 	| "errors"
-	| "model";
+	| "model"
+	| "system";
 
 export interface Channel {
 	id: ChannelId;
@@ -58,6 +60,14 @@ export const CHANNELS: Channel[] = [
 		shownByDefault: true,
 	},
 	{
+		id: "asks",
+		label: "asks",
+		hint: "what a step asked of you: an approval, a sign-in",
+		dot: "bg-yellow",
+		text: "text-yellow",
+		shownByDefault: true,
+	},
+	{
 		id: "errors",
 		label: "errors",
 		hint: "whether a step failed",
@@ -71,6 +81,14 @@ export const CHANNELS: Channel[] = [
 		hint: "what the step sent back to the model",
 		dot: "bg-purple",
 		text: "text-purple",
+		shownByDefault: false,
+	},
+	{
+		id: "system",
+		label: "system",
+		hint: "what the system told the agent between turns",
+		dot: "bg-dim",
+		text: "text-dim",
 		shownByDefault: false,
 	},
 ];

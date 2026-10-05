@@ -11,16 +11,17 @@ import {
 	StoredOAuthProvider,
 	sharedAuthCallback,
 } from "./mcp-oauth.ts";
-import type {
-	ConnConfig,
-	ConnectResult,
-	HttpConnConfig,
-	McpClient,
-	McpHost,
-	OAuthStore,
-	ServerHandle,
-	Tool,
-	ToolCall,
+import {
+	AuthorizationRequired,
+	type ConnConfig,
+	type ConnectResult,
+	type HttpConnConfig,
+	type McpClient,
+	type McpHost,
+	type OAuthStore,
+	type ServerHandle,
+	type Tool,
+	type ToolCall,
 } from "./ports.ts";
 
 function stdioTransport(conf: ConnConfig): StdioClientTransport {
@@ -46,16 +47,6 @@ export interface McpClientPorts {
 	redirectUri: string;
 	callbackPort: number;
 	scope?: string;
-}
-
-class NeedsAuthError extends Error {
-	constructor(server: string, authUrl: string, captured: boolean) {
-		super(
-			captured
-				? `authorization required for "${server}": open ${authUrl} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "<code>"))`
-				: `authorization required for "${server}": open ${authUrl} — once the user says they approved it, run (load-mcp "${server}") again (or, if they hand back a code instead, run (mcp-authorize "${server}" "<code>") first)`,
-		);
-	}
 }
 
 function landsOnCallbackPort(url: string, port: number): boolean {
@@ -154,7 +145,8 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 				handle.url,
 				scope,
 			);
-			if (authUrl) throw new NeedsAuthError(conf.name, authUrl, captured);
+			if (authUrl)
+				throw new AuthorizationRequired(conf.name, authUrl, captured);
 			const transport = new StreamableHTTPClientTransport(new URL(handle.url), {
 				authProvider: provider,
 			});
@@ -164,7 +156,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 				if (!(e instanceof UnauthorizedError)) throw e;
 				await provider.invalidateCredentials("tokens");
 				const retry = await ensureAuthorized(handle.url, scope);
-				throw new NeedsAuthError(
+				throw new AuthorizationRequired(
 					conf.name,
 					retry.authUrl ?? handle.url,
 					retry.captured,

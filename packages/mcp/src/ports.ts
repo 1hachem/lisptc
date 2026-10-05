@@ -78,6 +78,20 @@ export interface McpClient {
 	shutdown(): Promise<void>;
 }
 
+export class AuthorizationRequired extends Error {
+	constructor(
+		readonly server: string,
+		readonly url: string,
+		captured: boolean,
+	) {
+		super(
+			captured
+				? `authorization required for "${server}": open ${url} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "<code>"))`
+				: `authorization required for "${server}": open ${url} — once the user says they approved it, run (load-mcp "${server}") again (or, if they hand back a code instead, run (mcp-authorize "${server}" "<code>") first)`,
+		);
+	}
+}
+
 export interface ServerHandle {
 	url: string;
 	headers?: Record<string, string>;
@@ -96,6 +110,21 @@ export interface McpHost {
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
 }
+
+export type ServerAccess =
+	| { readonly access: "open" }
+	| { readonly access: "hidden" }
+	| { readonly access: "denied"; readonly reason?: string };
+
+export interface McpPolicy {
+	server(name: string): ServerAccess;
+	tool(server: string, tool: string): boolean;
+}
+
+export const openPolicy: McpPolicy = {
+	server: () => ({ access: "open" }),
+	tool: () => true,
+};
 
 export type {
 	SearchDocument,

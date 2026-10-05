@@ -1,5 +1,5 @@
 import { paginationOptsValidator } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireChat } from "./lib/auth.js";
@@ -20,9 +20,11 @@ const message = v.object({
 	content: v.string(),
 	kwargs: v.optional(v.record(v.string(), v.any())),
 	truncated: v.optional(v.boolean()),
+	wireId: v.optional(v.string()),
 });
 
 const incoming = v.object({
+	id: v.optional(v.string()),
 	type: messageType,
 	content: v.string(),
 	kwargs: v.optional(v.record(v.string(), v.any())),
@@ -81,6 +83,7 @@ export const append = mutation({
 					content: clamped.content,
 					kwargs: clamped.kwargs,
 					truncated: clamped.truncated ? true : undefined,
+					wireId: entry.id,
 				}),
 			);
 			seq += 1;
@@ -93,24 +96,45 @@ export const append = mutation({
 export const annotate = mutation({
 	args: {
 		chatId: v.id("chats"),
-		messageId: v.id("messages"),
+		id: v.string(),
 		kwargs: v.record(v.string(), v.any()),
 	},
 	returns: v.null(),
-	handler: async (ctx, { chatId, messageId, kwargs }) => {
+	handler: async (ctx, { chatId, id, kwargs }) => {
 		await requireChat(ctx, chatId);
-		const message = await ctx.db.get(messageId);
-		if (message === null || message.chatId !== chatId)
-			throw new Error("that message is not in this chat");
-		const clamped = clamp(message.content, kwargs);
-		await ctx.db.patch(messageId, {
+		const row = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
+			.first();
+		if (row === null) throw new ConvexError({ code: "MESSAGE_NOT_FOUND" });
+		const clamped = clamp(row.content, deepMerge(row.kwargs ?? {}, kwargs));
+		await ctx.db.patch(row._id, {
 			content: clamped.content,
 			kwargs: clamped.kwargs,
-			truncated: clamped.truncated ? true : undefined,
+			truncated: clamped.truncated || row.truncated ? true : undefined,
 		});
 		return null;
 	},
 });
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function deepMerge(
+	into: Record<string, unknown>,
+	from: Record<string, unknown>,
+): Record<string, unknown> {
+	const merged: Record<string, unknown> = { ...into };
+	for (const [key, value] of Object.entries(from)) {
+		const standing = merged[key];
+		merged[key] =
+			isPlainObject(standing) && isPlainObject(value)
+				? deepMerge(standing, value)
+				: value;
+	}
+	return merged;
+}
 
 export const purge = internalMutation({
 	args: { chatId: v.id("chats") },

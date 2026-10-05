@@ -40,10 +40,10 @@ is WRONG, an arity error. To search one server's tools, load it first, then
 - (unload-mcp "name") , (login "name") , (logout "name") ,
 (mcp-authorize "name" "code") , (mcp-shutdown) .
 - OAuth login and logout lifecycle, only for :oauth t servers:
-  - (login "name") begins authorization and returns the login URL to open, or
-    :logged-in if already authenticated. After approving, (load-mcp "name")
-connects.
-  - When the user says they approved, run (await (load-mcp "name")) and carry
+  - (login "name") gives :logged-in if already authenticated. Otherwise it,
+    like a load that needs a login, asks the user to authorize and ends the
+    turn there; you are told when they answer.
+  - When the user authorized, run (await (load-mcp "name")) and carry
     on with the original request: the redirect is captured for you. Only when
     they hand back a bare code, run (mcp-authorize "name" "<code>") before
     that load. Never ask for a code before that load has failed.

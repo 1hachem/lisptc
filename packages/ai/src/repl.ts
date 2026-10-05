@@ -5,21 +5,28 @@ import {
 } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
+import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
 export interface TranscriptEntry {
 	role: "user" | "assistant" | "system" | "tool";
 	content: string;
+	event?: { source: string };
 	riding?: string;
+}
+
+export function isUserPrompt(entry: TranscriptEntry): boolean {
+	return entry.role === "user" && entry.event === undefined;
 }
 
 export function snapshotConversation(
 	transcript: TranscriptEntry[],
 ): Record<string, unknown> {
 	return {
-		conversation: transcript.map((e) => ({ role: e.role, content: e.content })),
-		"user-messages": transcript
-			.filter((e) => e.role === "user")
-			.map((e) => e.content),
+		conversation: transcript.map((e) => ({
+			role: e.event ? "system" : e.role,
+			content: e.content,
+		})),
+		"user-messages": transcript.filter(isUserPrompt).map((e) => e.content),
 		"assistant-messages": transcript
 			.filter((e) => e.role === "assistant")
 			.map((e) => e.content),
@@ -35,8 +42,21 @@ export function joinRiding(standing: string | undefined, text: string): string {
 export function toLlmMessages(transcript: TranscriptEntry[]): AgentMessage[] {
 	return transcript.map((e) => ({
 		role: e.role === "tool" ? "user" : e.role,
-		content: e.riding ? joinRiding(e.content, e.riding) : e.content,
+		content: e.riding
+			? joinRiding(modelContent(e), neutraliseSystemEvents(e.riding))
+			: modelContent(e),
 	}));
+}
+
+function modelContent(entry: TranscriptEntry): string {
+	if (entry.event)
+		return renderSystemEvent({
+			source: entry.event.source,
+			text: entry.content,
+		});
+	return entry.role === "assistant"
+		? entry.content
+		: neutraliseSystemEvents(entry.content);
 }
 
 export function stripFences(text: string): string {
@@ -79,10 +99,19 @@ export async function evalCode(
 	error: boolean;
 	annotations: StepAnnotations;
 	failed: boolean;
+	held: boolean;
 }> {
 	try {
-		const { model, user, annotations, failed } = await repl.evalOutput(code);
-		return { output: model, display: user, error: false, annotations, failed };
+		const { model, user, annotations, failed, held } =
+			await repl.evalOutput(code);
+		return {
+			output: model,
+			display: user,
+			error: false,
+			annotations,
+			failed,
+			held,
+		};
 	} catch (ex) {
 		repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
@@ -93,6 +122,7 @@ export async function evalCode(
 			error: true,
 			annotations: noAnnotations(),
 			failed: true,
+			held: false,
 		};
 	}
 }
