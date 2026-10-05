@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { driveSync } from "../src/drive.ts";
 import { EvalException } from "../src/errors.ts";
-import { type Installable, Interp, runAsync, runSync } from "../src/lisp.ts";
+import {
+	type Installable,
+	type Interp,
+	runAsync,
+	runSync,
+} from "../src/lisp.ts";
 import { Cell, Keyword, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
