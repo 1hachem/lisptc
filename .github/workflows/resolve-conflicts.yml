@@ -86,6 +86,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ env.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
           plugin_marketplaces: ${{ github.workspace }}/.agents
           plugins: merge-conflicts@lisptc
           prompt: '/merge-conflicts:resolve-conflicts PR #${{ github.event.pull_request.number }} merges origin/${{ github.base_ref }} into ${{ github.head_ref }}'
