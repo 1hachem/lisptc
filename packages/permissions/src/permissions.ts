@@ -44,7 +44,14 @@ export class PermissionRefusal extends EvalException {
 }
 
 export class SessionRules {
-	constructor(private held: PermissionRules) {}
+	private readonly asks: ReadonlySet<string>;
+
+	constructor(
+		private held: PermissionRules,
+		asks: readonly string[] = [],
+	) {
+		this.asks = new Set(asks);
+	}
 
 	get current(): PermissionRules {
 		return this.held;
@@ -55,7 +62,14 @@ export class SessionRules {
 	}
 
 	decide(name: string): Ruling {
-		return this.held.decide(name);
+		const ruling = this.held.decide(name);
+		if (
+			ruling.verdict !== "allow" ||
+			!this.asks.has(name) ||
+			this.held.named(name) !== undefined
+		)
+			return ruling;
+		return { verdict: "ask" };
 	}
 
 	server(name: string): ServerAccess {
@@ -74,7 +88,7 @@ export interface PermissionsExtension extends InterpExtension {
 export function permissionsExtension(
 	host: PermissionsHost,
 ): PermissionsExtension {
-	const rules = new SessionRules(parseRules(host.store.source()));
+	const rules = new SessionRules(parseRules(host.store.source()), host.asks);
 	let armed = 0;
 	let issued = 0;
 

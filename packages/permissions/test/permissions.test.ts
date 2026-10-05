@@ -148,6 +148,42 @@ describe("the permissions surface", () => {
 	});
 });
 
+describe("a form the host asks for", () => {
+	const ASKED = ["string-upcase"];
+
+	it("waits for approval under a config that never names it", async () => {
+		const s = session("", undefined, ASKED);
+		const run = await s.step(UPCASE);
+		expect(run.held).toBe(true);
+		expect(run.requests).toEqual([
+			expect.objectContaining({ name: "string-upcase" }),
+		]);
+		expect((await s.step("(permission/check 'string-upcase)")).value).toBe(
+			"ask",
+		);
+	});
+
+	it("still asks when the config defaults to allow", async () => {
+		const s = session("(permission/default allow)", undefined, ASKED);
+		expect((await s.step(UPCASE)).held).toBe(true);
+	});
+
+	it("stays denied when the config defaults to deny", async () => {
+		const s = session("(permission/default deny)", undefined, ASKED);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("follows a rule that names it", async () => {
+		const s = session("(permission/allow string-upcase)", undefined, ASKED);
+		expect((await s.step(UPCASE)).value).toBe('"A"');
+	});
+
+	it("leaves every other form to the config", async () => {
+		const s = session("", undefined, ASKED);
+		expect((await s.step('(string-downcase "A")')).value).toBe('"a"');
+	});
+});
+
 describe("evaluating a permissions form", () => {
 	it("asks before any change, even one that tightens the config", async () => {
 		const s = session("");

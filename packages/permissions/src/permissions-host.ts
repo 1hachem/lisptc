@@ -41,6 +41,7 @@ const permissionsPrompt = filePrompt(
 export interface PermissionsHostOptions {
 	store?: PermissionsStore;
 	approvers?: readonly Approver[];
+	asks?: readonly string[];
 }
 
 export function permissionsHostFor(
@@ -52,6 +53,7 @@ export function permissionsHostFor(
 		approvers: options.approvers ?? [uiApprover],
 		clock: systemClock,
 		prompt: permissionsPrompt,
+		...(options.asks === undefined ? {} : { asks: options.asks }),
 	};
 }
 

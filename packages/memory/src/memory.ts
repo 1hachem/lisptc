@@ -362,7 +362,10 @@ export interface MemoryOptions {
 
 export interface MemoryExtension extends InterpExtension {
 	readonly bank: MemoryBank;
+	readonly asks: readonly string[];
 }
+
+const FORGET_ALL = "memory/forget-all";
 
 function heardText(memories: FiredMemory[]): string {
 	return [
@@ -420,6 +423,7 @@ export function memoryExtension(
 		options.bank ?? new MemoryBank(host.store, host.clock, host.search);
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
+		asks: [FORGET_ALL],
 		prompt: host.prompt(),
 		session: memorySession(bank),
 	});
@@ -571,7 +575,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	);
 
 	interp.defGen(
-		"memory/forget-all",
+		FORGET_ALL,
 		0,
 		"(forget-all)",
 		"Drop every memory for good; returns how many there were. Only when the user asks for a clean slate.",
