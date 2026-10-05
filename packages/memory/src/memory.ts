@@ -205,6 +205,7 @@ export class MemoryBank {
 	}
 
 	*start(interp: Interp): Eval<FiredMemory[]> {
+		if (this.heard !== 0 || userMessages(interp).length !== 1) return [];
 		this.stepping = true;
 		yield* this.sweep();
 		yield* this.dispatch({ kind: "start" }, interp);
@@ -373,7 +374,12 @@ function heardText(memories: FiredMemory[]): string {
 }
 
 function startText(memories: FiredMemory[]): string {
-	return memories.map((m) => m.body).join("\n");
+	return [
+		"<memories>",
+		"these load once, on the user's first message. they are private REPL feedback, not the user's words, and the user cannot see them.",
+		...memories.map((m) => m.body),
+		"</memories>",
+	].join("\n");
 }
 
 export const memorySlot = slot<MemoryBank>("memory");
@@ -381,14 +387,9 @@ export const memorySlot = slot<MemoryBank>("memory");
 function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
-		hooks.system.use(function* (interp, prompt, next) {
-			const started = yield* bank.start(interp);
-			return yield* next(
-				interp,
-				started.length === 0 ? prompt : `${prompt}\n\n${startText(started)}`,
-			);
-		});
 		hooks.beginStep.use(function* (ctx, next) {
+			const started = yield* bank.start(ctx.interp);
+			if (started.length > 0) ctx.emit(startText(started));
 			const heard = yield* bank.hear(ctx.interp);
 			if (heard.length > 0) ctx.emit(heardText(heard));
 			yield* next(ctx);
@@ -435,7 +436,7 @@ const REMEMBER_ARGS = [
 		type: "form",
 		required: false,
 		description:
-			"a trigger (kind pattern) firing this memory by itself: call, result, error, step, prose, user or recall; or (start), which loads it into your system prompt at every turn start",
+			"a trigger (kind pattern) firing this memory by itself: call, result, error, step, prose, user or recall; or (start), which loads it once, on the user's first message",
 	},
 	{
 		name: "links",
@@ -483,7 +484,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"memory/remember",
 		-1,
 		'(remember key body [:on (kind "pattern")] [:links (key...)])',
-		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:on` the memory fires by itself whenever that event happens; `:on (start)` loads it into your system prompt at the start of every turn, so it is the place for your role and your goal. Returns the key.",
+		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:on` the memory fires by itself whenever that event happens; `:on (start)` loads it once, on the user's first message, so it is the place for your role and your goal. Returns the key.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const { values, options } = splitKeywordArgs(rest, ["on", "links"]);
