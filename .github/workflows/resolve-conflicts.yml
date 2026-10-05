@@ -56,15 +56,9 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Setup Node.js
+      - name: Setup pnpm and Node.js
         if: steps.state.outputs.conflicting == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Enable corepack (pnpm)
-        if: steps.state.outputs.conflicting == 'true'
-        run: corepack enable
+        uses: ./.github/actions/setup
 
       - name: Merge the base branch
         if: steps.state.outputs.conflicting == 'true'

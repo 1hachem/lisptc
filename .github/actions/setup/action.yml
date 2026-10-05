@@ -1,0 +1,14 @@
+name: Setup
+description: Install pnpm and Node.js with the pnpm store cached
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
