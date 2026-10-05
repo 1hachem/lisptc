@@ -22,12 +22,8 @@ export function parseArgs<T extends z.ZodType>(
 ): z.infer<T> {
 	const result = schema.safeParse(a);
 	if (result.success) return result.data;
-	const issue = result.error.issues[0];
-	const index = issue?.path[0];
+	const [issue] = result.error.issues;
+	const index = issue.path[0];
 	const at = typeof index === "number" ? index : undefined;
-	throw new ArgumentException(
-		issue?.message ?? "invalid argument",
-		at === undefined ? a : a[at],
-		at,
-	);
+	throw new ArgumentException(issue.message, at === undefined ? a : a[at], at);
 }

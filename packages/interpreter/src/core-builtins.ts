@@ -453,7 +453,7 @@ export function installCore(interp: Definer, core: CoreOps): void {
 			} catch (ex) {
 				throw new EvalException(
 					"json-parse: invalid JSON",
-					ex instanceof Error ? ex.message : String(ex),
+					(ex as SyntaxError).message,
 					false,
 				);
 			}

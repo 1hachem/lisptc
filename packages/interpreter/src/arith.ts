@@ -1,7 +1,7 @@
 export type Numeric = number | bigint;
 
-export const ZERO = typeof BigInt === "undefined" ? 0 : BigInt(0);
-export const ONE = typeof BigInt === "undefined" ? 1 : BigInt(1);
+export const ZERO: Numeric = BigInt(0);
+export const ONE: Numeric = BigInt(1);
 
 export function isNumeric(x: unknown): x is Numeric {
 	const t = typeof x;
@@ -44,9 +44,7 @@ export function divide(x: Numeric, y: Numeric): Numeric {
 
 export function quotient(x: Numeric, y: Numeric): Numeric {
 	if (typeof x === "number" || typeof y === "number") {
-		const q = Math.trunc(Number(x) / Number(y));
-		if (typeof BigInt === "undefined") return q;
-		else return BigInt(q);
+		return BigInt(Math.trunc(Number(x) / Number(y)));
 	} else {
 		return x / y;
 	}
@@ -80,8 +78,7 @@ export function tryToParse(token: string): Numeric | null {
 
 export function convertToString(x: Numeric): string {
 	const s = `${x}`;
-	if (typeof BigInt !== "undefined")
-		if (typeof x === "number")
-			if (Number.isInteger(x) && !s.includes("e")) return `${s}.0`;
+	if (typeof x === "number" && Number.isInteger(x) && !s.includes("e"))
+		return `${s}.0`;
 	return s;
 }
