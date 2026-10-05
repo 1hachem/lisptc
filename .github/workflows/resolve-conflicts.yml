@@ -24,6 +24,7 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
       BASE: ${{ github.base_ref }}
       HEAD_REF: ${{ github.head_ref }}
+      HUSKY: "0"
     steps:
       - name: Check for a merge conflict
         id: state
