@@ -70,9 +70,9 @@ A memory on a call to the loader surfaces what you know about a server the momen
 you load it. A memory on an error surfaces the fix the moment the same error
 comes back.
 
-A start memory lands in your system prompt at the start of every turn, so it is
-where your role and your goal belong. Revise it and the next turn reads the new
-body.
+A start memory rides the user's first message and stays with it for the rest of
+the conversation, so it is where your role and your goal belong. It loads once:
+revise it and only the next conversation reads the new body.
 
 A fired memory arrives as a line of REPL feedback, to you alone. It is not run and
 the user does not see it. To run one, replay it. To show the user something, echo
