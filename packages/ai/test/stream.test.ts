@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { hearing, reporting, testRepl } from "./helpers.ts";
+import { hearing, reporting, riding, testRepl } from "./helpers.ts";
 
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
@@ -253,6 +253,25 @@ describe("chat stream", () => {
 			final.find((m) => m.type === "ai")?.additional_kwargs?.meta?.heard,
 		).toBeUndefined();
 		expect([...revised.keys()]).toEqual([0]);
+	});
+
+	test("what rode the user's message is stored on it, for the turns after", async () => {
+		let revised: ReadonlyMap<number, WireMessage> = new Map();
+		const messages = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{
+					repl: testRepl([riding("you are a pirate")]),
+					onTurn: (_produced, touched) => {
+						revised = touched;
+					},
+				},
+			),
+		);
+
+		expect(messages[0].content).toBe("what is 1 + 2?");
+		expect(messages[0].additional_kwargs?.riding).toBe("you are a pirate");
+		expect(revised.get(0)?.additional_kwargs?.riding).toBe("you are a pirate");
 	});
 
 	test("a REPL result carries no cost of its own", async () => {

@@ -68,6 +68,17 @@ export function hearing(text: string): InterpExtension {
 	});
 }
 
+export function riding(text: string): InterpExtension {
+	let said = false;
+	return extension((hooks) => {
+		hooks.beginStep.use(function* (ctx, next) {
+			if (!said) ctx.emit(text);
+			said = true;
+			yield* next(ctx);
+		});
+	});
+}
+
 export function testRepl(extensions: InterpExtension[] = []): AgentRepl {
 	return new AgentRepl({ extensions: [answering(), ...extensions] });
 }

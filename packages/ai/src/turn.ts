@@ -21,6 +21,7 @@ import { resolveModel } from "./provider.ts";
 import {
 	evalCode,
 	isUserPrompt,
+	joinRiding,
 	proseFeedbackContent,
 	replResultContent,
 	snapshotConversation,
@@ -71,6 +72,7 @@ export type TurnEvent =
 			failed: boolean;
 	  }
 	| { type: "collected"; annotations: Annotations }
+	| { type: "rode"; text: string }
 	| { type: "steered"; id: string; content: string }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -120,15 +122,24 @@ function noteEntry(text: string): TranscriptEntry {
 	return { role: "tool", content: replResultContent(text, false) };
 }
 
+function ride(transcript: TranscriptEntry[], text: string): boolean {
+	let at = transcript.length - 1;
+	while (at >= 0 && !isUserPrompt(transcript[at])) at--;
+	if (at === -1) return false;
+	const carrier = transcript[at];
+	transcript[at] = { ...carrier, riding: joinRiding(carrier.riding, text) };
+	return true;
+}
+
 async function* prepareStep(
 	repl: AgentRepl,
 	transcript: TranscriptEntry[],
-	riding: string,
-): AsyncGenerator<TurnEvent, string> {
+): AsyncGenerator<TurnEvent> {
 	repl.setConversationVars(snapshotConversation(transcript));
 	const { emitted, annotations } = await repl.beginStep();
 	yield* collect(annotations);
-	return emitted === "" ? riding : emitted;
+	if (emitted !== "" && ride(transcript, emitted))
+		yield { type: "rode", text: emitted };
 }
 
 interface Reply {
@@ -287,19 +298,17 @@ type Ending = Exclude<StepVerdict, "continue"> | "silent";
 interface Stepped {
 	verdict: StepVerdict | "silent";
 	code: string;
-	riding: string;
 }
 
 async function* runStep(
 	turn: Turn,
 	opened: { system: string; call: ModelCall },
-	riding: string,
 ): AsyncGenerator<TurnEvent, Stepped> {
 	const { repl, transcript } = turn;
-	const carried = yield* prepareStep(repl, transcript, riding);
+	yield* prepareStep(repl, transcript);
 	const stepId = crypto.randomUUID();
 	const startedAt = Date.now();
-	const messages = repl.context(toLlmMessages(transcript, carried));
+	const messages = repl.context(toLlmMessages(transcript));
 	const reply = yield* callModel(
 		repl,
 		{ system: opened.system, messages },
@@ -307,9 +316,9 @@ async function* runStep(
 		opened.call,
 	);
 	const code = repl.response(reply.full, stripFences);
-	if (code === "") return { verdict: "silent", code, riding: carried };
+	if (code === "") return { verdict: "silent", code };
 	const verdict = yield* evaluateStep(turn, { stepId, startedAt, code, reply });
-	return { verdict, code, riding: carried };
+	return { verdict, code };
 }
 
 function ending(verdict: Ending, code: string, steps: number): TurnEvent {
@@ -365,13 +374,11 @@ export async function* runAgentTurn(
 
 	try {
 		const opened = yield* openTurn(turn, options.config);
-		let riding = "";
 		let drained = false;
 
 		while (!signal?.aborted) {
 			if (turn.steps > 0 && !drained) yield* takeSteers(inbox, transcript);
-			const step = yield* runStep(turn, opened, riding);
-			riding = step.riding;
+			const step = yield* runStep(turn, opened);
 			drained = step.verdict !== "capped" && (yield* settleIfDone(turn, step));
 			if (step.verdict === "continue" || drained) continue;
 			outcome = step.verdict;

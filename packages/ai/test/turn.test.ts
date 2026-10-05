@@ -11,9 +11,9 @@ import {
 import { AgentRepl } from "@repo/repl/repl";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
-import type { TranscriptEntry } from "../src/repl.ts";
+import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { extension, noting, testRepl } from "./helpers.ts";
+import { extension, noting, riding, testRepl } from "./helpers.ts";
 
 interface Seen {
 	messages: AgentMessage[];
@@ -201,6 +201,40 @@ describe("the agent turn", () => {
 
 		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "halt"]);
 		expect(calls).toBe(1);
+	});
+
+	test("what rode the user's message stays on it for every later step", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		const events = await drain(ask, {
+			repl: testRepl([riding("you are a pirate")]),
+		});
+
+		expect(events.filter((e) => e.type === "rode")).toEqual([
+			{ type: "rode", text: "you are a pirate" },
+		]);
+		for (const call of seen)
+			expect(call.messages[0].content).toBe(
+				"what is 1 + 2?\n\nyou are a pirate",
+			);
+		expect(ask[0].riding).toBeUndefined();
+	});
+
+	test("what rode an earlier message reaches the model, but not the conversation vars", async () => {
+		script = [[{ text: "three." }]];
+		const history: TranscriptEntry[] = [
+			{ role: "user", content: "hello", riding: "you are a pirate" },
+			{ role: "assistant", content: "ahoy." },
+			{ role: "user", content: "what is 1 + 2?" },
+		];
+
+		await drain(history);
+
+		expect(seen[0].messages[0].content).toBe("hello\n\nyou are a pirate");
+		expect(snapshotConversation(history)["user-messages"]).toEqual([
+			"hello",
+			"what is 1 + 2?",
+		]);
 	});
 
 	test("a steer taken between steps reaches the next model call after the tool result", async () => {

@@ -11,6 +11,7 @@ export interface TranscriptEntry {
 	role: "user" | "assistant" | "system" | "tool";
 	content: string;
 	event?: { source: string };
+	riding?: string;
 }
 
 export function isUserPrompt(entry: TranscriptEntry): boolean {
@@ -32,28 +33,19 @@ export function snapshotConversation(
 	};
 }
 
-export function toLlmMessages(
-	transcript: TranscriptEntry[],
-	riding = "",
-): AgentMessage[] {
-	const messages = transcript.map((e) => ({
+export function joinRiding(standing: string | undefined, text: string): string {
+	return standing === undefined || standing === ""
+		? text
+		: `${standing}\n\n${text}`;
+}
+
+export function toLlmMessages(transcript: TranscriptEntry[]): AgentMessage[] {
+	return transcript.map((e) => ({
 		role: e.role === "tool" ? "user" : e.role,
-		content: modelContent(e),
+		content: e.riding
+			? joinRiding(modelContent(e), neutraliseSystemEvents(e.riding))
+			: modelContent(e),
 	}));
-	if (riding === "") return messages;
-	let last = -1;
-	for (let i = transcript.length - 1; i >= 0; i--)
-		if (transcript[i].role === "user") {
-			last = i;
-			break;
-		}
-	if (last === -1) return messages;
-	const carried = messages[last];
-	messages[last] = {
-		...carried,
-		content: `${carried.content}\n\n${neutraliseSystemEvents(riding)}`,
-	};
-	return messages;
 }
 
 function modelContent(entry: TranscriptEntry): string {

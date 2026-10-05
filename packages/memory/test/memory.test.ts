@@ -63,9 +63,18 @@ function fixture(
 	};
 }
 
-async function system(f: Fixture, prompt = "you are a repl"): Promise<string> {
+async function opening(f: Fixture): Promise<string> {
 	const hooks = openSession([memoryExtension(memoryHost, { bank: f.bank })]);
-	return drive(hooks.system.run((_i, p) => settled(p), f.interp, prompt));
+	let emitted = "";
+	await drive(
+		hooks.beginStep.run(() => settled(undefined), {
+			interp: f.interp,
+			emit: (text) => {
+				emitted += text;
+			},
+		}),
+	);
+	return emitted;
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
@@ -791,50 +800,57 @@ describe("the listing", () => {
 	});
 });
 
-describe("the start of a turn", () => {
-	it("leaves the system prompt alone when nothing fires on start", async () => {
+describe("the start of a conversation", () => {
+	it("says nothing when nothing fires on start", async () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "note" "unrelated")');
+		said(f, "hello");
 
-		expect(await system(f)).toBe("you are a repl");
+		expect(await opening(f)).toBe("");
 	});
 
-	it("puts a start memory in the system prompt", async () => {
+	it("rides the user's first message", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
+		said(f, "hello");
 
-		const prompt = await system(f);
-
-		expect(prompt).toBe("you are a repl\n\nyou are a pirate");
+		expect(await opening(f)).toContain("you are a pirate");
 	});
 
-	it("fires again at the next turn", async () => {
+	it("does not fire again on a later step of the first turn", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
+		said(f, "hello");
+		await opening(f);
 
-		await system(f);
-		await f.step("(+ 1 1)");
-
-		expect(await system(f)).toContain("you are a pirate");
+		expect(await opening(f)).toBe("");
 	});
 
-	it("reads the body as it is now, so a revised goal takes effect next turn", async () => {
+	it("does not fire again on a later message", async () => {
 		const f = fixture();
-		await ev(f, `(memory/remember "goal" "ship the parser" :on '(start))`);
-		await system(f);
+		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
+		said(f, "hello");
+		await opening(f);
+		said(f, "and again");
 
-		await ev(f, `(memory/remember "goal" "ship the printer" :on '(start))`);
+		expect(await opening(f)).not.toContain("you are a pirate");
+	});
 
-		const prompt = await system(f);
-		expect(prompt).toContain("ship the printer");
-		expect(prompt).not.toContain("ship the parser");
+	it("does not fire for a conversation already under way", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
+		said(f, "hello");
+		said(f, "and again");
+
+		expect(await opening(f)).not.toContain("you are a pirate");
 	});
 
 	it("surfaces a form as a recipe and does not run it", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "boot" '(defun greet () "hi") :on '(start))`);
+		said(f, "hello");
 
-		expect(await system(f)).toContain("(defun greet");
+		expect(await opening(f)).toContain("(defun greet");
 		await expect(ev(f, "(greet)")).rejects.toThrow();
 	});
 

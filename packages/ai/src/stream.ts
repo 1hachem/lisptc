@@ -1,7 +1,7 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import type { Steer, SteerInbox } from "./inbox.ts";
-import { replResultContent, type TranscriptEntry } from "./repl.ts";
+import { joinRiding, replResultContent, type TranscriptEntry } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
 import { runAgentTurn } from "./turn.ts";
@@ -56,6 +56,11 @@ function annotate(
 	return { ...message, additional_kwargs: { ...kwargs, meta } };
 }
 
+function riding(message: { additional_kwargs?: Record<string, unknown> }) {
+	const standing = message.additional_kwargs?.riding;
+	return typeof standing === "string" ? standing : undefined;
+}
+
 function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
@@ -99,9 +104,10 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	return (input.messages ?? []).map((m) => {
 		const content = contentToText(m.content);
 		const role = agentRole(m.type ?? m.role);
-		return role === "system"
-			? { role: "user", content, event: { source: eventSource(m) } }
-			: { role, content };
+		if (role === "system")
+			return { role: "user", content, event: { source: eventSource(m) } };
+		const rode = riding(m);
+		return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
 	});
 }
 
@@ -206,6 +212,18 @@ export function streamChatResponse<Id extends string>(
 						wire[at] = annotate(wire[at], event.annotations);
 						if (at < carried) revised.set(at, wire[at]);
 						if (!write(sse("values", { messages: wire }))) break;
+					} else if (event.type === "rode") {
+						const at = lastHuman(wire);
+						if (at === -1) continue;
+						const carrier = wire[at];
+						wire[at] = {
+							...carrier,
+							additional_kwargs: {
+								...carrier.additional_kwargs,
+								riding: joinRiding(riding(carrier), event.text),
+							},
+						};
+						if (at < carried) revised.set(at, wire[at]);
 					} else if (event.type === "assistant") {
 						lastMeta = { ...event.meta };
 						wire.push({
