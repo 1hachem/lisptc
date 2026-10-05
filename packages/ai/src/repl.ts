@@ -9,6 +9,7 @@ import type { AgentMessage } from "./agent.ts";
 export interface TranscriptEntry {
 	role: "user" | "assistant" | "system" | "tool";
 	content: string;
+	riding?: string;
 }
 
 export function snapshotConversation(
@@ -25,28 +26,17 @@ export function snapshotConversation(
 	};
 }
 
-export function toLlmMessages(
-	transcript: TranscriptEntry[],
-	riding = "",
-): AgentMessage[] {
-	const messages = transcript.map((e) => ({
+export function joinRiding(standing: string | undefined, text: string): string {
+	return standing === undefined || standing === ""
+		? text
+		: `${standing}\n\n${text}`;
+}
+
+export function toLlmMessages(transcript: TranscriptEntry[]): AgentMessage[] {
+	return transcript.map((e) => ({
 		role: e.role === "tool" ? "user" : e.role,
-		content: e.content,
+		content: e.riding ? joinRiding(e.content, e.riding) : e.content,
 	}));
-	if (riding === "") return messages;
-	let last = -1;
-	for (let i = transcript.length - 1; i >= 0; i--)
-		if (transcript[i].role === "user") {
-			last = i;
-			break;
-		}
-	if (last === -1) return messages;
-	const carried = messages[last];
-	messages[last] = {
-		...carried,
-		content: `${carried.content}\n\n${riding}`,
-	};
-	return messages;
 }
 
 export function stripFences(text: string): string {
