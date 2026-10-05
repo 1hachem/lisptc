@@ -93,6 +93,7 @@ jobs:
             --model opus
             --max-turns 100
             --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(pnpm:*)"
+            --disallowedTools "WebSearch,WebFetch"
 
       - name: Verify and commit
         if: steps.merge.outputs.conflicted == 'true'
