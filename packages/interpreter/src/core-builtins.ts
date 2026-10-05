@@ -62,6 +62,7 @@ export interface Definer extends DocSource {
 	getGlobal(sym: Sym): unknown;
 	globalEntries(): IterableIterator<[Sym, unknown]>;
 	setDoc(name: string, doc: Doc): void;
+	setSource(name: string, form: unknown): void;
 }
 
 export interface CoreOps {
@@ -315,6 +316,17 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		output.emit(interp.channels, { user: answer.text, model: answer.text });
 		return answer.value;
 	});
+	interp.def(
+		"_set-source",
+		2,
+		"(_set-source 'name form)",
+		"Record `form` as the definition of `name`; return `name`.",
+		z.tuple([zAny, zAny]),
+		([name, form]) => {
+			if (name instanceof Sym) interp.setSource(name.name, form);
+			return name;
+		},
+	);
 
 	const gensymCounter = newSym("*gensym-counter*");
 	interp.defineGlobal(gensymCounter, ONE, {

@@ -3,6 +3,8 @@ import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
+import { introspectionExtension } from "@repo/introspection-extension";
+import { introspectionHost } from "@repo/introspection-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
@@ -22,6 +24,7 @@ import { secretsHost } from "@repo/secrets-extension/host";
 export function docExtensions(): InterpExtension[] {
 	return [
 		promisesExtension(promisesHost),
+		introspectionExtension(introspectionHost),
 		mcpExtension(mcpHost),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
@@ -34,6 +37,7 @@ export function sessionExtensions(): InterpExtension[] {
 		permissions,
 		secretsExtension(secretsHost),
 		promisesExtension(promisesHost),
+		introspectionExtension(introspectionHost),
 		mcpExtension({
 			...mcpHostFor({ host: new LocalProcessHost() }),
 			policy: permissions.rules,
