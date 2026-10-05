@@ -91,10 +91,6 @@ function keywordArgsIn(tokens: string[]): DocArg[] | undefined {
 		: named.map((name) => ({ name, type: "any", required: false }));
 }
 
-function copyTree(x: unknown): unknown {
-	return x instanceof Cell ? new Cell(copyTree(x.car), copyTree(x.cdr)) : x;
-}
-
 function listToStrings(list: List): string[] {
 	const out: string[] = [];
 	for (let c = list; c !== null; c = c.cdr as Cell | null) out.push(str(c.car));
@@ -327,7 +323,7 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		"Record `form` as the definition of `name`; return `name`.",
 		z.tuple([zAny, zAny]),
 		([name, form]) => {
-			if (name instanceof Sym) interp.setSource(name.name, copyTree(form));
+			if (name instanceof Sym) interp.setSource(name.name, form);
 			return name;
 		},
 	);

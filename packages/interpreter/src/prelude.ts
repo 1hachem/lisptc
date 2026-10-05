@@ -1,8 +1,8 @@
 export const prelude = `
 (setq defmacro
       (macro (name args &rest body)
-             \`(progn (_set-source ',name '(defmacro ,name ,args ,@body))
-                     (setq ,name (macro ,args ,@body))
+             \`(progn (setq ,name (macro ,args ,@body))
+                     (_set-source ',name '(defmacro ,name ,args ,@body))
                      (_set-doc ',name ',args ,(cond ((stringp (car body)) (car body))))
                      ',name)))
 (_set-doc 'defmacro "(defmacro name (arg...) [docstring] body...)"
@@ -10,8 +10,8 @@ export const prelude = `
 
 (defmacro defun (name args &rest body)
   "Define a global function named name. A leading docstring is registered as its documentation; use &rest for variadic arguments, or &key to make the arguments after it optional and callable by name."
-  \`(progn (_set-source ',name '(defun ,name ,args ,@body))
-          (setq ,name (lambda ,args ,@body))
+  \`(progn (setq ,name (lambda ,args ,@body))
+          (_set-source ',name '(defun ,name ,args ,@body))
           (_set-doc ',name ',args ,(cond ((stringp (car body)) (car body))))
           ',name))
 

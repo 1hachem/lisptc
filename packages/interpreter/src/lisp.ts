@@ -98,6 +98,10 @@ export interface InterpOptions {
 	extensions?: readonly Installable[];
 }
 
+function copyTree(x: unknown): unknown {
+	return x instanceof Cell ? new Cell(copyTree(x.car), copyTree(x.cdr)) : x;
+}
+
 export class Interp {
 	private readonly globals: Map<Sym, unknown> = new Map();
 
@@ -206,12 +210,14 @@ export class Interp {
 
 	defineGlobal(sym: Sym, value: unknown, doc?: Doc): void {
 		this.globals.set(sym, value);
+		this.sources.delete(sym.name);
 		if (doc !== undefined) this.docTable.set(sym.name, doc);
 	}
 
 	undefineGlobal(sym: Sym): void {
 		this.globals.delete(sym);
 		this.docTable.delete(sym.name);
+		this.sources.delete(sym.name);
 	}
 
 	setDoc(name: string, doc: Doc): void {
@@ -219,11 +225,11 @@ export class Interp {
 	}
 
 	setSource(name: string, form: unknown): void {
-		this.sources.set(name, form);
+		this.sources.set(name, copyTree(form));
 	}
 
 	sourceOf(name: string): unknown {
-		return this.sources.get(name);
+		return copyTree(this.sources.get(name));
 	}
 
 	hasGlobal(sym: Sym): boolean {
@@ -517,6 +523,7 @@ export class Interp {
 				lval.setValue(result, env);
 			} else if (lval instanceof Sym && !(lval instanceof Keyword)) {
 				this.globals.set(lval, result);
+				this.sources.delete(lval.name);
 			} else {
 				throw new NotVariableException(lval);
 			}
