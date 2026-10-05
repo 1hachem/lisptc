@@ -22,5 +22,9 @@ export default defineConfig({
 				},
 			},
 		],
+		coverage: {
+			include: ["convex/**", "src/**"],
+			reporter: ["json", "text-summary"],
+		},
 	},
 });

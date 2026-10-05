@@ -6,5 +6,9 @@ export default defineConfig({
 		include: ["test/**/*.test.ts"],
 		setupFiles: ["./test/setup-env.ts"],
 		testTimeout: 20_000,
+		coverage: {
+			include: ["src/**"],
+			reporter: ["json", "text-summary"],
+		},
 	},
 });

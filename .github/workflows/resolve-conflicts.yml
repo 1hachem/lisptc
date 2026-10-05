@@ -56,18 +56,45 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Setup pnpm
+      - name: Check whether the base changed a workflow
         if: steps.state.outputs.conflicting == 'true'
+        id: workflows
+        run: |
+          git diff --name-only "$(git merge-base HEAD "origin/$BASE")" "origin/$BASE" -- .github/workflows > "$RUNNER_TEMP/workflows.txt"
+          if [ -s "$RUNNER_TEMP/workflows.txt" ]; then
+            cat "$RUNNER_TEMP/workflows.txt"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ask for a manual merge on the PR
+        if: steps.workflows.outputs.changed == 'true'
+        run: |
+          marker="<!-- resolve-conflicts:workflows -->"
+          if gh pr view "$PR" --json comments --jq '.comments[].body' | grep -qF "$marker"; then
+            exit 0
+          fi
+          {
+            echo "$marker"
+            echo "\`$BASE\` changed these workflows since this branch was cut, and the workflow token cannot push a merge that touches \`.github/workflows/\`:"
+            echo
+            sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/workflows.txt"
+            echo
+            echo "Merge \`$BASE\` into \`$HEAD_REF\` by hand to resolve the conflicts."
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comment.md"
+
+      - name: Setup pnpm
+        if: steps.state.outputs.conflicting == 'true' && steps.workflows.outputs.changed != 'true'
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Setup Node.js
-        if: steps.state.outputs.conflicting == 'true'
+        if: steps.state.outputs.conflicting == 'true' && steps.workflows.outputs.changed != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Merge the base branch
-        if: steps.state.outputs.conflicting == 'true'
+        if: steps.state.outputs.conflicting == 'true' && steps.workflows.outputs.changed != 'true'
         id: merge
         run: |
           git config user.name "claude[bot]"

@@ -12,6 +12,7 @@
     "start": "next start --port ${PORT:-3200}",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.evals.json",
     "test": "vitest run && vitest list --config vitest.evals.config.ts",
+    "test:coverage": "vitest run --coverage",
     "test:evals": "vitest run --config vitest.evals.config.ts"
   },
   "dependencies": {
@@ -43,6 +44,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "@vitest/coverage-v8": "^3.2.7",
     "typescript": "^5.9.3",
     "vitest": "^3.0.0"
   }

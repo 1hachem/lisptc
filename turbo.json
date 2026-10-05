@@ -81,6 +81,13 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "test:coverage": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+      "env": ["CI"],
+      "outputs": ["coverage/**"],
+      "outputLogs": "new-only"
+    },
     "test:watch": {
       "cache": false,
       "persistent": true

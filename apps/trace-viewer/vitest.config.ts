@@ -9,5 +9,9 @@ export default defineConfig({
 		environment: "node",
 		include: ["evals/harness/**/*.test.ts", "test/**/*.test.ts"],
 		setupFiles: ["./evals/harness/setup-env.ts"],
+		coverage: {
+			include: ["src/**"],
+			reporter: ["json", "text-summary"],
+		},
 	},
 });

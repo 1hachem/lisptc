@@ -25,7 +25,7 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: `README`, a package's own README.md, the `AGENTS.md` files, and what an
+code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, and what an
 agent runner itself reads under `.agents/` and `.github/`. Two guards back the
 rule: a `PreToolUse` hook in `.claude/settings.json` refuses to create a new
 markdown file, and `pnpm check:docs` fails CI on any tracked markdown outside
@@ -70,7 +70,7 @@ An agent's own calls are never refused.
 ## What this is
 
 A Lisp interpreter designed to be the deterministic "brain" of an AI agent in a
-neuro-symbolic architecture. The `README` is where that idea is written out.
+neuro-symbolic architecture. The `README.md` is where that idea is written out.
 
 It is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`),
 workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point
@@ -355,16 +355,16 @@ A commit message is a conventional commit, `type(scope): subject`, and
   workspaces takes the one its point is about.
 - The subject is lower case, says what the change does, and ends without a
   full stop. The whole header stays within 100 characters.
-- `harness` is the type for the harness: the checks that guard the repo, the
-  `AGENTS.md` files, and the agent rules under `.agents/`, with the hooks, the
-  agents and the skills that live there. It takes no scope:
-  `harness: add instruction to only run typecheck at the end`. A change to a
-  check script, a husky hook, a `no-comments.json` allowance or an `AGENTS.md`
-  is `harness`, never `docs` or `chore`.
-- `ci` is the type for how CI runs: the workflows under `.github/workflows/`
-  and the actions under `.github/actions/`, their setup, caching and runners.
-  It takes no scope: `ci: cache the pnpm store in every workflow`. A workflow
-  change is `ci`, never `harness`, even when the job it touches runs a check.
+- `harness` is reserved for what an AI agent reads or runs: the `AGENTS.md`
+  files and the agent rules under `.agents/`, with the hooks, the agents and
+  the skills that live there. It takes no scope:
+  `harness: add instruction to only run typecheck at the end`. An `AGENTS.md`
+  change is `harness`, never `docs` or `chore`.
+- `ci` is the type for how CI runs and the checks that guard the repo: the
+  workflows under `.github/workflows/` and the actions under `.github/actions/`,
+  a check script, a husky hook, a `no-comments.json` allowance, the test and
+  coverage setup. It takes no scope: `ci: cache the pnpm store in every
+  workflow`. None of that is `harness`.
 - `eval` is the type for a change to the eval cases.
 
 A commit is its title. `body-max-lines` rejects a body longer than one line, so

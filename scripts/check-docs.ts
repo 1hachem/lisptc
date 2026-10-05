@@ -49,9 +49,7 @@ console.error(
 	"This repo keeps no design notes: the code is the only source of",
 );
 console.error("truth. A constraint worth keeping goes in a name, a type or a");
-console.error(
-	"test. Only README, a package README.md, an AGENTS.md, .github/ and",
-);
+console.error("test. Only a README.md, an AGENTS.md, .github/ and");
 console.error(
 	"the skills, agents and plugins under .agents/ or .claude/ may be markdown. Run",
 );

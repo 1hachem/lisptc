@@ -12,6 +12,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "repl": "node --no-warnings --experimental-transform-types src/cli.ts",
     "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.2.7",
     "typescript": "^5.9.3",
     "vitest": "^3.0.0"
   }

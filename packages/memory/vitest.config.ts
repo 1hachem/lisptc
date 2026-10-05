@@ -5,5 +5,9 @@ export default defineConfig({
 		environment: "node",
 		include: ["test/**/*.test.ts"],
 		setupFiles: ["./test/setup-env.ts"],
+		coverage: {
+			include: ["src/**"],
+			reporter: ["json", "text-summary"],
+		},
 	},
 });
