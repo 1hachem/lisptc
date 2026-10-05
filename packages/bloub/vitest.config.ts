@@ -11,5 +11,15 @@ export default defineConfig({
 		exclude: onCi
 			? [...configDefaults.exclude, "src/bot/skins.test.ts"]
 			: configDefaults.exclude,
+		coverage: {
+			include: ["src/**/*.{ts,tsx}", "!src/**/*.test.{ts,tsx}"],
+			reporter: ["json", "text-summary"],
+			thresholds: {
+				statements: 92,
+				branches: 87,
+				functions: 86,
+				lines: 92,
+			},
+		},
 	},
 });

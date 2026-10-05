@@ -17,6 +17,8 @@ editors/nvim/.vendor/
 
 dist/
 
+coverage/
+
 # the eval suite's report artifacts
 apps/trace-viewer/.evals/
 

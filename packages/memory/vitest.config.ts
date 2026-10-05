@@ -5,5 +5,15 @@ export default defineConfig({
 		environment: "node",
 		include: ["test/**/*.test.ts"],
 		setupFiles: ["./test/setup-env.ts"],
+		coverage: {
+			include: ["src/**"],
+			reporter: ["json", "text-summary"],
+			thresholds: {
+				statements: 93,
+				branches: 85,
+				functions: 94,
+				lines: 93,
+			},
+		},
 	},
 });

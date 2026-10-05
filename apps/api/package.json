@@ -12,6 +12,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "@hono/vite-dev-server": "^0.26.1",
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.2.7",
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
     "vitest": "^3.0.0"
