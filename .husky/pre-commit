@@ -1,10 +1,10 @@
-#!/usr/bin/env bash
-set -euo pipefail
+staged() {
+  git diff --cached --name-only --diff-filter=ACMR -z
+}
 
-mapfile -d '' -t files < <(git diff --cached --name-only --diff-filter=ACMR -z)
-[ "${#files[@]}" -gt 0 ] || exit 0
+[ -n "$(staged | tr -d '\0')" ] || exit 0
 
 root=$(git rev-parse --show-toplevel)
 pnpm exec no-comments --staged --fix
-"$root/.agents/hooks/format-files.sh" "${files[@]}"
-git add -- "${files[@]}"
+staged | xargs -0 "$root/.agents/hooks/format-files.sh"
+staged | xargs -0 git add --
