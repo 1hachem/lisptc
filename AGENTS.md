@@ -53,10 +53,11 @@ Independent questions go out as several agents in one message. Claude's built-in
 ones there are.
 
 `.agents/` is where everything an agent runner reads lives: the agents, the
-hooks, the skills, and `.agents/codex/` for the runner that reads a config
-instead. `.claude/agents`, `.claude/hooks` and `.claude/skills` are symlinks
-into it, so a rule is written once and every runner obeys it. Add a skill, an
-agent or a hook under `.agents/`, never under `.claude/`.
+hooks, the skills, the plugins CI installs from its own marketplace, and
+`.agents/codex/` for the runner that reads a config instead. `.claude/agents`,
+`.claude/hooks` and `.claude/skills` are symlinks into it, so a rule is written
+once and every runner obeys it. Add a skill, an agent, a hook or a plugin under
+`.agents/`, never under `.claude/`.
 
 Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is

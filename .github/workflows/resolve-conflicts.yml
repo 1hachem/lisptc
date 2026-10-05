@@ -1,0 +1,116 @@
+name: Resolve conflicts
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: resolve-conflicts-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      BASE: ${{ github.base_ref }}
+      HEAD_REF: ${{ github.head_ref }}
+    steps:
+      - name: Check for a merge conflict
+        id: state
+        run: |
+          state=UNKNOWN
+          for _ in 1 2 3 4 5 6; do
+            state=$(gh pr view "$PR" --json mergeable --jq .mergeable)
+            [ "$state" != UNKNOWN ] && break
+            sleep 10
+          done
+          echo "PR $PR: $state"
+          [ "$state" = CONFLICTING ] && echo "conflicting=true" >> "$GITHUB_OUTPUT" || true
+
+      - name: Fetch the Claude and push credentials from Infisical
+        if: steps.state.outputs.conflicting == 'true'
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ci
+          secret-path: /claude
+          export-type: env
+
+      - name: Checkout
+        if: steps.state.outputs.conflicting == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ env.GH_PUSH_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        if: steps.state.outputs.conflicting == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack (pnpm)
+        if: steps.state.outputs.conflicting == 'true'
+        run: corepack enable
+
+      - name: Merge the base branch
+        if: steps.state.outputs.conflicting == 'true'
+        id: merge
+        run: |
+          git config user.name "claude[bot]"
+          git config user.email "claude[bot]@users.noreply.github.com"
+          if git merge --no-edit "origin/$BASE"; then
+            echo "conflicted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+          cat "$RUNNER_TEMP/conflicts.txt"
+          echo "conflicted=true" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve with Claude
+        if: steps.merge.outputs.conflicted == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ env.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: ${{ github.workspace }}/.agents
+          plugins: merge-conflicts@lisptc
+          prompt: '/merge-conflicts:resolve-conflicts PR #${{ github.event.pull_request.number }} merges origin/${{ github.base_ref }} into ${{ github.head_ref }}'
+          claude_args: >-
+            --model opus
+            --max-turns 100
+            --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(pnpm:*)"
+
+      - name: Verify and commit
+        if: steps.merge.outputs.conflicted == 'true'
+        run: |
+          mapfile -t files < "$RUNNER_TEMP/conflicts.txt"
+          if grep -nE '^(<<<<<<<|>>>>>>>) ' -- "${files[@]}" 2>/dev/null; then
+            echo "::error::Conflict markers remain"
+            exit 1
+          fi
+          pnpm install --frozen-lockfile
+          git add -A
+          git commit --no-edit
+
+      - name: Push
+        if: steps.merge.outputs.conflicted == 'true'
+        run: git push origin "HEAD:$HEAD_REF"
+
+      - name: Report a failed resolution on the PR
+        if: failure() && steps.merge.outputs.conflicted == 'true'
+        run: |
+          gh pr comment "$PR" --body "Claude could not resolve the merge conflicts with \`$BASE\` on its own. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
