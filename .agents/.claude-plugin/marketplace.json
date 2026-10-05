@@ -1,0 +1,18 @@
+{
+	"$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+	"name": "lisptc",
+	"version": "1.0.0",
+	"description": "The plugins this repo runs its agents with",
+	"owner": {
+		"name": "1hachem"
+	},
+	"plugins": [
+		{
+			"name": "merge-conflicts",
+			"description": "Resolve the merge conflicts a PR has with its base branch",
+			"version": "1.0.0",
+			"source": "./plugins/merge-conflicts",
+			"category": "development"
+		}
+	]
+}

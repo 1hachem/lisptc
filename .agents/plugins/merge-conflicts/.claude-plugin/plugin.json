@@ -1,0 +1,8 @@
+{
+	"name": "merge-conflicts",
+	"description": "Resolve the merge conflicts a PR has with its base branch",
+	"version": "1.0.0",
+	"author": {
+		"name": "1hachem"
+	}
+}

@@ -24,7 +24,7 @@ README.md|AGENTS.md|CLAUDE.md)
 esac
 
 case "$path" in
-*/.agents/skills/*|*/.agents/agents/*|.agents/skills/*|.agents/agents/*)
+*/.agents/skills/*|*/.agents/agents/*|*/.agents/plugins/*|.agents/skills/*|.agents/agents/*|.agents/plugins/*)
 	exit 0
 	;;
 esac
@@ -36,7 +36,7 @@ case "$path" in
 esac
 
 if [ "$tool" = "apply_patch" ]; then
-	echo "Blocked: this repo adds no new markdown files. The code is the only source of truth, so put the reason in a name, a type or a test. README.md, AGENTS.md, CLAUDE.md, and files under .agents/skills/ and .agents/agents/ are the exceptions." >&2
+	echo "Blocked: this repo adds no new markdown files. The code is the only source of truth, so put the reason in a name, a type or a test. README.md, AGENTS.md, CLAUDE.md, and files under .agents/skills/, .agents/agents/ and .agents/plugins/ are the exceptions." >&2
 	exit 2
 fi
 
@@ -44,5 +44,5 @@ if [ -e "$path" ]; then
 	exit 0
 fi
 
-echo "Blocked: this repo adds no new markdown files. The code is the only source of truth, so put the reason in a name, a type or a test. Editing an existing .md is fine, and README.md, AGENTS.md, CLAUDE.md, and files under .agents/skills/ and .agents/agents/ are the exceptions." >&2
+echo "Blocked: this repo adds no new markdown files. The code is the only source of truth, so put the reason in a name, a type or a test. Editing an existing .md is fine, and README.md, AGENTS.md, CLAUDE.md, and files under .agents/skills/, .agents/agents/ and .agents/plugins/ are the exceptions." >&2
 exit 2
