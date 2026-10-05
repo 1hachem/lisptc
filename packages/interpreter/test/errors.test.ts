@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { VoidVariable } from "../src/errors.ts";
+import { cdrCell, VoidVariable } from "../src/errors.ts";
+import { Cell } from "../src/objects.ts";
 import { ev } from "./helpers.ts";
 
 describe("evaluation errors that must be signalled", () => {
@@ -73,5 +74,14 @@ describe("robustness probes (weak typing)", () => {
 
 	it("length of an improper list should be an error", () => {
 		expect(() => ev("(length (cons 1 2))")).toThrow();
+	});
+});
+
+describe("cdrCell", () => {
+	it("returns the rest of a proper list and refuses a dotted one", () => {
+		const tail = new Cell(2, null);
+		expect(cdrCell(new Cell(1, tail))).toBe(tail);
+		expect(cdrCell(new Cell(1, null))).toBeNull();
+		expect(() => cdrCell(new Cell(1, 2))).toThrow(/proper list expected/);
 	});
 });

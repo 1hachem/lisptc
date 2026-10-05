@@ -94,3 +94,33 @@ describe("doc answers whoever asked, model included", () => {
 		expect(seen).toBe("no-such-binding: undocumented\n");
 	});
 });
+
+describe("(doc name) edge cases", () => {
+	it("keeps blank lines of a docstring unindented", () => {
+		const { output } = evWithOutput(
+			'(defun two-paras () "first\\n\\nsecond" 1) (doc \'two-paras)',
+		);
+		expect(output).toBe("(two-paras)\n  first\n\n  second\n");
+	});
+
+	it("rejects a name that is not a symbol", () => {
+		expect(() => ev("(doc 1)")).toThrow("symbol expected");
+	});
+
+	it("records no keyword args for a bare &key", () => {
+		const interp = freshInterp();
+		runSync(interp, "(_set-doc 'bare-key '(a &key) \"doc\")");
+		expect(interp.docs().get("bare-key")?.args).toBeUndefined();
+	});
+
+	it("records the names after &key, skipping &rest", () => {
+		const interp = freshInterp();
+		runSync(interp, "(_set-doc 'kw '(a &key b &rest c) \"doc\")");
+		expect(
+			interp
+				.docs()
+				.get("kw")
+				?.args?.map((x) => x.name),
+		).toEqual(["b", "c"]);
+	});
+});
