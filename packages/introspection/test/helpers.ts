@@ -1,34 +1,20 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { output } from "@repo/interpreter/topics";
 import { introspectionExtension } from "../src/introspection.ts";
 import { introspectionHost } from "../src/introspection-host.ts";
 
-function freshInterp(): Interp {
+export function evWithOutput(code: string): { value: string; output: string } {
 	const interp = new Interp({
 		extensions: [introspectionExtension(introspectionHost)],
 	});
 	runSync(interp, prelude);
-	return interp;
+	let printed = "";
+	output.on(interp.channels, (text, e) => {
+		if (e.to.includes("user")) printed += text;
+	});
+	return { value: str(runSync(interp, code)), output: printed };
 }
 
-export function ev(code: string, interp: Interp = freshInterp()): string {
-	return str(runSync(interp, code));
-}
-
-export function evWithOutput(
-	code: string,
-	interp: Interp = freshInterp(),
-): { value: string; output: string } {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
-	try {
-		return {
-			value: str(runSync(interp, code)),
-			output: buffer.collectText("user"),
-		};
-	} finally {
-		detach();
-	}
-}
+export const ev = (code: string): string => evWithOutput(code).value;
