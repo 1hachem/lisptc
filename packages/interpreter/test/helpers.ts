@@ -1,9 +1,9 @@
 import { bufferTransport } from "../src/channels-host.ts";
-import { Interp, runSync } from "../src/lisp.ts";
+import { Interp, type InterpOptions, runSync } from "../src/lisp.ts";
 import { prelude } from "../src/prelude.ts";
 import { str } from "../src/print.ts";
-export function freshInterp(): Interp {
-	const interp = new Interp();
+export function freshInterp(options?: InterpOptions): Interp {
+	const interp = new Interp(options);
 	runSync(interp, prelude);
 	return interp;
 }
