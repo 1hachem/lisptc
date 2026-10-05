@@ -31,10 +31,25 @@ for (const name of ["json", "json-summary", "html", "text-summary"] as const) {
 	reports.create(name).execute(context);
 }
 
-const pct = coverageMap.getCoverageSummary().lines.pct;
-const color = BADGE_COLORS.find(([floor]) => pct >= floor)?.[1] ?? "red";
-writeFileSync(
-	`${OUT}/badge.json`,
-	`${JSON.stringify({ schemaVersion: 1, label: "coverage", message: `${pct}%`, color })}\n`,
+const writeBadge = (
+	path: string,
+	label: string,
+	map: libCoverage.CoverageMap,
+) => {
+	const pct = map.getCoverageSummary().lines.pct;
+	const color = BADGE_COLORS.find(([floor]) => pct >= floor)?.[1] ?? "red";
+	writeFileSync(
+		path,
+		`${JSON.stringify({ schemaVersion: 1, label, message: `${pct}%`, color })}\n`,
+	);
+};
+
+writeBadge(`${OUT}/badge.json`, "coverage", coverageMap);
+
+const INTERPRETER = "packages/interpreter/coverage/coverage-final.json";
+writeBadge(
+	`${OUT}/badge-interpreter.json`,
+	"interpreter coverage",
+	libCoverage.createCoverageMap(JSON.parse(readFileSync(INTERPRETER, "utf8"))),
 );
 console.log(`merged ${inputs.length} reports into ${OUT}/`);
