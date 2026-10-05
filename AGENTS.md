@@ -93,6 +93,7 @@ interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
+- `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
@@ -359,9 +360,11 @@ A commit message is a conventional commit, `type(scope): subject`, and
   the skills that live there. It takes no scope:
   `harness: add instruction to only run typecheck at the end`. An `AGENTS.md`
   change is `harness`, never `docs` or `chore`.
-- `ci` is the type for the checks that guard the repo whoever runs them: a
-  workflow, a check script, a husky hook, a `no-comments.json` allowance, the
-  test and coverage setup. None of that is `harness`.
+- `ci` is the type for how CI runs and the checks that guard the repo: the
+  workflows under `.github/workflows/` and the actions under `.github/actions/`,
+  a check script, a husky hook, a `no-comments.json` allowance, the test and
+  coverage setup. It takes no scope: `ci: cache the pnpm store in every
+  workflow`. None of that is `harness`.
 - `eval` is the type for a change to the eval cases.
 
 A commit is its title. `body-max-lines` rejects a body longer than one line, so
