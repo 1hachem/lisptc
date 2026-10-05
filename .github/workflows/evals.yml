@@ -25,20 +25,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Enable corepack (pnpm)
-        run: corepack enable
-
-      - name: Cache the pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/pnpm/store
-          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
+      - name: Setup pnpm and Node.js
+        uses: ./.github/actions/setup
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
