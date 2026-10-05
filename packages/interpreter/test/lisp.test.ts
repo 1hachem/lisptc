@@ -40,7 +40,7 @@ describe("extensions", () => {
 		const withoutPrompt: Installable = () => {
 			installed.push("without");
 		};
-		const interp = new Interp({ extensions: [withPrompt, withoutPrompt] });
+		const interp = freshInterp({ extensions: [withPrompt, withoutPrompt] });
 		expect(installed).toEqual(["with", "without"]);
 		expect(ev("ext-value", interp)).toBe("42");
 		expect(interp.systemPrompt()).toBe(
@@ -49,7 +49,7 @@ describe("extensions", () => {
 	});
 
 	it("carries only the language reference with no extension", () => {
-		expect(new Interp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
+		expect(freshInterp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
 	});
 });
 
