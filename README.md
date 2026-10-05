@@ -1,6 +1,7 @@
 # lisptc
 
 [![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/1hachem/lisptc/badges/coverage.json)](https://github.com/1hachem/lisptc/actions/workflows/ci.yml)
+[![interpreter coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/1hachem/lisptc/badges/coverage-interpreter.json)](https://github.com/1hachem/lisptc/actions/workflows/ci.yml)
 
 A Lisp interpreter designed to be the deterministic "brain" of an AI agent in
 a neuro-symbolic architecture. The LLM writes Lisp code into a REPL; the
