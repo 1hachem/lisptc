@@ -86,22 +86,13 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ env.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: ${{ github.workspace }}/.agents
+          plugins: merge-conflicts@lisptc
+          prompt: '/merge-conflicts:resolve-conflicts PR #${{ github.event.pull_request.number }} merges origin/${{ github.base_ref }} into ${{ github.head_ref }}'
           claude_args: >-
             --model opus
             --max-turns 100
-            --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(pnpm:*)"
-          prompt: |
-            A merge of origin/${{ github.base_ref }} into the PR branch ${{ github.head_ref }} (PR #${{ github.event.pull_request.number }}) stopped on conflicts.
-            The conflicted files are listed in ${{ runner.temp }}/conflicts.txt.
-
-            Resolve every conflict so the result keeps the intent of both sides.
-            Read git log and git show for both sides to learn what each change was for.
-            If pnpm-lock.yaml conflicts, take either side and run pnpm install to regenerate it.
-            Follow AGENTS.md and the AGENTS.md of each package you touch.
-            Run the tests and the typecheck of each package you touched, and fix what fails.
-
-            Do not stage, commit or push. The workflow does that.
-            If you cannot resolve a conflict with confidence, leave its markers in place.
+            --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(pnpm:*)"
 
       - name: Verify and commit
         if: steps.merge.outputs.conflicted == 'true'
