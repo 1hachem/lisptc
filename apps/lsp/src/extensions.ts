@@ -12,6 +12,8 @@ import { LocalProcessHost } from "@repo/mcp-extension/local-host";
 import { mcpHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
+import { permissionsExtension } from "@repo/permissions-extension";
+import { permissionsHostFor } from "@repo/permissions-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -30,11 +32,16 @@ export function docExtensions(): InterpExtension[] {
 }
 
 export function sessionExtensions(): InterpExtension[] {
+	const permissions = permissionsExtension(permissionsHostFor());
 	return [
+		permissions,
 		secretsExtension(secretsHost),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
-		mcpExtension(mcpHostFor({ host: new LocalProcessHost() })),
+		mcpExtension({
+			...mcpHostFor({ host: new LocalProcessHost() }),
+			policy: permissions.rules,
+		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
 		memoryExtension(memoryHost),

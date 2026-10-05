@@ -20,6 +20,7 @@ import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
 import {
 	evalCode,
+	isUserPrompt,
 	joinRiding,
 	proseFeedbackContent,
 	replResultContent,
@@ -79,7 +80,7 @@ export type TurnEvent =
 	| { type: "failed"; message: string; error: unknown };
 
 function lastUserPrompt(transcript: TranscriptEntry[]): string {
-	return transcript.filter((e) => e.role === "user").at(-1)?.content ?? "";
+	return transcript.filter(isUserPrompt).at(-1)?.content ?? "";
 }
 
 function stepMeta(
@@ -123,7 +124,7 @@ function noteEntry(text: string): TranscriptEntry {
 
 function ride(transcript: TranscriptEntry[], text: string): boolean {
 	let at = transcript.length - 1;
-	while (at >= 0 && transcript[at].role !== "user") at--;
+	while (at >= 0 && !isUserPrompt(transcript[at])) at--;
 	if (at === -1) return false;
 	const carrier = transcript[at];
 	transcript[at] = { ...carrier, riding: joinRiding(carrier.riding, text) };
@@ -243,7 +244,7 @@ async function* evaluateStep(
 	transcript.push({ role: "assistant", content: code });
 
 	const evalStartedAt = Date.now();
-	const { output, display, error, annotations, failed } = await evalCode(
+	const { output, display, error, annotations, failed, held } = await evalCode(
 		repl,
 		code,
 	);
@@ -264,13 +265,14 @@ async function* evaluateStep(
 		repl.takeFinished() ? "halt" : capped ? "capped" : "continue",
 		turn.telemetry.stepEnd,
 	);
-	if (verdict === "halt") return verdict;
+	if (verdict === "halt" && !held) return verdict;
 
 	yield { type: "result", step, output, display, error, annotations, failed };
 	transcript.push({
 		role: "tool",
 		content: replResultContent(output, error, annotations.step),
 	});
+	if (verdict === "halt") return verdict;
 	return capped ? "capped" : verdict;
 }
 

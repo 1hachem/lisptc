@@ -26,6 +26,7 @@
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",
     "@repo/memory-extension": "workspace:*",
+    "@repo/permissions-extension": "workspace:*",
     "@repo/promises-extension": "workspace:*",
     "@repo/prose-extension": "workspace:*",
     "@repo/secrets-extension": "workspace:*",

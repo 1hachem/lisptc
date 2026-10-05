@@ -3,6 +3,7 @@ import type { AgentConfig } from "./agent.ts";
 import type { Steer, SteerInbox } from "./inbox.ts";
 import { joinRiding, replResultContent, type TranscriptEntry } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
+import type { SystemEvent } from "./system-event.ts";
 import { runAgentTurn } from "./turn.ts";
 
 export interface ChatMessageInput {
@@ -80,14 +81,33 @@ function wireType(
 	return "human";
 }
 
+const SOURCE_KEY = "source";
+
+export function systemEventMessage(
+	event: SystemEvent,
+	id: string,
+): WireMessage {
+	return {
+		type: "system",
+		content: event.text,
+		id,
+		additional_kwargs: { [SOURCE_KEY]: event.source },
+	};
+}
+
+function eventSource(message: ChatMessageInput): string {
+	const source = message.additional_kwargs?.[SOURCE_KEY];
+	return typeof source === "string" ? source : "system";
+}
+
 function toTranscript(input: ChatInput): TranscriptEntry[] {
 	return (input.messages ?? []).map((m) => {
+		const content = contentToText(m.content);
+		const role = agentRole(m.type ?? m.role);
+		if (role === "system")
+			return { role: "user", content, event: { source: eventSource(m) } };
 		const rode = riding(m);
-		return {
-			role: agentRole(m.type ?? m.role),
-			content: contentToText(m.content),
-			...(rode === undefined ? {} : { riding: rode }),
-		};
+		return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
 	});
 }
 

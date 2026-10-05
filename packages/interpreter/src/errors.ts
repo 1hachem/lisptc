@@ -65,6 +65,10 @@ export class LoopSignal {
 	constructor(readonly value: unknown) {}
 }
 
+export class StepHold {
+	constructor(readonly reason: string) {}
+}
+
 export class NotVariableException extends EvalException {
 	constructor(x: unknown) {
 		super("variable expected", x);

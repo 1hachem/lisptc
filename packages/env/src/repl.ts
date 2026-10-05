@@ -6,6 +6,7 @@ export const replEnv = createEnv({
 		LISP_DEBUG: z.string().optional(),
 		LISPTC_SESSION: z.string().optional(),
 		LISPTC_SECRETS_FILE: z.string().optional(),
+		LISPTC_PERMISSIONS_FILE: z.string().optional(),
 		XDG_RUNTIME_DIR: z.string().optional(),
 		INIT_CWD: z.string().optional(),
 	},

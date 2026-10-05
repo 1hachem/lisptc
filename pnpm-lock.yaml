@@ -91,6 +91,9 @@ importers:
       '@repo/memory-extension':
         specifier: workspace:*
         version: link:../../packages/memory
+      '@repo/permissions-extension':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@repo/promises-extension':
         specifier: workspace:*
         version: link:../../packages/promises
@@ -240,6 +243,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5.0.4
         version: 5.2.0(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0))
+      happy-dom:
+        specifier: ^20.13.0
+        version: 20.13.0
       nitro:
         specifier: ^3.0.260610-beta
         version: 3.0.260610-beta(chokidar@5.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(rollup@4.62.2)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -279,6 +285,9 @@ importers:
       '@repo/memory-extension':
         specifier: workspace:*
         version: link:../../packages/memory
+      '@repo/permissions-extension':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@repo/promises-extension':
         specifier: workspace:*
         version: link:../../packages/promises
@@ -374,6 +383,9 @@ importers:
       '@repo/memory-extension':
         specifier: workspace:*
         version: link:../../packages/memory
+      '@repo/permissions-extension':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@repo/promises-extension':
         specifier: workspace:*
         version: link:../../packages/promises
@@ -640,6 +652,9 @@ importers:
       '@repo/memory-extension':
         specifier: workspace:*
         version: link:../memory
+      '@repo/permissions-extension':
+        specifier: workspace:*
+        version: link:../permissions
       '@repo/promises-extension':
         specifier: workspace:*
         version: link:../promises
@@ -993,6 +1008,34 @@ importers:
       minisearch:
         specifier: ^7.2.0
         version: 7.2.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.0)
+
+  packages/permissions:
+    dependencies:
+      '@repo/env':
+        specifier: workspace:*
+        version: link:../env
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: ^4.4.3
         version: 4.4.3

@@ -10,11 +10,14 @@ import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
 	isGreetingMessage,
+	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
 	messageProse,
 	messageReasoning,
 	messageText,
+	toolAnswers,
+	toolAsks,
 	toolFailed,
 	toolModelOutput,
 	toolResult,
@@ -24,6 +27,7 @@ import {
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { AskCard } from "./ask-card.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { SkippedProse } from "./lisp-text.tsx";
@@ -143,44 +147,150 @@ function AssistantText({
 	);
 }
 
-function ToolMessage({ message }: { message: ChatMessage }) {
-	const { shown } = useUI();
+type Shown = ReturnType<typeof useUI>["shown"];
+
+function toolChannels(message: ChatMessage, shown: Shown) {
 	const { output } = toolResult(message);
 	const ui = toUiNode(toolUi(message));
-	const model = toolModelOutput(message);
-	const drawsUi = ui !== undefined && shown.ui;
-	const drawsUser = shown.user && output !== "";
-	const drawsError = shown.errors && toolFailed(message);
-	const drawsModel = shown.model && model.output !== "";
-	const labelled =
-		[drawsUi, drawsUser, drawsModel].filter(Boolean).length > 1 ||
-		(drawsError && drawsModel);
+	const model = toolModelOutput(message).output;
+	return {
+		output,
+		ui: shown.ui ? ui : undefined,
+		model,
+		drawsUser: shown.user && output !== "",
+		drawsError: shown.errors && toolFailed(message),
+		drawsModel: shown.model && model !== "",
+	};
+}
+
+type ToolChannels = ReturnType<typeof toolChannels>;
+
+function drawsAny(channels: ToolChannels): boolean {
+	const { ui, drawsUser, drawsError, drawsModel } = channels;
+	return ui !== undefined || drawsUser || drawsError || drawsModel;
+}
+
+function isLabelled(channels: ToolChannels): boolean {
+	const { ui, drawsUser, drawsError, drawsModel } = channels;
+	const drawn = [ui !== undefined, drawsUser, drawsModel].filter(Boolean);
+	return drawn.length > 1 || (drawsError && drawsModel);
+}
+
+function Channel({
+	id,
+	labelled,
+	children,
+}: {
+	id: string;
+	labelled: boolean;
+	children: React.ReactNode;
+}) {
+	return (
+		<>
+			{labelled && <ChannelLabel id={id} />}
+			{children}
+		</>
+	);
+}
+
+function ToolResult({ message }: { message: ChatMessage }) {
+	const { shown } = useUI();
+	const channels = toolChannels(message, shown);
+	if (!drawsAny(channels)) return null;
+	const { output, ui, model, drawsUser, drawsError, drawsModel } = channels;
+	const labelled = isLabelled(channels);
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
 				drawsError ? "border-red/60" : "border-dim/40"
 			}`}
 		>
-			{drawsUi && (
-				<>
-					{labelled && <ChannelLabel id="ui" />}
+			{ui !== undefined && (
+				<Channel id="ui" labelled={labelled}>
 					<GenerativeUI node={ui} />
-				</>
+				</Channel>
 			)}
 			{drawsUser && (
-				<>
-					{labelled && <ChannelLabel id="user" />}
+				<Channel id="user" labelled={labelled}>
 					<ChannelText text={output} tone="text-dim" />
-				</>
+				</Channel>
 			)}
 			{drawsError && (
 				<div className={channel("errors").text}>a form in this step failed</div>
 			)}
 			{drawsModel && (
-				<>
-					{labelled && <ChannelLabel id="model" />}
-					<ChannelText text={model.output} tone={channel("model").text} />
-				</>
+				<Channel id="model" labelled={labelled}>
+					<ChannelText text={model} tone={channel("model").text} />
+				</Channel>
+			)}
+		</div>
+	);
+}
+
+function ToolMessage({ message }: { message: ChatMessage }) {
+	const { shown } = useUI();
+	const asks = shown.asks ? toolAsks(message) : [];
+	const answers = toolAnswers(message);
+	return (
+		<>
+			<ToolResult message={message} />
+			{asks.map((ask) => (
+				<AskCard
+					key={ask.id}
+					ask={ask}
+					messageId={message.id}
+					answered={answers.get(ask.id)}
+				/>
+			))}
+		</>
+	);
+}
+
+function SystemLine({ message }: { message: ChatMessage }) {
+	const { text } = channel("system");
+	return (
+		<div className="min-w-0 break-words">
+			<ChannelLabel id="system" />
+			<div
+				className={`whitespace-pre-wrap break-words border-dim/40 border-l pl-3 ${text}`}
+			>
+				{messageText(message)}
+			</div>
+		</div>
+	);
+}
+
+function ChatLine({
+	message,
+	index,
+	busy,
+}: {
+	message: ChatMessage;
+	index: number;
+	busy: boolean;
+}) {
+	const { shown } = useUI();
+	const reasoning =
+		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
+	return (
+		<div className="min-w-0 break-words text-fg">
+			{reasoning && (
+				<div className="mb-2">
+					<ChannelLabel id="thinking" />
+					<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
+						{reasoning}
+					</div>
+				</div>
+			)}
+			{isUserMessage(message) ? (
+				<UserLine text={messageText(message)} />
+			) : (
+				<AssistantText
+					id={message.id ?? String(index)}
+					text={messageText(message)}
+					skipped={messageProse(message)}
+					busy={busy}
+				/>
 			)}
 		</div>
 	);
@@ -217,50 +327,44 @@ export function ChatView() {
 		isLoading: state.isLoading,
 	}));
 	const { shown } = useUI();
-	const lastSent = messages.filter(isUserMessage).at(-1)?.id;
+	const lastSent = messages
+		.filter((m) => isUserMessage(m) || isSystemMessage(m))
+		.at(-1)?.id;
 
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
 			<StickOnSend turn={lastSent} />
 			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
 				{messages
-					.filter((m) => !isGreetingMessage(m))
+					.filter(
+						(m) =>
+							!isGreetingMessage(m) && (shown.system || !isSystemMessage(m)),
+					)
 					.map((m, i, all) => {
-						const last = all.length - 1;
-						const reasoning =
-							isUserMessage(m) || !shown.thinking ? "" : messageReasoning(m);
 						const stats = m.id ? meta[m.id] : undefined;
+						const tool = isToolMessage(m);
+						if (isSystemMessage(m))
+							return (
+								<div key={m.id ?? i} className="min-w-0">
+									<SystemLine message={m} />
+								</div>
+							);
 						return (
 							<div key={m.id ?? i} className="group relative min-w-0">
-								{isToolMessage(m) ? (
+								{tool ? (
 									<ToolMessage message={m} />
 								) : (
-									<div className="min-w-0 break-words text-fg">
-										{reasoning && (
-											<div className="mb-2">
-												<ChannelLabel id="thinking" />
-												<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
-													{reasoning}
-												</div>
-											</div>
-										)}
-										{isUserMessage(m) ? (
-											<UserLine text={messageText(m)} />
-										) : (
-											<AssistantText
-												id={m.id ?? String(i)}
-												text={messageText(m)}
-												skipped={messageProse(m)}
-												busy={isLoading && i === last}
-											/>
-										)}
-									</div>
+									<ChatLine
+										message={m}
+										index={i}
+										busy={isLoading && i === all.length - 1}
+									/>
 								)}
 								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
 								)}
 								{stats && <MessageMeta meta={stats} />}
-								{!isUserMessage(m) && !isToolMessage(m) && (
+								{!tool && !isUserMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
 								)}
 							</div>

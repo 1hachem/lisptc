@@ -22,8 +22,8 @@
 		background: var(--bg);
 		color: var(--fg);
 		font-family: var(--font-mono);
-		font-size: 13px;
-		line-height: 1.7;
+		font-size: var(--text-sm);
+		line-height: var(--text-sm--line-height);
 		font-weight: 400;
 		-webkit-font-smoothing: antialiased;
 	}

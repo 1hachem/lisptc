@@ -42,7 +42,10 @@ export default defineSchema({
 		content: v.string(),
 		kwargs: v.optional(v.record(v.string(), v.any())),
 		truncated: v.optional(v.boolean()),
-	}).index("by_chat_seq", ["chatId", "seq"]),
+		wireId: v.optional(v.string()),
+	})
+		.index("by_chat_seq", ["chatId", "seq"])
+		.index("by_chat_wire", ["chatId", "wireId"]),
 
 	secrets: defineTable({
 		workspaceId: v.id("workspaces"),
@@ -52,6 +55,11 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	permissions: defineTable({
+		workspaceId: v.id("workspaces"),
+		source: v.string(),
+	}).index("by_workspace", ["workspaceId"]),
 
 	oauthRecords: defineTable({
 		workspaceId: v.id("workspaces"),

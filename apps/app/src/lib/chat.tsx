@@ -23,18 +23,10 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { API_URL, apiHeaders } from "./api.ts";
+import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
 import { pickGreeting } from "./greeting.ts";
-import {
-	awaitedState,
-	clearApproval,
-	OAUTH_APPROVED_KEY,
-	OAUTH_CHANNEL,
-	type OAuthSignal,
-	RESUME_MESSAGE,
-	readApproval,
-	rememberAwaitingChat,
-} from "./oauth-callback.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
+import type { SystemEventTicket } from "./system-event.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
@@ -46,8 +38,10 @@ export interface ChatMessage {
 		meta?: unknown;
 		display?: unknown;
 		ui?: unknown;
+		asks?: unknown;
 		prose?: unknown;
 		failed?: unknown;
+		source?: unknown;
 	};
 }
 
@@ -105,8 +99,10 @@ export interface ChatSession {
 	fresh: boolean;
 	isLoading: boolean;
 	chatId: Id<"chats"> | null;
+	workspaceId: Id<"workspaces">;
 	error?: string;
 	send: (text: string) => void;
+	resume: (event: SystemEventTicket) => void;
 	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
@@ -130,7 +126,7 @@ type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
 
 function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	return stored.map((message) => ({
-		id: message._id,
+		id: message.wireId ?? message._id,
 		type: message.type,
 		content: message.content,
 		additional_kwargs: message.kwargs,
@@ -268,24 +264,18 @@ export function ChatProvider({
 		[chatId, workspaceId, createChat, navigate],
 	);
 
-	const submitTurn = useCallback(
-		async (text: string) => {
-			const trimmed = text.trim();
-			if (!trimmed) return;
+	const submit = useCallback(
+		async (
+			input: { message: string } | { event: { token: string } },
+			shown: ChatMessage,
+			title: string,
+		) => {
 			setEvalError(undefined);
-			const opened =
-				chatId ?? (await createChat({ workspaceId, title: titleOf(trimmed) }));
+			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			stream.submit(
-				{ chatId: opened, message: trimmed },
-				{
-					optimisticValues: {
-						messages: [
-							...persisted,
-							{ type: "human", content: trimmed, id: crypto.randomUUID() },
-						],
-					},
-				},
+				{ chatId: opened, ...input },
+				{ optimisticValues: { messages: [...persisted, shown] } },
 			);
 			if (!chatId) {
 				await navigate({
@@ -296,6 +286,29 @@ export function ChatProvider({
 			}
 		},
 		[chatId, workspaceId, createChat, navigate, persisted, stream],
+	);
+
+	const submitTurn = useCallback(
+		async (text: string) => {
+			const trimmed = text.trim();
+			if (!trimmed) return;
+			await submit(
+				{ message: trimmed },
+				{ type: "human", content: trimmed, id: crypto.randomUUID() },
+				titleOf(trimmed),
+			);
+		},
+		[submit],
+	);
+
+	const resume = useCallback(
+		(event: SystemEventTicket) =>
+			void submit(
+				{ event: { token: event.token } },
+				systemMessage(event),
+				titleOf(event.text),
+			),
+		[submit],
 	);
 
 	const resend = useCallback(
@@ -319,46 +332,6 @@ export function ChatProvider({
 		[steering, enqueue, submitTurn],
 	);
 
-	const [approved, setApproved] = useState<string | null>(null);
-	useEffect(() => {
-		setApproved(readApproval());
-		const onStorage = (e: StorageEvent) => {
-			if (e.key === OAUTH_APPROVED_KEY) setApproved(e.newValue);
-		};
-		window.addEventListener("storage", onStorage);
-		return () => window.removeEventListener("storage", onStorage);
-	}, []);
-
-	const awaited = useMemo(
-		() =>
-			awaitedState(
-				persisted.map((m) => ({ type: m.type, text: messageText(m) })),
-			),
-		[persisted],
-	);
-
-	useEffect(() => {
-		if (!awaited || !chatId) return;
-		rememberAwaitingChat(awaited, { workspaceId, chatId });
-		const channel = new BroadcastChannel(OAUTH_CHANNEL);
-		channel.onmessage = (e: MessageEvent<OAuthSignal>) => {
-			if (e.data.type !== "approved" || e.data.state !== awaited) return;
-			channel.postMessage({
-				type: "resuming",
-				state: awaited,
-			} satisfies OAuthSignal);
-		};
-		return () => channel.close();
-	}, [awaited, chatId, workspaceId]);
-
-	useEffect(() => {
-		if (!approved || !chatId || stream.isLoading) return;
-		if (approved !== awaited) return;
-		clearApproval();
-		setApproved(null);
-		void submitTurn(RESUME_MESSAGE);
-	}, [approved, awaited, chatId, stream.isLoading, submitTurn]);
-
 	const stop = useCallback(() => {
 		clear();
 		running.current?.abort();
@@ -379,7 +352,9 @@ export function ChatProvider({
 			fresh,
 			isLoading: false,
 			chatId,
+			workspaceId,
 			send: () => {},
+			resume: () => {},
 			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
@@ -396,6 +371,7 @@ export function ChatProvider({
 			fresh,
 			isLoading: stream.isLoading || evaluating,
 			chatId,
+			workspaceId,
 			error:
 				(stream.error
 					? stream.error instanceof Error
@@ -405,6 +381,7 @@ export function ChatProvider({
 			send: (text) => {
 				void send(text);
 			},
+			resume,
 			runLisp: (code) => {
 				void runLisp(code);
 			},
@@ -423,7 +400,9 @@ export function ChatProvider({
 		evaluating,
 		evalError,
 		chatId,
+		workspaceId,
 		send,
+		resume,
 		runLisp,
 		stop,
 		withdraw,
@@ -457,6 +436,19 @@ export function isToolMessage(message: ChatMessage): boolean {
 	return message.type === "tool";
 }
 
+export function isSystemMessage(message: ChatMessage): boolean {
+	return message.type === "system";
+}
+
+function systemMessage(event: SystemEventTicket): ChatMessage {
+	return {
+		type: "system",
+		content: event.text,
+		id: crypto.randomUUID(),
+		additional_kwargs: { source: event.source },
+	};
+}
+
 export function isUserMessage(message: ChatMessage): boolean {
 	return message.type === "human" || message.type === "user";
 }
@@ -484,6 +476,16 @@ export function toolFailed(message: ChatMessage): boolean {
 
 export function toolUi(message: ChatMessage): unknown {
 	return message.additional_kwargs?.ui;
+}
+
+export function toolAsks(message: ChatMessage): Ask[] {
+	return asksOf(message.additional_kwargs);
+}
+
+export function toolAnswers(
+	message: ChatMessage,
+): ReadonlyMap<string, Answered> {
+	return answersOf(message.additional_kwargs);
 }
 
 export function toolModelOutput(message: ChatMessage): {

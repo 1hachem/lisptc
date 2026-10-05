@@ -66,6 +66,7 @@ const EXTENSION_DIRS = [
 	"packages/diagnostics/src/",
 	"packages/introspection/src/",
 	"packages/memory/src/",
+	"packages/permissions/src/",
 	"packages/promises/src/",
 	"packages/prose/src/",
 	"packages/secrets/src/",

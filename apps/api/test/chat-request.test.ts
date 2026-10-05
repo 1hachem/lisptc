@@ -23,6 +23,23 @@ describe("the chat request contract", () => {
 		expect(parsed.success && parsed.data.input).toEqual(envelope.input);
 	});
 
+	test("accepts a turn opened by a system event, which names a token and no text", () => {
+		const input = { chatId: envelope.input.chatId, event: { token: "t1" } };
+		const parsed = chatRequestSchema.safeParse({ input });
+		expect(parsed.success && parsed.data.input).toEqual(input);
+	});
+
+	test("refuses a system event without a token", () => {
+		const chatId = envelope.input.chatId;
+		expect(
+			chatRequestSchema.safeParse({ input: { chatId, event: {} } }).success,
+		).toBe(false);
+		expect(
+			chatRequestSchema.safeParse({ input: { chatId, event: { token: "" } } })
+				.success,
+		).toBe(false);
+	});
+
 	test("refuses a turn posted without the envelope", () => {
 		expect(chatRequestSchema.safeParse(envelope.input).success).toBe(false);
 	});

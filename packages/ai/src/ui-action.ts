@@ -4,6 +4,7 @@ export interface UiActionResult extends Record<string, unknown> {
 	output: string;
 	error: boolean;
 	message?: string;
+	annotations?: Record<string, unknown>;
 }
 
 export async function runUiAction<Id extends string>(
@@ -24,6 +25,7 @@ export async function runUiAction<Id extends string>(
 			output: user,
 			error: failed,
 			message,
+			annotations: annotations.output,
 		};
 	} catch (ex) {
 		return {

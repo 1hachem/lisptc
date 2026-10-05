@@ -26,6 +26,12 @@ Anything that knows what a message, a workspace or a chat is belongs in
 Colors come from the tokens in `theme.css`. A hex in a component is a bug: add
 the token instead, so both themes stay in step.
 
+**Type sizes come from the scale in `theme.css`, and `text-sm` is the body.**
+The body reads its size from that token, so a primitive scaffolded with
+`text-sm` sits at body size and `text-xs` below it. Change a size there, never
+by an arbitrary pixel size on a primitive, and never by restoring Tailwind's rem
+defaults: those are measured from a 16px root this app does not use.
+
 **Every icon comes from hugeicons.** `@hugeicons/core-free-icons` holds the data
 and `@hugeicons/react` draws it. An icon is data, so it is passed as the `icon`
 prop rather than rendered, and every SVG attribute goes on the drawing

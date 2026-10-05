@@ -1,28 +1,18 @@
 import type { Id } from "@repo/backend/dataModel";
 
-export const OAUTH_APPROVED_KEY = "lisptc:oauth-approved";
+export const OAUTH_AUTHORIZED_KEY = "lisptc:oauth-authorized";
 
 const OAUTH_CHAT_KEY = "lisptc:oauth-chat";
 
 export const OAUTH_CHANNEL = "lisptc:oauth";
 
 export type OAuthSignal =
-	| { type: "approved"; state: string }
-	| { type: "resuming"; state: string };
+	| { type: "authorized"; state: string }
+	| { type: "answering"; state: string };
 
 export interface AwaitingChat {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats">;
-}
-
-const STATE_PARAM = /[?&]state=([0-9a-f-]{36})/;
-
-export const RESUME_MESSAGE =
-	"I approved the authorization. Carry on with what you were doing.";
-
-export interface TranscriptLine {
-	type: string;
-	text: string;
 }
 
 export function callbackState(url: string): string | undefined {
@@ -31,17 +21,6 @@ export function callbackState(url: string): string | undefined {
 	} catch {
 		return undefined;
 	}
-}
-
-export function awaitedState(
-	lines: readonly TranscriptLine[],
-): string | undefined {
-	let awaited: string | undefined;
-	for (const line of lines) {
-		if (line.type === "human") awaited = undefined;
-		else awaited = STATE_PARAM.exec(line.text)?.[1] ?? awaited;
-	}
-	return awaited;
 }
 
 export function rememberAwaitingChat(state: string, chat: AwaitingChat): void {
@@ -65,22 +44,22 @@ export function awaitingChat(state: string): AwaitingChat | undefined {
 	}
 }
 
-export function storeApproval(state: string): void {
+export function storeAuthorized(state: string): void {
 	try {
-		localStorage.setItem(OAUTH_APPROVED_KEY, state);
+		localStorage.setItem(OAUTH_AUTHORIZED_KEY, state);
 	} catch {}
 }
 
-export function readApproval(): string | null {
+export function readAuthorized(): string | null {
 	try {
-		return localStorage.getItem(OAUTH_APPROVED_KEY);
+		return localStorage.getItem(OAUTH_AUTHORIZED_KEY);
 	} catch {
 		return null;
 	}
 }
 
-export function clearApproval(): void {
+export function clearAuthorized(): void {
 	try {
-		localStorage.removeItem(OAUTH_APPROVED_KEY);
+		localStorage.removeItem(OAUTH_AUTHORIZED_KEY);
 	} catch {}
 }
