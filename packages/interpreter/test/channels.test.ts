@@ -31,6 +31,20 @@ describe("Channels", () => {
 		expect(everything.map((e) => e.topic)).toEqual([output.name, "weather"]);
 	});
 
+	it("stops delivering to an onAny subscriber once it unsubscribes", () => {
+		const channels = new Channels();
+		const everything: Envelope[] = [];
+		const off = channels.onAny((e) => everything.push(e));
+		output.emit(channels, { user: "first" });
+		off();
+		output.emit(channels, { user: "second" });
+		expect(everything.map((e) => e.payload)).toEqual(["first"]);
+	});
+
+	it("drops nothing when emitting on no channels at all", () => {
+		expect(() => output.emit(undefined, { user: "nowhere" })).not.toThrow();
+	});
+
 	it("carries a topic the core never heard of", () => {
 		const channels = new Channels();
 		const seen: { sky: string }[] = [];
@@ -46,6 +60,14 @@ describe("Channels", () => {
 		channels.step = 7;
 		output.emit(channels, { user: "second" });
 		expect(seen.map((e) => e.step)).toEqual([0, 7]);
+	});
+
+	it("keeps a step the envelope already carries", () => {
+		const channels = new Channels();
+		const seen = record(channels, "weather");
+		channels.step = 7;
+		channels.emit({ topic: "weather", to: ["model"], step: 2, payload: {} });
+		expect(seen.map((e) => e.step)).toEqual([2]);
 	});
 
 	it("stops delivering after unsubscribe", () => {
@@ -80,6 +102,17 @@ describe("Channels", () => {
 			"failed: a listener on output threw: subscriber is broken",
 		]);
 	});
+
+	it("reports a listener that throws something other than an error", () => {
+		const channels = new Channels();
+		const notes: string[] = [];
+		note.on(channels, (n) => notes.push(n.text));
+		output.on(channels, () => {
+			throw "not an error";
+		});
+		output.emit(channels, { user: "printed" });
+		expect(notes).toEqual(["a listener on output threw: not an error"]);
+	});
 });
 
 describe("a piped transport", () => {
@@ -106,6 +139,34 @@ describe("a piped transport", () => {
 		output.emit(channels, { user: "the last one it accepts" });
 		output.emit(channels, { user: "never seen" });
 		expect(sent).toEqual(["while open", "the last one it accepts"]);
+	});
+
+	it("is dropped once it throws on send", () => {
+		const channels = new Channels();
+		let tries = 0;
+		channels.pipe({
+			send() {
+				tries++;
+				throw new Error("transport is broken");
+			},
+		});
+		output.emit(channels, { user: "first" });
+		output.emit(channels, { user: "second" });
+		expect(tries).toBe(1);
+	});
+
+	it("is closed when detached, and only the first time", () => {
+		const channels = new Channels();
+		let closed = 0;
+		const detach = channels.pipe({
+			send: () => true,
+			close() {
+				closed++;
+			},
+		});
+		detach();
+		detach();
+		expect(closed).toBe(1);
 	});
 
 	it("sorts what it collected by audience and by topic", () => {

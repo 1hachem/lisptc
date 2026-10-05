@@ -38,4 +38,24 @@ describe("asking", () => {
 		const into = { step: {}, output: { other: 1 } };
 		expect(asking(into, { open: [ask("a")] }).output.other).toBe(1);
 	});
+
+	it("records only answers when nothing is asked", () => {
+		const out = asking(noAnnotations(), {
+			answered: { a: { accepted: true, label: "Gone" } },
+		});
+		expect(out.output[ASKS_KEY]).toEqual({
+			answered: { a: { accepted: true, label: "Gone" } },
+		});
+	});
+
+	it("keeps earlier answers when a later extension only asks", () => {
+		const first = asking(noAnnotations(), {
+			answered: { a: { accepted: true, label: "Gone" } },
+		});
+		const both = asking(first, { open: [ask("b")] });
+		expect(both.output[ASKS_KEY]).toEqual({
+			open: [ask("b")],
+			answered: { a: { accepted: true, label: "Gone" } },
+		});
+	});
 });

@@ -364,7 +364,7 @@ export class Interp {
 							}
 							if (fn instanceof BuiltInFunc) {
 								if (!this.hooks.call.isEmpty)
-									this.guardCall(fn.callName ?? "", frame);
+									this.guardCall(fn.callName as string, frame);
 								if (fn.kind === "generator") return yield* fn.callGen(frame);
 								const value = fn.call(frame);
 								if (value instanceof Promise)
@@ -474,8 +474,7 @@ export class Interp {
 				env,
 				Closure.make,
 			);
-			if (!(handler instanceof Closure))
-				throw new EvalException("bad try", clause);
+			assert(handler instanceof Closure);
 			const frame = handler.makeFrame(new Cell(null, null));
 			frame[0] = ex.value;
 			const newEnv = new Cell(frame, handler.env);

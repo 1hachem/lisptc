@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFailure } from "../src/reader.ts";
 import { ev } from "./helpers.ts";
 
 describe("reader: lists and dotted pairs", () => {
@@ -114,5 +115,42 @@ describe("(read s): parsing text as Lisp data", () => {
 	it("misreads JSON rather than erroring — hence json-parse", () => {
 		expect(ev('(read "{\\"a\\": 1}")')).toBe("{");
 		expect(ev('(read "[1,2]")')).toBe("[1,2]");
+	});
+});
+
+describe("reader: unknown escapes", () => {
+	it("keeps an escape it does not know as written", () => {
+		expect(ev('(length "a\\qb")')).toBe("4");
+	});
+});
+
+describe("reader: readFailure", () => {
+	it("finds nothing wrong with well-formed source", () => {
+		expect(readFailure("(a b)\n'c")).toBeUndefined();
+	});
+
+	it("reports an unclosed form as the end of input, past its opening line", () => {
+		const failure = readFailure("(a\n(b");
+		expect(failure?.reason).toBe("unexpected end of input");
+		expect(failure?.line).toBeGreaterThan(1);
+	});
+
+	it("reports a malformed form with its reason and line", () => {
+		expect(readFailure("(a)\n)")).toEqual({
+			reason: 'unexpected ")"',
+			line: 2,
+		});
+	});
+
+	it("refuses a stray dot and a dotted pair with two tails", () => {
+		expect(readFailure(".")).toEqual({ reason: 'unexpected "."', line: 1 });
+		expect(readFailure("(a . b c)")).toEqual({
+			reason: '")" expected: c',
+			line: 1,
+		});
+	});
+
+	it("leaves a printed handle to the evaluator", () => {
+		expect(readFailure("#<promise>")).toBeUndefined();
 	});
 });
