@@ -25,7 +25,7 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: `README`, a package's own README.md, the `AGENTS.md` files, and what an
+code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, and what an
 agent runner itself reads under `.agents/` and `.github/`. Two guards back the
 rule: a `PreToolUse` hook in `.claude/settings.json` refuses to create a new
 markdown file, and `pnpm check:docs` fails CI on any tracked markdown outside
@@ -70,7 +70,7 @@ An agent's own calls are never refused.
 ## What this is
 
 A Lisp interpreter designed to be the deterministic "brain" of an AI agent in a
-neuro-symbolic architecture. The `README` is where that idea is written out.
+neuro-symbolic architecture. The `README.md` is where that idea is written out.
 
 It is a **Turborepo** pnpm monorepo (`pnpm-workspace.yaml` + `turbo.json`),
 workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point

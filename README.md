@@ -1,4 +1,6 @@
-lisptc
+# lisptc
+
+[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/1hachem/lisptc/badges/coverage.json)](https://github.com/1hachem/lisptc/actions/workflows/ci.yml)
 
 A Lisp interpreter designed to be the deterministic "brain" of an AI agent in
 a neuro-symbolic architecture. The LLM writes Lisp code into a REPL; the
@@ -12,7 +14,7 @@ They both write to each other.
 
 Write-up: https://d4shi.com/blog/lisptc/
 
-SHAPE
+## SHAPE
 
 The interpreter is the core dialect and nothing else. Every surface past it
 lives in an extension, and an extension is one language surface plus the
@@ -34,17 +36,20 @@ Every workspace carries an AGENTS.md with the rules that govern it. That is
 the entry point for working in one. The code carries no comments and there
 are no design docs: a constraint worth keeping is a name, a type, or a test.
 
-REPO LAYOUT (pnpm + Turborepo monorepo)
+## REPO LAYOUT (pnpm + Turborepo monorepo)
 
-The language
+### The language
 
+```
   packages/interpreter    @repo/interpreter. The reader, the evaluator, the
                           drivers, the prelude, and the three seam mechanisms
                           an extension plugs into. Ships no extension and
                           names none.
+```
 
-The extensions, one language surface each
+### The extensions, one language surface each
 
+```
   packages/compaction     @repo/compaction-extension. Bounded output, so a
                           large result never floods the context.
   packages/llm            @repo/llm-extension. The language model as a
@@ -62,9 +67,11 @@ The extensions, one language surface each
   packages/ui-extension   @repo/ui-extension. Widgets the agent renders to a
                           client.
   packages/checks         @repo/checks. The DSL an eval case is written in.
+```
 
-Everything else
+### Everything else
 
+```
   packages/repl           @repo/repl. REPL front-ends over the interpreter:
                           an embeddable string-in/string-out REPL, and a
                           shared-session server over a unix socket so an
@@ -85,9 +92,11 @@ Everything else
                           @repo/ui.
   packages/bloub          @repo/bloub. The avatar component and its engine.
   packages/tsconfigs      Shared tsconfig bases.
+```
 
-Apps
+### Apps
 
+```
   apps/api                An HTTP server streaming the agent loop.
   apps/app                The web frontend.
   apps/cli                @lisptc/cli. The interactive terminal REPL, shipped
@@ -103,9 +112,11 @@ Apps
                           ourselves, pointing outward.
   apps/trace-viewer       @lisptc/trace-viewer. A viewer for eval runs, and
                           the home of the eval cases and their concrete hosts.
+```
 
-Outside the workspaces
+### Outside the workspaces
 
+```
   editors/nvim            A Neovim plugin: filetype detection, LSP client
                           wiring, and a REPL client against the shared
                           session.
@@ -115,8 +126,9 @@ Outside the workspaces
                           MCP including Linear and Playwright.
   scripts/                The architecture, comment, docs and reference checks
                           CI runs.
+```
 
-THE LANGUAGE
+## THE LANGUAGE
 
 Core dialect:
 
@@ -130,6 +142,7 @@ Core dialect:
 
 What the extensions add on top:
 
+```
 - compaction   echo, doc, head, tail, grep
 - promises     await, promise-all, promise-all-settled, promise-any,
                promise-race, promise-state, promises, cancel
@@ -152,10 +165,14 @@ What the extensions add on top:
 - checks       the eval DSL: called, awaited, answered, errored, halted,
                matches, contains, eventually, never, always, before, after,
                within, once, at-most
+```
 
-COMMANDS
+## COMMANDS
 
+```
   pnpm test              vitest in each package
+  pnpm test:coverage     vitest with v8 coverage in each package
+  pnpm coverage:merge    merge them into coverage/ and its badge
   pnpm typecheck         tsc --noEmit per package
   pnpm lint              biome ci (matches CI)
   pnpm format            biome check --write
@@ -176,6 +193,7 @@ COMMANDS
   task evals:open        build the trace viewer, serve it, open a browser
   task test              pnpm tests, nix flake checks, and the nvim test
   task check:agents      judge the AGENTS.md prose a PR adds
+```
 
 A task that needs credentials runs under Infisical, so they reach the command
 without ever landing in a file.
