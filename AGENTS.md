@@ -360,6 +360,10 @@ A commit message is a conventional commit, `type(scope): subject`, and
   `harness: add instruction to only run typecheck at the end`. A change to a
   check script, a husky hook, a `no-comments.json` allowance or an `AGENTS.md`
   is `harness`, never `docs` or `chore`.
+- `ci` is the type for how CI runs: the workflows under `.github/workflows/`
+  and the actions under `.github/actions/`, their setup, caching and runners.
+  It takes no scope: `ci: cache the pnpm store in every workflow`. A workflow
+  change is `ci`, never `harness`, even when the job it touches runs a check.
 - `eval` is the type for a change to the eval cases.
 
 A commit is its title. `body-max-lines` rejects a body longer than one line, so
