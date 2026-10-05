@@ -354,12 +354,14 @@ A commit message is a conventional commit, `type(scope): subject`, and
   workspaces takes the one its point is about.
 - The subject is lower case, says what the change does, and ends without a
   full stop. The whole header stays within 100 characters.
-- `harness` is the type for the harness: the checks that guard the repo, the
-  `AGENTS.md` files, and the agent rules under `.agents/`, with the hooks, the
-  agents and the skills that live there. It takes no scope:
-  `harness: add instruction to only run typecheck at the end`. A change to a
-  check script, a husky hook, a `no-comments.json` allowance or an `AGENTS.md`
-  is `harness`, never `docs` or `chore`.
+- `harness` is reserved for what an AI agent reads or runs: the `AGENTS.md`
+  files and the agent rules under `.agents/`, with the hooks, the agents and
+  the skills that live there. It takes no scope:
+  `harness: add instruction to only run typecheck at the end`. An `AGENTS.md`
+  change is `harness`, never `docs` or `chore`.
+- `ci` is the type for the checks that guard the repo whoever runs them: a
+  workflow, a check script, a husky hook, a `no-comments.json` allowance, the
+  test and coverage setup. None of that is `harness`.
 - `eval` is the type for a change to the eval cases.
 
 A commit is its title. `body-max-lines` rejects a body longer than one line, so
