@@ -29,7 +29,7 @@ export interface CheckEvaluator {
 export type TranscriptEntry =
 	| { role: "user"; content: string }
 	| { role: "assistant"; content: string }
-	| { role: "tool"; content: string };
+	| { role: "tool"; content: string; riding?: string };
 
 export type EvalTurnEvent =
 	| {
@@ -51,15 +51,12 @@ export interface EvalResult {
 	output: string;
 	error: boolean;
 	annotations: { step: Record<string, unknown> };
+	emitted: string;
 }
 
 export interface AgentDriver<Repl> {
 	eval(repl: Repl, code: string): Promise<EvalResult>;
-	resultContent(
-		output: string,
-		error: boolean,
-		step: Record<string, unknown>,
-	): string;
+	resultContent(output: string, error: boolean): string;
 	systemPrompt(repl: Repl): string;
 	turn(
 		transcript: TranscriptEntry[],
@@ -306,14 +303,15 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 			see({ role: "user", content: entry.user });
 			continue;
 		}
-		const { output, error, annotations } = await runtime.agent.eval(
+		const { output, error, annotations, emitted } = await runtime.agent.eval(
 			repl,
 			entry.assistant,
 		);
 		transcript.push({ role: "assistant", content: entry.assistant });
 		transcript.push({
 			role: "tool",
-			content: runtime.agent.resultContent(output, error, annotations.step),
+			content: runtime.agent.resultContent(output, error),
+			...(emitted === "" ? {} : { riding: emitted }),
 		});
 		see({ role: "assistant", content: entry.assistant });
 		see({ role: "tool", content: output }, annotations.step);
