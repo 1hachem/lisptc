@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: convex-deploy
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: convex-deploy
+          image: "{{ .Values.convexDeploy.image.repository }}:{{ .Values.convexDeploy.image.tag }}"
+          env:
+            - name: CONVEX_SELF_HOSTED_URL
+              value: http://convex-backend:3210
+            - name: CONVEX_SELF_HOSTED_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-convex
+                  key: CONVEX_SELF_HOSTED_ADMIN_KEY

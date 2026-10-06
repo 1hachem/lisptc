@@ -1,0 +1,83 @@
+version: '3'
+silent: true
+vars:
+  HELMFILE: '{{.ROOT_DIR}}/deploy/helmfile.yaml.gotmpl'
+  STAGE: prod
+tasks:
+  _reachable:
+    internal: true
+    cmd: |
+      ctx=$(kubectl config current-context 2>/dev/null || true)
+      kubectl cluster-info --request-timeout=5s >/dev/null 2>&1 && exit 0
+      echo "cannot reach the cluster for context '$ctx'. On the k3s laptop: export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >&2
+      exit 1
+
+  credentials:
+    desc: write the Infisical machine identity the operator reads (INFISICAL_CLIENT_ID/SECRET from .env)
+    deps: [_reachable]
+    requires:
+      vars: [INFISICAL_CLIENT_ID, INFISICAL_CLIENT_SECRET]
+    cmd: |
+      kubectl create namespace infisical --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create secret generic lisptc-infisical-cred -n infisical \
+        --from-literal=clientId="$INFISICAL_CLIENT_ID" \
+        --from-literal=clientSecret="$INFISICAL_CLIENT_SECRET" \
+        --dry-run=client -o yaml | kubectl apply -f -
+
+  bootstrap:
+    desc: install the Infisical and Tailscale operators, ArgoCD and the root app; ArgoCD pulls the rest from main
+    cmds:
+      - task: credentials
+      - helmfile sync -e {{.STAGE}} -f {{.HELMFILE}} {{.CLI_ARGS}}
+      - task: status
+
+  sync:
+    desc: re-apply the bootstrap layer after a change to deploy/ or a bootstrap chart
+    deps: [_reachable]
+    cmd: helmfile sync -e {{.STAGE}} -f {{.HELMFILE}} {{.CLI_ARGS}}
+
+  diff:
+    desc: show what sync would change in the bootstrap layer
+    deps: [_reachable]
+    cmd: helmfile diff -e {{.STAGE}} -f {{.HELMFILE}} {{.CLI_ARGS}}
+
+  refresh:
+    desc: make ArgoCD pull main now instead of on its next poll
+    deps: [_reachable]
+    cmd: |
+      for app in root secrets lisptc argocd-image-updater; do
+        kubectl -n argocd annotate application "$app" argocd.argoproj.io/refresh=hard --overwrite
+      done
+
+  status:
+    desc: show the ArgoCD apps, the pods and the tailnet hosts
+    deps: [_reachable]
+    cmd: |
+      kubectl -n argocd get applications
+      kubectl -n lisptc get pods
+      kubectl get ingress -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.status.loadBalancer.ingress[0].hostname
+
+  argocd:password:
+    desc: print the initial ArgoCD admin password
+    deps: [_reachable]
+    cmd: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
+
+  convex:admin-key:
+    desc: generate a convex admin key, to store in Infisical prod /convex as CONVEX_SELF_HOSTED_ADMIN_KEY
+    deps: [_reachable]
+    cmd: kubectl -n lisptc exec statefulset/convex-backend -- ./generate_admin_key.sh
+
+  logs:
+    desc: 'follow the logs of a workload (task cluster:logs -- deploy/api)'
+    deps: [_reachable]
+    cmd: kubectl -n lisptc logs -f {{.CLI_ARGS | default "deploy/api"}}
+
+  lint:
+    desc: lint and render the local charts, no cluster needed
+    dir: '{{.ROOT_DIR}}/charts'
+    cmd: |
+      for chart in */; do
+        [ -f "$chart/Chart.yaml" ] || continue
+        helm lint "$chart" --quiet
+        helm template "$chart" >/dev/null
+      done

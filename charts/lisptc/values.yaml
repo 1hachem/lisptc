@@ -1,0 +1,38 @@
+api:
+  image:
+    repository: ghcr.io/1hachem/lisptc-api
+    tag: main
+  port: 3001
+  hostname: lisptc-api
+  storage: 1Gi
+  secrets: [lisptc-api, lisptc-ai, lisptc-analytics]
+
+app:
+  image:
+    repository: ghcr.io/1hachem/lisptc-app
+    tag: main
+  port: 3000
+  hostname: lisptc
+  secrets: [lisptc-web, lisptc-analytics]
+
+convexDeploy:
+  image:
+    repository: ghcr.io/1hachem/lisptc-convex-deploy
+    tag: main
+
+convex:
+  backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    storage: 5Gi
+  dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:2cbcf8179207eb4521360e6d81ebee5e7abbfa07
+  hostnames:
+    cloud: lisptc-convex
+    site: lisptc-convex-site
+    dashboard: lisptc-convex-dashboard
+  secrets: [lisptc-db, lisptc-convex]
+
+postgres:
+  image: postgres:17
+  storage: 5Gi
+  secret: lisptc-db
