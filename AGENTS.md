@@ -254,9 +254,6 @@ only paths where it is off. Every exemption in `src` carries a `biome-ignore`
 naming the reason. An extension never reads a module here at all: it declares a
 port and is handed the value.
 
-The Convex deployment carries an environment of its own, and nothing in this
-repo pushes it. `packages/backend/AGENTS.md` has the rule.
-
 **Secrets live in Infisical, and nowhere else.** A `task` command fetches them
 at run time, so no secret is written into the tree. No `apps/*` or `packages/*`
 directory carries a `.env` file of any kind. The only one allowed is the
