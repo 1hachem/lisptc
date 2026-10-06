@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -32,7 +33,9 @@ RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm install --frozen-lockfile --offline
 COPY --from=pruner /app/out/full/ .
-RUN turbo build -F app
+RUN --mount=type=secret,id=TURBO_TOKEN,env=TURBO_TOKEN \
+    --mount=type=secret,id=TURBO_REMOTE_CACHE_SIGNATURE_KEY,env=TURBO_REMOTE_CACHE_SIGNATURE_KEY \
+    turbo build -F app
 
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS prod
 ENV NODE_ENV=production
