@@ -82,6 +82,11 @@ the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
 `editors/nvim` is the editor plugin, and `examples/` is the dialect written out.
 A change to the language surface is not done until they still pass.
 
+The cluster friends test on is not a workspace either, and it answers to
+`task cluster:*`. `deploy/` holds the helmfile that bootstraps it, `charts/`
+the charts, and `argocd/` what ArgoCD pulls from `main`. A new service in
+`docker-compose.yml` is not deployed until `charts/lisptc` runs it too.
+
 ### Packages
 
 The core language, and nothing else:
