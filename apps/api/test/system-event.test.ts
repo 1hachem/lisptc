@@ -165,7 +165,17 @@ describe("a system event resuming a chat", () => {
 		});
 		expect(response.status).toBe(200);
 		expect(world.appended[0].messages).toEqual([
-			{ type: "human", content: "<system-event>hi</system-event>" },
+			{
+				id: expect.any(String),
+				type: "human",
+				content: "<system-event>hi</system-event>",
+			},
 		]);
+	});
+
+	test("stores a typed message under a wire id, so its annotations can be saved later", async () => {
+		await post(chat, { input: { chatId: CHAT, message: "hello" } });
+		const [stored] = world.appended[0].messages;
+		expect(stored.id).toMatch(/^[0-9a-f-]{36}$/);
 	});
 });

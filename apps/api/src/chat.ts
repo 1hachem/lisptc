@@ -35,7 +35,8 @@ async function openingMessage(
 	input: TurnInput,
 	subject: string,
 ): Promise<StoredMessage | undefined> {
-	if ("message" in input) return { type: "human", content: input.message };
+	if ("message" in input)
+		return { id: crypto.randomUUID(), type: "human", content: input.message };
 	const event = await events.redeem(input.event.token, {
 		subject,
 		chatId: input.chatId,
