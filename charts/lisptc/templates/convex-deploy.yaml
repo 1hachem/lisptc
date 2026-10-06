@@ -13,6 +13,19 @@ spec:
       containers:
         - name: convex-deploy
           image: "{{ .Values.convexDeploy.image.repository }}:{{ .Values.convexDeploy.image.tag }}"
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              for f in /etc/convex-env/*; do
+                [ -f "$f" ] || continue
+                pnpm exec convex env set "$(basename "$f")" "$(cat "$f")"
+              done
+              exec pnpm exec convex deploy --typecheck disable --codegen disable
+          volumeMounts:
+            - name: convex-env
+              mountPath: /etc/convex-env
+              readOnly: true
           env:
             - name: CONVEX_SELF_HOSTED_URL
               value: http://convex-backend:3210
@@ -21,3 +34,7 @@ spec:
                 secretKeyRef:
                   name: lisptc-convex
                   key: CONVEX_SELF_HOSTED_ADMIN_KEY
+      volumes:
+        - name: convex-env
+          secret:
+            secretName: lisptc-convex-deploy
