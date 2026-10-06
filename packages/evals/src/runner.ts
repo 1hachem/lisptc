@@ -270,6 +270,34 @@ function describeCase<Spec extends EvalSpec, Repl>(
 	};
 }
 
+async function replaySeed<Repl>(
+	agent: AgentDriver<Repl>,
+	repl: Repl,
+	seed: SeedEntry[],
+	transcript: TranscriptEntry[],
+	see: (line: TranscriptLine, annotations?: Record<string, unknown>) => void,
+): Promise<void> {
+	for (const entry of seed) {
+		if ("user" in entry) {
+			transcript.push({ role: "user", content: entry.user });
+			see({ role: "user", content: entry.user });
+			continue;
+		}
+		const { output, error, annotations, emitted } = await agent.eval(
+			repl,
+			entry.assistant,
+		);
+		transcript.push({ role: "assistant", content: entry.assistant });
+		transcript.push({
+			role: "tool",
+			content: agent.resultContent(output, error),
+			...(emitted === "" ? {} : { riding: emitted }),
+		});
+		see({ role: "assistant", content: entry.assistant });
+		see({ role: "tool", content: output }, annotations.step);
+	}
+}
+
 export async function runCase<Spec extends EvalSpec, Repl>(
 	runtime: EvalRuntime<Spec, Repl>,
 	spec: Spec,
@@ -297,25 +325,7 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 	}
 
 	trace.beginStep(0);
-	for (const entry of spec.seed ?? []) {
-		if ("user" in entry) {
-			transcript.push({ role: "user", content: entry.user });
-			see({ role: "user", content: entry.user });
-			continue;
-		}
-		const { output, error, annotations, emitted } = await runtime.agent.eval(
-			repl,
-			entry.assistant,
-		);
-		transcript.push({ role: "assistant", content: entry.assistant });
-		transcript.push({
-			role: "tool",
-			content: runtime.agent.resultContent(output, error),
-			...(emitted === "" ? {} : { riding: emitted }),
-		});
-		see({ role: "assistant", content: entry.assistant });
-		see({ role: "tool", content: output }, annotations.step);
-	}
+	await replaySeed(runtime.agent, repl, spec.seed ?? [], transcript, see);
 
 	let steps = 0;
 	let halted = false;
