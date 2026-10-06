@@ -27,6 +27,7 @@ ARG VITE_CONVEX_URL
 ARG VITE_ENVIRONMENT
 ARG VITE_POSTHOG_KEY
 ARG VITE_POSTHOG_SURVEY_ID
+ARG WEB_BUILD_VARS_HASH
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile
@@ -35,7 +36,8 @@ RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
 COPY --from=pruner /app/out/full/ .
 RUN --mount=type=secret,id=TURBO_TOKEN,env=TURBO_TOKEN \
     --mount=type=secret,id=TURBO_REMOTE_CACHE_SIGNATURE_KEY,env=TURBO_REMOTE_CACHE_SIGNATURE_KEY \
-    turbo build -F app
+    --mount=type=secret,id=WEB_BUILD_VARS,target=/run/secrets/web-build-vars \
+    sh -c 'if [ -f /run/secrets/web-build-vars ]; then set -a; . /run/secrets/web-build-vars; set +a; fi; turbo build -F app'
 
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS prod
 ENV NODE_ENV=production

@@ -63,19 +63,13 @@ jobs:
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: prod
           secret-path: /web
-          export-type: env
+          export-type: file
+          file-output-path: /../web-build-vars
 
-      - name: Fetch the analytics build variables from Infisical
+      - name: Hash the web build variables
+        id: web
         if: matrix.name == 'app'
-        uses: Infisical/secrets-action@v1.0.9
-        with:
-          method: universal
-          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
-          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: prod
-          secret-path: /analytics
-          export-type: env
+        run: echo "hash=$(sha256sum ../web-build-vars | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -106,14 +100,10 @@ jobs:
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VITE_API_URL=${{ env.VITE_API_URL }}
-            VITE_CONVEX_URL=${{ env.VITE_CONVEX_URL }}
-            VITE_ENVIRONMENT=${{ env.VITE_ENVIRONMENT }}
-            VITE_POSTHOG_KEY=${{ env.VITE_POSTHOG_KEY }}
-            VITE_POSTHOG_SURVEY_ID=${{ env.VITE_POSTHOG_SURVEY_ID }}
           secrets: |
             TURBO_TOKEN=${{ env.TURBO_TOKEN }}
             TURBO_REMOTE_CACHE_SIGNATURE_KEY=${{ env.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+          build-args: WEB_BUILD_VARS_HASH=${{ steps.web.outputs.hash }}
+          secret-files: ${{ matrix.name == 'app' && format('WEB_BUILD_VARS={0}/../web-build-vars', github.workspace) || '' }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
