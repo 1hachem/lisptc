@@ -104,6 +104,6 @@ jobs:
             TURBO_TOKEN=${{ env.TURBO_TOKEN }}
             TURBO_REMOTE_CACHE_SIGNATURE_KEY=${{ env.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
           build-args: WEB_BUILD_VARS_HASH=${{ steps.web.outputs.hash }}
-          secret-files: ${{ matrix.name == 'app' && format('WEB_BUILD_VARS={0}/../web-build-vars', github.workspace) || '' }}
+          secret-files: ${{ matrix.name == 'app' && format('web-build-vars={0}/../web-build-vars', github.workspace) || '' }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
