@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { atlasPanels } from "@/components/atlas.tsx";
 import { Empty, Masthead, Pill, Shell, Title } from "@/components/ui.tsx";
+import { CRAPPY } from "@/lib/crap.ts";
 import { count, when } from "@/lib/format.ts";
 import type { Snapshot } from "@/lib/snapshot.ts";
 import { snapshot } from "@/lib/snapshot.ts";
@@ -101,7 +102,7 @@ function ColumnHead({ side }: { side: Side }) {
 }
 
 function Deltas({ left, right }: { left: Side; right: Side }) {
-	const rows = [
+	const rows: { label: string; from: number; to: number; risk?: true }[] = [
 		{
 			label: "commits",
 			from: left.view.commits,
@@ -121,6 +122,7 @@ function Deltas({ left, right }: { left: Side; right: Side }) {
 			label: "import cycles",
 			from: left.view.cycles.length,
 			to: right.view.cycles.length,
+			risk: true,
 		},
 		{
 			label: "dep edges",
@@ -128,15 +130,23 @@ function Deltas({ left, right }: { left: Side; right: Side }) {
 			to: right.view.edges.length,
 		},
 	];
+	const [leftCrap, rightCrap] = [left.view.crap, right.view.crap];
+	if (leftCrap !== null && rightCrap !== null)
+		rows.push({
+			label: `crap ${CRAPPY}+`,
+			from: leftCrap.latest.crappy,
+			to: rightCrap.latest.crappy,
+			risk: true,
+		});
 
 	return (
-		<div className="grid gap-px bg-bg2 sm:grid-cols-5">
+		<div className="grid gap-px bg-bg2 sm:grid-cols-3 lg:grid-cols-6">
 			{rows.map((row) => {
 				const delta = row.to - row.from;
 				const tone =
 					delta === 0
 						? "var(--dim-plot)"
-						: (row.label === "import cycles") === delta > 0
+						: (row.risk === true) === delta > 0
 							? "var(--crit)"
 							: "var(--good)";
 				return (

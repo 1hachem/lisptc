@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { crapSchema } from "./crap.ts";
 import { decodeReport } from "./report.ts";
 import type { Snapshot } from "./snapshot.ts";
 import { snapshot } from "./snapshot.ts";
@@ -88,6 +89,7 @@ const storedSchema = z.object({
 		z.object({ members: z.array(z.string()), length: z.number() }),
 	),
 	report: z.string().nullable(),
+	crap: crapSchema.nullable().default(null),
 });
 
 export interface Version {

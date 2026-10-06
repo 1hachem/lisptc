@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { CrapFrame } from "@/components/atlas-crap.tsx";
 import { LayersFrame, MatrixFrame } from "@/components/atlas-dependencies.tsx";
 import { HotspotFrame } from "@/components/atlas-hotspot.tsx";
 import { ActivityFrame, CycleFrame } from "@/components/atlas-timeline.tsx";
@@ -41,6 +42,10 @@ export function atlasPanels(view: Snapshot, compact: boolean): AtlasPanel[] {
 		{
 			key: "hotspots",
 			node: <HotspotFrame compact={compact} files={code} />,
+		},
+		{
+			key: "crap",
+			node: <CrapFrame compact={compact} crap={view.crap} />,
 		},
 		{
 			key: "treemap",

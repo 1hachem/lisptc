@@ -1,9 +1,22 @@
+import {
+	CRAP_PREFIX,
+	crapDocumentOf,
+	crapNameOf,
+	crapPointOf,
+} from "./crap.ts";
 import { savePulls } from "./pulls.ts";
 import { exec, git } from "./repo.ts";
+import { decodeReport } from "./report.ts";
 import { documentStore } from "./store.ts";
 import { saveVersion } from "./versions.ts";
 
-const KEPT = 12;
+const KEPT = new Map([
+	["deadcode-", 12],
+	["health-", 12],
+	["snapshot-", 12],
+	["pulls-", 12],
+	[CRAP_PREFIX, 520],
+]);
 
 export interface Analysis {
 	at: number;
@@ -70,6 +83,27 @@ async function perform(): Promise<Analysis> {
 		return name;
 	});
 
+	await attempt("crap", async () => {
+		const [{ stdout }, head] = await Promise.all([
+			exec("pnpm", [
+				"exec",
+				"fallow",
+				"health",
+				"--max-crap",
+				"1",
+				"--report-only",
+				"--format",
+				"json",
+				"--quiet",
+			]),
+			git(["rev-parse", "HEAD"]),
+		]);
+		const point = crapPointOf(decodeReport(stdout), head.trim(), at);
+		const name = crapNameOf(point);
+		await write(name, crapDocumentOf(point));
+		return name;
+	});
+
 	await attempt("version", async () => (await saveVersion()).file);
 
 	await attempt("pulls", async () => {
@@ -87,15 +121,15 @@ async function prune(): Promise<void> {
 	const stored = await store.list();
 	const groups = new Map<string, typeof stored>();
 	for (const row of stored) {
-		const prefix = /^(deadcode|health|snapshot|pulls)-/.exec(row.name)?.[1];
+		const prefix = [...KEPT.keys()].find((kept) => row.name.startsWith(kept));
 		if (prefix === undefined) continue;
 		const held = groups.get(prefix);
 		if (held === undefined) groups.set(prefix, [row]);
 		else held.push(row);
 	}
-	for (const rows of groups.values())
+	for (const [prefix, rows] of groups)
 		for (const row of rows
 			.sort((a, b) => b.modifiedAt - a.modifiedAt)
-			.slice(KEPT))
+			.slice(KEPT.get(prefix)))
 			await store.remove?.(row.name);
 }

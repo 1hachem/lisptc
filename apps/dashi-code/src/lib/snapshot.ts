@@ -1,8 +1,15 @@
+import type { Crap } from "./crap.ts";
 import type { History, Pair, Timeline, Trend } from "./git.ts";
 import { readHistory } from "./git.ts";
 import type { Cycle, Report } from "./report.ts";
 import { cyclesOf } from "./report.ts";
-import { listDocuments, readDocument, readReport } from "./reports.ts";
+import {
+	listDocuments,
+	newestCrapName,
+	readCrap,
+	readDocument,
+	readReport,
+} from "./reports.ts";
 import type { Edge, Workspace } from "./workspaces.ts";
 import { readTree } from "./workspaces.ts";
 
@@ -50,6 +57,7 @@ export interface Snapshot {
 	cochange: { files: Pair[]; packages: Pair[] };
 	report: string | null;
 	cycles: Cycle[];
+	crap: Crap | null;
 }
 
 interface Cycles {
@@ -71,12 +79,13 @@ async function newestCycles(): Promise<Cycles> {
 let cached: { key: string; value: Snapshot } | undefined;
 
 export async function snapshot(): Promise<Snapshot> {
-	const [history, latest, cycles] = await Promise.all([
+	const [history, latest, cycles, crap] = await Promise.all([
 		readHistory(),
 		newest(),
 		newestCycles(),
+		newestCrapName(),
 	]);
-	const key = `${history.head}:${latest?.file ?? "none"}:${cycles.file ?? "none"}`;
+	const key = `${history.head}:${latest?.file ?? "none"}:${cycles.file ?? "none"}:${crap ?? "none"}`;
 	if (cached?.key === key) return cached.value;
 	const value = await compose(history, latest, cycles.cycles);
 	cached = { key, value };
@@ -99,7 +108,7 @@ async function compose(
 	latest: { file: string; report: Report } | null,
 	cycles: Cycle[],
 ): Promise<Snapshot> {
-	const tree = await readTree();
+	const [tree, crap] = await Promise.all([readTree(), readCrap()]);
 	const report = latest?.report;
 	const functions = functionsOf(report);
 	const files = filesOf(history, tree, complexityOf(functions), report);
@@ -117,6 +126,7 @@ async function compose(
 		timeline: history.timeline,
 		cochange: history.cochange,
 		cycles,
+		crap,
 		report: latest?.file ?? null,
 	};
 }

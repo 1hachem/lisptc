@@ -1,3 +1,5 @@
+import type { Crap, CrapPoint } from "./crap.ts";
+import { CRAP_PREFIX, crapOf, crapPointFrom } from "./crap.ts";
 import type { Report } from "./report.ts";
 import { decodeReport, parseReport } from "./report.ts";
 import type { DocumentStore, StoredDocument } from "./store.ts";
@@ -55,4 +57,23 @@ export async function readReport(file: string): Promise<Loaded> {
 			why: err instanceof Error ? err.message : String(err),
 		};
 	}
+}
+
+export async function newestCrapName(): Promise<string | null> {
+	const stored = (await listDocuments())
+		.filter((row) => row.name.startsWith(CRAP_PREFIX))
+		.sort((a, b) => b.modifiedAt - a.modifiedAt);
+	return stored[0]?.name ?? null;
+}
+
+export async function readCrap(): Promise<Crap | null> {
+	const names = (await listDocuments())
+		.map((row) => row.name)
+		.filter((name) => name.startsWith(CRAP_PREFIX));
+	const raws = await Promise.all(names.map(readDocument));
+	return crapOf(
+		raws
+			.map(crapPointFrom)
+			.filter((point): point is CrapPoint => point !== null),
+	);
 }
