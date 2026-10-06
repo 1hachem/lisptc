@@ -4,7 +4,15 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { emitting, hearing, reporting, riding, testRepl } from "./helpers.ts";
+import { extension, hearing, reporting, riding, testRepl } from "./helpers.ts";
+
+const emitting = (text: string) =>
+	extension((hooks) =>
+		hooks.evalStep.use((ctx, next) => {
+			ctx.emit(text);
+			return next(ctx);
+		}),
+	);
 
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],

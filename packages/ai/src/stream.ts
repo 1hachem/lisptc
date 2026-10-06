@@ -4,7 +4,7 @@ import type { Steer, SteerInbox } from "./inbox.ts";
 import { joinRiding, replResultContent, type TranscriptEntry } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
-import { runAgentTurn } from "./turn.ts";
+import { runAgentTurn, type TurnEvent } from "./turn.ts";
 
 export interface ChatMessageInput {
 	id?: string;
@@ -54,6 +54,21 @@ function annotate(
 	const meta = { ...((kwargs.meta as Record<string, unknown>) ?? {}) };
 	mergeInto(meta, annotations);
 	return { ...message, additional_kwargs: { ...kwargs, meta } };
+}
+
+function resultMessage(
+	event: Extract<TurnEvent, { type: "result" }>,
+): WireMessage {
+	const extras: Record<string, unknown> = { ...event.annotations.output };
+	if (event.display !== event.output) extras.display = event.display;
+	if (event.failed) extras.failed = true;
+	if (event.riding !== undefined) extras.riding = event.riding;
+	return {
+		type: "tool",
+		content: replResultContent(event.output, event.error),
+		id: crypto.randomUUID(),
+		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
+	};
 }
 
 function riding(message: { additional_kwargs?: Record<string, unknown> }) {
@@ -241,20 +256,7 @@ export function streamChatResponse<Id extends string>(
 					} else if (event.type === "result") {
 						steps = event.step;
 						if (lastMeta) mergeInto(lastMeta, event.annotations.step);
-						const extras: Record<string, unknown> = {
-							...event.annotations.output,
-						};
-						if (event.display !== event.output) extras.display = event.display;
-						if (event.failed) extras.failed = true;
-						if (event.riding !== undefined) extras.riding = event.riding;
-						wire.push({
-							type: "tool",
-							content: replResultContent(event.output, event.error),
-							id: crypto.randomUUID(),
-							...(Object.keys(extras).length > 0
-								? { additional_kwargs: extras }
-								: undefined),
-						});
+						wire.push(resultMessage(event));
 						if (!write(sse("values", { messages: wire }))) break;
 					} else if (event.type === "halt") {
 						steps = event.steps;

@@ -86,12 +86,3 @@ export function testRepl(extensions: InterpExtension[] = []): AgentRepl {
 export function testRepls(extensions: InterpExtension[] = []): ReplStore {
 	return new ReplStore(() => testRepl(extensions));
 }
-
-export function emitting(text: string): InterpExtension {
-	return extension((hooks) =>
-		hooks.evalStep.use((ctx, next) => {
-			ctx.emit(text);
-			return next(ctx);
-		}),
-	);
-}
