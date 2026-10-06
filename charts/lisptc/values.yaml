@@ -1,3 +1,5 @@
+imagePullSecret: ghcr-pull
+
 api:
   image:
     repository: ghcr.io/1hachem/lisptc-api

@@ -37,6 +37,8 @@ spec:
     spec:
       securityContext:
         fsGroup: 1001
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
       containers:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"

@@ -10,6 +10,8 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
       containers:
         - name: convex-deploy
           image: "{{ .Values.convexDeploy.image.repository }}:{{ .Values.convexDeploy.image.tag }}"
