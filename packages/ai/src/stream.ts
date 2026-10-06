@@ -246,6 +246,7 @@ export function streamChatResponse<Id extends string>(
 						};
 						if (event.display !== event.output) extras.display = event.display;
 						if (event.failed) extras.failed = true;
+						if (event.riding !== undefined) extras.riding = event.riding;
 						wire.push({
 							type: "tool",
 							content: replResultContent(event.output, event.error),
