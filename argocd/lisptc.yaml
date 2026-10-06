@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/1hachem/lisptc
-    targetRevision: main
+    targetRevision: feat/cluster-deploy
     path: charts/lisptc
   destination:
     server: https://kubernetes.default.svc
