@@ -24,9 +24,11 @@ jobs:
           - name: api
             dockerfile: apps/api/Dockerfile
             target: prod
+            turbo: true
           - name: app
             dockerfile: apps/app/Dockerfile
             target: prod
+            turbo: true
           - name: convex-deploy
             dockerfile: packages/backend/Dockerfile
             target: prod
@@ -39,8 +41,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fetch the turbo remote cache credentials from Infisical
+        if: matrix.turbo
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ci
+          secret-path: /turbo
+          export-type: env
+
       - name: Fetch the web build variables from Infisical
-        if: matrix.name == 'app' && github.event_name != 'pull_request'
+        if: matrix.name == 'app'
         uses: Infisical/secrets-action@v1.0.9
         with:
           method: universal
@@ -52,7 +66,7 @@ jobs:
           export-type: env
 
       - name: Fetch the analytics build variables from Infisical
-        if: matrix.name == 'app' && github.event_name != 'pull_request'
+        if: matrix.name == 'app'
         uses: Infisical/secrets-action@v1.0.9
         with:
           method: universal
@@ -98,5 +112,8 @@ jobs:
             VITE_ENVIRONMENT=${{ env.VITE_ENVIRONMENT }}
             VITE_POSTHOG_KEY=${{ env.VITE_POSTHOG_KEY }}
             VITE_POSTHOG_SURVEY_ID=${{ env.VITE_POSTHOG_SURVEY_ID }}
+          secrets: |
+            TURBO_TOKEN=${{ env.TURBO_TOKEN }}
+            TURBO_REMOTE_CACHE_SIGNATURE_KEY=${{ env.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
