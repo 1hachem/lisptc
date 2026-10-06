@@ -4,6 +4,7 @@ set -euo pipefail
 GRACE=${CLAUDE_CI_GRACE:-180}
 POLL=${CLAUDE_CI_POLL:-60}
 DEADLINE=${CLAUDE_CI_DEADLINE:-2400}
+MAX_MISSES=${CLAUDE_CI_MAX_MISSES:-3}
 
 payload=$(cat)
 cmd=$(jq -r '.tool_input.command // ""' <<<"$payload")
@@ -18,15 +19,39 @@ branch=$(git rev-parse --abbrev-ref HEAD)
 
 sleep "$GRACE"
 
+unavailable() {
+  cat >&2 <<MSG
+Could not read the CI status of $branch at ${sha:0:12}, the commit you pushed. \`gh run list\` failed $misses times in a row:
+
+$lookup_error
+
+Check \`gh auth status\` and the network, then check CI for this commit by hand with \`gh run list --commit $sha\`. Do not assume it passed.
+MSG
+  exit 2
+}
+
 waited=$GRACE
+misses=0
+lookup_error=""
+runs='[]'
 while :; do
-  runs=$(gh run list --commit "$sha" --json databaseId,name,status,conclusion,url 2>/dev/null || echo '[]')
-  pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
-  total=$(jq 'length' <<<"$runs")
-  if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then
-    break
+  if fresh=$(gh run list --commit "$sha" --json databaseId,name,status,conclusion,url 2>&1); then
+    runs=$fresh
+    misses=0
+  else
+    misses=$((misses + 1))
+    lookup_error=$fresh
+    [ "$misses" -ge "$MAX_MISSES" ] && unavailable
+  fi
+  if [ "$misses" -eq 0 ]; then
+    pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
+    total=$(jq 'length' <<<"$runs")
+    if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then
+      break
+    fi
   fi
   if [ "$waited" -ge "$DEADLINE" ]; then
+    [ "$misses" -gt 0 ] && unavailable
     [ "$total" -eq 0 ] && exit 0
     break
   fi
@@ -34,7 +59,7 @@ while :; do
   waited=$((waited + POLL))
 done
 
-failed=$(jq -r '.[] | select(.status == "completed" and (.conclusion | IN("success", "skipped", "neutral") | not)) | "- \(.name) (\(.conclusion)): run \(.databaseId) \(.url)"' <<<"$runs")
+failed=$(jq -r '.[] | select(.status == "completed" and (.conclusion | IN("success", "skipped", "neutral", "cancelled") | not)) | "- \(.name) (\(.conclusion)): run \(.databaseId) \(.url)"' <<<"$runs")
 still=$(jq -r '.[] | select(.status != "completed") | "- \(.name) (\(.status)): run \(.databaseId)"' <<<"$runs")
 
 [ -z "$failed" ] && exit 0
