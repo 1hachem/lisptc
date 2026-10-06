@@ -1,12 +1,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: convex-deploy
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  name: convex-deploy-{{ .Values.convexDeploy.image.tag | sha256sum | trunc 10 }}
 spec:
   backoffLimit: 4
+  activeDeadlineSeconds: 600
   template:
     spec:
       restartPolicy: OnFailure
