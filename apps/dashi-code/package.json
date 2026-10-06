@@ -10,7 +10,10 @@
     "dev": "next dev --port ${PORT:-3300}",
     "build": "next build",
     "start": "next start --port ${PORT:-3300}",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.700.0",
@@ -27,6 +30,8 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "typescript": "^5.9.3"
+    "@vitest/coverage-v8": "^3.2.7",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   }
 }
