@@ -83,7 +83,9 @@ describe("a REPL built from a list of its own", () => {
 
 		const { model, annotations } = await r.evalOutput("(+ 1 1)");
 
-		expect(annotations.step.memories).toEqual([{ key: "k", body: "the note" }]);
+		expect(annotations.step.memories).toEqual([
+			{ key: "k", body: "the note", on: "step" },
+		]);
 		expect(model).not.toContain("the note");
 		expect(model).toContain("2");
 	});

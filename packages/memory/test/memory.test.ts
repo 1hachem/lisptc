@@ -289,9 +289,24 @@ describe("triggers", () => {
 
 		said(f, "world go(done)");
 		expect(await drive(f.bank.hear(f.interp))).toEqual([
-			{ key: "h", body: "note" },
+			{ key: "h", body: "note", on: "user" },
 		]);
 		expect(await drive(f.bank.beginStep("(+ 1 1)", f.interp))).toBe("");
+	});
+
+	it("hands over a memory with no trigger without a kind", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "h" "note" :on '(user "world go"))`);
+		await ev(f, '(memory/remember "plain" "linked note")');
+		const h = await f.bank.store.get("h");
+		h?.links.set("plain", LINKED_FIRES_AT);
+		if (h) await f.bank.store.put(h);
+
+		said(f, "world go(done)");
+		expect(await drive(f.bank.hear(f.interp))).toEqual([
+			{ key: "h", body: "note", on: "user" },
+			{ key: "plain", body: "linked note" },
+		]);
 	});
 
 	it("keeps a memory the user's words fired open for revision", async () => {
