@@ -13,6 +13,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: convex-dashboard
+  annotations:
+    secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1
   selector:
@@ -28,6 +30,16 @@ spec:
           image: {{ .Values.convex.dashboard.image }}
           ports:
             - containerPort: 6791
+          readinessProbe:
+            tcpSocket:
+              port: 6791
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6791
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
           env:
             - name: NEXT_PUBLIC_DEPLOYMENT_URL
               valueFrom:

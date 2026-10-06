@@ -23,6 +23,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
+  annotations:
+    secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1
   strategy:
@@ -52,6 +54,13 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.api.port | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.api.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
