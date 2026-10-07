@@ -70,12 +70,24 @@ jobs:
           export-type: file
           file-output-path: /../web-build-vars
 
+      - name: Fetch the tailnet domain from Infisical
+        if: matrix.name == 'app' && env.PREVIEW == 'true'
+        uses: Infisical/secrets-action@v1.0.18
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /tailnet
+          export-type: env
+
       - name: Point the web build at the preview
         if: matrix.name == 'app' && env.PREVIEW == 'true'
         env:
           PR: ${{ github.event.number }}
         run: |
-          domain=$(set -a; . ../web-build-vars; printf %s "$TAILNET_DOMAIN")
+          domain="$TAILNET_DOMAIN"
           test -n "$domain"
           grep -v -e '^VITE_API_URL=' -e '^VITE_CONVEX_URL=' ../web-build-vars > ../web-build-vars.preview
           printf "VITE_API_URL='https://lisptc-pr-%s-api.%s'\nVITE_CONVEX_URL='https://lisptc-pr-%s-convex.%s'\n" "$PR" "$domain" "$PR" "$domain" >> ../web-build-vars.preview
