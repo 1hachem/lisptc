@@ -2,8 +2,6 @@
   (dict "name" "app" "host" .Values.app.hostname "service" "app" "port" .Values.app.port)
   (dict "name" "api" "host" .Values.api.hostname "service" "api" "port" .Values.api.port)
   (dict "name" "convex" "host" .Values.convex.hostnames.cloud "service" "convex-backend" "port" 3210)
-  (dict "name" "convex-site" "host" .Values.convex.hostnames.site "service" "convex-backend" "port" 3211)
-  (dict "name" "convex-dashboard" "host" .Values.convex.hostnames.dashboard "service" "convex-dashboard" "port" 6791)
 }}
 {{- range $ingresses }}
 ---
