@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { LoadingScene } from "../../components/loading-scene.tsx";
 import { useWorkspace } from "../../lib/workspace.tsx";
 
 export const Route = createFileRoute("/_authed/")({
@@ -19,5 +20,5 @@ function OpenWorkspace() {
 		});
 	}, [workspace, navigate]);
 
-	return null;
+	return <LoadingScene />;
 }

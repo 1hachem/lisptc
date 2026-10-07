@@ -1,8 +1,10 @@
+export * as alpineDawn from "./ascii/alpine-dawn.ts";
 export * from "./components/ai-elements/confirmation.tsx";
 export * from "./components/ai-elements/conversation.tsx";
 export * from "./components/ai-elements/prompt-input.tsx";
 export * from "./components/ai-elements/queue.tsx";
 export * from "./components/ai-elements/suggestion.tsx";
+export { AsciiScene } from "./components/ui/ascii-scene.tsx";
 export { Button, buttonVariants } from "./components/ui/button.tsx";
 export {
 	type ChartConfig,
