@@ -13,6 +13,7 @@
     "./infisical": "./src/infisical.ts",
     "./mcps/google/sheets": "./src/mcps/google/sheets.ts",
     "./mcps/mistral/api": "./src/mcps/mistral/api.ts",
+    "./mcp": "./src/mcp.ts",
     "./memory": "./src/memory.ts",
     "./oauth": "./src/oauth.ts",
     "./providers": "./src/providers.ts",
