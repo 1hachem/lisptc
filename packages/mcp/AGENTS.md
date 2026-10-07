@@ -39,17 +39,15 @@ is an address a client dials as written, so only a remote server, or one a
 An image built here lives in a Dockerfile under `docker/`;
 `task mcp:browser:build` builds the browser one.
 
-`mcpHostFor` defaults to `LocalProcessHost`, so this package needs no daemon to
-be used or tested. A container host is chosen at a composition root instead:
-the CLI passes `DockerHost`, and `@repo/backend`'s `agent-repl.ts` takes
-whichever `containerHost` picks from the env. A test that wants containers has
-to ask for them.
+This package needs no daemon to be used or tested. A container host is chosen
+at a composition root, never by default, and a test that wants containers has
+to ask for them. A test of a host that talks to a cluster hands it a fake
+cluster, never a real one.
 
-`KubernetesHost` runs the same launches as `DockerHost`, as pods in one
-namespace per workspace. It reaches the API server only through its `Cluster`,
-so a test hands it a fake one instead of a cluster. **What the API server lets
-it do is granted in `charts/lisptc`**, so a new kind of object it creates is a
-new rule there as well.
+**A workspace's servers run apart from every other workspace's.** On a cluster
+that boundary is its namespace. **What the cluster lets the api do is granted
+in `charts/lisptc`**, so a host that creates a new kind of object needs a new
+rule there too.
 
 **`task mcp:reap` clears the containers a dead process left behind.** No host
 instance reaps another's, so nothing else will.
