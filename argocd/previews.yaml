@@ -6,6 +6,9 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
+  ignoreApplicationDifferences:
+    - jsonPointers:
+        - /spec/source/helm/parameters
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
   generators:
@@ -33,17 +36,11 @@ spec:
           valuesObject:
             preview:
               enabled: true
+              number: "{{ .number }}"
             api:
               hostname: "lisptc-pr-{{ .number }}-api"
-              image:
-                tag: "pr-{{ .number }}-{{ .head_sha }}"
             app:
               hostname: "lisptc-pr-{{ .number }}"
-              image:
-                tag: "pr-{{ .number }}-{{ .head_sha }}"
-            convexDeploy:
-              image:
-                tag: "pr-{{ .number }}-{{ .head_sha }}"
             convex:
               hostnames:
                 cloud: "lisptc-pr-{{ .number }}-convex"

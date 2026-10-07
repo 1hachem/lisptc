@@ -8,6 +8,39 @@ metadata:
     lisptc.io/preview: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
+---
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: {{ .Release.Namespace }}
+  namespace: argocd
+spec:
+  commonUpdateSettings:
+    updateStrategy: newest-build
+    allowTags: regexp:^pr-{{ required "preview.number is required" .Values.preview.number }}-[0-9a-f]{40}$
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: {{ .Release.Namespace }}
+      images:
+        - alias: api
+          imageName: {{ .Values.api.image.repository }}
+          manifestTargets:
+            helm:
+              name: api.image.repository
+              tag: api.image.tag
+        - alias: app
+          imageName: {{ .Values.app.image.repository }}
+          manifestTargets:
+            helm:
+              name: app.image.repository
+              tag: app.image.tag
+        - alias: convex-deploy
+          imageName: {{ .Values.convexDeploy.image.repository }}
+          manifestTargets:
+            helm:
+              name: convexDeploy.image.repository
+              tag: convexDeploy.image.tag
 {{- range .Values.preview.synced }}
 ---
 apiVersion: secrets.infisical.com/v1alpha1
