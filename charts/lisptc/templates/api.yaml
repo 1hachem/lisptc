@@ -58,9 +58,16 @@ spec:
             - name: LISPTC_MCP_HOST
               value: kubernetes
             - name: LISPTC_MCP_NAMESPACE_PREFIX
-              value: {{ .Values.mcp.namespacePrefix | quote }}
+              value: {{ include "lisptc.mcpNamespacePrefix" . | quote }}
             - name: LISPTC_MCP_CALLER_NAMESPACE
               value: {{ .Release.Namespace | quote }}
+            {{- include "lisptc.previewEnv" (list . (dict
+                "APP_URL" .Values.app.hostname)) | nindent 12 }}
+            {{- include "lisptc.previewConvexEnv" . | nindent 12 }}
+            {{- if .Values.preview.enabled }}
+            - name: LISPTC_OAUTH_REDIRECT_URL
+              value: {{ printf "%s/oauth/callback" (include "lisptc.url" .Values.app.hostname) | quote }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health

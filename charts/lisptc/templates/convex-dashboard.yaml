@@ -41,11 +41,16 @@ spec:
             periodSeconds: 20
             failureThreshold: 3
           env:
+            {{- if .Values.preview.enabled }}
+            {{- include "lisptc.previewEnv" (list . (dict
+                "NEXT_PUBLIC_DEPLOYMENT_URL" .Values.convex.hostnames.cloud)) | nindent 12 }}
+            {{- else }}
             - name: NEXT_PUBLIC_DEPLOYMENT_URL
               valueFrom:
                 secretKeyRef:
                   name: lisptc-convex
                   key: CONVEX_CLOUD_ORIGIN
+            {{- end }}
             - name: NEXT_PUBLIC_ADMIN_KEY
               valueFrom:
                 secretKeyRef:
