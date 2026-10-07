@@ -16,7 +16,8 @@ Turbo tag: `extension`.
 `src/ports.ts` is the contract layer: the client, host, registry and store
 interfaces, and the tool and connection shapes that cross them. A consumer
 imports it without pulling in the extension. `src/mcp-client.ts`,
-`src/local-host.ts`, `src/docker-host.ts` and `src/mcp-oauth.ts` implement
+`src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts` and
+`src/mcp-oauth.ts` implement
 against it. `src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server
 registry.
 
@@ -25,8 +26,8 @@ is one per port for the whole process, shared by every REPL in it, and reached
 through `sharedAuthCallback`. A client that binds its own loses the flows the
 shared one is holding.
 
-`DockerHost` is the one strategy the extension is handed, and it covers every
-modality a toolkit entry can have. Read the modalities off the entry shapes in
+A container host is the one strategy the extension is handed, and it covers
+every modality a toolkit entry can have. Read the modalities off the entry shapes in
 `src/toolkit.ts`, not from prose.
 
 **An entry that names an `image` carries a `port` and never a `url`.** The
@@ -39,9 +40,16 @@ An image built here lives in a Dockerfile under `docker/`;
 `task mcp:browser:build` builds the browser one.
 
 `mcpHostFor` defaults to `LocalProcessHost`, so this package needs no daemon to
-be used or tested. `DockerHost` is chosen at a composition root instead:
-`@repo/backend`'s `agent-repl.ts` and the CLI both pass it. A test that wants
-containers has to ask for them.
+be used or tested. A container host is chosen at a composition root instead:
+the CLI passes `DockerHost`, and `@repo/backend`'s `agent-repl.ts` takes
+whichever `containerHost` picks from the env. A test that wants containers has
+to ask for them.
+
+`KubernetesHost` runs the same launches as `DockerHost`, as pods in one
+namespace per workspace. It reaches the API server only through its `Cluster`,
+so a test hands it a fake one instead of a cluster. **What the API server lets
+it do is granted in `charts/lisptc`**, so a new kind of object it creates is a
+new rule there as well.
 
 **`task mcp:reap` clears the containers a dead process left behind.** No host
 instance reaps another's, so nothing else will.
