@@ -9,6 +9,7 @@ includes:
   check: ./taskfiles/check.yml
   dashi-codes: ./taskfiles/dashi-codes.yml
   evals: ./taskfiles/evals.yml
+  cluster: ./taskfiles/cluster.yml
 tasks:
   default:
     desc: prints this help
@@ -36,7 +37,7 @@ tasks:
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: "DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}"
+          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
 
   up:prod:
     desc: build and start the whole stack from its production images
@@ -45,7 +46,7 @@ tasks:
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: "DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}"
+          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}'
       - echo "app http://localhost:3000 · api http://localhost:3001 · dashboard http://127.0.0.1:6791"
 
   down:

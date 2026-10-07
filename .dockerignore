@@ -17,3 +17,6 @@
 **/.env.local
 apps/trace-viewer/.evals
 editors/nvim/.vendor
+charts
+argocd
+deploy

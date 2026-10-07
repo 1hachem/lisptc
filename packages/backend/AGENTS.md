@@ -51,10 +51,6 @@ A public function takes the caller from the context, never from an argument, and
 resolves ownership before it touches a row. Read the guards in `convex/lib/`
 before writing a new one.
 
-The deployment carries an environment of its own, and nothing in this repo
-pushes it. A secret lives in Infisical under `/auth` and is set on the
-deployment by hand, from the dashboard, never written to a file.
-
 A schema change on a live deployment goes through a migration, and the runner is
 already here.
 

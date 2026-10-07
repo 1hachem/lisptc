@@ -82,6 +82,10 @@ the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
 `editors/nvim` is the editor plugin, and `examples/` is the dialect written out.
 A change to the language surface is not done until they still pass.
 
+The test cluster is not a workspace either, and it answers to `task` as well.
+What it runs is deployed from `main` alone. A service added to the local stack
+is not deployed until the cluster runs it too.
+
 ### Packages
 
 The core language, and nothing else:
@@ -248,9 +252,6 @@ A lint rule enforces this; `packages/env/src` and the test directories are the
 only paths where it is off. Every exemption in `src` carries a `biome-ignore`
 naming the reason. An extension never reads a module here at all: it declares a
 port and is handed the value.
-
-The Convex deployment carries an environment of its own, and nothing in this
-repo pushes it. `packages/backend/AGENTS.md` has the rule.
 
 **Secrets live in Infisical, and nowhere else.** A `task` command fetches them
 at run time, so no secret is written into the tree. No `apps/*` or `packages/*`

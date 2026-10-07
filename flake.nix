@@ -87,6 +87,10 @@
           unstable.wrangler
           chrome-agent.packages.${system}.default
           playwright-driver.browsers
+          kubectl
+          (wrapHelm kubernetes-helm {plugins = [kubernetes-helmPlugins.helm-diff];})
+          helmfile
+          k9s
         ];
 
         # Use the Nix browsers instead of downloaded ones; skip host-dep validation.
@@ -98,5 +102,8 @@
           export CHROME_AGENT_CHROME="$PLAYWRIGHT_MCP_EXECUTABLE"
         '';
       };
-    });
+    })
+    // {
+      nixosModules.k3s-cluster = import ./nix/k3s-cluster.nix;
+    };
 }
