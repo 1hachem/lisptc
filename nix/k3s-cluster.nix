@@ -26,6 +26,11 @@ in {
       example = "/etc/k3s/token";
       description = "The shared join token. The first server writes one to /var/lib/rancher/k3s/server/token when unset; every other node needs a copy.";
     };
+    kubeconfigGroup = lib.mkOption {
+      type = lib.types.str;
+      default = "wheel";
+      description = "The group allowed to read the admin kubeconfig on a server. Nobody outside it can.";
+    };
   };
 
   config = {
@@ -38,7 +43,8 @@ in {
         ]
         ++ lib.optionals isServer [
           "--disable=traefik"
-          "--write-kubeconfig-mode=0644"
+          "--write-kubeconfig-mode=0640"
+          "--write-kubeconfig-group=${cfg.kubeconfigGroup}"
         ]);
     };
 
