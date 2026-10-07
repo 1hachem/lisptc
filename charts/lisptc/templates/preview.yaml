@@ -6,6 +6,8 @@ metadata:
   name: {{ .Release.Namespace }}
   labels:
     lisptc.io/preview: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 {{- range .Values.preview.synced }}
 ---
 apiVersion: secrets.infisical.com/v1alpha1
