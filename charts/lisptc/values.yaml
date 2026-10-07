@@ -30,11 +30,39 @@ convex:
     image: ghcr.io/get-convex/convex-dashboard:2cbcf8179207eb4521360e6d81ebee5e7abbfa07
   hostnames:
     cloud: lisptc-convex
-    site: lisptc-convex-site
-    dashboard: lisptc-convex-dashboard
   secrets: [lisptc-db, lisptc-convex]
 
 postgres:
   image: postgres:17
   storage: 5Gi
   secret: lisptc-db
+
+preview:
+  enabled: false
+  number: ""
+  tailnetSecret: lisptc-tailnet
+  infisical:
+    hostAPI: https://app.infisical.com/api
+    projectSlug: listptc-nz-qj
+    envSlug: prod
+    resyncInterval: "1m"
+    credentials:
+      secretName: lisptc-infisical-cred
+      secretNamespace: infisical
+  synced:
+    - { name: db, path: /db, secretName: lisptc-db }
+    - { name: convex-deploy, path: /convex-deploy, secretName: lisptc-convex-deploy }
+    - { name: convex, path: /convex, secretName: lisptc-convex }
+    - { name: api, path: /api, secretName: lisptc-api }
+    - { name: ai, path: /ai, secretName: lisptc-ai }
+    - { name: analytics, path: /analytics, secretName: lisptc-analytics }
+    - { name: web, path: /web, secretName: lisptc-web }
+    - { name: tailnet, path: /tailnet, secretName: lisptc-tailnet }
+    - name: ghcr
+      path: /ghcr
+      secretName: ghcr-pull
+      secretType: kubernetes.io/dockerconfigjson
+      template:
+        includeAllSecrets: false
+        data:
+          .dockerconfigjson: '{"auths":{"ghcr.io":{"username":"{{ .GHCR_USERNAME.Value }}","password":"{{ .GHCR_TOKEN.Value }}","auth":"{{ printf "%s:%s" .GHCR_USERNAME.Value .GHCR_TOKEN.Value | encodeBase64 }}"}}}'

@@ -40,6 +40,7 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.app.port | quote }}
+            {{- include "lisptc.previewConvexEnv" . | nindent 12 }}
           livenessProbe:
             tcpSocket:
               port: {{ .Values.app.port }}
