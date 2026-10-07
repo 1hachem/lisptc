@@ -38,3 +38,31 @@ postgres:
   image: postgres:17
   storage: 5Gi
   secret: lisptc-db
+
+preview:
+  enabled: false
+  tailnetSecret: lisptc-web
+  infisical:
+    hostAPI: https://app.infisical.com/api
+    projectSlug: listptc-nz-qj
+    envSlug: prod
+    resyncInterval: "1m"
+    credentials:
+      secretName: lisptc-infisical-cred
+      secretNamespace: infisical
+  synced:
+    - { name: db, path: /db, secretName: lisptc-db }
+    - { name: convex-deploy, path: /convex-deploy, secretName: lisptc-convex-deploy }
+    - { name: convex, path: /convex, secretName: lisptc-convex }
+    - { name: api, path: /api, secretName: lisptc-api }
+    - { name: ai, path: /ai, secretName: lisptc-ai }
+    - { name: analytics, path: /analytics, secretName: lisptc-analytics }
+    - { name: web, path: /web, secretName: lisptc-web }
+    - name: ghcr
+      path: /ghcr
+      secretName: ghcr-pull
+      secretType: kubernetes.io/dockerconfigjson
+      template:
+        includeAllSecrets: false
+        data:
+          .dockerconfigjson: '{"auths":{"ghcr.io":{"username":"{{ .GHCR_USERNAME.Value }}","password":"{{ .GHCR_TOKEN.Value }}","auth":"{{ printf "%s:%s" .GHCR_USERNAME.Value .GHCR_TOKEN.Value | encodeBase64 }}"}}}'

@@ -54,6 +54,14 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.api.port | quote }}
+            {{- include "lisptc.previewEnv" (list . (dict
+                "APP_URL" .Values.app.hostname
+                "CONVEX_URL" .Values.convex.hostnames.cloud
+                "CONVEX_SITE_URL" .Values.convex.hostnames.site)) | nindent 12 }}
+            {{- if .Values.preview.enabled }}
+            - name: LISPTC_OAUTH_REDIRECT_URL
+              value: {{ printf "%s/oauth/callback" (include "lisptc.url" .Values.app.hostname) | quote }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health
