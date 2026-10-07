@@ -1,0 +1,64 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: previews
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - pullRequest:
+        github:
+          owner: 1hachem
+          repo: lisptc
+          labels: [preview]
+          tokenRef:
+            secretName: github-token
+            key: GITHUB_TOKEN
+        requeueAfterSeconds: 120
+  template:
+    metadata:
+      name: "lisptc-pr-{{ .number }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/1hachem/lisptc
+        targetRevision: "{{ .head_sha }}"
+        path: charts/lisptc
+        helm:
+          valuesObject:
+            preview:
+              enabled: true
+            api:
+              hostname: "lisptc-pr-{{ .number }}-api"
+              image:
+                tag: "pr-{{ .number }}-{{ .head_sha }}"
+            app:
+              hostname: "lisptc-pr-{{ .number }}"
+              image:
+                tag: "pr-{{ .number }}-{{ .head_sha }}"
+            convexDeploy:
+              image:
+                tag: "pr-{{ .number }}-{{ .head_sha }}"
+            convex:
+              hostnames:
+                cloud: "lisptc-pr-{{ .number }}-convex"
+                site: "lisptc-pr-{{ .number }}-convex-site"
+                dashboard: "lisptc-pr-{{ .number }}-convex-dashboard"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "lisptc-pr-{{ .number }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 10
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 10m
