@@ -1,5 +1,8 @@
+import { mcpEnv } from "@repo/env/mcp";
 import { oauthEnv } from "@repo/env/oauth";
 import { filePrompt } from "@repo/shared/host-node";
+import { DockerHost } from "./docker-host.ts";
+import { KubernetesHost } from "./kubernetes-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
@@ -35,6 +38,15 @@ export function finishAuthorization(
 		oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		callbackUrl,
 	);
+}
+
+export function containerHost(scope: string): McpHost {
+	if (mcpEnv.LISPTC_MCP_HOST === "docker") return new DockerHost();
+	return new KubernetesHost({
+		scope,
+		namespacePrefix: mcpEnv.LISPTC_MCP_NAMESPACE_PREFIX,
+		callerNamespace: mcpEnv.LISPTC_MCP_CALLER_NAMESPACE,
+	});
 }
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
