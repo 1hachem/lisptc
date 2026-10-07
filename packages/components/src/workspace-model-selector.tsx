@@ -69,7 +69,7 @@ function ModelChoices({
 								<ModelSelectorItem
 									data-chosen={chosen || undefined}
 									key={m.id}
-									keywords={[p.name]}
+									keywords={[p.name, m.name]}
 									onSelect={() => choose({ provider: p.id, model: m.id })}
 									value={`${p.id}/${m.id}`}
 								>
