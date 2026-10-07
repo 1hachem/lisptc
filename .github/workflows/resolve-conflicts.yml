@@ -4,11 +4,6 @@ on:
   pull_request_target:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
-    inputs:
-      pr:
-        description: Pull request number
-        required: true
-        type: number
 
 permissions:
   contents: write
@@ -16,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: resolve-conflicts-${{ github.event.pull_request.number || inputs.pr }}
+  group: resolve-conflicts-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -27,15 +22,16 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      PR: ${{ github.event.pull_request.number || github.ref_name }}
     steps:
       - name: Read the branches
         run: |
-          read -r base head cross < <(gh pr view "$PR" --json baseRefName,headRefName,isCrossRepository --jq '"\(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
+          read -r number base head cross < <(gh pr view "$PR" --json number,baseRefName,headRefName,isCrossRepository --jq '"\(.number) \(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
           if [ "$cross" = true ]; then
             echo "::error::PR $PR comes from a fork"
             exit 1
           fi
+          echo "PR=$number" >> "$GITHUB_ENV"
           echo "BASE=$base" >> "$GITHUB_ENV"
           echo "HEAD_REF=$head" >> "$GITHUB_ENV"
 
