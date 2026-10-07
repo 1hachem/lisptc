@@ -134,3 +134,40 @@ jobs:
           secret-files: ${{ matrix.name == 'app' && format('web-build-vars={0}/../web-build-vars', github.workspace) || '' }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  preview-link:
+    name: preview link
+    needs: build
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Fetch the tailnet domain from Infisical
+        uses: Infisical/secrets-action@v1.0.18
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /tailnet
+          export-type: env
+
+      - name: Comment the preview link on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test -n "$TAILNET_DOMAIN"
+          heading='**Preview**'
+          body=$(printf '%s: https://lisptc-pr-%s.%s\n\nImages for `%s` are pushed. ArgoCD rolls them out within a few minutes.' "$heading" "$PR" "$TAILNET_DOMAIN" "$SHA")
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$heading\"))) | .id" | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body "$body"
+          fi
