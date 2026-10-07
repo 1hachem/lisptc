@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: convex-dashboard
+spec:
+  selector:
+    app: convex-dashboard
+  ports:
+    - port: 6791
+      targetPort: 6791
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: convex-dashboard
+  annotations:
+    secrets.infisical.com/auto-reload: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: convex-dashboard
+  template:
+    metadata:
+      labels:
+        app: convex-dashboard
+    spec:
+      containers:
+        - name: convex-dashboard
+          image: {{ .Values.convex.dashboard.image }}
+          ports:
+            - containerPort: 6791
+          readinessProbe:
+            tcpSocket:
+              port: 6791
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6791
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
+          env:
+            - name: NEXT_PUBLIC_DEPLOYMENT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-convex
+                  key: CONVEX_CLOUD_ORIGIN
+            - name: NEXT_PUBLIC_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-convex
+                  key: CONVEX_SELF_HOSTED_ADMIN_KEY
+                  optional: true

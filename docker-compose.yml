@@ -120,12 +120,8 @@ services:
       context: .
       dockerfile: apps/app/Dockerfile
       target: ${DOCKER_TARGET:-dev}
-      args:
-        VITE_API_URL: ${VITE_API_URL}
-        VITE_CONVEX_URL: ${VITE_CONVEX_URL}
-        VITE_ENVIRONMENT: ${VITE_ENVIRONMENT}
-        VITE_POSTHOG_KEY: ${VITE_POSTHOG_KEY}
-        VITE_POSTHOG_SURVEY_ID: ${VITE_POSTHOG_SURVEY_ID}
+      secrets:
+        - web-build-vars
     restart: unless-stopped
     init: true
     network_mode: host
@@ -174,3 +170,7 @@ volumes:
   api-state:
   postgres-data:
   convex-data:
+
+secrets:
+  web-build-vars:
+    environment: WEB_BUILD_VARS
