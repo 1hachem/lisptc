@@ -10,3 +10,10 @@ export {
 	type TypewriterProps,
 	useTypewriter,
 } from "./typewriter.tsx";
+export {
+	type ModelChoice,
+	type ModelOption,
+	type ProviderOption,
+	WorkspaceModelDialog,
+	WorkspaceModelSelector,
+} from "./workspace-model-selector.tsx";
