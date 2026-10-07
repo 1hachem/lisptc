@@ -1,13 +1,9 @@
-import { providerSpecs } from "@repo/env/providers";
-import { DEFAULT_PROVIDER } from "@repo/shared/providers";
+import { DEFAULT_CHOICE } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
 import { chatModel } from "../src/model.ts";
 
 describe("the model a chat runs on", () => {
-	const fallback = {
-		provider: DEFAULT_PROVIDER,
-		model: providerSpecs[DEFAULT_PROVIDER].defaultModel,
-	};
+	const fallback = DEFAULT_CHOICE;
 
 	it("is the one its workspace chose", () => {
 		const chosen = {
@@ -23,5 +19,11 @@ describe("the model a chat runs on", () => {
 
 	it("is the default when the chosen provider is not one the agent serves", () => {
 		expect(chatModel({ provider: "nowhere", model: "x" })).toEqual(fallback);
+	});
+
+	it("is the default when the chosen model is not one the catalog offers", () => {
+		expect(
+			chatModel({ provider: "openrouter", model: "anthropic/claude-opus-4" }),
+		).toEqual(fallback);
 	});
 });

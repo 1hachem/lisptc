@@ -6,7 +6,7 @@ import {
 	WorkspaceModelDialog,
 } from "@repo/components";
 import {
-	DEFAULT_PROVIDER,
+	DEFAULT_CHOICE,
 	PROVIDER_CATALOG,
 	PROVIDER_NAMES,
 	type ProviderName,
@@ -26,11 +26,6 @@ const providers: ProviderOption[] = PROVIDER_NAMES.map((id) => ({
 	models: [...PROVIDER_CATALOG[id].models],
 }));
 
-const fallback: ModelChoice = {
-	provider: DEFAULT_PROVIDER,
-	model: PROVIDER_CATALOG[DEFAULT_PROVIDER].models[0]?.id ?? "",
-};
-
 interface ModelPicker {
 	choice: ModelChoice;
 	openModelPicker: () => void;
@@ -46,7 +41,7 @@ export function ModelPickerProvider({
 	const { workspace } = useWorkspace();
 	const setModel = useConvexMutation(api.workspaces.setModel);
 	const [open, setOpen] = useState(false);
-	const choice = workspace?.model ?? fallback;
+	const choice = workspace?.model ?? DEFAULT_CHOICE;
 	const openModelPicker = useCallback(() => setOpen(true), []);
 
 	return (

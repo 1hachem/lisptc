@@ -18,6 +18,16 @@ export interface ModelEntry {
 	name: string;
 }
 
+const GEMMA_ON_OPENROUTER: ModelEntry = {
+	id: "google/gemma-4-31b-it",
+	name: "Gemma 4 31B",
+};
+
+export const DEFAULT_CHOICE: { provider: ProviderName; model: string } = {
+	provider: DEFAULT_PROVIDER,
+	model: GEMMA_ON_OPENROUTER.id,
+};
+
 export const PROVIDER_CATALOG: Record<
 	ProviderName,
 	{ label: string; models: readonly ModelEntry[] }
@@ -28,7 +38,7 @@ export const PROVIDER_CATALOG: Record<
 	},
 	openrouter: {
 		label: "OpenRouter",
-		models: [{ id: "google/gemma-4-31b-it", name: "Gemma 4 31B" }],
+		models: [GEMMA_ON_OPENROUTER],
 	},
 };
 
