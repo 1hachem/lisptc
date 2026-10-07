@@ -47,8 +47,6 @@ spec:
             convex:
               hostnames:
                 cloud: "lisptc-pr-{{ .number }}-convex"
-                site: "lisptc-pr-{{ .number }}-convex-site"
-                dashboard: "lisptc-pr-{{ .number }}-convex-dashboard"
       destination:
         server: https://kubernetes.default.svc
         namespace: "lisptc-pr-{{ .number }}"

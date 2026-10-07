@@ -30,8 +30,6 @@ convex:
     image: ghcr.io/get-convex/convex-dashboard:2cbcf8179207eb4521360e6d81ebee5e7abbfa07
   hostnames:
     cloud: lisptc-convex
-    site: lisptc-convex-site
-    dashboard: lisptc-convex-dashboard
   secrets: [lisptc-db, lisptc-convex]
 
 postgres:

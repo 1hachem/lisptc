@@ -56,8 +56,11 @@ spec:
             - name: REDACT_LOGS_TO_CLIENT
               value: "false"
             {{- include "lisptc.previewEnv" (list . (dict
-                "CONVEX_CLOUD_ORIGIN" .Values.convex.hostnames.cloud
-                "CONVEX_SITE_ORIGIN" .Values.convex.hostnames.site)) | nindent 12 }}
+                "CONVEX_CLOUD_ORIGIN" .Values.convex.hostnames.cloud)) | nindent 12 }}
+            {{- if .Values.preview.enabled }}
+            - name: CONVEX_SITE_ORIGIN
+              value: {{ include "lisptc.convexSiteUrl" . | quote }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /version
