@@ -29,6 +29,18 @@
 	--text-xl: 17px;
 	--text-xl--line-height: 1.5;
 
+	--spacing-control-xs: 18px;
+	--spacing-control-sm: 22px;
+	--spacing-control: 26px;
+	--spacing-control-lg: 30px;
+	--spacing-icon-sm: 12px;
+	--spacing-icon: 14px;
+	--spacing-row: 24px;
+
+	--container-dialog-sm: 360px;
+	--container-dialog: 440px;
+	--container-dialog-lg: 560px;
+
 	--animate-blk: blk 1.06s steps(1, end) infinite;
 }
 
