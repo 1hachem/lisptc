@@ -21,7 +21,8 @@ spec:
                 [ -f "$f" ] || continue
                 pnpm exec convex env set "$(basename "$f")" "$(cat "$f")"
               done
-              exec pnpm exec convex deploy --typecheck disable --codegen disable
+              pnpm exec convex deploy --typecheck disable --codegen disable
+              exec pnpm run migrate
           volumeMounts:
             - name: convex-env
               mountPath: /etc/convex-env
