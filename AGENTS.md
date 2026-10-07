@@ -83,8 +83,11 @@ the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
 A change to the language surface is not done until they still pass.
 
 The test cluster is not a workspace either, and it answers to `task` as well.
-What it runs is deployed from `main` alone. A service added to the local stack
-is not deployed until the cluster runs it too.
+What it runs is deployed from `main` alone, except a pull request labeled
+`preview`, which runs in a namespace of its own until the label or the pull
+request goes away. A service added to the local stack is not deployed until the
+cluster runs it too, and a URL the stack derives from its hostnames has to be
+derived for a preview as well.
 
 ### Packages
 
