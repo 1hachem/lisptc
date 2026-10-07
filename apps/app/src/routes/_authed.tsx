@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { AppShell } from "../components/app-shell.tsx";
-import { LoadingScene } from "../components/loading-scene.tsx";
+import { LoadingGate } from "../components/loading-scene.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
@@ -34,21 +34,22 @@ function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const navigate = useNavigate();
 
-	if (isLoading) return <LoadingScene />;
-	if (!isAuthenticated) return <Navigate to="/login" replace />;
+	if (!isLoading && !isAuthenticated) return <Navigate to="/login" replace />;
 
 	return (
-		<WorkspaceProvider>
-			<UIProvider>
-				<AppShell
-					onSignOut={async () => {
-						await authClient.signOut();
-						await navigate({ to: "/login", replace: true });
-					}}
-				>
-					<Outlet />
-				</AppShell>
-			</UIProvider>
-		</WorkspaceProvider>
+		<LoadingGate loading={isLoading}>
+			<WorkspaceProvider>
+				<UIProvider>
+					<AppShell
+						onSignOut={async () => {
+							await authClient.signOut();
+							await navigate({ to: "/login", replace: true });
+						}}
+					>
+						<Outlet />
+					</AppShell>
+				</UIProvider>
+			</WorkspaceProvider>
+		</LoadingGate>
 	);
 }
