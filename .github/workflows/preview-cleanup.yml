@@ -1,0 +1,26 @@
+name: Preview cleanup
+
+on:
+  pull_request:
+    types: [unlabeled, closed]
+
+jobs:
+  remove-link:
+    name: remove preview link
+    if: (github.event.action == 'unlabeled' && github.event.label.name == 'preview') || (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview'))
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Delete the preview link comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+        run: |
+          heading='**Preview**'
+          gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$heading\"))) | .id" |
+            while read -r id; do
+              gh api -X DELETE "repos/$REPO/issues/comments/$id"
+            done

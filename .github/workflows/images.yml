@@ -162,6 +162,8 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           test -n "$TAILNET_DOMAIN"
+          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
+          [ "$live" = true ] || exit 0
           heading='**Preview**'
           body=$(printf '%s: https://lisptc-pr-%s.%s\n\nImages for `%s` are pushed. ArgoCD rolls them out within a few minutes.' "$heading" "$PR" "$TAILNET_DOMAIN" "$SHA")
           id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
