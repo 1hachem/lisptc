@@ -1,9 +1,9 @@
+import { isCatalogued } from "@repo/shared/providers";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
-import { MAX_MODEL_CHOICE_BYTES } from "./limits.js";
 import { modelChoice } from "./schema.js";
 
 const MAX_WORKSPACES = 64;
@@ -18,8 +18,6 @@ const workspace = v.object({
 	slug: v.string(),
 	model: v.optional(modelChoice),
 });
-
-const encoder = new TextEncoder();
 
 export const list = query({
 	args: {},
@@ -82,14 +80,8 @@ export const setModel = mutation({
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, model }) => {
 		await requireWorkspace(ctx, workspaceId);
-		if (model.provider.trim() === "" || model.model.trim() === "") {
-			throw new ConvexError({ code: "MODEL_CHOICE_EMPTY" });
-		}
-		if (
-			encoder.encode(model.provider + model.model).length >
-			MAX_MODEL_CHOICE_BYTES
-		) {
-			throw new ConvexError({ code: "MODEL_CHOICE_TOO_LARGE" });
+		if (!isCatalogued(model.provider, model.model)) {
+			throw new ConvexError({ code: "MODEL_NOT_OFFERED" });
 		}
 		await ctx.db.patch(workspaceId, { model });
 		return null;

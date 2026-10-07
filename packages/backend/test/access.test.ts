@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
-import { MAX_MODEL_CHOICE_BYTES } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("workspace access", () => {
@@ -73,29 +72,21 @@ describe("workspace model", () => {
 		).rejects.toThrow();
 	});
 
-	it("refuses a blank choice", async () => {
+	it("refuses a model the catalog does not offer", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
-		await expect(
-			alice.as.mutation(api.workspaces.setModel, {
-				workspaceId: alice.workspace,
-				model: { provider: "openrouter", model: " " },
-			}),
-		).rejects.toThrow(/MODEL_CHOICE_EMPTY/);
-	});
-
-	it("refuses a choice past the size limit", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		await expect(
-			alice.as.mutation(api.workspaces.setModel, {
-				workspaceId: alice.workspace,
-				model: {
-					provider: "openrouter",
-					model: "x".repeat(MAX_MODEL_CHOICE_BYTES),
-				},
-			}),
-		).rejects.toThrow(/MODEL_CHOICE_TOO_LARGE/);
+		for (const choice of [
+			{ provider: "openrouter", model: " " },
+			{ provider: "openrouter", model: "anthropic/claude-opus-4" },
+			{ provider: "nowhere", model: "google/gemma-4-31b-it" },
+		]) {
+			await expect(
+				alice.as.mutation(api.workspaces.setModel, {
+					workspaceId: alice.workspace,
+					model: choice,
+				}),
+			).rejects.toThrow(/MODEL_NOT_OFFERED/);
+		}
 	});
 });
 
