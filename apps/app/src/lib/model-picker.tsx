@@ -7,6 +7,7 @@ import {
 } from "@repo/components";
 import {
 	DEFAULT_CHOICE,
+	isCatalogued,
 	PROVIDER_CATALOG,
 	PROVIDER_NAMES,
 	type ProviderName,
@@ -51,6 +52,7 @@ export function ModelPickerProvider({
 				<WorkspaceModelDialog
 					onOpenChange={setOpen}
 					onSelect={async (model) => {
+						if (!isCatalogued(model)) throw new Error("model not offered");
 						await setModel({ workspaceId: workspace._id, model });
 					}}
 					open={open}

@@ -1,4 +1,3 @@
-import { isCatalogued } from "@repo/shared/providers";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
@@ -80,9 +79,6 @@ export const setModel = mutation({
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, model }) => {
 		await requireWorkspace(ctx, workspaceId);
-		if (!isCatalogued(model.provider, model.model)) {
-			throw new ConvexError({ code: "MODEL_NOT_OFFERED" });
-		}
 		await ctx.db.patch(workspaceId, { model });
 		return null;
 	},

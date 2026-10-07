@@ -1,3 +1,4 @@
+import { CATALOGUED_CHOICES } from "@repo/shared/providers";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -8,10 +9,11 @@ export const messageType = v.union(
 	v.literal("tool"),
 );
 
-export const modelChoice = v.object({
-	provider: v.string(),
-	model: v.string(),
-});
+export const modelChoice = v.union(
+	...CATALOGUED_CHOICES.map(({ provider, model }) =>
+		v.object({ provider: v.literal(provider), model: v.literal(model) }),
+	),
+);
 
 export default defineSchema({
 	users: defineTable({

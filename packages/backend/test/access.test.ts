@@ -1,3 +1,4 @@
+import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import { harness, signIn } from "./helpers.ts";
@@ -28,7 +29,10 @@ describe("workspace access", () => {
 });
 
 describe("workspace model", () => {
-	const model = { provider: "openrouter", model: "google/gemma-4-31b-it" };
+	const model = {
+		provider: "openrouter",
+		model: "google/gemma-4-31b-it",
+	} as const;
 
 	it("has none until one is chosen", async () => {
 		const t = harness();
@@ -49,7 +53,7 @@ describe("workspace model", () => {
 		const next = {
 			provider: "digitalocean",
 			model: "gemma-4-31B-it",
-		};
+		} as const;
 		await alice.as.mutation(api.workspaces.setModel, {
 			workspaceId: alice.workspace,
 			model: next,
@@ -83,9 +87,9 @@ describe("workspace model", () => {
 			await expect(
 				alice.as.mutation(api.workspaces.setModel, {
 					workspaceId: alice.workspace,
-					model: choice,
+					model: choice as CataloguedChoice,
 				}),
-			).rejects.toThrow(/MODEL_NOT_OFFERED/);
+			).rejects.toThrow(/Validator error/);
 		}
 	});
 });
