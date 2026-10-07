@@ -41,7 +41,7 @@ postgres:
 
 preview:
   enabled: false
-  tailnetSecret: lisptc-web
+  tailnetSecret: lisptc-tailnet
   infisical:
     hostAPI: https://app.infisical.com/api
     projectSlug: listptc-nz-qj
@@ -58,6 +58,7 @@ preview:
     - { name: ai, path: /ai, secretName: lisptc-ai }
     - { name: analytics, path: /analytics, secretName: lisptc-analytics }
     - { name: web, path: /web, secretName: lisptc-web }
+    - { name: tailnet, path: /tailnet, secretName: lisptc-tailnet }
     - name: ghcr
       path: /ghcr
       secretName: ghcr-pull
