@@ -16,5 +16,9 @@ RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm install --frozen-lockfile --offline
 COPY --from=pruner /app/out/full/ .
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 --ingroup nodejs --home /home/lisptc lisptc \
+ && chown -R lisptc:nodejs /app/packages/backend
+USER lisptc
 WORKDIR /app/packages/backend
 CMD ["pnpm", "exec", "convex", "deploy", "--typecheck", "disable", "--codegen", "disable"]
