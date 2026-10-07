@@ -36,6 +36,10 @@
 	--spacing-icon-sm: 12px;
 	--spacing-icon: 14px;
 	--spacing-row: 24px;
+	--spacing-switch-width-sm: 24px;
+	--spacing-switch-width: 28px;
+	--spacing-switch-height-sm: 14px;
+	--spacing-switch-height: 16px;
 
 	--container-dialog-sm: 360px;
 	--container-dialog: 440px;
