@@ -61,8 +61,8 @@ function neverAnswers(
 }
 
 beforeAll(async () => {
-	process.env.FIREWORKS_API_KEY = "test-key";
-	process.env.FIREWORKS_BASE_URL = "http://fireworks.test/v1";
+	process.env.OPENROUTER_API_KEY = "test-key";
+	process.env.OPENROUTER_BASE_URL = "http://openrouter.test/v1";
 	llmExtension = (await import("../src/llm.ts")).llmExtension;
 	llmHost = (await import("../src/llm-host.ts")).llmHost;
 	await import("@langchain/openai");
@@ -84,12 +84,12 @@ describe("the langchain client against a stubbed fetch", () => {
 		const interp = clientInterp();
 		const reply = await runAsync(
 			interp,
-			'(llm/complete "hi" :provider :fireworks :max-tokens 32)',
+			'(llm/complete "hi" :provider :openrouter :max-tokens 32)',
 		);
 		expect(str(reply.value)).toBe('"{\\"words\\":[\\"one\\",\\"two\\"]}"');
-		expect(seen.at(-1)?.url).toBe("http://fireworks.test/v1/chat/completions");
+		expect(seen.at(-1)?.url).toBe("http://openrouter.test/v1/chat/completions");
 		expect(seen.at(-1)?.body).toMatchObject({
-			model: "accounts/fireworks/models/kimi-k3",
+			model: "google/gemma-4-31b-it",
 			stream: false,
 			max_tokens: 32,
 			messages: [{ role: "user", content: "hi" }],
@@ -101,7 +101,7 @@ describe("the langchain client against a stubbed fetch", () => {
 		const interp = clientInterp();
 		const value = await runAsync(
 			interp,
-			'(llm/extract "one and two" (list (cons "words" (list :list :string))) :provider :fireworks)',
+			'(llm/extract "one and two" (list (cons "words" (list :list :string))) :provider :openrouter)',
 		);
 		expect(str(value.value)).toBe('(("words" "one" "two"))');
 		expect(seen.at(-1)?.body.response_format).toEqual({
@@ -132,7 +132,10 @@ describe("the langchain client against a stubbed fetch", () => {
 		stubFetch(neverAnswers);
 		const interp = clientInterp();
 		await expect(
-			runAsync(interp, '(llm/complete "hi" :provider :fireworks :timeout 100)'),
+			runAsync(
+				interp,
+				'(llm/complete "hi" :provider :openrouter :timeout 100)',
+			),
 		).rejects.toThrow(/llm timed out/);
 	});
 });

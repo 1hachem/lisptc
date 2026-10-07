@@ -7,11 +7,7 @@ export interface ProviderSpec {
 	body?: Record<string, unknown>;
 }
 
-export const PROVIDER_NAMES = [
-	"digitalocean",
-	"fireworks",
-	"openrouter",
-] as const;
+export const PROVIDER_NAMES = ["digitalocean", "openrouter"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 
@@ -29,10 +25,6 @@ export const PROVIDER_CATALOG: Record<
 	digitalocean: {
 		label: "DigitalOcean",
 		models: [{ id: "gemma-4-31B-it", name: "Gemma 4 31B" }],
-	},
-	fireworks: {
-		label: "Fireworks",
-		models: [{ id: "accounts/fireworks/models/kimi-k3", name: "Kimi K3" }],
 	},
 	openrouter: {
 		label: "OpenRouter",

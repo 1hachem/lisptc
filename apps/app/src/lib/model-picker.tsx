@@ -16,7 +16,6 @@ import { useWorkspace } from "./workspace.tsx";
 
 const LOGOS: Record<ProviderName, string | undefined> = {
 	digitalocean: undefined,
-	fireworks: "fireworks-ai",
 	openrouter: "openrouter",
 };
 
