@@ -3,7 +3,7 @@ import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
-import { modelChoice } from "./schema.js";
+import { modelChoice, storedModel } from "./schema.js";
 
 const MAX_WORKSPACES = 64;
 
@@ -15,7 +15,7 @@ const workspace = v.object({
 	ownerId: v.id("users"),
 	name: v.string(),
 	slug: v.string(),
-	model: v.optional(modelChoice),
+	model: v.optional(storedModel),
 });
 
 export const list = query({

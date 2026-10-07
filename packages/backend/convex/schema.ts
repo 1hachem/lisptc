@@ -1,6 +1,7 @@
-import { CATALOGUED_CHOICES } from "@repo/shared/providers";
+import { CATALOGUED_CHOICES, type ProviderName } from "@repo/shared/providers";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { RETIRED_MODELS } from "./lib/models.js";
 
 export const messageType = v.union(
 	v.literal("human"),
@@ -9,10 +10,20 @@ export const messageType = v.union(
 	v.literal("tool"),
 );
 
-export const modelChoice = v.union(
-	...CATALOGUED_CHOICES.map(({ provider, model }) =>
-		v.object({ provider: v.literal(provider), model: v.literal(model) }),
-	),
+function pair<P extends ProviderName, M extends string>(choice: {
+	provider: P;
+	model: M;
+}) {
+	return v.object({
+		provider: v.literal(choice.provider),
+		model: v.literal(choice.model),
+	});
+}
+
+export const modelChoice = v.union(...CATALOGUED_CHOICES.map(pair));
+
+export const storedModel = v.union(
+	...[...CATALOGUED_CHOICES, ...RETIRED_MODELS].map(pair),
 );
 
 export default defineSchema({
@@ -27,7 +38,7 @@ export default defineSchema({
 		ownerId: v.id("users"),
 		name: v.string(),
 		slug: v.string(),
-		model: v.optional(modelChoice),
+		model: v.optional(storedModel),
 	})
 		.index("by_owner", ["ownerId"])
 		.index("by_owner_slug", ["ownerId", "slug"]),
