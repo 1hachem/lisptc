@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
+import { MAX_MODEL_CHOICE_BYTES } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("workspace access", () => {
@@ -24,6 +25,77 @@ describe("workspace access", () => {
 		const t = harness();
 		await signIn(t, "alice@example.com");
 		await expect(t.query(api.workspaces.list, {})).rejects.toThrow();
+	});
+});
+
+describe("workspace model", () => {
+	const model = { provider: "openrouter", model: "google/gemma-4-31b-it" };
+
+	it("has none until one is chosen", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const got = await alice.as.query(api.workspaces.get, {
+			workspaceId: alice.workspace,
+		});
+		expect(got.model).toBeUndefined();
+	});
+
+	it("keeps the model a workspace was given, and the latest one wins", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.workspaces.setModel, {
+			workspaceId: alice.workspace,
+			model,
+		});
+		const next = {
+			provider: "digitalocean",
+			model: "gemma-4-31B-it",
+		};
+		await alice.as.mutation(api.workspaces.setModel, {
+			workspaceId: alice.workspace,
+			model: next,
+		});
+		const got = await alice.as.query(api.workspaces.get, {
+			workspaceId: alice.workspace,
+		});
+		expect(got.model).toEqual(next);
+	});
+
+	it("refuses choosing the model of another user's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setModel, {
+				workspaceId: bob.workspace,
+				model,
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses a blank choice", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setModel, {
+				workspaceId: alice.workspace,
+				model: { provider: "openrouter", model: " " },
+			}),
+		).rejects.toThrow(/MODEL_CHOICE_EMPTY/);
+	});
+
+	it("refuses a choice past the size limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setModel, {
+				workspaceId: alice.workspace,
+				model: {
+					provider: "openrouter",
+					model: "x".repeat(MAX_MODEL_CHOICE_BYTES),
+				},
+			}),
+		).rejects.toThrow(/MODEL_CHOICE_TOO_LARGE/);
 	});
 });
 

@@ -3,6 +3,8 @@ import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
+import { MAX_MODEL_CHOICE_BYTES } from "./limits.js";
+import { modelChoice } from "./schema.js";
 
 const MAX_WORKSPACES = 64;
 
@@ -14,7 +16,10 @@ const workspace = v.object({
 	ownerId: v.id("users"),
 	name: v.string(),
 	slug: v.string(),
+	model: v.optional(modelChoice),
 });
+
+const encoder = new TextEncoder();
 
 export const list = query({
 	args: {},
@@ -68,6 +73,25 @@ export const rename = mutation({
 	handler: async (ctx, { workspaceId, name }) => {
 		await requireWorkspace(ctx, workspaceId);
 		await ctx.db.patch(workspaceId, { name });
+		return null;
+	},
+});
+
+export const setModel = mutation({
+	args: { workspaceId: v.id("workspaces"), model: modelChoice },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, model }) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (model.provider.trim() === "" || model.model.trim() === "") {
+			throw new ConvexError({ code: "MODEL_CHOICE_EMPTY" });
+		}
+		if (
+			encoder.encode(model.provider + model.model).length >
+			MAX_MODEL_CHOICE_BYTES
+		) {
+			throw new ConvexError({ code: "MODEL_CHOICE_TOO_LARGE" });
+		}
+		await ctx.db.patch(workspaceId, { model });
 		return null;
 	},
 });

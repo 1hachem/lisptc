@@ -8,6 +8,11 @@ export const messageType = v.union(
 	v.literal("tool"),
 );
 
+export const modelChoice = v.object({
+	provider: v.string(),
+	model: v.string(),
+});
+
 export default defineSchema({
 	users: defineTable({
 		authId: v.string(),
@@ -20,6 +25,7 @@ export default defineSchema({
 		ownerId: v.id("users"),
 		name: v.string(),
 		slug: v.string(),
+		model: v.optional(modelChoice),
 	})
 		.index("by_owner", ["ownerId"])
 		.index("by_owner_slug", ["ownerId", "slug"]),
