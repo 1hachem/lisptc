@@ -3,6 +3,12 @@ name: Resolve conflicts
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
 
 permissions:
   contents: write
@@ -10,21 +16,29 @@ permissions:
   id-token: write
 
 concurrency:
-  group: resolve-conflicts-${{ github.event.pull_request.number }}
+  group: resolve-conflicts-${{ github.event.pull_request.number || inputs.pr }}
   cancel-in-progress: false
 
 jobs:
   resolve:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      PR: ${{ github.event.pull_request.number }}
-      BASE: ${{ github.base_ref }}
-      HEAD_REF: ${{ github.head_ref }}
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
     steps:
+      - name: Read the branches
+        run: |
+          read -r base head cross < <(gh pr view "$PR" --json baseRefName,headRefName,isCrossRepository --jq '"\(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
+          if [ "$cross" = true ]; then
+            echo "::error::PR $PR comes from a fork"
+            exit 1
+          fi
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          echo "HEAD_REF=$head" >> "$GITHUB_ENV"
+
       - name: Check for a merge conflict
         id: state
         run: |
@@ -53,7 +67,7 @@ jobs:
         if: steps.state.outputs.conflicting == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ env.HEAD_REF }}
           fetch-depth: 0
 
       - name: Check whether the base changed a workflow
@@ -115,7 +129,7 @@ jobs:
           github_token: ${{ github.token }}
           plugin_marketplaces: ${{ github.workspace }}/.agents
           plugins: merge-conflicts@lisptc
-          prompt: '/merge-conflicts:resolve-conflicts PR #${{ github.event.pull_request.number }} merges origin/${{ github.base_ref }} into ${{ github.head_ref }}'
+          prompt: '/merge-conflicts:resolve-conflicts PR #${{ env.PR }} merges origin/${{ env.BASE }} into ${{ env.HEAD_REF }}'
           claude_args: >-
             --model opus
             --max-turns 100
