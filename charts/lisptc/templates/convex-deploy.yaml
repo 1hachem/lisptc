@@ -2,9 +2,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: convex-deploy-{{ .Values.convexDeploy.image.tag | sha256sum | trunc 10 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   backoffLimit: 4
-  activeDeadlineSeconds: 600
+  activeDeadlineSeconds: 1800
   template:
     spec:
       restartPolicy: OnFailure
