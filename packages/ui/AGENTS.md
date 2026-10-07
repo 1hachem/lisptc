@@ -40,9 +40,10 @@ stays on Tailwind's 4px scale and stays tight: a surface takes `p-4` at most, a
 control `px-3` at most. A size the tokens do not cover is a new token, never a
 one-off on a component.
 
-shadcn and ai-elements scaffold the roomy defaults: `h-9`, `size-4`, `p-6`,
-`py-3.5`, `max-w-lg`, `font-medium` on controls. Bring a scaffolded file onto
-the tokens before committing, every time, the same way its icons are swapped.
+shadcn and ai-elements scaffold Tailwind's roomy defaults: 36px controls, 16px
+icons, wide padding, large dialogs, medium weight on controls. Bring a
+scaffolded file onto the tokens before committing, every time, the same way its
+icons are swapped.
 Never re-inflate a primitive from the outside with a `!` override.
 
 **Every icon comes from hugeicons.** `@hugeicons/core-free-icons` holds the data
