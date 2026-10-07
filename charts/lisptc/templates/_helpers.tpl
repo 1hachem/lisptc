@@ -2,6 +2,15 @@
 https://{{ . }}.$(TAILNET_DOMAIN)
 {{- end }}
 
+{{- define "lisptc.previewConvexEnv" -}}
+{{- if .Values.preview.enabled }}
+- name: CONVEX_URL
+  value: {{ printf "http://convex-backend.%s.svc.cluster.local:3210" .Release.Namespace | quote }}
+- name: CONVEX_SITE_URL
+  value: {{ printf "http://convex-backend.%s.svc.cluster.local:3211" .Release.Namespace | quote }}
+{{- end }}
+{{- end }}
+
 {{- define "lisptc.previewEnv" -}}
 {{- $ctx := index . 0 -}}
 {{- $vars := index . 1 -}}
