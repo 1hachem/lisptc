@@ -15,7 +15,7 @@ spec:
         valueFiles:
           - $values/charts/argocd-image-updater/values.yaml
     - repoURL: https://github.com/1hachem/lisptc
-      targetRevision: feat/cluster-deploy
+      targetRevision: main
       ref: values
   destination:
     server: https://kubernetes.default.svc
