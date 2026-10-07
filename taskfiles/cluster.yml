@@ -19,10 +19,10 @@ tasks:
       vars: [INFISICAL_CLIENT_ID, INFISICAL_CLIENT_SECRET]
     cmd: |
       kubectl create namespace infisical --dry-run=client -o yaml | kubectl apply -f -
-      kubectl create secret generic lisptc-infisical-cred -n infisical \
-        --from-literal=clientId="$INFISICAL_CLIENT_ID" \
-        --from-literal=clientSecret="$INFISICAL_CLIENT_SECRET" \
-        --dry-run=client -o yaml | kubectl apply -f -
+      id=$(printf %s "$INFISICAL_CLIENT_ID" | base64 -w0)
+      secret=$(printf %s "$INFISICAL_CLIENT_SECRET" | base64 -w0)
+      printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: lisptc-infisical-cred\n  namespace: infisical\ndata:\n  clientId: %s\n  clientSecret: %s\n' "$id" "$secret" \
+        | kubectl apply -f -
 
   bootstrap:
     desc: install the Infisical and Tailscale operators, ArgoCD and the root app; ArgoCD pulls the rest from main
