@@ -50,9 +50,9 @@ export function ModelPickerProvider({
 			{workspace && (
 				<WorkspaceModelDialog
 					onOpenChange={setOpen}
-					onSelect={(model) =>
-						void setModel({ workspaceId: workspace._id, model })
-					}
+					onSelect={async (model) => {
+						await setModel({ workspaceId: workspace._id, model });
+					}}
 					open={open}
 					providers={providers}
 					value={choice}

@@ -32,7 +32,7 @@ type Choosing = {
 	workspace: string;
 	providers: ProviderOption[];
 	value: ModelChoice;
-	onSelect: (choice: ModelChoice) => void;
+	onSelect: (choice: ModelChoice) => Promise<void> | void;
 };
 
 function ModelChoices({
@@ -40,13 +40,25 @@ function ModelChoices({
 	providers,
 	value,
 	onChoose,
-}: Omit<Choosing, "onSelect"> & { onChoose: (choice: ModelChoice) => void }) {
+}: Omit<Choosing, "onSelect"> & {
+	onChoose: (choice: ModelChoice) => Promise<void>;
+}) {
+	const [failed, setFailed] = useState(false);
+	const choose = (choice: ModelChoice) => {
+		setFailed(false);
+		onChoose(choice).catch(() => setFailed(true));
+	};
 	return (
 		<ModelSelectorContent
 			className="sm:max-w-dialog-sm"
 			title={`Model for ${workspace}`}
 		>
 			<ModelSelectorInput placeholder="Search models" />
+			{failed && (
+				<p className="px-3 py-2 text-destructive text-xs">
+					The model was not saved. Try again.
+				</p>
+			)}
 			<ModelSelectorList>
 				<ModelSelectorEmpty>No model matches.</ModelSelectorEmpty>
 				{providers.map((p) => (
@@ -58,7 +70,7 @@ function ModelChoices({
 									data-chosen={chosen || undefined}
 									key={m.id}
 									keywords={[p.name]}
-									onSelect={() => onChoose({ provider: p.id, model: m.id })}
+									onSelect={() => choose({ provider: p.id, model: m.id })}
 									value={`${p.id}/${m.id}`}
 								>
 									{p.logo && <ModelSelectorLogo provider={p.logo} />}
@@ -83,14 +95,13 @@ function ModelChoices({
 
 function chooser(
 	value: ModelChoice,
-	onSelect: (choice: ModelChoice) => void,
+	onSelect: Choosing["onSelect"],
 	close: () => void,
 ) {
-	return (choice: ModelChoice) => {
+	return async (choice: ModelChoice) => {
+		if (choice.provider !== value.provider || choice.model !== value.model)
+			await onSelect(choice);
 		close();
-		if (choice.provider === value.provider && choice.model === value.model)
-			return;
-		onSelect(choice);
 	};
 }
 
