@@ -32,6 +32,19 @@ The body reads its size from that token, so a primitive scaffolded with
 by an arbitrary pixel size on a primitive, and never by restoring Tailwind's rem
 defaults: those are measured from a 16px root this app does not use.
 
+**Control, row, icon and dialog sizes come from the size tokens in
+`theme.css` too.** The look is dense and exact: a control is `h-control`, a row
+in a menu, list or command is `h-row`, an icon is `size-icon`, and a dialog is
+capped by `max-w-dialog`, each with its `-sm`, `-xs` or `-lg` step. Padding
+stays on Tailwind's 4px scale and stays tight: a surface takes `p-4` at most, a
+control `px-3` at most. A size the tokens do not cover is a new token, never a
+one-off on a component.
+
+shadcn and ai-elements scaffold the roomy defaults: `h-9`, `size-4`, `p-6`,
+`py-3.5`, `max-w-lg`, `font-medium` on controls. Bring a scaffolded file onto
+the tokens before committing, every time, the same way its icons are swapped.
+Never re-inflate a primitive from the outside with a `!` override.
+
 **Every icon comes from hugeicons.** `@hugeicons/core-free-icons` holds the data
 and `@hugeicons/react` draws it. An icon is data, so it is passed as the `icon`
 prop rather than rendered, and every SVG attribute goes on the drawing
