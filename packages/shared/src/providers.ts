@@ -17,6 +17,36 @@ export type ProviderName = (typeof PROVIDER_NAMES)[number];
 
 export const DEFAULT_PROVIDER: ProviderName = "openrouter";
 
+export interface ModelEntry {
+	id: string;
+	name: string;
+}
+
+export const PROVIDER_CATALOG: Record<
+	ProviderName,
+	{ label: string; models: readonly ModelEntry[] }
+> = {
+	digitalocean: {
+		label: "DigitalOcean",
+		models: [{ id: "gemma-4-31B-it", name: "Gemma 4 31B" }],
+	},
+	fireworks: {
+		label: "Fireworks",
+		models: [{ id: "accounts/fireworks/models/kimi-k3", name: "Kimi K3" }],
+	},
+	openrouter: {
+		label: "OpenRouter",
+		models: [{ id: "google/gemma-4-31b-it", name: "Gemma 4 31B" }],
+	},
+};
+
+export function isCatalogued(provider: string, model: string): boolean {
+	return (
+		isProviderName(provider) &&
+		PROVIDER_CATALOG[provider].models.some((m) => m.id === model)
+	);
+}
+
 export function isProviderName(name: string): name is ProviderName {
 	return (PROVIDER_NAMES as readonly string[]).includes(name);
 }
