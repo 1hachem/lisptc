@@ -86,17 +86,15 @@ chat.post("/", async (c) => {
 	}
 	const convex = convexAs(c.get("session"));
 
+	const { workspaceId } = await convex.query(api.chats.get, { chatId });
+	const { provider, model } = chatModel(
+		(await convex.query(api.workspaces.get, { workspaceId })).model,
+	);
 	await convex.mutation(api.messages.append, {
 		chatId,
 		messages: [opening],
 	});
-	const [history, { workspaceId }] = await Promise.all([
-		convex.query(api.messages.transcript, { chatId }),
-		convex.query(api.chats.get, { chatId }),
-	]);
-	const { provider, model } = chatModel(
-		(await convex.query(api.workspaces.get, { workspaceId })).model,
-	);
+	const history = await convex.query(api.messages.transcript, { chatId });
 
 	console.log(
 		`chat chat=${chatId} messages=${history.length} ${provider}/${model}`,
