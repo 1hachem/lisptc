@@ -46,6 +46,7 @@ export function containerHost(scope: string): McpHost {
 		scope,
 		namespacePrefix: mcpEnv.LISPTC_MCP_NAMESPACE_PREFIX,
 		callerNamespace: mcpEnv.LISPTC_MCP_CALLER_NAMESPACE,
+		pullSecret: mcpEnv.LISPTC_MCP_PULL_SECRET,
 	});
 }
 

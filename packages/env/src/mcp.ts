@@ -9,6 +9,7 @@ export const mcpEnv = createEnv({
 			.regex(/^[a-z][a-z0-9-]*$/)
 			.default("lisptc-ws-"),
 		LISPTC_MCP_CALLER_NAMESPACE: z.string().optional(),
+		LISPTC_MCP_PULL_SECRET: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

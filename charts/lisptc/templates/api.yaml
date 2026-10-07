@@ -61,6 +61,8 @@ spec:
               value: {{ include "lisptc.mcpNamespacePrefix" . | quote }}
             - name: LISPTC_MCP_CALLER_NAMESPACE
               value: {{ .Release.Namespace | quote }}
+            - name: LISPTC_MCP_PULL_SECRET
+              value: {{ .Values.imagePullSecret | quote }}
             {{- include "lisptc.previewEnv" (list . (dict
                 "APP_URL" .Values.app.hostname)) | nindent 12 }}
             {{- include "lisptc.previewConvexEnv" . | nindent 12 }}

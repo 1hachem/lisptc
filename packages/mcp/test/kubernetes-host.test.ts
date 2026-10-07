@@ -15,7 +15,7 @@ import { recordingHost } from "./helpers.ts";
 
 const playwright: ContainerConnConfig = {
 	name: "playwright",
-	image: "lisptc/browser-mcp:v1.63.0",
+	image: "ghcr.io/1hachem/lisptc-browser-mcp:main",
 	port: 8931,
 	env: { TOKEN: "s3cret" },
 	headers: { authorization: "Bearer x" },
@@ -46,6 +46,7 @@ function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
 	const labelled: string[] = [];
 	const namespaces: string[] = [];
 	const policies: string[] = [];
+	const copied: string[] = [];
 	let next = 0;
 	const cluster: Cluster = {
 		async ensureNamespace(ns) {
@@ -53,6 +54,9 @@ function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
 		},
 		async ensureNetworkPolicy(namespace) {
 			policies.push(namespace);
+		},
+		async copySecret(from, to, name) {
+			copied.push(`${from}/${name} -> ${to}`);
 		},
 		async create(namespace, workload) {
 			created.push({ namespace, workload });
@@ -73,7 +77,15 @@ function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
 		},
 		origin: () => origin,
 	};
-	return { cluster, created, removed, labelled, namespaces, policies };
+	return {
+		cluster,
+		created,
+		removed,
+		labelled,
+		namespaces,
+		policies,
+		copied,
+	};
 }
 
 describe("naming in the cluster", () => {
@@ -131,6 +143,43 @@ describe("the kubernetes host", () => {
 		expect(fake.policies).toEqual(["lisptc-ws-ws1"]);
 		expect(fake.created.map((c) => c.namespace)).toEqual(["lisptc-ws-ws1"]);
 		expect(host.status("playwright")).toBe("running");
+		await host.stopAll();
+	});
+
+	it("pulls with a copy of the caller's pull secret", async () => {
+		const fake = fakeCluster();
+		const host = new KubernetesHost({
+			scope: "ws1",
+			namespacePrefix: "lisptc-ws-",
+			callerNamespace: "lisptc",
+			pullSecret: "ghcr-pull",
+			cluster: fake.cluster,
+		});
+
+		await host.ensure(playwright);
+
+		expect(fake.copied).toEqual(["lisptc/ghcr-pull -> lisptc-ws-ws1"]);
+		expect(fake.created[0]?.workload.pod.spec?.imagePullSecrets).toEqual([
+			{ name: "ghcr-pull" },
+		]);
+		await host.stopAll();
+	});
+
+	it("pulls without a secret when it has no caller to copy one from", async () => {
+		const fake = fakeCluster();
+		const host = new KubernetesHost({
+			scope: "ws1",
+			namespacePrefix: "lisptc-ws-",
+			pullSecret: "ghcr-pull",
+			cluster: fake.cluster,
+		});
+
+		await host.ensure(playwright);
+
+		expect(fake.copied).toEqual([]);
+		expect(
+			fake.created[0]?.workload.pod.spec?.imagePullSecrets,
+		).toBeUndefined();
 		await host.stopAll();
 	});
 

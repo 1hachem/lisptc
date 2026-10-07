@@ -61,6 +61,7 @@ export interface Cluster {
 		namespace: string,
 		policy: V1NetworkPolicy,
 	): Promise<void>;
+	copySecret(from: string, to: string, name: string): Promise<void>;
 	create(namespace: string, workload: Workload): Promise<void>;
 	state(namespace: string, pod: string): Promise<PodState>;
 	logs(namespace: string, pod: string): Promise<string>;
@@ -73,6 +74,7 @@ export interface KubernetesHostOptions {
 	scope: string;
 	namespacePrefix: string;
 	callerNamespace?: string;
+	pullSecret?: string;
 	cluster?: Cluster;
 	fallback?: McpHost;
 }
@@ -155,6 +157,23 @@ export function clientCluster(config: KubeConfig = defaultConfig()): Cluster {
 				net.createNamespacedNetworkPolicy({ namespace, body }),
 			);
 		},
+		async copySecret(from, to, name) {
+			const source = await core.readNamespacedSecret({
+				namespace: from,
+				name,
+			});
+			const body: V1Secret = {
+				metadata: { name, labels: { [MANAGED_BY]: MANAGER } },
+				type: source.type,
+				data: source.data,
+			};
+			try {
+				await core.createNamespacedSecret({ namespace: to, body });
+			} catch (ex) {
+				if (!isStatus(ex, 409)) throw ex;
+				await core.replaceNamespacedSecret({ namespace: to, name, body });
+			}
+		},
 		async create(namespace, { secret, pod, service }) {
 			await core.createNamespacedSecret({ namespace, body: secret });
 			await core.createNamespacedPod({ namespace, body: pod });
@@ -219,6 +238,7 @@ export function workloadFor(
 	conf: ConnConfig,
 	launch: Launch,
 	labels: Record<string, string>,
+	pullSecret?: string,
 ): Workload {
 	const port = Number(launch.exposed);
 	const metadata = { name, labels };
@@ -230,6 +250,7 @@ export function workloadFor(
 				restartPolicy: "Never",
 				automountServiceAccountToken: false,
 				enableServiceLinks: false,
+				...(pullSecret ? { imagePullSecrets: [{ name: pullSecret }] } : {}),
 				containers: [
 					{
 						name: CONTAINER,
@@ -323,6 +344,10 @@ export class KubernetesHost implements McpHost {
 		};
 	}
 
+	private callerPullSecret(): string | undefined {
+		return this.options.callerNamespace ? this.options.pullSecret : undefined;
+	}
+
 	private async ensureNamespace(): Promise<void> {
 		this.namespaceReady ??= this.prepareNamespace().catch((ex) => {
 			this.namespaceReady = undefined;
@@ -344,6 +369,9 @@ export class KubernetesHost implements McpHost {
 		});
 		const caller = this.options.callerNamespace;
 		if (caller === undefined) return;
+		const pullSecret = this.options.pullSecret;
+		if (pullSecret)
+			await this.cluster.copySecret(caller, this.namespace, pullSecret);
 		await this.cluster.ensureNetworkPolicy(this.namespace, {
 			metadata: { name: INGRESS_POLICY },
 			spec: {
@@ -384,7 +412,13 @@ export class KubernetesHost implements McpHost {
 		await this.cluster.remove(this.namespace, name);
 		await this.cluster.create(
 			this.namespace,
-			workloadFor(name, conf, launch, this.labels(conf)),
+			workloadFor(
+				name,
+				conf,
+				launch,
+				this.labels(conf),
+				this.callerPullSecret(),
+			),
 		);
 		this.servers.set(conf.name, server);
 		try {

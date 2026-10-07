@@ -64,7 +64,7 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 	it("keeps Playwright's local command alongside its container image", () => {
 		expect(configFor("playwright", "/nix/store/chromium/chrome")).toMatchObject(
 			{
-				image: "lisptc/browser-mcp:v1.63.0",
+				image: "ghcr.io/1hachem/lisptc-browser-mcp:main",
 				port: 8931,
 				command: "npx",
 				args: [
