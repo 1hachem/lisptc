@@ -82,32 +82,50 @@ MSG
 fi
 
 review_msg=""
-if pr=$(gh pr view "$branch" --json number,url 2>/dev/null); then
+review_unavailable() {
+  review_msg=$(cat <<MSG
+Could not check $branch for review feedback:
+
+$1
+
+Check \`gh auth status\` and the network, then look for unresolved threads, reviews and comments on its PR by hand with \`gh pr view $branch --comments\`. Do not assume there is none.
+MSG
+)
+}
+
+threads_query='query($owner: String!, $repo: String!, $number: Int!, $endCursor: String) {repository(owner: $owner, name: $repo) {pullRequest(number: $number) {reviewThreads(first: 100, after: $endCursor) {pageInfo {hasNextPage endCursor} nodes {isResolved isOutdated path line comments(first: 100) {nodes {author {login} body}}}}}}}'
+
+if ! pr=$(gh pr list --head "$branch" --state open --json number,url --jq '.[0] // empty' 2>&1); then
+  review_unavailable "$pr"
+elif [ -n "$pr" ]; then
   number=$(jq -r '.number' <<<"$pr")
   url=$(jq -r '.url' <<<"$pr")
-  if feedback=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -F number="$number" -f query='
+  if ! threads=$(gh api graphql --paginate --slurp -F owner='{owner}' -F repo='{repo}' -F number="$number" -f query="$threads_query" 2>&1); then
+    review_unavailable "$threads"
+  elif ! recent=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -F number="$number" -f query='
     query($owner: String!, $repo: String!, $number: Int!) {
       repository(owner: $owner, name: $repo) {
         pullRequest(number: $number) {
-          reviewThreads(first: 100) { nodes { isResolved isOutdated } }
           reviews(last: 100) { nodes { submittedAt author { login } } }
           comments(last: 100) { nodes { createdAt author { login } } }
         }
       }
-    }' 2>/dev/null); then
+    }' 2>&1); then
+    review_unavailable "$recent"
+  else
+    unresolved=$(jq '[.[].data.repository.pullRequest.reviewThreads.nodes[] | select((.isResolved or .isOutdated) | not)] | length' <<<"$threads")
     counts=$(jq -r --arg since "$pushed_at" '.data.repository.pullRequest as $pr | [
-      ([$pr.reviewThreads.nodes[] | select((.isResolved or .isOutdated) | not)] | length),
       ([$pr.reviews.nodes[] | select(.submittedAt >= $since)] | length),
       ([$pr.comments.nodes[] | select(.createdAt >= $since and .author.login != "github-actions")] | length)
-    ] | @tsv' <<<"$feedback")
-    read -r threads reviews comments <<<"$counts"
-    if [ $((threads + reviews + comments)) -gt 0 ]; then
+    ] | @tsv' <<<"$recent")
+    read -r reviews comments <<<"$counts"
+    if [ $((unresolved + reviews + comments)) -gt 0 ]; then
       review_msg=$(cat <<MSG
-PR #$number ($url) has review feedback to triage: $threads unresolved review threads, $reviews reviews and $comments comments since the push.
+PR #$number ($url) has review feedback to triage: $unresolved unresolved review threads, $reviews reviews and $comments comments since the push.
 
 Triage it before changing anything:
 1. Send a script agent to collect every unresolved review thread, every review body and every PR comment, and report each one verbatim with its author and file:line. The commands:
-   - \`gh api graphql -F owner='{owner}' -F repo='{repo}' -F number=$number -f query='query(\$owner:String!,\$repo:String!,\$number:Int!){repository(owner:\$owner,name:\$repo){pullRequest(number:\$number){reviewThreads(first:100){nodes{isResolved isOutdated path line comments(first:20){nodes{author{login} body}}}}}}}'\` (keep the threads that are neither resolved nor outdated)
+   - \`gh api graphql --paginate --slurp -F owner='{owner}' -F repo='{repo}' -F number=$number -f query='$threads_query'\` (keep the threads that are neither resolved nor outdated)
    - \`gh pr view $number --json reviews,comments\`
 2. Read the code each comment points at, and judge every point on three axes:
    - valid or not: is the reviewer right about this code, or is it a false positive, a misread, or against a rule in AGENTS.md?
@@ -124,7 +142,7 @@ fi
 [ -z "$ci_msg" ] && [ -z "$review_msg" ] && exit 0
 
 if [ -n "$ci_msg" ] && [ -n "$review_msg" ]; then
-  printf '%s\n\n%s\n' "$ci_msg" "$review_msg" >&2
+  printf '%s\n\nOnce CI is fixed and pushed, or you have told the user the failure is unrelated, deal with the PR. Fix nothing for it before the user has chosen.\n\n%s\n' "$ci_msg" "$review_msg" >&2
 else
   printf '%s\n' "$ci_msg$review_msg" >&2
 fi
