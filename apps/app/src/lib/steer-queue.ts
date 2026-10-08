@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { API_URL, apiHeaders } from "./api.ts";
+import { apiHeaders } from "./api.ts";
 
 export interface QueuedMessage {
 	id: string;
@@ -10,7 +10,7 @@ async function steer(
 	method: "POST" | "DELETE",
 	body: { chatId: string; id: string; message?: string },
 ): Promise<void> {
-	await fetch(`${API_URL}/api/chat/steer`, {
+	await fetch("/api/chat/steer", {
 		method,
 		headers: await apiHeaders(),
 		body: JSON.stringify(body),

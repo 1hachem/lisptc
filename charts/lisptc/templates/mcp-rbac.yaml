@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ .Values.api.serviceAccount }}
+  name: {{ .Values.app.serviceAccount }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -31,5 +31,5 @@ roleRef:
   name: {{ .Release.Namespace }}-mcp-host
 subjects:
   - kind: ServiceAccount
-    name: {{ .Values.api.serviceAccount }}
+    name: {{ .Values.app.serviceAccount }}
     namespace: {{ .Release.Namespace }}

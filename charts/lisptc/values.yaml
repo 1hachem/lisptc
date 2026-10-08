@@ -1,22 +1,15 @@
 imagePullSecret: ghcr-pull
 
-api:
-  image:
-    repository: ghcr.io/1hachem/lisptc-api
-    tag: main
-  port: 3001
-  hostname: lisptc-api
-  storage: 1Gi
-  serviceAccount: api
-  secrets: [lisptc-api, lisptc-ai, lisptc-analytics]
-
 app:
   image:
     repository: ghcr.io/1hachem/lisptc-app
     tag: main
   port: 3000
   hostname: lisptc
-  secrets: [lisptc-web, lisptc-analytics]
+  serviceAccount: app
+  stateClaim: api-state
+  storage: 1Gi
+  secrets: [lisptc-api, lisptc-ai, lisptc-analytics, lisptc-web]
 
 convexDeploy:
   image:

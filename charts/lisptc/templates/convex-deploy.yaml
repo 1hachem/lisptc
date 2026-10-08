@@ -24,7 +24,8 @@ spec:
               if [ -n "${PREVIEW_SITE_URL:-}" ]; then
                 pnpm exec convex env set SITE_URL "$PREVIEW_SITE_URL"
               fi
-              exec pnpm exec convex deploy --typecheck disable --codegen disable
+              pnpm exec convex deploy --typecheck disable --codegen disable
+              exec pnpm run migrate
           volumeMounts:
             - name: convex-env
               mountPath: /etc/convex-env

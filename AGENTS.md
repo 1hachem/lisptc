@@ -127,8 +127,7 @@ Everything else:
 
 ### Apps
 
-- `apps/api` (`api`) — an HTTP server streaming the agent loop.
-- `apps/app` (`app`) — the web frontend.
+- `apps/app` (`app`) — the web frontend, and the server that streams the agent loop.
 - `apps/cli` (`@lisptc/cli`) — the interactive terminal REPL.
 - `apps/dashi-code` (`@lisptc/dashi-code`) — the code dashboard: what production runs, what it never touches, and what keeps changing.
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
@@ -163,9 +162,9 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   tag denies `extension`, so naming one in a manifest fails `pnpm boundaries`,
   in a test as much as in `src/`.
 - An extension is named at a composition root, and there are only two: an app
-  that runs a REPL itself, and `@repo/backend` for the agent the API serves.
-  Adding one to the served agent means adding its prompt to what `apps/api`
-  ships, and `apps/api/AGENTS.md` carries that rule.
+  that runs a REPL itself, and `@repo/backend` for the agent `apps/app` serves.
+  Adding one to the served agent means adding its prompt to what `apps/app`
+  ships, and `apps/app/AGENTS.md` carries that rule.
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
   workspace package.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
@@ -318,7 +317,7 @@ pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
-task check:agents            # judge the AGENTS.md prose a PR adds (needs the /ai secrets)
+task check:agents            # judge the AGENTS.md prose a PR adds (needs the /actions/agents-md secrets)
 task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
 task up                      # build and run the whole stack in docker, with live reload
 task test                    # the vitest suites and the nix flake checks together
@@ -378,6 +377,28 @@ and do not count.
 
 One commit holds one concern. Unrelated changes in the tree go in commits of
 their own.
+
+## Issues
+
+Work found along the way and left out of the current change is written up as a
+Linear issue in the lisptc team (key PTC), so it is not lost in a reply.
+Open one when the user asks, or when a defect or follow-up is deliberately set
+aside, and say so in the reply with the link.
+
+**Every issue an agent opens carries the "generated" label.** It is the
+existing label for that, so do not create another. Add a type label such as
+bug, feature, refactor or improvement when one fits.
+
+An issue states:
+
+- what is wrong or missing, anchored to the files and functions involved;
+- the impact, concretely: who can do what, and what breaks;
+- the fix as a direction, not a finished design;
+- where it was found and why it was kept out of that change.
+
+Leave priority, assignee and cycle to the user unless they named them. Search
+for an open issue covering the same thing first, and comment on it instead of
+opening a duplicate.
 
 ## Writing Style
 

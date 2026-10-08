@@ -1,3 +1,4 @@
+import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import { harness, signIn } from "./helpers.ts";
@@ -24,6 +25,72 @@ describe("workspace access", () => {
 		const t = harness();
 		await signIn(t, "alice@example.com");
 		await expect(t.query(api.workspaces.list, {})).rejects.toThrow();
+	});
+});
+
+describe("workspace model", () => {
+	const model = {
+		provider: "openrouter",
+		model: "google/gemma-4-31b-it",
+	} as const;
+
+	it("has none until one is chosen", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const got = await alice.as.query(api.workspaces.get, {
+			workspaceId: alice.workspace,
+		});
+		expect(got.model).toBeUndefined();
+	});
+
+	it("keeps the model a workspace was given, and the latest one wins", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.workspaces.setModel, {
+			workspaceId: alice.workspace,
+			model,
+		});
+		const next = {
+			provider: "digitalocean",
+			model: "gemma-4-31B-it",
+		} as const;
+		await alice.as.mutation(api.workspaces.setModel, {
+			workspaceId: alice.workspace,
+			model: next,
+		});
+		const got = await alice.as.query(api.workspaces.get, {
+			workspaceId: alice.workspace,
+		});
+		expect(got.model).toEqual(next);
+	});
+
+	it("refuses choosing the model of another user's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setModel, {
+				workspaceId: bob.workspace,
+				model,
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses a model the catalog does not offer", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		for (const choice of [
+			{ provider: "openrouter", model: " " },
+			{ provider: "openrouter", model: "anthropic/claude-opus-4" },
+			{ provider: "nowhere", model: "google/gemma-4-31b-it" },
+		]) {
+			await expect(
+				alice.as.mutation(api.workspaces.setModel, {
+					workspaceId: alice.workspace,
+					model: choice as CataloguedChoice,
+				}),
+			).rejects.toThrow(/Validator error/);
+		}
 	});
 });
 
