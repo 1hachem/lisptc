@@ -51,10 +51,8 @@ A public function takes the caller from the context, never from an argument, and
 resolves ownership before it touches a row. Read the guards in `convex/lib/`
 before writing a new one.
 
-A write that only the agent server may make, such as a message in a transcript,
-is an internal function. The agent server calls it with the admin key, and it
-takes the subject the server verified as an argument. It still resolves
-ownership from that subject before it touches a row.
+A write that only the agent server may make is an internal function, never a
+public one. It still resolves ownership before it touches a row.
 
 A schema change on a live deployment goes through a migration, and the runner is
 already here.
