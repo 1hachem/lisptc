@@ -35,6 +35,13 @@ async function copyConversation(text: string): Promise<string> {
 	}
 }
 
+function quietly(run: () => void) {
+	return () => {
+		run();
+		return null;
+	};
+}
+
 export function useCommandRunner() {
 	const { toggleLeft, toggleRight, toggleChannel, shown } = useUI();
 	const store = useChatStore();
@@ -44,35 +51,28 @@ export function useCommandRunner() {
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
-			switch (name) {
-				case "/clear":
+			const actions: Record<
+				string,
+				() => Promise<string | null> | string | null
+			> = {
+				"/clear": async () => {
 					await newChat();
 					return null;
-				case "/copy":
-					return await copyConversation(transcript(store.getState().messages));
-				case "/sidebar":
-					toggleLeft();
-					return null;
-				case "/panel":
-					toggleRight();
-					return null;
-				case "/model":
-					openModelPicker();
-					return null;
-				case "/theme":
-					openThemePicker();
-					return null;
-				case "/font":
-					openFontPicker();
-					return null;
-				case "/debug":
+				},
+				"/copy": () => copyConversation(transcript(store.getState().messages)),
+				"/sidebar": quietly(toggleLeft),
+				"/panel": quietly(toggleRight),
+				"/model": quietly(openModelPicker),
+				"/theme": quietly(openThemePicker),
+				"/font": quietly(openFontPicker),
+				"/debug": () => {
 					toggleChannel("model");
 					return shown.model
 						? "the model channel is hidden"
 						: "the model channel is shown";
-				default:
-					return null;
-			}
+				},
+			};
+			return (await actions[name]?.()) ?? null;
 		},
 		[
 			toggleLeft,

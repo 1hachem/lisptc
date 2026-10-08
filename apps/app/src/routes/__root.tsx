@@ -16,7 +16,7 @@ import { ssrAuth } from "../lib/auth-server.ts";
 import { readFontPref, readThemePref } from "../lib/prefs.ts";
 import appCss from "../styles/app.css?url";
 
-export interface RouterContext {
+interface RouterContext {
 	queryClient: QueryClient;
 	convexQueryClient: ConvexQueryClient;
 }

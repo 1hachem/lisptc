@@ -152,6 +152,21 @@ function titleOf(message: string): string {
 	return line.length > 60 ? `${line.slice(0, 57)}…` : line;
 }
 
+function errorFor(
+	chatId: Id<"chats"> | null,
+	sources: {
+		stream: unknown;
+		streamingFor: Id<"chats"> | null;
+		evalError: { chatId: Id<"chats"> | null; message: string } | null;
+	},
+): string | undefined {
+	const { stream, streamingFor, evalError } = sources;
+	if (stream && streamingFor === chatId)
+		return stream instanceof Error ? stream.message : String(stream);
+	if (evalError?.chatId === chatId) return evalError.message;
+	return undefined;
+}
+
 export function ChatProvider({
 	workspaceId,
 	chatId,
@@ -379,13 +394,11 @@ export function ChatProvider({
 			isLoading: stream.isLoading || evaluating,
 			chatId,
 			workspaceId,
-			error:
-				(stream.error && streamingFor.current === chatId
-					? stream.error instanceof Error
-						? stream.error.message
-						: String(stream.error)
-					: undefined) ??
-				(evalError?.chatId === chatId ? evalError.message : undefined),
+			error: errorFor(chatId, {
+				stream: stream.error,
+				streamingFor: streamingFor.current,
+				evalError,
+			}),
 			send: (text) => {
 				void send(text);
 			},

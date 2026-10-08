@@ -78,7 +78,7 @@ export function ModelPickerProvider({
 	);
 }
 
-export function useModelPicker(): ModelPicker {
+export function useModelPicker() {
 	const ctx = useContext(ModelPickerContext);
 	if (!ctx) {
 		throw new Error("useModelPicker must be used within a ModelPickerProvider");
