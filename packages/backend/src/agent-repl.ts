@@ -39,9 +39,14 @@ export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
 ): Promise<InterpExtension[]> {
+	const memory = memoryExtension({
+		...memoryHostFor(workspaceId),
+		store: new ConvexMemoryStore(workspaceId, connect),
+	});
 	const permissions = permissionsExtension(
 		permissionsHostFor({
 			store: await ConvexPermissionsStore.open(workspaceId, connect),
+			asks: memory.asks,
 		}),
 	);
 	return [
@@ -62,10 +67,7 @@ export async function workspaceExtensions(
 		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
-		memoryExtension({
-			...memoryHostFor(workspaceId),
-			store: new ConvexMemoryStore(workspaceId, connect),
-		}),
+		memory,
 		proseExtension(proseHost),
 		uiExtension(uiHost),
 		diagnosticsExtension(diagnosticsHost),

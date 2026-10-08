@@ -33,6 +33,10 @@ and a test that wants a roster builds one.
 seam by name. If a new value from an extension has to reach it, that list is the
 thing to extend deliberately, in the script, and the failure names it.
 
+**A held step is answered through the `Ask` contract alone.** Nothing here
+learns which extension opened an ask, and the session protocol carries an ask
+as far as a local REPL gets one.
+
 Everything else here runs the chains without knowing who is on them. Give a new
 chain a base case that is correct when no extension hooks it, because a REPL
 built without that extension takes the base.

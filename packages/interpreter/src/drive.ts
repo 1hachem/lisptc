@@ -43,3 +43,54 @@ export async function driveAsync<T>(gen: Eval<T>): Promise<Outcome<T>> {
 	}
 	return { value: step.value };
 }
+
+type Decision = { readonly granted: true } | { readonly refusal: unknown };
+
+export class Hold {
+	private decision: Decision | undefined;
+	private settle!: (decision: Decision) => void;
+	readonly until: Promise<void>;
+
+	constructor(readonly reason: string) {
+		this.until = new Promise<void>((resolve, reject) => {
+			this.settle = (decision) =>
+				"granted" in decision ? resolve() : reject(decision.refusal);
+		});
+	}
+
+	get released(): boolean {
+		return this.decision !== undefined;
+	}
+
+	release(): void {
+		this.decision ??= { granted: true };
+	}
+
+	refuse(refusal: unknown): void {
+		this.decision ??= { refusal };
+	}
+
+	resume(): void {
+		if (this.decision !== undefined) this.settle(this.decision);
+	}
+}
+
+export class Holds {
+	private parker: ((hold: Hold) => void) | undefined;
+
+	get parkable(): boolean {
+		return this.parker !== undefined;
+	}
+
+	parkWith(parker: (hold: Hold) => void): () => void {
+		this.parker = parker;
+		return () => {
+			if (this.parker === parker) this.parker = undefined;
+		};
+	}
+
+	park(hold: Hold): Hold {
+		this.parker?.(hold);
+		return hold;
+	}
+}
