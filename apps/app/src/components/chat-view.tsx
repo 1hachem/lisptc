@@ -336,7 +336,7 @@ export function ChatView() {
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
 			<StickOnSend turn={lastSent} />
-			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
+			<ConversationContent className="mx-auto w-full max-w-[680px] gap-3 pb-3">
 				{messages
 					.filter(
 						(m) =>
@@ -352,7 +352,10 @@ export function ChatView() {
 								</div>
 							);
 						return (
-							<div key={m.id ?? i} className="group relative min-w-0">
+							<div
+								key={m.id ?? i}
+								className="group relative min-w-0 empty:hidden"
+							>
 								{tool ? (
 									<ToolMessage message={m} />
 								) : (
