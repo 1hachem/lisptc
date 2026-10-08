@@ -18,7 +18,9 @@ const MAX_STACKED = 5;
 const ORBIT_SECONDS = 2.4;
 
 function triggerColor(on: string | undefined): string {
-	return (on && TRIGGER_COLORS[on]) || "bg-dim";
+	return on && Object.hasOwn(TRIGGER_COLORS, on)
+		? TRIGGER_COLORS[on]
+		: "bg-dim";
 }
 
 function Dot({
@@ -85,7 +87,7 @@ export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
 							title={memory.on ? `fires on ${memory.on}` : "recalled"}
 						>
 							<Dot on={memory.on} />
-							<span>
+							<span className="min-w-0">
 								<span className="text-fg">{memory.key}</span>
 								{memory.body ? ` — ${memory.body}` : null}
 							</span>

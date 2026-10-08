@@ -58,12 +58,14 @@ describe("the recalled memories of a step", () => {
 			{ key: "oops", body: "a lesson", on: "error" },
 			{ key: "plain", body: "a fact" },
 			{ key: "odd", body: "unknown", on: "someday" },
+			{ key: "inherited", body: "unknown", on: "toString" },
 		]);
 		await view.toggle();
 
 		expect(view.colorOf("oops")).toContain("bg-red");
 		expect(view.colorOf("plain")).toContain("bg-dim");
 		expect(view.colorOf("odd")).toContain("bg-dim");
+		expect(view.colorOf("inherited")).toContain("bg-dim");
 	});
 
 	it("stacks a circle per memory, and counts the ones past the stack", async () => {
