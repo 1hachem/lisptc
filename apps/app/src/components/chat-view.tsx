@@ -327,7 +327,7 @@ export function ChatView() {
 		error: state.error,
 		isLoading: state.isLoading,
 	}));
-	const { shown } = useUI();
+	const { shown, metaShown } = useUI();
 	const { openModelPicker } = useModelPicker();
 	const lastSent = messages
 		.filter((m) => isUserMessage(m) || isSystemMessage(m))
@@ -336,7 +336,7 @@ export function ChatView() {
 	return (
 		<Conversation className="min-h-0 flex-1 px-8 pt-6">
 			<StickOnSend turn={lastSent} />
-			<ConversationContent className="mx-auto w-full max-w-[680px] gap-5 pb-3">
+			<ConversationContent className="mx-auto w-full max-w-[680px] gap-3 pb-3">
 				{messages
 					.filter(
 						(m) =>
@@ -352,7 +352,10 @@ export function ChatView() {
 								</div>
 							);
 						return (
-							<div key={m.id ?? i} className="group relative min-w-0">
+							<div
+								key={m.id ?? i}
+								className="group relative min-w-0 empty:hidden"
+							>
 								{tool ? (
 									<ToolMessage message={m} />
 								) : (
@@ -366,7 +369,11 @@ export function ChatView() {
 									<MessageMemories memories={stats.memories} />
 								)}
 								{stats && (
-									<MessageMeta meta={stats} onPickModel={openModelPicker} />
+									<MessageMeta
+										meta={stats}
+										show={metaShown}
+										onPickModel={openModelPicker}
+									/>
 								)}
 								{!tool && !isUserMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
