@@ -20,6 +20,11 @@ runs, and it exists so that the roster belongs to this app rather than to
 
 `isComplete` decides when a buffer holds a whole form. Both modes need it.
 
+Every input runs as a step, a .ptc file included, so whatever a step arms is
+armed for both. A held step is answered through `@repo/repl/asks` in both modes,
+never by naming the extension that held it. A file has no human to ask, so a
+held file stops the run.
+
 ## Rules
 
 This app names extensions because it is a composition root: it decides what a
