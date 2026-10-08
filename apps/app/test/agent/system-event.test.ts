@@ -1,4 +1,4 @@
-import type { ChatInput } from "@repo/ai";
+import type { ChatInput, streamChatResponse } from "@repo/ai";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { type Method, post as send } from "../helpers.ts";
 
@@ -6,9 +6,13 @@ const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 const OTHER_CHAT = "k17dbngz9ch0dbd3vbc12sygs58ejt2q";
 const NOTE = 'I approved (fs/write "a"). Carry on.';
 
+type StreamOptions = Parameters<typeof streamChatResponse>[1];
+type Revised = Parameters<NonNullable<StreamOptions["onTurn"]>>[1];
+
 const world = vi.hoisted(() => ({
 	appended: [] as { chatId: string; messages: Record<string, unknown>[] }[],
 	streamed: [] as ChatInput[],
+	onTurn: undefined as StreamOptions["onTurn"],
 }));
 
 vi.mock("../../server/agent/session.ts", async () => {
@@ -33,10 +37,22 @@ vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({
 		mutation: async (
 			_ref: unknown,
-			args: { chatId: string; messages?: Record<string, unknown>[] },
+			args: {
+				chatId: string;
+				messages?: Record<string, unknown>[];
+				id?: string;
+				kwargs?: Record<string, unknown>;
+			},
 		) => {
 			if (args.messages)
 				world.appended.push({ chatId: args.chatId, messages: args.messages });
+			if (args.kwargs) {
+				const row = world.appended
+					.flatMap(({ messages }) => messages)
+					.find((message) => message.id === args.id);
+				if (row === undefined) throw new Error("MESSAGE_NOT_FOUND");
+				row.kwargs = { ...(row.kwargs as object), ...args.kwargs };
+			}
 		},
 		query: async () =>
 			world.appended.flatMap(({ messages }) =>
@@ -57,8 +73,9 @@ vi.mock("@repo/ai", async (importOriginal) => ({
 		message: NOTE,
 		annotations: {},
 	}),
-	streamChatResponse: (input: ChatInput) => {
+	streamChatResponse: (input: ChatInput, options: StreamOptions) => {
 		world.streamed.push(input);
+		world.onTurn = options.onTurn;
 		return new Response("");
 	},
 }));
@@ -80,6 +97,7 @@ beforeAll(async () => {
 beforeEach(() => {
 	world.appended.length = 0;
 	world.streamed.length = 0;
+	world.onTurn = undefined;
 });
 
 function post(
@@ -178,5 +196,25 @@ describe("a system event resuming a chat", () => {
 		await post(chat, { input: { chatId: CHAT, message: "hello" } });
 		const [stored] = world.appended[0].messages;
 		expect(stored.id).toMatch(/^[0-9a-f-]{36}$/);
+	});
+
+	test("keeps the annotations a turn adds to the typed message", async () => {
+		await post(chat, { input: { chatId: CHAT, message: "hello" } });
+		const memories = [{ key: "greet", body: "say hi", on: "user" }];
+		const revised: Revised = new Map([
+			[
+				0,
+				{
+					id: "wire",
+					type: "human",
+					content: "hello",
+					additional_kwargs: { memories },
+				},
+			],
+		]);
+		expect(world.onTurn).toBeDefined();
+		await world.onTurn?.([], revised);
+		const [stored] = world.appended[0].messages;
+		expect(stored.kwargs).toEqual({ memories });
 	});
 });
