@@ -37,13 +37,16 @@ beforeAll(async () => {
 	});
 	await new Promise<void>((resolve) => server.listen(PORT, resolve));
 
-	process.env.APP_URL = "http://localhost:3000";
+	process.env.VITE_CONVEX_URL = ORIGIN;
+	process.env.VITE_ENVIRONMENT = "dev";
+	process.env.VITE_POSTHOG_KEY = "test";
+	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = ORIGIN;
 	process.env.CONVEX_SITE_URL = ORIGIN;
 
 	const { Hono } = await import("hono");
-	const { session } = await import("../src/session.ts");
-	const { errorHandler } = await import("../src/error.ts");
+	const { session } = await import("../../server/agent/session.ts");
+	const { errorHandler } = await import("../../server/agent/error.ts");
 
 	const { ConvexError } = await import("convex/values");
 

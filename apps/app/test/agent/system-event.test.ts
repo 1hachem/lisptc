@@ -11,7 +11,7 @@ const world = vi.hoisted(() => ({
 	streamed: [] as ChatInput[],
 }));
 
-vi.mock("../src/session.ts", async () => {
+vi.mock("../../server/agent/session.ts", async () => {
 	const { createMiddleware } = await import("hono/factory");
 	return {
 		session: createMiddleware(async (c, next) => {
@@ -24,9 +24,9 @@ vi.mock("../src/session.ts", async () => {
 	};
 });
 
-vi.mock("../src/repls.ts", () => ({ repls: {} }));
+vi.mock("../../server/agent/repls.ts", () => ({ repls: {} }));
 
-vi.mock("../src/convex.ts", () => ({
+vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({
 		mutation: async (
 			_ref: unknown,
@@ -64,11 +64,14 @@ let chat: Hono;
 let uiAction: Hono;
 
 beforeAll(async () => {
-	process.env.APP_URL = "http://localhost:3000";
+	process.env.VITE_CONVEX_URL = "http://127.0.0.1:3210";
+	process.env.VITE_ENVIRONMENT = "dev";
+	process.env.VITE_POSTHOG_KEY = "test";
+	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-	({ chat } = await import("../src/chat.ts"));
-	({ uiAction } = await import("../src/ui-action.ts"));
+	({ chat } = await import("../../server/agent/chat.ts"));
+	({ uiAction } = await import("../../server/agent/ui-action.ts"));
 });
 
 beforeEach(() => {

@@ -39,8 +39,8 @@ beforeAll(async () => {
 	process.env.POSTHOG_ENVIRONMENT = "test";
 
 	const { Hono } = await import("hono");
-	const { errorHandler } = await import("../src/error.ts");
-	const { telemetry } = await import("../src/telemetry.ts");
+	const { errorHandler } = await import("../../server/agent/error.ts");
+	const { telemetry } = await import("../../server/agent/telemetry.ts");
 
 	const app = new Hono();
 	app.use(telemetry());

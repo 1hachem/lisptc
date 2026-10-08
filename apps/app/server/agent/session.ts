@@ -1,11 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { apiEnv } from "@repo/env/api";
+import { webEnv } from "@repo/env/web";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const jwks = createRemoteJWKSet(
-	new URL("/api/auth/convex/jwks", apiEnv.CONVEX_SITE_URL),
+	new URL("/api/auth/convex/jwks", webEnv.CONVEX_SITE_URL),
 );
 
 export interface Session {
@@ -38,7 +38,7 @@ export const session = createMiddleware(async (c, next) => {
 		throw new HTTPException(401, { message: "missing bearer token" });
 	}
 	const verified = await jwtVerify(token, jwks, {
-		issuer: apiEnv.CONVEX_SITE_URL,
+		issuer: webEnv.CONVEX_SITE_URL,
 		audience: "convex",
 	}).catch(() => null);
 	if (verified === null || typeof verified.payload.sub !== "string") {

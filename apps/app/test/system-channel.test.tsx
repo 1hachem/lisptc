@@ -41,7 +41,6 @@ vi.mock("../src/lib/prefs.ts", () => ({
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/api.ts", () => ({
-	API_URL: "",
 	apiHeaders: async () => ({}),
 }));
 vi.mock("../src/components/agent-avatar.tsx", () => ({
