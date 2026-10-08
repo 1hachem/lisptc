@@ -20,11 +20,6 @@ runs, and it exists so that the roster belongs to this app rather than to
 
 `isComplete` decides when a buffer holds a whole form. Both modes need it.
 
-Every input runs as a step, a .ptc file included, so whatever a step arms is
-armed for both. A held step is answered through `@repo/repl/asks` in both modes,
-never by naming the extension that held it. A file has no human to ask, so a
-held file stops the run.
-
 ## Rules
 
 This app names extensions because it is a composition root: it decides what a
@@ -34,6 +29,9 @@ have it, and there is no registry that would do it for you.
 
 `@lisptc/lsp` keeps a session roster of its own. The two are one surface, so an
 extension added here is added there.
+
+**Every input runs as a step, a file included.** A file has no human to ask,
+so it never waits on one.
 
 `USAGE` is the only documentation a user of the binary gets. An argument or an
 option that changes belongs in it, in the same change.

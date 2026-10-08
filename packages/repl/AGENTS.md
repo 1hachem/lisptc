@@ -16,13 +16,6 @@ extension list. **The server is not an entry point here.** The caller names the
 file to spawn, so the process that serves a session is the one that decides
 what is in it.
 
-`src/asks.ts` answers a held step from a terminal. It reads the open asks off a
-step's annotations, puts each to a human as y/N, sends back the choice the
-reply picks, and runs the step again once every ask is accepted. It knows the
-`Ask` contract and nothing about who opened one, so it answers any extension's
-ask the same way. The session protocol carries the asks and the answer, so an
-attached client asks the same question a local one does.
-
 The interactive terminal REPL is not here. It is `@lisptc/cli`, which builds on
 this package's exports.
 
@@ -39,6 +32,10 @@ and a test that wants a roster builds one.
 `src/repl.ts` is a driver, and `check:arch` pins what it may carry across the
 seam by name. If a new value from an extension has to reach it, that list is the
 thing to extend deliberately, in the script, and the failure names it.
+
+**A held step is answered through the `Ask` contract alone.** Nothing here
+learns which extension opened an ask, and the session protocol carries an ask
+as far as a local REPL gets one.
 
 Everything else here runs the chains without knowing who is on them. Give a new
 chain a base case that is correct when no extension hooks it, because a REPL
