@@ -1,6 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
+import * as messages from "../convex/messages.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("workspace access", () => {
@@ -116,7 +117,8 @@ describe("chat access", () => {
 			workspaceId: bob.workspace,
 		});
 		await expect(
-			alice.as.mutation(api.messages.append, {
+			t.mutation(internal.messages.append, {
+				subject: alice.subject,
 				chatId,
 				messages: [{ type: "human", content: "hello" }],
 			}),
@@ -130,19 +132,22 @@ describe("chat access", () => {
 		const chatId = await bob.as.mutation(api.chats.create, {
 			workspaceId: bob.workspace,
 		});
-		await bob.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: bob.subject,
 			chatId,
 			messages: [{ id: "w1", type: "tool", content: "one" }],
 		});
 		await expect(
-			alice.as.mutation(api.messages.annotate, {
+			t.mutation(internal.messages.annotate, {
+				subject: alice.subject,
 				chatId,
 				id: "w1",
 				kwargs: { extra: true },
 			}),
 		).rejects.toThrow();
 		await expect(
-			t.mutation(api.messages.annotate, {
+			t.mutation(internal.messages.annotate, {
+				subject: "nobody",
 				chatId,
 				id: "w1",
 				kwargs: { extra: true },
@@ -150,6 +155,11 @@ describe("chat access", () => {
 		).rejects.toThrow();
 		const [row] = await bob.as.query(api.messages.transcript, { chatId });
 		expect(row.kwargs).toBeUndefined();
+	});
+
+	it("refuses writing a message from the browser, even to the owner's chat", () => {
+		expect(messages.append.isInternal).toBe(true);
+		expect(messages.annotate.isInternal).toBe(true);
 	});
 
 	it("hides an archived chat from the list", async () => {
@@ -178,11 +188,13 @@ describe("messages", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
-		await alice.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: alice.subject,
 			chatId,
 			messages: [{ type: "human", content: "one" }],
 		});
-		await alice.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: alice.subject,
 			chatId,
 			messages: [
 				{ type: "ai", content: "two" },
@@ -206,7 +218,8 @@ describe("messages", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
-		await alice.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: alice.subject,
 			chatId,
 			messages: [
 				{ id: "w1", type: "tool", content: "one" },
@@ -225,7 +238,8 @@ describe("messages", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
-		await alice.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: alice.subject,
 			chatId,
 			messages: [
 				{
@@ -239,7 +253,8 @@ describe("messages", () => {
 				},
 			],
 		});
-		await alice.as.mutation(api.messages.annotate, {
+		await t.mutation(internal.messages.annotate, {
+			subject: alice.subject,
 			chatId,
 			id: "w1",
 			kwargs: { nested: { list: [3], inner: { b: 2 } }, added: 1 },
@@ -259,7 +274,8 @@ describe("messages", () => {
 			workspaceId: alice.workspace,
 		});
 		await expect(
-			alice.as.mutation(api.messages.annotate, {
+			t.mutation(internal.messages.annotate, {
+				subject: alice.subject,
 				chatId,
 				id: "missing",
 				kwargs: { added: 1 },
@@ -273,7 +289,8 @@ describe("messages", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
-		await alice.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: alice.subject,
 			chatId,
 			messages: [{ type: "human", content: "one" }],
 		});

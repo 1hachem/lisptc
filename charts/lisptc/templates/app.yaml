@@ -56,6 +56,11 @@ spec:
               value: {{ .Values.app.port | quote }}
             - name: XDG_CONFIG_HOME
               value: /data
+            - name: CONVEX_SELF_HOSTED_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-convex
+                  key: CONVEX_SELF_HOSTED_ADMIN_KEY
             {{- include "lisptc.previewEnv" (list . (dict
                 "APP_URL" .Values.app.hostname)) | nindent 12 }}
             {{- include "lisptc.previewConvexEnv" . | nindent 12 }}

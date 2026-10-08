@@ -107,6 +107,7 @@ services:
       - LISPTC_OAUTH_REDIRECT_URL
       - CONVEX_URL
       - CONVEX_SITE_URL
+      - CONVEX_SELF_HOSTED_ADMIN_KEY
       - LLM_PROVIDER
       - DO_API_KEY
       - DO_BASE_URL

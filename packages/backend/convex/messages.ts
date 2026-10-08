@@ -1,8 +1,8 @@
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalMutation, mutation, query } from "./_generated/server.js";
-import { requireChat } from "./lib/auth.js";
+import { internalMutation, query } from "./_generated/server.js";
+import { requireChat, requireChatOf } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { messageType } from "./schema.js";
 
@@ -60,11 +60,15 @@ export const transcript = query({
 	},
 });
 
-export const append = mutation({
-	args: { chatId: v.id("chats"), messages: v.array(incoming) },
+export const append = internalMutation({
+	args: {
+		subject: v.string(),
+		chatId: v.id("chats"),
+		messages: v.array(incoming),
+	},
 	returns: v.array(v.id("messages")),
-	handler: async (ctx, { chatId, messages }) => {
-		const { chat } = await requireChat(ctx, chatId);
+	handler: async (ctx, { subject, chatId, messages }) => {
+		const { chat } = await requireChatOf(ctx, subject, chatId);
 		const last = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
@@ -93,15 +97,16 @@ export const append = mutation({
 	},
 });
 
-export const annotate = mutation({
+export const annotate = internalMutation({
 	args: {
+		subject: v.string(),
 		chatId: v.id("chats"),
 		id: v.string(),
 		kwargs: v.record(v.string(), v.any()),
 	},
 	returns: v.null(),
-	handler: async (ctx, { chatId, id, kwargs }) => {
-		await requireChat(ctx, chatId);
+	handler: async (ctx, { subject, chatId, id, kwargs }) => {
+		await requireChatOf(ctx, subject, chatId);
 		const row = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))

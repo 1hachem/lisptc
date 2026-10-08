@@ -7,6 +7,7 @@ export const webEnv = createEnv({
 	server: {
 		CONVEX_URL: z.url(),
 		CONVEX_SITE_URL: z.url(),
+		CONVEX_SELF_HOSTED_ADMIN_KEY: z.string(),
 	},
 	clientPrefix: "VITE_",
 	client: {

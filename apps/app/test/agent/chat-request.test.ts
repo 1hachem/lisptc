@@ -16,6 +16,7 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
+	process.env.CONVEX_SELF_HOSTED_ADMIN_KEY = "test";
 	({ chatRequestSchema, steerRequestSchema } = await import(
 		"../../server/agent/chat.ts"
 	));

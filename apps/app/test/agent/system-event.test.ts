@@ -27,7 +27,7 @@ vi.mock("../../server/agent/session.ts", async () => {
 vi.mock("../../server/agent/repls.ts", () => ({ repls: {} }));
 
 vi.mock("../../server/agent/convex.ts", () => ({
-	convexAs: () => ({
+	convexAsServer: () => ({
 		mutation: async (
 			_ref: unknown,
 			args: { chatId: string; messages?: Record<string, unknown>[] },
@@ -35,6 +35,8 @@ vi.mock("../../server/agent/convex.ts", () => ({
 			if (args.messages)
 				world.appended.push({ chatId: args.chatId, messages: args.messages });
 		},
+	}),
+	convexAs: () => ({
 		query: async () =>
 			world.appended.flatMap(({ messages }) =>
 				messages.map(({ id, ...m }, i) => ({
@@ -70,6 +72,7 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
+	process.env.CONVEX_SELF_HOSTED_ADMIN_KEY = "test";
 	({ chat } = await import("../../server/agent/chat.ts"));
 	({ uiAction } = await import("../../server/agent/ui-action.ts"));
 });

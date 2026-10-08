@@ -1,9 +1,9 @@
 import { runUiAction, type UiActionResult } from "@repo/ai";
-import { api } from "@repo/backend/api";
+import { api, internal } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { Hono } from "hono";
 import { z } from "zod";
-import { convexAs } from "./convex.ts";
+import { convexAs, convexAsServer, type ServerConvex } from "./convex.ts";
 import { ticket } from "./events.ts";
 import { convexId } from "./ids.ts";
 import { repls } from "./repls.ts";
@@ -17,13 +17,13 @@ const uiActionSchema = z.object({
 });
 
 async function annotateMessage(
-	convex: ReturnType<typeof convexAs>,
+	server: ServerConvex,
 	chatId: Id<"chats">,
 	id: string,
 	kwargs: UiActionResult["annotations"],
 ): Promise<void> {
 	if (kwargs === undefined || Object.keys(kwargs).length === 0) return;
-	await convex.mutation(api.messages.annotate, { chatId, id, kwargs });
+	await server.mutation(internal.messages.annotate, { chatId, id, kwargs });
 }
 
 export const uiAction = new Hono();
@@ -46,7 +46,12 @@ uiAction.post("/", async (c) => {
 	}
 	const { annotations, ...reply } = result;
 	if (messageId !== undefined && !result.error)
-		await annotateMessage(convex, chatId, messageId, annotations);
+		await annotateMessage(
+			convexAsServer(c.get("session")),
+			chatId,
+			messageId,
+			annotations,
+		);
 	const event =
 		result.message === undefined || result.error
 			? undefined

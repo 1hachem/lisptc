@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import { harness, signIn } from "./helpers.ts";
 
 afterEach(() => {
@@ -13,7 +13,8 @@ describe("removing a chat", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
-		await alice.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: alice.subject,
 			chatId,
 			messages: [{ type: "human", content: "hello" }],
 		});
@@ -71,7 +72,8 @@ describe("removing a workspace", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: doomed,
 		});
-		await alice.as.mutation(api.messages.append, {
+		await t.mutation(internal.messages.append, {
+			subject: alice.subject,
 			chatId,
 			messages: [{ type: "human", content: "hello" }],
 		});

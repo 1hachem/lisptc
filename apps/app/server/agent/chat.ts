@@ -5,10 +5,10 @@ import {
 	streamChatResponse,
 	systemEventMessage,
 } from "@repo/ai";
-import { api } from "@repo/backend/api";
+import { api, internal } from "@repo/backend/api";
 import { Hono } from "hono";
 import { z } from "zod";
-import { convexAs } from "./convex.ts";
+import { convexAs, convexAsServer } from "./convex.ts";
 import { events } from "./events.ts";
 import { type StoredMessage, toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
@@ -85,12 +85,13 @@ chat.post("/", async (c) => {
 		return c.json({ error: "no system event is waiting for this token" }, 403);
 	}
 	const convex = convexAs(c.get("session"));
+	const server = convexAsServer(c.get("session"));
 
 	const { workspaceId } = await convex.query(api.chats.get, { chatId });
 	const { provider, model } = chatModel(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
-	await convex.mutation(api.messages.append, {
+	await server.mutation(internal.messages.append, {
 		chatId,
 		messages: [opening],
 	});
@@ -122,7 +123,7 @@ chat.post("/", async (c) => {
 						message.additional_kwargs === undefined
 					)
 						continue;
-					await convex.mutation(api.messages.annotate, {
+					await server.mutation(internal.messages.annotate, {
 						chatId,
 						id: stored.wireId,
 						kwargs: message.additional_kwargs,
@@ -130,7 +131,7 @@ chat.post("/", async (c) => {
 				}
 				const messages = toStored(produced);
 				if (messages.length === 0) return;
-				await convex.mutation(api.messages.append, { chatId, messages });
+				await server.mutation(internal.messages.append, { chatId, messages });
 			},
 		},
 	);
@@ -180,15 +181,15 @@ chat.post("/eval", async (c) => {
 		return c.json({ error: z.treeifyError(parsed.error) }, 400);
 	}
 	const { chatId, code } = parsed.data;
-	const convex = convexAs(c.get("session"));
+	const server = convexAsServer(c.get("session"));
 
-	await convex.mutation(api.messages.append, {
+	await server.mutation(internal.messages.append, {
 		chatId,
 		messages: [{ id: crypto.randomUUID(), type: "human", content: code }],
 	});
 	console.log(`eval chat=${chatId} chars=${code.length}`);
 	const message = await evalUserCode(code, { repls, threadId: chatId });
-	await convex.mutation(api.messages.append, {
+	await server.mutation(internal.messages.append, {
 		chatId,
 		messages: toStored([{ ...message }]),
 	});

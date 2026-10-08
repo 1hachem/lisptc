@@ -43,6 +43,7 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = ORIGIN;
 	process.env.CONVEX_SITE_URL = ORIGIN;
+	process.env.CONVEX_SELF_HOSTED_ADMIN_KEY = "test";
 
 	const { Hono } = await import("hono");
 	const { session } = await import("../../server/agent/session.ts");

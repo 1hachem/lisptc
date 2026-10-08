@@ -10,6 +10,7 @@ const modules = import.meta.glob("../convex/**/*.ts");
 const HOUR = 60 * 60 * 1000;
 
 export interface Signed {
+	subject: string;
 	user: Id<"users">;
 	workspace: Id<"workspaces">;
 	as: TestConvex<typeof schema>;
@@ -76,6 +77,7 @@ export async function signIn(
 		return { user, workspace };
 	});
 	return {
+		subject: authId,
 		user,
 		workspace,
 		as: t.withIdentity({ subject: authId, sessionId }) as TestConvex<
