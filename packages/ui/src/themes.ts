@@ -1,29 +1,38 @@
+export type ThemeScheme = "light" | "dark";
+
 export interface ThemeDef {
 	id: string;
 	name: string;
-	swatches: [string, string, string];
+	scheme: ThemeScheme;
 }
+
+export const themeSchemes: ThemeScheme[] = ["light", "dark"];
 
 export const themes: ThemeDef[] = [
 	{
 		id: "gruvbox-dark",
-		name: "gruvbox dark",
-		swatches: ["#fe8019", "#b8bb26", "#83a598"],
+		name: "gruvbox",
+		scheme: "dark",
 	},
 	{
 		id: "gruvbox-light",
-		name: "gruvbox light",
-		swatches: ["#af3a03", "#79740e", "#076678"],
+		name: "gruvbox",
+		scheme: "light",
 	},
 	{
 		id: "tokyonight-dark",
-		name: "tokyonight dark",
-		swatches: ["#ff9e64", "#9ece6a", "#7aa2f7"],
+		name: "tokyonight",
+		scheme: "dark",
 	},
 	{
 		id: "tokyonight-light",
-		name: "tokyonight light",
-		swatches: ["#b15c00", "#587539", "#2e7de9"],
+		name: "tokyonight",
+		scheme: "light",
+	},
+	{
+		id: "borland",
+		name: "borland",
+		scheme: "dark",
 	},
 ];
 

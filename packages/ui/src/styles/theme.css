@@ -16,7 +16,7 @@
 	--color-aqua: var(--aqua);
 	--color-orange: var(--orange);
 
-	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-mono: var(--font-face), ui-monospace, SFMono-Regular, Menlo, monospace;
 
 	--text-xs: 11px;
 	--text-xs--line-height: 1.6;
@@ -167,6 +167,39 @@
 	--purple: #9854f1;
 	--aqua: #118c74;
 	--orange: #b15c00;
+}
+
+[data-theme="borland"] {
+	color-scheme: dark;
+	--bg: #0000a3;
+	--bg1: #0b0bb3;
+	--bg2: #2a2ac2;
+	--fg: #ffff4d;
+	--dim: #a3a3a3;
+	--red: #ff6b60;
+	--green: #a7ff60;
+	--yellow: #ffffb6;
+	--blue: #96cafd;
+	--purple: #ff73fd;
+	--aqua: #c6c4fd;
+	--orange: #ffa460;
+}
+
+:root,
+[data-font="jetbrains-mono"] {
+	--font-face: "JetBrains Mono";
+}
+
+[data-font="geist"] {
+	--font-face: "Geist";
+}
+
+[data-font="poppins"] {
+	--font-face: "Poppins";
+}
+
+[data-font] {
+	font-family: var(--font-face), ui-monospace, monospace;
 }
 
 @keyframes blk {
