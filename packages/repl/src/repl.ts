@@ -1,6 +1,11 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
+import {
+	driveAsync,
+	type Eval,
+	type Hold,
+	settled,
+} from "@repo/interpreter/drive";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import {
 	type Chain,
@@ -83,6 +88,29 @@ function partition(notes: readonly Note[]): {
 	return { skipped, failed, held };
 }
 
+interface Parked {
+	readonly hold: Hold;
+	readonly run: Promise<unknown>;
+}
+
+type Settled = { readonly held: Hold } | { readonly thrown: unknown };
+
+function stepThrowable(ex: unknown): boolean {
+	return (
+		ex instanceof EvalException || ex instanceof StepHold || ex === EndOfFile
+	);
+}
+
+function caught(run: Promise<unknown>): Promise<unknown> {
+	return run.then(
+		() => undefined,
+		(ex) => {
+			if (!stepThrowable(ex)) throw ex;
+			return ex instanceof StepHold ? undefined : ex;
+		},
+	);
+}
+
 function skipNotes(skipped: string[]): string {
 	return skipped.map((what) => `skipped ${what}\n`).join("");
 }
@@ -103,6 +131,7 @@ function render(result: StepResult): EvalOutput {
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private inFlight: Promise<void> = Promise.resolve();
+	private parked: Parked[] = [];
 	private readonly extensions: InterpExtension[];
 	readonly hooks: SessionHooks;
 
@@ -188,41 +217,34 @@ export class MemoryRepl implements InMemoryRepl {
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
 		let thrown: unknown;
+		let carried = false;
+		let carriedThrown: unknown;
 		try {
-			await body(ctx);
-		} catch (ex) {
-			if (
-				!(ex instanceof EvalException) &&
-				!(ex instanceof StepHold) &&
-				ex !== EndOfFile
-			)
-				throw ex;
-			if (!(ex instanceof StepHold)) thrown = ex;
+			const ran = await this.untilHeld(() => caught(body(ctx)));
+			if ("thrown" in ran) {
+				thrown = ran.thrown;
+				if (this.parked.some((p) => p.hold.released)) {
+					carried = true;
+					const resumed = await this.untilHeld(() => this.carryOn());
+					if ("thrown" in resumed) carriedThrown = resumed.thrown;
+				}
+			}
 		} finally {
 			detach();
 		}
 		const { skipped, failed, held } = partition(buffer.collect(note));
 		const holding = held.map((n) => `held: ${n.text}\n`).join("");
-		let error: Bounded = { model: "", user: "" };
-		if (thrown === EndOfFile) {
-			const text = "unbalanced expression (unexpected end of input)\n";
-			error = { model: text, user: "" };
-		} else if (thrown !== undefined) {
-			const text = `${failed.at(-1)?.text ?? String(thrown)}\n`;
-			error = this.hooks.stepError.run(
-				() => ({ model: text, user: text }),
-				ctx,
-				text,
-			);
-		}
 		const bounded = this.hooks.stepOutput.run((_c, out) => out, ctx, {
 			model: buffer.collectText("model"),
 			user: buffer.collectText("user"),
 		});
+		const error = this.errorOf(ctx, thrown, failed);
+		const carriedError = this.errorOf(ctx, carriedThrown, failed);
+		const message = this.hooks.message.run(noOpinion, buffer);
 		return {
 			envelopes: buffer.envelopes,
-			model: bounded.model + error.model + holding,
-			user: bounded.user + error.user,
+			model: carried ? error.model : bounded.model + error.model + holding,
+			user: bounded.user + carriedError.user + error.user,
 			emitted,
 			annotations: this.hooks.annotate.run(
 				(_b, into) => into,
@@ -231,9 +253,65 @@ export class MemoryRepl implements InMemoryRepl {
 			),
 			failed: thrown !== undefined,
 			held: held.length > 0,
-			message: this.hooks.message.run(noOpinion, buffer),
+			message: carried
+				? [message, carriedOn(bounded.model + carriedError.model + holding)]
+						.filter((m) => m !== undefined)
+						.join("\n\n")
+				: message,
 			skipped,
 		};
+	}
+
+	private errorOf(
+		ctx: StepContext,
+		thrown: unknown,
+		failed: readonly Note[],
+	): Bounded {
+		if (thrown === undefined) return { model: "", user: "" };
+		if (thrown === EndOfFile)
+			return {
+				model: "unbalanced expression (unexpected end of input)\n",
+				user: "",
+			};
+		const text = `${failed.at(-1)?.text ?? String(thrown)}\n`;
+		return this.hooks.stepError.run(
+			() => ({ model: text, user: text }),
+			ctx,
+			text,
+		);
+	}
+
+	private async untilHeld(run: () => Promise<unknown>): Promise<Settled> {
+		let parked!: (hold: Hold) => void;
+		const holding = new Promise<Hold>((resolve) => {
+			parked = resolve;
+		});
+		const unpark = this.currentInterp.holds.parkWith(parked);
+		try {
+			const running = run();
+			const first = await Promise.race([
+				running.then((thrown) => ({ thrown })),
+				holding.then((held) => ({ held })),
+			]);
+			if ("held" in first) {
+				running.catch(() => undefined);
+				this.parked.push({ hold: first.held, run: running });
+			}
+			return first;
+		} finally {
+			unpark();
+		}
+	}
+
+	private async carryOn(): Promise<unknown> {
+		const ready = this.parked.filter((p) => p.hold.released);
+		this.parked = this.parked.filter((p) => !p.hold.released);
+		let thrown: unknown;
+		for (const { hold, run } of ready) {
+			hold.resume();
+			thrown = (await run) ?? thrown;
+		}
+		return thrown;
 	}
 
 	async eval(code: string): Promise<string> {
@@ -241,6 +319,7 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	reset(): void {
+		this.parked = [];
 		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
 	}
@@ -443,4 +522,10 @@ function defineVar(interp: Interp, name: string, value: unknown): void {
 		signature: name,
 		doc: "Read-only live conversation state (auto-updated each step).",
 	});
+}
+
+function carriedOn(printed: string): string {
+	return printed.trim() === ""
+		? "The held step carried on and finished."
+		: `The held step carried on:\n${printed}`;
 }

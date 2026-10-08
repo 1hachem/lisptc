@@ -5,16 +5,19 @@
       "entry": ["scripts/**/*.ts"],
       "project": ["scripts/**/*.ts"]
     },
-    "apps/api": {
-      "project": ["src/**/*.ts", "test/**/*.ts", "runtime-assets.ts"]
-    },
     "apps/app": {
       "entry": [
         "src/routes/**/*.tsx",
         "server/routes/**/*.ts",
+        "server/plugins/**/*.ts",
         "scripts/**/*.ts"
       ],
-      "project": ["src/**/*.{ts,tsx}", "server/**/*.ts", "scripts/**/*.ts"],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "server/**/*.ts",
+        "scripts/**/*.ts",
+        "runtime-assets.ts"
+      ],
       "ignoreBinaries": ["magick"]
     },
     "apps/lsp": {

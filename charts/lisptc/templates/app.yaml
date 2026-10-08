@@ -9,6 +9,16 @@ spec:
     - port: {{ .Values.app.port }}
       targetPort: {{ .Values.app.port }}
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.stateClaim }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.app.storage }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,6 +27,8 @@ metadata:
     secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: app
@@ -25,6 +37,8 @@ spec:
       labels:
         app: app
     spec:
+      securityContext:
+        fsGroup: 1001
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       containers:
@@ -40,14 +54,31 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.app.port | quote }}
+            - name: XDG_CONFIG_HOME
+              value: /data
+            {{- include "lisptc.previewEnv" (list . (dict
+                "APP_URL" .Values.app.hostname)) | nindent 12 }}
             {{- include "lisptc.previewConvexEnv" . | nindent 12 }}
+            {{- if .Values.preview.enabled }}
+            - name: LISPTC_OAUTH_REDIRECT_URL
+              value: {{ printf "%s/oauth/callback" (include "lisptc.url" .Values.app.hostname) | quote }}
+            {{- end }}
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /live
               port: {{ .Values.app.port }}
             initialDelaySeconds: 30
             periodSeconds: 20
             failureThreshold: 3
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: {{ .Values.app.port }}
             periodSeconds: 10
+          volumeMounts:
+            - name: state
+              mountPath: /data
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ .Values.app.stateClaim }}

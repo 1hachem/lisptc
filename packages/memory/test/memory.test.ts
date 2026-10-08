@@ -143,6 +143,10 @@ describe("remembering and recalling", () => {
 		expect(await ev(f, "(memory/forget-all)")).toBe("0");
 	});
 
+	it("asks a human before forgetting everything", () => {
+		expect(memoryExtension(memoryHost).asks).toEqual(["memory/forget-all"]);
+	});
+
 	it("keeps a form as a form, not as its value", async () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "triage" \'(defun triage (i) (cdr i)))');

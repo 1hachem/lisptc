@@ -1,6 +1,6 @@
 import type { ChatInput } from "@repo/ai";
-import type { Hono } from "hono";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { type Method, post as send } from "../helpers.ts";
 
 const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 const OTHER_CHAT = "k17dbngz9ch0dbd3vbc12sygs58ejt2q";
@@ -11,22 +11,25 @@ const world = vi.hoisted(() => ({
 	streamed: [] as ChatInput[],
 }));
 
-vi.mock("../src/session.ts", async () => {
-	const { createMiddleware } = await import("hono/factory");
-	return {
-		session: createMiddleware(async (c, next) => {
+vi.mock("../../server/agent/session.ts", async () => {
+	const { createMiddleware } = await import("@tanstack/react-start");
+	const { edge } = await import("../../server/agent/edge.ts");
+	const session = createMiddleware({ type: "request" }).server(
+		({ request, next }) => {
 			const subject =
-				c.req.header("authorization")?.replace("Bearer ", "") ?? "";
-			c.set("session", { token: subject, subject });
-			await next();
-		}),
+				request.headers.get("authorization")?.replace("Bearer ", "") ?? "";
+			return next({ context: { session: { token: subject, subject } } });
+		},
+	);
+	return {
+		authed: [...edge, session],
 		currentSession: () => ({ token: "u1", subject: "u1" }),
 	};
 });
 
-vi.mock("../src/repls.ts", () => ({ repls: {} }));
+vi.mock("../../server/agent/repls.ts", () => ({ repls: {} }));
 
-vi.mock("../src/convex.ts", () => ({
+vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({
 		mutation: async (
 			_ref: unknown,
@@ -60,15 +63,18 @@ vi.mock("@repo/ai", async (importOriginal) => ({
 	},
 }));
 
-let chat: Hono;
-let uiAction: Hono;
+let chat: Method;
+let uiAction: Method;
 
 beforeAll(async () => {
-	process.env.APP_URL = "http://localhost:3000";
+	process.env.VITE_CONVEX_URL = "http://127.0.0.1:3210";
+	process.env.VITE_ENVIRONMENT = "dev";
+	process.env.VITE_POSTHOG_KEY = "test";
+	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-	({ chat } = await import("../src/chat.ts"));
-	({ uiAction } = await import("../src/ui-action.ts"));
+	({ turn: chat } = await import("../../server/agent/chat.ts"));
+	({ uiAction } = await import("../../server/agent/ui-action.ts"));
 });
 
 beforeEach(() => {
@@ -76,17 +82,12 @@ beforeEach(() => {
 	world.streamed.length = 0;
 });
 
-function post(app: Hono, body: unknown, subject = "u1"): Promise<Response> {
-	return Promise.resolve(
-		app.request("/", {
-			method: "POST",
-			headers: {
-				authorization: `Bearer ${subject}`,
-				"content-type": "application/json",
-			},
-			body: JSON.stringify(body),
-		}),
-	);
+function post(
+	method: Method,
+	body: unknown,
+	subject = "u1",
+): Promise<Response> {
+	return send(method, body, { authorization: `Bearer ${subject}` });
 }
 
 async function decide(chatId = CHAT, subject = "u1"): Promise<string> {

@@ -68,9 +68,9 @@ tasks:
     cmd: kubectl -n lisptc exec statefulset/convex-backend -- ./generate_admin_key.sh
 
   logs:
-    desc: 'follow the logs of a workload (task cluster:logs -- deploy/api)'
+    desc: 'follow the logs of a workload (task cluster:logs -- deploy/app)'
     deps: [_reachable]
-    cmd: kubectl -n lisptc logs -f {{.CLI_ARGS | default "deploy/api"}}
+    cmd: kubectl -n lisptc logs -f {{.CLI_ARGS | default "deploy/app"}}
 
   lint:
     desc: lint and render the local charts, no cluster needed

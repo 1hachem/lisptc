@@ -32,7 +32,10 @@ export function docExtensions(): InterpExtension[] {
 }
 
 export function sessionExtensions(): InterpExtension[] {
-	const permissions = permissionsExtension(permissionsHostFor());
+	const memory = memoryExtension(memoryHost);
+	const permissions = permissionsExtension(
+		permissionsHostFor({ asks: memory.asks }),
+	);
 	return [
 		permissions,
 		secretsExtension(secretsHost),
@@ -44,7 +47,7 @@ export function sessionExtensions(): InterpExtension[] {
 		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
-		memoryExtension(memoryHost),
+		memory,
 		proseExtension(proseHost),
 		diagnosticsExtension(diagnosticsHost),
 	];
