@@ -110,7 +110,7 @@ describe("permissions over a loaded MCP server", () => {
 		expect(out.model).toContain("unknown MCP server");
 	});
 
-	it("asks for a tool, and runs it once the user approves through the ui action", async () => {
+	it("asks for a tool, and carries the held call on once the user approves through the ui action", async () => {
 		const { repl, client } = replWith(CONFIG);
 		await repl.eval(LOAD);
 		const asked = await repl.evalOutput('(fx/send_mail :message "hello")');
@@ -129,10 +129,11 @@ describe("permissions over a loaded MCP server", () => {
 		});
 		expect(decided.failed).toBe(false);
 		expect(decided.message).toContain("approved fx/send_mail");
+		expect(decided.message).toContain("The held step carried on");
+		expect(client.calls.map((c) => c.tool)).toEqual(["send_mail"]);
 
-		expect(
-			await printed(repl, '(echo (fx/send_mail :message "hello"))'),
-		).toContain("hello");
+		const again = await repl.evalOutput('(fx/send_mail :message "hello")');
+		expect(again.held).toBe(true);
 		expect(client.calls.map((c) => c.tool)).toEqual(["send_mail"]);
 	});
 });

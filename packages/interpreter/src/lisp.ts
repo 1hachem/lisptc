@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
+import type { Awaitable } from "@repo/shared/host";
 import type { z } from "zod";
 import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
@@ -10,6 +11,8 @@ import {
 	driveAsync,
 	driveSync,
 	type Eval,
+	Hold,
+	Holds,
 	type Outcome,
 	settled,
 } from "./drive.ts";
@@ -74,7 +77,7 @@ export interface Hooks {
 	>;
 	readonly call: Chain<
 		[interp: Interp, name: string, args: readonly unknown[]],
-		void
+		Awaitable<void>
 	>;
 	readonly dispose: Chain<[], void>;
 }
@@ -138,6 +141,8 @@ export class Interp {
 	readonly channels: Channels = new Channels();
 
 	readonly async: AsyncWork = new AsyncWork();
+
+	readonly holds: Holds = new Holds();
 
 	readonly importStack: string[] = [];
 	private readonly importing: Set<string> = new Set();
@@ -276,8 +281,14 @@ export class Interp {
 		this.hooks.dispose.run(() => this.async.abortAll());
 	}
 
-	private guardCall(name: string, args: readonly unknown[]): void {
-		this.hooks.call.run(() => undefined, this, name, args);
+	private *guardCall(name: string, args: readonly unknown[]): Eval<void> {
+		yield* settled(this.hooks.call.run(() => undefined, this, name, args));
+	}
+
+	hold(reason: string): Hold | undefined {
+		if (!this.holds.parkable) return undefined;
+		note.emit(this.channels, { model: { kind: "held", text: reason } });
+		return this.holds.park(new Hold(reason));
 	}
 
 	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
@@ -321,7 +332,7 @@ export class Interp {
 
 	private *evalSpecial(fn: Keyword, x: Cell, env: List): Eval {
 		const arg = cdrCell(x);
-		if (!this.hooks.call.isEmpty) this.guardCall(fn.name, []);
+		if (!this.hooks.call.isEmpty) yield* this.guardCall(fn.name, []);
 		switch (fn) {
 			case quoteSym:
 				if (arg !== null && arg.cdr === null) return arg.car;
@@ -362,7 +373,7 @@ export class Interp {
 				? yield* this.evalGen(x.car, env)
 				: this.head(x, env);
 		if (fn instanceof Macro) {
-			this.guardMacro(x);
+			yield* this.guardMacro(x);
 			return new Tail(yield* fn.expandWith(this, arg), env);
 		}
 		const applied = applicable(x, fn);
@@ -397,13 +408,14 @@ export class Interp {
 		return fn;
 	}
 
-	private guardMacro(x: Cell): void {
+	private *guardMacro(x: Cell): Eval<void> {
 		if (!this.hooks.call.isEmpty && x.car instanceof Sym)
-			this.guardCall(x.car.name, []);
+			yield* this.guardCall(x.car.name, []);
 	}
 
 	private *callBuiltIn(fn: BuiltInFunc, frame: unknown[]): Eval {
-		if (!this.hooks.call.isEmpty) this.guardCall(fn.callName as string, frame);
+		if (!this.hooks.call.isEmpty)
+			yield* this.guardCall(fn.callName as string, frame);
 		if (fn.kind === "generator") return yield* fn.callGen(frame);
 		const value = fn.call(frame);
 		if (!(value instanceof Promise)) return value;

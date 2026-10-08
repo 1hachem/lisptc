@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import type { Hold } from "@repo/interpreter/drive";
+import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
 import { DECIDE_ACTION } from "../src/ui-approver.ts";
 import { recordingApprover, session } from "./helpers.ts";
@@ -78,6 +79,42 @@ describe("the permissions guard", () => {
 		const again = await s.step(UPCASE);
 		expect(again.failed).toBe(false);
 		expect(again.held).toBe(true);
+	});
+
+	it("parks an asked call where a step can wait, and carries it on once approved", async () => {
+		const s = session("(permission/ask string-upcase)");
+		let parked: Hold | undefined;
+		s.interp.holds.parkWith((hold) => {
+			parked = hold;
+		});
+		const run = s.step(UPCASE);
+		await vi.waitFor(() => expect(parked).toBeDefined());
+		expect(parked?.reason).toContain("do not run it again");
+		const [request] = s.host.approvals.pending();
+		await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		parked?.resume();
+		expect((await run).value).toBe('"A"');
+		expect(s.host.approvals.granted("string-upcase")).toBe(false);
+	});
+
+	it("refuses a parked call the user denies", async () => {
+		const s = session("(permission/ask string-upcase)");
+		let parked: Hold | undefined;
+		s.interp.holds.parkWith((hold) => {
+			parked = hold;
+		});
+		const run = s.step(UPCASE);
+		await vi.waitFor(() => expect(parked).toBeDefined());
+		const [request] = s.host.approvals.pending();
+		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
+		parked?.resume();
+		const refused = await run;
+		expect(refused.failed).toBe(true);
+		expect(refused.report).toContain("the user denied string-upcase");
 	});
 
 	it("keeps a session grant", async () => {
