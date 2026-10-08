@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { serve } from "../helpers.ts";
 
 const PORT = 9941;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -37,27 +38,37 @@ beforeAll(async () => {
 	});
 	await new Promise<void>((resolve) => server.listen(PORT, resolve));
 
-	process.env.APP_URL = "http://localhost:3000";
+	process.env.VITE_CONVEX_URL = ORIGIN;
+	process.env.VITE_ENVIRONMENT = "dev";
+	process.env.VITE_POSTHOG_KEY = "test";
+	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = ORIGIN;
 	process.env.CONVEX_SITE_URL = ORIGIN;
 
-	const { Hono } = await import("hono");
-	const { session } = await import("../src/session.ts");
-	const { errorHandler } = await import("../src/error.ts");
-
+	const { edge } = await import("../../server/agent/edge.ts");
+	const { authed } = await import("../../server/agent/session.ts");
 	const { ConvexError } = await import("convex/values");
 
-	const app = new Hono();
-	app.get("/api/refused", () => {
-		throw new ConvexError({ code: "FORBIDDEN" });
-	});
-	app.get("/api/broken", () => {
-		throw new Error("something else");
-	});
-	app.use("/api/guarded", session);
-	app.get("/api/guarded", (c) => c.json({ subject: c.get("session").subject }));
-	app.onError(errorHandler);
-	fetchApp = (request) => app.fetch(request);
+	const routes: Record<string, (request: Request) => Promise<Response>> = {
+		"/api/refused": serve({
+			middleware: edge,
+			handler: () => {
+				throw new ConvexError({ code: "FORBIDDEN" });
+			},
+		}),
+		"/api/broken": serve({
+			middleware: edge,
+			handler: () => {
+				throw new Error("something else");
+			},
+		}),
+		"/api/guarded": serve({
+			middleware: authed,
+			handler: ({ context }) =>
+				Response.json({ subject: context.session.subject }),
+		}),
+	};
+	fetchApp = (request) => routes[new URL(request.url).pathname](request);
 });
 
 afterAll(async () => {

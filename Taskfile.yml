@@ -47,7 +47,7 @@ tasks:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/db /convex /auth /api /web /ai /analytics"
           CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}'
-      - echo "app http://localhost:3000 · api http://localhost:3001 · dashboard http://127.0.0.1:6791"
+      - echo "app http://localhost:3000 · dashboard http://127.0.0.1:6791"
 
   down:
     desc: stop the whole stack (pass -- -v to drop its data)
@@ -102,29 +102,13 @@ tasks:
     desc: run the web app with access to secrets
     cmds:
       - task: _infisical-run
-        vars: { ENV: dev, PATHS: "/web /analytics", CMD: "pnpm run dev --filter app" }
-
-  dev-api:
-    desc: run api with access to secrets
-    cmds:
-      - task: _infisical-run
-        vars: { ENV: dev, PATHS: "/ai /analytics /api", CMD: "pnpm run dev --filter api" }
+        vars: { ENV: dev, PATHS: "/web /ai /analytics /api", CMD: "pnpm run dev --filter app" }
 
   start:
-    desc: build and serve both the app and the api
-    deps: [start:app, start:api]
-
-  start:app:
     desc: build the app and serve the built output with access to secrets
     cmds:
       - task: _infisical-run
-        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/web /analytics", CMD: "pnpm run build --filter app && pnpm --filter app start" }
-
-  start:api:
-    desc: build the api and serve the built output with access to secrets
-    cmds:
-      - task: _infisical-run
-        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/ai /analytics /api", CMD: "pnpm run build --filter api && pnpm --filter api start" }
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/web /ai /analytics /api", CMD: "pnpm run build --filter app && pnpm --filter app start" }
 
 
   mcp:sheets:

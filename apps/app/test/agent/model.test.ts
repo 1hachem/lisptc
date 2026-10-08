@@ -1,6 +1,6 @@
 import { DEFAULT_CHOICE } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
-import { chatModel } from "../src/model.ts";
+import { chatModel } from "../../server/agent/model.ts";
 
 describe("the model a chat runs on", () => {
 	it("is the one its workspace chose", () => {

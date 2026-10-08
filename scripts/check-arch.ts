@@ -111,7 +111,7 @@ const BLIND: BlindRule[] = [
 	{ dir: "packages/repl/src/", roster: ["packages/repl/src/repl.ts"] },
 ];
 
-const CARRIERS = ["apps/api/src/"];
+const CARRIERS = ["apps/app/server/agent/"];
 
 const SNIFFER = /export function (\w+)\([^)]*: InterpExtension[,)]/g;
 
