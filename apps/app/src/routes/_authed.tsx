@@ -6,7 +6,6 @@ import {
 	Navigate,
 	Outlet,
 	redirect,
-	useNavigate,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useState } from "react";
@@ -36,12 +35,12 @@ export const Route = createFileRoute("/_authed")({
 
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
-	const navigate = useNavigate();
 	const [leaving, setLeaving] = useState(false);
 	const queryClient = useQueryClient();
 
-	if (isLoading || leaving) return null;
+	if (isLoading) return null;
 	if (!isAuthenticated) return <Navigate to="/login" replace />;
+	if (leaving) return null;
 
 	return (
 		<WorkspaceProvider>
@@ -58,7 +57,6 @@ function AuthedLayout() {
 									setLeaving(false);
 									throw failure;
 								}
-								await navigate({ to: "/login", replace: true });
 							}}
 						>
 							<Outlet />
