@@ -40,7 +40,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: ci
+          env-slug: prod
           secret-path: /ai
           export-type: env
 
@@ -51,7 +51,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: ci
+          env-slug: prod
           secret-path: /assets
           export-type: env
 

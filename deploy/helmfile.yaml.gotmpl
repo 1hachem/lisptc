@@ -1,0 +1,47 @@
+environments:
+  prod:
+    values:
+      - env/prod.yaml
+---
+{{- $targetRevision := .Values | get "targetRevision" "main" }}
+
+repositories:
+  - name: infisical-helm-charts
+    url: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
+  - name: tailscale
+    url: https://pkgs.tailscale.com/helmcharts
+  - name: argo
+    url: https://argoproj.github.io/argo-helm
+
+releases:
+  - name: infisical-secrets-operator
+    namespace: infisical
+    chart: infisical-helm-charts/secrets-operator
+    version: 0.11.11
+
+  - name: tailscale-operator
+    namespace: tailscale
+    chart: tailscale/tailscale-operator
+    version: 1.102.4
+    values:
+      - ../charts/tailscale-operator/values.yaml
+
+  - name: argocd
+    namespace: argocd
+    chart: argo/argo-cd
+    version: 10.9.6
+    needs:
+      - infisical/infisical-secrets-operator
+      - tailscale/tailscale-operator
+    values:
+      {{- range .Values.argocd.values }}
+      - {{ . }}
+      {{- end }}
+
+  - name: argocd-root
+    namespace: argocd
+    chart: ../charts/argocd-root
+    needs:
+      - argocd/argocd
+    values:
+      - targetRevision: {{ $targetRevision | quote }}

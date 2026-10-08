@@ -30,6 +30,20 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.agents/hooks/ci-watch.sh\"",
+            "asyncRewake": true,
+            "timeout": 2700
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {

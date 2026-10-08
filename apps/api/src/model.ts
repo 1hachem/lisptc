@@ -1,6 +1,9 @@
 import type { ProviderName } from "@repo/ai";
-import { providerSpecs } from "@repo/env/providers";
-import { DEFAULT_PROVIDER } from "@repo/shared/providers";
+import { DEFAULT_CHOICE } from "@repo/shared/providers";
 
-export const CHAT_PROVIDER: ProviderName = DEFAULT_PROVIDER;
-export const CHAT_MODEL = providerSpecs[CHAT_PROVIDER].defaultModel;
+export function chatModel(chosen?: { provider: ProviderName; model: string }): {
+	provider: ProviderName;
+	model: string;
+} {
+	return chosen ?? DEFAULT_CHOICE;
+}

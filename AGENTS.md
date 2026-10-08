@@ -82,6 +82,13 @@ the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
 `editors/nvim` is the editor plugin, and `examples/` is the dialect written out.
 A change to the language surface is not done until they still pass.
 
+The test cluster is not a workspace either, and it answers to `task` as well.
+What it runs is deployed from `main` alone, except a pull request labeled
+`preview`, which runs in a namespace of its own until the label or the pull
+request goes away. A service added to the local stack is not deployed until the
+cluster runs it too, and a URL the stack derives from its hostnames has to be
+derived for a preview as well.
+
 ### Packages
 
 The core language, and nothing else:
@@ -249,9 +256,6 @@ only paths where it is off. Every exemption in `src` carries a `biome-ignore`
 naming the reason. An extension never reads a module here at all: it declares a
 port and is handed the value.
 
-The Convex deployment carries an environment of its own, and nothing in this
-repo pushes it. `packages/backend/AGENTS.md` has the rule.
-
 **Secrets live in Infisical, and nowhere else.** A `task` command fetches them
 at run time, so no secret is written into the tree. No `apps/*` or `packages/*`
 directory carries a `.env` file of any kind. The only one allowed is the
@@ -314,7 +318,7 @@ pnpm test:watch              # turbo run test:watch
 pnpm test:evals              # agent evals against real models (NOT part of `pnpm test`)
 pnpm repl                    # turbo run repl (run the interpreter REPL directly)
 
-task check:agents            # judge the AGENTS.md prose a PR adds (needs the /ai secrets)
+task check:agents            # judge the AGENTS.md prose a PR adds (needs the /actions/agents-md secrets)
 task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
 task up                      # build and run the whole stack in docker, with live reload
 task test                    # the vitest suites and the nix flake checks together

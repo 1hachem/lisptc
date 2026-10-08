@@ -12,7 +12,7 @@ import { convexAs } from "./convex.ts";
 import { events } from "./events.ts";
 import { type StoredMessage, toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
-import { CHAT_MODEL, CHAT_PROVIDER } from "./model.ts";
+import { chatModel } from "./model.ts";
 import { repls } from "./repls.ts";
 import { session } from "./session.ts";
 
@@ -87,6 +87,10 @@ chat.post("/", async (c) => {
 	}
 	const convex = convexAs(c.get("session"));
 
+	const { workspaceId } = await convex.query(api.chats.get, { chatId });
+	const { provider, model } = chatModel(
+		(await convex.query(api.workspaces.get, { workspaceId })).model,
+	);
 	await convex.mutation(api.messages.append, {
 		chatId,
 		messages: [opening],
@@ -94,14 +98,14 @@ chat.post("/", async (c) => {
 	const history = await convex.query(api.messages.transcript, { chatId });
 
 	console.log(
-		`chat chat=${chatId} messages=${history.length} ${CHAT_PROVIDER}/${CHAT_MODEL}`,
+		`chat chat=${chatId} messages=${history.length} ${provider}/${model}`,
 	);
 	return streamChatResponse(
 		{ messages: toInput(history) },
 		{
 			repls,
 			threadId: chatId,
-			config: { provider: CHAT_PROVIDER, model: CHAT_MODEL },
+			config: { provider, model },
 			signal: c.req.raw.signal,
 			steer: {
 				inbox: steers,

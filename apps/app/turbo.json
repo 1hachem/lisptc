@@ -1,5 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
-  "tags": ["product"]
+  "tags": ["product"],
+  "tasks": {
+    "build": {
+      "outputs": ["$TURBO_EXTENDS$", ".output/**"]
+    }
+  }
 }

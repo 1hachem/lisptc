@@ -1,0 +1,5 @@
+apiVersion: v2
+name: lisptc
+description: The lisptc stack, as docker-compose.yml runs it.
+type: application
+version: 0.1.0

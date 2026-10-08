@@ -200,13 +200,13 @@ describe("chat stream", () => {
 		const messages = await finalMessages(
 			stream(
 				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
-				{ config: { provider: "fireworks", model: "a-pinned-one" } },
+				{ config: { provider: "digitalocean", model: "a-pinned-one" } },
 			),
 		);
 
 		for (const m of messages.filter((m) => m.type === "ai"))
 			expect(m.additional_kwargs?.meta).toMatchObject({
-				provider: "fireworks",
+				provider: "digitalocean",
 				model: "a-pinned-one",
 			});
 	});
