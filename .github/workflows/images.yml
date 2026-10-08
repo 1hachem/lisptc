@@ -136,6 +136,9 @@ jobs:
     needs: build
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
     runs-on: ubuntu-latest
+    concurrency:
+      group: preview-comment-${{ github.event.number }}
+      cancel-in-progress: false
     permissions:
       pull-requests: write
     steps:
@@ -158,10 +161,18 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           test -n "$TAILNET_DOMAIN"
+          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
           heading='**Preview**'
+          ids=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$heading\"))) | .id")
+          if [ "$live" != true ]; then
+            for id in $ids; do
+              gh api -X DELETE "repos/$REPO/issues/comments/$id"
+            done
+            exit 0
+          fi
           body=$(printf '%s: https://lisptc-pr-%s.%s\n\nImages for `%s` are pushed. ArgoCD rolls them out within a few minutes.' "$heading" "$PR" "$TAILNET_DOMAIN" "$SHA")
-          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$heading\"))) | .id" | head -n1)
+          id=${ids%%$'\n'*}
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
           else
