@@ -1,5 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Navigate,
@@ -8,6 +9,8 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
+import { useState } from "react";
+import { flushSync } from "react-dom";
 import { AppShell } from "../components/app-shell.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
@@ -34,8 +37,10 @@ export const Route = createFileRoute("/_authed")({
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const navigate = useNavigate();
+	const [leaving, setLeaving] = useState(false);
+	const queryClient = useQueryClient();
 
-	if (isLoading) return null;
+	if (isLoading || leaving) return null;
 	if (!isAuthenticated) return <Navigate to="/login" replace />;
 
 	return (
@@ -45,7 +50,14 @@ function AuthedLayout() {
 					<UIProvider>
 						<AppShell
 							onSignOut={async () => {
-								await authClient.signOut();
+								flushSync(() => setLeaving(true));
+								queryClient.removeQueries();
+								try {
+									await authClient.signOut();
+								} catch (failure) {
+									setLeaving(false);
+									throw failure;
+								}
 								await navigate({ to: "/login", replace: true });
 							}}
 						>
