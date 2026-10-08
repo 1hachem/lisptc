@@ -22,14 +22,17 @@ transcript and turn shaping, the command list, analytics.
 router at this app's own origin, and `server/routes/ingest/[...path].ts` proxies
 analytics. `src/styles/app.css` pulls in the design system's stylesheet.
 
-`server/agent/` is the agent, a Hono app that Nitro mounts whole:
-`server/routes/api/[...].ts` hands it every other `/api` request and
-`server/routes/health.ts` its health check. `server/agent/app.ts` assembles the
-middleware, the routers and the health check. `chat.ts` serves the chat stream,
-the steering and the direct evaluation, `ui-action.ts` an action the browser
-sent back, `oauth-callback.ts` the end of an MCP authorization. `error.ts` is
-the single error handler. `session.ts` verifies a bearer token against the
-deployment's JWKS and is the only place a caller identity is established.
+`server/agent/` is the agent, served as TanStack Start server routes. A route
+file under `src/routes/` binds a path and its methods to a handler from
+`server/agent/` and does nothing else. Each handler carries its own request
+middleware: `edge.ts` lists the chain every one runs (telemetry, the request
+log, the single error handler in `error.ts`), and `session.ts` adds the
+authenticated chain on top of it. `body.ts` validates a request body against its schema and hands the
+handler the parsed value. `chat.ts` serves the chat stream, the steering and
+the direct evaluation, `ui-action.ts` an action the browser sent back,
+`oauth-callback.ts` the end of an MCP authorization, `health.ts` the health
+check. `session.ts` verifies a bearer token against the deployment's JWKS and
+is the only place a caller identity is established.
 `convex.ts` and `ids.ts` talk to the deployment as that caller, `history.ts`
 converts between a wire message and a stored one, `model.ts` names the provider
 and model, `telemetry.ts` wires PostHog.
@@ -79,8 +82,9 @@ Identity comes from the verified token, never from the request body. A handler
 reads it through the session, and a new route that touches the deployment goes
 through the same middleware.
 
-A request envelope is validated by its schema at the edge. Add the field to the
-schema before reading it in a handler.
+A request envelope is validated by its schema at the edge, through `body()` in
+the handler's middleware, never parsed inside the handler. Add the field to the
+schema before reading it.
 
 The agent keeps each chat's REPL, its steering inbox and its pending system
 events in this process. The app runs as one replica, and a rollout replaces it
@@ -96,5 +100,6 @@ prompt a module asks for at runtime and the build does not ship.
 `test/` holds them, under happy-dom. `test/chat-turns.test.ts` and
 `test/chat-transport.test.ts` are where the turn shaping and the stream contract
 are pinned. `test/agent/` covers the server: `chat-request.test.ts` pins the
-request envelope and `session.test.ts` the token path. A test there hits the
-agent app rather than a handler in isolation.
+request envelope and `session.test.ts` the token path. A test there runs a handler
+through its whole middleware chain with `serve` from `test/helpers.ts`, never
+the handler alone.
