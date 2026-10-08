@@ -2,6 +2,10 @@
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "minimumVersion": "3.28.0",
   "ignorePatterns": [".agents/**", "tree-sitter-lisptc/**"],
+  "entry": [
+    "apps/app/server/routes/**/*.ts",
+    "apps/app/server/plugins/**/*.ts"
+  ],
   "rules": {
     "unused-files": "error",
     "unused-exports": "error",
