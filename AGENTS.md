@@ -127,8 +127,7 @@ Everything else:
 
 ### Apps
 
-- `apps/api` (`api`) — an HTTP server streaming the agent loop.
-- `apps/app` (`app`) — the web frontend.
+- `apps/app` (`app`) — the web frontend, and the server that streams the agent loop.
 - `apps/cli` (`@lisptc/cli`) — the interactive terminal REPL.
 - `apps/dashi-code` (`@lisptc/dashi-code`) — the code dashboard: what production runs, what it never touches, and what keeps changing.
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
@@ -163,9 +162,9 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   tag denies `extension`, so naming one in a manifest fails `pnpm boundaries`,
   in a test as much as in `src/`.
 - An extension is named at a composition root, and there are only two: an app
-  that runs a REPL itself, and `@repo/backend` for the agent the API serves.
-  Adding one to the served agent means adding its prompt to what `apps/api`
-  ships, and `apps/api/AGENTS.md` carries that rule.
+  that runs a REPL itself, and `@repo/backend` for the agent `apps/app` serves.
+  Adding one to the served agent means adding its prompt to what `apps/app`
+  ships, and `apps/app/AGENTS.md` carries that rule.
 - `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
   workspace package.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
