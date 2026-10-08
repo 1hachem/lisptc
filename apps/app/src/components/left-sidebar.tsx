@@ -6,7 +6,6 @@ import { useNewChat } from "../lib/chats.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { SessionRow } from "./session-row.tsx";
 import { SidePanel } from "./side-panel.tsx";
-import { ThemeMenu } from "./theme-menu.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
 
 export function LeftSidebar({
@@ -79,8 +78,6 @@ export function LeftSidebar({
 								? user.email
 								: user.name}
 					</span>
-					<span className="flex-1" />
-					<ThemeMenu />
 					<button
 						type="button"
 						onClick={onSignOut}

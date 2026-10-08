@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { AppShell } from "../components/app-shell.tsx";
+import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
 import { UIProvider } from "../lib/ui.tsx";
@@ -40,16 +41,18 @@ function AuthedLayout() {
 	return (
 		<WorkspaceProvider>
 			<ModelPickerProvider>
-				<UIProvider>
-					<AppShell
-						onSignOut={async () => {
-							await authClient.signOut();
-							await navigate({ to: "/login", replace: true });
-						}}
-					>
-						<Outlet />
-					</AppShell>
-				</UIProvider>
+				<AppearanceProvider>
+					<UIProvider>
+						<AppShell
+							onSignOut={async () => {
+								await authClient.signOut();
+								await navigate({ to: "/login", replace: true });
+							}}
+						>
+							<Outlet />
+						</AppShell>
+					</UIProvider>
+				</AppearanceProvider>
 			</ModelPickerProvider>
 		</WorkspaceProvider>
 	);
