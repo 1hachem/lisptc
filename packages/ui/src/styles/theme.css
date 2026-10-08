@@ -1,5 +1,5 @@
 /*
- * Terminal color system for the PTC agent UI (gruvbox).
+ * Terminal color system for the PTC agent UI.
  */
 
 @theme {
@@ -105,7 +105,8 @@
 }
 
 :root,
-[data-theme="gruvbox"] {
+[data-theme="gruvbox-dark"] {
+	color-scheme: dark;
 	--bg: #1d2021;
 	--bg1: #282828;
 	--bg2: #3c3836;
@@ -118,6 +119,54 @@
 	--purple: #d3869b;
 	--aqua: #8ec07c;
 	--orange: #fe8019;
+}
+
+[data-theme="gruvbox-light"] {
+	color-scheme: light;
+	--bg: #f9f5d7;
+	--bg1: #fbf1c7;
+	--bg2: #ebdbb2;
+	--fg: #3c3836;
+	--dim: #7c6f64;
+	--red: #9d0006;
+	--green: #79740e;
+	--yellow: #b57614;
+	--blue: #076678;
+	--purple: #8f3f71;
+	--aqua: #427b58;
+	--orange: #af3a03;
+}
+
+[data-theme="tokyonight-dark"] {
+	color-scheme: dark;
+	--bg: #16161e;
+	--bg1: #1a1b26;
+	--bg2: #292e42;
+	--fg: #c0caf5;
+	--dim: #737aa2;
+	--red: #f7768e;
+	--green: #9ece6a;
+	--yellow: #e0af68;
+	--blue: #7aa2f7;
+	--purple: #bb9af7;
+	--aqua: #73daca;
+	--orange: #ff9e64;
+}
+
+[data-theme="tokyonight-light"] {
+	color-scheme: light;
+	--bg: #e1e2e7;
+	--bg1: #e9e9ed;
+	--bg2: #c4c8da;
+	--fg: #3760bf;
+	--dim: #68709a;
+	--red: #f52a65;
+	--green: #587539;
+	--yellow: #8c6c3e;
+	--blue: #2e7de9;
+	--purple: #9854f1;
+	--aqua: #118c74;
+	--orange: #b15c00;
 }
 
 @keyframes blk {
