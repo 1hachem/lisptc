@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { replEnv } from "@repo/env/repl";
 import { systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
@@ -27,11 +27,11 @@ export class FilePermissionsStore implements PermissionsStore {
 	}
 }
 
-export function permissionsFile(): string {
-	return (
-		replEnv.LISPTC_PERMISSIONS_FILE ??
-		join(replEnv.INIT_CWD || process.cwd(), ".lisptc", "permissions.ptc")
-	);
+function defaultPermissionsStore(): PermissionsStore {
+	const file = replEnv.LISPTC_PERMISSIONS_FILE;
+	return file === undefined
+		? new MemoryPermissionsStore()
+		: new FilePermissionsStore(file);
 }
 
 const permissionsPrompt = filePrompt(
@@ -48,7 +48,7 @@ export function permissionsHostFor(
 	options: PermissionsHostOptions = {},
 ): PermissionsHost {
 	return {
-		store: options.store ?? new FilePermissionsStore(permissionsFile()),
+		store: options.store ?? defaultPermissionsStore(),
 		approvals: new MemoryApprovals(),
 		approvers: options.approvers ?? [uiApprover],
 		clock: systemClock,
