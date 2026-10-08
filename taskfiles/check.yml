@@ -11,7 +11,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/ai"
+          PATHS: "/actions/agents-md"
           CMD: "pnpm check:agents {{.CLI_ARGS}}"
 
   refs:

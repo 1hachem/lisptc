@@ -6,6 +6,7 @@ import {
 	useState,
 } from "react";
 import { CHANNELS, type ChannelId, channelCookie } from "./channels.ts";
+import { META_FIELDS, type MetaField, metaCookie } from "./meta-fields.ts";
 import {
 	PANEL_COOKIE,
 	readBoolPref,
@@ -24,6 +25,17 @@ function readShown(): Shown {
 	) as Shown;
 }
 
+type MetaShown = Record<MetaField, boolean>;
+
+function readMetaShown(): MetaShown {
+	return Object.fromEntries(
+		META_FIELDS.map((f) => [
+			f.id,
+			readBoolPref(metaCookie(f.id), f.shownByDefault),
+		]),
+	) as MetaShown;
+}
+
 interface UIContextValue {
 	leftOpen: boolean;
 	setLeftOpen: (open: boolean) => void;
@@ -33,6 +45,8 @@ interface UIContextValue {
 	toggleRight: () => void;
 	shown: Shown;
 	toggleChannel: (id: ChannelId) => void;
+	metaShown: MetaShown;
+	toggleMeta: (id: MetaField) => void;
 }
 
 const UIContext = createContext<UIContextValue | null>(null);
@@ -45,6 +59,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		readBoolPref(PANEL_COOKIE, false),
 	);
 	const [shown, setShown] = useState<Shown>(readShown);
+	const [metaShown, setMetaShown] = useState<MetaShown>(readMetaShown);
 
 	const setLeftOpen = useCallback((open: boolean) => {
 		setLeft(open);
@@ -64,6 +79,14 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		});
 	}, []);
 
+	const toggleMeta = useCallback((id: MetaField) => {
+		setMetaShown((current) => {
+			const next = !current[id];
+			writeBoolPref(metaCookie(id), next);
+			return { ...current, [id]: next };
+		});
+	}, []);
+
 	const value = useMemo<UIContextValue>(
 		() => ({
 			leftOpen,
@@ -74,8 +97,19 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 			toggleRight: () => setRightOpen(!rightOpen),
 			shown,
 			toggleChannel,
+			metaShown,
+			toggleMeta,
 		}),
-		[leftOpen, rightOpen, shown, setLeftOpen, setRightOpen, toggleChannel],
+		[
+			leftOpen,
+			rightOpen,
+			shown,
+			metaShown,
+			setLeftOpen,
+			setRightOpen,
+			toggleChannel,
+			toggleMeta,
+		],
 	);
 
 	return <UIContext.Provider value={value}>{children}</UIContext.Provider>;

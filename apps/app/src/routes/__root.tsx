@@ -1,6 +1,6 @@
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
-import { defaultThemeId, fontLinks } from "@repo/ui";
+import { fontLinks } from "@repo/ui";
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -13,9 +13,10 @@ import {
 import { Analytics } from "../lib/analytics.tsx";
 import { providerClient } from "../lib/auth-client.ts";
 import { ssrAuth } from "../lib/auth-server.ts";
+import { readFontPref, readThemePref } from "../lib/prefs.ts";
 import appCss from "../styles/app.css?url";
 
-export interface RouterContext {
+interface RouterContext {
 	queryClient: QueryClient;
 	convexQueryClient: ConvexQueryClient;
 }
@@ -26,7 +27,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 		if (auth.source === "server" && auth.token !== null) {
 			context.convexQueryClient.serverHttpClient?.setAuth(auth.token);
 		}
-		return { auth };
+		return { auth, theme: readThemePref(), font: readFontPref() };
 	},
 	head: () => ({
 		meta: [
@@ -45,12 +46,14 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-	const { queryClient, convexQueryClient, auth } = useRouteContext({
-		from: Route.id,
-	});
+	const { queryClient, convexQueryClient, auth, theme, font } = useRouteContext(
+		{
+			from: Route.id,
+		},
+	);
 
 	return (
-		<RootDocument>
+		<RootDocument theme={theme} font={font}>
 			<ConvexBetterAuthProvider
 				client={convexQueryClient.convexClient}
 				authClient={providerClient}
@@ -68,9 +71,22 @@ function RootComponent() {
 	);
 }
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootDocument({
+	theme,
+	font,
+	children,
+}: {
+	theme: string;
+	font: string;
+	children: React.ReactNode;
+}) {
 	return (
-		<html lang="en" data-theme={defaultThemeId} suppressHydrationWarning>
+		<html
+			lang="en"
+			data-theme={theme}
+			data-font={font}
+			suppressHydrationWarning
+		>
 			<head>
 				<HeadContent />
 			</head>

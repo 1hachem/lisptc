@@ -2,12 +2,10 @@ import { providerSpecs } from "@repo/env/providers";
 import { DEFAULT_PROVIDER, type ProviderName } from "@repo/shared/providers";
 import type { Provider } from "./core.ts";
 import { digitalocean } from "./digitalocean.ts";
-import { fireworks } from "./fireworks.ts";
 import { openrouter } from "./openrouter.ts";
 
 export const providers: Record<ProviderName, Provider> = {
 	digitalocean,
-	fireworks,
 	openrouter,
 };
 

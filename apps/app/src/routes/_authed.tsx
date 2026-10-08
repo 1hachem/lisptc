@@ -1,15 +1,19 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Navigate,
 	Outlet,
 	redirect,
-	useNavigate,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
+import { useState } from "react";
+import { flushSync } from "react-dom";
 import { AppShell } from "../components/app-shell.tsx";
+import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
+import { ModelPickerProvider } from "../lib/model-picker.tsx";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
@@ -31,23 +35,35 @@ export const Route = createFileRoute("/_authed")({
 
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
-	const navigate = useNavigate();
+	const [leaving, setLeaving] = useState(false);
+	const queryClient = useQueryClient();
 
 	if (isLoading) return null;
 	if (!isAuthenticated) return <Navigate to="/login" replace />;
+	if (leaving) return null;
 
 	return (
 		<WorkspaceProvider>
-			<UIProvider>
-				<AppShell
-					onSignOut={async () => {
-						await authClient.signOut();
-						await navigate({ to: "/login", replace: true });
-					}}
-				>
-					<Outlet />
-				</AppShell>
-			</UIProvider>
+			<ModelPickerProvider>
+				<AppearanceProvider>
+					<UIProvider>
+						<AppShell
+							onSignOut={async () => {
+								flushSync(() => setLeaving(true));
+								queryClient.removeQueries();
+								try {
+									await authClient.signOut();
+								} catch (failure) {
+									setLeaving(false);
+									throw failure;
+								}
+							}}
+						>
+							<Outlet />
+						</AppShell>
+					</UIProvider>
+				</AppearanceProvider>
+			</ModelPickerProvider>
 		</WorkspaceProvider>
 	);
 }
