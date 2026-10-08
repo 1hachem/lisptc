@@ -24,6 +24,7 @@ import {
 	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
+import { useModelPicker } from "../lib/model-picker.tsx";
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
@@ -327,6 +328,7 @@ export function ChatView() {
 		isLoading: state.isLoading,
 	}));
 	const { shown } = useUI();
+	const { openModelPicker } = useModelPicker();
 	const lastSent = messages
 		.filter((m) => isUserMessage(m) || isSystemMessage(m))
 		.at(-1)?.id;
@@ -363,7 +365,9 @@ export function ChatView() {
 								{stats?.memories && shown.memory && (
 									<MessageMemories memories={stats.memories} />
 								)}
-								{stats && <MessageMeta meta={stats} />}
+								{stats && (
+									<MessageMeta meta={stats} onPickModel={openModelPicker} />
+								)}
 								{!tool && !isUserMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
 								)}

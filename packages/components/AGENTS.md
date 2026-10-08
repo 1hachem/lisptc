@@ -23,6 +23,11 @@ A primitive belongs in `@repo/ui`. A component that knows what a message or a
 workspace is belongs here. A component that knows about a route or a query
 belongs in the app.
 
+A component sizes itself with the tokens `@repo/ui` defines: `h-control`,
+`h-row`, `size-icon`, `max-w-dialog` and their steps. It never falls back on
+Tailwind's roomy default heights and icon sizes, nor an arbitrary pixel size.
+`packages/ui/AGENTS.md` holds the scale.
+
 `@repo/ui` is the only workspace dependency. Adding another one is a sign the
 component belongs in the app instead.
 

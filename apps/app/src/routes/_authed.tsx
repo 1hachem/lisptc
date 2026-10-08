@@ -10,6 +10,7 @@ import {
 import { useConvexAuth } from "convex/react";
 import { AppShell } from "../components/app-shell.tsx";
 import { authClient } from "../lib/auth-client.ts";
+import { ModelPickerProvider } from "../lib/model-picker.tsx";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
@@ -38,16 +39,18 @@ function AuthedLayout() {
 
 	return (
 		<WorkspaceProvider>
-			<UIProvider>
-				<AppShell
-					onSignOut={async () => {
-						await authClient.signOut();
-						await navigate({ to: "/login", replace: true });
-					}}
-				>
-					<Outlet />
-				</AppShell>
-			</UIProvider>
+			<ModelPickerProvider>
+				<UIProvider>
+					<AppShell
+						onSignOut={async () => {
+							await authClient.signOut();
+							await navigate({ to: "/login", replace: true });
+						}}
+					>
+						<Outlet />
+					</AppShell>
+				</UIProvider>
+			</ModelPickerProvider>
 		</WorkspaceProvider>
 	);
 }

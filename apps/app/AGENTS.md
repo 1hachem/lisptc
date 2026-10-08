@@ -50,6 +50,10 @@ shared product pieces, `@repo/bloub` for the avatar and `@repo/syntax` for
 highlighting the dialect. A primitive written here that has no product knowledge
 belongs in `@repo/ui` instead.
 
+A control, a menu row, an icon or a dialog written here takes its size from the
+`@repo/ui` tokens (`h-control`, `h-row`, `size-icon`, `max-w-dialog`), never
+from Tailwind's defaults. `packages/ui/AGENTS.md` holds the scale.
+
 **Every icon comes from hugeicons**, passed as the `icon` prop.
 `check:arch` fails on `lucide-react`.
 

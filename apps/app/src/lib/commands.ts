@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
+import { useModelPicker } from "./model-picker.tsx";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
 
@@ -16,6 +17,7 @@ export const commands: Command[] = [
 	{ name: "/clear", desc: "start a fresh session" },
 	{ name: "/copy", desc: "copy the conversation to the clipboard" },
 	{ name: "/debug", desc: "show what each step sent back to the model" },
+	{ name: "/model", desc: "choose the model this workspace runs on" },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
 ];
@@ -34,6 +36,7 @@ export function useCommandRunner() {
 	const { toggleLeft, toggleRight, toggleChannel, shown } = useUI();
 	const store = useChatStore();
 	const newChat = useNewChat();
+	const { openModelPicker } = useModelPicker();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
@@ -49,6 +52,9 @@ export function useCommandRunner() {
 				case "/panel":
 					toggleRight();
 					return null;
+				case "/model":
+					openModelPicker();
+					return null;
 				case "/debug":
 					toggleChannel("model");
 					return shown.model
@@ -58,6 +64,14 @@ export function useCommandRunner() {
 					return null;
 			}
 		},
-		[toggleLeft, toggleRight, toggleChannel, shown, newChat, store],
+		[
+			toggleLeft,
+			toggleRight,
+			toggleChannel,
+			shown,
+			newChat,
+			store,
+			openModelPicker,
+		],
 	);
 }

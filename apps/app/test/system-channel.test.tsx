@@ -40,6 +40,9 @@ vi.mock("../src/lib/prefs.ts", () => ({
 	},
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
+vi.mock("../src/lib/model-picker.tsx", () => ({
+	useModelPicker: () => ({ openModelPicker: vi.fn() }),
+}));
 vi.mock("../src/lib/api.ts", () => ({
 	apiHeaders: async () => ({}),
 }));
