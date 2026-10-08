@@ -327,7 +327,7 @@ export function ChatView() {
 		error: state.error,
 		isLoading: state.isLoading,
 	}));
-	const { shown } = useUI();
+	const { shown, metaShown } = useUI();
 	const { openModelPicker } = useModelPicker();
 	const lastSent = messages
 		.filter((m) => isUserMessage(m) || isSystemMessage(m))
@@ -366,7 +366,11 @@ export function ChatView() {
 									<MessageMemories memories={stats.memories} />
 								)}
 								{stats && (
-									<MessageMeta meta={stats} onPickModel={openModelPicker} />
+									<MessageMeta
+										meta={stats}
+										show={metaShown}
+										onPickModel={openModelPicker}
+									/>
 								)}
 								{!tool && !isUserMessage(m) && (
 									<MessageFeedback messageId={m.id} index={i} />
