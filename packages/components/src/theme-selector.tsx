@@ -6,6 +6,7 @@ import {
 	type ThemeScheme,
 	themeSchemes,
 } from "@repo/ui";
+import type { ComponentProps } from "react";
 import { ChoiceDialog } from "./choice-dialog.tsx";
 
 const SCHEME_HEADINGS: Record<ThemeScheme, string> = {
@@ -43,17 +44,12 @@ export function FontSample({ font }: { font: FontDef }) {
 	);
 }
 
-type Picking = {
-	value: string;
-	onSelect: (id: string) => void;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-};
-
 export function ThemeDialog({
 	themes,
 	...picking
-}: Picking & { themes: ThemeDef[] }) {
+}: Omit<ComponentProps<typeof ChoiceDialog>, "groups" | "noun" | "title"> & {
+	themes: ThemeDef[];
+}) {
 	return (
 		<ChoiceDialog
 			{...picking}
@@ -77,7 +73,9 @@ export function ThemeDialog({
 export function FontDialog({
 	fonts,
 	...picking
-}: Picking & { fonts: FontDef[] }) {
+}: Omit<ComponentProps<typeof ChoiceDialog>, "groups" | "noun" | "title"> & {
+	fonts: FontDef[];
+}) {
 	return (
 		<ChoiceDialog
 			{...picking}
