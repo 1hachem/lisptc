@@ -29,7 +29,18 @@ const providers: ProviderOption[] = PROVIDER_NAMES.map((id) => ({
 
 interface ModelPicker {
 	choice: ModelChoice;
+	modelName: string;
+	providerName: string;
 	openModelPicker: () => void;
+}
+
+function namesOf(choice: ModelChoice) {
+	const provider = providers.find((p) => p.id === choice.provider);
+	return {
+		modelName:
+			provider?.models.find((m) => m.id === choice.model)?.name ?? choice.model,
+		providerName: provider?.name ?? choice.provider,
+	};
 }
 
 const ModelPickerContext = createContext<ModelPicker | null>(null);
@@ -46,7 +57,9 @@ export function ModelPickerProvider({
 	const openModelPicker = useCallback(() => setOpen(true), []);
 
 	return (
-		<ModelPickerContext.Provider value={{ choice, openModelPicker }}>
+		<ModelPickerContext.Provider
+			value={{ choice, ...namesOf(choice), openModelPicker }}
+		>
 			{children}
 			{workspace && (
 				<WorkspaceModelDialog
