@@ -15,12 +15,6 @@ spec:
   applicationRefs:
     - namePattern: lisptc
       images:
-        - alias: api
-          imageName: ghcr.io/1hachem/lisptc-api
-          manifestTargets:
-            helm:
-              name: api.image.repository
-              tag: api.image.tag
         - alias: app
           imageName: ghcr.io/1hachem/lisptc-app
           manifestTargets:

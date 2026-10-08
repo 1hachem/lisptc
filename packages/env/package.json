@@ -6,8 +6,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./analytics": "./src/analytics.ts",
-    "./api": "./src/api.ts",
-    "./app": "./src/app.ts",
     "./dashi-codes": "./src/dashi-codes.ts",
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",
@@ -18,7 +16,6 @@
     "./providers": "./src/providers.ts",
     "./r2": "./src/r2.ts",
     "./repl": "./src/repl.ts",
-    "./server": "./src/server.ts",
     "./trace-viewer": "./src/trace-viewer.ts",
     "./web": "./src/web.ts"
   },

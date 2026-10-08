@@ -23,12 +23,6 @@ spec:
   applicationRefs:
     - namePattern: {{ .Release.Namespace }}
       images:
-        - alias: api
-          imageName: {{ .Values.api.image.repository }}
-          manifestTargets:
-            helm:
-              name: api.image.repository
-              tag: api.image.tag
         - alias: app
           imageName: {{ .Values.app.image.repository }}
           manifestTargets:

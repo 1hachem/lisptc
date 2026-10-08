@@ -22,10 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: api
-            dockerfile: apps/api/Dockerfile
-            target: prod
-            turbo: true
           - name: app
             dockerfile: apps/app/Dockerfile
             target: prod
@@ -89,8 +85,8 @@ jobs:
         run: |
           domain="$TAILNET_DOMAIN"
           test -n "$domain"
-          grep -v -e '^VITE_API_URL=' -e '^VITE_CONVEX_URL=' ../web-build-vars > ../web-build-vars.preview
-          printf "VITE_API_URL='https://lisptc-pr-%s-api.%s'\nVITE_CONVEX_URL='https://lisptc-pr-%s-convex.%s'\n" "$PR" "$domain" "$PR" "$domain" >> ../web-build-vars.preview
+          grep -v -e '^VITE_CONVEX_URL=' ../web-build-vars > ../web-build-vars.preview
+          printf "VITE_CONVEX_URL='https://lisptc-pr-%s-convex.%s'\n" "$PR" "$domain" >> ../web-build-vars.preview
           mv ../web-build-vars.preview ../web-build-vars
 
       - name: Hash the web build variables

@@ -2,7 +2,7 @@ import { PostHogProvider } from "@posthog/react";
 import { webEnv } from "@repo/env/web";
 import posthog, { type PostHogConfig } from "posthog-js";
 import type { ReactNode } from "react";
-import { API_URL, distinctId } from "./api.ts";
+import { distinctId } from "./api.ts";
 
 const ENVIRONMENT = webEnv.VITE_ENVIRONMENT;
 const IS_DEV = ENVIRONMENT === "dev";
@@ -22,7 +22,9 @@ const OPTIONS: Partial<PostHogConfig> = {
 				disable_session_recording: true,
 			}
 		: { capture_exceptions: true }),
-	tracing_headers: [new URL(API_URL).hostname],
+	...(typeof location === "undefined"
+		? {}
+		: { tracing_headers: [location.hostname] }),
 	bootstrap: { distinctID: distinctId() },
 	before_send: (event) => {
 		if (event)
