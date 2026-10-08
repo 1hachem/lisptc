@@ -21,8 +21,8 @@ function row(transcript: TranscriptLine[]): ReportRow {
 	return {
 		case: "connect-and-query",
 		sample: 1,
-		provider: "fireworks",
-		model: "kimi-k2",
+		provider: "digitalocean",
+		model: "gemma-4-31B-it",
 		grade: "pass",
 		steps: 3,
 		min: 2,
@@ -81,14 +81,14 @@ describe("the review payload", () => {
 
 	test("names the run so every vote on it joins", () => {
 		expect(runId(IDENTITY, subject)).toBe(
-			"2026-09-12T10-00-00.json#connect-and-query/fireworks/kimi-k2/1",
+			"2026-09-12T10-00-00.json#connect-and-query/digitalocean/gemma-4-31B-it/1",
 		);
 	});
 
 	test("carries the run, the checks and the voted turn", () => {
 		const properties = reviewProperties(IDENTITY, subject, 1);
 		expect(properties.eval_case).toBe("connect-and-query");
-		expect(properties.eval_model).toBe("kimi-k2");
+		expect(properties.eval_model).toBe("gemma-4-31B-it");
 		expect(properties.eval_checks_passed).toBe(1);
 		expect(properties.eval_checks_total).toBe(2);
 		expect(properties.eval_checks_failed).toEqual(["answers"]);

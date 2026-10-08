@@ -7,11 +7,7 @@ export interface ProviderSpec {
 	body?: Record<string, unknown>;
 }
 
-export const PROVIDER_NAMES = [
-	"digitalocean",
-	"fireworks",
-	"openrouter",
-] as const;
+export const PROVIDER_NAMES = ["digitalocean", "openrouter"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 

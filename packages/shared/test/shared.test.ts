@@ -13,8 +13,8 @@ const SPECS = {
 } as unknown as Parameters<typeof providerSpecFor>[1];
 
 describe("provider names", () => {
-	it("knows the four providers", () => {
-		expect(isProviderName("fireworks")).toBe(true);
+	it("knows the providers", () => {
+		expect(isProviderName("openrouter")).toBe(true);
 		expect(isProviderName("nowhere")).toBe(false);
 	});
 
@@ -23,7 +23,7 @@ describe("provider names", () => {
 			"gemma-4-31B-it",
 		);
 		expect(() => providerSpecFor("nowhere", SPECS)).toThrow(
-			/unknown provider "nowhere", expected one of digitalocean, fireworks, openrouter/,
+			/unknown provider "nowhere", expected one of digitalocean, openrouter/,
 		);
 	});
 });
