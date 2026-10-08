@@ -37,9 +37,8 @@ and model, `telemetry.ts` wires PostHog.
 ## Rules
 
 **The auth router is served here**, at this origin, not on the deployment. An
-OAuth app's callback points at this app. The agent verifies a token against the
-deployment's JWKS, and the browser sends it the token this app holds, to a
-relative `/api` path on this same origin.
+OAuth app's callback points at this app. The browser reaches the agent on this
+same origin too, never on a host of its own.
 
 Convex is subscribed to directly, through the query hooks, and the deployment's
 declared entrypoints are the only surface. Do not reach into the deployment's
