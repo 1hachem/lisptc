@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: convex-backend
+spec:
+  selector:
+    app: convex-backend
+  ports:
+    - name: cloud
+      port: 3210
+      targetPort: 3210
+    - name: site
+      port: 3211
+      targetPort: 3211
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: convex-backend
+  annotations:
+    secrets.infisical.com/auto-reload: "true"
+spec:
+  serviceName: convex-backend
+  replicas: 1
+  selector:
+    matchLabels:
+      app: convex-backend
+  template:
+    metadata:
+      labels:
+        app: convex-backend
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: convex-backend
+          image: {{ .Values.convex.backend.image }}
+          ports:
+            - containerPort: 3210
+            - containerPort: 3211
+          envFrom:
+            {{- range .Values.convex.secrets }}
+            - secretRef:
+                name: {{ . }}
+            {{- end }}
+          env:
+            - name: INSTANCE_NAME
+              value: $(POSTGRES_DB)
+            - name: INSTANCE_SECRET
+              value: $(CONVEX_INSTANCE_SECRET)
+            - name: POSTGRES_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432
+            - name: DO_NOT_REQUIRE_SSL
+              value: "true"
+            - name: DISABLE_BEACON
+              value: "true"
+            - name: REDACT_LOGS_TO_CLIENT
+              value: "false"
+            {{- include "lisptc.previewEnv" (list . (dict
+                "CONVEX_CLOUD_ORIGIN" .Values.convex.hostnames.cloud)) | nindent 12 }}
+            {{- if .Values.preview.enabled }}
+            - name: CONVEX_SITE_ORIGIN
+              value: {{ include "lisptc.convexSiteUrl" . | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /version
+              port: 3210
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /version
+              port: 3210
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /convex/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.convex.backend.storage }}

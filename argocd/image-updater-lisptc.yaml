@@ -1,0 +1,35 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: lisptc
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  commonUpdateSettings:
+    updateStrategy: newest-build
+    allowTags: regexp:^main-[0-9a-f]{40}$
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: lisptc
+      images:
+        - alias: api
+          imageName: ghcr.io/1hachem/lisptc-api
+          manifestTargets:
+            helm:
+              name: api.image.repository
+              tag: api.image.tag
+        - alias: app
+          imageName: ghcr.io/1hachem/lisptc-app
+          manifestTargets:
+            helm:
+              name: app.image.repository
+              tag: app.image.tag
+        - alias: convex-deploy
+          imageName: ghcr.io/1hachem/lisptc-convex-deploy
+          manifestTargets:
+            helm:
+              name: convexDeploy.image.repository
+              tag: convexDeploy.image.tag

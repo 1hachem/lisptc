@@ -100,7 +100,7 @@ export function WorkspaceMenu() {
 							onSelect={() => void open(candidate._id)}
 							className={item}
 						>
-							{candidate.name}
+							<span className="truncate">{candidate.name}</span>
 						</DropdownMenuItem>
 					))}
 					<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />

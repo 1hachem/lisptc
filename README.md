@@ -201,3 +201,6 @@ without ever landing in a file.
 
 Requires Node >= 22.6.0 and pnpm 10.28.0. .ts files run directly through
 Node's type stripping, with no build step.
+
+# Friends of lisptc
+- [autolith](https://github.com/lambda-symbolics/autolith)

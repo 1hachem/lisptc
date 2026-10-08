@@ -14,11 +14,6 @@ const providersEnv = createEnv({
 		DO_API_KEY: z.string().optional(),
 		DO_BASE_URL: z.url().default("https://inference.do-ai.run/v1"),
 		DO_MODEL: z.string().default("gemma-4-31B-it"),
-		FIREWORKS_API_KEY: z.string().optional(),
-		FIREWORKS_BASE_URL: z
-			.url()
-			.default("https://api.fireworks.ai/inference/v1"),
-		FIREWORKS_MODEL: z.string().default("accounts/fireworks/models/kimi-k3"),
 		OPENROUTER_API_KEY: z.string().optional(),
 		OPENROUTER_BASE_URL: z.url().default("https://openrouter.ai/api/v1"),
 		OPENROUTER_MODEL: z.string().default("google/gemma-4-31b-it"),
@@ -42,12 +37,6 @@ export const providerSpecs: Record<ProviderName, ProviderSpec> = {
 		...key("DO_API_KEY"),
 		baseUrl: providersEnv.DO_BASE_URL,
 		defaultModel: providersEnv.DO_MODEL,
-	},
-	fireworks: {
-		label: "Fireworks",
-		...key("FIREWORKS_API_KEY"),
-		baseUrl: providersEnv.FIREWORKS_BASE_URL,
-		defaultModel: providersEnv.FIREWORKS_MODEL,
 	},
 	openrouter: {
 		label: "OpenRouter",

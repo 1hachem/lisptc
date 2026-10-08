@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: convex-deploy-{{ .Values.convexDeploy.image.tag | sha256sum | trunc 10 }}
+spec:
+  backoffLimit: 4
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      containers:
+        - name: convex-deploy
+          image: "{{ .Values.convexDeploy.image.repository }}:{{ .Values.convexDeploy.image.tag }}"
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              for f in /etc/convex-env/*; do
+                [ -f "$f" ] || continue
+                pnpm exec convex env set "$(basename "$f")" "$(cat "$f")"
+              done
+              if [ -n "${PREVIEW_SITE_URL:-}" ]; then
+                pnpm exec convex env set SITE_URL "$PREVIEW_SITE_URL"
+              fi
+              pnpm exec convex deploy --typecheck disable --codegen disable
+              exec pnpm run migrate
+          volumeMounts:
+            - name: convex-env
+              mountPath: /etc/convex-env
+              readOnly: true
+          env:
+            - name: CONVEX_SELF_HOSTED_URL
+              value: http://convex-backend:3210
+            {{- include "lisptc.previewEnv" (list . (dict
+                "PREVIEW_SITE_URL" .Values.app.hostname)) | nindent 12 }}
+            - name: CONVEX_SELF_HOSTED_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-convex
+                  key: CONVEX_SELF_HOSTED_ADMIN_KEY
+      volumes:
+        - name: convex-env
+          secret:
+            secretName: lisptc-convex-deploy

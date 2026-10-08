@@ -1,5 +1,6 @@
 export * from "./components/ai-elements/confirmation.tsx";
 export * from "./components/ai-elements/conversation.tsx";
+export * from "./components/ai-elements/model-selector.tsx";
 export * from "./components/ai-elements/prompt-input.tsx";
 export * from "./components/ai-elements/queue.tsx";
 export * from "./components/ai-elements/suggestion.tsx";
@@ -24,7 +25,19 @@ export { Input } from "./components/ui/input.tsx";
 export * from "./components/ui/sidebar.tsx";
 export { Switch } from "./components/ui/switch.tsx";
 
-export { type FontLink, fontLinks } from "./fonts.ts";
+export {
+	defaultFontId,
+	type FontDef,
+	type FontLink,
+	fontLinks,
+	fonts,
+} from "./fonts.ts";
 export { useIsMobile } from "./hooks/use-mobile.ts";
 export { cn } from "./lib/utils.ts";
-export { defaultThemeId, type ThemeDef, themes } from "./themes.ts";
+export {
+	defaultThemeId,
+	type ThemeDef,
+	type ThemeScheme,
+	themeSchemes,
+	themes,
+} from "./themes.ts";

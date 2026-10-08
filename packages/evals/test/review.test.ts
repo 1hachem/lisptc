@@ -21,7 +21,7 @@ function row(transcript: TranscriptLine[]): ReportRow {
 	return {
 		case: "connect-and-query",
 		sample: 1,
-		provider: "fireworks",
+		provider: "openrouter",
 		model: "kimi-k2",
 		grade: "pass",
 		steps: 3,
@@ -81,7 +81,7 @@ describe("the review payload", () => {
 
 	test("names the run so every vote on it joins", () => {
 		expect(runId(IDENTITY, subject)).toBe(
-			"2026-09-12T10-00-00.json#connect-and-query/fireworks/kimi-k2/1",
+			"2026-09-12T10-00-00.json#connect-and-query/openrouter/kimi-k2/1",
 		);
 	});
 

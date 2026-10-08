@@ -1,4 +1,9 @@
+import { ThemeSwatches } from "@repo/components";
+import { fonts } from "@repo/ui";
+import { useEffect, useState } from "react";
+import { useAppearance } from "../lib/appearance.tsx";
 import { CHANNELS, type Channel } from "../lib/channels.ts";
+import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
 import { useUI } from "../lib/ui.tsx";
 import { SidePanel } from "./side-panel.tsx";
 
@@ -24,10 +29,94 @@ function ChannelToggle({ channel }: { channel: Channel }) {
 	);
 }
 
+function MetaToggle({ field }: { field: { id: MetaField; label: string } }) {
+	const { metaShown, toggleMeta } = useUI();
+	const on = metaShown[field.id];
+	return (
+		<button
+			type="button"
+			aria-pressed={on}
+			onClick={() => toggleMeta(field.id)}
+			className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+		>
+			<span className={`flex-1 ${on ? "text-fg" : "text-dim line-through"}`}>
+				{field.label}
+			</span>
+			<span className="flex-none text-dim">{on ? "on" : "off"}</span>
+		</button>
+	);
+}
+
+function ThemeList({ open }: { open: boolean }) {
+	const { theme, shortlist, chooseTheme, openThemePicker } = useAppearance();
+	const [shown, setShown] = useState(shortlist);
+	useEffect(() => {
+		if (!open) setShown(shortlist);
+	}, [open, shortlist]);
+
+	return (
+		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			{shown.map((candidate) => {
+				const chosen = candidate.id === theme.id;
+				return (
+					<button
+						key={candidate.id}
+						type="button"
+						aria-pressed={chosen}
+						onClick={() => chooseTheme(candidate.id)}
+						className="flex w-full cursor-pointer items-center gap-2 text-left"
+					>
+						<ThemeSwatches theme={candidate} />
+						<span className={`flex-1 ${chosen ? "text-fg" : "text-dim"}`}>
+							{candidate.name}
+						</span>
+						{chosen && <span className="flex-none text-dim">on</span>}
+					</button>
+				);
+			})}
+			<button
+				type="button"
+				onClick={openThemePicker}
+				className="cursor-pointer text-left text-dim hover:text-fg"
+			>
+				all themes…
+			</button>
+		</div>
+	);
+}
+
+function FontList() {
+	const { font, chooseFont } = useAppearance();
+	return (
+		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			{fonts.map((candidate) => {
+				const chosen = candidate.id === font.id;
+				return (
+					<button
+						key={candidate.id}
+						type="button"
+						aria-pressed={chosen}
+						onClick={() => chooseFont(candidate.id)}
+						className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+					>
+						<span
+							data-font={candidate.id}
+							className={`flex-1 ${chosen ? "text-fg" : "text-dim"}`}
+						>
+							{candidate.name}
+						</span>
+						{chosen && <span className="flex-none text-dim">on</span>}
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
 export function RightSidebar({ open }: { open: boolean }) {
 	return (
 		<SidePanel side="right" open={open} className="w-[214px]">
-			<div className="flex h-full flex-col gap-5 py-3.5">
+			<div className="flex h-full flex-col gap-5 overflow-y-auto py-3.5">
 				<div className="flex items-baseline gap-2 px-4">
 					<span className="flex-1 text-[11px] text-dim uppercase tracking-[0.14em]">
 						channels
@@ -41,6 +130,22 @@ export function RightSidebar({ open }: { open: boolean }) {
 						<ChannelToggle key={channel.id} channel={channel} />
 					))}
 				</div>
+				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+					metadata
+				</div>
+				<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+					{META_FIELDS.map((field) => (
+						<MetaToggle key={field.id} field={field} />
+					))}
+				</div>
+				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+					recent themes
+				</div>
+				<ThemeList open={open} />
+				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+					font
+				</div>
+				<FontList />
 			</div>
 		</SidePanel>
 	);

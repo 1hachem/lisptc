@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -21,18 +22,21 @@ WORKDIR /app/apps/app
 CMD ["pnpm", "run", "dev", "--host", "127.0.0.1"]
 
 FROM base AS builder
-ARG VITE_API_URL
-ARG VITE_CONVEX_URL
-ARG VITE_ENVIRONMENT
-ARG VITE_POSTHOG_KEY
-ARG VITE_POSTHOG_SURVEY_ID
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm install --frozen-lockfile --offline
 COPY --from=pruner /app/out/full/ .
-RUN turbo build -F app
+ARG WEB_BUILD_VARS_HASH
+RUN --mount=type=secret,id=TURBO_TOKEN,env=TURBO_TOKEN \
+    --mount=type=secret,id=TURBO_REMOTE_CACHE_SIGNATURE_KEY,env=TURBO_REMOTE_CACHE_SIGNATURE_KEY \
+    --mount=type=secret,id=web-build-vars,required=true,target=/app/.env \
+    echo "web build variables: ${WEB_BUILD_VARS_HASH}" \
+    && set -o allexport \
+    && . ./.env \
+    && set +o allexport \
+    && turbo build -F app
 
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS prod
 ENV NODE_ENV=production

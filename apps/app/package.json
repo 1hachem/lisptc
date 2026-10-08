@@ -30,6 +30,7 @@
     "@repo/bloub": "workspace:*",
     "@repo/components": "workspace:*",
     "@repo/env": "workspace:*",
+    "@repo/shared": "workspace:*",
     "@repo/syntax": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tanstack/highlight": "^0.1.0",
