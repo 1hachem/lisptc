@@ -15,18 +15,32 @@ const TRIGGER_COLORS: Record<string, string> = {
 };
 
 const MAX_STACKED = 5;
+const ORBIT_SECONDS = 2.4;
 
 function triggerColor(on: string | undefined): string {
 	return (on && TRIGGER_COLORS[on]) || "bg-dim";
 }
 
-function Dot({ on, stacked = false }: { on?: string; stacked?: boolean }) {
+function Dot({
+	on,
+	orbit,
+}: {
+	on?: string;
+	orbit?: { index: number; of: number };
+}) {
 	return (
 		<span
 			aria-hidden
 			data-memory-dot={on ?? ""}
+			style={
+				orbit && {
+					animationDelay: `${(-ORBIT_SECONDS * orbit.index) / orbit.of}s`,
+				}
+			}
 			className={`inline-block size-[3px] shrink-0 rounded-full ${triggerColor(on)} ${
-				stacked ? "-ml-px ring-1 ring-bg first:ml-0" : ""
+				orbit
+					? "-ml-px ring-1 ring-bg transition-[width,height] first:ml-0 animate-orbit group-hover:size-[4px] group-hover:[animation-play-state:paused] motion-reduce:animate-none"
+					: ""
 			}`}
 		/>
 	);
@@ -48,11 +62,15 @@ export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
 				type="button"
 				onClick={() => setOpen(!open)}
 				title={label}
-				className="inline-flex items-center gap-1.5 text-dim transition-colors hover:text-fg"
+				className="group inline-flex items-center gap-1.5 text-dim transition-colors hover:text-fg"
 			>
-				<span className="inline-flex items-center">
-					{stacked.map((memory) => (
-						<Dot key={memory.key} on={memory.on} stacked />
+				<span className="inline-flex items-center [perspective:24px] [transform-style:preserve-3d]">
+					{stacked.map((memory, index) => (
+						<Dot
+							key={memory.key}
+							on={memory.on}
+							orbit={{ index, of: stacked.length }}
+						/>
 					))}
 				</span>
 				{hidden > 0 && <span>+{hidden}</span>}
