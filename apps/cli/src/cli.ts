@@ -1,14 +1,17 @@
 import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
+import type { Ask, AskChoice } from "@repo/interpreter/asks";
 import type { ChannelTransport } from "@repo/interpreter/channels";
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import { setExit } from "@repo/interpreter/core-builtins";
-import { EvalException } from "@repo/interpreter/errors";
+import { EvalException, StepHold } from "@repo/interpreter/errors";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { Reader } from "@repo/interpreter/reader";
-import { openSession } from "@repo/interpreter/session";
+import { noAnnotations, openSession } from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
+import { openAsks, question, runAsking } from "@repo/repl/asks";
 import type { Repl } from "@repo/repl/repl";
 import {
 	connectOrSpawn,
@@ -76,12 +79,12 @@ class InteractiveRepl implements Repl {
 			const text = buffer;
 			buffer = "";
 			try {
-				await this.hooks.evalStep.run(
-					async (ctx) => {
-						await runAsync(ctx.interp, ctx.code);
-					},
-					{ interp: this.currentInterp, code: text, emit: write },
-				);
+				const refused = await runAsking({
+					run: () => this.step(text),
+					reply: (ask) => readLine(question(ask)),
+					answer: (choice) => this.answer(choice),
+				});
+				for (const line of refused) write(`${line}\n`);
 			} catch (ex) {
 				if (ex instanceof EvalException) write(`${ex}\n`);
 				else if (ex === EndOfFile)
@@ -89,6 +92,37 @@ class InteractiveRepl implements Repl {
 				else throw ex;
 			}
 		}
+	}
+
+	async step(code: string): Promise<readonly Ask[]> {
+		const interp = this.currentInterp;
+		const buffer = bufferTransport();
+		const detach = interp.channels.pipe(buffer);
+		try {
+			await this.hooks.evalStep.run(
+				async (ctx) => {
+					await runAsync(ctx.interp, ctx.code);
+				},
+				{ interp, code, emit: write },
+			);
+		} catch (ex) {
+			if (!(ex instanceof StepHold)) throw ex;
+		} finally {
+			detach();
+		}
+		return openAsks(
+			this.hooks.annotate.run((_b, into) => into, buffer, noAnnotations()),
+		);
+	}
+
+	private async answer(choice: AskChoice): Promise<void> {
+		const { action, values } = choice.answer;
+		await this.hooks.invoke.run(
+			() => {
+				throw new EvalException("no ui surface on this repl", action, false);
+			},
+			{ interp: this.currentInterp, action, values },
+		);
 	}
 }
 
@@ -122,8 +156,20 @@ async function attachLoop(): Promise<void> {
 			continue;
 		}
 		if (!isComplete(accum)) continue;
-		write(await client.eval(accum));
+		const code = accum;
 		accum = "";
+		const refused = await runAsking({
+			run: async () => {
+				const { output, asks } = await client.step(code);
+				write(output);
+				return asks;
+			},
+			reply: (ask) => readLine(question(ask)),
+			answer: async (choice) => {
+				write(await client.answer(choice.answer.action, choice.answer.values));
+			},
+		});
+		for (const line of refused) write(`${line}\n`);
 	}
 }
 
@@ -255,10 +301,18 @@ async function main(): Promise<void> {
 				const abs = path.resolve(launchDir, fileName);
 				const text = fs.readFileSync(abs, "utf8");
 				repl.interp.importStack.push(path.dirname(abs));
+				let asks: readonly Ask[];
 				try {
-					await runAsync(repl.interp, text);
+					asks = await repl.step(text);
 				} finally {
 					repl.interp.importStack.pop();
+				}
+				if (asks.length > 0) {
+					const held = asks.map((ask) => ask.title).join(", ");
+					console.error(
+						`${fileName}: ${held} waits for approval, and a file cannot ask. Run it at the prompt, or allow it in the permissions config.`,
+					);
+					process.exit(1);
 				}
 			}
 		}
@@ -278,7 +332,9 @@ argument is run in order on the same interpreter — so a trailing "-"
 keeps the files' state and drops you into a prompt afterwards. Secrets
 (REPL_* env vars / nearest .env) and MCP are wired in both modes. At the
 prompt, text around the forms is prose and a parenthesised aside is
-skipped with a note; a .ptc file argument is read strictly.
+skipped with a note; a .ptc file argument is read strictly. A call
+that waits for approval asks y/N at the prompt and runs the input again
+once allowed; in a .ptc file it stops the run instead.
 
 Arguments:
   file.ptc        run a .ptc script; relative paths resolve against the

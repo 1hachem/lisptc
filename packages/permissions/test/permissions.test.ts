@@ -197,6 +197,11 @@ describe("evaluating a permissions form", () => {
 				reason: "changes the permissions config",
 			}),
 		]);
+		expect(asked.annotations.output).toEqual({
+			asks: {
+				open: [expect.objectContaining({ answerApplies: true })],
+			},
+		});
 		expect((await s.step(UPCASE)).value).toBe('"A"');
 		expect(s.host.store.source()).toBe("");
 
