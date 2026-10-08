@@ -1,7 +1,3 @@
-/*
- * Terminal color system for the PTC agent UI.
- */
-
 @theme {
 	--color-bg: var(--bg);
 	--color-bg1: var(--bg1);
@@ -48,12 +44,6 @@
 	--animate-blk: blk 1.06s steps(1, end) infinite;
 }
 
-/*
- * shadcn / AI-Elements token layer, mapped onto the terminal palette.
- * These reference the per-theme `--bg`/`--fg`/… vars at use-site, so they
- * follow whatever [data-theme] is active. AI-Elements components pull from
- * these (bg-background, text-muted-foreground, border, …).
- */
 @theme inline {
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
@@ -100,7 +90,6 @@
 	--border: var(--bg2);
 	--input: var(--bg2);
 	--ring: var(--dim);
-	/* the terminal has no rounded corners */
 	--radius: 0rem;
 }
 
@@ -213,11 +202,6 @@
 	}
 }
 
-/*
- * Lisp highlighting: @tanstack/highlight emits th-* classes, and the lisptc
- * language in @repo/syntax picks which one each token gets. This is the only
- * place the colours are chosen.
- */
 .th-function {
 	color: var(--blue);
 }
