@@ -5,6 +5,43 @@ staged() {
 [ -n "$(staged | tr -d '\0')" ] || exit 0
 
 root=$(git rev-parse --show-toplevel)
+partial=$(mktemp)
+full=$(mktemp)
+trap 'rm -f "$partial" "$full"' EXIT
+
+staged | xargs -0 sh -c '
+  for f do
+    if git diff --quiet -- "$f"; then
+      printf "%s\0" "$f" >&3
+    elif [ -f "$f" ]; then
+      printf "%s %s\0" "$(git hash-object -w --no-filters -- "$f")" "$f"
+    fi
+  done
+' sh >"$partial" 3>"$full"
+
 pnpm exec no-comments --staged --fix
 staged | xargs -0 "$root/.agents/hooks/format-files.sh"
-staged | xargs -0 git add --
+
+changed=$(xargs -0 sh -c '
+  for entry do
+    hash=${entry%% *}
+    f=${entry#* }
+    if [ "$(git hash-object --no-filters -- "$f")" != "$hash" ]; then
+      git cat-file blob "$hash" >"$f"
+      printf "  %s\n" "$f"
+    fi
+  done
+' sh <"$partial")
+
+[ ! -s "$full" ] || xargs -0 git add -- <"$full"
+
+[ -z "$changed" ] || {
+  cat >&2 <<EOF
+pre-commit: these files are partly staged, and a fixer would change them:
+$changed
+The hook stages only fully staged files, so it did not change these files.
+Run \`pnpm exec no-comments --staged --fix\` and \`pnpm format\`, stage the
+hunks again, and commit again.
+EOF
+  exit 1
+}

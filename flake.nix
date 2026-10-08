@@ -59,6 +59,9 @@
         src = ./.;
         inherit ptcfmt;
       };
+      checks.pre-commit = pkgs.callPackage ./nix/tests/pre-commit-check.nix {
+        src = ./.;
+      };
 
       apps.ptcfmt =
         flake-utils.lib.mkApp {drv = ptcfmt;}
