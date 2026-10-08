@@ -22,20 +22,12 @@ transcript and turn shaping, the command list, analytics.
 router at this app's own origin, and `server/routes/ingest/[...path].ts` proxies
 analytics. `src/styles/app.css` pulls in the design system's stylesheet.
 
-`server/agent/` is the agent, served as TanStack Start server routes. A route
-file under `src/routes/` binds a path and its methods to a handler from
-`server/agent/` and does nothing else. Each handler carries its own request
-middleware: `edge.ts` lists the chain every one runs (telemetry, the request
-log, the single error handler in `error.ts`), and `session.ts` adds the
-authenticated chain on top of it. `body.ts` validates a request body against its schema and hands the
-handler the parsed value. `chat.ts` serves the chat stream, the steering and
-the direct evaluation, `ui-action.ts` an action the browser sent back,
-`oauth-callback.ts` the end of an MCP authorization, `health.ts` the health
-check. `session.ts` verifies a bearer token against the deployment's JWKS and
-is the only place a caller identity is established.
-`convex.ts` and `ids.ts` talk to the deployment as that caller, `history.ts`
-converts between a wire message and a stored one, `model.ts` names the provider
-and model, `telemetry.ts` wires PostHog.
+`server/agent/` is the agent. It is served as TanStack Start server routes and
+takes no other HTTP framework. A route file under `src/routes/` binds a path to
+a handler from `server/agent/` and holds no logic. Cross-cutting behaviour
+belongs in request middleware declared beside the handler, never inline in it.
+A caller identity is established in one place only, and every handler that
+touches the deployment runs behind it.
 
 ## Rules
 
