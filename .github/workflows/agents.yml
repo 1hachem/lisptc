@@ -23,7 +23,7 @@ jobs:
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
 
-      - name: Fetch the model credentials from Infisical
+      - name: Fetch the OpenRouter key from Infisical
         uses: Infisical/secrets-action@v1.0.9
         with:
           method: universal
@@ -31,7 +31,7 @@ jobs:
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: prod
-          secret-path: /ai
+          secret-path: /actions/agents-md
           export-type: env
 
       - name: Rules, not implementation

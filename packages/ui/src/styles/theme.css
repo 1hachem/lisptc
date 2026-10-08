@@ -1,7 +1,3 @@
-/*
- * Terminal color system for the PTC agent UI (gruvbox).
- */
-
 @theme {
 	--color-bg: var(--bg);
 	--color-bg1: var(--bg1);
@@ -16,7 +12,7 @@
 	--color-aqua: var(--aqua);
 	--color-orange: var(--orange);
 
-	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-mono: var(--font-face), ui-monospace, SFMono-Regular, Menlo, monospace;
 
 	--text-xs: 11px;
 	--text-xs--line-height: 1.6;
@@ -29,15 +25,25 @@
 	--text-xl: 17px;
 	--text-xl--line-height: 1.5;
 
+	--spacing-control-xs: 18px;
+	--spacing-control-sm: 22px;
+	--spacing-control: 26px;
+	--spacing-control-lg: 30px;
+	--spacing-icon-sm: 12px;
+	--spacing-icon: 14px;
+	--spacing-row: 24px;
+	--spacing-switch-width-sm: 24px;
+	--spacing-switch-width: 28px;
+	--spacing-switch-height-sm: 14px;
+	--spacing-switch-height: 16px;
+
+	--container-dialog-sm: 360px;
+	--container-dialog: 440px;
+	--container-dialog-lg: 560px;
+
 	--animate-blk: blk 1.06s steps(1, end) infinite;
 }
 
-/*
- * shadcn / AI-Elements token layer, mapped onto the terminal palette.
- * These reference the per-theme `--bg`/`--fg`/… vars at use-site, so they
- * follow whatever [data-theme] is active. AI-Elements components pull from
- * these (bg-background, text-muted-foreground, border, …).
- */
 @theme inline {
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
@@ -84,12 +90,12 @@
 	--border: var(--bg2);
 	--input: var(--bg2);
 	--ring: var(--dim);
-	/* the terminal has no rounded corners */
 	--radius: 0rem;
 }
 
 :root,
-[data-theme="gruvbox"] {
+[data-theme="gruvbox-dark"] {
+	color-scheme: dark;
 	--bg: #1d2021;
 	--bg1: #282828;
 	--bg2: #3c3836;
@@ -104,6 +110,87 @@
 	--orange: #fe8019;
 }
 
+[data-theme="gruvbox-light"] {
+	color-scheme: light;
+	--bg: #f9f5d7;
+	--bg1: #fbf1c7;
+	--bg2: #ebdbb2;
+	--fg: #3c3836;
+	--dim: #7c6f64;
+	--red: #9d0006;
+	--green: #79740e;
+	--yellow: #b57614;
+	--blue: #076678;
+	--purple: #8f3f71;
+	--aqua: #427b58;
+	--orange: #af3a03;
+}
+
+[data-theme="tokyonight-dark"] {
+	color-scheme: dark;
+	--bg: #16161e;
+	--bg1: #1a1b26;
+	--bg2: #292e42;
+	--fg: #c0caf5;
+	--dim: #737aa2;
+	--red: #f7768e;
+	--green: #9ece6a;
+	--yellow: #e0af68;
+	--blue: #7aa2f7;
+	--purple: #bb9af7;
+	--aqua: #73daca;
+	--orange: #ff9e64;
+}
+
+[data-theme="tokyonight-light"] {
+	color-scheme: light;
+	--bg: #e1e2e7;
+	--bg1: #e9e9ed;
+	--bg2: #c4c8da;
+	--fg: #3760bf;
+	--dim: #68709a;
+	--red: #f52a65;
+	--green: #587539;
+	--yellow: #8c6c3e;
+	--blue: #2e7de9;
+	--purple: #9854f1;
+	--aqua: #118c74;
+	--orange: #b15c00;
+}
+
+[data-theme="borland"] {
+	color-scheme: dark;
+	--bg: #0000a3;
+	--bg1: #0b0bb3;
+	--bg2: #2a2ac2;
+	--fg: #ffff4d;
+	--dim: #a3a3a3;
+	--red: #ff6b60;
+	--green: #a7ff60;
+	--yellow: #ffffb6;
+	--blue: #96cafd;
+	--purple: #ff73fd;
+	--aqua: #c6c4fd;
+	--orange: #ffa460;
+}
+
+:root,
+[data-font="jetbrains-mono"] {
+	--font-face: "JetBrains Mono";
+}
+
+[data-font="geist"] {
+	--font-face: "Geist";
+}
+
+[data-font="poppins"] {
+	--font-face: "Poppins";
+}
+
+[data-font] {
+	font-family: var(--font-face), ui-monospace, monospace;
+}
+
 @keyframes blk {
 	0%,
 	49% {
@@ -115,11 +202,6 @@
 	}
 }
 
-/*
- * Lisp highlighting: @tanstack/highlight emits th-* classes, and the lisptc
- * language in @repo/syntax picks which one each token gets. This is the only
- * place the colours are chosen.
- */
 .th-function {
 	color: var(--blue);
 }

@@ -102,9 +102,6 @@ services:
       - DO_API_KEY
       - DO_BASE_URL
       - DO_MODEL
-      - FIREWORKS_API_KEY
-      - FIREWORKS_BASE_URL
-      - FIREWORKS_MODEL
       - OPENROUTER_API_KEY
       - OPENROUTER_BASE_URL
       - OPENROUTER_MODEL

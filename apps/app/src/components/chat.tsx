@@ -1,5 +1,8 @@
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
+import { useModelPicker } from "../lib/model-picker.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import { ChatView } from "./chat-view.tsx";
@@ -7,6 +10,7 @@ import { Greeting } from "./greeting.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
+	const { modelName, providerName, openModelPicker } = useModelPicker();
 	const { send, runLisp, stop, isLoading, fresh } = useChatSession((state) => ({
 		send: state.send,
 		runLisp: state.runLisp,
@@ -47,6 +51,19 @@ export function Chat() {
 					isStreaming={isLoading}
 					onStop={stop}
 				/>
+				<div className="mx-auto mt-1 flex w-full max-w-[680px] justify-end px-3 text-[11px]">
+					<button
+						type="button"
+						onClick={openModelPicker}
+						title="change the model for this workspace"
+						className="flex cursor-pointer items-center gap-1 text-dim hover:text-fg"
+					>
+						<span>
+							{modelName} · {providerName}
+						</span>
+						<HugeiconsIcon className="size-icon-sm" icon={ArrowDown01Icon} />
+					</button>
+				</div>
 			</div>
 		</>
 	);
