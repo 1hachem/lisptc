@@ -14,7 +14,7 @@ const SPECS = {
 
 describe("provider names", () => {
 	it("knows the four providers", () => {
-		expect(isProviderName("fireworks")).toBe(true);
+		expect(isProviderName("fireworks")).toBe(false);
 		expect(isProviderName("nowhere")).toBe(false);
 	});
 
@@ -23,7 +23,7 @@ describe("provider names", () => {
 			"gemma-4-31B-it",
 		);
 		expect(() => providerSpecFor("nowhere", SPECS)).toThrow(
-			/unknown provider "nowhere", expected one of digitalocean, fireworks, openrouter/,
+			/unknown provider "nowhere", expected one of digitalocean, openrouter/,
 		);
 	});
 });

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { StepMeta } from "../lib/chat.tsx";
 
 export type MetaField =
@@ -84,23 +85,45 @@ const SEGMENTS: {
 	{ field: "provider", render: (m) => m.provider ?? null },
 ];
 
+const PICKS_MODEL: ReadonlySet<MetaField> = new Set(["model", "provider"]);
+
 export function MessageMeta({
 	meta,
 	show,
+	onPickModel,
 }: {
 	meta: StepMeta;
 	show?: Partial<Record<MetaField, boolean>>;
+	onPickModel?: () => void;
 }) {
 	const fields = show ? { ...META_FIELDS, ...show } : META_FIELDS;
 	const parts = SEGMENTS.filter((s) => fields[s.field])
-		.map((s) => s.render(meta, fields))
-		.filter((part): part is string => part !== null);
+		.map((s) => ({ field: s.field, text: s.render(meta, fields) }))
+		.filter(
+			(part): part is { field: MetaField; text: string } => part.text !== null,
+		);
 
 	if (parts.length === 0) return null;
 
 	return (
 		<div className="mt-1 select-none text-[11px] text-dim leading-[1.7]">
-			{parts.join(" · ")}
+			{parts.map((part, i) => (
+				<Fragment key={part.field}>
+					{i > 0 && " · "}
+					{onPickModel && PICKS_MODEL.has(part.field) ? (
+						<button
+							className="underline-offset-2 hover:text-fg hover:underline"
+							onClick={onPickModel}
+							title="change the model for this workspace"
+							type="button"
+						>
+							{part.text}
+						</button>
+					) : (
+						part.text
+					)}
+				</Fragment>
+			))}
 		</div>
 	);
 }
