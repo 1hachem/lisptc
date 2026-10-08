@@ -378,6 +378,28 @@ and do not count.
 One commit holds one concern. Unrelated changes in the tree go in commits of
 their own.
 
+## Issues
+
+Work found along the way and left out of the current change is written up as a
+Linear issue in the lisptc team (key PTC), so it is not lost in a reply.
+Open one when the user asks, or when a defect or follow-up is deliberately set
+aside, and say so in the reply with the link.
+
+**Every issue an agent opens carries the "generated" label.** It is the
+existing label for that, so do not create another. Add a type label such as
+bug, feature, refactor or improvement when one fits.
+
+An issue states:
+
+- what is wrong or missing, anchored to the files and functions involved;
+- the impact, concretely: who can do what, and what breaks;
+- the fix as a direction, not a finished design;
+- where it was found and why it was kept out of that change.
+
+Leave priority, assignee and cycle to the user unless they named them. Search
+for an open issue covering the same thing first, and comment on it instead of
+opening a duplicate.
+
 ## Writing Style
 
 These rules cover everything written here. Prose, documentation, commit
