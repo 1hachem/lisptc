@@ -13,6 +13,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: api-state
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   accessModes: ["ReadWriteOnce"]
   resources:
@@ -24,6 +26,7 @@ kind: Deployment
 metadata:
   name: api
   annotations:
+    argocd.argoproj.io/sync-wave: "2"
     secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1
