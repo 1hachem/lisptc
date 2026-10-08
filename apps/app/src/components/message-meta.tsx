@@ -1,15 +1,6 @@
 import { Fragment } from "react";
 import type { StepMeta } from "../lib/chat.tsx";
-
-export type MetaField =
-	| "time"
-	| "duration"
-	| "steps"
-	| "input"
-	| "cached"
-	| "output"
-	| "model"
-	| "provider";
+import type { MetaField } from "../lib/meta-fields.ts";
 
 const META_FIELDS: Record<MetaField, boolean> = {
 	time: true,

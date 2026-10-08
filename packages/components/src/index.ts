@@ -6,6 +6,12 @@ export { MessageFeedback } from "./message-feedback.tsx";
 export { MessageMemories } from "./message-memories.tsx";
 export { Scramble, type ScrambleProps } from "./scramble.tsx";
 export {
+	FontDialog,
+	FontSample,
+	ThemeDialog,
+	ThemeSwatches,
+} from "./theme-selector.tsx";
+export {
 	Typewriter,
 	type TypewriterProps,
 	useTypewriter,

@@ -152,6 +152,21 @@ function titleOf(message: string): string {
 	return line.length > 60 ? `${line.slice(0, 57)}…` : line;
 }
 
+function errorFor(
+	chatId: Id<"chats"> | null,
+	sources: {
+		stream: unknown;
+		streamingFor: Id<"chats"> | null;
+		evalError: { chatId: Id<"chats"> | null; message: string } | null;
+	},
+): string | undefined {
+	const { stream, streamingFor, evalError } = sources;
+	if (stream && streamingFor === chatId)
+		return stream instanceof Error ? stream.message : String(stream);
+	if (evalError?.chatId === chatId) return evalError.message;
+	return undefined;
+}
+
 export function ChatProvider({
 	workspaceId,
 	chatId,
@@ -197,7 +212,10 @@ export function ChatProvider({
 	}, []);
 
 	const [evaluating, setEvaluating] = useState(false);
-	const [evalError, setEvalError] = useState<string | undefined>(undefined);
+	const [evalError, setEvalError] = useState<{
+		chatId: Id<"chats"> | null;
+		message: string;
+	} | null>(null);
 	const running = useRef<AbortController | null>(null);
 
 	const turns =
@@ -234,10 +252,11 @@ export function ChatProvider({
 			const run = new AbortController();
 			running.current?.abort();
 			running.current = run;
-			setEvalError(undefined);
+			setEvalError(null);
 			setEvaluating(true);
+			let opened = chatId;
 			try {
-				const opened =
+				opened =
 					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
 				if (!chatId) {
 					await navigate({
@@ -253,7 +272,10 @@ export function ChatProvider({
 					$exception_source: "lisp eval",
 					thread_id: chatId ?? "draft",
 				});
-				setEvalError(ex instanceof Error ? ex.message : String(ex));
+				setEvalError({
+					chatId: opened,
+					message: ex instanceof Error ? ex.message : String(ex),
+				});
 			} finally {
 				if (running.current === run) {
 					running.current = null;
@@ -270,7 +292,7 @@ export function ChatProvider({
 			shown: ChatMessage,
 			title: string,
 		) => {
-			setEvalError(undefined);
+			setEvalError(null);
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			stream.submit(
@@ -372,12 +394,11 @@ export function ChatProvider({
 			isLoading: stream.isLoading || evaluating,
 			chatId,
 			workspaceId,
-			error:
-				(stream.error
-					? stream.error instanceof Error
-						? stream.error.message
-						: String(stream.error)
-					: undefined) ?? evalError,
+			error: errorFor(chatId, {
+				stream: stream.error,
+				streamingFor: streamingFor.current,
+				evalError,
+			}),
 			send: (text) => {
 				void send(text);
 			},
