@@ -197,7 +197,10 @@ export function ChatProvider({
 	}, []);
 
 	const [evaluating, setEvaluating] = useState(false);
-	const [evalError, setEvalError] = useState<string | undefined>(undefined);
+	const [evalError, setEvalError] = useState<{
+		chatId: Id<"chats"> | null;
+		message: string;
+	} | null>(null);
 	const running = useRef<AbortController | null>(null);
 
 	const turns =
@@ -234,10 +237,11 @@ export function ChatProvider({
 			const run = new AbortController();
 			running.current?.abort();
 			running.current = run;
-			setEvalError(undefined);
+			setEvalError(null);
 			setEvaluating(true);
+			let opened = chatId;
 			try {
-				const opened =
+				opened =
 					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
 				if (!chatId) {
 					await navigate({
@@ -253,7 +257,10 @@ export function ChatProvider({
 					$exception_source: "lisp eval",
 					thread_id: chatId ?? "draft",
 				});
-				setEvalError(ex instanceof Error ? ex.message : String(ex));
+				setEvalError({
+					chatId: opened,
+					message: ex instanceof Error ? ex.message : String(ex),
+				});
 			} finally {
 				if (running.current === run) {
 					running.current = null;
@@ -270,7 +277,7 @@ export function ChatProvider({
 			shown: ChatMessage,
 			title: string,
 		) => {
-			setEvalError(undefined);
+			setEvalError(null);
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			stream.submit(
@@ -373,11 +380,12 @@ export function ChatProvider({
 			chatId,
 			workspaceId,
 			error:
-				(stream.error
+				(stream.error && streamingFor.current === chatId
 					? stream.error instanceof Error
 						? stream.error.message
 						: String(stream.error)
-					: undefined) ?? evalError,
+					: undefined) ??
+				(evalError?.chatId === chatId ? evalError.message : undefined),
 			send: (text) => {
 				void send(text);
 			},
