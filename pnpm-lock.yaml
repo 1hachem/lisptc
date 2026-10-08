@@ -178,9 +178,6 @@ importers:
       convex:
         specifier: ^1.46.0
         version: 1.46.0(react@19.2.8)
-      hono:
-        specifier: ^4.13.5
-        version: 4.13.5
       jose:
         specifier: ^6.2.12
         version: 6.2.12

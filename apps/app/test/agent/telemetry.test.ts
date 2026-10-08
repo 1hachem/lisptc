@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { gunzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { serve } from "../helpers.ts";
 
 interface CapturedEvent {
 	event: string;
@@ -38,17 +39,14 @@ beforeAll(async () => {
 	process.env.POSTHOG_HOST = `http://127.0.0.1:${PORT}`;
 	process.env.POSTHOG_ENVIRONMENT = "test";
 
-	const { Hono } = await import("hono");
-	const { errorHandler } = await import("../../server/agent/error.ts");
-	const { telemetry } = await import("../../server/agent/telemetry.ts");
+	const { edge } = await import("../../server/agent/edge.ts");
 
-	const app = new Hono();
-	app.use(telemetry());
-	app.get("/api/boom", () => {
-		throw new Error("the interpreter gave up");
+	fetchApp = serve({
+		middleware: edge,
+		handler: () => {
+			throw new Error("the interpreter gave up");
+		},
 	});
-	app.onError(errorHandler);
-	fetchApp = (request) => app.fetch(request);
 });
 
 afterAll(async () => {

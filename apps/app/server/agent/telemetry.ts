@@ -1,33 +1,32 @@
 import { initTelemetry, withRequestContext } from "@repo/ai";
-import type { MiddlewareHandler } from "hono";
+import { createMiddleware } from "@tanstack/react-start";
 
-function clientIp(forwarded: string | undefined, real: string | undefined) {
-	return forwarded?.split(",")[0]?.trim() || real;
+function clientIp(forwarded: string | null, real: string | null) {
+	return forwarded?.split(",")[0]?.trim() || real || undefined;
 }
 
-export function telemetry(): MiddlewareHandler {
-	initTelemetry();
-	return (c, next) => {
+export const telemetry = createMiddleware({ type: "request" }).server(
+	({ request, next }) => {
+		initTelemetry();
+		const header = (name: string) => request.headers.get(name) ?? undefined;
 		const ip = clientIp(
-			c.req.header("x-forwarded-for"),
-			c.req.header("x-real-ip"),
+			request.headers.get("x-forwarded-for"),
+			request.headers.get("x-real-ip"),
 		);
-		const userAgent = c.req.header("user-agent");
+		const userAgent = header("user-agent");
 		return withRequestContext(
 			{
-				distinctId:
-					c.req.header("x-distinct-id") ??
-					c.req.header("x-posthog-distinct-id"),
-				sessionId: c.req.header("x-posthog-session-id"),
+				distinctId: header("x-distinct-id") ?? header("x-posthog-distinct-id"),
+				sessionId: header("x-posthog-session-id"),
 				properties: {
-					$current_url: c.req.url,
-					$request_method: c.req.method,
-					$request_path: c.req.path,
+					$current_url: request.url,
+					$request_method: request.method,
+					$request_path: new URL(request.url).pathname,
 					...(userAgent ? { $user_agent: userAgent } : {}),
 					...(ip ? { $ip: ip } : {}),
 				},
 			},
-			next,
+			() => next(),
 		);
-	};
-}
+	},
+);

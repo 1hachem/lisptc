@@ -54,7 +54,6 @@
     "@tanstack/react-start": "^1.168.49",
     "better-auth": "~1.6.33",
     "convex": "^1.46.0",
-    "hono": "^4.13.5",
     "jose": "^6.2.12",
     "lexical": "^0.49.0",
     "posthog-js": "^1.425.1",

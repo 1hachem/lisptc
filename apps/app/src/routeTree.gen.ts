@@ -10,15 +10,26 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as HealthRouteImport } from './routes/health'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedWorkspaceIdRouteRouteImport } from './routes/_authed/$workspaceId/route'
+import { Route as ApiChatRouteImport } from './routes/api.chat'
+import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
 import { Route as AuthedWorkspaceIdChatIdRouteImport } from './routes/_authed/$workspaceId/$chatId'
+import { Route as ApiChatEvalRouteImport } from './routes/api.chat.eval'
+import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
+import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -36,6 +47,16 @@ const AuthedWorkspaceIdRouteRoute = AuthedWorkspaceIdRouteRouteImport.update({
   path: '/$workspaceId',
   getParentRoute: () => AuthedRoute,
 } as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUiActionRoute = ApiUiActionRouteImport.update({
+  id: '/api/ui-action',
+  path: '/api/ui-action',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthCallbackRoute = OauthCallbackRouteImport.update({
   id: '/oauth/callback',
   path: '/oauth/callback',
@@ -51,63 +72,118 @@ const AuthedWorkspaceIdChatIdRoute = AuthedWorkspaceIdChatIdRouteImport.update({
   path: '/$chatId',
   getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
+const ApiChatEvalRoute = ApiChatEvalRouteImport.update({
+  id: '/eval',
+  path: '/eval',
+  getParentRoute: () => ApiChatRoute,
+} as any)
+const ApiChatSteerRoute = ApiChatSteerRouteImport.update({
+  id: '/steer',
+  path: '/steer',
+  getParentRoute: () => ApiChatRoute,
+} as any)
+const ApiOauthCallbackRoute = ApiOauthCallbackRouteImport.update({
+  id: '/api/oauth/callback',
+  path: '/api/oauth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
+  '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/api/chat/eval': typeof ApiChatEvalRoute
+  '/api/chat/steer': typeof ApiChatSteerRoute
+  '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRoutesByTo {
+  '/health': typeof HealthRoute
   '/login': typeof LoginRoute
+  '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/': typeof AuthedIndexRoute
   '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/api/chat/eval': typeof ApiChatEvalRoute
+  '/api/chat/steer': typeof ApiChatSteerRoute
+  '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
+  '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/_authed/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/api/chat/eval': typeof ApiChatEvalRoute
+  '/api/chat/steer': typeof ApiChatSteerRoute
+  '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/health'
     | '/login'
     | '/$workspaceId'
+    | '/api/chat'
+    | '/api/ui-action'
     | '/oauth/callback'
     | '/$workspaceId/$chatId'
+    | '/api/chat/eval'
+    | '/api/chat/steer'
+    | '/api/oauth/callback'
     | '/$workspaceId/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/health'
     | '/login'
+    | '/api/chat'
+    | '/api/ui-action'
     | '/oauth/callback'
     | '/'
     | '/$workspaceId/$chatId'
+    | '/api/chat/eval'
+    | '/api/chat/steer'
+    | '/api/oauth/callback'
     | '/$workspaceId'
   id:
     | '__root__'
     | '/_authed'
+    | '/health'
     | '/login'
     | '/_authed/$workspaceId'
+    | '/api/chat'
+    | '/api/ui-action'
     | '/oauth/callback'
     | '/_authed/'
     | '/_authed/$workspaceId/$chatId'
+    | '/api/chat/eval'
+    | '/api/chat/steer'
+    | '/api/oauth/callback'
     | '/_authed/$workspaceId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
+  HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRoute
+  ApiChatRoute: typeof ApiChatRouteWithChildren
+  ApiUiActionRoute: typeof ApiUiActionRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
+  ApiOauthCallbackRoute: typeof ApiOauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -117,6 +193,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -140,6 +223,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdRouteRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ui-action': {
+      id: '/api/ui-action'
+      path: '/api/ui-action'
+      fullPath: '/api/ui-action'
+      preLoaderRoute: typeof ApiUiActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth/callback': {
       id: '/oauth/callback'
       path: '/oauth/callback'
@@ -160,6 +257,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/$workspaceId/$chatId'
       preLoaderRoute: typeof AuthedWorkspaceIdChatIdRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
+    '/api/chat/eval': {
+      id: '/api/chat/eval'
+      path: '/eval'
+      fullPath: '/api/chat/eval'
+      preLoaderRoute: typeof ApiChatEvalRouteImport
+      parentRoute: typeof ApiChatRoute
+    }
+    '/api/chat/steer': {
+      id: '/api/chat/steer'
+      path: '/steer'
+      fullPath: '/api/chat/steer'
+      preLoaderRoute: typeof ApiChatSteerRouteImport
+      parentRoute: typeof ApiChatRoute
+    }
+    '/api/oauth/callback': {
+      id: '/api/oauth/callback'
+      path: '/api/oauth/callback'
+      fullPath: '/api/oauth/callback'
+      preLoaderRoute: typeof ApiOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -193,10 +311,27 @@ const AuthedRouteChildren: AuthedRouteChildren = {
 const AuthedRouteWithChildren =
   AuthedRoute._addFileChildren(AuthedRouteChildren)
 
+interface ApiChatRouteChildren {
+  ApiChatEvalRoute: typeof ApiChatEvalRoute
+  ApiChatSteerRoute: typeof ApiChatSteerRoute
+}
+
+const ApiChatRouteChildren: ApiChatRouteChildren = {
+  ApiChatEvalRoute: ApiChatEvalRoute,
+  ApiChatSteerRoute: ApiChatSteerRoute,
+}
+
+const ApiChatRouteWithChildren =
+  ApiChatRoute._addFileChildren(ApiChatRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
+  HealthRoute: HealthRoute,
   LoginRoute: LoginRoute,
+  ApiChatRoute: ApiChatRouteWithChildren,
+  ApiUiActionRoute: ApiUiActionRoute,
   OauthCallbackRoute: OauthCallbackRoute,
+  ApiOauthCallbackRoute: ApiOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
