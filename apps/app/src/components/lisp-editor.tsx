@@ -1,5 +1,6 @@
 import { openForms } from "@repo/syntax";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useKeymap } from "../lib/keymap.ts";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispText } from "./lisp-text.tsx";
 
@@ -22,9 +23,9 @@ export function LispEditor({
 	const area = useRef<HTMLTextAreaElement>(null);
 	const mirror = useRef<HTMLPreElement>(null);
 
-	useEffect(() => {
-		area.current?.focus();
-	}, []);
+	const insert = useCallback(() => area.current?.focus(), []);
+	useEffect(insert, [insert]);
+	useKeymap("workspaceChat", "insert", insert);
 
 	const run = () => {
 		const code = text.trim();

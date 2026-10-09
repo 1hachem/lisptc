@@ -59,6 +59,7 @@
     "posthog-js": "^1.425.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-hotkeys-hook": "^5.3.3",
     "zod": "^4.4.3",
     "zustand": "^5.0.15"
   },
