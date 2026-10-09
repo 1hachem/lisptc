@@ -23,27 +23,30 @@ function triggerColor(on: string | undefined): string {
 		: "bg-dim";
 }
 
-function Dot({
-	on,
-	orbit,
-}: {
-	on?: string;
-	orbit?: { index: number; of: number };
-}) {
+type Stack = { index: number; of: number };
+
+function stackMotion(stack: Stack | undefined): string {
+	if (!stack) return "";
+	const shared =
+		"group-hover:[animation-play-state:paused] motion-reduce:animate-none";
+	return stack.of === 1
+		? `animate-pulse ${shared}`
+		: `-ml-px ring-1 ring-bg first:ml-0 animate-orbit ${shared}`;
+}
+
+function Dot({ on, stack }: { on?: string; stack?: Stack }) {
 	return (
 		<span
 			aria-hidden
 			data-memory-dot={on ?? ""}
 			style={
-				orbit && {
-					animationDelay: `${(-ORBIT_SECONDS * orbit.index) / orbit.of}s`,
-				}
+				stack && stack.of > 1
+					? {
+							animationDelay: `${(-ORBIT_SECONDS * stack.index) / stack.of}s`,
+						}
+					: undefined
 			}
-			className={`inline-block size-[3px] shrink-0 rounded-full ${triggerColor(on)} ${
-				orbit
-					? "-ml-px ring-1 ring-bg transition-[width,height] first:ml-0 animate-orbit group-hover:size-[4px] group-hover:[animation-play-state:paused] motion-reduce:animate-none"
-					: ""
-			}`}
+			className={`inline-block size-[3px] shrink-0 rounded-full ${triggerColor(on)} ${stackMotion(stack)}`}
 		/>
 	);
 }
@@ -71,7 +74,7 @@ export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
 						<Dot
 							key={memory.key}
 							on={memory.on}
-							orbit={{ index, of: stacked.length }}
+							stack={{ index, of: stacked.length }}
 						/>
 					))}
 				</span>
