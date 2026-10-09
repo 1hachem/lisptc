@@ -37,6 +37,21 @@ describe("a step that renders", () => {
 	it("reports no view for a step that rendered none", async () => {
 		expect(view(await memoryRepl().evalOutput("(+ 1 2)"))).toBeUndefined();
 	});
+
+	it("renders a widget handed to echo instead of printing it", async () => {
+		const out = await memoryRepl().evalOutput(
+			`(echo (ui/table '((("id" . 1)))))`,
+		);
+		expect(view(out)).toMatchObject({ tag: "table" });
+		expect(out.model).toContain("rendered table");
+		expect(out.model).not.toContain("#<ui:");
+	});
+
+	it("leaves a text echo to compaction's cap", async () => {
+		const r = memoryRepl(modelFacing(new Compactor(2)));
+		const { model } = await r.evalOutput('(echo "one two three four")');
+		expect(model).not.toContain("three four");
+	});
 });
 
 describe("driving the view", () => {

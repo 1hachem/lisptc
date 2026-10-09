@@ -116,6 +116,51 @@ describe("building a view", () => {
 	});
 });
 
+describe("echoing a widget", () => {
+	function echoed(code: string) {
+		const { interp, ui } = fresh();
+		const buffer = bufferTransport();
+		const detach = interp.channels.pipe(buffer);
+		try {
+			const result = runSync(interp, code);
+			const view = ui.takeView();
+			return {
+				result,
+				view: view ? nodeToJson(view) : undefined,
+				text: buffer.collectText("user"),
+			};
+		} finally {
+			detach();
+		}
+	}
+
+	it("renders a lone widget as ui/render would, printing nothing", () => {
+		const { result, view, text } = echoed(`(echo (ui/table '((("id" . 1)))))`);
+		expect(view).toMatchObject({ tag: "table" });
+		expect(text).toBe("");
+		expect(str(result)).toBe('"rendered table, 1 element, 0 actions"');
+	});
+
+	it("stacks the other arguments around the widget, in order", () => {
+		const { view } = echoed('(echo "Issues:" (ui/text "two") 3)');
+		expect(view).toEqual({
+			tag: "stack",
+			props: {},
+			children: [
+				{ tag: "text", props: { text: "Issues:" }, children: [] },
+				{ tag: "text", props: { text: "two" }, children: [] },
+				{ tag: "text", props: { text: "3" }, children: [] },
+			],
+		});
+	});
+
+	it("still prints when no argument is a widget", () => {
+		const { view, text } = echoed('(echo "plain" 1)');
+		expect(view).toBeUndefined();
+		expect(text).toBe("plain 1\n");
+	});
+});
+
 describe("tables", () => {
 	const ROWS =
 		'(setq rows (list (list (cons "id" "1") (cons "title" "a")) (list (cons "id" "2") (cons "title" "b"))))';

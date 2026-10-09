@@ -88,8 +88,9 @@ are already taking a turn. Write it as a request, "search the issues for auth",
 not as a note to yourself, "user clicked search".
 
 **Rules of thumb**
-- The ui/render call is the ONLY thing that draws. Building a widget and not
-  rendering it shows nothing, exactly like computing a value and not echoing it.
+- Only ui/render draws, or an echo handed a widget, which renders it the same way.
+  Building a widget and not rendering it shows nothing, exactly like computing a
+  value and not echoing it.
 - A step that renders a view shows the user the WIDGET instead of its text output,
   so put anything they should read inside the widget rather than in an echo.
 - Echo when the answer is something to read; render when it is something to use —
