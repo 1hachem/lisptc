@@ -40,6 +40,14 @@ const LAST_SEEN = "lisptc.io/last-seen";
 const MANAGER = "lisptc-mcp";
 const CONTAINER = "mcp";
 const INGRESS_POLICY = "mcp-ingress";
+const EGRESS_POLICY = "mcp-egress";
+const UNROUTED_FROM_A_SERVER = [
+	"10.0.0.0/8",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+	"100.64.0.0/10",
+	"169.254.0.0/16",
+];
 export const SHM_LIMIT = "1Gi";
 
 export const DEFAULT_RESOURCES = {
@@ -344,6 +352,39 @@ export function workloadFor(
 	};
 }
 
+export function egressPolicy(): V1NetworkPolicy {
+	return {
+		metadata: { name: EGRESS_POLICY },
+		spec: {
+			podSelector: { matchLabels: { [MANAGED_BY]: MANAGER } },
+			policyTypes: ["Egress"],
+			egress: [
+				{
+					to: [
+						{
+							namespaceSelector: {
+								matchLabels: { "kubernetes.io/metadata.name": "kube-system" },
+							},
+							podSelector: { matchLabels: { "k8s-app": "kube-dns" } },
+						},
+					],
+					ports: [
+						{ protocol: "UDP", port: 53 },
+						{ protocol: "TCP", port: 53 },
+					],
+				},
+				{
+					to: [
+						{
+							ipBlock: { cidr: "0.0.0.0/0", except: UNROUTED_FROM_A_SERVER },
+						},
+					],
+				},
+			],
+		},
+	};
+}
+
 export class KubernetesHost implements McpHost {
 	private readonly servers = new Map<string, Server>();
 	private readonly starting = new Map<string, Promise<ServerHandle>>();
@@ -451,6 +492,7 @@ export class KubernetesHost implements McpHost {
 				},
 			},
 		});
+		await this.cluster.ensureNetworkPolicy(this.namespace, egressPolicy());
 		const caller = this.options.callerNamespace;
 		if (caller === undefined) return;
 		const pullSecret = this.options.pullSecret;

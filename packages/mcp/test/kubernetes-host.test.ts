@@ -5,6 +5,7 @@ import {
 	type Cluster,
 	DEFAULT_RESOURCES,
 	dnsLabel,
+	egressPolicy,
 	KubernetesHost,
 	namespaceFor,
 	type PodState,
@@ -58,8 +59,8 @@ function fakeCluster(
 		async ensureNamespace(ns) {
 			namespaces.push(ns.metadata?.name ?? "");
 		},
-		async ensureNetworkPolicy(namespace) {
-			policies.push(namespace);
+		async ensureNetworkPolicy(namespace, policy) {
+			policies.push(`${namespace}/${policy.metadata?.name}`);
 		},
 		async copySecret(from, to, name) {
 			copied.push(`${from}/${name} -> ${to}`);
@@ -165,6 +166,21 @@ describe("the workload a server runs as", () => {
 	});
 });
 
+describe("what a server may reach", () => {
+	it("resolves names and reaches the internet, but nothing inside the cluster", () => {
+		const [dns, internet] = egressPolicy().spec?.egress ?? [];
+		expect(dns?.to?.[0]?.podSelector?.matchLabels).toEqual({
+			"k8s-app": "kube-dns",
+		});
+		expect(dns?.ports?.map((p) => p.port)).toEqual([53, 53]);
+		const block = internet?.to?.[0]?.ipBlock;
+		expect(block?.cidr).toBe("0.0.0.0/0");
+		expect(block?.except).toEqual(
+			expect.arrayContaining(["10.0.0.0/8", "169.254.0.0/16"]),
+		);
+	});
+});
+
 describe("the kubernetes host", () => {
 	it("runs a server in its workspace namespace and hands back its address", async () => {
 		const fake = fakeCluster([{ phase: "starting" }, { phase: "ready" }]);
@@ -182,7 +198,10 @@ describe("the kubernetes host", () => {
 			headers: { authorization: "Bearer x" },
 		});
 		expect(fake.namespaces).toEqual(["lisptc-ws-ws1"]);
-		expect(fake.policies).toEqual(["lisptc-ws-ws1"]);
+		expect(fake.policies).toEqual([
+			"lisptc-ws-ws1/mcp-egress",
+			"lisptc-ws-ws1/mcp-ingress",
+		]);
 		expect(fake.created.map((c) => c.namespace)).toEqual(["lisptc-ws-ws1"]);
 		expect(fake.touched).toEqual([
 			expect.stringMatching(/^lisptc-ws-ws1@\d+$/),
@@ -242,7 +261,7 @@ describe("the kubernetes host", () => {
 		expect(pod?.spec?.containers[0]?.image).toMatch(
 			/^supercorp\/supergateway:/,
 		);
-		expect(fake.policies).toEqual([]);
+		expect(fake.policies).toEqual(["lisptc-ws-ws1/mcp-egress"]);
 		await host.stopAll();
 	});
 
