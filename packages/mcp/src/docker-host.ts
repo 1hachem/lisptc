@@ -14,6 +14,7 @@ const exec = promisify(execFile);
 const START_TIMEOUT_MS = 120_000;
 const POLL_MS = 250;
 const LOGS_KEEP = 8192;
+const PROBE_TIMEOUT_MS = 5_000;
 
 const GATEWAY_IMAGE = "supercorp/supergateway:3.4.3";
 const GATEWAY_PORT = "8000";
@@ -87,6 +88,17 @@ export function launchFor(conf: ConnConfig): Launch | undefined {
 			MCP_PATH,
 		],
 	};
+}
+
+export async function dockerAnswers(): Promise<boolean> {
+	try {
+		await exec("docker", ["info", "--format", "{{.ServerVersion}}"], {
+			timeout: PROBE_TIMEOUT_MS,
+		});
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 export class DockerHost implements McpHost {

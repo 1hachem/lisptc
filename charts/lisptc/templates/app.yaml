@@ -37,6 +37,7 @@ spec:
       labels:
         app: app
     spec:
+      serviceAccountName: {{ .Values.app.serviceAccount }}
       securityContext:
         fsGroup: 1001
       imagePullSecrets:
@@ -54,6 +55,14 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.app.port | quote }}
+            - name: LISPTC_MCP_HOST
+              value: kubernetes
+            - name: LISPTC_MCP_NAMESPACE_PREFIX
+              value: {{ include "lisptc.mcpNamespacePrefix" . | quote }}
+            - name: LISPTC_MCP_CALLER_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: LISPTC_MCP_PULL_SECRET
+              value: {{ .Values.imagePullSecret | quote }}
             - name: XDG_CONFIG_HOME
               value: /data
             {{- include "lisptc.previewEnv" (list . (dict

@@ -8,8 +8,7 @@ import { introspectionHost } from "@repo/introspection-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
-import { DockerHost } from "@repo/mcp-extension/docker-host";
-import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { containerHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -61,7 +60,7 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
-				host: new DockerHost(),
+				host: containerHost(workspaceId),
 			}),
 			policy: permissions.rules,
 		}),

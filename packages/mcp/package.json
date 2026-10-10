@@ -7,6 +7,7 @@
     ".": "./src/mcp.ts",
     "./client": "./src/mcp-client.ts",
     "./docker-host": "./src/docker-host.ts",
+    "./kubernetes-host": "./src/kubernetes-host.ts",
     "./mcp-host": "./src/mcp-host.ts",
     "./local-host": "./src/local-host.ts",
     "./ports": "./src/ports.ts",
@@ -23,6 +24,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@kubernetes/client-node": "1.3.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",

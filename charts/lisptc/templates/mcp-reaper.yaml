@@ -1,0 +1,160 @@
+{{- $reaper := .Values.mcp.reaper -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $reaper.serviceAccount }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Namespace }}-mcp-reaper
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list, delete]
+  - apiGroups: [""]
+    resources: [services, secrets]
+    verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Namespace }}-mcp-reaper
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Namespace }}-mcp-reaper
+subjects:
+  - kind: ServiceAccount
+    name: {{ $reaper.serviceAccount }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mcp-reaper
+spec:
+  schedule: {{ $reaper.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          serviceAccountName: {{ $reaper.serviceAccount }}
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: reaper
+              image: {{ $reaper.image | quote }}
+              command: ["/bin/sh", "-c"]
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: PREFIX
+                  value: {{ include "lisptc.mcpNamespacePrefix" . | quote }}
+                - name: POD_IDLE_SECONDS
+                  value: {{ $reaper.podIdleSeconds | quote }}
+                - name: NAMESPACE_IDLE_SECONDS
+                  value: {{ $reaper.namespaceIdleSeconds | quote }}
+              args:
+                - |
+                  set -eu
+                  now=$(date +%s)
+                  selector=app.kubernetes.io/managed-by=lisptc-mcp
+
+                  echo "reaper run at $now: prefix=$PREFIX pod idle=${POD_IDLE_SECONDS}s namespace idle=${NAMESPACE_IDLE_SECONDS}s"
+
+                  pods=$(kubectl get pods -A -l "$selector" -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{" "}{.metadata.annotations.lisptc\.io/last-seen}{"\n"}{end}') ||
+                    { echo "could not list pods"; exit 1; }
+                  seen_pods=0 reaped_pods=0 failed_pods=0
+                  while read -r ns name seen; do
+                    [ -n "$ns" ] || continue
+                    case "$ns" in "$PREFIX"*) ;; *) continue ;; esac
+                    seen_pods=$((seen_pods + 1))
+                    idle=$((now - ${seen:-0}))
+                    if [ "$idle" -lt "$POD_IDLE_SECONDS" ]; then
+                      echo "keeping pod $ns/$name, idle ${idle}s"
+                      continue
+                    fi
+                    echo "reaping pod $ns/$name, last seen ${seen:-never}"
+                    if kubectl delete -n "$ns" pod,service,secret "$name" --ignore-not-found --wait=false; then
+                      reaped_pods=$((reaped_pods + 1))
+                    else
+                      failed_pods=$((failed_pods + 1))
+                      echo "could not reap pod $ns/$name"
+                    fi
+                  done <<EOF
+                  $pods
+                  EOF
+                  if [ "$reaped_pods" -eq 0 ] && [ "$failed_pods" -eq 0 ]; then
+                    echo "pods: nothing to remove ($seen_pods seen)"
+                  else
+                    echo "pods: $reaped_pods reaped, $failed_pods failed, $seen_pods seen"
+                  fi
+
+                  namespaces=$(kubectl get namespaces -l "$selector" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.metadata.annotations.lisptc\.io/last-seen}{"\n"}{end}') ||
+                    { echo "could not list namespaces"; exit 1; }
+                  seen_ns=0 deleted_ns=0 failed_ns=0
+                  while read -r ns seen; do
+                    [ -n "$ns" ] || continue
+                    case "$ns" in "$PREFIX"*) ;; *) continue ;; esac
+                    seen_ns=$((seen_ns + 1))
+                    idle=$((now - ${seen:-0}))
+                    if [ "$idle" -lt "$NAMESPACE_IDLE_SECONDS" ]; then
+                      echo "keeping namespace $ns, idle ${idle}s"
+                      continue
+                    fi
+                    if ! left=$(kubectl get pods -n "$ns" -o name); then
+                      failed_ns=$((failed_ns + 1))
+                      echo "keeping namespace $ns, could not list its pods"
+                      continue
+                    fi
+                    remaining=$(printf '%s' "$left" | grep -c . || true)
+                    if [ "$remaining" -gt 0 ]; then
+                      echo "keeping namespace $ns, $remaining pods left"
+                      continue
+                    fi
+                    echo "deleting idle namespace $ns, last seen ${seen:-never}"
+                    if kubectl delete namespace "$ns" --wait=false; then
+                      deleted_ns=$((deleted_ns + 1))
+                    else
+                      failed_ns=$((failed_ns + 1))
+                      echo "could not delete namespace $ns"
+                    fi
+                  done <<EOF
+                  $namespaces
+                  EOF
+                  if [ "$deleted_ns" -eq 0 ] && [ "$failed_ns" -eq 0 ]; then
+                    echo "namespaces: nothing to remove ($seen_ns seen)"
+                  else
+                    echo "namespaces: $deleted_ns deleted, $failed_ns failed, $seen_ns seen"
+                  fi
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}

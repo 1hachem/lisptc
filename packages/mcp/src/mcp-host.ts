@@ -1,10 +1,14 @@
+import { mcpEnv } from "@repo/env/mcp";
 import { oauthEnv } from "@repo/env/oauth";
 import { filePrompt } from "@repo/shared/host-node";
+import { DockerHost, dockerAnswers } from "./docker-host.ts";
+import { clusterAnswers, KubernetesHost } from "./kubernetes-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
 import { completeAuthorization, FileOAuthStore } from "./mcp-oauth.ts";
 import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
+import { type HostCandidate, ProbedHost } from "./probed-host.ts";
 import { miniSearchEngine } from "./search.ts";
 import { bundledToolkit } from "./toolkit.ts";
 
@@ -34,6 +38,35 @@ export function finishAuthorization(
 		serverKey,
 		oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		callbackUrl,
+	);
+}
+
+export function containerHost(scope: string): McpHost {
+	const kubernetes: HostCandidate = {
+		available: async () =>
+			(mcpEnv.LISPTC_MCP_HOST === "kubernetes" ||
+				mcpEnv.KUBERNETES_SERVICE_HOST !== undefined) &&
+			(await clusterAnswers()),
+		create: () =>
+			new KubernetesHost({
+				scope,
+				namespacePrefix: mcpEnv.LISPTC_MCP_NAMESPACE_PREFIX,
+				callerNamespace: mcpEnv.LISPTC_MCP_CALLER_NAMESPACE,
+				pullSecret: mcpEnv.LISPTC_MCP_PULL_SECRET,
+			}),
+	};
+	const docker: HostCandidate = {
+		available: dockerAnswers,
+		create: () => new DockerHost(),
+	};
+	const tried = {
+		kubernetes: [kubernetes, docker],
+		docker: [docker],
+		process: [],
+	};
+	return new ProbedHost(
+		tried[mcpEnv.LISPTC_MCP_HOST ?? "kubernetes"],
+		() => new LocalProcessHost(),
 	);
 }
 

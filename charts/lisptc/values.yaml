@@ -6,6 +6,7 @@ app:
     tag: main
   port: 3000
   hostname: lisptc
+  serviceAccount: app
   stateClaim: api-state
   storage: 1Gi
   secrets: [lisptc-api, lisptc-ai, lisptc-analytics, lisptc-web]
@@ -29,6 +30,15 @@ postgres:
   image: postgres:17
   storage: 5Gi
   secret: lisptc-db
+
+mcp:
+  namespacePrefix: lisptc-ws-
+  reaper:
+    image: alpine/kubectl:1.36.4
+    schedule: "*/10 * * * *"
+    serviceAccount: mcp-reaper
+    podIdleSeconds: 600
+    namespaceIdleSeconds: 1800
 
 preview:
   enabled: false

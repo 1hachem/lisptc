@@ -18,8 +18,8 @@ tasks:
   mcp:browser:build:
     desc: build the browser MCP image the playwright toolkit entry runs
     vars:
-      TAG: '{{.TAG | default "v1.63.0"}}'
-    cmd: docker build -f docker/browser-mcp.Dockerfile -t lisptc/browser-mcp:{{.TAG}} .
+      TAG: '{{.TAG | default "main"}}'
+    cmd: docker build -f docker/browser-mcp.Dockerfile -t ghcr.io/1hachem/lisptc-browser-mcp:{{.TAG}} .
 
   mcp:reap:
     desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
