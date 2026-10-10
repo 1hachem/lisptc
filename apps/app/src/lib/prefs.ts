@@ -1,4 +1,12 @@
-import { defaultFontId, defaultThemeId, fonts, themes } from "@repo/ui";
+import {
+	defaultFontId,
+	defaultThemeId,
+	defaultToastPosition,
+	fonts,
+	type ToastPosition,
+	themes,
+	toastPositions,
+} from "@repo/ui";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import {
@@ -14,6 +22,7 @@ export const PANEL_COOKIE = "ui.panel";
 const THEME_COOKIE = "ui.theme";
 const THEME_USES_COOKIE = "ui.theme-uses";
 const FONT_COOKIE = "ui.font";
+const TOAST_POSITION_COOKIE = "ui.toast-position";
 
 const readCookie = createIsomorphicFn()
 	.server((name: string) => getCookie(name))
@@ -53,6 +62,17 @@ export function readFontPref() {
 export function writeFontPref(id: string) {
 	writeCookie(FONT_COOKIE, id);
 	document.documentElement.dataset.font = id;
+}
+
+export function readToastPositionPref(): ToastPosition {
+	const raw = readCookie(TOAST_POSITION_COOKIE);
+	return (
+		toastPositions.find((position) => position === raw) ?? defaultToastPosition
+	);
+}
+
+export function writeToastPositionPref(position: ToastPosition) {
+	writeCookie(TOAST_POSITION_COOKIE, position);
 }
 
 export function readThemeUsesPref() {

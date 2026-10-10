@@ -347,6 +347,13 @@ are whole-repo sweeps. Run them when the user asks to commit or push, or says
 the work is done, and not after every change while it is still moving. Until
 then, check a change with the tests and the typecheck of the package it touches.
 
+## Worktrees
+
+A git worktree an agent creates goes under ./workspaces/, one directory per
+worktree, named after its branch. Never put one anywhere else in the tree or
+outside the repository. The workspaces directory is ignored by git, so nothing in it is
+ever committed from the main checkout.
+
 ## Commits
 
 A commit message is a conventional commit, `type(scope): subject`, and

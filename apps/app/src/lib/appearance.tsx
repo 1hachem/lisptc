@@ -1,5 +1,13 @@
 import { FontDialog, ThemeDialog } from "@repo/components";
-import { type FontDef, fonts, type ThemeDef, themes } from "@repo/ui";
+import {
+	type FontDef,
+	fonts,
+	type ThemeDef,
+	Toaster,
+	type ToastPosition,
+	themes,
+	toast,
+} from "@repo/ui";
 import {
 	createContext,
 	useCallback,
@@ -11,9 +19,11 @@ import {
 	readFontPref,
 	readThemePref,
 	readThemeUsesPref,
+	readToastPositionPref,
 	writeFontPref,
 	writeThemePref,
 	writeThemeUsesPref,
+	writeToastPositionPref,
 } from "./prefs.ts";
 import { mostUsedThemes, recordThemeUse } from "./theme-uses.ts";
 
@@ -27,6 +37,8 @@ interface Appearance {
 	font: FontDef;
 	chooseFont: (id: string) => void;
 	openFontPicker: () => void;
+	toastPosition: ToastPosition;
+	chooseToastPosition: (position: ToastPosition) => void;
 }
 
 const AppearanceContext = createContext<Appearance | null>(null);
@@ -46,6 +58,7 @@ export function AppearanceProvider({
 	const [currentTheme, setCurrentTheme] = useState(readThemePref);
 	const [currentFont, setCurrentFont] = useState(readFontPref);
 	const [uses, setUses] = useState(readThemeUsesPref);
+	const [toastPosition, setToastPosition] = useState(readToastPositionPref);
 	const openThemePicker = useCallback(() => setPicking("theme"), []);
 	const openFontPicker = useCallback(() => setPicking("font"), []);
 	const shortlist = useMemo(
@@ -68,20 +81,31 @@ export function AppearanceProvider({
 		setCurrentFont(id);
 	};
 
+	const chooseToastPosition = (position: ToastPosition) => {
+		if (position === toastPosition) return;
+		writeToastPositionPref(position);
+		setToastPosition(position);
+		toast("toasts appear here");
+	};
+
 	const closeWhenFalse = (open: boolean) => {
 		if (!open) setPicking(null);
 	};
 
+	const theme = offered(themes, currentTheme);
+
 	return (
 		<AppearanceContext.Provider
 			value={{
-				theme: offered(themes, currentTheme),
+				theme,
 				shortlist,
 				chooseTheme,
 				openThemePicker,
 				font: offered(fonts, currentFont),
 				chooseFont,
 				openFontPicker,
+				toastPosition,
+				chooseToastPosition,
 			}}
 		>
 			{children}
@@ -99,6 +123,7 @@ export function AppearanceProvider({
 				open={picking === "font"}
 				value={currentFont}
 			/>
+			<Toaster scheme={theme.scheme} position={toastPosition} />
 		</AppearanceContext.Provider>
 	);
 }

@@ -23,6 +23,13 @@ export {
 } from "./components/ui/dropdown-menu.tsx";
 export { Input } from "./components/ui/input.tsx";
 export * from "./components/ui/sidebar.tsx";
+export {
+	defaultToastPosition,
+	Toaster,
+	type ToastPosition,
+	toast,
+	toastPositions,
+} from "./components/ui/sonner.tsx";
 export { Switch } from "./components/ui/switch.tsx";
 
 export {

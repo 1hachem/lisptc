@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Command, commands } from "../lib/commands.ts";
+import { useKeymap } from "../lib/keymap.ts";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispEditor } from "./lisp-editor.tsx";
 
@@ -120,6 +121,9 @@ function Editor({
 	useEffect(() => {
 		editor.setEditable(!disabled);
 	}, [editor, disabled]);
+
+	const insert = useCallback(() => editor.focus(), [editor]);
+	useKeymap("workspaceChat", "insert", insert, { enabled: !disabled });
 
 	useEffect(() => {
 		if (disabled) return;

@@ -1,5 +1,5 @@
 import { ThemeSwatches } from "@repo/components";
-import { fonts } from "@repo/ui";
+import { fonts, toastPositions } from "@repo/ui";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { CHANNELS, type Channel } from "../lib/channels.ts";
@@ -113,6 +113,35 @@ function FontList() {
 	);
 }
 
+function ToastPositionPicker() {
+	const { toastPosition, chooseToastPosition } = useAppearance();
+	return (
+		<div className="px-4">
+			<div className="grid aspect-video grid-cols-3 grid-rows-[auto_1fr_auto] border border-bg2 p-1">
+				{toastPositions.map((position) => {
+					const chosen = position === toastPosition;
+					const label = position.replace("-", " ");
+					return (
+						<button
+							key={position}
+							type="button"
+							aria-pressed={chosen}
+							aria-label={label}
+							title={label}
+							onClick={() => chooseToastPosition(position)}
+							className={`h-row cursor-pointer p-1 ${position.startsWith("bottom") ? "row-start-3" : ""}`}
+						>
+							<span
+								className={`block h-full ${chosen ? "bg-fg" : "bg-bg2 hover:bg-dim"}`}
+							/>
+						</button>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
 export function RightSidebar({ open }: { open: boolean }) {
 	return (
 		<SidePanel side="right" open={open} className="w-[214px]">
@@ -146,6 +175,10 @@ export function RightSidebar({ open }: { open: boolean }) {
 					font
 				</div>
 				<FontList />
+				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+					toasts
+				</div>
+				<ToastPositionPicker />
 			</div>
 		</SidePanel>
 	);
