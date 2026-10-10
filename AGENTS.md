@@ -349,9 +349,9 @@ then, check a change with the tests and the typecheck of the package it touches.
 
 ## Worktrees
 
-A git worktree an agent creates goes under `./workspaces/`, one directory per
+A git worktree an agent creates goes under ./workspaces/, one directory per
 worktree, named after its branch. Never put one anywhere else in the tree or
-outside the repository. `workspaces/` is ignored by git, so nothing in it is
+outside the repository. The workspaces directory is ignored by git, so nothing in it is
 ever committed from the main checkout.
 
 ## Commits
