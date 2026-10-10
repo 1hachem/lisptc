@@ -4,7 +4,15 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { hearing, reporting, riding, testRepl } from "./helpers.ts";
+import { extension, hearing, reporting, riding, testRepl } from "./helpers.ts";
+
+const emitting = (text: string) =>
+	extension((hooks) =>
+		hooks.evalStep.use((ctx, next) => {
+			ctx.emit(text);
+			return next(ctx);
+		}),
+	);
 
 const TURNS: AgentDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
@@ -12,9 +20,11 @@ const TURNS: AgentDelta[][] = [
 ];
 
 let turn = 0;
+const sent: { role: string; content: string }[][] = [];
 
 vi.mock("../src/agent.ts", () => ({
-	streamAgent: async function* () {
+	streamAgent: async function* (messages: { role: string; content: string }[]) {
+		sent.push(messages);
 		for (const delta of TURNS[Math.min(turn++, TURNS.length - 1)]) yield delta;
 	},
 }));
@@ -26,6 +36,7 @@ interface WireMessage {
 		reasoning_content?: string;
 		ui?: unknown;
 		display?: string;
+		riding?: string;
 		meta?: {
 			at?: string;
 			durationMs?: number;
@@ -80,6 +91,7 @@ describe("chat stream", () => {
 
 	beforeEach(() => {
 		turn = 0;
+		sent.length = 0;
 	});
 
 	test("a steer posted mid-turn is recorded in order, and the inbox closes with the turn", async () => {
@@ -306,5 +318,35 @@ describe("chat stream", () => {
 			"tool",
 			"ai",
 		]);
+	});
+
+	test("what a step emits rides its result, and the model reads it the same after a reload", async () => {
+		let produced: WireMessage[] = [];
+		const first = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{
+					repl: testRepl([emitting("k: the note\n")]),
+					onTurn: (made) => {
+						produced = made;
+					},
+				},
+			),
+		);
+		const live = sent[1].find((m) => m.content.includes("tool_result"));
+
+		const stored = produced.find((m) => m.type === "tool");
+		expect(stored?.additional_kwargs?.riding).toBe("k: the note\n");
+		expect(stored?.content).not.toContain("k: the note");
+		expect(live?.content).toContain("k: the note");
+
+		turn = 0;
+		sent.length = 0;
+		await stream({
+			messages: [...first, { type: "human", content: "and 2 + 2?" }],
+		}).text();
+		const reloaded = sent[0].find((m) => m.content.includes("tool_result"));
+
+		expect(reloaded?.content).toBe(live?.content);
 	});
 });

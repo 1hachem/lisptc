@@ -37,9 +37,10 @@ takes one, or the store and the thread to draw one from. The extensions in it,
 and the hosts under them, are assembled in `@repo/backend` and injected by the
 product app.
 
-Annotations are read by lane, never by key. One lane is the tool result the
-model reads, the other is the wire the browser reads. The loop interprets no
-key, and a payload that would need interpreting belongs below the seam instead.
+Annotations are read by lane, never by key, and they are for the browser
+alone. What the model reads is what an extension emits, and it reads the same
+thing live and after a reload. The loop interprets no key, and a payload that
+would need interpreting belongs below the seam instead.
 
 A new kind of thing a turn can report is a new variant of the turn event union,
 not a side channel.

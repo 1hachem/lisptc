@@ -50,6 +50,7 @@ export interface ReplOptions {
 
 export interface EvalOutput extends Bounded {
 	annotations: StepAnnotations;
+	emitted: string;
 	failed: boolean;
 	held: boolean;
 	message?: string;
@@ -58,7 +59,6 @@ export interface EvalOutput extends Bounded {
 export interface StepResult extends EvalOutput {
 	envelopes: readonly Envelope[];
 	skipped: string[];
-	feedback: string;
 }
 
 function partition(notes: readonly Note[]): {
@@ -121,6 +121,7 @@ function render(result: StepResult): EvalOutput {
 		model: result.model + notes,
 		user: result.user + notes,
 		annotations: result.annotations,
+		emitted: result.emitted,
 		failed: result.failed,
 		held: result.held,
 		message: result.message,
@@ -202,13 +203,13 @@ export class MemoryRepl implements InMemoryRepl {
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
 	): Promise<StepResult> {
-		let feedback = "";
+		let emitted = "";
 		const interp = this.currentInterp;
 		const ctx: StepContext = {
 			interp,
 			code,
 			emit: (text) => {
-				feedback += text;
+				emitted += text;
 			},
 		};
 		const { channels } = interp;
@@ -244,7 +245,7 @@ export class MemoryRepl implements InMemoryRepl {
 			envelopes: buffer.envelopes,
 			model: carried ? error.model : bounded.model + error.model + holding,
 			user: bounded.user + carriedError.user + error.user,
-			feedback,
+			emitted,
 			annotations: this.hooks.annotate.run(
 				(_b, into) => into,
 				buffer,
@@ -347,6 +348,7 @@ export class AgentRepl extends MemoryRepl {
 			model: result.model,
 			user: result.user,
 			annotations: result.annotations,
+			emitted: result.emitted,
 			failed: result.failed,
 			held: result.held,
 			message: result.message,

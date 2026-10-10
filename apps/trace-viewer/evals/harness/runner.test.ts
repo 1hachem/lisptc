@@ -225,7 +225,7 @@ describe("a case runs against a scripted model", () => {
 		);
 
 		const navigate = [
-			{ key: "navigate", body: "browser_navigate, not navigate" },
+			{ key: "navigate", body: "browser_navigate, not navigate", on: "call" },
 		];
 		const fired = result.transcript.filter((line) => line.annotations);
 		expect(fired.map((line) => line.role)).toEqual(["tool", "tool"]);
@@ -255,7 +255,9 @@ describe("a case runs against a scripted model", () => {
 		expect(result.transcript[1]).toMatchObject({
 			role: "assistant",
 			annotations: {
-				memories: [{ key: "site", body: "hyko.ai is the product site" }],
+				memories: [
+					{ key: "site", body: "hyko.ai is the product site", on: "user" },
+				],
 			},
 		});
 	});

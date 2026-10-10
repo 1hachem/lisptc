@@ -42,6 +42,7 @@
 	--container-dialog-lg: 560px;
 
 	--animate-blk: blk 1.06s steps(1, end) infinite;
+	--animate-orbit: orbit 2.4s linear infinite;
 }
 
 @theme inline {
@@ -199,6 +200,19 @@
 	50%,
 	100% {
 		opacity: 0;
+	}
+}
+
+@keyframes orbit {
+	from {
+		transform: rotateY(0turn) translateZ(3px) rotateY(0turn) translateY(0);
+	}
+	50% {
+		transform: rotateY(0.5turn) translateZ(3px) rotateY(-0.5turn)
+			translateY(-1px);
+	}
+	to {
+		transform: rotateY(1turn) translateZ(3px) rotateY(-1turn) translateY(0);
 	}
 }
 
