@@ -52,10 +52,8 @@ rule there too.
 **`task mcp:reap` clears the containers a dead process left behind.** No host
 instance reaps another's, so nothing else will.
 
-**On a cluster, the `mcp-reaper` CronJob in `charts/lisptc` does it instead.**
-It goes by the last-seen stamp that a live host keeps refreshing on its
-pods and on the namespace. An object a host adds next to a pod takes the pod's
-name, or it is left until the namespace goes.
+**On a cluster, what a dead host left behind is reaped from `charts/lisptc`.**
+So an object a host creates beside a pod is named after that pod.
 
 `check:arch` treats `src/mcp.ts` and `src/ports.ts` as extension modules. They
 import no `node:` builtin, no typed env module, no SDK and no `process.env`.
