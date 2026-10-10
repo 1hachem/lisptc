@@ -116,7 +116,12 @@ spec:
                       echo "keeping namespace $ns, idle ${idle}s"
                       continue
                     fi
-                    remaining=$(kubectl get pods -n "$ns" -o name | wc -l)
+                    if ! left=$(kubectl get pods -n "$ns" -o name); then
+                      failed_ns=$((failed_ns + 1))
+                      echo "keeping namespace $ns, could not list its pods"
+                      continue
+                    fi
+                    remaining=$(printf '%s' "$left" | grep -c . || true)
                     if [ "$remaining" -gt 0 ]; then
                       echo "keeping namespace $ns, $remaining pods left"
                       continue
