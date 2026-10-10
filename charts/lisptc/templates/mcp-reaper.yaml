@@ -1,0 +1,111 @@
+{{- $reaper := .Values.mcp.reaper -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $reaper.serviceAccount }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Namespace }}-mcp-reaper
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list, delete]
+  - apiGroups: [""]
+    resources: [services, secrets]
+    verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Namespace }}-mcp-reaper
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Namespace }}-mcp-reaper
+subjects:
+  - kind: ServiceAccount
+    name: {{ $reaper.serviceAccount }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mcp-reaper
+spec:
+  schedule: {{ $reaper.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          serviceAccountName: {{ $reaper.serviceAccount }}
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: reaper
+              image: {{ $reaper.image | quote }}
+              command: ["/bin/sh", "-c"]
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: PREFIX
+                  value: {{ include "lisptc.mcpNamespacePrefix" . | quote }}
+                - name: POD_IDLE_SECONDS
+                  value: {{ $reaper.podIdleSeconds | quote }}
+                - name: NAMESPACE_IDLE_SECONDS
+                  value: {{ $reaper.namespaceIdleSeconds | quote }}
+              args:
+                - |
+                  set -eu
+                  now=$(date +%s)
+                  selector=app.kubernetes.io/managed-by=lisptc-mcp
+
+                  kubectl get pods -A -l "$selector" -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{" "}{.metadata.annotations.lisptc\.io/last-seen}{"\n"}{end}' |
+                  while read -r ns name seen; do
+                    case "$ns" in "$PREFIX"*) ;; *) continue ;; esac
+                    [ $((now - ${seen:-0})) -ge "$POD_IDLE_SECONDS" ] || continue
+                    echo "reaping $ns/$name, last seen ${seen:-never}"
+                    kubectl delete -n "$ns" pod,service,secret "$name" --ignore-not-found --wait=false ||
+                      echo "could not reap $ns/$name"
+                  done
+
+                  kubectl get namespaces -l "$selector" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.metadata.annotations.lisptc\.io/last-seen}{"\n"}{end}' |
+                  while read -r ns seen; do
+                    case "$ns" in "$PREFIX"*) ;; *) continue ;; esac
+                    [ $((now - ${seen:-0})) -ge "$NAMESPACE_IDLE_SECONDS" ] || continue
+                    [ -z "$(kubectl get pods -n "$ns" -o name)" ] || continue
+                    echo "deleting idle namespace $ns, last seen ${seen:-never}"
+                    kubectl delete namespace "$ns" --wait=false ||
+                      echo "could not delete namespace $ns"
+                  done
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}

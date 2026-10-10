@@ -33,6 +33,12 @@ postgres:
 
 mcp:
   namespacePrefix: lisptc-ws-
+  reaper:
+    image: alpine/kubectl:1.36.4
+    schedule: "*/10 * * * *"
+    serviceAccount: mcp-reaper
+    podIdleSeconds: 600
+    namespaceIdleSeconds: 1800
 
 preview:
   enabled: false

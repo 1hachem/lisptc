@@ -3,10 +3,12 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	type Cluster,
+	DEFAULT_RESOURCES,
 	dnsLabel,
 	KubernetesHost,
 	namespaceFor,
 	type PodState,
+	SHM_LIMIT,
 	type Workload,
 	workloadFor,
 } from "../src/kubernetes-host.ts";
@@ -47,6 +49,7 @@ function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
 	const namespaces: string[] = [];
 	const policies: string[] = [];
 	const copied: string[] = [];
+	const touched: string[] = [];
 	let next = 0;
 	const cluster: Cluster = {
 		async ensureNamespace(ns) {
@@ -75,6 +78,12 @@ function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
 		async removeLabelled(_namespace, selector) {
 			labelled.push(selector);
 		},
+		async touchNamespace(namespace, seen) {
+			touched.push(`${namespace}@${seen}`);
+		},
+		async touchPod(namespace, pod, seen) {
+			touched.push(`${namespace}/${pod}@${seen}`);
+		},
 		origin: () => origin,
 	};
 	return {
@@ -85,6 +94,7 @@ function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
 		namespaces,
 		policies,
 		copied,
+		touched,
 	};
 }
 
@@ -108,6 +118,7 @@ describe("the workload a server runs as", () => {
 			playwright,
 			{ image: playwright.image, exposed: "8931", path: "/mcp", args: [] },
 			labels,
+			1_700_000_000,
 		);
 
 		expect(secret.stringData).toEqual({ TOKEN: "s3cret" });
@@ -120,6 +131,33 @@ describe("the workload a server runs as", () => {
 		expect(pod.spec?.automountServiceAccountToken).toBe(false);
 		expect(service.spec?.selector).toEqual(labels);
 		expect(service.spec?.ports).toEqual([{ port: 8931, targetPort: 8931 }]);
+		expect(pod.metadata?.annotations).toEqual({
+			"lisptc.io/last-seen": "1700000000",
+		});
+	});
+
+	it("bounds a server by default and lets its entry ask for more", () => {
+		const launch = { image: "x", exposed: "8931", path: "/mcp", args: [] };
+		const bounded = workloadFor("mcp-a", playwright, launch, {}, 0).pod.spec
+			?.containers[0]?.resources;
+		expect(bounded).toEqual(DEFAULT_RESOURCES);
+
+		const asked = workloadFor(
+			"mcp-b",
+			{ ...playwright, resources: { limits: { memory: "4Gi" } } },
+			launch,
+			{},
+			0,
+		).pod.spec?.containers[0]?.resources;
+		expect(asked?.limits).toEqual({ cpu: "2", memory: "4Gi" });
+		expect(asked?.requests).toEqual(DEFAULT_RESOURCES.requests);
+	});
+
+	it("leaves room above the memory-backed shm, which counts against the limit", () => {
+		const gib = (quantity: string) => Number.parseInt(quantity, 10);
+		expect(gib(DEFAULT_RESOURCES.limits.memory)).toBeGreaterThan(
+			gib(SHM_LIMIT),
+		);
 	});
 });
 
@@ -142,6 +180,9 @@ describe("the kubernetes host", () => {
 		expect(fake.namespaces).toEqual(["lisptc-ws-ws1"]);
 		expect(fake.policies).toEqual(["lisptc-ws-ws1"]);
 		expect(fake.created.map((c) => c.namespace)).toEqual(["lisptc-ws-ws1"]);
+		expect(fake.touched).toEqual([
+			expect.stringMatching(/^lisptc-ws-ws1@\d+$/),
+		]);
 		expect(host.status("playwright")).toBe("running");
 		await host.stopAll();
 	});

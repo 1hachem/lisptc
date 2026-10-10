@@ -26,6 +26,16 @@ interface ConnMeta {
 	keywords?: string[];
 }
 
+export interface ResourceAmounts {
+	cpu?: string;
+	memory?: string;
+}
+
+export interface Resources {
+	requests?: ResourceAmounts;
+	limits?: ResourceAmounts;
+}
+
 export type HttpConnConfig = ConnMeta & {
 	name: string;
 	url: string;
@@ -46,6 +56,7 @@ export type ContainerConnConfig = ConnMeta & {
 	args?: string[];
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
+	resources?: Resources;
 };
 
 export type StdioConnConfig = ConnMeta & {
@@ -53,6 +64,7 @@ export type StdioConnConfig = ConnMeta & {
 	command: string;
 	args?: string[];
 	env?: Record<string, string>;
+	resources?: Resources;
 };
 
 export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;

@@ -4,9 +4,12 @@ import {
 	CoreV1Api,
 	KubeConfig,
 	NetworkingV1Api,
+	PatchStrategy,
+	setHeaderOptions,
 	type V1Namespace,
 	type V1NetworkPolicy,
 	type V1Pod,
+	type V1ResourceRequirements,
 	type V1Secret,
 	type V1Service,
 	VersionApi,
@@ -23,6 +26,7 @@ import type {
 const START_TIMEOUT_MS = 180_000;
 const POLL_MS = 500;
 const REFRESH_MS = 5_000;
+const HEARTBEAT_MS = 60_000;
 const LOG_LINES = 200;
 const LOGS_KEEP = 8192;
 const NAME_MAX = 63;
@@ -32,9 +36,16 @@ const MANAGED_BY = "app.kubernetes.io/managed-by";
 const WORKSPACE_LABEL = "lisptc.io/workspace";
 const HOST_LABEL = "lisptc.io/mcp-host";
 const SERVER_LABEL = "lisptc.io/mcp-server";
+const LAST_SEEN = "lisptc.io/last-seen";
 const MANAGER = "lisptc-mcp";
 const CONTAINER = "mcp";
 const INGRESS_POLICY = "mcp-ingress";
+export const SHM_LIMIT = "1Gi";
+
+export const DEFAULT_RESOURCES = {
+	requests: { cpu: "100m", memory: "256Mi" },
+	limits: { cpu: "2", memory: "2Gi" },
+} as const;
 
 const FATAL_WAITING = new Set([
 	"ErrImagePull",
@@ -69,6 +80,8 @@ export interface Cluster {
 	logs(namespace: string, pod: string): Promise<string>;
 	remove(namespace: string, name: string): Promise<void>;
 	removeLabelled(namespace: string, selector: string): Promise<void>;
+	touchNamespace(namespace: string, seen: number): Promise<void>;
+	touchPod(namespace: string, pod: string, seen: number): Promise<void>;
 	origin(namespace: string, service: string, port: number): string;
 }
 
@@ -87,6 +100,23 @@ interface Server {
 	logs: string;
 	state: ServerState;
 	refresh?: ReturnType<typeof setInterval>;
+	heartbeat?: ReturnType<typeof setInterval>;
+}
+
+function epochSeconds(): number {
+	return Math.floor(Date.now() / 1000);
+}
+
+function seenAt(seen: number) {
+	return { [LAST_SEEN]: String(seen) };
+}
+
+function resourcesFor(conf: ConnConfig): V1ResourceRequirements {
+	const asked = "resources" in conf ? conf.resources : undefined;
+	return {
+		requests: { ...DEFAULT_RESOURCES.requests, ...asked?.requests },
+		limits: { ...DEFAULT_RESOURCES.limits, ...asked?.limits },
+	};
 }
 
 export function dnsLabel(value: string, max = NAME_MAX): string {
@@ -223,6 +253,18 @@ export function clientCluster(config: KubeConfig = defaultConfig()): Cluster {
 				core.deleteCollectionNamespacedSecret({ namespace, labelSelector }),
 			]);
 		},
+		async touchNamespace(name, seen) {
+			await core.patchNamespace(
+				{ name, body: { metadata: { annotations: seenAt(seen) } } },
+				setHeaderOptions("Content-Type", PatchStrategy.MergePatch),
+			);
+		},
+		async touchPod(namespace, name, seen) {
+			await core.patchNamespacedPod(
+				{ namespace, name, body: { metadata: { annotations: seenAt(seen) } } },
+				setHeaderOptions("Content-Type", PatchStrategy.MergePatch),
+			);
+		},
 		origin(namespace, service, port) {
 			return `http://${service}.${namespace}.svc.cluster.local:${port}`;
 		},
@@ -255,6 +297,7 @@ export function workloadFor(
 	conf: ConnConfig,
 	launch: Launch,
 	labels: Record<string, string>,
+	seen: number,
 	pullSecret?: string,
 ): Workload {
 	const port = Number(launch.exposed);
@@ -262,7 +305,7 @@ export function workloadFor(
 	return {
 		secret: { metadata, type: "Opaque", stringData: conf.env ?? {} },
 		pod: {
-			metadata,
+			metadata: { ...metadata, annotations: seenAt(seen) },
 			spec: {
 				restartPolicy: "Never",
 				automountServiceAccountToken: false,
@@ -275,6 +318,7 @@ export function workloadFor(
 						...(launch.args.length > 0 ? { args: launch.args } : {}),
 						ports: [{ containerPort: port }],
 						envFrom: [{ secretRef: { name } }],
+						resources: resourcesFor(conf),
 						readinessProbe: {
 							tcpSocket: { port },
 							periodSeconds: 2,
@@ -286,7 +330,7 @@ export function workloadFor(
 					},
 				],
 				volumes: [
-					{ name: "shm", emptyDir: { medium: "Memory", sizeLimit: "1Gi" } },
+					{ name: "shm", emptyDir: { medium: "Memory", sizeLimit: SHM_LIMIT } },
 				],
 			},
 		},
@@ -331,6 +375,7 @@ export class KubernetesHost implements McpHost {
 		if (!server) return await this.fallback.stop(name);
 		this.servers.delete(name);
 		clearInterval(server.refresh);
+		clearInterval(server.heartbeat);
 		server.state = "stopped";
 		await this.cluster.remove(this.namespace, server.name);
 	}
@@ -377,6 +422,7 @@ export class KubernetesHost implements McpHost {
 		await this.cluster.ensureNamespace({
 			metadata: {
 				name: this.namespace,
+				annotations: seenAt(epochSeconds()),
 				labels: {
 					[MANAGED_BY]: MANAGER,
 					[WORKSPACE_LABEL]: dnsLabel(this.options.scope),
@@ -427,6 +473,8 @@ export class KubernetesHost implements McpHost {
 			state: "running",
 		};
 		await this.cluster.remove(this.namespace, name);
+		const seen = epochSeconds();
+		await this.cluster.touchNamespace(this.namespace, seen);
 		await this.cluster.create(
 			this.namespace,
 			workloadFor(
@@ -434,6 +482,7 @@ export class KubernetesHost implements McpHost {
 				conf,
 				launch,
 				this.labels(conf),
+				seen,
 				this.callerPullSecret(),
 			),
 		);
@@ -483,9 +532,18 @@ export class KubernetesHost implements McpHost {
 			if (state && (state.phase === "failed" || state.phase === "gone")) {
 				server.state = "stopped";
 				clearInterval(server.refresh);
+				clearInterval(server.heartbeat);
 			}
 		}, REFRESH_MS);
 		server.refresh.unref();
+		server.heartbeat = setInterval(() => {
+			const seen = epochSeconds();
+			Promise.all([
+				this.cluster.touchPod(this.namespace, server.name, seen),
+				this.cluster.touchNamespace(this.namespace, seen),
+			]).catch(() => {});
+		}, HEARTBEAT_MS);
+		server.heartbeat.unref();
 	}
 }
 
