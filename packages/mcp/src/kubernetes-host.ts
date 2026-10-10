@@ -9,6 +9,7 @@ import {
 	type V1Pod,
 	type V1Secret,
 	type V1Service,
+	VersionApi,
 } from "@kubernetes/client-node";
 import { type Launch, launchFor } from "./docker-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
@@ -25,6 +26,7 @@ const REFRESH_MS = 5_000;
 const LOG_LINES = 200;
 const LOGS_KEEP = 8192;
 const NAME_MAX = 63;
+const PROBE_TIMEOUT_MS = 3_000;
 
 const MANAGED_BY = "app.kubernetes.io/managed-by";
 const WORKSPACE_LABEL = "lisptc.io/workspace";
@@ -225,6 +227,21 @@ export function clientCluster(config: KubeConfig = defaultConfig()): Cluster {
 			return `http://${service}.${namespace}.svc.cluster.local:${port}`;
 		},
 	};
+}
+
+export async function clusterAnswers(
+	config: KubeConfig = defaultConfig(),
+): Promise<boolean> {
+	const version = config.makeApiClient(VersionApi).getCode();
+	const timeout = new Promise<never>((_, reject) =>
+		setTimeout(reject, PROBE_TIMEOUT_MS).unref(),
+	);
+	try {
+		await Promise.race([version, timeout]);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function defaultConfig(): KubeConfig {

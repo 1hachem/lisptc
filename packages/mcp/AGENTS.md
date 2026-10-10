@@ -16,7 +16,7 @@ Turbo tag: `extension`.
 `src/ports.ts` is the contract layer: the client, host, registry and store
 interfaces, and the tool and connection shapes that cross them. A consumer
 imports it without pulling in the extension. `src/mcp-client.ts`,
-`src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts` and
+`src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts`, `src/probed-host.ts` and
 `src/mcp-oauth.ts` implement
 against it. `src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server
 registry.

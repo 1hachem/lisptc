@@ -3,7 +3,8 @@ import { z } from "zod";
 
 export const mcpEnv = createEnv({
 	server: {
-		LISPTC_MCP_HOST: z.enum(["docker", "kubernetes"]).default("docker"),
+		LISPTC_MCP_HOST: z.enum(["kubernetes", "docker", "process"]).optional(),
+		KUBERNETES_SERVICE_HOST: z.string().optional(),
 		LISPTC_MCP_NAMESPACE_PREFIX: z
 			.string()
 			.regex(/^[a-z][a-z0-9-]*$/)
