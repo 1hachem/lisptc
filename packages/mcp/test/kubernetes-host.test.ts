@@ -42,7 +42,10 @@ afterAll(() => {
 	answering.close();
 });
 
-function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
+function fakeCluster(
+	states: PodState[] = [{ phase: "ready" }],
+	{ failCreate = false } = {},
+) {
 	const created: { namespace: string; workload: Workload }[] = [];
 	const removed: string[] = [];
 	const labelled: string[] = [];
@@ -62,6 +65,7 @@ function fakeCluster(states: PodState[] = [{ phase: "ready" }]) {
 			copied.push(`${from}/${name} -> ${to}`);
 		},
 		async create(namespace, workload) {
+			if (failCreate) throw new Error("pods is forbidden");
 			created.push({ namespace, workload });
 		},
 		async state() {
@@ -257,6 +261,56 @@ describe("the kubernetes host", () => {
 		);
 		expect(host.status("playwright")).toBe("unknown");
 		expect(fake.removed).toHaveLength(2);
+	});
+
+	it("removes what a failed create left behind", async () => {
+		const fake = fakeCluster([{ phase: "ready" }], { failCreate: true });
+		const host = new KubernetesHost({
+			scope: "ws1",
+			namespacePrefix: "lisptc-ws-",
+			cluster: fake.cluster,
+		});
+
+		await expect(host.ensure(playwright)).rejects.toThrow(/forbidden/);
+		expect(host.status("playwright")).toBe("unknown");
+		expect(fake.removed).toHaveLength(2);
+	});
+
+	it("starts a server once when it is asked for twice at the same time", async () => {
+		const fake = fakeCluster();
+		const host = new KubernetesHost({
+			scope: "ws1",
+			namespacePrefix: "lisptc-ws-",
+			cluster: fake.cluster,
+		});
+
+		const [first, second] = await Promise.all([
+			host.ensure(playwright),
+			host.ensure(playwright),
+		]);
+
+		expect(fake.created).toHaveLength(1);
+		expect(second).toEqual(first);
+		await host.stopAll();
+	});
+
+	it("stops a server that was still starting", async () => {
+		const fake = fakeCluster([{ phase: "starting" }, { phase: "ready" }]);
+		const host = new KubernetesHost({
+			scope: "ws1",
+			namespacePrefix: "lisptc-ws-",
+			cluster: fake.cluster,
+		});
+
+		const started = host.ensure(playwright);
+		await host.stop("playwright");
+		await started;
+
+		expect(host.status("playwright")).toBe("unknown");
+		expect(fake.removed).toEqual([
+			fake.created[0]?.workload.pod.metadata?.name,
+			fake.created[0]?.workload.pod.metadata?.name,
+		]);
 	});
 
 	it("starts a server again once its pod is gone", async () => {

@@ -346,6 +346,7 @@ export function workloadFor(
 
 export class KubernetesHost implements McpHost {
 	private readonly servers = new Map<string, Server>();
+	private readonly starting = new Map<string, Promise<ServerHandle>>();
 	private readonly instance = randomUUID();
 	private readonly namespace: string;
 	private readonly cluster: Cluster;
@@ -361,27 +362,24 @@ export class KubernetesHost implements McpHost {
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
 		const launch = launchFor(conf);
 		if (launch === undefined) return await this.fallback.ensure(conf);
-		const running = this.servers.get(conf.name);
-		if (running && running.state === "running") {
-			const state = await this.cluster.state(this.namespace, running.name);
-			if (state.phase === "ready") return running.handle;
-			await this.stop(conf.name);
-		}
-		return await this.start(conf, launch);
+		const pending = this.starting.get(conf.name);
+		if (pending) return await pending;
+		const run = this.serving(conf, launch).finally(() =>
+			this.starting.delete(conf.name),
+		);
+		this.starting.set(conf.name, run);
+		return await run;
 	}
 
 	async stop(name: string): Promise<void> {
-		const server = this.servers.get(name);
-		if (!server) return await this.fallback.stop(name);
-		this.servers.delete(name);
-		clearInterval(server.refresh);
-		clearInterval(server.heartbeat);
-		server.state = "stopped";
-		await this.cluster.remove(this.namespace, server.name);
+		await this.starting.get(name)?.catch(() => {});
+		if (!this.servers.has(name)) return await this.fallback.stop(name);
+		await this.halt(name);
 	}
 
 	async stopAll(): Promise<void> {
-		for (const name of [...this.servers.keys()]) await this.stop(name);
+		await Promise.allSettled(this.starting.values());
+		for (const name of [...this.servers.keys()]) await this.halt(name);
 		await this.fallback.stopAll();
 		await this.cluster
 			.removeLabelled(this.namespace, `${HOST_LABEL}=${this.instance}`)
@@ -396,6 +394,29 @@ export class KubernetesHost implements McpHost {
 	logs(name: string): string {
 		const server = this.servers.get(name);
 		return server ? server.logs : this.fallback.logs(name);
+	}
+
+	private async serving(
+		conf: ConnConfig,
+		launch: Launch,
+	): Promise<ServerHandle> {
+		const server = this.servers.get(conf.name);
+		if (server && server.state === "running") {
+			const state = await this.cluster.state(this.namespace, server.name);
+			if (state.phase === "ready") return server.handle;
+		}
+		await this.halt(conf.name);
+		return await this.start(conf, launch);
+	}
+
+	private async halt(name: string): Promise<void> {
+		const server = this.servers.get(name);
+		if (!server) return;
+		this.servers.delete(name);
+		clearInterval(server.refresh);
+		clearInterval(server.heartbeat);
+		server.state = "stopped";
+		await this.cluster.remove(this.namespace, server.name);
 	}
 
 	private labels(conf: ConnConfig): Record<string, string> {
@@ -475,19 +496,19 @@ export class KubernetesHost implements McpHost {
 		await this.cluster.remove(this.namespace, name);
 		const seen = epochSeconds();
 		await this.cluster.touchNamespace(this.namespace, seen);
-		await this.cluster.create(
-			this.namespace,
-			workloadFor(
-				name,
-				conf,
-				launch,
-				this.labels(conf),
-				seen,
-				this.callerPullSecret(),
-			),
-		);
-		this.servers.set(conf.name, server);
 		try {
+			await this.cluster.create(
+				this.namespace,
+				workloadFor(
+					name,
+					conf,
+					launch,
+					this.labels(conf),
+					seen,
+					this.callerPullSecret(),
+				),
+			);
+			this.servers.set(conf.name, server);
 			await this.answering(conf.name, server, new URL(url).origin);
 		} catch (ex) {
 			this.servers.delete(conf.name);
