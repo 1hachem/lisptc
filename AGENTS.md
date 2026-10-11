@@ -334,7 +334,9 @@ database name, `/convex` the deployment's secret and its origins, `/auth`
 everything Better Auth signs and calls out with, the deployment's admin key
 included, so the convex CLI is credentialed wherever that environment reaches.
 `/grafana` holds the cluster Grafana's admin login, which both Grafana itself
-and the `grafana` MCP server in `.mcp.json` read.
+and the `grafana` MCP server in `.mcp.json` read. `/argocd` holds the cluster
+Argo CD's admin password, and its base URL and API token, which the `argocd`
+MCP server reads.
 
 The remote Turbo cache is shared, and `turbo.json` is where it is named. Its
 token is a secret like any other, kept at the `/turbo` Infisical path.
