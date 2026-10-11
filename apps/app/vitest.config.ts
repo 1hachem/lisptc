@@ -4,7 +4,7 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		coverage: {
-			include: ["src/**"],
+			include: ["src/**", "server/**"],
 			reporter: ["json", "text-summary"],
 		},
 		include: ["test/**/*.test.{ts,tsx}"],

@@ -3,9 +3,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { assetName, PROMPT_ROOTS, RUNTIME_ASSETS } from "../runtime-assets.ts";
+import {
+	assetName,
+	PROMPT_ROOTS,
+	RUNTIME_ASSETS,
+} from "../../runtime-assets.ts";
 
-const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
+const ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
 
 const REFERENCE =
 	/new URL\(\s*"\.\/([\w.-]+\.ptc)"\s*,\s*import\.meta\.url\s*\)/g;

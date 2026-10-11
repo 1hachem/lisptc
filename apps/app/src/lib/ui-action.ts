@@ -1,4 +1,4 @@
-import { API_URL, apiHeaders } from "./api.ts";
+import { apiHeaders } from "./api.ts";
 
 export interface UiActionResponse {
 	output?: string;
@@ -18,7 +18,7 @@ export async function postUiAction(
 	values: Record<string, string | boolean>,
 	messageId?: string,
 ): Promise<UiActionResult> {
-	const res = await fetch(`${API_URL}/api/ui-action`, {
+	const res = await fetch("/api/ui-action", {
 		method: "POST",
 		headers: await apiHeaders(),
 		body: JSON.stringify({ chatId, messageId, action, values }),

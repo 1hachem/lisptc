@@ -1,6 +1,15 @@
-import type { ApprovalRequest, Approvals, Decision, Scope } from "./ports.ts";
+import type {
+	ApprovalRequest,
+	Approvals,
+	Decision,
+	Scope,
+	Settled,
+} from "./ports.ts";
 
-type Resolved = (request: ApprovalRequest, decision: Decision) => void;
+type Resolved = (
+	request: ApprovalRequest,
+	decision: Decision,
+) => string | undefined;
 
 export class MemoryApprovals implements Approvals {
 	private readonly open_ = new Map<string, ApprovalRequest>();
@@ -17,13 +26,15 @@ export class MemoryApprovals implements Approvals {
 		return [...this.open_.values()];
 	}
 
-	resolve(decision: Decision): ApprovalRequest | undefined {
+	resolve(decision: Decision): Settled | undefined {
 		const request = this.open_.get(decision.id);
 		if (request === undefined) return undefined;
 		this.open_.delete(decision.id);
 		if (decision.approved) this.grants.set(request.name, decision.scope);
-		for (const listener of this.listeners) listener(request, decision);
-		return request;
+		let refused: string | undefined;
+		for (const listener of this.listeners)
+			refused = listener(request, decision) ?? refused;
+		return refused === undefined ? { request } : { request, refused };
 	}
 
 	granted(name: string): boolean {
@@ -49,12 +60,18 @@ export function resolveApproval(
 	approvals: Approvals,
 	decision: Decision,
 ): Resolution | undefined {
-	const request = approvals.resolve(decision);
-	if (request === undefined) return undefined;
-	return { request, decision, message: followUp(request, decision) };
+	const settled = approvals.resolve(decision);
+	if (settled === undefined) return undefined;
+	return {
+		request: settled.request,
+		decision,
+		message: followUp(settled, decision),
+	};
 }
 
-function followUp(request: ApprovalRequest, decision: Decision): string {
+function followUp({ request, refused }: Settled, decision: Decision): string {
+	if (request.change && decision.approved && refused !== undefined)
+		return `I approved ${request.name}, but ${refused}.`;
 	if (request.change)
 		return decision.approved
 			? `I approved ${request.name}, and it is applied to the permissions config.`

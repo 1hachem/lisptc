@@ -22,6 +22,7 @@ export interface Ask {
 	readonly detail?: string;
 	readonly prompt: string;
 	readonly choices: readonly AskChoice[];
+	readonly answerApplies?: true;
 }
 
 export interface Answered {

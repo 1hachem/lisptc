@@ -7,8 +7,8 @@ Turbo tag: `foundation`.
 ## Shape
 
 One module per area, each exporting the validated value that area reads:
-analytics, api, app, evals, infisical, memory, oauth, providers, r2, repl,
-server, trace-viewer, web, and `mcps/` for the toolkit servers. `src/errors.ts`
+analytics, evals, infisical, memory, oauth, providers, r2, repl,
+trace-viewer, web, and `mcps/` for the toolkit servers. `src/errors.ts`
 holds the failure shape they all report through, so a bad value fails the same
 way everywhere. `src/index.ts` re-exports the common ones.
 

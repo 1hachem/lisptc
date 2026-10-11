@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import type { Hold } from "@repo/interpreter/drive";
+import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
 import { DECIDE_ACTION } from "../src/ui-approver.ts";
 import { recordingApprover, session } from "./helpers.ts";
@@ -80,6 +81,42 @@ describe("the permissions guard", () => {
 		expect(again.held).toBe(true);
 	});
 
+	it("parks an asked call where a step can wait, and carries it on once approved", async () => {
+		const s = session("(permission/ask string-upcase)");
+		let parked: Hold | undefined;
+		s.interp.holds.parkWith((hold) => {
+			parked = hold;
+		});
+		const run = s.step(UPCASE);
+		await vi.waitFor(() => expect(parked).toBeDefined());
+		expect(parked?.reason).toContain("do not run it again");
+		const [request] = s.host.approvals.pending();
+		await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		parked?.resume();
+		expect((await run).value).toBe('"A"');
+		expect(s.host.approvals.granted("string-upcase")).toBe(false);
+	});
+
+	it("refuses a parked call the user denies", async () => {
+		const s = session("(permission/ask string-upcase)");
+		let parked: Hold | undefined;
+		s.interp.holds.parkWith((hold) => {
+			parked = hold;
+		});
+		const run = s.step(UPCASE);
+		await vi.waitFor(() => expect(parked).toBeDefined());
+		const [request] = s.host.approvals.pending();
+		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
+		parked?.resume();
+		const refused = await run;
+		expect(refused.failed).toBe(true);
+		expect(refused.report).toContain("the user denied string-upcase");
+	});
+
 	it("keeps a session grant", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const [request] = (await s.step(UPCASE)).requests;
@@ -148,6 +185,42 @@ describe("the permissions surface", () => {
 	});
 });
 
+describe("a form the host asks for", () => {
+	const ASKED = ["string-upcase"];
+
+	it("waits for approval under a config that never names it", async () => {
+		const s = session("", undefined, ASKED);
+		const run = await s.step(UPCASE);
+		expect(run.held).toBe(true);
+		expect(run.requests).toEqual([
+			expect.objectContaining({ name: "string-upcase" }),
+		]);
+		expect((await s.step("(permission/check 'string-upcase)")).value).toBe(
+			"ask",
+		);
+	});
+
+	it("still asks when the config defaults to allow", async () => {
+		const s = session("(permission/default allow)", undefined, ASKED);
+		expect((await s.step(UPCASE)).held).toBe(true);
+	});
+
+	it("stays denied when the config defaults to deny", async () => {
+		const s = session("(permission/default deny)", undefined, ASKED);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("follows a rule that names it", async () => {
+		const s = session("(permission/allow string-upcase)", undefined, ASKED);
+		expect((await s.step(UPCASE)).value).toBe('"A"');
+	});
+
+	it("leaves every other form to the config", async () => {
+		const s = session("", undefined, ASKED);
+		expect((await s.step('(string-downcase "A")')).value).toBe('"a"');
+	});
+});
+
 describe("evaluating a permissions form", () => {
 	it("asks before any change, even one that tightens the config", async () => {
 		const s = session("");
@@ -161,6 +234,11 @@ describe("evaluating a permissions form", () => {
 				reason: "changes the permissions config",
 			}),
 		]);
+		expect(asked.annotations.output).toEqual({
+			asks: {
+				open: [expect.objectContaining({ answerApplies: true })],
+			},
+		});
 		expect((await s.step(UPCASE)).value).toBe('"A"');
 		expect(s.host.store.source()).toBe("");
 
@@ -426,10 +504,132 @@ describe("deleting a permissions form", () => {
 		expect((await s.step(UPCASE)).failed).toBe(true);
 	});
 
+	it("says it changed nothing when the form is gone by the time it is approved", async () => {
+		const s = session("(permission/deny string-upcase)");
+		const [request] = (await s.step(DELETE)).requests;
+		const [clear] = (await s.step("(permission/clear-all)")).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: clear.id,
+			approved: true,
+			scope: "once",
+		});
+		const decided = await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(decided.message).toBe(
+			`I approved ${DELETE}, but it changes nothing: no such permissions form: (permission/deny string-upcase).`,
+		);
+		expect(s.host.store.source()).toBe("");
+	});
+
 	it("takes exactly one form", async () => {
 		const s = session("(permission/deny eval)");
 		expect((await s.step("(permission/delete)")).failed).toBe(true);
 		expect(s.host.store.source()).toBe("(permission/deny eval)");
+	});
+});
+
+describe("clearing the permissions config", () => {
+	const CLEAR = "(permission/clear-all)";
+	const HELD = "(permission/deny string-upcase)\n(permission/deny eval)\n";
+
+	it("waits for the user's approval, and changes nothing until then", async () => {
+		const s = session(HELD);
+		const asked = await s.step(CLEAR);
+		expect(asked.failed).toBe(false);
+		expect(asked.held).toBe(true);
+		expect(asked.requests).toEqual([
+			expect.objectContaining({
+				name: CLEAR,
+				reason: "changes the permissions config",
+				change: true,
+			}),
+		]);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+		expect(s.host.store.source()).toBe(HELD);
+	});
+
+	it("removes every form once approved, and saves an empty config", async () => {
+		const s = session(HELD);
+		const [request] = (await s.step(CLEAR)).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(s.host.store.source()).toBe("");
+		expect((await s.step("(permission/list)")).value).toBe("nil");
+		expect((await s.step(UPCASE)).value).toBe('"A"');
+	});
+
+	it("asks again after an approval, since a grant is never kept", async () => {
+		const s = session(HELD);
+		const [request] = (await s.step(CLEAR)).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "session",
+		});
+		const [deny] = (await s.step("(permission/deny eval)")).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: deny.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(s.host.store.source()).toBe("(permission/deny eval)\n");
+		expect((await s.step(CLEAR)).held).toBe(true);
+	});
+
+	it("refuses a pending clear once a rule approved meanwhile denies clearing", async () => {
+		const s = session(HELD);
+		const [clear] = (await s.step(CLEAR)).requests;
+		const [guard] = (await s.step("(permission/deny permission/clear-all)"))
+			.requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: guard.id,
+			approved: true,
+			scope: "once",
+		});
+		const decided = await s.invoke(DECIDE_ACTION, {
+			id: clear.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(decided.message).toBe(
+			`I approved ${CLEAR}, but permission/clear-all is denied by the permissions config, so ${CLEAR} changes nothing. Do not run it again.`,
+		);
+		expect(s.host.store.source()).toBe(
+			`${HELD}(permission/deny permission/clear-all)\n`,
+		);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("never clears once the user denies it", async () => {
+		const s = session(HELD);
+		const [request] = (await s.step(CLEAR)).requests;
+		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
+		expect(s.host.store.source()).toBe(HELD);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("never clears when a rule denies clearing", async () => {
+		const s = session(
+			"(permission/deny permission/clear-all)\n(permission/deny string-upcase)\n",
+		);
+		const run = await s.step(CLEAR);
+		expect(run.failed).toBe(true);
+		expect(run.requests).toEqual([]);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("takes no forms", async () => {
+		const s = session(HELD);
+		const run = await s.step("(permission/clear-all (permission/deny eval))");
+		expect(run.failed).toBe(true);
+		expect(run.requests).toEqual([]);
+		expect(s.host.store.source()).toBe(HELD);
 	});
 });
 

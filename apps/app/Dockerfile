@@ -11,12 +11,15 @@ COPY . .
 RUN turbo prune app --docker
 
 FROM base AS dev
+ENV XDG_CONFIG_HOME=/data
+COPY --from=docker:29-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm install --frozen-lockfile --offline
 COPY --from=pruner /app/out/full/ .
+RUN mkdir -p /data
 EXPOSE 3000
 WORKDIR /app/apps/app
 CMD ["pnpm", "run", "dev", "--host", "127.0.0.1"]
@@ -41,9 +44,11 @@ RUN --mount=type=secret,id=TURBO_TOKEN,env=TURBO_TOKEN \
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS prod
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV XDG_CONFIG_HOME=/data
 WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs \
- && adduser --system --uid 1001 --ingroup nodejs lisptc
+ && adduser --system --uid 1001 --ingroup nodejs lisptc \
+ && mkdir -p /data && chown lisptc:nodejs /data
 
 COPY --from=builder --chown=lisptc:nodejs /app/apps/app/.output ./.output
 

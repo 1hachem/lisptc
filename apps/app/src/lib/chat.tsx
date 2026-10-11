@@ -22,7 +22,7 @@ import {
 import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
-import { API_URL, apiHeaders } from "./api.ts";
+import { apiHeaders } from "./api.ts";
 import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
 import { pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
@@ -113,7 +113,7 @@ async function evalLisp(
 	chatId: string,
 	signal: AbortSignal,
 ): Promise<void> {
-	const response = await fetch(`${API_URL}/api/chat/eval`, {
+	const response = await fetch("/api/chat/eval", {
 		method: "POST",
 		headers: await apiHeaders(),
 		body: JSON.stringify({ chatId, code }),
@@ -181,7 +181,7 @@ export function ChatProvider({
 	const transport = useMemo(
 		() =>
 			new FetchStreamTransport({
-				apiUrl: `${API_URL}/api/chat`,
+				apiUrl: "/api/chat",
 				onRequest: async (_url, init) => ({
 					...init,
 					headers: { ...init.headers, ...(await apiHeaders()) },

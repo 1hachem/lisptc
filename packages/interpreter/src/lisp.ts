@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
+import type { Awaitable } from "@repo/shared/host";
 import type { z } from "zod";
 import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
@@ -10,6 +11,8 @@ import {
 	driveAsync,
 	driveSync,
 	type Eval,
+	Hold,
+	Holds,
 	type Outcome,
 	settled,
 } from "./drive.ts";
@@ -74,7 +77,7 @@ export interface Hooks {
 	>;
 	readonly call: Chain<
 		[interp: Interp, name: string, args: readonly unknown[]],
-		void
+		Awaitable<void>
 	>;
 	readonly dispose: Chain<[], void>;
 }
@@ -98,6 +101,34 @@ export interface InterpOptions {
 	extensions?: readonly Installable[];
 }
 
+class Tail {
+	constructor(
+		readonly x: unknown,
+		readonly env: List,
+	) {}
+}
+
+function applicable(x: Cell, fn: unknown): Closure | BuiltInFunc {
+	if (fn instanceof Closure || fn instanceof BuiltInFunc) return fn;
+	throw new UnresolvedHead("not-applicable", x, fn);
+}
+
+function copyRest(fn: Closure | BuiltInFunc, frame: unknown[]): List {
+	const fixed = fn.fixedArgs;
+	const rest = frame[fixed];
+	if (!fn.hasRest || !(rest instanceof Cell)) return null;
+	let head: List = null;
+	let tail: Cell | null = null;
+	for (let j: List = rest; j !== null; j = cdrCell(j)) {
+		const cell = new Cell(j.car, null);
+		if (tail === null) head = cell;
+		else tail.cdr = cell;
+		tail = cell;
+	}
+	frame[fixed] = head;
+	return head;
+}
+
 function copyTree(x: unknown): unknown {
 	return x instanceof Cell ? new Cell(copyTree(x.car), copyTree(x.cdr)) : x;
 }
@@ -110,6 +141,8 @@ export class Interp {
 	readonly channels: Channels = new Channels();
 
 	readonly async: AsyncWork = new AsyncWork();
+
+	readonly holds: Holds = new Holds();
 
 	readonly importStack: string[] = [];
 	private readonly importing: Set<string> = new Set();
@@ -248,8 +281,14 @@ export class Interp {
 		this.hooks.dispose.run(() => this.async.abortAll());
 	}
 
-	private guardCall(name: string, args: readonly unknown[]): void {
-		this.hooks.call.run(() => undefined, this, name, args);
+	private *guardCall(name: string, args: readonly unknown[]): Eval<void> {
+		yield* settled(this.hooks.call.run(() => undefined, this, name, args));
+	}
+
+	hold(reason: string): Hold | undefined {
+		if (!this.holds.parkable) return undefined;
+		note.emit(this.channels, { model: { kind: "held", text: reason } });
+		return this.holds.park(new Hold(reason));
 	}
 
 	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
@@ -273,121 +312,14 @@ export class Interp {
 	*evalGen(x: unknown, env: List): Eval {
 		try {
 			for (;;) {
-				if (x instanceof Arg) {
-					assert(env !== null);
-					return x.getValue(env);
-				} else if (x instanceof Sym) {
-					const value = this.globals.get(x);
-					if (value === undefined) throw new VoidVariable(x);
-					return value;
-				} else if (x instanceof Cell) {
-					let fn = x.car;
-					const arg = cdrCell(x);
-					if (fn instanceof Keyword) {
-						if (!this.hooks.call.isEmpty) this.guardCall(fn.name, []);
-						switch (<Keyword>fn) {
-							case quoteSym:
-								if (arg !== null && arg.cdr === null) return arg.car;
-								throw new EvalException("bad quote", x);
-							case prognSym:
-								x =
-									arg !== null && arg.cdr === null
-										? arg.car
-										: yield* this.evalProgN(arg, env);
-								break;
-							case condSym:
-								x = yield* this.evalCond(arg, env);
-								break;
-							case setqSym:
-								return yield* this.evalSetQ(arg, env);
-							case trySym: {
-								const [nx, nenv] = yield* this.evalTry(arg, env);
-								x = nx;
-								env = nenv;
-								break;
-							}
-							case lambdaSym:
-								return this.compile(arg, env, Closure.make);
-							case macroSym:
-								if (env !== null) throw new EvalException("nested macro", x);
-								return this.compile(arg, null, Macro.make);
-							case quasiquoteSym:
-								if (arg !== null && arg.cdr === null) {
-									x = qqExpand(arg.car);
-									break;
-								}
-								throw new EvalException("bad quasiquote", x);
-							default:
-								throw new EvalException("bad keyword", fn);
-						}
-					} else {
-						if (fn instanceof Sym) {
-							fn = this.globals.get(fn);
-							if (fn === undefined)
-								throw new UnresolvedHead("undefined", x, x.car);
-						} else if (fn instanceof Cell) {
-							fn = yield* this.evalGen(fn, env);
-						} else {
-							fn = this.evalNow(fn, env);
-						}
-
-						if (fn instanceof Macro) {
-							if (!this.hooks.call.isEmpty && x.car instanceof Sym)
-								this.guardCall(x.car.name, []);
-							x = yield* fn.expandWith(this, arg);
-						} else if (fn instanceof Closure || fn instanceof BuiltInFunc) {
-							const frame = fn.makeFrame(arg);
-							const fixed = fn.fixedArgs;
-							for (let i = 0; i < fixed; i++) {
-								const a = frame[i];
-								frame[i] =
-									a instanceof Cell
-										? yield* this.evalGen(a, env)
-										: this.evalNow(a, env);
-							}
-							if (fn.hasRest && frame[fixed] instanceof Cell) {
-								let head: List = null;
-								let tail: List = null;
-								for (let j = frame[fixed] as List; j !== null; j = cdrCell(j)) {
-									const a = j.car;
-									const cell = new Cell(
-										a instanceof Cell
-											? yield* this.evalGen(a, env)
-											: this.evalNow(a, env),
-										null,
-									);
-									if (tail === null) head = cell;
-									else tail.cdr = cell;
-									tail = cell;
-								}
-								frame[fixed] = head;
-							}
-							if (fn instanceof BuiltInFunc) {
-								if (!this.hooks.call.isEmpty)
-									this.guardCall(fn.callName as string, frame);
-								if (fn.kind === "generator") return yield* fn.callGen(frame);
-								const value = fn.call(frame);
-								if (value instanceof Promise)
-									return fn.kind === "plain"
-										? yield* fn.settle(value)
-										: this.async.watch(value);
-								return value;
-							}
-							env = new Cell(frame, fn.env);
-							const { body } = fn;
-							x =
-								body !== null && body.cdr === null
-									? body.car
-									: yield* this.evalProgN(body, env);
-						} else {
-							throw new UnresolvedHead("not-applicable", x, fn);
-						}
-					}
-				} else if (x instanceof Lambda) {
-					return Closure.makeFrom(x, env);
-				} else {
-					return x;
-				}
+				if (!(x instanceof Cell)) return this.evalNow(x, env);
+				const next =
+					x.car instanceof Keyword
+						? yield* this.evalSpecial(x.car, x, env)
+						: yield* this.evalApplication(x, env);
+				if (!(next instanceof Tail)) return next;
+				x = next.x;
+				env = next.env;
 			}
 		} catch (ex) {
 			if (ex instanceof EvalException) {
@@ -396,6 +328,100 @@ export class Interp {
 			}
 			throw ex;
 		}
+	}
+
+	private *evalSpecial(fn: Keyword, x: Cell, env: List): Eval {
+		const arg = cdrCell(x);
+		if (!this.hooks.call.isEmpty) yield* this.guardCall(fn.name, []);
+		switch (fn) {
+			case quoteSym:
+				if (arg !== null && arg.cdr === null) return arg.car;
+				throw new EvalException("bad quote", x);
+			case prognSym:
+				return new Tail(
+					arg !== null && arg.cdr === null
+						? arg.car
+						: yield* this.evalProgN(arg, env),
+					env,
+				);
+			case condSym:
+				return new Tail(yield* this.evalCond(arg, env), env);
+			case setqSym:
+				return yield* this.evalSetQ(arg, env);
+			case trySym: {
+				const [nx, nenv] = yield* this.evalTry(arg, env);
+				return new Tail(nx, nenv);
+			}
+			case lambdaSym:
+				return this.compile(arg, env, Closure.make);
+			case macroSym:
+				if (env !== null) throw new EvalException("nested macro", x);
+				return this.compile(arg, null, Macro.make);
+			case quasiquoteSym:
+				if (arg !== null && arg.cdr === null)
+					return new Tail(qqExpand(arg.car), env);
+				throw new EvalException("bad quasiquote", x);
+			default:
+				throw new EvalException("bad keyword", fn);
+		}
+	}
+
+	private *evalApplication(x: Cell, env: List): Eval {
+		const arg = cdrCell(x);
+		const fn =
+			x.car instanceof Cell
+				? yield* this.evalGen(x.car, env)
+				: this.head(x, env);
+		if (fn instanceof Macro) {
+			yield* this.guardMacro(x);
+			return new Tail(yield* fn.expandWith(this, arg), env);
+		}
+		const applied = applicable(x, fn);
+		const frame = applied.makeFrame(arg);
+		for (let i = 0; i < applied.fixedArgs; i++) {
+			const a = frame[i];
+			frame[i] =
+				a instanceof Cell ? yield* this.evalGen(a, env) : this.evalNow(a, env);
+		}
+		for (let j = copyRest(applied, frame); j !== null; j = j.cdr as List) {
+			const a = j.car;
+			j.car =
+				a instanceof Cell ? yield* this.evalGen(a, env) : this.evalNow(a, env);
+		}
+		if (applied instanceof BuiltInFunc)
+			return yield* this.callBuiltIn(applied, frame);
+		const inner = new Cell(frame, applied.env);
+		const { body } = applied;
+		return new Tail(
+			body !== null && body.cdr === null
+				? body.car
+				: yield* this.evalProgN(body, inner),
+			inner,
+		);
+	}
+
+	private head(x: Cell, env: List): unknown {
+		const head = x.car;
+		if (!(head instanceof Sym)) return this.evalNow(head, env);
+		const fn = this.globals.get(head);
+		if (fn === undefined) throw new UnresolvedHead("undefined", x, head);
+		return fn;
+	}
+
+	private *guardMacro(x: Cell): Eval<void> {
+		if (!this.hooks.call.isEmpty && x.car instanceof Sym)
+			yield* this.guardCall(x.car.name, []);
+	}
+
+	private *callBuiltIn(fn: BuiltInFunc, frame: unknown[]): Eval {
+		if (!this.hooks.call.isEmpty)
+			yield* this.guardCall(fn.callName as string, frame);
+		if (fn.kind === "generator") return yield* fn.callGen(frame);
+		const value = fn.call(frame);
+		if (!(value instanceof Promise)) return value;
+		return fn.kind === "plain"
+			? yield* fn.settle(value)
+			: this.async.watch(value);
 	}
 
 	private *applyForm([f, args]: [unknown, List]): Eval {

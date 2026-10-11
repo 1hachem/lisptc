@@ -37,8 +37,6 @@ spec:
             preview:
               enabled: true
               number: "{{ .number }}"
-            api:
-              hostname: "lisptc-pr-{{ .number }}-api"
             app:
               hostname: "lisptc-pr-{{ .number }}"
             convex:

@@ -44,7 +44,7 @@ Anything reaching in from another package goes through an entrypoint in
 
 Nothing above this package reaches past the declared entrypoints. `apps/app`
 subscribes to the functions directly and serves the auth router at its own
-origin. `apps/api` verifies a token against that origin's JWKS instead. The
+origin. Its agent server verifies a token against the deployment's JWKS. The
 OAuth callback points at the web app, never at the deployment.
 
 A public function takes the caller from the context, never from an argument, and

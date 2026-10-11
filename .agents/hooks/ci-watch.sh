@@ -133,6 +133,7 @@ Triage it before changing anything:
    - effort: an easy, local fix, or a larger change?
 3. Show the user one table with a row per point: reviewer, file:line, a one-line summary, and your verdict on each axis with a short reason. Merge duplicates the bots raised more than once.
 4. Ask the user with AskUserQuestion (multiSelect) which points to work on; the rest are ignored. Recommend the valid, high-priority ones. Do not fix, reply to or resolve anything until they answer.
+5. Once a chosen point is fixed, tested and pushed, reply on its thread with a short description of the change and the commit that made it, then resolve the thread. A point that is answered but not fixed gets a reply and stays open.
 MSG
 )
     fi

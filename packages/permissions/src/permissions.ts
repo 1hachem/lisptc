@@ -1,3 +1,4 @@
+import type { Hold } from "@repo/interpreter/drive";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import { arrayToList, Cell, newSym, Sym } from "@repo/interpreter/objects";
@@ -23,6 +24,16 @@ const DELETE_FORM = "permission/delete";
 
 const DELETE_SYM = newSym(DELETE_FORM);
 
+const CLEAR_FORM = "permission/clear-all";
+
+const CLEAR_SYM = newSym(CLEAR_FORM);
+
+function cleared(form: Cell): PermissionRules {
+	if (form.cdr !== null)
+		throw new EvalException("permission/clear-all takes no forms", form, false);
+	return parseRules("");
+}
+
 function deleted(form: Cell): unknown {
 	const rest = form.cdr;
 	if (!(rest instanceof Cell) || rest.cdr !== null)
@@ -44,7 +55,14 @@ export class PermissionRefusal extends EvalException {
 }
 
 export class SessionRules {
-	constructor(private held: PermissionRules) {}
+	private readonly asks: ReadonlySet<string>;
+
+	constructor(
+		private held: PermissionRules,
+		asks: readonly string[] = [],
+	) {
+		this.asks = new Set(asks);
+	}
 
 	get current(): PermissionRules {
 		return this.held;
@@ -55,7 +73,14 @@ export class SessionRules {
 	}
 
 	decide(name: string): Ruling {
-		return this.held.decide(name);
+		const ruling = this.held.decide(name);
+		if (
+			ruling.verdict !== "allow" ||
+			!this.asks.has(name) ||
+			this.held.named(name) !== undefined
+		)
+			return ruling;
+		return { verdict: "ask" };
 	}
 
 	server(name: string): ServerAccess {
@@ -74,7 +99,7 @@ export interface PermissionsExtension extends InterpExtension {
 export function permissionsExtension(
 	host: PermissionsHost,
 ): PermissionsExtension {
-	const rules = new SessionRules(parseRules(host.store.source()));
+	const rules = new SessionRules(parseRules(host.store.source()), host.asks);
 	let armed = 0;
 	let issued = 0;
 
@@ -88,23 +113,50 @@ export function permissionsExtension(
 	}
 
 	const awaiting = new Map<string, Cell>();
+	const holding = new Map<
+		string,
+		{ readonly name: string; readonly hold: Hold }
+	>();
 
 	host.approvals.onResolved((request, decision) => {
+		const waiting = holding.get(request.id);
+		if (waiting !== undefined) {
+			holding.delete(request.id);
+			if (decision.approved) {
+				host.approvals.consume(request.name);
+				waiting.hold.release();
+			} else
+				waiting.hold.refuse(
+					new PermissionRefusal(
+						request.name,
+						`the user denied ${request.name}. Do not call it again`,
+					),
+				);
+		}
 		const form = awaiting.get(request.id);
-		if (form === undefined) return;
+		if (form === undefined) return undefined;
 		awaiting.delete(request.id);
 		host.approvals.consume(request.name);
-		if (decision.approved) commit(form);
+		if (!decision.approved) return undefined;
+		const { operation, verdict, reason } = ruling(form);
+		if (verdict === "deny") return denial(operation, reason, str(form));
+		try {
+			commit(form);
+		} catch (error) {
+			if (error instanceof EvalException)
+				return `it changes nothing: ${error.message}`;
+			throw error;
+		}
+		return undefined;
 	});
 
-	function askFor(
+	function ask(
 		interp: Interp,
 		name: string,
 		args: string,
 		reason: string | undefined,
-		report: string,
 		change?: Cell,
-	): never {
+	): ApprovalRequest {
 		const request: ApprovalRequest = {
 			id: `${host.clock.now().toString(36)}-${(issued++).toString(36)}`,
 			name,
@@ -117,13 +169,40 @@ export function permissionsExtension(
 		if (change !== undefined) awaiting.set(request.id, change);
 		requested.emit(interp.channels, { user: request });
 		for (const approver of host.approvers) approver.ask?.(request);
-		throw new StepHold(report);
+		return request;
 	}
 
-	function guard(interp: Interp, name: string, args: readonly unknown[]): void {
-		if (armed === 0 || name.startsWith(OWN_FORMS)) return;
+	function waitFor(interp: Interp, request: ApprovalRequest): Promise<void> {
+		const { name } = request;
+		const hold = interp.hold(
+			`${name} is waiting for the user's approval. The turn ends here; once they answer, this step carries on from the call by itself and you are told what it printed, so do not run it again`,
+		);
+		if (hold === undefined)
+			throw new StepHold(
+				`${name} is waiting for the user's approval. The turn ends here; you will be told when they answer, and after an approval run it again exactly as before`,
+			);
+		for (const [id, earlier] of holding)
+			if (earlier.name === name) {
+				holding.delete(id);
+				earlier.hold.refuse(
+					new PermissionRefusal(
+						name,
+						`${name} was asked for again, so this earlier call was dropped`,
+					),
+				);
+			}
+		holding.set(request.id, { name, hold });
+		return hold.until;
+	}
+
+	function guard(
+		interp: Interp,
+		name: string,
+		args: readonly unknown[],
+	): Promise<void> | undefined {
+		if (armed === 0 || name.startsWith(OWN_FORMS)) return undefined;
 		const { verdict, reason } = rules.decide(name);
-		if (verdict === "allow") return;
+		if (verdict === "allow") return undefined;
 		if (verdict === "deny")
 			throw new PermissionRefusal(
 				name,
@@ -131,45 +210,39 @@ export function permissionsExtension(
 			);
 		if (host.approvals.granted(name)) {
 			host.approvals.consume(name);
-			return;
+			return undefined;
 		}
-		askFor(
-			interp,
-			name,
-			summarize(args),
-			reason,
-			`${name} is waiting for the user's approval. The turn ends here; you will be told when they answer, and after an approval run it again exactly as before`,
-		);
+		return waitFor(interp, ask(interp, name, summarize(args), reason));
 	}
 
 	function apply(interp: Interp, given: unknown): unknown {
 		const form = typeof given === "string" ? readOne(given) : given;
 		if (!(form instanceof Cell))
 			throw new EvalException("not a permissions form", given, false);
-		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
 		changed(form);
 		const change = str(form);
-		const { verdict, reason } = rules.current.named(operation) ?? {
-			verdict: "ask",
-		};
+		const { operation, verdict, reason } = ruling(form);
 		if (verdict === "deny")
-			throw new PermissionRefusal(
-				operation,
-				`${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`,
-			);
-		if (verdict === "ask")
-			askFor(
-				interp,
-				change,
-				"",
-				reason ?? "changes the permissions config",
+			throw new PermissionRefusal(operation, denial(operation, reason, change));
+		if (verdict === "ask") {
+			ask(interp, change, "", reason ?? "changes the permissions config", form);
+			throw new StepHold(
 				`${change} changes the permissions config and is waiting for the user's approval. The turn ends here; once they approve it is applied, so do not run it again`,
-				form,
 			);
+		}
 		return commit(form);
 	}
 
+	function ruling(form: Cell): Ruling & { readonly operation: string } {
+		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
+		return {
+			operation,
+			...(rules.current.named(operation) ?? { verdict: "ask" }),
+		};
+	}
+
 	function changed(form: Cell): PermissionRules {
+		if (form.car === CLEAR_SYM) return cleared(form);
 		return form.car === DELETE_SYM
 			? rules.current.without(deleted(form))
 			: rules.current.with(form);
@@ -186,8 +259,10 @@ export function permissionsExtension(
 		(interp: Interp): void => {
 			registerPermissions(interp, rules, (form) => apply(interp, form));
 			interp.hooks.call.use((i, name, args, next) => {
-				guard(i, name, args);
-				next(i, name, args);
+				const waiting = guard(i, name, args);
+				return waiting === undefined
+					? next(i, name, args)
+					: waiting.then(() => next(i, name, args));
 			});
 			interp.hooks.failedForm.use(function* (i, form, error, next) {
 				if (error instanceof PermissionRefusal)
@@ -289,6 +364,17 @@ export function registerPermissions(
 			doc: `Delete one form from the permissions config, written exactly as (permission/list) shows it, e.g. (permission/delete (permission/deny eval)).${APPLIES}`,
 		},
 	);
+	interp.defineGlobal(
+		CLEAR_SYM,
+		runSync(
+			interp,
+			`(macro (&rest forms) (permission/expand "${CLEAR_FORM}" forms))`,
+		),
+		{
+			signature: "(permission/clear-all)",
+			doc: `Delete every form from the permissions config.${APPLIES}`,
+		},
+	);
 	interp.def(
 		"permission/list",
 		0,
@@ -305,6 +391,14 @@ export function registerPermissions(
 		z.tuple([zSym]),
 		([sym]) => newSym(rules.decide(sym.name).verdict),
 	);
+}
+
+function denial(
+	operation: string,
+	reason: string | undefined,
+	change: string,
+): string {
+	return `${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`;
 }
 
 function readOne(source: string): unknown {

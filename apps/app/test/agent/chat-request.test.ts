@@ -6,14 +6,19 @@ const envelope = {
 	command: undefined,
 };
 
-let chatRequestSchema: typeof import("../src/chat.ts").chatRequestSchema;
-let steerRequestSchema: typeof import("../src/chat.ts").steerRequestSchema;
+let chatRequestSchema: typeof import("../../server/agent/chat.ts").chatRequestSchema;
+let steerRequestSchema: typeof import("../../server/agent/chat.ts").steerRequestSchema;
 
 beforeAll(async () => {
-	process.env.APP_URL = "http://localhost:3000";
+	process.env.VITE_CONVEX_URL = "http://127.0.0.1:3210";
+	process.env.VITE_ENVIRONMENT = "dev";
+	process.env.VITE_POSTHOG_KEY = "test";
+	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-	({ chatRequestSchema, steerRequestSchema } = await import("../src/chat.ts"));
+	({ chatRequestSchema, steerRequestSchema } = await import(
+		"../../server/agent/chat.ts"
+	));
 });
 
 describe("the chat request contract", () => {

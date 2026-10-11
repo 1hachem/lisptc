@@ -1,6 +1,5 @@
 {{- $ingresses := list
   (dict "name" "app" "host" .Values.app.hostname "service" "app" "port" .Values.app.port)
-  (dict "name" "api" "host" .Values.api.hostname "service" "api" "port" .Values.api.port)
   (dict "name" "convex" "host" .Values.convex.hostnames.cloud "service" "convex-backend" "port" 3210)
 }}
 {{- range $ingresses }}

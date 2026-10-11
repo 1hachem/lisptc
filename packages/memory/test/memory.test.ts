@@ -143,6 +143,10 @@ describe("remembering and recalling", () => {
 		expect(await ev(f, "(memory/forget-all)")).toBe("0");
 	});
 
+	it("asks a human before forgetting everything", () => {
+		expect(memoryExtension(memoryHost).asks).toEqual(["memory/forget-all"]);
+	});
+
 	it("keeps a form as a form, not as its value", async () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "triage" \'(defun triage (i) (cdr i)))');
@@ -289,9 +293,24 @@ describe("triggers", () => {
 
 		said(f, "world go(done)");
 		expect(await drive(f.bank.hear(f.interp))).toEqual([
-			{ key: "h", body: "note" },
+			{ key: "h", body: "note", on: "user" },
 		]);
 		expect(await drive(f.bank.beginStep("(+ 1 1)", f.interp))).toBe("");
+	});
+
+	it("hands over a memory with no trigger without a kind", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "h" "note" :on '(user "world go"))`);
+		await ev(f, '(memory/remember "plain" "linked note")');
+		const h = await f.bank.store.get("h");
+		h?.links.set("plain", LINKED_FIRES_AT);
+		if (h) await f.bank.store.put(h);
+
+		said(f, "world go(done)");
+		expect(await drive(f.bank.hear(f.interp))).toEqual([
+			{ key: "h", body: "note", on: "user" },
+			{ key: "plain", body: "linked note" },
+		]);
 	});
 
 	it("keeps a memory the user's words fired open for revision", async () => {

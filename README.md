@@ -98,8 +98,8 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
 ### Apps
 
 ```
-  apps/api                An HTTP server streaming the agent loop.
-  apps/app                The web frontend.
+  apps/app                The web frontend, and the server streaming the
+                          agent loop.
   apps/cli                @lisptc/cli. The interactive terminal REPL, shipped
                           as the lisptc binary: it runs .ptc files, drops into
                           a prompt, or attaches to the shared session server

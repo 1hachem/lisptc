@@ -1,7 +1,4 @@
-import { webEnv } from "@repo/env/web";
 import { authToken } from "./auth-client.ts";
-
-export const API_URL = webEnv.VITE_API_URL;
 
 const DISTINCT_ID_KEY = "lisptc.distinct-id";
 

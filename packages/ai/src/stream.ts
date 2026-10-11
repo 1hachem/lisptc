@@ -4,7 +4,7 @@ import type { Steer, SteerInbox } from "./inbox.ts";
 import { joinRiding, replResultContent, type TranscriptEntry } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
-import { runAgentTurn } from "./turn.ts";
+import { runAgentTurn, type TurnEvent } from "./turn.ts";
 
 export interface ChatMessageInput {
 	id?: string;
@@ -54,6 +54,21 @@ function annotate(
 	const meta = { ...((kwargs.meta as Record<string, unknown>) ?? {}) };
 	mergeInto(meta, annotations);
 	return { ...message, additional_kwargs: { ...kwargs, meta } };
+}
+
+function resultMessage(
+	event: Extract<TurnEvent, { type: "result" }>,
+): WireMessage {
+	const extras: Record<string, unknown> = { ...event.annotations.output };
+	if (event.display !== event.output) extras.display = event.display;
+	if (event.failed) extras.failed = true;
+	if (event.riding !== undefined) extras.riding = event.riding;
+	return {
+		type: "tool",
+		content: replResultContent(event.output, event.error),
+		id: crypto.randomUUID(),
+		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
+	};
 }
 
 function riding(message: { additional_kwargs?: Record<string, unknown> }) {
@@ -137,6 +152,148 @@ function steerLine(steer: ChatStreamOptions["steer"]) {
 	};
 }
 
+type Of<T extends TurnEvent["type"]> = Extract<TurnEvent, { type: T }>;
+
+class TurnWire {
+	readonly wire: WireMessage[];
+	readonly carried: number;
+	readonly revised = new Map<number, WireMessage>();
+	steps = 0;
+	private lastMeta: Record<string, unknown> | undefined;
+
+	constructor(
+		input: ChatInput,
+		private readonly write: (chunk: Uint8Array) => boolean,
+	) {
+		this.wire = (input.messages ?? []).map((m, i) => ({
+			type: wireType(m.type ?? m.role),
+			content: contentToText(m.content),
+			id: m.id ?? `msg-${i}`,
+			...(m.additional_kwargs
+				? { additional_kwargs: m.additional_kwargs }
+				: {}),
+		}));
+		this.carried = this.wire.length;
+	}
+
+	snapshot(): boolean {
+		return this.write(sse("values", { messages: this.wire }));
+	}
+
+	apply(event: TurnEvent): boolean {
+		switch (event.type) {
+			case "delta":
+				return this.delta(event);
+			case "steered":
+				this.wire.push({ type: "human", content: event.content, id: event.id });
+				return this.snapshot();
+			case "collected":
+				return (
+					!this.reviseLastHuman((m) => annotate(m, event.annotations)) ||
+					this.snapshot()
+				);
+			case "rode":
+				this.reviseLastHuman((m) => carrying(m, event.text));
+				return true;
+			case "assistant":
+				this.assistant(event);
+				return true;
+			case "result":
+				return this.result(event);
+			case "halt":
+				this.steps = event.steps;
+				if (this.lastMeta) this.lastMeta.steps = event.steps;
+				this.snapshot();
+				return true;
+			case "capped":
+				this.steps = event.steps;
+				return true;
+			case "silent":
+				this.steps = event.steps;
+				console.error(
+					`[ai] the model returned an empty reply after ${event.steps} step(s)`,
+				);
+				return true;
+			case "failed":
+				console.error("[ai] chat stream failed:", event.error);
+				this.write(
+					sse("error", { error: "AgentError", message: event.message }),
+				);
+				return true;
+		}
+	}
+
+	private delta(event: Of<"delta">): boolean {
+		const chunk =
+			event.reasoning === undefined
+				? { type: "ai", id: event.stepId, content: event.text ?? "" }
+				: {
+						type: "ai",
+						id: event.stepId,
+						content: "",
+						additional_kwargs: { reasoning_content: event.reasoning },
+					};
+		return this.write(sse("messages", [chunk, {}]));
+	}
+
+	private assistant(event: Of<"assistant">): void {
+		this.lastMeta = { ...event.meta };
+		this.wire.push({
+			type: "ai",
+			content: event.code,
+			id: event.stepId,
+			additional_kwargs: {
+				...(event.reasoning ? { reasoning_content: event.reasoning } : {}),
+				prose: event.prose,
+				meta: this.lastMeta,
+			},
+		});
+	}
+
+	private result(event: Of<"result">): boolean {
+		this.steps = event.step;
+		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
+		this.wire.push(resultMessage(event));
+		return this.snapshot();
+	}
+
+	private reviseLastHuman(
+		update: (message: WireMessage) => WireMessage,
+	): boolean {
+		const at = lastHuman(this.wire);
+		if (at === -1) return false;
+		this.wire[at] = update(this.wire[at]);
+		if (at < this.carried) this.revised.set(at, this.wire[at]);
+		return true;
+	}
+}
+
+function carrying(message: WireMessage, text: string): WireMessage {
+	return {
+		...message,
+		additional_kwargs: {
+			...message.additional_kwargs,
+			riding: joinRiding(riding(message), text),
+		},
+	};
+}
+
+async function record(
+	onTurn: ChatStreamOptions["onTurn"],
+	turn: TurnWire,
+): Promise<void> {
+	if (!onTurn) return;
+	try {
+		await onTurn(turn.wire.slice(turn.carried), turn.revised);
+	} catch (error) {
+		console.error("[ai] the turn was not recorded:", error);
+	}
+}
+
+function errorText(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 export function streamChatResponse<Id extends string>(
 	input: ChatInput,
 	options: ChatStreamOptions<Id>,
@@ -159,28 +316,13 @@ export function streamChatResponse<Id extends string>(
 					return false;
 				}
 			};
-
-			const wire: WireMessage[] = (input.messages ?? []).map((m, i) => ({
-				type: wireType(m.type ?? m.role),
-				content: contentToText(m.content),
-				id: m.id ?? `msg-${i}`,
-				...(m.additional_kwargs
-					? { additional_kwargs: m.additional_kwargs }
-					: undefined),
-			}));
-
-			const carried = wire.length;
-			let steps = 0;
-			let lastMeta: Record<string, unknown> | undefined;
-			const revised = new Map<number, WireMessage>();
+			const turn = new TurnWire(input, write);
 			const steering = steerLine(steer);
 
 			try {
 				await steering.open();
-				write(sse("values", { messages: wire }));
-
+				turn.snapshot();
 				const repl = await replFrom(options);
-
 				for await (const event of runAgentTurn(toTranscript(input), {
 					repl,
 					threadId,
@@ -188,117 +330,20 @@ export function streamChatResponse<Id extends string>(
 					signal: abort.signal,
 					identity,
 					inbox: steering.take,
-				})) {
-					if (event.type === "delta") {
-						const chunk: Record<string, unknown> = {
-							type: "ai",
-							id: event.stepId,
-						};
-						if (event.reasoning !== undefined) {
-							chunk.content = "";
-							chunk.additional_kwargs = {
-								reasoning_content: event.reasoning,
-							};
-						} else {
-							chunk.content = event.text ?? "";
-						}
-						if (!write(sse("messages", [chunk, {}]))) break;
-					} else if (event.type === "steered") {
-						wire.push({ type: "human", content: event.content, id: event.id });
-						if (!write(sse("values", { messages: wire }))) break;
-					} else if (event.type === "collected") {
-						const at = lastHuman(wire);
-						if (at === -1) continue;
-						wire[at] = annotate(wire[at], event.annotations);
-						if (at < carried) revised.set(at, wire[at]);
-						if (!write(sse("values", { messages: wire }))) break;
-					} else if (event.type === "rode") {
-						const at = lastHuman(wire);
-						if (at === -1) continue;
-						const carrier = wire[at];
-						wire[at] = {
-							...carrier,
-							additional_kwargs: {
-								...carrier.additional_kwargs,
-								riding: joinRiding(riding(carrier), event.text),
-							},
-						};
-						if (at < carried) revised.set(at, wire[at]);
-					} else if (event.type === "assistant") {
-						lastMeta = { ...event.meta };
-						wire.push({
-							type: "ai",
-							content: event.code,
-							id: event.stepId,
-							additional_kwargs: {
-								...(event.reasoning
-									? { reasoning_content: event.reasoning }
-									: {}),
-								prose: event.prose,
-								meta: lastMeta,
-							},
-						});
-					} else if (event.type === "result") {
-						steps = event.step;
-						if (lastMeta) mergeInto(lastMeta, event.annotations.step);
-						const extras: Record<string, unknown> = {
-							...event.annotations.output,
-						};
-						if (event.display !== event.output) extras.display = event.display;
-						if (event.failed) extras.failed = true;
-						wire.push({
-							type: "tool",
-							content: replResultContent(event.output, event.error),
-							id: crypto.randomUUID(),
-							...(Object.keys(extras).length > 0
-								? { additional_kwargs: extras }
-								: undefined),
-						});
-						if (!write(sse("values", { messages: wire }))) break;
-					} else if (event.type === "halt") {
-						steps = event.steps;
-						if (lastMeta) lastMeta.steps = event.steps;
-						write(sse("values", { messages: wire }));
-					} else if (event.type === "capped") {
-						steps = event.steps;
-					} else if (event.type === "silent") {
-						steps = event.steps;
-						console.error(
-							`[ai] the model returned an empty reply after ${event.steps} step(s)`,
-						);
-					} else {
-						console.error("[ai] chat stream failed:", event.error);
-						write(
-							sse("error", {
-								error: "AgentError",
-								message: event.message,
-							}),
-						);
-					}
-				}
+				}))
+					if (!turn.apply(event)) break;
 			} catch (error) {
 				console.error("[ai] the turn could not run:", error);
-				write(
-					sse("error", {
-						error: "AgentError",
-						message: error instanceof Error ? error.message : String(error),
-					}),
-				);
+				write(sse("error", { error: "AgentError", message: errorText(error) }));
 			} finally {
 				await steering
 					.close()
 					.catch((error) =>
 						console.error("[ai] the steer inbox did not close:", error),
 					);
-				if (onTurn) {
-					try {
-						await onTurn(wire.slice(carried), revised);
-					} catch (error) {
-						console.error("[ai] the turn was not recorded:", error);
-					}
-				}
+				await record(onTurn, turn);
 				console.log(
-					`[ai] chat stream closed after ${steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
+					`[ai] chat stream closed after ${turn.steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);
 				closed = true;
 				try {

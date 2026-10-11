@@ -6,7 +6,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { API_URL, apiHeaders } from "../lib/api.ts";
+import { apiHeaders } from "../lib/api.ts";
 import {
 	awaitingChat,
 	callbackState,
@@ -32,7 +32,7 @@ type Phase =
 type Finished = { server: string } | { failure: string };
 
 async function finishCallback(url: string): Promise<Finished> {
-	const response = await fetch(`${API_URL}/api/oauth/callback`, {
+	const response = await fetch("/api/oauth/callback", {
 		method: "POST",
 		headers: await apiHeaders(),
 		body: JSON.stringify({ url }),

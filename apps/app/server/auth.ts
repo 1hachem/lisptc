@@ -1,5 +1,5 @@
 import { convexBetterAuthReactStart } from "@convex-dev/better-auth/react-start";
-import { appServerEnv } from "@repo/env/app";
+import { webEnv } from "@repo/env/web";
 import { ConvexError } from "convex/values";
 
 const UNAUTHENTICATED = new Set(["UNAUTHENTICATED", "NOT_PROVISIONED"]);
@@ -16,7 +16,7 @@ function isAuthError(error: unknown): boolean {
 
 export const { handler: authHandler, getToken: authToken } =
 	convexBetterAuthReactStart({
-		convexUrl: appServerEnv.CONVEX_URL,
-		convexSiteUrl: appServerEnv.CONVEX_SITE_URL,
+		convexUrl: webEnv.CONVEX_URL,
+		convexSiteUrl: webEnv.CONVEX_SITE_URL,
 		jwtCache: { enabled: true, isAuthError },
 	});
