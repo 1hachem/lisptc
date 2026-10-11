@@ -552,7 +552,13 @@ describe("clearing the permissions config", () => {
 			approved: true,
 			scope: "session",
 		});
-		await s.step("(permission/deny eval)");
+		const [deny] = (await s.step("(permission/deny eval)")).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: deny.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(s.host.store.source()).toBe("(permission/deny eval)\n");
 		expect((await s.step(CLEAR)).held).toBe(true);
 	});
 
