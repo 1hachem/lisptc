@@ -117,7 +117,7 @@ function ToastPositionPicker() {
 	const { toastPosition, chooseToastPosition } = useAppearance();
 	return (
 		<div className="px-4">
-			<div className="grid h-12 grid-cols-3 grid-rows-[auto_1fr_auto] border border-bg2 p-0.5">
+			<div className="grid grid-cols-3 grid-rows-2 gap-0.5 border border-bg2 p-0.5">
 				{toastPositions.map((position) => {
 					const chosen = position === toastPosition;
 					const label = position.replace("-", " ");
@@ -129,7 +129,7 @@ function ToastPositionPicker() {
 							aria-label={label}
 							title={label}
 							onClick={() => chooseToastPosition(position)}
-							className={`h-3 cursor-pointer p-0.5${position.startsWith("bottom") ? "row-start-3" : ""}`}
+							className="h-5 cursor-pointer"
 						>
 							<span
 								className={`block h-full ${chosen ? "bg-fg" : "bg-bg2 hover:bg-dim"}`}

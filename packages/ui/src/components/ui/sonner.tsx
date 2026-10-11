@@ -68,8 +68,9 @@ function Toaster({
 				} as React.CSSProperties
 			}
 			toastOptions={{
+				style: { padding: "8px 12px", gap: "8px", minHeight: 0 },
 				classNames: {
-					toast: "gap-2 px-3 py-2 font-mono text-xs",
+					toast: "font-mono text-xs leading-tight",
 					description: "text-muted-foreground",
 				},
 			}}
