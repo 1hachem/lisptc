@@ -504,6 +504,26 @@ describe("deleting a permissions form", () => {
 		expect((await s.step(UPCASE)).failed).toBe(true);
 	});
 
+	it("says it changed nothing when the form is gone by the time it is approved", async () => {
+		const s = session("(permission/deny string-upcase)");
+		const [request] = (await s.step(DELETE)).requests;
+		const [clear] = (await s.step("(permission/clear-all)")).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: clear.id,
+			approved: true,
+			scope: "once",
+		});
+		const decided = await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(decided.message).toBe(
+			`I approved ${DELETE}, but it changes nothing: no such permissions form: (permission/deny string-upcase).`,
+		);
+		expect(s.host.store.source()).toBe("");
+	});
+
 	it("takes exactly one form", async () => {
 		const s = session("(permission/deny eval)");
 		expect((await s.step("(permission/delete)")).failed).toBe(true);
@@ -560,6 +580,30 @@ describe("clearing the permissions config", () => {
 		});
 		expect(s.host.store.source()).toBe("(permission/deny eval)\n");
 		expect((await s.step(CLEAR)).held).toBe(true);
+	});
+
+	it("refuses a pending clear once a rule approved meanwhile denies clearing", async () => {
+		const s = session(HELD);
+		const [clear] = (await s.step(CLEAR)).requests;
+		const [guard] = (await s.step("(permission/deny permission/clear-all)"))
+			.requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: guard.id,
+			approved: true,
+			scope: "once",
+		});
+		const decided = await s.invoke(DECIDE_ACTION, {
+			id: clear.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(decided.message).toBe(
+			`I approved ${CLEAR}, but permission/clear-all is denied by the permissions config, so ${CLEAR} changes nothing. Do not run it again.`,
+		);
+		expect(s.host.store.source()).toBe(
+			`${HELD}(permission/deny permission/clear-all)\n`,
+		);
+		expect((await s.step(UPCASE)).failed).toBe(true);
 	});
 
 	it("never clears once the user denies it", async () => {

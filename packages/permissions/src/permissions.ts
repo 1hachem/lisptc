@@ -134,10 +134,20 @@ export function permissionsExtension(
 				);
 		}
 		const form = awaiting.get(request.id);
-		if (form === undefined) return;
+		if (form === undefined) return undefined;
 		awaiting.delete(request.id);
 		host.approvals.consume(request.name);
-		if (decision.approved) commit(form);
+		if (!decision.approved) return undefined;
+		const { operation, verdict, reason } = ruling(form);
+		if (verdict === "deny") return denial(operation, reason, str(form));
+		try {
+			commit(form);
+		} catch (error) {
+			if (error instanceof EvalException)
+				return `it changes nothing: ${error.message}`;
+			throw error;
+		}
+		return undefined;
 	});
 
 	function ask(
@@ -209,17 +219,11 @@ export function permissionsExtension(
 		const form = typeof given === "string" ? readOne(given) : given;
 		if (!(form instanceof Cell))
 			throw new EvalException("not a permissions form", given, false);
-		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
 		changed(form);
 		const change = str(form);
-		const { verdict, reason } = rules.current.named(operation) ?? {
-			verdict: "ask",
-		};
+		const { operation, verdict, reason } = ruling(form);
 		if (verdict === "deny")
-			throw new PermissionRefusal(
-				operation,
-				`${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`,
-			);
+			throw new PermissionRefusal(operation, denial(operation, reason, change));
 		if (verdict === "ask") {
 			ask(interp, change, "", reason ?? "changes the permissions config", form);
 			throw new StepHold(
@@ -227,6 +231,14 @@ export function permissionsExtension(
 			);
 		}
 		return commit(form);
+	}
+
+	function ruling(form: Cell): Ruling & { readonly operation: string } {
+		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
+		return {
+			operation,
+			...(rules.current.named(operation) ?? { verdict: "ask" }),
+		};
 	}
 
 	function changed(form: Cell): PermissionRules {
@@ -379,6 +391,14 @@ export function registerPermissions(
 		z.tuple([zSym]),
 		([sym]) => newSym(rules.decide(sym.name).verdict),
 	);
+}
+
+function denial(
+	operation: string,
+	reason: string | undefined,
+	change: string,
+): string {
+	return `${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`;
 }
 
 function readOne(source: string): unknown {
