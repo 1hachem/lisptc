@@ -2,7 +2,7 @@ import type { Hold } from "@repo/interpreter/drive";
 import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
 import { SessionRules } from "../src/permissions.ts";
-import { parseRules } from "../src/rules.ts";
+import { MemoryPermissionsStore } from "../src/ports.ts";
 import { DECIDE_ACTION } from "../src/ui-approver.ts";
 import { recordingApprover, session } from "./helpers.ts";
 
@@ -677,14 +677,13 @@ describe("reporting a decision", () => {
 	});
 });
 
-describe("following the session's rules", () => {
-	it("tells every listener when the rules are replaced, until it stops listening", () => {
-		const rules = new SessionRules(parseRules(""));
-		const heard: string[] = [];
-		const stop = rules.onChange(() => heard.push(rules.current.source));
-		rules.replace(parseRules("(permission/deny eval)"));
-		stop();
-		rules.replace(parseRules(""));
-		expect(heard).toEqual(["(permission/deny eval)"]);
+describe("following the saved config", () => {
+	it("decides by what the store holds now, not what it held at the start", () => {
+		const store = new MemoryPermissionsStore("(permission/deny eval)");
+		const rules = new SessionRules(store);
+		expect(rules.decide("eval").verdict).toBe("deny");
+		store.save("(permission/server fx (hide echo))");
+		expect(rules.decide("eval").verdict).toBe("allow");
+		expect(rules.tool("fx", "echo")).toBe(false);
 	});
 });
