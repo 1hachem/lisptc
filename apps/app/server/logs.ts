@@ -34,7 +34,8 @@ function provider(token: string): LoggerProvider {
 	return new LoggerProvider({
 		resource: resourceFromAttributes({
 			[ATTR_SERVICE_NAME]: SERVICE_NAME,
-			[ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: webEnv.VITE_ENVIRONMENT,
+			[ATTR_DEPLOYMENT_ENVIRONMENT_NAME]:
+				analyticsEnv.POSTHOG_ENVIRONMENT ?? webEnv.VITE_ENVIRONMENT,
 		}),
 		processors: [
 			new BatchLogRecordProcessor({

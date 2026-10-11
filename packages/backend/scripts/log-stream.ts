@@ -3,7 +3,9 @@ import { backendServiceName, syncPostHogLogStream } from "../src/log-stream.ts";
 
 const token = convexAdminEnv.POSTHOG_API_KEY;
 if (token) {
-	const serviceName = backendServiceName(convexAdminEnv.VITE_ENVIRONMENT);
+	const serviceName = backendServiceName(
+		convexAdminEnv.POSTHOG_ENVIRONMENT ?? convexAdminEnv.VITE_ENVIRONMENT,
+	);
 	const outcome = await syncPostHogLogStream({
 		deploymentUrl: convexAdminEnv.CONVEX_SELF_HOSTED_URL,
 		adminKey: convexAdminEnv.CONVEX_SELF_HOSTED_ADMIN_KEY,

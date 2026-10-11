@@ -47,6 +47,7 @@ beforeAll(async () => {
 	process.env.POSTHOG_HOST = `http://127.0.0.1:${port}`;
 	process.env.VITE_CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.VITE_ENVIRONMENT = "prod";
+	process.env.POSTHOG_ENVIRONMENT = "pr-42";
 	process.env.VITE_POSTHOG_KEY = "test";
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
@@ -58,7 +59,7 @@ afterAll(() => {
 	server.close();
 });
 
-test("console output reaches posthog as the app service in its environment", async () => {
+test("console output reaches posthog as the app service in the posthog environment", async () => {
 	logs.startLogs();
 	console.warn("slow turn %dms", 1200);
 	await logs.shutdownLogs();
@@ -76,7 +77,7 @@ test("console output reaches posthog as the app service in its environment", asy
 		]),
 	);
 	expect(attributes["service.name"]).toBe("app");
-	expect(attributes["deployment.environment.name"]).toBe("prod");
+	expect(attributes["deployment.environment.name"]).toBe("pr-42");
 
 	const records = resourceLogs?.scopeLogs.flatMap((s) => s.logRecords) ?? [];
 	expect(records).toContainEqual(

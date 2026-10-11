@@ -24,6 +24,8 @@ https://{{ . }}.$(TAILNET_DOMAIN)
     secretKeyRef:
       name: {{ $ctx.Values.preview.tailnetSecret }}
       key: TAILNET_DOMAIN
+- name: POSTHOG_ENVIRONMENT
+  value: {{ printf "pr-%v" $ctx.Values.preview.number | quote }}
 {{- range $name, $host := $vars }}
 - name: {{ $name }}
   value: {{ include "lisptc.url" $host | quote }}
