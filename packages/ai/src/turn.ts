@@ -69,6 +69,7 @@ export type TurnEvent =
 			display: string;
 			error: boolean;
 			annotations: StepAnnotations;
+			riding?: string;
 			failed: boolean;
 	  }
 	| { type: "collected"; annotations: Annotations }
@@ -244,10 +245,8 @@ async function* evaluateStep(
 	transcript.push({ role: "assistant", content: code });
 
 	const evalStartedAt = Date.now();
-	const { output, display, error, annotations, failed, held } = await evalCode(
-		repl,
-		code,
-	);
+	const { output, display, error, annotations, emitted, failed, held } =
+		await evalCode(repl, code);
 	turn.steps += 1;
 	const step = turn.steps;
 
@@ -267,10 +266,21 @@ async function* evaluateStep(
 	);
 	if (verdict === "halt" && !held) return verdict;
 
-	yield { type: "result", step, output, display, error, annotations, failed };
+	const riding = emitted === "" ? {} : { riding: emitted };
+	yield {
+		type: "result",
+		step,
+		output,
+		display,
+		error,
+		annotations,
+		failed,
+		...riding,
+	};
 	transcript.push({
 		role: "tool",
-		content: replResultContent(output, error, annotations.step),
+		content: replResultContent(output, error),
+		...riding,
 	});
 	if (verdict === "halt") return verdict;
 	return capped ? "capped" : verdict;

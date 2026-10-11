@@ -14,6 +14,7 @@ kind: Deployment
 metadata:
   name: convex-dashboard
   annotations:
+    argocd.argoproj.io/sync-wave: "2"
     secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1

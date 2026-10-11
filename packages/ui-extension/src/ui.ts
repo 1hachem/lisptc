@@ -2,7 +2,7 @@ import { type Channels, topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
 import { driveAsync } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { callableArity } from "@repo/interpreter/func";
+import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	Cell,
@@ -593,11 +593,51 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		([view]) => {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
-			surface.render(view);
-			const { elements, actions } = summarize(view);
-			return `rendered ${view.tag}, ${elements} element${elements === 1 ? "" : "s"}, ${actions} action${actions === 1 ? "" : "s"}`;
+			return renderView(surface, view);
 		},
 	);
+
+	const textEcho = interp.getGlobal(newSym("echo"));
+	const textEchoDoc = interp.docs().get("echo");
+	if (
+		!(textEcho instanceof BuiltInFunc) ||
+		textEcho.kind !== "plain" ||
+		textEchoDoc === undefined
+	)
+		throw new Error("ui extension wraps a plain echo builtin");
+	interp.def(
+		"echo",
+		-1,
+		textEchoDoc.signature,
+		`${textEchoDoc.doc} When any argument is a widget, the whole echo is rendered instead, as \`ui/render\` would: the widget alone, or a \`ui/stack\` of every argument in order with the rest as \`ui/text\`, and it returns the one-line summary \`ui/render\` returns.`,
+		z.tuple([zList]),
+		([rest]) => {
+			const args = listElements(rest) ?? [];
+			if (!args.some((x) => x instanceof UiElement))
+				return textEcho.call([rest]);
+			const nodes = args.map((x) =>
+				x instanceof UiElement
+					? x
+					: new UiElement("text", {
+							text: typeof x === "string" ? x : str(x, false),
+						}),
+			);
+			const [only] = nodes;
+			return renderView(
+				surface,
+				nodes.length === 1 && only !== undefined
+					? only
+					: new UiElement("stack", {}, nodes),
+			);
+		},
+		textEchoDoc.args,
+	);
+}
+
+function renderView(surface: UiSurface, view: UiElement): string {
+	surface.render(view);
+	const { elements, actions } = summarize(view);
+	return `rendered ${view.tag}, ${elements} element${elements === 1 ? "" : "s"}, ${actions} action${actions === 1 ? "" : "s"}`;
 }
 
 export interface UiHost {

@@ -139,6 +139,7 @@ function fires(trigger: Trigger, event: MemoryEvent): boolean {
 export interface FiredMemory {
 	key: string;
 	body: string;
+	on?: TriggerKind;
 }
 
 export const fired = topic<FiredMemory>("memory");
@@ -282,7 +283,7 @@ export class MemoryBank {
 		this.fired.add(memory.key);
 		this.open.add(memory.key);
 		yield* this.reinforce(memory);
-		this.surface(memory.key, bodyText(memory.body));
+		this.surface(memory);
 		this.depth++;
 		try {
 			yield* this.dispatch({ kind: "recall", text: memory.key }, interp);
@@ -334,7 +335,9 @@ export class MemoryBank {
 		}
 	}
 
-	private surface(key: string, body: string): void {
+	private surface(memory: Memory): void {
+		const key = memory.key;
+		const body = bodyText(memory.body);
 		const line = `${key}: ${body}\n`;
 		const words = line.split(/\s+/).filter((w) => w !== "").length;
 		if (this.spent >= MAX_RECALL_WORDS) {
@@ -343,8 +346,12 @@ export class MemoryBank {
 		}
 		this.spent += words;
 		this.pending += line;
-		this.surfaced.push({ key, body });
-		fired.emit(this.channels, { user: { key, body } });
+		const surfaced: FiredMemory =
+			memory.on === undefined
+				? { key, body }
+				: { key, body, on: memory.on.kind };
+		this.surfaced.push(surfaced);
+		fired.emit(this.channels, { user: surfaced });
 	}
 }
 

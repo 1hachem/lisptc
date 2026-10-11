@@ -29,7 +29,7 @@ export interface CheckEvaluator {
 export type TranscriptEntry =
 	| { role: "user"; content: string }
 	| { role: "assistant"; content: string }
-	| { role: "tool"; content: string };
+	| { role: "tool"; content: string; riding?: string };
 
 export type EvalTurnEvent =
 	| {
@@ -51,15 +51,12 @@ export interface EvalResult {
 	output: string;
 	error: boolean;
 	annotations: { step: Record<string, unknown> };
+	emitted: string;
 }
 
 export interface AgentDriver<Repl> {
 	eval(repl: Repl, code: string): Promise<EvalResult>;
-	resultContent(
-		output: string,
-		error: boolean,
-		step: Record<string, unknown>,
-	): string;
+	resultContent(output: string, error: boolean): string;
 	systemPrompt(repl: Repl): string;
 	turn(
 		transcript: TranscriptEntry[],
@@ -273,6 +270,110 @@ function describeCase<Spec extends EvalSpec, Repl>(
 	};
 }
 
+async function replaySeed<Repl>(
+	agent: AgentDriver<Repl>,
+	repl: Repl,
+	seed: SeedEntry[],
+	transcript: TranscriptEntry[],
+	see: See,
+): Promise<void> {
+	for (const entry of seed) {
+		if ("user" in entry) {
+			transcript.push({ role: "user", content: entry.user });
+			see({ role: "user", content: entry.user });
+			continue;
+		}
+		const { output, error, annotations, emitted } = await agent.eval(
+			repl,
+			entry.assistant,
+		);
+		transcript.push({ role: "assistant", content: entry.assistant });
+		transcript.push({
+			role: "tool",
+			content: agent.resultContent(output, error),
+			...(emitted === "" ? {} : { riding: emitted }),
+		});
+		see({ role: "assistant", content: entry.assistant });
+		see({ role: "tool", content: output }, annotations.step);
+	}
+}
+
+interface Tally {
+	steps: number;
+	halted: boolean;
+	silent: boolean;
+	answer: string;
+	inputTokens: number;
+	outputTokens: number;
+}
+
+type See = (
+	line: TranscriptLine,
+	annotations?: Record<string, unknown>,
+) => void;
+
+async function runPrelude<Repl>(
+	agent: AgentDriver<Repl>,
+	repl: Repl,
+	trace: EvalTrace,
+	prelude: string | undefined,
+): Promise<void> {
+	if (prelude === undefined) return;
+	const before = trace.mark();
+	const { output, error } = await agent.eval(repl, prelude);
+	if (error || trace.refusedSince(before))
+		throw new Error(`the prelude did not run: ${output}`);
+}
+
+async function followTurn(
+	events: AsyncIterable<EvalTurnEvent>,
+	trace: EvalTrace,
+	checks: CheckEvaluator,
+	see: See,
+): Promise<Tally> {
+	const tally: Tally = {
+		steps: 0,
+		halted: false,
+		silent: false,
+		answer: "",
+		inputTokens: 0,
+		outputTokens: 0,
+	};
+	let collected: Record<string, unknown> = {};
+	for await (const event of events) {
+		switch (event.type) {
+			case "assistant":
+				tally.steps += 1;
+				trace.beginStep(tally.steps);
+				trace.reply(event.code);
+				see({ role: "assistant", content: event.code }, collected);
+				collected = {};
+				tally.inputTokens = event.meta.inputTokens ?? tally.inputTokens;
+				tally.outputTokens += event.meta.outputTokens ?? 0;
+				break;
+			case "collected":
+				collected = { ...collected, ...event.annotations };
+				break;
+			case "result":
+				see({ role: "tool", content: event.output }, event.annotations.step);
+				checks.evaluate(tally.steps);
+				break;
+			case "halt":
+				tally.halted = true;
+				tally.answer = event.answer;
+				trace.halt(event.answer);
+				checks.evaluate(tally.steps);
+				break;
+			case "silent":
+				tally.silent = true;
+				break;
+			case "failed":
+				throw new Error(event.message);
+		}
+	}
+	return tally;
+}
+
 export async function runCase<Spec extends EvalSpec, Repl>(
 	runtime: EvalRuntime<Spec, Repl>,
 	spec: Spec,
@@ -281,104 +382,37 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 	const { repl, trace, checks } = runtime.open(spec);
 	const transcript: TranscriptEntry[] = [];
 	const seen: TranscriptLine[] = [];
-	let collected: Record<string, unknown> = {};
-
-	const see = (
-		line: TranscriptLine,
-		annotations: Record<string, unknown> = {},
-	): void => {
+	const see: See = (line, annotations = {}) => {
 		seen.push(
 			Object.keys(annotations).length === 0 ? line : { ...line, annotations },
 		);
 	};
 
-	if (spec.prelude !== undefined) {
-		const before = trace.mark();
-		const { output, error } = await runtime.agent.eval(repl, spec.prelude);
-		if (error || trace.refusedSince(before))
-			throw new Error(`the prelude did not run: ${output}`);
-	}
-
+	await runPrelude(runtime.agent, repl, trace, spec.prelude);
 	trace.beginStep(0);
-	for (const entry of spec.seed ?? []) {
-		if ("user" in entry) {
-			transcript.push({ role: "user", content: entry.user });
-			see({ role: "user", content: entry.user });
-			continue;
-		}
-		const { output, error, annotations } = await runtime.agent.eval(
-			repl,
-			entry.assistant,
-		);
-		transcript.push({ role: "assistant", content: entry.assistant });
-		transcript.push({
-			role: "tool",
-			content: runtime.agent.resultContent(output, error, annotations.step),
-		});
-		see({ role: "assistant", content: entry.assistant });
-		see({ role: "tool", content: output }, annotations.step);
-	}
+	await replaySeed(runtime.agent, repl, spec.seed ?? [], transcript, see);
 
-	let steps = 0;
-	let halted = false;
-	let silent = false;
-	let answer = "";
-	let inputTokens = 0;
-	let outputTokens = 0;
 	const startedAt = Date.now();
-
-	for await (const event of runtime.agent.turn(transcript, {
-		repl,
-		maxSteps: spec.max,
-		target,
-		system: spec.system ?? runtime.agent.systemPrompt(repl),
-	})) {
-		if (event.type === "assistant") {
-			steps += 1;
-			trace.beginStep(steps);
-			trace.reply(event.code);
-			see({ role: "assistant", content: event.code }, collected);
-			collected = {};
-			inputTokens = event.meta.inputTokens ?? inputTokens;
-			outputTokens += event.meta.outputTokens ?? 0;
-			continue;
-		}
-		if (event.type === "collected") {
-			collected = { ...collected, ...event.annotations };
-			continue;
-		}
-		if (event.type === "result") {
-			see({ role: "tool", content: event.output }, event.annotations.step);
-			checks.evaluate(steps);
-			continue;
-		}
-		if (event.type === "halt") {
-			halted = true;
-			answer = event.answer;
-			trace.halt(event.answer);
-			checks.evaluate(steps);
-			continue;
-		}
-		if (event.type === "silent") {
-			silent = true;
-			continue;
-		}
-		if (event.type === "failed") throw new Error(event.message);
-	}
+	const tally = await followTurn(
+		runtime.agent.turn(transcript, {
+			repl,
+			maxSteps: spec.max,
+			target,
+			system: spec.system ?? runtime.agent.systemPrompt(repl),
+		}),
+		trace,
+		checks,
+		see,
+	);
 
 	const verdicts = checks.results();
 	return {
 		provider: target.provider,
 		model: target.model,
-		grade: grade(spec, verdicts, steps, halted),
-		steps,
+		grade: grade(spec, verdicts, tally.steps, tally.halted),
+		...tally,
 		min: spec.min,
 		max: spec.max,
-		halted,
-		silent,
-		answer,
-		inputTokens,
-		outputTokens,
 		durationMs: Date.now() - startedAt,
 		errors: trace.errors(),
 		skips: trace.skips(),
