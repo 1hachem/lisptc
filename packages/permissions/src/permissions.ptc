@@ -10,7 +10,8 @@ needs the user's approval.
 The config is written in forms you can also run: permission/default,
 permission/allow, permission/deny, permission/ask, permission/server,
 permission/deny-server and permission/hide-server. (permission/delete form)
-removes one form, written exactly as (permission/list) shows it.
+removes one form, written exactly as (permission/list) shows it, and
+(permission/clear-all) removes every form.
   Example: (permission/server playwright (only browser_navigate)) leaves the
   playwright server with that one tool.
   Example: (permission/delete (permission/deny eval)) .
