@@ -59,4 +59,68 @@ describe("the mcp policy port", () => {
 		expect(() => runSync(interp, LOAD_FX)).toThrow("unknown MCP server");
 		expect(str(runSync(interp, "(list-toolkit)"))).toBe("nil");
 	});
+
+	describe("a policy that changes", () => {
+		function changing() {
+			const hidden = new Set<string>();
+			let access: ServerAccess = { access: "open" };
+			const listeners = new Set<() => void>();
+			const policy: McpPolicy = {
+				server: () => access,
+				tool: (_server, tool) => !hidden.has(tool),
+				onChange(listener) {
+					listeners.add(listener);
+					return () => {
+						listeners.delete(listener);
+					};
+				},
+			};
+			const change = (next: () => void) => {
+				next();
+				for (const listener of listeners) listener();
+			};
+			return {
+				policy,
+				listeners,
+				hide: (tool: string) => change(() => hidden.add(tool)),
+				show: (tool: string) => change(() => hidden.delete(tool)),
+				server: (next: ServerAccess) =>
+					change(() => {
+						access = next;
+					}),
+			};
+		}
+
+		it("unbinds a tool hidden after load, and binds it again once shown", async () => {
+			const live = changing();
+			const interp = interpWith(live.policy);
+			await (runSync(interp, LOAD_FX) as Promise<unknown>);
+			live.hide("echo");
+			expect(() => runSync(interp, "(fx/echo)")).toThrow("undefined");
+			expect(str(runSync(interp, '(list-tools "fx")'))).not.toContain(
+				"fx/echo",
+			);
+			live.show("echo");
+			expect(str(runSync(interp, '(list-tools "fx")'))).toContain("fx/echo");
+			interp.dispose();
+		}, 30_000);
+
+		it("unloads a server hidden or denied after load", async () => {
+			const live = changing();
+			const interp = interpWith(live.policy);
+			await (runSync(interp, LOAD_FX) as Promise<unknown>);
+			live.server({ access: "denied" });
+			expect(str(runSync(interp, "(list-mcps)"))).not.toContain("fx");
+			expect(() => runSync(interp, "(fx/echo)")).toThrow("undefined");
+			interp.dispose();
+		}, 30_000);
+
+		it("stops listening once disposed", () => {
+			const live = changing();
+			const interp = interpWith(live.policy);
+			expect(live.listeners.size).toBe(1);
+			interp.dispose();
+			expect(live.listeners.size).toBe(0);
+		});
+	});
 });

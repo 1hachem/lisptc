@@ -119,6 +119,7 @@ export type ServerAccess =
 export interface McpPolicy {
 	server(name: string): ServerAccess;
 	tool(server: string, tool: string): boolean;
+	onChange?(listener: () => void): () => void;
 }
 
 export const openPolicy: McpPolicy = {
