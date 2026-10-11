@@ -45,7 +45,7 @@ tasks:
     desc: make ArgoCD pull main now instead of on its next poll
     deps: [_reachable]
     cmd: |
-      for app in root secrets lisptc argocd-image-updater; do
+      for app in root secrets lisptc argocd-image-updater cloudnative-pg kube-prometheus-stack loki alloy; do
         kubectl -n argocd annotate application "$app" argocd.argoproj.io/refresh=hard --overwrite
       done
 

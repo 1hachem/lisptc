@@ -1,0 +1,85 @@
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    retentionSize: 9GB
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+grafana:
+  admin:
+    existingSecret: grafana-admin
+    userKey: GRAFANA_USERNAME
+    passwordKey: GRAFANA_PASSWORD
+  persistence:
+    enabled: true
+    type: sts
+    accessModes: ["ReadWriteOnce"]
+    size: 2Gi
+  sidecar:
+    dashboards:
+      searchNamespace: ALL
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+
+extraManifests:
+  - apiVersion: secrets.infisical.com/v1alpha1
+    kind: InfisicalSecret
+    metadata:
+      name: infisical-grafana
+      namespace: monitoring
+    spec:
+      hostAPI: https://app.infisical.com/api
+      syncConfig:
+        resyncInterval: "1m"
+      authentication:
+        universalAuth:
+          secretsScope:
+            projectSlug: listptc-nz-qj
+            envSlug: prod
+            secretsPath: /grafana
+          credentialsRef:
+            secretName: lisptc-infisical-cred
+            secretNamespace: infisical
+      managedKubeSecretReferences:
+        - secretName: grafana-admin
+          secretNamespace: monitoring
+          creationPolicy: Orphan
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: grafana
+      namespace: monitoring
+    spec:
+      ingressClassName: tailscale
+      defaultBackend:
+        service:
+          name: kube-prometheus-stack-grafana
+          port:
+            number: 80
+      tls:
+        - hosts:
+            - lisptc-grafana
