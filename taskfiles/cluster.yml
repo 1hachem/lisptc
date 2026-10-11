@@ -57,11 +57,6 @@ tasks:
       kubectl -n lisptc get pods
       kubectl get ingress -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.status.loadBalancer.ingress[0].hostname
 
-  argocd:password:
-    desc: print the initial ArgoCD admin password
-    deps: [_reachable]
-    cmd: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
-
   convex:admin-key:
     desc: generate a convex admin key, to store in Infisical prod /convex as CONVEX_SELF_HOSTED_ADMIN_KEY
     deps: [_reachable]
