@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./analytics": "./src/analytics.ts",
+    "./convex-admin": "./src/convex-admin.ts",
     "./dashi-codes": "./src/dashi-codes.ts",
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",
