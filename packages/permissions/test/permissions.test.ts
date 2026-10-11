@@ -511,6 +511,78 @@ describe("deleting a permissions form", () => {
 	});
 });
 
+describe("clearing the permissions config", () => {
+	const CLEAR = "(permission/clear-all)";
+	const HELD = "(permission/deny string-upcase)\n(permission/deny eval)\n";
+
+	it("waits for the user's approval, and changes nothing until then", async () => {
+		const s = session(HELD);
+		const asked = await s.step(CLEAR);
+		expect(asked.failed).toBe(false);
+		expect(asked.held).toBe(true);
+		expect(asked.requests).toEqual([
+			expect.objectContaining({
+				name: CLEAR,
+				reason: "changes the permissions config",
+				change: true,
+			}),
+		]);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+		expect(s.host.store.source()).toBe(HELD);
+	});
+
+	it("removes every form once approved, and saves an empty config", async () => {
+		const s = session(HELD);
+		const [request] = (await s.step(CLEAR)).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(s.host.store.source()).toBe("");
+		expect((await s.step("(permission/list)")).value).toBe("nil");
+		expect((await s.step(UPCASE)).value).toBe('"A"');
+	});
+
+	it("asks again after an approval, since a grant is never kept", async () => {
+		const s = session(HELD);
+		const [request] = (await s.step(CLEAR)).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "session",
+		});
+		await s.step("(permission/deny eval)");
+		expect((await s.step(CLEAR)).held).toBe(true);
+	});
+
+	it("never clears once the user denies it", async () => {
+		const s = session(HELD);
+		const [request] = (await s.step(CLEAR)).requests;
+		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
+		expect(s.host.store.source()).toBe(HELD);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("never clears when a rule denies clearing", async () => {
+		const s = session(
+			"(permission/deny permission/clear-all)\n(permission/deny string-upcase)\n",
+		);
+		const run = await s.step(CLEAR);
+		expect(run.failed).toBe(true);
+		expect(run.requests).toEqual([]);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("takes no forms", async () => {
+		const s = session(HELD);
+		const run = await s.step("(permission/clear-all (permission/deny eval))");
+		expect(run.failed).toBe(true);
+		expect(run.requests).toEqual([]);
+		expect(s.host.store.source()).toBe(HELD);
+	});
+});
+
 describe("reporting a decision", () => {
 	it("carries a ui decision on the decide action's output lane, once", async () => {
 		const s = session("(permission/ask string-upcase)");

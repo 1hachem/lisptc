@@ -24,6 +24,16 @@ const DELETE_FORM = "permission/delete";
 
 const DELETE_SYM = newSym(DELETE_FORM);
 
+const CLEAR_FORM = "permission/clear-all";
+
+const CLEAR_SYM = newSym(CLEAR_FORM);
+
+function cleared(form: Cell): PermissionRules {
+	if (form.cdr !== null)
+		throw new EvalException("permission/clear-all takes no forms", form, false);
+	return parseRules("");
+}
+
 function deleted(form: Cell): unknown {
 	const rest = form.cdr;
 	if (!(rest instanceof Cell) || rest.cdr !== null)
@@ -220,6 +230,7 @@ export function permissionsExtension(
 	}
 
 	function changed(form: Cell): PermissionRules {
+		if (form.car === CLEAR_SYM) return cleared(form);
 		return form.car === DELETE_SYM
 			? rules.current.without(deleted(form))
 			: rules.current.with(form);
@@ -339,6 +350,17 @@ export function registerPermissions(
 		{
 			signature: "(permission/delete form)",
 			doc: `Delete one form from the permissions config, written exactly as (permission/list) shows it, e.g. (permission/delete (permission/deny eval)).${APPLIES}`,
+		},
+	);
+	interp.defineGlobal(
+		CLEAR_SYM,
+		runSync(
+			interp,
+			`(macro (&rest forms) (permission/expand "${CLEAR_FORM}" forms))`,
+		),
+		{
+			signature: "(permission/clear-all)",
+			doc: `Delete every form from the permissions config.${APPLIES}`,
 		},
 	);
 	interp.def(
