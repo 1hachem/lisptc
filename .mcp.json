@@ -12,6 +12,11 @@
       "type": "stdio",
       "command": "npx",
       "args": ["--no", "fallow-mcp"]
+    },
+    "grafana": {
+      "type": "stdio",
+      "command": "task",
+      "args": ["mcp:grafana"]
     }
   }
 }
