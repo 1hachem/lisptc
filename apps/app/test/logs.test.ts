@@ -59,7 +59,7 @@ afterAll(() => {
 	server.close();
 });
 
-test("console output reaches posthog as the app service in the posthog environment", async () => {
+test("console output reaches posthog as the app service named for its environment", async () => {
 	logs.startLogs();
 	console.warn("slow turn %dms", 1200);
 	await logs.shutdownLogs();
@@ -76,8 +76,8 @@ test("console output reaches posthog as the app service in the posthog environme
 			a.value.stringValue,
 		]),
 	);
-	expect(attributes["service.name"]).toBe("app");
-	expect(attributes["deployment.environment.name"]).toBe("pr-42");
+	expect(attributes["service.name"]).toBe("app-pr-42");
+	expect(attributes).not.toHaveProperty("deployment.environment.name");
 
 	const records = resourceLogs?.scopeLogs.flatMap((s) => s.logRecords) ?? [];
 	expect(records).toContainEqual(

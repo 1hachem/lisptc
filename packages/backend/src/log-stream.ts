@@ -17,10 +17,6 @@ interface ListedStream {
 	logStreamType: string;
 }
 
-export function backendServiceName(environment: string): string {
-	return `backend-${environment}`;
-}
-
 export async function syncPostHogLogStream(
 	target: LogStreamTarget,
 	fetchImpl: typeof fetch = fetch,

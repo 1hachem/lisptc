@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./analytics": "./src/analytics.ts",
     "./convex-admin": "./src/convex-admin.ts",
+    "./environments": "./src/environments.ts",
     "./dashi-codes": "./src/dashi-codes.ts",
     "./evals": "./src/evals.ts",
     "./infisical": "./src/infisical.ts",

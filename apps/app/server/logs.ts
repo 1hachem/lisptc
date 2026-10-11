@@ -6,11 +6,9 @@ import {
 	BatchLogRecordProcessor,
 	LoggerProvider,
 } from "@opentelemetry/sdk-logs";
-import {
-	ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
-	ATTR_SERVICE_NAME,
-} from "@opentelemetry/semantic-conventions";
+import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { analyticsEnv } from "@repo/env/analytics";
+import { serviceName } from "@repo/env/environments";
 import { webEnv } from "@repo/env/web";
 
 const SERVICE_NAME = "app";
@@ -33,9 +31,10 @@ function provider(token: string): LoggerProvider {
 	const host = analyticsEnv.POSTHOG_HOST ?? "https://us.i.posthog.com";
 	return new LoggerProvider({
 		resource: resourceFromAttributes({
-			[ATTR_SERVICE_NAME]: SERVICE_NAME,
-			[ATTR_DEPLOYMENT_ENVIRONMENT_NAME]:
+			[ATTR_SERVICE_NAME]: serviceName(
+				SERVICE_NAME,
 				analyticsEnv.POSTHOG_ENVIRONMENT ?? webEnv.VITE_ENVIRONMENT,
+			),
 		}),
 		processors: [
 			new BatchLogRecordProcessor({

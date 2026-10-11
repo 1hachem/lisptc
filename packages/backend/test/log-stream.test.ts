@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-	backendServiceName,
 	LOG_TOPICS,
 	type LogStreamTarget,
 	syncPostHogLogStream,
@@ -11,7 +10,7 @@ const target: LogStreamTarget = {
 	adminKey: "admin-key",
 	projectToken: "phc_test",
 	host: "https://us.i.posthog.com",
-	serviceName: backendServiceName("prod"),
+	serviceName: "backend-prod",
 };
 
 interface Call {
