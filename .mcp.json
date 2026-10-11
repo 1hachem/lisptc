@@ -17,6 +17,11 @@
       "type": "stdio",
       "command": "task",
       "args": ["mcp:grafana"]
+    },
+    "argocd": {
+      "type": "stdio",
+      "command": "task",
+      "args": ["mcp:argocd"]
     }
   }
 }
