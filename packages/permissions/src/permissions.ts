@@ -56,6 +56,7 @@ export class PermissionRefusal extends EvalException {
 
 export class SessionRules {
 	private readonly asks: ReadonlySet<string>;
+	private readonly changes = new Set<() => void>();
 
 	constructor(
 		private held: PermissionRules,
@@ -70,6 +71,14 @@ export class SessionRules {
 
 	replace(next: PermissionRules): void {
 		this.held = next;
+		for (const listener of this.changes) listener();
+	}
+
+	onChange(listener: () => void): () => void {
+		this.changes.add(listener);
+		return () => {
+			this.changes.delete(listener);
+		};
 	}
 
 	decide(name: string): Ruling {

@@ -1,6 +1,8 @@
 import type { Hold } from "@repo/interpreter/drive";
 import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
+import { SessionRules } from "../src/permissions.ts";
+import { parseRules } from "../src/rules.ts";
 import { DECIDE_ACTION } from "../src/ui-approver.ts";
 import { recordingApprover, session } from "./helpers.ts";
 
@@ -672,5 +674,17 @@ describe("reporting a decision", () => {
 		});
 		expect(denied.message).toMatch(/denied/);
 		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
+	});
+});
+
+describe("following the session's rules", () => {
+	it("tells every listener when the rules are replaced, until it stops listening", () => {
+		const rules = new SessionRules(parseRules(""));
+		const heard: string[] = [];
+		const stop = rules.onChange(() => heard.push(rules.current.source));
+		rules.replace(parseRules("(permission/deny eval)"));
+		stop();
+		rules.replace(parseRules(""));
+		expect(heard).toEqual(["(permission/deny eval)"]);
 	});
 });
