@@ -1,7 +1,7 @@
 # @lisptc/mcp-operator
 
-The controller that turns an `McpServer` into the pod that runs it. The app
-writes the resource; this reconciles it, and mirrors what it sees into Convex.
+The kubernetes operator that runs a workspace's MCP servers. On a cluster the
+app asks for a server, and only this app runs one.
 
 Turbo tag: `product`.
 

@@ -54,9 +54,9 @@ its status; `apps/mcp-operator` runs it. `src/mcp-server-resource.ts` is that
 resource's contract, which the package exports under the name kubernetes, and the schema in
 `charts/lisptc-crds` has to accept what it writes.
 
-**A server's state outlives its process.** The host never deletes an
-`McpServer`: it raises `restarts` on a failure and lets idling put it to sleep.
-A size or reset someone set on the live resource is kept.
+**A server's state outlives its process, so a host never deletes the
+resource.** What someone changed on the live one is theirs, and a host keeps
+it.
 
 **`task mcp:reap` clears the containers a dead process left behind.** No host
 instance reaps another's, so nothing else will. State volumes are kept;
