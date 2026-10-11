@@ -37,9 +37,6 @@ spec:
             preview:
               enabled: true
               number: "{{ .number }}"
-            postgres:
-              legacy:
-                enabled: false
             app:
               hostname: "lisptc-pr-{{ .number }}"
             convex:

@@ -31,11 +31,6 @@ postgres:
   image: ghcr.io/cloudnative-pg/postgresql:17.11
   storage: 5Gi
   init: lisptc-db-init
-  legacy:
-    enabled: true
-    image: postgres:17
-    storage: 5Gi
-    secret: lisptc-db
 
 preview:
   enabled: false
