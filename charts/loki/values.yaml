@@ -43,3 +43,17 @@ lokiCanary:
   enabled: false
 test:
   enabled: false
+
+extraObjects:
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: loki-from-monitoring
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+      policyTypes: [Ingress]
+      ingress:
+        - from:
+            - podSelector: {}
