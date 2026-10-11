@@ -25,6 +25,7 @@ function approvalAsk(request: ApprovalRequest): Ask {
 		title: request.name,
 		...(request.args ? { detail: request.args } : {}),
 		prompt: request.reason ?? NEEDS_APPROVAL,
+		...(request.change ? { answerApplies: true as const } : {}),
 		choices: [
 			{
 				label: "Deny",

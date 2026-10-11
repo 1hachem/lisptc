@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
+    "./asks": "./src/asks.ts",
     "./repl": "./src/repl.ts",
     "./session-server": "./src/session-server.ts"
   },

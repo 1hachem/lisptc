@@ -47,6 +47,7 @@ export interface Session {
 export function session(
 	source: string,
 	approvers?: readonly Approver[],
+	asks?: readonly string[],
 ): Session {
 	let now = 1_000;
 	const host: PermissionsHost = {
@@ -55,6 +56,7 @@ export function session(
 			...(approvers === undefined ? {} : { approvers }),
 		}),
 		clock: { now: () => now++ },
+		...(asks === undefined ? {} : { asks }),
 	};
 	const extension = permissionsExtension(host);
 	const interp = new Interp({ extensions: [extension] });

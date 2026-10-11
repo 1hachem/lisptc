@@ -23,7 +23,10 @@ import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost, secretsHostFor } from "@repo/secrets-extension/host";
 
 export function cliExtensions(): InterpExtension[] {
-	const permissions = permissionsExtension(permissionsHostFor());
+	const memory = memoryExtension(memoryHost);
+	const permissions = permissionsExtension(
+		permissionsHostFor({ asks: memory.asks }),
+	);
 	return [
 		permissions,
 		secretsExtension(secretsHostFor({ envFile: true })),
@@ -35,14 +38,17 @@ export function cliExtensions(): InterpExtension[] {
 		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost, { compactor: new Compactor() }),
-		memoryExtension(memoryHost),
+		memory,
 		proseExtension(proseHost),
 		diagnosticsExtension(diagnosticsHost),
 	];
 }
 
 export function sessionExtensions(): InterpExtension[] {
-	const permissions = permissionsExtension(permissionsHostFor());
+	const memory = memoryExtension(memoryHost);
+	const permissions = permissionsExtension(
+		permissionsHostFor({ asks: memory.asks }),
+	);
 	return [
 		permissions,
 		secretsExtension(secretsHost),
@@ -54,7 +60,7 @@ export function sessionExtensions(): InterpExtension[] {
 		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
-		memoryExtension(memoryHost),
+		memory,
 		proseExtension(proseHost),
 		diagnosticsExtension(diagnosticsHost),
 	];

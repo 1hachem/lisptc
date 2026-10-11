@@ -30,6 +30,9 @@ have it, and there is no registry that would do it for you.
 `@lisptc/lsp` keeps a session roster of its own. The two are one surface, so an
 extension added here is added there.
 
+**Every input runs as a step, a file included.** A file has no human to ask,
+so it never waits on one.
+
 `USAGE` is the only documentation a user of the binary gets. An argument or an
 option that changes belongs in it, in the same change.
 

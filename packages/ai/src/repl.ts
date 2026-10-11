@@ -1,8 +1,4 @@
-import {
-	type Annotations,
-	noAnnotations,
-	type StepAnnotations,
-} from "@repo/interpreter/session";
+import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
@@ -64,17 +60,12 @@ export function stripFences(text: string): string {
 	return m ? m[1] : text.trim();
 }
 
-export function replResultContent(
-	output: string,
-	error: boolean,
-	annotations: Annotations = {},
-): string {
+export function replResultContent(output: string, error: boolean): string {
 	return JSON.stringify({
 		type: "tool_result",
 		source: "lisp-repl",
 		error,
 		output: output || "(no output)",
-		...annotations,
 	});
 }
 
@@ -98,17 +89,19 @@ export async function evalCode(
 	display: string;
 	error: boolean;
 	annotations: StepAnnotations;
+	emitted: string;
 	failed: boolean;
 	held: boolean;
 }> {
 	try {
-		const { model, user, annotations, failed, held } =
+		const { model, user, annotations, emitted, failed, held } =
 			await repl.evalOutput(code);
 		return {
 			output: model,
 			display: user,
 			error: false,
 			annotations,
+			emitted,
 			failed,
 			held,
 		};
@@ -121,6 +114,7 @@ export async function evalCode(
 			display: text,
 			error: true,
 			annotations: noAnnotations(),
+			emitted: "",
 			failed: true,
 			held: false,
 		};

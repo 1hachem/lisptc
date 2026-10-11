@@ -5,8 +5,10 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replEnv } from "@repo/env/repl";
+import type { Ask } from "@repo/interpreter/asks";
 import type { Arity, DocArg } from "@repo/interpreter/docs";
 import type { InterpExtension } from "@repo/interpreter/session";
+import { openAsks } from "./asks.ts";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {
@@ -22,14 +24,29 @@ export interface DocEntry {
 	arity?: Arity;
 }
 
-interface Request {
-	id: number;
-	op: "eval" | "completions" | "doc" | "reset" | "shutdown" | "version";
-	code?: string;
-	symbol?: string;
+export interface SteppedEntry {
+	output: string;
+	asks: readonly Ask[];
 }
 
-export const PROTOCOL_VERSION = 1;
+interface Request {
+	id: number;
+	op:
+		| "eval"
+		| "step"
+		| "answer"
+		| "completions"
+		| "doc"
+		| "reset"
+		| "shutdown"
+		| "version";
+	code?: string;
+	symbol?: string;
+	action?: string;
+	values?: Record<string, unknown>;
+}
+
+export const PROTOCOL_VERSION = 2;
 
 interface Reply {
 	id: number;
@@ -68,6 +85,12 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 	switch (req.op) {
 		case "eval":
 			return repl.eval(req.code ?? "");
+		case "step": {
+			const out = await repl.evalOutput(req.code ?? "");
+			return { output: out.user, asks: openAsks(out.annotations) };
+		}
+		case "answer":
+			return (await repl.invokeUi(req.action ?? "", req.values ?? {})).user;
 		case "reset":
 			repl.reset();
 			return "";
@@ -233,6 +256,12 @@ export class SessionClient {
 
 	eval(code: string): Promise<string> {
 		return this.send({ op: "eval", code }) as Promise<string>;
+	}
+	step(code: string): Promise<SteppedEntry> {
+		return this.send({ op: "step", code }) as Promise<SteppedEntry>;
+	}
+	answer(action: string, values: Record<string, unknown>): Promise<string> {
+		return this.send({ op: "answer", action, values }) as Promise<string>;
 	}
 	reset(): Promise<string> {
 		return this.send({ op: "reset" }) as Promise<string>;
