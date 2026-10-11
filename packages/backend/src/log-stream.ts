@@ -1,8 +1,4 @@
-export const LOG_TOPICS = [
-	"console",
-	"exception",
-	"function_execution",
-] as const;
+export const LOG_TOPICS = ["console", "function_execution"] as const;
 
 export interface LogStreamTarget {
 	deploymentUrl: string;
