@@ -56,7 +56,7 @@ describe("permissions over a loaded MCP server", () => {
 		expect(client.calls).toEqual([]);
 	});
 
-	it("unbinds a loaded tool the repl hides afterwards, and lists it no more", async () => {
+	it("stops listing a loaded tool the repl hides afterwards", async () => {
 		const { repl } = replWith("(permission/allow permission/server)");
 		await repl.eval(LOAD);
 		await repl.eval("(permission/server fx (hide echo))");
@@ -65,7 +65,7 @@ describe("permissions over a loaded MCP server", () => {
 		);
 	});
 
-	it("binds a tool again once the rule hiding it is deleted", async () => {
+	it("lists a tool again once the rule hiding it is deleted", async () => {
 		const { repl } = replWith(
 			"(permission/allow permission/delete)\n(permission/server fx (hide echo))\n",
 		);
@@ -79,7 +79,7 @@ describe("permissions over a loaded MCP server", () => {
 		);
 	});
 
-	it("unloads a server the repl hides after it loaded", async () => {
+	it("stops showing a server the repl hides after it loaded", async () => {
 		const { repl } = replWith("(permission/allow permission/hide-server)");
 		await repl.eval(LOAD);
 		await repl.eval("(permission/hide-server fx)");

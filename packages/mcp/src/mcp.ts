@@ -149,7 +149,6 @@ interface ServerRec {
 	serverId: string;
 	toolSyms: Sym[];
 	tools: Map<string, Tool>;
-	offered: readonly Tool[];
 }
 
 export interface McpExtensionHost {
@@ -415,27 +414,14 @@ function installServer(
 		serverId: res.serverId,
 		toolSyms: [],
 		tools: new Map(),
-		offered: res.tools,
 	};
-	bindTools(interp, client, rec, policy);
-	servers.set(name, rec);
-	return arrayToList(toolRows(rec));
-}
-
-function bindTools(
-	interp: Interp,
-	client: McpClient,
-	rec: ServerRec,
-	policy: McpPolicy,
-): void {
-	for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
-	rec.toolSyms.length = 0;
-	rec.tools.clear();
-	for (const tool of rec.offered) {
-		if (!policy.tool(rec.name, tool.name)) continue;
+	for (const tool of res.tools) {
 		rec.tools.set(tool.name, tool);
-		const sym = newSym(`${rec.name}/${tool.name}`);
+		const sym = newSym(`${name}/${tool.name}`);
 		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
+			admitServer(policy, name);
+			if (!policy.tool(name, tool.name))
+				throw new EvalException("unknown MCP tool", sym.name, false);
 			const args = plistToJson(f[0] as List);
 			validate(tool, args);
 			return withTimeout(
@@ -451,6 +437,29 @@ function bindTools(
 		});
 		rec.toolSyms.push(sym);
 	}
+	servers.set(name, rec);
+	return arrayToList(toolRows(rec, policy));
+}
+
+function admitServer(policy: McpPolicy, name: string): void {
+	const access = policy.server(name);
+	if (access.access === "hidden")
+		throw new EvalException("unknown MCP server", name, false);
+	if (access.access === "denied")
+		throw new EvalException(
+			access.reason === undefined
+				? "MCP server denied"
+				: `MCP server denied: ${access.reason}`,
+			name,
+			false,
+		);
+}
+
+function shownTools(rec: ServerRec, policy: McpPolicy): Sym[] {
+	if (policy.server(rec.name).access !== "open") return [];
+	return rec.toolSyms.filter((sym) =>
+		policy.tool(rec.name, sym.name.slice(rec.name.length + 1)),
+	);
 }
 
 function toolRow(rec: ServerRec, sym: Sym): List {
@@ -466,8 +475,8 @@ function toolRow(rec: ServerRec, sym: Sym): List {
 	]);
 }
 
-function toolRows(rec: ServerRec): List[] {
-	return rec.toolSyms.map((sym) => toolRow(rec, sym));
+function toolRows(rec: ServerRec, policy: McpPolicy): List[] {
+	return shownTools(rec, policy).map((sym) => toolRow(rec, sym));
 }
 
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
@@ -493,26 +502,13 @@ export function registerMcp(
 				.filter((conf) => policy.server(conf.name).access !== "hidden")
 				.map((conf) => [conf.name, conf]),
 		);
-
-	const unfollow = policy.onChange?.(() => {
-		for (const rec of [...servers.values()])
-			if (policy.server(rec.name).access === "open")
-				bindTools(interp, client, rec, policy);
-			else doUnload(interp, client, servers, rec.name);
-	});
+	const loaded = (): Map<string, ServerRec> =>
+		new Map(
+			[...servers].filter(([name]) => policy.server(name).access !== "hidden"),
+		);
 
 	function startLoad(conf: ConnConfig): Promise<unknown> {
-		const access = policy.server(conf.name);
-		if (access.access === "hidden")
-			throw new EvalException("unknown MCP server", conf.name, false);
-		if (access.access === "denied")
-			throw new EvalException(
-				access.reason === undefined
-					? "MCP server denied"
-					: `MCP server denied: ${access.reason}`,
-				conf.name,
-				false,
-			);
+		admitServer(policy, conf.name);
 		const promise = interp.async.start((signal) =>
 			client.connect(conf, signal).then(
 				(res) => installServer(interp, client, servers, conf.name, res, policy),
@@ -628,13 +624,14 @@ export function registerMcp(
 		"Return the list of currently loaded MCP servers.",
 		z.tuple([]),
 		() => {
-			const names = new Set<string>([...shown().keys(), ...servers.keys()]);
+			const live = loaded();
+			const names = new Set<string>([...shown().keys(), ...live.keys()]);
 			const rows = [...names].map((name) => {
-				const rec = servers.get(name);
+				const rec = live.get(name);
 				return arrayToList([
 					name,
 					newLispKeyword(rec ? "loaded" : "unloaded"),
-					BigInt(rec ? rec.tools.size : 0),
+					BigInt(rec ? shownTools(rec, policy).length : 0),
 				]);
 			});
 			return arrayToList(rows);
@@ -701,12 +698,13 @@ export function registerMcp(
 		z.tuple([zList]),
 		([rest]) => {
 			const only = rest !== null ? asName(rest.car) : null;
+			const live = loaded();
 			const rows: unknown[] = [];
-			for (const rec of servers.values()) {
+			for (const rec of live.values()) {
 				if (only !== null && rec.name !== only) continue;
-				rows.push(...toolRows(rec));
+				rows.push(...toolRows(rec, policy));
 			}
-			if (only !== null && !servers.has(only))
+			if (only !== null && !live.has(only))
 				throw new EvalException("MCP server not loaded", only, false);
 			return arrayToList(rows);
 		},
@@ -724,7 +722,7 @@ export function registerMcp(
 				document: SearchDocument;
 			}[] = [];
 			for (const rec of servers.values()) {
-				for (const sym of rec.toolSyms) {
+				for (const sym of shownTools(rec, policy)) {
 					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
 					candidates.push({
 						value: { sym, doc: firstLine(tool?.description) },
@@ -775,7 +773,6 @@ export function registerMcp(
 	});
 
 	interp.hooks.dispose.use((next) => {
-		unfollow?.();
 		shutdown();
 		next();
 	});

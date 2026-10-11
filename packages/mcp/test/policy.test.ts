@@ -33,7 +33,7 @@ function serverPolicy(access: ServerAccess): McpPolicy {
 }
 
 describe("the mcp policy port", () => {
-	it("never binds a tool the policy hides", async () => {
+	it("never lets a tool the policy hides be listed or called", async () => {
 		const interp = interpWith({
 			server: () => ({ access: "open" }),
 			tool: (_server, tool) => tool !== "boom",
@@ -41,7 +41,7 @@ describe("the mcp policy port", () => {
 		const tools = str(await (runSync(interp, LOAD_FX) as Promise<unknown>));
 		expect(tools).toContain("fx/echo");
 		expect(tools).not.toContain("fx/boom");
-		expect(() => runSync(interp, "(fx/boom)")).toThrow("undefined");
+		expect(() => runSync(interp, "(fx/boom)")).toThrow("unknown MCP tool");
 		interp.dispose();
 	}, 30_000);
 
@@ -64,39 +64,28 @@ describe("the mcp policy port", () => {
 		function changing() {
 			const hidden = new Set<string>();
 			let access: ServerAccess = { access: "open" };
-			const listeners = new Set<() => void>();
 			const policy: McpPolicy = {
 				server: () => access,
 				tool: (_server, tool) => !hidden.has(tool),
-				onChange(listener) {
-					listeners.add(listener);
-					return () => {
-						listeners.delete(listener);
-					};
-				},
-			};
-			const change = (next: () => void) => {
-				next();
-				for (const listener of listeners) listener();
 			};
 			return {
 				policy,
-				listeners,
-				hide: (tool: string) => change(() => hidden.add(tool)),
-				show: (tool: string) => change(() => hidden.delete(tool)),
-				server: (next: ServerAccess) =>
-					change(() => {
-						access = next;
-					}),
+				hide: (tool: string) => hidden.add(tool),
+				show: (tool: string) => hidden.delete(tool),
+				server: (next: ServerAccess) => {
+					access = next;
+				},
 			};
 		}
 
-		it("unbinds a tool hidden after load, and binds it again once shown", async () => {
+		it("refuses and stops listing a tool hidden after load, and offers it again once shown", async () => {
 			const live = changing();
 			const interp = interpWith(live.policy);
 			await (runSync(interp, LOAD_FX) as Promise<unknown>);
 			live.hide("echo");
-			expect(() => runSync(interp, "(fx/echo)")).toThrow("undefined");
+			expect(() => runSync(interp, '(fx/echo :message "x")')).toThrow(
+				"unknown MCP tool",
+			);
 			expect(str(runSync(interp, '(list-tools "fx")'))).not.toContain(
 				"fx/echo",
 			);
@@ -105,22 +94,28 @@ describe("the mcp policy port", () => {
 			interp.dispose();
 		}, 30_000);
 
-		it("unloads a server hidden or denied after load", async () => {
+		it("refuses a loaded server's tools once it is denied, with the reason", async () => {
 			const live = changing();
 			const interp = interpWith(live.policy);
 			await (runSync(interp, LOAD_FX) as Promise<unknown>);
-			live.server({ access: "denied" });
-			expect(str(runSync(interp, "(list-mcps)"))).not.toContain("fx");
-			expect(() => runSync(interp, "(fx/echo)")).toThrow("undefined");
+			live.server({ access: "denied", reason: "no fixtures" });
+			expect(() => runSync(interp, '(fx/echo :message "x")')).toThrow(
+				"MCP server denied: no fixtures",
+			);
+			expect(str(runSync(interp, '(list-tools "fx")'))).toBe("nil");
 			interp.dispose();
 		}, 30_000);
 
-		it("stops listening once disposed", () => {
+		it("stops showing a loaded server once it is hidden", async () => {
 			const live = changing();
 			const interp = interpWith(live.policy);
-			expect(live.listeners.size).toBe(1);
+			await (runSync(interp, LOAD_FX) as Promise<unknown>);
+			live.server({ access: "hidden" });
+			expect(str(runSync(interp, "(list-mcps)"))).not.toContain("fx");
+			expect(() => runSync(interp, '(fx/echo :message "x")')).toThrow(
+				"unknown MCP server",
+			);
 			interp.dispose();
-			expect(live.listeners.size).toBe(0);
-		});
+		}, 30_000);
 	});
 });
