@@ -33,12 +33,13 @@ postgres:
 
 mcp:
   namespacePrefix: lisptc-ws-
-  reaper:
-    image: alpine/kubectl:1.36.4
-    schedule: "*/10 * * * *"
-    serviceAccount: mcp-reaper
-    podIdleSeconds: 600
-    namespaceIdleSeconds: 1800
+  storageClass: ""
+
+mcpOperator:
+  image:
+    repository: ghcr.io/1hachem/lisptc-mcp-operator
+    tag: main
+  serviceAccount: mcp-operator
 
 preview:
   enabled: false

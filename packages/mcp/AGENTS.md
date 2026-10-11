@@ -49,11 +49,18 @@ that boundary is its namespace. **What the cluster lets the api do is granted
 in `charts/lisptc`**, so a host that creates a new kind of object needs a new
 rule there too.
 
-**`task mcp:reap` clears the containers a dead process left behind.** No host
-instance reaps another's, so nothing else will.
+**On a cluster the host creates no pod.** It writes an `McpServer` and waits on
+its status; `apps/mcp-operator` runs it. `src/mcp-server-resource.ts` is that
+resource's contract, which the package exports under the name kubernetes, and the schema in
+`charts/lisptc-crds` has to accept what it writes.
 
-**On a cluster, what a dead host left behind is reaped from `charts/lisptc`.**
-So an object a host creates beside a pod is named after that pod.
+**A server's state outlives its process.** The host never deletes an
+`McpServer`: it raises `restarts` on a failure and lets idling put it to sleep.
+A size or reset someone set on the live resource is kept.
+
+**`task mcp:reap` clears the containers a dead process left behind.** No host
+instance reaps another's, so nothing else will. State volumes are kept;
+`task mcp:reap:state` is what drops them.
 
 `check:arch` treats `src/mcp.ts` and `src/ports.ts` as extension modules. They
 import no `node:` builtin, no typed env module, no SDK and no `process.env`.

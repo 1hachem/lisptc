@@ -2,6 +2,12 @@ import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { LocalProcessHost } from "./local-host.ts";
+import {
+	dnsLabel,
+	type Launch,
+	type State,
+	stateEntries,
+} from "./mcp-server-resource.ts";
 import type {
 	ConnConfig,
 	McpHost,
@@ -22,19 +28,14 @@ const MCP_PATH = "/mcp";
 
 const HOST_LABEL = "lisptc.mcp.host";
 const SERVER_LABEL = "lisptc.mcp.server";
+export const STATE_LABEL = "lisptc.mcp.state";
 
 interface Container {
 	id: string;
+	appId?: string;
 	handle: ServerHandle;
 	logs: string;
 	state: ServerState;
-}
-
-export interface Launch {
-	image: string;
-	exposed: string;
-	path: string;
-	args: string[];
 }
 
 async function reachable(url: string): Promise<boolean> {
@@ -105,7 +106,10 @@ export class DockerHost implements McpHost {
 	private readonly containers = new Map<string, Container>();
 	private readonly instance = randomUUID();
 
-	constructor(private readonly fallback: McpHost = new LocalProcessHost()) {}
+	constructor(
+		private readonly fallback: McpHost = new LocalProcessHost(),
+		private readonly scope = "local",
+	) {}
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
 		const launch = launchFor(conf);
@@ -119,6 +123,7 @@ export class DockerHost implements McpHost {
 		const container = this.containers.get(name);
 		if (!container) return await this.fallback.stop(name);
 		this.containers.delete(name);
+		if (container.appId) await this.remove(container.appId);
 		await this.remove(container.id);
 	}
 
@@ -138,22 +143,52 @@ export class DockerHost implements McpHost {
 		return container ? container.logs : this.fallback.logs(name);
 	}
 
+	private labels(conf: ConnConfig): string[] {
+		return [
+			"--label",
+			`${HOST_LABEL}=${this.instance}`,
+			"--label",
+			`${SERVER_LABEL}=${conf.name}`,
+		];
+	}
+
+	private mounts(conf: ConnConfig, states: State[]): string[] {
+		return states.flatMap((state) => [
+			"--mount",
+			`type=volume,src=${volumeName(this.scope, conf.name, state.name)},dst=${state.path},volume-label=${STATE_LABEL}=${dnsLabel(this.scope)}`,
+		]);
+	}
+
+	private envFlags(conf: ConnConfig): string[] {
+		return Object.entries(conf.env ?? {}).flatMap(([name, value]) => [
+			"--env",
+			`${name}=${value}`,
+		]);
+	}
+
 	private async start(conf: ConnConfig, launch: Launch): Promise<ServerHandle> {
+		const app = "app" in conf ? conf.app : undefined;
+		const exposed = (app?.ports ?? []).filter((port) =>
+			app?.expose?.includes(port.name),
+		);
 		const args = [
 			"run",
 			"--detach",
 			"--init",
 			"--shm-size=1g",
-			"--label",
-			`${HOST_LABEL}=${this.instance}`,
-			"--label",
-			`${SERVER_LABEL}=${conf.name}`,
+			...(app ? ["--ipc", "shareable"] : []),
+			...this.labels(conf),
 			"--publish",
 			`127.0.0.1::${launch.exposed}`,
+			...exposed.flatMap((port) => ["--publish", `127.0.0.1::${port.port}`]),
+			...this.mounts(
+				conf,
+				stateEntries("state" in conf ? conf.state : undefined),
+			),
+			...this.envFlags(conf),
+			launch.image,
+			...launch.args,
 		];
-		for (const [name, value] of Object.entries(conf.env ?? {}))
-			args.push("--env", `${name}=${value}`);
-		args.push(launch.image, ...launch.args);
 
 		const id = await this.docker(conf.name, args);
 		const container: Container = {
@@ -164,6 +199,21 @@ export class DockerHost implements McpHost {
 		};
 		this.follow(container);
 		try {
+			if (app)
+				container.appId = await this.docker(conf.name, [
+					"run",
+					"--detach",
+					"--init",
+					"--network",
+					`container:${id}`,
+					"--ipc",
+					`container:${id}`,
+					...this.labels(conf),
+					...this.mounts(conf, stateEntries(app.state)),
+					...this.envFlags(conf),
+					app.image,
+					...(app.args ?? []),
+				]);
 			const published = await this.publishedPort(conf.name, id, launch.exposed);
 			const url = new URL(launch.path, `http://${published}`).toString();
 			const headers = "headers" in conf ? conf.headers : undefined;
@@ -173,6 +223,7 @@ export class DockerHost implements McpHost {
 			return container.handle;
 		} catch (ex) {
 			this.containers.delete(conf.name);
+			if (container.appId) await this.remove(container.appId);
 			await this.remove(id);
 			throw ex;
 		}
@@ -259,4 +310,8 @@ export class DockerHost implements McpHost {
 			);
 		}
 	}
+}
+
+export function volumeName(scope: string, server: string, state: string) {
+	return `lisptc-${dnsLabel(scope, 24)}-${dnsLabel(server, 24)}-${state}`;
 }

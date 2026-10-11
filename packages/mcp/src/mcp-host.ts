@@ -46,18 +46,16 @@ export function containerHost(scope: string): McpHost {
 		available: async () =>
 			(mcpEnv.LISPTC_MCP_HOST === "kubernetes" ||
 				mcpEnv.KUBERNETES_SERVICE_HOST !== undefined) &&
-			(await clusterAnswers()),
+			(await clusterAnswers(mcpEnv.LISPTC_MCP_NAMESPACE)),
 		create: () =>
 			new KubernetesHost({
 				scope,
-				namespacePrefix: mcpEnv.LISPTC_MCP_NAMESPACE_PREFIX,
-				callerNamespace: mcpEnv.LISPTC_MCP_CALLER_NAMESPACE,
-				pullSecret: mcpEnv.LISPTC_MCP_PULL_SECRET,
+				namespace: mcpEnv.LISPTC_MCP_NAMESPACE ?? "",
 			}),
 	};
 	const docker: HostCandidate = {
 		available: dockerAnswers,
-		create: () => new DockerHost(),
+		create: () => new DockerHost(new LocalProcessHost(), scope),
 	};
 	const tried = {
 		kubernetes: [kubernetes, docker],

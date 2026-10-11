@@ -29,6 +29,12 @@ spec:
             helm:
               name: app.image.repository
               tag: app.image.tag
+        - alias: mcp-operator
+          imageName: {{ .Values.mcpOperator.image.repository }}
+          manifestTargets:
+            helm:
+              name: mcpOperator.image.repository
+              tag: mcpOperator.image.tag
         - alias: convex-deploy
           imageName: {{ .Values.convexDeploy.image.repository }}
           manifestTargets:

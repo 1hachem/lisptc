@@ -133,6 +133,7 @@ Everything else:
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.
+- `apps/mcp-operator` (`@lisptc/mcp-operator`) — the controller that runs each `McpServer` on the cluster.
 - `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases and their concrete hosts.
 
 ## Dependency flow

@@ -7,6 +7,7 @@
     ".": "./src/mcp.ts",
     "./client": "./src/mcp-client.ts",
     "./docker-host": "./src/docker-host.ts",
+    "./kubernetes": "./src/mcp-server-resource.ts",
     "./kubernetes-host": "./src/kubernetes-host.ts",
     "./mcp-host": "./src/mcp-host.ts",
     "./local-host": "./src/local-host.ts",

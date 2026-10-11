@@ -33,6 +33,10 @@ export class LocalProcessHost implements McpHost {
 	private readonly started = new Map<string, LocalServer>();
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
+		if ("image" in conf && (conf.app || conf.state))
+			throw new Error(
+				`${conf.name}: keeps state or runs an app beside it, which needs a container host (docker or kubernetes), not a local process.`,
+			);
 		if (!("url" in conf)) return undefined;
 		const handle: ServerHandle = conf.headers
 			? { url: conf.url, headers: conf.headers }

@@ -32,6 +32,9 @@ jobs:
           - name: browser-mcp
             dockerfile: docker/browser-mcp.Dockerfile
             target: ""
+          - name: mcp-operator
+            dockerfile: apps/mcp-operator/Dockerfile
+            target: prod
     env:
       PREVIEW: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview') }}
       PUSH: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'preview') }}

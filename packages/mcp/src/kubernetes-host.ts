@@ -1,21 +1,26 @@
-import { randomUUID } from "node:crypto";
 import {
 	ApiException,
 	CoreV1Api,
+	CustomObjectsApi,
 	KubeConfig,
-	NetworkingV1Api,
 	PatchStrategy,
 	setHeaderOptions,
-	type V1Namespace,
-	type V1NetworkPolicy,
-	type V1Pod,
-	type V1ResourceRequirements,
 	type V1Secret,
-	type V1Service,
-	VersionApi,
 } from "@kubernetes/client-node";
-import { type Launch, launchFor } from "./docker-host.ts";
+import { launchFor } from "./docker-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
+import {
+	envHash,
+	GROUP,
+	KIND,
+	type McpServer,
+	type McpServerSpec,
+	PLURAL,
+	type State,
+	serverName,
+	specFor,
+	VERSION,
+} from "./mcp-server-resource.ts";
 import type {
 	ConnConfig,
 	McpHost,
@@ -24,90 +29,40 @@ import type {
 } from "./ports.ts";
 
 const START_TIMEOUT_MS = 180_000;
-const POLL_MS = 500;
-const REFRESH_MS = 5_000;
+const POLL_MS = 1_000;
 const HEARTBEAT_MS = 60_000;
-const LOG_LINES = 200;
-const LOGS_KEEP = 8192;
-const NAME_MAX = 63;
 const PROBE_TIMEOUT_MS = 3_000;
 
-const MANAGED_BY = "app.kubernetes.io/managed-by";
-const WORKSPACE_LABEL = "lisptc.io/workspace";
-const HOST_LABEL = "lisptc.io/mcp-host";
-const SERVER_LABEL = "lisptc.io/mcp-server";
-const LAST_SEEN = "lisptc.io/last-seen";
-const MANAGER = "lisptc-mcp";
-const CONTAINER = "mcp";
-const INGRESS_POLICY = "mcp-ingress";
-const EGRESS_POLICY = "mcp-egress";
-const UNROUTED_FROM_A_SERVER = [
-	"10.0.0.0/8",
-	"172.16.0.0/12",
-	"192.168.0.0/16",
-	"100.64.0.0/10",
-	"169.254.0.0/16",
-];
-export const SHM_LIMIT = "1Gi";
-
-export const DEFAULT_RESOURCES = {
-	requests: { cpu: "100m", memory: "256Mi" },
-	limits: { cpu: "2", memory: "2Gi" },
-} as const;
-
-const FATAL_WAITING = new Set([
-	"ErrImagePull",
-	"ImagePullBackOff",
-	"InvalidImageName",
-	"CreateContainerConfigError",
-	"CreateContainerError",
-	"CrashLoopBackOff",
-]);
-
-export type PodState =
-	| { phase: "starting" }
-	| { phase: "ready" }
-	| { phase: "failed"; reason: string }
-	| { phase: "gone" };
-
-export interface Workload {
-	secret: V1Secret;
-	pod: V1Pod;
-	service: V1Service;
+export interface Owner {
+	name: string;
+	uid: string;
 }
 
-export interface Cluster {
-	ensureNamespace(namespace: V1Namespace): Promise<void>;
-	ensureNetworkPolicy(
-		namespace: string,
-		policy: V1NetworkPolicy,
+export interface ServerStore {
+	get(name: string): Promise<McpServer | undefined>;
+	create(server: McpServer): Promise<McpServer>;
+	patchSpec(name: string, spec: Partial<McpServerSpec>): Promise<McpServer>;
+	putEnv(
+		name: string,
+		data: Record<string, string>,
+		owner?: Owner,
 	): Promise<void>;
-	copySecret(from: string, to: string, name: string): Promise<void>;
-	create(namespace: string, workload: Workload): Promise<void>;
-	state(namespace: string, pod: string): Promise<PodState>;
-	logs(namespace: string, pod: string): Promise<string>;
-	remove(namespace: string, name: string): Promise<void>;
-	removeLabelled(namespace: string, selector: string): Promise<void>;
-	touchNamespace(namespace: string, seen: number): Promise<void>;
-	touchPod(namespace: string, pod: string, seen: number): Promise<void>;
-	origin(namespace: string, service: string, port: number): string;
 }
 
 export interface KubernetesHostOptions {
 	scope: string;
-	namespacePrefix: string;
-	callerNamespace?: string;
-	pullSecret?: string;
-	cluster?: Cluster;
+	namespace: string;
+	store?: ServerStore;
 	fallback?: McpHost;
+	clock?: () => number;
+	pollMs?: number;
+	startTimeoutMs?: number;
 }
 
-interface Server {
+interface Followed {
 	name: string;
-	handle: ServerHandle;
-	logs: string;
 	state: ServerState;
-	refresh?: ReturnType<typeof setInterval>;
+	logs: string;
 	heartbeat?: ReturnType<typeof setInterval>;
 }
 
@@ -115,183 +70,49 @@ function epochSeconds(): number {
 	return Math.floor(Date.now() / 1000);
 }
 
-function seenAt(seen: number) {
-	return { [LAST_SEEN]: String(seen) };
-}
-
-function resourcesFor(conf: ConnConfig): V1ResourceRequirements {
-	const asked = "resources" in conf ? conf.resources : undefined;
-	return {
-		requests: { ...DEFAULT_RESOURCES.requests, ...asked?.requests },
-		limits: { ...DEFAULT_RESOURCES.limits, ...asked?.limits },
-	};
-}
-
-export function dnsLabel(value: string, max = NAME_MAX): string {
-	return value
-		.toLowerCase()
-		.replace(/[^a-z0-9-]+/g, "-")
-		.slice(0, max)
-		.replace(/^-+|-+$/g, "");
-}
-
-export function namespaceFor(prefix: string, scope: string): string {
-	const name = dnsLabel(`${prefix}${scope}`);
-	if (!/^[a-z0-9]/.test(name))
-		throw new Error(`no namespace can be named after the scope "${scope}".`);
-	return name;
-}
-
 function isStatus(ex: unknown, code: number): boolean {
 	return ex instanceof ApiException && ex.code === code;
 }
 
-async function tolerating<T>(code: number, run: () => Promise<T>) {
-	try {
-		await run();
-	} catch (ex) {
-		if (!isStatus(ex, code)) throw ex;
-	}
+function encoded(env: Record<string, string> | undefined) {
+	return Object.fromEntries(
+		Object.entries(env ?? {}).map(([key, value]) => [
+			key,
+			Buffer.from(value).toString("base64"),
+		]),
+	);
 }
 
-async function reachable(url: string): Promise<boolean> {
-	try {
-		await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(2000) });
-		return true;
-	} catch {
-		return false;
-	}
+function keepManual(wanted: State[], live: State[] | undefined): State[] {
+	return wanted.map((state) => {
+		const kept = live?.find((entry) => entry.name === state.name);
+		return kept ? { ...state, size: kept.size, reset: kept.reset } : state;
+	});
 }
 
-function stateOf(pod: V1Pod): PodState {
-	const phase = pod.status?.phase;
-	const container = pod.status?.containerStatuses?.[0];
-	if (phase === "Failed" || phase === "Succeeded") {
-		const exit = container?.state?.terminated;
-		return {
-			phase: "failed",
-			reason: exit
-				? `exited with code ${exit.exitCode}${exit.reason ? ` (${exit.reason})` : ""}`
-				: `ended in phase ${phase}`,
-		};
-	}
-	const waiting = container?.state?.waiting;
-	if (waiting?.reason && FATAL_WAITING.has(waiting.reason))
-		return {
-			phase: "failed",
-			reason: `${waiting.reason}${waiting.message ? `: ${waiting.message}` : ""}`,
-		};
-	if (phase === "Running" && container?.ready) return { phase: "ready" };
-	return { phase: "starting" };
-}
-
-export function clientCluster(config: KubeConfig = defaultConfig()): Cluster {
-	const core = config.makeApiClient(CoreV1Api);
-	const net = config.makeApiClient(NetworkingV1Api);
+export function respecced(
+	live: McpServerSpec,
+	wanted: McpServerSpec,
+	failed: boolean,
+): McpServerSpec {
 	return {
-		async ensureNamespace(body) {
-			await tolerating(409, () => core.createNamespace({ body }));
-		},
-		async ensureNetworkPolicy(namespace, body) {
-			await tolerating(409, () =>
-				net.createNamespacedNetworkPolicy({ namespace, body }),
-			);
-		},
-		async copySecret(from, to, name) {
-			const source = await core.readNamespacedSecret({
-				namespace: from,
-				name,
-			});
-			const body: V1Secret = {
-				metadata: { name, labels: { [MANAGED_BY]: MANAGER } },
-				type: source.type,
-				data: source.data,
-			};
-			try {
-				await core.createNamespacedSecret({ namespace: to, body });
-			} catch (ex) {
-				if (!isStatus(ex, 409)) throw ex;
-				await core.replaceNamespacedSecret({ namespace: to, name, body });
-			}
-		},
-		async create(namespace, { secret, pod, service }) {
-			await core.createNamespacedSecret({ namespace, body: secret });
-			await core.createNamespacedPod({ namespace, body: pod });
-			await core.createNamespacedService({ namespace, body: service });
-		},
-		async state(namespace, name) {
-			try {
-				return stateOf(await core.readNamespacedPod({ namespace, name }));
-			} catch (ex) {
-				if (isStatus(ex, 404)) return { phase: "gone" };
-				throw ex;
-			}
-		},
-		async logs(namespace, name) {
-			try {
-				return await core.readNamespacedPodLog({
-					namespace,
-					name,
-					container: CONTAINER,
-					tailLines: LOG_LINES,
-				});
-			} catch {
-				return "";
-			}
-		},
-		async remove(namespace, name) {
-			await Promise.all([
-				tolerating(404, () =>
-					core.deleteNamespacedService({ namespace, name }),
-				),
-				tolerating(404, () =>
-					core.deleteNamespacedPod({ namespace, name, gracePeriodSeconds: 0 }),
-				),
-				tolerating(404, () => core.deleteNamespacedSecret({ namespace, name })),
-			]);
-		},
-		async removeLabelled(namespace, labelSelector) {
-			await Promise.all([
-				core.deleteCollectionNamespacedService({ namespace, labelSelector }),
-				core.deleteCollectionNamespacedPod({
-					namespace,
-					labelSelector,
-					gracePeriodSeconds: 0,
-				}),
-				core.deleteCollectionNamespacedSecret({ namespace, labelSelector }),
-			]);
-		},
-		async touchNamespace(name, seen) {
-			await core.patchNamespace(
-				{ name, body: { metadata: { annotations: seenAt(seen) } } },
-				setHeaderOptions("Content-Type", PatchStrategy.MergePatch),
-			);
-		},
-		async touchPod(namespace, name, seen) {
-			await core.patchNamespacedPod(
-				{ namespace, name, body: { metadata: { annotations: seenAt(seen) } } },
-				setHeaderOptions("Content-Type", PatchStrategy.MergePatch),
-			);
-		},
-		origin(namespace, service, port) {
-			return `http://${service}.${namespace}.svc.cluster.local:${port}`;
-		},
+		...wanted,
+		mcp: { ...wanted.mcp, state: keepManual(wanted.mcp.state, live.mcp.state) },
+		...(wanted.app
+			? {
+					app: {
+						...wanted.app,
+						state: keepManual(wanted.app.state, live.app?.state),
+					},
+				}
+			: {}),
+		restarts: live.restarts + (failed ? 1 : 0),
+		idleSeconds: live.idleSeconds,
 	};
 }
 
-export async function clusterAnswers(
-	config: KubeConfig = defaultConfig(),
-): Promise<boolean> {
-	const version = config.makeApiClient(VersionApi).getCode();
-	const timeout = new Promise<never>((_, reject) =>
-		setTimeout(reject, PROBE_TIMEOUT_MS).unref(),
-	);
-	try {
-		await Promise.race([version, timeout]);
-		return true;
-	} catch {
-		return false;
-	}
+export function envSecretName(server: string): string {
+	return `${server}-env`;
 }
 
 function defaultConfig(): KubeConfig {
@@ -300,112 +121,116 @@ function defaultConfig(): KubeConfig {
 	return config;
 }
 
-export function workloadFor(
-	name: string,
-	conf: ConnConfig,
-	launch: Launch,
-	labels: Record<string, string>,
-	seen: number,
-	pullSecret?: string,
-): Workload {
-	const port = Number(launch.exposed);
-	const metadata = { name, labels };
+const merge = setHeaderOptions("Content-Type", PatchStrategy.MergePatch);
+
+export function clientStore(
+	namespace: string,
+	config: KubeConfig = defaultConfig(),
+): ServerStore {
+	const custom = config.makeApiClient(CustomObjectsApi);
+	const core = config.makeApiClient(CoreV1Api);
+	const target = { group: GROUP, version: VERSION, namespace, plural: PLURAL };
 	return {
-		secret: { metadata, type: "Opaque", stringData: conf.env ?? {} },
-		pod: {
-			metadata: { ...metadata, annotations: seenAt(seen) },
-			spec: {
-				restartPolicy: "Never",
-				automountServiceAccountToken: false,
-				enableServiceLinks: false,
-				...(pullSecret ? { imagePullSecrets: [{ name: pullSecret }] } : {}),
-				containers: [
-					{
-						name: CONTAINER,
-						image: launch.image,
-						...(launch.args.length > 0 ? { args: launch.args } : {}),
-						ports: [{ containerPort: port }],
-						envFrom: [{ secretRef: { name } }],
-						resources: resourcesFor(conf),
-						readinessProbe: {
-							tcpSocket: { port },
-							periodSeconds: 2,
-						},
-						securityContext: {
-							allowPrivilegeEscalation: false,
-						},
-						volumeMounts: [{ name: "shm", mountPath: "/dev/shm" }],
-					},
-				],
-				volumes: [
-					{ name: "shm", emptyDir: { medium: "Memory", sizeLimit: SHM_LIMIT } },
-				],
-			},
+		async get(name) {
+			try {
+				return (await custom.getNamespacedCustomObject({
+					...target,
+					name,
+				})) as McpServer;
+			} catch (ex) {
+				if (isStatus(ex, 404)) return undefined;
+				throw ex;
+			}
 		},
-		service: {
-			metadata,
-			spec: {
-				selector: labels,
-				ports: [{ port, targetPort: port }],
-			},
+		async create(body) {
+			return (await custom.createNamespacedCustomObject({
+				...target,
+				body,
+			})) as McpServer;
+		},
+		async patchSpec(name, spec) {
+			return (await custom.patchNamespacedCustomObject(
+				{ ...target, name, body: { spec } },
+				merge,
+			)) as McpServer;
+		},
+		async putEnv(name, data, owner) {
+			const body: V1Secret = {
+				metadata: {
+					name,
+					...(owner
+						? {
+								ownerReferences: [
+									{
+										apiVersion: `${GROUP}/${VERSION}`,
+										kind: KIND,
+										name: owner.name,
+										uid: owner.uid,
+									},
+								],
+							}
+						: {}),
+				},
+				type: "Opaque",
+				data,
+			};
+			try {
+				await core.createNamespacedSecret({ namespace, body });
+			} catch (ex) {
+				if (!isStatus(ex, 409)) throw ex;
+				await core.replaceNamespacedSecret({ namespace, name, body });
+			}
 		},
 	};
 }
 
-export function egressPolicy(): V1NetworkPolicy {
-	return {
-		metadata: { name: EGRESS_POLICY },
-		spec: {
-			podSelector: { matchLabels: { [MANAGED_BY]: MANAGER } },
-			policyTypes: ["Egress"],
-			egress: [
-				{
-					to: [
-						{
-							namespaceSelector: {
-								matchLabels: { "kubernetes.io/metadata.name": "kube-system" },
-							},
-							podSelector: { matchLabels: { "k8s-app": "kube-dns" } },
-						},
-					],
-					ports: [
-						{ protocol: "UDP", port: 53 },
-						{ protocol: "TCP", port: 53 },
-					],
-				},
-				{
-					to: [
-						{
-							ipBlock: { cidr: "0.0.0.0/0", except: UNROUTED_FROM_A_SERVER },
-						},
-					],
-				},
-			],
-		},
-	};
+export async function clusterAnswers(
+	namespace: string | undefined,
+	config: KubeConfig = defaultConfig(),
+): Promise<boolean> {
+	if (namespace === undefined) return false;
+	const served = config
+		.makeApiClient(CustomObjectsApi)
+		.listNamespacedCustomObject({
+			group: GROUP,
+			version: VERSION,
+			namespace,
+			plural: PLURAL,
+			limit: 1,
+		});
+	const timeout = new Promise<never>((_, reject) =>
+		setTimeout(reject, PROBE_TIMEOUT_MS).unref(),
+	);
+	try {
+		await Promise.race([served, timeout]);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 export class KubernetesHost implements McpHost {
-	private readonly servers = new Map<string, Server>();
+	private readonly followed = new Map<string, Followed>();
 	private readonly starting = new Map<string, Promise<ServerHandle>>();
-	private readonly instance = randomUUID();
-	private readonly namespace: string;
-	private readonly cluster: Cluster;
+	private readonly store: ServerStore;
 	private readonly fallback: McpHost;
-	private namespaceReady: Promise<void> | undefined;
+	private readonly clock: () => number;
+	private readonly pollMs: number;
+	private readonly startTimeoutMs: number;
 
 	constructor(private readonly options: KubernetesHostOptions) {
-		this.namespace = namespaceFor(options.namespacePrefix, options.scope);
-		this.cluster = options.cluster ?? clientCluster();
+		this.store = options.store ?? clientStore(options.namespace);
 		this.fallback = options.fallback ?? new LocalProcessHost();
+		this.clock = options.clock ?? epochSeconds;
+		this.pollMs = options.pollMs ?? POLL_MS;
+		this.startTimeoutMs = options.startTimeoutMs ?? START_TIMEOUT_MS;
 	}
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
-		const launch = launchFor(conf);
-		if (launch === undefined) return await this.fallback.ensure(conf);
+		if (launchFor(conf) === undefined) return await this.fallback.ensure(conf);
 		const pending = this.starting.get(conf.name);
 		if (pending) return await pending;
-		const run = this.serving(conf, launch).finally(() =>
+		const run = this.serving(conf).finally(() =>
 			this.starting.delete(conf.name),
 		);
 		this.starting.set(conf.name, run);
@@ -414,200 +239,122 @@ export class KubernetesHost implements McpHost {
 
 	async stop(name: string): Promise<void> {
 		await this.starting.get(name)?.catch(() => {});
-		if (!this.servers.has(name)) return await this.fallback.stop(name);
-		await this.halt(name);
+		const followed = this.followed.get(name);
+		if (!followed) return await this.fallback.stop(name);
+		this.unfollow(followed);
+		await this.store.patchSpec(followed.name, { lastUsed: 0 });
 	}
 
 	async stopAll(): Promise<void> {
 		await Promise.allSettled(this.starting.values());
-		for (const name of [...this.servers.keys()]) await this.halt(name);
+		for (const followed of this.followed.values()) this.unfollow(followed);
 		await this.fallback.stopAll();
-		await this.cluster
-			.removeLabelled(this.namespace, `${HOST_LABEL}=${this.instance}`)
-			.catch(() => {});
 	}
 
 	status(name: string): ServerState {
-		const server = this.servers.get(name);
-		return server ? server.state : this.fallback.status(name);
+		const followed = this.followed.get(name);
+		return followed ? followed.state : this.fallback.status(name);
 	}
 
 	logs(name: string): string {
-		const server = this.servers.get(name);
-		return server ? server.logs : this.fallback.logs(name);
+		const followed = this.followed.get(name);
+		return followed ? followed.logs : this.fallback.logs(name);
 	}
 
-	private async serving(
-		conf: ConnConfig,
-		launch: Launch,
-	): Promise<ServerHandle> {
-		const server = this.servers.get(conf.name);
-		if (server && server.state === "running") {
-			const state = await this.cluster.state(this.namespace, server.name);
-			if (state.phase === "ready") return server.handle;
-		}
-		await this.halt(conf.name);
-		return await this.start(conf, launch);
+	private unfollow(followed: Followed): void {
+		clearInterval(followed.heartbeat);
+		followed.state = "stopped";
 	}
 
-	private async halt(name: string): Promise<void> {
-		const server = this.servers.get(name);
-		if (!server) return;
-		this.servers.delete(name);
-		clearInterval(server.refresh);
-		clearInterval(server.heartbeat);
-		server.state = "stopped";
-		await this.cluster.remove(this.namespace, server.name);
-	}
-
-	private labels(conf: ConnConfig): Record<string, string> {
-		return {
-			[MANAGED_BY]: MANAGER,
-			[HOST_LABEL]: this.instance,
-			[SERVER_LABEL]: dnsLabel(conf.name),
-		};
-	}
-
-	private callerPullSecret(): string | undefined {
-		return this.options.callerNamespace ? this.options.pullSecret : undefined;
-	}
-
-	private async ensureNamespace(): Promise<void> {
-		this.namespaceReady ??= this.prepareNamespace().catch((ex) => {
-			this.namespaceReady = undefined;
-			throw ex;
+	private async serving(conf: ConnConfig): Promise<ServerHandle> {
+		const launch = launchFor(conf);
+		if (!launch) throw new Error(`${conf.name}: has no container to run.`);
+		const { scope } = this.options;
+		const name = serverName(scope, conf.name);
+		const secret = envSecretName(name);
+		const data = encoded(conf.env);
+		const wanted = specFor(conf, launch, scope, this.clock(), {
+			secret,
+			hash: envHash(conf.env),
 		});
-		await this.namespaceReady;
-	}
 
-	private async prepareNamespace(): Promise<void> {
-		await this.cluster.ensureNamespace({
-			metadata: {
-				name: this.namespace,
-				annotations: seenAt(epochSeconds()),
-				labels: {
-					[MANAGED_BY]: MANAGER,
-					[WORKSPACE_LABEL]: dnsLabel(this.options.scope),
-					"pod-security.kubernetes.io/enforce": "baseline",
-				},
-			},
-		});
-		await this.cluster.ensureNetworkPolicy(this.namespace, egressPolicy());
-		const caller = this.options.callerNamespace;
-		if (caller === undefined) return;
-		const pullSecret = this.options.pullSecret;
-		if (pullSecret)
-			await this.cluster.copySecret(caller, this.namespace, pullSecret);
-		await this.cluster.ensureNetworkPolicy(this.namespace, {
-			metadata: { name: INGRESS_POLICY },
-			spec: {
-				podSelector: { matchLabels: { [MANAGED_BY]: MANAGER } },
-				policyTypes: ["Ingress"],
-				ingress: [
-					{
-						_from: [
-							{
-								namespaceSelector: {
-									matchLabels: { "kubernetes.io/metadata.name": caller },
-								},
-							},
-						],
-					},
-				],
-			},
-		});
-	}
-
-	private async start(conf: ConnConfig, launch: Launch): Promise<ServerHandle> {
-		await this.ensureNamespace();
-		const name = dnsLabel(
-			`mcp-${dnsLabel(conf.name, 40)}-${this.instance.slice(0, 8)}`,
-		);
-		const port = Number(launch.exposed);
-		const url = new URL(
-			launch.path,
-			this.cluster.origin(this.namespace, name, port),
-		).toString();
-		const headers = "headers" in conf ? conf.headers : undefined;
-		const server: Server = {
-			name,
-			handle: headers ? { url, headers } : { url },
-			logs: "",
-			state: "running",
-		};
-		await this.cluster.remove(this.namespace, name);
-		const seen = epochSeconds();
-		await this.cluster.touchNamespace(this.namespace, seen);
-		try {
-			await this.cluster.create(
-				this.namespace,
-				workloadFor(
-					name,
-					conf,
-					launch,
-					this.labels(conf),
-					seen,
-					this.callerPullSecret(),
-				),
+		const live = await this.store.get(name);
+		let server: McpServer;
+		if (live) {
+			await this.store.putEnv(secret, data, ownerOf(live));
+			server = await this.store.patchSpec(
+				name,
+				respecced(live.spec, wanted, live.status?.phase === "Failed"),
 			);
-			this.servers.set(conf.name, server);
-			await this.answering(conf.name, server, new URL(url).origin);
-		} catch (ex) {
-			this.servers.delete(conf.name);
-			await this.cluster.remove(this.namespace, name).catch(() => {});
-			throw ex;
+		} else {
+			await this.store.putEnv(secret, data);
+			server = await this.store.create({
+				apiVersion: `${GROUP}/${VERSION}`,
+				kind: KIND,
+				metadata: { name },
+				spec: wanted,
+			});
+			const owner = ownerOf(server);
+			if (owner) await this.store.putEnv(secret, data, owner);
 		}
-		this.follow(server);
-		return server.handle;
+
+		const followed: Followed = this.followed.get(conf.name) ?? {
+			name,
+			state: "running",
+			logs: "",
+		};
+		this.followed.set(conf.name, followed);
+		const url = await this.answering(conf.name, server, followed);
+		this.follow(followed);
+		const headers = "headers" in conf ? conf.headers : undefined;
+		return headers ? { url, headers } : { url };
 	}
 
 	private async answering(
 		label: string,
-		server: Server,
-		origin: string,
-	): Promise<void> {
-		const deadline = Date.now() + START_TIMEOUT_MS;
+		asked: McpServer,
+		followed: Followed,
+	): Promise<string> {
+		const generation = asked.metadata.generation ?? 0;
+		const deadline = Date.now() + this.startTimeoutMs;
+		let last: McpServer | undefined = asked;
 		while (Date.now() < deadline) {
-			const state = await this.cluster.state(this.namespace, server.name);
-			if (state.phase === "failed" || state.phase === "gone") {
-				server.logs = await this.cluster.logs(this.namespace, server.name);
-				const why = state.phase === "failed" ? state.reason : "was deleted";
+			last = await this.store.get(asked.metadata.name);
+			const status = last?.status;
+			const current = (status?.observedGeneration ?? 0) >= generation;
+			if (current && status?.phase === "Ready" && status.endpoints?.mcp)
+				return status.endpoints.mcp;
+			if (current && status?.phase === "Failed") {
+				followed.state = "stopped";
+				followed.logs = status.logTail ?? "";
 				throw new Error(
-					`${label}: its pod in ${this.namespace} ${why} before ${origin} answered.${tail(server.logs)}`,
+					`${label}: ${status.reason ?? "its server failed"} before it answered.${tail(followed.logs)}`,
 				);
 			}
-			if (state.phase === "ready" && (await reachable(origin))) return;
-			await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+			await new Promise((resolve) => setTimeout(resolve, this.pollMs));
 		}
-		server.logs = await this.cluster.logs(this.namespace, server.name);
+		followed.state = "stopped";
 		throw new Error(
-			`${label}: started its pod in ${this.namespace} but ${origin} did not answer within ${START_TIMEOUT_MS / 1000}s.${tail(server.logs)}`,
+			`${label}: asked the cluster for it but it did not answer within ${this.startTimeoutMs / 1000}s (last phase: ${last?.status?.phase ?? "none"}).`,
 		);
 	}
 
-	private follow(server: Server): void {
-		server.refresh = setInterval(async () => {
-			const [state, logs] = await Promise.all([
-				this.cluster.state(this.namespace, server.name),
-				this.cluster.logs(this.namespace, server.name),
-			]).catch(() => [undefined, undefined] as const);
-			if (logs) server.logs = logs.slice(-LOGS_KEEP);
-			if (state && (state.phase === "failed" || state.phase === "gone")) {
-				server.state = "stopped";
-				clearInterval(server.refresh);
-				clearInterval(server.heartbeat);
-			}
-		}, REFRESH_MS);
-		server.refresh.unref();
-		server.heartbeat = setInterval(() => {
-			const seen = epochSeconds();
-			Promise.all([
-				this.cluster.touchPod(this.namespace, server.name, seen),
-				this.cluster.touchNamespace(this.namespace, seen),
-			]).catch(() => {});
+	private follow(followed: Followed): void {
+		clearInterval(followed.heartbeat);
+		followed.state = "running";
+		followed.heartbeat = setInterval(() => {
+			this.store
+				.patchSpec(followed.name, { lastUsed: this.clock() })
+				.catch(() => {});
 		}, HEARTBEAT_MS);
-		server.heartbeat.unref();
+		followed.heartbeat.unref();
 	}
+}
+
+function ownerOf(server: McpServer): Owner | undefined {
+	return server.metadata.uid
+		? { name: server.metadata.name, uid: server.metadata.uid }
+		: undefined;
 }
 
 function tail(logs: string): string {

@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.mcpOperator.serviceAccount }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-operator
+rules:
+  - apiGroups: [lisptc.io]
+    resources: [mcpservers]
+    verbs: [get, list, watch, patch, update, delete]
+  - apiGroups: [lisptc.io]
+    resources: [mcpservers/status, mcpservers/finalizers]
+    verbs: [get, patch, update]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mcp-operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.mcpOperator.serviceAccount }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Namespace }}-mcp-operator
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, create, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list, create, delete]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, create, update, delete]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [get, list, create, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, create]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Namespace }}-mcp-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Namespace }}-mcp-operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.mcpOperator.serviceAccount }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mcp-operator
+  template:
+    metadata:
+      labels:
+        app: mcp-operator
+    spec:
+      serviceAccountName: {{ .Values.mcpOperator.serviceAccount }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      containers:
+        - name: mcp-operator
+          image: "{{ .Values.mcpOperator.image.repository }}:{{ .Values.mcpOperator.image.tag }}"
+          env:
+            - name: LISPTC_MCP_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: LISPTC_MCP_NAMESPACE_PREFIX
+              value: {{ include "lisptc.mcpNamespacePrefix" . | quote }}
+            - name: LISPTC_MCP_PULL_SECRET
+              value: {{ .Values.imagePullSecret | quote }}
+            {{- with .Values.mcp.storageClass }}
+            - name: LISPTC_MCP_STORAGE_CLASS
+              value: {{ . | quote }}
+            {{- end }}
+            - name: CONVEX_URL
+              value: {{ printf "http://convex-backend.%s.svc.cluster.local:3210" .Release.Namespace | quote }}
+            - name: CONVEX_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-convex
+                  key: CONVEX_SELF_HOSTED_ADMIN_KEY
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }

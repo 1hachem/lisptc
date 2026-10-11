@@ -21,7 +21,7 @@ export interface Tool {
 	outputSchema?: JsonSchema;
 }
 
-interface ConnMeta {
+export interface ConnMeta {
 	description?: string;
 	keywords?: string[];
 }
@@ -47,6 +47,32 @@ export type HttpConnConfig = ConnMeta & {
 	env?: Record<string, string>;
 };
 
+export type Reclaim = "Retain" | "Delete";
+
+export interface StateEntry {
+	name?: string;
+	path: string;
+	size?: string;
+	reclaim?: Reclaim;
+	retentionSeconds?: number;
+}
+
+export type StateSpec = string | StateEntry | (string | StateEntry)[];
+
+export interface NamedPort {
+	name: string;
+	port: number;
+}
+
+export interface AppContainer {
+	image: string;
+	args?: string[];
+	ports?: NamedPort[];
+	expose?: string[];
+	resources?: Resources;
+	state?: StateSpec;
+}
+
 export type ContainerConnConfig = ConnMeta & {
 	name: string;
 	image: string;
@@ -57,6 +83,8 @@ export type ContainerConnConfig = ConnMeta & {
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
 	resources?: Resources;
+	state?: StateSpec;
+	app?: AppContainer;
 };
 
 export type StdioConnConfig = ConnMeta & {

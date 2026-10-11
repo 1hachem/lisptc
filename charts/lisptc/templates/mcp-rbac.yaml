@@ -4,60 +4,25 @@ metadata:
   name: {{ .Values.app.serviceAccount }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ .Release.Namespace }}-mcp-host
-rules:
-  - apiGroups: [""]
-    resources: [namespaces]
-    verbs: [get, create, patch]
-  - apiGroups: [""]
-    resources: [pods]
-    verbs: [get, list, create, update, patch, delete, deletecollection]
-  - apiGroups: [""]
-    resources: [services]
-    verbs: [get, list, create, update, delete, deletecollection]
-  - apiGroups: [""]
-    resources: [secrets]
-    verbs: [create, update, delete, deletecollection]
-  - apiGroups: [""]
-    resources: [pods/log]
-    verbs: [get]
-  - apiGroups: [networking.k8s.io]
-    resources: [networkpolicies]
-    verbs: [get, create]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {{ .Release.Namespace }}-mcp-host
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ .Release.Namespace }}-mcp-host
-subjects:
-  - kind: ServiceAccount
-    name: {{ .Values.app.serviceAccount }}
-    namespace: {{ .Release.Namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: mcp-pull-secret
+  name: mcp-host
 rules:
+  - apiGroups: [lisptc.io]
+    resources: [mcpservers]
+    verbs: [get, list, watch, create, patch, delete]
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [{{ .Values.imagePullSecret }}]
-    verbs: [get]
+    verbs: [get, create, update, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: mcp-pull-secret
+  name: mcp-host
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: mcp-pull-secret
+  name: mcp-host
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.app.serviceAccount }}

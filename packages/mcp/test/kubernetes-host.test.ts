@@ -1,391 +1,231 @@
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-	type Cluster,
-	DEFAULT_RESOURCES,
-	dnsLabel,
-	egressPolicy,
+	envSecretName,
 	KubernetesHost,
-	namespaceFor,
-	type PodState,
-	SHM_LIMIT,
-	type Workload,
-	workloadFor,
+	type Owner,
+	type ServerStore,
 } from "../src/kubernetes-host.ts";
+import {
+	type McpServer,
+	type McpServerStatus,
+	serverName,
+} from "../src/mcp-server-resource.ts";
 import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
 import { recordingHost } from "./helpers.ts";
 
-const playwright: ContainerConnConfig = {
+const browser: ContainerConnConfig = {
 	name: "playwright",
-	image: "ghcr.io/1hachem/lisptc-browser-mcp:main",
+	image: "playwright-mcp",
 	port: 8931,
 	env: { TOKEN: "s3cret" },
 	headers: { authorization: "Bearer x" },
+	app: { image: "chromium-vnc", state: "/data/profile" },
 };
 
-const filesystem: StdioConnConfig = {
-	name: "fs",
-	command: "npx",
-	args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
-};
+const remote = {
+	name: "remote",
+	url: "https://example.com/mcp",
+} as const;
 
-let answering: Server;
-let origin: string;
+const NAME = serverName("ws1", "playwright");
+const READY_URL = `http://${NAME}.lisptc-ws-ws1:8931/mcp`;
 
-beforeAll(async () => {
-	answering = createServer((_req, res) => res.end());
-	await new Promise<void>((resolve) => answering.listen(0, resolve));
-	origin = `http://127.0.0.1:${(answering.address() as AddressInfo).port}`;
+type Operator = (server: McpServer) => McpServerStatus | undefined;
+
+const ready: Operator = (server) => ({
+	phase: "Ready",
+	endpoints: { mcp: READY_URL },
+	observedGeneration: server.metadata.generation,
 });
 
-afterAll(() => {
-	answering.close();
-});
-
-function fakeCluster(
-	states: PodState[] = [{ phase: "ready" }],
-	{ failCreate = false } = {},
-) {
-	const created: { namespace: string; workload: Workload }[] = [];
-	const removed: string[] = [];
-	const labelled: string[] = [];
-	const namespaces: string[] = [];
-	const policies: string[] = [];
-	const copied: string[] = [];
-	const touched: string[] = [];
-	let next = 0;
-	const cluster: Cluster = {
-		async ensureNamespace(ns) {
-			namespaces.push(ns.metadata?.name ?? "");
+function fakeStore(operator: Operator = ready) {
+	const servers = new Map<string, McpServer>();
+	const env = new Map<
+		string,
+		{ data: Record<string, string>; owner?: Owner }
+	>();
+	const patches: Partial<McpServer["spec"]>[] = [];
+	let uid = 0;
+	const store: ServerStore = {
+		async get(name) {
+			const server = servers.get(name);
+			if (!server) return undefined;
+			const status = operator(server);
+			if (status) server.status = status;
+			return structuredClone(server);
 		},
-		async ensureNetworkPolicy(namespace, policy) {
-			policies.push(`${namespace}/${policy.metadata?.name}`);
+		async create(server) {
+			uid += 1;
+			const created = structuredClone(server);
+			created.metadata.uid = `uid-${uid}`;
+			created.metadata.generation = 1;
+			servers.set(server.metadata.name, created);
+			return structuredClone(created);
 		},
-		async copySecret(from, to, name) {
-			copied.push(`${from}/${name} -> ${to}`);
+		async patchSpec(name, spec) {
+			const server = servers.get(name);
+			if (!server) throw new Error(`no ${name}`);
+			patches.push(spec);
+			server.spec = { ...server.spec, ...spec };
+			server.metadata.generation = (server.metadata.generation ?? 0) + 1;
+			return structuredClone(server);
 		},
-		async create(namespace, workload) {
-			if (failCreate) throw new Error("pods is forbidden");
-			created.push({ namespace, workload });
+		async putEnv(name, data, owner) {
+			env.set(name, { data, ...(owner ? { owner } : {}) });
 		},
-		async state() {
-			const state = states[Math.min(next, states.length - 1)];
-			next += 1;
-			return state ?? { phase: "gone" };
-		},
-		async logs() {
-			return "chromium crashed";
-		},
-		async remove(_namespace, name) {
-			removed.push(name);
-		},
-		async removeLabelled(_namespace, selector) {
-			labelled.push(selector);
-		},
-		async touchNamespace(namespace, seen) {
-			touched.push(`${namespace}@${seen}`);
-		},
-		async touchPod(namespace, pod, seen) {
-			touched.push(`${namespace}/${pod}@${seen}`);
-		},
-		origin: () => origin,
 	};
-	return {
-		cluster,
-		created,
-		removed,
-		labelled,
-		namespaces,
-		policies,
-		copied,
-		touched,
-	};
+	return { store, servers, env, patches };
 }
 
-describe("naming in the cluster", () => {
-	it("names the namespace after the workspace", () => {
-		expect(namespaceFor("lisptc-ws-", "jd7ABc123")).toBe("lisptc-ws-jd7abc123");
+function host(store: ServerStore, fallback = recordingHost()) {
+	return new KubernetesHost({
+		scope: "ws1",
+		namespace: "lisptc",
+		store,
+		fallback,
+		pollMs: 1,
+		startTimeoutMs: 200,
+		clock: () => 1000,
 	});
-
-	it("keeps a name within a dns label", () => {
-		const name = namespaceFor("lisptc-ws-", "x".repeat(80));
-		expect(name).toHaveLength(63);
-		expect(dnsLabel("My Server!!")).toBe("my-server");
-	});
-});
-
-describe("the workload a server runs as", () => {
-	it("keeps the env out of the pod spec and dials it through a service", () => {
-		const labels = { "lisptc.io/mcp-server": "playwright" };
-		const { secret, pod, service } = workloadFor(
-			"mcp-playwright",
-			playwright,
-			{ image: playwright.image, exposed: "8931", path: "/mcp", args: [] },
-			labels,
-			1_700_000_000,
-		);
-
-		expect(secret.stringData).toEqual({ TOKEN: "s3cret" });
-		const container = pod.spec?.containers[0];
-		expect(container?.env).toBeUndefined();
-		expect(container?.envFrom).toEqual([
-			{ secretRef: { name: "mcp-playwright" } },
-		]);
-		expect(container?.args).toBeUndefined();
-		expect(pod.spec?.automountServiceAccountToken).toBe(false);
-		expect(service.spec?.selector).toEqual(labels);
-		expect(service.spec?.ports).toEqual([{ port: 8931, targetPort: 8931 }]);
-		expect(pod.metadata?.annotations).toEqual({
-			"lisptc.io/last-seen": "1700000000",
-		});
-	});
-
-	it("bounds a server by default and lets its entry ask for more", () => {
-		const launch = { image: "x", exposed: "8931", path: "/mcp", args: [] };
-		const bounded = workloadFor("mcp-a", playwright, launch, {}, 0).pod.spec
-			?.containers[0]?.resources;
-		expect(bounded).toEqual(DEFAULT_RESOURCES);
-
-		const asked = workloadFor(
-			"mcp-b",
-			{ ...playwright, resources: { limits: { memory: "4Gi" } } },
-			launch,
-			{},
-			0,
-		).pod.spec?.containers[0]?.resources;
-		expect(asked?.limits).toEqual({ cpu: "2", memory: "4Gi" });
-		expect(asked?.requests).toEqual(DEFAULT_RESOURCES.requests);
-	});
-
-	it("leaves room above the memory-backed shm, which counts against the limit", () => {
-		const gib = (quantity: string) => Number.parseInt(quantity, 10);
-		expect(gib(DEFAULT_RESOURCES.limits.memory)).toBeGreaterThan(
-			gib(SHM_LIMIT),
-		);
-	});
-});
-
-describe("what a server may reach", () => {
-	it("resolves names and reaches the internet, but nothing inside the cluster", () => {
-		const [dns, internet] = egressPolicy().spec?.egress ?? [];
-		expect(dns?.to?.[0]?.podSelector?.matchLabels).toEqual({
-			"k8s-app": "kube-dns",
-		});
-		expect(dns?.ports?.map((p) => p.port)).toEqual([53, 53]);
-		const block = internet?.to?.[0]?.ipBlock;
-		expect(block?.cidr).toBe("0.0.0.0/0");
-		expect(block?.except).toEqual(
-			expect.arrayContaining(["10.0.0.0/8", "169.254.0.0/16"]),
-		);
-	});
-});
+}
 
 describe("the kubernetes host", () => {
-	it("runs a server in its workspace namespace and hands back its address", async () => {
-		const fake = fakeCluster([{ phase: "starting" }, { phase: "ready" }]);
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			callerNamespace: "lisptc",
-			cluster: fake.cluster,
-		});
+	it("asks for a server and hands back the address the operator reports", async () => {
+		const fake = fakeStore();
 
-		const handle = await host.ensure(playwright);
+		const handle = await host(fake.store).ensure(browser);
 
 		expect(handle).toEqual({
-			url: `${origin}/mcp`,
+			url: READY_URL,
 			headers: { authorization: "Bearer x" },
 		});
-		expect(fake.namespaces).toEqual(["lisptc-ws-ws1"]);
-		expect(fake.policies).toEqual([
-			"lisptc-ws-ws1/mcp-egress",
-			"lisptc-ws-ws1/mcp-ingress",
+		const server = fake.servers.get(NAME);
+		expect(server?.spec.app?.state).toMatchObject([
+			{ name: "profile", path: "/data/profile" },
 		]);
-		expect(fake.created.map((c) => c.namespace)).toEqual(["lisptc-ws-ws1"]);
-		expect(fake.touched).toEqual([
-			expect.stringMatching(/^lisptc-ws-ws1@\d+$/),
-		]);
-		expect(host.status("playwright")).toBe("running");
-		await host.stopAll();
+		expect(server?.spec.lastUsed).toBe(1000);
 	});
 
-	it("pulls with a copy of the caller's pull secret", async () => {
-		const fake = fakeCluster();
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			callerNamespace: "lisptc",
-			pullSecret: "ghcr-pull",
-			cluster: fake.cluster,
-		});
+	it("keeps the env in a secret the server owns, never in its spec", async () => {
+		const fake = fakeStore();
 
-		await host.ensure(playwright);
+		await host(fake.store).ensure(browser);
 
-		expect(fake.copied).toEqual(["lisptc/ghcr-pull -> lisptc-ws-ws1"]);
-		expect(fake.created[0]?.workload.pod.spec?.imagePullSecrets).toEqual([
-			{ name: "ghcr-pull" },
-		]);
-		await host.stopAll();
-	});
-
-	it("pulls without a secret when it has no caller to copy one from", async () => {
-		const fake = fakeCluster();
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			pullSecret: "ghcr-pull",
-			cluster: fake.cluster,
-		});
-
-		await host.ensure(playwright);
-
-		expect(fake.copied).toEqual([]);
-		expect(
-			fake.created[0]?.workload.pod.spec?.imagePullSecrets,
-		).toBeUndefined();
-		await host.stopAll();
-	});
-
-	it("wraps a stdio server in the gateway image", async () => {
-		const fake = fakeCluster();
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fake.cluster,
-		});
-
-		await host.ensure(filesystem);
-
-		const pod = fake.created[0]?.workload.pod;
-		expect(pod?.spec?.containers[0]?.image).toMatch(
-			/^supercorp\/supergateway:/,
+		const secret = fake.env.get(envSecretName(NAME));
+		expect(secret?.data).toEqual({ TOKEN: btoa("s3cret") });
+		expect(secret?.owner).toEqual({ name: NAME, uid: "uid-1" });
+		expect(JSON.stringify(fake.servers.get(NAME)?.spec)).not.toContain(
+			"s3cret",
 		);
-		expect(fake.policies).toEqual(["lisptc-ws-ws1/mcp-egress"]);
-		await host.stopAll();
 	});
 
-	it("names why a pod failed and removes it", async () => {
-		const fake = fakeCluster([
-			{ phase: "failed", reason: "ImagePullBackOff: not found" },
-		]);
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fake.cluster,
-		});
+	it("reuses a server another process asked for", async () => {
+		const fake = fakeStore();
+		await host(fake.store).ensure(browser);
 
-		await expect(host.ensure(playwright)).rejects.toThrow(
-			/ImagePullBackOff: not found[\s\S]*chromium crashed/,
+		await host(fake.store).ensure(browser);
+
+		expect(fake.servers.size).toBe(1);
+		expect(fake.patches).toHaveLength(1);
+	});
+
+	it("keeps a resize and a reset made on the live server", async () => {
+		const fake = fakeStore();
+		await host(fake.store).ensure(browser);
+		const live = fake.servers.get(NAME);
+		const state = live?.spec.app?.state[0];
+		if (!state) throw new Error("no state");
+		state.size = "5Gi";
+		state.reset = 2;
+
+		await host(fake.store).ensure(browser);
+
+		expect(fake.servers.get(NAME)?.spec.app?.state[0]).toMatchObject({
+			size: "5Gi",
+			reset: 2,
+		});
+	});
+
+	it("raises restarts on a failed server, and never deletes it", async () => {
+		let failNext = 0;
+		const fake = fakeStore((server) => {
+			if (failNext === 0) return ready(server);
+			failNext -= 1;
+			return {
+				phase: "Failed",
+				reason: "app: CrashLoopBackOff",
+				observedGeneration: server.metadata.generation,
+			};
+		});
+		await host(fake.store).ensure(browser);
+		const before = fake.servers.get(NAME);
+		failNext = 1;
+
+		await host(fake.store).ensure(browser);
+
+		expect(fake.servers.get(NAME)).toBe(before);
+		expect(fake.servers.get(NAME)?.spec.restarts).toBe(1);
+	});
+
+	it("names why the server failed and keeps its last lines", async () => {
+		const fake = fakeStore((server) => ({
+			phase: "Failed",
+			reason: "mcp exited with code 1",
+			logTail: "booting\nchromium crashed",
+			observedGeneration: server.metadata.generation,
+		}));
+		const kube = host(fake.store);
+
+		await expect(kube.ensure(browser)).rejects.toThrow(
+			/mcp exited with code 1[\s\S]*chromium crashed/,
 		);
-		expect(host.status("playwright")).toBe("unknown");
-		expect(fake.removed).toHaveLength(2);
+		expect(kube.status("playwright")).toBe("stopped");
+		expect(kube.logs("playwright")).toContain("chromium crashed");
 	});
 
-	it("removes what a failed create left behind", async () => {
-		const fake = fakeCluster([{ phase: "ready" }], { failCreate: true });
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fake.cluster,
+	it("ignores a status the operator wrote for an older spec", async () => {
+		let calls = 0;
+		const fake = fakeStore((server) => {
+			calls += 1;
+			return calls < 3
+				? { phase: "Failed", reason: "old", observedGeneration: 0 }
+				: ready(server);
 		});
 
-		await expect(host.ensure(playwright)).rejects.toThrow(/forbidden/);
-		expect(host.status("playwright")).toBe("unknown");
-		expect(fake.removed).toHaveLength(2);
-	});
-
-	it("starts a server once when it is asked for twice at the same time", async () => {
-		const fake = fakeCluster();
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fake.cluster,
+		await expect(host(fake.store).ensure(browser)).resolves.toMatchObject({
+			url: READY_URL,
 		});
-
-		const [first, second] = await Promise.all([
-			host.ensure(playwright),
-			host.ensure(playwright),
-		]);
-
-		expect(fake.created).toHaveLength(1);
-		expect(second).toEqual(first);
-		await host.stopAll();
 	});
 
-	it("stops a server that was still starting", async () => {
-		const fake = fakeCluster([{ phase: "starting" }, { phase: "ready" }]);
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fake.cluster,
-		});
+	it("gives up when the server never answers", async () => {
+		const fake = fakeStore(() => ({ phase: "Starting" }));
 
-		const started = host.ensure(playwright);
-		await host.stop("playwright");
-		await started;
-
-		expect(host.status("playwright")).toBe("unknown");
-		expect(fake.removed).toEqual([
-			fake.created[0]?.workload.pod.metadata?.name,
-			fake.created[0]?.workload.pod.metadata?.name,
-		]);
+		await expect(host(fake.store).ensure(browser)).rejects.toThrow(
+			/did not answer within 0.2s \(last phase: Starting\)/,
+		);
 	});
 
-	it("starts a server again once its pod is gone", async () => {
-		const fake = fakeCluster([
-			{ phase: "ready" },
-			{ phase: "gone" },
-			{ phase: "ready" },
-		]);
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fake.cluster,
-		});
+	it("puts a server to sleep when it is stopped", async () => {
+		const fake = fakeStore();
+		const kube = host(fake.store);
+		await kube.ensure(browser);
 
-		await host.ensure(playwright);
-		await host.ensure(playwright);
+		await kube.stop("playwright");
 
-		expect(fake.created).toHaveLength(2);
-		await host.stopAll();
+		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(0);
+		expect(kube.status("playwright")).toBe("stopped");
 	});
 
-	it("reaps what its own instance started when it stops", async () => {
-		const fake = fakeCluster();
+	it("hands a remote server and a stdio one to the right place", async () => {
+		const fake = fakeStore();
 		const fallback = recordingHost();
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fake.cluster,
-			fallback,
-		});
+		const kube = host(fake.store, fallback);
+		const stdio: StdioConnConfig = { name: "fs", command: "npx", args: ["x"] };
 
-		await host.ensure(playwright);
-		await host.stopAll();
+		await kube.ensure(remote);
+		await kube.ensure(stdio);
 
-		expect(fake.labelled).toEqual([
-			expect.stringMatching(/^lisptc\.io\/mcp-host=[0-9a-f-]{36}$/),
-		]);
-		expect(fallback.stoppedAll).toBe(1);
-		expect(host.status("playwright")).toBe("unknown");
-	});
-
-	it("hands a server that already speaks http to the fallback", async () => {
-		const fallback = recordingHost();
-		const host = new KubernetesHost({
-			scope: "ws1",
-			namespacePrefix: "lisptc-ws-",
-			cluster: fakeCluster().cluster,
-			fallback,
-		});
-
-		const handle = await host.ensure({
-			name: "linear",
-			url: "https://mcp.linear.app/mcp",
-		});
-
-		expect(handle).toEqual({ url: "https://mcp.linear.app/mcp" });
-		expect(fallback.ensured.map((c) => c.name)).toEqual(["linear"]);
+		expect(fallback.ensured.map((conf) => conf.name)).toEqual(["remote"]);
+		expect(fake.servers.has(serverName("ws1", "fs"))).toBe(true);
 	});
 });
