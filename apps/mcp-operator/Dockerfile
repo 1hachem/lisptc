@@ -15,7 +15,7 @@ COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
-    pnpm install --frozen-lockfile --offline --prod
+    pnpm install --frozen-lockfile --offline --prod --ignore-scripts
 COPY --from=pruner /app/out/full/ .
 
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS prod
