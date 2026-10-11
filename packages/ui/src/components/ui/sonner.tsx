@@ -32,8 +32,8 @@ function Toaster({
 		<Sonner
 			theme={scheme}
 			className="toaster group"
-				visibleToasts={3}
-				gap={6}
+			visibleToasts={3}
+			gap={6}
 			icons={{
 				success: (
 					<HugeiconsIcon
@@ -61,7 +61,7 @@ function Toaster({
 			style={
 				{
 					"--width": "260px",
-						"--normal-bg": "var(--popover)",
+					"--normal-bg": "var(--popover)",
 					"--normal-text": "var(--popover-foreground)",
 					"--normal-border": "var(--border)",
 					"--border-radius": "var(--radius)",
