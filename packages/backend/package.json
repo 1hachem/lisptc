@@ -24,6 +24,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
+    "log-stream": "node --no-warnings --experimental-transform-types scripts/log-stream.ts",
     "migrate": "convex run migrations:resetRetiredModels '{\"reset\": true}'",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -36,6 +37,7 @@
     "@convex-dev/migrations": "^0.3.6",
     "@repo/compaction-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
+    "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
     "@repo/llm-extension": "workspace:*",

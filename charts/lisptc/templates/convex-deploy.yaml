@@ -27,6 +27,7 @@ spec:
                 pnpm exec convex env set SITE_URL "$PREVIEW_SITE_URL"
               fi
               pnpm exec convex deploy --typecheck disable --codegen disable
+              pnpm run log-stream || echo "log stream sync failed, deploying anyway"
               exec pnpm run migrate
           volumeMounts:
             - name: convex-env
@@ -42,6 +43,24 @@ spec:
                 secretKeyRef:
                   name: lisptc-convex
                   key: CONVEX_SELF_HOSTED_ADMIN_KEY
+            - name: VITE_ENVIRONMENT
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-web
+                  key: VITE_ENVIRONMENT
+                  optional: true
+            - name: POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-analytics
+                  key: POSTHOG_API_KEY
+                  optional: true
+            - name: POSTHOG_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-analytics
+                  key: POSTHOG_HOST
+                  optional: true
       volumes:
         - name: convex-env
           secret:
