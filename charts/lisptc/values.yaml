@@ -26,9 +26,16 @@ convex:
   secrets: [lisptc-db, lisptc-convex]
 
 postgres:
-  image: postgres:17
+  cluster: db
+  instances: 1
+  image: ghcr.io/cloudnative-pg/postgresql:17.11
   storage: 5Gi
-  secret: lisptc-db
+  init: lisptc-db-init
+  legacy:
+    enabled: true
+    image: postgres:17
+    storage: 5Gi
+    secret: lisptc-db
 
 preview:
   enabled: false
@@ -44,6 +51,14 @@ preview:
       secretNamespace: infisical
   synced:
     - { name: db, path: /db, secretName: lisptc-db }
+    - name: db-init
+      path: /db
+      secretName: lisptc-db-init
+      template:
+        includeAllSecrets: false
+        data:
+          role.sql: 'DO $do$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = $n${{ .POSTGRES_USER.Value }}$n$) THEN ALTER ROLE "{{ .POSTGRES_USER.Value }}" LOGIN PASSWORD $pw${{ .POSTGRES_PASSWORD.Value }}$pw$; ELSE CREATE ROLE "{{ .POSTGRES_USER.Value }}" LOGIN PASSWORD $pw${{ .POSTGRES_PASSWORD.Value }}$pw$; END IF; END $do$'
+          database.sql: 'CREATE DATABASE "{{ .POSTGRES_DB.Value }}" OWNER "{{ .POSTGRES_USER.Value }}"'
     - { name: convex-deploy, path: /convex-deploy, secretName: lisptc-convex-deploy }
     - { name: convex, path: /convex, secretName: lisptc-convex }
     - { name: api, path: /api, secretName: lisptc-api }
