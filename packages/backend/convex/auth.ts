@@ -8,6 +8,7 @@ import type { DataModel } from "./_generated/dataModel.js";
 import { env } from "./_generated/server.js";
 import authConfig from "./auth.config.js";
 import { slugify } from "./lib/slug.js";
+import { posthog } from "./posthog.js";
 
 const authFunctions: AuthFunctions = internal.auth;
 
@@ -26,6 +27,10 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
 					ownerId: userId,
 					name: doc.name === "" ? doc.email : doc.name,
 					slug: slugify(doc.name === "" ? doc.email : doc.name),
+				});
+				await posthog.capture(ctx, {
+					distinctId: userId,
+					event: "user signed up",
 				});
 			},
 			onUpdate: async (ctx, newDoc) => {
