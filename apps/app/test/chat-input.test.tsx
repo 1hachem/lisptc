@@ -85,11 +85,11 @@ describe("the chat input", () => {
 		expect(area.value).toBe("にほん");
 	});
 
-	it("keeps a newline while a form is still open", () => {
+	it("sends on Enter while a form is still open", () => {
 		const onSubmit = vi.fn();
 		const area = render(onSubmit);
 		type(area, "(let ((x 1))");
 		enter(area, false);
-		expect(onSubmit).not.toHaveBeenCalled();
+		expect(onSubmit).toHaveBeenCalledWith("(let ((x 1))");
 	});
 });

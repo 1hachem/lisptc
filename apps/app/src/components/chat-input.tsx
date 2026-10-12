@@ -1,4 +1,3 @@
-import { openForms } from "@repo/syntax";
 import { cn } from "@repo/ui";
 import {
 	type KeyboardEvent,
@@ -35,12 +34,8 @@ function useNotice(): [string | null, (message: string) => void] {
 	return [notice, flash];
 }
 
-function submitsOnEnter(
-	event: KeyboardEvent<HTMLTextAreaElement>,
-	text: string,
-): boolean {
-	if (event.key !== "Enter" || event.shiftKey) return false;
-	return openForms(text) === 0 || event.metaKey || event.ctrlKey;
+function submitsOnEnter(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+	return event.key === "Enter" && !event.shiftKey;
 }
 
 function SendAction({
@@ -125,7 +120,7 @@ export function ChatInput({
 	const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (disabled || event.nativeEvent.isComposing || menu.handleKey(event))
 			return;
-		if (!submitsOnEnter(event, text)) return;
+		if (!submitsOnEnter(event)) return;
 		event.preventDefault();
 		if (isStreaming && empty) onStop?.();
 		else send();
