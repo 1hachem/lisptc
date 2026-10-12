@@ -57,11 +57,6 @@ tasks:
       kubectl -n lisptc get pods
       kubectl get ingress -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.status.loadBalancer.ingress[0].hostname
 
-  convex:admin-key:
-    desc: generate a convex admin key, to store in Infisical prod /convex as CONVEX_SELF_HOSTED_ADMIN_KEY
-    deps: [_reachable]
-    cmd: kubectl -n lisptc exec statefulset/convex-backend -- ./generate_admin_key.sh
-
   logs:
     desc: 'follow the logs of a workload (task cluster:logs -- deploy/app)'
     deps: [_reachable]

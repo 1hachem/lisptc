@@ -8,7 +8,8 @@ node_modules/
 
 .playwright-mcp/
 
-.claude/worktrees/
+/worktrees/*
+!/worktrees/.gitkeep
 
 editors/nvim/.vendor/
 
