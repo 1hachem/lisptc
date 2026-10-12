@@ -1,18 +1,8 @@
+import posthog from "posthog-js";
 import { authToken } from "./auth-client.ts";
 
-const DISTINCT_ID_KEY = "lisptc.distinct-id";
-
-export function distinctId(): string | undefined {
-	if (typeof localStorage === "undefined") return undefined;
-	try {
-		const existing = localStorage.getItem(DISTINCT_ID_KEY);
-		if (existing) return existing;
-		const fresh = crypto.randomUUID();
-		localStorage.setItem(DISTINCT_ID_KEY, fresh);
-		return fresh;
-	} catch {
-		return undefined;
-	}
+function distinctId(): string | undefined {
+	return posthog.__loaded ? posthog.get_distinct_id() : undefined;
 }
 
 export async function apiHeaders(): Promise<Record<string, string>> {

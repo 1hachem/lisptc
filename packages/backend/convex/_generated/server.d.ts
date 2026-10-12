@@ -35,6 +35,8 @@ type Env = {
   readonly GITHUB_CLIENT_SECRET: string | undefined;
   readonly GOOGLE_CLIENT_ID: string | undefined;
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
+  readonly POSTHOG_API_KEY: string;
+  readonly POSTHOG_HOST: string | undefined;
   readonly SITE_URL: string;
 };
 

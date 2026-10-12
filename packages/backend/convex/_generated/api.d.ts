@@ -22,6 +22,7 @@ import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as oauth from "../oauth.js";
 import type * as permissions from "../permissions.js";
+import type * as posthog from "../posthog.js";
 import type * as secrets from "../secrets.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   oauth: typeof oauth;
   permissions: typeof permissions;
+  posthog: typeof posthog;
   secrets: typeof secrets;
   users: typeof users;
   workspaces: typeof workspaces;
@@ -81,4 +83,5 @@ export declare const internal: FilterApi<
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
+  posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };
