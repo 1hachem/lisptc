@@ -34,6 +34,8 @@ spec:
         path: charts/lisptc
         helm:
           valuesObject:
+            release:
+              tag: pending
             preview:
               enabled: true
               number: "{{ .number }}"

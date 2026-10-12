@@ -23,18 +23,14 @@ spec:
   applicationRefs:
     - namePattern: {{ .Release.Namespace }}
       images:
-        - alias: app
-          imageName: {{ .Values.app.image.repository }}
-          manifestTargets:
-            helm:
-              name: app.image.repository
-              tag: app.image.tag
-        - alias: convex-deploy
+        - alias: release
           imageName: {{ .Values.convexDeploy.image.repository }}
+          commonUpdateSettings:
+            forceUpdate: true
           manifestTargets:
             helm:
               name: convexDeploy.image.repository
-              tag: convexDeploy.image.tag
+              tag: release.tag
 {{- range .Values.preview.synced }}
 ---
 apiVersion: secrets.infisical.com/v1alpha1

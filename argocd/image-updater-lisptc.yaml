@@ -9,21 +9,16 @@ metadata:
 spec:
   commonUpdateSettings:
     updateStrategy: newest-build
-    allowTags: regexp:^main-[0-9a-f]{40}$
+    allowTags: regexp:^release-[0-9a-f]{40}$
+    forceUpdate: true
   writeBackConfig:
     method: argocd
   applicationRefs:
     - namePattern: lisptc
       images:
-        - alias: app
-          imageName: ghcr.io/1hachem/lisptc-app
-          manifestTargets:
-            helm:
-              name: app.image.repository
-              tag: app.image.tag
-        - alias: convex-deploy
+        - alias: release
           imageName: ghcr.io/1hachem/lisptc-convex-deploy
           manifestTargets:
             helm:
               name: convexDeploy.image.repository
-              tag: convexDeploy.image.tag
+              tag: release.tag

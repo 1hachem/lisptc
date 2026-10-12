@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
-# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR branch).
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -22,11 +22,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: ${{ github.event_name != 'pull_request' }}
 
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
 
       - name: Fetch the turbo remote cache credentials from Infisical
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: Infisical/secrets-action@v1.0.9
         with:
           method: universal
@@ -112,6 +115,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Setup Nix
         uses: cachix/install-nix-action@v31
@@ -132,6 +138,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Setup Neovim
         uses: rhysd/action-setup-vim@v1
@@ -141,3 +150,17 @@ jobs:
 
       - name: Test
         run: bash editors/nvim/tests/run.sh
+
+  images:
+    needs: [test, test-nix, test-nvim]
+    if: >-
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'preview'))
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/images.yml
+    secrets: inherit
