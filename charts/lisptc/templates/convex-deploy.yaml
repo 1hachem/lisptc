@@ -2,9 +2,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: convex-deploy-{{ .Values.convexDeploy.image.tag | sha256sum | trunc 10 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   backoffLimit: 4
-  activeDeadlineSeconds: 600
+  activeDeadlineSeconds: 1800
   template:
     spec:
       restartPolicy: OnFailure
@@ -17,6 +19,9 @@ spec:
           args:
             - |
               set -e
+              until node -e 'fetch(process.env.CONVEX_SELF_HOSTED_URL + "/version").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'; do
+                sleep 2
+              done
               for f in /etc/convex-env/*; do
                 [ -f "$f" ] || continue
                 pnpm exec convex env set "$(basename "$f")" "$(cat "$f")"

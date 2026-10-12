@@ -1,0 +1,112 @@
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    retentionSize: 9GB
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+grafana:
+  admin:
+    existingSecret: grafana-admin
+    userKey: GRAFANA_USERNAME
+    passwordKey: GRAFANA_PASSWORD
+  persistence:
+    enabled: true
+    type: sts
+    accessModes: ["ReadWriteOnce"]
+    size: 2Gi
+  sidecar:
+    dashboards:
+      searchNamespace: ALL
+  defaultDashboardsEnabled: false
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      k8s-views-global: { gnetId: 15757, revision: 43, datasource: Prometheus }
+      k8s-views-namespaces:
+        { gnetId: 15758, revision: 46, datasource: Prometheus }
+      k8s-views-nodes: { gnetId: 15759, revision: 40, datasource: Prometheus }
+      k8s-views-pods: { gnetId: 15760, revision: 39, datasource: Prometheus }
+      k8s-system-api-server:
+        { gnetId: 15761, revision: 21, datasource: Prometheus }
+      k8s-system-coredns:
+        { gnetId: 15762, revision: 22, datasource: Prometheus }
+      k8s-persistent-volumes:
+        { gnetId: 13646, revision: 2, datasource: Prometheus }
+      cloudnativepg: { gnetId: 20417, revision: 4, datasource: Prometheus }
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+
+extraManifests:
+  - apiVersion: secrets.infisical.com/v1alpha1
+    kind: InfisicalSecret
+    metadata:
+      name: infisical-grafana
+      namespace: monitoring
+    spec:
+      hostAPI: https://app.infisical.com/api
+      syncConfig:
+        resyncInterval: "1m"
+      authentication:
+        universalAuth:
+          secretsScope:
+            projectSlug: listptc-nz-qj
+            envSlug: prod
+            secretsPath: /grafana
+          credentialsRef:
+            secretName: lisptc-infisical-cred
+            secretNamespace: infisical
+      managedKubeSecretReferences:
+        - secretName: grafana-admin
+          secretNamespace: monitoring
+          creationPolicy: Orphan
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: grafana
+      namespace: monitoring
+    spec:
+      ingressClassName: tailscale
+      defaultBackend:
+        service:
+          name: kube-prometheus-stack-grafana
+          port:
+            number: 80
+      tls:
+        - hosts:
+            - lisptc-grafana

@@ -24,6 +24,16 @@ const DELETE_FORM = "permission/delete";
 
 const DELETE_SYM = newSym(DELETE_FORM);
 
+const CLEAR_FORM = "permission/clear-all";
+
+const CLEAR_SYM = newSym(CLEAR_FORM);
+
+function cleared(form: Cell): PermissionRules {
+	if (form.cdr !== null)
+		throw new EvalException("permission/clear-all takes no forms", form, false);
+	return parseRules("");
+}
+
 function deleted(form: Cell): unknown {
 	const rest = form.cdr;
 	if (!(rest instanceof Cell) || rest.cdr !== null)
@@ -124,10 +134,20 @@ export function permissionsExtension(
 				);
 		}
 		const form = awaiting.get(request.id);
-		if (form === undefined) return;
+		if (form === undefined) return undefined;
 		awaiting.delete(request.id);
 		host.approvals.consume(request.name);
-		if (decision.approved) commit(form);
+		if (!decision.approved) return undefined;
+		const { operation, verdict, reason } = ruling(form);
+		if (verdict === "deny") return denial(operation, reason, str(form));
+		try {
+			commit(form);
+		} catch (error) {
+			if (error instanceof EvalException)
+				return `it changes nothing: ${error.message}`;
+			throw error;
+		}
+		return undefined;
 	});
 
 	function ask(
@@ -199,17 +219,11 @@ export function permissionsExtension(
 		const form = typeof given === "string" ? readOne(given) : given;
 		if (!(form instanceof Cell))
 			throw new EvalException("not a permissions form", given, false);
-		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
 		changed(form);
 		const change = str(form);
-		const { verdict, reason } = rules.current.named(operation) ?? {
-			verdict: "ask",
-		};
+		const { operation, verdict, reason } = ruling(form);
 		if (verdict === "deny")
-			throw new PermissionRefusal(
-				operation,
-				`${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`,
-			);
+			throw new PermissionRefusal(operation, denial(operation, reason, change));
 		if (verdict === "ask") {
 			ask(interp, change, "", reason ?? "changes the permissions config", form);
 			throw new StepHold(
@@ -219,7 +233,16 @@ export function permissionsExtension(
 		return commit(form);
 	}
 
+	function ruling(form: Cell): Ruling & { readonly operation: string } {
+		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
+		return {
+			operation,
+			...(rules.current.named(operation) ?? { verdict: "ask" }),
+		};
+	}
+
 	function changed(form: Cell): PermissionRules {
+		if (form.car === CLEAR_SYM) return cleared(form);
 		return form.car === DELETE_SYM
 			? rules.current.without(deleted(form))
 			: rules.current.with(form);
@@ -341,6 +364,17 @@ export function registerPermissions(
 			doc: `Delete one form from the permissions config, written exactly as (permission/list) shows it, e.g. (permission/delete (permission/deny eval)).${APPLIES}`,
 		},
 	);
+	interp.defineGlobal(
+		CLEAR_SYM,
+		runSync(
+			interp,
+			`(macro (&rest forms) (permission/expand "${CLEAR_FORM}" forms))`,
+		),
+		{
+			signature: "(permission/clear-all)",
+			doc: `Delete every form from the permissions config.${APPLIES}`,
+		},
+	);
 	interp.def(
 		"permission/list",
 		0,
@@ -357,6 +391,14 @@ export function registerPermissions(
 		z.tuple([zSym]),
 		([sym]) => newSym(rules.decide(sym.name).verdict),
 	);
+}
+
+function denial(
+	operation: string,
+	reason: string | undefined,
+	change: string,
+): string {
+	return `${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`;
 }
 
 function readOne(source: string): unknown {

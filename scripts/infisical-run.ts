@@ -118,7 +118,7 @@ const infisicalRun = command({
 			throw new Error(`Infisical authentication failed: ${message}`);
 		}
 
-		console.info(`requesting secrets from ${processedPaths}`);
+		console.error(`requesting secrets from ${processedPaths}`);
 		const allPathsSecrets = await Promise.all(
 			processedPaths.map((path) =>
 				client.secrets().listSecrets({
@@ -138,7 +138,7 @@ const infisicalRun = command({
 			},
 			{},
 		);
-		console.info(`${Object.keys(secrets).length} secrets loaded 👌`);
+		console.error(`${Object.keys(secrets).length} secrets loaded 👌`);
 		const exitCode = await spawnWithSignal(cmd, {
 			// biome-ignore lint/style/noProcessEnv: the command inherits the whole environment, no value is read here
 			env: { ...process.env, ...secrets },

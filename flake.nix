@@ -90,6 +90,7 @@
           kubectl
           (wrapHelm kubernetes-helm {plugins = [kubernetes-helmPlugins.helm-diff];})
           helmfile
+          yq-go
           k9s
         ];
 

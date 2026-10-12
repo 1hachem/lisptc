@@ -48,14 +48,22 @@ export interface Decision {
 	readonly by: string;
 }
 
+export interface Settled {
+	readonly request: ApprovalRequest;
+	readonly refused?: string;
+}
+
 export interface Approvals {
 	open(request: ApprovalRequest): void;
 	pending(): ApprovalRequest[];
-	resolve(decision: Decision): ApprovalRequest | undefined;
+	resolve(decision: Decision): Settled | undefined;
 	granted(name: string): boolean;
 	consume(name: string): void;
 	onResolved(
-		listener: (request: ApprovalRequest, decision: Decision) => void,
+		listener: (
+			request: ApprovalRequest,
+			decision: Decision,
+		) => string | undefined,
 	): void;
 }
 
