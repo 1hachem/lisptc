@@ -127,13 +127,13 @@ tasks:
     desc: serve the Grafana MCP server on stdio, against the cluster's Grafana on the tailnet
     cmds:
       - task: _infisical-run
-        vars: { ENV: prod, PATHS: "/grafana /tailnet", CMD: 'GRAFANA_URL=https://lisptc-grafana.\$TAILNET_DOMAIN docker run --rm -i --network host -e GRAFANA_URL -e GRAFANA_USERNAME -e GRAFANA_PASSWORD grafana/mcp-grafana:2.0.2 -t stdio' }
+        vars: { ENV: prod, PATHS: "/grafana /tailnet", CMD: 'GRAFANA_URL=https://lisptc-grafana.\$TAILNET_DOMAIN docker run --rm -i --network host --add-host lisptc-grafana.\$TAILNET_DOMAIN:\$(tailscale ip -4 lisptc-grafana) -e GRAFANA_URL -e GRAFANA_USERNAME -e GRAFANA_PASSWORD grafana/mcp-grafana:2.0.2 -t stdio' }
 
   mcp:argocd:
     desc: serve the Argo CD MCP server on stdio, against the cluster's Argo CD on the tailnet
     cmds:
       - task: _infisical-run
-        vars: { ENV: prod, PATHS: "/argocd", CMD: "npx --yes argocd-mcp@0.9.0 stdio" }
+        vars: { ENV: prod, PATHS: "/argocd /tailnet", CMD: 'docker run --rm -i --network host --add-host lisptc-argocd.\$TAILNET_DOMAIN:\$(tailscale ip -4 lisptc-argocd) -e ARGOCD_BASE_URL -e ARGOCD_API_TOKEN node:22-alpine npx --yes argocd-mcp@0.9.0 stdio' }
 
   repl:
     desc: run the interactive REPL against a local (private) interpreter
