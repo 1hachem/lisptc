@@ -18,13 +18,21 @@ function runsAnything(message: string, unrun: readonly Skipped[]): boolean {
 	return formsOnly(kept).trim() !== "";
 }
 
+export async function runsForms<Id extends string>(
+	message: string,
+	source: ReplSource<Id>,
+): Promise<boolean> {
+	if (formsOnly(message).trim() === "") return false;
+	const repl = await replFrom(source);
+	return runsAnything(message, repl.unrun(message));
+}
+
 export async function evalUserMessage<Id extends string>(
 	message: string,
 	source: ReplSource<Id>,
 ): Promise<EvalMessage | undefined> {
-	if (formsOnly(message).trim() === "") return undefined;
+	if (!(await runsForms(message, source))) return undefined;
 	const repl = await replFrom(source);
-	if (!runsAnything(message, repl.unrun(message))) return undefined;
 	const { output, display, error, failed, annotations, emitted, results } =
 		await evalCode(repl, message);
 	repl.clearTurnSignals();
