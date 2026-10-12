@@ -1,8 +1,8 @@
 import type { Interp } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
-import type { FormSpan } from "@repo/shared/lisp-forms";
+import { type FormSpan, formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, test } from "vitest";
-import { type EvalMessage, evalUserMessage } from "../src/eval.ts";
+import { type EvalMessage, evalUserMessage, runsForms } from "../src/eval.ts";
 import { testRepls } from "./helpers.ts";
 
 const repls = testRepls();
@@ -89,6 +89,30 @@ describe("a user message", () => {
 			threadId,
 		});
 		expect(ran && display(ran)).toContain("42");
+	});
+
+	test("runs the forms inside ordinary text and skips the text", async () => {
+		const prose = testRepls([
+			(interp: Interp) =>
+				interp.hooks.readSource.use((i, text, next) =>
+					next(i, formsOnly(text)),
+				),
+		]);
+		const threadId = crypto.randomUUID();
+		const message = "what is (+ 40 2) and also (list 1 2), thanks";
+		expect(await runsForms(message, { repls: prose, threadId })).toBe(true);
+		const ran = await evalUserMessage(message, { repls: prose, threadId });
+		expect(ran?.additional_kwargs?.results).toEqual(["42", "(1 2)"]);
+		expect(ran && result(ran).error).toBe(false);
+	});
+
+	test("finds nothing to run in a message without forms", async () => {
+		expect(
+			await runsForms("no parentheses here", {
+				repls,
+				threadId: crypto.randomUUID(),
+			}),
+		).toBe(false);
 	});
 
 	test("leaves the agent loop's halt signal untouched", async () => {
