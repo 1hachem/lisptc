@@ -1,5 +1,8 @@
 import type { Envelope } from "@repo/interpreter/channels";
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import {
+	bufferTransport,
+	type ChannelBuffer,
+} from "@repo/interpreter/channels-host";
 import {
 	driveAsync,
 	type Eval,
@@ -13,8 +16,14 @@ import {
 	noOpinion,
 } from "@repo/interpreter/hooks";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
+import {
+	EndOfFile,
+	jsonToLisp,
+	newSym,
+	Unspecified,
+} from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import {
 	type AgentEnd,
 	type AgentStep,
@@ -54,6 +63,7 @@ export interface EvalOutput extends Bounded {
 	failed: boolean;
 	held: boolean;
 	message?: string;
+	results: readonly string[];
 }
 
 export interface StepResult extends EvalOutput {
@@ -86,6 +96,35 @@ function partition(notes: readonly Note[]): {
 			}
 		}
 	return { skipped, failed, held };
+}
+
+interface FormRecorder {
+	begin(): number;
+	end(skipsBefore: number, value: unknown): void;
+}
+
+function recordTopLevel(buffer: ChannelBuffer): {
+	recorder: FormRecorder;
+	results: string[];
+} {
+	const results: string[] = [];
+	const skips = () =>
+		buffer.collect(note).filter((n) => n.kind === "skipped").length;
+	let depth = 0;
+	return {
+		results,
+		recorder: {
+			begin: () => {
+				depth++;
+				return skips();
+			},
+			end: (skipsBefore, value) => {
+				depth--;
+				if (depth > 0 || value === Unspecified) return;
+				if (skips() === skipsBefore) results.push(str(value));
+			},
+		},
+	};
 }
 
 interface Parked {
@@ -125,6 +164,7 @@ function render(result: StepResult): EvalOutput {
 		failed: result.failed,
 		held: result.held,
 		message: result.message,
+		results: result.results,
 	};
 }
 
@@ -132,6 +172,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
+	private recorder: FormRecorder | undefined;
 	private readonly extensions: InterpExtension[];
 	readonly hooks: SessionHooks;
 
@@ -147,6 +188,21 @@ export class MemoryRepl implements InMemoryRepl {
 
 	private freshInterp(): Interp {
 		const interp = new Interp({ extensions: this.extensions });
+		const recording = () => this.recorder;
+		interp.hooks.evalForm.use(function* (i, form, next) {
+			const record = recording();
+			if (record === undefined) return yield* next(i, form);
+			const mark = record.begin();
+			let value: unknown;
+			try {
+				value = yield* next(i, form);
+			} catch (ex) {
+				record.end(mark, Unspecified);
+				throw ex;
+			}
+			record.end(mark, value);
+			return value;
+		});
 		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
@@ -216,6 +272,8 @@ export class MemoryRepl implements InMemoryRepl {
 		channels.step += 1;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
+		const { recorder, results } = recordTopLevel(buffer);
+		this.recorder = recorder;
 		let thrown: unknown;
 		let carried = false;
 		let carriedThrown: unknown;
@@ -230,6 +288,7 @@ export class MemoryRepl implements InMemoryRepl {
 				}
 			}
 		} finally {
+			this.recorder = undefined;
 			detach();
 		}
 		const { skipped, failed, held } = partition(buffer.collect(note));
@@ -258,6 +317,7 @@ export class MemoryRepl implements InMemoryRepl {
 						.filter((m) => m !== undefined)
 						.join("\n\n")
 				: message,
+			results,
 			skipped,
 		};
 	}
@@ -352,6 +412,7 @@ export class AgentRepl extends MemoryRepl {
 			failed: result.failed,
 			held: result.held,
 			message: result.message,
+			results: result.results,
 		};
 	}
 

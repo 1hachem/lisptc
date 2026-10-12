@@ -42,6 +42,7 @@ export interface ChatMessage {
 		prose?: unknown;
 		failed?: unknown;
 		source?: unknown;
+		results?: unknown;
 	};
 }
 
@@ -412,6 +413,13 @@ function isSkipped(value: unknown): value is Skipped {
 
 export function toolFailed(message: ChatMessage): boolean {
 	return message.additional_kwargs?.failed === true;
+}
+
+export function toolResults(message: ChatMessage): string[] {
+	const results = message.additional_kwargs?.results;
+	return Array.isArray(results)
+		? results.filter((r): r is string => typeof r === "string")
+		: [];
 }
 
 export function toolUi(message: ChatMessage): unknown {

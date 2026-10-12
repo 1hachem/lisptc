@@ -25,13 +25,14 @@ export async function evalUserMessage<Id extends string>(
 	if (formsOnly(message).trim() === "") return undefined;
 	const repl = await replFrom(source);
 	if (!runsAnything(message, repl.unrun(message))) return undefined;
-	const { output, display, error, failed, annotations, emitted } =
+	const { output, display, error, failed, annotations, emitted, results } =
 		await evalCode(repl, message);
 	repl.clearTurnSignals();
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
 	if (failed) extras.failed = true;
 	if (emitted !== "") extras.riding = emitted;
+	if (results.length > 0) extras.results = results;
 	return {
 		type: "tool",
 		content: replResultContent(output, error),

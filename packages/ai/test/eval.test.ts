@@ -32,6 +32,11 @@ describe("a user message", () => {
 		expect(display(message)).toContain("42");
 	});
 
+	test("carries the value each form returned", async () => {
+		const message = await evaluated("(+ 40 2) (list 1 2)", crypto.randomUUID());
+		expect(message.additional_kwargs?.results).toEqual(["42", "(1 2)"]);
+	});
+
 	test("cannot reach another thread's definitions", async () => {
 		await evaluated("(setq y 1)", crypto.randomUUID());
 		const message = await evaluated("(echo y)", crypto.randomUUID());

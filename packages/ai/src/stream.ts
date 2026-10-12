@@ -63,6 +63,7 @@ function resultMessage(
 	if (event.display !== event.output) extras.display = event.display;
 	if (event.failed) extras.failed = true;
 	if (event.riding !== undefined) extras.riding = event.riding;
+	if (event.results.length > 0) extras.results = event.results;
 	return {
 		type: "tool",
 		content: replResultContent(event.output, event.error),
