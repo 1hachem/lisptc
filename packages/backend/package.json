@@ -24,7 +24,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "migrate": "convex run migrations:resetRetiredModels '{\"reset\": true}'",
+    "migrate": "convex run migrations:runLive",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
