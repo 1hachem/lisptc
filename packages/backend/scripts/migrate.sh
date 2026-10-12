@@ -2,6 +2,7 @@
 set -eu
 
 migration_timeout="${MIGRATION_TIMEOUT_SECONDS:-1500}"
+poll_seconds="${MIGRATION_POLL_SECONDS:-5}"
 
 pnpm exec convex run migrations:runLive
 
@@ -26,5 +27,5 @@ while :; do
     exit 1
   fi
   echo "$verdict"
-  sleep 5
+  sleep "$poll_seconds"
 done
