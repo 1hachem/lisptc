@@ -5,6 +5,32 @@ on:
     types: [unlabeled, closed]
 
 jobs:
+  remove-release:
+    name: remove preview release
+    if: github.event.action == 'closed' || github.event.label.name == 'preview'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-release-${{ github.event.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Take the preview away from Argo CD
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+        run: |
+          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
+          [ "$live" = true ] && exit 0
+          .github/scripts/preview-release.sh "$PR"
+
   remove-link:
     name: remove preview link
     if: github.event.action == 'closed' || github.event.label.name == 'preview'
