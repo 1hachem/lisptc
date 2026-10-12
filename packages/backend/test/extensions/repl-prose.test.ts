@@ -172,6 +172,28 @@ describe("prose with parentheses in it", () => {
 			expect(r.takeProseFeedback()).toContain('unexpected ")" on line 1');
 		});
 
+		it("is raised for an answer that lists rows in a Markdown table", async () => {
+			const r = agentRepl();
+			expect(
+				await r.eval(
+					"Here they are:\n\n| ID | Title |\n|---|---|\n| A-2 | template strings (format) |",
+				),
+			).toBe("");
+			expect(r.takeFinished()).toBe(true);
+			expect(r.takeProseFeedback()).toBe("");
+		});
+
+		it("is raised for an answer that explains with inline code", async () => {
+			const r = agentRepl();
+			expect(
+				await r.eval(
+					'`(format)` takes a template, as in `(format "Hello ~a" "world")`.',
+				),
+			).toBe("");
+			expect(r.takeFinished()).toBe(true);
+			expect(r.takeProseFeedback()).toBe("");
+		});
+
 		it("is not raised when a form ran alongside the aside", async () => {
 			const r = agentRepl();
 			await r.eval("almost (see above): (+ 1 2)");

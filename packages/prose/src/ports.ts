@@ -8,6 +8,7 @@ import {
 } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import type { Awaitable, PromptSource } from "@repo/shared/host";
+import type { FormSpan } from "@repo/shared/lisp-forms";
 import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
 
 export interface ProseClassification {
@@ -19,9 +20,25 @@ export type ProseClassifier = (
 	form: unknown,
 ) => Awaitable<ProseClassification | undefined>;
 
+export type ProseMarkup = (text: string, span: FormSpan) => boolean;
+
 export interface ProseHost {
 	readonly classifiers: readonly ProseClassifier[];
+	readonly markup: readonly ProseMarkup[];
 	readonly prompt: PromptSource;
+}
+
+export function inInlineCode(text: string, [start, end]: FormSpan): boolean {
+	return text[end] === "`" && (text[start] === "`" || text[start - 1] === "`");
+}
+
+export function inTableRow(text: string, [start, end]: FormSpan): boolean {
+	const from = text.lastIndexOf("\n", start - 1) + 1;
+	const newline = text.indexOf("\n", start);
+	const to = newline < 0 ? text.length : newline;
+	if (end > to) return false;
+	const row = text.slice(from, to).trim();
+	return row.startsWith("|") && row.endsWith("|");
 }
 
 export function readsAsProse(

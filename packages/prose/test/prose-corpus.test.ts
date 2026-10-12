@@ -196,6 +196,42 @@ describe("prose corpus: lisptc that reads like English", () => {
 	});
 });
 
+const MARKDOWN = [
+	[
+		"Here are the open items:",
+		"",
+		"| ID | Title |",
+		"|---|---|",
+		"| A-1 | write the docs |",
+		"| A-2 | let a template take values (format) |",
+	].join("\n"),
+	"Calling `(format)` with no template fails.",
+	'Pass a template instead, for example `(format "Hello ~a" "world")`.',
+	"`'(1 2 3)` is a quoted list, and `(car xs)` takes its head.",
+	"An aside reads like `(see below)` when in doubt.",
+];
+
+const MARKDOWN_AROUND_CODE: [source: string, value: string][] = [
+	["| a | b (format) |\n(+ 1 2)", "3"],
+	["Use `(car xs)` for the head:\n(car '(1 2 3))", "1"],
+	["(setq x 2) quasiquoted: `(1 ,x)", "(1 2)"],
+	["`(1 ,(+ 1 2))", "(1 3)"],
+	['(format "a `~a`" 1)', '"a `1`"'],
+];
+
+describe("prose corpus: Markdown in a finished answer", () => {
+	it.each(MARKDOWN)("runs nothing and skips nothing for %j", (text) => {
+		const { value, output, skipped } = tolerantly(text);
+		expect(value).toBe(NOTHING);
+		expect(output).toBe("");
+		expect(skipped).toEqual([]);
+	});
+
+	it.each(MARKDOWN_AROUND_CODE)("still evaluates %j to %s", (source, value) => {
+		expect(tolerantly(source).value).toBe(value);
+	});
+});
+
 describe("prose corpus: what must stay a call", () => {
 	it.each(CALLS)("reports %j as undefined: %s", (source, name) => {
 		expect(() => tolerantly(source)).toThrow(`undefined: ${name}`);

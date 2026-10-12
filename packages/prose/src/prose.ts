@@ -14,14 +14,19 @@ import {
 	formsOnly,
 	type Skipped,
 } from "@repo/shared/lisp-forms";
-import { isKnownCall, type ProseHost, readsAsProse } from "./ports.ts";
+import {
+	isKnownCall,
+	type ProseHost,
+	type ProseMarkup,
+	readsAsProse,
+} from "./ports.ts";
 
 export function proseExtension(host: ProseHost): InterpExtension {
 	const extension = (interp: Interp): void => {
 		interp.hooks.readSource.use((interp, text, next) =>
 			next(
 				interp,
-				stripProse(text, (what) =>
+				stripProse(unmarked(text, host.markup), (what) =>
 					note.emit(interp.channels, {
 						model: { kind: "skipped", text: what },
 					}),
@@ -51,10 +56,11 @@ export function proseExtension(host: ProseHost): InterpExtension {
 		session(hooks: SessionHooks): void {
 			hooks.unrun.use((interp, code, next) => [
 				...next(interp, code),
-				...proseSkipped(interp, code),
+				...proseSkipped(interp, unmarked(code, host.markup)),
 			]);
 			hooks.answered.use((ctx, out, next) => {
-				if (formsOnly(ctx.code).trim() === "") return true;
+				if (formsOnly(unmarked(ctx.code, host.markup)).trim() === "")
+					return true;
 				if (out.model !== "" || out.skipped.length === 0) return next(ctx, out);
 				return !isTruncated(ctx.code);
 			});
@@ -79,6 +85,14 @@ function unreadableReason(
 	const failure = readFailure(text.slice(start, end));
 	if (failure === undefined) return undefined;
 	return `${failure.reason} on line ${lineAt(text, start) + failure.line - 1}`;
+}
+
+function unmarked(text: string, markup: readonly ProseMarkup[]): string {
+	const out = text.split("");
+	for (const span of formSpans(text, proseJudge))
+		if (markup.some((marks) => marks(text, span)))
+			for (let j = span[0]; j < span[1]; j++) if (out[j] !== "\n") out[j] = " ";
+	return out.join("");
 }
 
 export function stripProse(
