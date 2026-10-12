@@ -10,16 +10,21 @@ export type McpServerChip = FunctionReturnType<
 	typeof api.mcpServers.list
 >["servers"][number];
 
-const DOT: Record<McpServerChip["phase"], string> = {
+type LoadedChip = McpServerChip & {
+	phase: Exclude<McpServerChip["phase"], "sleeping">;
+};
+
+const DOT: Record<LoadedChip["phase"], string> = {
 	starting: "bg-yellow animate-pulse",
 	ready: "bg-green",
-	sleeping: "bg-dim",
 	failed: "bg-red",
 };
 
 export function McpServerChips({ servers }: { servers: McpServerChip[] }) {
-	if (servers.length === 0) return null;
-	const sorted = [...servers].sort((a, b) => a.server.localeCompare(b.server));
+	const sorted = servers
+		.filter((chip): chip is LoadedChip => chip.phase !== "sleeping")
+		.sort((a, b) => a.server.localeCompare(b.server));
+	if (sorted.length === 0) return null;
 	return (
 		<ul
 			aria-label="MCP servers"
