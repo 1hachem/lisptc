@@ -202,6 +202,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		async callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown> {
 			const entry = clients.get(call.serverId);
 			if (!entry) throw new Error(`no such server: ${call.serverId}`);
+			ports.host.used(entry.name);
 			const result = await entry.client.callTool(
 				{ name: call.tool, arguments: call.args },
 				undefined,
@@ -233,6 +234,11 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			clients.delete(serverId);
 			await entry.client.close().catch(() => {});
 			await ports.host.stop(entry.name);
+		},
+
+		async asleep(serverId: string): Promise<boolean> {
+			const entry = clients.get(serverId);
+			return entry ? await ports.host.asleep(entry.name) : false;
 		},
 
 		async login(conf: HttpConnConfig): Promise<{ authUrl: string | null }> {

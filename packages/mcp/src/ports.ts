@@ -112,6 +112,7 @@ export interface McpClient {
 	connect(conf: ConnConfig, signal?: AbortSignal): Promise<ConnectResult>;
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
+	asleep(serverId: string): Promise<boolean>;
 	login(conf: HttpConnConfig): Promise<{ authUrl: string | null }>;
 	logout(conf: HttpConnConfig): Promise<void>;
 	authorize(conf: HttpConnConfig, code: string): Promise<void>;
@@ -145,6 +146,8 @@ export interface McpHost {
 	stopAll(): Promise<void>;
 	status(name: string): ServerState;
 	logs(name: string): string;
+	used(name: string): void;
+	asleep(name: string): Promise<boolean>;
 }
 
 export interface ToolkitRegistry {

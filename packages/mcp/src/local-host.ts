@@ -91,6 +91,12 @@ export class LocalProcessHost implements McpHost {
 		return this.started.get(name)?.stderr ?? "";
 	}
 
+	used(_name: string): void {}
+
+	async asleep(_name: string): Promise<boolean> {
+		return false;
+	}
+
 	private spawn(
 		command: string,
 		args?: string[],

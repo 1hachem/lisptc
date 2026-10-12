@@ -77,7 +77,11 @@ function fakeStore(operator: Operator = ready) {
 	return { store, servers, env, patches };
 }
 
-function host(store: ServerStore, fallback = recordingHost()) {
+function host(
+	store: ServerStore,
+	fallback = recordingHost(),
+	clock = () => 1000,
+) {
 	return new KubernetesHost({
 		scope: "ws1",
 		namespace: "lisptc",
@@ -85,8 +89,18 @@ function host(store: ServerStore, fallback = recordingHost()) {
 		fallback,
 		pollMs: 1,
 		startTimeoutMs: 200,
-		clock: () => 1000,
+		clock,
 	});
+}
+
+function ticking() {
+	let now = 1000;
+	return {
+		clock: () => now,
+		pass(seconds: number) {
+			now += seconds;
+		},
+	};
 }
 
 describe("the kubernetes host", () => {
@@ -227,5 +241,62 @@ describe("the kubernetes host", () => {
 
 		expect(fallback.ensured.map((conf) => conf.name)).toEqual(["remote"]);
 		expect(fake.servers.has(serverName("ws1", "fs"))).toBe(true);
+	});
+
+	it("keeps a server awake only while its tools are called", async () => {
+		const fake = fakeStore();
+		const time = ticking();
+		const kube = host(fake.store, recordingHost(), time.clock);
+		await kube.ensure(browser);
+
+		kube.used("playwright");
+		time.pass(30);
+		kube.used("playwright");
+		time.pass(60);
+		kube.used("playwright");
+
+		expect(fake.patches.map((patch) => patch.lastUsed)).toEqual([1090]);
+		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(1090);
+	});
+
+	it("tells a server went to sleep once the operator slept it", async () => {
+		let phase: "Ready" | "Sleeping" = "Ready";
+		const fake = fakeStore((server) => ({
+			...ready(server),
+			phase,
+		}));
+		const kube = host(fake.store);
+		await kube.ensure(browser);
+		expect(await kube.asleep("playwright")).toBe(false);
+
+		phase = "Sleeping";
+
+		expect(await kube.asleep("playwright")).toBe(true);
+		expect(kube.status("playwright")).toBe("stopped");
+		expect(await kube.asleep("playwright")).toBe(false);
+	});
+
+	it("tells a server went to sleep once its idle window has passed", async () => {
+		const fake = fakeStore();
+		const time = ticking();
+		const kube = host(fake.store, recordingHost(), time.clock);
+		await kube.ensure(browser);
+		const idle = fake.servers.get(NAME)?.spec.idleSeconds ?? 0;
+
+		time.pass(idle - 1);
+		expect(await kube.asleep("playwright")).toBe(false);
+		time.pass(1);
+		expect(await kube.asleep("playwright")).toBe(true);
+	});
+
+	it("asks the fallback about a server it does not run", async () => {
+		const fallback = recordingHost();
+		fallback.sleeping.add("remote");
+		const kube = host(fakeStore().store, fallback);
+
+		kube.used("remote");
+
+		expect(fallback.uses).toEqual(["remote"]);
+		expect(await kube.asleep("remote")).toBe(true);
 	});
 });

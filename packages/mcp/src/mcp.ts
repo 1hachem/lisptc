@@ -2,6 +2,7 @@ import { isNumeric } from "@repo/interpreter/arith";
 import { type Ask, asking } from "@repo/interpreter/asks";
 import { topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
+import { settled } from "@repo/interpreter/drive";
 import {
 	EvalException,
 	StepHold,
@@ -453,17 +454,49 @@ function toolRows(rec: ServerRec): List[] {
 	return rec.toolSyms.map((sym) => toolRow(rec, sym));
 }
 
-export function mcpExtension(host: McpExtensionHost): InterpExtension {
-	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
-		prompt: host.prompt(),
-		session: answerAuthorization,
+export type SleptServers = () => Promise<string[]>;
+
+function sleptText(names: string[]): string {
+	return names
+		.map(
+			(name) =>
+				`The MCP server "${name}" was stopped after going unused, and its ${name}/* tools are no longer defined. Run (load-mcp "${name}") again before calling them.`,
+		)
+		.join("\n");
+}
+
+function noticeSlept(
+	hooks: SessionHooks,
+	slept: WeakMap<Interp, SleptServers>,
+): void {
+	hooks.turnStart.use(function* (ctx, next) {
+		const asleep = slept.get(ctx.interp);
+		const names = asleep ? yield* settled(asleep()) : [];
+		if (names.length > 0) ctx.emit(sleptText(names));
+		yield* next(ctx);
 	});
+}
+
+export function mcpExtension(host: McpExtensionHost): InterpExtension {
+	const slept = new WeakMap<Interp, SleptServers>();
+	return Object.assign(
+		(interp: Interp): void => {
+			slept.set(interp, registerMcp(interp, host));
+		},
+		{
+			prompt: host.prompt(),
+			session: (hooks: SessionHooks): void => {
+				answerAuthorization(hooks);
+				noticeSlept(hooks, slept);
+			},
+		},
+	);
 }
 
 export function registerMcp(
 	interp: Interp,
 	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy">,
-): void {
+): SleptServers {
 	const { client, toolkit, search } = host;
 	const policy = host.policy ?? openPolicy;
 
@@ -751,6 +784,18 @@ export function registerMcp(
 		shutdown();
 		next();
 	});
+
+	return async () => {
+		const loaded = [...servers.values()];
+		const asleep = await Promise.all(
+			loaded.map((rec) => client.asleep(rec.serverId).catch(() => false)),
+		);
+		const names = loaded
+			.filter((rec, i) => asleep[i] && servers.get(rec.name) === rec)
+			.map((rec) => rec.name);
+		for (const name of names) doUnload(interp, client, servers, name);
+		return names;
+	};
 }
 
 function oauthServer(

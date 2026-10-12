@@ -143,6 +143,14 @@ export class DockerHost implements McpHost {
 		return container ? container.logs : this.fallback.logs(name);
 	}
 
+	used(name: string): void {
+		if (!this.containers.has(name)) this.fallback.used(name);
+	}
+
+	async asleep(name: string): Promise<boolean> {
+		return this.containers.has(name) ? false : await this.fallback.asleep(name);
+	}
+
 	private labels(conf: ConnConfig): string[] {
 		return [
 			"--label",
