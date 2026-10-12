@@ -1,25 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-env_dir="${1:?the directory holding the deployment's environment, one file per variable}"
 migration_timeout="${MIGRATION_TIMEOUT_SECONDS:-1500}"
-
-: "${CONVEX_SELF_HOSTED_URL:?the backend this release is pushed to}"
-: "${CONVEX_SELF_HOSTED_ADMIN_KEY:?the backend's admin key}"
-
-until node -e 'fetch(process.env.CONVEX_SELF_HOSTED_URL + "/version").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'; do
-  sleep 2
-done
-
-for f in "$env_dir"/*; do
-  [ -f "$f" ] || continue
-  pnpm exec convex env set "$(basename "$f")" "$(cat "$f")"
-done
-if [ -n "${PREVIEW_SITE_URL:-}" ]; then
-  pnpm exec convex env set SITE_URL "$PREVIEW_SITE_URL"
-fi
-
-pnpm exec convex deploy --typecheck disable --codegen disable
 
 pnpm exec convex run migrations:runLive
 

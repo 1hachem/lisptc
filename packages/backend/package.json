@@ -24,7 +24,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "migrate": "convex run migrations:runLive",
+    "migrate": "sh scripts/migrate.sh",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
