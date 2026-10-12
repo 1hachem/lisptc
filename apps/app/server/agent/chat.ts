@@ -49,12 +49,13 @@ async function runUserForms(
 	convex: ReturnType<typeof convexAs>,
 	chatId: TurnInput["chatId"],
 	message: string,
+	signal: AbortSignal,
 ): Promise<void> {
 	const evaluated = await evalUserMessage(message, {
 		repls,
 		threadId: chatId,
 	});
-	if (evaluated === undefined) return;
+	if (evaluated === undefined || signal.aborted) return;
 	await convex.mutation(api.messages.append, {
 		chatId,
 		messages: toStored([evaluated]),
@@ -103,7 +104,9 @@ export const turn = {
 			chatId,
 			messages: [opening],
 		});
-		if ("message" in input) await runUserForms(convex, chatId, input.message);
+		if ("message" in input)
+			await runUserForms(convex, chatId, input.message, request.signal);
+		if (request.signal.aborted) return new Response(null, { status: 204 });
 		const history = await convex.query(api.messages.transcript, { chatId });
 
 		console.log(
