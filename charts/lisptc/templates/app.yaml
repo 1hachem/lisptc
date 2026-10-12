@@ -20,6 +20,7 @@ spec:
   resources:
     requests:
       storage: {{ .Values.app.storage }}
+{{- if and (include "lisptc.builtForRelease" (list . .Values.app.image.tag)) (include "lisptc.builtForRelease" (list . .Values.convexDeploy.image.tag)) }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -85,3 +86,4 @@ spec:
         - name: state
           persistentVolumeClaim:
             claimName: {{ .Values.app.stateClaim }}
+{{- end }}
