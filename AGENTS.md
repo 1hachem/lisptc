@@ -67,6 +67,17 @@ theirs.
 should have had the call, so take it and spawn that agent instead of retrying.
 An agent's own calls are never refused.
 
+## Worktrees
+
+Every git worktree lives in `worktrees/` at the repository root, one directory
+per branch, named after it. This holds for Claude, Codex and any other agent
+runner, and for a worktree you add by hand. Never put one under `.claude/`, a
+sibling of the repository, or a temporary directory.
+
+The directory is tracked through its `.gitkeep`, and `.gitignore` keeps
+everything else in it out of git. Remove a worktree with `git worktree remove`
+once its branch is merged, so the directory does not fill with stale checkouts.
+
 ## What this is
 
 A Lisp interpreter designed to be the deterministic "brain" of an AI agent in a
