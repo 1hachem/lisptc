@@ -50,8 +50,8 @@ spec:
           prune: true
           selfHeal: true
         retry:
-          limit: 10
+          limit: 5
           backoff:
-            duration: 30s
+            duration: 15s
             factor: 2
-            maxDuration: 10m
+            maxDuration: 1m
