@@ -6,21 +6,15 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  ignoreApplicationDifferences:
-    - jsonPointers:
-        - /spec/source/helm/parameters
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
   generators:
-    - pullRequest:
-        github:
-          owner: 1hachem
-          repo: lisptc
-          labels: [preview]
-          tokenRef:
-            secretName: github-token
-            key: GITHUB_TOKEN
-        requeueAfterSeconds: 120
+    - git:
+        repoURL: https://github.com/1hachem/lisptc
+        revision: previews
+        files:
+          - path: "pr-*.json"
+        requeueAfterSeconds: 60
   template:
     metadata:
       name: "lisptc-pr-{{ .number }}"
@@ -30,15 +24,22 @@ spec:
       project: default
       source:
         repoURL: https://github.com/1hachem/lisptc
-        targetRevision: "{{ .head_sha }}"
+        targetRevision: "{{ .sha }}"
         path: charts/lisptc
         helm:
           valuesObject:
             preview:
               enabled: true
-              number: "{{ .number }}"
             app:
               hostname: "lisptc-pr-{{ .number }}"
+              image:
+                tag: "pr-{{ .number }}-{{ .sha }}"
+            convexDeploy:
+              image:
+                tag: "pr-{{ .number }}-{{ .sha }}"
+            mcpOperator:
+              image:
+                tag: "pr-{{ .number }}-{{ .sha }}"
             convex:
               hostnames:
                 cloud: "lisptc-pr-{{ .number }}-convex"

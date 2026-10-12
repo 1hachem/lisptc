@@ -45,7 +45,6 @@ mcpOperator:
 
 preview:
   enabled: false
-  number: ""
   tailnetSecret: lisptc-tailnet
   infisical:
     hostAPI: https://app.infisical.com/api
