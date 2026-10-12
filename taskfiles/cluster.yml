@@ -50,17 +50,22 @@ tasks:
       done
 
   status:
-    desc: show the ArgoCD apps, the pods and the tailnet hosts
+    desc: 'show the ArgoCD apps, the release Job, the pods and the tailnet hosts (PR=12 for a preview)'
     deps: [_reachable]
+    vars:
+      NS: '{{if .PR}}lisptc-pr-{{.PR}}{{else}}lisptc{{end}}'
     cmd: |
       kubectl -n argocd get applications
-      kubectl -n lisptc get pods
+      kubectl -n {{.NS}} get jobs -o custom-columns=JOB:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,SUCCEEDED:.status.succeeded,FAILED:.status.failed,STARTED:.status.startTime
+      kubectl -n {{.NS}} get pods
       kubectl get ingress -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.status.loadBalancer.ingress[0].hostname
 
   logs:
-    desc: 'follow the logs of a workload (task cluster:logs -- deploy/app)'
+    desc: 'follow the logs of a workload (task cluster:logs -- job/convex-deploy, PR=12 for a preview)'
     deps: [_reachable]
-    cmd: kubectl -n lisptc logs -f {{.CLI_ARGS | default "deploy/app"}}
+    vars:
+      NS: '{{if .PR}}lisptc-pr-{{.PR}}{{else}}lisptc{{end}}'
+    cmd: kubectl -n {{.NS}} logs -f {{.CLI_ARGS | default "deploy/app"}}
 
   lint:
     desc: lint and render the local charts, no cluster needed
