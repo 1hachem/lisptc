@@ -1,3 +1,4 @@
+import { formsOnly } from "@repo/shared/lisp-forms";
 import { evalCode, replResultContent } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 
@@ -8,13 +9,14 @@ export interface EvalMessage {
 	additional_kwargs?: Record<string, unknown>;
 }
 
-export async function evalUserCode<Id extends string>(
-	code: string,
+export async function evalUserMessage<Id extends string>(
+	message: string,
 	source: ReplSource<Id>,
-): Promise<EvalMessage> {
+): Promise<EvalMessage | undefined> {
+	if (formsOnly(message).trim() === "") return undefined;
 	const repl = await replFrom(source);
 	const { output, display, error, failed, annotations, emitted } =
-		await evalCode(repl, code);
+		await evalCode(repl, message);
 	repl.clearTurnSignals();
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;

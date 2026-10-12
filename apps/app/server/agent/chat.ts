@@ -1,5 +1,5 @@
 import {
-	evalUserCode,
+	evalUserMessage,
 	MemorySteerInbox,
 	type SteerInbox,
 	streamChatResponse,
@@ -45,6 +45,22 @@ async function openingMessage(
 	return toStored([systemEventMessage(event, crypto.randomUUID())])[0];
 }
 
+async function runUserForms(
+	convex: ReturnType<typeof convexAs>,
+	chatId: TurnInput["chatId"],
+	message: string,
+): Promise<void> {
+	const evaluated = await evalUserMessage(message, {
+		repls,
+		threadId: chatId,
+	});
+	if (evaluated === undefined) return;
+	await convex.mutation(api.messages.append, {
+		chatId,
+		messages: toStored([evaluated]),
+	});
+}
+
 export const steerRequestSchema = z.object({
 	chatId: convexId<"chats">(),
 	id: z.string().min(1),
@@ -60,11 +76,6 @@ const steers: SteerInbox = new MemorySteerInbox();
 
 const steerKey = (subject: string, chatId: string): string =>
 	`${subject}:${chatId}`;
-
-const evalRequestSchema = z.object({
-	chatId: convexId<"chats">(),
-	code: z.string(),
-});
 
 export const turn = {
 	middleware: [...authed, body(chatRequestSchema)] as const,
@@ -92,6 +103,7 @@ export const turn = {
 			chatId,
 			messages: [opening],
 		});
+		if ("message" in input) await runUserForms(convex, chatId, input.message);
 		const history = await convex.query(api.messages.transcript, { chatId });
 
 		console.log(
@@ -160,27 +172,5 @@ export const withdraw = {
 			id,
 		);
 		return Response.json({ withdrawn }, { status: withdrawn ? 200 : 409 });
-	},
-};
-
-export const evaluate = {
-	middleware: [...authed, body(evalRequestSchema)] as const,
-	handler: async ({
-		context,
-	}: Authed<z.infer<typeof evalRequestSchema>>): Promise<Response> => {
-		const { chatId, code } = context.body;
-		const convex = convexAs(context.session);
-
-		await convex.mutation(api.messages.append, {
-			chatId,
-			messages: [{ id: crypto.randomUUID(), type: "human", content: code }],
-		});
-		console.log(`eval chat=${chatId} chars=${code.length}`);
-		const message = await evalUserCode(code, { repls, threadId: chatId });
-		await convex.mutation(api.messages.append, {
-			chatId,
-			messages: toStored([{ ...message }]),
-		});
-		return Response.json({ message });
 	},
 };

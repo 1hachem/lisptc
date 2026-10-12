@@ -1,178 +1,138 @@
-import { ClearEditorPlugin } from "@lexical/react/LexicalClearEditorPlugin";
-import { LexicalComposer } from "@lexical/react/LexicalComposer";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
-import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
-import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
+import { openForms } from "@repo/syntax";
+import { cn } from "@repo/ui";
 import {
-	LexicalTypeaheadMenuPlugin,
-	MenuOption,
-	useBasicTypeaheadTriggerMatch,
-} from "@lexical/react/LexicalTypeaheadMenuPlugin";
-import { cn, useIsMobile } from "@repo/ui";
-import {
-	$createTextNode,
-	$getRoot,
-	CLEAR_EDITOR_COMMAND,
-	COMMAND_PRIORITY_LOW,
-	KEY_ENTER_COMMAND,
-	type TextNode,
-} from "lexical";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { type Command, commands } from "../lib/commands.ts";
+	type KeyboardEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import type { Command } from "../lib/commands.ts";
+import { CommandMenu, useCommandMenu } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
-import { LispEditor } from "./lisp-editor.tsx";
+import { LispText } from "./lisp-text.tsx";
 
 export interface ChatInputProps {
 	placeholder?: string;
 	onSubmit: (text: string) => void;
-	onLisp: (code: string) => void;
 	onCommand?: (name: string) => Promise<string | null>;
 	isStreaming?: boolean;
 	onStop?: () => void;
 	disabled?: boolean;
 }
 
-const LISP_PREFIX = "!";
 const NOTICE_MS = 2000;
 
-class CommandOption extends MenuOption {
-	command: Command;
-	constructor(command: Command) {
-		super(command.name);
-		this.command = command;
-	}
+function useNotice(): [string | null, (message: string) => void] {
+	const [notice, setNotice] = useState<string | null>(null);
+	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(() => () => clearTimeout(timer.current ?? undefined), []);
+	const flash = useCallback((message: string) => {
+		setNotice(message);
+		clearTimeout(timer.current ?? undefined);
+		timer.current = setTimeout(() => setNotice(null), NOTICE_MS);
+	}, []);
+	return [notice, flash];
+}
+
+function submitsOnEnter(
+	event: KeyboardEvent<HTMLTextAreaElement>,
+	text: string,
+): boolean {
+	if (event.key !== "Enter" || event.shiftKey) return false;
+	return openForms(text) === 0 || event.metaKey || event.ctrlKey;
+}
+
+function SendAction({
+	isStreaming,
+	empty,
+	disabled,
+	onStop,
+	onSend,
+}: {
+	isStreaming?: boolean;
+	empty: boolean;
+	disabled?: boolean;
+	onStop?: () => void;
+	onSend: () => void;
+}) {
+	if (isStreaming && empty)
+		return (
+			<InputAction
+				label="stop"
+				glyph="■"
+				tone="text-red hover:brightness-125"
+				onClick={onStop}
+			/>
+		);
+	if (isStreaming)
+		return (
+			<InputAction
+				label="queue"
+				glyph="⏎"
+				tone="text-yellow hover:brightness-125"
+				onClick={onSend}
+			/>
+		);
+	return (
+		<InputAction
+			label="send"
+			glyph="⏎"
+			tone="text-green hover:brightness-125"
+			onClick={onSend}
+			disabled={disabled}
+		/>
+	);
 }
 
 export function ChatInput({
 	placeholder = "",
 	onSubmit,
-	onLisp,
 	onCommand,
 	isStreaming,
 	onStop,
 	disabled,
 }: ChatInputProps) {
-	const [lisp, setLisp] = useState<string | null>(null);
+	const [text, setText] = useState("");
+	const area = useRef<HTMLTextAreaElement>(null);
+	const mirror = useRef<HTMLPreElement>(null);
+	const [notice, flash] = useNotice();
+	const empty = text.trim() === "";
+
+	const send = useCallback(() => {
+		if (disabled || empty) return;
+		onSubmit(text.trim());
+		setText("");
+	}, [text, empty, onSubmit, disabled]);
+
+	const pick = useCallback(
+		(command: Command) => {
+			if (command.takesArgument) {
+				setText(`${command.name} `);
+				area.current?.focus();
+				return;
+			}
+			setText("");
+			void Promise.resolve(onCommand?.(command.name)).then((shown) => {
+				if (shown) flash(shown);
+			});
+		},
+		[onCommand, flash],
+	);
+
+	const menu = useCommandMenu(text, pick);
+
+	const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+		if (disabled || menu.handleKey(event)) return;
+		if (!submitsOnEnter(event, text)) return;
+		event.preventDefault();
+		if (isStreaming && empty) onStop?.();
+		else send();
+	};
 
 	return (
 		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			{lisp === null ? (
-				<LexicalComposer
-					initialConfig={{
-						namespace: "chat-input",
-						theme: {},
-						nodes: [],
-						onError: (error) => {
-							throw error;
-						},
-					}}
-				>
-					<Editor
-						placeholder={placeholder}
-						onSubmit={onSubmit}
-						onLisp={onLisp}
-						onEnterLisp={setLisp}
-						onCommand={onCommand}
-						isStreaming={isStreaming}
-						onStop={onStop}
-						disabled={disabled}
-					/>
-				</LexicalComposer>
-			) : (
-				<LispEditor
-					initial={lisp}
-					onRun={onLisp}
-					onExit={() => setLisp(null)}
-					isStreaming={isStreaming}
-					onStop={onStop}
-				/>
-			)}
-		</div>
-	);
-}
-
-function Editor({
-	placeholder = "",
-	onSubmit,
-	onEnterLisp,
-	onCommand,
-	isStreaming,
-	onStop,
-	disabled,
-}: ChatInputProps & { onEnterLisp: (code: string) => void }) {
-	const [editor] = useLexicalComposerContext();
-	const menuOpen = useRef(false);
-	const menuHost = useRef<HTMLDivElement>(null);
-	const [notice, setNotice] = useState<string | null>(null);
-	const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	useEffect(() => () => clearTimeout(noticeTimer.current ?? undefined), []);
-
-	const flash = useCallback((text: string) => {
-		setNotice(text);
-		clearTimeout(noticeTimer.current ?? undefined);
-		noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
-	}, []);
-
-	useEffect(() => {
-		editor.setEditable(!disabled);
-	}, [editor, disabled]);
-
-	useEffect(() => {
-		if (disabled) return;
-		return editor.registerUpdateListener(({ editorState }) => {
-			const text = editorState.read(() => $getRoot().getTextContent());
-			if (!text.startsWith(LISP_PREFIX)) return;
-			queueMicrotask(() => {
-				editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
-				onEnterLisp(text.slice(LISP_PREFIX.length));
-			});
-		});
-	}, [editor, onEnterLisp, disabled]);
-
-	const runText = useCallback(() => {
-		if (disabled) return;
-		const text = editor
-			.getEditorState()
-			.read(() => $getRoot().getTextContent())
-			.trim();
-		if (!text) return;
-		onSubmit(text);
-		editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
-	}, [editor, onSubmit, disabled]);
-
-	const [empty, setEmpty] = useState(true);
-	useEffect(
-		() =>
-			editor.registerUpdateListener(({ editorState }) => {
-				setEmpty(
-					editorState.read(() => $getRoot().getTextContent()).trim() === "",
-				);
-			}),
-		[editor],
-	);
-
-	const steerOrStop = useCallback(() => {
-		if (empty) onStop?.();
-		else runText();
-	}, [empty, onStop, runText]);
-
-	const runCommand = useCallback(
-		(name: string) => {
-			editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
-			void Promise.resolve(onCommand?.(name)).then((text) => {
-				if (text) flash(text);
-			});
-		},
-		[editor, onCommand, flash],
-	);
-
-	return (
-		<>
-			<div ref={menuHost} />
+			<CommandMenu menu={menu} onPick={pick} />
 			{notice && (
 				<div className="border-b border-bg2 bg-bg1 px-3 py-0.5 text-dim">
 					{notice}
@@ -183,194 +143,52 @@ function Editor({
 				tone={disabled ? "text-dim" : "text-green"}
 				dim={disabled}
 				action={
-					isStreaming && empty ? (
-						<InputAction
-							label="stop"
-							glyph="■"
-							tone="text-red hover:brightness-125"
-							onClick={onStop}
-						/>
-					) : isStreaming ? (
-						<InputAction
-							label="queue"
-							glyph="⏎"
-							tone="text-yellow hover:brightness-125"
-							onClick={runText}
-						/>
-					) : (
-						<InputAction
-							label="send"
-							glyph="⏎"
-							tone="text-green hover:brightness-125"
-							onClick={runText}
-							disabled={disabled}
-						/>
-					)
+					<SendAction
+						isStreaming={isStreaming}
+						empty={empty}
+						disabled={disabled}
+						onStop={onStop}
+						onSend={send}
+					/>
 				}
 			>
-				<PlainTextPlugin
-					contentEditable={
-						<ContentEditable
-							aria-placeholder={placeholder}
-							placeholder={
-								<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
-									{placeholder}
-								</div>
-							}
-							className={cn(
-								"max-h-40 min-h-0 overflow-y-auto py-1 outline-none",
-								disabled
-									? "cursor-not-allowed text-dim"
-									: "text-yellow caret-yellow",
-							)}
-						/>
-					}
-					ErrorBoundary={LexicalErrorBoundary}
+				<pre
+					ref={mirror}
+					aria-hidden
+					className={cn(
+						"pointer-events-none max-h-40 overflow-hidden whitespace-pre-wrap break-words px-0 py-1 font-[inherit] text-[length:inherit]",
+						disabled ? "text-dim" : "text-fg",
+					)}
+				>
+					<LispText>{text}</LispText>
+					{"\n"}
+				</pre>
+				{text === "" && (
+					<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
+						{placeholder}
+					</div>
+				)}
+				<textarea
+					ref={area}
+					value={text}
+					aria-label={placeholder}
+					spellCheck={false}
+					readOnly={disabled}
+					onChange={(event) => {
+						setText(event.target.value);
+						menu.select(0);
+					}}
+					onScroll={() => {
+						if (mirror.current && area.current)
+							mirror.current.scrollTop = area.current.scrollTop;
+					}}
+					onKeyDown={onKeyDown}
+					className={cn(
+						"absolute inset-0 resize-none overflow-y-auto border-0 bg-transparent px-0 py-1 text-transparent outline-none",
+						disabled ? "cursor-not-allowed" : "caret-yellow",
+					)}
 				/>
 			</InputShell>
-
-			<HistoryPlugin />
-			<ClearEditorPlugin />
-			<CommandMenuPlugin
-				onPick={runCommand}
-				menuHost={menuHost}
-				onOpenChange={(open) => {
-					menuOpen.current = open;
-				}}
-			/>
-			<EnterSubmitPlugin
-				onEnter={isStreaming ? steerOrStop : runText}
-				disabled={disabled}
-				isMenuOpen={() => menuOpen.current}
-			/>
-		</>
-	);
-}
-
-function EnterSubmitPlugin({
-	onEnter,
-	isMenuOpen,
-	disabled,
-}: {
-	onEnter: () => void;
-	isMenuOpen: () => boolean;
-	disabled?: boolean;
-}) {
-	const [editor] = useLexicalComposerContext();
-	useEffect(
-		() =>
-			editor.registerCommand(
-				KEY_ENTER_COMMAND,
-				(event) => {
-					if (disabled) {
-						event?.preventDefault();
-						return true;
-					}
-					if (isMenuOpen() || event?.shiftKey) return false;
-					event?.preventDefault();
-					onEnter();
-					return true;
-				},
-				COMMAND_PRIORITY_LOW,
-			),
-		[editor, onEnter, isMenuOpen, disabled],
-	);
-	return null;
-}
-
-function CommandMenuPlugin({
-	onPick,
-	onOpenChange,
-	menuHost,
-}: {
-	onPick: (name: string) => void;
-	onOpenChange: (open: boolean) => void;
-	menuHost: React.RefObject<HTMLDivElement | null>;
-}) {
-	const [editor] = useLexicalComposerContext();
-	const [query, setQuery] = useState<string | null>(null);
-	const isMobile = useIsMobile();
-	const triggerFn = useBasicTypeaheadTriggerMatch("/", { minLength: 0 });
-
-	const options = useMemo(() => {
-		const q = (query ?? "").toLowerCase();
-		return commands
-			.filter((c) => !(isMobile && c.desktopOnly))
-			.filter((c) => c.name.slice(1).startsWith(q))
-			.map((c) => new CommandOption(c));
-	}, [query, isMobile]);
-
-	const onSelectOption = useCallback(
-		(
-			option: CommandOption,
-			nodeToRemove: TextNode | null,
-			closeMenu: () => void,
-		) => {
-			if (option.command.takesArgument) {
-				editor.update(() => {
-					const typed = $createTextNode(`${option.command.name} `);
-					if (nodeToRemove) nodeToRemove.replace(typed);
-					else $getRoot().getLastChild()?.insertAfter(typed);
-					typed.selectEnd();
-				});
-				closeMenu();
-				return;
-			}
-			editor.update(() => nodeToRemove?.remove());
-			closeMenu();
-			onPick(option.command.name);
-		},
-		[editor, onPick],
-	);
-
-	return (
-		<LexicalTypeaheadMenuPlugin<CommandOption>
-			options={options}
-			triggerFn={triggerFn}
-			onQueryChange={setQuery}
-			onSelectOption={onSelectOption}
-			onOpen={() => onOpenChange(true)}
-			onClose={() => onOpenChange(false)}
-			menuRenderFn={(
-				_anchorRef,
-				{ selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
-			) =>
-				menuHost.current && options.length
-					? createPortal(
-							<div className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]">
-								{options.map((opt, i) => (
-									<button
-										type="button"
-										key={opt.key}
-										ref={(el) => opt.setRefElement(el)}
-										onMouseEnter={() => setHighlightedIndex(i)}
-										onClick={() => {
-											setHighlightedIndex(i);
-											selectOptionAndCleanUp(opt);
-										}}
-										className={cn(
-											"flex items-baseline gap-2.5 px-3 py-0.5 text-left",
-											i === selectedIndex ? "bg-bg2" : "hover:brightness-125",
-										)}
-									>
-										<span className="flex-none whitespace-nowrap text-fg">
-											{opt.command.name}
-										</span>
-										<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-dim">
-											{opt.command.desc}
-										</span>
-										{opt.command.hint && (
-											<span className="flex-none text-[10.5px] text-dim">
-												{opt.command.hint}
-											</span>
-										)}
-									</button>
-								))}
-							</div>,
-							menuHost.current,
-						)
-					: null
-			}
-		/>
+		</div>
 	);
 }

@@ -19,7 +19,6 @@ import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
 import { Route as AuthedWorkspaceIdChatIdRouteImport } from './routes/_authed/$workspaceId/$chatId'
-import { Route as ApiChatEvalRouteImport } from './routes/api.chat.eval'
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
 import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
 
@@ -72,11 +71,6 @@ const AuthedWorkspaceIdChatIdRoute = AuthedWorkspaceIdChatIdRouteImport.update({
   path: '/$chatId',
   getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
-const ApiChatEvalRoute = ApiChatEvalRouteImport.update({
-  id: '/eval',
-  path: '/eval',
-  getParentRoute: () => ApiChatRoute,
-} as any)
 const ApiChatSteerRoute = ApiChatSteerRouteImport.update({
   id: '/steer',
   path: '/steer',
@@ -97,7 +91,6 @@ export interface FileRoutesByFullPath {
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
-  '/api/chat/eval': typeof ApiChatEvalRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
@@ -110,7 +103,6 @@ export interface FileRoutesByTo {
   '/oauth/callback': typeof OauthCallbackRoute
   '/': typeof AuthedIndexRoute
   '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
-  '/api/chat/eval': typeof ApiChatEvalRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
@@ -126,7 +118,6 @@ export interface FileRoutesById {
   '/oauth/callback': typeof OauthCallbackRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
-  '/api/chat/eval': typeof ApiChatEvalRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
@@ -142,7 +133,6 @@ export interface FileRouteTypes {
     | '/api/ui-action'
     | '/oauth/callback'
     | '/$workspaceId/$chatId'
-    | '/api/chat/eval'
     | '/api/chat/steer'
     | '/api/oauth/callback'
     | '/$workspaceId/'
@@ -155,7 +145,6 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/'
     | '/$workspaceId/$chatId'
-    | '/api/chat/eval'
     | '/api/chat/steer'
     | '/api/oauth/callback'
     | '/$workspaceId'
@@ -170,7 +159,6 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/_authed/'
     | '/_authed/$workspaceId/$chatId'
-    | '/api/chat/eval'
     | '/api/chat/steer'
     | '/api/oauth/callback'
     | '/_authed/$workspaceId/'
@@ -258,13 +246,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdChatIdRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
-    '/api/chat/eval': {
-      id: '/api/chat/eval'
-      path: '/eval'
-      fullPath: '/api/chat/eval'
-      preLoaderRoute: typeof ApiChatEvalRouteImport
-      parentRoute: typeof ApiChatRoute
-    }
     '/api/chat/steer': {
       id: '/api/chat/steer'
       path: '/steer'
@@ -312,12 +293,10 @@ const AuthedRouteWithChildren =
   AuthedRoute._addFileChildren(AuthedRouteChildren)
 
 interface ApiChatRouteChildren {
-  ApiChatEvalRoute: typeof ApiChatEvalRoute
   ApiChatSteerRoute: typeof ApiChatSteerRoute
 }
 
 const ApiChatRouteChildren: ApiChatRouteChildren = {
-  ApiChatEvalRoute: ApiChatEvalRoute,
   ApiChatSteerRoute: ApiChatSteerRoute,
 }
 
