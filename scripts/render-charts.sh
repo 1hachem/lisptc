@@ -8,7 +8,7 @@ trap 'rm -rf "$out"' EXIT
 placeholders='s/{{ *\.number *}}/0/g; s/{{ *\.head_sha *}}/main/g'
 
 echo "render deploy/helmfile.yaml.gotmpl"
-helmfile template -e prod -f "$root/deploy/helmfile.yaml.gotmpl" --skip-deps >"$out/bootstrap.yaml"
+helmfile template -e prod -f "$root/deploy/helmfile.yaml.gotmpl" >"$out/bootstrap.yaml"
 
 for file in "$root"/argocd/*.yaml; do
   case "$(yq '.kind' "$file")" in
