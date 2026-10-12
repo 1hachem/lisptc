@@ -123,7 +123,8 @@ export function ChatInput({
 	const menu = useCommandMenu(text, pick);
 
 	const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-		if (disabled || menu.handleKey(event)) return;
+		if (disabled || event.nativeEvent.isComposing || menu.handleKey(event))
+			return;
 		if (!submitsOnEnter(event, text)) return;
 		event.preventDefault();
 		if (isStreaming && empty) onStop?.();
@@ -156,7 +157,7 @@ export function ChatInput({
 					ref={mirror}
 					aria-hidden
 					className={cn(
-						"pointer-events-none max-h-40 overflow-hidden whitespace-pre-wrap break-words px-0 py-1 font-[inherit] text-[length:inherit]",
+						"pointer-events-none max-h-40 overflow-hidden [scrollbar-gutter:stable] whitespace-pre-wrap break-words px-0 py-1 font-[inherit] text-[length:inherit]",
 						disabled ? "text-dim" : "text-fg",
 					)}
 				>
@@ -184,7 +185,7 @@ export function ChatInput({
 					}}
 					onKeyDown={onKeyDown}
 					className={cn(
-						"absolute inset-0 resize-none overflow-y-auto border-0 bg-transparent px-0 py-1 text-transparent outline-none",
+						"absolute inset-0 resize-none overflow-y-auto [scrollbar-gutter:stable] border-0 bg-transparent px-0 py-1 text-transparent outline-none",
 						disabled ? "cursor-not-allowed" : "caret-yellow",
 					)}
 				/>
