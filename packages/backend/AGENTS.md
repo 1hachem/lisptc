@@ -52,12 +52,9 @@ resolves ownership before it touches a row. Read the guards in `convex/lib/`
 before writing a new one.
 
 A schema change on a live deployment goes through a migration, and the runner is
-already here. Every release runs the live series once and waits for it to finish
-before the app rolls out, so a migration that has completed never runs again.
-New work is a new named migration added to that series, never a reset of an old
-one. Retiring a model is such a migration: the schema keeps accepting the old
-value until the release that ran it has shipped, and only the release after
-drops it. A reset is an operator's call, made by hand.
+already here. A migration is new work under a new name, never a reset of one
+that has run. The schema keeps accepting the old shape until the release that
+migrated it has shipped. A reset is an operator's call.
 
 Size limits belong to the data, so they live in `convex/limits.ts` and are
 enforced where a row is written.
