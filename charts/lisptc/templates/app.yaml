@@ -46,7 +46,7 @@ spec:
         - name: {{ .Values.imagePullSecret }}
       containers:
         - name: app
-          image: "{{ .Values.app.image.repository }}:{{ .Values.release.tag }}"
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
           ports:
             - containerPort: {{ .Values.app.port }}
           envFrom:

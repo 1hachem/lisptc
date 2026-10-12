@@ -21,4 +21,4 @@ RUN addgroup --system --gid 1001 nodejs \
  && chown -R lisptc:nodejs /app/packages/backend
 USER lisptc
 WORKDIR /app/packages/backend
-ENTRYPOINT ["sh", "scripts/release.sh"]
+CMD ["pnpm", "exec", "convex", "deploy", "--typecheck", "disable", "--codegen", "disable"]

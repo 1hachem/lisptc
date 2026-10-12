@@ -1,7 +1,11 @@
 name: Images
 
 on:
-  workflow_call:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
 
 concurrency:
   group: images-${{ github.ref }}
@@ -30,16 +34,15 @@ jobs:
             target: ""
     env:
       PREVIEW: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview') }}
-      RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PUSH: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'preview') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ env.RELEASE_SHA }}
-          persist-credentials: false
+          ref: ${{ env.PREVIEW == 'true' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Fetch the turbo remote cache credentials from Infisical
-        if: matrix.turbo && env.PREVIEW != 'true'
+        if: matrix.turbo
         uses: Infisical/secrets-action@v1.0.18
         with:
           method: universal
@@ -58,7 +61,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ env.PREVIEW == 'true' && 'preview' || 'prod' }}
+          env-slug: prod
           secret-path: /web
           export-type: file
           file-output-path: /../web-build-vars
@@ -71,7 +74,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: preview
+          env-slug: prod
           secret-path: /tailnet
           export-type: env
 
@@ -82,7 +85,7 @@ jobs:
         run: |
           domain="$TAILNET_DOMAIN"
           test -n "$domain"
-          sed '/^VITE_CONVEX_URL=/d' ../web-build-vars > ../web-build-vars.preview
+          grep -v -e '^VITE_CONVEX_URL=' ../web-build-vars > ../web-build-vars.preview
           printf "VITE_CONVEX_URL='https://lisptc-pr-%s-convex.%s'\n" "$PR" "$domain" >> ../web-build-vars.preview
           mv ../web-build-vars.preview ../web-build-vars
 
@@ -95,6 +98,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
+        if: env.PUSH == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -107,7 +111,10 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/lisptc-${{ matrix.name }}
           tags: |
-            type=raw,value=candidate-${{ env.PREVIEW == 'true' && format('pr-{0}-', github.event.number) || '' }}${{ env.RELEASE_SHA }}
+            type=sha,format=long,prefix=main-,enable={{is_default_branch}}
+            type=sha,format=long,prefix=branch-,enable=${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=main,enable={{is_default_branch}}
+            type=raw,value=pr-${{ github.event.number }}-${{ github.event.pull_request.head.sha }},enable=${{ env.PREVIEW == 'true' }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -115,64 +122,18 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
-          push: true
+          push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          secrets: ${{ matrix.turbo && env.PREVIEW != 'true' && format('TURBO_TOKEN={0}{1}TURBO_REMOTE_CACHE_SIGNATURE_KEY={2}', env.TURBO_TOKEN, fromJSON('"\n"'), env.TURBO_REMOTE_CACHE_SIGNATURE_KEY) || '' }}
+          secrets: ${{ matrix.turbo && format('TURBO_TOKEN={0}{1}TURBO_REMOTE_CACHE_SIGNATURE_KEY={2}', env.TURBO_TOKEN, fromJSON('"\n"'), env.TURBO_REMOTE_CACHE_SIGNATURE_KEY) || '' }}
           build-args: WEB_BUILD_VARS_HASH=${{ steps.web.outputs.hash }}
           secret-files: ${{ matrix.name == 'app' && format('web-build-vars={0}/../web-build-vars', github.workspace) || '' }}
-          cache-from: type=gha,scope=${{ matrix.name }}-${{ env.PREVIEW == 'true' && 'preview' || 'prod' }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ env.PREVIEW == 'true' && 'preview' || 'prod' }}
-
-  promote:
-    name: promote release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      pull-requests: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      REPO: ${{ github.repository }}
-      OWNER: ${{ github.repository_owner }}
-      RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      PR: ${{ github.event.number }}
-      PREVIEW: ${{ github.event_name == 'pull_request' }}
-    steps:
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish the release tag after every image is available
-        run: |
-          if [ "$PREVIEW" = true ]; then
-            current=$(gh pr view "$PR" --repo "$REPO" --json headRefOid,state,labels --jq 'select(.state == "OPEN" and any(.labels[]; .name == "preview")) | .headRefOid')
-            candidate="candidate-pr-$PR-$RELEASE_SHA"
-            release="pr-$PR-$RELEASE_SHA"
-          else
-            current=$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)
-            candidate="candidate-$RELEASE_SHA"
-            release="release-$RELEASE_SHA"
-          fi
-          if [ "$current" != "$RELEASE_SHA" ]; then
-            echo "Skipping superseded release $RELEASE_SHA"
-            exit 0
-          fi
-          for name in app browser-mcp convex-deploy; do
-            image="ghcr.io/$OWNER/lisptc-$name"
-            docker buildx imagetools create --tag "$image:$release" "$image:$candidate"
-          done
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
   preview-link:
     name: preview link
-    needs: promote
+    needs: build
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
     runs-on: ubuntu-latest
     concurrency:
@@ -188,7 +149,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: preview
+          env-slug: prod
           secret-path: /tailnet
           export-type: env
 

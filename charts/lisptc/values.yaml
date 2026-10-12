@@ -1,11 +1,9 @@
 imagePullSecret: ghcr-pull
 
-release:
-  tag: main
-
 app:
   image:
     repository: ghcr.io/1hachem/lisptc-app
+    tag: main
   port: 3000
   hostname: lisptc
   stateClaim: api-state
@@ -15,6 +13,7 @@ app:
 convexDeploy:
   image:
     repository: ghcr.io/1hachem/lisptc-convex-deploy
+    tag: main
 
 convex:
   backend:
@@ -38,7 +37,7 @@ preview:
   infisical:
     hostAPI: https://app.infisical.com/api
     projectSlug: listptc-nz-qj
-    envSlug: preview
+    envSlug: prod
     resyncInterval: "1m"
     credentials:
       secretName: lisptc-infisical-cred

@@ -1,11 +1,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: convex-deploy
+  name: convex-deploy-{{ .Values.convexDeploy.image.tag | sha256sum | trunc 10 }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
-    argocd.argoproj.io/hook: Sync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 4
   activeDeadlineSeconds: 1800
@@ -16,8 +14,23 @@ spec:
         - name: {{ .Values.imagePullSecret }}
       containers:
         - name: convex-deploy
-          image: "{{ .Values.convexDeploy.image.repository }}:{{ .Values.release.tag }}"
-          args: ["/etc/convex-env"]
+          image: "{{ .Values.convexDeploy.image.repository }}:{{ .Values.convexDeploy.image.tag }}"
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              until node -e 'fetch(process.env.CONVEX_SELF_HOSTED_URL + "/version").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'; do
+                sleep 2
+              done
+              for f in /etc/convex-env/*; do
+                [ -f "$f" ] || continue
+                pnpm exec convex env set "$(basename "$f")" "$(cat "$f")"
+              done
+              if [ -n "${PREVIEW_SITE_URL:-}" ]; then
+                pnpm exec convex env set SITE_URL "$PREVIEW_SITE_URL"
+              fi
+              pnpm exec convex deploy --typecheck disable --codegen disable
+              exec pnpm run migrate
           volumeMounts:
             - name: convex-env
               mountPath: /etc/convex-env
