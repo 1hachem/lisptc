@@ -131,9 +131,37 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
+  preview-release:
+    name: preview release
+    needs: build
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-release-${{ github.event.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Hand the pushed images to Argo CD
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
+          [ "$live" = true ] || exit 0
+          .github/scripts/preview-release.sh "$PR" "$SHA"
+
   preview-link:
     name: preview link
-    needs: build
+    needs: preview-release
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
     runs-on: ubuntu-latest
     concurrency:

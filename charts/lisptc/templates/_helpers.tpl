@@ -30,11 +30,3 @@ https://{{ . }}.$(TAILNET_DOMAIN)
 {{- end }}
 {{- end }}
 {{- end }}
-
-{{- define "lisptc.builtForRelease" -}}
-{{- $ctx := index . 0 -}}
-{{- $tag := toString (index . 1) -}}
-{{- if or (not $ctx.Values.preview.enabled) (hasPrefix (printf "pr-%v-" $ctx.Values.preview.number) $tag) -}}
-true
-{{- end -}}
-{{- end }}
