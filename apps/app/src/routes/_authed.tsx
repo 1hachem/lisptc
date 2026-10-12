@@ -1,6 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Navigate,
@@ -11,6 +11,7 @@ import { useConvexAuth } from "convex/react";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { AppShell } from "../components/app-shell.tsx";
+import { forgetUser, useIdentify } from "../lib/analytics.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
@@ -33,6 +34,12 @@ export const Route = createFileRoute("/_authed")({
 	component: AuthedLayout,
 });
 
+function Identify() {
+	const { data } = useQuery(convexQuery(api.users.me, {}));
+	useIdentify(data);
+	return null;
+}
+
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const [leaving, setLeaving] = useState(false);
@@ -53,12 +60,14 @@ function AuthedLayout() {
 								queryClient.removeQueries();
 								try {
 									await authClient.signOut();
+									forgetUser();
 								} catch (failure) {
 									setLeaving(false);
 									throw failure;
 								}
 							}}
 						>
+							<Identify />
 							<Outlet />
 						</AppShell>
 					</UIProvider>
