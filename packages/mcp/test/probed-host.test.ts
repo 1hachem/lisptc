@@ -9,15 +9,17 @@ const browser: ContainerConnConfig = {
 	port: 8931,
 };
 
-function candidate(available: () => Promise<boolean>) {
+function candidate(available: () => Promise<boolean>, required = false) {
 	const host = recordingHost();
 	let probed = 0;
 	const entry: HostCandidate = {
+		name: "the cluster",
 		available: () => {
 			probed += 1;
 			return available();
 		},
 		create: () => host,
+		required,
 	};
 	return {
 		entry,
@@ -60,6 +62,48 @@ describe("choosing where servers run", () => {
 		);
 		await host.ensure(browser);
 		expect(docker.host.ensured).toEqual([browser]);
+	});
+
+	it("fails with the reason when a required host does not answer", async () => {
+		const kubernetes = candidate(async () => {
+			throw new Error("its CustomResourceDefinition is not installed.");
+		}, true);
+		const docker = candidate(async () => true);
+		const process = recordingHost();
+		const host = new ProbedHost(
+			[kubernetes.entry, docker.entry],
+			() => process,
+		);
+		await expect(host.ensure(browser)).rejects.toThrow(
+			"MCP servers have to run on the cluster here, but its CustomResourceDefinition is not installed.",
+		);
+		expect(docker.probed).toBe(0);
+		expect(process.ensured).toEqual([]);
+	});
+
+	it("fails when a required host answers no", async () => {
+		const host = new ProbedHost(
+			[candidate(async () => false, true).entry],
+			() => recordingHost(),
+		);
+		await expect(host.ensure(browser)).rejects.toThrow(
+			"MCP servers have to run on the cluster here, but it did not answer.",
+		);
+	});
+
+	it("probes again once a required host has failed", async () => {
+		let ready = false;
+		const kubernetes = candidate(async () => {
+			if (!ready) throw new Error("not yet");
+			return true;
+		}, true);
+		const host = new ProbedHost([kubernetes.entry], () => recordingHost());
+		await expect(host.ensure(browser)).rejects.toThrow("not yet");
+		await host.stopAll();
+		ready = true;
+		await host.ensure(browser);
+		expect(kubernetes.probed).toBe(2);
+		expect(kubernetes.host.ensured).toEqual([browser]);
 	});
 
 	it("runs in process when no container host answers", async () => {

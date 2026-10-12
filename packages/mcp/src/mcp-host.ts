@@ -2,7 +2,7 @@ import { mcpEnv } from "@repo/env/mcp";
 import { oauthEnv } from "@repo/env/oauth";
 import { filePrompt } from "@repo/shared/host-node";
 import { DockerHost, dockerAnswers } from "./docker-host.ts";
-import { clusterAnswers, KubernetesHost } from "./kubernetes-host.ts";
+import { clusterServes, KubernetesHost } from "./kubernetes-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
@@ -42,18 +42,22 @@ export function finishAuthorization(
 }
 
 export function containerHost(scope: string): McpHost {
+	const inCluster =
+		mcpEnv.LISPTC_MCP_HOST === "kubernetes" ||
+		mcpEnv.KUBERNETES_SERVICE_HOST !== undefined;
 	const kubernetes: HostCandidate = {
+		name: "the cluster",
 		available: async () =>
-			(mcpEnv.LISPTC_MCP_HOST === "kubernetes" ||
-				mcpEnv.KUBERNETES_SERVICE_HOST !== undefined) &&
-			(await clusterAnswers(mcpEnv.LISPTC_MCP_NAMESPACE)),
+			inCluster && (await clusterServes(mcpEnv.LISPTC_MCP_NAMESPACE)),
 		create: () =>
 			new KubernetesHost({
 				scope,
 				namespace: mcpEnv.LISPTC_MCP_NAMESPACE ?? "",
 			}),
+		required: inCluster,
 	};
 	const docker: HostCandidate = {
+		name: "docker",
 		available: dockerAnswers,
 		create: () => new DockerHost(new LocalProcessHost(), scope),
 	};

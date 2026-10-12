@@ -30,7 +30,7 @@ import type {
 
 const START_TIMEOUT_MS = 180_000;
 const POLL_MS = 1_000;
-const HEARTBEAT_MS = 60_000;
+const TOUCH_SECONDS = 60;
 const PROBE_TIMEOUT_MS = 3_000;
 
 export interface Owner {
@@ -63,7 +63,7 @@ interface Followed {
 	name: string;
 	state: ServerState;
 	logs: string;
-	heartbeat?: ReturnType<typeof setInterval>;
+	touched: number;
 }
 
 function epochSeconds(): number {
@@ -184,11 +184,15 @@ export function clientStore(
 	};
 }
 
-export async function clusterAnswers(
+export async function clusterServes(
 	namespace: string | undefined,
 	config: KubeConfig = defaultConfig(),
-): Promise<boolean> {
-	if (namespace === undefined) return false;
+): Promise<true> {
+	if (namespace === undefined)
+		throw new Error(
+			"no namespace to run MCP servers in: LISPTC_MCP_NAMESPACE is not set.",
+		);
+	const resource = `${PLURAL}.${GROUP}/${VERSION}`;
 	const served = config
 		.makeApiClient(CustomObjectsApi)
 		.listNamespacedCustomObject({
@@ -199,13 +203,31 @@ export async function clusterAnswers(
 			limit: 1,
 		});
 	const timeout = new Promise<never>((_, reject) =>
-		setTimeout(reject, PROBE_TIMEOUT_MS).unref(),
+		setTimeout(
+			() =>
+				reject(
+					new Error(
+						`the cluster did not list ${resource} in ${namespace} within ${PROBE_TIMEOUT_MS / 1000}s.`,
+					),
+				),
+			PROBE_TIMEOUT_MS,
+		).unref(),
 	);
 	try {
 		await Promise.race([served, timeout]);
 		return true;
-	} catch {
-		return false;
+	} catch (cause) {
+		if (cause instanceof ApiException && cause.code === 404)
+			throw new Error(
+				`the cluster does not serve ${resource}: its CustomResourceDefinition is not installed.`,
+				{ cause },
+			);
+		if (cause instanceof ApiException && cause.code === 403)
+			throw new Error(
+				`this service account may not list ${resource} in ${namespace}.`,
+				{ cause },
+			);
+		throw cause;
 	}
 }
 
@@ -261,8 +283,33 @@ export class KubernetesHost implements McpHost {
 		return followed ? followed.logs : this.fallback.logs(name);
 	}
 
+	used(name: string): void {
+		const followed = this.followed.get(name);
+		if (!followed) {
+			this.fallback.used(name);
+			return;
+		}
+		const now = this.clock();
+		if (followed.state !== "running" || now - followed.touched < TOUCH_SECONDS)
+			return;
+		followed.touched = now;
+		this.store.patchSpec(followed.name, { lastUsed: now }).catch(() => {});
+	}
+
+	async asleep(name: string): Promise<boolean> {
+		const followed = this.followed.get(name);
+		if (!followed) return await this.fallback.asleep(name);
+		if (followed.state !== "running") return false;
+		const live = await this.store.get(followed.name);
+		const slept =
+			live !== undefined &&
+			(live.status?.phase === "Sleeping" ||
+				this.clock() - live.spec.lastUsed >= live.spec.idleSeconds);
+		if (slept) this.unfollow(followed);
+		return slept;
+	}
+
 	private unfollow(followed: Followed): void {
-		clearInterval(followed.heartbeat);
 		followed.state = "stopped";
 	}
 
@@ -302,6 +349,7 @@ export class KubernetesHost implements McpHost {
 			name,
 			state: "running",
 			logs: "",
+			touched: 0,
 		};
 		this.followed.set(conf.name, followed);
 		const url = await this.answering(conf.name, server, followed);
@@ -340,14 +388,8 @@ export class KubernetesHost implements McpHost {
 	}
 
 	private follow(followed: Followed): void {
-		clearInterval(followed.heartbeat);
 		followed.state = "running";
-		followed.heartbeat = setInterval(() => {
-			this.store
-				.patchSpec(followed.name, { lastUsed: this.clock() })
-				.catch(() => {});
-		}, HEARTBEAT_MS);
-		followed.heartbeat.unref();
+		followed.touched = this.clock();
 	}
 }
 
