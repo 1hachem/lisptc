@@ -269,7 +269,15 @@ export class KubernetesHost implements McpHost {
 
 	async stopAll(): Promise<void> {
 		await Promise.allSettled(this.starting.values());
+		const running = [...this.followed.values()].filter(
+			(followed) => followed.state === "running",
+		);
 		for (const followed of this.followed.values()) this.unfollow(followed);
+		await Promise.allSettled(
+			running.map((followed) =>
+				this.store.patchSpec(followed.name, { lastUsed: 0 }),
+			),
+		);
 		await this.fallback.stopAll();
 	}
 

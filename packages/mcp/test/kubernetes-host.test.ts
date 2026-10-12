@@ -230,6 +230,19 @@ describe("the kubernetes host", () => {
 		expect(kube.status("playwright")).toBe("stopped");
 	});
 
+	it("puts every server it runs to sleep when it stops them all", async () => {
+		const fake = fakeStore();
+		const fallback = recordingHost();
+		const kube = host(fake.store, fallback);
+		await kube.ensure(browser);
+
+		await kube.stopAll();
+
+		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(0);
+		expect(kube.status("playwright")).toBe("stopped");
+		expect(fallback.stoppedAll).toBe(1);
+	});
+
 	it("hands a remote server and a stdio one to the right place", async () => {
 		const fake = fakeStore();
 		const fallback = recordingHost();
