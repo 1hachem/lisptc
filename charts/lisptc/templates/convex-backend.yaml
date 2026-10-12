@@ -48,7 +48,7 @@ spec:
             - name: INSTANCE_SECRET
               value: $(CONVEX_INSTANCE_SECRET)
             - name: POSTGRES_URL
-              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Values.postgres.cluster }}-rw:5432
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Values.postgres.cluster }}-rw:5432?sslmode=disable
             - name: DO_NOT_REQUIRE_SSL
               value: "true"
             - name: DISABLE_BEACON
