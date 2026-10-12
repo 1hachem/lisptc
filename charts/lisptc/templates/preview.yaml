@@ -17,6 +17,7 @@ metadata:
 spec:
   commonUpdateSettings:
     updateStrategy: newest-build
+    forceUpdate: true
     allowTags: regexp:^pr-{{ required "preview.number is required" .Values.preview.number }}-[0-9a-f]{40}$
   writeBackConfig:
     method: argocd
