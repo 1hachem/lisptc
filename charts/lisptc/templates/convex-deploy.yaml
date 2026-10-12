@@ -1,3 +1,4 @@
+{{- if include "lisptc.builtForRelease" (list . .Values.convexDeploy.image.tag) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -49,3 +50,4 @@ spec:
         - name: convex-env
           secret:
             secretName: lisptc-convex-deploy
+{{- end }}
