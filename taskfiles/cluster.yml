@@ -61,7 +61,7 @@ tasks:
       kubectl get ingress -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.status.loadBalancer.ingress[0].hostname
 
   logs:
-    desc: 'follow the logs of a workload (task cluster:logs -- job/convex-deploy, PR=12 for a preview)'
+    desc: 'follow the logs of a workload (task cluster:logs -- deploy/app, PR=12 for a preview)'
     deps: [_reachable]
     vars:
       NS: '{{if .PR}}lisptc-pr-{{.PR}}{{else}}lisptc{{end}}'
