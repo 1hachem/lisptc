@@ -1,6 +1,6 @@
 {{- $ingresses := list
-  (dict "name" "app" "host" .Values.app.hostname "service" "app" "port" .Values.app.port)
-  (dict "name" "convex" "host" .Values.convex.hostnames.cloud "service" "convex-backend" "port" 3210)
+  (dict "name" "app" "host" .Values.app.hostname "service" "app" "port" .Values.app.port "wave" "0")
+  (dict "name" "convex" "host" .Values.convex.hostnames.cloud "service" "convex-backend" "port" 3210 "wave" "1")
 }}
 {{- range $ingresses }}
 ---
@@ -8,6 +8,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ .name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ .wave | quote }}
 spec:
   ingressClassName: tailscale
   defaultBackend:
