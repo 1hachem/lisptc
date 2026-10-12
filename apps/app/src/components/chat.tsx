@@ -7,6 +7,7 @@ import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import { ChatView } from "./chat-view.tsx";
 import { Greeting } from "./greeting.tsx";
+import { McpServers } from "./mcp-servers.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
@@ -43,6 +44,7 @@ export function Chat() {
 						</>
 					) : null}
 				</div>
+				<McpServers />
 				<ChatInput
 					placeholder="type a message  ·  / for commands  ·  ! for lisp"
 					onSubmit={send}
