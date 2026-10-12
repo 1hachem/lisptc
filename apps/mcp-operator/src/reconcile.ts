@@ -115,9 +115,10 @@ class Run {
 			...status,
 			observedGeneration: this.server.metadata.generation,
 		};
-		if (!sameStatus(next, this.before))
-			await this.deps.servers.writeStatus(this.server, next);
-		if (next.phase && next.phase !== this.before.phase)
+		if (
+			next.phase &&
+			(next.phase !== this.before.phase || next.reason !== this.before.reason)
+		)
 			await this.deps.sink.observeServer({
 				workspace: this.server.spec.workspace,
 				server: this.server.spec.server,
@@ -125,6 +126,8 @@ class Run {
 				...(next.reason ? { reason: next.reason } : {}),
 			});
 		await this.mirrorState(next.state ?? {});
+		if (!sameStatus(next, this.before))
+			await this.deps.servers.writeStatus(this.server, next);
 		return requeueAt === undefined ? {} : { requeueAt };
 	}
 

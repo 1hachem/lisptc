@@ -112,6 +112,7 @@ await servers.start();
 await pods.start();
 setInterval(() => {
 	controller.sweep().catch(report("sweep"));
+	controller.mirror().catch(report("mirror"));
 }, SWEEP_MS);
 
 for (const signal of ["SIGTERM", "SIGINT"] as const)

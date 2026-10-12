@@ -165,6 +165,10 @@ export class Controller {
 
 	async resync(): Promise<void> {
 		for (const server of this.deps.all()) this.enqueue(server.metadata.name);
+		await this.mirror();
+	}
+
+	async mirror(): Promise<void> {
 		await this.deps.sink.reconcile(await this.snapshot());
 	}
 

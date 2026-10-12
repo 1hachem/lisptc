@@ -294,6 +294,47 @@ describe("the state a pair keeps", () => {
 	});
 });
 
+describe("the table it keeps in step", () => {
+	it("sends a new reason even when the phase stays the same", async () => {
+		const w = world();
+		w.fake.secrets.clear();
+		await reconcile(w.target, w.deps(1000));
+		w.target.status = { ...w.target.status, reason: "an older reason." };
+
+		await reconcile(w.target, w.deps(1001));
+
+		expect(w.sink.servers.map((row) => [row.phase, row.reason])).toEqual([
+			[
+				"failed",
+				`its env secret mcp-env-playwright is missing from ${RELEASE}.`,
+			],
+			[
+				"failed",
+				`its env secret mcp-env-playwright is missing from ${RELEASE}.`,
+			],
+		]);
+	});
+
+	it("leaves the status unwritten when the table refuses the row, so it is sent again", async () => {
+		const w = world();
+		const { observeServer } = w.sink.sink;
+		w.sink.sink.observeServer = async () => {
+			throw new Error("convex is down");
+		};
+
+		await expect(reconcile(w.target, w.deps(1000))).rejects.toThrow(
+			"convex is down",
+		);
+		expect(w.target.status?.phase).toBeUndefined();
+
+		w.sink.sink.observeServer = observeServer;
+		await reconcile(w.target, w.deps(1001));
+
+		expect(w.target.status?.phase).toBe("Starting");
+		expect(w.sink.servers.map((row) => row.phase)).toEqual(["starting"]);
+	});
+});
+
 describe("what it needs from the release", () => {
 	it("fails, naming the env secret it cannot find", async () => {
 		const w = world();

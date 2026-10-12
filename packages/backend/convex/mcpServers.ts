@@ -1,7 +1,11 @@
 import { type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Doc } from "./_generated/dataModel.js";
-import { internalMutation, query } from "./_generated/server.js";
+import {
+	internalMutation,
+	type MutationCtx,
+	query,
+} from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
 import { mcpServerPhase, mcpStatePhase } from "./schema.js";
 
@@ -27,6 +31,7 @@ const stateRow = v.object({
 	releasedAt: v.optional(v.number()),
 });
 
+type ServerRow = Infer<typeof serverRow>;
 type StateRow = Infer<typeof stateRow>;
 type StoredState = Omit<Doc<"mcpState">, "_id" | "_creationTime">;
 
@@ -109,39 +114,63 @@ export const list = query({
 	},
 });
 
+async function putServer(
+	ctx: MutationCtx,
+	{ workspaceId, server, phase, reason }: ServerRow,
+): Promise<void> {
+	const existing = await ctx.db
+		.query("mcpServers")
+		.withIndex("by_workspace_server", (q) =>
+			q.eq("workspaceId", workspaceId).eq("server", server),
+		)
+		.unique();
+	if (phase === "gone") {
+		if (existing !== null) await ctx.db.delete(existing._id);
+		return;
+	}
+	const next = {
+		workspaceId,
+		server,
+		phase,
+		...(reason === undefined ? {} : { reason }),
+		observedAt: Date.now(),
+	};
+	if (existing === null) {
+		if ((await ctx.db.get(workspaceId)) === null) return;
+		await ctx.db.insert("mcpServers", next);
+		return;
+	}
+	if (existing.phase === phase && existing.reason === reason) return;
+	await ctx.db.replace(existing._id, next);
+}
+
+async function putState(ctx: MutationCtx, row: StateRow): Promise<void> {
+	const { workspaceId, server, name, phase } = row;
+	const existing = await ctx.db
+		.query("mcpState")
+		.withIndex("by_workspace_server_name", (q) =>
+			q.eq("workspaceId", workspaceId).eq("server", server).eq("name", name),
+		)
+		.unique();
+	if (phase === "gone") {
+		if (existing !== null) await ctx.db.delete(existing._id);
+		return;
+	}
+	const next = mergedState(row, phase, existing);
+	if (existing === null) {
+		if ((await ctx.db.get(workspaceId)) === null) return;
+		await ctx.db.insert("mcpState", next);
+		return;
+	}
+	if (sameState(existing, next)) return;
+	await ctx.db.replace(existing._id, next);
+}
+
 export const observeServer = internalMutation({
 	args: serverRow.fields,
 	returns: v.null(),
-	handler: async (ctx, { workspaceId, server, phase, reason }) => {
-		const existing = await ctx.db
-			.query("mcpServers")
-			.withIndex("by_workspace_server", (q) =>
-				q.eq("workspaceId", workspaceId).eq("server", server),
-			)
-			.unique();
-		if (phase === "gone") {
-			if (existing !== null) await ctx.db.delete(existing._id);
-			return null;
-		}
-		if (existing === null) {
-			if ((await ctx.db.get(workspaceId)) === null) return null;
-			await ctx.db.insert("mcpServers", {
-				workspaceId,
-				server,
-				phase,
-				...(reason === undefined ? {} : { reason }),
-				observedAt: Date.now(),
-			});
-			return null;
-		}
-		if (existing.phase === phase && existing.reason === reason) return null;
-		await ctx.db.replace(existing._id, {
-			workspaceId,
-			server,
-			phase,
-			...(reason === undefined ? {} : { reason }),
-			observedAt: Date.now(),
-		});
+	handler: async (ctx, row) => {
+		await putServer(ctx, row);
 		return null;
 	},
 });
@@ -150,25 +179,7 @@ export const observeState = internalMutation({
 	args: stateRow.fields,
 	returns: v.null(),
 	handler: async (ctx, row) => {
-		const { workspaceId, server, name, phase } = row;
-		const existing = await ctx.db
-			.query("mcpState")
-			.withIndex("by_workspace_server_name", (q) =>
-				q.eq("workspaceId", workspaceId).eq("server", server).eq("name", name),
-			)
-			.unique();
-		if (phase === "gone") {
-			if (existing !== null) await ctx.db.delete(existing._id);
-			return null;
-		}
-		const next = mergedState(row, phase, existing);
-		if (existing === null) {
-			if ((await ctx.db.get(workspaceId)) === null) return null;
-			await ctx.db.insert("mcpState", next);
-			return null;
-		}
-		if (sameState(existing, next)) return null;
-		await ctx.db.replace(existing._id, next);
+		await putState(ctx, row);
 		return null;
 	},
 });
@@ -177,6 +188,8 @@ export const reconcile = internalMutation({
 	args: { servers: v.array(serverRow), state: v.array(stateRow) },
 	returns: v.null(),
 	handler: async (ctx, { servers, state }) => {
+		for (const row of servers) await putServer(ctx, row);
+		for (const row of state) await putState(ctx, row);
 		const liveServers = new Set(
 			servers.map((row) => `${row.workspaceId}\0${row.server}`),
 		);
