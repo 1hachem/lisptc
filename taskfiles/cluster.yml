@@ -45,7 +45,7 @@ tasks:
     desc: make ArgoCD pull main now instead of on its next poll
     deps: [_reachable]
     cmd: |
-      for app in root secrets lisptc argocd-image-updater; do
+      for app in root secrets lisptc argocd-image-updater cloudnative-pg kube-prometheus-stack loki alloy; do
         kubectl -n argocd annotate application "$app" argocd.argoproj.io/refresh=hard --overwrite
       done
 
@@ -68,11 +68,14 @@ tasks:
     cmd: kubectl -n {{.NS}} logs -f {{.CLI_ARGS | default "deploy/app"}}
 
   lint:
-    desc: lint and render the local charts, no cluster needed
+    desc: lint the local charts, no cluster needed
     dir: '{{.ROOT_DIR}}/charts'
     cmd: |
       for chart in */; do
         [ -f "$chart/Chart.yaml" ] || continue
         helm lint "$chart" --quiet
-        helm template "$chart" >/dev/null
       done
+
+  render:
+    desc: render every chart the cluster runs with the values it runs them with, no cluster needed
+    cmd: '{{.ROOT_DIR}}/scripts/render-charts.sh'
