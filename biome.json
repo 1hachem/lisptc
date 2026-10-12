@@ -25,6 +25,7 @@
       "*.json",
       "!**/node_modules",
       "!.claude",
+      "!worktrees",
       "!apps/app/src/routeTree.gen.ts",
       "!apps/trace-viewer/next-env.d.ts",
       "!packages/backend/convex/_generated"
