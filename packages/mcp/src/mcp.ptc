@@ -39,6 +39,23 @@ is WRONG, an arity error. To search one server's tools, load it first, then
 (search-tools "widget") ; to list them use (list-tools "acme") .
 - (unload-mcp "name") , (login "name") , (logout "name") ,
 (mcp-authorize "name" "code") , (mcp-shutdown) .
+- A loaded server can go away between steps: it falls asleep after going
+  unused, it fails, or someone removes it from the workspace. Before each step
+  every held server is checked, and a change shows up as a system event from
+  mcp holding the form that ran and what it returned, e.g.
+(mcp/observe "acme" :sleeping nil)
+  => acme is asleep and its tools were unloaded. (load-mcp "acme") wakes it.
+  - Its acme/* tools are already gone by then. Do not call them; run
+    (await (load-mcp "acme")) first if the task still needs it.
+  - (mcp/phase "acme") gives the phase recorded for a held server: :ready while
+    it is loaded, nil once it is not.
+  - (mcp/on-change "acme" (lambda (name old new reason) ...)) replaces the text
+    that event carries with whatever the function returns. old and new are
+    :ready , :sleeping , :failed or :gone ; reason is a string or nil. A
+    handler that errors is reported as its answer, and the server is unloaded
+    all the same. (mcp/on-change "acme" nil) restores the default.
+  - (mcp/observe "name" phase reason) is what runs. It returns nil when the
+    phase is the one already recorded, so you are told once per change.
 - OAuth login and logout lifecycle, only for :oauth t servers:
   - (login "name") gives :logged-in if already authenticated. Otherwise it,
     like a load that needs a login, asks the user to authorize and ends the
