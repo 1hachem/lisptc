@@ -2,7 +2,7 @@ import { quotient } from "@repo/interpreter/arith";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import type { Interp } from "@repo/interpreter/lisp";
+import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -144,6 +144,11 @@ export interface FiredMemory {
 
 export const fired = topic<FiredMemory>("memory");
 
+const countCodec: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
+
 export class MemoryBank {
 	private channels?: Channels;
 	private readonly fired = new Set<string>();
@@ -154,7 +159,24 @@ export class MemoryBank {
 	private spent = 0;
 	private dropped = 0;
 	private stepping = false;
-	private heard = 0;
+	private heardState: State<number> | undefined;
+
+	private get heard(): number {
+		return this.heardState?.get() ?? 0;
+	}
+
+	private set heard(count: number) {
+		this.heardState?.set(count);
+	}
+
+	keepHeardIn(interp: Interp): void {
+		this.heardState = interp.state(
+			"memory/heard",
+			countCodec,
+			this.heard,
+			"How many user messages the memory bank has already listened to.",
+		);
+	}
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
@@ -477,6 +499,7 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.reset();
+	bank.keepHeardIn(interp);
 	bank.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
