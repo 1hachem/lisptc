@@ -12,8 +12,22 @@ import {
 	type Middleware,
 	noOpinion,
 } from "@repo/interpreter/hooks";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
+import { type Image, restore, snapshot } from "@repo/interpreter/image";
+import {
+	Interp,
+	runAsync,
+	runSync,
+	type State,
+	type StateCodec,
+} from "@repo/interpreter/lisp";
+import {
+	arrayToList,
+	EndOfFile,
+	jsonToLisp,
+	type List,
+	listToArray,
+	newSym,
+} from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
 	type AgentEnd,
@@ -34,6 +48,7 @@ import {
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
+import type { ImageStore } from "./image-store.ts";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -46,6 +61,7 @@ export interface InMemoryRepl extends Repl {
 
 export interface ReplOptions {
 	extensions: InterpExtension[];
+	images?: ImageStore;
 }
 
 export interface EvalOutput extends Bounded {
@@ -54,6 +70,7 @@ export interface EvalOutput extends Bounded {
 	failed: boolean;
 	held: boolean;
 	message?: string;
+	call?: number;
 }
 
 export interface StepResult extends EvalOutput {
@@ -91,6 +108,7 @@ function partition(notes: readonly Note[]): {
 interface Parked {
 	readonly hold: Hold;
 	readonly run: Promise<unknown>;
+	readonly code: string;
 }
 
 type Settled = { readonly held: Hold } | { readonly thrown: unknown };
@@ -125,7 +143,23 @@ function render(result: StepResult): EvalOutput {
 		failed: result.failed,
 		held: result.held,
 		message: result.message,
+		call: result.call,
 	};
+}
+
+const calls: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
+
+const codes: StateCodec<string[]> = {
+	toLisp: (list) => arrayToList(list),
+	fromLisp: (x) => listToArray(x as List) as string[],
+};
+
+function droppedNote(code: readonly string[]): string | undefined {
+	if (code.length === 0) return undefined;
+	return `The REPL was restored from a checkpoint, and ${code.length === 1 ? "a step that was" : "steps that were"} waiting on an approval did not survive it. Run again whatever still needs doing:\n${code.join("\n")}`;
 }
 
 export class MemoryRepl implements InMemoryRepl {
@@ -133,10 +167,16 @@ export class MemoryRepl implements InMemoryRepl {
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
 	private readonly extensions: InterpExtension[];
+	private readonly images: ImageStore | undefined;
+	private saving: Promise<void> = Promise.resolve();
+	private dropped: string[] = [];
+	private calls!: State<number>;
+	private parkedCode!: State<string[]>;
 	readonly hooks: SessionHooks;
 
 	constructor(options: ReplOptions) {
 		this.extensions = options.extensions;
+		this.images = options.images;
 		this.hooks = openSession(this.extensions);
 		this.currentInterp = this.freshInterp();
 	}
@@ -145,14 +185,98 @@ export class MemoryRepl implements InMemoryRepl {
 		return this.currentInterp;
 	}
 
-	private freshInterp(): Interp {
+	get call(): number {
+		return this.calls.get();
+	}
+
+	private build(): Interp {
 		const interp = new Interp({ extensions: this.extensions });
+		this.calls = interp.state(
+			"repl/call",
+			calls,
+			0,
+			"How many calls this REPL has run. A checkpoint is kept after each one, numbered by it.",
+		);
+		this.parkedCode = interp.state(
+			"repl/parked",
+			codes,
+			[],
+			"The code of each step still waiting on an approval.",
+		);
+		return interp;
+	}
+
+	private freshInterp(): Interp {
+		const interp = this.build();
 		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
 	}
 
+	async resume(): Promise<number | undefined> {
+		const latest = await this.images?.latest();
+		if (latest === undefined) return undefined;
+		this.load(latest.image);
+		return latest.call;
+	}
+
+	async revert(call: number): Promise<number> {
+		await this.inFlight;
+		await this.saving;
+		const checkpoint = await this.images?.at(call);
+		if (checkpoint === undefined)
+			throw new Error(`no checkpoint for call ${call}`);
+		this.load(checkpoint.image);
+		await this.images?.dropAfter(call);
+		return call;
+	}
+
+	async revertToLatest(): Promise<number | undefined> {
+		await this.saving;
+		const latest = await this.images?.latest();
+		if (latest === undefined) return undefined;
+		this.load(latest.image);
+		return latest.call;
+	}
+
+	private load(image: Image): void {
+		const interp = this.build();
+		restore(interp, image);
+		this.parked = [];
+		this.currentInterp.dispose();
+		this.currentInterp = interp;
+		this.dropped = this.parkedCode.get();
+		this.parkedCode.set([]);
+	}
+
+	private checkpoint(result: StepResult): StepResult {
+		const call = this.calls.get() + 1;
+		this.calls.set(call);
+		const notes = [result.message, droppedNote(this.dropped)];
+		this.dropped = [];
+		const { images } = this;
+		if (images !== undefined) {
+			this.parkedCode.set(this.parked.map((p) => p.code));
+			try {
+				const image = snapshot(this.currentInterp);
+				this.saving = this.saving
+					.then(() => images.save({ call, image }))
+					.catch(() => undefined);
+			} catch (ex) {
+				notes.push(
+					`Call ${call} was not checkpointed, so it cannot be restored or reverted to: ${ex instanceof Error ? ex.message : String(ex)}`,
+				);
+			}
+		}
+		const message = notes.filter((m) => m !== undefined).join("\n\n");
+		return { ...result, call, message: message === "" ? undefined : message };
+	}
+
 	protected setup(_interp: Interp): void {}
+
+	protected currentInterpOrUndefined(): Interp | undefined {
+		return this.currentInterp as Interp | undefined;
+	}
 
 	async evalOutput(code: string): Promise<EvalOutput> {
 		return render(await this.evaluate(code));
@@ -190,7 +314,8 @@ export class MemoryRepl implements InMemoryRepl {
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
 	): Promise<StepResult> {
-		const run = () => this.runStep(code, body);
+		const run = () =>
+			this.runStep(code, body).then((result) => this.checkpoint(result));
 		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
 			() => undefined,
@@ -220,12 +345,12 @@ export class MemoryRepl implements InMemoryRepl {
 		let carried = false;
 		let carriedThrown: unknown;
 		try {
-			const ran = await this.untilHeld(() => caught(body(ctx)));
+			const ran = await this.untilHeld(() => caught(body(ctx)), code);
 			if ("thrown" in ran) {
 				thrown = ran.thrown;
 				if (this.parked.some((p) => p.hold.released)) {
 					carried = true;
-					const resumed = await this.untilHeld(() => this.carryOn());
+					const resumed = await this.untilHeld(() => this.carryOn(), code);
 					if ("thrown" in resumed) carriedThrown = resumed.thrown;
 				}
 			}
@@ -281,7 +406,10 @@ export class MemoryRepl implements InMemoryRepl {
 		);
 	}
 
-	private async untilHeld(run: () => Promise<unknown>): Promise<Settled> {
+	private async untilHeld(
+		run: () => Promise<unknown>,
+		code: string,
+	): Promise<Settled> {
 		let parked!: (hold: Hold) => void;
 		const holding = new Promise<Hold>((resolve) => {
 			parked = resolve;
@@ -295,7 +423,7 @@ export class MemoryRepl implements InMemoryRepl {
 			]);
 			if ("held" in first) {
 				running.catch(() => undefined);
-				this.parked.push({ hold: first.held, run: running });
+				this.parked.push({ hold: first.held, run: running, code });
 			}
 			return first;
 		} finally {
@@ -319,20 +447,26 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	reset(): void {
+		const call = this.calls.get();
 		this.parked = [];
 		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
+		this.calls.set(call);
 	}
 }
 
 export class AgentRepl extends MemoryRepl {
 	private finished = false;
 	private pendingProse: string[] = [];
-	private readonly conversationVars = new Map<string, unknown>();
+	private conversationNames: string[] = [];
 
 	protected override setup(interp: Interp): void {
-		const vars = this.conversationVars;
-		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
+		const previous = this.currentInterpOrUndefined();
+		for (const name of this.conversationNames ?? []) {
+			const sym = newSym(name);
+			if (previous?.hasGlobal(sym))
+				defineLisp(interp, name, previous.getGlobal(sym));
+		}
 	}
 
 	override async evalOutput(code: string): Promise<EvalOutput> {
@@ -480,11 +614,9 @@ export class AgentRepl extends MemoryRepl {
 	}
 
 	setConversationVars(vars: Record<string, unknown>): void {
-		this.conversationVars.clear();
-		for (const [name, value] of Object.entries(vars)) {
-			this.conversationVars.set(name, value);
-			defineVar(this.interp, name, value);
-		}
+		this.conversationNames = Object.keys(vars);
+		for (const [name, value] of Object.entries(vars))
+			defineLisp(this.interp, name, jsonToLisp(value));
 	}
 
 	takeFinished(): boolean {
@@ -517,11 +649,13 @@ function outermost<A extends unknown[], R>(
 	return around === undefined ? chain : chain.wrappedBy(around);
 }
 
-function defineVar(interp: Interp, name: string, value: unknown): void {
-	interp.defineGlobal(newSym(name), jsonToLisp(value), {
+function defineLisp(interp: Interp, name: string, value: unknown): void {
+	const sym = newSym(name);
+	interp.defineGlobal(sym, value, {
 		signature: name,
 		doc: "Read-only live conversation state (auto-updated each step).",
 	});
+	interp.seal(sym, "repl");
 }
 
 function carriedOn(printed: string): string {

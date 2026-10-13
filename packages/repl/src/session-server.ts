@@ -9,6 +9,7 @@ import type { Ask } from "@repo/interpreter/asks";
 import type { Arity, DocArg } from "@repo/interpreter/docs";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { openAsks } from "./asks.ts";
+import { MemoryImageStore } from "./image-store.ts";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {
@@ -38,15 +39,17 @@ interface Request {
 		| "completions"
 		| "doc"
 		| "reset"
+		| "revert"
 		| "shutdown"
 		| "version";
 	code?: string;
+	call?: number;
 	symbol?: string;
 	action?: string;
 	values?: Record<string, unknown>;
 }
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 interface Reply {
 	id: number;
@@ -94,6 +97,8 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 		case "reset":
 			repl.reset();
 			return "";
+		case "revert":
+			return repl.revert(req.call ?? 0);
 		case "shutdown":
 			return "";
 		case "version":
@@ -157,7 +162,7 @@ export async function serve(
 		} catch {}
 	}
 
-	const repl = new MemoryRepl({ extensions });
+	const repl = new MemoryRepl({ extensions, images: new MemoryImageStore() });
 
 	const server = createServer((socket: Socket) => {
 		let buffer = "";
@@ -265,6 +270,9 @@ export class SessionClient {
 	}
 	reset(): Promise<string> {
 		return this.send({ op: "reset" }) as Promise<string>;
+	}
+	revert(call: number): Promise<number> {
+		return this.send({ op: "revert", call }) as Promise<number>;
 	}
 	completions(): Promise<CompletionEntry[]> {
 		return this.send({ op: "completions" }) as Promise<CompletionEntry[]>;
