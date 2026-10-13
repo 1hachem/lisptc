@@ -4,10 +4,12 @@ import type { Doc } from "./_generated/dataModel.js";
 import {
 	internalMutation,
 	type MutationCtx,
+	mutation,
 	query,
 } from "./_generated/server.js";
 import { observeFact } from "./context.js";
 import { requireWorkspace } from "./lib/auth.js";
+import { MAX_MCP_REASON_LENGTH } from "./limits.js";
 import { mcpServerPhase, mcpStatePhase } from "./schema.js";
 
 const PURGE_BATCH = 256;
@@ -179,6 +181,28 @@ export const observeServer = internalMutation({
 	returns: v.null(),
 	handler: async (ctx, row) => {
 		await putServer(ctx, row);
+		return null;
+	},
+});
+
+export const report = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		server: v.string(),
+		phase: mcpServerPhase,
+		reason: v.optional(v.string()),
+	},
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, server, phase, reason }) => {
+		await requireWorkspace(ctx, workspaceId);
+		await putServer(ctx, {
+			workspaceId,
+			server,
+			phase,
+			...(reason === undefined
+				? {}
+				: { reason: reason.slice(-MAX_MCP_REASON_LENGTH) }),
+		});
 		return null;
 	},
 });

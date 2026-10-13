@@ -15,3 +15,5 @@ export const MAX_PERMISSIONS_BYTES = 32_768;
 export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
+
+export const MAX_MCP_REASON_LENGTH = 4_096;

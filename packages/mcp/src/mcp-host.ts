@@ -8,7 +8,12 @@ import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
 import { completeAuthorization } from "./mcp-oauth.ts";
 import { MemoryOAuthStore } from "./oauth-host.ts";
-import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
+import type {
+	McpClient,
+	McpHost,
+	OAuthStore,
+	ServerReporter,
+} from "./ports.ts";
 import { type HostCandidate, ProbedHost } from "./probed-host.ts";
 import { miniSearchEngine } from "./search.ts";
 import { bundledToolkit } from "./toolkit.ts";
@@ -42,7 +47,7 @@ export function finishAuthorization(
 	);
 }
 
-export function containerHost(scope: string): McpHost {
+export function containerHost(scope: string, report?: ServerReporter): McpHost {
 	const inCluster =
 		mcpEnv.LISPTC_MCP_HOST === "kubernetes" ||
 		mcpEnv.KUBERNETES_SERVICE_HOST !== undefined;
@@ -60,7 +65,7 @@ export function containerHost(scope: string): McpHost {
 	const docker: HostCandidate = {
 		name: "docker",
 		available: dockerAnswers,
-		create: () => new DockerHost(new LocalProcessHost(), scope),
+		create: () => new DockerHost(new LocalProcessHost(), scope, report),
 	};
 	const tried = {
 		kubernetes: [kubernetes, docker],

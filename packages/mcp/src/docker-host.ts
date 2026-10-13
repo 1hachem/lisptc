@@ -12,6 +12,7 @@ import type {
 	ConnConfig,
 	McpHost,
 	ServerHandle,
+	ServerReporter,
 	ServerState,
 } from "./ports.ts";
 
@@ -109,6 +110,7 @@ export class DockerHost implements McpHost {
 	constructor(
 		private readonly fallback: McpHost = new LocalProcessHost(),
 		private readonly scope = "local",
+		private readonly report: ServerReporter = () => {},
 	) {}
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
@@ -125,6 +127,7 @@ export class DockerHost implements McpHost {
 		this.containers.delete(name);
 		if (container.appId) await this.remove(container.appId);
 		await this.remove(container.id);
+		this.report({ server: name, phase: "sleeping" });
 	}
 
 	async stopAll(): Promise<void> {
@@ -175,6 +178,25 @@ export class DockerHost implements McpHost {
 	}
 
 	private async start(conf: ConnConfig, launch: Launch): Promise<ServerHandle> {
+		this.report({ server: conf.name, phase: "starting" });
+		try {
+			const handle = await this.launch(conf, launch);
+			this.report({ server: conf.name, phase: "ready" });
+			return handle;
+		} catch (ex) {
+			this.report({
+				server: conf.name,
+				phase: "failed",
+				reason: ex instanceof Error ? ex.message : String(ex),
+			});
+			throw ex;
+		}
+	}
+
+	private async launch(
+		conf: ConnConfig,
+		launch: Launch,
+	): Promise<ServerHandle> {
 		const app = "app" in conf ? conf.app : undefined;
 		const exposed = (app?.ports ?? []).filter((port) =>
 			app?.expose?.includes(port.name),
@@ -205,7 +227,7 @@ export class DockerHost implements McpHost {
 			logs: "",
 			state: "running",
 		};
-		this.follow(container);
+		this.follow(conf.name, container);
 		try {
 			if (app)
 				container.appId = await this.docker(conf.name, [
@@ -270,7 +292,7 @@ export class DockerHost implements McpHost {
 		);
 	}
 
-	private follow(container: Container): void {
+	private follow(name: string, container: Container): void {
 		const tail = spawn("docker", ["logs", "--follow", container.id], {
 			stdio: ["ignore", "pipe", "pipe"],
 		});
@@ -284,6 +306,13 @@ export class DockerHost implements McpHost {
 		});
 		tail.on("close", () => {
 			container.state = "stopped";
+			if (this.containers.get(name) !== container) return;
+			this.containers.delete(name);
+			this.report({
+				server: name,
+				phase: "failed",
+				reason: `its container exited.${whyItDied(container)}`,
+			});
 		});
 		tail.unref();
 	}

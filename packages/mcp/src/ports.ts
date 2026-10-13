@@ -140,6 +140,16 @@ export interface ServerHandle {
 
 export type ServerState = "running" | "stopped" | "unknown";
 
+export type ServerPhase = "starting" | "ready" | "sleeping" | "failed";
+
+export interface ServerReport {
+	server: string;
+	phase: ServerPhase;
+	reason?: string;
+}
+
+export type ServerReporter = (report: ServerReport) => void;
+
 export interface McpHost {
 	ensure(conf: ConnConfig): Promise<ServerHandle | undefined>;
 	stop(name: string): Promise<void>;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
+import { MAX_MCP_REASON_LENGTH } from "../convex/limits.js";
 import { harness, signIn } from "./helpers.ts";
 
 describe("the MCP servers the operator mirrors", () => {
@@ -159,5 +160,46 @@ describe("a server's phase, told to the chats that hold it", () => {
 			phase: "sleeping",
 		});
 		expect(await transcript(holder)).toEqual([]);
+	});
+});
+
+describe("the MCP servers a docker host reports", () => {
+	it("writes what the workspace's own host reports, keeping the tail of a long reason", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+
+		await alice.as.mutation(api.mcpServers.report, {
+			workspaceId,
+			server: "playwright",
+			phase: "failed",
+			reason: `${"x".repeat(MAX_MCP_REASON_LENGTH)}its container exited.`,
+		});
+
+		const { servers } = await alice.as.query(api.mcpServers.list, {
+			workspaceId,
+		});
+		expect(servers).toHaveLength(1);
+		expect(servers[0]?.phase).toBe("failed");
+		expect(servers[0]?.reason).toHaveLength(MAX_MCP_REASON_LENGTH);
+		expect(servers[0]?.reason?.endsWith("its container exited.")).toBe(true);
+	});
+
+	it("refuses a report into someone else's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const mallory = await signIn(t, "mallory@example.com");
+
+		await expect(
+			mallory.as.mutation(api.mcpServers.report, {
+				workspaceId: alice.workspace,
+				server: "playwright",
+				phase: "ready",
+			}),
+		).rejects.toThrow();
+		const { servers } = await alice.as.query(api.mcpServers.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(servers).toEqual([]);
 	});
 });
