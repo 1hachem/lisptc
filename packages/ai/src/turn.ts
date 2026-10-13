@@ -71,6 +71,7 @@ export type TurnEvent =
 			annotations: StepAnnotations;
 			riding?: string;
 			failed: boolean;
+			call?: number;
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
@@ -245,7 +246,7 @@ async function* evaluateStep(
 	transcript.push({ role: "assistant", content: code });
 
 	const evalStartedAt = Date.now();
-	const { output, display, error, annotations, emitted, failed, held } =
+	const { output, display, error, annotations, emitted, failed, held, call } =
 		await evalCode(repl, code);
 	turn.steps += 1;
 	const step = turn.steps;
@@ -269,6 +270,7 @@ async function* evaluateStep(
 	const riding = emitted === "" ? {} : { riding: emitted };
 	yield {
 		type: "result",
+		...(call === undefined ? {} : { call }),
 		step,
 		output,
 		display,

@@ -13,13 +13,14 @@ export async function evalUserCode<Id extends string>(
 	source: ReplSource<Id>,
 ): Promise<EvalMessage> {
 	const repl = await replFrom(source);
-	const { output, display, error, failed, annotations, emitted } =
+	const { output, display, error, failed, annotations, emitted, call } =
 		await evalCode(repl, code);
 	repl.clearTurnSignals();
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
 	if (failed) extras.failed = true;
 	if (emitted !== "") extras.riding = emitted;
+	if (call !== undefined) extras.call = call;
 	return {
 		type: "tool",
 		content: replResultContent(output, error),

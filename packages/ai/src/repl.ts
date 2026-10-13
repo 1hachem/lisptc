@@ -92,9 +92,10 @@ export async function evalCode(
 	emitted: string;
 	failed: boolean;
 	held: boolean;
+	call: number | undefined;
 }> {
 	try {
-		const { model, user, annotations, emitted, failed, held } =
+		const { model, user, annotations, emitted, failed, held, call } =
 			await repl.evalOutput(code);
 		return {
 			output: model,
@@ -104,6 +105,7 @@ export async function evalCode(
 			emitted,
 			failed,
 			held,
+			call,
 		};
 	} catch (ex) {
 		const restored = await repl.revertToLatest();
@@ -121,6 +123,7 @@ export async function evalCode(
 			emitted: "",
 			failed: true,
 			held: false,
+			call: restored,
 		};
 	}
 }

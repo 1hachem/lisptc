@@ -250,9 +250,22 @@ class TurnWire {
 		});
 	}
 
+	private stampCall(call: number): void {
+		let at = this.wire.length - 1;
+		while (at >= 0 && this.wire[at].type !== "ai") at--;
+		if (at === -1) return;
+		const message = this.wire[at];
+		this.wire[at] = {
+			...message,
+			additional_kwargs: { ...message.additional_kwargs, call },
+		};
+		if (at < this.carried) this.revised.set(at, this.wire[at]);
+	}
+
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
 		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
+		if (event.call !== undefined) this.stampCall(event.call);
 		this.wire.push(resultMessage(event));
 		return this.snapshot();
 	}
