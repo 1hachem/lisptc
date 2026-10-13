@@ -19,7 +19,8 @@ server.registerTool(
 			"Evaluate Lisptc source in a persistent REPL and return what the " +
 			"interactive REPL would print (last value plus any side-effect output; " +
 			"errors are rendered inline, not thrown). Definitions and loaded MCP " +
-			"servers persist across calls within a session.",
+			"servers persist across calls within a session. Each call is numbered " +
+			"and checkpointed, and lisp-revert goes back to one.",
 		inputSchema: {
 			code: z
 				.string()
@@ -29,9 +30,37 @@ server.registerTool(
 				),
 		},
 	},
-	async ({ code }) => ({
-		content: [{ type: "text", text: await repl.eval(code) }],
-	}),
+	async ({ code }) => {
+		const out = await repl.evalOutput(code);
+		const notes = out.message === undefined ? "" : `${out.message}\n`;
+		return {
+			content: [
+				{ type: "text", text: `${out.model}${notes}[call ${out.call}]\n` },
+			],
+		};
+	},
+);
+
+server.registerTool(
+	"lisp-revert",
+	{
+		title: "Revert the REPL to a call",
+		description:
+			"Put the REPL back exactly as it was after an earlier lisp-eval call, " +
+			"by the call number that call reported. Every later call is dropped. " +
+			"What those calls did outside the REPL, such as memories saved or " +
+			"MCP tools called, is not undone. MCP servers loaded at that point " +
+			"come back failed and must be loaded again.",
+		inputSchema: {
+			call: z.number().int().positive().describe("The call to go back to."),
+		},
+	},
+	async ({ call }) => {
+		await repl.revert(call);
+		return {
+			content: [{ type: "text", text: `Reverted to call ${call}.\n` }],
+		};
+	},
 );
 
 server.registerTool(
