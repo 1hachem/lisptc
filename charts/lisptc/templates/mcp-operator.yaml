@@ -78,6 +78,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mcp-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   replicas: 1
   strategy:
@@ -114,6 +116,14 @@ spec:
                 secretKeyRef:
                   name: lisptc-convex
                   key: CONVEX_SELF_HOSTED_ADMIN_KEY
+          ports:
+            - name: probe
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: probe
+            periodSeconds: 5
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { memory: 512Mi }
