@@ -26,6 +26,22 @@ describe("repl checkpoint access", () => {
 			bob.as.mutation(api.replImages.dropAfter, { chatId, call: 0 }),
 		).rejects.toThrow();
 	});
+
+	it("refuses to fork another user's chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId,
+			messages: [{ id: "h1", type: "human", content: "hi" }],
+		});
+		await expect(
+			bob.as.mutation(api.chats.fork, { chatId, messageId: "h1" }),
+		).rejects.toThrow();
+	});
 });
 
 describe("workspace access", () => {

@@ -42,6 +42,31 @@ async function drop(
 	await ctx.db.delete(imageId);
 }
 
+export async function copyCheckpoint(
+	ctx: MutationCtx,
+	from: Id<"chats">,
+	to: Id<"chats">,
+	call: number,
+): Promise<void> {
+	const image = await ctx.db
+		.query("replImages")
+		.withIndex("by_chat_call", (q) => q.eq("chatId", from).eq("call", call))
+		.unique();
+	if (image === null) return;
+	const target = await ctx.db.get(to);
+	if (target === null) return;
+	const imageId = await ctx.db.insert("replImages", {
+		chatId: to,
+		workspaceId: target.workspaceId,
+		call: image.call,
+		format: image.format,
+		bytes: image.bytes,
+		chunks: image.chunks,
+	});
+	for (const [index, data] of (await chunksOf(ctx, image._id)).entries())
+		await ctx.db.insert("replImageChunks", { imageId, index, data });
+}
+
 export const record = mutation({
 	args: {
 		chatId: v.id("chats"),
