@@ -9,18 +9,6 @@ spec:
     - port: {{ .Values.app.port }}
       targetPort: {{ .Values.app.port }}
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ .Values.app.stateClaim }}
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: {{ .Values.app.storage }}
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,8 +28,6 @@ spec:
       labels:
         app: app
     spec:
-      securityContext:
-        fsGroup: 1001
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       containers:
@@ -57,8 +43,6 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.app.port | quote }}
-            - name: XDG_CONFIG_HOME
-              value: /data
             {{- include "lisptc.previewEnv" (list . (dict
                 "APP_URL" .Values.app.hostname)) | nindent 12 }}
             {{- include "lisptc.previewConvexEnv" . | nindent 12 }}
@@ -78,10 +62,3 @@ spec:
               path: /health
               port: {{ .Values.app.port }}
             periodSeconds: 10
-          volumeMounts:
-            - name: state
-              mountPath: /data
-      volumes:
-        - name: state
-          persistentVolumeClaim:
-            claimName: {{ .Values.app.stateClaim }}
