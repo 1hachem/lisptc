@@ -123,6 +123,31 @@ describe("a server's phase, told to the chats that hold it", () => {
 		expect(told?.content).toContain('"fs" failed (CrashLoopBackOff)');
 	});
 
+	it("tells the holding chat a server was deleted", async () => {
+		const { t, workspaceId, holder, transcript } = await holding(["fs"]);
+		await t.mutation(internal.mcpServers.observeServer, {
+			workspaceId,
+			server: "fs",
+			phase: "gone",
+		});
+
+		const told = await transcript(holder);
+		expect(told).toHaveLength(1);
+		expect(told[0]?.content).toContain('"fs" was removed');
+	});
+
+	it("tells the holding chat a server the snapshot dropped is gone", async () => {
+		const { t, holder, transcript } = await holding(["fs"]);
+		await t.mutation(internal.mcpServers.reconcile, {
+			servers: [],
+			state: [],
+		});
+
+		const told = await transcript(holder);
+		expect(told).toHaveLength(1);
+		expect(told[0]?.content).toContain('"fs" was removed');
+	});
+
 	it("tells a chat nothing about a server it let go of", async () => {
 		const { t, workspaceId, holder, release, transcript } = await holding([
 			"fs",

@@ -206,7 +206,11 @@ export const reconcile = internalMutation({
 		);
 		for (const row of await ctx.db.query("mcpServers").take(RECONCILE_LIMIT))
 			if (!liveServers.has(`${row.workspaceId}\0${row.server}`))
-				await ctx.db.delete(row._id);
+				await putServer(ctx, {
+					workspaceId: row.workspaceId,
+					server: row.server,
+					phase: "gone",
+				});
 		for (const row of await ctx.db.query("mcpState").take(RECONCILE_LIMIT))
 			if (!liveState.has(`${row.workspaceId}\0${row.server}\0${row.name}`))
 				await ctx.db.delete(row._id);

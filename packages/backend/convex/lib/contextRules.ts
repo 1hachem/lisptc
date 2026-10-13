@@ -13,6 +13,8 @@ function mcpPhase({ key, state, detail }: ContextChange): string | undefined {
 		return `The MCP server "${key}" was stopped after going unused, and its ${key}/* tools are no longer defined. ${again}`;
 	if (state === "failed")
 		return `The MCP server "${key}" failed${detail === undefined ? "" : ` (${detail})`}, and its ${key}/* tools no longer answer. ${again}`;
+	if (state === "gone")
+		return `The MCP server "${key}" was removed, and its ${key}/* tools are no longer defined. It cannot be loaded again until it is added back.`;
 	return undefined;
 }
 
