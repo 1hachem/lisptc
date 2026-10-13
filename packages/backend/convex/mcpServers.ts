@@ -7,7 +7,6 @@ import {
 	mutation,
 	query,
 } from "./_generated/server.js";
-import { observeFact } from "./context.js";
 import { requireWorkspace } from "./lib/auth.js";
 import { MAX_MCP_REASON_LENGTH } from "./limits.js";
 import { mcpServerPhase, mcpStatePhase } from "./schema.js";
@@ -121,13 +120,6 @@ async function putServer(
 	ctx: MutationCtx,
 	{ workspaceId, server, phase, reason }: ServerRow,
 ): Promise<void> {
-	await observeFact(ctx, {
-		workspaceId,
-		source: "mcp",
-		key: server,
-		state: phase,
-		...(reason === undefined ? {} : { detail: reason }),
-	});
 	const existing = await ctx.db
 		.query("mcpServers")
 		.withIndex("by_workspace_server", (q) =>
@@ -230,11 +222,7 @@ export const reconcile = internalMutation({
 		);
 		for (const row of await ctx.db.query("mcpServers").take(RECONCILE_LIMIT))
 			if (!liveServers.has(`${row.workspaceId}\0${row.server}`))
-				await putServer(ctx, {
-					workspaceId: row.workspaceId,
-					server: row.server,
-					phase: "gone",
-				});
+				await ctx.db.delete(row._id);
 		for (const row of await ctx.db.query("mcpState").take(RECONCILE_LIMIT))
 			if (!liveState.has(`${row.workspaceId}\0${row.server}\0${row.name}`))
 				await ctx.db.delete(row._id);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, internal } from "../convex/_generated/api.js";
+import { api } from "../convex/_generated/api.js";
 import { harness, signIn } from "./helpers.ts";
 
 afterEach(() => {
@@ -26,26 +26,6 @@ describe("removing a chat", () => {
 			async (ctx) => await ctx.db.query("messages").collect(),
 		);
 		expect(left).toEqual([]);
-	});
-
-	it("lets go of the context it watched", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		const chatId = await alice.as.mutation(api.chats.create, {
-			workspaceId: alice.workspace,
-		});
-		await alice.as.mutation(api.context.watch, {
-			chatId,
-			source: "mcp",
-			keys: ["fs"],
-		});
-
-		await alice.as.mutation(api.chats.remove, { chatId });
-
-		const holds = await t.run(
-			async (ctx) => await ctx.db.query("contextWatches").collect(),
-		);
-		expect(holds).toEqual([]);
 	});
 
 	it("drops it from the list at once", async () => {
@@ -108,7 +88,7 @@ describe("removing a workspace", () => {
 		expect(messages).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records, permissions and context with it", async () => {
+	it("takes its secrets, oauth records and permissions with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -127,35 +107,16 @@ describe("removing a workspace", () => {
 			workspaceId: doomed,
 			source: "(permission/deny eval)",
 		});
-		await alice.as.mutation(api.context.watch, {
-			chatId: await alice.as.mutation(api.chats.create, {
-				workspaceId: doomed,
-			}),
-			source: "mcp",
-			keys: ["fs"],
-		});
-		await t.mutation(internal.context.observe, {
-			workspaceId: doomed,
-			source: "mcp",
-			key: "fs",
-			state: "ready",
-		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords, permissions, holds, facts } = await t.run(
-			async (ctx) => ({
-				secrets: await ctx.db.query("secrets").collect(),
-				oauthRecords: await ctx.db.query("oauthRecords").collect(),
-				permissions: await ctx.db.query("permissions").collect(),
-				holds: await ctx.db.query("contextWatches").collect(),
-				facts: await ctx.db.query("contextFacts").collect(),
-			}),
-		);
-		expect(holds).toEqual([]);
-		expect(facts).toEqual([]);
+		const { secrets, oauthRecords, permissions } = await t.run(async (ctx) => ({
+			secrets: await ctx.db.query("secrets").collect(),
+			oauthRecords: await ctx.db.query("oauthRecords").collect(),
+			permissions: await ctx.db.query("permissions").collect(),
+		}));
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
 		expect(permissions).toEqual([]);

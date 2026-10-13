@@ -80,25 +80,6 @@ export default defineSchema({
 		.index("by_chat_seq", ["chatId", "seq"])
 		.index("by_chat_wire", ["chatId", "wireId"]),
 
-	contextFacts: defineTable({
-		workspaceId: v.id("workspaces"),
-		source: v.string(),
-		key: v.string(),
-		state: v.string(),
-		detail: v.optional(v.string()),
-		observedAt: v.number(),
-	}).index("by_workspace_source_key", ["workspaceId", "source", "key"]),
-
-	contextWatches: defineTable({
-		workspaceId: v.id("workspaces"),
-		chatId: v.id("chats"),
-		source: v.string(),
-		key: v.string(),
-		told: v.optional(v.string()),
-	})
-		.index("by_chat_source", ["chatId", "source"])
-		.index("by_workspace_source_key", ["workspaceId", "source", "key"]),
-
 	secrets: defineTable({
 		workspaceId: v.id("workspaces"),
 		key: v.string(),

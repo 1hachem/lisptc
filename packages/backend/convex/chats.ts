@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { mutation, query } from "./_generated/server.js";
-import { forgetChat } from "./context.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 
 const MAX_CHATS = 200;
@@ -77,7 +76,6 @@ export const remove = mutation({
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
 		await ctx.db.delete(chatId);
-		await forgetChat(ctx, chatId);
 		await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
 		return null;
 	},

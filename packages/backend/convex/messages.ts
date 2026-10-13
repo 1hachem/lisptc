@@ -2,7 +2,6 @@ import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
-import { appendMessages } from "./lib/append.js";
 import { requireChat } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { messageType } from "./schema.js";
@@ -66,7 +65,31 @@ export const append = mutation({
 	returns: v.array(v.id("messages")),
 	handler: async (ctx, { chatId, messages }) => {
 		const { chat } = await requireChat(ctx, chatId);
-		return await appendMessages(ctx, chat, messages);
+		const last = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+			.order("desc")
+			.first();
+		let seq = last === null ? 0 : last.seq + 1;
+		const ids = [];
+		for (const entry of messages) {
+			const clamped = clamp(entry.content, entry.kwargs);
+			ids.push(
+				await ctx.db.insert("messages", {
+					chatId,
+					workspaceId: chat.workspaceId,
+					seq,
+					type: entry.type,
+					content: clamped.content,
+					kwargs: clamped.kwargs,
+					truncated: clamped.truncated ? true : undefined,
+					wireId: entry.id,
+				}),
+			);
+			seq += 1;
+		}
+		await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
+		return ids;
 	},
 });
 

@@ -123,22 +123,6 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
-	it("refuses watching context for another user's chat", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		const bob = await signIn(t, "bob@example.com");
-		const chatId = await bob.as.mutation(api.chats.create, {
-			workspaceId: bob.workspace,
-		});
-		await expect(
-			alice.as.mutation(api.context.watch, {
-				chatId,
-				source: "mcp",
-				keys: ["fs"],
-			}),
-		).rejects.toThrow();
-	});
-
 	it("refuses annotating a message in another user's chat", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
