@@ -18,8 +18,12 @@ interfaces, and the tool and connection shapes that cross them. A consumer
 imports it without pulling in the extension. `src/mcp-client.ts`,
 `src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts`, `src/probed-host.ts` and
 `src/mcp-oauth.ts` implement
-against it. `src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server
-registry.
+against it. **The OAuth state is the root's to keep**: every root hands the
+client an `OAuthStore`. The file one in `src/oauth-host.ts` is for the apps
+that run on the user's own machine, never for the served agent. The served
+agent keeps it in Convex, whichever container host it runs.
+
+`src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server registry.
 
 **Never give a client a callback server of its own.** The OAuth callback server
 is one per port for the whole process, shared by every REPL in it, and reached
