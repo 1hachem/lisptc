@@ -150,6 +150,17 @@ async function attachLoop(): Promise<void> {
 			client.close();
 			return;
 		}
+		const reverting = accum === "" ? /^:revert\s+(\d+)\s*$/.exec(line) : null;
+		if (reverting) {
+			try {
+				write(
+					`Reverted to call ${await client.revert(Number(reverting[1]))}.\n`,
+				);
+			} catch (ex) {
+				write(`${ex instanceof Error ? ex.message : String(ex)}\n`);
+			}
+			continue;
+		}
 		accum += `${line}\n`;
 		if (accum.trim() === "") {
 			accum = "";
