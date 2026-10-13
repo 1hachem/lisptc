@@ -49,6 +49,30 @@ tasks:
         kubectl -n argocd annotate application "$app" argocd.argoproj.io/refresh=hard --overwrite
       done
 
+  _argocd:
+    internal: true
+    requires:
+      vars: [ARGS]
+    cmds:
+      - task: :_infisical-run
+        vars: { ENV: prod, PATHS: "/argocd", CMD: 'export ARGOCD_SERVER=\${ARGOCD_BASE_URL#https://} ARGOCD_AUTH_TOKEN=\$ARGOCD_API_TOKEN ARGOCD_OPTS=--grpc-web && {{.ARGS}}' }
+
+  previews:pin:
+    desc: 'render every preview from a branch instead of main, root stops self-healing until unpin (task cluster:previews:pin -- feat/x, default the current branch)'
+    vars:
+      CURRENT:
+        sh: git branch --show-current
+      BRANCH: '{{.CLI_ARGS | default .CURRENT}}'
+    cmds:
+      - task: _argocd
+        vars: { ARGS: 'argocd app set argocd/root --self-heal=false && argocd app set argocd/previews --revision {{.BRANCH}} && argocd app sync argocd/previews' }
+
+  previews:unpin:
+    desc: put the previews back on main and let root self-heal again
+    cmds:
+      - task: _argocd
+        vars: { ARGS: 'argocd app set argocd/root --self-heal && argocd app set argocd/previews --revision main && argocd app sync argocd/previews' }
+
   status:
     desc: show the ArgoCD apps, the pods and the tailnet hosts
     deps: [_reachable]
