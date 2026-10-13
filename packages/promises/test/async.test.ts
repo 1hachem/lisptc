@@ -1,5 +1,6 @@
 import type { Eval } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
+import { Job } from "@repo/interpreter/job";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
@@ -145,7 +146,7 @@ describe("a promise is the host's own promise", () => {
 	function starter(): { interp: Interp; runs: () => number } {
 		const interp = interpWithSlow();
 		let runs = 0;
-		interp.defPromise(
+		interp.def(
 			"start",
 			1,
 			"(start x)",
@@ -159,7 +160,7 @@ describe("a promise is the host's own promise", () => {
 					}),
 				),
 		);
-		interp.defPromise(
+		interp.def(
 			"start-failing",
 			0,
 			"(start-failing)",
@@ -241,7 +242,7 @@ describe("a promise built-in stands on its own", () => {
 	function bare(): Interp {
 		const interp = new Interp();
 		runSync(interp, prelude);
-		interp.defPromise(
+		interp.def(
 			"start-doomed",
 			0,
 			"(start-doomed)",
@@ -259,19 +260,19 @@ describe("a promise built-in stands on its own", () => {
 	}
 
 	it("starts work with no promise built-ins installed", () => {
-		expect(runSync(bare(), "(start-doomed)")).toBeInstanceOf(Promise);
+		expect(runSync(bare(), "(start-doomed)")).toBeInstanceOf(Job);
 	});
 
 	it("absorbs a rejection nobody awaited", async () => {
 		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as Promise<unknown>;
+		const promise = runSync(interp, "(start-doomed)") as Job;
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(interp.async.stateOf(promise)).toBe("rejected");
 	});
 
 	it("is cancellable by the host that dropped the interp", () => {
 		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as Promise<unknown>;
+		const promise = runSync(interp, "(start-doomed)") as Job;
 		expect(interp.async.pending()).toContain(promise);
 		interp.dispose();
 		expect(interp.async.pending()).toHaveLength(0);
