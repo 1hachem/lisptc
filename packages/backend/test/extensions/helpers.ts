@@ -121,7 +121,7 @@ export function mockMcpClient(
 		disconnect: async (serverId) => {
 			live.delete(serverId);
 		},
-		asleep: async () => false,
+		phase: async () => ({ phase: "ready" }),
 		login: async () => ({ authUrl: null }),
 		logout: async () => {},
 		authorize: async () => {},

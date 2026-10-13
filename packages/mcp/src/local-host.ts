@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerState,
+import {
+	type ConnConfig,
+	type HeldState,
+	logTail,
+	type McpHost,
+	type ServerHandle,
+	type ServerState,
+	stillHeld,
 } from "./ports.ts";
 
 const START_TIMEOUT_MS = 60_000;
@@ -25,7 +28,7 @@ async function reachable(url: string): Promise<boolean> {
 }
 
 function whyItDied(server: LocalServer): string {
-	const tail = server.stderr.trim().split("\n").slice(-6).join("\n");
+	const tail = logTail(server.stderr);
 	return tail ? `\n${tail}` : "";
 }
 
@@ -93,8 +96,12 @@ export class LocalProcessHost implements McpHost {
 
 	used(_name: string): void {}
 
-	async asleep(_name: string): Promise<boolean> {
-		return false;
+	async phase(name: string): Promise<HeldState> {
+		const server = this.started.get(name);
+		if (server === undefined || server.child.exitCode === null)
+			return stillHeld;
+		const reason = logTail(server.stderr);
+		return reason === "" ? { phase: "failed" } : { phase: "failed", reason };
 	}
 
 	private spawn(

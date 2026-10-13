@@ -280,13 +280,31 @@ describe("the kubernetes host", () => {
 		}));
 		const kube = host(fake.store);
 		await kube.ensure(browser);
-		expect(await kube.asleep("playwright")).toBe(false);
+		expect(await kube.phase("playwright")).toEqual({ phase: "ready" });
 
 		phase = "Sleeping";
 
-		expect(await kube.asleep("playwright")).toBe(true);
+		expect(await kube.phase("playwright")).toEqual({ phase: "sleeping" });
 		expect(kube.status("playwright")).toBe("stopped");
-		expect(await kube.asleep("playwright")).toBe(false);
+	});
+
+	it("tells a server failed, with the reason the operator gave", async () => {
+		let phase: "Ready" | "Failed" = "Ready";
+		const fake = fakeStore((server) => ({
+			...ready(server),
+			phase,
+			...(phase === "Failed" ? { reason: "ImagePullBackOff" } : {}),
+		}));
+		const kube = host(fake.store);
+		await kube.ensure(browser);
+
+		phase = "Failed";
+
+		expect(await kube.phase("playwright")).toEqual({
+			phase: "failed",
+			reason: "ImagePullBackOff",
+		});
+		expect(kube.status("playwright")).toBe("stopped");
 	});
 
 	it("tells a server went to sleep once its idle window has passed", async () => {
@@ -297,9 +315,9 @@ describe("the kubernetes host", () => {
 		const idle = fake.servers.get(NAME)?.spec.idleSeconds ?? 0;
 
 		time.pass(idle - 1);
-		expect(await kube.asleep("playwright")).toBe(false);
+		expect(await kube.phase("playwright")).toEqual({ phase: "ready" });
 		time.pass(1);
-		expect(await kube.asleep("playwright")).toBe(true);
+		expect(await kube.phase("playwright")).toEqual({ phase: "sleeping" });
 	});
 
 	it("lets go of a server someone deleted from the cluster", async () => {
@@ -309,18 +327,18 @@ describe("the kubernetes host", () => {
 
 		fake.servers.delete(NAME);
 
-		expect(await kube.asleep("playwright")).toBe(true);
+		expect(await kube.phase("playwright")).toEqual({ phase: "gone" });
 		expect(kube.status("playwright")).toBe("stopped");
 	});
 
 	it("asks the fallback about a server it does not run", async () => {
 		const fallback = recordingHost();
-		fallback.sleeping.add("remote");
+		fallback.phases.set("remote", { phase: "sleeping" });
 		const kube = host(fakeStore().store, fallback);
 
 		kube.used("remote");
 
 		expect(fallback.uses).toEqual(["remote"]);
-		expect(await kube.asleep("remote")).toBe(true);
+		expect(await kube.phase("remote")).toEqual({ phase: "sleeping" });
 	});
 });

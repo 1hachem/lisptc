@@ -20,7 +20,7 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 			},
 			callTool: () => never(),
 			disconnect: () => Promise.resolve(),
-			asleep: () => Promise.resolve(false),
+			phase: () => Promise.resolve({ phase: "ready" }),
 			login: () => Promise.resolve({ authUrl: null }),
 			logout: () => Promise.resolve(),
 			authorize: () => Promise.resolve(),

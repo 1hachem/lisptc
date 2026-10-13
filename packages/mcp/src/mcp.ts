@@ -788,7 +788,12 @@ export function registerMcp(
 	return async () => {
 		const loaded = [...servers.values()];
 		const asleep = await Promise.all(
-			loaded.map((rec) => client.asleep(rec.serverId).catch(() => false)),
+			loaded.map((rec) =>
+				client.phase(rec.serverId).then(
+					(held) => held.phase !== "ready",
+					() => false,
+				),
+			),
 		);
 		const names = loaded
 			.filter((rec, i) => asleep[i] && servers.get(rec.name) === rec)

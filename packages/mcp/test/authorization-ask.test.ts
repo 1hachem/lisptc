@@ -16,7 +16,7 @@ const loginClient: McpClient = {
 		Promise.reject(new AuthorizationRequired(conf.name, AUTH_URL, false)),
 	callTool: () => Promise.resolve(null),
 	disconnect: () => Promise.resolve(),
-	asleep: () => Promise.resolve(false),
+	phase: () => Promise.resolve({ phase: "ready" }),
 	login: () => Promise.resolve({ authUrl: AUTH_URL }),
 	logout: () => Promise.resolve(),
 	authorize: () => Promise.resolve(),

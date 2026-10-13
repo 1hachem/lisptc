@@ -37,6 +37,7 @@ async function turnStart(
 		hooks.turnStart.run(() => settled(undefined), {
 			interp,
 			emit: (text) => emitted.push(text),
+			notify: () => {},
 		}),
 	);
 	return emitted;
@@ -59,7 +60,7 @@ describe("a server that went to sleep", () => {
 
 	it("is unloaded and told once, when the next turn starts", async () => {
 		const { host, interp, hooks } = await loaded();
-		host.sleeping.add("fx");
+		host.phases.set("fx", { phase: "sleeping" });
 
 		const [notice] = await turnStart(interp, hooks);
 

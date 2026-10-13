@@ -8,12 +8,15 @@ import {
 	type State,
 	stateEntries,
 } from "./mcp-server-resource.ts";
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerReporter,
-	ServerState,
+import {
+	type ConnConfig,
+	type HeldState,
+	logTail,
+	type McpHost,
+	type ServerHandle,
+	type ServerReporter,
+	type ServerState,
+	stillHeld,
 } from "./ports.ts";
 
 const exec = promisify(execFile);
@@ -49,8 +52,13 @@ async function reachable(url: string): Promise<boolean> {
 }
 
 function whyItDied(container: Container): string {
-	const tail = container.logs.trim().split("\n").slice(-6).join("\n");
+	const tail = logTail(container.logs);
 	return tail ? `\n${tail}` : "";
+}
+
+function exited(container: Container): HeldState {
+	const reason = logTail(container.logs);
+	return reason === "" ? { phase: "failed" } : { phase: "failed", reason };
 }
 
 function shellQuote(word: string): string {
@@ -105,6 +113,7 @@ export async function dockerAnswers(): Promise<boolean> {
 
 export class DockerHost implements McpHost {
 	private readonly containers = new Map<string, Container>();
+	private readonly ended = new Map<string, HeldState>();
 	private readonly instance = randomUUID();
 
 	constructor(
@@ -125,6 +134,7 @@ export class DockerHost implements McpHost {
 		const container = this.containers.get(name);
 		if (!container) return await this.fallback.stop(name);
 		this.containers.delete(name);
+		this.ended.set(name, { phase: "sleeping" });
 		if (container.appId) await this.remove(container.appId);
 		await this.remove(container.id);
 		this.report({ server: name, phase: "sleeping" });
@@ -150,8 +160,11 @@ export class DockerHost implements McpHost {
 		if (!this.containers.has(name)) this.fallback.used(name);
 	}
 
-	async asleep(name: string): Promise<boolean> {
-		return this.containers.has(name) ? false : await this.fallback.asleep(name);
+	async phase(name: string): Promise<HeldState> {
+		const container = this.containers.get(name);
+		if (container === undefined)
+			return this.ended.get(name) ?? (await this.fallback.phase(name));
+		return container.state === "running" ? stillHeld : exited(container);
 	}
 
 	private labels(conf: ConnConfig): string[] {
@@ -178,6 +191,7 @@ export class DockerHost implements McpHost {
 	}
 
 	private async start(conf: ConnConfig, launch: Launch): Promise<ServerHandle> {
+		this.ended.delete(conf.name);
 		this.report({ server: conf.name, phase: "starting" });
 		try {
 			const handle = await this.launch(conf, launch);
@@ -308,6 +322,7 @@ export class DockerHost implements McpHost {
 			container.state = "stopped";
 			if (this.containers.get(name) !== container) return;
 			this.containers.delete(name);
+			this.ended.set(name, exited(container));
 			this.report({
 				server: name,
 				phase: "failed",

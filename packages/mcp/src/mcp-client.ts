@@ -15,6 +15,7 @@ import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
+	type HeldState,
 	type HttpConnConfig,
 	type McpClient,
 	type McpHost,
@@ -236,9 +237,9 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			await ports.host.stop(entry.name);
 		},
 
-		async asleep(serverId: string): Promise<boolean> {
+		async phase(serverId: string): Promise<HeldState> {
 			const entry = clients.get(serverId);
-			return entry ? await ports.host.asleep(entry.name) : false;
+			return entry ? await ports.host.phase(entry.name) : { phase: "gone" };
 		},
 
 		async login(conf: HttpConnConfig): Promise<{ authUrl: string | null }> {

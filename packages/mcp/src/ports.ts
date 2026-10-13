@@ -112,7 +112,7 @@ export interface McpClient {
 	connect(conf: ConnConfig, signal?: AbortSignal): Promise<ConnectResult>;
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
-	asleep(serverId: string): Promise<boolean>;
+	phase(serverId: string): Promise<HeldState>;
 	login(conf: HttpConnConfig): Promise<{ authUrl: string | null }>;
 	logout(conf: HttpConnConfig): Promise<void>;
 	authorize(conf: HttpConnConfig, code: string): Promise<void>;
@@ -142,6 +142,19 @@ export type ServerState = "running" | "stopped" | "unknown";
 
 export type ServerPhase = "starting" | "ready" | "sleeping" | "failed";
 
+export type HeldPhase = Exclude<ServerPhase, "starting"> | "gone";
+
+export interface HeldState {
+	phase: HeldPhase;
+	reason?: string;
+}
+
+export const stillHeld: HeldState = { phase: "ready" };
+
+export function logTail(logs: string): string {
+	return logs.trim().split("\n").slice(-6).join("\n");
+}
+
 export interface ServerReport {
 	server: string;
 	phase: ServerPhase;
@@ -157,7 +170,7 @@ export interface McpHost {
 	status(name: string): ServerState;
 	logs(name: string): string;
 	used(name: string): void;
-	asleep(name: string): Promise<boolean>;
+	phase(name: string): Promise<HeldState>;
 }
 
 export interface ToolkitRegistry {
