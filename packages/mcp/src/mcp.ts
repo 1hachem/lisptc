@@ -158,6 +158,25 @@ export interface McpExtensionHost {
 	search: SearchEngine;
 	prompt: PromptSource;
 	policy?: McpPolicy;
+	held?: (servers: readonly string[]) => void;
+}
+
+class HeldServers extends Map<string, ServerRec> {
+	constructor(private readonly held?: (servers: readonly string[]) => void) {
+		super();
+	}
+
+	override set(name: string, rec: ServerRec): this {
+		super.set(name, rec);
+		this.held?.([...this.keys()]);
+		return this;
+	}
+
+	override delete(name: string): boolean {
+		const deleted = super.delete(name);
+		if (deleted) this.held?.([...this.keys()]);
+		return deleted;
+	}
 }
 
 function extractAuthCode(raw: string): string {
@@ -456,23 +475,13 @@ function toolRows(rec: ServerRec): List[] {
 
 export type SleptServers = () => Promise<string[]>;
 
-function sleptText(names: string[]): string {
-	return names
-		.map(
-			(name) =>
-				`The MCP server "${name}" was stopped after going unused, and its ${name}/* tools are no longer defined. Run (load-mcp "${name}") again before calling them.`,
-		)
-		.join("\n");
-}
-
-function noticeSlept(
+function unloadSlept(
 	hooks: SessionHooks,
 	slept: WeakMap<Interp, SleptServers>,
 ): void {
 	hooks.turnStart.use(function* (ctx, next) {
 		const asleep = slept.get(ctx.interp);
-		const names = asleep ? yield* settled(asleep()) : [];
-		if (names.length > 0) ctx.emit(sleptText(names));
+		if (asleep) yield* settled(asleep());
 		yield* next(ctx);
 	});
 }
@@ -487,7 +496,7 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 			prompt: host.prompt(),
 			session: (hooks: SessionHooks): void => {
 				answerAuthorization(hooks);
-				noticeSlept(hooks, slept);
+				unloadSlept(hooks, slept);
 			},
 		},
 	);
@@ -495,12 +504,15 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy">,
+	host: Pick<
+		McpExtensionHost,
+		"client" | "toolkit" | "search" | "policy" | "held"
+	>,
 ): SleptServers {
 	const { client, toolkit, search } = host;
 	const policy = host.policy ?? openPolicy;
 
-	const servers = new Map<string, ServerRec>();
+	const servers: Map<string, ServerRec> = new HeldServers(host.held);
 	const predefined = new Map<string, ConnConfig>();
 	const loading = new Set<Promise<unknown>>();
 	for (const conf of toolkit.all())

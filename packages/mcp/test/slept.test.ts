@@ -14,11 +14,12 @@ const FIXTURE = fileURLToPath(
 	new URL("./fixture-mcp-server.ts", import.meta.url),
 );
 
-async function loaded() {
+async function loaded(held: string[][] = []) {
 	const host = recordingHost();
 	const extension = mcpExtension({
 		...mcpHost,
 		client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
+		held: (servers) => held.push([...servers]),
 	});
 	const interp = new Interp({ extensions: [extension] });
 	runSync(interp, prelude);
@@ -58,16 +59,14 @@ describe("a server that went to sleep", () => {
 		interp.dispose();
 	}, 30_000);
 
-	it("is unloaded and told once, when the next turn starts", async () => {
-		const { host, interp, hooks } = await loaded();
+	it("is unloaded without a word to the model when the next turn starts", async () => {
+		const held: string[][] = [];
+		const { host, interp, hooks } = await loaded(held);
 		host.sleeping.add("fx");
 
-		const [notice] = await turnStart(interp, hooks);
-
-		expect(notice).toContain('"fx" was stopped after going unused');
-		expect(notice).toContain('(load-mcp "fx")');
-		expect(interp.hasGlobal(newSym("fx/echo"))).toBe(false);
 		expect(await turnStart(interp, hooks)).toEqual([]);
+		expect(interp.hasGlobal(newSym("fx/echo"))).toBe(false);
+		expect(held).toEqual([["fx"], []]);
 		interp.dispose();
 	}, 30_000);
 });
