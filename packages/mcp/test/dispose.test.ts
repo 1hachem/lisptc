@@ -1,3 +1,4 @@
+import type { Job } from "@repo/interpreter/job";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { describe, expect, it } from "vitest";
@@ -35,12 +36,12 @@ function mcpInterp(client: McpClient): Interp {
 	return interp;
 }
 
-function startLoad(interp: Interp): Promise<unknown> {
+function startLoad(interp: Interp): Job {
 	const promise = runSync(
 		interp,
 		'(load-mcp :name "x" :command "node")',
-	) as Promise<unknown>;
-	promise.catch(() => {});
+	) as Job;
+	promise.then(undefined, () => {});
 	return promise;
 }
 

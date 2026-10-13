@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { Job } from "@repo/interpreter/job";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -28,8 +29,8 @@ function mcpInterp(): Interp {
 	return new Interp({ extensions: [mcpExtension(mcpHost)] });
 }
 
-function start(interp: Interp, form: string): Promise<unknown> {
-	return runSync(interp, form) as Promise<unknown>;
+function start(interp: Interp, form: string): Job {
+	return runSync(interp, form) as Job;
 }
 
 async function load(interp: Interp, form: string): Promise<string> {
@@ -391,7 +392,7 @@ describe("the MCP extension adds no promise vocabulary of its own", () => {
 
 	it("starts a load, installs the bindings, and offers no await", async () => {
 		const promise = start(interp, loadForm("alone"));
-		expect(promise).toBeInstanceOf(Promise);
+		expect(promise).toBeInstanceOf(Job);
 		expect(str(await promise)).toContain("alone/echo");
 		expect(await evalStr(interp, '(alone/echo :message "hi")')).toBe('"hi"');
 		expect(() => runSync(interp, "(await 1)")).toThrow(/undefined: await/);
@@ -427,7 +428,7 @@ describe("a load runs in the background", () => {
 
 	it("runs two loads concurrently, not sequentially", async () => {
 		const slow = start(interp, loadForm("concSlow", 4000));
-		slow.catch(() => {});
+		slow.then(undefined, () => {});
 		const fast = start(interp, loadForm("concFast", 50));
 		await fast;
 
@@ -439,7 +440,7 @@ describe("a load runs in the background", () => {
 	it("cancelling a load rejects it and leaves no server behind", async () => {
 		const killme = start(interp, loadForm("killme", 3000));
 		expect(interp.async.cancel(killme)).toBe(true);
-		await expect(killme).rejects.toThrow();
+		await expect(killme.promise()).rejects.toThrow();
 		expect(interp.async.stateOf(killme)).toBe("rejected");
 		expect(await evalStr(interp, "(list-mcps)")).not.toContain("killme");
 	});
