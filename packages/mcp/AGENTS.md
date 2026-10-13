@@ -56,7 +56,7 @@ rule there too.
 **On a cluster the host creates no pod.** It writes an `McpServer` and waits on
 its status; `apps/mcp-operator` runs it. `src/mcp-server-resource.ts` is that
 resource's contract, which the package exports under the name kubernetes, and the schema in
-`charts/lisptc-crds` has to accept what it writes.
+`charts/lisptc/crds` has to accept what it writes.
 
 **A server's state outlives its process, so a host never deletes the
 resource.** What someone changed on the live one is theirs, and a host keeps

@@ -18,7 +18,7 @@ ports in `src/cluster.ts`. Everything that touches Convex goes through
 `StatusSink` in `src/status-sink.ts`.
 
 The resource's shape is owned by `@repo/mcp-extension/kubernetes`, and its schema
-by `charts/lisptc-crds`. A test fails when they disagree.
+by `charts/lisptc/crds`. A test fails when they disagree.
 
 ## Rules
 
