@@ -21,7 +21,7 @@ import {
 } from "lexical";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Command, commands } from "../lib/commands.ts";
+import { type Command, commands, matchesCommand } from "../lib/commands.ts";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispEditor } from "./lisp-editor.tsx";
 
@@ -293,10 +293,9 @@ function CommandMenuPlugin({
 	const triggerFn = useBasicTypeaheadTriggerMatch("/", { minLength: 0 });
 
 	const options = useMemo(() => {
-		const q = (query ?? "").toLowerCase();
 		return commands
 			.filter((c) => !(isMobile && c.desktopOnly))
-			.filter((c) => c.name.slice(1).startsWith(q))
+			.filter((c) => matchesCommand(c, query ?? ""))
 			.map((c) => new CommandOption(c));
 	}, [query, isMobile]);
 
