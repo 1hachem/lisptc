@@ -82,6 +82,9 @@ metadata:
     argocd.argoproj.io/sync-wave: "2"
 spec:
   replicas: 1
+  {{- if .Values.preview.enabled }}
+  progressDeadlineSeconds: {{ .Values.preview.progressDeadlineSeconds }}
+  {{- end }}
   strategy:
     type: Recreate
   selector:
@@ -97,7 +100,7 @@ spec:
         - name: {{ .Values.imagePullSecret }}
       containers:
         - name: mcp-operator
-          image: "{{ .Values.mcpOperator.image.repository }}:{{ .Values.mcpOperator.image.tag }}"
+          image: "{{ .Values.mcpOperator.image.repository }}:{{ include "lisptc.imageTag" (list . .Values.mcpOperator.image.tag) }}"
           env:
             - name: LISPTC_MCP_NAMESPACE
               value: {{ .Release.Namespace | quote }}
