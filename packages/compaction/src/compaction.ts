@@ -7,10 +7,13 @@ import {
 } from "@repo/interpreter/docs";
 import { EvalException } from "@repo/interpreter/errors";
 import { callableKind } from "@repo/interpreter/func";
-import type { Interp } from "@repo/interpreter/lisp";
+import { Job } from "@repo/interpreter/job";
+import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
+	arrayToList,
 	Cell,
 	type List,
+	listToArray,
 	newSym,
 	Sym,
 	Unspecified,
@@ -164,8 +167,22 @@ function boolOption(
 	return opts.get(name) !== null;
 }
 
+const counterCodec: StateCodec<Record<string, number>> = {
+	toLisp: (counts) =>
+		arrayToList(
+			Object.entries(counts).map(([base, n]) => new Cell(base, BigInt(n))),
+		),
+	fromLisp: (list) =>
+		Object.fromEntries(
+			listToArray(list as List).map((pair) => [
+				(pair as Cell).car as string,
+				Number((pair as Cell).cdr),
+			]),
+		),
+};
+
 export class Compactor {
-	private readonly counters = new Map<string, number>();
+	private counters: State<Record<string, number>> | undefined;
 	private spent = 0;
 	private dropped = 0;
 	private channels?: Channels;
@@ -193,7 +210,7 @@ export class Compactor {
 			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
 		const name = this.nameFor(interp, form, value);
-		if (value instanceof Promise)
+		if (value instanceof Job)
 			return `${name}: a promise, still running. Its result applies itself when the promise settles, so nothing is owed here; to act on it use the name — (promise-state ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
 
 		return `${name}: ${describe(value)}\n`;
@@ -205,8 +222,11 @@ export class Compactor {
 		this.dropped = 0;
 	}
 
+	keepCountsIn(counters: State<Record<string, number>>): void {
+		this.counters = counters;
+	}
+
 	reset(): void {
-		this.counters.clear();
 		this.stepping = false;
 		this.spent = 0;
 		this.dropped = 0;
@@ -399,13 +419,14 @@ export class Compactor {
 		value: unknown,
 		total: number,
 	): string {
-		let n = (this.counters.get(base) ?? 0) + 1;
+		const counts = this.counters?.get() ?? {};
+		let n = (counts[base] ?? 0) + 1;
 		let name = `${base}-${n}`;
 		while (interp.hasGlobal(newSym(name))) name = `${base}-${++n}`;
-		this.counters.set(base, n);
+		this.counters?.set({ ...counts, [base]: n });
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			doc: !(value instanceof Promise)
+			doc: !(value instanceof Job)
 				? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
 				: `The promise a \`${base}\` call returned. This name is how you address it — its printed form (#<promise>) cannot be read back. It applies its own result when it settles, so awaiting is optional: (await ${name}) waits for it now and returns that result, (promise-state ${name}) checks it without blocking (:pending / :fulfilled / :rejected), (cancel ${name}) aborts it.`,
 		});
@@ -594,13 +615,13 @@ function describe(value: unknown): string {
 	const callable = callableKind(value);
 	if (callable !== undefined) return callable;
 
-	if (value instanceof Promise) return "a promise, still running";
+	if (value instanceof Job) return "a promise, still running";
 
 	const started = listElements(value);
 	if (
 		started !== undefined &&
 		started.length > 0 &&
-		started.every((p) => p instanceof Promise)
+		started.every((p) => p instanceof Job)
 	)
 		return `list of ${started.length} promise${started.length === 1 ? "" : "s"}, still running`;
 
@@ -707,6 +728,14 @@ const GREP_ARGS: DocArg[] = [
 
 function registerCompaction(interp: Interp, c: Compactor): void {
 	c.reset();
+	c.keepCountsIn(
+		interp.state(
+			"compaction/counters",
+			counterCodec,
+			{},
+			"The last number used to name each kind of saved result, so the next one gets the next number.",
+		),
+	);
 	c.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (interp, form, next) {

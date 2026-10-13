@@ -1,4 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { Job } from "@repo/interpreter/job";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { Cell, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
@@ -274,8 +275,8 @@ describe("the character backstop", () => {
 });
 
 describe("reporting a promise", () => {
-	function pending(): Promise<unknown> {
-		return new Promise(() => {});
+	function pending(): Job {
+		return Job.of(new Promise(() => {}));
 	}
 
 	function reportOf(interp: Interp, c: Compactor, code: string): string {
