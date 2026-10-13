@@ -23,6 +23,7 @@ import {
 	type InterpExtension,
 	type ModelDelta,
 	type ModelRequest,
+	type Notice,
 	noAnnotations,
 	openSession,
 	type SessionHooks,
@@ -372,14 +373,16 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.unrun.run(() => [], this.interp, code);
 	}
 
-	async turnStart(
-		around?: Middleware<[TurnContext], Eval<void>>,
-	): Promise<{ emitted: string; annotations: StepAnnotations }> {
+	async turnStart(around?: Middleware<[TurnContext], Eval<void>>): Promise<{
+		emitted: string;
+		notices: readonly Notice[];
+		annotations: StepAnnotations;
+	}> {
 		const chain = outermost(this.hooks.turnStart, around);
-		const { emitted, annotations } = await this.emitting((ctx) =>
+		const { emitted, notices, annotations } = await this.emitting((ctx) =>
 			chain.run(() => settled(undefined), ctx),
 		);
-		return { emitted, annotations };
+		return { emitted, notices, annotations };
 	}
 
 	async system(
@@ -391,13 +394,15 @@ export class AgentRepl extends MemoryRepl {
 		return { prompt: value, annotations };
 	}
 
-	beginStep(): Promise<{
+	async beginStep(): Promise<{
 		emitted: string;
+		notices: readonly Notice[];
 		annotations: StepAnnotations;
 	}> {
-		return this.emitting((ctx) =>
+		const { emitted, notices, annotations } = await this.emitting((ctx) =>
 			this.hooks.beginStep.run(() => settled(undefined), ctx),
 		);
+		return { emitted, notices, annotations };
 	}
 
 	context(messages: readonly ChatMessage[]): readonly ChatMessage[] {
@@ -429,15 +434,17 @@ export class AgentRepl extends MemoryRepl {
 		);
 	}
 
-	async beforeSettle(
-		more: boolean,
-	): Promise<{ more: boolean; emitted: string }> {
+	async beforeSettle(more: boolean): Promise<{
+		more: boolean;
+		emitted: string;
+		notices: readonly Notice[];
+	}> {
 		const { beforeSettle } = this.hooks;
 		let decided = more;
-		const { emitted } = await this.emitting(function* (ctx) {
+		const { emitted, notices } = await this.emitting(function* (ctx) {
 			decided = yield* beforeSettle.run((_c, m) => settled(m), ctx, more);
 		});
-		return { more: decided, emitted };
+		return { more: decided, emitted, notices };
 	}
 
 	settled(
@@ -448,10 +455,14 @@ export class AgentRepl extends MemoryRepl {
 		outermost(this.hooks.settled, around).run(() => {}, turn, end);
 	}
 
-	private async emitting<T>(
-		run: (ctx: TurnContext) => Eval<T>,
-	): Promise<{ value: T; emitted: string; annotations: StepAnnotations }> {
+	private async emitting<T>(run: (ctx: TurnContext) => Eval<T>): Promise<{
+		value: T;
+		emitted: string;
+		notices: readonly Notice[];
+		annotations: StepAnnotations;
+	}> {
 		let emitted = "";
+		const notices: Notice[] = [];
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
@@ -463,6 +474,9 @@ export class AgentRepl extends MemoryRepl {
 					emit: (text) => {
 						emitted += emitted === "" ? text : `\n\n${text}`;
 					},
+					notify: (source, text) => {
+						notices.push({ source, text });
+					},
 				}),
 			));
 		} finally {
@@ -471,6 +485,7 @@ export class AgentRepl extends MemoryRepl {
 		return {
 			value,
 			emitted,
+			notices,
 			annotations: this.hooks.annotate.run(
 				(_b, into) => into,
 				buffer,
