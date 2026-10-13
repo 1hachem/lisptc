@@ -310,9 +310,9 @@ export class KubernetesHost implements McpHost {
 		if (followed.state !== "running") return false;
 		const live = await this.store.get(followed.name);
 		const slept =
-			live !== undefined &&
-			(live.status?.phase === "Sleeping" ||
-				this.clock() - live.spec.lastUsed >= live.spec.idleSeconds);
+			live === undefined ||
+			live.status?.phase === "Sleeping" ||
+			this.clock() - live.spec.lastUsed >= live.spec.idleSeconds;
 		if (slept) this.unfollow(followed);
 		return slept;
 	}

@@ -302,6 +302,17 @@ describe("the kubernetes host", () => {
 		expect(await kube.asleep("playwright")).toBe(true);
 	});
 
+	it("lets go of a server someone deleted from the cluster", async () => {
+		const fake = fakeStore();
+		const kube = host(fake.store);
+		await kube.ensure(browser);
+
+		fake.servers.delete(NAME);
+
+		expect(await kube.asleep("playwright")).toBe(true);
+		expect(kube.status("playwright")).toBe("stopped");
+	});
+
 	it("asks the fallback about a server it does not run", async () => {
 		const fallback = recordingHost();
 		fallback.sleeping.add("remote");
