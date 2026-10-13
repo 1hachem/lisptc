@@ -106,9 +106,13 @@ export async function evalCode(
 			held,
 		};
 	} catch (ex) {
-		repl.reset();
+		const restored = await repl.revertToLatest();
+		if (restored === undefined) repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
-		const text = `REPL error: ${msg} (interpreter was reset, definitions lost)`;
+		const text =
+			restored === undefined
+				? `REPL error: ${msg} (interpreter was reset, definitions lost)`
+				: `REPL error: ${msg} (restored to call ${restored})`;
 		return {
 			output: text,
 			display: text,
