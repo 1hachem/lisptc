@@ -80,6 +80,21 @@ export default defineSchema({
 		source: v.string(),
 	}).index("by_workspace", ["workspaceId"]),
 
+	replImages: defineTable({
+		chatId: v.id("chats"),
+		workspaceId: v.id("workspaces"),
+		call: v.number(),
+		format: v.number(),
+		bytes: v.number(),
+		chunks: v.number(),
+	}).index("by_chat_call", ["chatId", "call"]),
+
+	replImageChunks: defineTable({
+		imageId: v.id("replImages"),
+		index: v.number(),
+		data: v.string(),
+	}).index("by_image", ["imageId", "index"]),
+
 	oauthRecords: defineTable({
 		workspaceId: v.id("workspaces"),
 		serverKey: v.string(),

@@ -77,6 +77,7 @@ export const remove = mutation({
 		await requireChat(ctx, chatId);
 		await ctx.db.delete(chatId);
 		await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
+		await ctx.scheduler.runAfter(0, internal.replImages.purge, { chatId });
 		return null;
 	},
 });

@@ -28,6 +28,30 @@ describe("removing a chat", () => {
 		expect(left).toEqual([]);
 	});
 
+	it("takes its repl checkpoints with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.replImages.record, {
+			chatId,
+			call: 1,
+			format: 1,
+			chunks: ["{}", "[]"],
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("replImages").collect()),
+			...(await ctx.db.query("replImageChunks").collect()),
+		]);
+		expect(left).toEqual([]);
+	});
+
 	it("drops it from the list at once", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

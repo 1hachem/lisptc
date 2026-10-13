@@ -26,6 +26,7 @@ import { uiHost } from "@repo/ui-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { ConvexImageStore } from "./image-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
@@ -88,6 +89,11 @@ export function chatRepls(
 ): (chatId: Id<"chats">) => Promise<AgentRepl> {
 	return async (chatId) => {
 		const { workspaceId } = await connect().query(api.chats.get, { chatId });
-		return openWorkspaceRepl(workspaceId, connect);
+		const repl = new AgentRepl({
+			extensions: await workspaceExtensions(workspaceId, connect),
+			images: new ConvexImageStore(chatId, connect),
+		});
+		await repl.resume();
+		return repl;
 	};
 }

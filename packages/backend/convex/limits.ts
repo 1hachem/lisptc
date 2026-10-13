@@ -15,3 +15,7 @@ export const MAX_PERMISSIONS_BYTES = 32_768;
 export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
+
+export const MAX_REPL_IMAGE_BYTES = 8_388_608;
+
+export const REPL_IMAGE_CHUNK_CHARS = 262_144;
