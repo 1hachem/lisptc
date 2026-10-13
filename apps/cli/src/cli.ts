@@ -16,6 +16,7 @@ import type { Repl } from "@repo/repl/repl";
 import {
 	connectOrSpawn,
 	killSession,
+	type SessionClient,
 	socketPathFor,
 } from "@repo/repl/session-server";
 import { formsOnly } from "@repo/shared/lisp-forms";
@@ -140,6 +141,17 @@ export function isComplete(text: string): boolean {
 	return true;
 }
 
+async function reverted(client: SessionClient, line: string): Promise<boolean> {
+	const asked = /^:revert\s+(\d+)\s*$/.exec(line);
+	if (!asked) return false;
+	try {
+		write(`Reverted to call ${await client.revert(Number(asked[1]))}.\n`);
+	} catch (ex) {
+		write(`${ex instanceof Error ? ex.message : String(ex)}\n`);
+	}
+	return true;
+}
+
 async function attachLoop(): Promise<void> {
 	const client = await connectOrSpawn(socketPathFor(), SESSION_ENTRY);
 	let accum = "";
@@ -150,17 +162,7 @@ async function attachLoop(): Promise<void> {
 			client.close();
 			return;
 		}
-		const reverting = accum === "" ? /^:revert\s+(\d+)\s*$/.exec(line) : null;
-		if (reverting) {
-			try {
-				write(
-					`Reverted to call ${await client.revert(Number(reverting[1]))}.\n`,
-				);
-			} catch (ex) {
-				write(`${ex instanceof Error ? ex.message : String(ex)}\n`);
-			}
-			continue;
-		}
+		if (accum === "" && (await reverted(client, line))) continue;
 		accum += `${line}\n`;
 		if (accum.trim() === "") {
 			accum = "";
