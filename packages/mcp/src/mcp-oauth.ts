@@ -161,7 +161,7 @@ export async function completeAuthorization(
 
 const DEFAULT_AUTH_TIMEOUT_MS = 300_000;
 
-type CodeExchange = (code: string) => Promise<void>;
+export type CodeExchange = (code: string) => Promise<void>;
 
 interface Pending {
 	resolve: (code: string) => void;
