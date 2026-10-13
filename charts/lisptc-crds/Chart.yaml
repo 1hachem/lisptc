@@ -1,5 +1,0 @@
-apiVersion: v2
-name: lisptc-crds
-description: The custom resources the lisptc operators reconcile, installed once per cluster.
-type: application
-version: 0.1.0

@@ -5,7 +5,7 @@ import { parse } from "yaml";
 import { server } from "./helpers.ts";
 
 const CRD = new URL(
-	"../../../charts/lisptc-crds/templates/mcpservers.lisptc.io.yaml",
+	"../../../charts/lisptc/crds/mcpservers.lisptc.io.yaml",
 	import.meta.url,
 );
 

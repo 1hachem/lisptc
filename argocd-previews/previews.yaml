@@ -25,6 +25,7 @@ spec:
         targetRevision: "{{ .sha }}"
         path: charts/lisptc
         helm:
+          skipCrds: true
           valuesObject:
             preview:
               enabled: true
