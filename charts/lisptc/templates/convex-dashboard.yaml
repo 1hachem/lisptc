@@ -44,7 +44,7 @@ spec:
           env:
             {{- if .Values.preview.enabled }}
             {{- include "lisptc.previewEnv" (list . (dict
-                "NEXT_PUBLIC_DEPLOYMENT_URL" .Values.convex.hostnames.cloud)) | nindent 12 }}
+                "NEXT_PUBLIC_DEPLOYMENT_URL" (include "lisptc.convexCloudHostname" .))) | nindent 12 }}
             {{- else }}
             - name: NEXT_PUBLIC_DEPLOYMENT_URL
               valueFrom:

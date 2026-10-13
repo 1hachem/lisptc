@@ -18,6 +18,9 @@ metadata:
     secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1
+  {{- if .Values.preview.enabled }}
+  progressDeadlineSeconds: {{ .Values.preview.progressDeadlineSeconds }}
+  {{- end }}
   strategy:
     type: Recreate
   selector:
@@ -32,7 +35,7 @@ spec:
         - name: {{ .Values.imagePullSecret }}
       containers:
         - name: app
-          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          image: "{{ .Values.app.image.repository }}:{{ include "lisptc.imageTag" (list . .Values.app.image.tag) }}"
           ports:
             - containerPort: {{ .Values.app.port }}
           envFrom:
@@ -44,11 +47,11 @@ spec:
             - name: PORT
               value: {{ .Values.app.port | quote }}
             {{- include "lisptc.previewEnv" (list . (dict
-                "APP_URL" .Values.app.hostname)) | nindent 12 }}
+                "APP_URL" (include "lisptc.appHostname" .))) | nindent 12 }}
             {{- include "lisptc.previewConvexEnv" . | nindent 12 }}
             {{- if .Values.preview.enabled }}
             - name: LISPTC_OAUTH_REDIRECT_URL
-              value: {{ printf "%s/oauth/callback" (include "lisptc.url" .Values.app.hostname) | quote }}
+              value: {{ printf "%s/oauth/callback" (include "lisptc.url" (include "lisptc.appHostname" .)) | quote }}
             {{- end }}
           livenessProbe:
             httpGet:
