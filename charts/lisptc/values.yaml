@@ -32,6 +32,9 @@ postgres:
 
 preview:
   enabled: false
+  number: ""
+  sha: ""
+  progressDeadlineSeconds: 120
   tailnetSecret: lisptc-tailnet
   infisical:
     hostAPI: https://app.infisical.com/api

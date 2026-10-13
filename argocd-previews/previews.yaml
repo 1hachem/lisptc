@@ -28,16 +28,8 @@ spec:
           valuesObject:
             preview:
               enabled: true
-            app:
-              hostname: "lisptc-pr-{{ .number }}"
-              image:
-                tag: "pr-{{ .number }}-{{ .sha }}"
-            convexDeploy:
-              image:
-                tag: "pr-{{ .number }}-{{ .sha }}"
-            convex:
-              hostnames:
-                cloud: "lisptc-pr-{{ .number }}-convex"
+              number: "{{ .number }}"
+              sha: "{{ .sha }}"
       destination:
         server: https://kubernetes.default.svc
         namespace: "lisptc-pr-{{ .number }}"
@@ -46,8 +38,8 @@ spec:
           prune: true
           selfHeal: true
         retry:
-          limit: 10
+          limit: 2
           backoff:
-            duration: 30s
+            duration: 15s
             factor: 2
-            maxDuration: 10m
+            maxDuration: 1m
