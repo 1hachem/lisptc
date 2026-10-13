@@ -117,3 +117,58 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { memory: 512Mi }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-drain
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-drain
+rules:
+  - apiGroups: [lisptc.io]
+    resources: [mcpservers]
+    verbs: [get, list, watch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-drain
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mcp-drain
+subjects:
+  - kind: ServiceAccount
+    name: mcp-drain
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mcp-drain
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      serviceAccountName: mcp-drain
+      restartPolicy: Never
+      containers:
+        - name: drain
+          image: {{ .Values.mcpOperator.drainImage }}
+          args:
+            - delete
+            - mcpservers.lisptc.io
+            - --all
+            - --namespace={{ .Release.Namespace }}
+            - --wait=true
+            - --timeout=5m
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }

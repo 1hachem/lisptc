@@ -42,6 +42,7 @@ mcpOperator:
     repository: ghcr.io/1hachem/lisptc-mcp-operator
     tag: main
   serviceAccount: mcp-operator
+  drainImage: registry.k8s.io/kubectl:v1.35.9
 
 preview:
   enabled: false
