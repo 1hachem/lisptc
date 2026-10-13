@@ -81,6 +81,30 @@ async function respond(
 	});
 }
 
+function completions(repl: MemoryRepl): CompletionEntry[] {
+	const docs = repl.interp.docs();
+	const names = new Set([...repl.interp.globalNames(), ...docs.keys()]);
+	const out: CompletionEntry[] = [];
+	for (const name of names) {
+		if (name.startsWith("_")) continue;
+		const d = docs.get(name);
+		out.push({ name, signature: d?.signature, doc: d?.doc });
+	}
+	return out;
+}
+
+function docOf(repl: MemoryRepl, symbol: string): unknown {
+	const d = repl.interp.docs().get(symbol);
+	return d
+		? {
+				signature: d.signature,
+				doc: d.doc,
+				args: d.args,
+				arity: repl.interp.arityOf(symbol),
+			}
+		: null;
+}
+
 async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 	switch (req.op) {
 		case "eval":
@@ -98,29 +122,10 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 			return "";
 		case "version":
 			return PROTOCOL_VERSION;
-		case "completions": {
-			const docs = repl.interp.docs();
-			const names = new Set([...repl.interp.globalNames(), ...docs.keys()]);
-			const out: CompletionEntry[] = [];
-			for (const name of names) {
-				if (name.startsWith("_")) continue;
-				const d = docs.get(name);
-				out.push({ name, signature: d?.signature, doc: d?.doc });
-			}
-			return out;
-		}
-		case "doc": {
-			const symbol = req.symbol ?? "";
-			const d = repl.interp.docs().get(symbol);
-			return d
-				? {
-						signature: d.signature,
-						doc: d.doc,
-						args: d.args,
-						arity: repl.interp.arityOf(symbol),
-					}
-				: null;
-		}
+		case "completions":
+			return completions(repl);
+		case "doc":
+			return docOf(repl, req.symbol ?? "");
 		default:
 			throw new Error(`unknown op: ${(req as Request).op}`);
 	}
