@@ -461,6 +461,11 @@ export function isSystemMessage(message: ChatMessage): boolean {
 	return message.type === "system";
 }
 
+export function systemSource(message: ChatMessage): string | undefined {
+	const source = message.additional_kwargs?.source;
+	return typeof source === "string" && source !== "" ? source : undefined;
+}
+
 function systemMessage(event: SystemEventTicket): ChatMessage {
 	return {
 		type: "system",
