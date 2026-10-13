@@ -1,5 +1,6 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import { EvalException } from "@repo/interpreter/errors";
+import { Job } from "@repo/interpreter/job";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -152,7 +153,7 @@ function asText(x: unknown, what: string): string {
 function asContent(x: unknown, what: string): string {
 	if (typeof x === "string") return x;
 	if (x === null) throw new EvalException(`${what} must not be nil`, x);
-	if (x instanceof Promise)
+	if (x instanceof Job)
 		throw new EvalException(`${what} must not be a promise; await it first`, x);
 	if (
 		x === true ||
