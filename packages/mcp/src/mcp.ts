@@ -840,7 +840,9 @@ export function registerMcp(
 		const loaded = [...servers.values()];
 		const states = await Promise.all(
 			loaded.map((rec) =>
-				client.phase(rec.serverId).catch((): HeldState => ({ phase: "ready" })),
+				Promise.resolve()
+					.then(() => client.phase(rec.serverId))
+					.catch((): HeldState => ({ phase: "ready" })),
 			),
 		);
 		return loaded
