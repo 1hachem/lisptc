@@ -10,7 +10,9 @@ placeholders='s/{{ *\.number *}}/0/g; s/{{ *\.head_sha *}}/main/g'
 echo "render deploy/helmfile.yaml.gotmpl"
 helmfile template -e prod -f "$root/deploy/helmfile.yaml.gotmpl" >"$out/bootstrap.yaml"
 
-for file in "$root"/argocd/*.yaml; do
+files=("$root"/argocd/*.yaml)
+for ((f = 0; f < ${#files[@]}; f++)); do
+  file="${files[$f]}"
   case "$(yq '.kind' "$file")" in
     Application) app='' ;;
     ApplicationSet) app='.spec.template' ;;
@@ -29,6 +31,9 @@ for file in "$root"/argocd/*.yaml; do
     args=()
     if [ -n "$chart" ]; then
       args=("$chart" --repo "$(yq "$src.repoURL" "$file")" --version "$(yq "$src.targetRevision" "$file")")
+    elif [ -n "$path" ] && [ ! -f "$root/$path/Chart.yaml" ]; then
+      files+=("$root/$path"/*.yaml)
+      continue
     elif [ -n "$path" ]; then
       args=("$root/$path")
     else
