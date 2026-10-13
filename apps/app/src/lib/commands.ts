@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useAppearance } from "./appearance.tsx";
 import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
+import { useForkPicker } from "./fork-picker.tsx";
 import { useModelPicker } from "./model-picker.tsx";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
@@ -22,6 +23,11 @@ export const commands: Command[] = [
 	{ name: "/model", desc: "choose the model this workspace runs on" },
 	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
+	{
+		name: "/revert",
+		desc: "fork the chat and its repl at an earlier message",
+		aliases: ["/fork"],
+	},
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
 	{ name: "/theme", desc: "choose the colour theme" },
 ];
@@ -56,6 +62,7 @@ export function useCommandRunner() {
 	const newChat = useNewChat();
 	const { openModelPicker } = useModelPicker();
 	const { openThemePicker, openFontPicker } = useAppearance();
+	const { openForkPicker } = useForkPicker();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
@@ -73,6 +80,11 @@ export function useCommandRunner() {
 				"/model": quietly(openModelPicker),
 				"/theme": quietly(openThemePicker),
 				"/font": quietly(openFontPicker),
+				"/revert": () => {
+					if (store.getState().chatId === null) return "nothing to revert yet";
+					openForkPicker();
+					return null;
+				},
 				"/debug": () => {
 					toggleChannel("model");
 					return shown.model
@@ -92,6 +104,7 @@ export function useCommandRunner() {
 			openModelPicker,
 			openThemePicker,
 			openFontPicker,
+			openForkPicker,
 		],
 	);
 }
