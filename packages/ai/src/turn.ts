@@ -3,6 +3,7 @@ import type {
 	AgentTurn,
 	Annotations,
 	ModelRequest,
+	Notice,
 	StepAnnotations,
 	StepVerdict,
 	TurnOutcome,
@@ -74,6 +75,7 @@ export type TurnEvent =
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
+	| { type: "notice"; id: string; source: string; text: string }
 	| { type: "steered"; id: string; content: string }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -132,15 +134,26 @@ function ride(transcript: TranscriptEntry[], text: string): boolean {
 	return true;
 }
 
+function* told(
+	transcript: TranscriptEntry[],
+	notices: readonly Notice[],
+): Generator<TurnEvent> {
+	for (const { source, text } of notices) {
+		transcript.push({ role: "user", content: text, event: { source } });
+		yield { type: "notice", id: crypto.randomUUID(), source, text };
+	}
+}
+
 async function* prepareStep(
 	repl: AgentRepl,
 	transcript: TranscriptEntry[],
 ): AsyncGenerator<TurnEvent> {
 	repl.setConversationVars(snapshotConversation(transcript));
-	const { emitted, annotations } = await repl.beginStep();
+	const { emitted, notices, annotations } = await repl.beginStep();
 	yield* collect(annotations);
 	if (emitted !== "" && ride(transcript, emitted))
 		yield { type: "rode", text: emitted };
+	yield* told(transcript, notices);
 }
 
 interface Reply {
@@ -203,6 +216,7 @@ async function* openTurn(
 
 	const started = await repl.turnStart(turn.telemetry.turnStart);
 	if (started.emitted !== "") transcript.push(noteEntry(started.emitted));
+	yield* told(transcript, started.notices);
 	yield* collect(started.annotations);
 
 	const { prompt: system, annotations } = await repl.system(
@@ -300,6 +314,7 @@ async function* settle(turn: Turn): AsyncGenerator<TurnEvent, boolean> {
 	const taken = steps > 0 ? yield* takeSteers(inbox, transcript) : 0;
 	const settled = await repl.beforeSettle(taken > 0);
 	if (settled.emitted !== "") transcript.push(noteEntry(settled.emitted));
+	yield* told(transcript, settled.notices);
 	return settled.more && steps < maxSteps;
 }
 

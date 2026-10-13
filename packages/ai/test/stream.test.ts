@@ -4,7 +4,14 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { extension, hearing, reporting, riding, testRepl } from "./helpers.ts";
+import {
+	extension,
+	hearing,
+	notifying,
+	reporting,
+	riding,
+	testRepl,
+} from "./helpers.ts";
 
 const emitting = (text: string) =>
 	extension((hooks) =>
@@ -284,6 +291,29 @@ describe("chat stream", () => {
 		expect(messages[0].content).toBe("what is 1 + 2?");
 		expect(messages[0].additional_kwargs?.riding).toBe("you are a pirate");
 		expect(revised.get(0)?.additional_kwargs?.riding).toBe("you are a pirate");
+	});
+
+	test("a notice is recorded as a system message after the tool result", async () => {
+		const messages = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{ repl: testRepl([notifying("mcp", "github went to sleep", 2)]) },
+			),
+		);
+
+		expect(messages.map((m) => m.type)).toEqual([
+			"human",
+			"ai",
+			"tool",
+			"system",
+			"ai",
+		]);
+		expect(messages[0].content).toBe("what is 1 + 2?");
+		expect(messages[0].additional_kwargs?.riding).toBeUndefined();
+		expect(messages[3]).toMatchObject({
+			content: "github went to sleep",
+			additional_kwargs: { source: "mcp" },
+		});
 	});
 
 	test("a REPL result carries no cost of its own", async () => {
