@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import {
 	CoreV1Api,
 	CustomObjectsApi,
@@ -21,6 +22,7 @@ import { MANAGED_BY, MANAGER, SERVER_LABEL } from "./workload.ts";
 
 const SWEEP_MS = 60_000;
 const RESTART_MS = 5_000;
+const PROBE_PORT = 8080;
 
 const env = mcpOperatorEnv;
 const config = new KubeConfig();
@@ -110,6 +112,9 @@ keepAlive(pods, "pods");
 
 await servers.start();
 await pods.start();
+const probe = createServer((request, response) => {
+	response.writeHead(request.url === "/ready" ? 200 : 404).end();
+}).listen(PROBE_PORT);
 setInterval(() => {
 	controller.sweep().catch(report("sweep"));
 	controller.mirror().catch(report("mirror"));
@@ -118,6 +123,7 @@ setInterval(() => {
 for (const signal of ["SIGTERM", "SIGINT"] as const)
 	process.on(signal, async () => {
 		controller.stop();
+		probe.close();
 		await Promise.allSettled([servers.stop(), pods.stop()]);
 		process.exit(0);
 	});
