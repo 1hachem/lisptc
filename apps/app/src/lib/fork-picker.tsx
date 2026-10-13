@@ -12,7 +12,7 @@ import {
 import { useChatStore } from "./chat.tsx";
 import { forkChoices } from "./fork-choices.ts";
 
-interface ForkPicker {
+export interface ForkPicker {
 	openForkPicker: () => void;
 }
 
