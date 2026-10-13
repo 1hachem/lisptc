@@ -11,7 +11,6 @@ import { mcpExtension } from "@repo/mcp-extension";
 import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { LocalProcessHost } from "@repo/mcp-extension/local-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
-import { FileOAuthStore } from "@repo/mcp-extension/oauth-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -34,7 +33,7 @@ export function cliExtensions(): InterpExtension[] {
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
 		mcpExtension({
-			...mcpHostFor({ host: new DockerHost(), oauth: new FileOAuthStore() }),
+			...mcpHostFor({ host: new DockerHost() }),
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),
@@ -56,10 +55,7 @@ export function sessionExtensions(): InterpExtension[] {
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
 		mcpExtension({
-			...mcpHostFor({
-				host: new LocalProcessHost(),
-				oauth: new FileOAuthStore(),
-			}),
+			...mcpHostFor({ host: new LocalProcessHost() }),
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),

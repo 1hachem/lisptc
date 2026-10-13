@@ -4,7 +4,6 @@ import { prelude } from "@repo/interpreter/prelude";
 import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
-import { MemoryOAuthStore } from "../src/oauth-host.ts";
 import { recordingHost } from "./helpers.ts";
 
 const FIXTURE = fileURLToPath(
@@ -14,10 +13,7 @@ const FIXTURE = fileURLToPath(
 async function loaded(host: ReturnType<typeof recordingHost>): Promise<Interp> {
 	const interp = new Interp({
 		extensions: [
-			mcpExtension({
-				...mcpHost,
-				client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
-			}),
+			mcpExtension({ ...mcpHost, client: localMcpClient({ host }) }),
 		],
 	});
 	runSync(interp, prelude);

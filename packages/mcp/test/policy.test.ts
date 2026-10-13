@@ -5,7 +5,6 @@ import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
-import { MemoryOAuthStore } from "../src/oauth-host.ts";
 import type { McpPolicy, ServerAccess } from "../src/ports.ts";
 import { recordingHost } from "./helpers.ts";
 
@@ -20,10 +19,7 @@ function interpWith(policy: McpPolicy): Interp {
 		extensions: [
 			mcpExtension({
 				...mcpHost,
-				client: localMcpClient({
-					host: recordingHost(),
-					oauth: new MemoryOAuthStore(),
-				}),
+				client: localMcpClient({ host: recordingHost() }),
 				policy,
 			}),
 		],

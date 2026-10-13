@@ -1,17 +1,17 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
-import { mcpHostFor } from "../src/mcp-host.ts";
-import { MemoryOAuthStore } from "../src/oauth-host.ts";
+import { mcpHost } from "../src/mcp-host.ts";
 
-const token = { tokens: { access_token: "x", token_type: "Bearer" } };
+const dir = process.env.LISPTC_OAUTH_DIR as string;
 
 describe("logout", () => {
-	const oauth = new MemoryOAuthStore();
 	const interp = new Interp({
-		extensions: [mcpExtension(mcpHostFor({ oauth }))],
+		extensions: [mcpExtension(mcpHost)],
 	});
 	runSync(interp, prelude);
 
@@ -20,12 +20,18 @@ describe("logout", () => {
 	});
 
 	it("deletes a server's saved OAuth session via the store", async () => {
-		await oauth.save("https://mcp.posthog.com", token);
+		const file = join(dir, "https___mcp.posthog.com.json");
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(
+			file,
+			JSON.stringify({ tokens: { access_token: "x", token_type: "Bearer" } }),
+		);
+		expect(existsSync(file)).toBe(true);
 
 		expect(str((await runAsync(interp, '(logout "posthog")')).value)).toBe(
 			":logged-out",
 		);
-		expect(await oauth.load("https://mcp.posthog.com")).toBeUndefined();
+		expect(existsSync(file)).toBe(false);
 	});
 
 	it("errors for an unknown server", async () => {
@@ -36,9 +42,8 @@ describe("logout", () => {
 });
 
 describe("login", () => {
-	const oauth = new MemoryOAuthStore();
 	const interp = new Interp({
-		extensions: [mcpExtension(mcpHostFor({ oauth }))],
+		extensions: [mcpExtension(mcpHost)],
 	});
 	runSync(interp, prelude);
 
@@ -47,7 +52,12 @@ describe("login", () => {
 	});
 
 	it("returns :logged-in when a token is already stored", async () => {
-		await oauth.save("https://mcp.linear.app", token);
+		const file = join(dir, "https___mcp.linear.app.json");
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(
+			file,
+			JSON.stringify({ tokens: { access_token: "x", token_type: "Bearer" } }),
+		);
 		expect(str((await runAsync(interp, '(login "linear")')).value)).toBe(
 			":logged-in",
 		);
