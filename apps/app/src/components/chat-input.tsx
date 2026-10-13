@@ -331,6 +331,7 @@ function CommandMenuPlugin({
 			onSelectOption={onSelectOption}
 			onOpen={() => onOpenChange(true)}
 			onClose={() => onOpenChange(false)}
+			anchorClassName="hidden!"
 			menuRenderFn={(
 				_anchorRef,
 				{ selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
