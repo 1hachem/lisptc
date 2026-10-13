@@ -5,9 +5,8 @@ import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { waitsOnUser } from "./lib/waiting.js";
+import { MAX_TRANSCRIPT } from "./limits.js";
 import { messageType } from "./schema.js";
-
-const MAX_TRANSCRIPT = 200;
 
 const MAX_SENT = 200;
 
@@ -56,10 +55,12 @@ export const transcript = query({
 	returns: v.array(message),
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
-		return await ctx.db
+		const newest = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+			.order("desc")
 			.take(MAX_TRANSCRIPT);
+		return newest.reverse();
 	},
 });
 
