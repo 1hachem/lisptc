@@ -129,6 +129,12 @@ const infisicalRun = command({
 			),
 		);
 
+		const keysByPath = Object.fromEntries(
+			processedPaths.map((path, i) => [
+				`INFISICAL_KEYS${path.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}`,
+				allPathsSecrets[i].secrets.map((secret) => secret.secretKey).join(" "),
+			]),
+		);
 		const secrets = allPathsSecrets.reduce<Record<string, string>>(
 			(acc, pathSecrets) => {
 				for (const secret of pathSecrets.secrets) {
@@ -141,7 +147,7 @@ const infisicalRun = command({
 		console.error(`${Object.keys(secrets).length} secrets loaded 👌`);
 		const exitCode = await spawnWithSignal(cmd, {
 			// biome-ignore lint/style/noProcessEnv: the command inherits the whole environment, no value is read here
-			env: { ...process.env, ...secrets },
+			env: { ...process.env, ...secrets, ...keysByPath },
 			cwd: dir,
 		});
 		process.exit(exitCode);
