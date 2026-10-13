@@ -248,7 +248,24 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 }
 
 function SystemLine({ message }: { message: ChatMessage }) {
-	const { text } = channel("system");
+	const { label, dot, text } = channel("system");
+	const [opened, setOpened] = useState(false);
+	if (!opened)
+		return (
+			<button
+				type="button"
+				data-system-notice
+				onClick={() => setOpened(true)}
+				className={`mt-2 mb-1 flex w-full items-center gap-2 text-left text-[11px] tracking-[0.1em] ${text} hover:brightness-125`}
+			>
+				<span
+					aria-hidden
+					className={`size-1.5 flex-none rounded-full ${dot}`}
+				/>
+				<span className="flex-none">{label} notice</span>
+				<span aria-hidden className="h-px flex-1 bg-dim/20" />
+			</button>
+		);
 	return (
 		<div className="min-w-0 break-words">
 			<ChannelLabel id="system" />

@@ -110,18 +110,31 @@ describe("the system channel", () => {
 		});
 	});
 
-	it("hides what the system told the agent until it is shown, and never draws it as the user's words", async () => {
+	it("hides what the system told the agent until the channel is shown, and never draws it as the user's words", async () => {
 		const host = await mount();
 		expect(host.textContent).toContain("write a");
 		expect(host.textContent).not.toContain(NOTE);
+		expect(host.querySelectorAll("[data-system-notice]")).toHaveLength(0);
 
 		await act(async () => toggle?.());
+
+		expect(prefs.get("ui.channel.system")).toBe(true);
+		expect(host.querySelectorAll("[data-system-notice]")).toHaveLength(1);
+		expect(host.textContent).not.toContain(NOTE);
+	});
+
+	it("opens a folded notice to its text, never as the user's words", async () => {
+		const host = await mount();
+		await act(async () => toggle?.());
+		const notice = host.querySelector<HTMLButtonElement>(
+			"[data-system-notice]",
+		);
+		await act(async () => notice?.click());
 
 		expect(host.textContent).toContain(NOTE);
 		const userLines = [...host.querySelectorAll("[data-user-line]")].map(
 			(line) => line.textContent,
 		);
 		expect(userLines).toEqual(["write a"]);
-		expect(prefs.get("ui.channel.system")).toBe(true);
 	});
 });
