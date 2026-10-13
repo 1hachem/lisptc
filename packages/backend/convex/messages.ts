@@ -4,9 +4,8 @@ import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireChat } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
+import { MAX_TRANSCRIPT } from "./limits.js";
 import { messageType } from "./schema.js";
-
-const MAX_TRANSCRIPT = 200;
 
 const PURGE_BATCH = 256;
 
@@ -53,10 +52,12 @@ export const transcript = query({
 	returns: v.array(message),
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
-		return await ctx.db
+		const newest = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+			.order("desc")
 			.take(MAX_TRANSCRIPT);
+		return newest.reverse();
 	},
 });
 
