@@ -73,8 +73,8 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend exec convex dev --once"
+          PATHS: "/convex /auth /convex-deploy"
+          CMD: "bash scripts/convex-env-sync.sh && pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
     desc: regenerate convex/_generated against the local deployment, without pushing
@@ -92,8 +92,8 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend dev"
+          PATHS: "/convex /auth /convex-deploy"
+          CMD: "bash scripts/convex-env-sync.sh && pnpm --filter @repo/backend dev"
 
   r2:
     desc: sync .r2 with the bucket (pull, push or sync; raw captures stay local)
