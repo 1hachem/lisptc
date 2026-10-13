@@ -6,6 +6,7 @@ import {
 	type MutationCtx,
 	query,
 } from "./_generated/server.js";
+import { observeFact } from "./context.js";
 import { requireWorkspace } from "./lib/auth.js";
 import { mcpServerPhase, mcpStatePhase } from "./schema.js";
 
@@ -118,6 +119,13 @@ async function putServer(
 	ctx: MutationCtx,
 	{ workspaceId, server, phase, reason }: ServerRow,
 ): Promise<void> {
+	await observeFact(ctx, {
+		workspaceId,
+		source: "mcp",
+		key: server,
+		state: phase,
+		...(reason === undefined ? {} : { detail: reason }),
+	});
 	const existing = await ctx.db
 		.query("mcpServers")
 		.withIndex("by_workspace_server", (q) =>

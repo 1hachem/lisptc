@@ -10,9 +10,12 @@
 
 import type * as auth from "../auth.js";
 import type * as chats from "../chats.js";
+import type * as context from "../context.js";
 import type * as http from "../http.js";
+import type * as lib_append from "../lib/append.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_clamp from "../lib/clamp.js";
+import type * as lib_contextRules from "../lib/contextRules.js";
 import type * as lib_models from "../lib/models.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as limits from "../limits.js";
@@ -36,9 +39,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   chats: typeof chats;
+  context: typeof context;
   http: typeof http;
+  "lib/append": typeof lib_append;
   "lib/auth": typeof lib_auth;
   "lib/clamp": typeof lib_clamp;
+  "lib/contextRules": typeof lib_contextRules;
   "lib/models": typeof lib_models;
   "lib/slug": typeof lib_slug;
   limits: typeof limits;

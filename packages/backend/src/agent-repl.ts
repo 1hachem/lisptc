@@ -34,9 +34,28 @@ export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
 
 export type Connect = () => WorkspaceClient;
 
+function watchesOf(
+	chatId: Id<"chats">,
+	connect: Connect,
+): (servers: readonly string[]) => void {
+	let reported: Promise<unknown> = Promise.resolve();
+	return (servers) => {
+		reported = reported
+			.then(() =>
+				connect().mutation(api.context.watch, {
+					chatId,
+					source: "mcp",
+					keys: [...servers],
+				}),
+			)
+			.catch(() => {});
+	};
+}
+
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
+	chatId: Id<"chats">,
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -63,6 +82,7 @@ export async function workspaceExtensions(
 				host: containerHost(workspaceId),
 			}),
 			policy: permissions.rules,
+			held: watchesOf(chatId, connect),
 		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
@@ -76,9 +96,10 @@ export async function workspaceExtensions(
 export async function openWorkspaceRepl(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
+	chatId: Id<"chats">,
 ): Promise<AgentRepl> {
 	return new AgentRepl({
-		extensions: await workspaceExtensions(workspaceId, connect),
+		extensions: await workspaceExtensions(workspaceId, connect, chatId),
 	});
 }
 
@@ -87,6 +108,6 @@ export function chatRepls(
 ): (chatId: Id<"chats">) => Promise<AgentRepl> {
 	return async (chatId) => {
 		const { workspaceId } = await connect().query(api.chats.get, { chatId });
-		return openWorkspaceRepl(workspaceId, connect);
+		return openWorkspaceRepl(workspaceId, connect, chatId);
 	};
 }

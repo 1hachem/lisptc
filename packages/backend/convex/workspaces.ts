@@ -95,6 +95,7 @@ export const remove = mutation({
 		await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
 		await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
 		await ctx.scheduler.runAfter(0, internal.mcpServers.purge, { workspaceId });
+		await ctx.scheduler.runAfter(0, internal.context.purge, { workspaceId });
 		await ctx.scheduler.runAfter(0, internal.permissions.purge, {
 			workspaceId,
 		});
