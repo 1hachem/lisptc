@@ -90,22 +90,14 @@ tasks:
           CMD: "pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
-    desc: regenerate convex/_generated against a throwaway local backend, no deployment or secrets needed
-    vars:
-      NAME: lisptc-codegen
-      PORT: '{{.PORT | default "3299"}}'
-      URL: http://127.0.0.1:{{.PORT}}
-    cmd: |
-      set -eu
-      docker run -d --rm --name {{.NAME}} -e CONVEX_SITE_ORIGIN={{.URL}} \
-        -p 127.0.0.1:{{.PORT}}:3210 ghcr.io/get-convex/convex-backend:latest > /dev/null
-      trap 'docker stop {{.NAME}} > /dev/null' EXIT
-      for _ in $(seq 60); do curl -sf {{.URL}}/version > /dev/null && break; sleep 1; done
-      export CONVEX_SELF_HOSTED_URL={{.URL}}
-      CONVEX_SELF_HOSTED_ADMIN_KEY=$(docker exec {{.NAME}} /convex/generate_admin_key.sh | tail -n1)
-      export CONVEX_SELF_HOSTED_ADMIN_KEY
-      pnpm --filter @repo/backend exec convex env set SITE_URL http://localhost:3000 > /dev/null
-      pnpm --filter @repo/backend exec convex codegen --typecheck disable
+    desc: regenerate convex/_generated against the local deployment, without pushing
+    deps: [up:convex]
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/convex /auth"
+          CMD: "pnpm --filter @repo/backend exec convex codegen --typecheck disable"
 
   convex:dev:
     desc: watch convex/ and push the functions on every save
