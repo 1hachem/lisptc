@@ -10,20 +10,20 @@ FROM base AS pruner
 COPY . .
 RUN turbo prune @lisptc/mcp-operator --docker
 
-FROM base AS installer
+FROM base AS builder
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
-    pnpm install --frozen-lockfile --offline --prod --ignore-scripts
+    pnpm install --frozen-lockfile --offline --ignore-scripts
 COPY --from=pruner /app/out/full/ .
+RUN turbo build -F @lisptc/mcp-operator
 
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS prod
 ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 --ingroup nodejs lisptc
-COPY --from=installer --chown=lisptc:nodejs /app ./
+COPY --from=builder --chown=lisptc:nodejs /app/apps/mcp-operator/dist ./
 USER lisptc
-WORKDIR /app/apps/mcp-operator
-CMD ["node", "--no-warnings", "--experimental-transform-types", "src/main.ts"]
+CMD ["node", "main.js"]
