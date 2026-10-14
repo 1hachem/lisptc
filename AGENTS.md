@@ -207,9 +207,9 @@ tag may not depend on. `pnpm boundaries` fails on a wrong-direction dependency,
 on an import of a package missing from a `package.json`, on an import that
 reaches into another package's files, and on cycles between workspace packages.
 It does not detect circular imports between files within a package. Do not add
-circular imports between files in a package. `scripts/check-arch.ts`
-(`pnpm check:arch`) holds the rules a manifest cannot express, including the two
-below. Every failure prints the way out. Take it. Do not widen a list to get
+circular imports between files in a package. `scripts/check-arch/`
+(`pnpm check:arch`) holds the rules a manifest cannot express, one check per
+file, including the two below. Every failure prints the way out. Take it. Do not widen a list to get
 past one.
 
 ## Host ports
