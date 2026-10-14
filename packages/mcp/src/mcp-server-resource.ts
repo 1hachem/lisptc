@@ -68,8 +68,6 @@ export interface McpServerSpec {
 	server: string;
 	mcp: McpSlot;
 	app?: AppSlot;
-	envSecret: string;
-	envHash: string;
 	restarts: number;
 	lastUsed: number;
 	idleSeconds: number;
@@ -121,11 +119,6 @@ export interface McpServer {
 	status?: McpServerStatus;
 }
 
-export interface EnvRef {
-	secret: string;
-	hash: string;
-}
-
 export function dnsLabel(value: string, max = NAME_MAX): string {
 	return value
 		.toLowerCase()
@@ -152,13 +145,6 @@ export function serverName(workspace: string, server: string): string {
 export function claimName(server: string, state: string): string {
 	const base = dnsLabel(`${server}-${dnsLabel(state, 20)}`, NAME_MAX - 9);
 	return `${base}-${shortHash(server, state)}`;
-}
-
-export function envHash(env: Record<string, string> | undefined): string {
-	const entries = Object.entries(env ?? {}).sort(([a], [b]) =>
-		a.localeCompare(b),
-	);
-	return createHash("sha256").update(JSON.stringify(entries)).digest("hex");
 }
 
 export function resourcesFor(asked?: Resources): ResourceRequirements {
@@ -229,7 +215,6 @@ export function specFor(
 	launch: Launch,
 	workspace: string,
 	now: number,
-	env: EnvRef,
 ): McpServerSpec {
 	const mcp: McpSlot = {
 		image: launch.image,
@@ -246,8 +231,6 @@ export function specFor(
 		server: conf.name,
 		mcp,
 		...(app ? { app } : {}),
-		envSecret: env.secret,
-		envHash: env.hash,
 		restarts: 0,
 		lastUsed: now,
 		idleSeconds: DEFAULT_IDLE_SECONDS,
@@ -262,7 +245,6 @@ export function workloadHash(spec: McpServerSpec): string {
 			JSON.stringify({
 				mcp: { ...spec.mcp, state: states(spec.mcp) },
 				app: spec.app ? { ...spec.app, state: states(spec.app) } : null,
-				envHash: spec.envHash,
 				restarts: spec.restarts,
 			}),
 		)

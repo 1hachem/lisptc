@@ -60,9 +60,7 @@ describe("a new server", () => {
 		expect(service?.spec?.ports?.map((p) => p.name)).toEqual(["mcp", "view"]);
 
 		expect(profileClaim(w).spec?.resources?.requests?.storage).toBe("1Gi");
-		expect(
-			w.fake.secrets.get(`${NAMESPACE}/${w.target.metadata.name}`)?.data,
-		).toEqual({ TOKEN: "czNjcmV0" });
+		expect(containers.every((c) => c.envFrom === undefined)).toBe(true);
 	});
 
 	it("runs one container and no claim when it has no app", async () => {
@@ -135,7 +133,7 @@ describe("a new server", () => {
 });
 
 describe("rolling the pod", () => {
-	it("recreates the pod when the env changes, but not on a heartbeat", async () => {
+	it("recreates the pod when the workload changes, but not on a heartbeat", async () => {
 		const w = await readyWorld();
 		const name = `${NAMESPACE}/${w.target.metadata.name}`;
 		const hash = w.fake.pods.get(name)?.metadata?.labels?.[SPEC_HASH];
@@ -144,7 +142,7 @@ describe("rolling the pod", () => {
 		await reconcile(w.target, w.deps(1100));
 		expect(w.fake.pods.get(name)?.metadata?.labels?.[SPEC_HASH]).toBe(hash);
 
-		w.target.spec.envHash = "changed";
+		w.target.spec.mcp = { ...w.target.spec.mcp, image: "playwright-mcp:next" };
 		await reconcile(w.target, w.deps(1101));
 		expect(w.fake.pods.has(name)).toBe(false);
 		await reconcile(w.target, w.deps(1102));
@@ -297,21 +295,32 @@ describe("the state a pair keeps", () => {
 describe("the table it keeps in step", () => {
 	it("sends a new reason even when the phase stays the same", async () => {
 		const w = world();
-		w.fake.secrets.clear();
 		await reconcile(w.target, w.deps(1000));
+		const pod = w.fake.pods.get(`${NAMESPACE}/${w.target.metadata.name}`);
+		if (!pod) throw new Error("no pod");
+		pod.status = {
+			phase: "Pending",
+			containerStatuses: [
+				{
+					name: "app",
+					ready: false,
+					restartCount: 0,
+					image: "chromium-vnc",
+					imageID: "",
+					state: { waiting: { reason: "ImagePullBackOff" } },
+				},
+			],
+		};
+		await reconcile(w.target, w.deps(1001));
 		w.target.status = { ...w.target.status, reason: "an older reason." };
 
-		await reconcile(w.target, w.deps(1001));
+		await reconcile(w.target, w.deps(1002));
 
-		expect(w.sink.servers.map((row) => [row.phase, row.reason])).toEqual([
-			[
-				"failed",
-				`its env secret mcp-env-playwright is missing from ${RELEASE}.`,
-			],
-			[
-				"failed",
-				`its env secret mcp-env-playwright is missing from ${RELEASE}.`,
-			],
+		expect(
+			w.sink.servers.slice(-2).map((row) => [row.phase, row.reason]),
+		).toEqual([
+			["failed", "app: ImagePullBackOff"],
+			["failed", "app: ImagePullBackOff"],
 		]);
 	});
 
@@ -332,20 +341,5 @@ describe("the table it keeps in step", () => {
 
 		expect(w.target.status?.phase).toBe("Starting");
 		expect(w.sink.servers.map((row) => row.phase)).toEqual(["starting"]);
-	});
-});
-
-describe("what it needs from the release", () => {
-	it("fails, naming the env secret it cannot find", async () => {
-		const w = world();
-		w.fake.secrets.clear();
-
-		await reconcile(w.target, w.deps(1000));
-
-		expect(w.target.status).toMatchObject({
-			phase: "Failed",
-			reason: `its env secret mcp-env-playwright is missing from ${RELEASE}.`,
-		});
-		expect(w.fake.pods.size).toBe(0);
 	});
 });

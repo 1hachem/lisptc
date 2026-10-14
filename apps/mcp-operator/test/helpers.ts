@@ -2,7 +2,6 @@ import type {
 	V1Namespace,
 	V1PersistentVolumeClaim,
 	V1Pod,
-	V1Secret,
 	V1Service,
 } from "@kubernetes/client-node";
 import { launchFor } from "@repo/mcp-extension/docker-host";
@@ -60,10 +59,7 @@ export function server(
 			generation: 1,
 			finalizers: [],
 		},
-		spec: specFor(conf, launch, WORKSPACE, now, {
-			secret: "mcp-env-playwright",
-			hash: "h",
-		}),
+		spec: specFor(conf, launch, WORKSPACE, now),
 	};
 }
 
@@ -73,7 +69,6 @@ export function fakeCluster() {
 	const namespaces = new Map<string, V1Namespace>();
 	const policies: string[] = [];
 	const copied: string[] = [];
-	const secrets = new Map<string, V1Secret>();
 	const pods = new Map<string, V1Pod>();
 	const services = new Map<string, V1Service>();
 	const claims = new Map<string, V1PersistentVolumeClaim>();
@@ -81,10 +76,6 @@ export function fakeCluster() {
 	const resizeRefusal = { message: undefined as string | undefined };
 	let answering = true;
 	let logs = "";
-	secrets.set(key(RELEASE, "mcp-env-playwright"), {
-		metadata: { name: "mcp-env-playwright" },
-		data: { TOKEN: "czNjcmV0" },
-	});
 
 	function locate<T extends { metadata?: V1Pod["metadata"] }>(
 		map: Map<string, T>,
@@ -109,12 +100,6 @@ export function fakeCluster() {
 		async copySecret(from, to, name) {
 			copied.push(`${from}/${name} -> ${to}`);
 		},
-		async secretData(namespace, name) {
-			return secrets.get(key(namespace, name))?.data;
-		},
-		async putSecret(namespace, secret) {
-			secrets.set(key(namespace, secret.metadata?.name ?? ""), secret);
-		},
 		async pod(namespace, name) {
 			return pods.get(key(namespace, name));
 		},
@@ -131,7 +116,6 @@ export function fakeCluster() {
 		async remove(namespace, name) {
 			pods.delete(key(namespace, name));
 			services.delete(key(namespace, name));
-			secrets.delete(key(namespace, name));
 			removed.push(`all ${name}`);
 		},
 		async claims(namespace, selector) {
@@ -214,7 +198,6 @@ export function fakeCluster() {
 		namespaces,
 		policies,
 		copied,
-		secrets,
 		pods,
 		services,
 		claims,

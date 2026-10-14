@@ -31,12 +31,10 @@ spec:
           properties:
             spec:
               type: object
-              required: [workspace, server, mcp, envSecret, envHash, restarts, lastUsed, idleSeconds]
+              required: [workspace, server, mcp, restarts, lastUsed, idleSeconds]
               properties:
                 workspace: { type: string, minLength: 1 }
                 server: { type: string, minLength: 1 }
-                envSecret: { type: string, minLength: 1 }
-                envHash: { type: string }
                 restarts: { type: integer, minimum: 0 }
                 lastUsed: { type: integer, minimum: 0 }
                 idleSeconds: { type: integer, minimum: 1 }

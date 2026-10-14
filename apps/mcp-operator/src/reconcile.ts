@@ -25,7 +25,6 @@ import {
 	SPEC_HASH,
 	STATE_LABEL,
 	STATE_PATH,
-	secretFor,
 	selectorFor,
 	serviceFor,
 	statesOf,
@@ -335,17 +334,6 @@ class Run {
 		return { state, ready };
 	}
 
-	async copyEnv(): Promise<boolean> {
-		const { cluster, placement } = this.deps;
-		const env = await cluster.secretData(
-			placement.release,
-			this.server.spec.envSecret,
-		);
-		if (env === undefined) return false;
-		await cluster.putSecret(this.namespace, secretFor(this.server, env));
-		return true;
-	}
-
 	async currentPod(): Promise<V1Pod | undefined> {
 		const { cluster, placement } = this.deps;
 		const pod = await cluster.pod(this.namespace, this.name);
@@ -410,7 +398,7 @@ class Run {
 	}
 
 	async run(): Promise<Outcome> {
-		const { now, placement } = this.deps;
+		const { now } = this.deps;
 		const { spec, metadata } = this.server;
 		if (metadata.deletionTimestamp) return await this.finalize();
 		await this.ensureFinalizer();
@@ -422,15 +410,6 @@ class Run {
 		await this.prepareNamespace();
 		const { state, ready } = await this.settleClaims();
 		if (!ready) return await this.settle({ phase: "Starting", state }, soon);
-		if (!(await this.copyEnv()))
-			return await this.settle(
-				{
-					phase: "Failed",
-					reason: `its env secret ${spec.envSecret} is missing from ${placement.release}.`,
-					state,
-				},
-				soon,
-			);
 		const pod = await this.currentPod();
 		if (!pod) return await this.settle({ phase: "Starting", state }, soon);
 		return await this.observe(pod, state);

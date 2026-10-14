@@ -1,16 +1,13 @@
 import {
 	ApiException,
-	CoreV1Api,
 	CustomObjectsApi,
 	KubeConfig,
 	PatchStrategy,
 	setHeaderOptions,
-	type V1Secret,
 } from "@kubernetes/client-node";
 import { launchFor } from "./docker-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
 import {
-	envHash,
 	GROUP,
 	KIND,
 	type McpServer,
@@ -33,20 +30,10 @@ const POLL_MS = 1_000;
 const TOUCH_SECONDS = 60;
 const PROBE_TIMEOUT_MS = 3_000;
 
-export interface Owner {
-	name: string;
-	uid: string;
-}
-
 export interface ServerStore {
 	get(name: string): Promise<McpServer | undefined>;
 	create(server: McpServer): Promise<McpServer>;
 	patchSpec(name: string, spec: Partial<McpServerSpec>): Promise<McpServer>;
-	putEnv(
-		name: string,
-		data: Record<string, string>,
-		owner?: Owner,
-	): Promise<void>;
 }
 
 export interface KubernetesHostOptions {
@@ -72,15 +59,6 @@ function epochSeconds(): number {
 
 function isStatus(ex: unknown, code: number): boolean {
 	return ex instanceof ApiException && ex.code === code;
-}
-
-function encoded(env: Record<string, string> | undefined) {
-	return Object.fromEntries(
-		Object.entries(env ?? {}).map(([key, value]) => [
-			key,
-			Buffer.from(value).toString("base64"),
-		]),
-	);
 }
 
 function keepManual(wanted: State[], live: State[] | undefined): State[] {
@@ -111,10 +89,6 @@ export function respecced(
 	};
 }
 
-export function envSecretName(server: string): string {
-	return `${server}-env`;
-}
-
 function defaultConfig(): KubeConfig {
 	const config = new KubeConfig();
 	config.loadFromDefault();
@@ -128,7 +102,6 @@ export function clientStore(
 	config: KubeConfig = defaultConfig(),
 ): ServerStore {
 	const custom = config.makeApiClient(CustomObjectsApi);
-	const core = config.makeApiClient(CoreV1Api);
 	const target = { group: GROUP, version: VERSION, namespace, plural: PLURAL };
 	return {
 		async get(name) {
@@ -153,33 +126,6 @@ export function clientStore(
 				{ ...target, name, body: { spec } },
 				merge,
 			)) as McpServer;
-		},
-		async putEnv(name, data, owner) {
-			const body: V1Secret = {
-				metadata: {
-					name,
-					...(owner
-						? {
-								ownerReferences: [
-									{
-										apiVersion: `${GROUP}/${VERSION}`,
-										kind: KIND,
-										name: owner.name,
-										uid: owner.uid,
-									},
-								],
-							}
-						: {}),
-				},
-				type: "Opaque",
-				data,
-			};
-			try {
-				await core.createNamespacedSecret({ namespace, body });
-			} catch (ex) {
-				if (!isStatus(ex, 409)) throw ex;
-				await core.replaceNamespacedSecret({ namespace, name, body });
-			}
 		},
 	};
 }
@@ -325,33 +271,25 @@ export class KubernetesHost implements McpHost {
 		const launch = launchFor(conf);
 		if (!launch) throw new Error(`${conf.name}: has no container to run.`);
 		const { scope } = this.options;
+		if (Object.keys(("env" in conf && conf.env) || {}).length > 0)
+			throw new Error(
+				`${conf.name}: sets env, which a server on the cluster cannot take.`,
+			);
 		const name = serverName(scope, conf.name);
-		const secret = envSecretName(name);
-		const data = encoded(conf.env);
-		const wanted = specFor(conf, launch, scope, this.clock(), {
-			secret,
-			hash: envHash(conf.env),
-		});
+		const wanted = specFor(conf, launch, scope, this.clock());
 
 		const live = await this.store.get(name);
-		let server: McpServer;
-		if (live) {
-			await this.store.putEnv(secret, data, ownerOf(live));
-			server = await this.store.patchSpec(
-				name,
-				respecced(live.spec, wanted, live.status?.phase === "Failed"),
-			);
-		} else {
-			await this.store.putEnv(secret, data);
-			server = await this.store.create({
-				apiVersion: `${GROUP}/${VERSION}`,
-				kind: KIND,
-				metadata: { name },
-				spec: wanted,
-			});
-			const owner = ownerOf(server);
-			if (owner) await this.store.putEnv(secret, data, owner);
-		}
+		const server = live
+			? await this.store.patchSpec(
+					name,
+					respecced(live.spec, wanted, live.status?.phase === "Failed"),
+				)
+			: await this.store.create({
+					apiVersion: `${GROUP}/${VERSION}`,
+					kind: KIND,
+					metadata: { name },
+					spec: wanted,
+				});
 
 		const followed: Followed = this.followed.get(conf.name) ?? {
 			name,
@@ -399,12 +337,6 @@ export class KubernetesHost implements McpHost {
 		followed.state = "running";
 		followed.touched = this.clock();
 	}
-}
-
-function ownerOf(server: McpServer): Owner | undefined {
-	return server.metadata.uid
-		? { name: server.metadata.name, uid: server.metadata.uid }
-		: undefined;
 }
 
 function tail(logs: string): string {

@@ -40,11 +40,6 @@ export interface Cluster {
 		policy: V1NetworkPolicy,
 	): Promise<void>;
 	copySecret(from: string, to: string, name: string): Promise<void>;
-	secretData(
-		namespace: string,
-		name: string,
-	): Promise<Record<string, string> | undefined>;
-	putSecret(namespace: string, secret: V1Secret): Promise<void>;
 	pod(namespace: string, name: string): Promise<V1Pod | undefined>;
 	createPod(namespace: string, pod: V1Pod): Promise<void>;
 	ensureService(namespace: string, service: V1Service): Promise<void>;
@@ -114,6 +109,18 @@ function located(item: {
 export function clientCluster(config: KubeConfig): Cluster {
 	const core = config.makeApiClient(CoreV1Api);
 	const net = config.makeApiClient(NetworkingV1Api);
+	const putSecret = async (namespace: string, body: V1Secret) => {
+		try {
+			await core.createNamespacedSecret({ namespace, body });
+		} catch (ex) {
+			if (!isStatus(ex, 409)) throw ex;
+			await core.replaceNamespacedSecret({
+				namespace,
+				name: body.metadata?.name ?? "",
+				body,
+			});
+		}
+	};
 	return {
 		async ensureNamespace(body) {
 			await tolerating(409, () => core.createNamespace({ body }));
@@ -125,33 +132,11 @@ export function clientCluster(config: KubeConfig): Cluster {
 		},
 		async copySecret(from, to, name) {
 			const source = await core.readNamespacedSecret({ namespace: from, name });
-			await this.putSecret(to, {
+			await putSecret(to, {
 				metadata: { name, labels: { [MANAGED_BY]: MANAGER } },
 				type: source.type,
 				data: source.data,
 			});
-		},
-		async secretData(namespace, name) {
-			try {
-				return (
-					(await core.readNamespacedSecret({ namespace, name })).data ?? {}
-				);
-			} catch (ex) {
-				if (isStatus(ex, 404)) return undefined;
-				throw ex;
-			}
-		},
-		async putSecret(namespace, body) {
-			try {
-				await core.createNamespacedSecret({ namespace, body });
-			} catch (ex) {
-				if (!isStatus(ex, 409)) throw ex;
-				await core.replaceNamespacedSecret({
-					namespace,
-					name: body.metadata?.name ?? "",
-					body,
-				});
-			}
 		},
 		async pod(namespace, name) {
 			try {
@@ -180,7 +165,6 @@ export function clientCluster(config: KubeConfig): Cluster {
 					core.deleteNamespacedService({ namespace, name }),
 				),
 				this.removePod(namespace, name),
-				tolerating(404, () => core.deleteNamespacedSecret({ namespace, name })),
 			]);
 		},
 		async claims(namespace, labelSelector) {

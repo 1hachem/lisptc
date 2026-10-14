@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	envSecretName,
-	KubernetesHost,
-	type Owner,
-	type ServerStore,
-} from "../src/kubernetes-host.ts";
+import { KubernetesHost, type ServerStore } from "../src/kubernetes-host.ts";
 import {
 	type McpServer,
 	type McpServerStatus,
@@ -17,7 +12,6 @@ const browser: ContainerConnConfig = {
 	name: "playwright",
 	image: "playwright-mcp",
 	port: 8931,
-	env: { TOKEN: "s3cret" },
 	headers: { authorization: "Bearer x" },
 	app: { image: "chromium-vnc", state: "/data/profile" },
 };
@@ -40,10 +34,6 @@ const ready: Operator = (server) => ({
 
 function fakeStore(operator: Operator = ready) {
 	const servers = new Map<string, McpServer>();
-	const env = new Map<
-		string,
-		{ data: Record<string, string>; owner?: Owner }
-	>();
 	const patches: Partial<McpServer["spec"]>[] = [];
 	let uid = 0;
 	const store: ServerStore = {
@@ -70,11 +60,8 @@ function fakeStore(operator: Operator = ready) {
 			server.metadata.generation = (server.metadata.generation ?? 0) + 1;
 			return structuredClone(server);
 		},
-		async putEnv(name, data, owner) {
-			env.set(name, { data, ...(owner ? { owner } : {}) });
-		},
 	};
-	return { store, servers, env, patches };
+	return { store, servers, patches };
 }
 
 function host(
@@ -120,17 +107,15 @@ describe("the kubernetes host", () => {
 		expect(server?.spec.lastUsed).toBe(1000);
 	});
 
-	it("keeps the env in a secret the server owns, never in its spec", async () => {
+	it("refuses a server that sets env, and asks the cluster for nothing", async () => {
 		const fake = fakeStore();
 
-		await host(fake.store).ensure(browser);
-
-		const secret = fake.env.get(envSecretName(NAME));
-		expect(secret?.data).toEqual({ TOKEN: btoa("s3cret") });
-		expect(secret?.owner).toEqual({ name: NAME, uid: "uid-1" });
-		expect(JSON.stringify(fake.servers.get(NAME)?.spec)).not.toContain(
-			"s3cret",
+		await expect(
+			host(fake.store).ensure({ ...browser, env: { TOKEN: "s3cret" } }),
+		).rejects.toThrow(
+			"playwright: sets env, which a server on the cluster cannot take.",
 		);
+		expect(fake.servers.size).toBe(0);
 	});
 
 	it("reuses a server another process asked for", async () => {

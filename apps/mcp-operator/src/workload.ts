@@ -4,7 +4,6 @@ import type {
 	V1NetworkPolicy,
 	V1PersistentVolumeClaim,
 	V1Pod,
-	V1Secret,
 	V1Service,
 } from "@kubernetes/client-node";
 import {
@@ -159,13 +158,11 @@ function hardened(
 	image: string,
 	args: string[],
 	resources: ResourceRequirements,
-	secret: string,
 ): V1Container {
 	return {
 		name,
 		image,
 		...(args.length > 0 ? { args } : {}),
-		envFrom: [{ secretRef: { name: secret } }],
 		resources,
 		securityContext: { allowPrivilegeEscalation: false },
 	};
@@ -180,7 +177,7 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 	const { mcp, app } = server.spec;
 	const containers: V1Container[] = [
 		{
-			...hardened(MCP_CONTAINER, mcp.image, mcp.args, mcp.resources, name),
+			...hardened(MCP_CONTAINER, mcp.image, mcp.args, mcp.resources),
 			ports: [{ name: MCP_CONTAINER, containerPort: mcp.port }],
 			readinessProbe: { tcpSocket: { port: mcp.port }, periodSeconds: 2 },
 			volumeMounts: mounts(mcp.state),
@@ -188,7 +185,7 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 	];
 	if (app)
 		containers.push({
-			...hardened(APP_CONTAINER, app.image, app.args, app.resources, name),
+			...hardened(APP_CONTAINER, app.image, app.args, app.resources),
 			ports: app.ports.map((port) => ({
 				name: port.name,
 				containerPort: port.port,
@@ -248,17 +245,6 @@ export function serviceFor(server: McpServer): V1Service {
 				})),
 			],
 		},
-	};
-}
-
-export function secretFor(
-	server: McpServer,
-	data: Record<string, string>,
-): V1Secret {
-	return {
-		metadata: { name: server.metadata.name, labels: ownLabels(server) },
-		type: "Opaque",
-		data,
 	};
 }
 

@@ -50,7 +50,7 @@ rules:
     verbs: [get, list, create, delete]
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [get, list, create, update, delete]
+    verbs: [get, create, update]
   - apiGroups: [""]
     resources: [persistentvolumeclaims]
     verbs: [get, list, create, patch, delete]
