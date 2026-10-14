@@ -34,12 +34,6 @@ tasks:
       volumes=$(docker volume ls -q --filter "$filter")
       if [ -z "$volumes" ]; then echo "no MCP state volumes"; else docker volume rm $volumes; fi
 
-  mcp:operator:build:
-    desc: build the MCP operator image the chart deploys
-    vars:
-      TAG: '{{.TAG | default "main"}}'
-    cmd: docker build -f apps/mcp-operator/Dockerfile --target prod -t ghcr.io/1hachem/lisptc-mcp-operator:{{.TAG}} .
-
   up:
     desc: build and run the whole stack in docker with live reload, secrets from infisical
     aliases:
