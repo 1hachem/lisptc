@@ -1,9 +1,9 @@
 ---
-name: hunk-review-mode
+name: hunk
 description: Review mode. Listen to the notes the user writes in a live Hunk session and act on each one as it lands - answer a question, fix what a note asks for, or ask back - replying on the note itself. Use when the user asks for review mode, or to watch, follow or work through their Hunk notes.
 ---
 
-# hunk-review-mode
+# hunk
 
 The user reviews in Hunk. You work through their notes as they write them, and
 every answer goes back on the note it belongs to. The terminal is not where the
@@ -17,7 +17,7 @@ user is looking.
 2. Arm the watcher with the Monitor tool, `timeout_ms` at its maximum:
 
    ```bash
-   .agents/skills/hunk-review-mode/watch-notes.sh [session-id]
+   .agents/skills/hunk/watch-notes.sh [session-id]
    ```
 
    Each user note without a reply from you arrives as one JSON line,
