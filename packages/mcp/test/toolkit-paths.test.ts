@@ -62,27 +62,31 @@ describe("local toolkit commands resolve against the manifest", () => {
 		});
 	}
 
-	it("keeps Playwright's local command alongside its container image", () => {
-		expect(configFor("playwright", "/nix/store/chromium/chrome")).toMatchObject(
-			{
-				image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
-				port: 8931,
-				command: "npx",
-				state: "/home/pwuser/profile",
-				args: [
-					"-y",
-					"@playwright/mcp@0.0.81",
-					"--browser",
-					"chromium",
-					"--executable-path",
-					"/nix/store/chromium/chrome",
-					"--no-sandbox",
-					"--user-data-dir",
-					"/home/pwuser/profile",
-				],
-			},
-		);
+	it("runs Playwright from its local command", () => {
+		expect(configFor("playwright", "/nix/store/chromium/chrome")).toEqual({
+			name: "playwright",
+			description: expect.any(String),
+			keywords: expect.any(Array),
+			command: "npx",
+			args: [
+				"-y",
+				"@playwright/mcp@0.0.81",
+				"--browser",
+				"chromium",
+				"--executable-path",
+				"/nix/store/chromium/chrome",
+				"--no-sandbox",
+			],
+		});
 	});
+});
+
+describe("the local toolkit runs no container", () => {
+	for (const conf of localToolkit().all()) {
+		it(`names no image for ${conf.name}`, () => {
+			expect("image" in conf).toBe(false);
+		});
+	}
 });
 
 const DOCKERFILES = new URL("../../../docker/mcp/", import.meta.url);

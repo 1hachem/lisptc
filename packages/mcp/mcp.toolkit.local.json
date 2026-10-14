@@ -20,9 +20,6 @@
       "headless",
       "automation"
     ],
-    "image": "ghcr.io/1hachem/lisptc-mcp-playwright:main",
-    "port": 8931,
-    "state": "/home/pwuser/profile",
     "command": "npx",
     "args": [
       "-y",
@@ -31,9 +28,7 @@
       "chromium",
       "--executable-path",
       "${PLAYWRIGHT_MCP_EXECUTABLE}",
-      "--no-sandbox",
-      "--user-data-dir",
-      "/home/pwuser/profile"
+      "--no-sandbox"
     ]
   },
   {
