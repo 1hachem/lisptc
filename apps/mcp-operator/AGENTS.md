@@ -47,9 +47,8 @@ app writes.
 **A state volume is written by the user the image runs as.** The pod's group is
 what lets it, so an image that runs as another user needs its group matched.
 
-**The image runs one file esbuild bundled.** `build` inlines every dependency
-into `dist/main.js`, and the image carries no `node_modules`, so a dependency
-reaches production only through that bundle.
+**Production runs the bundle and nothing beside it.** A dependency the bundle
+leaves out does not exist there.
 
 ## Tests
 
