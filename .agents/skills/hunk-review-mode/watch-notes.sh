@@ -28,7 +28,8 @@ while true; do
 		exit 0
 	fi
 	jq -c '.comments[]' <<<"$notes" | while IFS= read -r note; do
-		id=$(jq -r '.commentId // .id' <<<"$note")
+		id=$(jq -r '.noteId // .commentId // .id // empty' <<<"$note")
+		[ -n "$id" ] || continue
 		if ! grep -qxF "$id" "$seen"; then
 			echo "$id" >>"$seen"
 			jq -c --arg s "$session" '{event:"note",session:$s,note:.}' <<<"$note"
