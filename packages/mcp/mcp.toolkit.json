@@ -22,6 +22,7 @@
     ],
     "image": "ghcr.io/1hachem/lisptc-browser-mcp:main",
     "port": 8931,
+    "state": "/home/pwuser/profile",
     "command": "npx",
     "args": [
       "-y",
@@ -31,7 +32,8 @@
       "--executable-path",
       "${PLAYWRIGHT_MCP_EXECUTABLE}",
       "--no-sandbox",
-      "--isolated"
+      "--user-data-dir",
+      "/home/pwuser/profile"
     ]
   },
   {

@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { mcpEnv } from "@repo/env/mcp";
 import { oauthEnv } from "@repo/env/oauth";
 import { filePrompt } from "@repo/shared/host-node";
@@ -30,6 +32,11 @@ export function localMcpClient(options: McpHostOptions = {}): McpClient {
 		redirectUri: oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		callbackPort: oauthEnv.LISPTC_OAUTH_CALLBACK_PORT,
 		scope: options.scope,
+		stateHome: join(
+			mcpEnv.XDG_DATA_HOME ?? join(homedir(), ".local", "share"),
+			"lisptc",
+			"mcp",
+		),
 	});
 }
 

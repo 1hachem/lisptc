@@ -6,6 +6,7 @@ import {
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { localStateArgs } from "./local-host.ts";
 import {
 	type CallbackServer,
 	StoredOAuthProvider,
@@ -24,7 +25,11 @@ import {
 	type ToolCall,
 } from "./ports.ts";
 
-function stdioTransport(conf: ConnConfig): StdioClientTransport {
+function stdioTransport(
+	conf: ConnConfig,
+	stateHome: string | undefined,
+	scope: string | undefined,
+): StdioClientTransport {
 	const command = "command" in conf ? conf.command : undefined;
 	if (command === undefined)
 		throw new Error(
@@ -32,7 +37,9 @@ function stdioTransport(conf: ConnConfig): StdioClientTransport {
 		);
 	return new StdioClientTransport({
 		command,
-		args: conf.args ?? [],
+		args: stateHome
+			? localStateArgs(conf, stateHome, scope)
+			: (conf.args ?? []),
 		env: {
 			// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
 			...(process.env as Record<string, string>),
@@ -47,6 +54,7 @@ export interface McpClientPorts {
 	redirectUri: string;
 	callbackPort: number;
 	scope?: string;
+	stateHome?: string;
 }
 
 function landsOnCallbackPort(url: string, port: number): boolean {
@@ -169,7 +177,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 							? { headers: handle.headers }
 							: undefined,
 					})
-				: stdioTransport(conf);
+				: stdioTransport(conf, ports.stateHome, ports.scope);
 			await client.connect(transport, { signal });
 		}
 		const { tools } = await client.listTools(undefined, { signal });

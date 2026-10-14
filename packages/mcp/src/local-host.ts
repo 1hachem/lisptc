@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { stateEntries } from "./mcp-server-resource.ts";
 import type {
 	ConnConfig,
 	McpHost,
@@ -29,13 +32,28 @@ function whyItDied(server: LocalServer): string {
 	return tail ? `\n${tail}` : "";
 }
 
+export function localStateArgs(
+	conf: ConnConfig,
+	stateHome: string,
+	scope?: string,
+): string[] {
+	const args = conf.args ?? [];
+	if (!("image" in conf)) return args;
+	const states = stateEntries(conf.state);
+	return states.reduce((rewritten, state) => {
+		const dir = join(stateHome, scope ?? "", conf.name, state.name);
+		mkdirSync(dir, { recursive: true });
+		return rewritten.map((arg) => arg.replaceAll(state.path, dir));
+	}, args);
+}
+
 export class LocalProcessHost implements McpHost {
 	private readonly started = new Map<string, LocalServer>();
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
-		if ("image" in conf && (conf.app || conf.state))
+		if ("image" in conf && conf.app)
 			throw new Error(
-				`${conf.name}: keeps state or runs an app beside it, which needs a container host (docker or kubernetes), not a local process.`,
+				`${conf.name}: runs an app beside it, which needs a container host (docker or kubernetes), not a local process.`,
 			);
 		if (!("url" in conf)) return undefined;
 		const handle: ServerHandle = conf.headers

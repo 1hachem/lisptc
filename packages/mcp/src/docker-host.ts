@@ -318,6 +318,7 @@ export class DockerHost implements McpHost {
 	}
 
 	private async remove(id: string): Promise<void> {
+		await exec("docker", ["stop", id]).catch(() => {});
 		await exec("docker", ["rm", "--force", "--volumes", id]).catch(() => {});
 	}
 

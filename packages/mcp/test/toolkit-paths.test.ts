@@ -68,6 +68,7 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 				image: "ghcr.io/1hachem/lisptc-browser-mcp:main",
 				port: 8931,
 				command: "npx",
+				state: "/home/pwuser/profile",
 				args: [
 					"-y",
 					"@playwright/mcp@0.0.81",
@@ -76,7 +77,8 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 					"--executable-path",
 					"/nix/store/chromium/chrome",
 					"--no-sandbox",
-					"--isolated",
+					"--user-data-dir",
+					"/home/pwuser/profile",
 				],
 			},
 		);
