@@ -35,6 +35,18 @@ cannot finish yet it returns as a requeue, never as a wait inside the call.
 What the cluster lets this do is granted in `charts/lisptc/templates/mcp-operator.yaml`,
 so a new kind of object needs a rule there too.
 
+**The app declares, and only this acts.** The app writes an `McpServer`'s spec
+and reads its status, and its role in `charts/lisptc/templates/mcp-rbac.yaml`
+grants nothing more. Something new the app needs from the cluster is a spec
+field this reconciles, never a wider grant to the app.
+
+**A server on the cluster takes no env.** Nothing carries a value from the app
+into a pod. Adding one is a spec field and a copy made here, not a secret the
+app writes.
+
+**A state volume is written by the user the image runs as.** The pod's group is
+what lets it, so an image that runs as another user needs its group matched.
+
 **The image runs one file esbuild bundled.** `build` inlines every dependency
 into `dist/main.js`, and the image carries no `node_modules`, so a dependency
 reaches production only through that bundle.
