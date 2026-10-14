@@ -1,7 +1,13 @@
 import { claimName } from "@repo/mcp-extension/kubernetes";
 import { describe, expect, it } from "vitest";
 import { FINALIZER, reconcile } from "../src/reconcile.ts";
-import { RECLAIM, RELEASED_AT, SHM_LIMIT, SPEC_HASH } from "../src/workload.ts";
+import {
+	RECLAIM,
+	RELEASED_AT,
+	SHM_LIMIT,
+	SPEC_HASH,
+	STATE_GROUP,
+} from "../src/workload.ts";
 import { browser, NAMESPACE, RELEASE, server, world } from "./helpers.ts";
 
 async function readyWorld() {
@@ -52,6 +58,7 @@ describe("a new server", () => {
 			emptyDir: { medium: "Memory", sizeLimit: SHM_LIMIT },
 		});
 		expect(pod?.spec?.restartPolicy).toBe("Never");
+		expect(pod?.spec?.securityContext?.fsGroup).toBe(STATE_GROUP);
 		expect(pod?.spec?.imagePullSecrets).toEqual([{ name: "ghcr-pull" }]);
 
 		const service = w.fake.services.get(

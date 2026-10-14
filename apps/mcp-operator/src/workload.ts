@@ -29,6 +29,7 @@ export const SERVER_NAME = "lisptc.io/server-name";
 export const STATE_PATH = "lisptc.io/state-path";
 export const EMPTY_SINCE = "lisptc.io/empty-since";
 export const SHM_LIMIT = "1Gi";
+export const STATE_GROUP = 1001;
 
 const MCP_CONTAINER = "mcp";
 const APP_CONTAINER = "app";
@@ -209,6 +210,7 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 			restartPolicy: "Never",
 			automountServiceAccountToken: false,
 			enableServiceLinks: false,
+			securityContext: { fsGroup: STATE_GROUP },
 			...(placement.pullSecret
 				? { imagePullSecrets: [{ name: placement.pullSecret }] }
 				: {}),
