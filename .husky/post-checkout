@@ -1,7 +1,16 @@
 [ "$1" = "0000000000000000000000000000000000000000" ] || exit 0
 
 main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
-[ "$main" = "$(pwd -P)" ] && exit 0
+here=$(pwd -P)
+[ "$main" = "$here" ] && exit 0
+
+slug=${here#"$main"/worktrees/}
+if [ "$slug" = "$here" ] || ! printf '%s' "$slug" | grep -qE '^[a-z]+/[^/]+$'; then
+  echo "post-checkout: a worktree lives at $main/worktrees/<type>/<slug>, not $here" >&2
+  echo "post-checkout: removed it; add it again under worktrees/, filed by its branch type" >&2
+  git -C "$main" worktree remove --force --force "$here" >&2
+  exit 1
+fi
 
 [ -f "$main/.env" ] && cp "$main/.env" .env
 if command -v direnv >/dev/null; then
