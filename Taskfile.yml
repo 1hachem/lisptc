@@ -13,16 +13,13 @@ includes:
   compose:
     taskfile: ./taskfiles/compose.yml
     flatten: true
+  mcp-images:
+    taskfile: ./taskfiles/mcp-images.yml
+    flatten: true
 tasks:
   default:
     desc: prints this help
     cmd: task -l
-
-  mcp:browser:build:
-    desc: build the browser MCP image the playwright toolkit entry runs
-    vars:
-      TAG: '{{.TAG | default "main"}}'
-    cmd: docker build -f docker/browser-mcp.Dockerfile -t ghcr.io/1hachem/lisptc-browser-mcp:{{.TAG}} .
 
   mcp:reap:
     desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown), and the volumes they kept their state on

@@ -5,7 +5,7 @@ tasks:
     desc: build and run the whole stack in docker with live reload, secrets from infisical
     aliases:
       - dev
-    deps: [mcp:browser:build]
+    deps: [mcp:images:build]
     cmds:
       - task: _infisical-run
         vars:
