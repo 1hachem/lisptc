@@ -195,5 +195,9 @@ server.addTool({
 
 await server.start({
 	transportType: "httpStream",
-	httpStream: { endpoint: "/mcp", port: PORT },
+	httpStream: {
+		endpoint: "/mcp",
+		host: googleSheetsEnv.LISPTC_SHEETS_HOST,
+		port: PORT,
+	},
 });
