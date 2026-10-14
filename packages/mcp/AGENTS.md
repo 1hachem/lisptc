@@ -36,8 +36,12 @@ is reachable from outside is the host's to decide, not the manifest's. A `url`
 is an address a client dials as written, so only a remote server, or one a
 `command` starts on a fixed local port, carries one.
 
-An image built here lives in a Dockerfile under `docker/`;
-`task mcp:browser:build` builds the browser one.
+**`mcp.toolkit.json` is what the cluster and docker hosts read, and it holds
+only servers that work in production**: each runs from its own image or is a
+remote url, never a local command. `mcp.toolkit.local.json` is what the local
+process host reads, commands included. A server's image is built from
+`docker/mcp/<name>.Dockerfile`; CI and `task mcp:images:build` build every file
+there.
 
 This package needs no daemon to be used or tested. A container host is chosen
 at a composition root, never by default, and a test that wants containers has

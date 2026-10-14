@@ -24,5 +24,6 @@ Nothing here reads `process.env`.
 A tool validates its arguments with a schema at the boundary and returns a
 failure the model can act on. A stack trace is not an answer.
 
-Adding a server means adding a directory, its env module, and a script. It does
+Adding a server means adding a directory, its env module, a script, and its
+image at `docker/mcp/<name>.Dockerfile`. It does
 not mean adding a branch to an existing server.
