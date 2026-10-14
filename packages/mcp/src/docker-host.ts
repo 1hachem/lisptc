@@ -171,10 +171,14 @@ export class DockerHost implements McpHost {
 	}
 
 	private envFlags(conf: ConnConfig): string[] {
-		return Object.entries(conf.env ?? {}).flatMap(([name, value]) => [
-			"--env",
-			`${name}=${value}`,
-		]);
+		const passed = "secret" in conf && conf.secret ? conf.secret.keys : [];
+		return [
+			...Object.entries(conf.env ?? {}).flatMap(([name, value]) => [
+				"--env",
+				`${name}=${value}`,
+			]),
+			...passed.flatMap((name) => ["--env", name]),
+		];
 	}
 
 	private async start(conf: ConnConfig, launch: Launch): Promise<ServerHandle> {

@@ -31,10 +31,10 @@ import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
-	type HttpConnConfig,
 	type JsonSchema,
 	type McpClient,
 	type McpPolicy,
+	type OAuthConnConfig,
 	openPolicy,
 	type SearchDocument,
 	type SearchEngine,
@@ -801,9 +801,9 @@ export function registerMcp(
 function oauthServer(
 	predefined: Map<string, ConnConfig>,
 	name: string,
-): HttpConnConfig {
+): OAuthConnConfig {
 	const conf = predefined.get(name);
-	if (!conf || !("url" in conf))
+	if (!conf || !("url" in conf || ("image" in conf && conf.oauth)))
 		throw new EvalException("unknown OAuth MCP server", name, false);
 	return conf;
 }

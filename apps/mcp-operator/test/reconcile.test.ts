@@ -70,6 +70,28 @@ describe("a new server", () => {
 		expect(containers.every((c) => c.envFrom === undefined)).toBe(true);
 	});
 
+	it("copies the secret its server names and hands it over as env", async () => {
+		const w = world(
+			server({
+				name: "ocr",
+				image: "ocr-mcp",
+				port: 8000,
+				secret: { name: "lisptc-mcp-ocr", keys: ["MISTRAL_API_KEY"] },
+			}),
+		);
+
+		await reconcile(w.target, w.deps(1000));
+
+		expect(w.fake.copied).toEqual([
+			`${RELEASE}/ghcr-pull -> ${NAMESPACE}`,
+			`${RELEASE}/lisptc-mcp-ocr -> ${NAMESPACE}`,
+		]);
+		const pod = w.fake.pods.get(`${NAMESPACE}/${w.target.metadata.name}`);
+		expect(pod?.spec?.containers[0]?.envFrom).toEqual([
+			{ secretRef: { name: "lisptc-mcp-ocr" } },
+		]);
+	});
+
 	it("runs one container and no claim when it has no app", async () => {
 		const w = world(server({ name: "fs", image: "fs-mcp", port: 8000 }));
 

@@ -219,6 +219,9 @@ class Run {
 				this.namespace,
 				placement.pullSecret,
 			);
+		const { secret } = this.server.spec.mcp;
+		if (secret)
+			await cluster.copySecret(placement.release, this.namespace, secret);
 	}
 
 	async claimsByState(): Promise<Map<string, V1PersistentVolumeClaim>> {

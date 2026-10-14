@@ -52,6 +52,7 @@ export interface McpSlot {
 	path: string;
 	resources: ResourceRequirements;
 	state: State[];
+	secret?: string;
 }
 
 export interface AppSlot {
@@ -223,6 +224,7 @@ export function specFor(
 		path: launch.path,
 		resources: resourcesFor("resources" in conf ? conf.resources : undefined),
 		state: stateEntries("state" in conf ? conf.state : undefined),
+		...("secret" in conf && conf.secret ? { secret: conf.secret.name } : {}),
 	};
 	const app = "app" in conf && conf.app ? appSlot(conf.app) : undefined;
 	uniqueStateNames(conf.name, [mcp.state, app?.state ?? []]);

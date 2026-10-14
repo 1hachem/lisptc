@@ -29,6 +29,23 @@ describe("the McpServer CRD", () => {
 		).toBe(true);
 	});
 
+	it("accepts a server that names a secret", () => {
+		const spec = server({
+			name: "ocr",
+			image: "ocr-mcp",
+			port: 8000,
+			secret: { name: "lisptc-mcp-ocr", keys: ["MISTRAL_API_KEY"] },
+		}).spec;
+		expect(spec.mcp.secret).toBe("lisptc-mcp-ocr");
+		expect(validate(spec)).toBe(true);
+	});
+
+	it("rejects a secret that is not a valid name", () => {
+		const spec = structuredClone(server().spec);
+		spec.mcp.secret = "Not A Name";
+		expect(validate(spec)).toBe(false);
+	});
+
 	it("rejects a state path that is not absolute", () => {
 		const spec = structuredClone(server().spec);
 		const state = spec.app?.state[0];

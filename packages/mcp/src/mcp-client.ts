@@ -9,6 +9,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { localStateArgs } from "./local-host.ts";
 import {
 	type CallbackServer,
+	issuerClient,
 	StoredOAuthProvider,
 	sharedAuthCallback,
 } from "./mcp-oauth.ts";
@@ -16,9 +17,10 @@ import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
-	type HttpConnConfig,
 	type McpClient,
 	type McpHost,
+	type OAuthClients,
+	type OAuthConnConfig,
 	type OAuthStore,
 	type ServerHandle,
 	type Tool,
@@ -53,8 +55,21 @@ export interface McpClientPorts {
 	oauth: OAuthStore;
 	redirectUri: string;
 	callbackPort: number;
+	clients?: OAuthClients;
 	scope?: string;
 	stateHome?: string;
+}
+
+function oauthScope(conf: OAuthConnConfig): string | undefined {
+	return conf.scopes?.length ? conf.scopes.join(" ") : undefined;
+}
+
+function signsIn(conf: ConnConfig): conf is OAuthConnConfig {
+	return "oauth" in conf && Boolean(conf.oauth);
+}
+
+function serverKey(conf: OAuthConnConfig, serverUrl: string): string {
+	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
 }
 
 function landsOnCallbackPort(url: string, port: number): boolean {
@@ -69,10 +84,32 @@ function landsOnCallbackPort(url: string, port: number): boolean {
 export function mcpClient(ports: McpClientPorts): McpClient {
 	const clients = new Map<string, { client: Client; name: string }>();
 
-	const tokenKey = (serverUrl: string): string => {
-		const origin = new URL(serverUrl).origin;
-		return ports.scope === undefined ? origin : `${ports.scope}/${origin}`;
-	};
+	const tokenKey = (key: string): string =>
+		ports.scope === undefined ? key : `${ports.scope}/${key}`;
+
+	function providerFor(
+		conf: OAuthConnConfig,
+		serverUrl: string,
+	): Promise<StoredOAuthProvider> {
+		const issuer =
+			typeof conf.oauth === "object"
+				? issuerClient(conf.name, conf.oauth, ports.clients ?? {})
+				: undefined;
+		return StoredOAuthProvider.open(
+			scopedStore,
+			serverKey(conf, serverUrl),
+			ports.redirectUri,
+			oauthScope(conf),
+			issuer,
+		);
+	}
+
+	async function serverUrlOf(conf: OAuthConnConfig): Promise<string> {
+		const handle = await ports.host.ensure(conf);
+		if (handle) return handle.url;
+		if ("url" in conf) return conf.url;
+		throw new Error(`${conf.name}: the host started no server to sign in to`);
+	}
 
 	const scopedStore: OAuthStore = {
 		load: (key) => ports.oauth.load(tokenKey(key)),
@@ -106,19 +143,15 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	}
 
 	async function ensureAuthorized(
+		conf: OAuthConnConfig,
 		serverUrl: string,
-		scope: string | undefined,
 	): Promise<{
 		provider: StoredOAuthProvider;
 		authUrl: string | null;
 		captured: boolean;
 	}> {
-		const provider = await StoredOAuthProvider.create(
-			scopedStore,
-			serverUrl,
-			ports.redirectUri,
-			scope,
-		);
+		const scope = oauthScope(conf);
+		const provider = await providerFor(conf, serverUrl);
 		const registered = provider.clientInformation();
 		if (
 			registered?.redirect_uris &&
@@ -126,7 +159,8 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		) {
 			await provider.invalidateCredentials("all");
 		}
-		if (provider.tokens()) return { provider, authUrl: null, captured: false };
+		if (await provider.tokens())
+			return { provider, authUrl: null, captured: false };
 		await auth(provider, { serverUrl, scope });
 		const authUrl = provider.authorizationUrl;
 		if (!authUrl) throw new Error("no authorization URL produced");
@@ -145,13 +179,11 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		conf: ConnConfig,
 		signal?: AbortSignal,
 	): Promise<ConnectResult> {
-		const http = "url" in conf ? conf : undefined;
 		const handle: ServerHandle | undefined = await ports.host.ensure(conf);
-		if (handle && http?.oauth) {
-			const scope = http.scopes?.length ? http.scopes.join(" ") : undefined;
+		if (handle && signsIn(conf)) {
 			const { provider, authUrl, captured } = await ensureAuthorized(
+				conf,
 				handle.url,
-				scope,
 			);
 			if (authUrl)
 				throw new AuthorizationRequired(conf.name, authUrl, captured);
@@ -163,7 +195,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			} catch (e) {
 				if (!(e instanceof UnauthorizedError)) throw e;
 				await provider.invalidateCredentials("tokens");
-				const retry = await ensureAuthorized(handle.url, scope);
+				const retry = await ensureAuthorized(conf, handle.url);
 				throw new AuthorizationRequired(
 					conf.name,
 					retry.authUrl ?? handle.url,
@@ -249,32 +281,22 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			return entry ? await ports.host.asleep(entry.name) : false;
 		},
 
-		async login(conf: HttpConnConfig): Promise<{ authUrl: string | null }> {
-			const handle = await ports.host.ensure(conf);
-			const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
-			const { authUrl } = await ensureAuthorized(
-				handle?.url ?? conf.url,
-				scope,
-			);
+		async login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }> {
+			const { authUrl } = await ensureAuthorized(conf, await serverUrlOf(conf));
 			return { authUrl };
 		},
 
-		async logout(conf: HttpConnConfig): Promise<void> {
-			await scopedStore.clear(conf.url);
+		async logout(conf: OAuthConnConfig): Promise<void> {
+			await scopedStore.clear(serverKey(conf, "url" in conf ? conf.url : ""));
 		},
 
-		async authorize(conf: HttpConnConfig, code: string): Promise<void> {
-			const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
-			const provider = await StoredOAuthProvider.create(
-				scopedStore,
-				conf.url,
-				ports.redirectUri,
-				scope,
-			);
+		async authorize(conf: OAuthConnConfig, code: string): Promise<void> {
+			const serverUrl = "url" in conf ? conf.url : await serverUrlOf(conf);
+			const provider = await providerFor(conf, serverUrl);
 			const result = await auth(provider, {
-				serverUrl: conf.url,
+				serverUrl,
 				authorizationCode: code,
-				scope,
+				scope: oauthScope(conf),
 			});
 			if (result !== "AUTHORIZED")
 				throw new Error("authorization did not complete (unexpected redirect)");

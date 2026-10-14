@@ -36,11 +36,19 @@ export interface Resources {
 	limits?: ResourceAmounts;
 }
 
+export interface IssuerOAuth {
+	issuer: string;
+	authorize: string;
+	token: string;
+	client: string;
+	params?: Record<string, string>;
+}
+
 export type HttpConnConfig = ConnMeta & {
 	name: string;
 	url: string;
 	headers?: Record<string, string>;
-	oauth?: boolean;
+	oauth?: boolean | IssuerOAuth;
 	scopes?: string[];
 	command?: string;
 	args?: string[];
@@ -73,6 +81,11 @@ export interface AppContainer {
 	state?: StateSpec;
 }
 
+export interface SecretRef {
+	name: string;
+	keys: string[];
+}
+
 export type ContainerConnConfig = ConnMeta & {
 	name: string;
 	image: string;
@@ -82,6 +95,9 @@ export type ContainerConnConfig = ConnMeta & {
 	args?: string[];
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
+	secret?: SecretRef;
+	oauth?: IssuerOAuth;
+	scopes?: string[];
 	resources?: Resources;
 	state?: StateSpec;
 	app?: AppContainer;
@@ -96,6 +112,8 @@ export type StdioConnConfig = ConnMeta & {
 };
 
 export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
+
+export type OAuthConnConfig = HttpConnConfig | ContainerConnConfig;
 
 export interface ConnectResult {
 	serverId: string;
@@ -113,9 +131,9 @@ export interface McpClient {
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
 	asleep(serverId: string): Promise<boolean>;
-	login(conf: HttpConnConfig): Promise<{ authUrl: string | null }>;
-	logout(conf: HttpConnConfig): Promise<void>;
-	authorize(conf: HttpConnConfig, code: string): Promise<void>;
+	login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }>;
+	logout(conf: OAuthConnConfig): Promise<void>;
+	authorize(conf: OAuthConnConfig, code: string): Promise<void>;
 	shutdown(): Promise<void>;
 }
 
@@ -189,14 +207,23 @@ export interface PendingAuthorization {
 	state: string;
 	serverUrl: string;
 	scope?: string;
+	oauth?: IssuerOAuth;
 }
 
 export interface OAuthRecord {
 	clientInformation?: OAuthClientInformationFull;
 	tokens?: OAuthTokens;
+	expiresAt?: number;
 	codeVerifier?: string;
 	pending?: PendingAuthorization;
 }
+
+export interface OAuthClient {
+	client_id: string;
+	client_secret: string;
+}
+
+export type OAuthClients = Record<string, OAuthClient>;
 
 export interface OAuthStore {
 	load(serverKey: string): Promise<OAuthRecord | undefined>;

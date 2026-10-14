@@ -182,6 +182,7 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 			ports: [{ name: MCP_CONTAINER, containerPort: mcp.port }],
 			readinessProbe: { tcpSocket: { port: mcp.port }, periodSeconds: 2 },
 			volumeMounts: mounts(mcp.state),
+			...(mcp.secret ? { envFrom: [{ secretRef: { name: mcp.secret } }] } : {}),
 		},
 	];
 	if (app)

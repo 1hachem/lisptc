@@ -12,6 +12,7 @@ import { completeAuthorization, FileOAuthStore } from "./mcp-oauth.ts";
 import type {
 	McpClient,
 	McpHost,
+	OAuthClients,
 	OAuthStore,
 	ServerReporter,
 } from "./ports.ts";
@@ -25,12 +26,25 @@ export interface McpHostOptions {
 	host?: McpHost;
 }
 
+function oauthClients(): OAuthClients {
+	const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = oauthEnv;
+	return GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET
+		? {
+				google: {
+					client_id: GOOGLE_CLIENT_ID,
+					client_secret: GOOGLE_CLIENT_SECRET,
+				},
+			}
+		: {};
+}
+
 export function localMcpClient(options: McpHostOptions = {}): McpClient {
 	return mcpClient({
 		host: options.host ?? new LocalProcessHost(),
 		oauth: options.oauth ?? new FileOAuthStore(),
 		redirectUri: oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		callbackPort: oauthEnv.LISPTC_OAUTH_CALLBACK_PORT,
+		clients: oauthClients(),
 		scope: options.scope,
 		stateHome: join(
 			mcpEnv.XDG_DATA_HOME ?? join(homedir(), ".local", "share"),
@@ -50,6 +64,7 @@ export function finishAuthorization(
 		serverKey,
 		oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		callbackUrl,
+		oauthClients(),
 	);
 }
 
