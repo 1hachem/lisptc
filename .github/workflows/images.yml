@@ -12,8 +12,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.images.outputs.include }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: List every image, one per MCP server under docker/mcp
+        id: images
+        run: |
+          mcp=$(for f in docker/mcp/*.Dockerfile; do
+            jq -nc --arg name "mcp-$(basename "$f" .Dockerfile)" --arg file "$f" '{name: $name, dockerfile: $file, target: ""}'
+          done | jq -sc .)
+          jq -nc --argjson mcp "$mcp" '[
+            {name: "app", dockerfile: "apps/app/Dockerfile", target: "prod", turbo: true},
+            {name: "convex-deploy", dockerfile: "packages/backend/Dockerfile", target: "prod"},
+            {name: "mcp-operator", dockerfile: "apps/mcp-operator/Dockerfile", target: "prod"}
+          ] + $mcp' | sed 's/^/include=/' >> "$GITHUB_OUTPUT"
+
   build:
     name: build ${{ matrix.name }}
+    needs: matrix
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,20 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: app
-            dockerfile: apps/app/Dockerfile
-            target: prod
-            turbo: true
-          - name: convex-deploy
-            dockerfile: packages/backend/Dockerfile
-            target: prod
-          - name: browser-mcp
-            dockerfile: docker/browser-mcp.Dockerfile
-            target: ""
-          - name: mcp-operator
-            dockerfile: apps/mcp-operator/Dockerfile
-            target: prod
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
     env:
       PREVIEW: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview') }}
       PUSH: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'preview') }}
