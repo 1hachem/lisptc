@@ -22,8 +22,14 @@ declare -A sent=()
 
 while true; do
 	if ! notes=$(hunk session comment list "$session" --type all --json 2>&1); then
-		echo "{\"event\":\"session-gone\",\"session\":\"$session\",\"error\":$(jq -Rs . <<<"$notes")}"
-		exit 0
+		if sessions=$(hunk session list --json 2>/dev/null) &&
+			! jq -e --arg s "$session" 'any(.sessions[]; .sessionId == $s)' <<<"$sessions" >/dev/null; then
+			echo "{\"event\":\"session-gone\",\"session\":\"$session\"}"
+			exit 0
+		fi
+		echo "{\"event\":\"retrying\",\"session\":\"$session\",\"error\":$(jq -Rs . <<<"$notes")}"
+		sleep "$interval"
+		continue
 	fi
 	while IFS= read -r note; do
 		id=$(jq -r '.noteId' <<<"$note")

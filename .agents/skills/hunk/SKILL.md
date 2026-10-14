@@ -25,7 +25,9 @@ user is looking.
    last, after the work is done. Re-arming sends every unanswered note again.
 3. Say in one line that review mode is on, then wait.
 
-When the monitor expires, re-arm it. On `session-gone`, stop, and say so.
+When the monitor expires, re-arm it. On `session-gone`, stop, and say so. A
+`retrying` line is a failed lookup on a session that is still live; the watcher
+keeps going on its own, so ignore it unless it repeats.
 
 ## Each note
 
