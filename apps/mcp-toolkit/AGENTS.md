@@ -11,10 +11,9 @@ tools, `api.ts` talks to the service. `src/sheets/` is the Google Sheets server,
 `src/ocr/` the document reader. `src/google-auth.ts` takes the Google access
 token a request carries and calls Google with it.
 
-**A server here runs no OAuth of its own.** The REPL's MCP client signs the
-user in, Convex keeps the tokens, and every request arrives with the access
-token as its bearer. A server reads it off the request and holds no client
-secret, no token store and no public URL.
+**A server here runs no OAuth of its own.** Signing a user in is the client's
+job, so a server takes the token it is handed and keeps no client secret, no
+token store and no public URL.
 
 Each server has its own script in `package.json`. There is no shared binary.
 
