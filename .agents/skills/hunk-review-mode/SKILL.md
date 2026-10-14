@@ -12,15 +12,17 @@ user is looking.
 ## Start
 
 1. `hunk session list`. One session in this checkout is picked on its own.
-   With several, ask which, and use its id everywhere below.
+   With several, ask which, and use its id everywhere below. A session in
+   another checkout is never picked: with none here, ask the user to open one.
 2. Arm the watcher with the Monitor tool, `timeout_ms` at its maximum:
 
    ```bash
    .agents/skills/hunk-review-mode/watch-notes.sh [session-id]
    ```
 
-   Each new user note arrives as one JSON line, `{"event":"note",...}`. A note
-   already handled is never sent again, so re-arming is safe.
+   Each user note without a reply from you arrives as one JSON line,
+   `{"event":"note",...}`. A note is handled once you reply on it, so reply
+   last, after the work is done. Re-arming sends every unanswered note again.
 3. Say in one line that review mode is on, then wait.
 
 When the monitor expires, re-arm it. On `session-gone`, stop, and say so.
