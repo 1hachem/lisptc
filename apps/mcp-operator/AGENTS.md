@@ -40,9 +40,10 @@ and reads its status, and its role in `charts/lisptc/templates/mcp-rbac.yaml`
 grants nothing more. Something new the app needs from the cluster is a spec
 field this reconciles, never a wider grant to the app.
 
-**A server on the cluster takes no env.** Nothing carries a value from the app
-into a pod. Adding one is a spec field and a copy made here, not a secret the
-app writes.
+**A server on the cluster takes no env from the app.** Nothing carries a value
+from the app into a pod. A server that needs a credential names a Secret in the
+release namespace, and this copies it into the workspace namespace and hands it
+over whole. The app never writes one.
 
 **A state volume is written by the user the image runs as.** The pod's group is
 what lets it, so an image that runs as another user needs its group matched.

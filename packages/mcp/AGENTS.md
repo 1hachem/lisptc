@@ -39,7 +39,10 @@ is an address a client dials as written, so only a remote server, or one a
 **`mcp.toolkit.json` is what the cluster and docker hosts read, and it holds
 only servers that work in production**: each runs from its own image or is a
 remote url, never a local command. `mcp.toolkit.local.json` is what the local
-process host reads, commands included. A server's image is built from
+process host reads, commands included. An image that needs a credential names
+a Secret, which the operator copies and docker passes through from the host's
+env, and one that signs a user in names its issuer and the host-held client,
+so the client runs the flow and the server only sees the bearer token. A server's image is built from
 `docker/mcp/<name>.Dockerfile`; CI and `task mcp:images:build` build every file
 there.
 
