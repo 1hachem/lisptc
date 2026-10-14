@@ -53,7 +53,7 @@
   },
   {
     "name": "sheets",
-    "description": "Google Sheets over your Google account: list spreadsheets, describe a workbook's tabs and sizes, read a range (raw rows or header-keyed alists), overwrite a range, append rows, clear a range, add a tab, create a spreadsheet. (load-mcp \"sheets\") starts the server if it is not already up, then returns an authorization link; approve it and it is captured for you, then load again. (login \"sheets\") asks for the link on its own and (logout \"sheets\") forgets the account.",
+    "description": "Google Sheets over your Google account: list spreadsheets, describe a workbook's tabs and sizes, read a range (raw rows or header-keyed alists), overwrite a range, append rows, clear a range, add a tab, create a spreadsheet. (load-mcp \"sheets\") starts the server if it is not already up, then returns an authorization link; approve it and it is captured for you, then load again. (login \"sheets\") asks for the link on its own and (logout \"sheets\") forgets the account. Signing in needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET from Infisical at /mcps/google in the REPL's environment.",
     "keywords": [
       "google",
       "spreadsheet",
@@ -73,7 +73,20 @@
       "data-entry"
     ],
     "url": "http://localhost:8911/mcp",
-    "oauth": true,
+    "oauth": {
+      "issuer": "https://accounts.google.com",
+      "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token": "https://oauth2.googleapis.com/token",
+      "client": "google",
+      "params": { "access_type": "offline", "prompt": "consent" }
+    },
+    "scopes": [
+      "openid",
+      "email",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive.metadata.readonly"
+    ],
     "command": "task",
     "args": ["--dir", "../..", "mcp:sheets"]
   },

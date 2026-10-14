@@ -10,7 +10,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          PATHS: "/db /convex /auth /api /web /ai /analytics /mcps/google /mcps/mistral"
           CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
 
   up:convex:
@@ -19,7 +19,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          PATHS: "/db /convex /auth /api /web /ai /analytics /mcps/google /mcps/mistral"
           CMD: "docker compose up -d --wait convex-backend"
 
   up:prod:
@@ -28,7 +28,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          PATHS: "/db /convex /auth /api /web /ai /analytics /mcps/google /mcps/mistral"
           CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}'
       - echo "app http://localhost:3000 · dashboard http://127.0.0.1:6791"
 

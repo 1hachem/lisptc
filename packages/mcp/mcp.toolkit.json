@@ -46,6 +46,70 @@
     "state": "/home/lisptc/files"
   },
   {
+    "name": "sheets",
+    "description": "Google Sheets over your Google account: list spreadsheets, describe a workbook's tabs and sizes, read a range (raw rows or header-keyed alists), overwrite a range, append rows, clear a range, add a tab, create a spreadsheet. First (load-mcp \"sheets\") returns an authorization link; once approved, load again. (login \"sheets\") asks for the link on its own and (logout \"sheets\") forgets the account.",
+    "keywords": [
+      "google",
+      "spreadsheet",
+      "spreadsheets",
+      "gsheets",
+      "excel",
+      "xlsx",
+      "csv",
+      "table",
+      "tabular",
+      "rows",
+      "columns",
+      "cells",
+      "range",
+      "tab",
+      "append",
+      "data-entry"
+    ],
+    "image": "ghcr.io/1hachem/lisptc-mcp-sheets:main",
+    "port": 8911,
+    "oauth": {
+      "issuer": "https://accounts.google.com",
+      "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token": "https://oauth2.googleapis.com/token",
+      "client": "google",
+      "params": { "access_type": "offline", "prompt": "consent" }
+    },
+    "scopes": [
+      "openid",
+      "email",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive.metadata.readonly"
+    ]
+  },
+  {
+    "name": "ocr",
+    "description": "Read a scanned PDF or image with Mistral OCR and get its text back as Markdown, one entry per page, tables included. Takes a public URL.",
+    "keywords": [
+      "ocr",
+      "vision",
+      "image",
+      "images",
+      "photo",
+      "picture",
+      "screenshot",
+      "scan",
+      "scanned",
+      "pdf",
+      "document",
+      "handwriting",
+      "invoice",
+      "receipt",
+      "text-extraction",
+      "markdown",
+      "mistral"
+    ],
+    "image": "ghcr.io/1hachem/lisptc-mcp-ocr:main",
+    "port": 8000,
+    "secret": { "name": "lisptc-mcp-ocr", "keys": ["MISTRAL_API_KEY"] }
+  },
+  {
     "name": "linear",
     "description": "Linear issue tracker over OAuth: search/list/create issues, projects, comments. First (load-mcp \"linear\") returns an authorization link; once approved, load again, running (mcp-authorize \"linear\" \"<code>\") first only if the user hands back a code.",
     "keywords": [

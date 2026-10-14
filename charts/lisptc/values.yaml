@@ -7,7 +7,7 @@ app:
   port: 3000
   hostname: lisptc
   serviceAccount: app
-  secrets: [lisptc-api, lisptc-ai, lisptc-analytics, lisptc-web]
+  secrets: [lisptc-api, lisptc-ai, lisptc-analytics, lisptc-web, lisptc-mcp-google]
 
 convexDeploy:
   image:
@@ -73,6 +73,8 @@ preview:
     - { name: analytics, path: /analytics, secretName: lisptc-analytics }
     - { name: web, path: /web, secretName: lisptc-web }
     - { name: tailnet, path: /tailnet, secretName: lisptc-tailnet }
+    - { name: mcp-google, path: /mcps/google, secretName: lisptc-mcp-google }
+    - { name: mcp-ocr, path: /mcps/mistral, secretName: lisptc-mcp-ocr }
     - name: ghcr
       path: /ghcr
       secretName: ghcr-pull
