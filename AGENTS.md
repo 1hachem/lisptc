@@ -367,7 +367,8 @@ The remote Turbo cache is shared, and `turbo.json` is where it is named. Its
 token is a secret like any other, kept at the `/turbo` Infisical path.
 
 Runtime requires **Node >= 22.6.0**, and `.ts` files run directly with no build
-step. `.github/workflows/` holds the CI jobs and the order their checks run in,
+step. A package or app that does need a build bundles it with esbuild, and only
+`apps/app`, whose frontend vite builds, takes another bundler. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails
 there fails the same way locally, under the command it names.
 

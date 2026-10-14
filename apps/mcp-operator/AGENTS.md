@@ -35,6 +35,10 @@ cannot finish yet it returns as a requeue, never as a wait inside the call.
 What the cluster lets this do is granted in `charts/lisptc/templates/mcp-operator.yaml`,
 so a new kind of object needs a rule there too.
 
+**The image runs one file esbuild bundled.** `build` inlines every dependency
+into `dist/main.js`, and the image carries no `node_modules`, so a dependency
+reaches production only through that bundle.
+
 ## Tests
 
 Tests hand the reconcile a fake cluster from `test/helpers.ts`, never a real
