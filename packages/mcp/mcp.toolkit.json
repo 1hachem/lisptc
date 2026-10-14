@@ -20,25 +20,13 @@
       "headless",
       "automation"
     ],
-    "image": "ghcr.io/1hachem/lisptc-browser-mcp:main",
+    "image": "ghcr.io/1hachem/lisptc-mcp-playwright:main",
     "port": 8931,
-    "state": "/home/pwuser/profile",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@playwright/mcp@0.0.81",
-      "--browser",
-      "chromium",
-      "--executable-path",
-      "${PLAYWRIGHT_MCP_EXECUTABLE}",
-      "--no-sandbox",
-      "--user-data-dir",
-      "/home/pwuser/profile"
-    ]
+    "state": "/home/pwuser/profile"
   },
   {
     "name": "fs",
-    "description": "Read, write, and list files under the current working directory.",
+    "description": "Read, write, and list files in this workspace's own directory, kept across restarts.",
     "keywords": [
       "file",
       "files",
@@ -53,59 +41,9 @@
       "disk",
       "text"
     ],
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
-  },
-  {
-    "name": "sheets",
-    "description": "Google Sheets over your Google account: list spreadsheets, describe a workbook's tabs and sizes, read a range (raw rows or header-keyed alists), overwrite a range, append rows, clear a range, add a tab, create a spreadsheet. (load-mcp \"sheets\") starts the server if it is not already up, then returns an authorization link; approve it and it is captured for you, then load again. (login \"sheets\") asks for the link on its own and (logout \"sheets\") forgets the account.",
-    "keywords": [
-      "google",
-      "spreadsheet",
-      "spreadsheets",
-      "gsheets",
-      "excel",
-      "xlsx",
-      "csv",
-      "table",
-      "tabular",
-      "rows",
-      "columns",
-      "cells",
-      "range",
-      "tab",
-      "append",
-      "data-entry"
-    ],
-    "url": "http://localhost:8911/mcp",
-    "oauth": true,
-    "command": "task",
-    "args": ["--dir", "../..", "mcp:sheets"]
-  },
-  {
-    "name": "ocr",
-    "description": "Read a scanned PDF or image with Mistral OCR and get its text back as Markdown, one entry per page, tables included. Takes a public URL or a local file path. Its Mistral key comes from Infisical at /mcps/mistral.",
-    "keywords": [
-      "ocr",
-      "vision",
-      "image",
-      "images",
-      "photo",
-      "picture",
-      "screenshot",
-      "scan",
-      "scanned",
-      "pdf",
-      "document",
-      "handwriting",
-      "invoice",
-      "receipt",
-      "text-extraction",
-      "markdown",
-      "mistral"
-    ],
-    "command": "task",
-    "args": ["--dir", "../..", "mcp:ocr"]
+    "image": "ghcr.io/1hachem/lisptc-mcp-fs:main",
+    "port": 8000,
+    "state": "/home/lisptc/files"
   },
   {
     "name": "linear",

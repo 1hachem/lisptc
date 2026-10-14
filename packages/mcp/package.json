@@ -13,7 +13,8 @@
     "./local-host": "./src/local-host.ts",
     "./ports": "./src/ports.ts",
     "./toolkit": "./src/toolkit.ts",
-    "./mcp.toolkit.json": "./mcp.toolkit.json"
+    "./mcp.toolkit.json": "./mcp.toolkit.json",
+    "./mcp.toolkit.local.json": "./mcp.toolkit.local.json"
   },
   "engines": {
     "node": ">=22.6.0"

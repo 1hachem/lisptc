@@ -17,7 +17,7 @@ import type {
 } from "./ports.ts";
 import { type HostCandidate, ProbedHost } from "./probed-host.ts";
 import { miniSearchEngine } from "./search.ts";
-import { bundledToolkit } from "./toolkit.ts";
+import { bundledToolkit, localToolkit } from "./toolkit.ts";
 
 export interface McpHostOptions {
 	scope?: string;
@@ -76,8 +76,8 @@ export function containerHost(scope: string, report?: ServerReporter): McpHost {
 	const tried = {
 		kubernetes: [kubernetes, docker],
 		docker: [docker],
-		process: [],
 	};
+	if (mcpEnv.LISPTC_MCP_HOST === "process") return new LocalProcessHost();
 	return new ProbedHost(
 		tried[mcpEnv.LISPTC_MCP_HOST ?? "kubernetes"],
 		() => new LocalProcessHost(),
@@ -87,9 +87,11 @@ export function containerHost(scope: string, report?: ServerReporter): McpHost {
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
 export function mcpHostFor(options: McpHostOptions = {}): McpExtensionHost {
+	const host = options.host ?? new LocalProcessHost();
 	return {
-		client: localMcpClient(options),
-		toolkit: bundledToolkit(),
+		client: localMcpClient({ ...options, host }),
+		toolkit:
+			host instanceof LocalProcessHost ? localToolkit() : bundledToolkit(),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
 	};

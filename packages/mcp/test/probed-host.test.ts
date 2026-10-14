@@ -5,7 +5,7 @@ import { recordingHost } from "./helpers.ts";
 
 const browser: ContainerConnConfig = {
 	name: "browser",
-	image: "ghcr.io/1hachem/lisptc-browser-mcp:main",
+	image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
 	port: 8931,
 };
 
