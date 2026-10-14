@@ -1,8 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Edit(./.claude/canvas/sessions/**)"
-    ],
     "deny": [
       "Read(./artifacts/**)",
       "Agent(Explore)"
