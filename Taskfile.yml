@@ -25,10 +25,12 @@ tasks:
     cmd: docker build -f docker/browser-mcp.Dockerfile -t ghcr.io/1hachem/lisptc-browser-mcp:{{.TAG}} .
 
   mcp:reap:
-    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
-    cmd: |
-      ids=$(docker ps -aq --filter label=lisptc.mcp.host)
-      if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
+    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown), and the volumes they kept their state on
+    cmds:
+      - |
+        ids=$(docker ps -aq --filter label=lisptc.mcp.host)
+        if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
+      - task: mcp:reap:state
 
   mcp:reap:state:
     desc: delete the volumes MCP servers keep their state on, for one workspace or (WORKSPACE unset) all of them
