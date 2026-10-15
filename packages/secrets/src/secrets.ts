@@ -57,6 +57,9 @@ class Secret implements ToJson {
 	) {
 		this.keys = [...new Set(keys)];
 	}
+	get lost(): boolean {
+		return this.plain === undefined;
+	}
 	get value(): string {
 		if (this.plain === undefined)
 			throw new EvalException(
@@ -102,6 +105,7 @@ function imageSecrets(interp: Interp, store: SecretsStore): void {
 		const whole =
 			x.keys.length === 1 &&
 			key !== undefined &&
+			!x.lost &&
 			store.get(key)?.value === x.value;
 		const data: ImagedSecret = { keys: [...x.keys], whole };
 		return { tag: "secret", data };
