@@ -1,4 +1,5 @@
 import type {
+	V1DaemonSet,
 	V1Namespace,
 	V1PersistentVolumeClaim,
 	V1Pod,
@@ -74,6 +75,7 @@ export function fakeCluster() {
 	const claims = new Map<string, V1PersistentVolumeClaim>();
 	const removed: string[] = [];
 	const resizeRefusal = { message: undefined as string | undefined };
+	const daemonSets = new Map<string, V1DaemonSet>();
 	let answering = true;
 	let logs = "";
 	let event: string | undefined;
@@ -162,6 +164,9 @@ export function fakeCluster() {
 		async lastEvent() {
 			return event;
 		},
+		async ensureDaemonSet(namespace, daemonSet) {
+			daemonSets.set(key(namespace, daemonSet.metadata?.name ?? ""), daemonSet);
+		},
 		async reachable() {
 			return answering;
 		},
@@ -206,6 +211,7 @@ export function fakeCluster() {
 		services,
 		claims,
 		removed,
+		daemonSets,
 		setEvent(value: string | undefined) {
 			event = value;
 		},

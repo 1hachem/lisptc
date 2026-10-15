@@ -125,6 +125,12 @@ export function retagged(image: string, tag: string | undefined): string {
 	return `${image.replace(/:[^:/]+$/, "")}:${tag}`;
 }
 
+export function imagesOf(conf: ConnConfig, tag?: string): string[] {
+	if (!("image" in conf)) return [];
+	const own = conf.internal ? retagged(conf.image, tag) : conf.image;
+	return conf.app ? [own, conf.app.image] : [own];
+}
+
 export function dnsLabel(value: string, max = NAME_MAX): string {
 	return value
 		.toLowerCase()

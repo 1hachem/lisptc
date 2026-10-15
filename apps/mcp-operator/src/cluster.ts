@@ -1,5 +1,6 @@
 import {
 	ApiException,
+	AppsV1Api,
 	CoreV1Api,
 	type CoreV1Event,
 	CustomObjectsApi,
@@ -7,6 +8,7 @@ import {
 	NetworkingV1Api,
 	PatchStrategy,
 	setHeaderOptions,
+	type V1DaemonSet,
 	type V1Namespace,
 	type V1NetworkPolicy,
 	type V1PersistentVolumeClaim,
@@ -21,7 +23,7 @@ import {
 	PLURAL,
 	VERSION,
 } from "@repo/mcp-extension/kubernetes";
-import { MANAGED_BY, MANAGER } from "./workload.ts";
+import { MANAGED_BY, MANAGER, SPEC_HASH } from "./workload.ts";
 
 const LOG_LINES = 20;
 const REACH_TIMEOUT_MS = 2_000;
@@ -60,6 +62,7 @@ export interface Cluster {
 	deleteClaim(namespace: string, name: string): Promise<void>;
 	logs(namespace: string, pod: string, container: string): Promise<string>;
 	lastEvent(namespace: string, pod: string): Promise<string | undefined>;
+	ensureDaemonSet(namespace: string, daemonSet: V1DaemonSet): Promise<void>;
 	reachable(url: string): Promise<boolean>;
 	origin(namespace: string, service: string, port: number): string;
 	managedPods(): Promise<Located[]>;
@@ -116,6 +119,7 @@ function located(item: {
 export function clientCluster(config: KubeConfig): Cluster {
 	const core = config.makeApiClient(CoreV1Api);
 	const net = config.makeApiClient(NetworkingV1Api);
+	const apps = config.makeApiClient(AppsV1Api);
 	const putSecret = async (namespace: string, body: V1Secret) => {
 		try {
 			await core.createNamespacedSecret({ namespace, body });
@@ -233,6 +237,30 @@ export function clientCluster(config: KubeConfig): Cluster {
 			} catch {
 				return undefined;
 			}
+		},
+		async ensureDaemonSet(namespace, body) {
+			const name = body.metadata?.name ?? "";
+			let live: V1DaemonSet;
+			try {
+				live = await apps.readNamespacedDaemonSet({ namespace, name });
+			} catch (ex) {
+				if (!isStatus(ex, 404)) throw ex;
+				await apps.createNamespacedDaemonSet({ namespace, body });
+				return;
+			}
+			const wanted = body.metadata?.annotations?.[SPEC_HASH];
+			if (live.metadata?.annotations?.[SPEC_HASH] === wanted) return;
+			await apps.replaceNamespacedDaemonSet({
+				namespace,
+				name,
+				body: {
+					...body,
+					metadata: {
+						...body.metadata,
+						resourceVersion: live.metadata?.resourceVersion,
+					},
+				},
+			});
 		},
 		async reachable(url) {
 			try {

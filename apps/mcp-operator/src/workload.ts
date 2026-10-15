@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import type {
 	V1Container,
+	V1DaemonSet,
 	V1Namespace,
 	V1NetworkPolicy,
 	V1PersistentVolumeClaim,
@@ -35,6 +37,12 @@ const MCP_CONTAINER = "mcp";
 const APP_CONTAINER = "app";
 const INGRESS_POLICY = "mcp-ingress";
 const EGRESS_POLICY = "mcp-egress";
+const PREPULL = "mcp-prepull";
+const PAUSE_IMAGE = "registry.k8s.io/pause:3.10";
+const PREPULL_RESOURCES = {
+	requests: { cpu: "1m", memory: "8Mi" },
+	limits: { memory: "32Mi" },
+};
 const UNROUTED_FROM_A_SERVER = [
 	"10.0.0.0/8",
 	"172.16.0.0/12",
@@ -296,4 +304,50 @@ export function endpointsFor(
 		if (app?.expose.includes(port.name))
 			endpoints[port.name] = origin(port.port);
 	return endpoints;
+}
+
+export function prepullFor(images: string[], pullSecret?: string): V1DaemonSet {
+	const labels = {
+		"app.kubernetes.io/name": PREPULL,
+		"app.kubernetes.io/part-of": "lisptc",
+	};
+	const fetched = [...new Set(images)].sort();
+	return {
+		metadata: {
+			name: PREPULL,
+			labels,
+			annotations: {
+				[SPEC_HASH]: createHash("sha256")
+					.update(JSON.stringify([fetched, pullSecret ?? ""]))
+					.digest("hex")
+					.slice(0, 16),
+			},
+		},
+		spec: {
+			selector: { matchLabels: labels },
+			template: {
+				metadata: { labels },
+				spec: {
+					automountServiceAccountToken: false,
+					enableServiceLinks: false,
+					...(pullSecret ? { imagePullSecrets: [{ name: pullSecret }] } : {}),
+					initContainers: fetched.map((image, index) => ({
+						name: `fetch-${index}`,
+						image,
+						command: ["true"],
+						resources: PREPULL_RESOURCES,
+						securityContext: { allowPrivilegeEscalation: false },
+					})),
+					containers: [
+						{
+							name: "hold",
+							image: PAUSE_IMAGE,
+							resources: PREPULL_RESOURCES,
+							securityContext: { allowPrivilegeEscalation: false },
+						},
+					],
+				},
+			},
+		},
+	};
 }

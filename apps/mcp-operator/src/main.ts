@@ -18,7 +18,8 @@ import {
 import { clientCluster, clientServers } from "./cluster.ts";
 import { Controller } from "./controller.ts";
 import { convexSink } from "./convex-sink.ts";
-import { MANAGED_BY, MANAGER, SERVER_LABEL } from "./workload.ts";
+import { toolkitImages } from "./prepull.ts";
+import { MANAGED_BY, MANAGER, prepullFor, SERVER_LABEL } from "./workload.ts";
 
 const SWEEP_MS = 60_000;
 const RESTART_MS = 5_000;
@@ -57,8 +58,9 @@ const pods = new ListWatch<V1Pod>(
 	`${MANAGED_BY}=${MANAGER}`,
 );
 
+const cluster = clientCluster(config);
 const controller = new Controller({
-	cluster: clientCluster(config),
+	cluster,
 	servers: clientServers(config, release),
 	sink: convexSink(env.CONVEX_URL, env.CONVEX_ADMIN_KEY),
 	placement: {
@@ -78,6 +80,16 @@ const controller = new Controller({
 function report(what: string) {
 	return (ex: unknown) =>
 		console.error(`${what}: ${ex instanceof Error ? ex.message : String(ex)}`);
+}
+
+function prepull() {
+	return cluster.ensureDaemonSet(
+		release,
+		prepullFor(
+			toolkitImages(env.LISPTC_MCP_IMAGE_TAG),
+			env.LISPTC_MCP_PULL_SECRET,
+		),
+	);
 }
 
 function keepAlive<T extends KubernetesObject>(
@@ -115,7 +127,9 @@ await pods.start();
 const probe = createServer((request, response) => {
 	response.writeHead(request.url === "/ready" ? 200 : 404).end();
 }).listen(PROBE_PORT);
+prepull().catch(report("prepull"));
 setInterval(() => {
+	prepull().catch(report("prepull"));
 	controller.sweep().catch(report("sweep"));
 	controller.mirror().catch(report("mirror"));
 }, SWEEP_MS);
