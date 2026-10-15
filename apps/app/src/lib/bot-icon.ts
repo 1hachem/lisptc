@@ -35,18 +35,31 @@ export function iconSvg(frame: BotFrame): string {
 }
 
 const HUGEICON_HALF = 12;
+const HUGEICON_INSET = 2;
+const HUGEICON_STROKE = 1.5;
+const CONTOUR_EYE_SCALE = 0.9;
 
-export function iconElement(frame: BotFrame): IconSvgElement {
-	const place = `translate(${HUGEICON_HALF} ${HUGEICON_HALF}) scale(${HUGEICON_HALF / iconHalf(frame)})`;
+function matrixScale(transform: string): number {
+	const [a, b, c, d] = matrixOf(transform);
+	return Math.sqrt(Math.abs(a * d - b * c));
+}
+
+function contour(scale: number) {
+	return {
+		fill: "none",
+		stroke: "currentColor",
+		strokeWidth: HUGEICON_STROKE / scale,
+		strokeLinejoin: "round",
+	};
+}
+
+function iconElement(frame: BotFrame): IconSvgElement {
+	const scale = (HUGEICON_HALF - HUGEICON_INSET) / iconHalf(frame);
+	const place = `translate(${HUGEICON_HALF} ${HUGEICON_HALF}) scale(${scale})`;
 	return [
 		[
 			"path",
-			{
-				key: "body",
-				d: frame.bodyPath,
-				transform: place,
-				fill: "currentColor",
-			},
+			{ key: "body", d: frame.bodyPath, transform: place, ...contour(scale) },
 		],
 		...frame.eyes.map(
 			(eye, i) =>
@@ -55,8 +68,8 @@ export function iconElement(frame: BotFrame): IconSvgElement {
 					{
 						key: `eye-${i}`,
 						d: eye.d,
-						transform: `${place} ${eye.matrix} scale(${ICON_EYE_SCALE})`,
-						fill: "var(--bg)",
+						transform: `${place} ${eye.matrix} scale(${CONTOUR_EYE_SCALE})`,
+						...contour(scale * matrixScale(eye.matrix) * CONTOUR_EYE_SCALE),
 					},
 				] as const,
 		),
