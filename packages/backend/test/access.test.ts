@@ -1,6 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
+import { MAX_PREFERENCES_BYTES } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("workspace access", () => {
@@ -167,7 +168,7 @@ describe("chat access", () => {
 		const listed = await alice.as.query(api.chats.list, {
 			workspaceId: alice.workspace,
 		});
-		expect(listed.map((c) => c._id)).toEqual([kept]);
+		expect(listed.chats.map((c) => c._id)).toEqual([kept]);
 	});
 });
 
@@ -486,5 +487,96 @@ describe("oauth record access", () => {
 				serverKey: "https://sheets.example.com",
 			}),
 		).toBeNull();
+	});
+});
+
+describe("preferences access", () => {
+	it("keeps a user's preferences to that user", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const preferences = { theme: "dusk", font: "mono", themeUses: { dusk: 2 } };
+		await bob.as.mutation(api.preferences.put, { preferences });
+		expect(await bob.as.query(api.preferences.get, {})).toEqual(preferences);
+		expect(await alice.as.query(api.preferences.get, {})).toBeNull();
+		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
+	});
+
+	it("merges each save into one row per user", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { theme: "dusk", channels: { lisp: true } },
+		});
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { font: "mono", channels: { lisp: false } },
+		});
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { metadata: { tokens: true } },
+		});
+		expect(await alice.as.query(api.preferences.get, {})).toEqual({
+			theme: "dusk",
+			font: "mono",
+			channels: { lisp: false },
+			metadata: { tokens: true },
+		});
+		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
+		expect(rows).toHaveLength(1);
+	});
+
+	it("refuses preferences past the size limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.preferences.put, {
+				preferences: {
+					theme: "x".repeat(MAX_PREFERENCES_BYTES),
+					themeUses: {},
+				},
+			}),
+		).rejects.toThrow("PREFERENCES_TOO_LARGE");
+	});
+});
+
+describe("chat listing", () => {
+	async function three(t: ReturnType<typeof harness>) {
+		const alice = await signIn(t, "alice@example.com");
+		for (const title of ["plan q4", "fix login", "login copy"]) {
+			await alice.as.mutation(api.chats.create, {
+				workspaceId: alice.workspace,
+				title,
+			});
+		}
+		return alice;
+	}
+
+	it("pages by limit and says when more remain", async () => {
+		const t = harness();
+		const alice = await three(t);
+		const first = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			limit: 2,
+		});
+		expect(first.chats).toHaveLength(2);
+		expect(first.more).toBe(true);
+		const all = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			limit: 3,
+		});
+		expect(all.chats).toHaveLength(3);
+		expect(all.more).toBe(false);
+	});
+
+	it("finds chats by title", async () => {
+		const t = harness();
+		const alice = await three(t);
+		const found = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			search: "login",
+		});
+		expect(found.chats.map((c) => c.title).sort()).toEqual([
+			"fix login",
+			"login copy",
+		]);
 	});
 });

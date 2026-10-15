@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import { harness, signIn } from "./helpers.ts";
 
 afterEach(() => {
@@ -45,7 +45,7 @@ describe("removing a chat", () => {
 		const listed = await alice.as.query(api.chats.list, {
 			workspaceId: alice.workspace,
 		});
-		expect(listed.map((c) => c._id)).toEqual([kept]);
+		expect(listed.chats.map((c) => c._id)).toEqual([kept]);
 	});
 
 	it("refuses a chat owned by someone else", async () => {
@@ -158,5 +158,22 @@ describe("removing a workspace", () => {
 		await expect(
 			alice.as.mutation(api.workspaces.remove, { workspaceId: bob.workspace }),
 		).rejects.toThrow();
+	});
+});
+
+describe("removing a user", () => {
+	it("takes their preferences with them", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { theme: "dusk", themeUses: {} },
+		});
+
+		await t.mutation(internal.users.purge, { userId: alice.user });
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("preferences").collect(),
+		);
+		expect(left).toEqual([]);
 	});
 });

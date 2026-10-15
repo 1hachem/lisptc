@@ -22,6 +22,7 @@ import type * as migrations from "../migrations.js";
 import type * as oauth from "../oauth.js";
 import type * as permissions from "../permissions.js";
 import type * as posthog from "../posthog.js";
+import type * as preferences from "../preferences.js";
 import type * as secrets from "../secrets.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   oauth: typeof oauth;
   permissions: typeof permissions;
   posthog: typeof posthog;
+  preferences: typeof preferences;
   secrets: typeof secrets;
   users: typeof users;
   workspaces: typeof workspaces;

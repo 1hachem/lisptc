@@ -34,6 +34,15 @@ export default defineSchema({
 		image: v.optional(v.string()),
 	}).index("by_auth", ["authId"]),
 
+	preferences: defineTable({
+		userId: v.id("users"),
+		theme: v.optional(v.string()),
+		font: v.optional(v.string()),
+		themeUses: v.optional(v.record(v.string(), v.number())),
+		channels: v.optional(v.record(v.string(), v.boolean())),
+		metadata: v.optional(v.record(v.string(), v.boolean())),
+	}).index("by_user", ["userId"]),
+
 	workspaces: defineTable({
 		ownerId: v.id("users"),
 		name: v.string(),
@@ -51,7 +60,15 @@ export default defineSchema({
 		archivedAt: v.optional(v.number()),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_activity", ["workspaceId", "lastMessageAt"]),
+		.index("by_workspace_live_activity", [
+			"workspaceId",
+			"archivedAt",
+			"lastMessageAt",
+		])
+		.searchIndex("search_title", {
+			searchField: "title",
+			filterFields: ["workspaceId", "archivedAt"],
+		}),
 
 	messages: defineTable({
 		chatId: v.id("chats"),
