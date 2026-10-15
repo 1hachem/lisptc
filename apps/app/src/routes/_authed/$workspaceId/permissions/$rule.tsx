@@ -11,6 +11,10 @@ export const Route = createFileRoute("/_authed/$workspaceId/permissions/$rule")(
 			parse: ({ rule }: { rule: string }) => ({ rule: Number(rule) }),
 			stringify: ({ rule }: { rule: number }) => ({ rule: String(rule) }),
 		},
+		loader: ({ context, params }) =>
+			context.queryClient.ensureQueryData(
+				convexQuery(api.permissions.get, { workspaceId: params.workspaceId }),
+			),
 		component: PermissionFile,
 	},
 );

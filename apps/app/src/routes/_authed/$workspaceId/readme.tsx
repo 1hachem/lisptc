@@ -8,7 +8,6 @@ import { MarkdownEditor } from "../../../components/markdown-editor.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId/readme")({
 	loader: async ({ context, params }) => {
-		if (context.auth.source === "browser") return;
 		await context.queryClient.ensureQueryData(
 			convexQuery(api.readmes.get, { workspaceId: params.workspaceId }),
 		);
