@@ -95,11 +95,13 @@ describe("the production toolkit runs nothing on the machine it is read on", () 
 	for (const conf of bundledToolkit().all()) {
 		it(`serves ${conf.name} from its own image or a remote url`, () => {
 			expect("command" in conf).toBe(false);
+			const built = existsSync(new URL(`${conf.name}.Dockerfile`, DOCKERFILES));
 			if ("image" in conf) {
-				expect(conf.image).toBe(`ghcr.io/1hachem/lisptc-mcp-${conf.name}:main`);
-				expect(
-					existsSync(new URL(`${conf.name}.Dockerfile`, DOCKERFILES)),
-				).toBe(true);
+				expect(Boolean(conf.internal)).toBe(built);
+				if (built)
+					expect(conf.image).toBe(
+						`ghcr.io/1hachem/lisptc-mcp-${conf.name}:main`,
+					);
 			} else {
 				expect("url" in conf && conf.url).toMatch(/^https:\/\//);
 			}

@@ -44,6 +44,7 @@ export interface KubernetesHostOptions {
 	clock?: () => number;
 	pollMs?: number;
 	startTimeoutMs?: number;
+	imageTag?: string;
 }
 
 interface Followed {
@@ -51,6 +52,11 @@ interface Followed {
 	state: ServerState;
 	logs: string;
 	touched: number;
+}
+
+function retagged(image: string, tag: string | undefined): string {
+	if (!tag || image.includes("@")) return image;
+	return `${image.replace(/:[^:/]+$/, "")}:${tag}`;
 }
 
 function epochSeconds(): number {
@@ -276,7 +282,14 @@ export class KubernetesHost implements McpHost {
 				`${conf.name}: sets env, which a server on the cluster cannot take.`,
 			);
 		const name = serverName(scope, conf.name);
-		const wanted = specFor(conf, launch, scope, this.clock());
+		const wanted = specFor(
+			conf,
+			"internal" in conf && conf.internal
+				? { ...launch, image: retagged(launch.image, this.options.imageTag) }
+				: launch,
+			scope,
+			this.clock(),
+		);
 
 		const live = await this.store.get(name);
 		const server = live

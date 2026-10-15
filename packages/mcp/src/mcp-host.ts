@@ -80,6 +80,7 @@ export function containerHost(scope: string, report?: ServerReporter): McpHost {
 			new KubernetesHost({
 				scope,
 				namespace: mcpEnv.LISPTC_MCP_NAMESPACE ?? "",
+				imageTag: mcpEnv.LISPTC_MCP_IMAGE_TAG,
 			}),
 		required: inCluster,
 	};

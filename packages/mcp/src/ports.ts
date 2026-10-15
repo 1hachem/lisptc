@@ -89,6 +89,7 @@ export interface SecretRef {
 export type ContainerConnConfig = ConnMeta & {
 	name: string;
 	image: string;
+	internal?: boolean;
 	port: number;
 	path?: string;
 	command?: string;

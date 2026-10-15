@@ -21,6 +21,7 @@
       "automation"
     ],
     "image": "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+    "internal": true,
     "port": 8931,
     "state": "/home/pwuser/profile"
   },
@@ -42,6 +43,7 @@
       "text"
     ],
     "image": "ghcr.io/1hachem/lisptc-mcp-fs:main",
+    "internal": true,
     "port": 8000,
     "state": "/home/lisptc/files"
   },
@@ -67,6 +69,7 @@
       "data-entry"
     ],
     "image": "ghcr.io/1hachem/lisptc-mcp-sheets:main",
+    "internal": true,
     "port": 8911,
     "oauth": {
       "issuer": "https://accounts.google.com",
@@ -106,6 +109,7 @@
       "mistral"
     ],
     "image": "ghcr.io/1hachem/lisptc-mcp-ocr:main",
+    "internal": true,
     "port": 8000,
     "secret": { "name": "lisptc-mcp-ocr", "keys": ["MISTRAL_API_KEY"] }
   },

@@ -6,6 +6,7 @@ import {
 	serverName,
 } from "../src/mcp-server-resource.ts";
 import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
+import { bundledToolkit } from "../src/toolkit.ts";
 import { recordingHost } from "./helpers.ts";
 
 const browser: ContainerConnConfig = {
@@ -68,6 +69,7 @@ function host(
 	store: ServerStore,
 	fallback = recordingHost(),
 	clock = () => 1000,
+	imageTag?: string,
 ) {
 	return new KubernetesHost({
 		scope: "ws1",
@@ -77,6 +79,7 @@ function host(
 		pollMs: 1,
 		startTimeoutMs: 200,
 		clock,
+		imageTag,
 	});
 }
 
@@ -105,6 +108,65 @@ describe("the kubernetes host", () => {
 			{ name: "profile", path: "/data/profile" },
 		]);
 		expect(server?.spec.lastUsed).toBe(1000);
+	});
+
+	it.each([
+		["ghcr.io/o/mcp-browser:main", "ghcr.io/o/mcp-browser:pr-7-abc"],
+		["ghcr.io/o/mcp-browser:latest", "ghcr.io/o/mcp-browser:pr-7-abc"],
+		["registry:5000/mcp-browser:1.2", "registry:5000/mcp-browser:pr-7-abc"],
+		["mcp-browser", "mcp-browser:pr-7-abc"],
+		["mcp-browser@sha256:abc", "mcp-browser@sha256:abc"],
+	])("runs internal image %s as %s when handed a tag", async (image, ran) => {
+		const fake = fakeStore();
+
+		await host(fake.store, recordingHost(), () => 1000, "pr-7-abc").ensure({
+			...browser,
+			image,
+			internal: true,
+		});
+
+		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe(ran);
+	});
+
+	it("runs an image the repo does not build at its own tag", async () => {
+		const fake = fakeStore();
+
+		await host(fake.store, recordingHost(), () => 1000, "pr-7-abc").ensure({
+			...browser,
+			image: "grafana/mcp-grafana:latest",
+		});
+
+		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe(
+			"grafana/mcp-grafana:latest",
+		);
+	});
+
+	it("runs an internal image as written when handed no tag", async () => {
+		const fake = fakeStore();
+
+		await host(fake.store).ensure({
+			...browser,
+			image: "mcp-browser:latest",
+			internal: true,
+		});
+
+		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe("mcp-browser:latest");
+	});
+
+	it("runs every internal image the toolkit names at the tag it was handed", async () => {
+		const fake = fakeStore();
+		const tagged = host(fake.store, recordingHost(), () => 1000, "pr-7-abc");
+		const images = bundledToolkit()
+			.all()
+			.filter((conf) => "internal" in conf && conf.internal);
+
+		for (const conf of images) await tagged.ensure(conf);
+
+		expect(images.length).toBeGreaterThan(0);
+		for (const conf of images)
+			expect(
+				fake.servers.get(serverName("ws1", conf.name))?.spec.mcp.image,
+			).toMatch(/:pr-7-abc$/);
 	});
 
 	it("refuses a server that sets env, and asks the cluster for nothing", async () => {
