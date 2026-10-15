@@ -164,6 +164,7 @@ jobs:
     needs: preview-release
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
     runs-on: ubuntu-latest
+    continue-on-error: true
     concurrency:
       group: preview-comment-${{ github.event.number }}
       cancel-in-progress: false
