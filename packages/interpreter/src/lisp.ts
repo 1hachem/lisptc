@@ -398,7 +398,7 @@ export class Interp {
 		if (x instanceof Sym) {
 			const value = this.globals.get(x);
 			if (value === undefined) throw new VoidVariable(x);
-			return value;
+			return this.sealed.has(x) ? copyTree(value) : value;
 		}
 		if (x instanceof Lambda) return Closure.makeFrom(x, env);
 		return x;
