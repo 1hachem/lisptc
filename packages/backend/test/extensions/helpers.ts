@@ -4,8 +4,7 @@ import {
 	compactionExtension,
 } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
-import { llmSlot, type Observed } from "@repo/interpreter/observe";
-import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import type { InterpExtension } from "@repo/interpreter/session";
 import type {
 	ConnectResult,
 	McpClient,
@@ -35,15 +34,6 @@ export function modelFacing(
 		proseExtension(proseHost),
 		uiExtension(uiHost),
 	];
-}
-
-export function observedExtension(): InterpExtension {
-	const observed: Observed = {};
-	return Object.assign(() => {}, {
-		session(hooks: SessionHooks): void {
-			hooks.fill(llmSlot, observed);
-		},
-	});
 }
 
 export function memoryRepl(
