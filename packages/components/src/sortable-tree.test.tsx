@@ -2,6 +2,7 @@
 import { act, type ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { TreeFolder } from "./file-tree.tsx";
 import { moved, SortableTree, unzoomed } from "./sortable-tree.tsx";
 
 beforeAll(() => {
@@ -101,5 +102,30 @@ describe("SortableTree", () => {
 			host.querySelector("[data-motion]")?.getAttribute("data-motion"),
 		).toBe("none");
 		matchMedia.mockRestore();
+	});
+
+	it("collapses an open folder while it is being dragged", async () => {
+		const host = await mounted(
+			<SortableTree order={["chat", "memories"]} onReorder={() => {}}>
+				{(id) => (
+					<TreeFolder name={id} open onToggle={() => {}}>
+						<span data-child={id} />
+					</TreeFolder>
+				)}
+			</SortableTree>,
+		);
+		const chat = host.querySelector<HTMLElement>('[data-entry="chat"]');
+		await act(async () => {
+			chat?.focus();
+			chat?.dispatchEvent(
+				new KeyboardEvent("keydown", { code: "Space", bubbles: true }),
+			);
+		});
+		expect(chat?.getAttribute("data-dragging")).toBe("true");
+		expect(chat?.querySelector("[data-open]")?.getAttribute("data-open")).toBe(
+			"false",
+		);
+		expect(host.querySelector('[data-child="chat"]')).toBeNull();
+		expect(host.querySelector('[data-child="memories"]')).not.toBeNull();
 	});
 });

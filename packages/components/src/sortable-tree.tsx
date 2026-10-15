@@ -7,6 +7,7 @@ import {
 	DragOverlay,
 	type DragStartEvent,
 	KeyboardSensor,
+	MeasuringStrategy,
 	PointerSensor,
 	type UniqueIdentifier,
 	useSensor,
@@ -27,12 +28,27 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS, type Transform } from "@dnd-kit/utilities";
 import type { MotionId } from "@repo/ui/motions.ts";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useState,
+	useSyncExternalStore,
+} from "react";
 
 const DRAG_AFTER_PX = 4;
 const LIFT_SCALE = 1.02;
 const SETTLE = { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" };
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+const REMEASURE_AS_ENTRIES_COLLAPSE = {
+	droppable: { strategy: MeasuringStrategy.Always },
+};
+
+const EntryDragged = createContext(false);
+
+export function useEntryDragged() {
+	return useContext(EntryDragged);
+}
 
 export function moved<Id extends string>(
 	order: readonly Id[],
@@ -127,7 +143,7 @@ function SortableEntry({
 				isDragging ? DRAGGING_CLASS[motion] : ""
 			}`}
 		>
-			{children}
+			<EntryDragged value={isDragging}>{children}</EntryDragged>
 		</div>
 	);
 }
@@ -170,6 +186,7 @@ export function SortableTree<Id extends string>({
 		<div ref={setRoot} data-motion={shown}>
 			<DndContext
 				sensors={sensors}
+				measuring={REMEASURE_AS_ENTRIES_COLLAPSE}
 				collisionDetection={closestCenter}
 				modifiers={[restrictToVerticalAxis, restrictToParentElement]}
 				onDragStart={onDragStart}
@@ -194,7 +211,7 @@ export function SortableTree<Id extends string>({
 									style={{ zoom }}
 									className="cursor-grabbing bg-bg2 shadow-lg"
 								>
-									{children(dragged)}
+									<EntryDragged value>{children(dragged)}</EntryDragged>
 								</div>
 							)}
 						</DragOverlay>
