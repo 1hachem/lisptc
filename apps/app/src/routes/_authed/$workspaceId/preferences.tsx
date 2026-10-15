@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { FileView } from "../../../components/file-view.tsx";
 import { useAppearance } from "../../../lib/appearance.tsx";
 import { preferencesSource } from "../../../lib/files.ts";
+import { useSidebarMotion, useSidebarOrder } from "../../../lib/sidebar.ts";
 import { useUI } from "../../../lib/ui.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId/preferences")({
@@ -11,6 +12,8 @@ export const Route = createFileRoute("/_authed/$workspaceId/preferences")({
 function PreferencesFile() {
 	const { theme, font, openThemePicker, openFontPicker } = useAppearance();
 	const { shown, metaShown } = useUI();
+	const { order } = useSidebarOrder();
+	const { motion } = useSidebarMotion();
 
 	return (
 		<FileView
@@ -21,6 +24,8 @@ function PreferencesFile() {
 					font: font.id,
 					channels: shown,
 					metadata: metaShown,
+					sidebar: order,
+					motion,
 				}),
 			}}
 			actions={
