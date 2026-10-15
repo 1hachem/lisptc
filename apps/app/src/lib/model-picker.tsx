@@ -1,4 +1,4 @@
-import { useConvexMutation } from "@convex-dev/react-query";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import {
 	type ModelChoice,
@@ -12,6 +12,7 @@ import {
 	PROVIDER_NAMES,
 	type ProviderName,
 } from "@repo/shared/providers";
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useState } from "react";
 import { useWorkspace } from "./workspace.tsx";
 
@@ -51,6 +52,7 @@ export function ModelPickerProvider({
 	children: React.ReactNode;
 }) {
 	const { workspace } = useWorkspace();
+	const queryClient = useQueryClient();
 	const setModel = useConvexMutation(api.workspaces.setModel);
 	const [open, setOpen] = useState(false);
 	const choice = workspace?.model ?? DEFAULT_CHOICE;
@@ -67,6 +69,9 @@ export function ModelPickerProvider({
 					onSelect={async (model) => {
 						if (!isCatalogued(model)) throw new Error("model not offered");
 						await setModel({ workspaceId: workspace._id, model });
+						await queryClient.invalidateQueries(
+							convexQuery(api.workspaces.list, {}),
+						);
 					}}
 					open={open}
 					providers={providers}

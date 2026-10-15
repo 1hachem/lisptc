@@ -112,7 +112,7 @@ function OAuthCallback() {
 			const chat = awaitingChat(state);
 			if (chat) {
 				await navigate({
-					to: "/$workspaceId/$chatId",
+					to: "/$workspaceId/chat/$chatId",
 					params: chat,
 					replace: true,
 				});

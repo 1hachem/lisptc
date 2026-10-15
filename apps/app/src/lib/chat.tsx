@@ -24,6 +24,7 @@ import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
+import { fileContext, type OpenFile } from "./files.ts";
 import { pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import type { SystemEventTicket } from "./system-event.ts";
@@ -102,6 +103,7 @@ export interface ChatSession {
 	workspaceId: Id<"workspaces">;
 	error?: string;
 	send: (text: string) => void;
+	sendAbout: (file: OpenFile, text: string) => void;
 	resume: (event: SystemEventTicket) => void;
 	runLisp: (code: string) => void;
 	stop: () => void;
@@ -260,7 +262,7 @@ export function ChatProvider({
 					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
 				if (!chatId) {
 					await navigate({
-						to: "/$workspaceId/$chatId",
+						to: "/$workspaceId/chat/$chatId",
 						params: { workspaceId, chatId: opened },
 						replace: true,
 					});
@@ -301,7 +303,7 @@ export function ChatProvider({
 			);
 			if (!chatId) {
 				await navigate({
-					to: "/$workspaceId/$chatId",
+					to: "/$workspaceId/chat/$chatId",
 					params: { workspaceId, chatId: opened },
 					replace: true,
 				});
@@ -311,16 +313,25 @@ export function ChatProvider({
 	);
 
 	const submitTurn = useCallback(
-		async (text: string) => {
+		async (text: string, title = titleOf(text)) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
 			await submit(
 				{ message: trimmed },
 				{ type: "human", content: trimmed, id: crypto.randomUUID() },
-				titleOf(trimmed),
+				title,
 			);
 		},
 		[submit],
+	);
+
+	const sendAbout = useCallback(
+		async (file: OpenFile, text: string) => {
+			const trimmed = text.trim();
+			if (!trimmed) return;
+			await submitTurn(fileContext(file, trimmed), titleOf(trimmed));
+		},
+		[submitTurn],
 	);
 
 	const resume = useCallback(
@@ -376,6 +387,7 @@ export function ChatProvider({
 			chatId,
 			workspaceId,
 			send: () => {},
+			sendAbout: () => {},
 			resume: () => {},
 			runLisp: () => {},
 			stop: () => {},
@@ -402,6 +414,9 @@ export function ChatProvider({
 			send: (text) => {
 				void send(text);
 			},
+			sendAbout: (file, text) => {
+				void sendAbout(file, text);
+			},
 			resume,
 			runLisp: (code) => {
 				void runLisp(code);
@@ -423,6 +438,7 @@ export function ChatProvider({
 		chatId,
 		workspaceId,
 		send,
+		sendAbout,
 		resume,
 		runLisp,
 		stop,

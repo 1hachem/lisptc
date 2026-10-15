@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -28,6 +29,10 @@ vi.mock("../src/lib/chat.tsx", async (importOriginal) => ({
 	useChatSession: <U,>(selector: (state: typeof session) => U): U =>
 		selector(session),
 }));
+vi.mock("@convex-dev/react-query", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@convex-dev/react-query")>()),
+	useConvexMutation: () => async () => null,
+}));
 const prefs = vi.hoisted(() => new Map<string, boolean>());
 
 vi.mock("../src/lib/prefs.ts", () => ({
@@ -38,6 +43,13 @@ vi.mock("../src/lib/prefs.ts", () => ({
 	writeBoolPref: (name: string, value: boolean) => {
 		prefs.set(name, value);
 	},
+}));
+vi.mock("@convex-dev/react-query", () => ({
+	convexQuery: (_query: unknown, args: unknown) => ({
+		queryKey: ["convexQuery", args],
+		queryFn: async () => null,
+	}),
+	useConvexMutation: () => async () => null,
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/model-picker.tsx", () => ({
@@ -86,6 +98,10 @@ function Toggle() {
 	return null;
 }
 
+const offline = new QueryClient({
+	defaultOptions: { queries: { enabled: false } },
+});
+
 async function mount() {
 	const host = document.createElement("div");
 	document.body.append(host);
@@ -93,10 +109,12 @@ async function mount() {
 	roots.push(root);
 	await act(async () => {
 		root.render(
-			<UIProvider>
-				<Toggle />
-				<ChatView />
-			</UIProvider>,
+			<QueryClientProvider client={offline}>
+				<UIProvider>
+					<Toggle />
+					<ChatView />
+				</UIProvider>
+			</QueryClientProvider>,
 		);
 	});
 	return host;
