@@ -3,6 +3,7 @@ import {
 	newestFirst,
 	type RecallDirection,
 	type Recalled,
+	rebase,
 	recall,
 	sentHistory,
 } from "../src/lib/message-history.ts";
@@ -67,5 +68,22 @@ describe("the sent history", () => {
 describe("the prompts to search", () => {
 	it("puts the newest first and keeps each prompt once", () => {
 		expect(newestFirst(["a", "b", "a", "c"])).toEqual(["c", "a", "b"]);
+	});
+});
+
+describe("a history that changed while browsing", () => {
+	it("finds the shown message again and keeps walking from there", () => {
+		const first = recall(history, null, "", "back");
+		const second = recall(history, first?.recalled ?? null, "third", "back");
+		const grown = ["zeroth", ...history, "fourth"];
+		const rebased = rebase(second?.recalled ?? null, grown);
+		expect(rebased?.index).toBe(2);
+		expect(recall(grown, rebased, "second", "back")?.text).toBe("first");
+		expect(recall(grown, rebased, "second", "forward")?.text).toBe("third");
+	});
+
+	it("stops browsing when the shown message is gone", () => {
+		const first = recall(history, null, "", "back");
+		expect(rebase(first?.recalled ?? null, ["first", "second"])).toBeNull();
 	});
 });

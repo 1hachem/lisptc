@@ -31,6 +31,7 @@ import {
 	newestFirst,
 	type RecallDirection,
 	type Recalled,
+	rebase,
 	recall,
 } from "../lib/message-history.ts";
 import { InputAction, InputShell } from "./input-shell.tsx";
@@ -299,6 +300,7 @@ function RecallPlugin({
 }) {
 	const [editor] = useLexicalComposerContext();
 	const recalled = useRef<Recalled | null>(null);
+	const recalledIn = useRef(history);
 	useEffect(() => {
 		if (disabled) return;
 		const step = (direction: RecallDirection) => (event: KeyboardEvent) => {
@@ -306,10 +308,15 @@ function RecallPlugin({
 			const text = editor
 				.getEditorState()
 				.read(() => $getRoot().getTextContent());
-			const next = recall(history, recalled.current, text, direction);
+			const standing =
+				recalledIn.current === history
+					? recalled.current
+					: rebase(recalled.current, history);
+			const next = recall(history, standing, text, direction);
 			if (!next) return false;
 			event.preventDefault();
 			recalled.current = next.recalled;
+			recalledIn.current = history;
 			editor.update(() => $replaceText(next.text));
 			return true;
 		};

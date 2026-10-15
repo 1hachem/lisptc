@@ -21,6 +21,15 @@ export function newestFirst(history: string[]): string[] {
 	return [...new Set([...history].reverse())];
 }
 
+export function rebase(
+	recalled: Recalled | null,
+	history: string[],
+): Recalled | null {
+	if (!recalled) return null;
+	const index = history.lastIndexOf(recalled.shown);
+	return index === -1 ? null : { ...recalled, index };
+}
+
 export function recall(
 	history: string[],
 	recalled: Recalled | null,
