@@ -33,3 +33,15 @@ export function mostUsedThemes(
 		.slice(0, limit)
 		.map(({ theme }) => theme);
 }
+
+export function darkVariant(
+	themes: readonly ThemeDef[],
+	current: ThemeDef,
+): ThemeDef | string {
+	if (current.scheme === "dark") return `${current.name} is already dark`;
+	return (
+		themes.find(
+			(theme) => theme.name === current.name && theme.scheme === "dark",
+		) ?? `${current.name} has no dark variant`
+	);
+}

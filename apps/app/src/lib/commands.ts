@@ -1,8 +1,10 @@
+import { themes } from "@repo/ui";
 import { useCallback } from "react";
 import { useAppearance } from "./appearance.tsx";
 import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
 import { useModelPicker } from "./model-picker.tsx";
+import { darkVariant } from "./theme-uses.ts";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
 
@@ -17,6 +19,7 @@ export interface Command {
 
 export const commands: Command[] = [
 	{ name: "/copy", desc: "copy the conversation to the clipboard" },
+	{ name: "/dark", desc: "switch to the dark variant of the theme" },
 	{ name: "/debug", desc: "show what each step sent back to the model" },
 	{ name: "/font", desc: "choose the font" },
 	{ name: "/model", desc: "choose the model this workspace runs on" },
@@ -55,7 +58,8 @@ export function useCommandRunner() {
 	const store = useChatStore();
 	const newChat = useNewChat();
 	const { openModelPicker } = useModelPicker();
-	const { openThemePicker, openFontPicker } = useAppearance();
+	const { theme, chooseTheme, openThemePicker, openFontPicker } =
+		useAppearance();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
@@ -73,6 +77,12 @@ export function useCommandRunner() {
 				"/model": quietly(openModelPicker),
 				"/theme": quietly(openThemePicker),
 				"/font": quietly(openFontPicker),
+				"/dark": () => {
+					const dark = darkVariant(themes, theme);
+					if (typeof dark === "string") return dark;
+					chooseTheme(dark.id);
+					return null;
+				},
 				"/debug": () => {
 					toggleChannel("model");
 					return shown.model
@@ -90,6 +100,8 @@ export function useCommandRunner() {
 			newChat,
 			store,
 			openModelPicker,
+			theme,
+			chooseTheme,
 			openThemePicker,
 			openFontPicker,
 		],
