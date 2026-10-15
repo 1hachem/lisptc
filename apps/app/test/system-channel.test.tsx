@@ -44,13 +44,6 @@ vi.mock("../src/lib/prefs.ts", () => ({
 		prefs.set(name, value);
 	},
 }));
-vi.mock("@convex-dev/react-query", () => ({
-	convexQuery: (_query: unknown, args: unknown) => ({
-		queryKey: ["convexQuery", args],
-		queryFn: async () => null,
-	}),
-	useConvexMutation: () => async () => null,
-}));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/model-picker.tsx", () => ({
 	useModelPicker: () => ({ openModelPicker: vi.fn() }),
