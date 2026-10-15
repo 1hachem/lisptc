@@ -245,8 +245,15 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private load(image: Image): void {
+		const { calls, parkedCode } = this;
 		const interp = this.build();
-		restore(interp, image);
+		try {
+			restore(interp, image);
+		} catch (ex) {
+			this.calls = calls;
+			this.parkedCode = parkedCode;
+			throw ex;
+		}
 		this.parked = [];
 		this.currentInterp.dispose();
 		this.currentInterp = interp;

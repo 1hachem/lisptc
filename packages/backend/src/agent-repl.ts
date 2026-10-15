@@ -93,7 +93,9 @@ export function chatRepls(
 			extensions: await workspaceExtensions(workspaceId, connect),
 			images: new ConvexImageStore(chatId, connect),
 		});
-		await repl.resume();
+		await repl.resume().catch((ex) => {
+			console.error(`[backend] chat ${chatId} resumed fresh:`, ex);
+		});
 		return repl;
 	};
 }
