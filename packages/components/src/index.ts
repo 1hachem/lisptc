@@ -12,6 +12,7 @@ export type { FiredMemory } from "./memories.ts";
 export { firedMemories } from "./memories.ts";
 export { MessageFeedback } from "./message-feedback.tsx";
 export { MessageMemories } from "./message-memories.tsx";
+export { PromptDialog } from "./prompt-dialog.tsx";
 export { Scramble, type ScrambleProps } from "./scramble.tsx";
 export { moved, SortableTree } from "./sortable-tree.tsx";
 export {

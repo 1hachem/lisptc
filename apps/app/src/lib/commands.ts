@@ -30,6 +30,7 @@ export const commands: Command[] = [
 		desktopOnly: true,
 		aliases: ["/panel", "/right"],
 	},
+	{ name: "/prompt", desc: "search the prompts sent in this workspace" },
 	{
 		name: "/sidebar",
 		desc: "toggle the sidebar",
