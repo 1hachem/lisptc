@@ -52,7 +52,7 @@ export async function copyCheckpoint(
 		.query("replImages")
 		.withIndex("by_chat_call", (q) => q.eq("chatId", from).eq("call", call))
 		.unique();
-	if (image === null) return;
+	if (image === null) throw new ConvexError({ code: "NO_CHECKPOINT", call });
 	const target = await ctx.db.get(to);
 	if (target === null) return;
 	const imageId = await ctx.db.insert("replImages", {
