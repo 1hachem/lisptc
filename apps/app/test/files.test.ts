@@ -33,16 +33,18 @@ describe("memorySource", () => {
 });
 
 describe("preferencesSource", () => {
-	it("names the theme, the font and every toggle", () => {
+	it("names the theme, the font, every toggle and the sidebar order", () => {
 		expect(
 			preferencesSource({
 				theme: "dusk",
 				font: "mono",
 				channels: { lisp: false, thinking: true },
 				metadata: { tokens: true },
+				sidebar: ["README.md", "home"],
+				motion: "lift",
 			}),
 		).toBe(
-			'(preferences :theme "dusk"\n  :font "mono"\n  :channels (:lisp nil :thinking t)\n  :metadata (:tokens t))',
+			'(preferences :theme "dusk"\n  :font "mono"\n  :channels (:lisp nil :thinking t)\n  :metadata (:tokens t)\n  :sidebar ("README.md" "home")\n  :motion "lift")',
 		);
 	});
 });
@@ -68,6 +70,15 @@ describe("fileContext", () => {
 		).toBe(
 			"about `permissions.ptc`:\n```lisp\n(permission/default ask)\n```\n\nallow car",
 		);
+	});
+
+	it("fences a markdown file as markdown", () => {
+		expect(
+			fileContext(
+				{ path: "README.md", source: "# notes", language: "markdown" },
+				"tidy it",
+			),
+		).toBe("about `README.md`:\n```markdown\n# notes\n```\n\ntidy it");
 	});
 });
 

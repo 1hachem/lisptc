@@ -9,10 +9,12 @@ export function FileView({
 	file,
 	missing,
 	actions,
+	body,
 }: {
 	file: OpenFile | undefined;
 	missing?: string;
 	actions?: ReactNode;
+	body?: ReactNode;
 }) {
 	const runCommand = useCommandRunner();
 	const { sendAbout, runLisp, stop, isLoading } = useChatSession((state) => ({
@@ -32,6 +34,8 @@ export function FileView({
 					</div>
 					{file === undefined ? (
 						<div className="text-dim">{missing ?? "loading…"}</div>
+					) : body !== undefined ? (
+						body
 					) : file.source.trim() === "" ? (
 						<div className="text-dim">empty</div>
 					) : (

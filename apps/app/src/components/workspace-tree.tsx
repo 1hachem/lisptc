@@ -3,7 +3,9 @@ import {
 	Book02Icon,
 	BubbleChatIcon,
 	FlashIcon,
-	RoboticIcon,
+	Home01Icon,
+	InformationCircleIcon,
+	PaintBoardIcon,
 	ShieldKeyIcon,
 	StickyNote01Icon,
 	TaskDone01Icon,
@@ -13,6 +15,7 @@ import { api } from "@repo/backend/api";
 import type { Doc, Id } from "@repo/backend/dataModel";
 import {
 	FileTree,
+	SortableTree,
 	TreeCommand,
 	TreeFile,
 	TreeFilter,
@@ -27,13 +30,22 @@ import {
 	useParams,
 } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
+import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
+import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { FileMenu } from "./file-menu.tsx";
 import { SessionRow } from "./session-row.tsx";
 
-const PLACEHOLDERS = ["knowledge", "agents", "triggers", "tasks"] as const;
+const PLACEHOLDERS = [
+	"knowledge",
+	"agents",
+	"triggers",
+	"tasks",
+	"ui",
+] as const;
 
 type Folder =
 	| "chat"
@@ -46,9 +58,10 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	memories: StickyNote01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
-	agents: RoboticIcon,
+	agents: restingIcon(),
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
+	ui: PaintBoardIcon,
 };
 
 function useLeave(workspaceId: Id<"workspaces">) {
@@ -215,6 +228,7 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	return (
 		<TreeFile
 			name="home"
+			icon={Home01Icon}
 			selected={selected}
 			link={(content, className) => (
 				<Link to="/$workspaceId" params={{ workspaceId }} className={className}>
@@ -225,19 +239,29 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	);
 }
 
+const ROOT_FILES: Record<
+	"readme" | "settings" | "preferences",
+	{ name: string; icon?: IconSvgElement }
+> = {
+	readme: { name: "README.md", icon: InformationCircleIcon },
+	settings: { name: "settings.ptc" },
+	preferences: { name: "preferences.ptc" },
+};
+
 function RootFile({
 	workspaceId,
 	page,
 }: {
 	workspaceId: Id<"workspaces">;
-	page: "settings" | "preferences";
+	page: keyof typeof ROOT_FILES;
 }) {
 	const selected = useLocation({
 		select: (location) => location.pathname.endsWith(`/${page}`),
 	});
 	return (
 		<TreeFile
-			name={`${page}.ptc`}
+			name={ROOT_FILES[page].name}
+			icon={ROOT_FILES[page].icon}
 			selected={selected}
 			link={(content, className) => (
 				<Link
@@ -330,51 +354,81 @@ export function WorkspaceTree({
 		convexQuery(api.memories.list, { workspaceId }),
 	);
 
+	const { order, reorder } = useSidebarOrder();
+	const { motion } = useSidebarMotion();
+
+	const entry = (name: SidebarEntry): ReactNode => {
+		switch (name) {
+			case "home":
+				return <HomeFile workspaceId={workspaceId} />;
+			case "new_chat":
+				return <TreeCommand name="new_chat" onRun={() => void newChat()} />;
+			case "chat":
+				return (
+					<ChatFolder
+						workspaceId={workspaceId}
+						current={params.chatId}
+						folder={folder("chat")}
+					/>
+				);
+			case "memories":
+				return (
+					<TreeFolder
+						name="memories"
+						icon={FOLDER_ICONS.memories}
+						{...folder("memories")}
+					>
+						<Listing items={memories} empty="no memories yet">
+							{(memory) => (
+								<MemoryFile
+									key={memory._id}
+									memory={memory}
+									selected={params.key === memory.key}
+								/>
+							)}
+						</Listing>
+					</TreeFolder>
+				);
+			case "permissions":
+				return (
+					<TreeFolder
+						name="permissions"
+						icon={FOLDER_ICONS.permissions}
+						{...folder("permissions")}
+					>
+						<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
+					</TreeFolder>
+				);
+			case "knowledge":
+			case "agents":
+			case "triggers":
+			case "tasks":
+			case "ui":
+				return (
+					<TreeFolder
+						name={name}
+						icon={FOLDER_ICONS[name]}
+						{...folder(name)}
+						onCreate="disabled"
+						createLabel="coming soon"
+					>
+						<Empty>no {name} yet</Empty>
+					</TreeFolder>
+				);
+			case "README.md":
+				return <RootFile workspaceId={workspaceId} page="readme" />;
+			case "settings.ptc":
+				return <RootFile workspaceId={workspaceId} page="settings" />;
+			case "preferences.ptc":
+				return <RootFile workspaceId={workspaceId} page="preferences" />;
+		}
+	};
+
 	return (
 		<FileTree>
-			<HomeFile workspaceId={workspaceId} />
-			<TreeCommand name="new_chat" onRun={() => void newChat()} />
-			<ChatFolder
-				workspaceId={workspaceId}
-				current={params.chatId}
-				folder={folder("chat")}
-			/>
-			<TreeFolder
-				name="memories"
-				icon={FOLDER_ICONS.memories}
-				{...folder("memories")}
-			>
-				<Listing items={memories} empty="no memories yet">
-					{(memory) => (
-						<MemoryFile
-							key={memory._id}
-							memory={memory}
-							selected={params.key === memory.key}
-						/>
-					)}
-				</Listing>
-			</TreeFolder>
-			<TreeFolder
-				name="permissions"
-				icon={FOLDER_ICONS.permissions}
-				{...folder("permissions")}
-			>
-				<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
-			</TreeFolder>
-			{PLACEHOLDERS.map((name) => (
-				<TreeFolder
-					key={name}
-					name={name}
-					icon={FOLDER_ICONS[name]}
-					{...folder(name)}
-					onCreate="disabled"
-					createLabel="coming soon"
-				>
-					<Empty>no {name} yet</Empty>
-				</TreeFolder>
-			))}
-			<RootFile workspaceId={workspaceId} page="settings" />
-			<RootFile workspaceId={workspaceId} page="preferences" />
+			<SortableTree order={order} onReorder={reorder} motion={motion}>
+				{entry}
+			</SortableTree>
 		</FileTree>
 	);
 }

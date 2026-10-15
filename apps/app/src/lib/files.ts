@@ -4,6 +4,7 @@ import { formSpans } from "@repo/shared/lisp-forms";
 export interface OpenFile {
 	path: string;
 	source: string;
+	language?: "lisp" | "markdown";
 }
 
 function quoted(text: string): string {
@@ -43,18 +44,22 @@ export function preferencesSource(preferences: {
 	font: string;
 	channels: Record<string, boolean>;
 	metadata: Record<string, boolean>;
+	sidebar: readonly string[];
+	motion: string;
 }): string {
 	return [
 		`(preferences :theme ${quoted(preferences.theme)}`,
 		`  :font ${quoted(preferences.font)}`,
 		`  :channels ${toggles(preferences.channels)}`,
-		`  :metadata ${toggles(preferences.metadata)})`,
+		`  :metadata ${toggles(preferences.metadata)}`,
+		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
+		`  :motion ${quoted(preferences.motion)})`,
 	].join("\n");
 }
 
 export function fileContext(file: OpenFile, text: string): string {
 	const fence = "```";
-	return `about \`${file.path}\`:\n${fence}lisp\n${file.source}\n${fence}\n\n${text}`;
+	return `about \`${file.path}\`:\n${fence}${file.language ?? "lisp"}\n${file.source}\n${fence}\n\n${text}`;
 }
 
 export interface PermissionRule {
