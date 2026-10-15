@@ -6,12 +6,6 @@ link="${2:-}"
 open='<!-- preview -->'
 close='<!-- /preview -->'
 
-legacy=$(gh api "repos/$REPO/issues/$pr/comments" --paginate \
-  --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("**Preview**"))) | .id')
-for id in $legacy; do
-  gh api -X DELETE "repos/$REPO/issues/comments/$id"
-done
-
 body=$(gh api "repos/$REPO/pulls/$pr" --jq '.body // ""')
 rest=$(printf '%s\n' "$body" | awk -v start="$open" -v end="$close" '
   { line = $0; sub(/\r$/, "", line) }
