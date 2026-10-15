@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { prepull, retryStalledPulls, toolkitImages } from "../src/prepull.ts";
+import {
+	ownRepositories,
+	prepull,
+	retryStalledPulls,
+	toolkitImages,
+} from "../src/prepull.ts";
 import { prepullFor, SPEC_HASH } from "../src/workload.ts";
 import { fakeCluster, RELEASE } from "./helpers.ts";
 
@@ -29,6 +34,21 @@ describe("fetching the toolkit's images ahead of a load", () => {
 			"ghcr.io/o/mcp-browser:pr-7-abc",
 			"chromium-vnc",
 		]);
+	});
+
+	it("names the repositories we build ourselves, and no third party's", () => {
+		expect(
+			ownRepositories([
+				{
+					name: "sheets",
+					image: "ghcr.io/o/mcp-sheets:main",
+					port: 1,
+					internal: true,
+				},
+				{ name: "grafana", image: "grafana/mcp-grafana:latest", port: 2 },
+				{ name: "remote", url: "https://example.com/mcp" },
+			]),
+		).toEqual(["ghcr.io/o/mcp-sheets"]);
 	});
 
 	it("reads the bundled toolkit", () => {

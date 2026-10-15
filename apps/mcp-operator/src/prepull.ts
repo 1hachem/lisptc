@@ -6,7 +6,7 @@ import toolkit from "@repo/mcp-extension/mcp.toolkit.json" with {
 import type { ConnConfig } from "@repo/mcp-extension/ports";
 import type { Cluster } from "./cluster.ts";
 import { pullStalled } from "./state.ts";
-import { PREPULL_SELECTOR } from "./workload.ts";
+import { PREPULL_SELECTOR, repositoryOf } from "./workload.ts";
 
 export function toolkitImages(
 	tag?: string,
@@ -17,6 +17,14 @@ export function toolkitImages(
 			(entries as ConnConfig[]).flatMap((conf) => imagesOf(conf, tag)),
 		),
 	];
+}
+
+export function ownRepositories(
+	entries: readonly unknown[] = toolkit,
+): string[] {
+	return (entries as ConnConfig[]).flatMap((conf) =>
+		"image" in conf && conf.internal ? [repositoryOf(conf.image)] : [],
+	);
 }
 
 export async function prepull(

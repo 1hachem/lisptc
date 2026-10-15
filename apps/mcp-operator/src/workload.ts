@@ -12,7 +12,9 @@ import {
 	claimName,
 	dnsLabel,
 	type McpServer,
+	type McpServerSpec,
 	type ResourceRequirements,
+	retagged,
 	type State,
 	workloadHash,
 } from "@repo/mcp-extension/kubernetes";
@@ -51,6 +53,27 @@ const UNROUTED_FROM_A_SERVER = [
 	"100.64.0.0/10",
 	"169.254.0.0/16",
 ];
+
+export interface Rollout {
+	tag: string;
+	repositories: string[];
+}
+
+export function repositoryOf(image: string): string {
+	return image.replace(/@.*$/, "").replace(/:[^:/]+$/, "");
+}
+
+export function rolledOut(
+	spec: McpServerSpec,
+	rollout: Rollout | undefined,
+): McpServerSpec {
+	if (!rollout?.repositories.includes(repositoryOf(spec.mcp.image)))
+		return spec;
+	return {
+		...spec,
+		mcp: { ...spec.mcp, image: retagged(spec.mcp.image, rollout.tag) },
+	};
+}
 
 export interface WorkloadPlacement {
 	namespace: string;
@@ -312,7 +335,7 @@ function digest(...parts: string[]): string {
 }
 
 function prepullName(image: string): string {
-	const repository = image.replace(/@.*$/, "").replace(/:[^:/]+$/, "");
+	const repository = repositoryOf(image);
 	const base = repository.split("/").pop() ?? repository;
 	return `${PREPULL}-${dnsLabel(base, 30)}-${digest(repository).slice(0, 6)}`;
 }

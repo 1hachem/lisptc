@@ -236,6 +236,40 @@ describe("rolling the pod", () => {
 		expect(w.fake.pods.get(name)?.metadata?.labels?.[SPEC_HASH]).not.toBe(hash);
 	});
 
+	it("moves a server of our own onto the deployed tag, and leaves a third party's alone", async () => {
+		const w = await readyWorld();
+		const name = `${NAMESPACE}/${w.target.metadata.name}`;
+		const deployed = (now: number, repositories: string[]) => {
+			const deps = w.deps(now);
+			return {
+				...deps,
+				placement: {
+					...deps.placement,
+					rollout: { tag: "pr-7-b", repositories },
+				},
+			};
+		};
+
+		await reconcile(w.target, deployed(1100, ["someone/else"]));
+		expect(w.fake.pods.get(name)?.spec?.containers[0]?.image).toBe(
+			"playwright-mcp",
+		);
+
+		await reconcile(w.target, deployed(1101, ["playwright-mcp"]));
+		expect(w.fake.pods.has(name)).toBe(false);
+		await reconcile(w.target, deployed(1102, ["playwright-mcp"]));
+		const containers = w.fake.pods.get(name)?.spec?.containers ?? [];
+		expect(containers.map((c) => c.image)).toEqual([
+			"playwright-mcp:pr-7-b",
+			"chromium-vnc",
+		]);
+		expect(w.target.spec.mcp.image).toBe("playwright-mcp");
+
+		w.fake.runPods();
+		await reconcile(w.target, deployed(1103, ["playwright-mcp"]));
+		expect(w.fake.pods.has(name)).toBe(true);
+	});
+
 	it("brings a failed pair back on the same claim when restarts is raised", async () => {
 		const w = await readyWorld();
 		const claim = profileClaim(w);

@@ -22,6 +22,8 @@ import {
 	podFor,
 	RECLAIM,
 	RELEASED_AT,
+	type Rollout,
+	rolledOut,
 	SPEC_HASH,
 	STATE_LABEL,
 	STATE_PATH,
@@ -38,6 +40,7 @@ export interface Placement {
 	release: string;
 	pullSecret?: string;
 	storageClass?: string;
+	rollout?: Rollout;
 }
 
 export interface Deps {
@@ -339,10 +342,14 @@ class Run {
 
 	async currentPod(): Promise<V1Pod | undefined> {
 		const { cluster, placement } = this.deps;
+		const running = {
+			...this.server,
+			spec: rolledOut(this.server.spec, placement.rollout),
+		};
 		const pod = await cluster.pod(this.namespace, this.name);
 		if (
 			pod &&
-			pod.metadata?.labels?.[SPEC_HASH] !== workloadHash(this.server.spec)
+			pod.metadata?.labels?.[SPEC_HASH] !== workloadHash(running.spec)
 		) {
 			await cluster.removePod(this.namespace, this.name);
 			return undefined;
@@ -351,7 +358,7 @@ class Run {
 		if (!pod)
 			await cluster.createPod(
 				this.namespace,
-				podFor(this.server, {
+				podFor(running, {
 					namespace: this.namespace,
 					pullSecret: placement.pullSecret,
 				}),

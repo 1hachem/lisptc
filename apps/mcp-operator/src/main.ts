@@ -18,7 +18,12 @@ import {
 import { clientCluster, clientServers } from "./cluster.ts";
 import { Controller } from "./controller.ts";
 import { convexSink } from "./convex-sink.ts";
-import { prepull, retryStalledPulls, toolkitImages } from "./prepull.ts";
+import {
+	ownRepositories,
+	prepull,
+	retryStalledPulls,
+	toolkitImages,
+} from "./prepull.ts";
 import { MANAGED_BY, MANAGER, prepullFor, SERVER_LABEL } from "./workload.ts";
 
 const SWEEP_MS = 60_000;
@@ -69,6 +74,14 @@ const controller = new Controller({
 		release,
 		...(env.LISPTC_MCP_PULL_SECRET
 			? { pullSecret: env.LISPTC_MCP_PULL_SECRET }
+			: {}),
+		...(env.LISPTC_MCP_IMAGE_TAG
+			? {
+					rollout: {
+						tag: env.LISPTC_MCP_IMAGE_TAG,
+						repositories: ownRepositories(),
+					},
+				}
 			: {}),
 		...(env.LISPTC_MCP_STORAGE_CLASS
 			? { storageClass: env.LISPTC_MCP_STORAGE_CLASS }
