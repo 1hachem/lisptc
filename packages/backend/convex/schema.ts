@@ -41,6 +41,7 @@ export default defineSchema({
 		themeUses: v.optional(v.record(v.string(), v.number())),
 		channels: v.optional(v.record(v.string(), v.boolean())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
+		sidebar: v.optional(v.array(v.string())),
 	}).index("by_user", ["userId"]),
 
 	workspaces: defineTable({
@@ -91,6 +92,11 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	readmes: defineTable({
+		workspaceId: v.id("workspaces"),
+		body: v.string(),
+	}).index("by_workspace", ["workspaceId"]),
 
 	permissions: defineTable({
 		workspaceId: v.id("workspaces"),

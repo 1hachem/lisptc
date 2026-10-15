@@ -88,7 +88,7 @@ describe("removing a workspace", () => {
 		expect(messages).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records and permissions with it", async () => {
+	it("takes its secrets, oauth records, permissions and readme with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -107,19 +107,27 @@ describe("removing a workspace", () => {
 			workspaceId: doomed,
 			source: "(permission/deny eval)",
 		});
+		await alice.as.mutation(api.readmes.put, {
+			workspaceId: doomed,
+			body: "# doomed",
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords, permissions } = await t.run(async (ctx) => ({
-			secrets: await ctx.db.query("secrets").collect(),
-			oauthRecords: await ctx.db.query("oauthRecords").collect(),
-			permissions: await ctx.db.query("permissions").collect(),
-		}));
+		const { secrets, oauthRecords, permissions, readmes } = await t.run(
+			async (ctx) => ({
+				secrets: await ctx.db.query("secrets").collect(),
+				oauthRecords: await ctx.db.query("oauthRecords").collect(),
+				permissions: await ctx.db.query("permissions").collect(),
+				readmes: await ctx.db.query("readmes").collect(),
+			}),
+		);
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
 		expect(permissions).toEqual([]);
+		expect(readmes).toEqual([]);
 	});
 
 	it("leaves the other workspaces alone", async () => {

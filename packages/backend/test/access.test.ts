@@ -1,7 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
-import { MAX_PREFERENCES_BYTES } from "../convex/limits.ts";
+import { MAX_PREFERENCES_BYTES, MAX_README_BYTES } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("workspace access", () => {
@@ -578,5 +578,52 @@ describe("chat listing", () => {
 			"fix login",
 			"login copy",
 		]);
+	});
+});
+
+describe("readme access", () => {
+	it("keeps a workspace's readme to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.readmes.put, {
+			workspaceId: bob.workspace,
+			body: "# bob",
+		});
+		expect(
+			await bob.as.query(api.readmes.get, { workspaceId: bob.workspace }),
+		).toBe("# bob");
+		await expect(
+			alice.as.query(api.readmes.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.readmes.put, {
+				workspaceId: bob.workspace,
+				body: "# alice was here",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("reads empty until written, then holds one row replaced on save", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		expect(await alice.as.query(api.readmes.get, { workspaceId })).toBe("");
+		await alice.as.mutation(api.readmes.put, { workspaceId, body: "one" });
+		await alice.as.mutation(api.readmes.put, { workspaceId, body: "two" });
+		expect(await alice.as.query(api.readmes.get, { workspaceId })).toBe("two");
+		const rows = await t.run((ctx) => ctx.db.query("readmes").collect());
+		expect(rows).toHaveLength(1);
+	});
+
+	it("refuses a readme past the size limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.readmes.put, {
+				workspaceId: alice.workspace,
+				body: "x".repeat(MAX_README_BYTES + 1),
+			}),
+		).rejects.toThrow("README_TOO_LARGE");
 	});
 });
