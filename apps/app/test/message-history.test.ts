@@ -10,12 +10,16 @@ import {
 
 const history = ["first", "second", "third"];
 
-function walk(start: string, moves: RecallDirection[]): string[] {
+function walk(
+	start: string,
+	moves: RecallDirection[],
+	sent: string[] = history,
+): string[] {
 	let recalled: Recalled | null = null;
 	let text = start;
 	const seen: string[] = [];
 	for (const move of moves) {
-		const step = recall(history, recalled, text, move);
+		const step = recall(sent, recalled, text, move);
 		if (step) {
 			recalled = step.recalled;
 			text = step.text;
@@ -41,7 +45,7 @@ describe("recalling sent messages", () => {
 		);
 	});
 
-	it("leaves a typed draft alone", () => {
+	it("leaves a typed draft alone when nothing sent matches it", () => {
 		expect(recall(history, null, "half a thought", "back")).toBeNull();
 		expect(recall(history, null, "", "forward")).toBeNull();
 	});
@@ -85,5 +89,29 @@ describe("a history that changed while browsing", () => {
 	it("stops browsing when the shown message is gone", () => {
 		const first = recall(history, null, "", "back");
 		expect(rebase(first?.recalled ?? null, ["first", "second"])).toBeNull();
+	});
+});
+
+describe("searching back with typed text", () => {
+	const sent = ["deploy the app", "fix the tests", "Deploy again", "hello"];
+
+	it("steps through the prompts that hold the text, newest first", () => {
+		expect(walk("deploy", ["back", "back", "back"], sent)).toEqual([
+			"Deploy again",
+			"deploy the app",
+			"deploy the app",
+		]);
+	});
+
+	it("walks forward through the matches and back to what was typed", () => {
+		expect(
+			walk("deploy", ["back", "back", "forward", "forward"], sent),
+		).toEqual(["Deploy again", "deploy the app", "Deploy again", "deploy"]);
+	});
+
+	it("skips a prompt that is exactly what was typed", () => {
+		expect(walk("hello", ["back"], [...sent, "say hello", "hello"])).toEqual([
+			"say hello",
+		]);
 	});
 });

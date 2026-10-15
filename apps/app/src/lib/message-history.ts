@@ -37,19 +37,26 @@ export function recall(
 	direction: RecallDirection,
 ): RecallStep | null {
 	const browsing = recalled && recalled.shown === text ? recalled : null;
+	const draft = browsing ? browsing.draft : text;
+	const matches = matching(draft);
 	if (direction === "back") {
-		if (!browsing) {
-			if (text.trim() !== "" || history.length === 0) return null;
-			return at(history, history.length - 1, text);
+		const from = browsing ? browsing.index - 1 : history.length - 1;
+		for (let i = from; i >= 0; i--) {
+			if (matches(history[i] ?? "")) return at(history, i, draft);
 		}
-		if (browsing.index === 0) return null;
-		return at(history, browsing.index - 1, browsing.draft);
+		return null;
 	}
 	if (!browsing) return null;
-	if (browsing.index >= history.length - 1) {
-		return { recalled: null, text: browsing.draft };
+	for (let i = browsing.index + 1; i < history.length; i++) {
+		if (matches(history[i] ?? "")) return at(history, i, draft);
 	}
-	return at(history, browsing.index + 1, browsing.draft);
+	return { recalled: null, text: draft };
+}
+
+function matching(draft: string): (entry: string) => boolean {
+	const query = draft.trim().toLowerCase();
+	return (entry) =>
+		entry.toLowerCase().includes(query) && entry !== draft.trim();
 }
 
 function at(history: string[], index: number, draft: string): RecallStep {
