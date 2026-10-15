@@ -69,12 +69,14 @@ export function TreeFolder({
 
 export function TreeFile({
 	name,
+	icon,
 	selected,
 	depth = 0,
 	link,
 	trailing,
 }: {
 	name: string;
+	icon?: IconSvgElement;
 	selected: boolean;
 	depth?: number;
 	link: (content: ReactNode, className: string) => ReactNode;
@@ -90,7 +92,7 @@ export function TreeFile({
 					<>
 						<HugeiconsIcon
 							className="size-icon-sm flex-none"
-							icon={File01Icon}
+							icon={icon ?? File01Icon}
 						/>
 						<span className="truncate">{name}</span>
 					</>,

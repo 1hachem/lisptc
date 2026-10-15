@@ -1,3 +1,5 @@
+import type { IconSvgElement } from "@hugeicons/react";
+import { BotEngine, EXPRESSION_BY_ID, RAYON, SHAPE_BY_ID } from "@repo/bloub";
 import type { BotFrame } from "@repo/bloub/bot/engine";
 
 export const ICON_SHAPE = "carre";
@@ -30,6 +32,42 @@ export function iconSvg(frame: BotFrame): string {
 		eyes,
 		"</svg>",
 	].join("");
+}
+
+const HUGEICON_HALF = 12;
+
+export function iconElement(frame: BotFrame): IconSvgElement {
+	const place = `translate(${HUGEICON_HALF} ${HUGEICON_HALF}) scale(${HUGEICON_HALF / iconHalf(frame)})`;
+	return [
+		[
+			"path",
+			{
+				key: "body",
+				d: frame.bodyPath,
+				transform: place,
+				fill: "currentColor",
+			},
+		],
+		...frame.eyes.map(
+			(eye, i) =>
+				[
+					"path",
+					{
+						key: `eye-${i}`,
+						d: eye.d,
+						transform: `${place} ${eye.matrix} scale(${ICON_EYE_SCALE})`,
+						fill: "var(--bg)",
+					},
+				] as const,
+		),
+	];
+}
+
+export function restingIcon(): IconSvgElement {
+	const shape = SHAPE_BY_ID.get(ICON_SHAPE);
+	const face = EXPRESSION_BY_ID.get(ICON_FACE);
+	if (!shape || !face) throw new Error("bot icon shape or face is missing");
+	return iconElement(new BotEngine(RAYON, "idle", shape.radii, face).sample(0));
 }
 
 function matrixOf(
