@@ -606,6 +606,104 @@ describe("chat listing", () => {
 		expect(all.more).toBe(false);
 	});
 
+	it("lists a chat with no messages above older ones", async () => {
+		const t = harness();
+		const alice = await three(t);
+		const older = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "older",
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: older,
+			messages: [{ type: "human", content: "hello" }],
+		});
+		const fresh = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "fresh",
+		});
+		const { chats } = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(chats[0]?._id).toBe(fresh);
+	});
+
+	describe("status", () => {
+		const asking = {
+			type: "tool" as const,
+			content: "held",
+			id: "w1",
+			kwargs: {
+				asks: { open: [{ id: "a1", title: "run?", prompt: "", choices: [] }] },
+			},
+		};
+
+		async function opened(t: ReturnType<typeof harness>) {
+			const alice = await signIn(t, "alice@example.com");
+			const chatId = await alice.as.mutation(api.chats.create, {
+				workspaceId: alice.workspace,
+			});
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [{ type: "human", content: "go" }],
+			});
+			await alice.as.mutation(api.chats.start, { chatId });
+			const status = async () =>
+				(await alice.as.query(api.chats.get, { chatId })).status;
+			return { alice, chatId, status };
+		}
+
+		it("streams from start and goes idle when the turn settles", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			expect(await status()).toBe("streaming");
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBeUndefined();
+		});
+
+		it("keeps why a turn failed until the next one starts", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			await alice.as.mutation(api.chats.settle, {
+				chatId,
+				failure: "the provider is down",
+			});
+			const chat = await alice.as.query(api.chats.get, { chatId });
+			expect(chat).toMatchObject({
+				status: "errored",
+				failure: "the provider is down",
+			});
+			await alice.as.mutation(api.chats.start, { chatId });
+			expect(await status()).toBe("streaming");
+			expect(
+				(await alice.as.query(api.chats.get, { chatId })).failure,
+			).toBeUndefined();
+		});
+
+		it("waits on an open ask until it is answered", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [asking],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
+			await alice.as.mutation(api.messages.annotate, {
+				chatId,
+				id: "w1",
+				kwargs: { asks: { answered: { a1: { accepted: true, label: "ok" } } } },
+			});
+			expect(await status()).toBeUndefined();
+		});
+
+		it("forgets an ask left open in an earlier turn", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [asking, { type: "human", content: "never mind" }],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBeUndefined();
+		});
+	});
+
 	it("finds chats by title", async () => {
 		const t = harness();
 		const alice = await three(t);

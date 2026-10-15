@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
+import { waitsOnUser } from "./lib/waiting.js";
+import { chatStatus } from "./schema.js";
 
 const MAX_CHATS = 200;
 const PAGE = 20;
@@ -14,6 +16,8 @@ const chat = v.object({
 	title: v.string(),
 	lastMessageAt: v.optional(v.number()),
 	archivedAt: v.optional(v.number()),
+	status: v.optional(chatStatus),
+	failure: v.optional(v.string()),
 });
 
 export const list = query({
@@ -66,7 +70,36 @@ export const create = mutation({
 			workspaceId,
 			userId: user._id,
 			title: title ?? "",
+			lastMessageAt: Date.now(),
 		});
+	},
+});
+
+export const start = mutation({
+	args: { chatId: v.id("chats") },
+	returns: v.null(),
+	handler: async (ctx, { chatId }) => {
+		await requireChat(ctx, chatId);
+		await ctx.db.patch(chatId, { status: "streaming", failure: undefined });
+		return null;
+	},
+});
+
+export const settle = mutation({
+	args: { chatId: v.id("chats"), failure: v.optional(v.string()) },
+	returns: v.null(),
+	handler: async (ctx, { chatId, failure }) => {
+		await requireChat(ctx, chatId);
+		if (failure !== undefined) {
+			await ctx.db.patch(chatId, { status: "errored", failure });
+			return null;
+		}
+		const waiting = await waitsOnUser(ctx, chatId);
+		await ctx.db.patch(chatId, {
+			status: waiting ? "waiting" : undefined,
+			failure: undefined,
+		});
+		return null;
 	},
 });
 
