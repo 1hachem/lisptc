@@ -13,6 +13,7 @@ export { firedMemories } from "./memories.ts";
 export { MessageFeedback } from "./message-feedback.tsx";
 export { MessageMemories } from "./message-memories.tsx";
 export { Scramble, type ScrambleProps } from "./scramble.tsx";
+export { moved, SortableTree } from "./sortable-tree.tsx";
 export {
 	FontDialog,
 	FontSample,
