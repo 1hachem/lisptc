@@ -8,7 +8,7 @@ export type StoredPreferences = NonNullable<
 	FunctionReturnType<typeof api.preferences.get>
 >;
 
-export type PreferencesChange = FunctionArgs<
+type PreferencesChange = FunctionArgs<
 	typeof api.preferences.put
 >["preferences"];
 

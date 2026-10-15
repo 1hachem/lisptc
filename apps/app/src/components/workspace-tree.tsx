@@ -357,77 +357,74 @@ export function WorkspaceTree({
 	const { order, reorder } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
 
-	const entry = (name: SidebarEntry): ReactNode => {
-		switch (name) {
-			case "home":
-				return <HomeFile workspaceId={workspaceId} />;
-			case "new_chat":
-				return <TreeCommand name="new_chat" onRun={() => void newChat()} />;
-			case "chat":
-				return (
-					<ChatFolder
-						workspaceId={workspaceId}
-						current={params.chatId}
-						folder={folder("chat")}
-					/>
-				);
-			case "memories":
-				return (
-					<TreeFolder
-						name="memories"
-						icon={FOLDER_ICONS.memories}
-						{...folder("memories")}
-					>
-						<Listing items={memories} empty="no memories yet">
-							{(memory) => (
-								<MemoryFile
-									key={memory._id}
-									memory={memory}
-									selected={params.key === memory.key}
-								/>
-							)}
-						</Listing>
-					</TreeFolder>
-				);
-			case "permissions":
-				return (
-					<TreeFolder
-						name="permissions"
-						icon={FOLDER_ICONS.permissions}
-						{...folder("permissions")}
-					>
-						<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
-					</TreeFolder>
-				);
-			case "knowledge":
-			case "sub-agents":
-			case "triggers":
-			case "tasks":
-			case "ui":
-				return (
-					<TreeFolder
-						name={name}
-						icon={FOLDER_ICONS[name]}
-						{...folder(name)}
-						onCreate="disabled"
-						createLabel="coming soon"
-					>
-						<Empty>no {name} yet</Empty>
-					</TreeFolder>
-				);
-			case "README.md":
-				return <RootFile workspaceId={workspaceId} page="readme" />;
-			case "settings.ptc":
-				return <RootFile workspaceId={workspaceId} page="settings" />;
-			case "preferences.ptc":
-				return <RootFile workspaceId={workspaceId} page="preferences" />;
-		}
+	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
+		<TreeFolder
+			name={name}
+			icon={FOLDER_ICONS[name]}
+			{...folder(name)}
+			onCreate="disabled"
+			createLabel="coming soon"
+		>
+			<Empty>no {name} yet</Empty>
+		</TreeFolder>
+	);
+
+	const entries: Record<SidebarEntry, () => ReactNode> = {
+		home: () => <HomeFile workspaceId={workspaceId} />,
+		new_chat: () => (
+			<TreeCommand name="new_chat" onRun={() => void newChat()} />
+		),
+		chat: () => (
+			<ChatFolder
+				workspaceId={workspaceId}
+				current={params.chatId}
+				folder={folder("chat")}
+			/>
+		),
+		memories: () => (
+			<TreeFolder
+				name="memories"
+				icon={FOLDER_ICONS.memories}
+				{...folder("memories")}
+			>
+				<Listing items={memories} empty="no memories yet">
+					{(memory) => (
+						<MemoryFile
+							key={memory._id}
+							memory={memory}
+							selected={params.key === memory.key}
+						/>
+					)}
+				</Listing>
+			</TreeFolder>
+		),
+		permissions: () => (
+			<TreeFolder
+				name="permissions"
+				icon={FOLDER_ICONS.permissions}
+				{...folder("permissions")}
+			>
+				<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
+			</TreeFolder>
+		),
+		knowledge: placeholder("knowledge"),
+		"sub-agents": placeholder("sub-agents"),
+		triggers: placeholder("triggers"),
+		tasks: placeholder("tasks"),
+		ui: placeholder("ui"),
+		"README.md": () => <RootFile workspaceId={workspaceId} page="readme" />,
+		"settings.ptc": () => (
+			<RootFile workspaceId={workspaceId} page="settings" />
+		),
+		"preferences.ptc": () => (
+			<RootFile workspaceId={workspaceId} page="preferences" />
+		),
 	};
 
 	return (
 		<FileTree>
 			<SortableTree order={order} onReorder={reorder} motion={motion}>
-				{entry}
+				{(name) => entries[name]()}
 			</SortableTree>
 		</FileTree>
 	);
