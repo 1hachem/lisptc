@@ -62,6 +62,15 @@ export function moved<Id extends string>(
 	return arrayMove([...order], from, to);
 }
 
+export function awaitingOrder<Id extends string>(
+	order: readonly Id[],
+	dropped: { next: readonly Id[]; over: readonly Id[] } | undefined,
+): readonly Id[] {
+	return dropped && dropped.over.join("\0") === order.join("\0")
+		? dropped.next
+		: order;
+}
+
 export function unzoomed(
 	transform: Transform | null,
 	zoom: number,
@@ -149,7 +158,7 @@ function SortableEntry({
 }
 
 export function SortableTree<Id extends string>({
-	order,
+	order: given,
 	onReorder,
 	onPickUp,
 	motion = "slide",
@@ -165,6 +174,11 @@ export function SortableTree<Id extends string>({
 	const shown: MotionId = reduced ? "none" : motion;
 	const [root, setRoot] = useState<HTMLDivElement | null>(null);
 	const [dragged, setDragged] = useState<Id>();
+	const [dropped, setDropped] = useState<{
+		next: readonly Id[];
+		over: readonly Id[];
+	}>();
+	const order = awaitingOrder(given, dropped);
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
 			activationConstraint: { distance: DRAG_AFTER_PX },
@@ -184,7 +198,9 @@ export function SortableTree<Id extends string>({
 		setDragged(undefined);
 		const from = entry(active.id);
 		const next = from && moved(order, from, entry(over?.id));
-		if (next) onReorder(next);
+		if (!next) return;
+		setDropped({ next, over: given });
+		onReorder(next);
 	};
 	const zoom = root?.currentCSSZoom ?? 1;
 	return (
