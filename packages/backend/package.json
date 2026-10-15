@@ -24,6 +24,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
+    "env:seed": "sh scripts/seed-env.sh",
     "migrate": "convex run migrations:resetRetiredModels '{\"reset\": true}'",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
