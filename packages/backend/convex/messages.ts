@@ -2,11 +2,13 @@ import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
-import { requireChat } from "./lib/auth.js";
+import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
+
+const MAX_SENT = 200;
 
 const PURGE_BATCH = 256;
 
@@ -57,6 +59,22 @@ export const transcript = query({
 			.query("messages")
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
 			.take(MAX_TRANSCRIPT);
+	},
+});
+
+export const sent = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.array(v.string()),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const rows = await ctx.db
+			.query("messages")
+			.withIndex("by_workspace_type", (q) =>
+				q.eq("workspaceId", workspaceId).eq("type", "human"),
+			)
+			.order("desc")
+			.take(MAX_SENT);
+		return rows.reverse().map((row) => row.content);
 	},
 });
 
