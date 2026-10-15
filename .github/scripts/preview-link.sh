@@ -5,8 +5,9 @@ pr="$1"
 link="${2:-}"
 open='<!-- preview -->'
 close='<!-- /preview -->'
+retry="$(dirname "$0")/retry.sh"
 
-body=$(gh api "repos/$REPO/pulls/$pr" --jq '.body // ""')
+body=$("$retry" gh api "repos/$REPO/pulls/$pr" --jq '.body // ""')
 rest=$(printf '%s\n' "$body" | awk -v start="$open" -v end="$close" '
   { line = $0; sub(/\r$/, "", line) }
   line == start { skip = 1; next }
@@ -21,4 +22,4 @@ else
 fi
 
 [ "$next" = "$body" ] && exit 0
-gh api -X PATCH "repos/$REPO/pulls/$pr" -f body="$next" > /dev/null
+"$retry" gh api -X PATCH "repos/$REPO/pulls/$pr" -f body="$next" > /dev/null
