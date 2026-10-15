@@ -200,6 +200,9 @@ class TurnWire {
 				return true;
 			case "result":
 				return this.result(event);
+			case "checkpointed":
+				this.stampCall(event.call);
+				return this.snapshot();
 			case "halt":
 				this.steps = event.steps;
 				if (this.lastMeta) this.lastMeta.steps = event.steps;

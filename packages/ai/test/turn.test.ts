@@ -167,6 +167,7 @@ describe("the agent turn", () => {
 			"result",
 			"delta",
 			"assistant",
+			"checkpointed",
 			"halt",
 		]);
 		expect(events.at(-1)).toMatchObject({ answer: "three.", steps: 2 });
@@ -199,7 +200,12 @@ describe("the agent turn", () => {
 
 		const events = await drain(ask);
 
-		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "halt"]);
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"checkpointed",
+			"halt",
+		]);
 		expect(calls).toBe(1);
 	});
 
@@ -250,6 +256,7 @@ describe("the agent turn", () => {
 			"steered",
 			"delta",
 			"assistant",
+			"checkpointed",
 			"halt",
 		]);
 		expect(events[3]).toEqual({
@@ -431,6 +438,7 @@ describe("the agent turn", () => {
 			"result",
 			"delta",
 			"assistant",
+			"checkpointed",
 			"halt",
 		]);
 		expect(events.at(-1)).toMatchObject({ answer: "really three.", steps: 2 });
@@ -456,9 +464,11 @@ describe("the agent turn", () => {
 		expect(events.map((e) => e.type)).toEqual([
 			"delta",
 			"assistant",
+			"checkpointed",
 			"steered",
 			"delta",
 			"assistant",
+			"checkpointed",
 			"halt",
 		]);
 		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });

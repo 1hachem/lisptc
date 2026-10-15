@@ -75,6 +75,7 @@ export type TurnEvent =
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
+	| { type: "checkpointed"; call: number }
 	| { type: "steered"; id: string; content: string }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -265,7 +266,10 @@ async function* evaluateStep(
 		repl.takeFinished() ? "halt" : capped ? "capped" : "continue",
 		turn.telemetry.stepEnd,
 	);
-	if (verdict === "halt" && !held) return verdict;
+	if (verdict === "halt" && !held) {
+		if (call !== undefined) yield { type: "checkpointed", call };
+		return verdict;
+	}
 
 	const riding = emitted === "" ? {} : { riding: emitted };
 	yield {

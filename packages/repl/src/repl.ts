@@ -486,6 +486,7 @@ export class AgentRepl extends MemoryRepl {
 			failed: result.failed,
 			held: result.held,
 			message: result.message,
+			call: result.call,
 		};
 	}
 
