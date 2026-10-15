@@ -57,6 +57,19 @@ describe("FileTree", () => {
 		expect(selected[0]?.textContent).toBe("plan-q4");
 	});
 
+	it("draws a glyph in place of the file icon", async () => {
+		const host = await mounted(
+			<TreeFile
+				name="plan-q4"
+				selected={false}
+				link={anchor}
+				glyph={<span data-glyph />}
+			/>,
+		);
+		expect(host.querySelector("[data-glyph]")).not.toBeNull();
+		expect(host.querySelector("svg")).toBeNull();
+	});
+
 	it("toggles a folder from its name and creates from its plus", async () => {
 		const onToggle = vi.fn();
 		const onCreate = vi.fn();

@@ -1,9 +1,6 @@
-import {
-	Alert02Icon,
-	CheckmarkCircle02Icon,
-	Loading03Icon,
-} from "@hugeicons/core-free-icons";
+import { Alert02Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Dots } from "@repo/ui";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { apiHeaders } from "../lib/api.ts";
@@ -144,17 +141,7 @@ function Status({ phase }: { phase: Phase }) {
 	switch (phase.kind) {
 		case "finishing":
 			return (
-				<Panel
-					icon={
-						<HugeiconsIcon
-							icon={Loading03Icon}
-							size={16}
-							strokeWidth={1.5}
-							className="animate-spin text-dim"
-						/>
-					}
-					title="connecting…"
-				>
+				<Panel icon={<Dots className="text-dim" />} title="connecting…">
 					finishing the authorization
 				</Panel>
 			);

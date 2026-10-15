@@ -1,14 +1,11 @@
 import { useConvexMutation } from "@convex-dev/react-query";
-import {
-	Alert02Icon,
-	BubbleChatIcon,
-	Loading03Icon,
-} from "@hugeicons/core-free-icons";
+import { Alert02Icon, BubbleChatIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Doc } from "@repo/backend/dataModel";
 import { TreeFile } from "@repo/components";
 import {
+	Dots,
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -20,23 +17,26 @@ import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
 
-const STATUS_GLYPHS = {
-	streaming: { icon: Loading03Icon, className: "animate-spin" },
-	waiting: { icon: BubbleChatIcon, className: "text-yellow" },
-	errored: { icon: Alert02Icon, className: "text-red" },
+const STATUS_ICONS = {
+	waiting: { icon: BubbleChatIcon, iconClassName: "text-yellow" },
+	errored: { icon: Alert02Icon, iconClassName: "text-red" },
 } satisfies Record<
-	NonNullable<Doc<"chats">["status"]>,
-	{ icon: IconSvgElement; className: string }
+	Exclude<Doc<"chats">["status"], "streaming" | undefined>,
+	{ icon: IconSvgElement; iconClassName: string }
 >;
 
 function statusGlyph(chat: Doc<"chats">) {
 	if (chat.status === undefined) return {};
-	const { icon, className } = STATUS_GLYPHS[chat.status];
+	if (chat.status === "streaming")
+		return {
+			glyph: <Dots className="size-icon-sm" label="streaming" />,
+			iconLabel: "streaming",
+		};
 	const label =
 		chat.status === "errored" && chat.failure
 			? `errored: ${chat.failure}`
 			: chat.status;
-	return { icon, iconClassName: className, iconLabel: label };
+	return { ...STATUS_ICONS[chat.status], iconLabel: label };
 }
 
 const item =

@@ -9,6 +9,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { ReactNode } from "react";
+import { useEntryDragged } from "./sortable-tree.tsx";
 
 const INDENT_REM = 0.875;
 
@@ -35,8 +36,10 @@ export function TreeFolder({
 	depth?: number;
 	children?: ReactNode;
 }) {
+	const dragged = useEntryDragged();
+	const shown = open && !dragged;
 	return (
-		<div data-open={open}>
+		<div data-open={shown}>
 			<div className="group/folder flex items-center">
 				<button
 					type="button"
@@ -46,7 +49,7 @@ export function TreeFolder({
 				>
 					<HugeiconsIcon
 						className="size-icon-sm flex-none"
-						icon={icon ?? (open ? Folder02Icon : Folder01Icon)}
+						icon={icon ?? (shown ? Folder02Icon : Folder01Icon)}
 					/>
 					<span className="truncate">{name}/</span>
 				</button>
@@ -62,7 +65,7 @@ export function TreeFolder({
 					</button>
 				)}
 			</div>
-			{open && <div>{children}</div>}
+			{shown && <div>{children}</div>}
 		</div>
 	);
 }
@@ -71,6 +74,7 @@ export function TreeFile({
 	name,
 	icon,
 	iconClassName = "",
+	glyph,
 	iconLabel,
 	selected,
 	depth = 0,
@@ -80,6 +84,7 @@ export function TreeFile({
 	name: string;
 	icon?: IconSvgElement;
 	iconClassName?: string;
+	glyph?: ReactNode;
 	iconLabel?: string;
 	selected: boolean;
 	depth?: number;
@@ -95,10 +100,12 @@ export function TreeFile({
 				{link(
 					<>
 						<span title={iconLabel} className="flex flex-none">
-							<HugeiconsIcon
-								className={`size-icon-sm ${iconClassName}`}
-								icon={icon ?? File01Icon}
-							/>
+							{glyph ?? (
+								<HugeiconsIcon
+									className={`size-icon-sm ${iconClassName}`}
+									icon={icon ?? File01Icon}
+								/>
+							)}
 							{iconLabel && <span className="sr-only">{iconLabel}</span>}
 						</span>
 						<span className="truncate">{name}</span>
