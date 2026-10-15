@@ -4,6 +4,7 @@ import { mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 
 const MAX_CHATS = 200;
+const PAGE = 20;
 
 const chat = v.object({
 	_id: v.id("chats"),
@@ -16,18 +17,37 @@ const chat = v.object({
 });
 
 export const list = query({
-	args: { workspaceId: v.id("workspaces") },
-	returns: v.array(chat),
-	handler: async (ctx, { workspaceId }) => {
+	args: {
+		workspaceId: v.id("workspaces"),
+		search: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({ chats: v.array(chat), more: v.boolean() }),
+	handler: async (ctx, { workspaceId, search, limit }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const chats = await ctx.db
-			.query("chats")
-			.withIndex("by_workspace_activity", (q) =>
-				q.eq("workspaceId", workspaceId),
-			)
-			.order("desc")
-			.take(MAX_CHATS);
-		return chats.filter((row) => row.archivedAt === undefined);
+		const wanted = Math.min(Math.max(1, Math.floor(limit ?? PAGE)), MAX_CHATS);
+		const term = search?.trim();
+		const rows = term
+			? await ctx.db
+					.query("chats")
+					.withSearchIndex("search_title", (q) =>
+						q
+							.search("title", term)
+							.eq("workspaceId", workspaceId)
+							.eq("archivedAt", undefined),
+					)
+					.take(wanted + 1)
+			: await ctx.db
+					.query("chats")
+					.withIndex("by_workspace_live_activity", (q) =>
+						q.eq("workspaceId", workspaceId).eq("archivedAt", undefined),
+					)
+					.order("desc")
+					.take(wanted + 1);
+		return {
+			chats: rows.slice(0, wanted),
+			more: rows.length > wanted,
+		};
 	},
 });
 
