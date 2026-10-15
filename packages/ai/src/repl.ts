@@ -95,10 +95,10 @@ export async function evalCode(
 	call: number | undefined;
 }> {
 	try {
-		const { model, user, annotations, emitted, failed, held, call } =
+		const { model, user, annotations, emitted, failed, held, call, message } =
 			await repl.evalOutput(code);
 		return {
-			output: model,
+			output: message === undefined ? model : `${model}\n\n${message}`,
 			display: user,
 			error: false,
 			annotations,
@@ -108,7 +108,7 @@ export async function evalCode(
 			call,
 		};
 	} catch (ex) {
-		const restored = await repl.revertToLatest();
+		const restored = await repl.revertToLatest().catch(() => undefined);
 		if (restored === undefined) repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
 		const text =
