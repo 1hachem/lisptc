@@ -130,9 +130,11 @@ named only at a composition root:
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
 - `packages/permissions` (`@repo/permissions-extension`) — what a session may call: allowed, denied, or waiting on a human.
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
+- `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
+- `packages/workspace` (`@repo/workspace-extension`) — the workspace's settings and its chats.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
 
 Everything else:

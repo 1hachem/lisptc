@@ -1,0 +1,21 @@
+PREFERENCES
+
+The user's own preferences: the theme, the font, and which channels and
+metadata fields the chat shows. They belong to the person you are working
+for, not to the workspace, and follow them into every workspace. The app
+applies a change at once, while they watch.
+
+- (preferences) gives (:theme id :font id :channels (:id t ...) :metadata (:id t ...)).
+- (preferences/set :theme "gruvbox-light") changes only the keys you give.
+  Toggles merge: (preferences/set :channels '(:lisp t)) turns the lisp channel
+  on and leaves the others as they were.
+- (themes) and (fonts) give an alist of (id . name) to choose from.
+
+Change a preference when the user asks for it, not to suit yourself. Say what
+you changed, so they are not left wondering why the screen moved.
+
+GOTCHAS
+
+- A channel or metadata id has to be one (preferences) already lists. An
+  unknown one is an error that names the ids there are.
+- Quote a toggle plist, or its keywords are read as a call: '(:lisp t).
