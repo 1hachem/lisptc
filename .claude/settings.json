@@ -29,6 +29,16 @@
             "statusMessage": "Checking the IO budget"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.agents/hooks/worktree-move.sh\"",
+            "statusMessage": "Checking where the worktree goes"
+          }
+        ]
       }
     ],
     "WorktreeCreate": [

@@ -98,11 +98,9 @@ services:
         - action: rebuild
           path: ./pnpm-lock.yaml
     volumes:
-      - api-state:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - PORT=${APP_PORT:-3000}
-      - XDG_CONFIG_HOME=/data
       - APP_URL
       - LISPTC_OAUTH_REDIRECT_URL
       - CONVEX_URL
@@ -130,7 +128,6 @@ services:
       retries: 6
 
 volumes:
-  api-state:
   postgres-data:
   convex-data:
 

@@ -12,18 +12,27 @@ export interface Command {
 	hint?: string;
 	desktopOnly?: boolean;
 	takesArgument?: boolean;
+	aliases?: string[];
 }
 
 export const commands: Command[] = [
-	{ name: "/clear", desc: "start a fresh session" },
 	{ name: "/copy", desc: "copy the conversation to the clipboard" },
 	{ name: "/debug", desc: "show what each step sent back to the model" },
 	{ name: "/font", desc: "choose the font" },
 	{ name: "/model", desc: "choose the model this workspace runs on" },
+	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
+	{ name: "/prompt", desc: "search the prompts sent in this workspace" },
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
 	{ name: "/theme", desc: "choose the colour theme" },
 ];
+
+export function matchesCommand(command: Command, typed: string): boolean {
+	const query = typed.toLowerCase();
+	return [command.name, ...(command.aliases ?? [])].some((name) =>
+		name.slice(1).startsWith(query),
+	);
+}
 
 async function copyConversation(text: string): Promise<string> {
 	if (!text) return "nothing to copy";
@@ -55,7 +64,7 @@ export function useCommandRunner() {
 				string,
 				() => Promise<string | null> | string | null
 			> = {
-				"/clear": async () => {
+				"/new": async () => {
 					await newChat();
 					return null;
 				},

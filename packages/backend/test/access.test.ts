@@ -280,6 +280,45 @@ describe("messages", () => {
 		const chat = await alice.as.query(api.chats.get, { chatId });
 		expect(chat.lastMessageAt).toBeTypeOf("number");
 	});
+
+	it("lists what was sent in every chat of a workspace, oldest first", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const first = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const second = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: first,
+			messages: [
+				{ type: "human", content: "one" },
+				{ type: "ai", content: "reply" },
+			],
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: second,
+			messages: [{ type: "human", content: "two" }],
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: first,
+			messages: [{ type: "human", content: "three" }],
+		});
+		const sent = await alice.as.query(api.messages.sent, {
+			workspaceId: alice.workspace,
+		});
+		expect(sent).toEqual(["one", "two", "three"]);
+	});
+
+	it("refuses listing what was sent in another user's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await expect(
+			alice.as.query(api.messages.sent, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+	});
 });
 
 describe("permissions access", () => {

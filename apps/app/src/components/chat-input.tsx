@@ -1,12 +1,21 @@
+import { PromptDialog } from "@repo/components";
 import { cn } from "@repo/ui";
 import {
 	type KeyboardEvent,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
 import type { Command } from "../lib/commands.ts";
+import {
+	newestFirst,
+	type RecallDirection,
+	type Recalled,
+	rebase,
+	recall,
+} from "../lib/message-history.ts";
 import { CommandMenu, useCommandMenu } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispText } from "./lisp-text.tsx";
@@ -14,6 +23,7 @@ import { LispText } from "./lisp-text.tsx";
 export interface ChatInputProps {
 	placeholder?: string;
 	onSubmit: (text: string) => void;
+	history?: string[];
 	onCommand?: (name: string) => Promise<string | null>;
 	isStreaming?: boolean;
 	onStop?: () => void;
@@ -32,6 +42,30 @@ function useNotice(): [string | null, (message: string) => void] {
 		timer.current = setTimeout(() => setNotice(null), NOTICE_MS);
 	}, []);
 	return [notice, flash];
+}
+
+const RECALL_KEYS: Record<string, RecallDirection> = {
+	ArrowUp: "back",
+	ArrowDown: "forward",
+};
+
+function useRecall(history: string[]) {
+	const recalled = useRef<Recalled | null>(null);
+	const recalledIn = useRef(history);
+	return useCallback(
+		(text: string, direction: RecallDirection): string | null => {
+			const standing =
+				recalledIn.current === history
+					? recalled.current
+					: rebase(recalled.current, history);
+			const next = recall(history, standing, text, direction);
+			if (!next) return null;
+			recalled.current = next.recalled;
+			recalledIn.current = history;
+			return next.text;
+		},
+		[history],
+	);
 }
 
 function submitsOnEnter(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
@@ -83,6 +117,7 @@ function SendAction({
 export function ChatInput({
 	placeholder = "",
 	onSubmit,
+	history = [],
 	onCommand,
 	isStreaming,
 	onStop,
@@ -93,6 +128,14 @@ export function ChatInput({
 	const mirror = useRef<HTMLPreElement>(null);
 	const [notice, flash] = useNotice();
 	const empty = text.trim() === "";
+	const [searching, setSearching] = useState(false);
+	const prompts = useMemo(() => newestFirst(history), [history]);
+	const step = useRecall(history);
+
+	const insertPrompt = useCallback((prompt: string) => {
+		setText(prompt);
+		area.current?.focus();
+	}, []);
 
 	const send = useCallback(() => {
 		if (disabled || empty) return;
@@ -108,6 +151,10 @@ export function ChatInput({
 				return;
 			}
 			setText("");
+			if (command.name === "/prompt") {
+				setSearching(true);
+				return;
+			}
 			void Promise.resolve(onCommand?.(command.name)).then((shown) => {
 				if (shown) flash(shown);
 			});
@@ -120,6 +167,14 @@ export function ChatInput({
 	const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (disabled || event.nativeEvent.isComposing || menu.handleKey(event))
 			return;
+		const direction = RECALL_KEYS[event.key];
+		if (direction) {
+			const recalled = step(text, direction);
+			if (recalled === null) return;
+			event.preventDefault();
+			setText(recalled);
+			return;
+		}
 		if (!submitsOnEnter(event)) return;
 		event.preventDefault();
 		if (isStreaming && empty) onStop?.();
@@ -185,6 +240,12 @@ export function ChatInput({
 					)}
 				/>
 			</InputShell>
+			<PromptDialog
+				onOpenChange={setSearching}
+				onSelect={insertPrompt}
+				open={searching}
+				prompts={prompts}
+			/>
 		</div>
 	);
 }

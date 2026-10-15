@@ -1,6 +1,6 @@
 import { cn, useIsMobile } from "@repo/ui";
 import { type KeyboardEvent, useMemo, useState } from "react";
-import { type Command, commands } from "../lib/commands.ts";
+import { type Command, commands, matchesCommand } from "../lib/commands.ts";
 
 const COMMAND_QUERY = /^\/(\S*)$/;
 
@@ -12,10 +12,9 @@ export interface CommandMenuState {
 }
 
 function matching(query: string, isMobile: boolean): Command[] {
-	const typed = query.toLowerCase();
 	return commands
 		.filter((c) => !(isMobile && c.desktopOnly))
-		.filter((c) => c.name.slice(1).startsWith(typed));
+		.filter((c) => matchesCommand(c, query));
 }
 
 export function useCommandMenu(

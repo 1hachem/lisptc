@@ -69,14 +69,27 @@ An agent's own calls are never refused.
 
 ## Worktrees
 
-Every git worktree lives in `worktrees/` at the repository root, one directory
-per branch, named after it. This holds for Claude, Codex and any other agent
-runner, and for a worktree you add by hand. Never put one under `.claude/`, a
-sibling of the repository, or a temporary directory.
+Every git worktree lives in `worktrees/` at the repository root, at the path of
+its branch: `worktrees/<type>/<slug>` for a branch named `<type>/<slug>`. The
+type is a commit type (`feat`, `fix`, `refactor`, `ci` and so on), so a branch
+is named for the commit it is headed to, and its worktree is filed with the
+others of its kind. This holds for Claude, Codex and any other agent runner, and
+for a worktree you add by hand. Never put one under `.claude/`, a sibling of the
+repository, a temporary directory, or flat at the top of `worktrees/`.
 
 The directory is tracked through its `.gitkeep`, and `.gitignore` keeps
-everything else in it out of git. Remove a worktree with `git worktree remove`
-once its branch is merged, so the directory does not fill with stale checkouts.
+everything else in it out of git. Move a worktree with `git worktree move`,
+never `mv`, so git keeps track of where it is.
+
+`.husky/post-checkout` removes a worktree added anywhere else, home directory
+included, and the hooks under `.agents/hooks/` hold Claude's own worktrees and
+its `git worktree move` to the same path.
+
+Remove a worktree with `git worktree remove` once its pull request is merged,
+and delete its branch with it. Do the same for a worktree whose branch has no
+remote and is no longer worked on. Never delete a worktree's directory by hand:
+git loses track of it, and what is left is a directory no git command will
+clean up.
 
 ## What this is
 
