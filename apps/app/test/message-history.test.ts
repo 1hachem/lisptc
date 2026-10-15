@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	newestFirst,
 	type RecallDirection,
 	type Recalled,
 	recall,
@@ -60,5 +61,11 @@ describe("recalling sent messages", () => {
 describe("the sent history", () => {
 	it("trims, drops blanks and collapses repeats in a row", () => {
 		expect(sentHistory([" a ", "a", "", "b", "a"])).toEqual(["a", "b", "a"]);
+	});
+});
+
+describe("the prompts to search", () => {
+	it("puts the newest first and keeps each prompt once", () => {
+		expect(newestFirst(["a", "b", "a", "c"])).toEqual(["c", "a", "b"]);
 	});
 });

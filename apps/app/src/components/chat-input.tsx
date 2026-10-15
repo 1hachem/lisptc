@@ -10,6 +10,7 @@ import {
 	MenuOption,
 	useBasicTypeaheadTriggerMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
+import { PromptDialog } from "@repo/components";
 import { cn, useIsMobile } from "@repo/ui";
 import {
 	$createLineBreakNode,
@@ -27,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Command, commands, matchesCommand } from "../lib/commands.ts";
 import {
+	newestFirst,
 	type RecallDirection,
 	type Recalled,
 	recall,
@@ -173,9 +175,24 @@ function Editor({
 		else runText();
 	}, [empty, onStop, runText]);
 
+	const [searching, setSearching] = useState(false);
+	const prompts = useMemo(() => newestFirst(history), [history]);
+
+	const insertPrompt = useCallback(
+		(prompt: string) => {
+			editor.update(() => $replaceText(prompt));
+			editor.focus();
+		},
+		[editor],
+	);
+
 	const runCommand = useCallback(
 		(name: string) => {
 			editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
+			if (name === "/prompt") {
+				setSearching(true);
+				return;
+			}
 			void Promise.resolve(onCommand?.(name)).then((text) => {
 				if (text) flash(text);
 			});
@@ -242,6 +259,12 @@ function Editor({
 				/>
 			</InputShell>
 
+			<PromptDialog
+				onOpenChange={setSearching}
+				onSelect={insertPrompt}
+				open={searching}
+				prompts={prompts}
+			/>
 			<HistoryPlugin />
 			<ClearEditorPlugin />
 			<CommandMenuPlugin

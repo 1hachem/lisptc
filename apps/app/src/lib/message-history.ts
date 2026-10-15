@@ -17,6 +17,10 @@ export function sentHistory(sent: string[]): string[] {
 		.filter((text, i, all) => text !== "" && text !== all[i - 1]);
 }
 
+export function newestFirst(history: string[]): string[] {
+	return [...new Set([...history].reverse())];
+}
+
 export function recall(
 	history: string[],
 	recalled: Recalled | null,
