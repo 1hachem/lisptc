@@ -5,6 +5,7 @@ import {
 	formsIn,
 	highlighter,
 	openForms,
+	sourceTokensIn,
 	tokensIn,
 } from "../src/index.ts";
 
@@ -223,5 +224,30 @@ describe("the browser reads a reply the way the repl runs it", () => {
 	}) => {
 		const { prose } = formsIn(source);
 		for (const form of forms) expect(prose).not.toContain(form);
+	});
+});
+
+describe("sourceTokensIn", () => {
+	const rules = "(permission/default ask)\n(permission/allow car)";
+
+	test("reads every form of a source file as code", () => {
+		expect(
+			sourceTokensIn(rules)
+				.filter((t) => t.className !== undefined)
+				.map((t) => t.value),
+		).toEqual([
+			"(",
+			"permission/default",
+			"ask",
+			")",
+			"(",
+			"permission/allow",
+			"car",
+			")",
+		]);
+	});
+
+	test("the prose-aware tokenizer leaves the same forms plain", () => {
+		expect(classed(rules)).toEqual([]);
 	});
 });
