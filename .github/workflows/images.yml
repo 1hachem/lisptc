@@ -168,7 +168,7 @@ jobs:
           PR: ${{ github.event.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
+          live=$(.github/scripts/retry.sh gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
           [ "$live" = true ] || exit 0
           .github/scripts/preview-release.sh "$PR" "$SHA"
 
@@ -177,6 +177,7 @@ jobs:
     needs: preview-release
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
     runs-on: ubuntu-latest
+    continue-on-error: true
     concurrency:
       group: preview-comment-${{ github.event.number }}
       cancel-in-progress: false
@@ -207,7 +208,7 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           test -n "$TAILNET_DOMAIN"
-          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
+          live=$(.github/scripts/retry.sh gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
           if [ "$live" != true ]; then
             .github/scripts/preview-link.sh "$PR"
             exit 0
