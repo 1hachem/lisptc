@@ -180,6 +180,24 @@ export function ChatProvider({
 }) {
 	const navigate = useNavigate();
 	const createChat = useConvexMutation(api.chats.create);
+	const startChat = useConvexMutation(api.chats.start);
+	const markStreaming = useMemo(
+		() =>
+			startChat.withOptimisticUpdate((store, { chatId: started }) => {
+				for (const { args, value } of store.getAllQueries(api.chats.list)) {
+					if (value === undefined) continue;
+					store.setQuery(api.chats.list, args, {
+						...value,
+						chats: value.chats.map((chat) =>
+							chat._id === started
+								? { ...chat, status: "streaming" as const, failure: undefined }
+								: chat,
+						),
+					});
+				}
+			}),
+		[startChat],
+	);
 	const transport = useMemo(
 		() =>
 			new FetchStreamTransport({
@@ -297,6 +315,7 @@ export function ChatProvider({
 			setEvalError(null);
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
+			void markStreaming({ chatId: opened });
 			stream.submit(
 				{ chatId: opened, ...input },
 				{ optimisticValues: { messages: [...persisted, shown] } },
@@ -309,7 +328,15 @@ export function ChatProvider({
 				});
 			}
 		},
-		[chatId, workspaceId, createChat, navigate, persisted, stream],
+		[
+			chatId,
+			workspaceId,
+			createChat,
+			markStreaming,
+			navigate,
+			persisted,
+			stream,
+		],
 	);
 
 	const submitTurn = useCallback(

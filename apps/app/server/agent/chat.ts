@@ -45,6 +45,23 @@ async function openingMessage(
 	return toStored([systemEventMessage(event, crypto.randomUUID())])[0];
 }
 
+async function prepareTurn(
+	convex: ReturnType<typeof convexAs>,
+	chatId: TurnInput["chatId"],
+	opening: StoredMessage,
+) {
+	const { workspaceId } = await convex.query(api.chats.get, { chatId });
+	const { provider, model } = chatModel(
+		(await convex.query(api.workspaces.get, { workspaceId })).model,
+	);
+	await convex.mutation(api.messages.append, {
+		chatId,
+		messages: [opening],
+	});
+	const history = await convex.query(api.messages.transcript, { chatId });
+	return { provider, model, history };
+}
+
 export const steerRequestSchema = z.object({
 	chatId: convexId<"chats">(),
 	id: z.string().min(1),
@@ -83,17 +100,19 @@ export const turn = {
 			);
 		}
 		const convex = convexAs(context.session);
-
-		const { workspaceId } = await convex.query(api.chats.get, { chatId });
-		const { provider, model } = chatModel(
-			(await convex.query(api.workspaces.get, { workspaceId })).model,
-		);
-		await convex.mutation(api.messages.append, {
-			chatId,
-			messages: [opening],
-		});
-		const history = await convex.query(api.messages.transcript, { chatId });
 		await convex.mutation(api.chats.start, { chatId });
+
+		const { provider, model, history } = await prepareTurn(
+			convex,
+			chatId,
+			opening,
+		).catch(async (error: unknown) => {
+			await convex.mutation(api.chats.settle, {
+				chatId,
+				failure: error instanceof Error ? error.message : String(error),
+			});
+			throw error;
+		});
 
 		console.log(
 			`chat chat=${chatId} messages=${history.length} ${provider}/${model}`,
