@@ -125,10 +125,68 @@ describe("a new server", () => {
 			lastAttached: 1002,
 		});
 		expect(outcome.requeueAt).toBe(1600);
-		expect(w.sink.servers.map((row) => row.phase)).toEqual([
-			"starting",
-			"ready",
+		expect(w.sink.servers).toMatchObject([
+			{ phase: "starting", reason: "creating its pod" },
+			{
+				phase: "starting",
+				reason: `waiting for it to answer at http://${w.target.metadata.name}.${NAMESPACE}:8931/mcp`,
+			},
+			{ phase: "ready" },
 		]);
+	});
+
+	it("says it is fetching the image while its containers are being created", async () => {
+		const w = world();
+		await reconcile(w.target, w.deps(1000));
+		w.fake.bindAll();
+		for (const pod of w.fake.pods.values())
+			pod.status = {
+				phase: "Pending",
+				containerStatuses: (pod.spec?.containers ?? []).map((c) => ({
+					name: c.name,
+					ready: false,
+					restartCount: 0,
+					image: c.image ?? "",
+					imageID: "",
+					state: { waiting: { reason: "ContainerCreating" } },
+				})),
+			};
+		w.fake.setEvent('Pulling image "playwright-mcp"');
+
+		await reconcile(w.target, w.deps(1001));
+
+		expect(w.target.status).toMatchObject({
+			phase: "Starting",
+			reason: 'Pulling image "playwright-mcp"',
+		});
+		expect(w.sink.servers.at(-1)).toMatchObject({
+			phase: "starting",
+			reason: 'Pulling image "playwright-mcp"',
+		});
+	});
+
+	it("says which node it waits for when the pod cannot be placed", async () => {
+		const w = world();
+		await reconcile(w.target, w.deps(1000));
+		w.fake.bindAll();
+		for (const pod of w.fake.pods.values())
+			pod.status = {
+				phase: "Pending",
+				conditions: [
+					{
+						type: "PodScheduled",
+						status: "False",
+						reason: "Unschedulable",
+						message: "0/1 nodes are available: insufficient memory.",
+					},
+				],
+			};
+
+		await reconcile(w.target, w.deps(1001));
+
+		expect(w.target.status?.reason).toBe(
+			"waiting for a node: 0/1 nodes are available: insufficient memory.",
+		);
 	});
 
 	it("names the app container that failed and keeps its last lines", async () => {

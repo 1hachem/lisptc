@@ -1,6 +1,7 @@
 import {
 	ApiException,
 	CoreV1Api,
+	type CoreV1Event,
 	CustomObjectsApi,
 	type KubeConfig,
 	NetworkingV1Api,
@@ -58,6 +59,7 @@ export interface Cluster {
 	resizeClaim(namespace: string, name: string, size: string): Promise<void>;
 	deleteClaim(namespace: string, name: string): Promise<void>;
 	logs(namespace: string, pod: string, container: string): Promise<string>;
+	lastEvent(namespace: string, pod: string): Promise<string | undefined>;
 	reachable(url: string): Promise<boolean>;
 	origin(namespace: string, service: string, port: number): string;
 	managedPods(): Promise<Located[]>;
@@ -89,6 +91,11 @@ async function tolerating(code: number, run: () => Promise<unknown>) {
 }
 
 const merge = setHeaderOptions("Content-Type", PatchStrategy.MergePatch);
+
+function when(event: CoreV1Event): number {
+	const at = event.eventTime ?? event.lastTimestamp ?? event.firstTimestamp;
+	return at ? new Date(at).getTime() : 0;
+}
 
 function located(item: {
 	metadata?: {
@@ -213,6 +220,18 @@ export function clientCluster(config: KubeConfig): Cluster {
 				});
 			} catch {
 				return "";
+			}
+		},
+		async lastEvent(namespace, name) {
+			try {
+				const list = await core.listNamespacedEvent({
+					namespace,
+					fieldSelector: `involvedObject.kind=Pod,involvedObject.name=${name}`,
+				});
+				const latest = list.items.sort((a, b) => when(b) - when(a))[0];
+				return latest?.message?.trim() || undefined;
+			} catch {
+				return undefined;
 			}
 		},
 		async reachable(url) {

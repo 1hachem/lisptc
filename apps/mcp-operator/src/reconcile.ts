@@ -370,6 +370,7 @@ class Run {
 			cluster.origin(this.namespace, this.name, port),
 		);
 		const observed = stateOf(pod);
+		const soon = now + SOON_SECONDS;
 		if (observed.phase === "failed") {
 			const logs = await cluster.logs(
 				this.namespace,
@@ -387,13 +388,25 @@ class Run {
 				wake,
 			);
 		}
-		const answering =
-			observed.phase === "ready" &&
-			(await cluster.reachable(endpoints.mcp ?? ""));
-		if (!answering)
+		if (observed.phase === "starting") {
+			const reason =
+				(observed.creating
+					? await cluster.lastEvent(this.namespace, this.name)
+					: undefined) ?? observed.reason;
 			return await this.settle(
-				{ phase: "Starting", endpoints, state },
-				now + SOON_SECONDS,
+				{ phase: "Starting", reason, endpoints, state },
+				soon,
+			);
+		}
+		if (!(await cluster.reachable(endpoints.mcp ?? "")))
+			return await this.settle(
+				{
+					phase: "Starting",
+					reason: `waiting for it to answer at ${endpoints.mcp}`,
+					endpoints,
+					state,
+				},
+				soon,
 			);
 		if (this.before.phase !== "Ready")
 			for (const entry of Object.values(state)) entry.lastAttached = now;
@@ -412,9 +425,17 @@ class Run {
 		const soon = now + SOON_SECONDS;
 		await this.prepareNamespace();
 		const { state, ready } = await this.settleClaims();
-		if (!ready) return await this.settle({ phase: "Starting", state }, soon);
+		if (!ready)
+			return await this.settle(
+				{ phase: "Starting", reason: "waiting for its volumes", state },
+				soon,
+			);
 		const pod = await this.currentPod();
-		if (!pod) return await this.settle({ phase: "Starting", state }, soon);
+		if (!pod)
+			return await this.settle(
+				{ phase: "Starting", reason: "creating its pod", state },
+				soon,
+			);
 		return await this.observe(pod, state);
 	}
 }

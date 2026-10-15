@@ -76,6 +76,7 @@ export function fakeCluster() {
 	const resizeRefusal = { message: undefined as string | undefined };
 	let answering = true;
 	let logs = "";
+	let event: string | undefined;
 
 	function locate<T extends { metadata?: V1Pod["metadata"] }>(
 		map: Map<string, T>,
@@ -158,6 +159,9 @@ export function fakeCluster() {
 		async logs() {
 			return logs;
 		},
+		async lastEvent() {
+			return event;
+		},
 		async reachable() {
 			return answering;
 		},
@@ -202,6 +206,9 @@ export function fakeCluster() {
 		services,
 		claims,
 		removed,
+		setEvent(value: string | undefined) {
+			event = value;
+		},
 		refuseResize(message: string) {
 			resizeRefusal.message = message;
 		},
