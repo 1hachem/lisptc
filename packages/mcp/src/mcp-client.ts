@@ -23,6 +23,7 @@ import {
 	type OAuthConnConfig,
 	type OAuthStore,
 	type ServerHandle,
+	type StartWatch,
 	type Tool,
 	type ToolCall,
 } from "./ports.ts";
@@ -177,9 +178,13 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	async function openClient(
 		client: Client,
 		conf: ConnConfig,
-		signal?: AbortSignal,
+		watch: StartWatch,
 	): Promise<ConnectResult> {
-		const handle: ServerHandle | undefined = await ports.host.ensure(conf);
+		const { signal } = watch;
+		const handle: ServerHandle | undefined = await ports.host.ensure(
+			conf,
+			watch,
+		);
 		if (handle && signsIn(conf)) {
 			const { provider, authUrl, captured } = await ensureAuthorized(
 				conf,
@@ -225,14 +230,14 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	return {
 		async connect(
 			conf: ConnConfig,
-			signal?: AbortSignal,
+			watch: StartWatch = {},
 		): Promise<ConnectResult> {
 			const client = new Client(
 				{ name: "lisptc", version: "1.0.0" },
 				{ capabilities: {} },
 			);
 			try {
-				return await openClient(client, conf, signal);
+				return await openClient(client, conf, watch);
 			} catch (e) {
 				await client.close().catch(() => {});
 				throw e;

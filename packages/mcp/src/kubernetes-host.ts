@@ -12,7 +12,9 @@ import {
 	KIND,
 	type McpServer,
 	type McpServerSpec,
+	type McpServerStatus,
 	PLURAL,
+	retagged,
 	type State,
 	serverName,
 	specFor,
@@ -23,10 +25,16 @@ import type {
 	McpHost,
 	ServerHandle,
 	ServerState,
+	StartWatch,
 } from "./ports.ts";
+import {
+	START_LIMITS,
+	type StartCheck,
+	type StartGaveUp,
+	type StartLimits,
+	waitForStart,
+} from "./start-wait.ts";
 
-const START_TIMEOUT_MS = 180_000;
-const POLL_MS = 1_000;
 const TOUCH_SECONDS = 60;
 const PROBE_TIMEOUT_MS = 3_000;
 
@@ -42,9 +50,37 @@ export interface KubernetesHostOptions {
 	store?: ServerStore;
 	fallback?: McpHost;
 	clock?: () => number;
-	pollMs?: number;
-	startTimeoutMs?: number;
+	limits?: StartLimits;
 	imageTag?: string;
+}
+
+class Start {
+	note: string | undefined;
+	waiting = 0;
+	readonly listeners = new Set<(note: string) => void>();
+	readonly controller = new AbortController();
+	readonly run: Promise<ServerHandle>;
+
+	constructor(serve: (watch: StartWatch) => Promise<ServerHandle>) {
+		this.run = serve({
+			signal: this.controller.signal,
+			progress: (note) => {
+				this.note = note;
+				for (const listener of this.listeners) listener(note);
+			},
+		});
+	}
+}
+
+function abandoned(signal: AbortSignal | undefined): Promise<never> {
+	return new Promise((_, reject) => {
+		if (!signal) return;
+		if (signal.aborted) reject(signal.reason);
+		else
+			signal.addEventListener("abort", () => reject(signal.reason), {
+				once: true,
+			});
+	});
 }
 
 interface Followed {
@@ -52,11 +88,6 @@ interface Followed {
 	state: ServerState;
 	logs: string;
 	touched: number;
-}
-
-function retagged(image: string, tag: string | undefined): string {
-	if (!tag || image.includes("@")) return image;
-	return `${image.replace(/:[^:/]+$/, "")}:${tag}`;
 }
 
 function epochSeconds(): number {
@@ -185,34 +216,60 @@ export async function clusterServes(
 
 export class KubernetesHost implements McpHost {
 	private readonly followed = new Map<string, Followed>();
-	private readonly starting = new Map<string, Promise<ServerHandle>>();
+	private readonly starting = new Map<string, Start>();
 	private readonly store: ServerStore;
 	private readonly fallback: McpHost;
 	private readonly clock: () => number;
-	private readonly pollMs: number;
-	private readonly startTimeoutMs: number;
+	private readonly limits: StartLimits;
 
 	constructor(private readonly options: KubernetesHostOptions) {
 		this.store = options.store ?? clientStore(options.namespace);
 		this.fallback = options.fallback ?? new LocalProcessHost();
 		this.clock = options.clock ?? epochSeconds;
-		this.pollMs = options.pollMs ?? POLL_MS;
-		this.startTimeoutMs = options.startTimeoutMs ?? START_TIMEOUT_MS;
+		this.limits = options.limits ?? START_LIMITS.cluster;
 	}
 
-	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
-		if (launchFor(conf) === undefined) return await this.fallback.ensure(conf);
-		const pending = this.starting.get(conf.name);
-		if (pending) return await pending;
-		const run = this.serving(conf).finally(() =>
-			this.starting.delete(conf.name),
+	async ensure(
+		conf: ConnConfig,
+		watch: StartWatch = {},
+	): Promise<ServerHandle | undefined> {
+		if (launchFor(conf) === undefined)
+			return await this.fallback.ensure(conf, watch);
+		const start = this.starting.get(conf.name) ?? this.begin(conf);
+		return await this.join(start, watch);
+	}
+
+	private begin(conf: ConnConfig): Start {
+		const start = new Start((watch) =>
+			this.serving(conf, watch).finally(() => this.starting.delete(conf.name)),
 		);
-		this.starting.set(conf.name, run);
-		return await run;
+		start.run.catch(() => {});
+		this.starting.set(conf.name, start);
+		return start;
+	}
+
+	private async join(start: Start, watch: StartWatch): Promise<ServerHandle> {
+		const { signal, progress } = watch;
+		if (progress) {
+			start.listeners.add(progress);
+			if (start.note) progress(start.note);
+		}
+		start.waiting += 1;
+		const leave = () => {
+			start.waiting -= 1;
+			if (start.waiting === 0) start.controller.abort(signal?.reason);
+		};
+		signal?.addEventListener("abort", leave, { once: true });
+		try {
+			return await Promise.race([start.run, abandoned(signal)]);
+		} finally {
+			signal?.removeEventListener("abort", leave);
+			if (progress) start.listeners.delete(progress);
+		}
 	}
 
 	async stop(name: string): Promise<void> {
-		await this.starting.get(name)?.catch(() => {});
+		await this.starting.get(name)?.run.catch(() => {});
 		const followed = this.followed.get(name);
 		if (!followed) return await this.fallback.stop(name);
 		this.unfollow(followed);
@@ -220,7 +277,9 @@ export class KubernetesHost implements McpHost {
 	}
 
 	async stopAll(): Promise<void> {
-		await Promise.allSettled(this.starting.values());
+		await Promise.allSettled(
+			[...this.starting.values()].map((start) => start.run),
+		);
 		const running = [...this.followed.values()].filter(
 			(followed) => followed.state === "running",
 		);
@@ -273,7 +332,10 @@ export class KubernetesHost implements McpHost {
 		followed.state = "stopped";
 	}
 
-	private async serving(conf: ConnConfig): Promise<ServerHandle> {
+	private async serving(
+		conf: ConnConfig,
+		watch: StartWatch,
+	): Promise<ServerHandle> {
 		const launch = launchFor(conf);
 		if (!launch) throw new Error(`${conf.name}: has no container to run.`);
 		const { scope } = this.options;
@@ -311,7 +373,7 @@ export class KubernetesHost implements McpHost {
 			touched: 0,
 		};
 		this.followed.set(conf.name, followed);
-		const url = await this.answering(conf.name, server, followed);
+		const url = await this.answering(conf.name, server, followed, watch);
 		this.follow(followed);
 		const headers = "headers" in conf ? conf.headers : undefined;
 		return headers ? { url, headers } : { url };
@@ -321,35 +383,58 @@ export class KubernetesHost implements McpHost {
 		label: string,
 		asked: McpServer,
 		followed: Followed,
+		watch: StartWatch,
 	): Promise<string> {
 		const generation = asked.metadata.generation ?? 0;
-		const deadline = Date.now() + this.startTimeoutMs;
-		let last: McpServer | undefined = asked;
-		while (Date.now() < deadline) {
-			last = await this.store.get(asked.metadata.name);
-			const status = last?.status;
-			const current = (status?.observedGeneration ?? 0) >= generation;
-			if (current && status?.phase === "Ready" && status.endpoints?.mcp)
-				return status.endpoints.mcp;
-			if (current && status?.phase === "Failed") {
-				followed.state = "stopped";
-				followed.logs = status.logTail ?? "";
-				throw new Error(
-					`${label}: ${status.reason ?? "its server failed"} before it answered.${tail(followed.logs)}`,
-				);
-			}
-			await new Promise((resolve) => setTimeout(resolve, this.pollMs));
+		try {
+			return await waitForStart<string>(
+				async () => {
+					const live = await this.store.get(asked.metadata.name);
+					const status = live?.status ?? {};
+					if ((status.observedGeneration ?? 0) < generation)
+						return { waiting: `${label} is starting on the cluster` };
+					return standing(label, status, followed);
+				},
+				this.limits,
+				(why) => clusterGaveUp(label, why),
+				watch,
+			);
+		} catch (ex) {
+			followed.state = "stopped";
+			throw ex;
 		}
-		followed.state = "stopped";
-		throw new Error(
-			`${label}: asked the cluster for it but it did not answer within ${this.startTimeoutMs / 1000}s (last phase: ${last?.status?.phase ?? "none"}).`,
-		);
 	}
 
 	private follow(followed: Followed): void {
 		followed.state = "running";
 		followed.touched = this.clock();
 	}
+}
+
+function standing(
+	label: string,
+	status: McpServerStatus,
+	followed: Followed,
+): StartCheck<string> {
+	const mcp = status.endpoints?.mcp;
+	if (status.phase === "Ready" && mcp) return { ready: mcp };
+	if (status.phase === "Failed") {
+		followed.logs = status.logTail ?? "";
+		throw new Error(
+			`${label}: ${status.reason ?? "its server failed"} before it answered.${tail(followed.logs)}`,
+		);
+	}
+	const phase = (status.phase ?? "Starting").toLowerCase();
+	const reason = status.reason ? `: ${status.reason}` : "";
+	return { waiting: `${label} is ${phase} on the cluster${reason}` };
+}
+
+function clusterGaveUp(label: string, why: StartGaveUp): Error {
+	return new Error(
+		why.stalled
+			? `${label}: the cluster made no progress for ${why.seconds}s, so it was given up on (${why.note}).`
+			: `${label}: the cluster did not have it answering within ${why.seconds}s (${why.note}).`,
+	);
 }
 
 function tail(logs: string): string {

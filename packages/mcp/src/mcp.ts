@@ -519,8 +519,8 @@ export function registerMcp(
 				conf.name,
 				false,
 			);
-		const promise = interp.async.start((signal) =>
-			client.connect(conf, signal).then(
+		const promise = interp.async.start((signal, progress) =>
+			client.connect(conf, { signal, progress }).then(
 				(res) => installServer(interp, client, servers, conf.name, res, policy),
 				(error: unknown) => {
 					throw holdForAuthorization(interp, error);

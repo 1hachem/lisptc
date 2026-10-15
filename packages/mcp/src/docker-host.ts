@@ -14,12 +14,12 @@ import type {
 	ServerHandle,
 	ServerReporter,
 	ServerState,
+	StartWatch,
 } from "./ports.ts";
+import { reachable, START_LIMITS, waitForStart } from "./start-wait.ts";
 
 const exec = promisify(execFile);
 
-const START_TIMEOUT_MS = 120_000;
-const POLL_MS = 250;
 const LOGS_KEEP = 8192;
 const PROBE_TIMEOUT_MS = 5_000;
 
@@ -37,15 +37,6 @@ interface Container {
 	handle: ServerHandle;
 	logs: string;
 	state: ServerState;
-}
-
-async function reachable(url: string): Promise<boolean> {
-	try {
-		await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(2000) });
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 function whyItDied(container: Container): string {
@@ -113,12 +104,15 @@ export class DockerHost implements McpHost {
 		private readonly report: ServerReporter = () => {},
 	) {}
 
-	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
+	async ensure(
+		conf: ConnConfig,
+		watch?: StartWatch,
+	): Promise<ServerHandle | undefined> {
 		const launch = launchFor(conf);
-		if (launch === undefined) return await this.fallback.ensure(conf);
+		if (launch === undefined) return await this.fallback.ensure(conf, watch);
 		const running = this.containers.get(conf.name);
 		if (running && running.state === "running") return running.handle;
-		return await this.start(conf, launch);
+		return await this.start(conf, launch, watch);
 	}
 
 	async stop(name: string): Promise<void> {
@@ -181,10 +175,15 @@ export class DockerHost implements McpHost {
 		];
 	}
 
-	private async start(conf: ConnConfig, launch: Launch): Promise<ServerHandle> {
+	private async start(
+		conf: ConnConfig,
+		launch: Launch,
+		watch?: StartWatch,
+	): Promise<ServerHandle> {
 		this.report({ server: conf.name, phase: "starting" });
 		try {
-			const handle = await this.launch(conf, launch);
+			watch?.progress?.(`${conf.name} is starting its container`);
+			const handle = await this.launch(conf, launch, watch);
 			this.report({ server: conf.name, phase: "ready" });
 			return handle;
 		} catch (ex) {
@@ -200,6 +199,7 @@ export class DockerHost implements McpHost {
 	private async launch(
 		conf: ConnConfig,
 		launch: Launch,
+		watch?: StartWatch,
 	): Promise<ServerHandle> {
 		const app = "app" in conf ? conf.app : undefined;
 		const exposed = (app?.ports ?? []).filter((port) =>
@@ -253,7 +253,7 @@ export class DockerHost implements McpHost {
 			const headers = "headers" in conf ? conf.headers : undefined;
 			container.handle = headers ? { url, headers } : { url };
 			this.containers.set(conf.name, container);
-			await this.answering(conf.name, container, new URL(url).origin);
+			await this.answering(conf.name, container, new URL(url).origin, watch);
 			return container.handle;
 		} catch (ex) {
 			this.containers.delete(conf.name);
@@ -281,18 +281,23 @@ export class DockerHost implements McpHost {
 		name: string,
 		container: Container,
 		origin: string,
+		watch?: StartWatch,
 	): Promise<void> {
-		const deadline = Date.now() + START_TIMEOUT_MS;
-		while (Date.now() < deadline) {
-			if (await reachable(origin)) return;
-			if (container.state !== "running")
-				throw new Error(
-					`${name}: its container exited before ${origin} answered.${whyItDied(container)}`,
-				);
-			await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-		}
-		throw new Error(
-			`${name}: started its container but ${origin} did not answer within ${START_TIMEOUT_MS / 1000}s.${whyItDied(container)}`,
+		await waitForStart(
+			async () => {
+				if (await reachable(origin)) return { ready: undefined };
+				if (container.state !== "running")
+					throw new Error(
+						`${name}: its container exited before ${origin} answered.${whyItDied(container)}`,
+					);
+				return { waiting: `${name} is waiting for ${origin} to answer` };
+			},
+			START_LIMITS.docker,
+			({ seconds }) =>
+				new Error(
+					`${name}: started its container but ${origin} did not answer within ${seconds}s.${whyItDied(container)}`,
+				),
+			watch,
 		);
 	}
 

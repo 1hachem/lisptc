@@ -128,7 +128,7 @@ export interface ToolCall {
 }
 
 export interface McpClient {
-	connect(conf: ConnConfig, signal?: AbortSignal): Promise<ConnectResult>;
+	connect(conf: ConnConfig, watch?: StartWatch): Promise<ConnectResult>;
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
 	asleep(serverId: string): Promise<boolean>;
@@ -169,8 +169,16 @@ export interface ServerReport {
 
 export type ServerReporter = (report: ServerReport) => void;
 
+export interface StartWatch {
+	signal?: AbortSignal;
+	progress?: (note: string) => void;
+}
+
 export interface McpHost {
-	ensure(conf: ConnConfig): Promise<ServerHandle | undefined>;
+	ensure(
+		conf: ConnConfig,
+		watch?: StartWatch,
+	): Promise<ServerHandle | undefined>;
 	stop(name: string): Promise<void>;
 	stopAll(): Promise<void>;
 	status(name: string): ServerState;

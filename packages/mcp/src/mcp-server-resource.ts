@@ -120,6 +120,11 @@ export interface McpServer {
 	status?: McpServerStatus;
 }
 
+export function retagged(image: string, tag: string | undefined): string {
+	if (!tag || image.includes("@")) return image;
+	return `${image.replace(/:[^:/]+$/, "")}:${tag}`;
+}
+
 export function dnsLabel(value: string, max = NAME_MAX): string {
 	return value
 		.toLowerCase()

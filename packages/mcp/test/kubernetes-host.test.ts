@@ -76,8 +76,7 @@ function host(
 		namespace: "lisptc",
 		store,
 		fallback,
-		pollMs: 1,
-		startTimeoutMs: 200,
+		limits: { pollMs: 1, stallMs: 200, ceilingMs: 400 },
 		clock,
 		imageTag,
 	});
@@ -258,12 +257,133 @@ describe("the kubernetes host", () => {
 		});
 	});
 
-	it("gives up when the server never answers", async () => {
-		const fake = fakeStore(() => ({ phase: "Starting" }));
+	it("gives up on a server whose start stops moving, naming where it stood", async () => {
+		const fake = fakeStore((server) => ({
+			phase: "Starting",
+			reason: "creating mcp",
+			observedGeneration: server.metadata.generation,
+		}));
 
 		await expect(host(fake.store).ensure(browser)).rejects.toThrow(
-			/did not answer within 0.2s \(last phase: Starting\)/,
+			/made no progress for 0s.*playwright is starting on the cluster: creating mcp/,
 		);
+	});
+
+	it("keeps waiting while the start moves, and tells each step", async () => {
+		let polls = 0;
+		const fake = fakeStore((server) => {
+			polls += 1;
+			if (polls > 30) return ready(server);
+			return {
+				phase: "Starting",
+				reason: `step ${Math.floor(polls / 10)}`,
+				observedGeneration: server.metadata.generation,
+			};
+		});
+		const notes: string[] = [];
+		const kube = new KubernetesHost({
+			scope: "ws1",
+			namespace: "lisptc",
+			store: fake.store,
+			fallback: recordingHost(),
+			limits: { pollMs: 5, stallMs: 250, ceilingMs: 2_000 },
+		});
+
+		await expect(
+			kube.ensure(browser, { progress: (note) => notes.push(note) }),
+		).resolves.toMatchObject({ url: READY_URL });
+		expect(notes).toEqual([
+			"playwright is starting on the cluster: step 0",
+			"playwright is starting on the cluster: step 1",
+			"playwright is starting on the cluster: step 2",
+			"playwright is starting on the cluster: step 3",
+		]);
+	});
+
+	it("gives up once the ceiling passes, however the start moves", async () => {
+		let polls = 0;
+		const fake = fakeStore((server) => {
+			polls += 1;
+			return {
+				phase: "Starting",
+				reason: `step ${polls}`,
+				observedGeneration: server.metadata.generation,
+			};
+		});
+
+		await expect(host(fake.store).ensure(browser)).rejects.toThrow(
+			/did not have it answering within 0s/,
+		);
+	});
+
+	it("lets a second load join a start, and tells it where the start stands", async () => {
+		let open = false;
+		const fake = fakeStore((server) =>
+			open
+				? ready(server)
+				: {
+						phase: "Starting",
+						reason: 'Pulling image "playwright-mcp"',
+						observedGeneration: server.metadata.generation,
+					},
+		);
+		const kube = new KubernetesHost({
+			scope: "ws1",
+			namespace: "lisptc",
+			store: fake.store,
+			fallback: recordingHost(),
+			limits: { pollMs: 1, stallMs: 5_000, ceilingMs: 5_000 },
+		});
+		const first = kube.ensure(browser);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const notes: string[] = [];
+
+		const second = kube.ensure(browser, {
+			progress: (note) => notes.push(note),
+		});
+		open = true;
+
+		await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+		expect(fake.patches).toHaveLength(0);
+		expect(notes[0]).toBe(
+			'playwright is starting on the cluster: Pulling image "playwright-mcp"',
+		);
+	});
+
+	it("stops polling only once every load waiting on a start was cancelled", async () => {
+		let polls = 0;
+		const fake = fakeStore((server) => {
+			polls += 1;
+			return {
+				phase: "Starting",
+				reason: "creating mcp",
+				observedGeneration: server.metadata.generation,
+			};
+		});
+		const kube = new KubernetesHost({
+			scope: "ws1",
+			namespace: "lisptc",
+			store: fake.store,
+			fallback: recordingHost(),
+			limits: { pollMs: 1, stallMs: 5_000, ceilingMs: 5_000 },
+		});
+		const one = new AbortController();
+		const two = new AbortController();
+		const first = kube.ensure(browser, { signal: one.signal });
+		const second = kube.ensure(browser, { signal: two.signal });
+
+		one.abort();
+		await expect(first).rejects.toThrow();
+		const before = polls;
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(polls).toBeGreaterThan(before);
+
+		two.abort();
+		await expect(second).rejects.toThrow();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const stopped = polls;
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(polls).toBe(stopped);
 	});
 
 	it("puts a server to sleep when it is stopped", async () => {
