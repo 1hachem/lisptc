@@ -25,10 +25,7 @@ export const PROVIDER_CATALOG = {
 	},
 	openrouter: {
 		label: "OpenRouter",
-		models: [
-			{ id: "google/gemma-4-31b-it", name: "Gemma 4 31B" },
-			{ id: "openai/gpt-oss-safeguard-20b", name: "GPT-OSS Safeguard 20B" },
-		],
+		models: [{ id: "google/gemma-4-31b-it", name: "Gemma 4 31B" }],
 	},
 } as const satisfies Record<
 	ProviderName,
