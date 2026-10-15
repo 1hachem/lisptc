@@ -1,11 +1,11 @@
-import { SortableTree, ThemeSwatches } from "@repo/components";
+import { ThemeSwatches } from "@repo/components";
 import { fonts } from "@repo/ui";
 import { motions } from "@repo/ui/motions.ts";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { CHANNELS, type Channel } from "../lib/channels.ts";
 import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
-import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
+import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useUI } from "../lib/ui.tsx";
 import { SidePanel } from "./side-panel.tsx";
 
@@ -115,23 +115,6 @@ function FontList() {
 	);
 }
 
-function SidebarOrder() {
-	const { order, reorder } = useSidebarOrder();
-	const { motion } = useSidebarMotion();
-	return (
-		<div className="px-4 text-[11.5px]">
-			<SortableTree order={order} onReorder={reorder} motion={motion}>
-				{(name) => (
-					<div className="flex cursor-grab items-baseline gap-2 py-0.5 text-dim hover:text-fg">
-						<span aria-hidden>⋮⋮</span>
-						<span className="flex-1 truncate">{name}</span>
-					</div>
-				)}
-			</SortableTree>
-		</div>
-	);
-}
-
 function MotionList() {
 	const { motion, chooseMotion } = useSidebarMotion();
 	return (
@@ -191,10 +174,6 @@ export function PreferencesPanel({ open }: { open: boolean }) {
 					font
 				</div>
 				<FontList />
-				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-					sidebar order
-				</div>
-				<SidebarOrder />
 				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 					drag motion
 				</div>
