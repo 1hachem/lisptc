@@ -128,4 +128,25 @@ describe("SortableTree", () => {
 		expect(host.querySelector('[data-child="chat"]')).toBeNull();
 		expect(host.querySelector('[data-child="memories"]')).not.toBeNull();
 	});
+
+	it("tells which entry was picked up", async () => {
+		const onPickUp = vi.fn();
+		const host = await mounted(
+			<SortableTree
+				order={["chat", "memories"]}
+				onReorder={() => {}}
+				onPickUp={onPickUp}
+			>
+				{(id) => <span>{id}</span>}
+			</SortableTree>,
+		);
+		const memories = host.querySelector<HTMLElement>('[data-entry="memories"]');
+		await act(async () => {
+			memories?.focus();
+			memories?.dispatchEvent(
+				new KeyboardEvent("keydown", { code: "Space", bubbles: true }),
+			);
+		});
+		expect(onPickUp).toHaveBeenCalledWith("memories");
+	});
 });

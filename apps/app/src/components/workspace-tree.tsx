@@ -101,6 +101,10 @@ const FOLDERS = [
 	...PLACEHOLDERS,
 ] as const satisfies readonly Folder[];
 
+function isFolder(entry: SidebarEntry): entry is Folder {
+	return FOLDERS.some((folder) => folder === entry);
+}
+
 function folderCookie(folder: Folder) {
 	return `ui.folder.${folder}`;
 }
@@ -423,7 +427,14 @@ export function WorkspaceTree({
 
 	return (
 		<FileTree>
-			<SortableTree order={order} onReorder={reorder} motion={motion}>
+			<SortableTree
+				order={order}
+				onReorder={reorder}
+				onPickUp={(name) => {
+					if (isFolder(name) && folder(name).open) folder(name).onToggle();
+				}}
+				motion={motion}
+			>
 				{(name) => entries[name]()}
 			</SortableTree>
 		</FileTree>

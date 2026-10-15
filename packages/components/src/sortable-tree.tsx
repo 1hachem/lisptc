@@ -151,11 +151,13 @@ function SortableEntry({
 export function SortableTree<Id extends string>({
 	order,
 	onReorder,
+	onPickUp,
 	motion = "slide",
 	children,
 }: {
 	order: readonly Id[];
 	onReorder: (next: Id[]) => void;
+	onPickUp?: (id: Id) => void;
 	motion?: MotionId;
 	children: (id: Id) => ReactNode;
 }) {
@@ -173,8 +175,11 @@ export function SortableTree<Id extends string>({
 	);
 	const entry = (id: UniqueIdentifier | undefined) =>
 		order.find((candidate) => candidate === id);
-	const onDragStart = ({ active }: DragStartEvent) =>
-		setDragged(entry(active.id));
+	const onDragStart = ({ active }: DragStartEvent) => {
+		const picked = entry(active.id);
+		setDragged(picked);
+		if (picked) onPickUp?.(picked);
+	};
 	const onDragEnd = ({ active, over }: DragEndEvent) => {
 		setDragged(undefined);
 		const from = entry(active.id);
