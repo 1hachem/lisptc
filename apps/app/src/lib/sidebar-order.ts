@@ -5,7 +5,7 @@ export const SIDEBAR_ENTRIES = [
 	"memories",
 	"permissions",
 	"knowledge",
-	"agents",
+	"sub-agents",
 	"triggers",
 	"tasks",
 	"ui",
@@ -16,6 +16,10 @@ export const SIDEBAR_ENTRIES = [
 
 export type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number];
 
+const RENAMED: Readonly<Record<string, SidebarEntry>> = {
+	agents: "sub-agents",
+};
+
 function isEntry(name: string): name is SidebarEntry {
 	return (SIDEBAR_ENTRIES as readonly string[]).includes(name);
 }
@@ -23,6 +27,8 @@ function isEntry(name: string): name is SidebarEntry {
 export function sidebarOrder(
 	stored: readonly string[] | undefined,
 ): SidebarEntry[] {
-	const kept = [...new Set(stored ?? [])].filter(isEntry);
+	const kept = [
+		...new Set((stored ?? []).map((name) => RENAMED[name] ?? name)),
+	].filter(isEntry);
 	return [...kept, ...SIDEBAR_ENTRIES.filter((name) => !kept.includes(name))];
 }

@@ -41,7 +41,7 @@ import { SessionRow } from "./session-row.tsx";
 
 const PLACEHOLDERS = [
 	"knowledge",
-	"agents",
+	"sub-agents",
 	"triggers",
 	"tasks",
 	"ui",
@@ -58,7 +58,7 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	memories: StickyNote01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
-	agents: restingIcon(),
+	"sub-agents": restingIcon(),
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
 	ui: PaintBoardIcon,
@@ -400,7 +400,7 @@ export function WorkspaceTree({
 					</TreeFolder>
 				);
 			case "knowledge":
-			case "agents":
+			case "sub-agents":
 			case "triggers":
 			case "tasks":
 			case "ui":

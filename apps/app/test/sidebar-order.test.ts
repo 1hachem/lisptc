@@ -12,6 +12,13 @@ describe("sidebarOrder", () => {
 		expect(order).toHaveLength(SIDEBAR_ENTRIES.length);
 	});
 
+	it("keeps a renamed entry where the user put it", () => {
+		expect(sidebarOrder(["README.md", "agents"]).slice(0, 2)).toEqual([
+			"README.md",
+			"sub-agents",
+		]);
+	});
+
 	it("drops repeats and entries the sidebar no longer has", () => {
 		expect(sidebarOrder(["gone", "tasks", "tasks"])[0]).toBe("tasks");
 		expect(sidebarOrder(["gone"])).toEqual([...SIDEBAR_ENTRIES]);
