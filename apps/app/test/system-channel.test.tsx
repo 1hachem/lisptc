@@ -29,15 +29,38 @@ vi.mock("../src/lib/chat.tsx", async (importOriginal) => ({
 	useChatSession: <U,>(selector: (state: typeof session) => U): U =>
 		selector(session),
 }));
-vi.mock("@convex-dev/react-query", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@convex-dev/react-query")>()),
-	useConvexMutation: () => async () => null,
-}));
+const stored = vi.hoisted(() => {
+	const listeners = new Set<() => void>();
+	let value: { channels?: Record<string, boolean> } = {};
+	return {
+		get: () => value,
+		put: (change: typeof value) => {
+			value = { ...value, ...change };
+			for (const listener of listeners) listener();
+		},
+		subscribe: (listener: () => void) => {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
+		reset: () => {
+			value = {};
+		},
+	};
+});
+
+vi.mock("../src/lib/preferences.ts", async () => {
+	const { useSyncExternalStore } = await import("react");
+	return {
+		usePreferences: () =>
+			useSyncExternalStore(stored.subscribe, stored.get, stored.get),
+		usePutPreferences: () => stored.put,
+	};
+});
 const prefs = vi.hoisted(() => new Map<string, boolean>());
 
 vi.mock("../src/lib/prefs.ts", () => ({
 	SIDEBAR_COOKIE: "ui.sidebar",
-	PANEL_COOKIE: "ui.panel",
+	PREFERENCES_COOKIE: "ui.panel",
 	readBoolPref: (name: string, fallback: boolean) =>
 		prefs.get(name) ?? fallback,
 	writeBoolPref: (name: string, value: boolean) => {
@@ -81,6 +104,7 @@ afterEach(() => {
 	for (const root of roots.splice(0)) act(() => root.unmount());
 	document.body.replaceChildren();
 	prefs.clear();
+	stored.reset();
 });
 
 let toggle: (() => void) | undefined;
@@ -133,6 +157,6 @@ describe("the system channel", () => {
 			(line) => line.textContent,
 		);
 		expect(userLines).toEqual(["write a"]);
-		expect(prefs.get("ui.channel.system")).toBe(true);
+		expect(stored.get().channels?.system).toBe(true);
 	});
 });

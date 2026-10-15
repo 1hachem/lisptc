@@ -1,29 +1,15 @@
-import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
-import { api } from "@repo/backend/api";
 import { FontDialog, ThemeDialog } from "@repo/components";
 import { type FontDef, fonts, type ThemeDef, themes } from "@repo/ui";
-import { useQuery } from "@tanstack/react-query";
 import {
 	createContext,
 	useCallback,
 	useContext,
-	useEffect,
 	useMemo,
 	useState,
 } from "react";
-import {
-	readFontPref,
-	readThemePref,
-	readThemeUsesPref,
-	writeFontPref,
-	writeThemePref,
-	writeThemeUsesPref,
-} from "./prefs.ts";
-import {
-	mostUsedThemes,
-	recordThemeUse,
-	type ThemeUses,
-} from "./theme-uses.ts";
+import { usePreferences, usePutPreferences } from "./preferences.ts";
+import { fontOf, themeOf } from "./resolved-preferences.ts";
+import { mostUsedThemes, recordThemeUse } from "./theme-uses.ts";
 
 const SHORTLIST = 6;
 
@@ -39,13 +25,6 @@ interface Appearance {
 
 const AppearanceContext = createContext<Appearance | null>(null);
 
-function isOffered(
-	list: { id: string }[],
-	id: string | undefined,
-): id is string {
-	return list.some((candidate) => candidate.id === id);
-}
-
 function offered<T extends { id: string }>(list: T[], id: string): T {
 	const found = list.find((candidate) => candidate.id === id);
 	if (!found) throw new Error(`${id} is not offered`);
@@ -58,63 +37,26 @@ export function AppearanceProvider({
 	children: React.ReactNode;
 }) {
 	const [picking, setPicking] = useState<"theme" | "font" | null>(null);
-	const [currentTheme, setCurrentTheme] = useState(readThemePref);
-	const [currentFont, setCurrentFont] = useState(readFontPref);
-	const [uses, setUses] = useState(readThemeUsesPref);
+	const stored = usePreferences();
+	const put = usePutPreferences();
+	const currentTheme = themeOf(stored);
+	const currentFont = fontOf(stored);
+	const uses = stored?.themeUses;
 	const openThemePicker = useCallback(() => setPicking("theme"), []);
 	const openFontPicker = useCallback(() => setPicking("font"), []);
 	const shortlist = useMemo(
-		() => mostUsedThemes(themes, uses, SHORTLIST),
+		() => mostUsedThemes(themes, uses ?? {}, SHORTLIST),
 		[uses],
 	);
-	const { data: stored } = useQuery(convexQuery(api.preferences.get, {}));
-	const putPreferences = useConvexMutation(api.preferences.put);
-
-	const save = useCallback(
-		(preferences: { theme?: string; font?: string; themeUses?: ThemeUses }) =>
-			void putPreferences({ preferences }),
-		[putPreferences],
-	);
-
-	useEffect(() => {
-		if (stored === undefined) return;
-		if (!stored?.theme && !stored?.font) {
-			save({
-				theme: readThemePref(),
-				font: readFontPref(),
-				themeUses: readThemeUsesPref(),
-			});
-			return;
-		}
-		if (isOffered(themes, stored.theme)) {
-			writeThemePref(stored.theme);
-			setCurrentTheme(stored.theme);
-		}
-		if (isOffered(fonts, stored.font)) {
-			writeFontPref(stored.font);
-			setCurrentFont(stored.font);
-		}
-		if (stored.themeUses) {
-			writeThemeUsesPref(stored.themeUses);
-			setUses(stored.themeUses);
-		}
-	}, [stored, save]);
 
 	const chooseTheme = (id: string) => {
 		if (id === currentTheme) return;
-		const next = recordThemeUse(uses, id);
-		writeThemePref(id);
-		writeThemeUsesPref(next);
-		setCurrentTheme(id);
-		setUses(next);
-		save({ theme: id, themeUses: next });
+		put({ theme: id, themeUses: recordThemeUse(uses ?? {}, id) });
 	};
 
 	const chooseFont = (id: string) => {
 		if (id === currentFont) return;
-		writeFontPref(id);
-		setCurrentFont(id);
-		save({ font: id });
+		put({ font: id });
 	};
 
 	const closeWhenFalse = (open: boolean) => {
