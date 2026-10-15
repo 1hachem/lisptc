@@ -24,8 +24,18 @@ export const commands: Command[] = [
 	{ name: "/font", desc: "choose the font" },
 	{ name: "/model", desc: "choose the model this workspace runs on" },
 	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
-	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
-	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
+	{
+		name: "/preferences",
+		desc: "toggle the preferences panel",
+		desktopOnly: true,
+		aliases: ["/panel", "/right"],
+	},
+	{
+		name: "/sidebar",
+		desc: "toggle the sidebar",
+		desktopOnly: true,
+		aliases: ["/left"],
+	},
 	{ name: "/theme", desc: "choose the colour theme" },
 ];
 
@@ -33,6 +43,16 @@ export function matchesCommand(command: Command, typed: string): boolean {
 	const query = typed.toLowerCase();
 	return [command.name, ...(command.aliases ?? [])].some((name) =>
 		name.slice(1).startsWith(query),
+	);
+}
+
+export function canonicalCommand(typed: string): string {
+	const name = typed.toLowerCase();
+	return (
+		commands.find(
+			(command) =>
+				command.name === name || command.aliases?.includes(name) === true,
+		)?.name ?? name
 	);
 }
 
@@ -73,7 +93,7 @@ export function useCommandRunner() {
 				},
 				"/copy": () => copyConversation(transcript(store.getState().messages)),
 				"/sidebar": quietly(toggleLeft),
-				"/panel": quietly(toggleRight),
+				"/preferences": quietly(toggleRight),
 				"/model": quietly(openModelPicker),
 				"/theme": quietly(openThemePicker),
 				"/font": quietly(openFontPicker),
@@ -90,7 +110,7 @@ export function useCommandRunner() {
 						: "the model channel is shown";
 				},
 			};
-			return (await actions[name]?.()) ?? null;
+			return (await actions[canonicalCommand(name)]?.()) ?? null;
 		},
 		[
 			toggleLeft,
