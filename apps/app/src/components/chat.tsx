@@ -1,7 +1,9 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useChatSession } from "../lib/chat.tsx";
+import { useMemo } from "react";
+import { isUserMessage, messageText, useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
+import { sentHistory } from "../lib/message-history.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
@@ -18,6 +20,10 @@ export function Chat() {
 		isLoading: state.isLoading,
 		fresh: state.fresh,
 	}));
+	const sent = useChatSession((state) =>
+		state.messages.filter(isUserMessage).map(messageText),
+	);
+	const history = useMemo(() => sentHistory(sent), [sent]);
 
 	return (
 		<>
@@ -46,6 +52,7 @@ export function Chat() {
 				<ChatInput
 					placeholder="type a message  ·  / for commands  ·  ! for lisp"
 					onSubmit={send}
+					history={history}
 					onLisp={runLisp}
 					onCommand={runCommand}
 					isStreaming={isLoading}

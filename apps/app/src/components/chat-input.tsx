@@ -12,22 +12,32 @@ import {
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { cn, useIsMobile } from "@repo/ui";
 import {
+	$createLineBreakNode,
+	$createParagraphNode,
 	$createTextNode,
 	$getRoot,
 	CLEAR_EDITOR_COMMAND,
 	COMMAND_PRIORITY_LOW,
+	KEY_ARROW_DOWN_COMMAND,
+	KEY_ARROW_UP_COMMAND,
 	KEY_ENTER_COMMAND,
 	type TextNode,
 } from "lexical";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Command, commands, matchesCommand } from "../lib/commands.ts";
+import {
+	type RecallDirection,
+	type Recalled,
+	recall,
+} from "../lib/message-history.ts";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispEditor } from "./lisp-editor.tsx";
 
 export interface ChatInputProps {
 	placeholder?: string;
 	onSubmit: (text: string) => void;
+	history?: string[];
 	onLisp: (code: string) => void;
 	onCommand?: (name: string) => Promise<string | null>;
 	isStreaming?: boolean;
@@ -49,6 +59,7 @@ class CommandOption extends MenuOption {
 export function ChatInput({
 	placeholder = "",
 	onSubmit,
+	history,
 	onLisp,
 	onCommand,
 	isStreaming,
@@ -73,6 +84,7 @@ export function ChatInput({
 					<Editor
 						placeholder={placeholder}
 						onSubmit={onSubmit}
+						history={history}
 						onLisp={onLisp}
 						onEnterLisp={setLisp}
 						onCommand={onCommand}
@@ -97,6 +109,7 @@ export function ChatInput({
 function Editor({
 	placeholder = "",
 	onSubmit,
+	history = [],
 	onEnterLisp,
 	onCommand,
 	isStreaming,
@@ -238,6 +251,11 @@ function Editor({
 					menuOpen.current = open;
 				}}
 			/>
+			<RecallPlugin
+				history={history}
+				disabled={disabled}
+				isMenuOpen={() => menuOpen.current}
+			/>
 			<EnterSubmitPlugin
 				onEnter={isStreaming ? steerOrStop : runText}
 				disabled={disabled}
@@ -245,6 +263,59 @@ function Editor({
 			/>
 		</>
 	);
+}
+
+function RecallPlugin({
+	history,
+	isMenuOpen,
+	disabled,
+}: {
+	history: string[];
+	isMenuOpen: () => boolean;
+	disabled?: boolean;
+}) {
+	const [editor] = useLexicalComposerContext();
+	const recalled = useRef<Recalled | null>(null);
+	useEffect(() => {
+		if (disabled) return;
+		const step = (direction: RecallDirection) => (event: KeyboardEvent) => {
+			if (isMenuOpen()) return false;
+			const text = editor
+				.getEditorState()
+				.read(() => $getRoot().getTextContent());
+			const next = recall(history, recalled.current, text, direction);
+			if (!next) return false;
+			event.preventDefault();
+			recalled.current = next.recalled;
+			editor.update(() => $replaceText(next.text));
+			return true;
+		};
+		const unregisterUp = editor.registerCommand(
+			KEY_ARROW_UP_COMMAND,
+			step("back"),
+			COMMAND_PRIORITY_LOW,
+		);
+		const unregisterDown = editor.registerCommand(
+			KEY_ARROW_DOWN_COMMAND,
+			step("forward"),
+			COMMAND_PRIORITY_LOW,
+		);
+		return () => {
+			unregisterUp();
+			unregisterDown();
+		};
+	}, [editor, history, isMenuOpen, disabled]);
+	return null;
+}
+
+function $replaceText(text: string) {
+	const paragraph = $createParagraphNode();
+	text.split("\n").forEach((line, i) => {
+		if (i > 0) paragraph.append($createLineBreakNode());
+		if (line) paragraph.append($createTextNode(line));
+	});
+	$getRoot().clear().append(paragraph);
+	paragraph.selectEnd();
 }
 
 function EnterSubmitPlugin({
