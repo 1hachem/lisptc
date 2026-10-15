@@ -22,6 +22,10 @@ export async function world(held: Preferences = {}): Promise<World> {
 						{ id: "gruvbox-light", name: "gruvbox light" },
 					],
 					fonts: [{ id: "geist", name: "Geist" }],
+					motions: [
+						{ id: "slide", name: "rows slide" },
+						{ id: "lift", name: "the row lifts" },
+					],
 				}),
 			),
 		],

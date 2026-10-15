@@ -5,6 +5,7 @@ import {
 	arrayToList,
 	Cell,
 	type List,
+	listToArray,
 	newLispKeyword,
 } from "@repo/interpreter/objects";
 import { parsePlist, plistOptions } from "@repo/interpreter/plist";
@@ -13,7 +14,7 @@ import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
 import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
 
-const SET_KEYS = ["theme", "font", "channels", "metadata"];
+const SET_KEYS = ["theme", "font", "channels", "metadata", "sidebar", "motion"];
 
 const SET_ARGS = [
 	{
@@ -42,6 +43,20 @@ const SET_ARGS = [
 		description:
 			"which metadata fields the chat shows, as (:id t-or-nil ...); ids not named keep their value",
 	},
+	{
+		name: "sidebar",
+		type: "list",
+		required: false,
+		description:
+			'the order of the sidebar\'s top-level entries, as ("name" ...); entries not named follow in their current order',
+	},
+	{
+		name: "motion",
+		type: "string",
+		required: false,
+		description:
+			"how the sidebar animates a drag, a motion id from (motions); the system's reduced-motion setting still wins",
+	},
 ];
 
 function plist(entries: [string, unknown][]): List {
@@ -62,6 +77,8 @@ export function preferencesList(preferences: Preferences): List {
 		["font", preferences.font ?? null],
 		["channels", togglesList(preferences.channels)],
 		["metadata", togglesList(preferences.metadata)],
+		["sidebar", arrayToList([...(preferences.sidebar ?? [])])],
+		["motion", preferences.motion ?? null],
 	]);
 }
 
@@ -70,7 +87,7 @@ function choices(offered: readonly Choice[]): List {
 }
 
 function chosen(
-	kind: "theme" | "font",
+	kind: "theme" | "font" | "motion",
 	value: unknown,
 	offered: readonly Choice[],
 ): string {
@@ -99,6 +116,27 @@ function toggled(
 	return next;
 }
 
+function ordered(
+	value: unknown,
+	known: readonly string[] | undefined,
+): string[] {
+	if (value !== null && !(value instanceof Cell))
+		throw new EvalException('sidebar must be a list ("name" ...)', value);
+	const named = listToArray(value).map((name) => {
+		if (typeof name !== "string")
+			throw new EvalException("a sidebar entry is named by a string", name);
+		if (known && known.length > 0 && !known.includes(name))
+			throw new EvalException(
+				`unknown sidebar entry, there are ${known.map((id) => JSON.stringify(id)).join(" ")}`,
+				name,
+			);
+		return name;
+	});
+	if (new Set(named).size !== named.length)
+		throw new EvalException("a sidebar entry is named twice", value);
+	return [...named, ...(known ?? []).filter((name) => !named.includes(name))];
+}
+
 export function registerPreferences(
 	interp: Interp,
 	host: PreferencesHost,
@@ -109,7 +147,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		"Return the user's preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...)). They belong to the user, not the workspace, and the app applies them live.",
+		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :sidebar ("name" ...) :motion id). They belong to the user, not the workspace, and the app applies them live.',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -119,14 +157,14 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		"(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)])",
+		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:sidebar ("name" ...)] [:motion id])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :theme :font :channels :metadata",
+					"nothing to set, give one of :theme :font :channels :metadata :sidebar :motion",
 					null,
 				);
 			const current = yield* settled(store.read());
@@ -147,6 +185,10 @@ export function registerPreferences(
 					options.get("metadata"),
 					current.metadata,
 				);
+			if (options.has("sidebar"))
+				change.sidebar = ordered(options.get("sidebar"), current.sidebar);
+			if (options.has("motion"))
+				change.motion = chosen("motion", options.get("motion"), host.motions);
 			yield* settled(store.write(change));
 			return preferencesList({ ...current, ...change });
 		},
@@ -169,6 +211,15 @@ export function registerPreferences(
 		"Return an alist of (id . name) for every font the app offers.",
 		z.tuple([]),
 		() => choices(host.fonts),
+	);
+
+	interp.def(
+		"motions",
+		0,
+		"(motions)",
+		"Return an alist of (id . description) for every way the sidebar can animate a drag.",
+		z.tuple([]),
+		() => choices(host.motions),
 	);
 }
 

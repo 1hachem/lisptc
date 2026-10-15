@@ -7,6 +7,8 @@ export interface Preferences {
 	font?: string;
 	channels?: Toggles;
 	metadata?: Toggles;
+	sidebar?: string[];
+	motion?: string;
 }
 
 export interface PreferencesStore {
@@ -23,6 +25,7 @@ export interface PreferencesHost {
 	store: PreferencesStore;
 	themes: readonly Choice[];
 	fonts: readonly Choice[];
+	motions: readonly Choice[];
 	prompt: PromptSource;
 }
 

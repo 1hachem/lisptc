@@ -24,6 +24,7 @@ import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
+import { motions } from "@repo/ui/motions.ts";
 import { themes } from "@repo/ui/themes";
 import { uiExtension } from "@repo/ui-extension";
 import { uiHost } from "@repo/ui-extension/host";
@@ -93,6 +94,7 @@ export async function workspaceExtensions(
 					name: `${theme.name} ${theme.scheme}`,
 				})),
 				fonts,
+				motions,
 			}),
 		),
 		proseExtension(proseHost),

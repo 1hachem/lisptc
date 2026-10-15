@@ -42,6 +42,7 @@ export default defineSchema({
 		channels: v.optional(v.record(v.string(), v.boolean())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
 		sidebar: v.optional(v.array(v.string())),
+		motion: v.optional(v.string()),
 	}).index("by_user", ["userId"]),
 
 	workspaces: defineTable({
