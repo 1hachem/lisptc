@@ -141,25 +141,16 @@ below the seam instead: move the interpretation into the extension.
 
 ## State lives in the image
 
-An interpreter's whole state is its globals, and `src/image.ts` writes them out
-as JSON and reads them back. So nothing a session needs after a restore may
-live anywhere else.
+A restore brings back the globals and nothing else. Whatever a session needs
+after one lives in a global.
 
-- State an extension keeps across calls is a global it declares with
-  `interp.state`. That global is sealed: Lisp reads it and cannot set it. The
-  extension reads it back each time instead of holding a copy in a closure.
-- A live resource, such as a connection, a process, a running promise or a
-  hold, sits in a cache keyed by an id or a name that a global holds. Dropping
-  the cache must cost a reconnect and never change what the session knows.
-- A value of the extension's own class that can sit in a global needs a codec
-  on `encodeValue` and `decodeValue`. A builtin made at run time carries the
-  foreign value that rebuilds it. A secret is written by its key, never its
-  value.
-- What a restore cannot carry back, a `revive` hook marks as failed, so the
-  session is told rather than surprised.
-
-A field that is reset at every step needs none of this. Anything else that
-stays in a closure is lost on the next restore.
+- State an extension keeps across calls is a global it declares, and Lisp
+  cannot set it. The extension keeps no copy of its own.
+- A live resource is a cache behind a name a global holds. Losing the cache
+  costs a reconnect, never something the session knew.
+- A value of an extension's own class that can reach a global ships with a
+  codec. A secret is stored by its key, never its value.
+- What a restore cannot bring back is marked failed, so the session is told.
 
 ## Tests
 
