@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api.js";
 import { internalMutation, query } from "./_generated/server.js";
 import { requireUser } from "./lib/auth.js";
 
@@ -36,7 +37,12 @@ export const purge = internalMutation({
 					.withIndex("by_chat_seq", (q) => q.eq("chatId", chat._id))
 					.take(PURGE_BATCH);
 				for (const message of messages) await ctx.db.delete(message._id);
-				if (messages.length < PURGE_BATCH) await ctx.db.delete(chat._id);
+				if (messages.length < PURGE_BATCH) {
+					await ctx.db.delete(chat._id);
+					await ctx.scheduler.runAfter(0, internal.replImages.purge, {
+						chatId: chat._id,
+					});
+				}
 			}
 			if (chats.length < PURGE_BATCH) await ctx.db.delete(workspace._id);
 		}
