@@ -22,6 +22,7 @@ export const commands: Command[] = [
 	{ name: "/model", desc: "choose the model this workspace runs on" },
 	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
 	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
+	{ name: "/prompt", desc: "search the prompts sent in this workspace" },
 	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
 	{ name: "/theme", desc: "choose the colour theme" },
 ];

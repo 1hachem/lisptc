@@ -1,7 +1,12 @@
+import { convexQuery } from "@convex-dev/react-query";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { api } from "@repo/backend/api";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
+import { sentHistory } from "../lib/message-history.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
@@ -11,13 +16,20 @@ import { Greeting } from "./greeting.tsx";
 export function Chat() {
 	const runCommand = useCommandRunner();
 	const { modelName, providerName, openModelPicker } = useModelPicker();
-	const { send, runLisp, stop, isLoading, fresh } = useChatSession((state) => ({
-		send: state.send,
-		runLisp: state.runLisp,
-		stop: state.stop,
-		isLoading: state.isLoading,
-		fresh: state.fresh,
-	}));
+	const { workspaceId, send, runLisp, stop, isLoading, fresh } = useChatSession(
+		(state) => ({
+			workspaceId: state.workspaceId,
+			send: state.send,
+			runLisp: state.runLisp,
+			stop: state.stop,
+			isLoading: state.isLoading,
+			fresh: state.fresh,
+		}),
+	);
+	const { data: sent } = useQuery(
+		convexQuery(api.messages.sent, { workspaceId }),
+	);
+	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
 
 	return (
 		<>
@@ -46,6 +58,7 @@ export function Chat() {
 				<ChatInput
 					placeholder="type a message  ·  / for commands  ·  ! for lisp"
 					onSubmit={send}
+					history={history}
 					onLisp={runLisp}
 					onCommand={runCommand}
 					isStreaming={isLoading}

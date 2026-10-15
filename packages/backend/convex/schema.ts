@@ -64,7 +64,8 @@ export default defineSchema({
 		wireId: v.optional(v.string()),
 	})
 		.index("by_chat_seq", ["chatId", "seq"])
-		.index("by_chat_wire", ["chatId", "wireId"]),
+		.index("by_chat_wire", ["chatId", "wireId"])
+		.index("by_workspace_type", ["workspaceId", "type"]),
 
 	secrets: defineTable({
 		workspaceId: v.id("workspaces"),
