@@ -157,6 +157,10 @@ const codes: StateCodec<string[]> = {
 	fromLisp: (x) => listToArray(x as List) as string[],
 };
 
+function notCheckpointed(call: number, ex: unknown): string {
+	return `Call ${call} was not checkpointed, so it cannot be restored or reverted to: ${ex instanceof Error ? ex.message : String(ex)}`;
+}
+
 function droppedNote(code: readonly string[]): string | undefined {
 	if (code.length === 0) return undefined;
 	return `The REPL was restored from a checkpoint, and ${code.length === 1 ? "a step that was" : "steps that were"} waiting on an approval did not survive it. Run again whatever still needs doing:\n${code.join("\n")}`;
@@ -170,6 +174,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private readonly images: ImageStore | undefined;
 	private saving: Promise<void> = Promise.resolve();
 	private dropped: string[] = [];
+	private unsaved: string[] = [];
 	private calls!: State<number>;
 	private parkedCode!: State<string[]>;
 	readonly hooks: SessionHooks;
@@ -252,8 +257,9 @@ export class MemoryRepl implements InMemoryRepl {
 	private checkpoint(result: StepResult): StepResult {
 		const call = this.calls.get() + 1;
 		this.calls.set(call);
-		const notes = [result.message, droppedNote(this.dropped)];
+		const notes = [result.message, droppedNote(this.dropped), ...this.unsaved];
 		this.dropped = [];
+		this.unsaved = [];
 		const { images } = this;
 		if (images !== undefined) {
 			this.parkedCode.set(this.parked.map((p) => p.code));
@@ -261,11 +267,11 @@ export class MemoryRepl implements InMemoryRepl {
 				const image = snapshot(this.currentInterp);
 				this.saving = this.saving
 					.then(() => images.save({ call, image }))
-					.catch(() => undefined);
+					.catch((ex) => {
+						this.unsaved.push(notCheckpointed(call, ex));
+					});
 			} catch (ex) {
-				notes.push(
-					`Call ${call} was not checkpointed, so it cannot be restored or reverted to: ${ex instanceof Error ? ex.message : String(ex)}`,
-				);
+				notes.push(notCheckpointed(call, ex));
 			}
 		}
 		const message = notes.filter((m) => m !== undefined).join("\n\n");
