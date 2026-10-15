@@ -93,6 +93,7 @@ export const turn = {
 			messages: [opening],
 		});
 		const history = await convex.query(api.messages.transcript, { chatId });
+		await convex.mutation(api.chats.start, { chatId });
 
 		console.log(
 			`chat chat=${chatId} messages=${history.length} ${provider}/${model}`,
@@ -112,23 +113,27 @@ export const turn = {
 					distinctId: request.headers.get("x-distinct-id") ?? undefined,
 					sessionId: request.headers.get("x-posthog-session-id") ?? undefined,
 				},
-				onTurn: async (produced, revised) => {
-					for (const [at, message] of revised) {
-						const stored = history[at];
-						if (
-							stored?.wireId === undefined ||
-							message.additional_kwargs === undefined
-						)
-							continue;
-						await convex.mutation(api.messages.annotate, {
-							chatId,
-							id: stored.wireId,
-							kwargs: message.additional_kwargs,
-						});
+				onTurn: async (produced, revised, failure) => {
+					try {
+						for (const [at, message] of revised) {
+							const stored = history[at];
+							if (
+								stored?.wireId === undefined ||
+								message.additional_kwargs === undefined
+							)
+								continue;
+							await convex.mutation(api.messages.annotate, {
+								chatId,
+								id: stored.wireId,
+								kwargs: message.additional_kwargs,
+							});
+						}
+						const messages = toStored(produced);
+						if (messages.length > 0)
+							await convex.mutation(api.messages.append, { chatId, messages });
+					} finally {
+						await convex.mutation(api.chats.settle, { chatId, failure });
 					}
-					const messages = toStored(produced);
-					if (messages.length === 0) return;
-					await convex.mutation(api.messages.append, { chatId, messages });
 				},
 			},
 		);

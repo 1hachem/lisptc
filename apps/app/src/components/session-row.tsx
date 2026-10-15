@@ -1,4 +1,10 @@
 import { useConvexMutation } from "@convex-dev/react-query";
+import {
+	Alert02Icon,
+	BubbleChatIcon,
+	Loading03Icon,
+} from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Doc } from "@repo/backend/dataModel";
 import { TreeFile } from "@repo/components";
@@ -13,6 +19,25 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
+
+const STATUS_GLYPHS = {
+	streaming: { icon: Loading03Icon, className: "animate-spin" },
+	waiting: { icon: BubbleChatIcon, className: "text-yellow" },
+	errored: { icon: Alert02Icon, className: "text-red" },
+} satisfies Record<
+	NonNullable<Doc<"chats">["status"]>,
+	{ icon: IconSvgElement; className: string }
+>;
+
+function statusGlyph(chat: Doc<"chats">) {
+	if (chat.status === undefined) return {};
+	const { icon, className } = STATUS_GLYPHS[chat.status];
+	const label =
+		chat.status === "errored" && chat.failure
+			? `errored: ${chat.failure}`
+			: chat.status;
+	return { icon, iconClassName: className, iconLabel: label };
+}
 
 const item =
 	"rounded-none px-2.5 py-1 text-[11.5px] text-dim focus:bg-bg2 focus:text-fg";
@@ -62,6 +87,7 @@ export function SessionRow({
 		<>
 			<TreeFile
 				name={chat.title === "" ? "untitled" : chat.title}
+				{...statusGlyph(chat)}
 				selected={current}
 				depth={1}
 				link={(content, className) => (

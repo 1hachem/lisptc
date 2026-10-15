@@ -10,6 +10,12 @@ export const messageType = v.union(
 	v.literal("tool"),
 );
 
+export const chatStatus = v.union(
+	v.literal("streaming"),
+	v.literal("waiting"),
+	v.literal("errored"),
+);
+
 function pair<P extends ProviderName, M extends string>(choice: {
 	provider: P;
 	model: M;
@@ -60,6 +66,8 @@ export default defineSchema({
 		title: v.string(),
 		lastMessageAt: v.optional(v.number()),
 		archivedAt: v.optional(v.number()),
+		status: v.optional(chatStatus),
+		failure: v.optional(v.string()),
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_live_activity", [
