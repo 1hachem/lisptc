@@ -13,6 +13,7 @@ import type * as chats from "../chats.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_clamp from "../lib/clamp.js";
+import type * as lib_env from "../lib/env.js";
 import type * as lib_models from "../lib/models.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_waiting from "../lib/waiting.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/clamp": typeof lib_clamp;
+  "lib/env": typeof lib_env;
   "lib/models": typeof lib_models;
   "lib/slug": typeof lib_slug;
   "lib/waiting": typeof lib_waiting;
