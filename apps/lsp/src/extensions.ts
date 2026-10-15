@@ -9,7 +9,8 @@ import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
 import { LocalProcessHost } from "@repo/mcp-extension/local-host";
-import { mcpHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { FileOAuthStore } from "@repo/mcp-extension/oauth-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -25,7 +26,7 @@ export function docExtensions(): InterpExtension[] {
 	return [
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
-		mcpExtension(mcpHost),
+		mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
 	];
@@ -42,7 +43,10 @@ export function sessionExtensions(): InterpExtension[] {
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
 		mcpExtension({
-			...mcpHostFor({ host: new LocalProcessHost() }),
+			...mcpHostFor({
+				host: new LocalProcessHost(),
+				oauth: new FileOAuthStore(),
+			}),
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),

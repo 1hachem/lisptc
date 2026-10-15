@@ -8,7 +8,8 @@ import { clusterServes, KubernetesHost } from "./kubernetes-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
-import { completeAuthorization, FileOAuthStore } from "./mcp-oauth.ts";
+import { completeAuthorization } from "./mcp-oauth.ts";
+import { MemoryOAuthStore } from "./oauth-host.ts";
 import type {
 	McpClient,
 	McpHost,
@@ -22,7 +23,7 @@ import { bundledToolkit, localToolkit } from "./toolkit.ts";
 
 export interface McpHostOptions {
 	scope?: string;
-	oauth?: OAuthStore;
+	oauth: OAuthStore;
 	host?: McpHost;
 }
 
@@ -38,10 +39,10 @@ function oauthClients(): OAuthClients {
 		: {};
 }
 
-export function localMcpClient(options: McpHostOptions = {}): McpClient {
+export function localMcpClient(options: McpHostOptions): McpClient {
 	return mcpClient({
 		host: options.host ?? new LocalProcessHost(),
-		oauth: options.oauth ?? new FileOAuthStore(),
+		oauth: options.oauth,
 		redirectUri: oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		callbackPort: oauthEnv.LISPTC_OAUTH_CALLBACK_PORT,
 		clients: oauthClients(),
@@ -102,7 +103,7 @@ export function containerHost(scope: string, report?: ServerReporter): McpHost {
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
-export function mcpHostFor(options: McpHostOptions = {}): McpExtensionHost {
+export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 	const host = options.host ?? new LocalProcessHost();
 	return {
 		client: localMcpClient({ ...options, host }),
@@ -113,4 +114,6 @@ export function mcpHostFor(options: McpHostOptions = {}): McpExtensionHost {
 	};
 }
 
-export const mcpHost: McpExtensionHost = mcpHostFor();
+export const mcpHost: McpExtensionHost = mcpHostFor({
+	oauth: new MemoryOAuthStore(),
+});

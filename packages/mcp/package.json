@@ -11,6 +11,7 @@
     "./kubernetes-host": "./src/kubernetes-host.ts",
     "./mcp-host": "./src/mcp-host.ts",
     "./local-host": "./src/local-host.ts",
+    "./oauth-host": "./src/oauth-host.ts",
     "./ports": "./src/ports.ts",
     "./toolkit": "./src/toolkit.ts",
     "./mcp.toolkit.json": "./mcp.toolkit.json",
