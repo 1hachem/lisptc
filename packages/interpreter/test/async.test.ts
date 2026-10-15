@@ -13,6 +13,24 @@ describe("AsyncWork tracks the promises it is handed", () => {
 		expect(work.pending()).toEqual([]);
 	});
 
+	it("tells what started work last said it was doing, until it settles", async () => {
+		const work = new AsyncWork();
+		let finish = () => {};
+		const p = work.start(
+			(_, progress) =>
+				new Promise<void>((resolve) => {
+					progress("pulling");
+					progress("starting");
+					finish = resolve;
+				}),
+		);
+		expect(work.progressOf(p)).toBe("starting");
+		finish();
+		await p;
+		await Promise.resolve();
+		expect(work.progressOf(p)).toBeUndefined();
+	});
+
 	it("reports a rejected promise as rejected", async () => {
 		const work = new AsyncWork();
 		const p = work.watch(Promise.reject(new Error("no")));
