@@ -38,6 +38,7 @@ const APP_CONTAINER = "app";
 const INGRESS_POLICY = "mcp-ingress";
 const EGRESS_POLICY = "mcp-egress";
 const PREPULL = "mcp-prepull";
+export const PREPULL_SELECTOR = `app.kubernetes.io/name=${PREPULL}`;
 const PAUSE_IMAGE = "registry.k8s.io/pause:3.10";
 const PREPULL_RESOURCES = {
 	requests: { cpu: "1m", memory: "8Mi" },
@@ -306,21 +307,29 @@ export function endpointsFor(
 	return endpoints;
 }
 
-export function prepullFor(images: string[], pullSecret?: string): V1DaemonSet {
+function digest(...parts: string[]): string {
+	return createHash("sha256").update(parts.join("\0")).digest("hex");
+}
+
+function prepullName(image: string): string {
+	const repository = image.replace(/@.*$/, "").replace(/:[^:/]+$/, "");
+	const base = repository.split("/").pop() ?? repository;
+	return `${PREPULL}-${dnsLabel(base, 30)}-${digest(repository).slice(0, 6)}`;
+}
+
+function prepullOne(image: string, pullSecret?: string): V1DaemonSet {
+	const name = prepullName(image);
 	const labels = {
 		"app.kubernetes.io/name": PREPULL,
+		"app.kubernetes.io/instance": name,
 		"app.kubernetes.io/part-of": "lisptc",
 	};
-	const fetched = [...new Set(images)].sort();
 	return {
 		metadata: {
-			name: PREPULL,
+			name,
 			labels,
 			annotations: {
-				[SPEC_HASH]: createHash("sha256")
-					.update(JSON.stringify([fetched, pullSecret ?? ""]))
-					.digest("hex")
-					.slice(0, 16),
+				[SPEC_HASH]: digest(image, pullSecret ?? "").slice(0, 16),
 			},
 		},
 		spec: {
@@ -330,14 +339,17 @@ export function prepullFor(images: string[], pullSecret?: string): V1DaemonSet {
 				spec: {
 					automountServiceAccountToken: false,
 					enableServiceLinks: false,
+					terminationGracePeriodSeconds: 0,
 					...(pullSecret ? { imagePullSecrets: [{ name: pullSecret }] } : {}),
-					initContainers: fetched.map((image, index) => ({
-						name: `fetch-${index}`,
-						image,
-						command: ["true"],
-						resources: PREPULL_RESOURCES,
-						securityContext: { allowPrivilegeEscalation: false },
-					})),
+					initContainers: [
+						{
+							name: "fetch",
+							image,
+							command: ["true"],
+							resources: PREPULL_RESOURCES,
+							securityContext: { allowPrivilegeEscalation: false },
+						},
+					],
 					containers: [
 						{
 							name: "hold",
@@ -350,4 +362,13 @@ export function prepullFor(images: string[], pullSecret?: string): V1DaemonSet {
 			},
 		},
 	};
+}
+
+export function prepullFor(
+	images: string[],
+	pullSecret?: string,
+): V1DaemonSet[] {
+	return [...new Set(images)]
+		.sort()
+		.map((image) => prepullOne(image, pullSecret));
 }

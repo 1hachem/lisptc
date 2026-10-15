@@ -63,6 +63,9 @@ export interface Cluster {
 	logs(namespace: string, pod: string, container: string): Promise<string>;
 	lastEvent(namespace: string, pod: string): Promise<string | undefined>;
 	ensureDaemonSet(namespace: string, daemonSet: V1DaemonSet): Promise<void>;
+	daemonSets(namespace: string, selector: string): Promise<string[]>;
+	deleteDaemonSet(namespace: string, name: string): Promise<void>;
+	pods(namespace: string, selector: string): Promise<V1Pod[]>;
 	reachable(url: string): Promise<boolean>;
 	origin(namespace: string, service: string, port: number): string;
 	managedPods(): Promise<Located[]>;
@@ -261,6 +264,22 @@ export function clientCluster(config: KubeConfig): Cluster {
 					},
 				},
 			});
+		},
+		async daemonSets(namespace, labelSelector) {
+			const list = await apps.listNamespacedDaemonSet({
+				namespace,
+				labelSelector,
+			});
+			return list.items.map((set) => set.metadata?.name ?? "");
+		},
+		async deleteDaemonSet(namespace, name) {
+			await tolerating(404, () =>
+				apps.deleteNamespacedDaemonSet({ namespace, name }),
+			);
+		},
+		async pods(namespace, labelSelector) {
+			const list = await core.listNamespacedPod({ namespace, labelSelector });
+			return list.items;
 		},
 		async reachable(url) {
 			try {

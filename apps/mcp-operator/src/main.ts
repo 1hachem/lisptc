@@ -18,10 +18,11 @@ import {
 import { clientCluster, clientServers } from "./cluster.ts";
 import { Controller } from "./controller.ts";
 import { convexSink } from "./convex-sink.ts";
-import { toolkitImages } from "./prepull.ts";
+import { prepull, retryStalledPulls, toolkitImages } from "./prepull.ts";
 import { MANAGED_BY, MANAGER, prepullFor, SERVER_LABEL } from "./workload.ts";
 
 const SWEEP_MS = 60_000;
+const PULL_RETRY_MS = 10_000;
 const RESTART_MS = 5_000;
 const PROBE_PORT = 8080;
 
@@ -82,14 +83,13 @@ function report(what: string) {
 		console.error(`${what}: ${ex instanceof Error ? ex.message : String(ex)}`);
 }
 
-function prepull() {
-	return cluster.ensureDaemonSet(
-		release,
-		prepullFor(
-			toolkitImages(env.LISPTC_MCP_IMAGE_TAG),
-			env.LISPTC_MCP_PULL_SECRET,
-		),
-	);
+const prepullSets = prepullFor(
+	toolkitImages(env.LISPTC_MCP_IMAGE_TAG),
+	env.LISPTC_MCP_PULL_SECRET,
+);
+
+function ensurePrepull() {
+	return prepull(cluster, release, prepullSets);
 }
 
 function keepAlive<T extends KubernetesObject>(
@@ -127,9 +127,17 @@ await pods.start();
 const probe = createServer((request, response) => {
 	response.writeHead(request.url === "/ready" ? 200 : 404).end();
 }).listen(PROBE_PORT);
-prepull().catch(report("prepull"));
+ensurePrepull().catch(report("prepull"));
 setInterval(() => {
-	prepull().catch(report("prepull"));
+	retryStalledPulls(cluster, release)
+		.then((retried) => {
+			if (retried.length)
+				console.log(`prepull: retrying ${retried.join(", ")}`);
+		})
+		.catch(report("prepull retry"));
+}, PULL_RETRY_MS);
+setInterval(() => {
+	ensurePrepull().catch(report("prepull"));
 	controller.sweep().catch(report("sweep"));
 	controller.mirror().catch(report("mirror"));
 }, SWEEP_MS);

@@ -80,6 +80,24 @@ export function fakeCluster() {
 	let logs = "";
 	let event: string | undefined;
 
+	function matching<T extends { metadata?: V1Pod["metadata"] }>(
+		map: Map<string, T>,
+		namespace: string,
+		selector: string,
+	): T[] {
+		const wanted = Object.fromEntries(
+			selector.split(",").map((pair) => pair.split("=")),
+		);
+		return [...map.entries()]
+			.filter(([k]) => k.startsWith(`${namespace}/`))
+			.map(([, item]) => item)
+			.filter((item) =>
+				Object.entries(wanted).every(
+					([label, value]) => item.metadata?.labels?.[label] === value,
+				),
+			);
+	}
+
 	function locate<T extends { metadata?: V1Pod["metadata"] }>(
 		map: Map<string, T>,
 	): Located[] {
@@ -122,17 +140,7 @@ export function fakeCluster() {
 			removed.push(`all ${name}`);
 		},
 		async claims(namespace, selector) {
-			const wanted = Object.fromEntries(
-				selector.split(",").map((pair) => pair.split("=")),
-			);
-			return [...claims.entries()]
-				.filter(([k]) => k.startsWith(`${namespace}/`))
-				.map(([, claim]) => claim)
-				.filter((claim) =>
-					Object.entries(wanted).every(
-						([label, value]) => claim.metadata?.labels?.[label] === value,
-					),
-				);
+			return matching(claims, namespace, selector);
 		},
 		async createClaim(namespace, claim) {
 			const k = key(namespace, claim.metadata?.name ?? "");
@@ -166,6 +174,18 @@ export function fakeCluster() {
 		},
 		async ensureDaemonSet(namespace, daemonSet) {
 			daemonSets.set(key(namespace, daemonSet.metadata?.name ?? ""), daemonSet);
+		},
+		async daemonSets(namespace, selector) {
+			return matching(daemonSets, namespace, selector).map(
+				(set) => set.metadata?.name ?? "",
+			);
+		},
+		async deleteDaemonSet(namespace, name) {
+			if (daemonSets.delete(key(namespace, name)))
+				removed.push(`daemonset ${name}`);
+		},
+		async pods(namespace, selector) {
+			return matching(pods, namespace, selector);
 		},
 		async reachable() {
 			return answering;

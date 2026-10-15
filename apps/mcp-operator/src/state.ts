@@ -9,6 +9,8 @@ const FATAL_WAITING = new Set([
 	"CrashLoopBackOff",
 ]);
 
+const PULL_FAILED = new Set(["ErrImagePull", "ImagePullBackOff"]);
+
 const CREATING = new Set(["ContainerCreating", "PodInitializing"]);
 
 export type PodState =
@@ -78,4 +80,11 @@ export function stateOf(pod: V1Pod): PodState {
 		containers.length === expected &&
 		containers.every((status) => status.ready);
 	return ready ? { phase: "ready" } : starting(pod, containers);
+}
+
+export function pullStalled(pod: V1Pod): boolean {
+	return [
+		...(pod.status?.initContainerStatuses ?? []),
+		...(pod.status?.containerStatuses ?? []),
+	].some((status) => PULL_FAILED.has(status.state?.waiting?.reason ?? ""));
 }
