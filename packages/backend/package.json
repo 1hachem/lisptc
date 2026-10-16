@@ -24,6 +24,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
+    "env:seed": "sh scripts/seed-env.sh",
     "migrate": "sh scripts/migrate.sh",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -43,12 +44,15 @@
     "@repo/mcp-extension": "workspace:*",
     "@repo/memory-extension": "workspace:*",
     "@repo/permissions-extension": "workspace:*",
+    "@repo/preferences-extension": "workspace:*",
     "@repo/promises-extension": "workspace:*",
     "@repo/prose-extension": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/secrets-extension": "workspace:*",
     "@repo/shared": "workspace:*",
+    "@repo/ui": "workspace:*",
     "@repo/ui-extension": "workspace:*",
+    "@repo/workspace-extension": "workspace:*",
     "better-auth": "~1.6.33",
     "convex": "^1.46.0"
   },

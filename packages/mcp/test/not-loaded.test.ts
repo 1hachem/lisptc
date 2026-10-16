@@ -4,6 +4,7 @@ import { prelude } from "@repo/interpreter/prelude";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
+import { MemoryOAuthStore } from "../src/oauth-host.ts";
 import type { ConnConfig } from "../src/ports.ts";
 import { recordingHost, reportOf } from "./helpers.ts";
 
@@ -22,7 +23,10 @@ function withToolkit(): Interp {
 		extensions: [
 			mcpExtension({
 				...mcpHost,
-				client: localMcpClient({ host: recordingHost() }),
+				client: localMcpClient({
+					host: recordingHost(),
+					oauth: new MemoryOAuthStore(),
+				}),
 				toolkit: { all: () => [FX] },
 			}),
 		],

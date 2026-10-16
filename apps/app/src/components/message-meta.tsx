@@ -37,7 +37,7 @@ function formatTime(at: string): string | null {
 
 const SEGMENTS: {
 	field: MetaField;
-	render: (meta: StepMeta, show: Record<MetaField, boolean>) => string | null;
+	render: (meta: StepMeta) => string | null;
 }[] = [
 	{ field: "time", render: (m) => (m.at ? formatTime(m.at) : null) },
 	{
@@ -56,14 +56,15 @@ const SEGMENTS: {
 	},
 	{
 		field: "input",
-		render: (m, show) => {
-			if (m.inputTokens === undefined) return null;
-			const cached = show.cached ? m.cachedInputTokens : undefined;
-			const total = formatTokens(m.inputTokens);
-			return cached
-				? `${total} in (${formatTokens(cached)} cached)`
-				: `${total} in`;
-		},
+		render: (m) =>
+			m.inputTokens === undefined ? null : `${formatTokens(m.inputTokens)} in`,
+	},
+	{
+		field: "cached",
+		render: (m) =>
+			m.cachedInputTokens === undefined
+				? null
+				: `${formatTokens(m.cachedInputTokens)} cached`,
 	},
 	{
 		field: "output",
@@ -89,7 +90,7 @@ export function MessageMeta({
 }) {
 	const fields = show ? { ...META_FIELDS, ...show } : META_FIELDS;
 	const parts = SEGMENTS.filter((s) => fields[s.field])
-		.map((s) => ({ field: s.field, text: s.render(meta, fields) }))
+		.map((s) => ({ field: s.field, text: s.render(meta) }))
 		.filter(
 			(part): part is { field: MetaField; text: string } => part.text !== null,
 		);

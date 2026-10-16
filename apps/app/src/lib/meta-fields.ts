@@ -22,7 +22,3 @@ export const META_FIELDS: {
 	{ id: "model", label: "model", shownByDefault: false },
 	{ id: "provider", label: "provider", shownByDefault: false },
 ];
-
-export function metaCookie(id: MetaField): string {
-	return `ui.meta.${id}`;
-}

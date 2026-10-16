@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: previews
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/1hachem/lisptc
+        revision: previews
+        files:
+          - path: "pr-*.json"
+        requeueAfterSeconds: 60
+  template:
+    metadata:
+      name: "lisptc-pr-{{ .number }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/1hachem/lisptc
+        targetRevision: "{{ .sha }}"
+        path: charts/lisptc
+        helm:
+          valuesObject:
+            preview:
+              enabled: true
+              number: "{{ .number }}"
+              sha: "{{ .sha }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "lisptc-pr-{{ .number }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 2
+          backoff:
+            duration: 15s
+            factor: 2
+            maxDuration: 1m

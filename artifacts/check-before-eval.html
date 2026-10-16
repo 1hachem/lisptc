@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Check Before Eval</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --paper: #f3f5f2;
+  --sheet: #ffffff;
+  --ink: #1b2420;
+  --muted: #5b6a63;
+  --rule: #d5ddd8;
+  --accent: #0f7a6c;
+  --accent-soft: #dcefeb;
+  --err: #b4362f;
+  --err-soft: #f7e1df;
+  --ok: #2f7a3a;
+  --code-bg: #e9eeeb;
+  --f-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --s-1: 0.8125rem;
+  --s0: 1rem;
+  --s1: 1.25rem;
+  --s2: 1.625rem;
+  --s3: 2.375rem;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121816;
+    --sheet: #18201d;
+    --ink: #e3ebe7;
+    --muted: #93a39c;
+    --rule: #2c3833;
+    --accent: #4cc3b0;
+    --accent-soft: #173832;
+    --err: #ef7d73;
+    --err-soft: #3a1e1c;
+    --ok: #7fcb88;
+    --code-bg: #1f2925;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121816;
+  --sheet: #18201d;
+  --ink: #e3ebe7;
+  --muted: #93a39c;
+  --rule: #2c3833;
+  --accent: #4cc3b0;
+  --accent-soft: #173832;
+  --err: #ef7d73;
+  --err-soft: #3a1e1c;
+  --ok: #7fcb88;
+  --code-bg: #1f2925;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: var(--s0);
+  line-height: 1.6;
+  padding-inline: 16px;
+  padding-block: 0 4rem;
+}
+.wrap { max-width: 60rem; margin-inline: auto; display: grid; gap: 3rem; }
+header { padding-block: 3rem 0; display: grid; gap: 0.75rem; }
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: var(--s-1);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h1 { font-family: var(--f-display); font-weight: 650; font-size: var(--s3); line-height: 1.1; }
+h2 { font-family: var(--f-display); font-weight: 500; font-size: var(--s2); line-height: 1.2; }
+h3 { font-size: var(--s1); font-weight: 600; line-height: 1.3; }
+p { margin: 0; max-width: 65ch; }
+.lede { font-size: var(--s1); color: var(--muted); max-width: 52ch; }
+section { display: grid; gap: 1.25rem; min-width: 0; }
+section > .head { display: grid; gap: 0.35rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; }
+code, .mono { font-family: var(--f-mono); font-size: 0.875em; }
+p code, li code, td code {
+  background: var(--code-bg);
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+pre {
+  margin: 0;
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  font-family: var(--f-mono);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.diagram { overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem; }
+.diagram svg { display: block; width: 100%; min-width: 46rem; height: auto; }
+svg text { font-family: var(--f-body); fill: var(--ink); }
+svg .lbl { font-size: 13px; font-weight: 600; }
+svg .sub { font-size: 11px; fill: var(--muted); font-family: var(--f-mono); }
+svg .box { fill: var(--sheet); stroke: var(--rule); stroke-width: 1.5; }
+svg .admit { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .inner { fill: var(--sheet); stroke: var(--accent); stroke-width: 1; }
+svg .reject { fill: var(--err-soft); stroke: var(--err); stroke-width: 1.5; }
+svg .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+svg .edge-err { fill: none; stroke: var(--err); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .head-arrow { fill: var(--muted); }
+svg .head-err { fill: var(--err); }
+svg .tag-err { fill: var(--err); font-size: 11px; font-family: var(--f-mono); }
+svg .tag-ok { fill: var(--ok); font-size: 11px; font-family: var(--f-mono); }
+svg .new { fill: var(--accent); font-size: 10px; font-family: var(--f-mono); letter-spacing: 0.06em; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
+.fact {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  min-width: 0;
+}
+.fact .where { font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); overflow-wrap: anywhere; }
+.pill {
+  justify-self: start;
+  font-family: var(--f-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.pill.have { color: var(--ok); }
+.pill.gap { color: var(--err); }
+.part { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); gap: 0 1rem; }
+.part .n {
+  font-family: var(--f-display);
+  font-size: var(--s2);
+  color: var(--accent);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.part .body { display: grid; gap: 0.75rem; min-width: 0; }
+ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; max-width: 68ch; }
+.loop { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.turn { display: grid; gap: 0.5rem; min-width: 0; align-content: start; }
+.turn .who { font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); }
+.turn.bad pre { background: var(--err-soft); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; min-width: 36rem; font-size: 0.9375rem; }
+th, td { text-align: left; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: var(--s-1); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+tr:last-child td { border-bottom: 0; }
+.decisions { display: grid; gap: 1rem; }
+.decision { border-left: 3px solid var(--err); padding: 0.2rem 0 0.2rem 1rem; display: grid; gap: 0.4rem; }
+ol.order { margin: 0; padding-left: 1.4rem; display: grid; gap: 0.6rem; max-width: 68ch; }
+ol.order li::marker { font-family: var(--f-mono); color: var(--accent); font-weight: 600; }
+footer { color: var(--muted); font-size: var(--s-1); border-top: 1px solid var(--rule); padding-top: 1rem; }
+@media (max-width: 30rem) {
+  h1 { font-size: 2rem; }
+  .part { grid-template-columns: 1.6rem minmax(0, 1fr); gap: 0 0.6rem; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Design proposal · apps/app served agent</span>
+  <h1>Check Before Eval</h1>
+  <p class="lede">The lisp the agent writes is formatted and checked before it runs. A clean step is stored and evaluated. A step with errors goes back to the agent, which repairs it with a string edit or rewrites it.</p>
+</header>
+
+<section aria-labelledby="pipe">
+  <div class="head">
+    <span class="eyebrow">The step, end to end</span>
+    <h2 id="pipe">One new stage between the reply and the eval</h2>
+  </div>
+  <div class="diagram" role="img" aria-label="Pipeline: model reply, response chain, admit chain with format and lint, then either eval and store, or a lisp-check result sent back to the model.">
+    <svg viewBox="0 0 960 290" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-arrow"/></marker>
+        <marker id="ae" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-err"/></marker>
+      </defs>
+
+      <rect class="box" x="10" y="50" width="120" height="80" rx="8"/>
+      <text class="lbl" x="70" y="85" text-anchor="middle">model reply</text>
+      <text class="sub" x="70" y="104" text-anchor="middle">callModel</text>
+
+      <rect class="box" x="160" y="50" width="130" height="80" rx="8"/>
+      <text class="lbl" x="225" y="85" text-anchor="middle">response</text>
+      <text class="sub" x="225" y="104" text-anchor="middle">stripFences</text>
+
+      <rect class="admit" x="320" y="30" width="220" height="120" rx="10"/>
+      <text class="new" x="332" y="47">NEW CHAIN</text>
+      <text class="lbl" x="430" y="47" text-anchor="middle">admit</text>
+      <rect class="inner" x="332" y="62" width="92" height="74" rx="6"/>
+      <text class="lbl" x="378" y="92" text-anchor="middle">format</text>
+      <text class="sub" x="378" y="110" text-anchor="middle">FormatHost</text>
+      <text class="sub" x="378" y="124" text-anchor="middle">ptcfmt</text>
+      <rect class="inner" x="436" y="62" width="92" height="74" rx="6"/>
+      <text class="lbl" x="482" y="92" text-anchor="middle">lint</text>
+      <text class="sub" x="482" y="110" text-anchor="middle">arity, keys,</text>
+      <text class="sub" x="482" y="124" text-anchor="middle">undefined</text>
+      <path class="edge" d="M424,99 L434,99" marker-end="url(#a)"/>
+
+      <polygon class="box" points="600,62 638,90 600,118 562,90"/>
+      <text class="lbl" x="600" y="94" text-anchor="middle">errors?</text>
+
+      <rect class="box" x="670" y="50" width="120" height="80" rx="8"/>
+      <text class="lbl" x="730" y="85" text-anchor="middle">evaluateStep</text>
+      <text class="sub" x="730" y="104" text-anchor="middle">evalCode</text>
+
+      <rect class="box" x="820" y="50" width="130" height="80" rx="8"/>
+      <text class="lbl" x="885" y="85" text-anchor="middle">Convex</text>
+      <text class="sub" x="885" y="104" text-anchor="middle">messages.append</text>
+
+      <rect class="reject" x="510" y="190" width="180" height="62" rx="8"/>
+      <text class="lbl" x="600" y="216" text-anchor="middle">tool result</text>
+      <text class="sub" x="600" y="236" text-anchor="middle">source: "lisp-check"</text>
+
+      <path class="edge" d="M130,90 L158,90" marker-end="url(#a)"/>
+      <path class="edge" d="M290,90 L318,90" marker-end="url(#a)"/>
+      <path class="edge" d="M540,90 L560,90" marker-end="url(#a)"/>
+      <path class="edge" d="M638,90 L668,90" marker-end="url(#a)"/>
+      <text class="tag-ok" x="653" y="80" text-anchor="middle">no</text>
+      <path class="edge" d="M790,90 L818,90" marker-end="url(#a)"/>
+      <path class="edge-err" d="M600,118 L600,188" marker-end="url(#ae)"/>
+      <text class="tag-err" x="612" y="160">yes</text>
+      <path class="edge-err" d="M510,221 L70,221 L70,132" marker-end="url(#ae)"/>
+      <text class="tag-err" x="290" y="212" text-anchor="middle">diagnostics become the next input; agent edits or rewrites</text>
+      <text class="sub" x="950" y="150" text-anchor="end">ai row: formatted code</text>
+    </svg>
+  </div>
+  <p>Formatting runs first so that every diagnostic range points into the exact text that is stored and that the agent will edit. If the code does not parse, it is stored as written and the syntax error is reported.</p>
+</section>
+
+<section aria-labelledby="today">
+  <div class="head">
+    <span class="eyebrow">What exists today</span>
+    <h2 id="today">The pieces, and where they stop</h2>
+  </div>
+  <div class="facts">
+    <div class="fact">
+      <span class="pill have">static</span>
+      <h3>Syntax check</h3>
+      <p>Unbalanced parens and reader errors, from text alone. The MCP <code>lisp-check</code> tool calls only this.</p>
+      <span class="where">packages/prose/src/prose.ts:156</span>
+    </div>
+    <div class="fact">
+      <span class="pill have">static, locked in app</span>
+      <h3>Arity and required keywords</h3>
+      <p>Token scan compared against the docs <code>def</code> records. Tied to <code>vscode-languageserver</code> types, so the agent cannot use it.</p>
+      <span class="where">apps/lsp/src/call-diagnostics.ts:23-79</span>
+    </div>
+    <div class="fact">
+      <span class="pill gap">runtime only</span>
+      <h3>Undefined names</h3>
+      <p>Caught only after a form fails, through the <code>failedForm</code> hook. The prose extension then turns the form into prose.</p>
+      <span class="where">packages/prose/src/prose.ts:31-47</span>
+    </div>
+    <div class="fact">
+      <span class="pill gap">no type system</span>
+      <h3>Types</h3>
+      <p><code>DocArg.type</code> is a string nothing reads. The only value check is zod in <code>parseArgs</code>, at call time.</p>
+      <span class="where">packages/interpreter/src/docs.ts:8-24</span>
+    </div>
+    <div class="fact">
+      <span class="pill gap">nix only</span>
+      <h3>Formatter</h3>
+      <p><code>ptcfmt</code> wraps the Topiary CLI. Prose stays verbatim and output is idempotent, but it is in no Docker image and the LSP has no formatting provider.</p>
+      <span class="where">nix/ptcfmt.nix:22-35</span>
+    </div>
+    <div class="fact">
+      <span class="pill gap">no hook point</span>
+      <h3>Before eval</h3>
+      <p><code>response</code> is synchronous. Throwing inside <code>evalStep</code> would reach the catch in <code>evalCode</code>, which resets the interpreter and loses every definition.</p>
+      <span class="where">packages/ai/src/repl.ts:84-122</span>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="design">
+  <div class="head">
+    <span class="eyebrow">The design</span>
+    <h2 id="design">Five parts</h2>
+  </div>
+
+  <div class="part">
+    <span class="n">1</span>
+    <div class="body">
+      <h3>An async <code>admit</code> chain in the interpreter</h3>
+      <p>It joins <code>SessionHooks</code> next to the other chains that run before evaluation. <code>runStep</code> calls it after <code>response</code> and before <code>evaluateStep</code>. The base case returns the code unchanged with no diagnostics.</p>
+<pre>readonly admit: Chain&lt;[ctx: StepContext], Promise&lt;Admission&gt;&gt;;
+
+type Admission = { code: string; diagnostics: Diagnostic[] };</pre>
+      <ul>
+        <li>Any error-severity diagnostic skips eval and pushes a <code>tool</code> entry with <code>source: "lisp-check"</code>. The loop continues, so the model reads the errors as its next input.</li>
+        <li>Otherwise <code>admission.code</code> replaces <code>code</code> for the rest of the step, the <code>assistant</code> wire event included. That makes the formatted text what lands in <code>messages.content</code>.</li>
+        <li>The agent loop never learns which extension rejected the step, so the seam holds.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="part">
+    <span class="n">2</span>
+    <div class="body">
+      <h3>A lint extension that owns the checker</h3>
+      <p>For example <code>packages/lint</code>, <code>@repo/lint-extension</code>. The name <code>checks</code> is already the eval DSL.</p>
+      <ul>
+        <li><strong>Move the checker out of the LSP.</strong> <code>tokenize.ts</code> and <code>call-diagnostics.ts</code> return a neutral <code>{range, message, severity, code}</code>. <code>apps/lsp</code> and the MCP <code>lisp-check</code> import it at their own composition roots. Editor and agent share one checker.</li>
+        <li><strong>Strip prose through the seam.</strong> Run the interpreter's <code>readSource</code> chain instead of importing <code>formsOnly</code>, so lint never names the prose extension.</li>
+        <li><strong>Undefined symbols.</strong> Lexical scope over <code>let</code>, <code>lambda</code>, <code>defun</code> parameters and the other binding forms. Known names are <code>globalNames()</code> plus whatever the same submission defines. Macro call arguments are skipped, since expanding a user macro runs code. Error in a top-level call, warning inside a function body.</li>
+        <li><strong>Types, later.</strong> Check literal arguments against the declared argument type only. Inference is its own project.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="part">
+    <span class="n">3</span>
+    <div class="body">
+      <h3>Formatting through a host port</h3>
+      <p>A subprocess is an outward reach, so the extension declares <code>FormatHost</code> and is handed an implementation. The app spawns <code>ptcfmt</code>, which means its image carries the Topiary binary and the compiled grammar from <code>nix build .#ptcfmt</code>. A TypeScript printer would avoid that, at the cost of two formatters that drift.</p>
+<pre>interface FormatHost {
+  format(text: string): Promise&lt;string | null&gt;;
+}</pre>
+    </div>
+  </div>
+
+  <div class="part">
+    <span class="n">4</span>
+    <div class="body">
+      <h3>Recovery by editing, then by rewriting</h3>
+      <p>The extension sets a <code>rejected</code> REPL variable to the last rejected source, the same way <code>setConversationVars</code> sets the conversation. It adds <code>revise</code>: a strict replace that fails on zero or several matches, checks the result the same way, and evaluates only when it is clean. A rewrite is just a new step.</p>
+      <div class="loop">
+        <div class="turn">
+          <span class="who">step 1 · agent</span>
+<pre>(defun total (items)
+  (reduce + 0 items))
+
+(echo (totl prices))</pre>
+        </div>
+        <div class="turn bad">
+          <span class="who">step 1 · lisp-check, not run</span>
+<pre>line 4: "totl" is not defined.
+  did you mean total?
+fix: (revise :old … :new …)
+  on rejected; rewrite only if
+  an edit cannot express it</pre>
+        </div>
+        <div class="turn">
+          <span class="who">step 2 · agent</span>
+<pre>(revise :old "(totl prices)"
+        :new "(total prices)")</pre>
+        </div>
+      </div>
+      <p>"Edit first" lives in the extension's prompt and in each rejection message. An eval case in <code>apps/trace-viewer/evals</code> asserts the agent reaches for <code>revise</code> before rewriting, so the rule is held by a test. The existing step cap stops a model that keeps hitting the same error.</p>
+    </div>
+  </div>
+
+  <div class="part">
+    <span class="n">5</span>
+    <div class="body">
+      <h3>What lands in Convex</h3>
+      <p>No schema change. <code>kwargs</code> already takes anything.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Step</th><th><code>ai</code> row</th><th><code>tool</code> row</th></tr></thead>
+          <tbody>
+            <tr><td>Accepted</td><td>Formatted code</td><td>Eval result, as today</td></tr>
+            <tr><td>Rejected</td><td>Code as written, formatted if it parsed</td><td><code>source: "lisp-check"</code> and the diagnostics</td></tr>
+            <tr><td><code>revise</code></td><td><code>(revise …)</code></td><td>Result of the revised code. <code>messages.annotate</code> writes the code that ran into the rejected row's <code>kwargs</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="decide">
+  <div class="head">
+    <span class="eyebrow">Open</span>
+    <h2 id="decide">Two decisions before building</h2>
+  </div>
+  <div class="decisions">
+    <div class="decision">
+      <h3>Undefined heads versus prose</h3>
+      <p>Today a form whose head does not resolve becomes prose. A static "not defined" error flips that: a typo becomes an error instead of being dropped. That is likely the goal, but the prose extension's <code>failedForm</code> behaviour and its tests change with it.</p>
+    </div>
+    <div class="decision">
+      <h3>Code the user types</h3>
+      <p><code>evalUserCode</code> in <code>apps/app/server/agent/chat.ts:166</code> could pass through <code>admit</code> too. That is consistent, and the user then sees the same diagnostics in the UI.</p>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="order">
+  <div class="head">
+    <span class="eyebrow">Order of work</span>
+    <h2 id="order">Each step ships on its own</h2>
+  </div>
+  <ol class="order">
+    <li>Move the checker into the lint extension and switch <code>apps/lsp</code> to it. Nothing changes for the agent yet.</li>
+    <li>Add the <code>admit</code> chain, its call in <code>turn.ts</code>, and the rejection result.</li>
+    <li>Add <code>revise</code>, <code>rejected</code>, the prompt, and the eval case.</li>
+    <li>Add the format port and <code>ptcfmt</code> in the app image.</li>
+    <li>Add the undefined-symbol check, then the literal type checks.</li>
+  </ol>
+</section>
+
+<footer>File anchors were read from <code>main</code> at b1bb4e49. The lisp example is illustrative.</footer>
+
+</div>
+</body>
+</html>
