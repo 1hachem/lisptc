@@ -1,35 +1,31 @@
 MEMORY
 
-What you work out in one session is gone by the next unless you remember it. A
-memory is a key and a body, and the body is either prose or code — one slot, both
-kinds, because in this language they are the same material.
+Work from one session is gone next session unless remembered. Memory = key +
+body. Body is prose or code, one slot: here they are the same material.
 
-- (memory/remember key body) store one. Prose in the body is something to know.
-  A quoted form in the body is something to do, a recipe you run later. Quote it:
-  the arguments are evaluated, so an unquoted form stores its result instead.
-- (memory/recall query) retrieve by key or body text, strongest first. The query
-  is words, not a pattern: every word that carries meaning has to land somewhere
-  in the one memory, spelling is forgiven and a prefix counts. What it finds is
-  loaded into your context, so recalling IS reading and there is no echo step to
-  write after it.
+- (memory/remember key body) store one. Prose body is something to know.
+  Quoted form body is a recipe to run later. Quote it: arguments are
+  evaluated, so unquoted form stores its result instead.
+- (memory/recall query) retrieve by key or body text, strongest first. Query is
+  words, not a pattern: every meaningful word must land in the one memory.
+  Spelling forgiven, prefix counts. Found memories load into your context:
+  recalling IS reading. No echo after it.
 - (memories) every memory as key, score and trigger, strongest first.
 - (memory/forget key) drop one for good.
 - (memory/forget-all) drop every memory, only when the user asks for a clean slate.
-- (memory/replay key) evaluate a memory whose body is a form, and return what it
-  produced. A memory holding a defun installs that function when you replay it.
-  This is how a remembered recipe becomes a running one.
-- (memory/revise key body) correct a memory. See the window below.
+- (memory/replay key) evaluate a memory whose body is a form, return result.
+  Replaying a defun installs that function. Remembered recipe becomes running one.
+- (memory/revise key body) correct a memory. See THE WINDOW.
 
-The names are slashed because remember, recall and forget are ordinary English
-verbs, and a bare one in an aside would be read as code.
+Names are slashed: bare remember, recall, forget are English verbs and would
+be read as code in an aside.
 
 FIRING BY ITSELF
 
-With :on a memory watches for an event and loads itself when that event happens,
-without you asking. The trigger is a quoted form of a kind and a pattern. The
-eight kinds:
+With :on a memory watches for an event and loads itself, unasked. Trigger is a
+quoted form of kind and pattern. Eight kinds:
 
-  call     a form about to be evaluated, at any depth — so it catches a call
+  call     a form about to be evaluated, at any depth, so it catches a call
            nested inside a setq or a let
   result   the printed value a top-level form returned
   error    an evaluation that raised, so a past mistake surfaces exactly as it
@@ -40,8 +36,7 @@ eight kinds:
   recall   another memory being retrieved
   start    the user's first message, once, with no pattern: written (start)
 
-For call the pattern is A FORM, written the way the call itself is written, and
-matched structurally. This is what gives you precision about arguments:
+For call the pattern is A FORM, written like the call, matched structurally:
 
 (call (load-mcp "acme")) only that server, not every load
 (call (load-mcp)) any call to load-mcp, whatever its arguments
@@ -50,98 +45,81 @@ matched structurally. This is what gives you precision about arguments:
                                    pattern hooks every tool on a server
 (call (setq _ (acme/get _))) the shape nests as deeply as you write it
 
-A pattern list matches a PREFIX of the call, so naming fewer arguments is looser
-and naming more is tighter. Every other kind matches text, so its pattern is a
-string used as a regular expression, matched case-insensitively anywhere in the
-text:
+Pattern list matches a PREFIX of the call: fewer arguments looser, more
+tighter. Every other kind matches text: pattern is a string regex, matched
+case-insensitively anywhere:
 
 (user "file.*") whatever the user says about file.md, file.pdf or any other one
 (user "^deploy") only what the user opens with the word
 
-A pattern that is not a regular expression is read as plain text instead, so a
-literal with a stray bracket in it still matches.
+Invalid regex is read as plain text, so a literal with a stray bracket still
+matches.
 
-Combine patterns with all, any-of and not, in either sort of trigger:
+Combine with all, any-of and not, in either sort of trigger:
 
 (call (all (load-mcp) (not (load-mcp "acme"))))
 (error (any-of "undefined" "void variable"))
 
-A memory on a call to the loader surfaces what you know about a server the moment
-you load it. A memory on an error surfaces the fix the moment the same error
-comes back.
+Memory on a loader call surfaces what you know about a server the moment you
+load it. Memory on an error surfaces the fix the moment that error returns.
 
-A start memory rides the user's first message and stays with it for the rest of
-the conversation, so it is where your role and your goal belong. It loads once:
-revise it and only the next conversation reads the new body.
+Start memory rides the user's first message and stays for the whole
+conversation: put role and goal there. Loads once: a revision is read only by
+the next conversation.
 
-A fired memory arrives as a line of REPL feedback, to you alone. It is not run and
-the user does not see it. To run one, replay it. To show the user something, echo
-it.
+Fired memory arrives as a REPL feedback line, to you alone. Not run, user does
+not see it. To run, replay. To show the user, echo.
 
 CHAINING
 
-The last kind is the interesting one: retrieval is itself an event, so a memory can
-hook another memory and the two arrive together. You can also say it outright with
-:links, which takes a list of keys.
-
-And it happens on its own: memories that fire in the same step get wired to each
-other, so the things you keep using together start arriving together.
+Retrieval is an event, so one memory can hook another and both arrive
+together. Say so outright with :links, a list of keys. Also automatic:
+memories firing in the same step get wired together.
 
 STRENGTH AND FORGETTING
 
-Every memory has a score. Recalling one strengthens it. Leaving it alone lets it
-fade — half its strength a week — and under a floor it is swept away. So what you
-keep using stays and what you wrote once and never needed goes. Nothing has to be
-tidied by hand, though memory/forget is there when something is simply wrong.
+Every memory has a score. Recall strengthens it. Unused, it fades, half its
+strength a week, and below a floor it is swept away. No hand tidying needed;
+memory/forget exists for what is wrong.
 
 THE WINDOW
 
-Retrieving a memory opens it: until the end of the step you can revise its body to
-correct what it says. Outside that window revise is an error telling you to recall
-it first. Reading and rewriting are one act on purpose — you fix a memory while you
-are looking at it and can see that it was wrong.
+Retrieving a memory opens it: until step end you can revise its body. Outside
+that window revise errors, telling you to recall first. Fix a memory while
+looking at it.
 
 GOTCHAS
 
-- A memory body must be prose or a form that can be read back. A closure, a promise
-  or a secret is a live value, prints in angle brackets, and remember rejects it.
-  Store the quoted form that builds the thing, never the built thing itself.
-- Quote a code body. Without the quote the form is evaluated and you store its
-  result.
-- memory/recall loads what it finds into your context. Do not follow it with an
-  echo to see it properly; it is already in front of you.
-- Firing does not run anything. A memory that fires on a call tells you what it
-  knows; if it holds a recipe, replay it.
-- Triggers watch the code you write into the REPL. A form evaluated inside a replay
-  or inside a function body is not a step of its own and fires nothing.
-- Memories outlive the interpreter. Definitions die on a reset and memories do not,
-  so a recipe worth keeping belongs in a memory rather than in a defun you will
-  lose.
-- A memory with no :on never arrives by itself. It waits for a recall that names
-  it, and if you cannot guess its key later it is as good as lost. Storing a
-  correction without a trigger is the commonest way to write a memory that never
-  helps you again.
+- Body must be prose or a readable form. Closure, promise or secret is a live
+  value, prints in angle brackets, and remember rejects it. Store the quoted
+  form that builds it, never the built thing.
+- memory/recall output is already in front of you. No echo after.
+- Firing runs nothing. Fired recipe? Replay it.
+- Triggers watch code you write into the REPL. A form evaluated inside a
+  replay or a function body is not a step and fires nothing.
+- Memories outlive the interpreter; definitions die on reset. A recipe worth
+  keeping belongs in a memory, not a defun.
+- Memory with no :on never arrives by itself. It waits for a recall naming it.
+  Unguessable key later means lost. Correction stored without a trigger is the
+  commonest memory that never helps again.
 
 RULES
 
-- REMEMBER THE MOMENT A GUESS FAILS. A rejected call, a name that turned out wrong,
-  an argument order you had backwards: that is the one thing worth keeping, and the
-  moment you know it is the only moment you will ever have the correction in front
-  of you. Write it before you move on, while the right answer is on screen.
-- GIVE IT THE TRIGGER THAT WILL REPEAT, not a description of the topic. Ask what you
-  will be doing when you next need this, and hook that. A tool you misnamed belongs
-  on the call that loads its server, so it arrives before you can misname it again;
-  a mistake the interpreter rejected belongs on that error. A memory you have to
-  remember to look for is a memory you will not look for.
-- NAME THE ARGUMENT THAT MADE IT TRUE. What you learned about one server is not
-  true of the next one, so (call (load-mcp "acme")) is right where
-(call (load-mcp)) would fire on every server you ever load and teach you the
-  wrong thing about most of them. Hook the whole call, not just the name.
-- Remember the correction, not the transcript. "browser_navigate, not navigate" is
-  worth keeping; the whole tool listing is not, and the next listing will be
-  different anyway.
-- Do not remember what the REPL can tell you. Anything doc prints, anything a
-  discovery call returns, anything you can recompute: look it up instead. Memory is
-  for what you had to find out the hard way.
-- Recall before you guess. When you are about to write a name you are not sure of
-  and the session has not told you, that is the cheapest possible recall.
+- REMEMBER THE MOMENT A GUESS FAILS. Rejected call, wrong name, backwards
+  argument order: worth keeping. Write it before moving on, while the right
+  answer is on screen. That is your only chance.
+- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description. Hook what you
+  will be doing when you next need it. Misnamed tool goes on the call that
+  loads its server, so it arrives before you misname it again. Rejected
+  mistake goes on that error. A memory you must remember to look for, you will
+  not look for.
+- NAME THE ARGUMENT THAT MADE IT TRUE. Facts about one server are not true of
+  the next, so (call (load-mcp "acme")) is right where
+(call (load-mcp)) would fire on every server and teach wrong things about
+  most. Hook the whole call, not only the name.
+- Remember the correction, not the transcript. "browser_navigate, not navigate"
+  is worth keeping; the whole tool listing is not.
+- Do not remember what the REPL can tell you: doc output, discovery results,
+  anything recomputable. Memory is for what you found out the hard way.
+- Recall before you guess. Unsure of a name the session has not told you?
+  Cheapest possible recall.

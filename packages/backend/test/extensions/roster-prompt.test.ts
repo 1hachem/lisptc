@@ -9,10 +9,8 @@ const names = (name: string): RegExp => new RegExp(`\\b${name}\\b`);
 
 describe("the failures a run actually dies of", () => {
 	it("says the aside tolerance is forgiveness, not a way to write", () => {
-		expect(PROMPT).toMatch(
-			/a mistake the reader forgives, NOT a way to write/i,
-		);
-		expect(PROMPT).toMatch(/narrow and unpredictable/i);
+		expect(PROMPT).toMatch(/Mistake the reader\s+forgave, not a way to write/i);
+		expect(PROMPT).toMatch(/Forgiveness narrow, unpredictable/i);
 	});
 
 	it("says a discovery call prints itself and needs no echo", () => {
@@ -29,28 +27,26 @@ describe("the failures a run actually dies of", () => {
 
 describe("what the REPL reports back", () => {
 	it("says the REPL prints nothing and reports a name and shape instead", () => {
-		expect(PROMPT).toMatch(/The REPL prints nothing on its own/);
+		expect(PROMPT).toMatch(/REPL prints nothing on its own/);
 		expect(PROMPT).toMatch(/name: shape/);
-		expect(PROMPT).toMatch(/the ONE command that prints/);
+		expect(PROMPT).toMatch(/echo is the one command that shows a value/);
 	});
 
 	it("tells the model to refer to the result variable, not retype data", () => {
-		expect(PROMPT).toMatch(/NEVER retype data the REPL produced/);
+		expect(PROMPT).toMatch(/Never retype data the REPL produced/);
 	});
 
 	it("tells the model to extract into a name, then echo it", () => {
 		expect(PROMPT).toMatch(/EXTRACT, THEN ECHO/);
 		expect(PROMPT).toMatch(/RETURN a value/);
-		expect(PROMPT).toMatch(/never read it off a printout and retype it/);
+		expect(PROMPT).toMatch(/Never read a value off a printout and retype it/);
 		expect(PROMPT).toMatch(names("grep"));
 		expect(PROMPT).toMatch(names("echo"));
 	});
 
 	it("tells the model a truncated echo is not the whole output", () => {
-		expect(PROMPT).toMatch(
-			/Your view of echo output is capped; the user's is not/,
-		);
-		expect(PROMPT).toMatch(/page on with the offset/);
+		expect(PROMPT).toMatch(/Echo output is capped for you, not for the user/);
+		expect(PROMPT).toMatch(/Page on with the given offset/);
 	});
 });
 
@@ -98,15 +94,15 @@ describe("memory", () => {
 
 	it("says a fired memory reaches the model and not the user", () => {
 		expect(PROMPT).toMatch(/to you alone/);
-		expect(PROMPT).toMatch(/the user does not see it/);
+		expect(PROMPT).toMatch(/user does\s+not see it/);
 	});
 
 	it("says why the memory builtins are slashed", () => {
-		expect(PROMPT).toMatch(/ordinary English\s+verbs/);
+		expect(PROMPT).toMatch(/are English verbs and would\s+be read as code/);
 	});
 
 	it("says a code body has to be quoted", () => {
-		expect(PROMPT).toMatch(/Quote a code body/);
+		expect(PROMPT).toMatch(/Quote it: arguments are\s+evaluated/);
 	});
 });
 
@@ -115,11 +111,11 @@ describe("interactive views", () => {
 
 	it("says an action runs in the REPL with no model turn", () => {
 		expect(FLAT).toMatch(/runs IN THIS REPL/);
-		expect(FLAT).toMatch(/NO model turn in between/);
+		expect(FLAT).toMatch(/NO model turn between/);
 	});
 
 	it("says the widget is not sent back into its context", () => {
-		expect(FLAT).toMatch(/the widget is never sent back to you/i);
+		expect(FLAT).toMatch(/widget is never sent back/i);
 	});
 
 	it("names the render entry point and every constructor the renderer draws", () => {
@@ -146,22 +142,22 @@ describe("interactive views", () => {
 
 	it("says a select or checkbox can act on change with no submit", () => {
 		expect(FLAT).toMatch(names("on-change"));
-		expect(FLAT).toMatch(/no submit button/);
+		expect(FLAT).toMatch(/No submit, no model turn/);
 	});
 
 	it("draws the line between echoing and rendering", () => {
 		expect(FLAT).toMatch(
-			/Echo when the answer is something to read; render when it is something to use/,
+			/Echo when answer is to read; render when it is to use/,
 		);
 	});
 
 	it("says a handler can hand the turn back with ui/send", () => {
 		expect(FLAT).toMatch(names("ui/send"));
-		expect(FLAT).toMatch(/joins the conversation as a message from the user/);
+		expect(FLAT).toMatch(/result joins conversation as user message/);
 	});
 
 	it("says which clicks are worth a turn and which are not", () => {
-		expect(FLAT).toMatch(/Send for judgement, handle it in Lisp for work/);
+		expect(FLAT).toMatch(/Send for judgement, handle in Lisp for work/);
 	});
 
 	it("names every tone the renderer can colour, and no others", () => {
