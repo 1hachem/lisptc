@@ -86,7 +86,10 @@ export class Walk {
 
 	private value(node: Node | undefined, scope: Scope, inBody: boolean): void {
 		if (node === undefined || node.quoted) return;
-		if (node.kind === "list") return this.form(node, scope, inBody);
+		if (node.kind === "list") {
+			this.form(node, scope, inBody);
+			return;
+		}
 		if (isSymbol(node.text) && !this.bound(node.text, scope))
 			this.unbound.push({ atom: node, inBody });
 	}
@@ -100,7 +103,10 @@ export class Walk {
 	private form(form: ListForm, scope: Scope, inBody: boolean): void {
 		const [head, ...rest] = form.items;
 		if (head === undefined) return;
-		if (head.kind === "list") return this.values(form.items, scope, inBody);
+		if (head.kind === "list") {
+			this.values(form.items, scope, inBody);
+			return;
+		}
 		if (head.quoted || !isSymbol(head.text)) return;
 		const name = head.text;
 		switch (name) {
@@ -108,14 +114,18 @@ export class Walk {
 			case "macro":
 			case "defmacro":
 				return;
-			case "progn":
-				return this.values(rest, scope, inBody);
-			case "setq":
-				return this.values(
+			case "progn": {
+				this.values(rest, scope, inBody);
+				return;
+			}
+			case "setq": {
+				this.values(
 					rest.filter((_, i) => i % 2 === 1),
 					scope,
 					inBody,
 				);
+				return;
+			}
 			case "cond":
 				for (const clause of rest)
 					this.values(asList(clause)?.items ?? [], scope, inBody);
@@ -125,32 +135,38 @@ export class Walk {
 				for (const clause of rest.slice(1))
 					this.values(asList(clause)?.items.slice(1) ?? [], scope, inBody);
 				return;
-			case "lambda":
-				return this.values(
-					rest.slice(1),
-					widened(scope, namesIn(rest[0])),
-					true,
-				);
-			case "defun":
-				return this.values(
-					rest.slice(2),
-					widened(scope, namesIn(rest[1])),
-					true,
-				);
+			case "lambda": {
+				this.values(rest.slice(1), widened(scope, namesIn(rest[0])), true);
+				return;
+			}
+			case "defun": {
+				this.values(rest.slice(2), widened(scope, namesIn(rest[1])), true);
+				return;
+			}
 			case "let":
 			case "let*":
-			case "letrec":
-				return this.let(name, rest, scope, inBody);
+			case "letrec": {
+				this.let(name, rest, scope, inBody);
+				return;
+			}
 			case "dolist":
-			case "dotimes":
-				return this.loop(rest, scope, inBody);
-			case "try":
-				return this.try(rest, scope, inBody);
+			case "dotimes": {
+				this.loop(rest, scope, inBody);
+				return;
+			}
+			case "try": {
+				this.try(rest, scope, inBody);
+				return;
+			}
 		}
-		if (scope.has(name)) return this.values(rest, scope, inBody);
+		if (scope.has(name)) {
+			this.values(rest, scope, inBody);
+			return;
+		}
 		if (EVALUATES_EVERY_ARGUMENT.has(name)) {
 			this.reach(form, inBody);
-			return this.values(rest, scope, inBody);
+			this.values(rest, scope, inBody);
+			return;
 		}
 		if (this.known.isMacro(name)) return;
 		if (this.definedHere.has(name) || this.known.isFunction(name)) {
