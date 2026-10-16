@@ -17,10 +17,10 @@ convexDeploy:
 
 convex:
   backend:
-    image: ghcr.io/get-convex/convex-backend:latest
+    image: ghcr.io/convex/convex-backend:latest
     storage: 5Gi
   dashboard:
-    image: ghcr.io/get-convex/convex-dashboard:2cbcf8179207eb4521360e6d81ebee5e7abbfa07
+    image: ghcr.io/convex/convex-dashboard:2cbcf8179207eb4521360e6d81ebee5e7abbfa07
   hostnames:
     cloud: lisptc-convex
   secrets: [lisptc-db, lisptc-convex]
