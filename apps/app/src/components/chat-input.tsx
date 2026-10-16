@@ -1,13 +1,20 @@
+import { LexicalComposer } from "@lexical/react/LexicalComposer";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { ContentEditable } from "@lexical/react/LexicalContentEditable";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
+import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
+import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
 import { cn } from "@repo/ui";
 import {
-	type KeyboardEvent,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+	$createLineBreakNode,
+	$createParagraphNode,
+	$createTextNode,
+	$getRoot,
+	COMMAND_PRIORITY_HIGH,
+	KEY_DOWN_COMMAND,
+} from "lexical";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Command } from "../lib/commands.ts";
 import {
 	newestFirst,
@@ -16,9 +23,9 @@ import {
 	rebase,
 	recall,
 } from "../lib/message-history.ts";
-import { CommandMenu, useCommandMenu } from "./command-menu.tsx";
+import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
-import { LispText } from "./lisp-text.tsx";
+import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 
 export interface ChatInputProps {
 	placeholder?: string;
@@ -68,8 +75,18 @@ function useRecall(history: string[]) {
 	);
 }
 
-function submitsOnEnter(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+function submitsOnEnter(event: KeyboardEvent): boolean {
 	return event.key === "Enter" && !event.shiftKey;
+}
+
+function $replaceText(text: string) {
+	const paragraph = $createParagraphNode();
+	text.split("\n").forEach((line, i) => {
+		if (i > 0) paragraph.append($createLineBreakNode());
+		if (line) paragraph.append($createTextNode(line));
+	});
+	$getRoot().clear().append(paragraph);
+	paragraph.selectEnd();
 }
 
 function SendAction({
@@ -114,7 +131,24 @@ function SendAction({
 	);
 }
 
-export function ChatInput({
+export function ChatInput(props: ChatInputProps) {
+	return (
+		<LexicalComposer
+			initialConfig={{
+				namespace: "chat-input",
+				theme: {},
+				nodes: [LispTokenNode],
+				onError: (error) => {
+					throw error;
+				},
+			}}
+		>
+			<Editor {...props} />
+		</LexicalComposer>
+	);
+}
+
+function Editor({
 	placeholder = "",
 	onSubmit,
 	history = [],
@@ -123,34 +157,42 @@ export function ChatInput({
 	onStop,
 	disabled,
 }: ChatInputProps) {
+	const [editor] = useLexicalComposerContext();
 	const [text, setText] = useState("");
-	const area = useRef<HTMLTextAreaElement>(null);
-	const mirror = useRef<HTMLPreElement>(null);
 	const [notice, flash] = useNotice();
 	const empty = text.trim() === "";
 	const [searching, setSearching] = useState(false);
 	const prompts = useMemo(() => newestFirst(history), [history]);
 	const step = useRecall(history);
 
-	const insertPrompt = useCallback((prompt: string) => {
-		setText(prompt);
-		area.current?.focus();
-	}, []);
+	const replace = useCallback(
+		(next: string) =>
+			editor.update(() => $replaceText(next), { discrete: true }),
+		[editor],
+	);
+
+	const insertPrompt = useCallback(
+		(prompt: string) => {
+			replace(prompt);
+			editor.focus();
+		},
+		[editor, replace],
+	);
 
 	const send = useCallback(() => {
 		if (disabled || empty) return;
 		onSubmit(text.trim());
-		setText("");
-	}, [text, empty, onSubmit, disabled]);
+		replace("");
+	}, [text, empty, onSubmit, disabled, replace]);
 
 	const pick = useCallback(
 		(command: Command) => {
 			if (command.takesArgument) {
-				setText(`${command.name} `);
-				area.current?.focus();
+				replace(`${command.name} `);
+				editor.focus();
 				return;
 			}
-			setText("");
+			replace("");
 			if (command.name === "/prompt") {
 				setSearching(true);
 				return;
@@ -159,31 +201,52 @@ export function ChatInput({
 				if (shown) flash(shown);
 			});
 		},
-		[onCommand, flash],
+		[editor, replace, onCommand, flash],
 	);
 
-	const menu = useCommandMenu(text, pick);
+	const menuHost = useRef<HTMLDivElement>(null);
+	const menuActive = useRef(false);
 
-	const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-		if (disabled || event.nativeEvent.isComposing || menu.handleKey(event))
-			return;
+	useEffect(() => {
+		editor.setEditable(!disabled);
+	}, [editor, disabled]);
+
+	useEffect(() => editor.registerTextContentListener(setText), [editor]);
+
+	const onKeyDown = (event: KeyboardEvent): boolean => {
+		if (event.isComposing) return true;
+		if (disabled) return true;
+		if (menuActive.current) return false;
 		const direction = RECALL_KEYS[event.key];
 		if (direction) {
 			const recalled = step(text, direction);
-			if (recalled === null) return;
+			if (recalled === null) return false;
 			event.preventDefault();
-			setText(recalled);
-			return;
+			replace(recalled);
+			return true;
 		}
-		if (!submitsOnEnter(event)) return;
+		if (!submitsOnEnter(event)) return false;
 		event.preventDefault();
 		if (isStreaming && empty) onStop?.();
 		else send();
+		return true;
 	};
+	const keys = useRef(onKeyDown);
+	keys.current = onKeyDown;
+
+	useEffect(
+		() =>
+			editor.registerCommand(
+				KEY_DOWN_COMMAND,
+				(event) => keys.current(event),
+				COMMAND_PRIORITY_HIGH,
+			),
+		[editor],
+	);
 
 	return (
 		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			<CommandMenu menu={menu} onPick={pick} />
+			<div ref={menuHost} />
 			{notice && (
 				<div className="border-b border-bg2 bg-bg1 px-3 py-0.5 text-dim">
 					{notice}
@@ -203,43 +266,31 @@ export function ChatInput({
 					/>
 				}
 			>
-				<pre
-					ref={mirror}
-					aria-hidden
-					className={cn(
-						"pointer-events-none max-h-40 overflow-hidden [scrollbar-gutter:stable] whitespace-pre-wrap break-words px-0 py-1 font-[inherit] text-[length:inherit]",
-						disabled ? "text-dim" : "text-fg",
-					)}
-				>
-					<LispText>{text}</LispText>
-					{"\n"}
-				</pre>
-				{text === "" && (
-					<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
-						{placeholder}
-					</div>
-				)}
-				<textarea
-					ref={area}
-					value={text}
-					aria-label={placeholder}
-					spellCheck={false}
-					readOnly={disabled}
-					onChange={(event) => {
-						setText(event.target.value);
-						menu.select(0);
-					}}
-					onScroll={() => {
-						if (mirror.current && area.current)
-							mirror.current.scrollTop = area.current.scrollTop;
-					}}
-					onKeyDown={onKeyDown}
-					className={cn(
-						"absolute inset-0 resize-none overflow-y-auto [scrollbar-gutter:stable] border-0 bg-transparent px-0 py-1 text-transparent outline-none",
-						disabled ? "cursor-not-allowed" : "caret-yellow",
-					)}
+				<PlainTextPlugin
+					contentEditable={
+						<ContentEditable
+							aria-label={placeholder}
+							aria-placeholder={placeholder}
+							spellCheck={false}
+							placeholder={
+								<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
+									{placeholder}
+								</div>
+							}
+							className={cn(
+								"max-h-40 min-h-0 overflow-y-auto [scrollbar-gutter:stable] whitespace-pre-wrap break-words py-1 outline-none",
+								disabled
+									? "cursor-not-allowed text-dim"
+									: "text-fg caret-yellow",
+							)}
+						/>
+					}
+					ErrorBoundary={LexicalErrorBoundary}
 				/>
 			</InputShell>
+			<HistoryPlugin />
+			<LispHighlightPlugin />
+			<CommandMenuPlugin onPick={pick} host={menuHost} active={menuActive} />
 			<PromptDialog
 				onOpenChange={setSearching}
 				onSelect={insertPrompt}

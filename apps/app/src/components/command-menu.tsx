@@ -1,94 +1,128 @@
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import {
+	LexicalTypeaheadMenuPlugin,
+	MenuOption,
+	type MenuTextMatch,
+} from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { cn, useIsMobile } from "@repo/ui";
-import { type KeyboardEvent, useMemo, useState } from "react";
+import { $getRoot } from "lexical";
+import {
+	type RefObject,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { type Command, commands, matchesCommand } from "../lib/commands.ts";
 
 const COMMAND_QUERY = /^\/(\S*)$/;
 
-export interface CommandMenuState {
-	options: Command[];
-	selected: number;
-	select: (index: number) => void;
-	handleKey: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean;
+class CommandOption extends MenuOption {
+	readonly command: Command;
+	constructor(command: Command) {
+		super(command.name);
+		this.command = command;
+	}
 }
 
-function matching(query: string, isMobile: boolean): Command[] {
-	return commands
-		.filter((c) => !(isMobile && c.desktopOnly))
-		.filter((c) => matchesCommand(c, query));
-}
-
-export function useCommandMenu(
-	text: string,
-	pick: (command: Command) => void,
-): CommandMenuState {
-	const [chosen, setChosen] = useState(0);
-	const [dismissed, setDismissed] = useState<string | null>(null);
+export function CommandMenuPlugin({
+	onPick,
+	host,
+	active,
+}: {
+	onPick: (command: Command) => void;
+	host: RefObject<HTMLDivElement | null>;
+	active: RefObject<boolean>;
+}) {
+	const [editor] = useLexicalComposerContext();
+	const [query, setQuery] = useState<string | null>(null);
+	const [open, setOpen] = useState(false);
 	const isMobile = useIsMobile();
-	const query = COMMAND_QUERY.exec(text)?.[1];
+
 	const options = useMemo(
 		() =>
-			query === undefined || dismissed === text
-				? []
-				: matching(query, isMobile),
-		[query, dismissed, text, isMobile],
+			commands
+				.filter((c) => !(isMobile && c.desktopOnly))
+				.filter((c) => matchesCommand(c, query ?? ""))
+				.map((c) => new CommandOption(c)),
+		[query, isMobile],
 	);
-	const selected = Math.min(chosen, Math.max(options.length - 1, 0));
 
-	const moves: Record<string, () => void> = {
-		ArrowDown: () => setChosen((selected + 1) % options.length),
-		ArrowUp: () => setChosen((selected - 1 + options.length) % options.length),
-		Escape: () => setDismissed(text),
-		Tab: () => pick(options[selected] as Command),
-		Enter: () => pick(options[selected] as Command),
-	};
+	useEffect(() => {
+		active.current = open && options.length > 0;
+	}, [active, open, options]);
 
-	const handleKey = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
-		const move = moves[event.key];
-		if (options.length === 0 || move === undefined || event.shiftKey)
-			return false;
-		event.preventDefault();
-		move();
-		return true;
-	};
+	const triggerFn = useCallback(
+		(typed: string): MenuTextMatch | null => {
+			const match = COMMAND_QUERY.exec(typed);
+			const whole = editor
+				.getEditorState()
+				.read(() => $getRoot().getTextContent());
+			if (!match || whole !== typed) return null;
+			return {
+				leadOffset: 0,
+				matchingString: match[1] ?? "",
+				replaceableString: match[0],
+			};
+		},
+		[editor],
+	);
 
-	return { options, selected, select: setChosen, handleKey };
-}
+	const onSelectOption = useCallback(
+		(option: CommandOption, _node: unknown, closeMenu: () => void) => {
+			closeMenu();
+			onPick(option.command);
+		},
+		[onPick],
+	);
 
-export function CommandMenu({
-	menu,
-	onPick,
-}: {
-	menu: CommandMenuState;
-	onPick: (command: Command) => void;
-}) {
-	if (menu.options.length === 0) return null;
 	return (
-		<div className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]">
-			{menu.options.map((command, i) => (
-				<button
-					type="button"
-					key={command.name}
-					onMouseEnter={() => menu.select(i)}
-					onMouseDown={(event) => event.preventDefault()}
-					onClick={() => onPick(command)}
-					className={cn(
-						"flex items-baseline gap-2.5 px-3 py-0.5 text-left",
-						i === menu.selected ? "bg-bg2" : "hover:brightness-125",
-					)}
-				>
-					<span className="flex-none whitespace-nowrap text-fg">
-						{command.name}
-					</span>
-					<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-dim">
-						{command.desc}
-					</span>
-					{command.hint && (
-						<span className="flex-none text-[10.5px] text-dim">
-							{command.hint}
-						</span>
-					)}
-				</button>
-			))}
-		</div>
+		<LexicalTypeaheadMenuPlugin<CommandOption>
+			options={options}
+			triggerFn={triggerFn}
+			onQueryChange={setQuery}
+			onSelectOption={onSelectOption}
+			onOpen={() => setOpen(true)}
+			onClose={() => setOpen(false)}
+			menuRenderFn={(
+				_anchor,
+				{ selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
+			) =>
+				host.current && options.length > 0
+					? createPortal(
+							<div className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]">
+								{options.map((option, i) => (
+									<button
+										type="button"
+										key={option.key}
+										ref={(element) => option.setRefElement(element)}
+										onMouseEnter={() => setHighlightedIndex(i)}
+										onMouseDown={(event) => event.preventDefault()}
+										onClick={() => selectOptionAndCleanUp(option)}
+										className={cn(
+											"flex items-baseline gap-2.5 px-3 py-0.5 text-left",
+											i === selectedIndex ? "bg-bg2" : "hover:brightness-125",
+										)}
+									>
+										<span className="flex-none whitespace-nowrap text-fg">
+											{option.command.name}
+										</span>
+										<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-dim">
+											{option.command.desc}
+										</span>
+										{option.command.hint && (
+											<span className="flex-none text-[10.5px] text-dim">
+												{option.command.hint}
+											</span>
+										)}
+									</button>
+								))}
+							</div>,
+							host.current,
+						)
+					: null
+			}
+		/>
 	);
 }
