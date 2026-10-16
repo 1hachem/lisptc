@@ -63,6 +63,21 @@ async function runUserForms(
 	});
 }
 
+const preparing = new Map<string, Promise<void>>();
+
+function oneTurnAtATime<T>(chatId: string, run: () => Promise<T>): Promise<T> {
+	const turn = (preparing.get(chatId) ?? Promise.resolve()).then(run);
+	const done = turn.then(
+		() => undefined,
+		() => undefined,
+	);
+	preparing.set(chatId, done);
+	void done.then(() => {
+		if (preparing.get(chatId) === done) preparing.delete(chatId);
+	});
+	return turn;
+}
+
 async function prepareTurn(
 	convex: ReturnType<typeof convexAs>,
 	input: TurnInput,
@@ -74,13 +89,15 @@ async function prepareTurn(
 	const { provider, model } = chatModel(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
-	await convex.mutation(api.messages.append, {
-		chatId,
-		messages: [opening],
+	const history = await oneTurnAtATime(chatId, async () => {
+		await convex.mutation(api.messages.append, {
+			chatId,
+			messages: [opening],
+		});
+		if ("message" in input)
+			await runUserForms(convex, chatId, input.message, signal);
+		return convex.query(api.messages.transcript, { chatId });
 	});
-	if ("message" in input)
-		await runUserForms(convex, chatId, input.message, signal);
-	const history = await convex.query(api.messages.transcript, { chatId });
 	return { provider, model, history };
 }
 

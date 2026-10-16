@@ -51,10 +51,13 @@ vi.mock("@repo/ai", async (importOriginal) => {
 		runsForms: async (message: string) => holdsForms(message),
 		evalUserMessage: async (
 			message: string,
-		): Promise<EvalMessage | undefined> =>
-			holdsForms(message)
+		): Promise<EvalMessage | undefined> => {
+			if (message.startsWith("slow"))
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			return holdsForms(message)
 				? { type: "tool", content: "3", id: "result" }
-				: undefined,
+				: undefined;
+		},
 		MemorySteerInbox: class extends real.MemorySteerInbox {
 			override async post(
 				_key: string,
@@ -109,6 +112,19 @@ describe("a message that holds forms", () => {
 				type: "human",
 				content: "what is (+ 1 2)\n\n3",
 			}),
+		]);
+	});
+
+	test("keeps a second turn in the same chat out until its result is stored", async () => {
+		await Promise.all([
+			send(turn, { input: { chatId: CHAT, message: "slow (+ 1 2)" } }),
+			send(turn, { input: { chatId: CHAT, message: "next (+ 1 2)" } }),
+		]);
+		expect(world.appended.map((m) => `${m.type}:${m.content}`)).toEqual([
+			"human:slow (+ 1 2)",
+			"tool:3",
+			"human:next (+ 1 2)",
+			"tool:3",
 		]);
 	});
 
