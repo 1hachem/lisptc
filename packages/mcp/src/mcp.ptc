@@ -1,69 +1,66 @@
 MCP SERVERS
 
-- (load-mcp "name") — load predefined server by name. Asynchronous: returns
-  promise at once; tools install only when it settles.
-- Unawaited load is finished code, not a loose end. Promise installs tools
-  itself on settle, so step that reported
-  "load-mcp-1: a promise, still running …" needs no follow-up:
-  go on, call tools on a later step. Use await only to get tool list in SAME step.
-- Load and use in one step: wrap SINGLE load-mcp call in await:
-(await (load-mcp "acme")) blocks until ready, returns its tools, each as
-(name argument-count description) — same rows (list-tools) gives, so no need
-  to list them after a load.
-  Do NOT call (load-mcp "acme") then (await (load-mcp "acme")) —
-  that starts TWO connections. Wrap directly as above, or bind
-  the one promise and await it: (setq p (load-mcp "acme")) then later (await p) .
-- Ad-hoc servers, wrapped in await the same way:
+- (load-mcp "name") loads predefined server. load-mcp async: returns promise
+  at once, NOT blocking. Server connects in background; tools install when it
+  settles.
+- Unawaited load is finished code. Step reporting
+  "load-mcp-1: a promise, still running …" needs no follow-up: go on, call
+  tools on later step. Await only to get tool list in SAME step.
+- Load and use in one step: wrap SINGLE load-mcp call in await.
+(await (load-mcp "acme")) blocks until ready, returns tools as
+(name argument-count description) , same rows as (list-tools) , so no listing
+  after load. (promise-state p) checks progress without blocking:
+  :pending, :fulfilled or :rejected.
+  Do NOT call (load-mcp "acme") then (await (load-mcp "acme")) : TWO
+  connections. Wrap directly, or bind one promise:
+  (setq p (load-mcp "acme")) then later (await p) .
+- Ad-hoc servers, awaited same way:
   - Remote: (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
 - Local stdio: (load-mcp :name "acme" :command "npx" :args '("-y" "acme-mcp-server"))
-- OAuth remote: add :oauth t, optionally :scopes; then use login and mcp-authorize.
-- Load several concurrently:
-(await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) — settled,
-  not all, so one failing server does not discard others.
-- Finding tools — two different searches, don't confuse them:
-  - Both PRINT their answer, not name it, so one is a complete step: read
-    names and descriptions from the print and go on. Never follow one with
-    (echo …) , never run same search twice.
+- OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
+- Several concurrently:
+(await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) . Settled,
+  not all: one failing server discards no others.
+- Finding: two different searches, don't confuse.
+  - Both PRINT answer, so one is a complete step: read names from print, go
+    on. Never follow with (echo …) , never repeat a search.
   - (search-mcps "query") searches toolkit of predefined servers, loaded or
-    not — use it to find a server to load. Matches keywords, name and
-    description, so search capability in own words: vision, spreadsheet,
-    tickets, analytics. Don't guess a product name. Misspelling still lands,
-    prefix counts, so read a near miss before retyping. Also (list-mcps) , and
-    (list-toolkit) , which reports every server's keywords.
+    not: finds server to load. Matches keywords, name, description, so search
+    capability in own words: vision, spreadsheet, tickets, analytics. Don't
+    guess product name. Misspelling still lands, prefix counts: read near miss
+    before retyping. Also (list-mcps) , and (list-toolkit) with every server's
+    keywords.
   - (search-tools "query") searches tools of loaded servers by name and
-    description, best-first, forgives misspelling. Takes ONE query string,
-    searches ALL loaded servers — NO server argument. (search-tools "acme" "widget")
-is WRONG, an arity error. For one server's tools, load it, then
-(search-tools "widget") ; to list them use (list-tools "acme") .
+    description, best-first, forgives misspelling. ONE query string, ALL
+    loaded servers, NO server argument. (search-tools "acme" "widget")
+is WRONG, an arity error. For one server: load it, then
+(search-tools "widget") ; list with (list-tools "acme") .
 - (unload-mcp "name") , (login "name") , (logout "name") ,
 (mcp-authorize "name" "code") , (mcp-shutdown) .
-- OAuth login/logout, only for :oauth t servers:
-  - (login "name") gives :logged-in if already authenticated. Otherwise, like a
-    load needing login, asks user to authorize and ends turn; you are told when
-    they answer.
-  - User authorized: run (await (load-mcp "name")) and carry on with original
-    request: redirect is captured for you. Only when they hand back a bare code,
-    run (mcp-authorize "name" "<code>") before that load. Never ask for a code
+- login/logout only for :oauth t servers:
+  - (login "name") gives :logged-in if authenticated. Else, like load needing
+    login, asks user to authorize, ends turn; you are told when they answer.
+  - User authorized: run (await (load-mcp "name")) , carry on with original
+    request; redirect captured for you. Only when they hand back bare code,
+    run (mcp-authorize "name" "<code>") before that load. Never ask for code
     before that load failed.
   - (logout "name") gives :logged-out. Unloads server if loaded AND deletes
     saved tokens, so next (load-mcp "name") or (login "name")
 re-authorizes from scratch. Use to sign out, or force fresh consent after
-    widening :scopes, e.g. tool call returned
-    403 insufficient_scope: (logout "name") then (login "name") again.
-  - login and logout accept only a predefined OAuth server name; unknown or
-    non-OAuth server errors. logout is no-op-safe: no error if server not loaded.
-- Each loaded tool becomes global server/tool, called with keyword args,
-  blocking, returns result directly, e.g.
+    widening :scopes, e.g. on 403 insufficient_scope:
+    (logout "name") then (login "name") again.
+  - Accept only predefined OAuth server name; unknown or non-OAuth errors.
+    logout no-op-safe when server not loaded.
+- Each loaded tool becomes global named <server>/<tool>, called with keyword args,
+  blocking, returns result directly:
 (acme/list_widgets :query "blue") . (doc 'acme/list_widgets) prints full
-  signature, every argument, which are required — read it before guessing a
-  keyword, and again when a call is rejected.
-- Tool result arrives as Lisp data: JSON object as alist with string keys,
-  array as list. Read with assoc, cdr, mapcar, nth — no parsing step. Holds
-  however server sent it: JSON document sent as text is parsed too, so result's
-  report names its keys. Only a string that is not a JSON document needs
+  signature, every argument, which required. Read before guessing a keyword,
+  and again when a call is rejected.
+- Result arrives as Lisp data: JSON object as alist with string keys, array as
+  list. Read with assoc, cdr, mapcar, nth; no parsing. JSON sent as text
+  parsed too, so report names its keys. Only non-JSON string needs
   (json-parse s) .
-- Full example — find server, load it, find tool, call it. Names below are
-  made up: you never know them in advance, so start from
+- Full example. Names made up: never known in advance, so start from
   search-mcps and let each step tell you the next name.
 
 (search-mcps "widget")
@@ -72,4 +69,4 @@ re-authorizes from scratch. Use to sign out, or force fresh consent after
 (acme/get_widget :id "42")
 RULES
 
-- MCP built-ins: search-mcps, list-toolkit, load-mcp, unload-mcp, list-mcps, list-tools, search-tools. You are not told which servers exist or what they are called: find one with (search-mcps "query") and (list-toolkit) , its tools with (search-tools "query") / (list-tools "server") once loaded. Never invent a server or tool name — read it out of one of those results. load-mcp is asynchronous: it returns a promise immediately and does NOT block. Server connects in background; tools install themselves when done, visible via list-tools/search-tools on a later step. (await p) blocks until ready, returns tool list same step; (promise-state p) checks progress (:pending/:fulfilled/:rejected) without blocking. Load toolkit server by name search returned, or ad-hoc with a plist as above. Each loaded tool becomes a global named <server>/<tool>, called with keyword args, e.g. (acme/get_widget :id "42") . acme, a, b are placeholders for whatever searches return.
+- You are not told which servers exist or what they are called. Never invent a server or tool name — read it out of one of those results. acme, a, b are placeholders.

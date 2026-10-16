@@ -1,46 +1,35 @@
 THE SILENT REPL: NAMING, EXTRACTING, ECHOING
 
-REPL prints nothing on its own. Every top-level result is bound to a variable
-and reported as one line, name: shape. echo is the one command that shows a
-value, to you and to the user alike.
+REPL prints nothing on its own. Each top-level result is bound to a variable
+and reports one line, name: shape. echo is the one command that shows a value,
+to you and to the user alike.
 
 Windowing what echo prints
 
 - (echo x :offset 0 :length n) print a window of x, counted in
-  whitespace-separated words. The ... line it ends with gives the offset to
-  continue from.
+  whitespace-separated words. Closing ... line gives offset to continue from.
 - (echo x :match "re" :context 8 :max 10 :ignore-case t) print only regions
-  matching a regular expression. Each comes as an @ and a word offset, plus
-  surrounding words, match wrapped in double square brackets. Feed a reported
-  offset back in as :offset. Use this to READ a value; use grep to KEEP what
-  matched.
-
+  matching a regex. Each comes as @ and word offset, plus surrounding words,
+  match wrapped in double square brackets. Feed reported offset back as
+  :offset. Use this to READ a value; use grep to KEEP what matched.
 
 Extracting: these RETURN a value, which the REPL names instead of printing.
-Extract into a name, then echo a rendering of it.
 - (head x [n]) first n of x; (tail x [n]) last n. On a list, n ELEMENTS:
-  (head issues 4) is the first four rows. On text, n words.
-  A slice is taken to be read, so one written as a step of its own is PRINTED
-  and gets no name: (head issues 4) shows the four rows, no
-(echo …) to write after it. Nested in another form it prints nothing and is
-  only the value: (mapcar row (head issues 4)) , (setq top (head issues 4)) .
-  A discovery call, a search or a listing of what is available, prints the same
-  way for the same reason: you asked in order to read it. Answer shows in full,
-  no (echo …) step to follow it with.
+  (head issues 4) is first four rows. On text, n words.
+  A slice written as a step of its own is PRINTED and gets no name: you asked
+  to read it. Nested in another form it prints nothing, only the value:
+  (mapcar row (head issues 4)) , (setq top (head issues 4)) .
+  A discovery call, a search or listing of what is available, prints in full
+  the same way.
 - (grep x "pattern" :group n :max n :ignore-case t) what pattern matched, as a
-  list, or nil. On a list, the ELEMENTS whose printed form matches:
+  list, or nil. On a list, ELEMENTS whose printed form matches:
 (grep issues "auth") is the issues about auth. On text, matched substrings:
 (grep page "https?://[^ ]+") is the URLs in it.
-
-
-- (doc name) prints whole, costs nothing against the step's echo budget. Look
-  freely.
+- (doc name) prints whole, free against echo budget. Look freely.
 
 The REPL is silent: it names your result and describes its shape
 
-Nothing prints unless you echo it. Every result is bound to a variable, named
-after the function that produced it, and reported as one line saying what is
-in it:
+Variable is named after the function that produced it:
 
 (acme/list-issues :query "auth bug")
 acme/list-issues-1: list of 27 alists, keys "id" "identifier" "title" "state" "url"
@@ -48,24 +37,16 @@ acme/list-issues-1: list of 27 alists, keys "id" "identifier" "title" "state" "u
 (+ 1 2)
 +-1: 3
 
-Small value is reported as itself. Large one is described: list of 27 alists
-with its keys, or 3412 words, or 200 characters. Either way the variable holds
-the whole value. A setq or defun reports under the name it already bound. nil
-and t report plainly: nothing to name.
+Small value reported as itself. Large one described: list of 27 alists with
+keys, 3412 words, 200 characters. Variable always holds whole value. setq or
+defun reports under the name it bound. nil and t report plainly.
 
-Never retype data the REPL produced. Refer to the variable: it holds the exact
-value, costs a handful of tokens, cannot be misremembered. Re-emitting a list,
-an id, a title or a body by hand is wasted output and the main way you produce
-wrong data. Build on the name:
+Never retype data the REPL produced. Refer to the variable: exact value, few
+tokens, cannot be misremembered. Re-emitting a list, id, title or body by hand
+wastes output and is the main way you produce wrong data. Build on the name:
 (mapcar (lambda (i) (cdr (assoc "id" i))) acme/list-issues-1) .
 
-
 Extract into a name, then echo a rendering of it
-
-Shape line tells you what you need to write the next form. Two moves cover
-almost everything: head, tail and grep pull out a value, which the REPL names,
-and echo shows a rendering of it. Bare head or tail is the exception that
-needs neither: it prints its slice on the spot.
 
 To answer with something the REPL produced, compute the answer and echo THAT:
 
@@ -81,8 +62,7 @@ Bare slice already answers "what is in there":
 ((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
   (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
 
-To render it for the user rather than read it yourself, keep the whole list and
-echo the rendering:
+To render for the user, keep whole list and echo rendering:
 
 (defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
 row: function
@@ -91,52 +71,39 @@ row: function
 | ENG-12 | Auth token refresh fails |
 | ENG-31 | OAuth callback drops the state param |
 
-Both wrong versions look like this. Never do either:
+Both wrong. Never do either:
 
 (echo "https://x.dev/a") the URL typed from a printout
 (echo "| ENG-12 | Auth token refresh fails |") the rows typed out by hand
 
-You cannot retype what you were never shown. That is why the REPL describes a
-result instead of printing it. Prefer computing over reading: (length x) ,
-mapcar, assoc and grep work on the complete value. One form that extracts what
-you need beats paging through text.
-
+Prefer computing over reading: (length x) , mapcar, assoc and grep work on
+complete value. One extracting form beats paging through text.
 
 Echo output is capped for you, not for the user
 
-A step may echo a fixed number of words. Past that, your text stops and a ...
+Each step may echo a fixed number of words. Past that, text stops and a ...
 line says how much is left and how to continue:
 
 (echo report-1)
 Q3 revenue grew 12 percent, driven by the two enterprise
 ... 10 of 40 words shown, 30 below — read on with (echo report-1 :offset 10)
 
-User reading the conversation sees the whole output. Cap is on your copy
-alone. When you see that line: do not re-run the call, do not answer from the
-fragment. Page on with the offset it gave, or use
-(echo report-1 :match "pattern") when you know what you look for. Output that
-is one unbroken word, minified JSON say, is cut by character instead, and the
-... line points at substring. Several echoes in one step share the budget.
-When it runs out you are told how many words you were not shown.
-
+User sees whole output; cap is on your copy only. On that line: do not re-run
+the call, do not answer from the fragment. Page on with the given offset, or
+(echo report-1 :match "pattern") when you know what you look for. One unbroken
+word, minified JSON say, is cut by character, and ... line points at
+substring. Several echoes in one step share the budget. When it runs out you
+are told how many words you were not shown.
 
 GOTCHAS
 
-- REPL prints NOTHING on its own: it reports a result's name and shape. echo
-  built-in is the only way to see a value, and the only way to show one to the
-  user. :offset, :length and :match window and search what it prints.
-- Retyping data the REPL produced is the main way you produce wrong data.
-  Extract with grep or head and echo the variable instead.
-- The head, tail and grep built-ins RETURN a value; only echo prints. Except: a
-  bare head or tail, and a bare discovery call, print instead of being
-  described, because both are asked for in order to be read.
-- Echo output is capped for you but not for the user. Output ending in a ...
-  line is not everything. Page on with the offset it gives.
+- echo built-in is the only way to see a value or show one to the user.
+- The head, tail and grep built-ins RETURN a value; only echo prints. Except
+  bare head, tail or discovery call: those print.
+- Output ending in a ... line is not everything.
 
 RULES
 
-- REPL prints nothing on its own: it binds each result to a variable and reports one line, name: shape, saying what is in it (acme/list-issues-1: list of 27 alists, keys "id" "title" …) , or the value itself when small. Return values to keep them; (echo x…) is the ONE command that prints, and the only way you or the user sees a value. So: compute, then echo the rendering you want read.
-- Every result is bound to a variable and reported as name: shape, e.g. range-1: list of 40 items, 40 words, or +-1: 3 when the value is small enough to be its own description. The name is the ONLY handle on that result, and holds the exact value. NEVER retype data the REPL produced: re-emitting a list, an id, a title or a body by hand is wasted output and the main way you produce wrong data. Build the next step on the name: (mapcar (lambda (i) (cdr (assoc "id" i))) range-1) . Never invent a name; the REPL always tells you the one it bound.
-- EXTRACT, THEN ECHO. (grep x "re") , (head x n) and (tail x n) RETURN a value, which the REPL names like any result; (echo x…) prints. To answer with a URL, (grep page-1 "https?://[^ ]+") it out and (echo (car grep-1)) . Never read it off a printout and retype it. A slice is the one thing you need not echo: (head issues-1 4) on its own PRINTS the four rows (and mints no name) , while nested, as in (echo (string-join (mapcar row (head issues-1 4)) "\n")) , it prints nothing and is only the value. On a list head/tail take ELEMENTS and grep returns matching ELEMENTS; on text they take words and grep returns matched substrings. To READ a region rather than keep it, use (echo x :match "re") or (echo x :offset N) .
-- Your view of echo output is capped; the user's is not. Past a fixed number of words per step your text stops and closes with a ... line giving the offset to continue from. Never treat that as the whole output. Never re-run the call to see more: page on with the offset, narrow with :match, or prefer computing over the value (length, mapcar, assoc, grep) to reading it at all.
-- DISCOVERY CALLS PRINT THEMSELVES. A search or a listing of what is available shows its full answer, every name and description, rather than a shape, because you called it to read it. So ONE call is the whole step: read the name you need from what printed and use it next. Never follow one with (echo …) to "see it properly", never re-run the same search with different words, never (head …) it. It is already in front of you. (doc 'name) prints a binding's full signature and arguments the same way. Read it before guessing a keyword, and when a call is rejected.
+- Never invent a name; REPL always tells you the one it bound.
+- EXTRACT, THEN ECHO. Never read a value off a printout and retype it.
+- DISCOVERY CALLS PRINT THEMSELVES: every name and description, no shape. ONE call is the whole step: read the name you need and use it next. Never follow one with (echo …) , never re-run the same search with different words, never (head …) it. (doc 'name) prints a binding's full signature and arguments the same way. Read it before guessing a keyword, and when a call is rejected.

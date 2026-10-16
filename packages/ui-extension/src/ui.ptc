@@ -1,7 +1,7 @@
 INTERACTIVE VIEWS
 
-echo puts text on user's screen. ui/render puts a **widget** there — one they
-can click, type into and submit, each interaction running Lisp in this same REPL.
+echo puts text on user's screen. ui/render puts a **widget** there: user
+clicks, types, submits, each interaction running Lisp in this same REPL.
 
 (defun panel ()
   (ui/stack
@@ -12,44 +12,40 @@ can click, type into and submit, each interaction running Lisp in this same REPL
       :submit "search")))
 (ui/render (panel))
 
-**Constructors** — each returns a widget; none draws on its own.
-- (ui/text s) a line · (ui/heading s) · (ui/markdown s) a markdown block.
-- (ui/stack child...) one above next · (ui/row child...) side by side. Bare
-  string child becomes a ui/text.
-- (ui/card title child...) titled box. Break long view into named parts;
-  without cards a big ui/stack reads as one wall.
-- (ui/kpi label value [:hint "..."]) one number, big, as in (ui/kpi "open" 27).
-  Most understanding per token here: says at a glance what a 27-row table
-  says in a screenful. :hint is smaller line under it.
-- (ui/badge text [:tone "ok"]) short status label, :tone one of "ok",
-  "warn", "bad", "info" or "muted". For *state* of a thing — status,
-  severity, check result — where a sentence is noise. Any other tone
-  is an error, so do not invent one.
-- (ui/link text url) link opened in new tab. Use for a URL a tool handed
-  you, so user can follow it, not copy it out of a table.
-- (ui/table rows [:columns '("id" "title")]) — rows is list of alists, the
-  usual MCP tool result shape. Without :columns first row's keys are columns.
+**Constructors** each return a widget; none draws on its own.
+- (ui/text s) a line · (ui/heading s) · (ui/markdown s) markdown block.
+- (ui/stack child...) stacked · (ui/row child...) side by side. Bare string
+  child becomes ui/text.
+- (ui/card title child...) titled box. Split long view into named parts;
+  big ui/stack without cards reads as one wall.
+- (ui/kpi label value [:hint "..."]) one big number, as in (ui/kpi "open" 27).
+  Most understanding per token: a glance says what a 27-row table says in a
+  screenful. :hint is smaller line under it.
+- (ui/badge text [:tone "ok"]) short status label. :tone only "ok", "warn",
+  "bad", "info" or "muted"; any other errors, do not invent one. For *state*:
+  status, severity, check result, where a sentence is noise.
+- (ui/link text url) opens in new tab. Use for URL a tool handed you, so user
+  follows it, not copies it from a table.
+- (ui/table rows [:columns '("id" "title")]) rows is list of alists, usual MCP
+  result shape. No :columns: first row's keys are columns.
 - (ui/input :name "q" [:label "..."] [:placeholder "..."] [:value "..."]) text
   field · (ui/select options :name "n" [:label "..."] [:value "..."]
-  [:on-change fn]) dropdown over list of strings · (ui/checkbox :name "o"
+  [:on-change fn]) dropdown over strings · (ui/checkbox :name "o"
   [:label "..."] [:checked t] [:on-change fn]) tick box.
 - (ui/button label action) · (ui/form action child... [:submit "Send"]).
 
-**Actions** are ordinary Lisp functions. Button's or form's action runs IN
-THIS REPL when user uses it, with NO model turn between — user clicks,
-closure runs, view is replaced, you are not asked anything. That makes a
-view worth building: every branch you anticipate becomes free.
-- Button action takes no argument: (lambda () (ui/render (panel))). Form's
-  takes one: alist of every enclosed field's :name and contents, read with
-  assoc. Button INSIDE a form gets same alist if it takes an argument.
-- Field contents always strings — except ui/checkbox, whose value is real
-  boolean, so (if (cdr (assoc "o" values)) ...) works. (read s) turns a
-  string field into a number. "" and "false" are both TRUE, which is why
-  tick box does not hand you a string.
-- :on-change on ui/select or ui/checkbox is a one-argument function run the
-  moment user picks or ticks — no submit button, no model turn. Gets same
-  alist a form handler would, answers same way, by rendering. That
-  is how to build a filter that reacts:
+**Actions** are ordinary Lisp functions. Button or form action runs IN THIS
+REPL on use, NO model turn between: click, closure runs, view replaced, you
+are not asked. So every branch you anticipate is free.
+- Button action takes no argument: (lambda () (ui/render (panel))). Form
+  action takes one: alist of every enclosed field's :name and contents, read
+  with assoc. Button INSIDE a form gets same alist if it takes an argument.
+- Field contents always strings, except ui/checkbox: real boolean, so
+  (if (cdr (assoc "o" values)) ...) works. (read s) turns string into number.
+  "" and "false" are both TRUE, hence boolean tick box.
+- :on-change on ui/select or ui/checkbox: one-argument function run when user
+  picks or ticks. No submit, no model turn. Gets same alist as form handler,
+  answers by rendering. Reactive filter:
 
   (defun panel (window)
     (ui/stack
@@ -58,41 +54,38 @@ view worth building: every branch you anticipate becomes free.
       (ui/table (issues-since window))))
   (ui/render (panel "7"))
 
-  Text fields have no :on-change on purpose: every keystroke would be a round
-  trip redrawing the field user types into. Put ui/input in a
-  ui/form, let submit carry it.
-- Action answers by calling ui/render. What it renders replaces view in
-  place; action rendering nothing leaves view as it was.
-- Actions close over environment where written, and REPL is persistent,
-  so (setq counter (+ counter 1)) in a handler sticks — later step reads
-  changed value like any global. They die with REPL: clearing the
-  conversation drops every action a view held.
+  Text fields have no :on-change on purpose: each keystroke would round-trip,
+  redrawing the field being typed in. Put ui/input in ui/form, let submit
+  carry it.
+- Action answers via ui/render, replacing view in place; rendering nothing
+  leaves view as is.
+- Actions close over their environment, REPL persistent, so
+  (setq counter (+ counter 1)) in a handler sticks; later step reads it like
+  any global. They die with REPL: clearing conversation drops every action.
 
-**Handing work back to you, the (ui/send text...) call** — arguments join
-the way echo joins them, result joins conversation as a message from user,
-so you take next turn and answer normally:
+**Handing work back to you, the (ui/send text...) call**: arguments join as
+echo joins them; result joins conversation as user message, so you take next
+turn, answer normally:
 
 (ui/form (lambda (values) (ui/send "search the issues for" (cdr (assoc "q" values))))
   (ui/input :name "q" :label "search")
   :submit "ask")
 
-Send for judgement, handle in Lisp for work: request typed in prose, a
-decision or step you wrote no code for needs a turn; filtering, paging,
-recomputing or calling a loaded tool is free. Handler may render AND send —
-render view user should see while you think, then send. Several sends in one
-handler join into ONE message: one click is one thing user did. Only
-handlers deliver: ui/send in your own step does nothing, you already take a
-turn. Write it as a request, "search the issues for auth", not a note to
-yourself, "user clicked search".
+Send for judgement, handle in Lisp for work. Prose request, or decision or
+step with no code written, needs a turn; filtering, paging, recomputing,
+calling a loaded tool is free. Handler may render AND send: render what user
+sees while you think, then send. Several sends in one handler join into ONE
+message: one click, one thing. Only handlers deliver: ui/send in your own step
+does nothing, you already take a turn. Write a request, "search the issues for
+auth", not a note, "user clicked search".
 
 **Rules of thumb**
-- Only ui/render draws, or echo handed a widget, which renders it same way.
-  Widget built but not rendered shows nothing, like a value computed but not
-  echoed.
-- Step that renders a view shows user the WIDGET, not its text output, so put
-  anything they should read inside the widget, not in an echo.
-- Echo when answer is to read; render when it is to use — when it has
-  something to DO in it, a filter to change, a row to act on, a choice to make.
-- You are told only that render happened, as in "rendered stack, 8 elements,
-  3 actions"; widget is never sent back, because describing it to yourself
-  would spend exactly the context drawing it saved.
+- Only ui/render draws, or echo handed a widget. Built but unrendered widget
+  shows nothing, like a value not echoed.
+- Rendering step shows user the WIDGET, not text output: put what they should
+  read inside it, not in an echo.
+- Echo when answer is to read; render when it is to use: something to DO, a
+  filter to change, a row to act on, a choice to make.
+- You get only a summary, as in "rendered stack, 8 elements, 3 actions";
+  widget is never sent back, since describing it would spend the context
+  drawing it saved.

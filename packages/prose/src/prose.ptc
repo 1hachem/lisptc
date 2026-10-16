@@ -1,27 +1,24 @@
 PROSE AROUND THE FORMS
 
-Only parenthesised forms in output are program text. Everything around them is
-prose REPL skips. Parenthesised aside whose head names nothing that exists is
-prose too.
+Only parenthesised forms are program text. REPL skips prose around them, and a
+parenthesised aside whose head names nothing that exists.
 
 Ending the loop: prose alone
 
-No halt, exit or quit. End loop by replying with prose and no form at all.
-Message with nothing to evaluate is a program doing nothing: the done signal.
-That prose is your final answer to user, e.g. "the sum is 3".
+No halt, exit or quit. Reply with prose and no form: nothing to evaluate is the
+done signal. That prose is final answer to user, e.g. "the sum is 3".
 
-- Reply that way ONLY when user's request FULLY satisfied. Until then every
-  reply carries at least one form. Still need to inspect a result, branch, or
-  take another step? Emit next form; you will be asked to continue.
-- Prose around a form is ignored. Prose instead of a form stops loop. So never
-  answer in bare prose mid-task. Never park a plan or note in a form-less
-  message: put remarks around the form you emit.
-- Loop also stops on its own after fixed step count, a safety cap. End
-  deliberately with your answer; do not rely on cap.
-- REPL and driver behaviour, not core language: outside agent loop a form-less
-  program is a no-op.
+- Do it ONLY when user's request is FULLY satisfied. Until then every reply
+  carries at least one form. Need to inspect, branch or step again? Emit next
+  form; you will be asked to continue.
+- Prose around form is ignored; prose instead of form stops loop. Never answer
+  in bare prose mid-task. Never park plan or note in form-less message: put
+  remarks around the form.
+- Loop also stops at fixed step cap. End deliberately; do not rely on cap.
+- REPL and driver behaviour, not core language: outside agent loop, form-less
+  program is no-op.
 
 
 RULES
 
-- Parenthesised aside whose head names nothing that exists — (see below) , (one, two, three) — is prose, not code. Reader forgives that mistake; it is NOT a way to write remarks. Forgiveness is narrow and unpredictable: keyword argument, string literal, nested call, or slashed/underscored name makes it code. So (see below) is skipped while (see "below") raises undefined: see. Calling a tool before its server is loaded is an undefined: error to fix, not a skipped aside. Reply made only of asides ran nothing and ends loop exactly like bare prose: mid-task it throws turn away. What was read as prose comes back as a skipped … note. When that note is all a reply produced, it arrives with next user message, not at the time. Note is for you alone: keep it to yourself, act on it silently by not writing that shape again, NEVER mention it to user. Do not apologise, do not explain what was skipped, do not restate previous answer because of it. User asked something new: answer that and nothing else.
+- Aside whose head names nothing that exists — (see below) , (one, two, three) — is prose, not code. Reader forgives it; NOT a way to write remarks. Forgiveness narrow and unpredictable: keyword argument, string literal, nested call, or slashed/underscored name makes it code. (see below) is skipped; (see "below") raises undefined: see. Tool called before its server loads: undefined: error to fix, not skipped. Reply of only asides ran nothing and ends loop like bare prose: mid-task, turn wasted. Prose reads come back as skipped … note. Note alone arrives with next user message, not at the time. Note is for you alone: act silently by not repeating that shape; NEVER mention it to user. No apology, no explaining skip, no restating previous answer. User asked something new: answer only that.
