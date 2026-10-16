@@ -1,6 +1,6 @@
 import { runSync } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
-import { problemsIn } from "../src/check.ts";
+import { problemsIn, unclosedIn } from "../src/check.ts";
 import { admit, linted } from "./helpers.ts";
 
 describe("admit", () => {
@@ -16,9 +16,23 @@ describe("admit", () => {
 		);
 	});
 
+	it("rejects a form left open, even where prose surrounds it", async () => {
+		const admission = await admit("Adding them up.\n(echo (+ 1 2)");
+		expect(admission.rejected).toContain(
+			'line 2: unexpected end of input, this "(" is never closed',
+		);
+	});
+
 	it("rejects source that does not read", async () => {
 		const admission = await admit("(car '(1 2)");
 		expect(admission.rejected).toContain("line 1: unexpected end of input");
+	});
+});
+
+describe("unclosedIn", () => {
+	it("ignores an open parenthesis that opens no form", () => {
+		expect(unclosedIn("that went badly :(")).toBeUndefined();
+		expect(unclosedIn("a list ( of things")).toBeUndefined();
 	});
 });
 

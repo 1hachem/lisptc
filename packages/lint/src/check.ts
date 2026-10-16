@@ -1,5 +1,6 @@
 import type { Arity, Doc } from "@repo/interpreter/docs";
 import { readFailure } from "@repo/interpreter/reader";
+import { formSpans } from "@repo/shared/lisp-forms";
 import { type CallDoc, diagnosticsForCalls } from "./calls.ts";
 import {
 	type Call,
@@ -89,10 +90,31 @@ export function problemsIn(forms: string, defined: Defined): Problem[] {
 		.map((d) => ({ line: d.range.start.line + 1, message: d.message }));
 }
 
+function opensForm(text: string, at: number): boolean {
+	const after = text[at + 1] ?? "";
+	return (at === 0 || /\s/.test(text[at - 1])) && /[^\s()]/.test(after);
+}
+
+export function unclosedIn(code: string): Problem | undefined {
+	let found: Problem | undefined;
+	formSpans(code, {
+		unclosed(text, at) {
+			if (found === undefined && opensForm(text, at))
+				found = {
+					line: text.slice(0, at).split("\n").length,
+					message: 'unexpected end of input, this "(" is never closed',
+				};
+			return "unclosed";
+		},
+		unreadable: () => undefined,
+	});
+	return found;
+}
+
 export function rejection(problems: readonly Problem[]): string {
 	return [
 		"not run: checked before running and found mistakes.",
 		...problems.map((p) => `line ${p.line}: ${p.message}`),
-		"fix them and send the whole code again.",
+		"fix them, then send the step again.",
 	].join("\n");
 }
