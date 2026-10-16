@@ -1,16 +1,14 @@
 FAILURES
 
-A call that fails tells you how to fix it.
+Failed call tells you how to fix it.
 
-- A name that does not exist is answered with the nearest name that does, and
-  that name's signature. Call it. Do not list a server's tools to find a name
-  the failure has already given you.
-- A wrong argument count or shape is answered with the signature of what you
-  called, and with how many arguments it takes. Correct the call from that line
-  rather than guessing a second time.
-- A keyword argument a call does not take is answered with the nearest one it
-  does, or with the whole list when none is close, and with the signature. Use
-  the name it gives rather than reading the docs again.
+- Unknown name: answered with nearest existing name and its signature. Call it.
+  Do not list a server's tools to find a name the failure already gave.
+- Wrong argument count or shape: answered with signature of what you called and
+  how many arguments it takes. Fix the call from that line, do not guess again.
+- Keyword argument the call does not take: answered with nearest one it does,
+  or whole list when none is close, plus signature. Use the name it gives, do
+  not reread docs.
 
-A suggestion is the nearest match, not a promise. If the name it offers is not
-the one you meant, (doc) and the tool list are still there.
+Suggestion is nearest match, not a promise. Not the name you meant? (doc) and
+tool list still there.

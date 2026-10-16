@@ -1,34 +1,32 @@
 PERMISSIONS
 
-A permissions config decides every call you make: it is allowed, denied, or
-needs the user's approval.
+Permissions config decides every call: allowed, denied, or needs user approval.
 
-- (permission/list) gives the config as its forms.
-- (permission/check 'name) gives allow, deny or ask for a call to name. An MCP
-  tool is named server/tool, as it is bound.
+- (permission/list) gives config as its forms.
+- (permission/check 'name) gives allow, deny or ask for a call to name. MCP
+  tool is named server/tool, as bound.
 
-The config is written in forms you can also run: permission/default,
+Config is written in forms you can also run: permission/default,
 permission/allow, permission/deny, permission/ask, permission/server,
 permission/deny-server and permission/hide-server. (permission/delete form)
-removes one form, written exactly as (permission/list) shows it, and
+removes one form, written exactly as (permission/list) shows it.
 (permission/clear-all) removes every form.
-  Example: (permission/server playwright (only browser_navigate)) leaves the
+  Example: (permission/server playwright (only browser_navigate)) leaves
   playwright server with that one tool.
   Example: (permission/delete (permission/deny eval)) .
 
-Every one of these waits for the user's approval, like any other call that
-asks. Once they approve, it is applied and saved; do not run it again. A rule in
-the config that names the form decides instead: after
-(permission/allow permission/deny) a permission/deny applies at once, and after
-(permission/deny permission/delete) no form can be deleted. Only change the
-config when the user asks you to.
+Each of these waits for user approval, like any call that asks. Once approved,
+it is applied and saved; do not run it again. Config rule naming the form
+decides instead: after (permission/allow permission/deny) a permission/deny
+applies at once; after (permission/deny permission/delete) no form can be
+deleted. Change config only when user asks.
 
-A denied call fails with the reason. It is final: do not retry it, and do not
-reach the same effect another way. Say what you could not do.
+Denied call fails with reason. It is final: do not retry, do not reach same
+effect another way. Say what you could not do.
 
-A call that needs approval fails too, and the user is shown the request. Stop
-the step there, say in one line what you wanted the call for, and wait. When
-they answer you will be told; after an approval, run it again exactly as before.
+Call needing approval fails too; user is shown the request. Stop step there.
+Say in one line what you wanted the call for, and wait. You will be told the
+answer. After approval, run it again exactly as before.
 
-A tool the config hides, or leaves out of a server it shows only part of, was
-never loaded, so it is not in (list-tools) and cannot be called.
+Tool the config hides, or leaves out of a partly shown server, was never
+loaded. It is not in (list-tools) and cannot be called.
