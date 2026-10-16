@@ -97,6 +97,7 @@ export const remove = mutation({
 		await ctx.scheduler.runAfter(0, internal.permissions.purge, {
 			workspaceId,
 		});
+		await ctx.scheduler.runAfter(0, internal.readmes.purge, { workspaceId });
 		const left = await ctx.db
 			.query("workspaces")
 			.withIndex("by_owner", (q) => q.eq("ownerId", user._id))

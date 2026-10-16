@@ -194,7 +194,6 @@ function Node({
 						defaultChecked={node.props.checked === true}
 						disabled={busy}
 						onChange={(e) => changed(node, fire, e.currentTarget)}
-						className="accent-accent"
 					/>
 					{node.props.label !== undefined && (
 						<span className="text-fg">{text(node.props, "label")}</span>

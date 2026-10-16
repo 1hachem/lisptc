@@ -3,9 +3,12 @@ import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import { type MutationCtx, mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
+import { waitsOnUser } from "./lib/waiting.js";
 import { copyCheckpoint } from "./replImages.js";
+import { chatStatus } from "./schema.js";
 
 const MAX_CHATS = 200;
+const PAGE = 20;
 
 const chat = v.object({
 	_id: v.id("chats"),
@@ -15,21 +18,42 @@ const chat = v.object({
 	title: v.string(),
 	lastMessageAt: v.optional(v.number()),
 	archivedAt: v.optional(v.number()),
+	status: v.optional(chatStatus),
+	failure: v.optional(v.string()),
 });
 
 export const list = query({
-	args: { workspaceId: v.id("workspaces") },
-	returns: v.array(chat),
-	handler: async (ctx, { workspaceId }) => {
+	args: {
+		workspaceId: v.id("workspaces"),
+		search: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({ chats: v.array(chat), more: v.boolean() }),
+	handler: async (ctx, { workspaceId, search, limit }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const chats = await ctx.db
-			.query("chats")
-			.withIndex("by_workspace_activity", (q) =>
-				q.eq("workspaceId", workspaceId),
-			)
-			.order("desc")
-			.take(MAX_CHATS);
-		return chats.filter((row) => row.archivedAt === undefined);
+		const wanted = Math.min(Math.max(1, Math.floor(limit ?? PAGE)), MAX_CHATS);
+		const term = search?.trim();
+		const rows = term
+			? await ctx.db
+					.query("chats")
+					.withSearchIndex("search_title", (q) =>
+						q
+							.search("title", term)
+							.eq("workspaceId", workspaceId)
+							.eq("archivedAt", undefined),
+					)
+					.take(wanted + 1)
+			: await ctx.db
+					.query("chats")
+					.withIndex("by_workspace_live_activity", (q) =>
+						q.eq("workspaceId", workspaceId).eq("archivedAt", undefined),
+					)
+					.order("desc")
+					.take(wanted + 1);
+		return {
+			chats: rows.slice(0, wanted),
+			more: rows.length > wanted,
+		};
 	},
 });
 
@@ -48,7 +72,36 @@ export const create = mutation({
 			workspaceId,
 			userId: user._id,
 			title: title ?? "",
+			lastMessageAt: Date.now(),
 		});
+	},
+});
+
+export const start = mutation({
+	args: { chatId: v.id("chats") },
+	returns: v.null(),
+	handler: async (ctx, { chatId }) => {
+		await requireChat(ctx, chatId);
+		await ctx.db.patch(chatId, { status: "streaming", failure: undefined });
+		return null;
+	},
+});
+
+export const settle = mutation({
+	args: { chatId: v.id("chats"), failure: v.optional(v.string()) },
+	returns: v.null(),
+	handler: async (ctx, { chatId, failure }) => {
+		await requireChat(ctx, chatId);
+		if (failure !== undefined) {
+			await ctx.db.patch(chatId, { status: "errored", failure });
+			return null;
+		}
+		const waiting = await waitsOnUser(ctx, chatId);
+		await ctx.db.patch(chatId, {
+			status: waiting ? "waiting" : undefined,
+			failure: undefined,
+		});
+		return null;
 	},
 });
 

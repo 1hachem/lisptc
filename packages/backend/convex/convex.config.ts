@@ -2,20 +2,9 @@ import betterAuth from "@convex-dev/better-auth/convex.config";
 import migrations from "@convex-dev/migrations/convex.config";
 import posthog from "@posthog/convex/convex.config";
 import { defineApp } from "convex/server";
-import { v } from "convex/values";
+import { deploymentEnv } from "./lib/env.js";
 
-const app = defineApp({
-	env: {
-		SITE_URL: v.string(),
-		BETTER_AUTH_SECRET: v.string(),
-		GITHUB_CLIENT_ID: v.optional(v.string()),
-		GITHUB_CLIENT_SECRET: v.optional(v.string()),
-		GOOGLE_CLIENT_ID: v.optional(v.string()),
-		GOOGLE_CLIENT_SECRET: v.optional(v.string()),
-		POSTHOG_API_KEY: v.string(),
-		POSTHOG_HOST: v.optional(v.string()),
-	},
-});
+const app = defineApp({ env: deploymentEnv });
 
 app.use(betterAuth);
 app.use(migrations);

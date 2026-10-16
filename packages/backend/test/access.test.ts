@@ -1,6 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
+import { MAX_PREFERENCES_BYTES, MAX_README_BYTES } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("repl checkpoint access", () => {
@@ -208,7 +209,7 @@ describe("chat access", () => {
 		const listed = await alice.as.query(api.chats.list, {
 			workspaceId: alice.workspace,
 		});
-		expect(listed.map((c) => c._id)).toEqual([kept]);
+		expect(listed.chats.map((c) => c._id)).toEqual([kept]);
 	});
 });
 
@@ -320,6 +321,45 @@ describe("messages", () => {
 		});
 		const chat = await alice.as.query(api.chats.get, { chatId });
 		expect(chat.lastMessageAt).toBeTypeOf("number");
+	});
+
+	it("lists what was sent in every chat of a workspace, oldest first", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const first = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const second = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: first,
+			messages: [
+				{ type: "human", content: "one" },
+				{ type: "ai", content: "reply" },
+			],
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: second,
+			messages: [{ type: "human", content: "two" }],
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: first,
+			messages: [{ type: "human", content: "three" }],
+		});
+		const sent = await alice.as.query(api.messages.sent, {
+			workspaceId: alice.workspace,
+		});
+		expect(sent).toEqual(["one", "two", "three"]);
+	});
+
+	it("refuses listing what was sent in another user's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await expect(
+			alice.as.query(api.messages.sent, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
 	});
 });
 
@@ -527,5 +567,241 @@ describe("oauth record access", () => {
 				serverKey: "https://sheets.example.com",
 			}),
 		).toBeNull();
+	});
+});
+
+describe("preferences access", () => {
+	it("keeps a user's preferences to that user", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const preferences = { theme: "dusk", font: "mono", themeUses: { dusk: 2 } };
+		await bob.as.mutation(api.preferences.put, { preferences });
+		expect(await bob.as.query(api.preferences.get, {})).toEqual(preferences);
+		expect(await alice.as.query(api.preferences.get, {})).toBeNull();
+		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
+	});
+
+	it("merges each save into one row per user", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { theme: "dusk", channels: { lisp: true } },
+		});
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { font: "mono", channels: { lisp: false } },
+		});
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { metadata: { tokens: true } },
+		});
+		expect(await alice.as.query(api.preferences.get, {})).toEqual({
+			theme: "dusk",
+			font: "mono",
+			channels: { lisp: false },
+			metadata: { tokens: true },
+		});
+		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
+		expect(rows).toHaveLength(1);
+	});
+
+	it("refuses preferences past the size limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.preferences.put, {
+				preferences: {
+					theme: "x".repeat(MAX_PREFERENCES_BYTES),
+					themeUses: {},
+				},
+			}),
+		).rejects.toThrow("PREFERENCES_TOO_LARGE");
+	});
+});
+
+describe("chat listing", () => {
+	async function three(t: ReturnType<typeof harness>) {
+		const alice = await signIn(t, "alice@example.com");
+		for (const title of ["plan q4", "fix login", "login copy"]) {
+			await alice.as.mutation(api.chats.create, {
+				workspaceId: alice.workspace,
+				title,
+			});
+		}
+		return alice;
+	}
+
+	it("pages by limit and says when more remain", async () => {
+		const t = harness();
+		const alice = await three(t);
+		const first = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			limit: 2,
+		});
+		expect(first.chats).toHaveLength(2);
+		expect(first.more).toBe(true);
+		const all = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			limit: 3,
+		});
+		expect(all.chats).toHaveLength(3);
+		expect(all.more).toBe(false);
+	});
+
+	it("lists a chat with no messages above older ones", async () => {
+		const t = harness();
+		const alice = await three(t);
+		const older = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "older",
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: older,
+			messages: [{ type: "human", content: "hello" }],
+		});
+		const fresh = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "fresh",
+		});
+		const { chats } = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(chats[0]?._id).toBe(fresh);
+	});
+
+	describe("status", () => {
+		const asking = {
+			type: "tool" as const,
+			content: "held",
+			id: "w1",
+			kwargs: {
+				asks: { open: [{ id: "a1", title: "run?", prompt: "", choices: [] }] },
+			},
+		};
+
+		async function opened(t: ReturnType<typeof harness>) {
+			const alice = await signIn(t, "alice@example.com");
+			const chatId = await alice.as.mutation(api.chats.create, {
+				workspaceId: alice.workspace,
+			});
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [{ type: "human", content: "go" }],
+			});
+			await alice.as.mutation(api.chats.start, { chatId });
+			const status = async () =>
+				(await alice.as.query(api.chats.get, { chatId })).status;
+			return { alice, chatId, status };
+		}
+
+		it("streams from start and goes idle when the turn settles", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			expect(await status()).toBe("streaming");
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBeUndefined();
+		});
+
+		it("keeps why a turn failed until the next one starts", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			await alice.as.mutation(api.chats.settle, {
+				chatId,
+				failure: "the provider is down",
+			});
+			const chat = await alice.as.query(api.chats.get, { chatId });
+			expect(chat).toMatchObject({
+				status: "errored",
+				failure: "the provider is down",
+			});
+			await alice.as.mutation(api.chats.start, { chatId });
+			expect(await status()).toBe("streaming");
+			expect(
+				(await alice.as.query(api.chats.get, { chatId })).failure,
+			).toBeUndefined();
+		});
+
+		it("waits on an open ask until it is answered", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [asking],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
+			await alice.as.mutation(api.messages.annotate, {
+				chatId,
+				id: "w1",
+				kwargs: { asks: { answered: { a1: { accepted: true, label: "ok" } } } },
+			});
+			expect(await status()).toBeUndefined();
+		});
+
+		it("forgets an ask left open in an earlier turn", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [asking, { type: "human", content: "never mind" }],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBeUndefined();
+		});
+	});
+
+	it("finds chats by title", async () => {
+		const t = harness();
+		const alice = await three(t);
+		const found = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			search: "login",
+		});
+		expect(found.chats.map((c) => c.title).sort()).toEqual([
+			"fix login",
+			"login copy",
+		]);
+	});
+});
+
+describe("readme access", () => {
+	it("keeps a workspace's readme to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.readmes.put, {
+			workspaceId: bob.workspace,
+			body: "# bob",
+		});
+		expect(
+			await bob.as.query(api.readmes.get, { workspaceId: bob.workspace }),
+		).toBe("# bob");
+		await expect(
+			alice.as.query(api.readmes.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.readmes.put, {
+				workspaceId: bob.workspace,
+				body: "# alice was here",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("reads empty until written, then holds one row replaced on save", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		expect(await alice.as.query(api.readmes.get, { workspaceId })).toBe("");
+		await alice.as.mutation(api.readmes.put, { workspaceId, body: "one" });
+		await alice.as.mutation(api.readmes.put, { workspaceId, body: "two" });
+		expect(await alice.as.query(api.readmes.get, { workspaceId })).toBe("two");
+		const rows = await t.run((ctx) => ctx.db.query("readmes").collect());
+		expect(rows).toHaveLength(1);
+	});
+
+	it("refuses a readme past the size limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.readmes.put, {
+				workspaceId: alice.workspace,
+				body: "x".repeat(MAX_README_BYTES + 1),
+			}),
+		).rejects.toThrow("README_TOO_LARGE");
 	});
 });
