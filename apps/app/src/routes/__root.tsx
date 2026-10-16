@@ -8,6 +8,7 @@ import {
 	HeadContent,
 	Outlet,
 	Scripts,
+	useMatches,
 	useRouteContext,
 } from "@tanstack/react-router";
 import { Analytics } from "../lib/analytics.tsx";
@@ -54,7 +55,11 @@ function RootComponent() {
 	const { queryClient, convexQueryClient, auth } = useRouteContext({
 		from: Route.id,
 	});
-	const stored = useCachedPreferences(queryClient);
+	const themed = useMatches({
+		select: (matches) => matches.some((match) => match.staticData.themed),
+	});
+	const cached = useCachedPreferences(queryClient);
+	const stored = themed ? cached : undefined;
 
 	return (
 		<RootDocument theme={themeOf(stored)} font={fontOf(stored)}>
