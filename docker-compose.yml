@@ -19,7 +19,7 @@ services:
       retries: 10
 
   convex-backend:
-    image: ghcr.io/get-convex/convex-backend:${CONVEX_BACKEND_TAG:-latest}
+    image: ghcr.io/convex/convex-backend:${CONVEX_BACKEND_TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 10s
     stop_signal: SIGINT
@@ -50,7 +50,7 @@ services:
   convex-dashboard:
     # pinned: every dashboard build after 2026-08-19 500s on a turbopack
     # barrel-optimizer bug (Cannot find module @radix-ui/react-icons-<hash>)
-    image: ghcr.io/get-convex/convex-dashboard:${CONVEX_DASHBOARD_TAG:-2cbcf8179207eb4521360e6d81ebee5e7abbfa07}
+    image: ghcr.io/convex/convex-dashboard:${CONVEX_DASHBOARD_TAG:-2cbcf8179207eb4521360e6d81ebee5e7abbfa07}
     restart: unless-stopped
     depends_on:
       convex-backend:
