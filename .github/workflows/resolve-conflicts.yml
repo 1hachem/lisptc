@@ -130,6 +130,8 @@ jobs:
           fi
           git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
           cat "$RUNNER_TEMP/conflicts.txt"
+          git ls-files -s > "$RUNNER_TEMP/index-before.txt"
+          git rev-parse HEAD MERGE_HEAD > "$RUNNER_TEMP/heads-before.txt"
           echo "conflicted=true" >> "$GITHUB_OUTPUT"
 
       - name: Resolve with Claude
@@ -156,7 +158,16 @@ jobs:
             exit 1
           fi
           pnpm install --frozen-lockfile
-          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > "$RUNNER_TEMP/touched.txt"
+          if ! git rev-parse HEAD MERGE_HEAD | cmp -s - "$RUNNER_TEMP/heads-before.txt"; then
+            echo "::error::The merge was committed, aborted or moved during the resolution"
+            exit 1
+          fi
+          git ls-files -s > "$RUNNER_TEMP/index-after.txt"
+          {
+            sort "$RUNNER_TEMP/index-before.txt" "$RUNNER_TEMP/index-after.txt" | uniq -u | cut -f2-
+            git diff --name-only
+            git ls-files --others --exclude-standard
+          } | sort -u > "$RUNNER_TEMP/touched.txt"
           { cat "$RUNNER_TEMP/conflicts.txt"; echo pnpm-lock.yaml; } | sort -u > "$RUNNER_TEMP/allowed.txt"
           extra=$(comm -23 "$RUNNER_TEMP/touched.txt" "$RUNNER_TEMP/allowed.txt")
           if [ -n "$extra" ]; then
