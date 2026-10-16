@@ -5,6 +5,7 @@ import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
+import { lintExtension } from "@repo/lint-extension";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
@@ -98,6 +99,7 @@ export async function workspaceExtensions(
 			}),
 		),
 		proseExtension(proseHost),
+		lintExtension(),
 		uiExtension(uiHost),
 		diagnosticsExtension(diagnosticsHost),
 	];

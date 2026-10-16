@@ -422,9 +422,6 @@ importers:
       '@repo/secrets-extension':
         specifier: workspace:*
         version: link:../../packages/secrets
-      '@repo/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       vscode-languageserver:
         specifier: ^9.0.1
         version: 9.0.1
@@ -679,6 +676,9 @@ importers:
       '@repo/introspection-extension':
         specifier: workspace:*
         version: link:../introspection
+      '@repo/lint-extension':
+        specifier: workspace:*
+        version: link:../lint
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../llm

@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
+    ".": "./src/lint.ts",
     "./calls": "./src/calls.ts"
   },
   "engines": {

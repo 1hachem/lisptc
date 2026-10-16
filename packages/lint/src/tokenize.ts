@@ -6,13 +6,14 @@ export interface Atom {
 	line: number;
 	char: number;
 }
-interface ListForm {
+export interface ListForm {
 	kind: "list";
 	items: Node[];
 	openLine: number;
 	openChar: number;
 	closeLine: number;
 	closeChar: number;
+	quoted?: true;
 }
 export type Node = Atom | ListForm;
 
@@ -40,7 +41,12 @@ export function parseForms(tokens: Atom[]): Node[] {
 			if (t !== undefined) i++;
 			return undefined;
 		}
-		if (t.text === "'" || t.text === "`" || t.text === "," || t.text === ",@") {
+		if (t.text === "'" || t.text === "`") {
+			i++;
+			const datum = parseOne();
+			return datum?.kind === "list" ? { ...datum, quoted: true } : datum;
+		}
+		if (t.text === "," || t.text === ",@") {
 			i++;
 			return parseOne();
 		}
@@ -77,21 +83,25 @@ export interface Call {
 	argCount: number;
 }
 
+export function callOf(form: ListForm): Call | undefined {
+	const [head, ...rest] = form.items;
+	if (head?.kind !== "atom" || head.text.startsWith(":")) return undefined;
+	const keywords = new Set(
+		rest
+			.filter(
+				(item): item is Atom =>
+					item.kind === "atom" && item.text.startsWith(":"),
+			)
+			.map((item) => item.text.slice(1)),
+	);
+	return { name: head.text, head, keywords, argCount: rest.length };
+}
+
 export function collectCalls(nodes: Node[], out: Call[] = []): Call[] {
 	for (const n of nodes) {
 		if (n.kind !== "list") continue;
-		const [head, ...rest] = n.items;
-		if (head?.kind === "atom" && !head.text.startsWith(":")) {
-			const keywords = new Set(
-				rest
-					.filter(
-						(item): item is Atom =>
-							item.kind === "atom" && item.text.startsWith(":"),
-					)
-					.map((item) => item.text.slice(1)),
-			);
-			out.push({ name: head.text, head, keywords, argCount: rest.length });
-		}
+		const call = callOf(n);
+		if (call !== undefined) out.push(call);
 		collectCalls(n.items, out);
 	}
 	return out;
