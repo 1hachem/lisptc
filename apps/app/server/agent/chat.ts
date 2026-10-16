@@ -201,15 +201,18 @@ export const evaluate = {
 			messages: [{ id: crypto.randomUUID(), type: "human", content: code }],
 		});
 		console.log(`eval chat=${chatId} chars=${code.length}`);
-		const mistaken = await checkUserCode(code, { repls, threadId: chatId });
-		if (mistaken !== undefined) {
+		const checked = await checkUserCode(code, { repls, threadId: chatId });
+		if ("mistaken" in checked) {
 			const event = await ticket(
 				{ subject: context.session.subject, chatId },
-				mistaken,
+				checked.mistaken,
 			);
 			return Response.json({ event });
 		}
-		const message = await evalUserCode(code, { repls, threadId: chatId });
+		const message = await evalUserCode(checked.admitted, {
+			repls,
+			threadId: chatId,
+		});
 		await convex.mutation(api.messages.append, {
 			chatId,
 			messages: toStored([{ ...message }]),

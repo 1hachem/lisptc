@@ -9,20 +9,24 @@ export interface EvalMessage {
 	additional_kwargs?: Record<string, unknown>;
 }
 
+export type UserCheck = { admitted: string } | { mistaken: SystemEvent };
+
 export async function checkUserCode<Id extends string>(
 	code: string,
 	source: ReplSource<Id>,
-): Promise<SystemEvent | undefined> {
+): Promise<UserCheck> {
 	const repl = await replFrom(source);
-	const { rejected } = await repl.admit(code);
-	if (rejected === undefined) return undefined;
+	const admission = await repl.admit(code);
+	if (admission.rejected === undefined) return { admitted: admission.code };
 	return {
-		source: "lisp-check",
-		text: [
-			"the user ran this code, and it was stopped before it ran:",
-			code,
-			rejected,
-		].join("\n\n"),
+		mistaken: {
+			source: "lisp-check",
+			text: [
+				"the user ran this code, and it was stopped before it ran:",
+				admission.code,
+				admission.rejected,
+			].join("\n\n"),
+		},
 	};
 }
 

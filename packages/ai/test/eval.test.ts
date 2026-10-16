@@ -54,17 +54,36 @@ describe("checking user code", () => {
 
 	test("passes code nothing rejects", async () => {
 		const threadId = crypto.randomUUID();
-		expect(await checkUserCode("(+ 1 2)", { repls: checked, threadId })).toBe(
-			undefined,
-		);
+		expect(
+			await checkUserCode("(+ 1 2)", { repls: checked, threadId }),
+		).toEqual({ admitted: "(+ 1 2)" });
 	});
 
 	test("turns a rejection into an event asking the agent to fix it", async () => {
 		const threadId = crypto.randomUUID();
-		const event = await checkUserCode("(bad)", { repls: checked, threadId });
-		expect(event?.source).toBe("lisp-check");
-		expect(event?.text).toContain("the user ran this code");
-		expect(event?.text).toContain("(bad)");
-		expect(event?.text).toContain("line 1: bad call");
+		const checkedCode = await checkUserCode("(bad)", {
+			repls: checked,
+			threadId,
+		});
+		if (!("mistaken" in checkedCode)) throw new Error("expected a rejection");
+		const event = checkedCode.mistaken;
+		expect(event.source).toBe("lisp-check");
+		expect(event.text).toContain("the user ran this code");
+		expect(event.text).toContain("(bad)");
+		expect(event.text).toContain("line 1: bad call");
+	});
+
+	test("hands back the code admit rewrote, to be run in place of the typed code", async () => {
+		const rewriting = testRepls([
+			extension((hooks) =>
+				hooks.admit.use(async (interp, code, next) =>
+					next(interp, code.replace("(fix)", "(+ 1 1)")),
+				),
+			),
+		]);
+		const threadId = crypto.randomUUID();
+		expect(
+			await checkUserCode("(fix)", { repls: rewriting, threadId }),
+		).toEqual({ admitted: "(+ 1 1)" });
 	});
 });
