@@ -56,9 +56,11 @@ server.registerTool(
 		description:
 			"Check Lisptc source WITHOUT evaluating it, the same check the agent " +
 			"runs before every step, and report each problem with its 1-based " +
-			"line number: a form left open, source that does not read, a call " +
-			"with the wrong number of arguments or a missing required keyword " +
-			"argument, measured against what this REPL has defined. Only the " +
+			"line number and severity: a form left open, source that does not " +
+			"read, a call with the wrong number of arguments, a missing required " +
+			"keyword argument or a literal of the wrong type, and a name nothing " +
+			"binds, measured against what this REPL has defined. An error would " +
+			"stop the agent's step; a warning would not. Only the " +
 			"parenthesised forms are checked, so prose around them is never an " +
 			"error. Does not change REPL state or run side effects — use it to " +
 			"validate a program before evaluating it.",
@@ -71,7 +73,9 @@ server.registerTool(
 		const text =
 			problems.length === 0
 				? "OK — no problems found.\n"
-				: problems.map((p) => `line ${p.line}: ${p.message}`).join("\n");
+				: problems
+						.map((p) => `line ${p.line}: ${p.severity}: ${p.message}`)
+						.join("\n");
 		return { content: [{ type: "text", text }] };
 	},
 );

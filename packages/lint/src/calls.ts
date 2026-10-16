@@ -2,6 +2,7 @@ import type { Arity, DocArg } from "@repo/interpreter/docs";
 import {
 	type Call,
 	collectCalls,
+	type Node,
 	parseForms,
 	tokenizeWithPositions,
 } from "./tokenize.ts";
@@ -20,7 +21,41 @@ export interface Diagnostic {
 	range: Range;
 	message: string;
 	severity: "error" | "warning";
-	code: "missing-argument" | "arity";
+	code: "missing-argument" | "arity" | "type";
+}
+
+type LiteralKind = "string" | "integer" | "number" | "boolean" | "nil" | "list";
+
+function literalKind(node: Node): LiteralKind | undefined {
+	if (node.kind === "list") return node.quoted ? "list" : undefined;
+	if (node.quoted) return undefined;
+	if (node.text.startsWith('"')) return "string";
+	if (node.text === "t") return "boolean";
+	if (node.text === "nil") return "nil";
+	const n = Number(node.text);
+	if (Number.isNaN(n)) return undefined;
+	return Number.isInteger(n) ? "integer" : "number";
+}
+
+const ACCEPTS: Record<string, readonly LiteralKind[]> = {
+	string: ["string"],
+	integer: ["integer"],
+	boolean: ["boolean", "nil"],
+	list: ["list", "nil"],
+	alist: ["list", "nil"],
+	plist: ["list", "nil"],
+};
+
+function literalText(node: Node): string {
+	return node.kind === "atom" ? node.text : "a quoted list";
+}
+
+function wrongType(arg: DocArg, value: Node): boolean {
+	const kind = literalKind(value);
+	const accepts = ACCEPTS[arg.type];
+	if (kind === undefined || accepts === undefined) return false;
+	if (kind === "nil" && !arg.required) return false;
+	return !accepts.includes(kind);
 }
 
 export interface CallDoc {
@@ -51,6 +86,14 @@ export function diagnosticsForCalls(
 			arity !== undefined && call.keywords.size === 0 && call.argCount > 0;
 		if (args?.length && !bareFormOfHybrid) {
 			for (const arg of args) {
+				const value = call.values.get(arg.name);
+				if (value !== undefined && wrongType(arg, value))
+					diagnostics.push({
+						severity: "error",
+						range,
+						message: `${call.name}: :${arg.name} takes a ${arg.type}, got ${literalText(value)}`,
+						code: "type",
+					});
 				if (!arg.required || call.keywords.has(arg.name)) continue;
 				diagnostics.push({
 					severity: "error",

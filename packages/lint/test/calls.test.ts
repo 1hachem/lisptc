@@ -167,7 +167,7 @@ describe("callDiagnostics", () => {
 				: {};
 		};
 		const diagnostics = await callDiagnostics(
-			"(foo) (foo :bar 1) (baz)",
+			'(foo) (foo :bar "x") (baz)',
 			resolve,
 		);
 		expect(resolved.sort()).toEqual(["baz", "foo"]);
@@ -175,5 +175,17 @@ describe("callDiagnostics", () => {
 		expect(diagnostics[0].message).toBe(
 			'foo: missing required argument ":bar"',
 		);
+	});
+
+	it("flags a literal keyword argument of the wrong type", async () => {
+		const diagnostics = await callDiagnostics("(foo :bar 1)", async () => ({
+			args: [{ name: "bar", type: "string", required: true }],
+		}));
+		expect(diagnostics).toEqual([
+			expect.objectContaining({
+				code: "type",
+				message: "foo: :bar takes a string, got 1",
+			}),
+		]);
 	});
 });

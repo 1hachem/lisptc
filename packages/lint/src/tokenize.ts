@@ -5,6 +5,7 @@ export interface Atom {
 	text: string;
 	line: number;
 	char: number;
+	quoted?: true;
 }
 export interface ListForm {
 	kind: "list";
@@ -44,7 +45,7 @@ export function parseForms(tokens: Atom[]): Node[] {
 		if (t.text === "'" || t.text === "`") {
 			i++;
 			const datum = parseOne();
-			return datum?.kind === "list" ? { ...datum, quoted: true } : datum;
+			return datum === undefined ? datum : { ...datum, quoted: true };
 		}
 		if (t.text === "," || t.text === ",@") {
 			i++;
@@ -80,21 +81,25 @@ export interface Call {
 	name: string;
 	head: Atom;
 	keywords: Set<string>;
+	values: Map<string, Node>;
 	argCount: number;
+}
+
+function isKeyword(node: Node): node is Atom {
+	return node.kind === "atom" && !node.quoted && node.text.startsWith(":");
 }
 
 export function callOf(form: ListForm): Call | undefined {
 	const [head, ...rest] = form.items;
 	if (head?.kind !== "atom" || head.text.startsWith(":")) return undefined;
-	const keywords = new Set(
-		rest
-			.filter(
-				(item): item is Atom =>
-					item.kind === "atom" && item.text.startsWith(":"),
-			)
-			.map((item) => item.text.slice(1)),
-	);
-	return { name: head.text, head, keywords, argCount: rest.length };
+	const keywords = new Set(rest.filter(isKeyword).map((k) => k.text.slice(1)));
+	const values = new Map<string, Node>();
+	rest.forEach((item, i) => {
+		const value = rest[i + 1];
+		if (isKeyword(item) && value !== undefined && !isKeyword(value))
+			values.set(item.text.slice(1), value);
+	});
+	return { name: head.text, head, keywords, values, argCount: rest.length };
 }
 
 export function collectCalls(nodes: Node[], out: Call[] = []): Call[] {

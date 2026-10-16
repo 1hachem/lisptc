@@ -18,7 +18,9 @@ export function lintExtension(): InterpExtension {
 	return Object.assign((_interp: Interp): void => {}, {
 		session(hooks: SessionHooks): void {
 			hooks.admit.use(async (interp, code, next) => {
-				const problems = checkSource(interp, code);
+				const problems = checkSource(interp, code).filter(
+					(problem) => problem.severity === "error",
+				);
 				if (problems.length === 0) return next(interp, code);
 				return { code, rejected: rejection(problems) };
 			});
