@@ -19,9 +19,10 @@ export const Route = createFileRoute("/_authed/$workspaceId/settings")({
 
 function SettingsFile() {
 	const { workspaceId } = Route.useParams();
-	const { data: workspace } = useQuery(
+	const { data: workspace, error } = useQuery(
 		convexQuery(api.workspaces.get, { workspaceId }),
 	);
+	if (error) throw error;
 	const { openModelPicker } = useModelPicker();
 
 	return (

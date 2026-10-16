@@ -23,9 +23,10 @@ export const Route = createFileRoute("/_authed/$workspaceId/permissions/$rule")(
 
 function PermissionFile() {
 	const { workspaceId, rule } = Route.useParams();
-	const { data: source } = useQuery(
+	const { data: source, error } = useQuery(
 		convexQuery(api.permissions.get, { workspaceId }),
 	);
+	if (error) throw error;
 	const found =
 		source === undefined ? undefined : permissionRules(source ?? "")[rule];
 

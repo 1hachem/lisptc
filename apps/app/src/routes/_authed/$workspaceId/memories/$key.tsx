@@ -17,9 +17,10 @@ export const Route = createFileRoute("/_authed/$workspaceId/memories/$key")({
 
 function MemoryFile() {
 	const { workspaceId, key } = Route.useParams();
-	const { data: memories } = useQuery(
+	const { data: memories, error } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
+	if (error) throw error;
 	const memory = memories?.find((candidate) => candidate.key === key);
 
 	return (
