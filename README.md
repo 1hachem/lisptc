@@ -53,6 +53,8 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
 ```
   packages/compaction     @repo/compaction-extension. Bounded output, so a
                           large result never floods the context.
+  packages/lint           @repo/lint-extension. The static check: what is
+                          wrong with source before it runs.
   packages/llm            @repo/llm-extension. The language model as a
                           callable value.
   packages/mcp            @repo/mcp-extension. MCP servers, their tools, and

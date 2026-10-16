@@ -1,14 +1,27 @@
 import type { Arity, DocArg } from "@repo/interpreter/docs";
 import {
-	type Diagnostic,
-	DiagnosticSeverity,
-} from "vscode-languageserver/node.js";
-import {
 	type Call,
 	collectCalls,
 	parseForms,
 	tokenizeWithPositions,
 } from "./tokenize.ts";
+
+export interface Position {
+	line: number;
+	character: number;
+}
+
+export interface Range {
+	start: Position;
+	end: Position;
+}
+
+export interface Diagnostic {
+	range: Range;
+	message: string;
+	severity: "error" | "warning";
+	code: "missing-argument" | "arity";
+}
 
 export interface CallDoc {
 	args?: DocArg[];
@@ -40,10 +53,10 @@ export function diagnosticsForCalls(
 			for (const arg of args) {
 				if (!arg.required || call.keywords.has(arg.name)) continue;
 				diagnostics.push({
-					severity: DiagnosticSeverity.Error,
+					severity: "error",
 					range,
 					message: `${call.name}: missing required argument ":${arg.name}"`,
-					source: "lisptc",
+					code: "missing-argument",
 				});
 			}
 		} else if (
@@ -54,10 +67,10 @@ export function diagnosticsForCalls(
 			const expected = expectedArgs(arity);
 			const plural = expected !== "1";
 			diagnostics.push({
-				severity: DiagnosticSeverity.Error,
+				severity: "error",
 				range,
 				message: `${call.name}: expected ${expected} ${plural ? "arguments" : "argument"}, got ${call.argCount}`,
-				source: "lisptc",
+				code: "arity",
 			});
 		}
 	}

@@ -4,7 +4,7 @@ import {
 	callDiagnostics,
 	diagnosticsForCalls,
 	expectedArgs,
-} from "../src/call-diagnostics.ts";
+} from "../src/calls.ts";
 import {
 	collectCalls,
 	parseForms,
@@ -51,6 +51,8 @@ describe("diagnosticsForCalls", () => {
 			start: { line: 0, character: 1 },
 			end: { line: 0, character: 9 },
 		});
+		expect(diagnostics[0].severity).toBe("error");
+		expect(diagnostics[0].code).toBe("missing-argument");
 	});
 
 	it("does not flag a call that supplies every required :arg", () => {
@@ -74,6 +76,7 @@ describe("diagnosticsForCalls", () => {
 			new Map([["car", { arity: { min: 1, max: 1 } }]]),
 		);
 		expect(diagnostics[0].message).toBe("car: expected 1 argument, got 0");
+		expect(diagnostics[0].code).toBe("arity");
 	});
 
 	it("flags a positional binding called with too many arguments", () => {
