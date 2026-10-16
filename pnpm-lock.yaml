@@ -462,6 +462,9 @@ importers:
       '@repo/introspection-extension':
         specifier: workspace:*
         version: link:../../packages/introspection
+      '@repo/lint-extension':
+        specifier: workspace:*
+        version: link:../../packages/lint
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../../packages/llm
