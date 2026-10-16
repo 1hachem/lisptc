@@ -33,7 +33,7 @@ describe("prose is allowed on every surface the model meets", () => {
 describe("the language reference teaches prose", () => {
 	it("says the text around the forms is ignored", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(
-			/only the parenthesised top-level forms are program text/i,
+			/only parenthesised top-level forms are program text/i,
 		);
 	});
 

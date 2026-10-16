@@ -6,18 +6,21 @@ import { FileView } from "../../../../components/file-view.tsx";
 import { memorySource } from "../../../../lib/files.ts";
 
 export const Route = createFileRoute("/_authed/$workspaceId/memories/$key")({
-	loader: ({ context, params }) =>
-		context.queryClient.ensureQueryData(
+	loader: async ({ context, params }) => {
+		if (context.auth.source === "browser") return;
+		await context.queryClient.ensureQueryData(
 			convexQuery(api.memories.list, { workspaceId: params.workspaceId }),
-		),
+		);
+	},
 	component: MemoryFile,
 });
 
 function MemoryFile() {
 	const { workspaceId, key } = Route.useParams();
-	const { data: memories } = useQuery(
+	const { data: memories, error } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
+	if (error) throw error;
 	const memory = memories?.find((candidate) => candidate.key === key);
 
 	return (

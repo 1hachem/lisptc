@@ -1,0 +1,91 @@
+name: Approve CI
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    if: github.event.issue.pull_request && github.event.comment.body == '/ci'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.issue.number }}
+      LOGIN: ${{ github.event.comment.user.login }}
+      COMMENT: ${{ github.event.comment.id }}
+    steps:
+      - name: Check the commenter maintains the repo
+        run: |
+          role=$(gh api "repos/$GH_REPO/collaborators/$LOGIN/permission" --jq .role_name)
+          case "$role" in
+            admin | maintain) ;;
+            *)
+              echo "::error::$LOGIN is $role, and only a maintainer can release CI"
+              exit 1
+              ;;
+          esac
+
+      - name: Fetch the App credentials from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /github-apps/auto-resolve-merge-conflict
+          export-type: env
+
+      - name: Mint the App token
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_PRIVATE_KEY }}
+
+      - name: Check the head is a held resolution
+        id: head
+        env:
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          read -r sha ref cross < <(gh pr view "$PR" --json headRefOid,headRefName,isCrossRepository --jq '"\(.headRefOid) \(.headRefName) \(.isCrossRepository)"')
+          if [ "$cross" = true ]; then
+            echo "::error::PR $PR comes from a fork"
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/commits/$sha" > "$RUNNER_TEMP/head.json"
+          author=$(jq -r '.author.login // ""' "$RUNNER_TEMP/head.json")
+          if [ "$author" != "$BOT" ] || ! jq -e '.commit.message | contains("[skip ci]")' "$RUNNER_TEMP/head.json" > /dev/null; then
+            echo "::error::The head of PR $PR, $sha, is not a resolution held by $BOT"
+            exit 1
+          fi
+          {
+            echo "sha=$sha"
+            echo "ref=$ref"
+            echo "tree=$(jq -r .commit.tree.sha "$RUNNER_TEMP/head.json")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Push an empty commit that runs CI
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SHA: ${{ steps.head.outputs.sha }}
+          REF: ${{ steps.head.outputs.ref }}
+          TREE: ${{ steps.head.outputs.tree }}
+        run: |
+          commit=$(gh api "repos/$GH_REPO/git/commits" \
+            -f message="chore: run ci on the merge $LOGIN reviewed" \
+            -f tree="$TREE" -f "parents[]=$SHA" --jq .sha)
+          gh api -X PATCH "repos/$GH_REPO/git/refs/heads/$REF" -f sha="$commit" -F force=false > /dev/null
+
+      - name: Acknowledge the comment
+        run: gh api "repos/$GH_REPO/issues/comments/$COMMENT/reactions" -f content=+1 > /dev/null
+
+      - name: Refuse the comment
+        if: failure()
+        run: gh api "repos/$GH_REPO/issues/comments/$COMMENT/reactions" -f content=-1 > /dev/null
