@@ -1,4 +1,4 @@
-import type { Envelope } from "@repo/interpreter/channels";
+import type { Channels, Envelope } from "@repo/interpreter/channels";
 import {
 	bufferTransport,
 	type ChannelBuffer,
@@ -173,6 +173,9 @@ export class MemoryRepl implements InMemoryRepl {
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
 	private recorder: FormRecorder | undefined;
+	private betweenSteps:
+		| { channels: Channels; buffer: ChannelBuffer; detach: () => void }
+		| undefined;
 	private readonly extensions: InterpExtension[];
 	readonly hooks: SessionHooks;
 
@@ -255,6 +258,19 @@ export class MemoryRepl implements InMemoryRepl {
 		return done;
 	}
 
+	private listenBetweenSteps(channels: Channels): void {
+		const buffer = bufferTransport();
+		this.betweenSteps = { channels, buffer, detach: channels.pipe(buffer) };
+	}
+
+	private takeBetweenSteps(channels: Channels): readonly Envelope[] {
+		const between = this.betweenSteps;
+		this.betweenSteps = undefined;
+		if (between === undefined) return [];
+		between.detach();
+		return between.channels === channels ? between.buffer.envelopes : [];
+	}
+
 	private async runStep(
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
@@ -271,6 +287,8 @@ export class MemoryRepl implements InMemoryRepl {
 		const { channels } = interp;
 		channels.step += 1;
 		const buffer = bufferTransport();
+		for (const envelope of this.takeBetweenSteps(channels))
+			buffer.send(envelope);
 		const detach = channels.pipe(buffer);
 		const { recorder, results } = recordTopLevel(buffer);
 		this.recorder = recorder;
@@ -290,6 +308,7 @@ export class MemoryRepl implements InMemoryRepl {
 		} finally {
 			this.recorder = undefined;
 			detach();
+			this.listenBetweenSteps(channels);
 		}
 		const { skipped, failed, held } = partition(buffer.collect(note));
 		const holding = held.map((n) => `held: ${n.text}\n`).join("");
