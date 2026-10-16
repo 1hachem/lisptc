@@ -46,8 +46,8 @@ the session holds.
 
 Only an error stops a step; a warning is for a reader such as the MCP check. A
 name nothing binds is an error where it would run now and a warning inside a
-function body, which may run once it is bound. A qualified `server/tool` name is
-never flagged, because a server's tools are bound when it loads. A literal is
+function body, which may run once it is bound. A name qualified by a server, the
+way a loaded tool is named, is never flagged, because a server's tools are bound when it loads. A literal is
 checked against the type its doc record declares only when that type names a
 literal shape; an expression is never guessed at.
 
