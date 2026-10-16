@@ -135,12 +135,13 @@ export const turn = {
 			await convex.mutation(api.chats.settle, { chatId });
 			return new Response(null, { status: 204 });
 		}
+		const { messages, rows } = toInput(history);
 
 		console.log(
 			`chat chat=${chatId} messages=${history.length} ${provider}/${model}`,
 		);
 		return streamChatResponse(
-			{ messages: toInput(history) },
+			{ messages },
 			{
 				repls,
 				threadId: chatId,
@@ -157,7 +158,7 @@ export const turn = {
 				onTurn: async (produced, revised, failure) => {
 					try {
 						for (const [at, message] of revised) {
-							const stored = history[at];
+							const stored = history[rows[at]];
 							if (
 								stored?.wireId === undefined ||
 								message.additional_kwargs === undefined

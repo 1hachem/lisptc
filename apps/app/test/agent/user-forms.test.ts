@@ -7,6 +7,7 @@ const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 const world = vi.hoisted(() => ({
 	appended: [] as Record<string, unknown>[],
 	storedWhenStreamed: [] as Record<string, unknown>[][],
+	sent: [] as ChatInput[],
 	steered: [] as string[],
 }));
 
@@ -63,7 +64,8 @@ vi.mock("@repo/ai", async (importOriginal) => {
 				return true;
 			}
 		},
-		streamChatResponse: (_input: ChatInput) => {
+		streamChatResponse: (input: ChatInput) => {
+			world.sent.push(input);
 			world.storedWhenStreamed.push([...world.appended]);
 			return new Response("");
 		},
@@ -86,6 +88,7 @@ beforeAll(async () => {
 beforeEach(() => {
 	world.appended.length = 0;
 	world.storedWhenStreamed.length = 0;
+	world.sent.length = 0;
 	world.steered.length = 0;
 });
 
@@ -96,6 +99,16 @@ describe("a message that holds forms", () => {
 		expect(world.storedWhenStreamed[0].map((m) => m.type)).toEqual([
 			"human",
 			"tool",
+		]);
+	});
+
+	test("reaches the agent as one user message carrying its result", async () => {
+		await send(turn, { input: { chatId: CHAT, message: "what is (+ 1 2)" } });
+		expect(world.sent[0].messages).toEqual([
+			expect.objectContaining({
+				type: "human",
+				content: "what is (+ 1 2)\n\n3",
+			}),
 		]);
 	});
 
@@ -111,6 +124,13 @@ describe("a message that holds forms", () => {
 });
 
 describe("a message without forms", () => {
+	test("reaches the agent as its plain text", async () => {
+		await send(turn, { input: { chatId: CHAT, message: "use hex" } });
+		expect(world.sent[0].messages).toEqual([
+			expect.objectContaining({ type: "human", content: "use hex" }),
+		]);
+	});
+
 	test("is steered into the running turn", async () => {
 		const response = await send(steer, {
 			chatId: CHAT,
