@@ -1,41 +1,86 @@
 name: Resolve conflicts
 
 on:
+  push:
+    branches: [main]
   pull_request_target:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened]
+  schedule:
+    - cron: "17 */6 * * *"
+    - cron: "0 11 * * *"
   workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number, empty for every open PR
+        required: false
+      update:
+        description: Also merge main into every PR behind it
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   id-token: write
 
-concurrency:
-  group: resolve-conflicts-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: false
-
 jobs:
-  resolve:
+  find:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 45
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+    outputs:
+      prs: ${{ steps.list.outputs.prs }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      PR: ${{ github.event.pull_request.number || github.ref_name }}
+      ONLY: ${{ github.event.pull_request.number || inputs.pr }}
+    steps:
+      - name: List the conflicting PRs
+        id: list
+        run: |
+          query='query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { pullRequests(states: OPEN, first: 100) { nodes { number isCrossRepository mergeable } } } }'
+          for _ in $(seq 1 12); do
+            gh api graphql -f query="$query" -f owner="${GH_REPO%/*}" -f name="${GH_REPO#*/}" \
+              --jq '.data.repository.pullRequests.nodes | map(select(.isCrossRepository | not))' > prs.json
+            if [ -n "$ONLY" ]; then
+              jq --argjson n "$ONLY" 'map(select(.number == $n))' prs.json > only.json
+              mv only.json prs.json
+            fi
+            jq -e 'any(.mergeable == "UNKNOWN")' prs.json > /dev/null || break
+            sleep 10
+          done
+          jq -c . prs.json
+          echo "prs=$(jq -c 'map(select(.mergeable == "CONFLICTING") | .number)' prs.json)" >> "$GITHUB_OUTPUT"
+
+  resolve:
+    needs: find
+    if: needs.find.outputs.prs != '' && needs.find.outputs.prs != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        pr: ${{ fromJSON(needs.find.outputs.prs) }}
+    concurrency:
+      group: resolve-conflicts-${{ matrix.pr }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ matrix.pr }}
     steps:
       - name: Read the branches
         run: |
-          read -r number base head cross < <(gh pr view "$PR" --json number,baseRefName,headRefName,isCrossRepository --jq '"\(.number) \(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
+          read -r base head cross < <(gh pr view "$PR" --json baseRefName,headRefName,isCrossRepository --jq '"\(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
           if [ "$cross" = true ]; then
             echo "::error::PR $PR comes from a fork"
             exit 1
           fi
-          echo "PR=$number" >> "$GITHUB_ENV"
           echo "BASE=$base" >> "$GITHUB_ENV"
           echo "HEAD_REF=$head" >> "$GITHUB_ENV"
 
-      - name: Check for a merge conflict
+      - name: Check the PR still conflicts
         id: state
         run: |
           state=UNKNOWN
@@ -65,46 +110,20 @@ jobs:
         with:
           ref: ${{ env.HEAD_REF }}
           fetch-depth: 0
-
-      - name: Check whether the base changed a workflow
-        if: steps.state.outputs.conflicting == 'true'
-        id: workflows
-        run: |
-          git diff --name-only "$(git merge-base HEAD "origin/$BASE")" "origin/$BASE" -- .github/workflows > "$RUNNER_TEMP/workflows.txt"
-          if [ -s "$RUNNER_TEMP/workflows.txt" ]; then
-            cat "$RUNNER_TEMP/workflows.txt"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Ask for a manual merge on the PR
-        if: steps.workflows.outputs.changed == 'true'
-        run: |
-          marker="<!-- resolve-conflicts:workflows -->"
-          if gh pr view "$PR" --json comments --jq '.comments[].body' | grep -qF "$marker"; then
-            exit 0
-          fi
-          {
-            echo "$marker"
-            echo "\`$BASE\` changed these workflows since this branch was cut, and the workflow token cannot push a merge that touches \`.github/workflows/\`:"
-            echo
-            sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/workflows.txt"
-            echo
-            echo "Merge \`$BASE\` into \`$HEAD_REF\` by hand to resolve the conflicts."
-          } > "$RUNNER_TEMP/comment.md"
-          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comment.md"
+          persist-credentials: false
 
       - name: Setup pnpm
-        if: steps.state.outputs.conflicting == 'true' && steps.workflows.outputs.changed != 'true'
+        if: steps.state.outputs.conflicting == 'true'
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Setup Node.js
-        if: steps.state.outputs.conflicting == 'true' && steps.workflows.outputs.changed != 'true'
+        if: steps.state.outputs.conflicting == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Merge the base branch
-        if: steps.state.outputs.conflicting == 'true' && steps.workflows.outputs.changed != 'true'
+        if: steps.state.outputs.conflicting == 'true'
         id: merge
         run: |
           git config user.name "claude[bot]"
@@ -115,24 +134,22 @@ jobs:
           fi
           git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
           cat "$RUNNER_TEMP/conflicts.txt"
+          git ls-files -s > "$RUNNER_TEMP/index-before.txt"
+          git rev-parse HEAD MERGE_HEAD > "$RUNNER_TEMP/heads-before.txt"
           echo "conflicted=true" >> "$GITHUB_OUTPUT"
 
       - name: Resolve with Claude
         if: steps.merge.outputs.conflicted == 'true'
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ env.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ github.token }}
-          plugin_marketplaces: ${{ github.workspace }}/.agents
-          plugins: merge-conflicts@lisptc
-          prompt: '/merge-conflicts:resolve-conflicts PR #${{ env.PR }} merges origin/${{ env.BASE }} into ${{ env.HEAD_REF }}'
-          claude_args: >-
-            --model opus
-            --max-turns 100
-            --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(pnpm:*)"
+        run: |
+          npm install --global @anthropic-ai/claude-code@2.1.296
+          claude -p "/merge-conflicts:resolve-conflicts PR #$PR merges origin/$BASE into $HEAD_REF" \
+            --plugin-dir .agents/plugins/merge-conflicts \
+            --model opus \
+            --max-turns 100 \
+            --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(pnpm:*)" \
             --disallowedTools "WebSearch,WebFetch"
 
-      - name: Verify and commit
+      - name: Verify the resolution
         if: steps.merge.outputs.conflicted == 'true'
         run: |
           mapfile -t files < "$RUNNER_TEMP/conflicts.txt"
@@ -141,14 +158,135 @@ jobs:
             exit 1
           fi
           pnpm install --frozen-lockfile
+          if ! git rev-parse HEAD MERGE_HEAD | cmp -s - "$RUNNER_TEMP/heads-before.txt"; then
+            echo "::error::The merge was committed, aborted or moved during the resolution"
+            exit 1
+          fi
+          git ls-files -s > "$RUNNER_TEMP/index-after.txt"
+          {
+            sort "$RUNNER_TEMP/index-before.txt" "$RUNNER_TEMP/index-after.txt" | uniq -u | cut -f2-
+            git diff --name-only
+            git ls-files --others --exclude-standard
+          } | sort -u > "$RUNNER_TEMP/touched.txt"
+          { cat "$RUNNER_TEMP/conflicts.txt"; echo pnpm-lock.yaml; } | sort -u > "$RUNNER_TEMP/allowed.txt"
+          extra=$(comm -23 "$RUNNER_TEMP/touched.txt" "$RUNNER_TEMP/allowed.txt")
+          if [ -n "$extra" ]; then
+            echo "::error::Claude changed files outside the conflicts:"
+            echo "$extra"
+            exit 1
+          fi
+
+      - name: Fetch the App credentials from Infisical
+        if: steps.merge.outputs.conflicted == 'true'
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /github-apps/auto-resolve-merge-conflict
+          export-type: env
+
+      - name: Mint the App token
+        if: steps.merge.outputs.conflicted == 'true'
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_PRIVATE_KEY }}
+
+      - name: Commit as the App
+        if: steps.merge.outputs.conflicted == 'true'
+        env:
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          id=$(gh api "/users/$BOT" --jq .id)
           git add -A
-          git commit --no-edit
+          git -c core.hooksPath=/dev/null -c user.name="$BOT" -c user.email="$id+$BOT@users.noreply.github.com" \
+            commit -m "Merge origin/$BASE into $HEAD_REF [skip ci]"
 
       - name: Push
         if: steps.merge.outputs.conflicted == 'true'
-        run: git push origin "HEAD:$HEAD_REF"
+        env:
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+        run: git -c core.hooksPath=/dev/null push "https://x-access-token:$APP_TOKEN@github.com/$GH_REPO.git" "HEAD:$HEAD_REF"
+
+      - name: Ask a maintainer to release CI
+        if: steps.merge.outputs.conflicted == 'true'
+        run: |
+          marker="<!-- resolve-conflicts:held -->"
+          sha=$(git rev-parse HEAD)
+          {
+            echo "$marker"
+            echo "Claude merged \`$BASE\` into \`$HEAD_REF\` in $sha and resolved these conflicts:"
+            echo
+            while read -r file; do
+              case "$file" in
+                .github/*) echo "- \`$file\` **(workflow)**" ;;
+                *) echo "- \`$file\`" ;;
+              esac
+            done < "$RUNNER_TEMP/conflicts.txt"
+            echo
+            echo "CI is held on this commit. A maintainer comments \`/ci\` after reviewing the diff to run it."
+          } > "$RUNNER_TEMP/held.md"
+          existing=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$existing" -F body=@"$RUNNER_TEMP/held.md" > /dev/null
+          else
+            gh pr comment "$PR" --body-file "$RUNNER_TEMP/held.md"
+          fi
 
       - name: Report a failed resolution on the PR
         if: failure() && steps.merge.outputs.conflicted == 'true'
         run: |
           gh pr comment "$PR" --body "Claude could not resolve the merge conflicts with \`$BASE\` on its own. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+
+  update:
+    needs: [find, resolve]
+    if: always() && (github.event.schedule == '0 11 * * *' || inputs.update)
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Fetch the App credentials from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /github-apps/auto-resolve-merge-conflict
+          export-type: env
+
+      - name: Mint the App token
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_PRIVATE_KEY }}
+
+      - name: Merge main into every PR behind it
+        env:
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          gh pr list --state open --limit 100 \
+            --json number,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable \
+            --jq '.[] | select((.isCrossRepository | not) and .mergeable == "MERGEABLE") | "\(.number) \(.baseRefName) \(.headRefName) \(.headRefOid)"' |
+          while read -r number base head sha; do
+            behind=$(gh api "repos/$GH_REPO/compare/$base...$head" --jq .behind_by)
+            if [ "$behind" = 0 ]; then
+              continue
+            fi
+            gh api "repos/$GH_REPO/commits/$sha" > head.json
+            if [ "$(jq -r '.author.login // ""' head.json)" = "$BOT" ] && jq -e '.commit.message | contains("[skip ci]")' head.json > /dev/null; then
+              echo "PR $number: held for /ci, left alone"
+              continue
+            fi
+            echo "PR $number: $behind behind $base"
+            GH_TOKEN="$APP_TOKEN" gh api -X PUT "repos/$GH_REPO/pulls/$number/update-branch" -f expected_head_sha="$sha" > /dev/null ||
+              echo "::warning::PR $number could not be updated"
+          done

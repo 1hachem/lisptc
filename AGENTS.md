@@ -254,6 +254,16 @@ This is the part that rots first. A single type import from a layer above is all
 it takes to lose it. The mechanisms and how to add to them are in
 `packages/interpreter/AGENTS.md`.
 
+## Prompts
+
+**Every prompt an extension ships is written in caveman voice.** A `.ptc`
+prompt is read by the model on every turn, so each word it carries is paid for
+on every turn. Write a new one, and rewrite a changed one, by the rules of
+`.agents/skills/caveman/SKILL.md`. The skill exempts what is persisted
+outside chat; a prompt is the exception to that exemption. Every form, keyword,
+id and negation survives the rewrite exactly, and a test that pins the old
+wording is changed to match.
+
 ## Comments
 
 **The code carries no comments.** Three guards hold it, at commit, at push and

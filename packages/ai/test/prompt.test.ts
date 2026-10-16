@@ -38,7 +38,7 @@ describe("prose around the forms", () => {
 
 	it("carries the language reference, which teaches the same rule", () => {
 		expect(PROMPT).toMatch(
-			/only the parenthesised top-level forms are program text/i,
+			/only parenthesised top-level forms are program text/i,
 		);
 	});
 });
@@ -51,7 +51,7 @@ describe("the failures a run actually dies of", () => {
 
 	it("says a bare result name ends the turn instead of showing it", () => {
 		expect(PROMPT).toMatch(/ENDS THE TURN/);
-		expect(PROMPT).toMatch(/most expensive typo in the language/i);
+		expect(PROMPT).toMatch(/most expensive typo in the\s+language/i);
 	});
 
 	it("says to stop when the request is met", () => {
