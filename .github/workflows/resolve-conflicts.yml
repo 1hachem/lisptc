@@ -173,7 +173,7 @@ jobs:
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: prod
-          secret-path: /github-app
+          secret-path: /github-apps/auto-resolve-merge-conflict
           export-type: env
 
       - name: Mint the App token
