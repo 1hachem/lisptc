@@ -136,17 +136,13 @@ jobs:
 
       - name: Resolve with Claude
         if: steps.merge.outputs.conflicted == 'true'
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ env.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ github.token }}
-          plugin_marketplaces: ${{ github.workspace }}/.agents
-          plugins: merge-conflicts@lisptc
-          prompt: '/merge-conflicts:resolve-conflicts PR #${{ env.PR }} merges origin/${{ env.BASE }} into ${{ env.HEAD_REF }}'
-          claude_args: >-
-            --model opus
-            --max-turns 100
-            --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(pnpm:*)"
+        run: |
+          npm install --global @anthropic-ai/claude-code@2.1.296
+          claude -p "/merge-conflicts:resolve-conflicts PR #$PR merges origin/$BASE into $HEAD_REF" \
+            --plugin-dir .agents/plugins/merge-conflicts \
+            --model opus \
+            --max-turns 100 \
+            --allowedTools "Read,Edit,Write,Grep,Glob,Agent,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(pnpm:*)" \
             --disallowedTools "WebSearch,WebFetch"
 
       - name: Verify the resolution
