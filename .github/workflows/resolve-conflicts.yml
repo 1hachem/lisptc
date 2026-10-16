@@ -203,14 +203,14 @@ jobs:
         run: |
           id=$(gh api "/users/$BOT" --jq .id)
           git add -A
-          git -c user.name="$BOT" -c user.email="$id+$BOT@users.noreply.github.com" \
+          git -c core.hooksPath=/dev/null -c user.name="$BOT" -c user.email="$id+$BOT@users.noreply.github.com" \
             commit -m "Merge origin/$BASE into $HEAD_REF [skip ci]"
 
       - name: Push
         if: steps.merge.outputs.conflicted == 'true'
         env:
           APP_TOKEN: ${{ steps.app.outputs.token }}
-        run: git push "https://x-access-token:$APP_TOKEN@github.com/$GH_REPO.git" "HEAD:$HEAD_REF"
+        run: git -c core.hooksPath=/dev/null push "https://x-access-token:$APP_TOKEN@github.com/$GH_REPO.git" "HEAD:$HEAD_REF"
 
       - name: Ask a maintainer to release CI
         if: steps.merge.outputs.conflicted == 'true'
