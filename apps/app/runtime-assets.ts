@@ -18,10 +18,12 @@ export const PROMPT_ROOTS = [
 	rootOf(require.resolve("@repo/mcp-extension")),
 	rootOf(require.resolve("@repo/memory-extension")),
 	rootOf(require.resolve("@repo/permissions-extension")),
+	rootOf(require.resolve("@repo/preferences-extension")),
 	rootOf(require.resolve("@repo/promises-extension")),
 	rootOf(require.resolve("@repo/prose-extension")),
 	rootOf(require.resolve("@repo/secrets-extension")),
 	rootOf(require.resolve("@repo/ui-extension")),
+	rootOf(require.resolve("@repo/workspace-extension")),
 ];
 
 function promptFiles(dir: URL): URL[] {

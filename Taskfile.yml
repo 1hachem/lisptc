@@ -43,7 +43,7 @@ tasks:
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend exec convex dev --once"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
     desc: regenerate convex/_generated against the local deployment, without pushing
@@ -62,7 +62,7 @@ tasks:
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend dev"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
 
   r2:
     desc: sync .r2 with the bucket (pull, push or sync; raw captures stay local)

@@ -1,13 +1,10 @@
 import { convexQuery } from "@convex-dev/react-query";
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
 import { sentHistory } from "../lib/message-history.ts";
-import { useModelPicker } from "../lib/model-picker.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import { ChatView } from "./chat-view.tsx";
@@ -16,7 +13,6 @@ import { McpServers } from "./mcp-servers.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
-	const { modelName, providerName, openModelPicker } = useModelPicker();
 	const { workspaceId, send, runLisp, stop, isLoading, fresh } = useChatSession(
 		(state) => ({
 			workspaceId: state.workspaceId,
@@ -66,19 +62,6 @@ export function Chat() {
 					isStreaming={isLoading}
 					onStop={stop}
 				/>
-				<div className="mx-auto mt-1 flex w-full max-w-[680px] justify-end px-3 text-[11px]">
-					<button
-						type="button"
-						onClick={openModelPicker}
-						title="change the model for this workspace"
-						className="flex cursor-pointer items-center gap-1 text-dim hover:text-fg"
-					>
-						<span>
-							{modelName} · {providerName}
-						</span>
-						<HugeiconsIcon className="size-icon-sm" icon={ArrowDown01Icon} />
-					</button>
-				</div>
 			</div>
 		</>
 	);

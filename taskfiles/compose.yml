@@ -14,13 +14,13 @@ tasks:
           CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
 
   up:convex:
-    desc: start postgres and the convex backend in the background and wait until they are healthy
+    desc: start postgres and the convex backend in the background, seed and deploy the functions, and wait until they are done
     cmds:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/db /convex /auth /api /web /ai /analytics /mcps/google /mcps/mistral"
-          CMD: "docker compose up -d --wait convex-backend"
+          CMD: "docker compose up -d --wait convex-backend && docker compose run --rm --build convex-deploy"
 
   up:prod:
     desc: build and start the whole stack from its production images

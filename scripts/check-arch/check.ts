@@ -27,10 +27,12 @@ const EXTENSION_DIRS = [
 	"packages/introspection/src/",
 	"packages/memory/src/",
 	"packages/permissions/src/",
+	"packages/preferences/src/",
 	"packages/promises/src/",
 	"packages/prose/src/",
 	"packages/secrets/src/",
 	"packages/ui-extension/src/",
+	"packages/workspace/src/",
 ];
 
 const EXTENSION_FILES = [
