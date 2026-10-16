@@ -15,7 +15,6 @@ import { forgetUser, useIdentify } from "../lib/analytics.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
-import { preferencesQuery } from "../lib/preferences.ts";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
@@ -30,7 +29,6 @@ export const Route = createFileRoute("/_authed")({
 		await Promise.all([
 			context.queryClient.ensureQueryData(convexQuery(api.users.me, {})),
 			context.queryClient.ensureQueryData(convexQuery(api.workspaces.list, {})),
-			context.queryClient.ensureQueryData(preferencesQuery),
 		]);
 	},
 	component: AuthedLayout,
