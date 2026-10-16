@@ -50,7 +50,7 @@ describe("removing a chat", () => {
 		const listed = await alice.as.query(api.chats.list, {
 			workspaceId: alice.workspace,
 		});
-		expect(listed.map((c) => c._id)).toEqual([kept]);
+		expect(listed.chats.map((c) => c._id)).toEqual([kept]);
 	});
 
 	it("refuses a chat owned by someone else", async () => {
@@ -93,7 +93,7 @@ describe("removing a workspace", () => {
 		expect(messages).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records and permissions with it", async () => {
+	it("takes its secrets, oauth records, permissions and readme with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -112,19 +112,27 @@ describe("removing a workspace", () => {
 			workspaceId: doomed,
 			source: "(permission/deny eval)",
 		});
+		await alice.as.mutation(api.readmes.put, {
+			workspaceId: doomed,
+			body: "# doomed",
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords, permissions } = await t.run(async (ctx) => ({
-			secrets: await ctx.db.query("secrets").collect(),
-			oauthRecords: await ctx.db.query("oauthRecords").collect(),
-			permissions: await ctx.db.query("permissions").collect(),
-		}));
+		const { secrets, oauthRecords, permissions, readmes } = await t.run(
+			async (ctx) => ({
+				secrets: await ctx.db.query("secrets").collect(),
+				oauthRecords: await ctx.db.query("oauthRecords").collect(),
+				permissions: await ctx.db.query("permissions").collect(),
+				readmes: await ctx.db.query("readmes").collect(),
+			}),
+		);
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
 		expect(permissions).toEqual([]);
+		expect(readmes).toEqual([]);
 	});
 
 	it("leaves the other workspaces alone", async () => {
@@ -215,6 +223,8 @@ async function remaining(t: TestConvex<typeof schema>) {
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
 		permissions: await ctx.db.query("permissions").collect(),
+		readmes: await ctx.db.query("readmes").collect(),
+		preferences: await ctx.db.query("preferences").collect(),
 	}));
 }
 
@@ -227,6 +237,8 @@ const nothing = {
 	secrets: [],
 	oauthRecords: [],
 	permissions: [],
+	readmes: [],
+	preferences: [],
 };
 
 describe("deleting an account", () => {
@@ -262,9 +274,16 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, secrets, oauth records and permissions", async () => {
+	it("takes its memories, secrets, oauth records, permissions, readme and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.readmes.put, {
+			workspaceId: alice.workspace,
+			body: "doomed",
+		});
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { theme: "dusk", themeUses: {} },
+		});
 		await alice.as.mutation(api.secrets.put, {
 			workspaceId: alice.workspace,
 			secret: { key: "REPL_TOKEN", value: "doomed", description: "" },
@@ -313,5 +332,22 @@ describe("deleting an account", () => {
 		expect(left.chats).toHaveLength(1);
 		expect(left.messages).toHaveLength(1);
 		expect(left.secrets).toHaveLength(1);
+	});
+});
+
+describe("removing a user", () => {
+	it("takes their preferences with them", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { theme: "dusk", themeUses: {} },
+		});
+
+		await t.mutation(internal.users.purge, { userId: alice.user });
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("preferences").collect(),
+		);
+		expect(left).toEqual([]);
 	});
 });
