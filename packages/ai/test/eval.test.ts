@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { type EvalMessage, evalUserCode } from "../src/eval.ts";
-import { testRepls } from "./helpers.ts";
+import { checkUserCode, type EvalMessage, evalUserCode } from "../src/eval.ts";
+import { extension, testRepls } from "./helpers.ts";
 
 const repls = testRepls();
 
@@ -38,5 +38,33 @@ describe("user code", () => {
 		const repl = repls.peek(threadId);
 		expect(repl?.takeFinished()).toBe(false);
 		expect(repl?.takeProseFeedback()).toBe("");
+	});
+});
+
+describe("checking user code", () => {
+	const checked = testRepls([
+		extension((hooks) =>
+			hooks.admit.use(async (interp, code, next) =>
+				code.includes("bad")
+					? { code, rejected: "line 1: bad call" }
+					: next(interp, code),
+			),
+		),
+	]);
+
+	test("passes code nothing rejects", async () => {
+		const threadId = crypto.randomUUID();
+		expect(await checkUserCode("(+ 1 2)", { repls: checked, threadId })).toBe(
+			undefined,
+		);
+	});
+
+	test("turns a rejection into an event asking the agent to fix it", async () => {
+		const threadId = crypto.randomUUID();
+		const event = await checkUserCode("(bad)", { repls: checked, threadId });
+		expect(event?.source).toBe("lisp-check");
+		expect(event?.text).toContain("the user ran this code");
+		expect(event?.text).toContain("(bad)");
+		expect(event?.text).toContain("line 1: bad call");
 	});
 });

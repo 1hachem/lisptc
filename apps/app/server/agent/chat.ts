@@ -1,4 +1,5 @@
 import {
+	checkUserCode,
 	evalUserCode,
 	MemorySteerInbox,
 	type SteerInbox,
@@ -9,7 +10,7 @@ import { api } from "@repo/backend/api";
 import { z } from "zod";
 import { body } from "./body.ts";
 import { convexAs } from "./convex.ts";
-import { events } from "./events.ts";
+import { events, ticket } from "./events.ts";
 import { type StoredMessage, toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
 import { chatModel } from "./model.ts";
@@ -200,6 +201,14 @@ export const evaluate = {
 			messages: [{ id: crypto.randomUUID(), type: "human", content: code }],
 		});
 		console.log(`eval chat=${chatId} chars=${code.length}`);
+		const mistaken = await checkUserCode(code, { repls, threadId: chatId });
+		if (mistaken !== undefined) {
+			const event = await ticket(
+				{ subject: context.session.subject, chatId },
+				mistaken,
+			);
+			return Response.json({ event });
+		}
 		const message = await evalUserCode(code, { repls, threadId: chatId });
 		await convex.mutation(api.messages.append, {
 			chatId,
