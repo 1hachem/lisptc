@@ -63,6 +63,27 @@ async function runUserForms(
 	});
 }
 
+async function prepareTurn(
+	convex: ReturnType<typeof convexAs>,
+	input: TurnInput,
+	opening: StoredMessage,
+	signal: AbortSignal,
+) {
+	const { chatId } = input;
+	const { workspaceId } = await convex.query(api.chats.get, { chatId });
+	const { provider, model } = chatModel(
+		(await convex.query(api.workspaces.get, { workspaceId })).model,
+	);
+	await convex.mutation(api.messages.append, {
+		chatId,
+		messages: [opening],
+	});
+	if ("message" in input)
+		await runUserForms(convex, chatId, input.message, signal);
+	const history = await convex.query(api.messages.transcript, { chatId });
+	return { provider, model, history };
+}
+
 export const steerRequestSchema = z.object({
 	chatId: convexId<"chats">(),
 	id: z.string().min(1),
@@ -96,19 +117,24 @@ export const turn = {
 			);
 		}
 		const convex = convexAs(context.session);
+		await convex.mutation(api.chats.start, { chatId });
 
-		const { workspaceId } = await convex.query(api.chats.get, { chatId });
-		const { provider, model } = chatModel(
-			(await convex.query(api.workspaces.get, { workspaceId })).model,
-		);
-		await convex.mutation(api.messages.append, {
-			chatId,
-			messages: [opening],
+		const { provider, model, history } = await prepareTurn(
+			convex,
+			input,
+			opening,
+			request.signal,
+		).catch(async (error: unknown) => {
+			await convex.mutation(api.chats.settle, {
+				chatId,
+				failure: error instanceof Error ? error.message : String(error),
+			});
+			throw error;
 		});
-		if ("message" in input)
-			await runUserForms(convex, chatId, input.message, request.signal);
-		if (request.signal.aborted) return new Response(null, { status: 204 });
-		const history = await convex.query(api.messages.transcript, { chatId });
+		if (request.signal.aborted) {
+			await convex.mutation(api.chats.settle, { chatId });
+			return new Response(null, { status: 204 });
+		}
 
 		console.log(
 			`chat chat=${chatId} messages=${history.length} ${provider}/${model}`,
@@ -128,23 +154,27 @@ export const turn = {
 					distinctId: request.headers.get("x-distinct-id") ?? undefined,
 					sessionId: request.headers.get("x-posthog-session-id") ?? undefined,
 				},
-				onTurn: async (produced, revised) => {
-					for (const [at, message] of revised) {
-						const stored = history[at];
-						if (
-							stored?.wireId === undefined ||
-							message.additional_kwargs === undefined
-						)
-							continue;
-						await convex.mutation(api.messages.annotate, {
-							chatId,
-							id: stored.wireId,
-							kwargs: message.additional_kwargs,
-						});
+				onTurn: async (produced, revised, failure) => {
+					try {
+						for (const [at, message] of revised) {
+							const stored = history[at];
+							if (
+								stored?.wireId === undefined ||
+								message.additional_kwargs === undefined
+							)
+								continue;
+							await convex.mutation(api.messages.annotate, {
+								chatId,
+								id: stored.wireId,
+								kwargs: message.additional_kwargs,
+							});
+						}
+						const messages = toStored(produced);
+						if (messages.length > 0)
+							await convex.mutation(api.messages.append, { chatId, messages });
+					} finally {
+						await convex.mutation(api.chats.settle, { chatId, failure });
 					}
-					const messages = toStored(produced);
-					if (messages.length === 0) return;
-					await convex.mutation(api.messages.append, { chatId, messages });
 				},
 			},
 		);

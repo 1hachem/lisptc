@@ -28,11 +28,14 @@ function atomClass(text: string, head: boolean): TokenRange["className"] {
 	return head ? "function" : "variable";
 }
 
-function scan(text: string): Scan {
-	const token = tokenPattern();
-	const prose = formSpans(text).filter(([start, end]) =>
+function proseIn(text: string): FormSpan[] {
+	return formSpans(text).filter(([start, end]) =>
 		looksLikeParenthesizedProse(text.slice(start, end)),
 	);
+}
+
+function scan(text: string, prose: readonly FormSpan[]): Scan {
+	const token = tokenPattern();
 	const ranges: TokenRange[] = [];
 	const heads: string[] = [];
 	const enclosing: boolean[] = [];
@@ -129,10 +132,17 @@ function scan(text: string): Scan {
 export const lisptc = defineLanguage({
 	name: "lisptc",
 	aliases: ["lisp", "ptc"],
-	tokenize: (code) => scan(code).ranges,
+	tokenize: (code) => scan(code, proseIn(code)).ranges,
 });
 
-export const highlighter = createHighlighter({ languages: [lisptc] });
+const lisptcSource = defineLanguage({
+	name: "lisptc-source",
+	tokenize: (code) => scan(code, []).ranges,
+});
+
+export const highlighter = createHighlighter({
+	languages: [lisptc, lisptcSource],
+});
 
 function within(
 	skipped: readonly FormSpan[],
@@ -153,6 +163,10 @@ export function tokensIn(text: string, skipped: readonly FormSpan[] = []) {
 	});
 }
 
+export function sourceTokensIn(text: string) {
+	return highlighter.tokenize(text, { lang: "lisptc-source" }).tokens;
+}
+
 export function formsIn(
 	text: string,
 	skipped: readonly FormSpan[] = [],
@@ -166,7 +180,7 @@ export function formsIn(
 			continue;
 		prose += text.slice(at, start);
 		at = end;
-		heads.push(...scan(source).heads);
+		heads.push(...scan(source, proseIn(source)).heads);
 	}
 	prose += text.slice(at);
 	return {

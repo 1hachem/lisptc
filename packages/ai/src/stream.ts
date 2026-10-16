@@ -134,6 +134,7 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	onTurn?: (
 		messages: WireMessage[],
 		revised: ReadonlyMap<number, WireMessage>,
+		failure: string | undefined,
 	) => Promise<void> | void;
 	steer?: { inbox: SteerInbox; key: string };
 };
@@ -160,6 +161,7 @@ class TurnWire {
 	readonly carried: number;
 	readonly revised = new Map<number, WireMessage>();
 	steps = 0;
+	failure: string | undefined;
 	private lastMeta: Record<string, unknown> | undefined;
 
 	constructor(
@@ -217,6 +219,7 @@ class TurnWire {
 				return true;
 			case "failed":
 				console.error("[ai] chat stream failed:", event.error);
+				this.failure = event.message;
 				this.write(
 					sse("error", { error: "AgentError", message: event.message }),
 				);
@@ -285,7 +288,7 @@ async function record(
 ): Promise<void> {
 	if (!onTurn) return;
 	try {
-		await onTurn(turn.wire.slice(turn.carried), turn.revised);
+		await onTurn(turn.wire.slice(turn.carried), turn.revised, turn.failure);
 	} catch (error) {
 		console.error("[ai] the turn was not recorded:", error);
 	}
@@ -335,6 +338,7 @@ export function streamChatResponse<Id extends string>(
 					if (!turn.apply(event)) break;
 			} catch (error) {
 				console.error("[ai] the turn could not run:", error);
+				turn.failure = errorText(error);
 				write(sse("error", { error: "AgentError", message: errorText(error) }));
 			} finally {
 				await steering

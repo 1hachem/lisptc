@@ -10,6 +10,12 @@ export const messageType = v.union(
 	v.literal("tool"),
 );
 
+export const chatStatus = v.union(
+	v.literal("streaming"),
+	v.literal("waiting"),
+	v.literal("errored"),
+);
+
 function pair<P extends ProviderName, M extends string>(choice: {
 	provider: P;
 	model: M;
@@ -34,6 +40,17 @@ export default defineSchema({
 		image: v.optional(v.string()),
 	}).index("by_auth", ["authId"]),
 
+	preferences: defineTable({
+		userId: v.id("users"),
+		theme: v.optional(v.string()),
+		font: v.optional(v.string()),
+		themeUses: v.optional(v.record(v.string(), v.number())),
+		channels: v.optional(v.record(v.string(), v.boolean())),
+		metadata: v.optional(v.record(v.string(), v.boolean())),
+		sidebar: v.optional(v.array(v.string())),
+		motion: v.optional(v.string()),
+	}).index("by_user", ["userId"]),
+
 	workspaces: defineTable({
 		ownerId: v.id("users"),
 		name: v.string(),
@@ -49,9 +66,19 @@ export default defineSchema({
 		title: v.string(),
 		lastMessageAt: v.optional(v.number()),
 		archivedAt: v.optional(v.number()),
+		status: v.optional(chatStatus),
+		failure: v.optional(v.string()),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_activity", ["workspaceId", "lastMessageAt"]),
+		.index("by_workspace_live_activity", [
+			"workspaceId",
+			"archivedAt",
+			"lastMessageAt",
+		])
+		.searchIndex("search_title", {
+			searchField: "title",
+			filterFields: ["workspaceId", "archivedAt"],
+		}),
 
 	messages: defineTable({
 		chatId: v.id("chats"),
@@ -75,6 +102,11 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	readmes: defineTable({
+		workspaceId: v.id("workspaces"),
+		body: v.string(),
+	}).index("by_workspace", ["workspaceId"]),
 
 	permissions: defineTable({
 		workspaceId: v.id("workspaces"),

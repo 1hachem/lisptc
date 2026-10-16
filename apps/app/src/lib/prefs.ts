@@ -1,19 +1,10 @@
-import { defaultFontId, defaultThemeId, fonts, themes } from "@repo/ui";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
-import {
-	parseThemeUses,
-	serializeThemeUses,
-	type ThemeUses,
-} from "./theme-uses.ts";
 
 const YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 export const SIDEBAR_COOKIE = "ui.sidebar";
-export const PANEL_COOKIE = "ui.panel";
-const THEME_COOKIE = "ui.theme";
-const THEME_USES_COOKIE = "ui.theme-uses";
-const FONT_COOKIE = "ui.font";
+export const PREFERENCES_COOKIE = "ui.panel";
 
 const readCookie = createIsomorphicFn()
 	.server((name: string) => getCookie(name))
@@ -33,34 +24,6 @@ export function readBoolPref(name: string, fallback: boolean) {
 
 export function writeBoolPref(name: string, value: boolean) {
 	writeCookie(name, String(value));
-}
-
-export function readThemePref() {
-	const raw = readCookie(THEME_COOKIE);
-	return themes.find((theme) => theme.id === raw)?.id ?? defaultThemeId;
-}
-
-export function writeThemePref(id: string) {
-	writeCookie(THEME_COOKIE, id);
-	document.documentElement.dataset.theme = id;
-}
-
-export function readFontPref() {
-	const raw = readCookie(FONT_COOKIE);
-	return fonts.find((font) => font.id === raw)?.id ?? defaultFontId;
-}
-
-export function writeFontPref(id: string) {
-	writeCookie(FONT_COOKIE, id);
-	document.documentElement.dataset.font = id;
-}
-
-export function readThemeUsesPref() {
-	return parseThemeUses(readCookie(THEME_USES_COOKIE));
-}
-
-export function writeThemeUsesPref(uses: ThemeUses) {
-	writeCookie(THEME_USES_COOKIE, serializeThemeUses(uses));
 }
 
 function writeCookie(name: string, value: string) {

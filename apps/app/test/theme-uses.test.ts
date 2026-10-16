@@ -1,11 +1,6 @@
 import type { ThemeDef } from "@repo/ui";
 import { describe, expect, it } from "vitest";
-import {
-	mostUsedThemes,
-	parseThemeUses,
-	recordThemeUse,
-	serializeThemeUses,
-} from "../src/lib/theme-uses.ts";
+import { mostUsedThemes, recordThemeUse } from "../src/lib/theme-uses.ts";
 
 const theme = (id: string): ThemeDef => ({
 	id,
@@ -17,14 +12,11 @@ const themes = ["a", "b", "c", "d"].map(theme);
 const ids = (list: ThemeDef[]) => list.map((t) => t.id);
 
 describe("counting theme picks", () => {
-	it("round-trips through the cookie value", () => {
-		const uses = recordThemeUse(recordThemeUse({}, "b"), "b");
-		expect(parseThemeUses(serializeThemeUses(uses))).toEqual({ b: 2 });
-	});
-
-	it("drops malformed pairs", () => {
-		expect(parseThemeUses("a:3|b:x|:2|c:-1|d")).toEqual({ a: 3 });
-		expect(parseThemeUses(undefined)).toEqual({});
+	it("adds one to the theme picked and keeps the others", () => {
+		expect(recordThemeUse(recordThemeUse({ a: 1 }, "b"), "b")).toEqual({
+			a: 1,
+			b: 2,
+		});
 	});
 });
 
