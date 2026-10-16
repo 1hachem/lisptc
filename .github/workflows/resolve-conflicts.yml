@@ -7,6 +7,7 @@ on:
     types: [opened, reopened]
   schedule:
     - cron: "17 */6 * * *"
+    - cron: "0 11 * * *"
   workflow_dispatch:
     inputs:
       pr:
@@ -229,3 +230,52 @@ jobs:
         if: failure() && steps.merge.outputs.conflicted == 'true'
         run: |
           gh pr comment "$PR" --body "Claude could not resolve the merge conflicts with \`$BASE\` on its own. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+
+  update:
+    needs: [find, resolve]
+    if: always() && github.event.schedule == '0 11 * * *'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Fetch the App credentials from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /github-apps/auto-resolve-merge-conflict
+          export-type: env
+
+      - name: Mint the App token
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_PRIVATE_KEY }}
+
+      - name: Merge main into every PR behind it
+        env:
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          gh pr list --state open --limit 100 \
+            --json number,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable \
+            --jq '.[] | select((.isCrossRepository | not) and .mergeable == "MERGEABLE") | "\(.number) \(.baseRefName) \(.headRefName) \(.headRefOid)"' |
+          while read -r number base head sha; do
+            behind=$(gh api "repos/$GH_REPO/compare/$base...$head" --jq .behind_by)
+            if [ "$behind" = 0 ]; then
+              continue
+            fi
+            gh api "repos/$GH_REPO/commits/$sha" > head.json
+            if [ "$(jq -r '.author.login // ""' head.json)" = "$BOT" ] && jq -e '.commit.message | contains("[skip ci]")' head.json > /dev/null; then
+              echo "PR $number: held for /ci, left alone"
+              continue
+            fi
+            echo "PR $number: $behind behind $base"
+            GH_TOKEN="$APP_TOKEN" gh api -X PUT "repos/$GH_REPO/pulls/$number/update-branch" -f expected_head_sha="$sha" > /dev/null ||
+              echo "::warning::PR $number could not be updated"
+          done
