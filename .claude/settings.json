@@ -1,10 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Edit(./.claude/canvas/sessions/**)"
+      "Edit(./.claude/canvas/sessions/**)",
+      "Edit(./artifacts/**/*.html)"
+    ],
+    "ask": [
+      "Read(./artifacts/**)"
     ],
     "deny": [
-      "Read(./artifacts/**)",
       "Agent(Explore)"
     ]
   },
