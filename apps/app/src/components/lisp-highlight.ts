@@ -4,43 +4,54 @@ import {
 	$applyNodeReplacement,
 	$createTextNode,
 	$getSelection,
-	$getState,
 	$isRangeSelection,
 	$isTextNode,
-	$setState,
-	createState,
 	type EditorConfig,
 	type LexicalEditor,
 	type LexicalNode,
+	type NodeKey,
 	ParagraphNode,
 	type PointType,
+	type SerializedTextNode,
 	TextNode,
 } from "lexical";
 import { useEffect } from "react";
 
-const tokenState = createState("token", {
-	parse: (value) => (typeof value === "string" ? value : ""),
-});
+type SerializedLispTokenNode = SerializedTextNode & { token: string };
 
 export class LispTokenNode extends TextNode {
-	$config() {
-		return this.config("lisp-token", {
-			extends: TextNode,
-			stateConfigs: [{ stateConfig: tokenState, flat: true }],
-		});
+	__token: string;
+
+	constructor(text = "", token = "", key?: NodeKey) {
+		super(text, key);
+		this.__token = token;
+	}
+
+	static getType(): string {
+		return "lisp-token";
+	}
+
+	static clone(node: LispTokenNode): LispTokenNode {
+		return new LispTokenNode(node.__text, node.__token, node.__key);
+	}
+
+	static importJSON(json: SerializedLispTokenNode): LispTokenNode {
+		return new LispTokenNode(json.text, json.token).updateFromJSON(json);
+	}
+
+	exportJSON(): SerializedLispTokenNode {
+		return { ...super.exportJSON(), token: this.__token };
 	}
 
 	createDOM(config: EditorConfig, editor?: LexicalEditor): HTMLElement {
 		const dom = super.createDOM(config, editor);
-		dom.className = `th-${$getState(this, tokenState, "direct")}`;
+		dom.className = `th-${this.__token}`;
 		return dom;
 	}
 
 	updateDOM(prevNode: this, dom: HTMLElement, config: EditorConfig): boolean {
 		const changed = super.updateDOM(prevNode, dom, config);
-		const token = $getState(this, tokenState, "direct");
-		if ($getState(prevNode, tokenState, "direct") !== token)
-			dom.className = `th-${token}`;
+		if (prevNode.__token !== this.__token) dom.className = `th-${this.__token}`;
 		return changed;
 	}
 }
@@ -56,17 +67,13 @@ interface Segment {
 
 function $createSegment({ text, token }: Segment): TextNode {
 	if (token === undefined) return $createTextNode(text);
-	return $setState(
-		$applyNodeReplacement(new LispTokenNode(text)),
-		tokenState,
-		token,
-	);
+	return $applyNodeReplacement(new LispTokenNode(text, token));
 }
 
 function $segmentOf(node: TextNode): Segment {
 	return {
 		text: node.getTextContent(),
-		token: $isLispTokenNode(node) ? $getState(node, tokenState) : undefined,
+		token: $isLispTokenNode(node) ? node.getLatest().__token : undefined,
 	};
 }
 

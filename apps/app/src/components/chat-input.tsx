@@ -14,7 +14,14 @@ import {
 	COMMAND_PRIORITY_HIGH,
 	KEY_DOWN_COMMAND,
 } from "lexical";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type RefObject,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type { Command } from "../lib/commands.ts";
 import {
 	newestFirst,
@@ -131,6 +138,71 @@ function SendAction({
 	);
 }
 
+function useKeys({
+	disabled,
+	menuActive,
+	recall,
+	enter,
+}: {
+	disabled?: boolean;
+	menuActive: RefObject<boolean>;
+	recall: (direction: RecallDirection) => boolean;
+	enter: () => void;
+}) {
+	const [editor] = useLexicalComposerContext();
+	const onKeyDown = (event: KeyboardEvent): boolean => {
+		if (event.isComposing || disabled) return true;
+		if (menuActive.current) return false;
+		const direction = RECALL_KEYS[event.key];
+		const handled = direction ? recall(direction) : submitsOnEnter(event);
+		if (!handled) return false;
+		event.preventDefault();
+		if (!direction) enter();
+		return true;
+	};
+	const keys = useRef(onKeyDown);
+	keys.current = onKeyDown;
+	useEffect(
+		() =>
+			editor.registerCommand(
+				KEY_DOWN_COMMAND,
+				(event) => keys.current(event),
+				COMMAND_PRIORITY_HIGH,
+			),
+		[editor],
+	);
+}
+
+function Field({
+	placeholder,
+	disabled,
+}: {
+	placeholder: string;
+	disabled?: boolean;
+}) {
+	return (
+		<PlainTextPlugin
+			contentEditable={
+				<ContentEditable
+					aria-label={placeholder}
+					aria-placeholder={placeholder}
+					spellCheck={false}
+					placeholder={
+						<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
+							{placeholder}
+						</div>
+					}
+					className={cn(
+						"max-h-40 min-h-0 overflow-y-auto [scrollbar-gutter:stable] whitespace-pre-wrap break-words py-1 outline-none",
+						disabled ? "cursor-not-allowed text-dim" : "text-fg caret-yellow",
+					)}
+				/>
+			}
+			ErrorBoundary={LexicalErrorBoundary}
+		/>
+	);
+}
+
 export function ChatInput(props: ChatInputProps) {
 	return (
 		<LexicalComposer
@@ -213,36 +285,16 @@ function Editor({
 
 	useEffect(() => editor.registerTextContentListener(setText), [editor]);
 
-	const onKeyDown = (event: KeyboardEvent): boolean => {
-		if (event.isComposing) return true;
-		if (disabled) return true;
-		if (menuActive.current) return false;
-		const direction = RECALL_KEYS[event.key];
-		if (direction) {
+	useKeys({
+		disabled,
+		menuActive,
+		recall: (direction) => {
 			const recalled = step(text, direction);
-			if (recalled === null) return false;
-			event.preventDefault();
-			replace(recalled);
-			return true;
-		}
-		if (!submitsOnEnter(event)) return false;
-		event.preventDefault();
-		if (isStreaming && empty) onStop?.();
-		else send();
-		return true;
-	};
-	const keys = useRef(onKeyDown);
-	keys.current = onKeyDown;
-
-	useEffect(
-		() =>
-			editor.registerCommand(
-				KEY_DOWN_COMMAND,
-				(event) => keys.current(event),
-				COMMAND_PRIORITY_HIGH,
-			),
-		[editor],
-	);
+			if (recalled !== null) replace(recalled);
+			return recalled !== null;
+		},
+		enter: () => (isStreaming && empty ? onStop?.() : send()),
+	});
 
 	return (
 		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
@@ -266,27 +318,7 @@ function Editor({
 					/>
 				}
 			>
-				<PlainTextPlugin
-					contentEditable={
-						<ContentEditable
-							aria-label={placeholder}
-							aria-placeholder={placeholder}
-							spellCheck={false}
-							placeholder={
-								<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
-									{placeholder}
-								</div>
-							}
-							className={cn(
-								"max-h-40 min-h-0 overflow-y-auto [scrollbar-gutter:stable] whitespace-pre-wrap break-words py-1 outline-none",
-								disabled
-									? "cursor-not-allowed text-dim"
-									: "text-fg caret-yellow",
-							)}
-						/>
-					}
-					ErrorBoundary={LexicalErrorBoundary}
-				/>
+				<Field placeholder={placeholder} disabled={disabled} />
 			</InputShell>
 			<HistoryPlugin />
 			<LispHighlightPlugin />
