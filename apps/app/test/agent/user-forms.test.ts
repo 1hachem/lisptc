@@ -105,13 +105,11 @@ describe("a message that holds forms", () => {
 		]);
 	});
 
-	test("reaches the agent as one user message carrying its result", async () => {
+	test("reaches the stream as the message then its result row, untouched", async () => {
 		await send(turn, { input: { chatId: CHAT, message: "what is (+ 1 2)" } });
 		expect(world.sent[0].messages).toEqual([
-			expect.objectContaining({
-				type: "human",
-				content: "what is (+ 1 2)\n\n3",
-			}),
+			expect.objectContaining({ type: "human", content: "what is (+ 1 2)" }),
+			expect.objectContaining({ type: "tool", content: "3" }),
 		]);
 	});
 

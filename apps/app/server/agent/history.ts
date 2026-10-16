@@ -13,45 +13,15 @@ function isStoredType(value: string): value is StoredMessage["type"] {
 	return TYPES.has(value);
 }
 
-type Row = StoredMessage & { _id: string; wireId?: string };
-
-const isUserEval = (previous: Row | undefined, message: Row): boolean =>
-	message.type === "tool" && previous?.type === "human";
-
-function withEval(human: ChatMessageInput, result: Row): ChatMessageInput {
-	const riding = result.kwargs?.riding;
-	return {
-		...human,
-		content: [
-			human.content,
-			result.content,
-			...(typeof riding === "string" ? [riding] : []),
-		].join("\n\n"),
-	};
-}
-
 export function toInput(
 	stored: (StoredMessage & { _id: string; wireId?: string })[],
-): {
-	messages: ChatMessageInput[];
-	rows: number[];
-} {
-	const messages: ChatMessageInput[] = [];
-	const rows: number[] = [];
-	stored.forEach((message, row) => {
-		if (isUserEval(stored[row - 1], message)) {
-			messages[messages.length - 1] = withEval(messages.at(-1) ?? {}, message);
-			return;
-		}
-		messages.push({
-			id: message.wireId ?? message._id,
-			type: message.type,
-			content: message.content,
-			additional_kwargs: message.kwargs,
-		});
-		rows.push(row);
-	});
-	return { messages, rows };
+): ChatMessageInput[] {
+	return stored.map((message) => ({
+		id: message.wireId ?? message._id,
+		type: message.type,
+		content: message.content,
+		additional_kwargs: message.kwargs,
+	}));
 }
 
 export function toStored(wire: WireMessage[]): StoredMessage[] {
