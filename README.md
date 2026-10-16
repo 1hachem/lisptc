@@ -65,6 +65,8 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
                           synchronous evaluator.
   packages/prose          @repo/prose-extension. The prose the model writes
                           around its forms.
+  packages/recovery       @repo/recovery-extension. Repairing a step the
+                          check stopped, by editing it instead of rewriting.
   packages/secrets        @repo/secrets-extension. The secret registry, with
                           taint-tracked redaction.
   packages/ui-extension   @repo/ui-extension. Widgets the agent renders to a

@@ -71,6 +71,7 @@ const EXTENSION_DIRS = [
 	"packages/preferences/src/",
 	"packages/promises/src/",
 	"packages/prose/src/",
+	"packages/recovery/src/",
 	"packages/secrets/src/",
 	"packages/ui-extension/src/",
 	"packages/workspace/src/",

@@ -47,6 +47,7 @@
     "@repo/preferences-extension": "workspace:*",
     "@repo/promises-extension": "workspace:*",
     "@repo/prose-extension": "workspace:*",
+    "@repo/recovery-extension": "workspace:*",
     "@repo/secrets-extension": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/syntax": "workspace:*",

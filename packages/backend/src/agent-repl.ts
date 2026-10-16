@@ -21,6 +21,8 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import { recoveryExtension } from "@repo/recovery-extension";
+import { recoveryHost } from "@repo/recovery-extension/host";
 import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
@@ -99,6 +101,7 @@ export async function workspaceExtensions(
 			}),
 		),
 		proseExtension(proseHost),
+		recoveryExtension(recoveryHost),
 		lintExtension(),
 		uiExtension(uiHost),
 		diagnosticsExtension(diagnosticsHost),
