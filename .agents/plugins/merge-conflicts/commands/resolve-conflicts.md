@@ -10,6 +10,7 @@ Context from the caller: $ARGUMENTS
 
 **Rules for you and every subagent you launch:**
 - Never stage, commit, push, abort the merge, or check out another ref. The caller owns the git state.
+- Edit only the conflicted files and `pnpm-lock.yaml`. The caller refuses a resolution that changes any other file.
 - Never take one side wholesale to make a conflict go away. A side is dropped only when the other side deliberately replaced it, and you can name the commit that did.
 - If a hunk cannot be resolved with confidence, leave its conflict markers in place and say why in the summary. A marker left on purpose is better than a guess.
 
