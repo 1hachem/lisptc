@@ -138,26 +138,100 @@ function SendAction({
 	);
 }
 
+function usePick({
+	replace,
+	onCommand,
+	flash,
+	search,
+}: {
+	replace: (text: string) => void;
+	onCommand?: (name: string) => Promise<string | null>;
+	flash: (message: string) => void;
+	search: (open: boolean) => void;
+}) {
+	const [editor] = useLexicalComposerContext();
+	return useCallback(
+		(command: Command) => {
+			if (command.takesArgument) {
+				replace(`${command.name} `);
+				editor.focus();
+				return;
+			}
+			replace("");
+			if (command.name === "/prompt") {
+				search(true);
+				return;
+			}
+			void Promise.resolve(onCommand?.(command.name)).then((shown) => {
+				if (shown) flash(shown);
+			});
+		},
+		[editor, replace, onCommand, flash, search],
+	);
+}
+
+function useDraft(onSubmit: (text: string) => void, disabled?: boolean) {
+	const [editor] = useLexicalComposerContext();
+	const [text, setText] = useState("");
+	const empty = text.trim() === "";
+
+	useEffect(() => {
+		editor.setEditable(!disabled);
+	}, [editor, disabled]);
+
+	useEffect(() => editor.registerTextContentListener(setText), [editor]);
+
+	const replace = useCallback(
+		(next: string) =>
+			editor.update(() => $replaceText(next), { discrete: true }),
+		[editor],
+	);
+
+	const send = useCallback(() => {
+		if (disabled || empty) return;
+		onSubmit(text.trim());
+		replace("");
+	}, [text, empty, onSubmit, disabled, replace]);
+
+	return { text, empty, replace, send };
+}
+
+const ENABLED = { prompt: "›", tone: "text-green" };
+const DISABLED = { prompt: "⋯", tone: "text-dim" };
+
+function Notice({ text }: { text: string | null }) {
+	if (!text) return null;
+	return (
+		<div className="border-b border-bg2 bg-bg1 px-3 py-0.5 text-dim">
+			{text}
+		</div>
+	);
+}
+
 function useKeys({
 	disabled,
 	menuActive,
 	recall,
+	replace,
 	enter,
 }: {
 	disabled?: boolean;
 	menuActive: RefObject<boolean>;
-	recall: (direction: RecallDirection) => boolean;
-	enter: () => void;
+	recall: (direction: RecallDirection) => string | null;
+	replace: (text: string) => void;
+	enter?: () => void;
 }) {
 	const [editor] = useLexicalComposerContext();
 	const onKeyDown = (event: KeyboardEvent): boolean => {
 		if (event.isComposing || disabled) return true;
 		if (menuActive.current) return false;
 		const direction = RECALL_KEYS[event.key];
-		const handled = direction ? recall(direction) : submitsOnEnter(event);
+		const recalled = direction ? recall(direction) : null;
+		if (recalled !== null) replace(recalled);
+		const handled = direction ? recalled !== null : submitsOnEnter(event);
 		if (!handled) return false;
 		event.preventDefault();
-		if (!direction) enter();
+		if (!direction) enter?.();
 		return true;
 	};
 	const keys = useRef(onKeyDown);
@@ -230,18 +304,11 @@ function Editor({
 	disabled,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
-	const [text, setText] = useState("");
+	const { text, empty, replace, send } = useDraft(onSubmit, disabled);
 	const [notice, flash] = useNotice();
-	const empty = text.trim() === "";
 	const [searching, setSearching] = useState(false);
 	const prompts = useMemo(() => newestFirst(history), [history]);
 	const step = useRecall(history);
-
-	const replace = useCallback(
-		(next: string) =>
-			editor.update(() => $replaceText(next), { discrete: true }),
-		[editor],
-	);
 
 	const insertPrompt = useCallback(
 		(prompt: string) => {
@@ -251,62 +318,27 @@ function Editor({
 		[editor, replace],
 	);
 
-	const send = useCallback(() => {
-		if (disabled || empty) return;
-		onSubmit(text.trim());
-		replace("");
-	}, [text, empty, onSubmit, disabled, replace]);
-
-	const pick = useCallback(
-		(command: Command) => {
-			if (command.takesArgument) {
-				replace(`${command.name} `);
-				editor.focus();
-				return;
-			}
-			replace("");
-			if (command.name === "/prompt") {
-				setSearching(true);
-				return;
-			}
-			void Promise.resolve(onCommand?.(command.name)).then((shown) => {
-				if (shown) flash(shown);
-			});
-		},
-		[editor, replace, onCommand, flash],
-	);
+	const pick = usePick({ replace, onCommand, flash, search: setSearching });
 
 	const menuHost = useRef<HTMLDivElement>(null);
 	const menuActive = useRef(false);
 
-	useEffect(() => {
-		editor.setEditable(!disabled);
-	}, [editor, disabled]);
-
-	useEffect(() => editor.registerTextContentListener(setText), [editor]);
-
 	useKeys({
 		disabled,
 		menuActive,
-		recall: (direction) => {
-			const recalled = step(text, direction);
-			if (recalled !== null) replace(recalled);
-			return recalled !== null;
-		},
-		enter: () => (isStreaming && empty ? onStop?.() : send()),
+		recall: (direction) => step(text, direction),
+		replace,
+		enter: isStreaming && empty ? onStop : send,
 	});
+	const look = disabled ? DISABLED : ENABLED;
 
 	return (
 		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
 			<div ref={menuHost} />
-			{notice && (
-				<div className="border-b border-bg2 bg-bg1 px-3 py-0.5 text-dim">
-					{notice}
-				</div>
-			)}
+			<Notice text={notice} />
 			<InputShell
-				prompt={disabled ? "⋯" : "›"}
-				tone={disabled ? "text-dim" : "text-green"}
+				prompt={look.prompt}
+				tone={look.tone}
 				dim={disabled}
 				action={
 					<SendAction

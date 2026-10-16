@@ -17,8 +17,6 @@ import {
 } from "lexical";
 import { useEffect } from "react";
 
-type SerializedLispTokenNode = SerializedTextNode & { token: string };
-
 export class LispTokenNode extends TextNode {
 	__token: string;
 
@@ -35,11 +33,13 @@ export class LispTokenNode extends TextNode {
 		return new LispTokenNode(node.__text, node.__token, node.__key);
 	}
 
-	static importJSON(json: SerializedLispTokenNode): LispTokenNode {
+	static importJSON(
+		json: SerializedTextNode & { token: string },
+	): LispTokenNode {
 		return new LispTokenNode(json.text, json.token).updateFromJSON(json);
 	}
 
-	exportJSON(): SerializedLispTokenNode {
+	exportJSON(): SerializedTextNode & { token: string } {
 		return { ...super.exportJSON(), token: this.__token };
 	}
 

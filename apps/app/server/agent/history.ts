@@ -30,7 +30,9 @@ function withEval(human: ChatMessageInput, result: Row): ChatMessageInput {
 	};
 }
 
-export function toInput(stored: Row[]): {
+export function toInput(
+	stored: (StoredMessage & { _id: string; wireId?: string })[],
+): {
 	messages: ChatMessageInput[];
 	rows: number[];
 } {
