@@ -3,19 +3,37 @@ export type PromiseState = "pending" | "fulfilled" | "rejected";
 interface Tracked {
 	state: PromiseState;
 	controller?: AbortController;
+	progress?: string;
 }
+
+export type Progress = (note: string) => void;
 
 export class AsyncWork {
 	private readonly tracked = new WeakMap<Promise<unknown>, Tracked>();
 	private readonly live = new Set<Promise<unknown>>();
 
-	start<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+	start<T>(
+		run: (signal: AbortSignal, progress: Progress) => Promise<T>,
+	): Promise<T> {
 		const controller = new AbortController();
-		return this.record(run(controller.signal), controller);
+		const record: Tracked = { state: "pending", controller };
+		return this.record(
+			run(controller.signal, (note) => {
+				record.progress = note;
+			}),
+			record,
+		);
 	}
 
 	watch<T>(promise: Promise<T>): Promise<T> {
-		return this.tracked.has(promise) ? promise : this.record(promise);
+		return this.tracked.has(promise)
+			? promise
+			: this.record(promise, { state: "pending" });
+	}
+
+	progressOf(promise: Promise<unknown>): string | undefined {
+		const record = this.tracked.get(promise);
+		return record?.state === "pending" ? record.progress : undefined;
 	}
 
 	stateOf(promise: Promise<unknown>): PromiseState | "unknown" {
@@ -40,11 +58,7 @@ export class AsyncWork {
 		this.live.clear();
 	}
 
-	private record<T>(
-		promise: Promise<T>,
-		controller?: AbortController,
-	): Promise<T> {
-		const record: Tracked = { state: "pending", controller };
+	private record<T>(promise: Promise<T>, record: Tracked): Promise<T> {
 		this.tracked.set(promise, record);
 		this.live.add(promise);
 		promise.then(

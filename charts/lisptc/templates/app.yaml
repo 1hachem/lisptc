@@ -51,6 +51,8 @@ spec:
               value: kubernetes
             - name: LISPTC_MCP_NAMESPACE
               value: {{ .Release.Namespace | quote }}
+            - name: LISPTC_MCP_IMAGE_TAG
+              value: {{ include "lisptc.imageTag" (list . .Values.app.image.tag) | quote }}
             {{- include "lisptc.previewEnv" (list . (dict
                 "APP_URL" (include "lisptc.appHostname" .))) | nindent 12 }}
             {{- include "lisptc.previewConvexEnv" . | nindent 12 }}

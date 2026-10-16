@@ -7,14 +7,8 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import {
-	readFontPref,
-	readThemePref,
-	readThemeUsesPref,
-	writeFontPref,
-	writeThemePref,
-	writeThemeUsesPref,
-} from "./prefs.ts";
+import { usePreferences, usePutPreferences } from "./preferences.ts";
+import { fontOf, themeOf } from "./resolved-preferences.ts";
 import { mostUsedThemes, recordThemeUse } from "./theme-uses.ts";
 
 const SHORTLIST = 6;
@@ -43,29 +37,26 @@ export function AppearanceProvider({
 	children: React.ReactNode;
 }) {
 	const [picking, setPicking] = useState<"theme" | "font" | null>(null);
-	const [currentTheme, setCurrentTheme] = useState(readThemePref);
-	const [currentFont, setCurrentFont] = useState(readFontPref);
-	const [uses, setUses] = useState(readThemeUsesPref);
+	const stored = usePreferences();
+	const put = usePutPreferences();
+	const currentTheme = themeOf(stored);
+	const currentFont = fontOf(stored);
+	const uses = stored?.themeUses;
 	const openThemePicker = useCallback(() => setPicking("theme"), []);
 	const openFontPicker = useCallback(() => setPicking("font"), []);
 	const shortlist = useMemo(
-		() => mostUsedThemes(themes, uses, SHORTLIST),
+		() => mostUsedThemes(themes, uses ?? {}, SHORTLIST),
 		[uses],
 	);
 
 	const chooseTheme = (id: string) => {
 		if (id === currentTheme) return;
-		const next = recordThemeUse(uses, id);
-		writeThemePref(id);
-		writeThemeUsesPref(next);
-		setCurrentTheme(id);
-		setUses(next);
+		put({ theme: id, themeUses: recordThemeUse(uses ?? {}, id) });
 	};
 
 	const chooseFont = (id: string) => {
 		if (id === currentFont) return;
-		writeFontPref(id);
-		setCurrentFont(id);
+		put({ font: id });
 	};
 
 	const closeWhenFalse = (open: boolean) => {

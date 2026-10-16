@@ -24,6 +24,7 @@ import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
+import { fileContext, type OpenFile } from "./files.ts";
 import { pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import type { SystemEventTicket } from "./system-event.ts";
@@ -102,6 +103,7 @@ export interface ChatSession {
 	workspaceId: Id<"workspaces">;
 	error?: string;
 	send: (text: string) => void;
+	sendAbout: (file: OpenFile, text: string) => void;
 	resume: (event: SystemEventTicket) => void;
 	runLisp: (code: string) => void;
 	stop: () => void;
@@ -178,6 +180,24 @@ export function ChatProvider({
 }) {
 	const navigate = useNavigate();
 	const createChat = useConvexMutation(api.chats.create);
+	const startChat = useConvexMutation(api.chats.start);
+	const markStreaming = useMemo(
+		() =>
+			startChat.withOptimisticUpdate((store, { chatId: started }) => {
+				for (const { args, value } of store.getAllQueries(api.chats.list)) {
+					if (value === undefined) continue;
+					store.setQuery(api.chats.list, args, {
+						...value,
+						chats: value.chats.map((chat) =>
+							chat._id === started
+								? { ...chat, status: "streaming" as const, failure: undefined }
+								: chat,
+						),
+					});
+				}
+			}),
+		[startChat],
+	);
 	const transport = useMemo(
 		() =>
 			new FetchStreamTransport({
@@ -260,7 +280,7 @@ export function ChatProvider({
 					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
 				if (!chatId) {
 					await navigate({
-						to: "/$workspaceId/$chatId",
+						to: "/$workspaceId/chat/$chatId",
 						params: { workspaceId, chatId: opened },
 						replace: true,
 					});
@@ -295,32 +315,50 @@ export function ChatProvider({
 			setEvalError(null);
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
+			void markStreaming({ chatId: opened });
 			stream.submit(
 				{ chatId: opened, ...input },
 				{ optimisticValues: { messages: [...persisted, shown] } },
 			);
 			if (!chatId) {
 				await navigate({
-					to: "/$workspaceId/$chatId",
+					to: "/$workspaceId/chat/$chatId",
 					params: { workspaceId, chatId: opened },
 					replace: true,
 				});
 			}
 		},
-		[chatId, workspaceId, createChat, navigate, persisted, stream],
+		[
+			chatId,
+			workspaceId,
+			createChat,
+			markStreaming,
+			navigate,
+			persisted,
+			stream,
+		],
 	);
 
 	const submitTurn = useCallback(
-		async (text: string) => {
+		async (text: string, title = titleOf(text)) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
 			await submit(
 				{ message: trimmed },
 				{ type: "human", content: trimmed, id: crypto.randomUUID() },
-				titleOf(trimmed),
+				title,
 			);
 		},
 		[submit],
+	);
+
+	const sendAbout = useCallback(
+		async (file: OpenFile, text: string) => {
+			const trimmed = text.trim();
+			if (!trimmed) return;
+			await submitTurn(fileContext(file, trimmed), titleOf(trimmed));
+		},
+		[submitTurn],
 	);
 
 	const resume = useCallback(
@@ -376,6 +414,7 @@ export function ChatProvider({
 			chatId,
 			workspaceId,
 			send: () => {},
+			sendAbout: () => {},
 			resume: () => {},
 			runLisp: () => {},
 			stop: () => {},
@@ -402,6 +441,9 @@ export function ChatProvider({
 			send: (text) => {
 				void send(text);
 			},
+			sendAbout: (file, text) => {
+				void sendAbout(file, text);
+			},
 			resume,
 			runLisp: (code) => {
 				void runLisp(code);
@@ -423,6 +465,7 @@ export function ChatProvider({
 		chatId,
 		workspaceId,
 		send,
+		sendAbout,
 		resume,
 		runLisp,
 		stop,

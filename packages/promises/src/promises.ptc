@@ -9,6 +9,9 @@ one you bound yourself — never its printed hash-and-angle-brackets form, which
 the reader refuses.
 - (await promise [timeout-ms]) wait for it and return its value, re-raising its
   error. Waiting again on a settled promise returns the same value at once.
+  An await gives up after a default timeout. When it times out "while the work
+  kept running", nothing failed: it names what the work is doing, so await the
+  same promise again.
 - (promise-all promises) gives one promise for every value, in order; it rejects
   as soon as any of them does.
 - (promise-all-settled promises) gives one promise for how each turned out, as

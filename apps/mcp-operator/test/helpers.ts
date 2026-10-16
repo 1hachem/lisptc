@@ -1,8 +1,8 @@
 import type {
+	V1DaemonSet,
 	V1Namespace,
 	V1PersistentVolumeClaim,
 	V1Pod,
-	V1Secret,
 	V1Service,
 } from "@kubernetes/client-node";
 import { launchFor } from "@repo/mcp-extension/docker-host";
@@ -60,10 +60,7 @@ export function server(
 			generation: 1,
 			finalizers: [],
 		},
-		spec: specFor(conf, launch, WORKSPACE, now, {
-			secret: "mcp-env-playwright",
-			hash: "h",
-		}),
+		spec: specFor(conf, launch, WORKSPACE, now),
 	};
 }
 
@@ -73,18 +70,33 @@ export function fakeCluster() {
 	const namespaces = new Map<string, V1Namespace>();
 	const policies: string[] = [];
 	const copied: string[] = [];
-	const secrets = new Map<string, V1Secret>();
 	const pods = new Map<string, V1Pod>();
 	const services = new Map<string, V1Service>();
 	const claims = new Map<string, V1PersistentVolumeClaim>();
 	const removed: string[] = [];
 	const resizeRefusal = { message: undefined as string | undefined };
+	const daemonSets = new Map<string, V1DaemonSet>();
 	let answering = true;
 	let logs = "";
-	secrets.set(key(RELEASE, "mcp-env-playwright"), {
-		metadata: { name: "mcp-env-playwright" },
-		data: { TOKEN: "czNjcmV0" },
-	});
+	let event: string | undefined;
+
+	function matching<T extends { metadata?: V1Pod["metadata"] }>(
+		map: Map<string, T>,
+		namespace: string,
+		selector: string,
+	): T[] {
+		const wanted = Object.fromEntries(
+			selector.split(",").map((pair) => pair.split("=")),
+		);
+		return [...map.entries()]
+			.filter(([k]) => k.startsWith(`${namespace}/`))
+			.map(([, item]) => item)
+			.filter((item) =>
+				Object.entries(wanted).every(
+					([label, value]) => item.metadata?.labels?.[label] === value,
+				),
+			);
+	}
 
 	function locate<T extends { metadata?: V1Pod["metadata"] }>(
 		map: Map<string, T>,
@@ -109,12 +121,6 @@ export function fakeCluster() {
 		async copySecret(from, to, name) {
 			copied.push(`${from}/${name} -> ${to}`);
 		},
-		async secretData(namespace, name) {
-			return secrets.get(key(namespace, name))?.data;
-		},
-		async putSecret(namespace, secret) {
-			secrets.set(key(namespace, secret.metadata?.name ?? ""), secret);
-		},
 		async pod(namespace, name) {
 			return pods.get(key(namespace, name));
 		},
@@ -131,21 +137,10 @@ export function fakeCluster() {
 		async remove(namespace, name) {
 			pods.delete(key(namespace, name));
 			services.delete(key(namespace, name));
-			secrets.delete(key(namespace, name));
 			removed.push(`all ${name}`);
 		},
 		async claims(namespace, selector) {
-			const wanted = Object.fromEntries(
-				selector.split(",").map((pair) => pair.split("=")),
-			);
-			return [...claims.entries()]
-				.filter(([k]) => k.startsWith(`${namespace}/`))
-				.map(([, claim]) => claim)
-				.filter((claim) =>
-					Object.entries(wanted).every(
-						([label, value]) => claim.metadata?.labels?.[label] === value,
-					),
-				);
+			return matching(claims, namespace, selector);
 		},
 		async createClaim(namespace, claim) {
 			const k = key(namespace, claim.metadata?.name ?? "");
@@ -173,6 +168,24 @@ export function fakeCluster() {
 		},
 		async logs() {
 			return logs;
+		},
+		async lastEvent() {
+			return event;
+		},
+		async ensureDaemonSet(namespace, daemonSet) {
+			daemonSets.set(key(namespace, daemonSet.metadata?.name ?? ""), daemonSet);
+		},
+		async daemonSets(namespace, selector) {
+			return matching(daemonSets, namespace, selector).map(
+				(set) => set.metadata?.name ?? "",
+			);
+		},
+		async deleteDaemonSet(namespace, name) {
+			if (daemonSets.delete(key(namespace, name)))
+				removed.push(`daemonset ${name}`);
+		},
+		async pods(namespace, selector) {
+			return matching(pods, namespace, selector);
 		},
 		async reachable() {
 			return answering;
@@ -214,11 +227,14 @@ export function fakeCluster() {
 		namespaces,
 		policies,
 		copied,
-		secrets,
 		pods,
 		services,
 		claims,
 		removed,
+		daemonSets,
+		setEvent(value: string | undefined) {
+			event = value;
+		},
 		refuseResize(message: string) {
 			resizeRefusal.message = message;
 		},

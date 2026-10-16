@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { stateEntries } from "./mcp-server-resource.ts";
 import {
 	type ConnConfig,
 	type HeldState,
@@ -6,11 +9,11 @@ import {
 	type McpHost,
 	type ServerHandle,
 	type ServerState,
+	type StartWatch,
 	stillHeld,
 } from "./ports.ts";
+import { reachable, START_LIMITS, waitForStart } from "./start-wait.ts";
 
-const START_TIMEOUT_MS = 60_000;
-const POLL_MS = 250;
 const STDERR_KEEP = 4096;
 
 interface LocalServer {
@@ -18,27 +21,36 @@ interface LocalServer {
 	stderr: string;
 }
 
-async function reachable(url: string): Promise<boolean> {
-	try {
-		await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(2000) });
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 function whyItDied(server: LocalServer): string {
 	const tail = logTail(server.stderr);
 	return tail ? `\n${tail}` : "";
 }
 
+export function localStateArgs(
+	conf: ConnConfig,
+	stateHome: string,
+	scope?: string,
+): string[] {
+	const args = conf.args ?? [];
+	if (!("image" in conf)) return args;
+	const states = stateEntries(conf.state);
+	return states.reduce((rewritten, state) => {
+		const dir = join(stateHome, scope ?? "", conf.name, state.name);
+		mkdirSync(dir, { recursive: true });
+		return rewritten.map((arg) => arg.replaceAll(state.path, dir));
+	}, args);
+}
+
 export class LocalProcessHost implements McpHost {
 	private readonly started = new Map<string, LocalServer>();
 
-	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
-		if ("image" in conf && (conf.app || conf.state))
+	async ensure(
+		conf: ConnConfig,
+		watch?: StartWatch,
+	): Promise<ServerHandle | undefined> {
+		if ("image" in conf && conf.app)
 			throw new Error(
-				`${conf.name}: keeps state or runs an app beside it, which needs a container host (docker or kubernetes), not a local process.`,
+				`${conf.name}: runs an app beside it, which needs a container host (docker or kubernetes), not a local process.`,
 			);
 		if (!("url" in conf)) return undefined;
 		const handle: ServerHandle = conf.headers
@@ -52,19 +64,24 @@ export class LocalProcessHost implements McpHost {
 			server = this.spawn(conf.command, conf.args, conf.env);
 			this.started.set(conf.name, server);
 		}
-		const deadline = Date.now() + START_TIMEOUT_MS;
-		while (Date.now() < deadline) {
-			if (await reachable(origin)) return handle;
-			if (server.child.exitCode !== null) {
-				this.started.delete(conf.name);
-				throw new Error(
-					`${conf.name}: its server exited with code ${server.child.exitCode} before ${origin} answered.${whyItDied(server)}`,
-				);
-			}
-			await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-		}
-		throw new Error(
-			`${conf.name}: started its server but ${origin} did not answer within ${START_TIMEOUT_MS / 1000}s.${whyItDied(server)}`,
+		const started = server;
+		return await waitForStart(
+			async () => {
+				if (await reachable(origin)) return { ready: handle };
+				if (started.child.exitCode !== null) {
+					this.started.delete(conf.name);
+					throw new Error(
+						`${conf.name}: its server exited with code ${started.child.exitCode} before ${origin} answered.${whyItDied(started)}`,
+					);
+				}
+				return { waiting: `${conf.name} is waiting for ${origin} to answer` };
+			},
+			START_LIMITS.process,
+			({ seconds }) =>
+				new Error(
+					`${conf.name}: started its server but ${origin} did not answer within ${seconds}s.${whyItDied(started)}`,
+				),
+			watch,
 		);
 	}
 

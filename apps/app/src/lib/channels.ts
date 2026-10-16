@@ -92,7 +92,3 @@ export const CHANNELS: Channel[] = [
 		shownByDefault: false,
 	},
 ];
-
-export function channelCookie(id: ChannelId): string {
-	return `ui.channel.${id}`;
-}

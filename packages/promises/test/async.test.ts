@@ -94,6 +94,31 @@ describe("a rejected promise is an ordinary Lisp error", () => {
 	});
 });
 
+describe("an await that runs out of time", () => {
+	it("says what the work is still doing, so it can be awaited again", async () => {
+		const interp = interpWithSlow();
+		interp.defPromise(
+			"stuck",
+			0,
+			"(stuck)",
+			"Return a promise that never settles and says it is pulling.",
+			z.tuple([]),
+			() =>
+				interp.async.start((_, progress) => {
+					progress("pulling the image");
+					return new Promise(() => {});
+				}),
+		);
+
+		await expect(
+			evAsync("(setq job (stuck)) (await job 5)", interp),
+		).rejects.toThrow(
+			"await timed out after 0.005s while the work kept running: pulling the image",
+		);
+		expect(await evAsync("(promise-state job)", interp)).toBe(":pending");
+	});
+});
+
 describe("a suspending built-in written with defGen", () => {
 	it("may yield from its own body", async () => {
 		const interp = interpWithSlow();

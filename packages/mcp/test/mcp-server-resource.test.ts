@@ -3,7 +3,6 @@ import { launchFor } from "../src/docker-host.ts";
 import {
 	claimName,
 	DEFAULT_RETENTION_SECONDS,
-	envHash,
 	NAME_MAX,
 	serverName,
 	specFor,
@@ -11,8 +10,6 @@ import {
 	workloadHash,
 } from "../src/mcp-server-resource.ts";
 import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
-
-const env = { secret: "mcp-env", hash: "h" };
 
 const browser: ContainerConnConfig = {
 	name: "playwright",
@@ -33,7 +30,7 @@ const browser: ContainerConnConfig = {
 function spec(conf: ContainerConnConfig | StdioConnConfig) {
 	const launch = launchFor(conf);
 	if (!launch) throw new Error("no launch");
-	return specFor(conf, launch, "ws1", 1000, env);
+	return specFor(conf, launch, "ws1", 1000);
 }
 
 describe("the state a container keeps", () => {
@@ -89,7 +86,6 @@ describe("the spec a server is created from", () => {
 		expect(made).toMatchObject({
 			workspace: "ws1",
 			server: "playwright",
-			envSecret: "mcp-env",
 			restarts: 0,
 			lastUsed: 1000,
 		});
@@ -130,11 +126,6 @@ describe("naming in the cluster", () => {
 		);
 		expect(claimName("srv", "profile")).not.toBe(claimName("srv", "cache"));
 	});
-
-	it("hashes env the same whatever order its keys come in", () => {
-		expect(envHash({ A: "1", B: "2" })).toBe(envHash({ B: "2", A: "1" }));
-		expect(envHash({ A: "1" })).not.toBe(envHash({ A: "2" }));
-	});
 });
 
 describe("what rolls the pod", () => {
@@ -153,11 +144,8 @@ describe("what rolls the pod", () => {
 		expect(workloadHash(touched)).toBe(workloadHash(made));
 	});
 
-	it("follows the env, a restart and a new mount", () => {
+	it("follows a restart and a new mount", () => {
 		const made = spec(browser);
-		expect(workloadHash({ ...made, envHash: "other" })).not.toBe(
-			workloadHash(made),
-		);
 		expect(workloadHash({ ...made, restarts: 1 })).not.toBe(workloadHash(made));
 		expect(workloadHash(spec({ ...browser, state: "/tmp/output" }))).not.toBe(
 			workloadHash(made),

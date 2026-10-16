@@ -10,22 +10,24 @@ includes:
   dashi-codes: ./taskfiles/dashi-codes.yml
   evals: ./taskfiles/evals.yml
   cluster: ./taskfiles/cluster.yml
+  compose:
+    taskfile: ./taskfiles/compose.yml
+    flatten: true
+  mcp-images:
+    taskfile: ./taskfiles/mcp-images.yml
+    flatten: true
 tasks:
   default:
     desc: prints this help
     cmd: task -l
 
-  mcp:browser:build:
-    desc: build the browser MCP image the playwright toolkit entry runs
-    vars:
-      TAG: '{{.TAG | default "main"}}'
-    cmd: docker build -f docker/browser-mcp.Dockerfile -t ghcr.io/1hachem/lisptc-browser-mcp:{{.TAG}} .
-
   mcp:reap:
-    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
-    cmd: |
-      ids=$(docker ps -aq --filter label=lisptc.mcp.host)
-      if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
+    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown), and the volumes they kept their state on
+    cmds:
+      - |
+        ids=$(docker ps -aq --filter label=lisptc.mcp.host)
+        if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
+      - task: mcp:reap:state
 
   mcp:reap:state:
     desc: delete the volumes MCP servers keep their state on, for one workspace or (WORKSPACE unset) all of them
@@ -34,52 +36,6 @@ tasks:
       volumes=$(docker volume ls -q --filter "$filter")
       if [ -z "$volumes" ]; then echo "no MCP state volumes"; else docker volume rm $volumes; fi
 
-  mcp:operator:build:
-    desc: build the MCP operator image the chart deploys
-    vars:
-      TAG: '{{.TAG | default "main"}}'
-    cmd: docker build -f apps/mcp-operator/Dockerfile --target prod -t ghcr.io/1hachem/lisptc-mcp-operator:{{.TAG}} .
-
-  up:
-    desc: build and run the whole stack in docker with live reload, secrets from infisical
-    aliases:
-      - dev
-    deps: [mcp:browser:build]
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
-
-  up:convex:
-    desc: start postgres and the convex backend in the background and wait until they are healthy
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: "docker compose up -d --wait convex-backend"
-
-  up:prod:
-    desc: build and start the whole stack from its production images
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}'
-      - echo "app http://localhost:3000 · dashboard http://127.0.0.1:6791"
-
-  down:
-    desc: stop the whole stack (pass -- -v to drop its data)
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex"
-          CMD: "docker compose down {{.CLI_ARGS}}"
-
   convex:push:
     desc: push the convex functions and schema to the running deployment, once
     cmds:
@@ -87,7 +43,7 @@ tasks:
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend exec convex dev --once"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
     desc: regenerate convex/_generated against the local deployment, without pushing
@@ -106,7 +62,7 @@ tasks:
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend dev"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
 
   r2:
     desc: sync .r2 with the bucket (pull, push or sync; raw captures stay local)

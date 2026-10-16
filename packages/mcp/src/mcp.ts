@@ -33,10 +33,10 @@ import {
 	type ConnConfig,
 	type ConnectResult,
 	type HeldState,
-	type HttpConnConfig,
 	type JsonSchema,
 	type McpClient,
 	type McpPolicy,
+	type OAuthConnConfig,
 	openPolicy,
 	type SearchDocument,
 	type SearchEngine,
@@ -553,8 +553,8 @@ export function registerMcp(
 				conf.name,
 				false,
 			);
-		const promise = interp.async.start((signal) =>
-			client.connect(conf, signal).then(
+		const promise = interp.async.start((signal, progress) =>
+			client.connect(conf, { signal, progress }).then(
 				(res) => installServer(interp, client, servers, conf.name, res, policy),
 				(error: unknown) => {
 					throw holdForAuthorization(interp, error);
@@ -924,9 +924,9 @@ const OBSERVE = `
 function oauthServer(
 	predefined: Map<string, ConnConfig>,
 	name: string,
-): HttpConnConfig {
+): OAuthConnConfig {
 	const conf = predefined.get(name);
-	if (!conf || !("url" in conf))
+	if (!conf || !("url" in conf || ("image" in conf && conf.oauth)))
 		throw new EvalException("unknown OAuth MCP server", name, false);
 	return conf;
 }
@@ -1008,52 +1008,58 @@ function toolArgs(tool: Tool): DocArg[] {
 	}));
 }
 
+function argumentLine(
+	key: string,
+	spec: JsonSchema,
+	required: boolean,
+): string {
+	const req = required ? " (required)" : "";
+	const desc = spec.description ? ` — ${spec.description}` : "";
+	const allowed = spec.enum?.length
+		? ` (one of ${JSON.stringify(spec.enum)})`
+		: "";
+	const dflt =
+		spec.default !== undefined
+			? ` (default ${JSON.stringify(spec.default)})`
+			: "";
+	const example = spec.examples?.length
+		? ` (e.g. ${JSON.stringify(spec.examples[0])})`
+		: "";
+	return `  ${key}${schemaType(spec)}${req}${allowed}${dflt}${example}${desc}`;
+}
+
+function examplesBlock(
+	title: string,
+	examples: unknown[] | undefined,
+): string[] {
+	if (!examples?.length) return [];
+	return ["", title, ...examples.map((ex) => `  ${JSON.stringify(ex)}`)];
+}
+
+function returnsBlock(out: JsonSchema | undefined): string[] {
+	if (!out) return [];
+	const outType = schemaType(out);
+	const returns =
+		outType || out.description
+			? [
+					"",
+					`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
+				]
+			: [];
+	return [...returns, ...examplesBlock("Example outputs:", out.examples)];
+}
+
 function toolDocBody(tool: Tool): string {
-	const lines: string[] = [];
-	if (tool.description) lines.push(tool.description);
+	const lines: string[] = tool.description ? [tool.description] : [];
 	const entries = orderedProps(tool);
 	const required = new Set(tool.inputSchema?.required ?? []);
-
 	if (entries.length) {
 		if (lines.length) lines.push("");
 		lines.push("Arguments:");
-		for (const [key, spec] of entries) {
-			const req = required.has(key) ? " (required)" : "";
-			const type = schemaType(spec);
-			const desc = spec.description ? ` — ${spec.description}` : "";
-			const allowed = spec.enum?.length
-				? ` (one of ${JSON.stringify(spec.enum)})`
-				: "";
-			const dflt =
-				spec.default !== undefined
-					? ` (default ${JSON.stringify(spec.default)})`
-					: "";
-			const example = spec.examples?.length
-				? ` (e.g. ${JSON.stringify(spec.examples[0])})`
-				: "";
-			lines.push(`  ${key}${type}${req}${allowed}${dflt}${example}${desc}`);
-		}
+		for (const [key, spec] of entries)
+			lines.push(argumentLine(key, spec, required.has(key)));
 	}
-
-	const inputEx = tool.inputSchema?.examples;
-	if (inputEx?.length) {
-		lines.push("", "Example inputs:");
-		for (const ex of inputEx) lines.push(`  ${JSON.stringify(ex)}`);
-	}
-	if (tool.outputSchema) {
-		const out = tool.outputSchema;
-		const outType = schemaType(out);
-		if (outType || out.description) {
-			lines.push(
-				"",
-				`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
-			);
-		}
-		if (out.examples?.length) {
-			lines.push("", "Example outputs:");
-			for (const ex of out.examples) lines.push(`  ${JSON.stringify(ex)}`);
-		}
-	}
-
+	lines.push(...examplesBlock("Example inputs:", tool.inputSchema?.examples));
+	lines.push(...returnsBlock(tool.outputSchema));
 	return lines.join("\n");
 }

@@ -1,23 +1,18 @@
 import { describe, expect, it } from "vitest";
-import {
-	envSecretName,
-	KubernetesHost,
-	type Owner,
-	type ServerStore,
-} from "../src/kubernetes-host.ts";
+import { KubernetesHost, type ServerStore } from "../src/kubernetes-host.ts";
 import {
 	type McpServer,
 	type McpServerStatus,
 	serverName,
 } from "../src/mcp-server-resource.ts";
 import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
+import { bundledToolkit } from "../src/toolkit.ts";
 import { recordingHost } from "./helpers.ts";
 
 const browser: ContainerConnConfig = {
 	name: "playwright",
 	image: "playwright-mcp",
 	port: 8931,
-	env: { TOKEN: "s3cret" },
 	headers: { authorization: "Bearer x" },
 	app: { image: "chromium-vnc", state: "/data/profile" },
 };
@@ -40,10 +35,6 @@ const ready: Operator = (server) => ({
 
 function fakeStore(operator: Operator = ready) {
 	const servers = new Map<string, McpServer>();
-	const env = new Map<
-		string,
-		{ data: Record<string, string>; owner?: Owner }
-	>();
 	const patches: Partial<McpServer["spec"]>[] = [];
 	let uid = 0;
 	const store: ServerStore = {
@@ -70,26 +61,24 @@ function fakeStore(operator: Operator = ready) {
 			server.metadata.generation = (server.metadata.generation ?? 0) + 1;
 			return structuredClone(server);
 		},
-		async putEnv(name, data, owner) {
-			env.set(name, { data, ...(owner ? { owner } : {}) });
-		},
 	};
-	return { store, servers, env, patches };
+	return { store, servers, patches };
 }
 
 function host(
 	store: ServerStore,
 	fallback = recordingHost(),
 	clock = () => 1000,
+	imageTag?: string,
 ) {
 	return new KubernetesHost({
 		scope: "ws1",
 		namespace: "lisptc",
 		store,
 		fallback,
-		pollMs: 1,
-		startTimeoutMs: 200,
+		limits: { pollMs: 1, stallMs: 200, ceilingMs: 400 },
 		clock,
+		imageTag,
 	});
 }
 
@@ -120,17 +109,74 @@ describe("the kubernetes host", () => {
 		expect(server?.spec.lastUsed).toBe(1000);
 	});
 
-	it("keeps the env in a secret the server owns, never in its spec", async () => {
+	it.each([
+		["ghcr.io/o/mcp-browser:main", "ghcr.io/o/mcp-browser:pr-7-abc"],
+		["ghcr.io/o/mcp-browser:latest", "ghcr.io/o/mcp-browser:pr-7-abc"],
+		["registry:5000/mcp-browser:1.2", "registry:5000/mcp-browser:pr-7-abc"],
+		["mcp-browser", "mcp-browser:pr-7-abc"],
+		["mcp-browser@sha256:abc", "mcp-browser@sha256:abc"],
+	])("runs internal image %s as %s when handed a tag", async (image, ran) => {
 		const fake = fakeStore();
 
-		await host(fake.store).ensure(browser);
+		await host(fake.store, recordingHost(), () => 1000, "pr-7-abc").ensure({
+			...browser,
+			image,
+			internal: true,
+		});
 
-		const secret = fake.env.get(envSecretName(NAME));
-		expect(secret?.data).toEqual({ TOKEN: btoa("s3cret") });
-		expect(secret?.owner).toEqual({ name: NAME, uid: "uid-1" });
-		expect(JSON.stringify(fake.servers.get(NAME)?.spec)).not.toContain(
-			"s3cret",
+		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe(ran);
+	});
+
+	it("runs an image the repo does not build at its own tag", async () => {
+		const fake = fakeStore();
+
+		await host(fake.store, recordingHost(), () => 1000, "pr-7-abc").ensure({
+			...browser,
+			image: "grafana/mcp-grafana:latest",
+		});
+
+		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe(
+			"grafana/mcp-grafana:latest",
 		);
+	});
+
+	it("runs an internal image as written when handed no tag", async () => {
+		const fake = fakeStore();
+
+		await host(fake.store).ensure({
+			...browser,
+			image: "mcp-browser:latest",
+			internal: true,
+		});
+
+		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe("mcp-browser:latest");
+	});
+
+	it("runs every internal image the toolkit names at the tag it was handed", async () => {
+		const fake = fakeStore();
+		const tagged = host(fake.store, recordingHost(), () => 1000, "pr-7-abc");
+		const images = bundledToolkit()
+			.all()
+			.filter((conf) => "internal" in conf && conf.internal);
+
+		for (const conf of images) await tagged.ensure(conf);
+
+		expect(images.length).toBeGreaterThan(0);
+		for (const conf of images)
+			expect(
+				fake.servers.get(serverName("ws1", conf.name))?.spec.mcp.image,
+			).toMatch(/:pr-7-abc$/);
+	});
+
+	it("refuses a server that sets env, and asks the cluster for nothing", async () => {
+		const fake = fakeStore();
+
+		await expect(
+			host(fake.store).ensure({ ...browser, env: { TOKEN: "s3cret" } }),
+		).rejects.toThrow(
+			"playwright: sets env, which a server on the cluster cannot take.",
+		);
+		expect(fake.servers.size).toBe(0);
 	});
 
 	it("reuses a server another process asked for", async () => {
@@ -211,12 +257,133 @@ describe("the kubernetes host", () => {
 		});
 	});
 
-	it("gives up when the server never answers", async () => {
-		const fake = fakeStore(() => ({ phase: "Starting" }));
+	it("gives up on a server whose start stops moving, naming where it stood", async () => {
+		const fake = fakeStore((server) => ({
+			phase: "Starting",
+			reason: "creating mcp",
+			observedGeneration: server.metadata.generation,
+		}));
 
 		await expect(host(fake.store).ensure(browser)).rejects.toThrow(
-			/did not answer within 0.2s \(last phase: Starting\)/,
+			/made no progress for 0s.*playwright is starting on the cluster: creating mcp/,
 		);
+	});
+
+	it("keeps waiting while the start moves, and tells each step", async () => {
+		let polls = 0;
+		const fake = fakeStore((server) => {
+			polls += 1;
+			if (polls > 30) return ready(server);
+			return {
+				phase: "Starting",
+				reason: `step ${Math.floor(polls / 10)}`,
+				observedGeneration: server.metadata.generation,
+			};
+		});
+		const notes: string[] = [];
+		const kube = new KubernetesHost({
+			scope: "ws1",
+			namespace: "lisptc",
+			store: fake.store,
+			fallback: recordingHost(),
+			limits: { pollMs: 5, stallMs: 250, ceilingMs: 2_000 },
+		});
+
+		await expect(
+			kube.ensure(browser, { progress: (note) => notes.push(note) }),
+		).resolves.toMatchObject({ url: READY_URL });
+		expect(notes).toEqual([
+			"playwright is starting on the cluster: step 0",
+			"playwright is starting on the cluster: step 1",
+			"playwright is starting on the cluster: step 2",
+			"playwright is starting on the cluster: step 3",
+		]);
+	});
+
+	it("gives up once the ceiling passes, however the start moves", async () => {
+		let polls = 0;
+		const fake = fakeStore((server) => {
+			polls += 1;
+			return {
+				phase: "Starting",
+				reason: `step ${polls}`,
+				observedGeneration: server.metadata.generation,
+			};
+		});
+
+		await expect(host(fake.store).ensure(browser)).rejects.toThrow(
+			/did not have it answering within 0s/,
+		);
+	});
+
+	it("lets a second load join a start, and tells it where the start stands", async () => {
+		let open = false;
+		const fake = fakeStore((server) =>
+			open
+				? ready(server)
+				: {
+						phase: "Starting",
+						reason: 'Pulling image "playwright-mcp"',
+						observedGeneration: server.metadata.generation,
+					},
+		);
+		const kube = new KubernetesHost({
+			scope: "ws1",
+			namespace: "lisptc",
+			store: fake.store,
+			fallback: recordingHost(),
+			limits: { pollMs: 1, stallMs: 5_000, ceilingMs: 5_000 },
+		});
+		const first = kube.ensure(browser);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const notes: string[] = [];
+
+		const second = kube.ensure(browser, {
+			progress: (note) => notes.push(note),
+		});
+		open = true;
+
+		await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+		expect(fake.patches).toHaveLength(0);
+		expect(notes[0]).toBe(
+			'playwright is starting on the cluster: Pulling image "playwright-mcp"',
+		);
+	});
+
+	it("stops polling only once every load waiting on a start was cancelled", async () => {
+		let polls = 0;
+		const fake = fakeStore((server) => {
+			polls += 1;
+			return {
+				phase: "Starting",
+				reason: "creating mcp",
+				observedGeneration: server.metadata.generation,
+			};
+		});
+		const kube = new KubernetesHost({
+			scope: "ws1",
+			namespace: "lisptc",
+			store: fake.store,
+			fallback: recordingHost(),
+			limits: { pollMs: 1, stallMs: 5_000, ceilingMs: 5_000 },
+		});
+		const one = new AbortController();
+		const two = new AbortController();
+		const first = kube.ensure(browser, { signal: one.signal });
+		const second = kube.ensure(browser, { signal: two.signal });
+
+		one.abort();
+		await expect(first).rejects.toThrow();
+		const before = polls;
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(polls).toBeGreaterThan(before);
+
+		two.abort();
+		await expect(second).rejects.toThrow();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const stopped = polls;
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(polls).toBe(stopped);
 	});
 
 	it("puts a server to sleep when it is stopped", async () => {

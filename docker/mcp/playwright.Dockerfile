@@ -11,13 +11,8 @@ RUN npm install --global @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} \
 
 USER pwuser
 
+RUN mkdir -p /home/pwuser/profile
+
 EXPOSE 8931
 
-CMD ["playwright-mcp", \
-     "--browser", "chromium", \
-     "--headless", \
-     "--no-sandbox", \
-     "--isolated", \
-     "--host", "0.0.0.0", \
-     "--port", "8931", \
-     "--allowed-hosts", "*"]
+CMD ["sh", "-c", "rm -f /home/pwuser/profile/Singleton* && exec playwright-mcp --browser chromium --headless --no-sandbox --user-data-dir /home/pwuser/profile --host 0.0.0.0 --port 8931 --allowed-hosts '*'"]

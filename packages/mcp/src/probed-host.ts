@@ -4,6 +4,7 @@ import {
 	type McpHost,
 	type ServerHandle,
 	type ServerState,
+	type StartWatch,
 	stillHeld,
 } from "./ports.ts";
 
@@ -35,8 +36,11 @@ export class ProbedHost implements McpHost {
 		private readonly last: () => McpHost,
 	) {}
 
-	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
-		return await (await this.resolve()).ensure(conf);
+	async ensure(
+		conf: ConnConfig,
+		watch?: StartWatch,
+	): Promise<ServerHandle | undefined> {
+		return await (await this.resolve()).ensure(conf, watch);
 	}
 
 	async stop(name: string): Promise<void> {

@@ -22,10 +22,11 @@ import {
 	podFor,
 	RECLAIM,
 	RELEASED_AT,
+	type Rollout,
+	rolledOut,
 	SPEC_HASH,
 	STATE_LABEL,
 	STATE_PATH,
-	secretFor,
 	selectorFor,
 	serviceFor,
 	statesOf,
@@ -39,6 +40,7 @@ export interface Placement {
 	release: string;
 	pullSecret?: string;
 	storageClass?: string;
+	rollout?: Rollout;
 }
 
 export interface Deps {
@@ -220,6 +222,9 @@ class Run {
 				this.namespace,
 				placement.pullSecret,
 			);
+		const { secret } = this.server.spec.mcp;
+		if (secret)
+			await cluster.copySecret(placement.release, this.namespace, secret);
 	}
 
 	async claimsByState(): Promise<Map<string, V1PersistentVolumeClaim>> {
@@ -335,23 +340,16 @@ class Run {
 		return { state, ready };
 	}
 
-	async copyEnv(): Promise<boolean> {
-		const { cluster, placement } = this.deps;
-		const env = await cluster.secretData(
-			placement.release,
-			this.server.spec.envSecret,
-		);
-		if (env === undefined) return false;
-		await cluster.putSecret(this.namespace, secretFor(this.server, env));
-		return true;
-	}
-
 	async currentPod(): Promise<V1Pod | undefined> {
 		const { cluster, placement } = this.deps;
+		const running = {
+			...this.server,
+			spec: rolledOut(this.server.spec, placement.rollout),
+		};
 		const pod = await cluster.pod(this.namespace, this.name);
 		if (
 			pod &&
-			pod.metadata?.labels?.[SPEC_HASH] !== workloadHash(this.server.spec)
+			pod.metadata?.labels?.[SPEC_HASH] !== workloadHash(running.spec)
 		) {
 			await cluster.removePod(this.namespace, this.name);
 			return undefined;
@@ -360,7 +358,7 @@ class Run {
 		if (!pod)
 			await cluster.createPod(
 				this.namespace,
-				podFor(this.server, {
+				podFor(running, {
 					namespace: this.namespace,
 					pullSecret: placement.pullSecret,
 				}),
@@ -379,6 +377,7 @@ class Run {
 			cluster.origin(this.namespace, this.name, port),
 		);
 		const observed = stateOf(pod);
+		const soon = now + SOON_SECONDS;
 		if (observed.phase === "failed") {
 			const logs = await cluster.logs(
 				this.namespace,
@@ -396,13 +395,25 @@ class Run {
 				wake,
 			);
 		}
-		const answering =
-			observed.phase === "ready" &&
-			(await cluster.reachable(endpoints.mcp ?? ""));
-		if (!answering)
+		if (observed.phase === "starting") {
+			const reason =
+				(observed.creating
+					? await cluster.lastEvent(this.namespace, this.name)
+					: undefined) ?? observed.reason;
 			return await this.settle(
-				{ phase: "Starting", endpoints, state },
-				now + SOON_SECONDS,
+				{ phase: "Starting", reason, endpoints, state },
+				soon,
+			);
+		}
+		if (!(await cluster.reachable(endpoints.mcp ?? "")))
+			return await this.settle(
+				{
+					phase: "Starting",
+					reason: `waiting for it to answer at ${endpoints.mcp}`,
+					endpoints,
+					state,
+				},
+				soon,
 			);
 		if (this.before.phase !== "Ready")
 			for (const entry of Object.values(state)) entry.lastAttached = now;
@@ -410,7 +421,7 @@ class Run {
 	}
 
 	async run(): Promise<Outcome> {
-		const { now, placement } = this.deps;
+		const { now } = this.deps;
 		const { spec, metadata } = this.server;
 		if (metadata.deletionTimestamp) return await this.finalize();
 		await this.ensureFinalizer();
@@ -421,18 +432,17 @@ class Run {
 		const soon = now + SOON_SECONDS;
 		await this.prepareNamespace();
 		const { state, ready } = await this.settleClaims();
-		if (!ready) return await this.settle({ phase: "Starting", state }, soon);
-		if (!(await this.copyEnv()))
+		if (!ready)
 			return await this.settle(
-				{
-					phase: "Failed",
-					reason: `its env secret ${spec.envSecret} is missing from ${placement.release}.`,
-					state,
-				},
+				{ phase: "Starting", reason: "waiting for its volumes", state },
 				soon,
 			);
 		const pod = await this.currentPod();
-		if (!pod) return await this.settle({ phase: "Starting", state }, soon);
+		if (!pod)
+			return await this.settle(
+				{ phase: "Starting", reason: "creating its pod", state },
+				soon,
+			);
 		return await this.observe(pod, state);
 	}
 }

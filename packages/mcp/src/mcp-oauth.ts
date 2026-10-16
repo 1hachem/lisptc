@@ -1,61 +1,59 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import {
 	auth,
 	type OAuthClientProvider,
+	type OAuthDiscoveryState,
+	refreshAuthorization,
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
 	OAuthClientInformationFull,
 	OAuthClientMetadata,
+	OAuthMetadata,
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
-import { oauthEnv } from "@repo/env/oauth";
-import type { OAuthRecord, OAuthStore } from "./ports.ts";
+import type {
+	IssuerOAuth,
+	OAuthClient,
+	OAuthClients,
+	OAuthRecord,
+	OAuthStore,
+} from "./ports.ts";
 
-function defaultOAuthDir(): string {
-	const dir = oauthEnv.LISPTC_OAUTH_DIR;
-	if (dir) return dir;
-	const configHome = oauthEnv.XDG_CONFIG_HOME ?? join(homedir(), ".config");
-	return join(configHome, "lisptc", "oauth");
+const REFRESH_MARGIN_MS = 60_000;
+
+export interface IssuerClient {
+	oauth: IssuerOAuth;
+	client: OAuthClient;
 }
 
-function keyToFileName(serverKey: string): string {
-	return `${serverKey.replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
+export function issuerClient(
+	server: string,
+	oauth: IssuerOAuth,
+	clients: OAuthClients,
+): IssuerClient {
+	const client = clients[oauth.client];
+	if (!client)
+		throw new Error(
+			`${server}: signs in through the "${oauth.client}" OAuth client, which this host does not hold.`,
+		);
+	return { oauth, client };
 }
 
-export class FileOAuthStore implements OAuthStore {
-	constructor(private readonly dir?: string) {}
-
-	private base(): string {
-		return this.dir ?? defaultOAuthDir();
-	}
-
-	private file(serverKey: string): string {
-		return join(this.base(), keyToFileName(serverKey));
-	}
-
-	async load(serverKey: string): Promise<OAuthRecord | undefined> {
-		try {
-			return JSON.parse(await readFile(this.file(serverKey), "utf8"));
-		} catch {
-			return undefined;
-		}
-	}
-
-	async save(serverKey: string, record: OAuthRecord): Promise<void> {
-		await mkdir(this.base(), { recursive: true, mode: 0o700 });
-		await writeFile(this.file(serverKey), JSON.stringify(record), {
-			mode: 0o600,
-		});
-	}
-
-	async clear(serverKey: string): Promise<void> {
-		await rm(this.file(serverKey), { force: true });
-	}
+function issuerMetadata({
+	issuer,
+	authorize,
+	token,
+}: IssuerOAuth): OAuthMetadata {
+	return {
+		issuer,
+		authorization_endpoint: authorize,
+		token_endpoint: token,
+		response_types_supported: ["code"],
+		code_challenge_methods_supported: ["S256"],
+		token_endpoint_auth_methods_supported: ["client_secret_post"],
+	};
 }
 
 export class StoredOAuthProvider implements OAuthClientProvider {
@@ -66,13 +64,21 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 		return this._state;
 	}
 
+	validateResourceURL?: (
+		serverUrl: string | URL,
+		resource?: string,
+	) => Promise<URL | undefined>;
+
 	private constructor(
 		private readonly store: OAuthStore,
 		private readonly serverKey: string,
 		private readonly redirect: string,
 		private readonly record: OAuthRecord,
 		private readonly scope: string | undefined,
-	) {}
+		private readonly issuer: IssuerClient | undefined,
+	) {
+		if (issuer) this.validateResourceURL = () => Promise.resolve(undefined);
+	}
 
 	static async create(
 		store: OAuthStore,
@@ -93,6 +99,7 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 		serverKey: string,
 		redirectUrl: string,
 		scope?: string,
+		issuer?: IssuerClient,
 	): Promise<StoredOAuthProvider> {
 		const record = (await store.load(serverKey)) ?? {};
 		return new StoredOAuthProvider(
@@ -101,7 +108,16 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 			redirectUrl,
 			record,
 			scope,
+			issuer,
 		);
+	}
+
+	discoveryState(): OAuthDiscoveryState | undefined {
+		if (!this.issuer) return undefined;
+		return {
+			authorizationServerUrl: this.issuer.oauth.issuer,
+			authorizationServerMetadata: issuerMetadata(this.issuer.oauth),
+		};
 	}
 
 	get redirectUrl(): string {
@@ -120,6 +136,12 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 	}
 
 	clientInformation(): OAuthClientInformationFull | undefined {
+		if (this.issuer)
+			return {
+				...this.issuer.client,
+				redirect_uris: [this.redirect],
+				token_endpoint_auth_method: "client_secret_post",
+			};
 		return this.record.clientInformation;
 	}
 
@@ -128,12 +150,26 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 		await this.persist();
 	}
 
-	tokens(): OAuthTokens | undefined {
-		return this.record.tokens;
+	async tokens(): Promise<OAuthTokens | undefined> {
+		const { tokens, expiresAt } = this.record;
+		if (!this.issuer || !tokens?.refresh_token || expiresAt === undefined)
+			return tokens;
+		if (expiresAt - REFRESH_MARGIN_MS > Date.now()) return tokens;
+		const fresh = await refreshAuthorization(this.issuer.oauth.issuer, {
+			metadata: issuerMetadata(this.issuer.oauth),
+			clientInformation: this.clientInformation() ?? this.issuer.client,
+			refreshToken: tokens.refresh_token,
+		});
+		await this.saveTokens(fresh);
+		return fresh;
 	}
 
 	async saveTokens(tokens: OAuthTokens): Promise<void> {
 		this.record.tokens = tokens;
+		this.record.expiresAt =
+			tokens.expires_in === undefined
+				? undefined
+				: Date.now() + tokens.expires_in * 1000;
 		this.record.pending = undefined;
 		await this.persist();
 	}
@@ -143,6 +179,7 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 			state: this.state(),
 			serverUrl,
 			...(this.scope ? { scope: this.scope } : {}),
+			...(this.issuer ? { oauth: this.issuer.oauth } : {}),
 		};
 		await this.persist();
 	}
@@ -159,6 +196,8 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 	}
 
 	redirectToAuthorization(authorizationUrl: URL): void {
+		for (const [name, value] of Object.entries(this.issuer?.oauth.params ?? {}))
+			authorizationUrl.searchParams.set(name, value);
 		this.authorizationUrl = authorizationUrl;
 	}
 
@@ -183,6 +222,7 @@ export async function completeAuthorization(
 	serverKey: string,
 	redirectUrl: string,
 	callbackUrl: string,
+	clients: OAuthClients = {},
 ): Promise<void> {
 	const params = new URL(callbackUrl).searchParams;
 	const code = params.get("code");
@@ -195,6 +235,7 @@ export async function completeAuthorization(
 		serverKey,
 		redirectUrl,
 		pending.scope,
+		pending.oauth ? issuerClient(serverKey, pending.oauth, clients) : undefined,
 	);
 	const result = await auth(provider, {
 		serverUrl: pending.serverUrl,

@@ -17,6 +17,9 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get]
+  - apiGroups: [apps]
+    resources: [daemonsets]
+    verbs: [get, list, create, update, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -50,7 +53,7 @@ rules:
     verbs: [get, list, create, delete]
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [get, list, create, update, delete]
+    verbs: [get, create, update]
   - apiGroups: [""]
     resources: [persistentvolumeclaims]
     verbs: [get, list, create, patch, delete]
@@ -59,7 +62,7 @@ rules:
     verbs: [get, create]
   - apiGroups: [""]
     resources: [events]
-    verbs: [create]
+    verbs: [create, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -108,6 +111,8 @@ spec:
               value: {{ include "lisptc.mcpNamespacePrefix" . | quote }}
             - name: LISPTC_MCP_PULL_SECRET
               value: {{ .Values.imagePullSecret | quote }}
+            - name: LISPTC_MCP_IMAGE_TAG
+              value: {{ include "lisptc.imageTag" (list . .Values.app.image.tag) | quote }}
             {{- with .Values.mcp.storageClass }}
             - name: LISPTC_MCP_STORAGE_CLASS
               value: {{ . | quote }}

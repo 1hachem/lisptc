@@ -16,10 +16,13 @@ Turbo tag: `extension`.
 `src/ports.ts` is the contract layer: the client, host, registry and store
 interfaces, and the tool and connection shapes that cross them. A consumer
 imports it without pulling in the extension. `src/mcp-client.ts`,
-`src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts`, `src/probed-host.ts` and
-`src/mcp-oauth.ts` implement
-against it. `src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server
-registry.
+`src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts`,
+`src/probed-host.ts` and `src/mcp-oauth.ts` implement against it. **The OAuth
+state is the root's to keep**: every root hands the client an `OAuthStore`. The file one in `src/oauth-host.ts` is for the apps
+that run on the user's own machine, never for the served agent. The served
+agent keeps it in Convex, whichever container host it runs.
+
+`src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server registry.
 
 **Never give a client a callback server of its own.** The OAuth callback server
 is one per port for the whole process, shared by every REPL in it, and reached
@@ -36,8 +39,16 @@ is reachable from outside is the host's to decide, not the manifest's. A `url`
 is an address a client dials as written, so only a remote server, or one a
 `command` starts on a fixed local port, carries one.
 
-An image built here lives in a Dockerfile under `docker/`;
-`task mcp:browser:build` builds the browser one.
+**`mcp.toolkit.json` is what the cluster and docker hosts read, and it holds
+only servers that work in production**: each runs from its own image or is a
+remote url, never a local command. `mcp.toolkit.local.json` is what the local
+process host reads, commands included. A server's image is built from
+`docker/mcp/<name>.Dockerfile`; CI and `task mcp:images:build` build every file
+there.
+
+**An image holds no credential of its own.** A key it needs is a secret the
+host already keeps, named in its entry, and a user's sign-in belongs to the
+client, never to the server.
 
 This package needs no daemon to be used or tested. A container host is chosen
 at a composition root, never by default, and a test that wants containers has
@@ -58,9 +69,9 @@ resource's contract, which the package exports under the name kubernetes, and th
 resource.** What someone changed on the live one is theirs, and a host keeps
 it.
 
-**`task mcp:reap` clears the containers a dead process left behind.** No host
-instance reaps another's, so nothing else will. State volumes are kept;
-`task mcp:reap:state` is what drops them.
+**`task mcp:reap` clears the containers a dead process left behind, and the
+state volumes with them.** No host instance reaps another's, so nothing else
+will. `task mcp:reap:state` drops the volumes alone, for one workspace or all.
 
 `check:arch` treats `src/mcp.ts` and `src/ports.ts` as extension modules. They
 import no `node:` builtin, no typed env module, no SDK and no `process.env`.

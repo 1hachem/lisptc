@@ -6,11 +6,11 @@ import {
 	CallbackServer,
 	completeAuthorization,
 	createAuthCallback,
-	FileOAuthStore,
 	StoredOAuthProvider,
 	sharedAuthCallback,
 } from "../src/mcp-oauth.ts";
-import type { OAuthRecord, OAuthStore } from "../src/ports.ts";
+import { FileOAuthStore } from "../src/oauth-host.ts";
+import type { IssuerOAuth, OAuthRecord, OAuthStore } from "../src/ports.ts";
 
 const REDIRECT = "http://127.0.0.1:8991/callback";
 
@@ -74,7 +74,7 @@ describe("StoredOAuthProvider", () => {
 			"https://mcp.example.com/mcp",
 			REDIRECT,
 		);
-		expect(p.tokens()?.access_token).toBe("cached");
+		expect((await p.tokens())?.access_token).toBe("cached");
 		expect(p.redirectUrl).toBe(REDIRECT);
 		expect(p.clientMetadata.redirect_uris).toEqual([REDIRECT]);
 	});
@@ -120,6 +120,128 @@ describe("StoredOAuthProvider", () => {
 		});
 		await p.saveTokens({ access_token: "at", token_type: "Bearer" });
 		expect(store.data.get("https://mcp.example.com")?.pending).toBeUndefined();
+	});
+
+	describe("signing in at an issuer the entry names", () => {
+		const google: IssuerOAuth = {
+			issuer: "https://accounts.google.com",
+			authorize: "https://accounts.google.com/o/oauth2/v2/auth",
+			token: "https://oauth2.googleapis.com/token",
+			client: "google",
+			params: { access_type: "offline", prompt: "consent" },
+		};
+		const issuer = {
+			oauth: google,
+			client: { client_id: "cid", client_secret: "secret" },
+		};
+
+		function opened(store: OAuthStore) {
+			return StoredOAuthProvider.open(
+				store,
+				"ws/mcp:sheets",
+				REDIRECT,
+				"openid",
+				issuer,
+			);
+		}
+
+		it("uses the host's client and the issuer's endpoints without discovery", async () => {
+			const p = await opened(memoryStore());
+			expect(p.clientInformation()).toEqual({
+				client_id: "cid",
+				client_secret: "secret",
+				redirect_uris: [REDIRECT],
+				token_endpoint_auth_method: "client_secret_post",
+			});
+			expect(p.discoveryState()).toMatchObject({
+				authorizationServerUrl: google.issuer,
+				authorizationServerMetadata: {
+					authorization_endpoint: google.authorize,
+					token_endpoint: google.token,
+				},
+			});
+			expect(await p.validateResourceURL?.("http://sheets:8911/mcp")).toBe(
+				undefined,
+			);
+		});
+
+		it("adds the issuer's params to the authorization link", async () => {
+			const p = await opened(memoryStore());
+			p.redirectToAuthorization(new URL(`${google.authorize}?client_id=cid`));
+			expect(p.authorizationUrl?.searchParams.get("access_type")).toBe(
+				"offline",
+			);
+			expect(p.authorizationUrl?.searchParams.get("prompt")).toBe("consent");
+		});
+
+		it("keeps the issuer on the pending login so the callback can finish it", async () => {
+			const store = memoryStore();
+			const p = await opened(store);
+			await p.savePending("http://sheets:8911/mcp");
+			expect(store.data.get("ws/mcp:sheets")?.pending?.oauth).toEqual(google);
+			await expect(
+				completeAuthorization(
+					store,
+					"ws/mcp:sheets",
+					REDIRECT,
+					`https://app.example/oauth/callback?code=abc&state=${p.state()}`,
+				),
+			).rejects.toThrow(/does not hold/);
+		});
+
+		it("refreshes an access token that is about to expire", async () => {
+			const store = memoryStore();
+			store.data.set("ws/mcp:sheets", {
+				tokens: {
+					access_token: "old",
+					token_type: "Bearer",
+					refresh_token: "rt",
+				},
+				expiresAt: Date.now() + 1000,
+			});
+			const fetched = vi.fn(async (_url: unknown, _init?: RequestInit) =>
+				Response.json({
+					access_token: "new",
+					token_type: "Bearer",
+					expires_in: 3600,
+				}),
+			);
+			vi.stubGlobal("fetch", fetched);
+			try {
+				const p = await opened(store);
+				expect((await p.tokens())?.access_token).toBe("new");
+			} finally {
+				vi.unstubAllGlobals();
+			}
+			expect(String(fetched.mock.calls[0]?.[0])).toBe(google.token);
+			const body = String(fetched.mock.calls[0]?.[1]?.body);
+			expect(body).toContain("grant_type=refresh_token");
+			expect(body).toContain("client_secret=secret");
+			const saved = store.data.get("ws/mcp:sheets");
+			expect(saved?.tokens?.refresh_token).toBe("rt");
+			expect(saved?.expiresAt).toBeGreaterThan(Date.now() + 3_000_000);
+		});
+
+		it("leaves a token that is still fresh alone", async () => {
+			const store = memoryStore();
+			store.data.set("ws/mcp:sheets", {
+				tokens: {
+					access_token: "at",
+					token_type: "Bearer",
+					refresh_token: "rt",
+				},
+				expiresAt: Date.now() + 3_600_000,
+			});
+			const fetched = vi.fn();
+			vi.stubGlobal("fetch", fetched);
+			try {
+				const p = await opened(store);
+				expect((await p.tokens())?.access_token).toBe("at");
+			} finally {
+				vi.unstubAllGlobals();
+			}
+			expect(fetched).not.toHaveBeenCalled();
+		});
 	});
 
 	it("refuses to complete a callback whose state no login issued", async () => {
@@ -180,7 +302,7 @@ describe("StoredOAuthProvider", () => {
 			redirect_uris: [REDIRECT],
 		});
 		await p.invalidateCredentials("tokens");
-		expect(p.tokens()).toBeUndefined();
+		expect(await p.tokens()).toBeUndefined();
 		expect(p.clientInformation()?.client_id).toBe("cid");
 	});
 });

@@ -9,6 +9,11 @@ const TOOLKIT_URL = new URL(
 	import.meta.url,
 );
 
+const LOCAL_TOOLKIT_URL = new URL(
+	FROM_SOURCE ? "../mcp.toolkit.local.json" : "./mcp.toolkit.local.json",
+	import.meta.url,
+);
+
 export const processEnv: EnvLookup = {
 	// biome-ignore lint/style/noProcessEnv: mcp.toolkit.json names the variable, so it is only known at runtime
 	get: (name) => process.env[name],
@@ -41,10 +46,18 @@ export function jsonToolkit(
 	return { all: () => configs };
 }
 
-export function bundledToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
+function fileToolkit(url: URL, env: EnvLookup): ToolkitRegistry {
 	try {
-		return jsonToolkit(readFileSync(TOOLKIT_URL, "utf8"), env);
+		return jsonToolkit(readFileSync(url, "utf8"), env);
 	} catch {
 		return { all: () => [] };
 	}
+}
+
+export function bundledToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
+	return fileToolkit(TOOLKIT_URL, env);
+}
+
+export function localToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
+	return fileToolkit(LOCAL_TOOLKIT_URL, env);
 }

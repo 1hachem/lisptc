@@ -1,6 +1,6 @@
 import { useUI } from "../lib/ui.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
-import { RightSidebar } from "./right-sidebar.tsx";
+import { PreferencesPanel } from "./preferences-panel.tsx";
 
 function PanelToggle({
 	side,
@@ -11,7 +11,7 @@ function PanelToggle({
 	open: boolean;
 	onToggle: () => void;
 }) {
-	const noun = side === "left" ? "sidebar" : "panel";
+	const noun = side === "left" ? "sidebar" : "preferences";
 	const points = side === "left" ? open : !open;
 	return (
 		<button
@@ -40,7 +40,7 @@ export function AppShell({
 		<div className="relative h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
 			<main className="flex h-full min-w-0 flex-col">{children}</main>
 			<LeftSidebar open={leftOpen} onSignOut={onSignOut} />
-			<RightSidebar open={rightOpen} />
+			<PreferencesPanel open={rightOpen} />
 			<PanelToggle side="left" open={leftOpen} onToggle={toggleLeft} />
 			<PanelToggle side="right" open={rightOpen} onToggle={toggleRight} />
 		</div>

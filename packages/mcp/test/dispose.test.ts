@@ -15,7 +15,7 @@ function hangingClient(): { client: McpClient; aborts: () => number } {
 		});
 	return {
 		client: {
-			connect: (_conf, signal) => hang(signal),
+			connect: (_conf, watch) => hang(watch?.signal),
 			callTool: (_call, signal) => hang(signal),
 			disconnect: () => Promise.resolve(),
 			phase: () => Promise.resolve({ phase: "ready" }),

@@ -1,11 +1,14 @@
 import {
 	ApiException,
+	AppsV1Api,
 	CoreV1Api,
+	type CoreV1Event,
 	CustomObjectsApi,
 	type KubeConfig,
 	NetworkingV1Api,
 	PatchStrategy,
 	setHeaderOptions,
+	type V1DaemonSet,
 	type V1Namespace,
 	type V1NetworkPolicy,
 	type V1PersistentVolumeClaim,
@@ -20,7 +23,7 @@ import {
 	PLURAL,
 	VERSION,
 } from "@repo/mcp-extension/kubernetes";
-import { MANAGED_BY, MANAGER } from "./workload.ts";
+import { MANAGED_BY, MANAGER, SPEC_HASH } from "./workload.ts";
 
 const LOG_LINES = 20;
 const REACH_TIMEOUT_MS = 2_000;
@@ -40,11 +43,6 @@ export interface Cluster {
 		policy: V1NetworkPolicy,
 	): Promise<void>;
 	copySecret(from: string, to: string, name: string): Promise<void>;
-	secretData(
-		namespace: string,
-		name: string,
-	): Promise<Record<string, string> | undefined>;
-	putSecret(namespace: string, secret: V1Secret): Promise<void>;
 	pod(namespace: string, name: string): Promise<V1Pod | undefined>;
 	createPod(namespace: string, pod: V1Pod): Promise<void>;
 	ensureService(namespace: string, service: V1Service): Promise<void>;
@@ -63,6 +61,11 @@ export interface Cluster {
 	resizeClaim(namespace: string, name: string, size: string): Promise<void>;
 	deleteClaim(namespace: string, name: string): Promise<void>;
 	logs(namespace: string, pod: string, container: string): Promise<string>;
+	lastEvent(namespace: string, pod: string): Promise<string | undefined>;
+	ensureDaemonSet(namespace: string, daemonSet: V1DaemonSet): Promise<void>;
+	daemonSets(namespace: string, selector: string): Promise<string[]>;
+	deleteDaemonSet(namespace: string, name: string): Promise<void>;
+	pods(namespace: string, selector: string): Promise<V1Pod[]>;
 	reachable(url: string): Promise<boolean>;
 	origin(namespace: string, service: string, port: number): string;
 	managedPods(): Promise<Located[]>;
@@ -95,6 +98,11 @@ async function tolerating(code: number, run: () => Promise<unknown>) {
 
 const merge = setHeaderOptions("Content-Type", PatchStrategy.MergePatch);
 
+function when(event: CoreV1Event): number {
+	const at = event.eventTime ?? event.lastTimestamp ?? event.firstTimestamp;
+	return at ? new Date(at).getTime() : 0;
+}
+
 function located(item: {
 	metadata?: {
 		namespace?: string;
@@ -114,6 +122,19 @@ function located(item: {
 export function clientCluster(config: KubeConfig): Cluster {
 	const core = config.makeApiClient(CoreV1Api);
 	const net = config.makeApiClient(NetworkingV1Api);
+	const apps = config.makeApiClient(AppsV1Api);
+	const putSecret = async (namespace: string, body: V1Secret) => {
+		try {
+			await core.createNamespacedSecret({ namespace, body });
+		} catch (ex) {
+			if (!isStatus(ex, 409)) throw ex;
+			await core.replaceNamespacedSecret({
+				namespace,
+				name: body.metadata?.name ?? "",
+				body,
+			});
+		}
+	};
 	return {
 		async ensureNamespace(body) {
 			await tolerating(409, () => core.createNamespace({ body }));
@@ -125,33 +146,11 @@ export function clientCluster(config: KubeConfig): Cluster {
 		},
 		async copySecret(from, to, name) {
 			const source = await core.readNamespacedSecret({ namespace: from, name });
-			await this.putSecret(to, {
+			await putSecret(to, {
 				metadata: { name, labels: { [MANAGED_BY]: MANAGER } },
 				type: source.type,
 				data: source.data,
 			});
-		},
-		async secretData(namespace, name) {
-			try {
-				return (
-					(await core.readNamespacedSecret({ namespace, name })).data ?? {}
-				);
-			} catch (ex) {
-				if (isStatus(ex, 404)) return undefined;
-				throw ex;
-			}
-		},
-		async putSecret(namespace, body) {
-			try {
-				await core.createNamespacedSecret({ namespace, body });
-			} catch (ex) {
-				if (!isStatus(ex, 409)) throw ex;
-				await core.replaceNamespacedSecret({
-					namespace,
-					name: body.metadata?.name ?? "",
-					body,
-				});
-			}
 		},
 		async pod(namespace, name) {
 			try {
@@ -180,7 +179,6 @@ export function clientCluster(config: KubeConfig): Cluster {
 					core.deleteNamespacedService({ namespace, name }),
 				),
 				this.removePod(namespace, name),
-				tolerating(404, () => core.deleteNamespacedSecret({ namespace, name })),
 			]);
 		},
 		async claims(namespace, labelSelector) {
@@ -230,6 +228,58 @@ export function clientCluster(config: KubeConfig): Cluster {
 			} catch {
 				return "";
 			}
+		},
+		async lastEvent(namespace, name) {
+			try {
+				const list = await core.listNamespacedEvent({
+					namespace,
+					fieldSelector: `involvedObject.kind=Pod,involvedObject.name=${name}`,
+				});
+				const latest = list.items.sort((a, b) => when(b) - when(a))[0];
+				return latest?.message?.trim() || undefined;
+			} catch {
+				return undefined;
+			}
+		},
+		async ensureDaemonSet(namespace, body) {
+			const name = body.metadata?.name ?? "";
+			let live: V1DaemonSet;
+			try {
+				live = await apps.readNamespacedDaemonSet({ namespace, name });
+			} catch (ex) {
+				if (!isStatus(ex, 404)) throw ex;
+				await apps.createNamespacedDaemonSet({ namespace, body });
+				return;
+			}
+			const wanted = body.metadata?.annotations?.[SPEC_HASH];
+			if (live.metadata?.annotations?.[SPEC_HASH] === wanted) return;
+			await apps.replaceNamespacedDaemonSet({
+				namespace,
+				name,
+				body: {
+					...body,
+					metadata: {
+						...body.metadata,
+						resourceVersion: live.metadata?.resourceVersion,
+					},
+				},
+			});
+		},
+		async daemonSets(namespace, labelSelector) {
+			const list = await apps.listNamespacedDaemonSet({
+				namespace,
+				labelSelector,
+			});
+			return list.items.map((set) => set.metadata?.name ?? "");
+		},
+		async deleteDaemonSet(namespace, name) {
+			await tolerating(404, () =>
+				apps.deleteNamespacedDaemonSet({ namespace, name }),
+			);
+		},
+		async pods(namespace, labelSelector) {
+			const list = await core.listNamespacedPod({ namespace, labelSelector });
+			return list.items;
 		},
 		async reachable(url) {
 			try {
