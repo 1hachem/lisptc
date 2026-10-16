@@ -32,6 +32,16 @@ describe("arityOf", () => {
 	});
 });
 
+describe("isMacro", () => {
+	it("tells a macro from a function and from an unbound name", () => {
+		const interp = freshInterp();
+		runSync(interp, "(setq m (macro (x) x))");
+		expect(interp.isMacro("m")).toBe(true);
+		expect(interp.isMacro("car")).toBe(false);
+		expect(interp.isMacro("no-such-name")).toBe(false);
+	});
+});
+
 describe("extensions", () => {
 	it("installs each extension and appends the prompts it carries", () => {
 		const installed: string[] = [];

@@ -161,6 +161,10 @@ export class Interp {
 		return new Map([...Object.entries(specialFormDocs), ...this.docTable]);
 	}
 
+	isMacro(name: string): boolean {
+		return this.globals.get(newSym(name)) instanceof Macro;
+	}
+
 	arityOf(name: string): Arity | undefined {
 		const value = this.globals.get(newSym(name));
 		if (!(value instanceof Func)) return undefined;
