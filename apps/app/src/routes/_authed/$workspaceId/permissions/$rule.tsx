@@ -11,19 +11,22 @@ export const Route = createFileRoute("/_authed/$workspaceId/permissions/$rule")(
 			parse: ({ rule }: { rule: string }) => ({ rule: Number(rule) }),
 			stringify: ({ rule }: { rule: number }) => ({ rule: String(rule) }),
 		},
-		loader: ({ context, params }) =>
-			context.queryClient.ensureQueryData(
+		loader: async ({ context, params }) => {
+			if (context.auth.source === "browser") return;
+			await context.queryClient.ensureQueryData(
 				convexQuery(api.permissions.get, { workspaceId: params.workspaceId }),
-			),
+			);
+		},
 		component: PermissionFile,
 	},
 );
 
 function PermissionFile() {
 	const { workspaceId, rule } = Route.useParams();
-	const { data: source } = useQuery(
+	const { data: source, error } = useQuery(
 		convexQuery(api.permissions.get, { workspaceId }),
 	);
+	if (error) throw error;
 	const found =
 		source === undefined ? undefined : permissionRules(source ?? "")[rule];
 

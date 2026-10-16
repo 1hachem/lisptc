@@ -8,18 +8,21 @@ import { settingsSource } from "../../../lib/files.ts";
 import { useModelPicker } from "../../../lib/model-picker.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId/settings")({
-	loader: ({ context, params }) =>
-		context.queryClient.ensureQueryData(
+	loader: async ({ context, params }) => {
+		if (context.auth.source === "browser") return;
+		await context.queryClient.ensureQueryData(
 			convexQuery(api.workspaces.get, { workspaceId: params.workspaceId }),
-		),
+		);
+	},
 	component: SettingsFile,
 });
 
 function SettingsFile() {
 	const { workspaceId } = Route.useParams();
-	const { data: workspace } = useQuery(
+	const { data: workspace, error } = useQuery(
 		convexQuery(api.workspaces.get, { workspaceId }),
 	);
+	if (error) throw error;
 	const { openModelPicker } = useModelPicker();
 
 	return (
