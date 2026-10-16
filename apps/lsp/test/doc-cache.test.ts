@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { CallDoc } from "@repo/lint-extension/calls";
+import { describe, expect, it } from "vitest";
 import { cachedResolver } from "../src/doc-cache.ts";
 
 function resolverSpy(doc: CallDoc = {}) {

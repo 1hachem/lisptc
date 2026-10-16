@@ -3,8 +3,8 @@ import { EvalException } from "@repo/interpreter/errors";
 import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	Cell,
-	type List,
 	LispKeyword,
+	type List,
 	newSym,
 	Sym,
 } from "@repo/interpreter/objects";
