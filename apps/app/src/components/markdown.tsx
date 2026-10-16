@@ -25,6 +25,9 @@ const TEXT_TAGS = [
 const CODE =
 	"whitespace-pre-wrap break-words bg-transparent p-0 font-[inherit] text-[length:inherit]";
 
+export const MARKDOWN_BODY =
+	"min-w-0 break-words font-[inherit] text-[length:inherit] text-inherit [&_:is(h1,h2,h3,h4,h5,h6)]:my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:font-semibold [&_:is(h1,h2,h3,h4,h5,h6)]:text-[length:inherit] [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_li:has(>input)]:list-none [&_li>input]:mr-2 [&_[data-type=taskList]]:list-none [&_[data-type=taskList]]:pl-0 [&_[data-type=taskList]_li]:flex [&_[data-type=taskList]_li]:items-baseline [&_[data-type=taskList]_li]:gap-2 [&_[data-type=taskList]_li>div]:min-w-0 [&_[data-type=taskList]_li>div]:flex-1";
+
 function tag(name: string, className?: string, lisp = false) {
 	return ({ children, ...props }: TagProps) =>
 		createElement(
@@ -92,7 +95,7 @@ export function Markdown({
 	lisp?: boolean;
 }) {
 	return (
-		<div className="min-w-0 break-words font-[inherit] text-[length:inherit] text-inherit [&_:is(h1,h2,h3,h4,h5,h6)]:my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:font-semibold [&_:is(h1,h2,h3,h4,h5,h6)]:text-[length:inherit] [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5">
+		<div className={MARKDOWN_BODY}>
 			<TanStackMarkdown
 				components={lisp ? LISP : PLAIN}
 				extensions={extensions}

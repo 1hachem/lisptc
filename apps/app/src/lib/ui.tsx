@@ -2,39 +2,24 @@ import {
 	createContext,
 	useCallback,
 	useContext,
+	useEffect,
 	useMemo,
 	useState,
 } from "react";
-import { CHANNELS, type ChannelId, channelCookie } from "./channels.ts";
-import { META_FIELDS, type MetaField, metaCookie } from "./meta-fields.ts";
+import { CHANNELS, type ChannelId } from "./channels.ts";
+import { META_FIELDS, type MetaField } from "./meta-fields.ts";
+import { usePreferences, usePutPreferences } from "./preferences.ts";
 import {
-	PANEL_COOKIE,
+	PREFERENCES_COOKIE,
 	readBoolPref,
 	SIDEBAR_COOKIE,
 	writeBoolPref,
 } from "./prefs.ts";
+import { togglesOf } from "./resolved-preferences.ts";
 
 type Shown = Record<ChannelId, boolean>;
 
-function readShown(): Shown {
-	return Object.fromEntries(
-		CHANNELS.map((c) => [
-			c.id,
-			readBoolPref(channelCookie(c.id), c.shownByDefault),
-		]),
-	) as Shown;
-}
-
 type MetaShown = Record<MetaField, boolean>;
-
-function readMetaShown(): MetaShown {
-	return Object.fromEntries(
-		META_FIELDS.map((f) => [
-			f.id,
-			readBoolPref(metaCookie(f.id), f.shownByDefault),
-		]),
-	) as MetaShown;
-}
 
 interface UIContextValue {
 	leftOpen: boolean;
@@ -56,11 +41,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		readBoolPref(SIDEBAR_COOKIE, false),
 	);
 	const [rightOpen, setRight] = useState(() =>
-		readBoolPref(PANEL_COOKIE, false),
+		readBoolPref(PREFERENCES_COOKIE, false),
 	);
-	const [shown, setShown] = useState<Shown>(readShown);
-	const [metaShown, setMetaShown] = useState<MetaShown>(readMetaShown);
-
 	const setLeftOpen = useCallback((open: boolean) => {
 		setLeft(open);
 		writeBoolPref(SIDEBAR_COOKIE, open);
@@ -68,24 +50,36 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 
 	const setRightOpen = useCallback((open: boolean) => {
 		setRight(open);
-		writeBoolPref(PANEL_COOKIE, open);
+		writeBoolPref(PREFERENCES_COOKIE, open);
 	}, []);
 
-	const toggleChannel = useCallback((id: ChannelId) => {
-		setShown((current) => {
-			const next = !current[id];
-			writeBoolPref(channelCookie(id), next);
-			return { ...current, [id]: next };
-		});
-	}, []);
+	const stored = usePreferences();
+	const put = usePutPreferences();
+	const shown: Shown = useMemo(
+		() => togglesOf(CHANNELS, stored?.channels),
+		[stored?.channels],
+	);
+	const metaShown: MetaShown = useMemo(
+		() => togglesOf(META_FIELDS, stored?.metadata),
+		[stored?.metadata],
+	);
 
-	const toggleMeta = useCallback((id: MetaField) => {
-		setMetaShown((current) => {
-			const next = !current[id];
-			writeBoolPref(metaCookie(id), next);
-			return { ...current, [id]: next };
-		});
-	}, []);
+	useEffect(() => {
+		if (stored === undefined) return;
+		if (!stored.channels) put({ channels: togglesOf(CHANNELS, undefined) });
+		if (!stored.metadata) put({ metadata: togglesOf(META_FIELDS, undefined) });
+	}, [stored, put]);
+
+	const toggleChannel = useCallback(
+		(id: ChannelId) => put({ channels: { ...shown, [id]: !shown[id] } }),
+		[shown, put],
+	);
+
+	const toggleMeta = useCallback(
+		(id: MetaField) =>
+			put({ metadata: { ...metaShown, [id]: !metaShown[id] } }),
+		[metaShown, put],
+	);
 
 	const value = useMemo<UIContextValue>(
 		() => ({

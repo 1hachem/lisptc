@@ -4,6 +4,7 @@ import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
+import { waitsOnUser } from "./lib/waiting.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
@@ -119,7 +120,7 @@ export const annotate = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { chatId, id, kwargs }) => {
-		await requireChat(ctx, chatId);
+		const { chat } = await requireChat(ctx, chatId);
 		const row = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
@@ -131,6 +132,8 @@ export const annotate = mutation({
 			kwargs: clamped.kwargs,
 			truncated: clamped.truncated || row.truncated ? true : undefined,
 		});
+		if (chat.status === "waiting" && !(await waitsOnUser(ctx, chatId)))
+			await ctx.db.patch(chatId, { status: undefined });
 		return null;
 	},
 });

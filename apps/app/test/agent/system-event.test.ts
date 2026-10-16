@@ -213,7 +213,7 @@ describe("a system event resuming a chat", () => {
 			],
 		]);
 		expect(world.onTurn).toBeDefined();
-		await world.onTurn?.([], revised);
+		await world.onTurn?.([], revised, undefined);
 		const [stored] = world.appended[0].messages;
 		expect(stored.kwargs).toEqual({ memories });
 	});

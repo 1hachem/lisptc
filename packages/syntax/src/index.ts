@@ -8,5 +8,6 @@ export {
 	formsIn,
 	highlighter,
 	lisptc,
+	sourceTokensIn,
 	tokensIn,
 } from "./lisptc.ts";

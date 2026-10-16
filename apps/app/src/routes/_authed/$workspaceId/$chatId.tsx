@@ -1,8 +1,5 @@
-import { convexQuery } from "@convex-dev/react-query";
-import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { createFileRoute } from "@tanstack/react-router";
-import { Chat } from "../../../components/chat.tsx";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authed/$workspaceId/$chatId")({
 	params: {
@@ -11,11 +8,11 @@ export const Route = createFileRoute("/_authed/$workspaceId/$chatId")({
 		}),
 		stringify: ({ chatId }: { chatId: Id<"chats"> }) => ({ chatId }),
 	},
-	loader: async ({ context, params }) => {
-		if (context.auth.source === "browser") return;
-		await context.queryClient.ensureQueryData(
-			convexQuery(api.messages.transcript, { chatId: params.chatId }),
-		);
+	beforeLoad: ({ params }) => {
+		throw redirect({
+			to: "/$workspaceId/chat/$chatId",
+			params,
+			replace: true,
+		});
 	},
-	component: Chat,
 });

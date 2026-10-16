@@ -18,6 +18,7 @@ type Body = Record<string, unknown>;
 
 export type ProviderSpec = SharedProviderSpec & {
 	extraBody?: (opts: ModelOptions) => Body;
+	variant?: (model: string) => string;
 };
 
 export const repetitionPenaltyBody = (opts: ModelOptions): Body => ({
@@ -33,9 +34,10 @@ export function defineProvider(spec: ProviderSpec): Provider {
 			);
 		}
 
+		const model = opts.model ?? spec.defaultModel;
 		return new ChatOpenAI({
 			apiKey,
-			model: opts.model ?? spec.defaultModel,
+			model: spec.variant ? spec.variant(model) : model,
 			temperature: opts.temperature ?? undefined,
 			streaming: opts.streaming ?? true,
 			configuration: { baseURL: spec.baseUrl },

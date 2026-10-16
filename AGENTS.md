@@ -130,9 +130,11 @@ named only at a composition root:
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
 - `packages/permissions` (`@repo/permissions-extension`) — what a session may call: allowed, denied, or waiting on a human.
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
+- `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
+- `packages/workspace` (`@repo/workspace-extension`) — the workspace's settings and its chats.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
 
 Everything else:
@@ -370,10 +372,11 @@ step. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails
 there fails the same way locally, under the command it names.
 
-**Run `pnpm typecheck`, `pnpm knip` and `pnpm fallow` only at the end.** They
-are whole-repo sweeps. Run them when the user asks to commit or push, or says
-the work is done, and not after every change while it is still moving. Until
-then, check a change with the tests and the typecheck of the package it touches.
+**Do not run the checks yourself before a push.** `.husky/pre-push` runs them
+and refuses a push that fails, and CI runs them again. When the user asks to
+push, push. If the hook or CI fails, read the failure, fix it, and push again
+without being asked. While the work is still moving, check a change with the
+tests and the typecheck of the package it touches, and nothing wider.
 
 ## Commits
 

@@ -14,6 +14,7 @@ export {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "./components/ui/chart.tsx";
+export { Dots } from "./components/ui/dots.tsx";
 export {
 	DropdownMenu,
 	DropdownMenuContent,
