@@ -1,11 +1,12 @@
-import type {
-	AgentFailure,
-	AgentTurn,
-	Annotations,
-	ModelRequest,
-	StepAnnotations,
-	StepVerdict,
-	TurnOutcome,
+import {
+	type AgentFailure,
+	type AgentTurn,
+	type Annotations,
+	type ModelRequest,
+	noAnnotations,
+	type StepAnnotations,
+	type StepVerdict,
+	type TurnOutcome,
 } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
@@ -19,6 +20,7 @@ import type { Steer } from "./inbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
 import {
+	checkResultContent,
 	evalCode,
 	isUserPrompt,
 	joinRiding,
@@ -71,6 +73,7 @@ export type TurnEvent =
 			annotations: StepAnnotations;
 			riding?: string;
 			failed: boolean;
+			rejected?: true;
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
@@ -228,11 +231,11 @@ interface Answered {
 	reply: Reply;
 }
 
-async function* evaluateStep(
+async function* announce(
 	turn: Turn,
 	answered: Answered,
-): AsyncGenerator<TurnEvent, StepVerdict> {
-	const { repl, transcript, ran, maxSteps } = turn;
+): AsyncGenerator<TurnEvent> {
+	const { repl, transcript, ran } = turn;
 	const { stepId, startedAt, code, reply } = answered;
 	yield {
 		type: "assistant",
@@ -243,6 +246,52 @@ async function* evaluateStep(
 		meta: stepMeta(startedAt, reply.usage, ran),
 	};
 	transcript.push({ role: "assistant", content: code });
+}
+
+async function* rejectStep(
+	turn: Turn,
+	answered: Answered,
+	rejected: string,
+): AsyncGenerator<TurnEvent, StepVerdict> {
+	const { repl, transcript, maxSteps } = turn;
+	yield* announce(turn, answered);
+	turn.steps += 1;
+	const step = turn.steps;
+	const capped = step >= maxSteps;
+	const verdict = repl.stepEnd(
+		turn.agent,
+		{
+			step,
+			code: answered.code,
+			output: rejected,
+			error: true,
+			failed: true,
+			latencyMs: 0,
+		},
+		capped ? "capped" : "continue",
+		turn.telemetry.stepEnd,
+	);
+	yield {
+		type: "result",
+		step,
+		output: rejected,
+		display: rejected,
+		error: true,
+		annotations: noAnnotations(),
+		failed: true,
+		rejected: true,
+	};
+	transcript.push({ role: "tool", content: checkResultContent(rejected) });
+	return capped ? "capped" : verdict;
+}
+
+async function* evaluateStep(
+	turn: Turn,
+	answered: Answered,
+): AsyncGenerator<TurnEvent, StepVerdict> {
+	const { repl, transcript, maxSteps } = turn;
+	const { code } = answered;
+	yield* announce(turn, answered);
 
 	const evalStartedAt = Date.now();
 	const { output, display, error, annotations, emitted, failed, held } =
@@ -325,9 +374,14 @@ async function* runStep(
 		stepId,
 		opened.call,
 	);
-	const code = repl.response(reply.full, stripFences);
-	if (code === "") return { verdict: "silent", code };
-	const verdict = yield* evaluateStep(turn, { stepId, startedAt, code, reply });
+	const written = repl.response(reply.full, stripFences);
+	if (written === "") return { verdict: "silent", code: written };
+	const { code, rejected } = await repl.admit(written);
+	const answered = { stepId, startedAt, code, reply };
+	const verdict =
+		rejected === undefined
+			? yield* evaluateStep(turn, answered)
+			: yield* rejectStep(turn, answered, rejected);
 	return { verdict, code };
 }
 

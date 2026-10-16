@@ -410,6 +410,85 @@ describe("the agent turn", () => {
 		});
 	});
 
+	test("an admitted rewrite is the code shown and run", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "four." }]];
+		const ran: string[] = [];
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) =>
+					next(interp, code.replace("(+ 1 2)", "(+ 2 2)")),
+				);
+				hooks.evalStep.use(async (ctx, next) => {
+					ran.push(ctx.code);
+					await next(ctx);
+				});
+			}),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(events.find((e) => e.type === "assistant")).toMatchObject({
+			code: "(+ 2 2)",
+		});
+		expect(ran[0]).toBe("(+ 2 2)");
+	});
+
+	test("a rejected step never runs and the model reads why", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+		const ran: string[] = [];
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) =>
+					code.startsWith("(")
+						? { code, rejected: "line 1: not checked" }
+						: next(interp, code),
+				);
+				hooks.evalStep.use(async (ctx, next) => {
+					ran.push(ctx.code);
+					await next(ctx);
+				});
+			}),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"delta",
+			"assistant",
+			"halt",
+		]);
+		expect(events.find((e) => e.type === "result")).toMatchObject({
+			step: 1,
+			output: "line 1: not checked",
+			error: true,
+			failed: true,
+			rejected: true,
+		});
+		expect(ran.filter((code) => code.startsWith("("))).toEqual([]);
+		expect(JSON.parse(String(seen[1].messages.at(-1)?.content))).toEqual({
+			type: "tool_result",
+			source: "lisp-check",
+			error: true,
+			output: "line 1: not checked",
+		});
+	});
+
+	test("a hook that rejects every step still stops at the cap", async () => {
+		script = [[{ text: "(+ 1 2)" }]];
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.admit.use(async (_interp, code) => ({ code, rejected: "no" })),
+			),
+		]);
+
+		const events = await drain(ask, { repl, maxSteps: 2 });
+
+		expect(events.at(-1)).toEqual({ type: "capped", steps: 2 });
+	});
+
 	test("a hook can keep the turn going past an answer", async () => {
 		script = [[{ text: "three." }], [{ text: "really three." }]];
 		let overruled = false;

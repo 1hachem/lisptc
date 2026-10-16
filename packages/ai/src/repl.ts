@@ -69,6 +69,15 @@ export function replResultContent(output: string, error: boolean): string {
 	});
 }
 
+export function checkResultContent(output: string): string {
+	return JSON.stringify({
+		type: "tool_result",
+		source: "lisp-check",
+		error: true,
+		output,
+	});
+}
+
 export function proseFeedbackContent(feedback: string): string {
 	return replResultContent(
 		[

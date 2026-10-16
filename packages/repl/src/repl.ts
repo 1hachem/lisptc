@@ -16,6 +16,7 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
+	type Admission,
 	type AgentEnd,
 	type AgentStep,
 	type AgentTurn,
@@ -413,6 +414,14 @@ export class AgentRepl extends MemoryRepl {
 
 	response(text: string, read: (text: string) => string): string {
 		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
+	}
+
+	admit(code: string): Promise<Admission> {
+		return this.hooks.admit.run(
+			async (_i, c) => ({ code: c }),
+			this.interp,
+			code,
+		);
 	}
 
 	stepEnd(
