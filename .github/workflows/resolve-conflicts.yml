@@ -13,6 +13,10 @@ on:
       pr:
         description: PR number, empty for every open PR
         required: false
+      update:
+        description: Also merge main into every PR behind it
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -240,7 +244,7 @@ jobs:
 
   update:
     needs: [find, resolve]
-    if: always() && github.event.schedule == '0 11 * * *'
+    if: always() && (github.event.schedule == '0 11 * * *' || inputs.update)
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
