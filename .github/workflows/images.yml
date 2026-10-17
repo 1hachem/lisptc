@@ -155,7 +155,7 @@ jobs:
           PR: ${{ github.event.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
+          live=$(.github/scripts/retry.sh gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
           [ "$live" = true ] || exit 0
           .github/scripts/preview-release.sh "$PR" "$SHA"
 
@@ -164,6 +164,7 @@ jobs:
     needs: preview-release
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'preview')
     runs-on: ubuntu-latest
+    continue-on-error: true
     concurrency:
       group: preview-comment-${{ github.event.number }}
       cancel-in-progress: false
@@ -181,7 +182,12 @@ jobs:
           secret-path: /tailnet
           export-type: env
 
-      - name: Comment the preview link on the pull request
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Put the preview link at the top of the pull request description
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -189,20 +195,10 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           test -n "$TAILNET_DOMAIN"
-          live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
-          heading='**Preview**'
-          ids=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$heading\"))) | .id")
+          live=$(.github/scripts/retry.sh gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
           if [ "$live" != true ]; then
-            for id in $ids; do
-              gh api -X DELETE "repos/$REPO/issues/comments/$id"
-            done
+            .github/scripts/preview-link.sh "$PR"
             exit 0
           fi
-          body=$(printf '%s: https://lisptc-pr-%s.%s\n\nImages for `%s` are pushed. ArgoCD rolls them out within a few minutes.' "$heading" "$PR" "$TAILNET_DOMAIN" "$SHA")
-          id=${ids%%$'\n'*}
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
-          else
-            gh pr comment "$PR" --repo "$REPO" --body "$body"
-          fi
+          link=$(printf '**Preview**: https://lisptc-pr-%s.%s\n\nImages for `%s` are pushed. ArgoCD rolls them out within a few minutes.' "$PR" "$TAILNET_DOMAIN" "$SHA")
+          .github/scripts/preview-link.sh "$PR" "$link"

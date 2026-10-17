@@ -1,5 +1,5 @@
 import { Migrations } from "@convex-dev/migrations";
-import { components } from "./_generated/api.js";
+import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
 import { retiredModelReset } from "./lib/models.js";
 
@@ -11,3 +11,7 @@ export const resetRetiredModels = migrations.define({
 	table: "workspaces",
 	migrateOne: (_ctx, workspace) => retiredModelReset(workspace.model),
 });
+
+export const runAll = migrations.runner([
+	internal.migrations.resetRetiredModels,
+]);

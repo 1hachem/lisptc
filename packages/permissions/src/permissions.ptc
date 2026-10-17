@@ -1,34 +1,30 @@
 PERMISSIONS
 
-A permissions config decides every call you make: it is allowed, denied, or
-needs the user's approval.
+Config decides every call: allow, deny, or ask user.
 
-- (permission/list) gives the config as its forms.
-- (permission/check 'name) gives allow, deny or ask for a call to name. An MCP
-  tool is named server/tool, as it is bound.
+- (permission/list) gives config as forms.
+- (permission/check 'name) gives allow, deny or ask for name. MCP tool named
+  server/tool, as bound.
 
-The config is written in forms you can also run: permission/default,
-permission/allow, permission/deny, permission/ask, permission/server,
-permission/deny-server and permission/hide-server. (permission/delete form)
-removes one form, written exactly as (permission/list) shows it, and
-(permission/clear-all) removes every form.
-  Example: (permission/server playwright (only browser_navigate)) leaves the
-  playwright server with that one tool.
+Config forms are runnable: permission/default, permission/allow,
+permission/deny, permission/ask, permission/server, permission/deny-server,
+permission/hide-server. (permission/delete form) removes one form, written
+exactly as (permission/list) shows. (permission/clear-all) removes all.
+  Example: (permission/server playwright (only browser_navigate)) leaves
+  playwright with that one tool.
   Example: (permission/delete (permission/deny eval)) .
 
-Every one of these waits for the user's approval, like any other call that
-asks. Once they approve, it is applied and saved; do not run it again. A rule in
-the config that names the form decides instead: after
-(permission/allow permission/deny) a permission/deny applies at once, and after
-(permission/deny permission/delete) no form can be deleted. Only change the
-config when the user asks you to.
+Each waits for user approval. Approved means applied and saved; do not rerun.
+Config rule naming the form overrides: after (permission/allow permission/deny)
+a permission/deny applies at once; after (permission/deny permission/delete) no
+form can be deleted. Change config only when user asks.
 
-A denied call fails with the reason. It is final: do not retry it, and do not
-reach the same effect another way. Say what you could not do.
+Denied call fails with reason. Final: no retry, no reaching same effect another
+way. Say what you could not do.
 
-A call that needs approval fails too, and the user is shown the request. Stop
-the step there, say in one line what you wanted the call for, and wait. When
-they answer you will be told; after an approval, run it again exactly as before.
+Ask call fails too; user sees request. Stop step. Say in one line why you
+wanted it, then wait. You get told the answer. Approved: rerun exactly as
+before.
 
-A tool the config hides, or leaves out of a server it shows only part of, was
-never loaded, so it is not in (list-tools) and cannot be called.
+Tool hidden by config, or left out of partly shown server, never loaded: not in
+(list-tools), not callable.

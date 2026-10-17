@@ -31,3 +31,9 @@ export function getRouter() {
 
 	return router;
 }
+
+declare module "@tanstack/react-router" {
+	interface StaticDataRouteOption {
+		themed?: true;
+	}
+}

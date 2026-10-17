@@ -5,10 +5,20 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 
+retry() {
+  local attempt
+  for attempt in 1 2 3 4; do
+    "$@" && return 0
+    [ "$attempt" -lt 4 ] || return 1
+    echo "attempt $attempt failed, retrying in $((attempt * 10))s" >&2
+    sleep $((attempt * 10))
+  done
+}
+
 placeholders='s/{{ *\.number *}}/0/g; s/{{ *\.head_sha *}}/main/g'
 
 echo "render deploy/helmfile.yaml.gotmpl"
-helmfile template -e prod -f "$root/deploy/helmfile.yaml.gotmpl" >"$out/bootstrap.yaml"
+retry helmfile template -e prod -f "$root/deploy/helmfile.yaml.gotmpl" >"$out/bootstrap.yaml"
 
 files=("$root"/argocd/*.yaml)
 for ((f = 0; f < ${#files[@]}; f++)); do
@@ -49,6 +59,6 @@ for ((f = 0; f < ${#files[@]}; f++)); do
     args+=(-f "$inline")
 
     echo "render ${file#"$root"/} as $name"
-    helm template "$name" "${args[@]}" -n "$namespace" >"$out/$name-$i.yaml"
+    retry helm template "$name" "${args[@]}" -n "$namespace" >"$out/$name-$i.yaml"
   done
 done

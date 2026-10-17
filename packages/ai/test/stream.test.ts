@@ -20,11 +20,13 @@ const TURNS: AgentDelta[][] = [
 ];
 
 let turn = 0;
+let down = false;
 const sent: { role: string; content: string }[][] = [];
 
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (messages: { role: string; content: string }[]) {
 		sent.push(messages);
+		if (down) throw new Error("the provider is down");
 		for (const delta of TURNS[Math.min(turn++, TURNS.length - 1)]) yield delta;
 	},
 }));
@@ -91,7 +93,22 @@ describe("chat stream", () => {
 
 	beforeEach(() => {
 		turn = 0;
+		down = false;
 		sent.length = 0;
+	});
+
+	test("reports why a turn failed, and nothing when it did not", async () => {
+		const failures: (string | undefined)[] = [];
+		const onTurn: ChatStreamOptions["onTurn"] = (_made, _revised, failure) => {
+			failures.push(failure);
+		};
+		const ask = { messages: [{ type: "human", content: "what is 1 + 2?" }] };
+
+		await stream(ask, { onTurn }).text();
+		down = true;
+		await stream(ask, { onTurn }).text();
+
+		expect(failures).toEqual([undefined, expect.stringContaining("down")]);
 	});
 
 	test("a steer posted mid-turn is recorded in order, and the inbox closes with the turn", async () => {
