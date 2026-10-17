@@ -124,6 +124,7 @@ interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
+- `packages/conversation` (`@repo/conversation-extension`) — the conversation as data the agent reads and other extensions consume.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
 - `packages/lint` (`@repo/lint-extension`) — the static check: what is wrong with source before it runs.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.

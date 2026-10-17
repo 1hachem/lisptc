@@ -53,6 +53,8 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
 ```
   packages/compaction     @repo/compaction-extension. Bounded output, so a
                           large result never floods the context.
+  packages/conversation   @repo/conversation-extension. The conversation as
+                          data the agent reads and extensions consume.
   packages/lint           @repo/lint-extension. The static check: what is
                           wrong with source before it runs.
   packages/llm            @repo/llm-extension. The language model as a
