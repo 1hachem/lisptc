@@ -27,6 +27,7 @@ import {
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
+import { messageWritten } from "../lib/written.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { AskCard } from "./ask-card.tsx";
 import { Building } from "./building.tsx";
@@ -37,6 +38,7 @@ import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 import { SteerQueue } from "./steer-queue.tsx";
 import { UserLine } from "./user-line.tsx";
+import { WrittenAs } from "./written-as.tsx";
 
 const FOLD_LINES = 25;
 const PAGE_LINES = 200;
@@ -273,6 +275,7 @@ function ChatLine({
 	const { shown } = useUI();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
+	const written = shown.lisp ? messageWritten(message) : undefined;
 	return (
 		<div className="min-w-0 break-words text-fg">
 			{reasoning && (
@@ -283,6 +286,7 @@ function ChatLine({
 					</div>
 				</div>
 			)}
+			{written && <WrittenAs written={written} ran={messageText(message)} />}
 			{isUserMessage(message) ? (
 				<UserLine text={messageText(message)} />
 			) : (

@@ -41,6 +41,7 @@ export interface ChatMessage {
 		ui?: unknown;
 		asks?: unknown;
 		prose?: unknown;
+		written?: unknown;
 		failed?: unknown;
 		source?: unknown;
 	};
