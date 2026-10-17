@@ -199,6 +199,10 @@ class Edits {
 		this.interp.defineGlobal(REJECTED, code, REJECTED_DOC);
 	}
 
+	base(): string | null {
+		return this.held() ?? this.stopped()?.code ?? null;
+	}
+
 	stopped(): Stopped | undefined {
 		const conversation = this.conversation();
 		return conversation === undefined
@@ -220,13 +224,13 @@ class Edits {
 	aim(): void {
 		const stopped = this.stopped();
 		this.fallback =
-			stopped !== undefined && stopped.code === this.held()
+			stopped !== undefined && stopped.code === this.base()
 				? failedForms(stopped).at(-1)?.form
 				: undefined;
 	}
 
 	apply(target: unknown, edit: (code: string) => string): string {
-		const code = this.held();
+		const code = this.base();
 		try {
 			if (code === null) throw new EditFailure("nothing was rejected to edit");
 			const form = target === undefined ? this.fallback : formNumberOf(target);
@@ -427,7 +431,7 @@ export function recoveryExtension(host: RecoveryHost): InterpExtension {
 				if (edits === undefined) return next(interp, code);
 				const kind = kindOf(interp, code);
 				if (kind === "mixed") return { code, rejected: ALONE };
-				const base = edits.held();
+				const base = edits.base();
 				let candidate = code;
 				if (kind === "edits") {
 					const result = await edited(interp, edits, code);

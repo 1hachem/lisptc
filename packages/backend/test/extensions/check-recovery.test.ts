@@ -52,6 +52,35 @@ describe("several broken forms, repaired through the conversation", () => {
 	});
 });
 
+describe("a stopped step read back before it is repaired", () => {
+	it("still takes an edit after a step that only looked at it", async () => {
+		const repl = checked();
+		await repl.turnStart();
+		const code = "(echo (car))";
+		const stopped = await repl.admit(code);
+		repl.stepEnd(
+			{ interp: repl.interp } as AgentTurn,
+			{
+				step: 1,
+				code,
+				output: stopped.rejected ?? "",
+				error: true,
+				failed: true,
+				latencyMs: 0,
+			},
+			"continue",
+		);
+		await repl.beginStep();
+		expect(
+			(await repl.admit("(echo (failed-forms))")).rejected,
+		).toBeUndefined();
+		expect(await repl.admit("(push-arg car '(1 2 3))")).toMatchObject({
+			code: "(echo (car '(1 2 3)))",
+			from: code,
+		});
+	});
+});
+
 describe("a step the check stops, repaired by an edit", () => {
 	it("pushes the argument a call was missing, and admits the result", async () => {
 		const repl = checked();
