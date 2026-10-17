@@ -16,7 +16,6 @@
     "test:watch": "turbo run test:watch",
     "test:evals": "turbo run test:evals",
     "test:nvim": "bash editors/nvim/tests/run.sh",
-    "test:hooks": "bash scripts/test-pre-commit.sh",
     "repl": "pnpm --filter @lisptc/cli repl",
     "repl:attach": "pnpm --silent --filter @lisptc/cli repl:attach",
     "repl:kill": "pnpm --silent --filter @lisptc/cli repl:kill",
