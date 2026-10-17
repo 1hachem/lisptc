@@ -10,6 +10,14 @@ if [ -z "$name" ]; then
 	exit 1
 fi
 
+types='wip|build|chore|ci|docs|eval|feat|fix|perf|refactor|revert|style|test|harness'
+if [[ "$name" =~ ^($types)[-+]([^/]+)$ ]]; then
+	name="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+elif ! [[ "$name" =~ ^($types)/[^/]+$ ]]; then
+	echo "worktree-create: name it <type>/<slug> after its branch, like feat/$name or feat-$name" >&2
+	exit 1
+fi
+
 common=$(git -C "${cwd:-$PWD}" rev-parse --path-format=absolute --git-common-dir)
 root=$(dirname "$common")
 path="$root/worktrees/$name"

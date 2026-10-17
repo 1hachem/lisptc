@@ -69,14 +69,27 @@ An agent's own calls are never refused.
 
 ## Worktrees
 
-Every git worktree lives in `worktrees/` at the repository root, one directory
-per branch, named after it. This holds for Claude, Codex and any other agent
-runner, and for a worktree you add by hand. Never put one under `.claude/`, a
-sibling of the repository, or a temporary directory.
+Every git worktree lives in `worktrees/` at the repository root, at the path of
+its branch: `worktrees/<type>/<slug>` for a branch named `<type>/<slug>`. The
+type is a commit type (`feat`, `fix`, `refactor`, `ci` and so on), so a branch
+is named for the commit it is headed to, and its worktree is filed with the
+others of its kind. This holds for Claude, Codex and any other agent runner, and
+for a worktree you add by hand. Never put one under `.claude/`, a sibling of the
+repository, a temporary directory, or flat at the top of `worktrees/`.
 
 The directory is tracked through its `.gitkeep`, and `.gitignore` keeps
-everything else in it out of git. Remove a worktree with `git worktree remove`
-once its branch is merged, so the directory does not fill with stale checkouts.
+everything else in it out of git. Move a worktree with `git worktree move`,
+never `mv`, so git keeps track of where it is.
+
+`.husky/post-checkout` removes a worktree added anywhere else, home directory
+included, and the hooks under `.agents/hooks/` hold Claude's own worktrees and
+its `git worktree move` to the same path.
+
+Remove a worktree with `git worktree remove` once its pull request is merged,
+and delete its branch with it. Do the same for a worktree whose branch has no
+remote and is no longer worked on. Never delete a worktree's directory by hand:
+git loses track of it, and what is left is a directory no git command will
+clean up.
 
 ## What this is
 
@@ -117,9 +130,11 @@ named only at a composition root:
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
 - `packages/permissions` (`@repo/permissions-extension`) — what a session may call: allowed, denied, or waiting on a human.
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
+- `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
+- `packages/workspace` (`@repo/workspace-extension`) — the workspace's settings and its chats.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
 
 Everything else:
@@ -237,6 +252,24 @@ extension module at all, type imports included.
 This is the part that rots first. A single type import from a layer above is all
 it takes to lose it. The mechanisms and how to add to them are in
 `packages/interpreter/AGENTS.md`.
+
+## Prompts
+
+**Every prompt an extension ships is written in caveman voice.** A `.ptc`
+prompt is read by the model on every turn, so each word it carries is paid for
+on every turn. Write a new one, and rewrite a changed one, by the rules of
+`.agents/skills/caveman/SKILL.md`. The skill exempts what is persisted
+outside chat; a prompt is the exception to that exemption. Every form, keyword,
+id and negation survives the rewrite exactly, and a test that pins the old
+wording is changed to match.
+
+The caveman voice is for the prose around the language, never for the language
+itself. Every symbol, operator, signature and example form a prompt carries is
+what the evaluator implements, so it is copied character for character. A
+rewrite that treats `*` or a backtick as markdown and strips it teaches the
+model code that does not run: `(* n n)` becomes `(n n)`, `let*` becomes `let`,
+`*version*` becomes `version`, a quasiquoted expansion loses its backtick. An
+example a prompt shows still evaluates to the result the prompt claims for it.
 
 ## Comments
 
@@ -357,10 +390,11 @@ step. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails
 there fails the same way locally, under the command it names.
 
-**Run `pnpm typecheck`, `pnpm knip` and `pnpm fallow` only at the end.** They
-are whole-repo sweeps. Run them when the user asks to commit or push, or says
-the work is done, and not after every change while it is still moving. Until
-then, check a change with the tests and the typecheck of the package it touches.
+**Do not run the checks yourself before a push.** `.husky/pre-push` runs them
+and refuses a push that fails, and CI runs them again. When the user asks to
+push, push. If the hook or CI fails, read the failure, fix it, and push again
+without being asked. While the work is still moving, check a change with the
+tests and the typecheck of the package it touches, and nothing wider.
 
 ## Commits
 

@@ -41,7 +41,12 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - name: Delete the preview link comment
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Take the preview link out of the pull request description
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -49,9 +54,4 @@ jobs:
         run: |
           live=$(gh pr view "$PR" --repo "$REPO" --json state,labels --jq '.state == "OPEN" and any(.labels[]; .name == "preview")')
           [ "$live" = true ] && exit 0
-          heading='**Preview**'
-          ids=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$heading\"))) | .id")
-          for id in $ids; do
-            gh api -X DELETE "repos/$REPO/issues/comments/$id"
-          done
+          .github/scripts/preview-link.sh "$PR"

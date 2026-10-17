@@ -6,6 +6,7 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     chrome-agent.url = "github:1hachem/chrome-agent";
+    agents.url = "github:numtide/llm-agents.nix/32b0d7443782bdeacea2bed59ef66d522b8a2097";
   };
 
   outputs = {
@@ -13,6 +14,7 @@
     nixpkgs-unstable,
     flake-utils,
     chrome-agent,
+    agents,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
@@ -89,6 +91,8 @@
           r2mount
           unstable.wrangler
           chrome-agent.packages.${system}.default
+          agents.packages.${system}.claude-code
+          agents.packages.${system}.hunk
           playwright-driver.browsers
           kubectl
           (wrapHelm kubernetes-helm {plugins = [kubernetes-helmPlugins.helm-diff];})

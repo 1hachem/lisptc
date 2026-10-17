@@ -19,6 +19,7 @@ import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
 export const Route = createFileRoute("/_authed")({
+	staticData: { themed: true },
 	beforeLoad: ({ context }) => {
 		if (context.auth.source === "server" && context.auth.token === null) {
 			throw redirect({ to: "/login" });

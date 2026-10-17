@@ -1,8 +1,10 @@
+import { themes } from "@repo/ui";
 import { useCallback } from "react";
 import { useAppearance } from "./appearance.tsx";
 import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
 import { useModelPicker } from "./model-picker.tsx";
+import { darkVariant } from "./theme-uses.ts";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
 
@@ -17,12 +19,24 @@ export interface Command {
 
 export const commands: Command[] = [
 	{ name: "/copy", desc: "copy the conversation to the clipboard" },
+	{ name: "/dark", desc: "switch to the dark variant of the theme" },
 	{ name: "/debug", desc: "show what each step sent back to the model" },
 	{ name: "/font", desc: "choose the font" },
 	{ name: "/model", desc: "choose the model this workspace runs on" },
 	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
-	{ name: "/panel", desc: "toggle the side panel", desktopOnly: true },
-	{ name: "/sidebar", desc: "toggle the sidebar", desktopOnly: true },
+	{
+		name: "/preferences",
+		desc: "toggle the preferences panel",
+		desktopOnly: true,
+		aliases: ["/panel", "/right"],
+	},
+	{ name: "/prompt", desc: "search the prompts sent in this workspace" },
+	{
+		name: "/sidebar",
+		desc: "toggle the sidebar",
+		desktopOnly: true,
+		aliases: ["/left"],
+	},
 	{ name: "/theme", desc: "choose the colour theme" },
 ];
 
@@ -30,6 +44,16 @@ export function matchesCommand(command: Command, typed: string): boolean {
 	const query = typed.toLowerCase();
 	return [command.name, ...(command.aliases ?? [])].some((name) =>
 		name.slice(1).startsWith(query),
+	);
+}
+
+export function canonicalCommand(typed: string): string {
+	const name = typed.toLowerCase();
+	return (
+		commands.find(
+			(command) =>
+				command.name === name || command.aliases?.includes(name) === true,
+		)?.name ?? name
 	);
 }
 
@@ -55,7 +79,8 @@ export function useCommandRunner() {
 	const store = useChatStore();
 	const newChat = useNewChat();
 	const { openModelPicker } = useModelPicker();
-	const { openThemePicker, openFontPicker } = useAppearance();
+	const { theme, chooseTheme, openThemePicker, openFontPicker } =
+		useAppearance();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
@@ -69,10 +94,16 @@ export function useCommandRunner() {
 				},
 				"/copy": () => copyConversation(transcript(store.getState().messages)),
 				"/sidebar": quietly(toggleLeft),
-				"/panel": quietly(toggleRight),
+				"/preferences": quietly(toggleRight),
 				"/model": quietly(openModelPicker),
 				"/theme": quietly(openThemePicker),
 				"/font": quietly(openFontPicker),
+				"/dark": () => {
+					const dark = darkVariant(themes, theme);
+					if (typeof dark === "string") return dark;
+					chooseTheme(dark.id);
+					return null;
+				},
 				"/debug": () => {
 					toggleChannel("model");
 					return shown.model
@@ -80,7 +111,7 @@ export function useCommandRunner() {
 						: "the model channel is shown";
 				},
 			};
-			return (await actions[name]?.()) ?? null;
+			return (await actions[canonicalCommand(name)]?.()) ?? null;
 		},
 		[
 			toggleLeft,
@@ -90,6 +121,8 @@ export function useCommandRunner() {
 			newChat,
 			store,
 			openModelPicker,
+			theme,
+			chooseTheme,
 			openThemePicker,
 			openFontPicker,
 		],

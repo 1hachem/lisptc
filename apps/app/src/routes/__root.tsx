@@ -8,12 +8,14 @@ import {
 	HeadContent,
 	Outlet,
 	Scripts,
+	useMatches,
 	useRouteContext,
 } from "@tanstack/react-router";
 import { Analytics } from "../lib/analytics.tsx";
 import { providerClient } from "../lib/auth-client.ts";
 import { ssrAuth } from "../lib/auth-server.ts";
-import { readFontPref, readThemePref } from "../lib/prefs.ts";
+import { preferencesQuery, useCachedPreferences } from "../lib/preferences.ts";
+import { fontOf, themeOf } from "../lib/resolved-preferences.ts";
 import appCss from "../styles/app.css?url";
 
 interface RouterContext {
@@ -27,7 +29,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 		if (auth.source === "server" && auth.token !== null) {
 			context.convexQueryClient.serverHttpClient?.setAuth(auth.token);
 		}
-		return { auth, theme: readThemePref(), font: readFontPref() };
+		return { auth };
+	},
+	loader: async ({ context }) => {
+		if (context.auth.source !== "server" || context.auth.token === null) return;
+		await context.queryClient.ensureQueryData(preferencesQuery);
 	},
 	head: () => ({
 		meta: [
@@ -46,14 +52,17 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-	const { queryClient, convexQueryClient, auth, theme, font } = useRouteContext(
-		{
-			from: Route.id,
-		},
-	);
+	const { queryClient, convexQueryClient, auth } = useRouteContext({
+		from: Route.id,
+	});
+	const themed = useMatches({
+		select: (matches) => matches.some((match) => match.staticData.themed),
+	});
+	const cached = useCachedPreferences(queryClient);
+	const stored = themed ? cached : undefined;
 
 	return (
-		<RootDocument theme={theme} font={font}>
+		<RootDocument theme={themeOf(stored)} font={fontOf(stored)}>
 			<ConvexBetterAuthProvider
 				client={convexQueryClient.convexClient}
 				authClient={providerClient}
