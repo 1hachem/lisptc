@@ -22,7 +22,11 @@ export function lintExtension(): InterpExtension {
 					(problem) => problem.severity === "error",
 				);
 				if (problems.length === 0) return next(interp, code);
-				return { code, rejected: rejection(problems) };
+				return {
+					code,
+					rejected: rejection(problems),
+					problems: problems.map(({ line, message }) => ({ line, message })),
+				};
 			});
 		},
 	});

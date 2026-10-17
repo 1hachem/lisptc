@@ -14,6 +14,9 @@ describe("admit", () => {
 		expect(admission.rejected).toContain(
 			"line 2: car: expected 1 argument, got 0",
 		);
+		expect(admission.problems).toEqual([
+			{ line: 2, message: "car: expected 1 argument, got 0" },
+		]);
 	});
 
 	it("rejects a form left open, even where prose surrounds it", async () => {

@@ -37,9 +37,15 @@ export interface StepContext {
 	emit(text: string): void;
 }
 
+export interface Problem {
+	readonly line: number;
+	readonly message: string;
+}
+
 export interface Admission {
 	readonly code: string;
 	readonly rejected?: string;
+	readonly problems?: readonly Problem[];
 	readonly because?: string;
 	readonly from?: string;
 }
