@@ -16,9 +16,6 @@ turns text into positioned atoms, forms and calls. `src/calls.ts` checks each
 call against the arity and the required keyword arguments its doc record
 declares, and owns the diagnostic shape every check returns.
 
-It has no prompt and no port yet. The rejection explains itself, so the model
-pays for it only on the step that needs it.
-
 ## Rules
 
 Read the host-port and seam rules in `packages/interpreter/AGENTS.md`. They

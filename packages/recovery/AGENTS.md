@@ -16,11 +16,8 @@ pure functions over source with no interpreter in them.
 Read the host-port and seam rules in `packages/interpreter/AGENTS.md`. They
 govern this package.
 
-It checks nothing itself and names no checker. It wraps the `admit` chain: what
-a checker below it rejects becomes `rejected`, and a step made only of edit
-forms is applied to `rejected` and handed down to be checked as the step's
-code. So it is listed before every extension that hooks `admit` at a
-composition root, or it never sees what they reject.
+It checks nothing itself and names no checker. At a composition root it comes
+before every extension that hooks `admit`, or it never sees what they reject.
 
 An edit is strict. It fails rather than guess: a replace that matches nowhere
 or more than once, a call that is not there or is there twice. A failed edit
