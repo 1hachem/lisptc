@@ -36,7 +36,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          PATHS: "/db /convex /convex-deploy /auth /api /web /ai /analytics"
           CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
 
   up:convex:
@@ -45,7 +45,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          PATHS: "/db /convex /convex-deploy /auth /api /web /ai /analytics"
           CMD: "docker compose up -d --wait convex-backend && docker compose run --rm --build convex-deploy"
 
   up:prod-local:
@@ -54,7 +54,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          PATHS: "/db /convex /convex-deploy /auth /api /web /ai /analytics"
           CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}'
       - echo "app http://localhost:3000 · dashboard http://127.0.0.1:6791"
 
@@ -74,7 +74,7 @@ tasks:
         vars:
           ENV: dev
           PATHS: "/convex /auth /convex-deploy"
-          CMD: "bash scripts/convex-env-sync.sh && pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
     desc: regenerate convex/_generated against the local deployment, without pushing
@@ -93,7 +93,7 @@ tasks:
         vars:
           ENV: dev
           PATHS: "/convex /auth /convex-deploy"
-          CMD: "bash scripts/convex-env-sync.sh && pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
 
   r2:
     desc: sync .r2 with the bucket (pull, push or sync; raw captures stay local)
