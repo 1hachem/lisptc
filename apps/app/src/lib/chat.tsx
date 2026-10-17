@@ -28,6 +28,7 @@ import { fileContext, type OpenFile } from "./files.ts";
 import { pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
+import { type ToolEnvelope, toolEnvelope } from "./tool-result.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
@@ -564,46 +565,19 @@ export function toolAnswers(
 	return answersOf(message.additional_kwargs);
 }
 
-export function toolModelOutput(message: ChatMessage): {
-	output: string;
-	error: boolean;
-} {
+export function toolModelOutput(message: ChatMessage): ToolEnvelope {
 	const text = messageText(message);
-	try {
-		const parsed = JSON.parse(text) as {
-			source?: unknown;
-			output?: unknown;
-			error?: unknown;
-		};
-		if (parsed?.source === "lisp-repl")
-			return {
-				output: String(parsed.output ?? ""),
-				error: Boolean(parsed.error),
-			};
-	} catch {}
-	return { output: text, error: false };
+	return toolEnvelope(text) ?? { output: text, error: false };
 }
 
-export function toolResult(message: ChatMessage): {
-	output: string;
-	error: boolean;
-} {
+export function toolResult(message: ChatMessage): ToolEnvelope {
 	const text = messageText(message);
+	const envelope = toolEnvelope(text);
+	if (envelope === undefined) return { output: text, error: false };
 	const display = message.additional_kwargs?.display;
-	try {
-		const parsed = JSON.parse(text) as {
-			source?: unknown;
-			output?: unknown;
-			error?: unknown;
-		};
-		if (parsed?.source === "lisp-repl")
-			return {
-				output:
-					typeof display === "string" ? display : String(parsed.output ?? ""),
-				error: Boolean(parsed.error),
-			};
-	} catch {}
-	return { output: text, error: false };
+	return typeof display === "string"
+		? { ...envelope, output: display }
+		: envelope;
 }
 
 export function messageText(message: ChatMessage): string {
