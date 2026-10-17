@@ -11,7 +11,7 @@ import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
 import { modelChoice, storedModel } from "./schema.js";
 
-const MAX_WORKSPACES = 64;
+export const MAX_WORKSPACES = 25;
 
 const PURGE_BATCH = 256;
 

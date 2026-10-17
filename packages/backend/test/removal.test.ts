@@ -174,6 +174,22 @@ describe("removing a workspace", () => {
 	});
 });
 
+describe("creating a workspace", () => {
+	it("refuses one past the cap of 25", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		for (let i = 1; i < 25; i++) {
+			await alice.as.mutation(api.workspaces.create, { name: `extra ${i}` });
+		}
+
+		await expect(
+			alice.as.mutation(api.workspaces.create, { name: "one too many" }),
+		).rejects.toThrow("TOO_MANY_WORKSPACES");
+		const listed = await alice.as.query(api.workspaces.list, {});
+		expect(listed).toHaveLength(25);
+	});
+});
+
 async function addChat(
 	t: TestConvex<typeof schema>,
 	who: Signed,
