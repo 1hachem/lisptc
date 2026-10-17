@@ -1,8 +1,8 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api.js";
 import { internalMutation, query } from "./_generated/server.js";
 import { requireUser } from "./lib/auth.js";
-
-const PURGE_BATCH = 256;
+import { dropWorkspace, MAX_WORKSPACES } from "./workspaces.js";
 
 export const me = query({
 	args: {},
@@ -29,21 +29,12 @@ export const purge = internalMutation({
 		const workspaces = await ctx.db
 			.query("workspaces")
 			.withIndex("by_owner", (q) => q.eq("ownerId", userId))
-			.take(PURGE_BATCH);
+			.take(MAX_WORKSPACES);
 		for (const workspace of workspaces) {
-			const chats = await ctx.db
-				.query("chats")
-				.withIndex("by_workspace", (q) => q.eq("workspaceId", workspace._id))
-				.take(PURGE_BATCH);
-			for (const chat of chats) {
-				const messages = await ctx.db
-					.query("messages")
-					.withIndex("by_chat_seq", (q) => q.eq("chatId", chat._id))
-					.take(PURGE_BATCH);
-				for (const message of messages) await ctx.db.delete(message._id);
-				if (messages.length < PURGE_BATCH) await ctx.db.delete(chat._id);
-			}
-			if (chats.length < PURGE_BATCH) await ctx.db.delete(workspace._id);
+			await dropWorkspace(ctx, workspace._id);
+		}
+		if (workspaces.length === MAX_WORKSPACES) {
+			await ctx.scheduler.runAfter(0, internal.users.purge, { userId });
 		}
 		return null;
 	},
