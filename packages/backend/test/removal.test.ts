@@ -39,8 +39,9 @@ describe("removing a chat", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
-		await alice.as.mutation(api.replImages.record, {
-			chatId,
+		const replId = await alice.as.mutation(api.repls.open, { chatId });
+		await t.mutation(internal.repls.record, {
+			replId,
 			call: 1,
 			format: 1,
 			chunks: ["{}", "[]"],
@@ -51,6 +52,7 @@ describe("removing a chat", () => {
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
 		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("repls").collect()),
 			...(await ctx.db.query("replImages").collect()),
 			...(await ctx.db.query("replImageChunks").collect()),
 		]);
@@ -104,17 +106,28 @@ describe("removing a workspace", () => {
 			chatId,
 			messages: [{ type: "human", content: "hello" }],
 		});
+		const replId = await alice.as.mutation(api.repls.open, { chatId });
+		await t.mutation(internal.repls.record, {
+			replId,
+			call: 1,
+			format: 1,
+			chunks: ["{}"],
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { chats, messages } = await t.run(async (ctx) => ({
+		const { chats, messages, repls, replImages } = await t.run(async (ctx) => ({
 			chats: await ctx.db.query("chats").collect(),
 			messages: await ctx.db.query("messages").collect(),
+			repls: await ctx.db.query("repls").collect(),
+			replImages: await ctx.db.query("replImages").collect(),
 		}));
 		expect(chats).toEqual([]);
 		expect(messages).toEqual([]);
+		expect(repls).toEqual([]);
+		expect(replImages).toEqual([]);
 	});
 
 	it("takes its secrets, oauth records, permissions and readme with it", async () => {

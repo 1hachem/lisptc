@@ -4,7 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel.js";
 import { type MutationCtx, mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { waitsOnUser } from "./lib/waiting.js";
-import { copyCheckpoint } from "./replImages.js";
+import { dropRepl, forkRepl } from "./repls.js";
 import { chatStatus } from "./schema.js";
 
 const MAX_CHATS = 200;
@@ -20,6 +20,7 @@ const chat = v.object({
 	archivedAt: v.optional(v.number()),
 	status: v.optional(chatStatus),
 	failure: v.optional(v.string()),
+	replId: v.optional(v.id("repls")),
 });
 
 export const list = query({
@@ -160,13 +161,14 @@ export const fork = mutation({
 				q.eq("chatId", chatId).lte("seq", upTo.seq),
 			)
 			.collect();
+		const call = kept.reduce((last, m) => Math.max(last, callOf(m)), 0);
 		const forked = await ctx.db.insert("chats", {
 			workspaceId: chat.workspaceId,
 			userId: user._id,
 			title: `${chat.title || "untitled"} (fork)`,
 			lastMessageAt: Date.now(),
+			replId: call > 0 ? await forkRepl(ctx, chat, call) : undefined,
 		});
-		let call = 0;
 		for (const message of kept) {
 			await ctx.db.insert("messages", {
 				chatId: forked,
@@ -178,9 +180,7 @@ export const fork = mutation({
 				truncated: message.truncated,
 				wireId: message.wireId,
 			});
-			call = Math.max(call, callOf(message));
 		}
-		if (call > 0) await copyCheckpoint(ctx, chatId, forked, call);
 		return forked;
 	},
 });
@@ -189,10 +189,10 @@ export const remove = mutation({
 	args: { chatId: v.id("chats") },
 	returns: v.null(),
 	handler: async (ctx, { chatId }) => {
-		await requireChat(ctx, chatId);
+		const { chat } = await requireChat(ctx, chatId);
 		await ctx.db.delete(chatId);
+		await dropRepl(ctx, chat);
 		await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
-		await ctx.scheduler.runAfter(0, internal.replImages.purge, { chatId });
 		return null;
 	},
 });

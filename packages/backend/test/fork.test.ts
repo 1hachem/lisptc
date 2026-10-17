@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import { MAX_TRANSCRIPT } from "../convex/limits.js";
 import { harness, signIn } from "./helpers.ts";
 
@@ -30,14 +30,15 @@ async function conversation() {
 			},
 		],
 	});
+	const replId = await alice.as.mutation(api.repls.open, { chatId });
 	for (const call of [1, 2])
-		await alice.as.mutation(api.replImages.record, {
-			chatId,
+		await t.mutation(internal.repls.record, {
+			replId,
 			call,
 			format: 1,
 			chunks: [JSON.stringify({ call })],
 		});
-	return { t, alice, chatId };
+	return { t, alice, chatId, replId };
 }
 
 describe("forking a chat at a message", () => {
@@ -57,24 +58,23 @@ describe("forking a chat at a message", () => {
 	});
 
 	it("leaves the original chat as it was", async () => {
-		const { alice, chatId } = await conversation();
+		const { t, alice, chatId, replId } = await conversation();
 		await alice.as.mutation(api.chats.fork, { chatId, messageId: "a1" });
 		const original = await alice.as.query(api.messages.transcript, { chatId });
 		expect(original).toHaveLength(5);
-		expect(
-			(await alice.as.query(api.replImages.latest, { chatId }))?.call,
-		).toBe(2);
+		expect((await t.query(internal.repls.latest, { replId }))?.call).toBe(2);
 	});
 
 	it("starts the fork's repl from the last call made up to that message", async () => {
-		const { alice, chatId } = await conversation();
+		const { t, alice, chatId, replId: originalRepl } = await conversation();
 		const forked = await alice.as.mutation(api.chats.fork, {
 			chatId,
 			messageId: "h2",
 		});
-		const latest = await alice.as.query(api.replImages.latest, {
-			chatId: forked,
-		});
+		const { replId } = await alice.as.query(api.chats.get, { chatId: forked });
+		if (replId === undefined) throw new Error("the fork has no repl");
+		expect(replId).not.toBe(originalRepl);
+		const latest = await t.query(internal.repls.latest, { replId });
 		expect(latest?.call).toBe(1);
 		expect(JSON.parse(latest?.chunks.join("") ?? "")).toEqual({ call: 1 });
 	});
@@ -86,8 +86,8 @@ describe("forking a chat at a message", () => {
 			messageId: "h1",
 		});
 		expect(
-			await alice.as.query(api.replImages.latest, { chatId: forked }),
-		).toBeNull();
+			(await alice.as.query(api.chats.get, { chatId: forked })).replId,
+		).toBeUndefined();
 	});
 
 	it("refuses a message that is not in the chat", async () => {

@@ -1,30 +1,35 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it } from "vitest";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import { MAX_PREFERENCES_BYTES, MAX_README_BYTES } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("repl checkpoint access", () => {
-	it("refuses another user's chat", async () => {
+	it("refuses to open another user's repl", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
+		await expect(bob.as.mutation(api.repls.open, { chatId })).rejects.toThrow();
+	});
+
+	it("refuses a repl whose chat was removed", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const replId = await alice.as.mutation(api.repls.open, { chatId });
+		await alice.as.mutation(api.chats.remove, { chatId });
 		await expect(
-			bob.as.mutation(api.replImages.record, {
-				chatId,
+			t.mutation(internal.repls.record, {
+				replId,
 				call: 1,
 				format: 1,
 				chunks: ["{}"],
 			}),
-		).rejects.toThrow();
-		await expect(
-			bob.as.query(api.replImages.latest, { chatId }),
-		).rejects.toThrow();
-		await expect(
-			bob.as.mutation(api.replImages.dropAfter, { chatId, call: 0 }),
 		).rejects.toThrow();
 	});
 

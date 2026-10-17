@@ -9,6 +9,7 @@ import {
 } from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
+import { dropRepl } from "./repls.js";
 import { modelChoice, storedModel } from "./schema.js";
 
 export const MAX_WORKSPACES = 25;
@@ -133,10 +134,8 @@ export const purge = internalMutation({
 			.take(PURGE_BATCH);
 		for (const chat of chats) {
 			await ctx.db.delete(chat._id);
+			await dropRepl(ctx, chat);
 			await ctx.scheduler.runAfter(0, internal.messages.purge, {
-				chatId: chat._id,
-			});
-			await ctx.scheduler.runAfter(0, internal.replImages.purge, {
 				chatId: chat._id,
 			});
 		}

@@ -1,10 +1,8 @@
 import type { Checkpoint, ImageStore } from "@repo/repl/image-store";
-import type { ConvexHttpClient } from "convex/browser";
-import { api } from "../convex/_generated/api.js";
+import { internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { REPL_IMAGE_CHUNK_CHARS } from "../convex/limits.ts";
-
-export type ImageClient = Pick<ConvexHttpClient, "query" | "mutation">;
+import type { ServerClient } from "./server-client.ts";
 
 interface StoredCheckpoint {
 	call: number;
@@ -26,13 +24,13 @@ function decode(stored: StoredCheckpoint | null): Checkpoint | undefined {
 
 export class ConvexImageStore implements ImageStore {
 	constructor(
-		private readonly chatId: Id<"chats">,
-		private readonly connect: () => ImageClient,
+		private readonly replId: Id<"repls">,
+		private readonly server: ServerClient,
 	) {}
 
 	async save({ call, image }: Checkpoint): Promise<void> {
-		await this.connect().mutation(api.replImages.record, {
-			chatId: this.chatId,
+		await this.server.mutation(internal.repls.record, {
+			replId: this.replId,
 			call,
 			format: image.format,
 			chunks: chunked(JSON.stringify(image)),
@@ -41,24 +39,24 @@ export class ConvexImageStore implements ImageStore {
 
 	async latest(): Promise<Checkpoint | undefined> {
 		return decode(
-			await this.connect().query(api.replImages.latest, {
-				chatId: this.chatId,
+			await this.server.query(internal.repls.latest, {
+				replId: this.replId,
 			}),
 		);
 	}
 
 	async at(call: number): Promise<Checkpoint | undefined> {
 		return decode(
-			await this.connect().query(api.replImages.at, {
-				chatId: this.chatId,
+			await this.server.query(internal.repls.at, {
+				replId: this.replId,
 				call,
 			}),
 		);
 	}
 
 	async dropAfter(call: number): Promise<void> {
-		await this.connect().mutation(api.replImages.dropAfter, {
-			chatId: this.chatId,
+		await this.server.mutation(internal.repls.dropAfter, {
+			replId: this.replId,
 			call,
 		});
 	}
