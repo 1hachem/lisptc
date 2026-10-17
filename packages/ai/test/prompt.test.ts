@@ -1,7 +1,7 @@
 import { Interp } from "@repo/interpreter/lisp";
+import { conversationVars } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
 import { IDENTITY, MAX_STEPS, systemPromptFor } from "../src/prompts/lisp.ts";
-import { snapshotConversation } from "../src/repl.ts";
 
 const PROMPT = systemPromptFor(new Interp());
 
@@ -96,7 +96,7 @@ describe("the REPL loop protocol", () => {
 	});
 
 	it("promises exactly the conversation globals the host injects", () => {
-		for (const name of Object.keys(snapshotConversation([]))) {
+		for (const name of Object.keys(conversationVars([]))) {
 			expect(PROMPT).toContain(`\`${name}\``);
 		}
 	});

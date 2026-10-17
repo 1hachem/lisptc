@@ -1,3 +1,4 @@
+import type { ConversationEntry } from "@repo/interpreter/conversation";
 import {
 	noAnnotations,
 	type Problem,
@@ -18,20 +19,14 @@ export function isUserPrompt(entry: TranscriptEntry): boolean {
 	return entry.role === "user" && entry.event === undefined;
 }
 
-export function snapshotConversation(
+export function conversationOf(
 	transcript: TranscriptEntry[],
-): Record<string, unknown> {
-	return {
-		conversation: transcript.map((e) => ({
-			role: e.event ? "system" : e.role,
-			content: e.content,
-			...problemsIn(e.content),
-		})),
-		"user-messages": transcript.filter(isUserPrompt).map((e) => e.content),
-		"assistant-messages": transcript
-			.filter((e) => e.role === "assistant")
-			.map((e) => e.content),
-	};
+): ConversationEntry[] {
+	return transcript.map((e) => ({
+		role: e.event ? "system" : e.role,
+		content: e.content,
+		...problemsIn(e.content),
+	}));
 }
 
 function problemsIn(content: string): { problems?: Problem[] } {
