@@ -84,6 +84,8 @@ const EDIT_FIRST = [
 	"rewrite only when no edit can say it.",
 ].join("\n");
 
+const EDITED = "edited the code the check stopped";
+
 const ALONE =
 	"edit forms change rejected and run alone: send them in a step with nothing else.";
 
@@ -260,13 +262,18 @@ export function recoveryExtension(host: RecoveryHost): InterpExtension {
 				if (edits === undefined) return next(interp, code);
 				const kind = kindOf(interp, code);
 				if (kind === "mixed") return { code, rejected: ALONE };
+				const base = edits.held();
 				let candidate = code;
 				if (kind === "edits") {
 					const result = await edited(interp, edits, code);
 					if (typeof result !== "string") return result;
 					candidate = result;
 				}
-				const admission = await next(interp, candidate);
+				const checked = await next(interp, candidate);
+				const admission =
+					kind === "edits" && base !== null
+						? { ...checked, because: EDITED, from: base }
+						: checked;
 				if (admission.rejected === undefined) {
 					edits.hold(null);
 					return admission;

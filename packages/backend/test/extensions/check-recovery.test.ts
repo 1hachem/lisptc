@@ -23,6 +23,8 @@ describe("a step the check stops, repaired by an edit", () => {
 		expect(stopped.rejected).toContain("(push-arg f value)");
 		expect(await repl.admit("(push-arg total 2)")).toEqual({
 			code: "(echo (total 1 2))",
+			because: "edited the code the check stopped",
+			from: expect.any(String),
 		});
 	});
 
@@ -35,6 +37,8 @@ describe("a step the check stops, repaired by an edit", () => {
 		);
 		expect(await repl.admit("Closing it.\n(close-parens)")).toEqual({
 			code: "(echo (+ 1 2))",
+			because: "edited the code the check stopped",
+			from: expect.any(String),
 		});
 	});
 

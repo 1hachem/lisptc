@@ -38,6 +38,8 @@ describe("an edit step", () => {
 		await w.admit("(defun total (xs) xs)\n(echo (totl '(1 2)))");
 		expect(await w.admit("(rename totl total)")).toEqual({
 			code: "(defun total (xs) xs)\n(echo (total '(1 2)))",
+			because: "edited the code the check stopped",
+			from: "(defun total (xs) xs)\n(echo (totl '(1 2)))",
 		});
 		expect(w.rejected()).toBe(null);
 	});
@@ -47,6 +49,8 @@ describe("an edit step", () => {
 		await w.admit("(echo (car '(1 2))");
 		expect(await w.admit("(close-parens)")).toEqual({
 			code: "(echo (car '(1 2)))",
+			because: "edited the code the check stopped",
+			from: expect.any(String),
 		});
 	});
 
@@ -55,6 +59,8 @@ describe("an edit step", () => {
 		await w.admit('(load-mcp :url "x")');
 		expect(await w.admit('(add-arg load-mcp :name "srv")')).toEqual({
 			code: '(load-mcp :url "x" :name "srv")',
+			because: "edited the code the check stopped",
+			from: expect.any(String),
 		});
 	});
 
@@ -71,7 +77,11 @@ describe("an edit step", () => {
 		await w.admit("(echo (totl 1)");
 		expect(
 			await w.admit('(revise :old "(totl 1)" :new "(+ 1 1)")\n(close-parens)'),
-		).toEqual({ code: "(echo (+ 1 1))" });
+		).toEqual({
+			code: "(echo (+ 1 1))",
+			because: "edited the code the check stopped",
+			from: expect.any(String),
+		});
 	});
 
 	it("keeps rejected as it was when an edit fails", async () => {
