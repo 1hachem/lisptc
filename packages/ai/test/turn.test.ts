@@ -261,7 +261,7 @@ describe("the agent turn", () => {
 		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
 	});
 
-	test("a steer's lisp runs when the steer is taken, and the model reads its result inside the steer", async () => {
+	test("a steer's lisp runs when the steer is taken, and the model reads its result as a system event after the steer", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
 		const pending = [{ id: "s1", content: "(+ 40 2)" }];
 
@@ -272,9 +272,10 @@ describe("the agent turn", () => {
 			type: "evaluated",
 			message: { type: "tool", additional_kwargs: { results: ["42"] } },
 		});
-		const steer = seen[1].messages.at(-1)?.content ?? "";
-		expect(steer.startsWith("(+ 40 2)\n\n")).toBe(true);
-		expect(steer).toContain('"tool_result"');
+		expect(seen[1].messages.slice(-2).map((m) => m.content)).toEqual([
+			"(+ 40 2)",
+			'<system-event source="lisp-repl">the user ran the code in their message above:\n\n(no output)</system-event>',
+		]);
 	});
 
 	test("the inbox is not read before the first step", async () => {

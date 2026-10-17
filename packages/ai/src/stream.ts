@@ -136,7 +136,7 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	for (const entry of (input.messages ?? []).map(toEntry)) {
 		const previous = transcript.at(-1);
 		if (entry.role === "tool" && previous && isUserPrompt(previous))
-			transcript[transcript.length - 1] = withItsResult(previous, entry);
+			transcript.splice(-1, 1, ...withItsResult(previous, entry));
 		else transcript.push(entry);
 	}
 	return transcript;

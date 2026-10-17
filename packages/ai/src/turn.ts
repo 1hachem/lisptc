@@ -132,10 +132,7 @@ async function* takeSteers({
 		yield { type: "steered", ...steer };
 		const evaluated = await evalMessage(repl, steer.content);
 		if (evaluated === undefined) continue;
-		transcript[transcript.length - 1] = withItsResult(
-			prompt,
-			resultEntry(evaluated),
-		);
+		transcript.splice(-1, 1, ...withItsResult(prompt, resultEntry(evaluated)));
 		yield { type: "evaluated", message: evaluated };
 	}
 	return taken;

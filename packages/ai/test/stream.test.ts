@@ -368,7 +368,7 @@ describe("chat stream", () => {
 		expect(reloaded?.content).toBe(live?.content);
 	});
 
-	test("a user message's eval result reaches the model inside that message and the wire as its own row", async () => {
+	test("a user message's eval result reaches the model as a system event after it and the wire as its own row", async () => {
 		const result = {
 			type: "tool",
 			content: replResultContent("3", false),
@@ -380,7 +380,10 @@ describe("chat stream", () => {
 
 		expect(
 			sent[0].filter((m) => m.role === "user").map((m) => m.content),
-		).toEqual([`what is (+ 1 2)\n\n${result.content}`]);
+		).toEqual([
+			"what is (+ 1 2)",
+			'<system-event source="lisp-repl">the user ran the code in their message above:\n\n3</system-event>',
+		]);
 		const first = records(body).find((r) => r.event === "values")?.data as {
 			messages: WireMessage[];
 		};
