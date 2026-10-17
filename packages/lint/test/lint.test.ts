@@ -91,6 +91,12 @@ describe("problemsIn", () => {
 		expect(problems("(defun f (car) (car 1 2))")).toEqual([]);
 	});
 
+	it("accepts a positional call that leaves optional keyword slots out", () => {
+		const own = linted();
+		runSync(own, "(defun kpi (&key label value unit) label)");
+		expect(problemsIn('(kpi "x")', own)).toEqual([]);
+	});
+
 	it("does not look inside a macro's arguments", () => {
 		const own = linted();
 		runSync(own, "(defmacro m (&rest body) nil)");
