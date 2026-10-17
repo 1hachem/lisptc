@@ -272,6 +272,9 @@ async function remaining(t: TestConvex<typeof schema>) {
 		workspaces: await ctx.db.query("workspaces").collect(),
 		chats: await ctx.db.query("chats").collect(),
 		messages: await ctx.db.query("messages").collect(),
+		repls: await ctx.db.query("repls").collect(),
+		replImages: await ctx.db.query("replImages").collect(),
+		replImageChunks: await ctx.db.query("replImageChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
@@ -286,6 +289,9 @@ const nothing = {
 	workspaces: [],
 	chats: [],
 	messages: [],
+	repls: [],
+	replImages: [],
+	replImageChunks: [],
 	memories: [],
 	secrets: [],
 	oauthRecords: [],
@@ -320,6 +326,25 @@ describe("deleting an account", () => {
 					slug: `extra-${i}`,
 				});
 			}
+		});
+
+		await deleteAccount(t, alice);
+
+		expect(await remaining(t)).toEqual(nothing);
+	});
+
+	it("takes the repl checkpoints of its chats", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const replId = await alice.as.mutation(api.repls.open, { chatId });
+		await t.mutation(internal.repls.record, {
+			replId,
+			call: 1,
+			format: 1,
+			chunks: ["{}", "[]"],
 		});
 
 		await deleteAccount(t, alice);
