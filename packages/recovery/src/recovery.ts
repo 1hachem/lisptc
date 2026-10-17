@@ -24,7 +24,7 @@ import type {
 	SessionHooks,
 } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
-import { formSpans } from "@repo/shared/lisp-forms";
+import { type FormSpan, formSpans, openForms } from "@repo/shared/lisp-forms";
 import { z } from "zod";
 import {
 	addArgument,
@@ -143,8 +143,29 @@ function lineAt(code: string, offset: number): number {
 	return code.slice(0, offset).split("\n").length;
 }
 
+function endOfUnclosed(code: string, [start, end]: FormSpan): number {
+	const column = start - (code.lastIndexOf("\n", start - 1) + 1);
+	const nextForm = /\n([ \t]*)['`]?\(/g;
+	nextForm.lastIndex = start;
+	for (let m = nextForm.exec(code); m !== null; m = nextForm.exec(code))
+		if (m[1].length <= column) return m.index;
+	return end;
+}
+
+function spansOf(code: string): FormSpan[] {
+	const spans = formSpans(code);
+	const last = spans.at(-1);
+	if (last === undefined || openForms(code.slice(...last)) === 0) return spans;
+	const cut = endOfUnclosed(code, last);
+	if (cut === last[1]) return spans;
+	const after = spansOf(code.slice(cut)).map(
+		([start, end]): FormSpan => [start + cut, end + cut],
+	);
+	return [...spans.slice(0, -1), [last[0], cut], ...after];
+}
+
 function failedForms({ code, problems }: Stopped): FailedForm[] {
-	return formSpans(code).flatMap(([start, end], i) => {
+	return spansOf(code).flatMap(([start, end], i) => {
 		const first = lineAt(code, start);
 		const last = lineAt(code, Math.max(start, end - 1));
 		const inside = problems.filter((p) => p.line >= first && p.line <= last);
@@ -165,18 +186,22 @@ function editInForm(
 	form: number,
 	edit: (text: string) => string,
 ): string {
-	const span = formSpans(code)[form - 1];
+	const span = spansOf(code)[form - 1];
 	if (span === undefined) throw new EditFailure(`rejected has no form ${form}`);
 	const [start, end] = span;
 	return code.slice(0, start) + edit(code.slice(start, end)) + code.slice(end);
 }
 
-function formNumberOf(record: unknown): number {
-	const form = Number(field(record, "form"));
+function formNumberOf(target: unknown): number {
+	const form = Number(
+		typeof target === "number" || typeof target === "bigint"
+			? target
+			: field(target, "form"),
+	);
 	if (!Number.isInteger(form) || form < 1)
 		throw new EvalException(
-			":in takes a form from (failed-forms), got",
-			record ?? null,
+			":in takes an entry of (failed-forms) or its form number, e.g. :in (car (failed-forms)), got",
+			target ?? null,
 		);
 	return form;
 }
@@ -289,7 +314,7 @@ function install(interp: Interp, edits: Edits): void {
 		"failed-forms",
 		0,
 		"(failed-forms)",
-		"The forms of the last step the check stopped that it found problems in, last one last. Each is an alist with form, line, text and problems; hand one to an edit as :in.",
+		"The forms of the last step the check stopped that it found problems in, last one last. Each is an alist with form, line, text and problems; hand one, or its form number, to an edit as :in.",
 		z.tuple([]),
 		() => jsonToLisp(edits.failed()),
 	);

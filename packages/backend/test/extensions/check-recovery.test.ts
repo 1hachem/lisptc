@@ -52,6 +52,42 @@ describe("several broken forms, repaired through the conversation", () => {
 	});
 });
 
+describe("a form left open among other broken forms", () => {
+	it("reports the forms before it, and repairs each by edit", async () => {
+		const repl = checked();
+		await repl.turnStart();
+		const code = "(echo (car))\n(echo (+ 1 2)\n(echo (length '(1 2)))";
+		const stopped = await repl.admit(code);
+		expect(stopped.problems).toEqual([
+			{ line: 1, message: "car: expected 1 argument, got 0" },
+			{
+				line: 2,
+				message: 'unexpected end of input, this "(" is never closed',
+			},
+		]);
+		repl.stepEnd(
+			{ interp: repl.interp } as AgentTurn,
+			{
+				step: 1,
+				code,
+				output: stopped.rejected ?? "",
+				error: true,
+				failed: true,
+				latencyMs: 0,
+			},
+			"continue",
+		);
+		await repl.beginStep();
+		const repaired = await repl.admit(
+			"(close-parens)\n(push-arg car '(1 2) :in (get-in (car (failed-forms)) :form))",
+		);
+		expect(repaired.rejected).toBeUndefined();
+		expect(repaired.code).toBe(
+			"(echo (car '(1 2)))\n(echo (+ 1 2))\n(echo (length '(1 2)))",
+		);
+	});
+});
+
 describe("a stopped step read back before it is repaired", () => {
 	it("still takes an edit after a step that only looked at it", async () => {
 		const repl = checked();

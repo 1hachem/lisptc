@@ -182,10 +182,61 @@ describe("the failed forms of the last stopped step", () => {
 		expect(admission.code).toBe("(echo (total 1))\n(echo (total 2))");
 	});
 
-	it("refuses an :in that is not a failed form", async () => {
+	it("takes a failed form's number as :in", async () => {
+		const w = await stoppedTwice();
+		await w.admit(
+			"(rename totl total :in (get-in (car (failed-forms)) :form))",
+		);
+		expect(w.rejected()).toBe("(echo (total 1))\n(echo (totl 2))");
+	});
+
+	it("refuses an :in that is neither a failed form nor its number", async () => {
+		const w = await stoppedTwice();
+		const admission = await w.admit('(rename totl total :in "first")');
+		expect(admission.rejected).toContain(
+			":in takes an entry of (failed-forms) or its form number",
+		);
+		expect(w.rejected()).toBe(both);
+	});
+
+	it("refuses an :in number past the last form", async () => {
 		const w = await stoppedTwice();
 		const admission = await w.admit("(rename totl total :in 5)");
-		expect(admission.rejected).toContain(":in takes a form");
+		expect(admission.rejected).toContain("rejected has no form 5");
 		expect(w.rejected()).toBe(both);
+	});
+});
+
+describe("a form left open among others", () => {
+	const code = "(echo (car))\n(echo (+ 1 2)\n(echo (length '(1 2)))";
+
+	async function stopped() {
+		const w = world();
+		await w.admit(code);
+		w.stopped(code, [1, 2]);
+		return w;
+	}
+
+	it("ends where the next form starts at its depth, not at the end of the step", async () => {
+		const w = await stopped();
+		expect(w.read("(length (failed-forms))")).toBe(2n);
+		expect(w.read("(get-in (car (cdr (failed-forms))) :text)")).toBe(
+			"(echo (+ 1 2)",
+		);
+	});
+
+	it("closes in place, leaving the forms after it alone", async () => {
+		const w = await stopped();
+		expect((await w.admit("(close-parens)")).code).toBe(
+			"(echo (car))\n(echo (+ 1 2))\n(echo (length '(1 2)))",
+		);
+	});
+
+	it("runs to the end of the step when nothing after it starts at its depth", async () => {
+		const w = world();
+		const open = "(defun f (x)\n  (+ x 1)";
+		await w.admit(open);
+		w.stopped(open, [1]);
+		expect(w.read("(get-in (car (failed-forms)) :text)")).toBe(open);
 	});
 });
