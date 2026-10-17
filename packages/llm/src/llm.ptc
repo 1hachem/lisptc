@@ -49,7 +49,7 @@ Options, all optional, every call: :provider, keyword from (llm/providers) ·
 :low, :medium or :high · :timeout ms, default 60000. Failed or timed-out call
 raises: wrap in try when you have fallback.
 
-Global llm-defaults = keyword list every call starts from; call-site option
+Global *llm-defaults* = keyword list every call starts from; call-site option
 wins. (with-llm (option...) body...) extends it for one block, restores after:
 
 (with-llm (:provider :openrouter :max-tokens 120)

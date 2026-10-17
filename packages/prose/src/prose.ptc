@@ -1,7 +1,7 @@
 PROSE AROUND THE FORMS
 
 Only parenthesised forms are program text. REPL skips prose around them, and a
-parenthesised aside whose head names nothing that exists.
+parenthesised aside whose head names nothing that exists is prose too.
 
 Ending the loop: prose alone
 
