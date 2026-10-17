@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authed/$workspaceId/preferences")({
 function PreferencesFile() {
 	const { theme, font, openThemePicker, openFontPicker } = useAppearance();
 	const { shown, metaShown } = useUI();
-	const { order } = useSidebarOrder();
+	const { order, hidden } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
 
 	return (
@@ -25,6 +25,7 @@ function PreferencesFile() {
 					channels: shown,
 					metadata: metaShown,
 					sidebar: order,
+					hidden,
 					motion,
 				}),
 			}}

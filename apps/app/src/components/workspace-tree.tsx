@@ -9,6 +9,7 @@ import {
 	ShieldKeyIcon,
 	StickyNote01Icon,
 	TaskDone01Icon,
+	TestTube01Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
@@ -45,6 +46,7 @@ const PLACEHOLDERS = [
 	"triggers",
 	"tasks",
 	"ui",
+	"tests",
 ] as const;
 
 type Folder =
@@ -62,6 +64,7 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
 	ui: PaintBoardIcon,
+	tests: TestTube01Icon,
 };
 
 function useLeave(workspaceId: Id<"workspaces">) {
@@ -358,7 +361,7 @@ export function WorkspaceTree({
 		convexQuery(api.memories.list, { workspaceId }),
 	);
 
-	const { order, reorder } = useSidebarOrder();
+	const { shown, reorder } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
 
 	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
@@ -416,6 +419,7 @@ export function WorkspaceTree({
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),
 		ui: placeholder("ui"),
+		tests: placeholder("tests"),
 		"README.md": () => <RootFile workspaceId={workspaceId} page="readme" />,
 		"settings.ptc": () => (
 			<RootFile workspaceId={workspaceId} page="settings" />
@@ -428,7 +432,7 @@ export function WorkspaceTree({
 	return (
 		<FileTree>
 			<SortableTree
-				order={order}
+				order={shown}
 				onReorder={reorder}
 				onPickUp={(name) => {
 					if (isFolder(name) && folder(name).open) folder(name).onToggle();
