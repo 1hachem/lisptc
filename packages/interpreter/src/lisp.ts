@@ -109,6 +109,16 @@ export interface State<T> {
 	set(value: T): void;
 }
 
+export function detachedState<T>(initial: T): State<T> {
+	let value = initial;
+	return {
+		get: () => value,
+		set: (next) => {
+			value = next;
+		},
+	};
+}
+
 export interface Contents {
 	readonly globals: readonly (readonly [Sym, unknown, string | undefined])[];
 	readonly docs: readonly (readonly [string, Doc])[];
