@@ -4,11 +4,11 @@ import {
 	compactionExtension,
 } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
-import { llmSlot, type Observed } from "@repo/interpreter/observe";
-import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import type { InterpExtension } from "@repo/interpreter/session";
 import type {
 	ConnectResult,
 	McpClient,
+	StartWatch,
 	ToolCall,
 } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
@@ -35,15 +35,6 @@ export function modelFacing(
 		proseExtension(proseHost),
 		uiExtension(uiHost),
 	];
-}
-
-export function observedExtension(): InterpExtension {
-	const observed: Observed = {};
-	return Object.assign(() => {}, {
-		session(hooks: SessionHooks): void {
-			hooks.fill(llmSlot, observed);
-		},
-	});
 }
 
 export function memoryRepl(
@@ -90,11 +81,11 @@ export function mockMcpClient(
 
 	async function connect(
 		conf: { name: string },
-		signal?: AbortSignal,
+		watch?: StartWatch,
 	): Promise<ConnectResult> {
 		const spec = servers[conf.name];
 		if (!spec) throw new Error(`cannot start MCP server "${conf.name}"`);
-		if (spec.connectDelayMs) await delay(spec.connectDelayMs, signal);
+		if (spec.connectDelayMs) await delay(spec.connectDelayMs, watch?.signal);
 		if (spec.tools.length === 0)
 			throw new Error("connected but the server exposed no tools");
 		const serverId = randomUUID();
@@ -121,6 +112,7 @@ export function mockMcpClient(
 		disconnect: async (serverId) => {
 			live.delete(serverId);
 		},
+		asleep: async () => false,
 		login: async () => ({ authUrl: null }),
 		logout: async () => {},
 		authorize: async () => {},

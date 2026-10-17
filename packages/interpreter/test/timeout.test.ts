@@ -17,4 +17,26 @@ describe("withTimeout", () => {
 		await expect(late).rejects.toBeInstanceOf(EvalException);
 		await expect(late).rejects.toThrow("fetch timed out: 5");
 	});
+
+	it("names the work still running when it says what it is doing", async () => {
+		const late = withTimeout(
+			new Promise(() => {}),
+			5,
+			"await",
+			() => "fetching",
+		);
+		await expect(late).rejects.toThrow(
+			"await timed out after 0.005s while the work kept running: fetching. It goes on by itself, so await the same promise again to keep waiting",
+		);
+	});
+
+	it("keeps the plain message when the work says nothing", async () => {
+		const late = withTimeout(
+			new Promise(() => {}),
+			5,
+			"await",
+			() => undefined,
+		);
+		await expect(late).rejects.toThrow("await timed out: 5");
+	});
 });

@@ -76,7 +76,9 @@ export function registerPromises(interp: Interp): void {
 		([rest]) => {
 			const args = listToArray(rest);
 			const [promise] = toPromises(args[0]);
-			return withTimeout(promise, parseTimeout(args[1]), "await");
+			return withTimeout(promise, parseTimeout(args[1]), "await", () =>
+				interp.async.progressOf(promise),
+			);
 		},
 	);
 

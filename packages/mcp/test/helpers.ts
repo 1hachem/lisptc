@@ -12,13 +12,19 @@ export function recordingHost(): McpHost & {
 	ensured: ConnConfig[];
 	stopped: string[];
 	stoppedAll: number;
+	uses: string[];
+	sleeping: Set<string>;
 } {
 	const ensured: ConnConfig[] = [];
 	const stopped: string[] = [];
+	const uses: string[] = [];
+	const sleeping = new Set<string>();
 	let stoppedAll = 0;
 	return {
 		ensured,
 		stopped,
+		uses,
+		sleeping,
 		get stoppedAll() {
 			return stoppedAll;
 		},
@@ -34,6 +40,10 @@ export function recordingHost(): McpHost & {
 		},
 		status: (name): ServerState => (name === "known" ? "running" : "unknown"),
 		logs: (name) => (name === "known" ? "the fallback's log" : ""),
+		used(name) {
+			uses.push(name);
+		},
+		asleep: async (name) => sleeping.has(name),
 	};
 }
 

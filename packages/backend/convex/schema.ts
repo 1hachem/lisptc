@@ -26,6 +26,20 @@ function pair<P extends ProviderName, M extends string>(choice: {
 	});
 }
 
+export const mcpServerPhase = v.union(
+	v.literal("starting"),
+	v.literal("ready"),
+	v.literal("sleeping"),
+	v.literal("failed"),
+);
+
+export const mcpStatePhase = v.union(
+	v.literal("bound"),
+	v.literal("pending"),
+	v.literal("resizing"),
+	v.literal("released"),
+);
+
 export const modelChoice = v.union(...CATALOGUED_CHOICES.map(pair));
 
 export const storedModel = v.union(
@@ -136,4 +150,28 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	mcpServers: defineTable({
+		workspaceId: v.id("workspaces"),
+		server: v.string(),
+		phase: mcpServerPhase,
+		reason: v.optional(v.string()),
+		observedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_server", ["workspaceId", "server"]),
+
+	mcpState: defineTable({
+		workspaceId: v.id("workspaces"),
+		server: v.string(),
+		name: v.string(),
+		path: v.string(),
+		size: v.string(),
+		phase: mcpStatePhase,
+		lastAttached: v.optional(v.number()),
+		releasedAt: v.optional(v.number()),
+		observedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_server_name", ["workspaceId", "server", "name"]),
 });

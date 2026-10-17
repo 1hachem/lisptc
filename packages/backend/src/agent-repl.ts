@@ -8,8 +8,8 @@ import { introspectionHost } from "@repo/introspection-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
-import { DockerHost } from "@repo/mcp-extension/docker-host";
-import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { containerHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import type { ServerReporter } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -43,6 +43,20 @@ import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
 
 export type Connect = () => WorkspaceClient;
+
+function reportsOf(
+	workspaceId: Id<"workspaces">,
+	connect: Connect,
+): ServerReporter {
+	let reported: Promise<unknown> = Promise.resolve();
+	return (report) => {
+		reported = reported
+			.then(() =>
+				connect().mutation(api.mcpServers.report, { workspaceId, ...report }),
+			)
+			.catch(() => {});
+	};
+}
 
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
@@ -78,7 +92,7 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
-				host: new DockerHost(),
+				host: containerHost(workspaceId, reportsOf(workspaceId, connect)),
 			}),
 			policy: permissions.rules,
 		}),

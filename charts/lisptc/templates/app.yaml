@@ -14,7 +14,7 @@ kind: Deployment
 metadata:
   name: app
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "3"
     secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1
@@ -31,6 +31,7 @@ spec:
       labels:
         app: app
     spec:
+      serviceAccountName: {{ .Values.app.serviceAccount }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       containers:
@@ -46,6 +47,12 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.app.port | quote }}
+            - name: LISPTC_MCP_HOST
+              value: kubernetes
+            - name: LISPTC_MCP_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: LISPTC_MCP_IMAGE_TAG
+              value: {{ include "lisptc.imageTag" (list . .Values.app.image.tag) | quote }}
             {{- include "lisptc.previewEnv" (list . (dict
                 "APP_URL" (include "lisptc.appHostname" .))) | nindent 12 }}
             {{- include "lisptc.previewConvexEnv" . | nindent 12 }}

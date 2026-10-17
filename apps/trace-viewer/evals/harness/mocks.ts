@@ -6,6 +6,7 @@ import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type {
 	ConnectResult,
 	McpClient,
+	StartWatch,
 	ToolCall,
 } from "@repo/mcp-extension/ports";
 import {
@@ -107,7 +108,7 @@ function mockClient(spec: MockSpec): McpClient {
 
 	async function connect(
 		conf: { name: string },
-		signal?: AbortSignal,
+		watch?: StartWatch,
 	): Promise<ConnectResult> {
 		const name = conf.name;
 		const server = spec.servers[name];
@@ -117,7 +118,8 @@ function mockClient(spec: MockSpec): McpClient {
 			);
 			throw new Error(`cannot start MCP server "${name}"`);
 		}
-		if (server.connectDelayMs) await delay(server.connectDelayMs, signal);
+		if (server.connectDelayMs)
+			await delay(server.connectDelayMs, watch?.signal);
 		if (server.fails) throw new Error(server.fails);
 		if (server.tools.length === 0)
 			throw new Error("connected but the server exposed no tools");
@@ -156,6 +158,7 @@ function mockClient(spec: MockSpec): McpClient {
 		disconnect: async (serverId) => {
 			live.delete(serverId);
 		},
+		asleep: async () => false,
 		login: async () => ({ authUrl: null }),
 		logout: async () => {},
 		authorize: async () => {},
