@@ -1,6 +1,10 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
+	type ConversationEntry,
+	conversationSlot,
+} from "@repo/interpreter/conversation";
+import {
 	driveAsync,
 	type Eval,
 	type Hold,
@@ -326,10 +330,30 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 }
 
+export function conversationVars(
+	entries: readonly ConversationEntry[],
+): Record<string, unknown> {
+	return {
+		conversation: entries,
+		"user-messages": entries
+			.filter((e) => e.role === "user")
+			.map((e) => e.content),
+		"assistant-messages": entries
+			.filter((e) => e.role === "assistant")
+			.map((e) => e.content),
+	};
+}
+
 export class AgentRepl extends MemoryRepl {
 	private finished = false;
 	private pendingProse: string[] = [];
 	private readonly conversationVars = new Map<string, unknown>();
+	private conversation: readonly ConversationEntry[] = [];
+
+	constructor(options: ReplOptions) {
+		super(options);
+		this.hooks.fill(conversationSlot, { entries: () => this.conversation });
+	}
 
 	protected override setup(interp: Interp): void {
 		const vars = this.conversationVars;
@@ -486,6 +510,11 @@ export class AgentRepl extends MemoryRepl {
 				noAnnotations(),
 			),
 		};
+	}
+
+	setConversation(entries: readonly ConversationEntry[]): void {
+		this.conversation = entries;
+		this.setConversationVars(conversationVars(entries));
 	}
 
 	setConversationVars(vars: Record<string, unknown>): void {
