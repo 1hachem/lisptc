@@ -58,6 +58,59 @@ describe("extensions", () => {
 	});
 });
 
+describe("the language reference", () => {
+	it("documents multiplication", () => {
+		expect(LANGUAGE_REFERENCE).toContain("(* n...) product, 1 if none");
+	});
+
+	it.each([
+		["(* 2 3)", "6"],
+		["(* 2 3.0)", "6.0"],
+	])("shows %s is %s, and it is", (form, value) => {
+		expect(LANGUAGE_REFERENCE).toContain(`${form} is ${value}`);
+		expect(ev(form)).toBe(value);
+	});
+
+	it("shows a mapcar that squares", () => {
+		const form = "(mapcar (lambda (n) (* n n)) '(1 2 3))";
+		expect(LANGUAGE_REFERENCE).toContain(`${form} gives (1 4 9)`);
+		expect(ev(form)).toBe("(1 4 9)");
+	});
+
+	it("names let* as the sequential binding", () => {
+		expect(LANGUAGE_REFERENCE).toContain(
+			"(let* ((name val) ...) body...) sequential",
+		);
+		expect(ev("(let* ((a 1) (b (+ a 1))) b)")).toBe("2");
+	});
+
+	it("names the earmuffed globals that exist", () => {
+		expect(LANGUAGE_REFERENCE).toContain(
+			"Globals: *gensym-counter*, *version*.",
+		);
+		expect(() => ev("*gensym-counter*")).not.toThrow();
+		expect(() => ev("*version*")).not.toThrow();
+	});
+
+	it("quasiquotes the swap expansion", () => {
+		const swap =
+			"(defmacro swap (a b)\n  `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))";
+		expect(LANGUAGE_REFERENCE).toContain(swap);
+		const interp = freshInterp();
+		runSync(interp, swap);
+		expect(ev("(let ((x 1) (y 2)) (swap x y) (list x y))", interp)).toBe(
+			"(2 1)",
+		);
+	});
+
+	it("shows a try whose handler runs", () => {
+		expect(LANGUAGE_REFERENCE).toContain('(try\n  (error "boom")');
+		expect(ev('(try (error "boom") (catch (e) (concat "failed: " e)))')).toBe(
+			'"failed: boom"',
+		);
+	});
+});
+
 describe("builtin kinds", () => {
 	it("watches the promise a promise builtin returns", async () => {
 		const interp = freshInterp();

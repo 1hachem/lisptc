@@ -22,7 +22,7 @@ clicks, types, submits, each interaction running Lisp in this same REPL.
   Most understanding per token: a glance says what a 27-row table says in a
   screenful. :hint is smaller line under it.
 - (ui/badge text [:tone "ok"]) short status label. :tone only "ok", "warn",
-  "bad", "info" or "muted"; any other errors, do not invent one. For *state*:
+  "bad", "info" or "muted"; any other tone is an error, do not invent one. For *state*:
   status, severity, check result, where a sentence is noise.
 - (ui/link text url) opens in new tab. Use for URL a tool handed you, so user
   follows it, not copies it from a table.
