@@ -29,7 +29,6 @@ export function WrittenAs({ written, ran }: { written: Written; ran: string }) {
 				<LispText>{written.text}</LispText>
 			</div>
 			<div className="flex flex-wrap items-center gap-3 text-[12px]">
-				{written.because && <span>{written.because}</span>}
 				{changes.length > 0 && (
 					<button
 						type="button"

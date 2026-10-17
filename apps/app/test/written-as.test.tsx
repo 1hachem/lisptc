@@ -92,7 +92,6 @@ describe("WrittenAs", () => {
 			/>,
 		);
 		expect(host.textContent).toContain("(rename totl total)");
-		expect(host.textContent).toContain("edited the code the check stopped");
 		const change = (kind: string) =>
 			[...host.querySelectorAll(`[data-change="${kind}"]`)].map(
 				(line) => line.textContent,
