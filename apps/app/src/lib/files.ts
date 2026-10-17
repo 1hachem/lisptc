@@ -45,6 +45,7 @@ export function preferencesSource(preferences: {
 	channels: Record<string, boolean>;
 	metadata: Record<string, boolean>;
 	sidebar: readonly string[];
+	hidden: readonly string[];
 	motion: string;
 }): string {
 	return [
@@ -53,6 +54,7 @@ export function preferencesSource(preferences: {
 		`  :channels ${toggles(preferences.channels)}`,
 		`  :metadata ${toggles(preferences.metadata)}`,
 		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
+		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
 		`  :motion ${quoted(preferences.motion)})`,
 	].join("\n");
 }
