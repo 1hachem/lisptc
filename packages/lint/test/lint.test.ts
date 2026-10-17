@@ -26,6 +26,19 @@ describe("admit", () => {
 		);
 	});
 
+	it("still reports the mistakes in the forms before one left open", async () => {
+		const admission = await admit(
+			"(echo (car))\n(echo (+ 1 2)\n(echo (length '(1 2)))",
+		);
+		expect(admission.problems).toEqual([
+			{ line: 1, message: "car: expected 1 argument, got 0" },
+			{
+				line: 2,
+				message: 'unexpected end of input, this "(" is never closed',
+			},
+		]);
+	});
+
 	it("rejects source that does not read", async () => {
 		const admission = await admit("(car '(1 2)");
 		expect(admission.rejected).toContain("line 1: unexpected end of input");

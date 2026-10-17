@@ -10,8 +10,10 @@ export type { Problem } from "./check.ts";
 
 export function checkSource(interp: Interp, code: string): Problem[] {
 	const unclosed = unclosedIn(code);
-	if (unclosed !== undefined) return [unclosed];
-	return problemsIn(formsAsRead(interp, code), interp);
+	if (unclosed === undefined)
+		return problemsIn(formsAsRead(interp, code), interp);
+	const before = code.slice(0, unclosed.at);
+	return [...problemsIn(formsAsRead(interp, before), interp), unclosed.problem];
 }
 
 export function lintExtension(): InterpExtension {

@@ -89,15 +89,23 @@ function opensForm(text: string, at: number): boolean {
 	return (at === 0 || /\s/.test(text[at - 1])) && /[^\s()]/.test(after);
 }
 
-export function unclosedIn(code: string): Problem | undefined {
-	let found: Problem | undefined;
+export interface Unclosed {
+	problem: Problem;
+	at: number;
+}
+
+export function unclosedIn(code: string): Unclosed | undefined {
+	let found: Unclosed | undefined;
 	formSpans(code, {
 		unclosed(text, at) {
 			if (found === undefined && opensForm(text, at))
 				found = {
-					line: text.slice(0, at).split("\n").length,
-					message: 'unexpected end of input, this "(" is never closed',
-					severity: "error",
+					at,
+					problem: {
+						line: text.slice(0, at).split("\n").length,
+						message: 'unexpected end of input, this "(" is never closed',
+						severity: "error",
+					},
 				};
 			return "unclosed";
 		},
