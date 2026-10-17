@@ -126,6 +126,48 @@ describe("a thread left idle", () => {
 		expect(told).toEqual([["thread-i", { saved: true }]]);
 	});
 
+	it("is saved and closed with the rest when the host shuts down", async () => {
+		const told: [string, Closed][] = [];
+		const repls = savedRepls([], (threadId, closed) => {
+			told.push([threadId, closed]);
+		});
+		await (await repls.get("thread-j")).eval("(setq x 41)");
+		await (await repls.get("thread-k")).eval("(setq y 1)");
+		const opening = repls.get("thread-l");
+		await repls.close();
+
+		expect(await opening).toBeDefined();
+		expect(repls.peek("thread-j")).toBeUndefined();
+		expect(repls.peek("thread-k")).toBeUndefined();
+		expect(repls.peek("thread-l")).toBeUndefined();
+		expect(told).toEqual([
+			["thread-j", { saved: true }],
+			["thread-k", { saved: true }],
+			["thread-l", { saved: true }],
+		]);
+		expect(
+			(await (await repls.get("thread-j")).evalOutput("(echo x)")).user,
+		).toBe("41\n");
+	});
+
+	it("waits for a running call before it shuts down", async () => {
+		const { extension, open } = gated();
+		const repls = savedRepls([extension]);
+		const repl = await repls.get("thread-m");
+		const running = repl.evalOutput("(slow)");
+		let shut = false;
+		const closing = repls.close().then(() => {
+			shut = true;
+		});
+		await Promise.resolve();
+
+		expect(shut).toBe(false);
+		open();
+		await running;
+		await closing;
+		expect(shut).toBe(true);
+	});
+
 	it("is not closed while a call is still running", async () => {
 		vi.useFakeTimers();
 		const { extension, open } = gated();

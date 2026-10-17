@@ -97,6 +97,19 @@ export class ReplStore<Id extends string = string> {
 			standing.timer = this.lapseIn(threadId, repl, left);
 			return;
 		}
+		this.shut(threadId, repl);
+	}
+
+	async close(): Promise<void> {
+		await Promise.allSettled(this.opening.values());
+		for (const [threadId, { repl, timer }] of [...this.repls]) {
+			clearTimeout(timer);
+			this.shut(threadId, repl);
+		}
+		await Promise.all(this.closing.values());
+	}
+
+	private shut(threadId: Id, repl: AgentRepl): void {
 		this.repls.delete(threadId);
 		const closed = repl
 			.close()
