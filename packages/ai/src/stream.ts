@@ -71,7 +71,7 @@ function resultMessage(
 	return {
 		type: "tool",
 		content: event.rejected
-			? checkResultContent(event.output)
+			? checkResultContent(event.output, event.problems)
 			: replResultContent(event.output, event.error),
 		id: crypto.randomUUID(),
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),

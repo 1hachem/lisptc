@@ -1,4 +1,8 @@
-import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
+import {
+	noAnnotations,
+	type Problem,
+	type StepAnnotations,
+} from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
@@ -21,12 +25,27 @@ export function snapshotConversation(
 		conversation: transcript.map((e) => ({
 			role: e.event ? "system" : e.role,
 			content: e.content,
+			...problemsIn(e.content),
 		})),
 		"user-messages": transcript.filter(isUserPrompt).map((e) => e.content),
 		"assistant-messages": transcript
 			.filter((e) => e.role === "assistant")
 			.map((e) => e.content),
 	};
+}
+
+function problemsIn(content: string): { problems?: Problem[] } {
+	try {
+		const parsed = JSON.parse(content) as {
+			type?: unknown;
+			problems?: unknown;
+		};
+		if (parsed?.type !== "tool_result" || !Array.isArray(parsed.problems))
+			return {};
+		return { problems: parsed.problems as Problem[] };
+	} catch {
+		return {};
+	}
 }
 
 export function joinRiding(standing: string | undefined, text: string): string {
@@ -69,12 +88,16 @@ export function replResultContent(output: string, error: boolean): string {
 	});
 }
 
-export function checkResultContent(output: string): string {
+export function checkResultContent(
+	output: string,
+	problems: readonly Problem[] = [],
+): string {
 	return JSON.stringify({
 		type: "tool_result",
 		source: "lisp-check",
 		error: true,
 		output,
+		...(problems.length > 0 ? { problems } : {}),
 	});
 }
 

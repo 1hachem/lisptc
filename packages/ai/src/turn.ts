@@ -5,6 +5,7 @@ import {
 	type Annotations,
 	type ModelRequest,
 	noAnnotations,
+	type Problem,
 	type StepAnnotations,
 	type StepVerdict,
 	type TurnOutcome,
@@ -76,6 +77,7 @@ export type TurnEvent =
 			riding?: string;
 			failed: boolean;
 			rejected?: true;
+			problems?: readonly Problem[];
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
@@ -274,6 +276,7 @@ async function* rejectStep(
 	turn: Turn,
 	answered: Answered,
 	rejected: string,
+	problems: readonly Problem[],
 ): AsyncGenerator<TurnEvent, StepVerdict> {
 	const { repl, transcript, maxSteps } = turn;
 	yield* announce(turn, answered);
@@ -302,8 +305,12 @@ async function* rejectStep(
 		annotations: noAnnotations(),
 		failed: true,
 		rejected: true,
+		...(problems.length > 0 ? { problems } : {}),
 	};
-	transcript.push({ role: "tool", content: checkResultContent(rejected) });
+	transcript.push({
+		role: "tool",
+		content: checkResultContent(rejected, problems),
+	});
 	return capped ? "capped" : verdict;
 }
 
@@ -411,7 +418,7 @@ async function* runStep(
 	const verdict =
 		rejected === undefined
 			? yield* evaluateStep(turn, answered)
-			: yield* rejectStep(turn, answered, rejected);
+			: yield* rejectStep(turn, answered, rejected, admission.problems ?? []);
 	return { verdict, code };
 }
 
