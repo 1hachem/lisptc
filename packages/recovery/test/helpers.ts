@@ -1,5 +1,5 @@
 import { Interp, runSync } from "@repo/interpreter/lisp";
-import { newSym } from "@repo/interpreter/objects";
+import { jsonToLisp, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
 	type Admission,
@@ -39,6 +39,8 @@ export interface World {
 	interp: Interp;
 	admit(code: string): Promise<Admission>;
 	rejected(): unknown;
+	stopped(code: string, lines: number[]): void;
+	read(code: string): unknown;
 }
 
 export function world(): World {
@@ -51,5 +53,19 @@ export function world(): World {
 		admit: (code) =>
 			hooks.admit.run(async (_i, c) => ({ code: c }), interp, code),
 		rejected: () => interp.getGlobal(newSym("rejected")),
+		stopped: (code, lines) =>
+			interp.defineGlobal(
+				newSym("conversation"),
+				jsonToLisp([
+					{ role: "user", content: "fix it" },
+					{ role: "assistant", content: code },
+					{
+						role: "tool",
+						content: "not run",
+						problems: lines.map((line) => ({ line, message: `line ${line}` })),
+					},
+				]),
+			),
+		read: (code) => runSync(interp, code),
 	};
 }

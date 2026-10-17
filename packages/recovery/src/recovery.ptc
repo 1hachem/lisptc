@@ -3,12 +3,16 @@ RECOVERY
 Check stops bad step before run. Nothing ran. Code kept in `rejected`. Fix by
 edit, not rewrite: edit forms change rejected, then fixed code checked and run
 as this step.
-- (revise :old "text" :new "text") replace text found once in rejected. No
-  match or many fails: quote more around it.
-- (rename old new) rename symbol everywhere in rejected. Strings untouched.
-- (close-parens) close parens left open, at end.
+- (revise :old "text" :new "text") replace text found once. No match or many
+  fails: quote more around it.
+- (rename old new) rename symbol everywhere. Strings untouched.
+- (close-parens) close parens left open, at end of form.
 - (add-arg f :key value) add keyword arg to the one call of f.
 - (push-arg f value) add positional arg to the one call of f, before its
   keywords.
+Each edit works on last failed form of stopped step. Other form: add
+:in, e.g. (rename old new :in (car (failed-forms))).
+- (failed-forms) forms check found problems in, last one last. Each alist:
+  form, line, text, problems. Read field: (get-in f :text).
 Edit forms go alone in step, applied in order. Rewrite only when no edit says
 it.

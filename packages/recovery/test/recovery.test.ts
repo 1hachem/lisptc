@@ -114,3 +114,65 @@ describe("an edit step", () => {
 		expect(w.rejected()).toBe("(echo (totl xs))");
 	});
 });
+
+describe("the failed forms of the last stopped step", () => {
+	const both = "(echo (totl 1))\n(echo (totl 2))";
+
+	async function stoppedTwice() {
+		const w = world();
+		await w.admit(both);
+		w.stopped(both, [1, 2]);
+		return w;
+	}
+
+	it("lists the forms its problems fall in, read from the conversation", async () => {
+		const w = await stoppedTwice();
+		expect(w.read("(length (failed-forms))")).toBe(2n);
+		expect(w.read("(get-in (car (failed-forms)) :text)")).toBe(
+			"(echo (totl 1))",
+		);
+		expect(w.read("(car (get-in (car (failed-forms)) :problems))")).toBe(
+			"line 1",
+		);
+	});
+
+	it("is nil when the conversation holds no stopped step", () => {
+		expect(world().read("(failed-forms)")).toBe(null);
+	});
+
+	it("lets an edit without :in work on the last failed form", async () => {
+		const w = await stoppedTwice();
+		await w.admit("(rename totl total)");
+		expect(w.rejected()).toBe("(echo (totl 1))\n(echo (total 2))");
+	});
+
+	it("lets :in pick another failed form", async () => {
+		const w = await stoppedTwice();
+		await w.admit("(rename totl total :in (car (failed-forms)))");
+		expect(w.rejected()).toBe("(echo (total 1))\n(echo (totl 2))");
+	});
+
+	it("repairs several forms in one step", async () => {
+		const w = await stoppedTwice();
+		const admission = await w.admit(
+			"(rename totl total :in (car (failed-forms)))\n(rename totl total)",
+		);
+		expect(admission.rejected).toBeUndefined();
+		expect(admission.code).toBe("(echo (total 1))\n(echo (total 2))");
+	});
+
+	it("edits the whole step when the conversation's stopped step is another one", async () => {
+		const w = world();
+		await w.admit(both);
+		w.stopped("(echo (totl 9))", [1]);
+		const admission = await w.admit("(rename totl total)");
+		expect(admission.code).toBe("(echo (total 1))\n(echo (total 2))");
+	});
+
+	it("refuses an :in that is not a failed form", async () => {
+		const w = await stoppedTwice();
+		const admission = await w.admit("(rename totl total :in 5)");
+		expect(admission.rejected).toContain(":in takes a form");
+		expect(w.rejected()).toBe(both);
+	});
+});
