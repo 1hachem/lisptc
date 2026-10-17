@@ -388,7 +388,18 @@ function install(interp: Interp, edits: Edits): void {
 		interp.setDoc(name, doc);
 }
 
-type StepKind = "edits" | "mixed" | "code";
+type StepKind =
+	| { kind: "edits" }
+	| { kind: "mixed"; others: unknown[] }
+	| { kind: "code" };
+
+function isEdit(form: unknown): boolean {
+	return (
+		form instanceof Cell &&
+		form.car instanceof Sym &&
+		EDIT_FORMS.has(form.car.name)
+	);
+}
 
 function kindOf(interp: Interp, code: string): StepKind {
 	const forms: unknown[] = [];
@@ -397,16 +408,15 @@ function kindOf(interp: Interp, code: string): StepKind {
 	try {
 		while (!reader.isEmpty()) forms.push(reader.read());
 	} catch {
-		return "code";
+		return { kind: "code" };
 	}
-	const edits = forms.filter(
-		(form) =>
-			form instanceof Cell &&
-			form.car instanceof Sym &&
-			EDIT_FORMS.has(form.car.name),
-	).length;
-	if (edits === 0) return "code";
-	return edits === forms.length ? "edits" : "mixed";
+	const others = forms.filter((form) => !isEdit(form));
+	if (others.length === forms.length) return { kind: "code" };
+	return others.length === 0 ? { kind: "edits" } : { kind: "mixed", others };
+}
+
+function alone(others: unknown[]): string {
+	return `${ALONE}\nalso in it: ${others.map((form) => str(form, true)).join(" ")}`;
 }
 
 async function failureOf(
@@ -473,8 +483,10 @@ export function recoveryExtension(host: RecoveryHost): InterpExtension {
 			hooks.admit.use(async (interp, code, next) => {
 				const edits = editsOf.get(interp);
 				if (edits === undefined) return next(interp, code);
-				const kind = kindOf(interp, code);
-				if (kind === "mixed") return { code, rejected: ALONE };
+				const step = kindOf(interp, code);
+				if (step.kind === "mixed")
+					return { code, rejected: alone(step.others) };
+				const kind = step.kind;
 				const base = edits.base();
 				let candidate = code;
 				if (kind === "edits") {

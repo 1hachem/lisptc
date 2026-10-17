@@ -126,6 +126,7 @@ describe("an edit step", () => {
 		await w.admit("(echo (totl xs))");
 		const admission = await w.admit("(rename totl total)\n(echo 1)");
 		expect(admission.rejected).toContain("alone");
+		expect(admission.rejected).toContain("also in it: (echo 1)");
 		expect(w.rejected()).toBe("(echo (totl xs))");
 	});
 });
