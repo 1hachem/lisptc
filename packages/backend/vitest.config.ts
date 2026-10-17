@@ -21,13 +21,6 @@ export default defineConfig({
 					setupFiles: ["./test/extensions/setup-env.ts"],
 				},
 			},
-			{
-				test: {
-					name: "scripts",
-					environment: "node",
-					include: ["test/scripts/*.test.ts"],
-				},
-			},
 		],
 		coverage: {
 			include: ["convex/**", "src/**"],
