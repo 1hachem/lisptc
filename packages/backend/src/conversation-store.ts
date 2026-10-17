@@ -40,7 +40,7 @@ function toolResult(
 	}
 }
 
-export function entryOf({ type, content }: Row): ConversationEntry {
+function entryOf({ type, content }: Row): ConversationEntry {
 	const role = ROLES[type];
 	const result = role === "tool" ? toolResult(content) : undefined;
 	if (result === undefined) return { role, content };
