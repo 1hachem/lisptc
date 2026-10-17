@@ -248,8 +248,13 @@ export class Compactor {
 		this.counters = counters;
 	}
 
-	keepBudgetIn(budget: State<Budget>): void {
-		this.budget = budget;
+	keepBudgetIn(interp: Interp): void {
+		this.budget = interp.state(
+			"compaction/budget",
+			budgetCodec,
+			IDLE,
+			"What the current step has echoed to the model: whether a step is running, the words shown, and the words held back.",
+		);
 	}
 
 	attach(channels: Channels): void {
@@ -752,14 +757,7 @@ const GREP_ARGS: DocArg[] = [
 ];
 
 function registerCompaction(interp: Interp, c: Compactor): void {
-	c.keepBudgetIn(
-		interp.state(
-			"compaction/budget",
-			budgetCodec,
-			IDLE,
-			"What the current step has echoed to the model: whether a step is running, the words shown, and the words held back.",
-		),
-	);
+	c.keepBudgetIn(interp);
 	c.keepCountsIn(
 		interp.state(
 			"compaction/counters",
