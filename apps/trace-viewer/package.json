@@ -19,6 +19,7 @@
     "@repo/ai": "workspace:*",
     "@repo/checks": "workspace:*",
     "@repo/compaction-extension": "workspace:*",
+    "@repo/conversation-extension": "workspace:*",
     "@repo/components": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/evals": "workspace:*",

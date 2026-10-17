@@ -1,4 +1,4 @@
-import type { CallDoc } from "./call-diagnostics.ts";
+import type { CallDoc } from "@repo/lint-extension/calls";
 
 export function cachedResolver(
 	resolve: (name: string) => Promise<CallDoc>,

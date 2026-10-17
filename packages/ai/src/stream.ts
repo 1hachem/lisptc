@@ -1,7 +1,12 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import type { Steer, SteerInbox } from "./inbox.ts";
-import { joinRiding, replResultContent, type TranscriptEntry } from "./repl.ts";
+import {
+	checkResultContent,
+	joinRiding,
+	replResultContent,
+	type TranscriptEntry,
+} from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
 import { runAgentTurn, type TurnEvent } from "./turn.ts";
@@ -65,7 +70,9 @@ function resultMessage(
 	if (event.riding !== undefined) extras.riding = event.riding;
 	return {
 		type: "tool",
-		content: replResultContent(event.output, event.error),
+		content: event.rejected
+			? checkResultContent(event.output, event.problems)
+			: replResultContent(event.output, event.error),
 		id: crypto.randomUUID(),
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
 	};
@@ -247,6 +254,7 @@ class TurnWire {
 			id: event.stepId,
 			additional_kwargs: {
 				...(event.reasoning ? { reasoning_content: event.reasoning } : {}),
+				...(event.written ? { written: event.written } : {}),
 				prose: event.prose,
 				meta: this.lastMeta,
 			},

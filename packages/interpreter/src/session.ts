@@ -37,6 +37,19 @@ export interface StepContext {
 	emit(text: string): void;
 }
 
+export interface Problem {
+	readonly line: number;
+	readonly message: string;
+}
+
+export interface Admission {
+	readonly code: string;
+	readonly rejected?: string;
+	readonly problems?: readonly Problem[];
+	readonly because?: string;
+	readonly from?: string;
+}
+
 export interface StepOutcome extends Bounded {
 	readonly skipped: readonly string[];
 	readonly failed: boolean;
@@ -127,6 +140,7 @@ export interface SessionHooks {
 		AsyncIterable<ModelDelta>
 	>;
 	readonly response: Chain<[interp: Interp, text: string], string>;
+	readonly admit: Chain<[interp: Interp, code: string], Promise<Admission>>;
 	readonly stepEnd: Chain<
 		[turn: AgentTurn, step: AgentStep, verdict: StepVerdict],
 		StepVerdict
@@ -160,6 +174,7 @@ export function newSessionHooks(): SessionHooks {
 		context: new Chain(),
 		modelCall: new Chain(),
 		response: new Chain(),
+		admit: new Chain(),
 		stepEnd: new Chain(),
 		beforeSettle: new Chain(),
 		settled: new Chain(),

@@ -63,13 +63,16 @@ const IMPORTS: ImportRule[] = [
 
 const EXTENSION_DIRS = [
 	"packages/compaction/src/",
+	"packages/conversation/src/",
 	"packages/diagnostics/src/",
 	"packages/introspection/src/",
+	"packages/lint/src/",
 	"packages/memory/src/",
 	"packages/permissions/src/",
 	"packages/preferences/src/",
 	"packages/promises/src/",
 	"packages/prose/src/",
+	"packages/recovery/src/",
 	"packages/secrets/src/",
 	"packages/ui-extension/src/",
 	"packages/workspace/src/",

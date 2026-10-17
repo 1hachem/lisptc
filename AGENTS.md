@@ -124,7 +124,9 @@ interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
+- `packages/conversation` (`@repo/conversation-extension`) — the conversation as data the agent reads and other extensions consume.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
+- `packages/lint` (`@repo/lint-extension`) — the static check: what is wrong with source before it runs.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
@@ -132,6 +134,7 @@ named only at a composition root:
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
 - `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
+- `packages/recovery` (`@repo/recovery-extension`) — repairing a step the check stopped, by editing it.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
 - `packages/workspace` (`@repo/workspace-extension`) — the workspace's settings and its chats.
@@ -286,6 +289,16 @@ first.
 `pnpm check:comments` lists offenders; `pnpm fix:comments` strips them (then run
 `pnpm format`).
 
+## The lockfile
+
+**`pnpm-lock.yaml` is generated, never edited.** Not by hand, not by a
+script, not to resolve a merge conflict. A dependency changes in the
+`package.json` that declares it, and pnpm install writes the lockfile from
+there. A conflict in it is resolved by taking either side and running
+pnpm install again.
+
+`.agents/hooks/lockfile-policy.sh` refuses an agent's edit of it.
+
 ## Environment variables
 
 **Never read `process.env` directly.** Every variable the code reads is declared
@@ -426,6 +439,14 @@ and do not count.
 
 One commit holds one concern. Unrelated changes in the tree go in commits of
 their own.
+
+## Pull requests
+
+A pull request that changes what the agent or the chat does carries prompts to
+test it with, under a heading of their own in its description. Each prompt sits
+in a fenced block of its own so it copies whole, followed by what a reviewer
+should see once it runs. A prompt names the exact code or message to send, so
+it reproduces without waiting for the model to make the mistake on its own.
 
 ## Issues
 

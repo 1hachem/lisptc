@@ -1,4 +1,8 @@
-import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
+import {
+	noAnnotations,
+	type Problem,
+	type StepAnnotations,
+} from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
@@ -12,21 +16,6 @@ export interface TranscriptEntry {
 
 export function isUserPrompt(entry: TranscriptEntry): boolean {
 	return entry.role === "user" && entry.event === undefined;
-}
-
-export function snapshotConversation(
-	transcript: TranscriptEntry[],
-): Record<string, unknown> {
-	return {
-		conversation: transcript.map((e) => ({
-			role: e.event ? "system" : e.role,
-			content: e.content,
-		})),
-		"user-messages": transcript.filter(isUserPrompt).map((e) => e.content),
-		"assistant-messages": transcript
-			.filter((e) => e.role === "assistant")
-			.map((e) => e.content),
-	};
 }
 
 export function joinRiding(standing: string | undefined, text: string): string {
@@ -66,6 +55,19 @@ export function replResultContent(output: string, error: boolean): string {
 		source: "lisp-repl",
 		error,
 		output: output || "(no output)",
+	});
+}
+
+export function checkResultContent(
+	output: string,
+	problems: readonly Problem[] = [],
+): string {
+	return JSON.stringify({
+		type: "tool_result",
+		source: "lisp-check",
+		error: true,
+		output,
+		...(problems.length > 0 ? { problems } : {}),
 	});
 }
 

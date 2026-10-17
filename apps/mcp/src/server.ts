@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { checkSyntax } from "@repo/prose-extension";
+import { checkSource } from "@repo/lint-extension";
 import { z } from "zod";
 import { newRepl } from "./repl.ts";
 
@@ -52,23 +52,30 @@ server.registerTool(
 server.registerTool(
 	"lisp-check",
 	{
-		title: "Check Lisptc syntax",
+		title: "Check Lisptc source",
 		description:
-			"Parse Lisptc source WITHOUT evaluating it and report any syntax " +
-			"errors (with 1-based line numbers). Only the parenthesised forms are " +
-			"parsed, so prose around them is never an error. Does not touch REPL " +
-			"state or run side effects — use it to validate a program before " +
-			"evaluating it.",
+			"Check Lisptc source WITHOUT evaluating it, the same check the agent " +
+			"runs before every step, and report each problem with its 1-based " +
+			"line number and severity: a form left open, source that does not " +
+			"read, a call with the wrong number of arguments, a missing required " +
+			"keyword argument or a literal of the wrong type, and a name nothing " +
+			"binds, measured against what this REPL has defined. An error would " +
+			"stop the agent's step; a warning would not. Only the " +
+			"parenthesised forms are checked, so prose around them is never an " +
+			"error. Does not change REPL state or run side effects — use it to " +
+			"validate a program before evaluating it.",
 		inputSchema: {
-			code: z.string().describe("Lisptc source program to parse."),
+			code: z.string().describe("Lisptc source program to check."),
 		},
 	},
 	async ({ code }) => {
-		const errors = checkSyntax(code);
+		const problems = checkSource(repl.interp, code);
 		const text =
-			errors.length === 0
-				? "OK — no syntax errors.\n"
-				: errors.map((e) => `line ${e.line}: ${e.message}`).join("\n");
+			problems.length === 0
+				? "OK — no problems found.\n"
+				: problems
+						.map((p) => `line ${p.line}: ${p.severity}: ${p.message}`)
+						.join("\n");
 		return { content: [{ type: "text", text }] };
 	},
 );

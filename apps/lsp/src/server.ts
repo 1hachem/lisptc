@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { Interp, runSync } from "@repo/interpreter";
 import type { DocArg } from "@repo/interpreter/docs";
 import { prelude } from "@repo/interpreter/prelude";
+import { type CallDoc, callDiagnostics } from "@repo/lint-extension/calls";
 import { checkSyntax } from "@repo/prose-extension";
 import {
 	type CompletionEntry,
@@ -20,7 +21,6 @@ import {
 	TextDocuments,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { type CallDoc, callDiagnostics } from "./call-diagnostics.ts";
 import { argCompletionItems } from "./doc-args.ts";
 import { cachedResolver } from "./doc-cache.ts";
 import { docExtensions } from "./extensions.ts";
@@ -106,7 +106,14 @@ documents.onDidChangeContent(async ({ document }) => {
 	});
 	const callErrors =
 		syntaxErrors.length === 0
-			? await callDiagnostics(document.getText(), callDocFor)
+			? (await callDiagnostics(document.getText(), callDocFor)).map((d) => ({
+					...d,
+					severity:
+						d.severity === "error"
+							? DiagnosticSeverity.Error
+							: DiagnosticSeverity.Warning,
+					source: "lisptc",
+				}))
 			: [];
 	if (documents.get(document.uri)?.version !== document.version) return;
 	connection.sendDiagnostics({

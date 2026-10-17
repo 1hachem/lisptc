@@ -13,9 +13,10 @@ import {
 	noOpinion,
 } from "@repo/interpreter/hooks";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
+import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
+	type Admission,
 	type AgentEnd,
 	type AgentStep,
 	type AgentTurn,
@@ -148,11 +149,8 @@ export class MemoryRepl implements InMemoryRepl {
 	private freshInterp(): Interp {
 		const interp = new Interp({ extensions: this.extensions });
 		runSync(interp, prelude);
-		this.setup(interp);
 		return interp;
 	}
-
-	protected setup(_interp: Interp): void {}
 
 	async evalOutput(code: string): Promise<EvalOutput> {
 		return render(await this.evaluate(code));
@@ -328,12 +326,6 @@ export class MemoryRepl implements InMemoryRepl {
 export class AgentRepl extends MemoryRepl {
 	private finished = false;
 	private pendingProse: string[] = [];
-	private readonly conversationVars = new Map<string, unknown>();
-
-	protected override setup(interp: Interp): void {
-		const vars = this.conversationVars;
-		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
-	}
 
 	override async evalOutput(code: string): Promise<EvalOutput> {
 		const result = await this.evaluate(code);
@@ -415,6 +407,14 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
 	}
 
+	admit(code: string): Promise<Admission> {
+		return this.hooks.admit.run(
+			async (_i, c) => ({ code: c }),
+			this.interp,
+			code,
+		);
+	}
+
 	stepEnd(
 		turn: AgentTurn,
 		step: AgentStep,
@@ -479,14 +479,6 @@ export class AgentRepl extends MemoryRepl {
 		};
 	}
 
-	setConversationVars(vars: Record<string, unknown>): void {
-		this.conversationVars.clear();
-		for (const [name, value] of Object.entries(vars)) {
-			this.conversationVars.set(name, value);
-			defineVar(this.interp, name, value);
-		}
-	}
-
 	takeFinished(): boolean {
 		const f = this.finished;
 		this.finished = false;
@@ -515,13 +507,6 @@ function outermost<A extends unknown[], R>(
 	around: Middleware<A, R> | undefined,
 ): Chain<A, R> {
 	return around === undefined ? chain : chain.wrappedBy(around);
-}
-
-function defineVar(interp: Interp, name: string, value: unknown): void {
-	interp.defineGlobal(newSym(name), jsonToLisp(value), {
-		signature: name,
-		doc: "Read-only live conversation state (auto-updated each step).",
-	});
 }
 
 function carriedOn(printed: string): string {
