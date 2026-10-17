@@ -3,6 +3,7 @@ export type ChannelId =
 	| "ui"
 	| "lisp"
 	| "thinking"
+	| "edits"
 	| "memory"
 	| "asks"
 	| "errors"
@@ -49,6 +50,14 @@ export const CHANNELS: Channel[] = [
 		hint: "what the model reasoned before it answered",
 		dot: "bg-blue",
 		text: "text-blue",
+		shownByDefault: true,
+	},
+	{
+		id: "edits",
+		label: "edits",
+		hint: "what a step was written as, when it ran as something else",
+		dot: "bg-yellow",
+		text: "text-yellow",
 		shownByDefault: true,
 	},
 	{

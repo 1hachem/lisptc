@@ -93,13 +93,22 @@ describe("WrittenAs", () => {
 		);
 		expect(host.textContent).toContain("(rename totl total)");
 		expect(host.textContent).toContain("edited the code the check stopped");
-		expect(host.textContent).not.toContain("- (echo (totl x))");
+		const change = (kind: string) =>
+			[...host.querySelectorAll(`[data-change="${kind}"]`)].map(
+				(line) => line.textContent,
+			);
+		expect(change("removed")).toEqual([]);
 		const toggle = [...host.querySelectorAll("button")].find(
 			(b) => b.textContent === "show changes",
 		);
 		act(() => toggle?.click());
-		expect(host.textContent).toContain("- (echo (totl x))");
-		expect(host.textContent).toContain("+ (echo (total x))");
+		expect(change("removed")).toEqual(["-(echo (totl x))"]);
+		expect(change("added")).toEqual(["+(echo (total x))"]);
+	});
+
+	it("draws no icon, only the text as written", () => {
+		const host = mount(<WrittenAs written={{ text: "(fix)" }} ran="(+ 1 1)" />);
+		expect(host.querySelector("svg")).toBeNull();
 	});
 
 	it("offers no changes when it does not know what the code was made from", () => {

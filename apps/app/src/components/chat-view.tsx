@@ -275,7 +275,7 @@ function ChatLine({
 	const { shown } = useUI();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
-	const written = shown.lisp ? messageWritten(message) : undefined;
+	const written = shown.edits ? messageWritten(message) : undefined;
 	return (
 		<div className="min-w-0 break-words text-fg">
 			{reasoning && (
@@ -286,7 +286,12 @@ function ChatLine({
 					</div>
 				</div>
 			)}
-			{written && <WrittenAs written={written} ran={messageText(message)} />}
+			{written && (
+				<div className="mb-2">
+					<ChannelLabel id="edits" />
+					<WrittenAs written={written} ran={messageText(message)} />
+				</div>
+			)}
 			{isUserMessage(message) ? (
 				<UserLine text={messageText(message)} />
 			) : (
