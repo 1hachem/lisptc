@@ -39,7 +39,7 @@ export function ForkPickerProvider({
 			if (chatId === null) return;
 			const forked = await fork({ chatId, messageId });
 			await navigate({
-				to: "/$workspaceId/$chatId",
+				to: "/$workspaceId/chat/$chatId",
 				params: { workspaceId, chatId: forked },
 			});
 		},
