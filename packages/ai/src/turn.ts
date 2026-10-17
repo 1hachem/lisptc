@@ -23,7 +23,6 @@ import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
 import {
 	checkResultContent,
-	conversationOf,
 	evalCode,
 	isUserPrompt,
 	joinRiding,
@@ -143,7 +142,6 @@ async function* prepareStep(
 	repl: AgentRepl,
 	transcript: TranscriptEntry[],
 ): AsyncGenerator<TurnEvent> {
-	repl.setConversation(conversationOf(transcript));
 	const { emitted, annotations } = await repl.beginStep();
 	yield* collect(annotations);
 	if (emitted !== "" && ride(transcript, emitted))

@@ -1,5 +1,4 @@
 import { Interp } from "@repo/interpreter/lisp";
-import { conversationVars } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
 import { IDENTITY, MAX_STEPS, systemPromptFor } from "../src/prompts/lisp.ts";
 
@@ -93,12 +92,6 @@ describe("the REPL loop protocol", () => {
 	it("tells the model the loop is capped, and quotes the driver's cap", () => {
 		expect(PROMPT).toMatch(/The loop also stops automatically/i);
 		expect(PROMPT).toContain(`after ${MAX_STEPS} steps`);
-	});
-
-	it("promises exactly the conversation globals the host injects", () => {
-		for (const name of Object.keys(conversationVars([]))) {
-			expect(PROMPT).toContain(`\`${name}\``);
-		}
 	});
 });
 

@@ -1,10 +1,6 @@
 import type { Envelope } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
-	type ConversationEntry,
-	conversationSlot,
-} from "@repo/interpreter/conversation";
-import {
 	driveAsync,
 	type Eval,
 	type Hold,
@@ -17,7 +13,7 @@ import {
 	noOpinion,
 } from "@repo/interpreter/hooks";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
+import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
 	type Admission,
@@ -153,11 +149,8 @@ export class MemoryRepl implements InMemoryRepl {
 	private freshInterp(): Interp {
 		const interp = new Interp({ extensions: this.extensions });
 		runSync(interp, prelude);
-		this.setup(interp);
 		return interp;
 	}
-
-	protected setup(_interp: Interp): void {}
 
 	async evalOutput(code: string): Promise<EvalOutput> {
 		return render(await this.evaluate(code));
@@ -330,35 +323,9 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 }
 
-export function conversationVars(
-	entries: readonly ConversationEntry[],
-): Record<string, unknown> {
-	return {
-		conversation: entries,
-		"user-messages": entries
-			.filter((e) => e.role === "user")
-			.map((e) => e.content),
-		"assistant-messages": entries
-			.filter((e) => e.role === "assistant")
-			.map((e) => e.content),
-	};
-}
-
 export class AgentRepl extends MemoryRepl {
 	private finished = false;
 	private pendingProse: string[] = [];
-	private readonly conversationVars = new Map<string, unknown>();
-	private conversation: readonly ConversationEntry[] = [];
-
-	constructor(options: ReplOptions) {
-		super(options);
-		this.hooks.fill(conversationSlot, { entries: () => this.conversation });
-	}
-
-	protected override setup(interp: Interp): void {
-		const vars = this.conversationVars;
-		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
-	}
 
 	override async evalOutput(code: string): Promise<EvalOutput> {
 		const result = await this.evaluate(code);
@@ -512,19 +479,6 @@ export class AgentRepl extends MemoryRepl {
 		};
 	}
 
-	setConversation(entries: readonly ConversationEntry[]): void {
-		this.conversation = entries;
-		this.setConversationVars(conversationVars(entries));
-	}
-
-	setConversationVars(vars: Record<string, unknown>): void {
-		this.conversationVars.clear();
-		for (const [name, value] of Object.entries(vars)) {
-			this.conversationVars.set(name, value);
-			defineVar(this.interp, name, value);
-		}
-	}
-
 	takeFinished(): boolean {
 		const f = this.finished;
 		this.finished = false;
@@ -553,13 +507,6 @@ function outermost<A extends unknown[], R>(
 	around: Middleware<A, R> | undefined,
 ): Chain<A, R> {
 	return around === undefined ? chain : chain.wrappedBy(around);
-}
-
-function defineVar(interp: Interp, name: string, value: unknown): void {
-	interp.defineGlobal(newSym(name), jsonToLisp(value), {
-		signature: name,
-		doc: "Read-only live conversation state (auto-updated each step).",
-	});
 }
 
 function carriedOn(printed: string): string {

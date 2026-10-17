@@ -1,4 +1,3 @@
-import type { ConversationEntry } from "@repo/interpreter/conversation";
 import {
 	noAnnotations,
 	type Problem,
@@ -17,30 +16,6 @@ export interface TranscriptEntry {
 
 export function isUserPrompt(entry: TranscriptEntry): boolean {
 	return entry.role === "user" && entry.event === undefined;
-}
-
-export function conversationOf(
-	transcript: TranscriptEntry[],
-): ConversationEntry[] {
-	return transcript.map((e) => ({
-		role: e.event ? "system" : e.role,
-		content: e.content,
-		...problemsIn(e.content),
-	}));
-}
-
-function problemsIn(content: string): { problems?: Problem[] } {
-	try {
-		const parsed = JSON.parse(content) as {
-			type?: unknown;
-			problems?: unknown;
-		};
-		if (parsed?.type !== "tool_result" || !Array.isArray(parsed.problems))
-			return {};
-		return { problems: parsed.problems as Problem[] };
-	} catch {
-		return {};
-	}
 }
 
 export function joinRiding(standing: string | undefined, text: string): string {

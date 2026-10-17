@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkResultContent, conversationOf } from "../src/repl.ts";
+import { checkResultContent } from "../src/repl.ts";
 
 describe("a stopped step in the conversation", () => {
 	const problems = [{ line: 2, message: "totl is not defined" }];
@@ -15,20 +15,5 @@ describe("a stopped step in the conversation", () => {
 		expect(JSON.parse(checkResultContent("not run"))).not.toHaveProperty(
 			"problems",
 		);
-	});
-
-	it("exposes those problems on its conversation entry", () => {
-		const conversation = conversationOf([
-			{ role: "assistant", content: "(echo 1)\n(echo (totl 2))" },
-			{ role: "tool", content: checkResultContent("not run", problems) },
-		]);
-		expect(conversation).toEqual([
-			{ role: "assistant", content: "(echo 1)\n(echo (totl 2))" },
-			{
-				role: "tool",
-				content: checkResultContent("not run", problems),
-				problems,
-			},
-		]);
 	});
 });

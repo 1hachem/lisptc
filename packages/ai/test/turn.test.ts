@@ -8,10 +8,10 @@ import {
 	type SessionHooks,
 	type TurnOutcome,
 } from "@repo/interpreter/session";
-import { AgentRepl, conversationVars } from "@repo/repl/repl";
+import { AgentRepl } from "@repo/repl/repl";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
-import { conversationOf, type TranscriptEntry } from "../src/repl.ts";
+import type { TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
 import { extension, noting, riding, testRepl } from "./helpers.ts";
 
@@ -231,10 +231,6 @@ describe("the agent turn", () => {
 		await drain(history);
 
 		expect(seen[0].messages[0].content).toBe("hello\n\nyou are a pirate");
-		expect(conversationVars(conversationOf(history))["user-messages"]).toEqual([
-			"hello",
-			"what is 1 + 2?",
-		]);
 	});
 
 	test("a steer taken between steps reaches the next model call after the tool result", async () => {
