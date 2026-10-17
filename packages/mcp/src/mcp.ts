@@ -409,17 +409,23 @@ function installServer(
 	res: ConnectResult,
 	policy: McpPolicy,
 ): List {
-	const toolMap = new Map<string, Tool>();
-	const toolSyms: Sym[] = [];
+	const rec: ServerRec = {
+		name,
+		serverId: res.serverId,
+		toolSyms: [],
+		tools: new Map(),
+	};
 	for (const tool of res.tools) {
-		if (!policy.tool(name, tool.name)) continue;
-		toolMap.set(tool.name, tool);
+		rec.tools.set(tool.name, tool);
 		const sym = newSym(`${name}/${tool.name}`);
 		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
+			admitServer(policy, name);
+			if (!policy.tool(name, tool.name))
+				throw new EvalException("unknown MCP tool", sym.name, false);
 			const args = plistToJson(f[0] as List);
 			validate(tool, args);
 			return withTimeout(
-				client.callTool({ serverId: res.serverId, tool: tool.name, args }),
+				client.callTool({ serverId: rec.serverId, tool: tool.name, args }),
 				CALL_TIMEOUT_MS,
 				sym.name,
 			).then(jsonToLisp);
@@ -429,11 +435,31 @@ function installServer(
 			doc: toolDocBody(tool) || "MCP tool (no description provided).",
 			args: toolArgs(tool),
 		});
-		toolSyms.push(sym);
+		rec.toolSyms.push(sym);
 	}
-	const rec = { name, serverId: res.serverId, toolSyms, tools: toolMap };
 	servers.set(name, rec);
-	return arrayToList(toolRows(rec));
+	return arrayToList(toolRows(rec, policy));
+}
+
+function admitServer(policy: McpPolicy, name: string): void {
+	const access = policy.server(name);
+	if (access.access === "hidden")
+		throw new EvalException("unknown MCP server", name, false);
+	if (access.access === "denied")
+		throw new EvalException(
+			access.reason === undefined
+				? "MCP server denied"
+				: `MCP server denied: ${access.reason}`,
+			name,
+			false,
+		);
+}
+
+function shownTools(rec: ServerRec, policy: McpPolicy): Sym[] {
+	if (policy.server(rec.name).access !== "open") return [];
+	return rec.toolSyms.filter((sym) =>
+		policy.tool(rec.name, sym.name.slice(rec.name.length + 1)),
+	);
 }
 
 function toolRow(rec: ServerRec, sym: Sym): List {
@@ -449,8 +475,8 @@ function toolRow(rec: ServerRec, sym: Sym): List {
 	]);
 }
 
-function toolRows(rec: ServerRec): List[] {
-	return rec.toolSyms.map((sym) => toolRow(rec, sym));
+function toolRows(rec: ServerRec, policy: McpPolicy): List[] {
+	return shownTools(rec, policy).map((sym) => toolRow(rec, sym));
 }
 
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
@@ -468,24 +494,21 @@ export function registerMcp(
 	const policy = host.policy ?? openPolicy;
 
 	const servers = new Map<string, ServerRec>();
-	const predefined = new Map<string, ConnConfig>();
 	const loading = new Set<Promise<unknown>>();
-	for (const conf of toolkit.all())
-		if (policy.server(conf.name).access !== "hidden")
-			predefined.set(conf.name, conf);
+	const shown = (): Map<string, ConnConfig> =>
+		new Map(
+			toolkit
+				.all()
+				.filter((conf) => policy.server(conf.name).access !== "hidden")
+				.map((conf) => [conf.name, conf]),
+		);
+	const loaded = (): Map<string, ServerRec> =>
+		new Map(
+			[...servers].filter(([name]) => policy.server(name).access !== "hidden"),
+		);
 
 	function startLoad(conf: ConnConfig): Promise<unknown> {
-		const access = policy.server(conf.name);
-		if (access.access === "hidden")
-			throw new EvalException("unknown MCP server", conf.name, false);
-		if (access.access === "denied")
-			throw new EvalException(
-				access.reason === undefined
-					? "MCP server denied"
-					: `MCP server denied: ${access.reason}`,
-				conf.name,
-				false,
-			);
+		admitServer(policy, conf.name);
 		const promise = interp.async.start((signal) =>
 			client.connect(conf, signal).then(
 				(res) => installServer(interp, client, servers, conf.name, res, policy),
@@ -507,7 +530,7 @@ export function registerMcp(
 		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url or :command to load an ad-hoc server instead.',
 		z.tuple([zList]),
 		([rest]) => {
-			const conf = connConfigFromArgs(rest, predefined);
+			const conf = connConfigFromArgs(rest, shown());
 			if (servers.has(conf.name)) doUnload(interp, client, servers, conf.name);
 			return startLoad(conf);
 		},
@@ -546,7 +569,7 @@ export function registerMcp(
 					raw,
 					false,
 				);
-			const conf = oauthServer(predefined, name);
+			const conf = oauthServer(shown(), name);
 			return withTimeout(
 				client.authorize(conf, code),
 				CALL_TIMEOUT_MS,
@@ -564,7 +587,7 @@ export function registerMcp(
 		([rest]) => {
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
-			const conf = oauthServer(predefined, name);
+			const conf = oauthServer(shown(), name);
 			return withTimeout(client.login(conf), CALL_TIMEOUT_MS, "login").then(
 				({ authUrl }) => {
 					if (authUrl === null) return newLispKeyword("logged-in");
@@ -586,7 +609,7 @@ export function registerMcp(
 		([rest]) => {
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
-			const conf = oauthServer(predefined, name);
+			const conf = oauthServer(shown(), name);
 			if (servers.has(name)) doUnload(interp, client, servers, name);
 			return withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout").then(
 				() => newLispKeyword("logged-out"),
@@ -601,13 +624,14 @@ export function registerMcp(
 		"Return the list of currently loaded MCP servers.",
 		z.tuple([]),
 		() => {
-			const names = new Set<string>([...predefined.keys(), ...servers.keys()]);
+			const live = loaded();
+			const names = new Set<string>([...shown().keys(), ...live.keys()]);
 			const rows = [...names].map((name) => {
-				const rec = servers.get(name);
+				const rec = live.get(name);
 				return arrayToList([
 					name,
 					newLispKeyword(rec ? "loaded" : "unloaded"),
-					BigInt(rec ? rec.tools.size : 0),
+					BigInt(rec ? shownTools(rec, policy).length : 0),
 				]);
 			});
 			return arrayToList(rows);
@@ -621,7 +645,7 @@ export function registerMcp(
 		'Return the ready-to-use MCP servers from the toolkit, each as (name description keywords :loaded|:unloaded). Load one by bare name with (load-mcp name); search the same keywords with (search-mcps "query").',
 		z.tuple([]),
 		() => {
-			const rows = [...predefined.entries()].map(([name, conf]) =>
+			const rows = [...shown().entries()].map(([name, conf]) =>
 				arrayToList([
 					name,
 					conf.description ?? "",
@@ -643,7 +667,7 @@ export function registerMcp(
 			const scored = searchDocuments(
 				search,
 				rawQuery,
-				[...predefined.values()].map((conf) => ({
+				[...shown().values()].map((conf) => ({
 					value: conf,
 					document: {
 						id: conf.name,
@@ -674,12 +698,13 @@ export function registerMcp(
 		z.tuple([zList]),
 		([rest]) => {
 			const only = rest !== null ? asName(rest.car) : null;
+			const live = loaded();
 			const rows: unknown[] = [];
-			for (const rec of servers.values()) {
+			for (const rec of live.values()) {
 				if (only !== null && rec.name !== only) continue;
-				rows.push(...toolRows(rec));
+				rows.push(...toolRows(rec, policy));
 			}
-			if (only !== null && !servers.has(only))
+			if (only !== null && !live.has(only))
 				throw new EvalException("MCP server not loaded", only, false);
 			return arrayToList(rows);
 		},
@@ -697,7 +722,7 @@ export function registerMcp(
 				document: SearchDocument;
 			}[] = [];
 			for (const rec of servers.values()) {
-				for (const sym of rec.toolSyms) {
+				for (const sym of shownTools(rec, policy)) {
 					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
 					candidates.push({
 						value: { sym, doc: firstLine(tool?.description) },
@@ -742,7 +767,7 @@ export function registerMcp(
 	);
 
 	interp.hooks.failedForm.use(function* (interp, form, error, next) {
-		const reported = notLoaded(error, predefined, servers);
+		const reported = notLoaded(error, shown(), servers);
 		if (reported === undefined) return yield* next(interp, form, error);
 		return { reported };
 	});
