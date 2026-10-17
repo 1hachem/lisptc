@@ -196,12 +196,12 @@ export const evaluate = {
 		const { chatId, code } = context.body;
 		const convex = convexAs(context.session);
 
-		await convex.mutation(api.messages.append, {
-			chatId,
-			messages: [{ id: crypto.randomUUID(), type: "human", content: code }],
-		});
 		console.log(`eval chat=${chatId} chars=${code.length}`);
 		const checked = await checkUserCode(code, { repls, threadId: chatId });
+		await convex.mutation(api.messages.append, {
+			chatId,
+			messages: toStored([checked.line]),
+		});
 		if ("mistaken" in checked) {
 			const event = await ticket(
 				{ subject: context.session.subject, chatId },

@@ -56,7 +56,10 @@ describe("checking user code", () => {
 		const threadId = crypto.randomUUID();
 		expect(
 			await checkUserCode("(+ 1 2)", { repls: checked, threadId }),
-		).toEqual({ admitted: "(+ 1 2)" });
+		).toMatchObject({
+			admitted: "(+ 1 2)",
+			line: { type: "human", content: "(+ 1 2)" },
+		});
 	});
 
 	test("turns a rejection into an event asking the agent to fix it", async () => {
@@ -71,6 +74,7 @@ describe("checking user code", () => {
 		expect(event.text).toContain("the user ran this code");
 		expect(event.text).toContain("(bad)");
 		expect(event.text).toContain("line 1: bad call");
+		expect(checkedCode.line).toMatchObject({ type: "human", content: "(bad)" });
 	});
 
 	test("hands back the code admit rewrote, to be run in place of the typed code", async () => {
@@ -84,6 +88,12 @@ describe("checking user code", () => {
 		const threadId = crypto.randomUUID();
 		expect(
 			await checkUserCode("(fix)", { repls: rewriting, threadId }),
-		).toEqual({ admitted: "(+ 1 1)" });
+		).toMatchObject({
+			admitted: "(+ 1 1)",
+			line: {
+				content: "(+ 1 1)",
+				additional_kwargs: { written: { text: "(fix)" } },
+			},
+		});
 	});
 });

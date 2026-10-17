@@ -12,6 +12,7 @@ export {
 	type EvalMessage,
 	evalUserCode,
 	type UserCheck,
+	type UserLine,
 } from "./eval.ts";
 export {
 	type EventOwner,

@@ -40,6 +40,8 @@ export interface StepContext {
 export interface Admission {
 	readonly code: string;
 	readonly rejected?: string;
+	readonly because?: string;
+	readonly from?: string;
 }
 
 export interface StepOutcome extends Bounded {

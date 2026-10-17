@@ -1,4 +1,5 @@
 import {
+	type Admission,
 	type AgentFailure,
 	type AgentTurn,
 	type Annotations,
@@ -62,6 +63,7 @@ export type TurnEvent =
 			code: string;
 			prose: Skipped[];
 			reasoning?: string;
+			written?: Written;
 			meta: StepMeta;
 	  }
 	| {
@@ -224,10 +226,29 @@ async function* openTurn(
 	};
 }
 
+export interface Written {
+	text: string;
+	because?: string;
+	from?: string;
+}
+
+export function writtenAs(
+	written: string,
+	{ code, because, from }: Admission,
+): Written | undefined {
+	if (code === written) return undefined;
+	return {
+		text: written,
+		...(because === undefined ? {} : { because }),
+		...(from === undefined ? {} : { from }),
+	};
+}
+
 interface Answered {
 	stepId: string;
 	startedAt: number;
 	code: string;
+	written?: Written;
 	reply: Reply;
 }
 
@@ -236,13 +257,14 @@ async function* announce(
 	answered: Answered,
 ): AsyncGenerator<TurnEvent> {
 	const { repl, transcript, ran } = turn;
-	const { stepId, startedAt, code, reply } = answered;
+	const { stepId, startedAt, code, written, reply } = answered;
 	yield {
 		type: "assistant",
 		stepId,
 		code,
 		prose: repl.unrun(code),
 		...(reply.reasoning ? { reasoning: reply.reasoning } : {}),
+		...(written ? { written } : {}),
 		meta: stepMeta(startedAt, reply.usage, ran),
 	};
 	transcript.push({ role: "assistant", content: code });
@@ -376,8 +398,16 @@ async function* runStep(
 	);
 	const written = repl.response(reply.full, stripFences);
 	if (written === "") return { verdict: "silent", code: written };
-	const { code, rejected } = await repl.admit(written);
-	const answered = { stepId, startedAt, code, reply };
+	const admission = await repl.admit(written);
+	const { code, rejected } = admission;
+	const rewrite = writtenAs(written, admission);
+	const answered: Answered = {
+		stepId,
+		startedAt,
+		code,
+		reply,
+		...(rewrite ? { written: rewrite } : {}),
+	};
 	const verdict =
 		rejected === undefined
 			? yield* evaluateStep(turn, answered)

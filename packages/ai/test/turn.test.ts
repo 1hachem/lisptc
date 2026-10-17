@@ -429,6 +429,7 @@ describe("the agent turn", () => {
 
 		expect(events.find((e) => e.type === "assistant")).toMatchObject({
 			code: "(+ 2 2)",
+			written: { text: "(+ 1 2)" },
 		});
 		expect(ran[0]).toBe("(+ 2 2)");
 	});

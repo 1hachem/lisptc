@@ -1,6 +1,7 @@
 import { evalCode, replResultContent } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
+import { writtenAs } from "./turn.ts";
 
 export interface EvalMessage {
 	type: "tool";
@@ -9,7 +10,16 @@ export interface EvalMessage {
 	additional_kwargs?: Record<string, unknown>;
 }
 
-export type UserCheck = { admitted: string } | { mistaken: SystemEvent };
+export interface UserLine {
+	type: "human";
+	content: string;
+	id: string;
+	additional_kwargs?: Record<string, unknown>;
+}
+
+export type UserCheck =
+	| { line: UserLine; admitted: string }
+	| { line: UserLine; mistaken: SystemEvent };
 
 export async function checkUserCode<Id extends string>(
 	code: string,
@@ -17,8 +27,21 @@ export async function checkUserCode<Id extends string>(
 ): Promise<UserCheck> {
 	const repl = await replFrom(source);
 	const admission = await repl.admit(code);
-	if (admission.rejected === undefined) return { admitted: admission.code };
+	const id = crypto.randomUUID();
+	if (admission.rejected === undefined) {
+		const written = writtenAs(code, admission);
+		return {
+			admitted: admission.code,
+			line: {
+				type: "human",
+				content: admission.code,
+				id,
+				...(written ? { additional_kwargs: { written } } : {}),
+			},
+		};
+	}
 	return {
+		line: { type: "human", content: code, id },
 		mistaken: {
 			source: "lisp-check",
 			text: [
