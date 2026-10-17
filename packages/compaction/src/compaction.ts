@@ -8,7 +8,12 @@ import {
 import { EvalException } from "@repo/interpreter/errors";
 import { callableKind } from "@repo/interpreter/func";
 import { Job } from "@repo/interpreter/job";
-import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
+import {
+	detachedState,
+	type Interp,
+	type State,
+	type StateCodec,
+} from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -181,12 +186,31 @@ const counterCodec: StateCodec<Record<string, number>> = {
 		),
 };
 
+interface Budget {
+	readonly stepping: boolean;
+	readonly spent: number;
+	readonly dropped: number;
+}
+
+const IDLE: Budget = { stepping: false, spent: 0, dropped: 0 };
+
+const budgetCodec: StateCodec<Budget> = {
+	toLisp: ({ stepping, spent, dropped }) =>
+		arrayToList([stepping || null, BigInt(spent), BigInt(dropped)]),
+	fromLisp: (list) => {
+		const [stepping, spent, dropped] = listToArray(list as List);
+		return {
+			stepping: stepping === true,
+			spent: Number(spent),
+			dropped: Number(dropped),
+		};
+	},
+};
+
 export class Compactor {
 	private counters: State<Record<string, number>> | undefined;
-	private spent = 0;
-	private dropped = 0;
+	private budget: State<Budget> = detachedState(IDLE);
 	private channels?: Channels;
-	private stepping = false;
 	readonly limit: number;
 
 	constructor(limit: number = MAX_WORDS) {
@@ -198,7 +222,7 @@ export class Compactor {
 	}
 
 	result(interp: Interp, form: unknown, value: unknown): string {
-		if (!this.stepping) return "";
+		if (!this.budget.get().stepping) return "";
 		if (value === Unspecified) return "";
 		if (isDocForm(form)) return "";
 		if (isReadForm(form)) {
@@ -217,19 +241,15 @@ export class Compactor {
 	}
 
 	beginStep(): void {
-		this.stepping = true;
-		this.spent = 0;
-		this.dropped = 0;
+		this.budget.set({ stepping: true, spent: 0, dropped: 0 });
 	}
 
 	keepCountsIn(counters: State<Record<string, number>>): void {
 		this.counters = counters;
 	}
 
-	reset(): void {
-		this.stepping = false;
-		this.spent = 0;
-		this.dropped = 0;
+	keepBudgetIn(budget: State<Budget>): void {
+		this.budget = budget;
 	}
 
 	attach(channels: Channels): void {
@@ -237,17 +257,22 @@ export class Compactor {
 	}
 
 	endStep(): string {
-		if (this.dropped === 0) return "";
-		return `... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
+		const { dropped } = this.budget.get();
+		if (dropped === 0) return "";
+		return `... ${dropped} more word${dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
 	}
 
 	private get remaining(): number {
-		return Math.max(0, this.limit - this.spent);
+		return Math.max(0, this.limit - this.budget.get().spent);
 	}
 
 	private echo(model: string, user: string, dropped: number): Bounded {
-		this.spent += wordSpans(model).length;
-		this.dropped += dropped;
+		const budget = this.budget.get();
+		this.budget.set({
+			...budget,
+			spent: budget.spent + wordSpans(model).length,
+			dropped: budget.dropped + dropped,
+		});
 		output.emit(this.channels, { model, user });
 		return { model, user };
 	}
@@ -727,7 +752,14 @@ const GREP_ARGS: DocArg[] = [
 ];
 
 function registerCompaction(interp: Interp, c: Compactor): void {
-	c.reset();
+	c.keepBudgetIn(
+		interp.state(
+			"compaction/budget",
+			budgetCodec,
+			IDLE,
+			"What the current step has echoed to the model: whether a step is running, the words shown, and the words held back.",
+		),
+	);
 	c.keepCountsIn(
 		interp.state(
 			"compaction/counters",
