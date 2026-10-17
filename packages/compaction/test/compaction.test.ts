@@ -1,4 +1,6 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { restore, snapshot } from "@repo/interpreter/image";
+import { Job } from "@repo/interpreter/job";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { Cell, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
@@ -274,8 +276,8 @@ describe("the character backstop", () => {
 });
 
 describe("reporting a promise", () => {
-	function pending(): Promise<unknown> {
-		return new Promise(() => {});
+	function pending(): Job {
+		return Job.of(new Promise(() => {}));
 	}
 
 	function reportOf(interp: Interp, c: Compactor, code: string): string {
@@ -485,6 +487,26 @@ describe("the step's echo budget", () => {
 
 	it("passes short output through untouched", () => {
 		expect(stepped('(echo "a b")', stepping(400)).model).toBe("a b\n");
+	});
+
+	it("survives an image taken in the middle of a step", () => {
+		function finish(imaged: boolean): string {
+			const given = stepping(4);
+			given.c.beginStep();
+			runSync(given.interp, '(echo "a b c d")');
+			let into = given;
+			if (imaged) {
+				into = stepping(4);
+				restore(into.interp, snapshot(given.interp));
+			}
+			const buffer = bufferTransport();
+			const detach = into.interp.channels.pipe(buffer);
+			runSync(into.interp, '(echo "e f")');
+			detach();
+			return buffer.collectText("model") + into.c.endStep();
+		}
+		expect(finish(false)).toContain("not shown");
+		expect(finish(true)).toBe(finish(false));
 	});
 });
 

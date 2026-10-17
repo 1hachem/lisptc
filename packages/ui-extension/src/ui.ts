@@ -3,11 +3,13 @@ import type { DocArg } from "@repo/interpreter/docs";
 import { driveAsync } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
-import type { Interp } from "@repo/interpreter/lisp";
+import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
+	arrayToList,
 	Cell,
 	jsonToLisp,
 	type List,
+	listToArray,
 	newSym,
 	Unspecified,
 } from "@repo/interpreter/objects";
@@ -65,32 +67,66 @@ class UiElement implements UiNode {
 	}
 }
 
+const handlerCodec: StateCodec<[string, unknown][]> = {
+	toLisp: (handlers) =>
+		arrayToList(handlers.map(([id, fn]) => new Cell(id, fn))),
+	fromLisp: (list) =>
+		listToArray(list as List).map((pair) => [
+			(pair as Cell).car as string,
+			(pair as Cell).cdr,
+		]),
+};
+
+const seqCodec: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
+
+const UI_TAG = "ui/element";
+
 export class UiSurface {
-	private readonly handlers = new Map<string, unknown>();
+	private handlers: State<[string, unknown][]> | undefined;
+	private seq: State<number> | undefined;
 	private interp: Interp | undefined;
 	private channels: Channels | undefined;
-	private seq = 0;
 
 	bind(interp: Interp): void {
 		this.interp = interp;
 		this.channels = interp.channels;
+		this.handlers = interp.state(
+			"ui/handlers",
+			handlerCodec,
+			[],
+			"The function behind each control on screen, by the action id the view carries. The oldest are dropped past 500.",
+		);
+		this.seq = interp.state(
+			"ui/seq",
+			seqCodec,
+			0,
+			"The number of the last action id handed out.",
+		);
 	}
 
 	reset(): void {
-		this.handlers.clear();
+		this.handlers?.set([]);
 	}
 
 	action(fn: unknown): string {
 		if (callableArity(fn) === undefined)
 			throw new EvalException("function expected as a ui action", fn);
-		const id = `a${++this.seq}`;
-		this.handlers.set(id, fn);
-		while (this.handlers.size > MAX_HANDLERS) {
-			const oldest = this.handlers.keys().next().value;
-			if (oldest === undefined) break;
-			this.handlers.delete(oldest);
-		}
+		const n = (this.seq?.get() ?? 0) + 1;
+		this.seq?.set(n);
+		const id = `a${n}`;
+		const handlers = [
+			...(this.handlers?.get() ?? []),
+			[id, fn] as [string, unknown],
+		];
+		this.handlers?.set(handlers.slice(-MAX_HANDLERS));
 		return id;
+	}
+
+	private handler(id: string): unknown {
+		return this.handlers?.get().find(([at]) => at === id)?.[1];
 	}
 
 	render(node: UiNode): void {
@@ -104,11 +140,11 @@ export class UiSurface {
 	}
 
 	hasAction(id: string): boolean {
-		return this.handlers.has(id);
+		return this.handler(id) !== undefined;
 	}
 
 	async invoke(id: string, values: Record<string, unknown>): Promise<unknown> {
-		const fn = this.handlers.get(id);
+		const fn = this.handler(id);
 		if (fn === undefined)
 			throw new EvalException("no such ui action", id, false);
 		const interp = this.interp;
@@ -329,9 +365,19 @@ const INPUT_ARGS: DocArg[] = [
 	},
 ];
 
+function elementOf(node: UiNode): UiElement {
+	return new UiElement(node.tag, node.props, node.children.map(elementOf));
+}
+
 function registerUi(interp: Interp, surface: UiSurface): void {
-	surface.reset();
 	surface.bind(interp);
+	surface.reset();
+	interp.hooks.encodeValue.use((x, next) =>
+		x instanceof UiElement ? { tag: UI_TAG, data: nodeToJson(x) } : next(x),
+	);
+	interp.hooks.decodeValue.use((foreign, next) =>
+		foreign.tag === UI_TAG ? elementOf(foreign.data as UiNode) : next(foreign),
+	);
 
 	interp.def(
 		"ui/text",

@@ -3,6 +3,8 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { RETIRED_MODELS } from "./lib/models.js";
 
+export const replState = v.union(v.literal("open"), v.literal("closed"));
+
 export const messageType = v.union(
 	v.literal("human"),
 	v.literal("ai"),
@@ -69,6 +71,7 @@ export default defineSchema({
 		archivedAt: v.optional(v.number()),
 		status: v.optional(chatStatus),
 		failure: v.optional(v.string()),
+		replId: v.optional(v.id("repls")),
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_live_activity", [
@@ -113,6 +116,31 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		source: v.string(),
 	}).index("by_workspace", ["workspaceId"]),
+
+	repls: defineTable({
+		workspaceId: v.id("workspaces"),
+		state: replState,
+		call: v.number(),
+		bytes: v.number(),
+		openedAt: v.optional(v.number()),
+		lastActiveAt: v.optional(v.number()),
+		closedAt: v.optional(v.number()),
+		closedSaved: v.optional(v.boolean()),
+	}),
+
+	replImages: defineTable({
+		replId: v.id("repls"),
+		call: v.number(),
+		format: v.number(),
+		bytes: v.number(),
+		chunks: v.number(),
+	}).index("by_repl_call", ["replId", "call"]),
+
+	replImageChunks: defineTable({
+		imageId: v.id("replImages"),
+		index: v.number(),
+		data: v.string(),
+	}).index("by_image", ["imageId", "index"]),
 
 	oauthRecords: defineTable({
 		workspaceId: v.id("workspaces"),

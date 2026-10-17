@@ -92,23 +92,29 @@ export async function evalCode(
 	emitted: string;
 	failed: boolean;
 	held: boolean;
+	call: number | undefined;
 }> {
 	try {
-		const { model, user, annotations, emitted, failed, held } =
+		const { model, user, annotations, emitted, failed, held, call, message } =
 			await repl.evalOutput(code);
 		return {
-			output: model,
+			output: message === undefined ? model : `${model}\n\n${message}`,
 			display: user,
 			error: false,
 			annotations,
 			emitted,
 			failed,
 			held,
+			call,
 		};
 	} catch (ex) {
-		repl.reset();
+		const restored = await repl.revertToLatest().catch(() => undefined);
+		if (restored === undefined) repl.reset();
 		const msg = ex instanceof Error ? ex.message : String(ex);
-		const text = `REPL error: ${msg} (interpreter was reset, definitions lost)`;
+		const text =
+			restored === undefined
+				? `REPL error: ${msg} (interpreter was reset, definitions lost)`
+				: `REPL error: ${msg} (restored to call ${restored})`;
 		return {
 			output: text,
 			display: text,
@@ -117,6 +123,7 @@ export async function evalCode(
 			emitted: "",
 			failed: true,
 			held: false,
+			call: restored,
 		};
 	}
 }

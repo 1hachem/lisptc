@@ -1,62 +1,56 @@
-export type PromiseState = "pending" | "fulfilled" | "rejected";
+import { Job, type JobState } from "./job.ts";
 
-interface Tracked {
-	state: PromiseState;
-	controller?: AbortController;
-}
+export type PromiseState = JobState;
 
 export class AsyncWork {
-	private readonly tracked = new WeakMap<Promise<unknown>, Tracked>();
-	private readonly live = new Set<Promise<unknown>>();
+	private readonly controllers = new WeakMap<Job, AbortController>();
+	private readonly jobs = new WeakMap<Promise<unknown>, Job>();
+	private readonly live = new Set<Job>();
 
-	start<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+	start(run: (signal: AbortSignal) => Promise<unknown>): Job {
 		const controller = new AbortController();
-		return this.record(run(controller.signal), controller);
+		const job = this.record(run(controller.signal));
+		this.controllers.set(job, controller);
+		return job;
 	}
 
-	watch<T>(promise: Promise<T>): Promise<T> {
-		return this.tracked.has(promise) ? promise : this.record(promise);
+	watch(promise: Promise<unknown>): Job {
+		return this.jobs.get(promise) ?? this.record(promise);
 	}
 
-	stateOf(promise: Promise<unknown>): PromiseState | "unknown" {
-		return this.tracked.get(promise)?.state ?? "unknown";
+	stateOf(job: Job): PromiseState {
+		return job.state;
 	}
 
-	pending(): Promise<unknown>[] {
+	promiseOf(job: Job): Promise<unknown> {
+		return job.promise();
+	}
+
+	pending(): Job[] {
 		return [...this.live];
 	}
 
-	cancel(promise: Promise<unknown>): boolean {
-		this.live.delete(promise);
-		const controller = this.tracked.get(promise)?.controller;
+	cancel(job: Job): boolean {
+		this.live.delete(job);
+		const controller = this.controllers.get(job);
 		if (!controller) return false;
 		controller.abort();
 		return true;
 	}
 
 	abortAll(): void {
-		for (const promise of this.live)
-			this.tracked.get(promise)?.controller?.abort();
+		for (const job of this.live) this.controllers.get(job)?.abort();
 		this.live.clear();
 	}
 
-	private record<T>(
-		promise: Promise<T>,
-		controller?: AbortController,
-	): Promise<T> {
-		const record: Tracked = { state: "pending", controller };
-		this.tracked.set(promise, record);
-		this.live.add(promise);
-		promise.then(
-			() => {
-				record.state = "fulfilled";
-				this.live.delete(promise);
-			},
-			() => {
-				record.state = "rejected";
-				this.live.delete(promise);
-			},
-		);
-		return promise;
+	private record(promise: Promise<unknown>): Job {
+		const job = Job.of(promise);
+		this.jobs.set(promise, job);
+		this.live.add(job);
+		const settle = () => {
+			this.live.delete(job);
+		};
+		promise.then(settle, settle);
+		return job;
 	}
 }

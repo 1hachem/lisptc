@@ -25,7 +25,7 @@ import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
-import { pickGreeting } from "./greeting.ts";
+import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import type { SystemEventTicket } from "./system-event.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
@@ -133,12 +133,6 @@ function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 		content: message.content,
 		additional_kwargs: message.kwargs,
 	}));
-}
-
-const GREETING_ID = "greeting";
-
-export function isGreetingMessage(message: ChatMessage): boolean {
-	return message.id === GREETING_ID;
 }
 
 function greetingMessage(): ChatMessage {

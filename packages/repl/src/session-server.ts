@@ -9,6 +9,7 @@ import type { Ask } from "@repo/interpreter/asks";
 import type { Arity, DocArg } from "@repo/interpreter/docs";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { openAsks } from "./asks.ts";
+import { MemoryImageStore } from "./image-store.ts";
 import { MemoryRepl } from "./repl.ts";
 
 export interface CompletionEntry {
@@ -38,15 +39,17 @@ interface Request {
 		| "completions"
 		| "doc"
 		| "reset"
+		| "revert"
 		| "shutdown"
 		| "version";
 	code?: string;
+	call?: number;
 	symbol?: string;
 	action?: string;
 	values?: Record<string, unknown>;
 }
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 interface Reply {
 	id: number;
@@ -81,6 +84,30 @@ async function respond(
 	});
 }
 
+function completions(repl: MemoryRepl): CompletionEntry[] {
+	const docs = repl.interp.docs();
+	const names = new Set([...repl.interp.globalNames(), ...docs.keys()]);
+	const out: CompletionEntry[] = [];
+	for (const name of names) {
+		if (name.startsWith("_")) continue;
+		const d = docs.get(name);
+		out.push({ name, signature: d?.signature, doc: d?.doc });
+	}
+	return out;
+}
+
+function docOf(repl: MemoryRepl, symbol: string): unknown {
+	const d = repl.interp.docs().get(symbol);
+	return d
+		? {
+				signature: d.signature,
+				doc: d.doc,
+				args: d.args,
+				arity: repl.interp.arityOf(symbol),
+			}
+		: null;
+}
+
 async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 	switch (req.op) {
 		case "eval":
@@ -94,33 +121,16 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 		case "reset":
 			repl.reset();
 			return "";
+		case "revert":
+			return repl.revert(req.call ?? 0);
 		case "shutdown":
 			return "";
 		case "version":
 			return PROTOCOL_VERSION;
-		case "completions": {
-			const docs = repl.interp.docs();
-			const names = new Set([...repl.interp.globalNames(), ...docs.keys()]);
-			const out: CompletionEntry[] = [];
-			for (const name of names) {
-				if (name.startsWith("_")) continue;
-				const d = docs.get(name);
-				out.push({ name, signature: d?.signature, doc: d?.doc });
-			}
-			return out;
-		}
-		case "doc": {
-			const symbol = req.symbol ?? "";
-			const d = repl.interp.docs().get(symbol);
-			return d
-				? {
-						signature: d.signature,
-						doc: d.doc,
-						args: d.args,
-						arity: repl.interp.arityOf(symbol),
-					}
-				: null;
-		}
+		case "completions":
+			return completions(repl);
+		case "doc":
+			return docOf(repl, req.symbol ?? "");
 		default:
 			throw new Error(`unknown op: ${(req as Request).op}`);
 	}
@@ -157,7 +167,7 @@ export async function serve(
 		} catch {}
 	}
 
-	const repl = new MemoryRepl({ extensions });
+	const repl = new MemoryRepl({ extensions, images: new MemoryImageStore() });
 
 	const server = createServer((socket: Socket) => {
 		let buffer = "";
@@ -265,6 +275,9 @@ export class SessionClient {
 	}
 	reset(): Promise<string> {
 		return this.send({ op: "reset" }) as Promise<string>;
+	}
+	revert(call: number): Promise<number> {
+		return this.send({ op: "revert", call }) as Promise<number>;
 	}
 	completions(): Promise<CompletionEntry[]> {
 		return this.send({ op: "completions" }) as Promise<CompletionEntry[]>;
