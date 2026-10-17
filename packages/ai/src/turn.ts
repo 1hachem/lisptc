@@ -15,6 +15,7 @@ import {
 	streamAgent,
 	type TokenUsage,
 } from "./agent.ts";
+import { type EvalMessage, evalMessage } from "./eval.ts";
 import type { Steer } from "./inbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider.ts";
@@ -28,6 +29,7 @@ import {
 	stripFences,
 	type TranscriptEntry,
 	toLlmMessages,
+	withItsResult,
 } from "./repl.ts";
 import type { TraceContext } from "./telemetry.ts";
 import { type TurnTelemetry, turnTelemetry } from "./turn-telemetry.ts";
@@ -71,10 +73,12 @@ export type TurnEvent =
 			annotations: StepAnnotations;
 			riding?: string;
 			failed: boolean;
+			results: readonly string[];
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
 	| { type: "steered"; id: string; content: string }
+	| { type: "evaluated"; message: EvalMessage }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
@@ -106,15 +110,30 @@ function stepMeta(
 	};
 }
 
-async function* takeSteers(
-	inbox: (() => Promise<Steer[]>) | undefined,
-	transcript: TranscriptEntry[],
-): AsyncGenerator<TurnEvent, number> {
+function resultEntry(message: EvalMessage): TranscriptEntry {
+	const riding = message.additional_kwargs?.riding;
+	return {
+		role: "tool",
+		content: message.content,
+		...(typeof riding === "string" ? { riding } : {}),
+	};
+}
+
+async function* takeSteers({
+	repl,
+	inbox,
+	transcript,
+}: Turn): AsyncGenerator<TurnEvent, number> {
 	let taken = 0;
 	for (const steer of (await inbox?.()) ?? []) {
-		transcript.push({ role: "user", content: steer.content });
+		const prompt: TranscriptEntry = { role: "user", content: steer.content };
+		transcript.push(prompt);
 		taken += 1;
 		yield { type: "steered", ...steer };
+		const evaluated = await evalMessage(repl, steer.content);
+		if (evaluated === undefined) continue;
+		transcript.splice(-1, 1, ...withItsResult(prompt, resultEntry(evaluated)));
+		yield { type: "evaluated", message: evaluated };
 	}
 	return taken;
 }
@@ -245,8 +264,16 @@ async function* evaluateStep(
 	transcript.push({ role: "assistant", content: code });
 
 	const evalStartedAt = Date.now();
-	const { output, display, error, annotations, emitted, failed, held } =
-		await evalCode(repl, code);
+	const {
+		output,
+		display,
+		error,
+		annotations,
+		emitted,
+		failed,
+		held,
+		results,
+	} = await evalCode(repl, code);
 	turn.steps += 1;
 	const step = turn.steps;
 
@@ -275,6 +302,7 @@ async function* evaluateStep(
 		error,
 		annotations,
 		failed,
+		results,
 		...riding,
 	};
 	transcript.push({
@@ -295,9 +323,9 @@ async function* settleIfDone(
 }
 
 async function* settle(turn: Turn): AsyncGenerator<TurnEvent, boolean> {
-	const { repl, transcript, inbox, signal, steps, maxSteps } = turn;
+	const { repl, transcript, signal, steps, maxSteps } = turn;
 	if (signal?.aborted) return false;
-	const taken = steps > 0 ? yield* takeSteers(inbox, transcript) : 0;
+	const taken = steps > 0 ? yield* takeSteers(turn) : 0;
 	const settled = await repl.beforeSettle(taken > 0);
 	if (settled.emitted !== "") transcript.push(noteEntry(settled.emitted));
 	return settled.more && steps < maxSteps;
@@ -375,7 +403,7 @@ export async function* runAgentTurn(
 	options: TurnOptions,
 ): AsyncGenerator<TurnEvent> {
 	const turn = newTurn(options, messages);
-	const { repl, transcript, signal, inbox } = turn;
+	const { repl, signal } = turn;
 	const startedAt = Date.now();
 
 	let answer = "";
@@ -387,7 +415,7 @@ export async function* runAgentTurn(
 		let drained = false;
 
 		while (!signal?.aborted) {
-			if (turn.steps > 0 && !drained) yield* takeSteers(inbox, transcript);
+			if (turn.steps > 0 && !drained) yield* takeSteers(turn);
 			const step = yield* runStep(turn, opened);
 			drained = step.verdict !== "capped" && (yield* settleIfDone(turn, step));
 			if (step.verdict === "continue" || drained) continue;

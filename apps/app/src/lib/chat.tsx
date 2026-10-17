@@ -43,6 +43,7 @@ export interface ChatMessage {
 		prose?: unknown;
 		failed?: unknown;
 		source?: unknown;
+		results?: unknown;
 	};
 }
 
@@ -105,23 +106,8 @@ export interface ChatSession {
 	send: (text: string) => void;
 	sendAbout: (file: OpenFile, text: string) => void;
 	resume: (event: SystemEventTicket) => void;
-	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
-}
-
-async function evalLisp(
-	code: string,
-	chatId: string,
-	signal: AbortSignal,
-): Promise<void> {
-	const response = await fetch("/api/chat/eval", {
-		method: "POST",
-		headers: await apiHeaders(),
-		body: JSON.stringify({ chatId, code }),
-		signal,
-	});
-	if (!response.ok) throw new Error(`the repl returned ${response.status}`);
 }
 
 type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
@@ -156,16 +142,11 @@ function titleOf(message: string): string {
 
 function errorFor(
 	chatId: Id<"chats"> | null,
-	sources: {
-		stream: unknown;
-		streamingFor: Id<"chats"> | null;
-		evalError: { chatId: Id<"chats"> | null; message: string } | null;
-	},
+	stream: unknown,
+	streamingFor: Id<"chats"> | null,
 ): string | undefined {
-	const { stream, streamingFor, evalError } = sources;
 	if (stream && streamingFor === chatId)
 		return stream instanceof Error ? stream.message : String(stream);
-	if (evalError?.chatId === chatId) return evalError.message;
 	return undefined;
 }
 
@@ -231,13 +212,6 @@ export function ChatProvider({
 		setGreeting(greetingMessage());
 	}, []);
 
-	const [evaluating, setEvaluating] = useState(false);
-	const [evalError, setEvalError] = useState<{
-		chatId: Id<"chats"> | null;
-		message: string;
-	} | null>(null);
-	const running = useRef<AbortController | null>(null);
-
 	const turns =
 		streamingFor.current === chatId
 			? turnsToShow(streamed, persisted, stream.isLoading)
@@ -267,52 +241,12 @@ export function ChatProvider({
 			setMeta((prev) => ({ ...prev, ...found }));
 	}, [turns, meta]);
 
-	const runLisp = useCallback(
-		async (code: string) => {
-			const run = new AbortController();
-			running.current?.abort();
-			running.current = run;
-			setEvalError(null);
-			setEvaluating(true);
-			let opened = chatId;
-			try {
-				opened =
-					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
-				if (!chatId) {
-					await navigate({
-						to: "/$workspaceId/chat/$chatId",
-						params: { workspaceId, chatId: opened },
-						replace: true,
-					});
-				}
-				await evalLisp(code, opened, run.signal);
-			} catch (ex) {
-				if (run.signal.aborted) return;
-				reportIssue(ex, {
-					$exception_source: "lisp eval",
-					thread_id: chatId ?? "draft",
-				});
-				setEvalError({
-					chatId: opened,
-					message: ex instanceof Error ? ex.message : String(ex),
-				});
-			} finally {
-				if (running.current === run) {
-					running.current = null;
-					setEvaluating(false);
-				}
-			}
-		},
-		[chatId, workspaceId, createChat, navigate],
-	);
-
 	const submit = useCallback(
 		async (
 			input: { message: string } | { event: { token: string } },
 			shown: ChatMessage,
 			title: string,
 		) => {
-			setEvalError(null);
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			void markStreaming({ chatId: opened });
@@ -394,9 +328,6 @@ export function ChatProvider({
 
 	const stop = useCallback(() => {
 		clear();
-		running.current?.abort();
-		running.current = null;
-		setEvaluating(false);
 		stream.stop();
 	}, [stream, clear]);
 
@@ -416,7 +347,6 @@ export function ChatProvider({
 			send: () => {},
 			sendAbout: () => {},
 			resume: () => {},
-			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
 		}));
@@ -430,14 +360,10 @@ export function ChatProvider({
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
 			fresh,
-			isLoading: stream.isLoading || evaluating,
+			isLoading: stream.isLoading,
 			chatId,
 			workspaceId,
-			error: errorFor(chatId, {
-				stream: stream.error,
-				streamingFor: streamingFor.current,
-				evalError,
-			}),
+			error: errorFor(chatId, stream.error, streamingFor.current),
 			send: (text) => {
 				void send(text);
 			},
@@ -445,9 +371,6 @@ export function ChatProvider({
 				void sendAbout(file, text);
 			},
 			resume,
-			runLisp: (code) => {
-				void runLisp(code);
-			},
 			stop,
 			withdraw,
 		});
@@ -460,14 +383,11 @@ export function ChatProvider({
 		fresh,
 		stream.isLoading,
 		stream.error,
-		evaluating,
-		evalError,
 		chatId,
 		workspaceId,
 		send,
 		sendAbout,
 		resume,
-		runLisp,
 		stop,
 		withdraw,
 	]);
@@ -536,6 +456,13 @@ function isSkipped(value: unknown): value is Skipped {
 
 export function toolFailed(message: ChatMessage): boolean {
 	return message.additional_kwargs?.failed === true;
+}
+
+export function toolResults(message: ChatMessage): string[] {
+	const results = message.additional_kwargs?.results;
+	return Array.isArray(results)
+		? results.filter((r): r is string => typeof r === "string")
+		: [];
 }
 
 export function toolUi(message: ChatMessage): unknown {
