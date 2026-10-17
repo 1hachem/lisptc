@@ -264,7 +264,8 @@ MACROS
 defmacro defines compile-time transformer. Build expansion with quasiquote:
 
 (defmacro swap (a b)
-  `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
+  (let ((tmp (gensym)))
+    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))
 
 (gensym) for temporaries you introduce, so user variables are not captured.
 Expansion depth max 20 nesting levels at compile time.

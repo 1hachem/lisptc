@@ -92,13 +92,16 @@ describe("the language reference", () => {
 		expect(() => ev("*version*")).not.toThrow();
 	});
 
-	it("quasiquotes the swap expansion", () => {
+	it("shows a swap that quasiquotes a gensym temporary", () => {
 		const swap =
-			"(defmacro swap (a b)\n  `(let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))";
+			"(defmacro swap (a b)\n  (let ((tmp (gensym)))\n    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))";
 		expect(LANGUAGE_REFERENCE).toContain(swap);
 		const interp = freshInterp();
 		runSync(interp, swap);
 		expect(ev("(let ((x 1) (y 2)) (swap x y) (list x y))", interp)).toBe(
+			"(2 1)",
+		);
+		expect(ev("(let ((tmp 1) (x 2)) (swap tmp x) (list tmp x))", interp)).toBe(
 			"(2 1)",
 		);
 	});
