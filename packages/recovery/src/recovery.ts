@@ -110,7 +110,7 @@ interface FailedForm {
 
 interface Stopped {
 	code: string;
-	problems: Problem[];
+	problems: readonly Problem[];
 }
 
 function itemsOf(list: unknown): unknown[] {
@@ -133,7 +133,7 @@ function lastStopped(
 		if (problems.length === 0) continue;
 		for (let before = at - 1; before >= 0; before--)
 			if (entries[before].role === "assistant")
-				return { code: entries[before].content, problems: [...problems] };
+				return { code: entries[before].content, problems };
 		return undefined;
 	}
 	return undefined;
