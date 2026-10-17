@@ -1,3 +1,8 @@
+import {
+	type Conversation,
+	type ConversationEntry,
+	conversationSlot,
+} from "@repo/interpreter/conversation";
 import type { Doc } from "@repo/interpreter/docs";
 import { EvalException } from "@repo/interpreter/errors";
 import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
@@ -35,8 +40,6 @@ export interface RecoveryHost {
 }
 
 const REJECTED = newSym("rejected");
-
-const CONVERSATION = newSym("conversation");
 
 const REJECTED_DOC: Doc = {
 	signature: "rejected",
@@ -122,25 +125,15 @@ function field(record: unknown, key: string): unknown {
 	return undefined;
 }
 
-function problemOf(record: unknown): Problem {
-	return {
-		line: Number(field(record, "line")),
-		message: String(field(record, "message") ?? ""),
-	};
-}
-
-function lastStopped(conversation: unknown): Stopped | undefined {
-	const entries = itemsOf(conversation);
+function lastStopped(
+	entries: readonly ConversationEntry[],
+): Stopped | undefined {
 	for (let at = entries.length - 1; at >= 0; at--) {
-		const problems = itemsOf(field(entries[at], "problems"));
+		const problems = entries[at].problems ?? [];
 		if (problems.length === 0) continue;
-		for (let before = at - 1; before >= 0; before--) {
-			if (field(entries[before], "role") !== "assistant") continue;
-			const code = field(entries[before], "content");
-			return typeof code === "string"
-				? { code, problems: problems.map(problemOf) }
-				: undefined;
-		}
+		for (let before = at - 1; before >= 0; before--)
+			if (entries[before].role === "assistant")
+				return { code: entries[before].content, problems: [...problems] };
 		return undefined;
 	}
 	return undefined;
@@ -192,7 +185,10 @@ class Edits {
 	failure: string | undefined;
 	fallback: number | undefined;
 
-	constructor(private readonly interp: Interp) {}
+	constructor(
+		private readonly interp: Interp,
+		private readonly conversation: () => Conversation | undefined,
+	) {}
 
 	held(): string | null {
 		const code = this.interp.getGlobal(REJECTED);
@@ -204,10 +200,19 @@ class Edits {
 	}
 
 	stopped(): Stopped | undefined {
-		return lastStopped(this.interp.getGlobal(CONVERSATION));
+		const conversation = this.conversation();
+		return conversation === undefined
+			? undefined
+			: lastStopped(conversation.entries());
 	}
 
 	failed(): FailedForm[] {
+		if (this.conversation() === undefined)
+			throw new EvalException(
+				"no conversation",
+				"this session hands none over, so there are no failed forms to read",
+				false,
+			);
 		const stopped = this.stopped();
 		return stopped === undefined ? [] : failedForms(stopped);
 	}
@@ -407,14 +412,16 @@ async function edited(
 
 export function recoveryExtension(host: RecoveryHost): InterpExtension {
 	const editsOf = new WeakMap<Interp, Edits>();
+	let conversation: () => Conversation | undefined = () => undefined;
 	const extension = (interp: Interp): void => {
-		const edits = new Edits(interp);
+		const edits = new Edits(interp, () => conversation());
 		editsOf.set(interp, edits);
 		install(interp, edits);
 	};
 	return Object.assign(extension, {
 		prompt: host.prompt(),
 		session(hooks: SessionHooks): void {
+			conversation = () => hooks.filled(conversationSlot);
 			hooks.admit.use(async (interp, code, next) => {
 				const edits = editsOf.get(interp);
 				if (edits === undefined) return next(interp, code);

@@ -1,5 +1,9 @@
+import {
+	type ConversationEntry,
+	conversationSlot,
+} from "@repo/interpreter/conversation";
 import { Interp, runSync } from "@repo/interpreter/lisp";
-import { jsonToLisp, newSym } from "@repo/interpreter/objects";
+import { newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
 	type Admission,
@@ -43,29 +47,29 @@ export interface World {
 	read(code: string): unknown;
 }
 
-export function world(): World {
+export function world({ conversation = true } = {}): World {
 	const extensions = [recoveryExtension(recoveryHost), checker];
 	const interp = new Interp({ extensions });
 	runSync(interp, prelude);
 	const hooks = openSession(extensions);
+	let entries: ConversationEntry[] = [];
+	if (conversation) hooks.fill(conversationSlot, { entries: () => entries });
 	return {
 		interp,
 		admit: (code) =>
 			hooks.admit.run(async (_i, c) => ({ code: c }), interp, code),
 		rejected: () => interp.getGlobal(newSym("rejected")),
-		stopped: (code, lines) =>
-			interp.defineGlobal(
-				newSym("conversation"),
-				jsonToLisp([
-					{ role: "user", content: "fix it" },
-					{ role: "assistant", content: code },
-					{
-						role: "tool",
-						content: "not run",
-						problems: lines.map((line) => ({ line, message: `line ${line}` })),
-					},
-				]),
-			),
+		stopped: (code, lines) => {
+			entries = [
+				{ role: "user", content: "fix it" },
+				{ role: "assistant", content: code },
+				{
+					role: "tool",
+					content: "not run",
+					problems: lines.map((line) => ({ line, message: `line ${line}` })),
+				},
+			];
+		},
 		read: (code) => runSync(interp, code),
 	};
 }

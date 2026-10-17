@@ -140,6 +140,19 @@ describe("the failed forms of the last stopped step", () => {
 		expect(world().read("(failed-forms)")).toBe(null);
 	});
 
+	it("says so when the session hands over no conversation", () => {
+		expect(() => world({ conversation: false }).read("(failed-forms)")).toThrow(
+			/no conversation/,
+		);
+	});
+
+	it("still edits the whole step when the session hands over no conversation", async () => {
+		const w = world({ conversation: false });
+		await w.admit(both);
+		const admission = await w.admit("(rename totl total)");
+		expect(admission.code).toBe("(echo (total 1))\n(echo (total 2))");
+	});
+
 	it("lets an edit without :in work on the last failed form", async () => {
 		const w = await stoppedTwice();
 		await w.admit("(rename totl total)");

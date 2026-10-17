@@ -14,6 +14,30 @@ function checked() {
 	]);
 }
 
+describe("several broken forms, repaired through the conversation", () => {
+	it("finds each failed form and repairs them all in one step", async () => {
+		const repl = checked();
+		const code = "(echo pricez)\n(echo (car))";
+		const stopped = await repl.admit(code);
+		expect(stopped.problems).toEqual([
+			{ line: 1, message: "pricez is not defined" },
+			{ line: 2, message: "car: expected 1 argument, got 0" },
+		]);
+		repl.setConversation([
+			{ role: "assistant", content: code },
+			{ role: "tool", content: "not run", problems: stopped.problems },
+		]);
+		expect((await repl.evalOutput("(echo (length (failed-forms)))")).user).toBe(
+			"2\n",
+		);
+		const repaired = await repl.admit(
+			"(rename pricez 42 :in (car (failed-forms)))\n(push-arg car '(1 2))",
+		);
+		expect(repaired.rejected).toBeUndefined();
+		expect(repaired.code).toMatch(/^\(echo 42\)\n\(echo \(car /);
+	});
+});
+
 describe("a step the check stops, repaired by an edit", () => {
 	it("pushes the argument a call was missing, and admits the result", async () => {
 		const repl = checked();
