@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { mutation, query } from "./_generated/server.js";
+import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { waitsOnUser } from "./lib/waiting.js";
+import { STREAMING_LEASE_MS } from "./limits.js";
 import { chatStatus } from "./schema.js";
 
 const MAX_CHATS = 200;
@@ -17,6 +18,7 @@ const chat = v.object({
 	lastMessageAt: v.optional(v.number()),
 	archivedAt: v.optional(v.number()),
 	status: v.optional(chatStatus),
+	streamingSince: v.optional(v.number()),
 	failure: v.optional(v.string()),
 });
 
@@ -80,7 +82,32 @@ export const start = mutation({
 	returns: v.null(),
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
-		await ctx.db.patch(chatId, { status: "streaming", failure: undefined });
+		const since = Date.now();
+		await ctx.db.patch(chatId, {
+			status: "streaming",
+			streamingSince: since,
+			failure: undefined,
+		});
+		await ctx.scheduler.runAfter(STREAMING_LEASE_MS, internal.chats.expire, {
+			chatId,
+			since,
+		});
+		return null;
+	},
+});
+
+export const expire = internalMutation({
+	args: { chatId: v.id("chats"), since: v.number() },
+	returns: v.null(),
+	handler: async (ctx, { chatId, since }) => {
+		const chat = await ctx.db.get(chatId);
+		if (chat?.status !== "streaming" || chat.streamingSince !== since)
+			return null;
+		await ctx.db.patch(chatId, {
+			status: "errored",
+			streamingSince: undefined,
+			failure: "the turn stopped answering",
+		});
 		return null;
 	},
 });
@@ -91,12 +118,17 @@ export const settle = mutation({
 	handler: async (ctx, { chatId, failure }) => {
 		await requireChat(ctx, chatId);
 		if (failure !== undefined) {
-			await ctx.db.patch(chatId, { status: "errored", failure });
+			await ctx.db.patch(chatId, {
+				status: "errored",
+				streamingSince: undefined,
+				failure,
+			});
 			return null;
 		}
 		const waiting = await waitsOnUser(ctx, chatId);
 		await ctx.db.patch(chatId, {
 			status: waiting ? "waiting" : undefined,
+			streamingSince: undefined,
 			failure: undefined,
 		});
 		return null;
