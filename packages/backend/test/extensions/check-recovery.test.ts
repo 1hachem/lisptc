@@ -78,6 +78,13 @@ describe("a form left open among other broken forms", () => {
 			"continue",
 		);
 		await repl.beginStep();
+		const tooFar = await repl.admit(
+			"(push-arg car '(1 2) :in (car (failed-forms)))\n(close-parens :in (nth 2 (failed-forms)))",
+		);
+		expect(tooFar.rejected).toContain(
+			"(close-parens :in (nth 2 (failed-forms))) failed: :in takes an entry",
+		);
+		expect(tooFar.rejected).toContain("edit 2 of 2 failed");
 		const repaired = await repl.admit(
 			"(close-parens)\n(push-arg car '(1 2) :in (get-in (car (failed-forms)) :form))",
 		);

@@ -409,33 +409,52 @@ function kindOf(interp: Interp, code: string): StepKind {
 	return edits === forms.length ? "edits" : "mixed";
 }
 
+async function failureOf(
+	interp: Interp,
+	edits: Edits,
+	edit: string,
+): Promise<string | undefined> {
+	edits.failure = undefined;
+	try {
+		await runAsync(interp, edit);
+	} catch (ex) {
+		return edits.failure ?? (ex instanceof Error ? ex.message : String(ex));
+	}
+	return edits.failure;
+}
+
+function failedEdit(steps: string[], at: number, failure: string): string {
+	const named = `${steps[at]} failed: ${failure}`;
+	if (steps.length === 1) return named;
+	return `${named}\nedit ${at + 1} of ${steps.length} failed, so none of this step's edits were applied; rejected is as it was.`;
+}
+
 async function edited(
 	interp: Interp,
 	edits: Edits,
 	code: string,
 ): Promise<string | Admission> {
 	const before = edits.held();
-	edits.failure = undefined;
 	edits.aim();
-	let thrown: unknown;
-	try {
-		await runAsync(interp, code);
-	} catch (ex) {
-		thrown = ex;
+	const source = interp.hooks.readSource.run((_i, text) => text, interp, code);
+	const steps = formSpans(source).map(([start, end]) =>
+		source.slice(start, end),
+	);
+	for (const [at, step] of steps.entries()) {
+		const failure = await failureOf(interp, edits, step);
+		if (failure === undefined) continue;
+		edits.hold(before);
+		return {
+			code,
+			rejected: `not run: ${failedEdit(steps, at, failure)}\n${EDIT_FIRST}`,
+		};
 	}
-	const failure =
-		edits.failure ??
-		(thrown === undefined
-			? undefined
-			: thrown instanceof Error
-				? thrown.message
-				: String(thrown));
 	const after = edits.held();
-	if (failure === undefined && after !== null) return after;
+	if (after !== null) return after;
 	edits.hold(before);
 	return {
 		code,
-		rejected: `not run: ${failure ?? "nothing was rejected to edit"}\n${EDIT_FIRST}`,
+		rejected: `not run: nothing was rejected to edit\n${EDIT_FIRST}`,
 	};
 }
 

@@ -92,6 +92,21 @@ describe("an edit step", () => {
 		expect(w.rejected()).toBe("(echo (totl xs))");
 	});
 
+	it("names the edit that failed and drops the ones beside it", async () => {
+		const w = world();
+		await w.admit("(echo (totl xs)");
+		const admission = await w.admit(
+			'(close-parens)\n(revise :old "nowhere" :new "x")',
+		);
+		expect(admission.rejected).toContain(
+			'(revise :old "nowhere" :new "x") failed: not found in rejected',
+		);
+		expect(admission.rejected).toContain(
+			"edit 2 of 2 failed, so none of this step's edits were applied",
+		);
+		expect(w.rejected()).toBe("(echo (totl xs)");
+	});
+
 	it("re-rejects an edit that still leaves a mistake, holding the edited code", async () => {
 		const w = world();
 		await w.admit("(echo (totl xs)");
