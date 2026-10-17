@@ -319,8 +319,8 @@ export function streamChatResponse<Id extends string>(
 ): Response {
 	const { threadId, config, identity, onTurn, signal, steer } = options;
 	const abort = new AbortController();
-	if (signal)
-		signal.addEventListener("abort", () => abort.abort(), { once: true });
+	if (signal?.aborted) abort.abort();
+	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
 
 	const body = new ReadableStream<Uint8Array>({
 		async start(controller) {

@@ -1,7 +1,11 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
-import { MAX_PREFERENCES_BYTES, MAX_README_BYTES } from "../convex/limits.ts";
+import {
+	MAX_PREFERENCES_BYTES,
+	MAX_README_BYTES,
+	STREAMING_LEASE_MS,
+} from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 describe("repl checkpoint access", () => {
@@ -721,6 +725,35 @@ describe("chat listing", () => {
 			expect(
 				(await alice.as.query(api.chats.get, { chatId })).failure,
 			).toBeUndefined();
+		});
+
+		it("errors a turn that never settles once its lease runs out", async () => {
+			vi.useFakeTimers();
+			const t = harness();
+			const { alice, chatId } = await opened(t);
+			await t.finishAllScheduledFunctions(vi.runAllTimers);
+			expect(await alice.as.query(api.chats.get, { chatId })).toMatchObject({
+				status: "errored",
+				failure: "the turn stopped answering",
+			});
+			vi.useRealTimers();
+		});
+
+		it("leaves a turn that settled, or started again, to its own lease", async () => {
+			vi.useFakeTimers();
+			const t = harness();
+			const { alice, chatId, status } = await opened(t);
+			await alice.as.mutation(api.chats.settle, { chatId });
+			await t.finishAllScheduledFunctions(vi.runAllTimers);
+			expect(await status()).toBeUndefined();
+
+			await alice.as.mutation(api.chats.start, { chatId });
+			vi.advanceTimersByTime(STREAMING_LEASE_MS / 2);
+			await alice.as.mutation(api.chats.start, { chatId });
+			vi.advanceTimersByTime(STREAMING_LEASE_MS / 2 + 1);
+			await t.finishInProgressScheduledFunctions();
+			expect(await status()).toBe("streaming");
+			vi.useRealTimers();
 		});
 
 		it("waits on an open ask until it is answered", async () => {

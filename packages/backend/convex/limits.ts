@@ -25,3 +25,7 @@ export const MAX_REPL_IMAGE_BYTES = 8_388_608;
 export const REPL_IMAGE_CHUNK_CHARS = 262_144;
 
 export const MAX_TRANSCRIPT = 200;
+
+export const TURN_DEADLINE_MS = 600_000;
+
+export const STREAMING_LEASE_MS = TURN_DEADLINE_MS + 60_000;
