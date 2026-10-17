@@ -13,6 +13,7 @@ import {
 } from "../lib/oauth-callback.ts";
 
 export const Route = createFileRoute("/oauth/callback")({
+	staticData: { themed: true },
 	component: OAuthCallback,
 });
 

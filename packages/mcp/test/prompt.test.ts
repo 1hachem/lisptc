@@ -30,10 +30,10 @@ describe("the prompt the extension carries", () => {
 
 	it("says load-mcp is async: it returns a promise and does not block", () => {
 		expect(PROMPT).toMatch(
-			/load-mcp is asynchronous: it returns a promise immediately and does NOT block/,
+			/load-mcp async: returns promise\s+at once, NOT blocking/,
 		);
 		expect(PROMPT).toMatch(
-			/\(promise-state p\) checks progress \(:pending\/:fulfilled\/:rejected\)/,
+			/\(promise-state p\) checks progress without blocking:\s+:pending, :fulfilled or :rejected/,
 		);
 	});
 

@@ -9,6 +9,7 @@ export const SIDEBAR_ENTRIES = [
 	"triggers",
 	"tasks",
 	"ui",
+	"tests",
 	"README.md",
 	"settings.ptc",
 	"preferences.ptc",
@@ -31,4 +32,19 @@ export function sidebarOrder(
 		...new Set((stored ?? []).map((name) => RENAMED[name] ?? name)),
 	].filter(isEntry);
 	return [...kept, ...SIDEBAR_ENTRIES.filter((name) => !kept.includes(name))];
+}
+
+export function shownEntries(
+	order: readonly SidebarEntry[],
+	hidden: readonly string[] | undefined,
+): SidebarEntry[] {
+	const gone = new Set((hidden ?? []).map((name) => RENAMED[name] ?? name));
+	return order.filter((name) => !gone.has(name));
+}
+
+export function withHidden(
+	shown: readonly SidebarEntry[],
+	order: readonly SidebarEntry[],
+): SidebarEntry[] {
+	return [...shown, ...order.filter((name) => !shown.includes(name))];
 }
