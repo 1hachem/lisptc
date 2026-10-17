@@ -22,7 +22,12 @@ export interface Unbound {
 	inBody: boolean;
 }
 
-type Scope = ReadonlySet<string>;
+type Special = (
+	walk: Walk,
+	rest: readonly Node[],
+	scope: ReadonlySet<string>,
+	inBody: boolean,
+) => void;
 
 const EVALUATES_EVERY_ARGUMENT = new Set([
 	"if",
@@ -54,7 +59,10 @@ function bindingNames(bindings: Node | undefined): string[] {
 	);
 }
 
-function widened(scope: Scope, names: readonly string[]): Scope {
+function widened(
+	scope: ReadonlySet<string>,
+	names: readonly string[],
+): ReadonlySet<string> {
 	return names.length === 0 ? scope : new Set([...scope, ...names]);
 }
 
@@ -71,7 +79,7 @@ export class Walk {
 		private readonly definedHere: ReadonlySet<string>,
 	) {}
 
-	private bound(name: string, scope: Scope): boolean {
+	private bound(name: string, scope: ReadonlySet<string>): boolean {
 		return (
 			scope.has(name) ||
 			this.definedHere.has(name) ||
@@ -80,11 +88,19 @@ export class Walk {
 		);
 	}
 
-	values(nodes: readonly Node[], scope: Scope, inBody: boolean): void {
+	values(
+		nodes: readonly Node[],
+		scope: ReadonlySet<string>,
+		inBody: boolean,
+	): void {
 		for (const node of nodes) this.value(node, scope, inBody);
 	}
 
-	private value(node: Node | undefined, scope: Scope, inBody: boolean): void {
+	value(
+		node: Node | undefined,
+		scope: ReadonlySet<string>,
+		inBody: boolean,
+	): void {
 		if (node === undefined || node.quoted) return;
 		if (node.kind === "list") {
 			this.form(node, scope, inBody);
@@ -100,7 +116,11 @@ export class Walk {
 			this.calls.push({ call, inBody });
 	}
 
-	private form(form: ListForm, scope: Scope, inBody: boolean): void {
+	private form(
+		form: ListForm,
+		scope: ReadonlySet<string>,
+		inBody: boolean,
+	): void {
 		const [head, ...rest] = form.items;
 		if (head === undefined) return;
 		if (head.kind === "list") {
@@ -108,77 +128,37 @@ export class Walk {
 			return;
 		}
 		if (head.quoted || !isSymbol(head.text)) return;
-		const name = head.text;
-		switch (name) {
-			case "quote":
-			case "macro":
-			case "defmacro":
-				return;
-			case "progn": {
-				this.values(rest, scope, inBody);
-				return;
-			}
-			case "setq": {
-				this.values(
-					rest.filter((_, i) => i % 2 === 1),
-					scope,
-					inBody,
-				);
-				return;
-			}
-			case "cond":
-				for (const clause of rest)
-					this.values(asList(clause)?.items ?? [], scope, inBody);
-				return;
-			case "case":
-				this.value(rest[0], scope, inBody);
-				for (const clause of rest.slice(1))
-					this.values(asList(clause)?.items.slice(1) ?? [], scope, inBody);
-				return;
-			case "lambda": {
-				this.values(rest.slice(1), widened(scope, namesIn(rest[0])), true);
-				return;
-			}
-			case "defun": {
-				this.values(rest.slice(2), widened(scope, namesIn(rest[1])), true);
-				return;
-			}
-			case "let":
-			case "let*":
-			case "letrec": {
-				this.let(name, rest, scope, inBody);
-				return;
-			}
-			case "dolist":
-			case "dotimes": {
-				this.loop(rest, scope, inBody);
-				return;
-			}
-			case "try": {
-				this.try(rest, scope, inBody);
-				return;
-			}
-		}
-		if (scope.has(name)) {
-			this.values(rest, scope, inBody);
-			return;
-		}
-		if (EVALUATES_EVERY_ARGUMENT.has(name)) {
-			this.reach(form, inBody);
-			this.values(rest, scope, inBody);
-			return;
-		}
-		if (this.known.isMacro(name)) return;
-		if (this.definedHere.has(name) || this.known.isFunction(name)) {
-			this.reach(form, inBody);
-			this.values(rest, scope, inBody);
-		}
+		const special = SPECIAL_FORMS.get(head.text);
+		if (special !== undefined) special(this, rest, scope, inBody);
+		else this.application(form, head.text, scope, inBody);
 	}
 
-	private let(
+	private application(
+		form: ListForm,
+		name: string,
+		scope: ReadonlySet<string>,
+		inBody: boolean,
+	): void {
+		const args = form.items.slice(1);
+		if (scope.has(name)) {
+			this.values(args, scope, inBody);
+			return;
+		}
+		if (!this.evaluatesItsArguments(name)) return;
+		this.reach(form, inBody);
+		this.values(args, scope, inBody);
+	}
+
+	private evaluatesItsArguments(name: string): boolean {
+		if (EVALUATES_EVERY_ARGUMENT.has(name)) return true;
+		if (this.known.isMacro(name)) return false;
+		return this.definedHere.has(name) || this.known.isFunction(name);
+	}
+
+	let(
 		name: string,
 		rest: readonly Node[],
-		scope: Scope,
+		scope: ReadonlySet<string>,
 		inBody: boolean,
 	): void {
 		const bindings = asList(rest[0]);
@@ -191,7 +171,11 @@ export class Walk {
 		this.values(rest.slice(1), inner, inBody);
 	}
 
-	private loop(rest: readonly Node[], scope: Scope, inBody: boolean): void {
+	loop(
+		rest: readonly Node[],
+		scope: ReadonlySet<string>,
+		inBody: boolean,
+	): void {
 		const spec = asList(rest[0]);
 		const [variable, source, result] = spec?.items ?? [];
 		this.value(source, scope, inBody);
@@ -200,7 +184,11 @@ export class Walk {
 		this.values(rest.slice(1), inner, inBody);
 	}
 
-	private try(rest: readonly Node[], scope: Scope, inBody: boolean): void {
+	try(
+		rest: readonly Node[],
+		scope: ReadonlySet<string>,
+		inBody: boolean,
+	): void {
 		this.value(rest[0], scope, inBody);
 		const handler = asList(rest[1]);
 		if (handler === undefined) return;
@@ -208,3 +196,81 @@ export class Walk {
 		this.values(body, widened(scope, namesIn(params)), inBody);
 	}
 }
+
+function letForm(name: string): Special {
+	return (walk, rest, scope, inBody) => {
+		walk.let(name, rest, scope, inBody);
+	};
+}
+
+function ignored(): void {}
+
+const SPECIAL_FORMS = new Map<string, Special>([
+	["quote", ignored],
+	["macro", ignored],
+	["defmacro", ignored],
+	[
+		"progn",
+		(walk, rest, scope, inBody) => {
+			walk.values(rest, scope, inBody);
+		},
+	],
+	[
+		"setq",
+		(walk, rest, scope, inBody) => {
+			walk.values(
+				rest.filter((_, i) => i % 2 === 1),
+				scope,
+				inBody,
+			);
+		},
+	],
+	[
+		"cond",
+		(walk, rest, scope, inBody) => {
+			for (const clause of rest)
+				walk.values(asList(clause)?.items ?? [], scope, inBody);
+		},
+	],
+	[
+		"case",
+		(walk, rest, scope, inBody) => {
+			walk.value(rest[0], scope, inBody);
+			for (const clause of rest.slice(1))
+				walk.values(asList(clause)?.items.slice(1) ?? [], scope, inBody);
+		},
+	],
+	[
+		"lambda",
+		(walk, rest, scope) => {
+			walk.values(rest.slice(1), widened(scope, namesIn(rest[0])), true);
+		},
+	],
+	[
+		"defun",
+		(walk, rest, scope) => {
+			walk.values(rest.slice(2), widened(scope, namesIn(rest[1])), true);
+		},
+	],
+	["let", letForm("let")],
+	["let*", letForm("let*")],
+	["letrec", letForm("letrec")],
+	[
+		"dolist",
+		(walk, rest, scope, inBody) => {
+			walk.loop(rest, scope, inBody);
+		},
+	],
+	[
+		"dotimes",
+		(walk, rest, scope, inBody) => {
+			walk.loop(rest, scope, inBody);
+		},
+	],
+	[
+		"try",
+		(walk, rest, scope, inBody) => {
+			walk.try(rest, scope, inBody);
+		},
+	],
+]);

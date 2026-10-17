@@ -18,21 +18,20 @@ export interface Problem {
 	severity: "error" | "warning";
 }
 
+function targetsOf(head: Node | undefined, rest: Node[]): Node[] {
+	if (head?.kind !== "atom" || head.quoted) return [];
+	if (head.text === "setq") return rest.filter((_, i) => i % 2 === 0);
+	if (head.text === "defun" || head.text === "defmacro")
+		return rest.slice(0, 1);
+	return [];
+}
+
 function definedHere(nodes: Node[], out = new Set<string>()): Set<string> {
 	for (const node of nodes) {
 		if (node.kind !== "list" || node.quoted) continue;
 		const [head, ...rest] = node.items;
-		if (head?.kind === "atom" && !head.quoted) {
-			const targets =
-				head.text === "setq"
-					? rest.filter((_, i) => i % 2 === 0)
-					: head.text === "defun" || head.text === "defmacro"
-						? rest.slice(0, 1)
-						: [];
-			for (const target of targets)
-				if (target.kind === "atom" && isSymbol(target.text))
-					out.add(target.text);
-		}
+		for (const target of targetsOf(head, rest))
+			if (target.kind === "atom" && isSymbol(target.text)) out.add(target.text);
 		definedHere(node.items, out);
 	}
 	return out;

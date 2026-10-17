@@ -68,56 +68,75 @@ export function expectedArgs({ min, max }: Arity): string {
 	return min === max ? `${min}` : `${min}-${max}`;
 }
 
+function rangeOf(call: Call): Range {
+	return {
+		start: { line: call.head.line, character: call.head.char },
+		end: { line: call.head.line, character: call.head.char + call.name.length },
+	};
+}
+
+function error(
+	call: Call,
+	code: Diagnostic["code"],
+	message: string,
+): Diagnostic {
+	return { severity: "error", range: rangeOf(call), message, code };
+}
+
+function keywordProblems(call: Call, args: DocArg[]): Diagnostic[] {
+	const problems: Diagnostic[] = [];
+	for (const arg of args) {
+		const value = call.values.get(arg.name);
+		if (value !== undefined && wrongType(arg, value))
+			problems.push(
+				error(
+					call,
+					"type",
+					`${call.name}: :${arg.name} takes a ${arg.type}, got ${literalText(value)}`,
+				),
+			);
+		if (arg.required && !call.keywords.has(arg.name))
+			problems.push(
+				error(
+					call,
+					"missing-argument",
+					`${call.name}: missing required argument ":${arg.name}"`,
+				),
+			);
+	}
+	return problems;
+}
+
+function arityProblems(call: Call, arity: Arity): Diagnostic[] {
+	const { min, max } = arity;
+	if (call.argCount >= min && (max === undefined || call.argCount <= max))
+		return [];
+	const expected = expectedArgs(arity);
+	const noun = expected === "1" ? "argument" : "arguments";
+	return [
+		error(
+			call,
+			"arity",
+			`${call.name}: expected ${expected} ${noun}, got ${call.argCount}`,
+		),
+	];
+}
+
+function problemsOf(call: Call, doc: CallDoc): Diagnostic[] {
+	const { args, arity } = doc;
+	const bareFormOfHybrid =
+		arity !== undefined && call.keywords.size === 0 && call.argCount > 0;
+	if (args?.length && !bareFormOfHybrid) return keywordProblems(call, args);
+	return arity === undefined ? [] : arityProblems(call, arity);
+}
+
 export function diagnosticsForCalls(
 	calls: Call[],
 	docByName: Map<string, CallDoc>,
 ): Diagnostic[] {
-	const diagnostics: Diagnostic[] = [];
-	for (const call of calls) {
-		const range = {
-			start: { line: call.head.line, character: call.head.char },
-			end: {
-				line: call.head.line,
-				character: call.head.char + call.name.length,
-			},
-		};
-		const { args, arity } = docByName.get(call.name) ?? {};
-		const bareFormOfHybrid =
-			arity !== undefined && call.keywords.size === 0 && call.argCount > 0;
-		if (args?.length && !bareFormOfHybrid) {
-			for (const arg of args) {
-				const value = call.values.get(arg.name);
-				if (value !== undefined && wrongType(arg, value))
-					diagnostics.push({
-						severity: "error",
-						range,
-						message: `${call.name}: :${arg.name} takes a ${arg.type}, got ${literalText(value)}`,
-						code: "type",
-					});
-				if (!arg.required || call.keywords.has(arg.name)) continue;
-				diagnostics.push({
-					severity: "error",
-					range,
-					message: `${call.name}: missing required argument ":${arg.name}"`,
-					code: "missing-argument",
-				});
-			}
-		} else if (
-			arity !== undefined &&
-			(call.argCount < arity.min ||
-				(arity.max !== undefined && call.argCount > arity.max))
-		) {
-			const expected = expectedArgs(arity);
-			const plural = expected !== "1";
-			diagnostics.push({
-				severity: "error",
-				range,
-				message: `${call.name}: expected ${expected} ${plural ? "arguments" : "argument"}, got ${call.argCount}`,
-				code: "arity",
-			});
-		}
-	}
-	return diagnostics;
+	return calls.flatMap((call) =>
+		problemsOf(call, docByName.get(call.name) ?? {}),
+	);
 }
 
 export async function callDiagnostics(
