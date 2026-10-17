@@ -1,6 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { SidePanel } from "./side-panel.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
@@ -40,6 +41,16 @@ export function LeftSidebar({
 								? user.email
 								: user.name}
 					</span>
+					{workspace && (
+						<Link
+							to="/$workspaceId/account"
+							params={{ workspaceId: workspace._id }}
+							className="ml-auto flex-none text-dim hover:text-fg"
+							activeProps={{ className: "text-fg" }}
+						>
+							settings
+						</Link>
+					)}
 					<button
 						type="button"
 						onClick={onSignOut}
