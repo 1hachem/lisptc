@@ -48,8 +48,7 @@ way a loaded tool is named, is never flagged, because a server's tools are bound
 checked against the type its doc record declares only when that type names a
 literal shape; an expression is never guessed at.
 
-A binding form the walk does not know is treated like a macro: nothing inside
-it is checked. Teaching it a new one is a case in `src/scope.ts` and a test.
+Inside a binding form it does not understand, the check stays silent.
 
 ## Tests
 

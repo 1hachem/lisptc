@@ -19,6 +19,10 @@ govern this package.
 It checks nothing itself and names no checker. At a composition root it comes
 before every extension that hooks `admit`, or it never sees what they reject.
 
+It reads the conversation only through `conversationSlot`, never through a
+global looked up by name. A session that fills no conversation still gets
+whole-step edits.
+
 An edit is strict. It fails rather than guess: a replace that matches nowhere
 or more than once, a call that is not there or is there twice. A failed edit
 leaves `rejected` as it was.
