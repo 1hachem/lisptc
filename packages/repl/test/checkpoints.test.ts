@@ -103,6 +103,48 @@ describe("checkpoints", () => {
 		expect((await second.evalOutput("(+ 1 1)")).message).toBeUndefined();
 	});
 
+	it("saves what changed after the last call when it closes", async () => {
+		const images = new MemoryImageStore();
+		const first = repl(images);
+		await first.evalOutput("(setq a 1)");
+		first.interp.defineGlobal(newSym("late"), 5n);
+		await first.close();
+		const second = repl(images);
+		expect(await second.resume()).toBe(1);
+		expect(second.interp.getGlobal(newSym("late"))).toBe(5n);
+	});
+
+	it("finishes the running call before it closes", async () => {
+		const images = new MemoryImageStore();
+		const first = repl(images);
+		const running = first.evalOutput("(setq a 1)");
+		await first.close();
+		expect((await running).call).toBe(1);
+		const second = repl(images);
+		expect(await second.resume()).toBe(1);
+		expect(second.interp.getGlobal(newSym("a"))).toBe(1n);
+	});
+
+	it("disposes its interpreter when it closes", async () => {
+		let disposed = 0;
+		const watched: InterpExtension = (interp: Interp): void => {
+			interp.hooks.dispose.use((next) => {
+				disposed++;
+				next();
+			});
+		};
+		const r = repl(new MemoryImageStore(), [watched]);
+		await r.evalOutput("(setq a 1)");
+		await r.close();
+		expect(disposed).toBe(1);
+	});
+
+	it("saves nothing when it closes before its first call", async () => {
+		const images = new MemoryImageStore();
+		await repl(images).close();
+		expect(await images.latest()).toBeUndefined();
+	});
+
 	it("keeps the call count across a reset", async () => {
 		const r = repl();
 		await r.evalOutput("(setq a 1)");
