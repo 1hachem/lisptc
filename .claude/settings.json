@@ -34,6 +34,16 @@
         ]
       },
       {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.agents/hooks/lockfile-policy.sh\"",
+            "statusMessage": "Checking for a hand edit of the lockfile"
+          }
+        ]
+      },
+      {
         "matcher": "Grep|Glob|Bash",
         "hooks": [
           {
