@@ -152,6 +152,16 @@ describe("a step the check stops, repaired by an edit", () => {
 		});
 	});
 
+	it("takes edits whose prose quotes code in backticks", async () => {
+		const repl = checked();
+		await repl.admit("(echo (car))");
+		expect(
+			await repl.admit(
+				"Form 1 (`(echo (car))`) passes `car` nothing, so:\n(push-arg car '(1 2))",
+			),
+		).toMatchObject({ code: "(echo (car '(1 2)))" });
+	});
+
 	it("holds an edit that is still wrong as the new rejected code", async () => {
 		const repl = checked();
 		await repl.admit("(echo (car)");
