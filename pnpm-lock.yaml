@@ -58,7 +58,7 @@ importers:
         version: 6.27.0
       no-comments:
         specifier: github:1hachem/no-comments#v1
-        version: https://codeload.github.com/1hachem/no-comments/tar.gz/a38a075ce66c272071c9470bf5579bc7c0df5040
+        version: https://codeload.github.com/1hachem/no-comments/tar.gz/4b09d305fc0fe4e1a29cb765255b21d262484fd8
       turbo:
         specifier: ^2.5.0
         version: 2.10.5
@@ -6712,9 +6712,9 @@ packages:
       zephyr-agent:
         optional: true
 
-  no-comments@https://codeload.github.com/1hachem/no-comments/tar.gz/a38a075ce66c272071c9470bf5579bc7c0df5040:
-    resolution: {tarball: https://codeload.github.com/1hachem/no-comments/tar.gz/a38a075ce66c272071c9470bf5579bc7c0df5040}
-    version: 1.1.0
+  no-comments@https://codeload.github.com/1hachem/no-comments/tar.gz/4b09d305fc0fe4e1a29cb765255b21d262484fd8:
+    resolution: {tarball: https://codeload.github.com/1hachem/no-comments/tar.gz/4b09d305fc0fe4e1a29cb765255b21d262484fd8}
+    version: 1.2.0
     hasBin: true
 
   node-releases@2.0.53:
@@ -13020,7 +13020,7 @@ snapshots:
       - uploadthing
       - wrangler
 
-  no-comments@https://codeload.github.com/1hachem/no-comments/tar.gz/a38a075ce66c272071c9470bf5579bc7c0df5040: {}
+  no-comments@https://codeload.github.com/1hachem/no-comments/tar.gz/4b09d305fc0fe4e1a29cb765255b21d262484fd8: {}
 
   node-releases@2.0.53: {}
 
