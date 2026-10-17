@@ -1,3 +1,6 @@
+import { conversationExtension } from "@repo/conversation-extension";
+import { conversationHost } from "@repo/conversation-extension/host";
+import type { AgentTurn } from "@repo/interpreter/session";
 import { lintExtension } from "@repo/lint-extension";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
@@ -9,6 +12,7 @@ import { agentRepl } from "./helpers.ts";
 function checked() {
 	return agentRepl([
 		proseExtension(proseHost),
+		conversationExtension(conversationHost),
 		recoveryExtension(recoveryHost),
 		lintExtension(),
 	]);
@@ -17,16 +21,26 @@ function checked() {
 describe("several broken forms, repaired through the conversation", () => {
 	it("finds each failed form and repairs them all in one step", async () => {
 		const repl = checked();
+		await repl.turnStart();
 		const code = "(echo pricez)\n(echo (car))";
 		const stopped = await repl.admit(code);
 		expect(stopped.problems).toEqual([
 			{ line: 1, message: "pricez is not defined" },
 			{ line: 2, message: "car: expected 1 argument, got 0" },
 		]);
-		repl.setConversation([
-			{ role: "assistant", content: code },
-			{ role: "tool", content: "not run", problems: stopped.problems },
-		]);
+		repl.stepEnd(
+			{ interp: repl.interp } as AgentTurn,
+			{
+				step: 1,
+				code,
+				output: stopped.rejected ?? "",
+				error: true,
+				failed: true,
+				latencyMs: 0,
+			},
+			"continue",
+		);
+		await repl.beginStep();
 		expect((await repl.evalOutput("(echo (length (failed-forms)))")).user).toBe(
 			"2\n",
 		);

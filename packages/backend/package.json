@@ -37,6 +37,7 @@
     "@convex-dev/migrations": "^0.3.6",
     "@posthog/convex": "^2.1.5",
     "@repo/compaction-extension": "workspace:*",
+    "@repo/conversation-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",

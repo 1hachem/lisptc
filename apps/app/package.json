@@ -35,6 +35,7 @@
     "@repo/backend": "workspace:*",
     "@repo/bloub": "workspace:*",
     "@repo/compaction-extension": "workspace:*",
+    "@repo/conversation-extension": "workspace:*",
     "@repo/components": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
     "@repo/env": "workspace:*",
