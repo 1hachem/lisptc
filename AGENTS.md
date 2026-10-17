@@ -421,6 +421,14 @@ and do not count.
 One commit holds one concern. Unrelated changes in the tree go in commits of
 their own.
 
+## Pull requests
+
+A pull request that changes what the agent or the chat does carries prompts to
+test it with, under a heading of their own in its description. Each prompt sits
+in a fenced block of its own so it copies whole, followed by what a reviewer
+should see once it runs. A prompt names the exact code or message to send, so
+it reproduces without waiting for the model to make the mistake on its own.
+
 ## Issues
 
 Work found along the way and left out of the current change is written up as a
