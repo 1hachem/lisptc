@@ -43,6 +43,7 @@
 
 	--animate-blk: blk 1.06s steps(1, end) infinite;
 	--animate-orbit: orbit 2.4s linear infinite;
+	--animate-dot: dot 1.5s ease-in-out infinite both;
 }
 
 @theme inline {
@@ -200,6 +201,19 @@
 	50%,
 	100% {
 		opacity: 0;
+	}
+}
+
+@keyframes dot {
+	0%,
+	50%,
+	100% {
+		transform: scale(1);
+		opacity: 0.55;
+	}
+	25% {
+		transform: scale(1.25);
+		opacity: 1;
 	}
 }
 

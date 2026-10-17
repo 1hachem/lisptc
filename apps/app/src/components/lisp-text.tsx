@@ -1,4 +1,4 @@
-import { type FormSpan, tokensIn } from "@repo/syntax";
+import { type FormSpan, sourceTokensIn, tokensIn } from "@repo/syntax";
 import {
 	Children,
 	createContext,
@@ -34,10 +34,13 @@ function spansOver(fragment: string, { text, spans }: Skips): FormSpan[] {
 	return spans.map(([from, to]) => [from - at, to - at]);
 }
 
-export function LispText({ children }: { children: string }) {
-	const skipped = useContext(Skipped);
+function Tokens({
+	tokens,
+}: {
+	tokens: readonly { value: string; className?: string }[];
+}) {
 	let at = 0;
-	return tokensIn(children, spansOver(children, skipped)).map((t) => {
+	return tokens.map((t) => {
 		const key = at;
 		at += t.value.length;
 		return (
@@ -46,6 +49,15 @@ export function LispText({ children }: { children: string }) {
 			</span>
 		);
 	});
+}
+
+export function LispText({ children }: { children: string }) {
+	const skipped = useContext(Skipped);
+	return <Tokens tokens={tokensIn(children, spansOver(children, skipped))} />;
+}
+
+export function LispSource({ children }: { children: string }) {
+	return <Tokens tokens={sourceTokensIn(children)} />;
 }
 
 export function withLisp(children: ReactNode): ReactNode {

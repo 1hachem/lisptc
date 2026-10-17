@@ -1,9 +1,11 @@
 import { ThemeSwatches } from "@repo/components";
 import { fonts } from "@repo/ui";
+import { motions } from "@repo/ui/motions.ts";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { CHANNELS, type Channel } from "../lib/channels.ts";
 import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
+import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useUI } from "../lib/ui.tsx";
 import { SidePanel } from "./side-panel.tsx";
 
@@ -113,7 +115,33 @@ function FontList() {
 	);
 }
 
-export function RightSidebar({ open }: { open: boolean }) {
+function MotionList() {
+	const { motion, chooseMotion } = useSidebarMotion();
+	return (
+		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			{motions.map((candidate) => {
+				const chosen = candidate.id === motion;
+				return (
+					<button
+						key={candidate.id}
+						type="button"
+						aria-pressed={chosen}
+						title={candidate.name}
+						onClick={() => chooseMotion(candidate.id)}
+						className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+					>
+						<span className={`flex-1 ${chosen ? "text-fg" : "text-dim"}`}>
+							{candidate.id}
+						</span>
+						{chosen && <span className="flex-none text-dim">on</span>}
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
+export function PreferencesPanel({ open }: { open: boolean }) {
 	return (
 		<SidePanel side="right" open={open} className="w-[214px]">
 			<div className="flex h-full flex-col gap-5 overflow-y-auto py-3.5">
@@ -146,6 +174,10 @@ export function RightSidebar({ open }: { open: boolean }) {
 					font
 				</div>
 				<FontList />
+				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+					drag motion
+				</div>
+				<MotionList />
 			</div>
 		</SidePanel>
 	);

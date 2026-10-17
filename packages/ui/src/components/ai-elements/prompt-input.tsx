@@ -44,6 +44,7 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "../ui/command";
+import { Dots } from "../ui/dots";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -68,7 +69,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "../ui/select";
-import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
@@ -1150,7 +1150,7 @@ export const PromptInputSubmit = ({
 	let Icon = <HugeiconsIcon icon={CornerDownLeftIcon} className="size-4" />;
 
 	if (status === "submitted") {
-		Icon = <Spinner />;
+		Icon = <Dots />;
 	} else if (status === "streaming") {
 		Icon = <HugeiconsIcon icon={SquareIcon} className="size-4" />;
 	} else if (status === "error") {
