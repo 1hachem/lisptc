@@ -86,7 +86,7 @@ export const sent = query({
 	},
 });
 
-type Incoming = Infer<typeof incoming>;
+export type Incoming = Infer<typeof incoming>;
 
 export async function appendTo(
 	ctx: MutationCtx,
