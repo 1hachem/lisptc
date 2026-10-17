@@ -20,9 +20,8 @@ It is the only place the conversation is kept. Nothing above an extension sets
 it, and another extension reads it through `conversationSlot`, never through a
 global looked up by name.
 
-What was said before this turn comes from the host's store. What happens during
-the turn comes from the session's own chains, because a turn is stored only
-once it ends.
+A store answers for finished turns only. Never make it the source of the turn
+in progress.
 
 One extension instance serves one session, so a root builds one per REPL.
 
