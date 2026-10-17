@@ -3,6 +3,7 @@ import { type Interp, runSync } from "@repo/interpreter/lisp";
 import { note } from "@repo/interpreter/topics";
 import type {
 	ConnConfig,
+	HeldState,
 	McpHost,
 	ServerHandle,
 	ServerState,
@@ -13,18 +14,18 @@ export function recordingHost(): McpHost & {
 	stopped: string[];
 	stoppedAll: number;
 	uses: string[];
-	sleeping: Set<string>;
+	phases: Map<string, HeldState>;
 } {
 	const ensured: ConnConfig[] = [];
 	const stopped: string[] = [];
 	const uses: string[] = [];
-	const sleeping = new Set<string>();
+	const phases = new Map<string, HeldState>();
 	let stoppedAll = 0;
 	return {
 		ensured,
 		stopped,
 		uses,
-		sleeping,
+		phases,
 		get stoppedAll() {
 			return stoppedAll;
 		},
@@ -43,7 +44,7 @@ export function recordingHost(): McpHost & {
 		used(name) {
 			uses.push(name);
 		},
-		asleep: async (name) => sleeping.has(name),
+		phase: async (name) => phases.get(name) ?? { phase: "ready" },
 	};
 }
 

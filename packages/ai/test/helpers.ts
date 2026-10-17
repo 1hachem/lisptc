@@ -79,6 +79,21 @@ export function riding(text: string): InterpExtension {
 	});
 }
 
+export function notifying(
+	source: string,
+	text: string,
+	atStep: number,
+): InterpExtension {
+	let steps = 0;
+	return extension((hooks) => {
+		hooks.beginStep.use(function* (ctx, next) {
+			steps += 1;
+			if (steps === atStep) ctx.notify(source, text);
+			yield* next(ctx);
+		});
+	});
+}
+
 export function testRepl(extensions: InterpExtension[] = []): AgentRepl {
 	return new AgentRepl({ extensions: [answering(), ...extensions] });
 }

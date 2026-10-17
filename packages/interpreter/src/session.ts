@@ -26,9 +26,15 @@ export function annotating(
 	return { ...into, [where]: { ...into[where], ...entry } };
 }
 
+export interface Notice {
+	readonly source: string;
+	readonly text: string;
+}
+
 export interface TurnContext {
 	readonly interp: Interp;
 	emit(text: string): void;
+	notify(source: string, text: string): void;
 }
 
 export interface StepContext {

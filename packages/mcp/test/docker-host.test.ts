@@ -193,5 +193,27 @@ describe("what the docker host reports about the containers it runs", () => {
 			reason: "its container exited.\nserver listening",
 		});
 		expect(host.status("playwright")).toBe("unknown");
+		expect(await host.phase("playwright")).toEqual({
+			phase: "failed",
+			reason: "server listening",
+		});
+	});
+
+	it("answers ready while its container runs, and asleep once stopped", async () => {
+		const { host } = reporting(30);
+
+		await host.ensure(playwright);
+		expect(await host.phase("playwright")).toEqual({ phase: "ready" });
+		await host.stop("playwright");
+
+		expect(await host.phase("playwright")).toEqual({ phase: "sleeping" });
+	});
+
+	it("asks the fallback about a server it never ran", async () => {
+		const fallback = recordingHost();
+		fallback.phases.set("remote", { phase: "gone" });
+		const host = new DockerHost(fallback);
+
+		expect(await host.phase("remote")).toEqual({ phase: "gone" });
 	});
 });

@@ -20,12 +20,14 @@ import {
 	specFor,
 	VERSION,
 } from "./mcp-server-resource.ts";
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type HeldState,
+	logTail,
+	type McpHost,
+	type ServerHandle,
+	type ServerState,
+	type StartWatch,
 } from "./ports.ts";
 import {
 	START_LIMITS,
@@ -315,17 +317,12 @@ export class KubernetesHost implements McpHost {
 		this.store.patchSpec(followed.name, { lastUsed: now }).catch(() => {});
 	}
 
-	async asleep(name: string): Promise<boolean> {
+	async phase(name: string): Promise<HeldState> {
 		const followed = this.followed.get(name);
-		if (!followed) return await this.fallback.asleep(name);
-		if (followed.state !== "running") return false;
-		const live = await this.store.get(followed.name);
-		const slept =
-			live === undefined ||
-			live.status?.phase === "Sleeping" ||
-			this.clock() - live.spec.lastUsed >= live.spec.idleSeconds;
-		if (slept) this.unfollow(followed);
-		return slept;
+		if (!followed) return await this.fallback.phase(name);
+		const held = heldState(await this.store.get(followed.name), this.clock());
+		if (held.phase !== "ready") this.unfollow(followed);
+		return held;
 	}
 
 	private unfollow(followed: Followed): void {
@@ -438,6 +435,18 @@ function clusterGaveUp(label: string, why: StartGaveUp): Error {
 }
 
 function tail(logs: string): string {
-	const last = logs.trim().split("\n").slice(-6).join("\n");
+	const last = logTail(logs);
 	return last ? `\n${last}` : "";
+}
+
+function heldState(live: McpServer | undefined, now: number): HeldState {
+	if (live === undefined) return { phase: "gone" };
+	const { spec, status } = live;
+	if (status?.phase === "Failed") {
+		const reason = status.reason ?? logTail(status.logTail ?? "");
+		return reason === "" ? { phase: "failed" } : { phase: "failed", reason };
+	}
+	if (status?.phase === "Sleeping" || now - spec.lastUsed >= spec.idleSeconds)
+		return { phase: "sleeping" };
+	return { phase: "ready" };
 }

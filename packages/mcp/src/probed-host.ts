@@ -1,9 +1,11 @@
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type HeldState,
+	type McpHost,
+	type ServerHandle,
+	type ServerState,
+	type StartWatch,
+	stillHeld,
 } from "./ports.ts";
 
 export interface HostCandidate {
@@ -61,8 +63,8 @@ export class ProbedHost implements McpHost {
 		this.host?.used(name);
 	}
 
-	async asleep(name: string): Promise<boolean> {
-		return (await this.host?.asleep(name)) ?? false;
+	async phase(name: string): Promise<HeldState> {
+		return (await this.host?.phase(name)) ?? stillHeld;
 	}
 
 	private settled(): Promise<McpHost | undefined> {
