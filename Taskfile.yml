@@ -37,11 +37,11 @@ tasks:
       if [ -z "$volumes" ]; then echo "no MCP state volumes"; else docker volume rm $volumes; fi
 
   convex:push:
-    desc: push the convex functions and schema to the running deployment, once
+    desc: push the convex functions and schema to the local dev deployment, once (production releases through the cluster's convex-deploy Job)
     cmds:
       - task: _infisical-run
         vars:
-          ENV: '{{.ENV | default "dev"}}'
+          ENV: dev
           PATHS: "/convex /auth"
           CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
 
@@ -56,11 +56,11 @@ tasks:
           CMD: "pnpm --filter @repo/backend exec convex codegen --typecheck disable"
 
   convex:dev:
-    desc: watch convex/ and push the functions on every save
+    desc: watch convex/ and push the functions to the local dev deployment on every save
     cmds:
       - task: _infisical-run
         vars:
-          ENV: '{{.ENV | default "dev"}}'
+          ENV: dev
           PATHS: "/convex /auth"
           CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
 

@@ -8,6 +8,7 @@ const HELD = {
 	channels: { lisp: false, thinking: true },
 	metadata: { tokens: true },
 	sidebar: ["home", "chat", "memories", "README.md"],
+	hidden: ["memories"],
 	motion: "slide",
 };
 
@@ -15,7 +16,7 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:theme "gruvbox-dark" :font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :sidebar ("home" "chat" "memories" "README.md") :motion "slide")',
+			'(:theme "gruvbox-dark" :font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :motion "slide")',
 		);
 	});
 
@@ -97,6 +98,24 @@ describe("changing preferences", () => {
 		await expect(
 			ev('(preferences/set :sidebar \'("chat" "chat"))'),
 		).rejects.toThrow(/named twice/);
+	});
+
+	it("replaces the hidden sidebar entries, so an entry left out is shown again", async () => {
+		const { ev, store } = await world(HELD);
+		expect(
+			await ev('(preferences/set :hidden \'("README.md" "chat"))'),
+		).toContain(':hidden ("README.md" "chat")');
+		expect(store.read().hidden).toEqual(["README.md", "chat"]);
+		await ev("(preferences/set :hidden '())");
+		expect(store.read().hidden).toEqual([]);
+	});
+
+	it("refuses to hide a sidebar entry the app has never listed", async () => {
+		const { ev, store } = await world(HELD);
+		await expect(ev('(preferences/set :hidden \'("bogus"))')).rejects.toThrow(
+			/unknown sidebar entry/,
+		);
+		expect(store.read()).toEqual(HELD);
 	});
 
 	it("sets how the sidebar animates a drag, and refuses a motion it does not offer", async () => {

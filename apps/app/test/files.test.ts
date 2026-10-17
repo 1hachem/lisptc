@@ -33,7 +33,7 @@ describe("memorySource", () => {
 });
 
 describe("preferencesSource", () => {
-	it("names the theme, the font, every toggle and the sidebar order", () => {
+	it("names the theme, the font, every toggle, the sidebar order and what it hides", () => {
 		expect(
 			preferencesSource({
 				theme: "dusk",
@@ -41,10 +41,11 @@ describe("preferencesSource", () => {
 				channels: { lisp: false, thinking: true },
 				metadata: { tokens: true },
 				sidebar: ["README.md", "home"],
+				hidden: ["tests"],
 				motion: "lift",
 			}),
 		).toBe(
-			'(preferences :theme "dusk"\n  :font "mono"\n  :channels (:lisp nil :thinking t)\n  :metadata (:tokens t)\n  :sidebar ("README.md" "home")\n  :motion "lift")',
+			'(preferences :theme "dusk"\n  :font "mono"\n  :channels (:lisp nil :thinking t)\n  :metadata (:tokens t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift")',
 		);
 	});
 });

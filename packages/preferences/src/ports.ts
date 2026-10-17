@@ -8,6 +8,7 @@ export interface Preferences {
 	channels?: Toggles;
 	metadata?: Toggles;
 	sidebar?: string[];
+	hidden?: string[];
 	motion?: string;
 }
 
