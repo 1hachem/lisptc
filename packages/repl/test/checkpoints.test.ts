@@ -52,6 +52,26 @@ describe("checkpoints", () => {
 		expect(r.call).toBe(3);
 	});
 
+	it("stamps a step's channel envelopes with its call, across a revert", async () => {
+		const steps: number[] = [];
+		const stamp: InterpExtension = (interp: Interp): void => {
+			interp.defineGlobal(
+				newSym("stamp"),
+				new BuiltInFunc("stamp", 0, () => {
+					steps.push(interp.channels.step);
+					return null;
+				}),
+			);
+		};
+		const r = repl(new MemoryImageStore(), [stamp]);
+		await r.evalOutput("(stamp)");
+		await r.evalOutput("(stamp)");
+		await r.evalOutput("(stamp)");
+		await r.revert(2);
+		await r.evalOutput("(stamp)");
+		expect(steps).toEqual([1, 2, 3, 3]);
+	});
+
 	it("reverts to a call, dropping what came after it", async () => {
 		const images = new MemoryImageStore();
 		const r = repl(images);

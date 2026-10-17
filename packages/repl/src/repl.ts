@@ -378,7 +378,7 @@ export class MemoryRepl implements InMemoryRepl {
 			},
 		};
 		const { channels } = interp;
-		channels.step += 1;
+		channels.step = this.calls.get() + 1;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
 		let thrown: unknown;
