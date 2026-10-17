@@ -1,5 +1,6 @@
+import type { AgentRepl } from "@repo/repl/repl";
 import { formsOnly, type Skipped } from "@repo/shared/lisp-forms";
-import { evalCode, replResultContent } from "./repl.ts";
+import { evalMessageCode, replResultContent } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 
 export interface EvalMessage {
@@ -18,24 +19,14 @@ function runsAnything(message: string, unrun: readonly Skipped[]): boolean {
 	return formsOnly(kept).trim() !== "";
 }
 
-export async function runsForms<Id extends string>(
+export async function evalMessage(
+	repl: AgentRepl,
 	message: string,
-	source: ReplSource<Id>,
-): Promise<boolean> {
-	if (formsOnly(message).trim() === "") return false;
-	const repl = await replFrom(source);
-	return runsAnything(message, repl.unrun(message));
-}
-
-export async function evalUserMessage<Id extends string>(
-	message: string,
-	source: ReplSource<Id>,
 ): Promise<EvalMessage | undefined> {
-	if (!(await runsForms(message, source))) return undefined;
-	const repl = await replFrom(source);
+	if (formsOnly(message).trim() === "") return undefined;
+	if (!runsAnything(message, repl.unrun(message))) return undefined;
 	const { output, display, error, failed, annotations, emitted, results } =
-		await evalCode(repl, message);
-	repl.clearTurnSignals();
+		await evalMessageCode(repl, message);
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
 	if (failed) extras.failed = true;
@@ -47,4 +38,12 @@ export async function evalUserMessage<Id extends string>(
 		id: crypto.randomUUID(),
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
 	};
+}
+
+export async function evalUserMessage<Id extends string>(
+	message: string,
+	source: ReplSource<Id>,
+): Promise<EvalMessage | undefined> {
+	if (formsOnly(message).trim() === "") return undefined;
+	return evalMessage(await replFrom(source), message);
 }

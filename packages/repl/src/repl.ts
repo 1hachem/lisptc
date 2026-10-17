@@ -414,6 +414,10 @@ export class AgentRepl extends MemoryRepl {
 		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
 	}
 
+	async evalMessage(code: string): Promise<EvalOutput> {
+		return render(await this.evaluate(code));
+	}
+
 	override async evalOutput(code: string): Promise<EvalOutput> {
 		const result = await this.evaluate(code);
 		if (result.held) {

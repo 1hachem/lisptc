@@ -1,7 +1,6 @@
 import {
 	evalUserMessage,
 	MemorySteerInbox,
-	runsForms,
 	type SteerInbox,
 	streamChatResponse,
 	systemEventMessage,
@@ -204,8 +203,6 @@ export const steer = {
 		context,
 	}: Authed<z.infer<typeof steerRequestSchema>>): Promise<Response> => {
 		const { chatId, id, message } = context.body;
-		if (await runsForms(message, { repls, threadId: chatId }))
-			return Response.json({ accepted: false }, { status: 409 });
 		const accepted = await steers.post(
 			steerKey(context.session.subject, chatId),
 			{ id, content: message },

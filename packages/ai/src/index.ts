@@ -7,7 +7,7 @@ export {
 	type Role,
 	streamAgent,
 } from "./agent.ts";
-export { type EvalMessage, evalUserMessage, runsForms } from "./eval.ts";
+export { type EvalMessage, evalUserMessage } from "./eval.ts";
 export {
 	type EventOwner,
 	MemorySystemEventBox,

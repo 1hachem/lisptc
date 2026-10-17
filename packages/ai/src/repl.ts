@@ -1,5 +1,5 @@
 import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
-import type { AgentRepl } from "@repo/repl/repl";
+import type { AgentRepl, EvalOutput } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
@@ -81,9 +81,9 @@ export function proseFeedbackContent(feedback: string): string {
 	);
 }
 
-export async function evalCode(
+async function outcomeOf(
 	repl: AgentRepl,
-	code: string,
+	run: () => Promise<EvalOutput>,
 ): Promise<{
 	output: string;
 	display: string;
@@ -96,7 +96,7 @@ export async function evalCode(
 }> {
 	try {
 		const { model, user, annotations, emitted, failed, held, results } =
-			await repl.evalOutput(code);
+			await run();
 		return {
 			output: model,
 			display: user,
@@ -122,4 +122,25 @@ export async function evalCode(
 			results: [],
 		};
 	}
+}
+
+export function evalCode(repl: AgentRepl, code: string) {
+	return outcomeOf(repl, () => repl.evalOutput(code));
+}
+
+export function evalMessageCode(repl: AgentRepl, code: string) {
+	return outcomeOf(repl, () => repl.evalMessage(code));
+}
+
+export function withItsResult(
+	prompt: TranscriptEntry,
+	result: TranscriptEntry,
+): TranscriptEntry {
+	const content = `${prompt.content}\n\n${result.content}`;
+	if (result.riding === undefined) return { ...prompt, content };
+	return {
+		...prompt,
+		content,
+		riding: joinRiding(prompt.riding, result.riding),
+	};
 }

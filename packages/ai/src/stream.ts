@@ -6,6 +6,7 @@ import {
 	joinRiding,
 	replResultContent,
 	type TranscriptEntry,
+	withItsResult,
 } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
@@ -130,19 +131,6 @@ function toEntry(m: ChatMessageInput): TranscriptEntry {
 	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
 }
 
-function withItsResult(
-	prompt: TranscriptEntry,
-	result: TranscriptEntry,
-): TranscriptEntry {
-	const content = `${prompt.content}\n\n${result.content}`;
-	if (result.riding === undefined) return { ...prompt, content };
-	return {
-		...prompt,
-		content,
-		riding: joinRiding(prompt.riding, result.riding),
-	};
-}
-
 function toTranscript(input: ChatInput): TranscriptEntry[] {
 	const transcript: TranscriptEntry[] = [];
 	for (const entry of (input.messages ?? []).map(toEntry)) {
@@ -216,6 +204,9 @@ class TurnWire {
 				return this.delta(event);
 			case "steered":
 				this.wire.push({ type: "human", content: event.content, id: event.id });
+				return this.snapshot();
+			case "evaluated":
+				this.wire.push(event.message);
 				return this.snapshot();
 			case "collected":
 				return (

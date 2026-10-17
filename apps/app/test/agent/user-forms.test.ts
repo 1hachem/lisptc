@@ -48,7 +48,6 @@ vi.mock("@repo/ai", async (importOriginal) => {
 	const real = await importOriginal<typeof import("@repo/ai")>();
 	return {
 		...real,
-		runsForms: async (message: string) => holdsForms(message),
 		evalUserMessage: async (
 			message: string,
 		): Promise<EvalMessage | undefined> => {
@@ -126,14 +125,14 @@ describe("a message that holds forms", () => {
 		]);
 	});
 
-	test("is not steered into a running turn, so it waits to run as its own", async () => {
+	test("is steered into the running turn like any other message", async () => {
 		const response = await send(steer, {
 			chatId: CHAT,
 			id: "s1",
 			message: "also (+ 1 2)",
 		});
-		expect(response.status).toBe(409);
-		expect(world.steered).toEqual([]);
+		expect(response.status).toBe(202);
+		expect(world.steered).toEqual(["also (+ 1 2)"]);
 	});
 });
 
