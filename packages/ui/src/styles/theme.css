@@ -11,6 +11,7 @@
 	--color-purple: var(--purple);
 	--color-aqua: var(--aqua);
 	--color-orange: var(--orange);
+	--color-brand: var(--brand, var(--orange));
 
 	--font-mono: var(--font-face), ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -24,6 +25,10 @@
 	--text-lg--line-height: 1.6;
 	--text-xl: 17px;
 	--text-xl--line-height: 1.5;
+	--text-headline: 18px;
+	--text-headline--line-height: 1.3;
+	--text-display: 28px;
+	--text-display--line-height: 1.15;
 
 	--spacing-control-xs: 18px;
 	--spacing-control-sm: 22px;
@@ -40,6 +45,7 @@
 	--container-dialog-sm: 360px;
 	--container-dialog: 440px;
 	--container-dialog-lg: 560px;
+	--container-page: 720px;
 
 	--animate-blk: blk 1.06s steps(1, end) infinite;
 	--animate-orbit: orbit 2.4s linear infinite;

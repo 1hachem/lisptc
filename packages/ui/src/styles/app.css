@@ -7,6 +7,7 @@
  * this package's tree, so scan them all explicitly for class candidates. */
 @source "../";
 @source "../../../components/src";
+@source "../../../landing-components/src";
 @source "../../../../apps/app/src";
 @source "../../../../apps/trace-viewer/src";
 @source "../../../../apps/dashi-code/src";
