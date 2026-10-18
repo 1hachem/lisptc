@@ -1,6 +1,5 @@
 import { shutdownTelemetry } from "@repo/ai";
 import { definePlugin } from "nitro";
-import { repls } from "../agent/repls.ts";
 import { shutdownLogs, startLogs } from "../logs.ts";
 
 const DRAIN_MS = 5_000;
@@ -8,7 +7,6 @@ const DRAIN_MS = 5_000;
 let stopping = false;
 
 async function flush(): Promise<void> {
-	await repls.close();
 	await shutdownTelemetry();
 	await shutdownLogs();
 }

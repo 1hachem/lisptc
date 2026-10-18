@@ -169,8 +169,6 @@ function droppedNote(code: readonly string[]): string | undefined {
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private inFlight: Promise<void> = Promise.resolve();
-	private queued = 0;
-	private lastStepAt = Date.now();
 	private parked: Parked[] = [];
 	private readonly extensions: InterpExtension[];
 	private readonly images: ImageStore | undefined;
@@ -244,21 +242,6 @@ export class MemoryRepl implements InMemoryRepl {
 		if (latest === undefined) return undefined;
 		this.load(latest.image);
 		return latest.call;
-	}
-
-	async close(): Promise<void> {
-		await this.inFlight;
-		await this.saving;
-		try {
-			const { images } = this;
-			const call = this.calls.get();
-			if (images === undefined || call === 0) return;
-			this.parkedCode.set(this.parked.map((p) => p.code));
-			await images.save({ call, image: snapshot(this.currentInterp) });
-		} finally {
-			this.parked = [];
-			this.currentInterp.dispose();
-		}
 	}
 
 	private load(image: Image): void {
@@ -346,22 +329,12 @@ export class MemoryRepl implements InMemoryRepl {
 	): Promise<StepResult> {
 		const run = () =>
 			this.runStep(code, body).then((result) => this.checkpoint(result));
-		this.queued++;
 		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
-			() => this.settle(),
-			() => this.settle(),
+			() => undefined,
+			() => undefined,
 		);
 		return done;
-	}
-
-	private settle(): void {
-		this.queued--;
-		this.lastStepAt = Date.now();
-	}
-
-	get idleSince(): number | undefined {
-		return this.queued > 0 ? undefined : this.lastStepAt;
 	}
 
 	private async runStep(
