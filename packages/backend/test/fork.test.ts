@@ -89,6 +89,19 @@ describe("forking a chat at a message", () => {
 		).toBeUndefined();
 	});
 
+	it("refuses a message whose call has no checkpoint", async () => {
+		const { alice, chatId } = await conversation();
+		await alice.as.mutation(api.messages.append, {
+			chatId,
+			messages: [
+				{ id: "a3", type: "ai", content: "(sq 3)", kwargs: { call: 3 } },
+			],
+		});
+		await expect(
+			alice.as.mutation(api.chats.fork, { chatId, messageId: "a3" }),
+		).rejects.toThrow("NO_CHECKPOINT");
+	});
+
 	it("refuses a message that is not in the chat", async () => {
 		const { alice, chatId } = await conversation();
 		await expect(
