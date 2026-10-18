@@ -15,7 +15,6 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
-import { MemoryImageStore } from "@repo/repl/image-store";
 import { MemoryRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
@@ -33,6 +32,5 @@ export function newRepl(): MemoryRepl {
 			proseExtension(proseHost),
 			diagnosticsExtension(diagnosticsHost),
 		],
-		images: new MemoryImageStore(),
 	});
 }
