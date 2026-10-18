@@ -2,9 +2,9 @@ import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { DeleteAccount } from "../../../components/delete-account.tsx";
+import { DeleteAccount } from "../../../../components/delete-account.tsx";
 
-export const Route = createFileRoute("/_authed/$workspaceId/account")({
+export const Route = createFileRoute("/app/_authed/$workspaceId/account")({
 	component: AccountSettings,
 });
 

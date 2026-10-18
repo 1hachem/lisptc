@@ -5,10 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ConvexError } from "convex/values";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileView } from "../../../components/file-view.tsx";
-import { MarkdownEditor } from "../../../components/markdown-editor.tsx";
+import { FileView } from "../../../../components/file-view.tsx";
+import { MarkdownEditor } from "../../../../components/markdown-editor.tsx";
 
-export const Route = createFileRoute("/_authed/$workspaceId/readme")({
+export const Route = createFileRoute("/app/_authed/$workspaceId/readme")({
 	loader: async ({ context, params }) => {
 		await context.queryClient.ensureQueryData(
 			convexQuery(api.readmes.get, { workspaceId: params.workspaceId }),

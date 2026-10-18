@@ -20,7 +20,9 @@ export function readLandingSource(source: string): LandingResult {
 	}
 }
 
-const builtIn: Readonly<Record<string, string>> = { salsal };
+export const MAIN_VERTICAL = "salsal";
+
+const builtIn: Readonly<Record<string, string>> = { [MAIN_VERTICAL]: salsal };
 
 export function builtInPage(vertical: string): LandingPage | undefined {
 	const source = builtIn[vertical];
@@ -32,5 +34,5 @@ export function builtInPage(vertical: string): LandingPage | undefined {
 }
 
 export function startHref(): string {
-	return "/login";
+	return "/app/login";
 }

@@ -4,9 +4,9 @@ import { LANDING_PAGE_PATH } from "@repo/landing";
 import { LandingView } from "@repo/landing-components";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { readLandingSource, startHref } from "../../../lib/site-pages.ts";
+import { readLandingSource, startHref } from "../../../../lib/site-pages.ts";
 
-export const Route = createFileRoute("/_authed/$workspaceId/landing")({
+export const Route = createFileRoute("/app/_authed/$workspaceId/landing")({
 	component: LandingPreview,
 });
 

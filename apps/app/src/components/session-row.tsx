@@ -92,7 +92,7 @@ export function SessionRow({
 				depth={1}
 				link={(content, className) => (
 					<Link
-						to="/$workspaceId/chat/$chatId"
+						to="/app/$workspaceId/chat/$chatId"
 						params={{ workspaceId: chat.workspaceId, chatId: chat._id }}
 						className={className}
 					>
@@ -130,7 +130,7 @@ export function SessionRow({
 									attempt(async () => {
 										if (current) {
 											await navigate({
-												to: "/$workspaceId",
+												to: "/app/$workspaceId",
 												params: { workspaceId: chat.workspaceId },
 												replace: true,
 											});

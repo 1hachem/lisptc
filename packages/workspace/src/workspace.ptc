@@ -29,7 +29,7 @@ sidebar; every change shows there at once.
 LANDING PAGE
 
 "landing-page.ptc" is workspace's landing page, one plist. User previews it
-live at /<workspace-id>/landing. Bad key or value: preview lists problem by
+live at /app/<workspace-id>/landing. Bad key or value: preview lists problem by
 path, fix it. Unknown key refused, so spell keys exactly.
 
 (:title "…" :description "…"

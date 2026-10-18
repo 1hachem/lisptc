@@ -9,7 +9,7 @@ export function useNewChat(): () => Promise<void> {
 	return useCallback(async () => {
 		if (!workspace) return;
 		await navigate({
-			to: "/$workspaceId",
+			to: "/app/$workspaceId",
 			params: { workspaceId: workspace._id },
 		});
 	}, [workspace, navigate]);

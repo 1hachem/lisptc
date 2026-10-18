@@ -2,9 +2,9 @@ import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { createFileRoute } from "@tanstack/react-router";
-import { Chat } from "../../../../components/chat.tsx";
+import { Chat } from "../../../../../components/chat.tsx";
 
-export const Route = createFileRoute("/_authed/$workspaceId/chat/$chatId")({
+export const Route = createFileRoute("/app/_authed/$workspaceId/chat/$chatId")({
 	params: {
 		parse: ({ chatId }: { chatId: string }) => ({
 			chatId: chatId as Id<"chats">,

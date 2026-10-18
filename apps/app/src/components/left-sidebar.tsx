@@ -45,7 +45,7 @@ export function LeftSidebar({
 					</span>
 					{workspace && (
 						<Link
-							to="/$workspaceId/account"
+							to="/app/$workspaceId/account"
 							params={{ workspaceId: workspace._id }}
 							className="ml-auto flex-none text-dim hover:text-fg"
 							activeProps={{ className: "text-fg" }}
