@@ -46,6 +46,7 @@ export function LandingView({
 		>
 			{page.sections.map((section, index) => (
 				<LandingSection
+					// biome-ignore lint/suspicious/noArrayIndexKey: a page's sections are static data with no id, so position is their identity
 					key={`${section.type}-${index}`}
 					section={section}
 					start={start}

@@ -1,7 +1,10 @@
-import { type LandingResult, parseLandingPage } from "@repo/landing";
-import type { LandingPage } from "@repo/landing";
 import { dataToJson } from "@repo/interpreter/objects";
 import { Reader } from "@repo/interpreter/reader";
+import {
+	type LandingPage,
+	type LandingResult,
+	parseLandingPage,
+} from "@repo/landing";
 import salsal from "../site/salsal.ptc?raw";
 
 export function readLandingSource(source: string): LandingResult {
