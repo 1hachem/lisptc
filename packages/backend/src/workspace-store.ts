@@ -87,4 +87,34 @@ export class ConvexWorkspaceStore implements WorkspaceStore {
 			text: message.content,
 		}));
 	}
+
+	async files(): Promise<string[]> {
+		return await this.connect().query(api.files.list, {
+			workspaceId: this.workspaceId,
+		});
+	}
+
+	async file(path: string): Promise<string | undefined> {
+		const source = await this.connect().query(api.files.get, {
+			workspaceId: this.workspaceId,
+			path,
+		});
+		return source ?? undefined;
+	}
+
+	async write(path: string, source: string): Promise<void> {
+		await this.connect().mutation(api.files.put, {
+			workspaceId: this.workspaceId,
+			path,
+			source,
+		});
+	}
+
+	async remove(path: string): Promise<void> {
+		const removed = await this.connect().mutation(api.files.remove, {
+			workspaceId: this.workspaceId,
+			path,
+		});
+		if (!removed) throw new Error(`no file ${path}`);
+	}
 }

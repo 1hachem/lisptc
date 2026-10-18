@@ -81,7 +81,7 @@ describe("chats", () => {
 });
 
 describe("what waits on the user", () => {
-	it("asks before changing settings, archiving or reading another chat", async () => {
+	it("asks before changing settings, archiving or reading another chat, or deleting a file", async () => {
 		const { store } = await world();
 		const extension = workspaceExtension(
 			workspaceHostFor({ store, models: MODELS }),
@@ -90,6 +90,75 @@ describe("what waits on the user", () => {
 			"settings/set",
 			"chat/archive",
 			"chat/read",
+			"file/delete",
 		]);
+	});
+});
+
+describe("files", () => {
+	it("writes a value as printed data and reads it back as data", async () => {
+		const { ev, store } = await world();
+		expect(
+			await ev(
+				`(file/write "landing-page.ptc" '(:title "Hi" :sections ((:type :hero))))`,
+			),
+		).toBe('"landing-page.ptc"');
+		expect(store.file("landing-page.ptc")).toBe(
+			'(:title "Hi" :sections ((:type :hero)))\n',
+		);
+		expect(
+			await ev('(get-in (file/read "landing-page.ptc") :sections 0 :type)'),
+		).toBe(":hero");
+		expect(await ev("(files)")).toBe('("landing-page.ptc")');
+	});
+
+	it("never runs what a file holds", async () => {
+		const { ev, store } = await world();
+		store.write("trap.ptc", '(chat/archive "c2")\n');
+		expect(await ev('(file/read "trap.ptc")')).toBe('(chat/archive "c2")');
+		expect(store.chatsHeld.find((chat) => chat.id === "c2")?.archived).toBe(
+			undefined,
+		);
+	});
+
+	it("edits a file in place with the core data forms", async () => {
+		const { ev, store } = await world();
+		store.write("notes.ptc", '(:status "open")\n');
+		await ev(
+			'(file/write "notes.ptc" (set-in (file/read "notes.ptc") "done" :status))',
+		);
+		expect(store.file("notes.ptc")).toBe('(:status "done")\n');
+	});
+
+	it("gives nil for a missing file", async () => {
+		const { ev } = await world();
+		expect(await ev('(file/read "nope.ptc")')).toBe("nil");
+	});
+
+	it("refuses a value that does not read back", async () => {
+		const { ev, store } = await world();
+		await expect(ev('(file/write "f.ptc" (lambda (x) x))')).rejects.toThrow(
+			/only data/,
+		);
+		expect(store.files()).toEqual([]);
+	});
+
+	it("refuses a file holding more than one form", async () => {
+		const { ev, store } = await world();
+		store.write("two.ptc", "(:a 1)\n(:b 2)\n");
+		await expect(ev('(file/read "two.ptc")')).rejects.toThrow(
+			/not one data form/,
+		);
+	});
+
+	it.each([
+		"../escape.ptc",
+		"Landing.ptc",
+		"notes.txt",
+		"/abs.ptc",
+		"a//b.ptc",
+	])("refuses the path %s", async (path) => {
+		const { ev } = await world();
+		await expect(ev(`(file/write "${path}" 1)`)).rejects.toThrow(/file path/);
 	});
 });

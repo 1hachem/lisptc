@@ -29,6 +29,17 @@ export interface WorkspaceStore {
 	retitle(chatId: string, title: string): Awaitable<void>;
 	archive(chatId: string): Awaitable<void>;
 	transcript(chatId: string): Awaitable<ChatLine[]>;
+	files(): Awaitable<string[]>;
+	file(path: string): Awaitable<string | undefined>;
+	write(path: string, source: string): Awaitable<void>;
+	remove(path: string): Awaitable<void>;
+}
+
+export const MAX_FILE_PATH = 128;
+const FILE_PATH = /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*\.ptc$/;
+
+export function isFilePath(path: string): boolean {
+	return path.length <= MAX_FILE_PATH && FILE_PATH.test(path);
 }
 
 export interface WorkspaceHost {
@@ -47,6 +58,7 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
 	constructor(
 		public held: Settings,
 		public chatsHeld: HeldChat[] = [],
+		public filesHeld: Map<string, string> = new Map(),
 	) {}
 
 	settings(): Settings {
@@ -86,6 +98,22 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
 
 	transcript(chatId: string): ChatLine[] {
 		return this.chat(chatId).lines;
+	}
+
+	files(): string[] {
+		return [...this.filesHeld.keys()].sort();
+	}
+
+	file(path: string): string | undefined {
+		return this.filesHeld.get(path);
+	}
+
+	write(path: string, source: string): void {
+		this.filesHeld.set(path, source);
+	}
+
+	remove(path: string): void {
+		if (!this.filesHeld.delete(path)) throw new Error(`no file ${path}`);
 	}
 
 	private chat(chatId: string): HeldChat {

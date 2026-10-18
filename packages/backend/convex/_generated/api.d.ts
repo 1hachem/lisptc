@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as chats from "../chats.js";
+import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_clamp from "../lib/clamp.js";
@@ -39,6 +40,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   chats: typeof chats;
+  files: typeof files;
   http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/clamp": typeof lib_clamp;

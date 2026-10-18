@@ -5,18 +5,27 @@ import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
+	EndOfFile,
 	type List,
 	newLispKeyword,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
-import { zList } from "@repo/interpreter/schema";
+import { str } from "@repo/interpreter/print";
+import { Reader } from "@repo/interpreter/reader";
+import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
-import type { ChatEntry, Settings, WorkspaceHost } from "./ports.ts";
+import {
+	type ChatEntry,
+	isFilePath,
+	type Settings,
+	type WorkspaceHost,
+} from "./ports.ts";
 
 const SETTINGS_SET = "settings/set";
 const CHAT_ARCHIVE = "chat/archive";
 const CHAT_READ = "chat/read";
+const FILE_DELETE = "file/delete";
 
 const DEFAULT_CHATS = 20;
 const DEFAULT_LINES = 20;
@@ -61,6 +70,56 @@ function count(kind: string, value: unknown, fallback: number): number {
 	if (!isNumeric(value) || Number(value) < 1)
 		throw new EvalException(`${kind} must be a positive number`, value);
 	return Math.floor(Number(value));
+}
+
+function filePath(path: string): string {
+	if (!isFilePath(path))
+		throw new EvalException(
+			"a file path is lowercase segments ending in .ptc, like landing-page.ptc",
+			path,
+		);
+	return path;
+}
+
+function readsAsOneForm(source: string): unknown {
+	const reader = new Reader();
+	reader.push(source);
+	if (reader.isEmpty()) return null;
+	const value = reader.read();
+	try {
+		reader.read();
+	} catch (ex) {
+		if (ex === EndOfFile) return value;
+		throw ex;
+	}
+	throw new Error("more than one form");
+}
+
+export function parseFile(path: string, source: string): unknown {
+	try {
+		return readsAsOneForm(source);
+	} catch (ex) {
+		throw new EvalException(
+			`${path} is not one data form: ${ex instanceof Error ? ex.message : String(ex)}`,
+			path,
+		);
+	}
+}
+
+export function printFile(value: unknown): string {
+	const source = str(value);
+	let back: unknown;
+	try {
+		back = readsAsOneForm(source);
+	} catch {
+		back = undefined;
+	}
+	if (back === undefined || str(back) !== source)
+		throw new EvalException(
+			"only data can be written to a file, and this does not read back",
+			value,
+		);
+	return `${source}\n`;
 }
 
 export function registerWorkspace(interp: Interp, host: WorkspaceHost): void {
@@ -205,13 +264,60 @@ export function registerWorkspace(interp: Interp, host: WorkspaceHost): void {
 			);
 		},
 	);
+
+	interp.defGen(
+		"files",
+		0,
+		"(files)",
+		"Return the paths of the workspace's files, as strings.",
+		z.tuple([]),
+		function* (): Eval {
+			return arrayToList(yield* settled(store.files()));
+		},
+	);
+
+	interp.defGen(
+		"file/read",
+		1,
+		'(file/read "path.ptc")',
+		"Read a workspace file as data: its one form, parsed and never run. Returns nil when there is no such file.",
+		z.tuple([zString]),
+		function* ([path]): Eval {
+			const source = yield* settled(store.file(filePath(path)));
+			return source === undefined ? null : parseFile(path, source);
+		},
+	);
+
+	interp.defGen(
+		"file/write",
+		2,
+		'(file/write "path.ptc" value)',
+		"Write value to a workspace file as printed data, replacing what it held. Only data reads back, so a function or other live value is refused. Returns the path.",
+		z.tuple([zString, zAny]),
+		function* ([path, value]): Eval {
+			yield* settled(store.write(filePath(path), printFile(value)));
+			return path;
+		},
+	);
+
+	interp.defGen(
+		FILE_DELETE,
+		1,
+		'(file/delete "path.ptc")',
+		"Delete a workspace file. The user approves it first.",
+		z.tuple([zString]),
+		function* ([path]): Eval {
+			yield* settled(store.remove(filePath(path)));
+			return true;
+		},
+	);
 }
 
 export function workspaceExtension(host: WorkspaceHost): WorkspaceExtension {
 	return Object.assign(
 		(interp: Interp): void => registerWorkspace(interp, host),
 		{
-			asks: [SETTINGS_SET, CHAT_ARCHIVE, CHAT_READ],
+			asks: [SETTINGS_SET, CHAT_ARCHIVE, CHAT_READ, FILE_DELETE],
 			prompt: host.prompt(),
 		},
 	);
