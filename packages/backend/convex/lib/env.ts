@@ -9,4 +9,5 @@ export const deploymentEnv = {
 	GOOGLE_CLIENT_SECRET: v.optional(v.string()),
 	POSTHOG_API_KEY: v.string(),
 	POSTHOG_HOST: v.optional(v.string()),
+	VERTICAL_OWNER_EMAILS: v.optional(v.string()),
 };

@@ -37,6 +37,7 @@ type Env = {
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
   readonly POSTHOG_API_KEY: string;
   readonly POSTHOG_HOST: string | undefined;
+  readonly VERTICAL_OWNER_EMAILS: string | undefined;
   readonly SITE_URL: string;
 };
 

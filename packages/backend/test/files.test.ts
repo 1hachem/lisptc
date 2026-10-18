@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import { MAX_FILE_BYTES, MAX_FILES } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
@@ -15,7 +15,7 @@ describe("workspace files", () => {
 		});
 		await alice.as.mutation(api.files.put, {
 			workspaceId,
-			path: "landing-page.ptc",
+			path: "home.ptc",
 			source: "(:a 2)\n",
 		});
 		await alice.as.mutation(api.files.put, {
@@ -24,7 +24,7 @@ describe("workspace files", () => {
 			source: "(:a 3)\n",
 		});
 		expect(await alice.as.query(api.files.list, { workspaceId })).toEqual([
-			"landing-page.ptc",
+			"home.ptc",
 			"notes.ptc",
 		]);
 		expect(
@@ -114,5 +114,56 @@ describe("workspace files", () => {
 		expect(
 			await alice.as.query(api.files.get, { workspaceId, path: "f0.ptc" }),
 		).toBe("2\n");
+	});
+});
+
+describe("vertical owner files", () => {
+	it("refuses a landing page to an account that owns no vertical", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.files.put, {
+				workspaceId: alice.workspace,
+				path: "landing-page.ptc",
+				source: '(:title "x")\n',
+			}),
+		).rejects.toThrow(/VERTICAL_OWNER_REQUIRED/);
+	});
+
+	it("lets a vertical owner write and remove a landing page", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await t.mutation(internal.users.setVerticalOwner, {
+			email: "alice@example.com",
+			owner: true,
+		});
+		expect((await alice.as.query(api.users.me, {})).verticalOwner).toBe(true);
+		await alice.as.mutation(api.files.put, {
+			workspaceId: alice.workspace,
+			path: "landing-page.ptc",
+			source: '(:title "x")\n',
+		});
+		expect(
+			await alice.as.mutation(api.files.remove, {
+				workspaceId: alice.workspace,
+				path: "landing-page.ptc",
+			}),
+		).toBe(true);
+	});
+
+	it("takes the flag away again", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await t.mutation(internal.users.setVerticalOwner, {
+			email: "alice@example.com",
+			owner: true,
+		});
+		await t.mutation(internal.users.setVerticalOwner, {
+			email: "alice@example.com",
+			owner: false,
+		});
+		expect(
+			(await alice.as.query(api.users.me, {})).verticalOwner,
+		).toBeUndefined();
 	});
 });

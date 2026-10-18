@@ -8,6 +8,7 @@ import type { DataModel } from "./_generated/dataModel.js";
 import { env } from "./_generated/server.js";
 import authConfig from "./auth.config.js";
 import { slugify } from "./lib/slug.js";
+import { seededVerticalOwner } from "./lib/vertical-owners.js";
 import { posthog } from "./posthog.js";
 
 const authFunctions: AuthFunctions = internal.auth;
@@ -22,6 +23,9 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
 					name: doc.name,
 					email: doc.email,
 					image: doc.image ?? undefined,
+					...(seededVerticalOwner(doc, env.VERTICAL_OWNER_EMAILS)
+						? { verticalOwner: true }
+						: {}),
 				});
 				await ctx.db.insert("workspaces", {
 					ownerId: userId,
@@ -43,6 +47,9 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
 					name: newDoc.name,
 					email: newDoc.email,
 					image: newDoc.image ?? undefined,
+					...(seededVerticalOwner(newDoc, env.VERTICAL_OWNER_EMAILS)
+						? { verticalOwner: true }
+						: {}),
 				});
 			},
 			onDelete: async (ctx, doc) => {

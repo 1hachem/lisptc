@@ -5,6 +5,7 @@ import { LandingView } from "@repo/landing-components";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { readLandingSource, startHref } from "../../../../lib/site-pages.ts";
+import { useVerticalOwner } from "../../../../lib/vertical-owner.ts";
 
 export const Route = createFileRoute("/app/_authed/$workspaceId/landing")({
 	component: LandingPreview,
@@ -25,9 +26,17 @@ function Notice({ title, lines }: { title: string; lines: readonly string[] }) {
 
 function LandingPreview() {
 	const { workspaceId } = Route.useParams();
+	const owner = useVerticalOwner();
 	const { data: source } = useQuery(
 		convexQuery(api.files.get, { workspaceId, path: LANDING_PAGE_PATH }),
 	);
+	if (!owner)
+		return (
+			<Notice
+				title="a landing page belongs to a vertical"
+				lines={["this account owns no vertical"]}
+			/>
+		);
 	if (source === undefined) return null;
 	if (source === null)
 		return (

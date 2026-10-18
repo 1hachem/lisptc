@@ -251,12 +251,13 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 }
 
 const ROOT_FILES: Record<
-	"readme" | "settings" | "preferences",
+	"readme" | "settings" | "preferences" | "landing-page",
 	{ name: string; icon?: IconSvgElement }
 > = {
 	readme: { name: "README.md", icon: InformationCircleIcon },
 	settings: { name: "settings.ptc" },
 	preferences: { name: "preferences.ptc" },
+	"landing-page": { name: "landing-page.ptc" },
 };
 
 function RootFile({
@@ -430,6 +431,9 @@ export function WorkspaceTree({
 		),
 		"preferences.ptc": () => (
 			<RootFile workspaceId={workspaceId} page="preferences" />
+		),
+		"landing-page.ptc": () => (
+			<RootFile workspaceId={workspaceId} page="landing-page" />
 		),
 	};
 

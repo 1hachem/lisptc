@@ -118,7 +118,7 @@ describe("removing a workspace", () => {
 		});
 		await alice.as.mutation(api.files.put, {
 			workspaceId: doomed,
-			path: "landing-page.ptc",
+			path: "notes.ptc",
 			source: '(:title "doomed")\n',
 		});
 

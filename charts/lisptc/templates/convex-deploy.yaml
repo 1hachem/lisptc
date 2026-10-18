@@ -24,7 +24,8 @@ spec:
               done
               pnpm run env:seed
               pnpm exec convex deploy --typecheck disable --codegen disable
-              exec pnpm run migrate
+              pnpm run migrate
+              exec pnpm run seed:owners
           envFrom:
             - secretRef:
                 name: lisptc-convex-deploy

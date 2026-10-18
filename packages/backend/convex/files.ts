@@ -1,7 +1,8 @@
+import { LANDING_PAGE_PATH } from "@repo/landing";
 import { isFilePath } from "@repo/workspace-extension/ports";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import {
 	internalMutation,
 	type MutationCtx,
@@ -15,8 +16,17 @@ import { MAX_FILE_BYTES, MAX_FILES } from "./limits.js";
 const PURGE_BATCH = 256;
 const encoder = new TextEncoder();
 
+const VERTICAL_OWNER_FILES: readonly string[] = [LANDING_PAGE_PATH];
+
 function checkedPath(path: string): string {
 	if (!isFilePath(path)) throw new ConvexError({ code: "BAD_FILE_PATH" });
+	return path;
+}
+
+function writablePath(user: Doc<"users">, path: string): string {
+	checkedPath(path);
+	if (VERTICAL_OWNER_FILES.includes(path) && user.verticalOwner !== true)
+		throw new ConvexError({ code: "VERTICAL_OWNER_REQUIRED" });
 	return path;
 }
 
@@ -63,8 +73,8 @@ export const put = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, path, source }) => {
-		await requireWorkspace(ctx, workspaceId);
-		checkedPath(path);
+		const { user } = await requireWorkspace(ctx, workspaceId);
+		writablePath(user, path);
 		if (encoder.encode(source).length > MAX_FILE_BYTES) {
 			throw new ConvexError({ code: "FILE_TOO_LARGE" });
 		}
@@ -89,8 +99,8 @@ export const remove = mutation({
 	args: { workspaceId: v.id("workspaces"), path: v.string() },
 	returns: v.boolean(),
 	handler: async (ctx, { workspaceId, path }) => {
-		await requireWorkspace(ctx, workspaceId);
-		const existing = await held(ctx, workspaceId, checkedPath(path));
+		const { user } = await requireWorkspace(ctx, workspaceId);
+		const existing = await held(ctx, workspaceId, writablePath(user, path));
 		if (existing === null) return false;
 		await ctx.db.delete(existing._id);
 		return true;

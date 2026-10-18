@@ -685,6 +685,9 @@ importers:
       '@repo/introspection-extension':
         specifier: workspace:*
         version: link:../introspection
+      '@repo/landing':
+        specifier: workspace:*
+        version: link:../landing
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../llm

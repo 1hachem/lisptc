@@ -13,9 +13,23 @@ export const SIDEBAR_ENTRIES = [
 	"README.md",
 	"settings.ptc",
 	"preferences.ptc",
+	"landing-page.ptc",
 ] as const;
 
 export type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number];
+
+const VERTICAL_OWNER_ENTRIES: readonly SidebarEntry[] = ["landing-page.ptc"];
+
+export function entriesFor<T extends string>(
+	entries: readonly T[],
+	verticalOwner: boolean,
+): T[] {
+	return verticalOwner
+		? [...entries]
+		: entries.filter(
+				(name) => !(VERTICAL_OWNER_ENTRIES as readonly string[]).includes(name),
+			);
+}
 
 const RENAMED: Readonly<Record<string, SidebarEntry>> = {
 	agents: "sub-agents",

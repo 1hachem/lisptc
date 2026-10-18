@@ -38,6 +38,7 @@ export default defineSchema({
 		name: v.string(),
 		email: v.string(),
 		image: v.optional(v.string()),
+		verticalOwner: v.optional(v.boolean()),
 	}).index("by_auth", ["authId"]),
 
 	preferences: defineTable({

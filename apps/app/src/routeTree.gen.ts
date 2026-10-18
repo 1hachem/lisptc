@@ -25,6 +25,7 @@ import { Route as AppAuthedWorkspaceIdRouteRouteImport } from './routes/app/_aut
 import { Route as AppAuthedWorkspaceIdIndexRouteImport } from './routes/app/_authed/$workspaceId/index'
 import { Route as AppAuthedWorkspaceIdAccountRouteImport } from './routes/app/_authed/$workspaceId/account'
 import { Route as AppAuthedWorkspaceIdLandingRouteImport } from './routes/app/_authed/$workspaceId/landing'
+import { Route as AppAuthedWorkspaceIdLandingPageRouteImport } from './routes/app/_authed/$workspaceId/landing-page'
 import { Route as AppAuthedWorkspaceIdPreferencesRouteImport } from './routes/app/_authed/$workspaceId/preferences'
 import { Route as AppAuthedWorkspaceIdReadmeRouteImport } from './routes/app/_authed/$workspaceId/readme'
 import { Route as AppAuthedWorkspaceIdSettingsRouteImport } from './routes/app/_authed/$workspaceId/settings'
@@ -116,6 +117,12 @@ const AppAuthedWorkspaceIdLandingRoute =
     path: '/landing',
     getParentRoute: () => AppAuthedWorkspaceIdRouteRoute,
   } as any)
+const AppAuthedWorkspaceIdLandingPageRoute =
+  AppAuthedWorkspaceIdLandingPageRouteImport.update({
+    id: '/landing-page',
+    path: '/landing-page',
+    getParentRoute: () => AppAuthedWorkspaceIdRouteRoute,
+  } as any)
 const AppAuthedWorkspaceIdPreferencesRoute =
   AppAuthedWorkspaceIdPreferencesRouteImport.update({
     id: '/preferences',
@@ -169,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppAuthedIndexRoute
   '/app/$workspaceId/account': typeof AppAuthedWorkspaceIdAccountRoute
   '/app/$workspaceId/landing': typeof AppAuthedWorkspaceIdLandingRoute
+  '/app/$workspaceId/landing-page': typeof AppAuthedWorkspaceIdLandingPageRoute
   '/app/$workspaceId/preferences': typeof AppAuthedWorkspaceIdPreferencesRoute
   '/app/$workspaceId/readme': typeof AppAuthedWorkspaceIdReadmeRoute
   '/app/$workspaceId/settings': typeof AppAuthedWorkspaceIdSettingsRoute
@@ -191,6 +199,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppAuthedIndexRoute
   '/app/$workspaceId/account': typeof AppAuthedWorkspaceIdAccountRoute
   '/app/$workspaceId/landing': typeof AppAuthedWorkspaceIdLandingRoute
+  '/app/$workspaceId/landing-page': typeof AppAuthedWorkspaceIdLandingPageRoute
   '/app/$workspaceId/preferences': typeof AppAuthedWorkspaceIdPreferencesRoute
   '/app/$workspaceId/readme': typeof AppAuthedWorkspaceIdReadmeRoute
   '/app/$workspaceId/settings': typeof AppAuthedWorkspaceIdSettingsRoute
@@ -216,6 +225,7 @@ export interface FileRoutesById {
   '/app/_authed/': typeof AppAuthedIndexRoute
   '/app/_authed/$workspaceId/account': typeof AppAuthedWorkspaceIdAccountRoute
   '/app/_authed/$workspaceId/landing': typeof AppAuthedWorkspaceIdLandingRoute
+  '/app/_authed/$workspaceId/landing-page': typeof AppAuthedWorkspaceIdLandingPageRoute
   '/app/_authed/$workspaceId/preferences': typeof AppAuthedWorkspaceIdPreferencesRoute
   '/app/_authed/$workspaceId/readme': typeof AppAuthedWorkspaceIdReadmeRoute
   '/app/_authed/$workspaceId/settings': typeof AppAuthedWorkspaceIdSettingsRoute
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/$workspaceId/account'
     | '/app/$workspaceId/landing'
+    | '/app/$workspaceId/landing-page'
     | '/app/$workspaceId/preferences'
     | '/app/$workspaceId/readme'
     | '/app/$workspaceId/settings'
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/$workspaceId/account'
     | '/app/$workspaceId/landing'
+    | '/app/$workspaceId/landing-page'
     | '/app/$workspaceId/preferences'
     | '/app/$workspaceId/readme'
     | '/app/$workspaceId/settings'
@@ -288,6 +300,7 @@ export interface FileRouteTypes {
     | '/app/_authed/'
     | '/app/_authed/$workspaceId/account'
     | '/app/_authed/$workspaceId/landing'
+    | '/app/_authed/$workspaceId/landing-page'
     | '/app/_authed/$workspaceId/preferences'
     | '/app/_authed/$workspaceId/readme'
     | '/app/_authed/$workspaceId/settings'
@@ -423,6 +436,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAuthedWorkspaceIdLandingRouteImport
       parentRoute: typeof AppAuthedWorkspaceIdRouteRoute
     }
+    '/app/_authed/$workspaceId/landing-page': {
+      id: '/app/_authed/$workspaceId/landing-page'
+      path: '/landing-page'
+      fullPath: '/app/$workspaceId/landing-page'
+      preLoaderRoute: typeof AppAuthedWorkspaceIdLandingPageRouteImport
+      parentRoute: typeof AppAuthedWorkspaceIdRouteRoute
+    }
     '/app/_authed/$workspaceId/preferences': {
       id: '/app/_authed/$workspaceId/preferences'
       path: '/preferences'
@@ -484,6 +504,7 @@ const ApiChatRouteWithChildren =
 interface AppAuthedWorkspaceIdRouteRouteChildren {
   AppAuthedWorkspaceIdAccountRoute: typeof AppAuthedWorkspaceIdAccountRoute
   AppAuthedWorkspaceIdLandingRoute: typeof AppAuthedWorkspaceIdLandingRoute
+  AppAuthedWorkspaceIdLandingPageRoute: typeof AppAuthedWorkspaceIdLandingPageRoute
   AppAuthedWorkspaceIdPreferencesRoute: typeof AppAuthedWorkspaceIdPreferencesRoute
   AppAuthedWorkspaceIdReadmeRoute: typeof AppAuthedWorkspaceIdReadmeRoute
   AppAuthedWorkspaceIdSettingsRoute: typeof AppAuthedWorkspaceIdSettingsRoute
@@ -497,6 +518,7 @@ const AppAuthedWorkspaceIdRouteRouteChildren: AppAuthedWorkspaceIdRouteRouteChil
   {
     AppAuthedWorkspaceIdAccountRoute: AppAuthedWorkspaceIdAccountRoute,
     AppAuthedWorkspaceIdLandingRoute: AppAuthedWorkspaceIdLandingRoute,
+    AppAuthedWorkspaceIdLandingPageRoute: AppAuthedWorkspaceIdLandingPageRoute,
     AppAuthedWorkspaceIdPreferencesRoute: AppAuthedWorkspaceIdPreferencesRoute,
     AppAuthedWorkspaceIdReadmeRoute: AppAuthedWorkspaceIdReadmeRoute,
     AppAuthedWorkspaceIdSettingsRoute: AppAuthedWorkspaceIdSettingsRoute,

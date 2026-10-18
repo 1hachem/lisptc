@@ -1,7 +1,12 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalMutation, query } from "./_generated/server.js";
+import { env, internalMutation, query } from "./_generated/server.js";
+import { authComponent } from "./auth.js";
 import { requireUser } from "./lib/auth.js";
+import {
+	seededVerticalOwner,
+	verticalOwnerEmails,
+} from "./lib/vertical-owners.js";
 import { dropWorkspace, MAX_WORKSPACES } from "./workspaces.js";
 
 export const me = query({
@@ -13,8 +18,23 @@ export const me = query({
 		name: v.string(),
 		email: v.string(),
 		image: v.optional(v.string()),
+		verticalOwner: v.optional(v.boolean()),
 	}),
 	handler: async (ctx) => await requireUser(ctx),
+});
+
+export const setVerticalOwner = internalMutation({
+	args: { email: v.string(), owner: v.boolean() },
+	returns: v.id("users"),
+	handler: async (ctx, { email, owner }) => {
+		const user = await ctx.db
+			.query("users")
+			.filter((q) => q.eq(q.field("email"), email))
+			.unique();
+		if (user === null) throw new ConvexError({ code: "NO_SUCH_USER" });
+		await ctx.db.patch(user._id, { verticalOwner: owner ? true : undefined });
+		return user._id;
+	},
 });
 
 export const purge = internalMutation({
@@ -37,5 +57,31 @@ export const purge = internalMutation({
 			await ctx.scheduler.runAfter(0, internal.users.purge, { userId });
 		}
 		return null;
+	},
+});
+
+export const seedVerticalOwners = internalMutation({
+	args: {},
+	returns: v.array(v.string()),
+	handler: async (ctx) => {
+		const granted: string[] = [];
+		for (const email of verticalOwnerEmails(env.VERTICAL_OWNER_EMAILS)) {
+			const users = await ctx.db
+				.query("users")
+				.filter((q) => q.eq(q.field("email"), email))
+				.collect();
+			for (const user of users) {
+				if (user.verticalOwner === true) continue;
+				const account = await authComponent.getAnyUserById(ctx, user.authId);
+				if (
+					account === null ||
+					!seededVerticalOwner(account, env.VERTICAL_OWNER_EMAILS)
+				)
+					continue;
+				await ctx.db.patch(user._id, { verticalOwner: true });
+				granted.push(email);
+			}
+		}
+		return granted;
 	},
 });

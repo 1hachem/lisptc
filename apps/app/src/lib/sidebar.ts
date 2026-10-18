@@ -3,11 +3,13 @@ import { useCallback, useEffect, useMemo } from "react";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
 import { motionOf } from "./resolved-preferences.ts";
 import {
+	entriesFor,
 	type SidebarEntry,
 	shownEntries,
 	sidebarOrder,
 	withHidden,
 } from "./sidebar-order.ts";
+import { useVerticalOwner } from "./vertical-owner.ts";
 
 export function useSidebarOrder() {
 	const stored = usePreferences();
@@ -28,7 +30,13 @@ export function useSidebarOrder() {
 		[put, order],
 	);
 
-	return { order, shown, hidden: stored?.hidden ?? [], reorder };
+	const owner = useVerticalOwner();
+	return {
+		order: entriesFor(order, owner),
+		shown: entriesFor(shown, owner),
+		hidden: entriesFor(stored?.hidden ?? [], owner),
+		reorder,
+	};
 }
 
 export function useSidebarMotion() {
