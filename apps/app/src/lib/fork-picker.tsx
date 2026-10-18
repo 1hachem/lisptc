@@ -9,6 +9,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { reportIssue } from "./analytics.tsx";
 import { useChatStore } from "./chat.tsx";
 import { forkChoices } from "./fork-choices.ts";
 
@@ -29,19 +30,26 @@ export function ForkPickerProvider({
 	const [choices, setChoices] = useState<Choice[] | null>(null);
 
 	const openForkPicker = useCallback(() => {
-		const { chatId, messages } = store.getState();
-		if (chatId !== null) setChoices(forkChoices(messages));
+		const { chatId, saved } = store.getState();
+		if (chatId !== null) setChoices(forkChoices(saved));
 	}, [store]);
 
 	const forkAt = useCallback(
 		async (messageId: string) => {
-			const { chatId, workspaceId } = store.getState();
+			const { chatId, workspaceId, fail } = store.getState();
 			if (chatId === null) return;
-			const forked = await fork({ chatId, messageId });
-			await navigate({
-				to: "/$workspaceId/chat/$chatId",
-				params: { workspaceId, chatId: forked },
-			});
+			try {
+				const forked = await fork({ chatId, messageId });
+				await navigate({
+					to: "/$workspaceId/chat/$chatId",
+					params: { workspaceId, chatId: forked },
+				});
+			} catch (ex) {
+				reportIssue(ex, { $exception_source: "chat fork", thread_id: chatId });
+				fail(
+					`could not fork the chat: ${ex instanceof Error ? ex.message : String(ex)}`,
+				);
+			}
 		},
 		[store, fork, navigate],
 	);

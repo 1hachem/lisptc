@@ -94,6 +94,7 @@ function parseMeta(value: unknown): StepMeta | undefined {
 
 export interface ChatSession {
 	messages: ChatMessage[];
+	saved: ChatMessage[];
 	queued: QueuedMessage[];
 	greeting: string | null;
 	meta: Record<string, StepMeta>;
@@ -108,6 +109,7 @@ export interface ChatSession {
 	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
+	fail: (message: string) => void;
 }
 
 async function evalLisp(
@@ -153,13 +155,13 @@ function errorFor(
 	sources: {
 		stream: unknown;
 		streamingFor: Id<"chats"> | null;
-		evalError: { chatId: Id<"chats"> | null; message: string } | null;
+		failure: { chatId: Id<"chats"> | null; message: string } | null;
 	},
 ): string | undefined {
-	const { stream, streamingFor, evalError } = sources;
+	const { stream, streamingFor, failure } = sources;
 	if (stream && streamingFor === chatId)
 		return stream instanceof Error ? stream.message : String(stream);
-	if (evalError?.chatId === chatId) return evalError.message;
+	if (failure?.chatId === chatId) return failure.message;
 	return undefined;
 }
 
@@ -241,7 +243,7 @@ export function ChatProvider({
 	}, []);
 
 	const [evaluating, setEvaluating] = useState(false);
-	const [evalError, setEvalError] = useState<{
+	const [failure, setFailure] = useState<{
 		chatId: Id<"chats"> | null;
 		message: string;
 	} | null>(null);
@@ -281,7 +283,7 @@ export function ChatProvider({
 			const run = new AbortController();
 			running.current?.abort();
 			running.current = run;
-			setEvalError(null);
+			setFailure(null);
 			setEvaluating(true);
 			let opened = chatId;
 			try {
@@ -301,7 +303,7 @@ export function ChatProvider({
 					$exception_source: "lisp eval",
 					thread_id: chatId ?? "draft",
 				});
-				setEvalError({
+				setFailure({
 					chatId: opened,
 					message: ex instanceof Error ? ex.message : String(ex),
 				});
@@ -321,7 +323,7 @@ export function ChatProvider({
 			shown: ChatMessage,
 			title: string,
 		) => {
-			setEvalError(null);
+			setFailure(null);
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			markStreaming({ chatId: opened }).catch((ex: unknown) =>
@@ -425,6 +427,7 @@ export function ChatProvider({
 	if (storeRef.current === null) {
 		storeRef.current = create<ChatSession>(() => ({
 			messages: [],
+			saved: [],
 			queued: [],
 			greeting: null,
 			meta: {},
@@ -438,6 +441,7 @@ export function ChatProvider({
 			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
+			fail: () => {},
 		}));
 	}
 	const store = storeRef.current;
@@ -445,6 +449,7 @@ export function ChatProvider({
 	useEffect(() => {
 		store.setState({
 			messages,
+			saved: persisted,
 			queued,
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
@@ -455,7 +460,7 @@ export function ChatProvider({
 			error: errorFor(chatId, {
 				stream: stream.error,
 				streamingFor: streamingFor.current,
-				evalError,
+				failure,
 			}),
 			send: (text) => {
 				void send(text);
@@ -469,10 +474,12 @@ export function ChatProvider({
 			},
 			stop,
 			withdraw,
+			fail: (message) => setFailure({ chatId, message }),
 		});
 	}, [
 		store,
 		messages,
+		persisted,
 		queued,
 		meta,
 		greeting,
@@ -480,7 +487,7 @@ export function ChatProvider({
 		stream.isLoading,
 		stream.error,
 		evaluating,
-		evalError,
+		failure,
 		chatId,
 		workspaceId,
 		send,
