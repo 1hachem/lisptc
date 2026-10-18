@@ -6,7 +6,6 @@ import {
 	systemEventMessage,
 } from "@repo/ai";
 import { api } from "@repo/backend/api";
-import { TURN_DEADLINE_MS } from "@repo/backend/limits";
 import { z } from "zod";
 import { body } from "./body.ts";
 import { convexAs } from "./convex.ts";
@@ -101,21 +100,19 @@ export const turn = {
 			);
 		}
 		const convex = convexAs(context.session);
-		const { provider, model, history } = await convex
-			.mutation(api.chats.start, { chatId })
-			.then(() => prepareTurn(convex, chatId, opening))
-			.catch(async (error: unknown) => {
-				await convex
-					.mutation(api.chats.settle, {
-						chatId,
-						failure: error instanceof Error ? error.message : String(error),
-					})
-					.catch((unsettled: unknown) =>
-						console.error(`chat=${chatId} was not settled:`, unsettled),
-					);
-				throw error;
+		await convex.mutation(api.chats.start, { chatId });
+
+		const { provider, model, history } = await prepareTurn(
+			convex,
+			chatId,
+			opening,
+		).catch(async (error: unknown) => {
+			await convex.mutation(api.chats.settle, {
+				chatId,
+				failure: error instanceof Error ? error.message : String(error),
 			});
-		const deadline = AbortSignal.timeout(TURN_DEADLINE_MS);
+			throw error;
+		});
 
 		console.log(
 			`chat chat=${chatId} messages=${history.length} ${provider}/${model}`,
@@ -126,7 +123,7 @@ export const turn = {
 				repls,
 				threadId: chatId,
 				config: { provider, model },
-				signal: AbortSignal.any([request.signal, deadline]),
+				signal: request.signal,
 				steer: {
 					inbox: steers,
 					key: steerKey(context.session.subject, chatId),
@@ -154,14 +151,7 @@ export const turn = {
 						if (messages.length > 0)
 							await convex.mutation(api.messages.append, { chatId, messages });
 					} finally {
-						await convex.mutation(api.chats.settle, {
-							chatId,
-							failure:
-								failure ??
-								(deadline.aborted
-									? "the turn ran past its deadline"
-									: undefined),
-						});
+						await convex.mutation(api.chats.settle, { chatId, failure });
 					}
 				},
 			},
