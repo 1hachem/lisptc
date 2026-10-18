@@ -84,6 +84,27 @@ describe("checkpoints", () => {
 		expect(r.call).toBe(3);
 	});
 
+	it("runs a call made during a revert on the reverted interpreter", async () => {
+		let release = (): void => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		class SlowStore extends MemoryImageStore {
+			override async at(call: number) {
+				await gate;
+				return super.at(call);
+			}
+		}
+		const r = repl(new SlowStore());
+		await r.evalOutput("(setq a 1)");
+		await r.evalOutput("(setq a 2)");
+		const reverting = r.revert(1);
+		const after = r.evalOutput("(echo a)");
+		release();
+		await reverting;
+		expect(await after).toMatchObject({ user: "1\n", call: 2 });
+	});
+
 	it("refuses a call it has no checkpoint for", async () => {
 		await expect(repl().revert(7)).rejects.toThrow("no checkpoint for call 7");
 	});
