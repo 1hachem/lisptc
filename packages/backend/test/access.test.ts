@@ -199,22 +199,6 @@ describe("chat access", () => {
 		expect(row.kwargs).toBeUndefined();
 	});
 
-	it("refuses retiring the asks in another user's chat", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		const bob = await signIn(t, "bob@example.com");
-		const chatId = await bob.as.mutation(api.chats.create, {
-			workspaceId: bob.workspace,
-		});
-		await expect(
-			alice.as.mutation(api.messages.retireAsks, { chatId, note: "x" }),
-		).rejects.toThrow();
-		await expect(
-			t.mutation(api.messages.retireAsks, { chatId }),
-		).rejects.toThrow();
-		expect(await bob.as.query(api.messages.transcript, { chatId })).toEqual([]);
-	});
-
 	it("hides an archived chat from the list", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

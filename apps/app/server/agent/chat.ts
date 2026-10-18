@@ -54,7 +54,6 @@ async function prepareTurn(
 	const { provider, model } = chatModel(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
-	await repls.get(chatId);
 	await convex.mutation(api.messages.append, {
 		chatId,
 		messages: [opening],

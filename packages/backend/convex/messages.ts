@@ -1,16 +1,10 @@
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, type Infer, v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import type { Doc, Id } from "./_generated/dataModel.js";
-import {
-	internalMutation,
-	type MutationCtx,
-	mutation,
-	query,
-} from "./_generated/server.js";
+import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
-import { unansweredAsks, waitsOnUser } from "./lib/waiting.js";
+import { waitsOnUser } from "./lib/waiting.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
@@ -85,65 +79,38 @@ export const sent = query({
 	},
 });
 
-async function appendTo(
-	ctx: MutationCtx,
-	chat: Doc<"chats">,
-	messages: Infer<typeof incoming>[],
-): Promise<Id<"messages">[]> {
-	const last = await ctx.db
-		.query("messages")
-		.withIndex("by_chat_seq", (q) => q.eq("chatId", chat._id))
-		.order("desc")
-		.first();
-	let seq = last === null ? 0 : last.seq + 1;
-	const ids = [];
-	for (const entry of messages) {
-		const clamped = clamp(entry.content, entry.kwargs);
-		ids.push(
-			await ctx.db.insert("messages", {
-				chatId: chat._id,
-				workspaceId: chat.workspaceId,
-				seq,
-				type: entry.type,
-				content: clamped.content,
-				kwargs: clamped.kwargs,
-				truncated: clamped.truncated ? true : undefined,
-				wireId: entry.id,
-			}),
-		);
-		seq += 1;
-	}
-	await ctx.db.patch(chat._id, { lastMessageAt: Date.now() });
-	return ids;
-}
-
 export const append = mutation({
 	args: { chatId: v.id("chats"), messages: v.array(incoming) },
 	returns: v.array(v.id("messages")),
-	handler: async (ctx, { chatId, messages }) =>
-		await appendTo(ctx, (await requireChat(ctx, chatId)).chat, messages),
+	handler: async (ctx, { chatId, messages }) => {
+		const { chat } = await requireChat(ctx, chatId);
+		const last = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+			.order("desc")
+			.first();
+		let seq = last === null ? 0 : last.seq + 1;
+		const ids = [];
+		for (const entry of messages) {
+			const clamped = clamp(entry.content, entry.kwargs);
+			ids.push(
+				await ctx.db.insert("messages", {
+					chatId,
+					workspaceId: chat.workspaceId,
+					seq,
+					type: entry.type,
+					content: clamped.content,
+					kwargs: clamped.kwargs,
+					truncated: clamped.truncated ? true : undefined,
+					wireId: entry.id,
+				}),
+			);
+			seq += 1;
+		}
+		await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
+		return ids;
+	},
 });
-
-async function mergeKwargs(
-	ctx: MutationCtx,
-	row: Doc<"messages">,
-	kwargs: Record<string, unknown>,
-): Promise<void> {
-	const clamped = clamp(row.content, deepMerge(row.kwargs ?? {}, kwargs));
-	await ctx.db.patch(row._id, {
-		content: clamped.content,
-		kwargs: clamped.kwargs,
-		truncated: clamped.truncated || row.truncated ? true : undefined,
-	});
-}
-
-async function settleWaiting(
-	ctx: MutationCtx,
-	chat: Doc<"chats">,
-): Promise<void> {
-	if (chat.status === "waiting" && !(await waitsOnUser(ctx, chat._id)))
-		await ctx.db.patch(chat._id, { status: undefined });
-}
 
 export const annotate = mutation({
 	args: {
@@ -159,38 +126,14 @@ export const annotate = mutation({
 			.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
 			.first();
 		if (row === null) throw new ConvexError({ code: "MESSAGE_NOT_FOUND" });
-		await mergeKwargs(ctx, row, kwargs);
-		await settleWaiting(ctx, chat);
-		return null;
-	},
-});
-
-const RETIRED = { accepted: false, label: "Ended when the REPL restarted" };
-
-export const retireAsks = mutation({
-	args: { chatId: v.id("chats"), note: v.optional(v.string()) },
-	returns: v.null(),
-	handler: async (ctx, { chatId, note }) => {
-		const { chat } = await requireChat(ctx, chatId);
-		const recent = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-			.order("desc")
-			.take(MAX_TRANSCRIPT);
-		for (const row of recent) {
-			const open = unansweredAsks(row.kwargs);
-			if (open.length > 0)
-				await mergeKwargs(ctx, row, {
-					asks: {
-						answered: Object.fromEntries(open.map((id) => [id, RETIRED])),
-					},
-				});
-		}
-		if (note !== undefined)
-			await appendTo(ctx, chat, [
-				{ type: "system", content: note, kwargs: { source: "repl" } },
-			]);
-		await settleWaiting(ctx, chat);
+		const clamped = clamp(row.content, deepMerge(row.kwargs ?? {}, kwargs));
+		await ctx.db.patch(row._id, {
+			content: clamped.content,
+			kwargs: clamped.kwargs,
+			truncated: clamped.truncated || row.truncated ? true : undefined,
+		});
+		if (chat.status === "waiting" && !(await waitsOnUser(ctx, chatId)))
+			await ctx.db.patch(chatId, { status: undefined });
 		return null;
 	},
 });

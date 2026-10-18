@@ -9,15 +9,13 @@ function record(value: unknown): Record<string, unknown> | undefined {
 		: undefined;
 }
 
-export function unansweredAsks(
-	kwargs: Record<string, unknown> | undefined,
-): string[] {
+function unanswered(kwargs: Record<string, unknown> | undefined): boolean {
 	const asks = record(kwargs?.asks);
 	const answered = record(asks?.answered) ?? {};
-	const open: unknown[] = Array.isArray(asks?.open) ? asks.open : [];
-	return open.flatMap((ask) => {
+	const open = Array.isArray(asks?.open) ? asks.open : [];
+	return open.some((ask) => {
 		const id = record(ask)?.id;
-		return typeof id === "string" && !(id in answered) ? [id] : [];
+		return typeof id === "string" && !(id in answered);
 	});
 }
 
@@ -32,7 +30,7 @@ export async function waitsOnUser(
 		.take(TURN_SCAN);
 	for (const message of latest) {
 		if (message.type === "human" || message.type === "system") return false;
-		if (unansweredAsks(message.kwargs).length > 0) return true;
+		if (unanswered(message.kwargs)) return true;
 	}
 	return false;
 }
