@@ -31,7 +31,9 @@ vi.mock("../../server/agent/session.ts", async () => {
 	};
 });
 
-vi.mock("../../server/agent/repls.ts", () => ({ repls: {} }));
+vi.mock("../../server/agent/repls.ts", () => ({
+	repls: { get: async () => undefined },
+}));
 
 vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({

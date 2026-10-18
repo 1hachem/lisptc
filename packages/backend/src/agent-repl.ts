@@ -20,7 +20,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
-import { AgentRepl } from "@repo/repl/repl";
+import { AgentRepl, droppedNote } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
@@ -118,6 +118,10 @@ export function chatRepls(
 		});
 		await repl.resume().catch((ex) => {
 			console.error(`[backend] chat ${chatId} resumed fresh:`, ex);
+		});
+		await connect().mutation(api.messages.retireAsks, {
+			chatId,
+			note: droppedNote(repl.takeDropped()),
 		});
 		return repl;
 	};

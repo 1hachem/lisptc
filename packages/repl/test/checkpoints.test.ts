@@ -149,6 +149,17 @@ describe("checkpoints", () => {
 		expect((await second.evalOutput("(+ 1 1)")).message).toBeUndefined();
 	});
 
+	it("hands over the dropped steps once, so the next step does not repeat them", async () => {
+		const images = new MemoryImageStore();
+		const first = repl(images, [waiting()]);
+		await first.evalOutput("(guarded)");
+		const second = repl(images, [waiting()]);
+		await second.resume();
+		expect(second.takeDropped()).toEqual(["(guarded)"]);
+		expect(second.takeDropped()).toEqual([]);
+		expect((await second.evalOutput("(+ 1 1)")).message).toBeUndefined();
+	});
+
 	it("keeps the call count across a reset", async () => {
 		const r = repl();
 		await r.evalOutput("(setq a 1)");

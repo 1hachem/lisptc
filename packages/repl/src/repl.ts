@@ -161,7 +161,7 @@ function notCheckpointed(call: number, ex: unknown): string {
 	return `Call ${call} was not checkpointed, so it cannot be restored or reverted to: ${ex instanceof Error ? ex.message : String(ex)}`;
 }
 
-function droppedNote(code: readonly string[]): string | undefined {
+export function droppedNote(code: readonly string[]): string | undefined {
 	if (code.length === 0) return undefined;
 	return `The REPL was restored from a checkpoint, and ${code.length === 1 ? "a step that was" : "steps that were"} waiting on an approval did not survive it. Run again whatever still needs doing:\n${code.join("\n")}`;
 }
@@ -223,6 +223,12 @@ export class MemoryRepl implements InMemoryRepl {
 		if (latest === undefined) return undefined;
 		this.load(latest.image);
 		return latest.call;
+	}
+
+	takeDropped(): readonly string[] {
+		const { dropped } = this;
+		this.dropped = [];
+		return dropped;
 	}
 
 	revert(call: number): Promise<number> {
