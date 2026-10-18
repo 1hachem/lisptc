@@ -7,24 +7,21 @@ Turbo tag: `ui`.
 
 ## Shape
 
-`src/landing-view.tsx` draws a whole page and scopes its theme, font and accent
-to the page's own root. `src/sections.tsx` holds one component per section
-type. `src/icons.ts` names the icons a page may ask for. `src/index.ts`
-re-exports what the app uses.
+`src/landing-view.tsx` is a whole page, `src/sections.tsx` one component per
+section type, `src/icons.ts` the icons a page may name, and `src/index.ts` what
+the app imports.
 
 ## Rules
 
 A component here draws a typed page and nothing else. It talks to no backend,
-no store and no router. Where a call to action leads is handed in by the app,
-so routing stays in the app.
+no store and no router. Routing belongs to the app.
 
 Every vertical draws with these same components. A page changes its look
-through the schema's layout keys and theme tokens, never through markup or CSS
-of its own, so a new look is a new key in `@repo/landing` and a branch here.
+through the schema's keys and theme tokens, never through markup or CSS of its
+own, so a new look starts in `@repo/landing`.
 
-Sizes, colours and type come from the `@repo/ui` tokens. A page's accent reaches
-the components as the `--brand` variable, so a component reads `brand`, never a
-hex.
+Sizes, colours and type come from the `@repo/ui` tokens. A hex in a component
+is a bug.
 
 `@repo/ui` and `@repo/landing` are the only workspace dependencies.
 
