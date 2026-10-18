@@ -29,6 +29,7 @@ import {
 	foldl,
 	jsonToLisp,
 	type List,
+	LispKeyword,
 	newSym,
 	Sym,
 	Unspecified,
@@ -189,6 +190,14 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		"Return t if `x` is a string.",
 		z.tuple([zAny]),
 		([x]) => (typeof x === "string" ? true : null),
+	);
+	interp.def(
+		"keywordp",
+		1,
+		"(keywordp x)",
+		"Return t if `x` is a keyword such as `:name`.",
+		z.tuple([zAny]),
+		([x]) => (x instanceof LispKeyword ? true : null),
 	);
 	interp.def(
 		"numberp",
