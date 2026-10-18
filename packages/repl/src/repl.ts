@@ -13,13 +13,7 @@ import {
 	noOpinion,
 } from "@repo/interpreter/hooks";
 import { type Image, restore, snapshot } from "@repo/interpreter/image";
-import {
-	Interp,
-	runAsync,
-	runSync,
-	type State,
-	type StateCodec,
-} from "@repo/interpreter/lisp";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
@@ -41,7 +35,7 @@ import {
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
-import type { ImageStore } from "./image-store.ts";
+import type { Checkpoint, ImageStore } from "./image-store.ts";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -139,11 +133,6 @@ function render(result: StepResult): EvalOutput {
 	};
 }
 
-const calls: StateCodec<number> = {
-	toLisp: (n) => BigInt(n),
-	fromLisp: (x) => Number(x),
-};
-
 function snapshotOf(interp: Interp): Image | undefined {
 	try {
 		return snapshot(interp);
@@ -159,7 +148,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private readonly extensions: InterpExtension[];
 	private readonly images: ImageStore | undefined;
 	private saving: Promise<void> = Promise.resolve();
-	private calls!: State<number>;
+	private calls = 0;
 	readonly hooks: SessionHooks;
 
 	constructor(options: ReplOptions) {
@@ -174,22 +163,11 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	get call(): number {
-		return this.calls.get();
-	}
-
-	private build(): Interp {
-		const interp = new Interp({ extensions: this.extensions });
-		this.calls = interp.state(
-			"repl/call",
-			calls,
-			0,
-			"How many calls this REPL has run. A checkpoint is kept after each one, numbered by it.",
-		);
-		return interp;
+		return this.calls;
 	}
 
 	private freshInterp(): Interp {
-		const interp = this.build();
+		const interp = new Interp({ extensions: this.extensions });
 		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
@@ -198,7 +176,7 @@ export class MemoryRepl implements InMemoryRepl {
 	async resume(): Promise<number | undefined> {
 		const latest = await this.images?.latest();
 		if (latest === undefined) return undefined;
-		this.load(latest.image);
+		this.load(latest);
 		return latest.call;
 	}
 
@@ -208,29 +186,24 @@ export class MemoryRepl implements InMemoryRepl {
 			const checkpoint = await this.images?.at(call);
 			if (checkpoint === undefined)
 				throw new Error(`no checkpoint for call ${call}`);
-			this.load(checkpoint.image);
+			this.load(checkpoint);
 			await this.images?.dropAfter(call);
 			return call;
 		});
 	}
 
-	private load(image: Image): void {
-		const { calls } = this;
-		const interp = this.build();
-		try {
-			restore(interp, image);
-		} catch (ex) {
-			this.calls = calls;
-			throw ex;
-		}
+	private load({ call, image }: Checkpoint): void {
+		const interp = new Interp({ extensions: this.extensions });
+		restore(interp, image);
 		this.parked = [];
 		this.currentInterp.dispose();
 		this.currentInterp = interp;
+		this.calls = call;
 	}
 
 	private checkpoint(result: StepResult): StepResult {
-		const call = this.calls.get() + 1;
-		this.calls.set(call);
+		const call = this.calls + 1;
+		this.calls = call;
 		const { images } = this;
 		if (images === undefined) return result;
 		const image = snapshotOf(this.currentInterp);
@@ -311,7 +284,7 @@ export class MemoryRepl implements InMemoryRepl {
 			},
 		};
 		const { channels } = interp;
-		channels.step = this.calls.get() + 1;
+		channels.step = this.calls + 1;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
 		let thrown: unknown;
@@ -417,11 +390,9 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	reset(): void {
-		const call = this.calls.get();
 		this.parked = [];
 		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
-		this.calls.set(call);
 	}
 }
 
