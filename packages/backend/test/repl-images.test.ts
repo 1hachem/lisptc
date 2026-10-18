@@ -47,14 +47,6 @@ describe("a chat's repl", () => {
 		expect(repl?.call).toBe(1);
 		expect(repl?.bytes).toBeGreaterThan(0);
 	});
-
-	it("follows a revert back to the call it kept", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		for (const call of [1, 2, 3])
-			await t.mutation(internal.repls.record, { replId, ...image(call) });
-		await t.mutation(internal.repls.dropAfter, { replId, call: 1 });
-		expect((await t.run((ctx) => ctx.db.get(replId)))?.call).toBe(1);
-	});
 });
 
 describe("repl checkpoints", () => {
@@ -65,8 +57,8 @@ describe("repl checkpoints", () => {
 		const latest = await t.query(internal.repls.latest, { replId });
 		expect(latest?.call).toBe(3);
 		expect(JSON.parse(latest?.chunks.join("") ?? "")).toEqual({ call: 3 });
-		const second = await t.query(internal.repls.at, { replId, call: 2 });
-		expect(JSON.parse(second?.chunks.join("") ?? "")).toEqual({ call: 2 });
+		const rows = await t.run((ctx) => ctx.db.query("replImages").collect());
+		expect(rows.map((row) => row.call)).toEqual([1, 2, 3]);
 	});
 
 	it("replaces a call recorded twice", async () => {
@@ -75,15 +67,6 @@ describe("repl checkpoints", () => {
 		await t.mutation(internal.repls.record, { replId, ...image(1) });
 		const rows = await t.run((ctx) => ctx.db.query("replImages").collect());
 		expect(rows).toHaveLength(1);
-	});
-
-	it("drops every call after the one reverted to", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		for (const call of [1, 2, 3])
-			await t.mutation(internal.repls.record, { replId, ...image(call) });
-		await t.mutation(internal.repls.dropAfter, { replId, call: 1 });
-		expect((await t.query(internal.repls.latest, { replId }))?.call).toBe(1);
-		expect(await t.query(internal.repls.at, { replId, call: 3 })).toBeNull();
 	});
 
 	it("splits a large image across rows and joins it back", async () => {

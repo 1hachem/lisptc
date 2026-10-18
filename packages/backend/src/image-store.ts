@@ -44,20 +44,4 @@ export class ConvexImageStore implements ImageStore {
 			}),
 		);
 	}
-
-	async at(call: number): Promise<Checkpoint | undefined> {
-		return decode(
-			await this.server.query(internal.repls.at, {
-				replId: this.replId,
-				call,
-			}),
-		);
-	}
-
-	async dropAfter(call: number): Promise<void> {
-		await this.server.mutation(internal.repls.dropAfter, {
-			replId: this.replId,
-			call,
-		});
-	}
 }

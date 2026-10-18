@@ -182,34 +182,6 @@ export const latest = internalQuery({
 	},
 });
 
-export const at = internalQuery({
-	args: { replId: v.id("repls"), call: v.number() },
-	returns: v.union(checkpoint, v.null()),
-	handler: async (ctx, { replId, call }) => {
-		await standing(ctx, replId);
-		return await stored(ctx, await imageAt(ctx, replId, call));
-	},
-});
-
-export const dropAfter = internalMutation({
-	args: { replId: v.id("repls"), call: v.number() },
-	returns: v.null(),
-	handler: async (ctx, { replId, call }) => {
-		await standing(ctx, replId);
-		const later = await ctx.db
-			.query("replImages")
-			.withIndex("by_repl_call", (q) => q.eq("replId", replId).gt("call", call))
-			.collect();
-		for (const image of later) await drop(ctx, image._id);
-		const kept = await imageAt(ctx, replId, call);
-		await ctx.db.patch(replId, {
-			call: kept?.call ?? 0,
-			bytes: kept?.bytes ?? 0,
-		});
-		return null;
-	},
-});
-
 export const purge = internalMutation({
 	args: { replId: v.id("repls") },
 	returns: v.null(),
