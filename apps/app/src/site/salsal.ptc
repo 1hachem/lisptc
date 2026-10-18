@@ -1,6 +1,6 @@
 (:title "salsal: workspaces that learn how you work"
  :description "Build declarative workspaces where agents work together, and shape them until they fit the way you work."
- :theme (:base "gruvbox-dark" :font "geist")
+ :theme (:base "gruvbox-dark" :font "jetbrains-mono")
  :sections
  ((:type :hero
    :eyebrow "salsal"

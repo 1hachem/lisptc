@@ -56,8 +56,6 @@ function Login() {
 	return (
 		<div className="flex h-full items-center justify-center bg-bg font-mono text-[13px] text-fg">
 			<div className="flex w-[320px] flex-col gap-3.5">
-				<div className="text-orange">ptc</div>
-
 				<form
 					className="flex flex-col gap-2"
 					onSubmit={(event) => {
