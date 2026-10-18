@@ -435,7 +435,7 @@ export class AgentRepl extends MemoryRepl {
 		for (const name of this.conversationNames ?? []) {
 			const sym = newSym(name);
 			if (previous?.hasGlobal(sym))
-				defineLisp(interp, name, previous.getGlobal(sym));
+				defineConversationVar(interp, name, previous.getGlobal(sym));
 		}
 	}
 
@@ -587,7 +587,7 @@ export class AgentRepl extends MemoryRepl {
 	setConversationVars(vars: Record<string, unknown>): void {
 		this.conversationNames = Object.keys(vars);
 		for (const [name, value] of Object.entries(vars))
-			defineLisp(this.interp, name, jsonToLisp(value));
+			defineConversationVar(this.interp, name, jsonToLisp(value));
 	}
 
 	takeFinished(): boolean {
@@ -620,7 +620,11 @@ function outermost<A extends unknown[], R>(
 	return around === undefined ? chain : chain.wrappedBy(around);
 }
 
-function defineLisp(interp: Interp, name: string, value: unknown): void {
+function defineConversationVar(
+	interp: Interp,
+	name: string,
+	value: unknown,
+): void {
 	const sym = newSym(name);
 	interp.defineGlobal(sym, value, {
 		signature: name,
