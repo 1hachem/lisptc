@@ -7,7 +7,6 @@ import {
 } from "@repo/interpreter/docs";
 import { EvalException } from "@repo/interpreter/errors";
 import { callableKind } from "@repo/interpreter/func";
-import { Job } from "@repo/interpreter/job";
 import {
 	detachedState,
 	type Interp,
@@ -25,6 +24,7 @@ import {
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { echoText, str } from "@repo/interpreter/print";
+import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
@@ -234,7 +234,7 @@ export class Compactor {
 			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
 		const name = this.nameFor(interp, form, value);
-		if (value instanceof Job)
+		if (value instanceof LispPromise)
 			return `${name}: a promise, still running. Its result applies itself when the promise settles, so nothing is owed here; to act on it use the name — (promise-state ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
 
 		return `${name}: ${describe(value)}\n`;
@@ -456,7 +456,7 @@ export class Compactor {
 		this.counters?.set({ ...counts, [base]: n });
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			doc: !(value instanceof Job)
+			doc: !(value instanceof LispPromise)
 				? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
 				: `The promise a \`${base}\` call returned. This name is how you address it — its printed form (#<promise>) cannot be read back. It applies its own result when it settles, so awaiting is optional: (await ${name}) waits for it now and returns that result, (promise-state ${name}) checks it without blocking (:pending / :fulfilled / :rejected), (cancel ${name}) aborts it.`,
 		});
@@ -645,13 +645,13 @@ function describe(value: unknown): string {
 	const callable = callableKind(value);
 	if (callable !== undefined) return callable;
 
-	if (value instanceof Job) return "a promise, still running";
+	if (value instanceof LispPromise) return "a promise, still running";
 
 	const started = listElements(value);
 	if (
 		started !== undefined &&
 		started.length > 0 &&
-		started.every((p) => p instanceof Job)
+		started.every((p) => p instanceof LispPromise)
 	)
 		return `list of ${started.length} promise${started.length === 1 ? "" : "s"}, still running`;
 

@@ -1,56 +1,57 @@
-import { Job, type JobState } from "./job.ts";
+import { LispPromise, type PromiseState } from "./promise.ts";
 
-export type PromiseState = JobState;
+export type { PromiseState };
 
 export class AsyncWork {
-	private readonly controllers = new WeakMap<Job, AbortController>();
-	private readonly jobs = new WeakMap<Promise<unknown>, Job>();
-	private readonly live = new Set<Job>();
+	private readonly controllers = new WeakMap<LispPromise, AbortController>();
+	private readonly lispPromises = new WeakMap<Promise<unknown>, LispPromise>();
+	private readonly live = new Set<LispPromise>();
 
-	start(run: (signal: AbortSignal) => Promise<unknown>): Job {
+	start(run: (signal: AbortSignal) => Promise<unknown>): LispPromise {
 		const controller = new AbortController();
-		const job = this.record(run(controller.signal));
-		this.controllers.set(job, controller);
-		return job;
+		const lispPromise = this.record(run(controller.signal));
+		this.controllers.set(lispPromise, controller);
+		return lispPromise;
 	}
 
-	watch(promise: Promise<unknown>): Job {
-		return this.jobs.get(promise) ?? this.record(promise);
+	watch(promise: Promise<unknown>): LispPromise {
+		return this.lispPromises.get(promise) ?? this.record(promise);
 	}
 
-	stateOf(job: Job): PromiseState {
-		return job.state;
+	stateOf(lispPromise: LispPromise): PromiseState {
+		return lispPromise.state;
 	}
 
-	promiseOf(job: Job): Promise<unknown> {
-		return job.promise();
+	promiseOf(lispPromise: LispPromise): Promise<unknown> {
+		return lispPromise.promise();
 	}
 
-	pending(): Job[] {
+	pending(): LispPromise[] {
 		return [...this.live];
 	}
 
-	cancel(job: Job): boolean {
-		this.live.delete(job);
-		const controller = this.controllers.get(job);
+	cancel(lispPromise: LispPromise): boolean {
+		this.live.delete(lispPromise);
+		const controller = this.controllers.get(lispPromise);
 		if (!controller) return false;
 		controller.abort();
 		return true;
 	}
 
 	abortAll(): void {
-		for (const job of this.live) this.controllers.get(job)?.abort();
+		for (const lispPromise of this.live)
+			this.controllers.get(lispPromise)?.abort();
 		this.live.clear();
 	}
 
-	private record(promise: Promise<unknown>): Job {
-		const job = Job.of(promise);
-		this.jobs.set(promise, job);
-		this.live.add(job);
+	private record(promise: Promise<unknown>): LispPromise {
+		const lispPromise = LispPromise.of(promise);
+		this.lispPromises.set(promise, lispPromise);
+		this.live.add(lispPromise);
 		const settle = () => {
-			this.live.delete(job);
+			this.live.delete(lispPromise);
 		};
 		promise.then(settle, settle);
-		return job;
+		return lispPromise;
 	}
 }

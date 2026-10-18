@@ -1,7 +1,6 @@
 import type { Doc } from "./docs.ts";
 import { EvalException } from "./errors.ts";
 import { Arg, BuiltInFunc, Closure, Lambda, Macro } from "./func.ts";
-import { Job } from "./job.ts";
 import type { Interp } from "./lisp.ts";
 import {
 	Cell,
@@ -14,9 +13,10 @@ import {
 	Unspecified,
 } from "./objects.ts";
 import { str } from "./print.ts";
+import { LispPromise } from "./promise.ts";
 import type { ForeignValue } from "./types.ts";
 
-export const IMAGE_FORMAT = 1;
+export const IMAGE_FORMAT = 2;
 
 export type Json =
 	| null
@@ -98,9 +98,9 @@ class Writer {
 				},
 			};
 		if (x instanceof Sym) return { sym: x.name };
-		if (x instanceof Job)
+		if (x instanceof LispPromise)
 			return {
-				job: {
+				promise: {
 					state: x.state,
 					outcome:
 						x.state === "rejected"
@@ -195,7 +195,7 @@ class ImageReader {
 		this.objects.forEach((json, id) => {
 			if (!isRecord(json)) throw new ImageError(`bad image object ${id}`);
 			if ("cell" in json) this.values[id] = new Cell(null, null);
-			else if ("job" in json) this.values[id] = new Job();
+			else if ("promise" in json) this.values[id] = new LispPromise();
 			else if ("frame" in json)
 				this.values[id] = new Array((json.frame as Json[]).length);
 		});
@@ -210,8 +210,8 @@ class ImageReader {
 				const [car, cdr] = record.cell as [Json, Json];
 				target.car = this.value(car);
 				target.cdr = this.value(cdr);
-			} else if (target instanceof Job) {
-				const { state, outcome } = record.job as {
+			} else if (target instanceof LispPromise) {
+				const { state, outcome } = record.promise as {
 					state: string;
 					outcome: Json;
 				};

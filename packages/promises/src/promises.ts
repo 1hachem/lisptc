@@ -1,5 +1,4 @@
 import { ArgumentException, EvalException } from "@repo/interpreter/errors";
-import { Job } from "@repo/interpreter/job";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -8,6 +7,7 @@ import {
 	listToArray,
 	newLispKeyword,
 } from "@repo/interpreter/objects";
+import { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
@@ -16,7 +16,10 @@ import { z } from "zod";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
 
-const zJob = z.custom<Job>((x) => x instanceof Job, "promise expected");
+const zPromise = z.custom<LispPromise>(
+	(x) => x instanceof LispPromise,
+	"promise expected",
+);
 
 const message = (e: unknown): string =>
 	e instanceof Error ? e.message : String(e);
@@ -24,7 +27,8 @@ const message = (e: unknown): string =>
 function toPromises(interp: Interp, x: unknown): Promise<unknown>[] {
 	const arr = x === null || x instanceof Cell ? listToArray(x as List) : [x];
 	return arr.map((p) => {
-		if (!(p instanceof Job)) throw new EvalException("not a promise", p);
+		if (!(p instanceof LispPromise))
+			throw new EvalException("not a promise", p);
 		return interp.async.promiseOf(p);
 	});
 }
@@ -43,7 +47,7 @@ export interface PromisesHost {
 
 function unawaited(error: EvalException): string | undefined {
 	if (!(error instanceof ArgumentException)) return undefined;
-	if (!(error.value instanceof Job)) return undefined;
+	if (!(error.value instanceof LispPromise)) return undefined;
 	const where =
 		error.at === undefined ? "an argument" : `argument ${error.at + 1}`;
 	const of = error.callee === undefined ? "" : ` of ${error.callee}`;
@@ -136,7 +140,7 @@ export function registerPromises(interp: Interp): void {
 		1,
 		"(promise-state promise)",
 		"Return how a promise stands, without waiting: :pending, :fulfilled or :rejected.",
-		z.tuple([zJob]),
+		z.tuple([zPromise]),
 		([promise]) => newLispKeyword(interp.async.stateOf(promise)),
 	);
 
@@ -164,7 +168,7 @@ export function registerPromises(interp: Interp): void {
 		1,
 		"(cancel promise)",
 		"Abort the work a promise came from and stop tracking it; returns t if there was something to abort. A promise is not cancellable in itself, so this aborts the request behind it — one built by promise-all and friends has nothing of its own to abort and returns nil.",
-		z.tuple([zJob]),
+		z.tuple([zPromise]),
 		([promise]) => interp.async.cancel(promise) || null,
 	);
 }

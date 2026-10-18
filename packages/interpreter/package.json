@@ -17,7 +17,7 @@
     "./func": "./src/func.ts",
     "./hooks": "./src/hooks.ts",
     "./image": "./src/image.ts",
-    "./job": "./src/job.ts",
+    "./promise": "./src/promise.ts",
     "./lisp": "./src/lisp.ts",
     "./objects": "./src/objects.ts",
     "./observe": "./src/observe.ts",

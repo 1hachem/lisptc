@@ -1,10 +1,10 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { restore, snapshot } from "@repo/interpreter/image";
-import { Job } from "@repo/interpreter/job";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { Cell, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
 import { Compactor, compactionExtension } from "../src/compaction.ts";
 import { compactionHost } from "../src/compaction-host.ts";
@@ -276,8 +276,8 @@ describe("the character backstop", () => {
 });
 
 describe("reporting a promise", () => {
-	function pending(): Job {
-		return Job.of(new Promise(() => {}));
+	function pending(): LispPromise {
+		return LispPromise.of(new Promise(() => {}));
 	}
 
 	function reportOf(interp: Interp, c: Compactor, code: string): string {

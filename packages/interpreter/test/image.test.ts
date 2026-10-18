@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { ImageError, snapshot } from "../src/image.ts";
-import type { Job } from "../src/job.ts";
 import { Interp, runSync, type State } from "../src/lisp.ts";
 import { newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
+import type { LispPromise } from "../src/promise.ts";
 import { ev, freshInterp, roundTrip } from "./helpers.ts";
 
 function imagedAfter(setup: string): Interp {
@@ -141,8 +141,8 @@ describe("an image", () => {
 	});
 });
 
-describe("a job in an image", () => {
-	it("keeps a settled job's outcome, and fails one still running", async () => {
+describe("a promise in an image", () => {
+	it("keeps a settled promise's outcome, and fails one still running", async () => {
 		const interp = freshInterp();
 		interp.defPromise("now", 0, "(now)", "", z.tuple([]), async () => 42n);
 		interp.defPromise(
@@ -154,25 +154,28 @@ describe("a job in an image", () => {
 			() => new Promise(() => {}),
 		);
 		ev("(setq done (now) waiting (never))", interp);
-		await (interp.getGlobal(newSym("done")) as Job);
+		await (interp.getGlobal(newSym("done")) as LispPromise);
 		const back = roundTrip(interp);
-		const done = back.getGlobal(newSym("done")) as Job;
+		const done = back.getGlobal(newSym("done")) as LispPromise;
 		expect(done.state).toBe("fulfilled");
 		expect(await done).toBe(42n);
-		const waiting = back.getGlobal(newSym("waiting")) as Job;
+		const waiting = back.getGlobal(newSym("waiting")) as LispPromise;
 		expect(waiting.state).toBe("rejected");
 		await expect(waiting.promise()).rejects.toThrow("interrupted by restore");
 		expect(back.async.pending()).toEqual([]);
 	});
 
-	it("keeps a rejected job's reason", async () => {
+	it("keeps a rejected promise's reason", async () => {
 		const interp = freshInterp();
 		interp.defPromise("boom", 0, "(boom)", "", z.tuple([]), async () => {
 			throw new Error("it broke");
 		});
 		ev("(setq broken (boom))", interp);
-		await (interp.getGlobal(newSym("broken")) as Job).then(undefined, () => {});
-		const broken = roundTrip(interp).getGlobal(newSym("broken")) as Job;
+		await (interp.getGlobal(newSym("broken")) as LispPromise).then(
+			undefined,
+			() => {},
+		);
+		const broken = roundTrip(interp).getGlobal(newSym("broken")) as LispPromise;
 		await expect(broken.promise()).rejects.toThrow("it broke");
 	});
 });

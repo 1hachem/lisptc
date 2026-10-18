@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AsyncWork } from "../src/async.ts";
-import { Job } from "../src/job.ts";
+import { LispPromise } from "../src/promise.ts";
 
-describe("AsyncWork tracks the jobs it hands out", () => {
+describe("AsyncWork tracks the promises it hands out", () => {
 	it("reports a started promise as pending, then fulfilled", async () => {
 		const work = new AsyncWork();
 		const p = work.start(async () => 1);
@@ -23,11 +23,13 @@ describe("AsyncWork tracks the jobs it hands out", () => {
 		expect(work.pending()).toEqual([]);
 	});
 
-	it("reads the state off a job it never ran", () => {
-		expect(new AsyncWork().stateOf(new Job("fulfilled", 1n))).toBe("fulfilled");
+	it("reads the state off a promise it never ran", () => {
+		expect(new AsyncWork().stateOf(new LispPromise("fulfilled", 1n))).toBe(
+			"fulfilled",
+		);
 	});
 
-	it("keeps the outcome on the job", async () => {
+	it("keeps the outcome on the promise", async () => {
 		const work = new AsyncWork();
 		const p = work.start(async () => 7n);
 		expect(await p).toBe(7n);

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { driveSync } from "../src/drive.ts";
 import { EvalException } from "../src/errors.ts";
-import { Job } from "../src/job.ts";
 import {
 	type Installable,
 	type Interp,
@@ -11,6 +10,7 @@ import {
 } from "../src/lisp.ts";
 import { Cell, Keyword, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
+import { LispPromise } from "../src/promise.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
@@ -127,9 +127,9 @@ describe("builtin kinds", () => {
 			async ([x]) => x,
 		);
 		const { value } = await runAsync(interp, "(later 5)");
-		expect(value).toBeInstanceOf(Job);
+		expect(value).toBeInstanceOf(LispPromise);
 		expect(await value).toBe(5n);
-		expect(interp.async.stateOf(value as Job)).toBe("fulfilled");
+		expect(interp.async.stateOf(value as LispPromise)).toBe("fulfilled");
 		expect(interp.docs().get("later")?.signature).toBe("(later x)");
 	});
 

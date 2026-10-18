@@ -1,10 +1,10 @@
 import type { Eval } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { Job } from "@repo/interpreter/job";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { promisesExtension } from "../src/promises.ts";
@@ -260,19 +260,19 @@ describe("a promise built-in stands on its own", () => {
 	}
 
 	it("starts work with no promise built-ins installed", () => {
-		expect(runSync(bare(), "(start-doomed)")).toBeInstanceOf(Job);
+		expect(runSync(bare(), "(start-doomed)")).toBeInstanceOf(LispPromise);
 	});
 
 	it("absorbs a rejection nobody awaited", async () => {
 		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as Job;
+		const promise = runSync(interp, "(start-doomed)") as LispPromise;
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(interp.async.stateOf(promise)).toBe("rejected");
 	});
 
 	it("is cancellable by the host that dropped the interp", () => {
 		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as Job;
+		const promise = runSync(interp, "(start-doomed)") as LispPromise;
 		expect(interp.async.pending()).toContain(promise);
 		interp.dispose();
 		expect(interp.async.pending()).toHaveLength(0);

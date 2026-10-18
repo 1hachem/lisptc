@@ -1,6 +1,6 @@
-import type { Job } from "@repo/interpreter/job";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
+import type { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -36,11 +36,11 @@ function mcpInterp(client: McpClient): Interp {
 	return interp;
 }
 
-function startLoad(interp: Interp): Job {
+function startLoad(interp: Interp): LispPromise {
 	const promise = runSync(
 		interp,
 		'(load-mcp :name "x" :command "node")',
-	) as Job;
+	) as LispPromise;
 	promise.then(undefined, () => {});
 	return promise;
 }

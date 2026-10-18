@@ -7,7 +7,6 @@ import {
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
-import type { Job } from "@repo/interpreter/job";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -21,6 +20,7 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { keyName, parsePlist } from "@repo/interpreter/plist";
+import type { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
@@ -565,12 +565,12 @@ export function registerMcp(
 		"The MCP servers this session loaded, each with its state (:loaded or :failed) and its tools. Kept by load-mcp and unload-mcp; read it, never set it.",
 	);
 	const predefined = new Map<string, ConnConfig>();
-	const loading = new Set<Job>();
+	const loading = new Set<LispPromise>();
 	for (const conf of toolkit.all())
 		if (policy.server(conf.name).access !== "hidden")
 			predefined.set(conf.name, conf);
 
-	function startLoad(conf: ConnConfig): Job {
+	function startLoad(conf: ConnConfig): LispPromise {
 		const access = policy.server(conf.name);
 		if (access.access === "hidden")
 			throw new EvalException("unknown MCP server", conf.name, false);
@@ -582,7 +582,7 @@ export function registerMcp(
 				conf.name,
 				false,
 			);
-		const job = interp.async.start((signal) =>
+		const promise = interp.async.start((signal) =>
 			client.connect(conf, signal).then(
 				(res) => {
 					if (signal.aborted) {
@@ -596,10 +596,10 @@ export function registerMcp(
 				},
 			),
 		);
-		loading.add(job);
-		const forget = () => loading.delete(job);
-		void interp.async.promiseOf(job).then(forget, forget);
-		return job;
+		loading.add(promise);
+		const forget = () => loading.delete(promise);
+		void interp.async.promiseOf(promise).then(forget, forget);
+		return promise;
 	}
 
 	interp.def(

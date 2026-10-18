@@ -1,27 +1,27 @@
-export type JobState = "pending" | "fulfilled" | "rejected";
+export type PromiseState = "pending" | "fulfilled" | "rejected";
 
-export class Job implements PromiseLike<unknown> {
+export class LispPromise implements PromiseLike<unknown> {
 	private running: Promise<unknown> | undefined;
 
 	constructor(
-		public state: JobState = "pending",
+		public state: PromiseState = "pending",
 		public outcome: unknown = null,
 	) {}
 
-	static of(promise: Promise<unknown>): Job {
-		const job = new Job();
-		job.running = promise;
+	static of(promise: Promise<unknown>): LispPromise {
+		const lispPromise = new LispPromise();
+		lispPromise.running = promise;
 		promise.then(
 			(value) => {
-				job.state = "fulfilled";
-				job.outcome = value;
+				lispPromise.state = "fulfilled";
+				lispPromise.outcome = value;
 			},
 			(error: unknown) => {
-				job.state = "rejected";
-				job.outcome = error;
+				lispPromise.state = "rejected";
+				lispPromise.outcome = error;
 			},
 		);
-		return job;
+		return lispPromise;
 	}
 
 	promise(): Promise<unknown> {
@@ -31,7 +31,7 @@ export class Job implements PromiseLike<unknown> {
 			: Promise.resolve(this.outcome);
 	}
 
-	// biome-ignore lint/suspicious/noThenProperty: a job stands where a Lisp promise used to be a native one, so host code awaiting it keeps working
+	// biome-ignore lint/suspicious/noThenProperty: a Lisp promise stood as a native one before it carried its own state, so host code awaiting it keeps working
 	then<A = unknown, B = never>(
 		fulfilled?: ((value: unknown) => A | PromiseLike<A>) | null,
 		rejected?: ((reason: unknown) => B | PromiseLike<B>) | null,

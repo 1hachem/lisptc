@@ -1,9 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { Job } from "@repo/interpreter/job";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { LispPromise } from "@repo/interpreter/promise";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -29,8 +29,8 @@ function mcpInterp(): Interp {
 	return new Interp({ extensions: [mcpExtension(mcpHost)] });
 }
 
-function start(interp: Interp, form: string): Job {
-	return runSync(interp, form) as Job;
+function start(interp: Interp, form: string): LispPromise {
+	return runSync(interp, form) as LispPromise;
 }
 
 async function load(interp: Interp, form: string): Promise<string> {
@@ -392,7 +392,7 @@ describe("the MCP extension adds no promise vocabulary of its own", () => {
 
 	it("starts a load, installs the bindings, and offers no await", async () => {
 		const promise = start(interp, loadForm("alone"));
-		expect(promise).toBeInstanceOf(Job);
+		expect(promise).toBeInstanceOf(LispPromise);
 		expect(str(await promise)).toContain("alone/echo");
 		expect(await evalStr(interp, '(alone/echo :message "hi")')).toBe('"hi"');
 		expect(() => runSync(interp, "(await 1)")).toThrow(/undefined: await/);
