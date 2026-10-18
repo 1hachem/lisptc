@@ -93,7 +93,7 @@ describe("removing a workspace", () => {
 		expect(messages).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records, permissions and readme with it", async () => {
+	it("takes its secrets, oauth records, permissions, readme and files with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -116,23 +116,30 @@ describe("removing a workspace", () => {
 			workspaceId: doomed,
 			body: "# doomed",
 		});
+		await alice.as.mutation(api.files.put, {
+			workspaceId: doomed,
+			path: "landing-page.ptc",
+			source: '(:title "doomed")\n',
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords, permissions, readmes } = await t.run(
+		const { secrets, oauthRecords, permissions, readmes, files } = await t.run(
 			async (ctx) => ({
 				secrets: await ctx.db.query("secrets").collect(),
 				oauthRecords: await ctx.db.query("oauthRecords").collect(),
 				permissions: await ctx.db.query("permissions").collect(),
 				readmes: await ctx.db.query("readmes").collect(),
+				files: await ctx.db.query("files").collect(),
 			}),
 		);
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
 		expect(permissions).toEqual([]);
 		expect(readmes).toEqual([]);
+		expect(files).toEqual([]);
 	});
 
 	it("leaves the other workspaces alone", async () => {
@@ -240,6 +247,7 @@ async function remaining(t: TestConvex<typeof schema>) {
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
 		permissions: await ctx.db.query("permissions").collect(),
 		readmes: await ctx.db.query("readmes").collect(),
+		files: await ctx.db.query("files").collect(),
 		preferences: await ctx.db.query("preferences").collect(),
 	}));
 }
@@ -254,6 +262,7 @@ const nothing = {
 	oauthRecords: [],
 	permissions: [],
 	readmes: [],
+	files: [],
 	preferences: [],
 };
 
@@ -290,12 +299,17 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, secrets, oauth records, permissions, readme and preferences", async () => {
+	it("takes its memories, secrets, oauth records, permissions, readme, files and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.readmes.put, {
 			workspaceId: alice.workspace,
 			body: "doomed",
+		});
+		await alice.as.mutation(api.files.put, {
+			workspaceId: alice.workspace,
+			path: "notes.ptc",
+			source: "(:a 1)\n",
 		});
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { theme: "dusk", themeUses: {} },

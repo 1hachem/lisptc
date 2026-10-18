@@ -19,3 +19,7 @@ export const MAX_README_BYTES = 65_536;
 export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
+
+export const MAX_FILE_BYTES = 65_536;
+
+export const MAX_FILES = 256;

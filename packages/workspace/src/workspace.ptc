@@ -17,6 +17,15 @@ sidebar; every change shows there at once.
 - (chat/read id :last 10) gives another chat's last messages as (role . text).
   User approves it: it brings whole other conversation into this one.
 
+- (files) lists workspace file paths, like "landing-page.ptc".
+- (file/read "notes.ptc") gives file's one form as data, never run. nil when
+  no file.
+- (file/write "notes.ptc" value) replaces file with value printed as data.
+  Data only: function refused.
+- Edit file: read, change with set-in / update-in / remove-in, write back:
+  (file/write "notes.ptc" (set-in (file/read "notes.ptc") "done" :status))
+- (file/delete "notes.ptc") removes file. User approves it.
+
 GOTCHAS
 
 - Ids come from (chats). Never guess one.
