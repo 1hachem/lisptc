@@ -31,7 +31,7 @@ import { uiHost } from "@repo/ui-extension/host";
 import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { ConvexImageStore } from "./image-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -120,5 +120,13 @@ export function chatRepls(
 			console.error(`[backend] chat ${chatId} resumed fresh:`, ex);
 		});
 		return repl;
+	};
+}
+
+export function chatReplClosed(
+	server: ServerClient,
+): (chatId: Id<"chats">, closed: { saved: boolean }) => Promise<void> {
+	return async (chatId, { saved }) => {
+		await server.mutation(internal.repls.closeChat, { chatId, saved });
 	};
 }

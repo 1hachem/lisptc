@@ -1,17 +1,17 @@
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import {
 	internalMutation,
 	type MutationCtx,
 	mutation,
+	type QueryCtx,
 	query,
 } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { waitsOnUser } from "./lib/waiting.js";
-import { layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
@@ -87,6 +87,19 @@ export const sent = query({
 	},
 });
 
+async function layerFor(
+	ctx: QueryCtx,
+	replId: Id<"repls">,
+	origin: string,
+): Promise<Doc<"replLayers"> | null> {
+	return await ctx.db
+		.query("replLayers")
+		.withIndex("by_repl_origin", (q) =>
+			q.eq("replId", replId).eq("origin", origin),
+		)
+		.first();
+}
+
 async function layersOf(
 	ctx: MutationCtx,
 	chat: Doc<"chats">,
@@ -107,39 +120,45 @@ async function layersOf(
 	});
 }
 
+export async function appendTo(
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+	messages: Infer<typeof incoming>[],
+): Promise<Id<"messages">[]> {
+	const last = await ctx.db
+		.query("messages")
+		.withIndex("by_chat_seq", (q) => q.eq("chatId", chat._id))
+		.order("desc")
+		.first();
+	let seq = last === null ? 0 : last.seq + 1;
+	const layers = await layersOf(ctx, chat, messages);
+	const ids = [];
+	for (const [at, entry] of messages.entries()) {
+		const clamped = clamp(entry.content, entry.kwargs);
+		ids.push(
+			await ctx.db.insert("messages", {
+				chatId: chat._id,
+				workspaceId: chat.workspaceId,
+				seq,
+				type: entry.type,
+				content: clamped.content,
+				kwargs: clamped.kwargs,
+				truncated: clamped.truncated ? true : undefined,
+				wireId: entry.id,
+				layerId: layers[at],
+			}),
+		);
+		seq += 1;
+	}
+	await ctx.db.patch(chat._id, { lastMessageAt: Date.now() });
+	return ids;
+}
+
 export const append = mutation({
 	args: { chatId: v.id("chats"), messages: v.array(incoming) },
 	returns: v.array(v.id("messages")),
-	handler: async (ctx, { chatId, messages }) => {
-		const { chat } = await requireChat(ctx, chatId);
-		const last = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-			.order("desc")
-			.first();
-		let seq = last === null ? 0 : last.seq + 1;
-		const layers = await layersOf(ctx, chat, messages);
-		const ids = [];
-		for (const [at, entry] of messages.entries()) {
-			const clamped = clamp(entry.content, entry.kwargs);
-			ids.push(
-				await ctx.db.insert("messages", {
-					chatId,
-					workspaceId: chat.workspaceId,
-					seq,
-					type: entry.type,
-					content: clamped.content,
-					kwargs: clamped.kwargs,
-					truncated: clamped.truncated ? true : undefined,
-					wireId: entry.id,
-					layerId: layers[at],
-				}),
-			);
-			seq += 1;
-		}
-		await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
-		return ids;
-	},
+	handler: async (ctx, { chatId, messages }) =>
+		await appendTo(ctx, (await requireChat(ctx, chatId)).chat, messages),
 });
 
 export const annotate = mutation({

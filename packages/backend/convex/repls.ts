@@ -10,6 +10,7 @@ import {
 } from "./_generated/server.js";
 import { requireChat } from "./lib/auth.js";
 import { MAX_REPL_LAYER_BYTES, REPL_LAYER_CHUNK_CHARS } from "./limits.js";
+import { appendTo } from "./messages.js";
 
 const PURGE_BATCH = 64;
 
@@ -28,10 +29,21 @@ async function openRepl(
 	ctx: MutationCtx,
 	chat: Doc<"chats">,
 ): Promise<Id<"repls">> {
-	if (chat.replId !== undefined) return chat.replId;
+	const now = Date.now();
+	if (chat.replId !== undefined) {
+		await ctx.db.patch(chat.replId, {
+			state: "open",
+			openedAt: now,
+			lastActiveAt: now,
+		});
+		return chat.replId;
+	}
 	const replId = await ctx.db.insert("repls", {
 		workspaceId: chat.workspaceId,
 		chatId: chat._id,
+		state: "open",
+		openedAt: now,
+		lastActiveAt: now,
 	});
 	await ctx.db.patch(chat._id, { replId });
 	return replId;
@@ -47,6 +59,7 @@ export async function forkRepl(
 	const replId = await ctx.db.insert("repls", {
 		workspaceId: chat.workspaceId,
 		chatId: chat._id,
+		state: "closed",
 		head,
 	});
 	await ctx.db.patch(chat._id, { replId });
@@ -74,6 +87,31 @@ export const open = mutation({
 		await openRepl(ctx, (await requireChat(ctx, chatId)).chat),
 });
 
+export const closeChat = internalMutation({
+	args: { chatId: v.id("chats"), saved: v.boolean() },
+	returns: v.null(),
+	handler: async (ctx, { chatId, saved }) => {
+		const chat = await ctx.db.get(chatId);
+		if (chat?.replId === undefined) return null;
+		if ((await ctx.db.get(chat.replId)) === null) return null;
+		await ctx.db.patch(chat.replId, {
+			state: "closed",
+			closedAt: Date.now(),
+			closedSaved: saved,
+		});
+		await appendTo(ctx, chat, [
+			{
+				type: "system",
+				content: saved
+					? "The REPL sat idle, so it was saved and closed. It reopens where it stopped on the next message."
+					: "The REPL sat idle and was closed, but its last state could not be saved. It reopens from its last checkpoint on the next message.",
+				kwargs: { source: "repl" },
+			},
+		]);
+		return null;
+	},
+});
+
 async function standing(
 	ctx: QueryCtx,
 	replId: Id<"repls">,
@@ -81,19 +119,6 @@ async function standing(
 	const repl = await ctx.db.get(replId);
 	if (repl === null) throw new ConvexError({ code: "NOT_FOUND" });
 	return repl;
-}
-
-export async function layerFor(
-	ctx: QueryCtx,
-	replId: Id<"repls">,
-	origin: string,
-): Promise<Doc<"replLayers"> | null> {
-	return await ctx.db
-		.query("replLayers")
-		.withIndex("by_repl_origin", (q) =>
-			q.eq("replId", replId).eq("origin", origin),
-		)
-		.first();
 }
 
 async function settleMessages(
@@ -154,7 +179,7 @@ export const record = internalMutation({
 		});
 		for (const [index, data] of chunks.entries())
 			await ctx.db.insert("replLayerChunks", { layerId, index, data });
-		await ctx.db.patch(replId, { head: layerId });
+		await ctx.db.patch(replId, { head: layerId, lastActiveAt: Date.now() });
 		const layer = await ctx.db.get(layerId);
 		if (layer !== null && repl.chatId !== undefined)
 			await settleMessages(ctx, repl.chatId, layer);
