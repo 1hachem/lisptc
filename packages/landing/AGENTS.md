@@ -20,8 +20,7 @@ read the same schema.
 zod is its only dependency, so a Convex function can import it. It depends on
 no workspace package.
 
-A new section type is added to the schema here first. Every key is strict, so a
-misspelt key fails with its path instead of being dropped.
+A new section type belongs in this schema before anything draws or stores it.
 
 ## Tests
 
