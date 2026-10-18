@@ -26,6 +26,38 @@ sidebar; every change shows there at once.
   (file/write "notes.ptc" (set-in (file/read "notes.ptc") "done" :status))
 - (file/delete "notes.ptc") removes file. User approves it.
 
+LANDING PAGE
+
+"landing-page.ptc" is workspace's landing page, one plist. User previews it
+live at /<workspace-id>/landing. Bad key or value: preview lists problem by
+path, fix it. Unknown key refused, so spell keys exactly.
+
+(:title "…" :description "…"
+ :theme (:base "gruvbox-dark" :accent "#d65d0e" :font "geist")
+ :sections (section...))
+
+- :base one of gruvbox-dark gruvbox-light tokyonight-dark tokyonight-light
+  borland. :font one of jetbrains-mono geist poppins. :accent "#rrggbb".
+- Section is plist with :type, one of:
+  (:type :hero [:layout :centered|:split] [:eyebrow "…"] :title "…"
+   [:subtitle "…"] [:cta cta] [:secondary (:label "…" :href "https://…")])
+  (:type :features [:layout :grid|:list] [:title "…"]
+   :items ((:icon name :title "…" :body "…")...))
+  (:type :steps [:title "…"] :items ((:title "…" :body "…")...))
+  (:type :pricing [:title "…"] :plans ((:name "…" :price "…" [:period "…"]
+   :features ("…"...) [:cta cta])...))
+  (:type :testimonials [:title "…"] :items ((:quote "…" :author "…"
+   [:role "…"])...))
+  (:type :faq [:title "…"] :items ((:question "…" :answer "…")...))
+  (:type :cta :title "…" [:body "…"] :cta cta)
+  (:type :vertical-directory [:title "…"])
+- cta is (:label "…" [:flow "flow-id"]). 1 to 12 items per list, 1 to 20
+  sections. Line max 120 chars, body max 1200.
+- Icon names: brain chart check clock code cube flash layers puzzle rocket
+  settings shield sparkles team workflow.
+- Add section: (file/write "landing-page.ptc" (update-in (file/read
+  "landing-page.ptc") (lambda (s) (append s (list section))) :sections))
+
 GOTCHAS
 
 - Ids come from (chats). Never guess one.
