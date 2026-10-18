@@ -1,7 +1,7 @@
 # @repo/landing
 
-The shape of a landing page: the schema a `landing-page.ptc` is validated
-against, and the types every reader of one is typed by.
+The shape of a landing page: the schema a vertical's landing page file is
+validated against, and the types every reader of one is typed by.
 
 Turbo tag: `foundation`.
 
