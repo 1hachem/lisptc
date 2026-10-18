@@ -6,12 +6,12 @@ import {
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useState } from "react";
-import { authClient } from "../lib/auth-client.ts";
+import { authClient } from "../../lib/auth-client.ts";
 
-export const Route = createFileRoute("/login")({
+export const Route = createFileRoute("/app/login")({
 	beforeLoad: ({ context }) => {
 		if (context.auth.source === "server" && context.auth.token !== null) {
-			throw redirect({ to: "/" });
+			throw redirect({ to: "/app" });
 		}
 	},
 	component: Login,
@@ -29,7 +29,7 @@ function Login() {
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 
-	const land = () => navigate({ to: "/", replace: true });
+	const land = () => navigate({ to: "/app", replace: true });
 
 	const run = async (
 		attempt: () => Promise<{ error?: { message?: string } | null }>,
@@ -51,7 +51,7 @@ function Login() {
 	};
 
 	if (isLoading) return null;
-	if (isAuthenticated) return <Navigate to="/" replace />;
+	if (isAuthenticated) return <Navigate to="/app" replace />;
 
 	return (
 		<div className="flex h-full items-center justify-center bg-bg font-mono text-[13px] text-fg">
@@ -112,7 +112,7 @@ function Login() {
 						onClick={() =>
 							void authClient.signIn.social({
 								provider: "github",
-								callbackURL: window.location.origin,
+								callbackURL: `${window.location.origin}/app`,
 							})
 						}
 						className="flex-1 bg-bg2 px-2.5 py-1 text-dim hover:text-fg"
@@ -125,7 +125,7 @@ function Login() {
 						onClick={() =>
 							void authClient.signIn.social({
 								provider: "google",
-								callbackURL: window.location.origin,
+								callbackURL: `${window.location.origin}/app`,
 							})
 						}
 						className="flex-1 bg-bg2 px-2.5 py-1 text-dim hover:text-fg"

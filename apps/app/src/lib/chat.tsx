@@ -280,7 +280,7 @@ export function ChatProvider({
 					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
 				if (!chatId) {
 					await navigate({
-						to: "/$workspaceId/chat/$chatId",
+						to: "/app/$workspaceId/chat/$chatId",
 						params: { workspaceId, chatId: opened },
 						replace: true,
 					});
@@ -322,7 +322,7 @@ export function ChatProvider({
 			);
 			if (!chatId) {
 				await navigate({
-					to: "/$workspaceId/chat/$chatId",
+					to: "/app/$workspaceId/chat/$chatId",
 					params: { workspaceId, chatId: opened },
 					replace: true,
 				});

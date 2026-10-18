@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { FileView } from "../../../components/file-view.tsx";
-import { useAppearance } from "../../../lib/appearance.tsx";
-import { preferencesSource } from "../../../lib/files.ts";
-import { useSidebarMotion, useSidebarOrder } from "../../../lib/sidebar.ts";
-import { useUI } from "../../../lib/ui.tsx";
+import { FileView } from "../../../../components/file-view.tsx";
+import { useAppearance } from "../../../../lib/appearance.tsx";
+import { preferencesSource } from "../../../../lib/files.ts";
+import { useSidebarMotion, useSidebarOrder } from "../../../../lib/sidebar.ts";
+import { useUI } from "../../../../lib/ui.tsx";
 
-export const Route = createFileRoute("/_authed/$workspaceId/preferences")({
+export const Route = createFileRoute("/app/_authed/$workspaceId/preferences")({
 	component: PreferencesFile,
 });
 

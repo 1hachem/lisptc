@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useWorkspace } from "../../lib/workspace.tsx";
+import { useWorkspace } from "../../../lib/workspace.tsx";
 
-export const Route = createFileRoute("/_authed/")({
+export const Route = createFileRoute("/app/_authed/")({
 	component: OpenWorkspace,
 });
 
@@ -13,7 +13,7 @@ function OpenWorkspace() {
 	useEffect(() => {
 		if (!workspace) return;
 		void navigate({
-			to: "/$workspaceId",
+			to: "/app/$workspaceId",
 			params: { workspaceId: workspace._id },
 			replace: true,
 		});

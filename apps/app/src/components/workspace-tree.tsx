@@ -72,7 +72,7 @@ function useLeave(workspaceId: Id<"workspaces">) {
 	return (selected: boolean) =>
 		selected
 			? navigate({
-					to: "/$workspaceId",
+					to: "/app/$workspaceId",
 					params: { workspaceId },
 					replace: true,
 				})
@@ -162,7 +162,7 @@ function MemoryFile({
 			}
 			link={(content, className) => (
 				<Link
-					to="/$workspaceId/memories/$key"
+					to="/app/$workspaceId/memories/$key"
 					params={{ workspaceId: memory.workspaceId, key: memory.key }}
 					className={className}
 				>
@@ -213,7 +213,7 @@ function PermissionFiles({
 						}
 						link={(content, className) => (
 							<Link
-								to="/$workspaceId/permissions/$rule"
+								to="/app/$workspaceId/permissions/$rule"
 								params={{ workspaceId, rule: index }}
 								className={className}
 							>
@@ -238,7 +238,11 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 			icon={Home01Icon}
 			selected={selected}
 			link={(content, className) => (
-				<Link to="/$workspaceId" params={{ workspaceId }} className={className}>
+				<Link
+					to="/app/$workspaceId"
+					params={{ workspaceId }}
+					className={className}
+				>
 					{content}
 				</Link>
 			)}
@@ -272,7 +276,7 @@ function RootFile({
 			selected={selected}
 			link={(content, className) => (
 				<Link
-					to={`/$workspaceId/${page}`}
+					to={`/app/$workspaceId/${page}`}
 					params={{ workspaceId }}
 					className={className}
 				>
