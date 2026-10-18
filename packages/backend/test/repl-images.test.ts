@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import { REPL_IMAGE_CHUNK_CHARS } from "../convex/limits.ts";
+import { chunked } from "../src/image-store.ts";
 import { harness, signIn } from "./helpers.ts";
-
-function chunked(json: string): string[] {
-	const chunks: string[] = [];
-	for (let at = 0; at < json.length; at += REPL_IMAGE_CHUNK_CHARS)
-		chunks.push(json.slice(at, at + REPL_IMAGE_CHUNK_CHARS));
-	return chunks;
-}
 
 async function chatOf(email: string) {
 	const t = harness();
