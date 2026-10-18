@@ -143,6 +143,7 @@ Everything else:
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
+- `packages/landing` (`@repo/landing`) — the schema a landing page is data in.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
