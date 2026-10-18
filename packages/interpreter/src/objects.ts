@@ -146,3 +146,36 @@ export function jsonToLisp(x: unknown): unknown {
 		);
 	return String(x);
 }
+
+function isPlist(list: Cell): boolean {
+	let j: unknown = list;
+	while (j instanceof Cell) {
+		if (!(j.car instanceof LispKeyword) || !(j.cdr instanceof Cell))
+			return false;
+		j = j.cdr.cdr;
+	}
+	return j === null;
+}
+
+export function dataToJson(x: unknown): unknown {
+	if (x === null) return null;
+	if (x === true) return true;
+	if (typeof x === "number" || typeof x === "string") return x;
+	if (typeof x === "bigint") return Number(x);
+	if (x instanceof LispKeyword) return x.name;
+	if (x instanceof Sym) return x.name;
+	if (x instanceof Cell) {
+		if (isPlist(x)) {
+			const out: Record<string, unknown> = {};
+			for (let j: List = x; j !== null; j = (j.cdr as Cell).cdr as List)
+				out[(j.car as LispKeyword).name] = dataToJson((j.cdr as Cell).car);
+			return out;
+		}
+		const out: unknown[] = [];
+		let j: unknown = x;
+		for (; j instanceof Cell; j = j.cdr) out.push(dataToJson(j.car));
+		if (j !== null) throw new TypeError("a dotted pair is not JSON data");
+		return out;
+	}
+	throw new TypeError(`${String(x)} is not JSON data`);
+}

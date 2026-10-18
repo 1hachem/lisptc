@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	assert,
 	Cell,
+	dataToJson,
 	EndOfFile,
 	isSpecialForm,
 	jsonToLisp,
@@ -11,6 +12,7 @@ import {
 	quoteSym,
 	Unspecified,
 } from "../src/objects.ts";
+import { Reader } from "../src/reader.ts";
 
 describe("objects", () => {
 	it("fails an assertion with and without a message", () => {
@@ -55,5 +57,37 @@ describe("objects", () => {
 		expect(jsonToLisp(Symbol.for("s"))).toBe("Symbol(s)");
 		expect(jsonToLisp(undefined)).toBeNull();
 		expect(jsonToLisp(false)).toBeNull();
+	});
+});
+
+describe("dataToJson", () => {
+	const read = (text: string): unknown => {
+		const reader = new Reader();
+		reader.push(text);
+		return reader.read();
+	};
+
+	it("turns a keyword plist into an object and a list into an array", () => {
+		expect(
+			dataToJson(
+				read('(:title "Hi" :sections ((:type :hero :n 2 :ok t) (:type :faq)))'),
+			),
+		).toEqual({
+			title: "Hi",
+			sections: [{ type: "hero", n: 2, ok: true }, { type: "faq" }],
+		});
+	});
+
+	it("reads nil as null, a symbol as its name and a float as a number", () => {
+		expect(dataToJson(read("(a nil 1.5)"))).toEqual(["a", null, 1.5]);
+	});
+
+	it("keeps an odd or keyword-led list that is not a plist as an array", () => {
+		expect(dataToJson(read("(:a :b :c)"))).toEqual(["a", "b", "c"]);
+		expect(dataToJson(read("(1 :a 2)"))).toEqual([1, "a", 2]);
+	});
+
+	it("refuses what JSON cannot hold", () => {
+		expect(() => dataToJson(read("(1 . 2)"))).toThrow(/dotted pair/);
 	});
 });
