@@ -1,6 +1,10 @@
-import type { AgentRepl } from "@repo/repl/repl";
-import { describe, expect, it } from "vitest";
-import { ReplStore } from "../src/repl-store.ts";
+import { BuiltInFunc } from "@repo/interpreter/func";
+import type { Interp } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
+import { MemoryImageStore } from "@repo/repl/image-store";
+import { AgentRepl } from "@repo/repl/repl";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type Closed, ReplStore } from "../src/repl-store.ts";
 import { testRepl, testRepls } from "./helpers.ts";
 
 describe("the store a host keeps its threads in", () => {
@@ -42,14 +46,140 @@ describe("the store a host keeps its threads in", () => {
 	it("does not build a repl for a thread nobody has opened", () => {
 		expect(testRepls().peek("thread-e")).toBeUndefined();
 	});
+});
 
-	it("drops the thread it heard from longest ago", async () => {
-		const repls = new ReplStore(() => testRepl(), 2);
+const IDLE = 1000;
+
+function savedRepls(
+	extensions: ((interp: Interp) => void)[] = [],
+	closed?: (threadId: string, closed: Closed) => void,
+) {
+	const images = new MemoryImageStore();
+	return new ReplStore(
+		async (): Promise<AgentRepl> => {
+			const repl = new AgentRepl({ extensions, images });
+			await repl.resume();
+			return repl;
+		},
+		{ idleMs: IDLE, closed },
+	);
+}
+
+function gated(): { extension: (interp: Interp) => void; open: () => void } {
+	let open = (): void => {};
+	const gate = new Promise<void>((resolve) => {
+		open = resolve;
+	});
+	const extension = (interp: Interp): void => {
+		interp.defineGlobal(
+			newSym("slow"),
+			new BuiltInFunc("slow", 0, () => "ran"),
+		);
+		interp.hooks.call.use((i, name, args, next) =>
+			name === "slow"
+				? gate.then(() => next(i, name, args))
+				: next(i, name, args),
+		);
+	};
+	return { extension, open: () => open() };
+}
+
+describe("a thread left idle", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("stays while it keeps being used", async () => {
+		vi.useFakeTimers();
+		const repls = savedRepls();
+		const first = await repls.get("thread-f");
+		await vi.advanceTimersByTimeAsync(IDLE * 0.75);
 		await repls.get("thread-f");
-		await repls.get("thread-g");
-		await repls.get("thread-h");
+		await vi.advanceTimersByTimeAsync(IDLE * 0.75);
 
-		expect(repls.peek("thread-f")).toBeUndefined();
-		expect(repls.peek("thread-g")).toBeDefined();
+		expect(repls.peek("thread-f")).toBe(first);
+	});
+
+	it("is saved, closed and reopened where it stopped", async () => {
+		vi.useFakeTimers();
+		const repls = savedRepls();
+		const first = await repls.get("thread-g");
+		await first.eval("(setq x 41)");
+		first.interp.defineGlobal(newSym("late"), 1n);
+		await vi.advanceTimersByTimeAsync(IDLE + 1);
+
+		expect(repls.peek("thread-g")).toBeUndefined();
+		const second = await repls.get("thread-g");
+		expect(second).not.toBe(first);
+		expect((await second.evalOutput("(echo (+ x late))")).user).toBe("42\n");
+	});
+
+	it("tells the host once it is closed", async () => {
+		vi.useFakeTimers();
+		const told: [string, Closed][] = [];
+		const repls = savedRepls([], (threadId, closed) => {
+			told.push([threadId, closed]);
+		});
+		await (await repls.get("thread-i")).eval("(setq x 1)");
+		await vi.advanceTimersByTimeAsync(IDLE + 1);
+
+		expect(told).toEqual([["thread-i", { saved: true }]]);
+	});
+
+	it("is saved and closed with the rest when the host shuts down", async () => {
+		const told: [string, Closed][] = [];
+		const repls = savedRepls([], (threadId, closed) => {
+			told.push([threadId, closed]);
+		});
+		await (await repls.get("thread-j")).eval("(setq x 41)");
+		await (await repls.get("thread-k")).eval("(setq y 1)");
+		const opening = repls.get("thread-l");
+		await repls.close();
+
+		expect(await opening).toBeDefined();
+		expect(repls.peek("thread-j")).toBeUndefined();
+		expect(repls.peek("thread-k")).toBeUndefined();
+		expect(repls.peek("thread-l")).toBeUndefined();
+		expect(told).toEqual([
+			["thread-j", { saved: true }],
+			["thread-k", { saved: true }],
+			["thread-l", { saved: true }],
+		]);
+		expect(
+			(await (await repls.get("thread-j")).evalOutput("(echo x)")).user,
+		).toBe("41\n");
+	});
+
+	it("waits for a running call before it shuts down", async () => {
+		const { extension, open } = gated();
+		const repls = savedRepls([extension]);
+		const repl = await repls.get("thread-m");
+		const running = repl.evalOutput("(slow)");
+		let shut = false;
+		const closing = repls.close().then(() => {
+			shut = true;
+		});
+		await Promise.resolve();
+
+		expect(shut).toBe(false);
+		open();
+		await running;
+		await closing;
+		expect(shut).toBe(true);
+	});
+
+	it("is not closed while a call is still running", async () => {
+		vi.useFakeTimers();
+		const { extension, open } = gated();
+		const repls = savedRepls([extension]);
+		const repl = await repls.get("thread-h");
+		const running = repl.evalOutput("(slow)");
+		await vi.advanceTimersByTimeAsync(IDLE * 3);
+
+		expect(repls.peek("thread-h")).toBe(repl);
+		open();
+		await running;
+		await vi.advanceTimersByTimeAsync(IDLE + 1);
+		expect(repls.peek("thread-h")).toBeUndefined();
 	});
 });
