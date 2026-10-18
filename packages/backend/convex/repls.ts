@@ -10,7 +10,6 @@ import {
 } from "./_generated/server.js";
 import { requireChat } from "./lib/auth.js";
 import { MAX_REPL_IMAGE_BYTES, REPL_IMAGE_CHUNK_CHARS } from "./limits.js";
-import { appendTo } from "./messages.js";
 
 const PURGE_BATCH = 64;
 
@@ -70,22 +69,11 @@ async function openRepl(
 	ctx: MutationCtx,
 	chat: Doc<"chats">,
 ): Promise<Id<"repls">> {
-	const now = Date.now();
-	if (chat.replId !== undefined) {
-		await ctx.db.patch(chat.replId, {
-			state: "open",
-			openedAt: now,
-			lastActiveAt: now,
-		});
-		return chat.replId;
-	}
+	if (chat.replId !== undefined) return chat.replId;
 	const replId = await ctx.db.insert("repls", {
 		workspaceId: chat.workspaceId,
-		state: "open",
 		call: 0,
 		bytes: 0,
-		openedAt: now,
-		lastActiveAt: now,
 	});
 	await ctx.db.patch(chat._id, { replId });
 	return replId;
@@ -101,7 +89,6 @@ export async function forkRepl(
 	if (image === null) throw new ConvexError({ code: "NO_CHECKPOINT", call });
 	const replId = await ctx.db.insert("repls", {
 		workspaceId: chat.workspaceId,
-		state: "closed",
 		call: image.call,
 		bytes: image.bytes,
 	});
@@ -133,31 +120,6 @@ export const open = mutation({
 	returns: v.id("repls"),
 	handler: async (ctx, { chatId }) =>
 		await openRepl(ctx, (await requireChat(ctx, chatId)).chat),
-});
-
-export const closeChat = internalMutation({
-	args: { chatId: v.id("chats"), saved: v.boolean() },
-	returns: v.null(),
-	handler: async (ctx, { chatId, saved }) => {
-		const chat = await ctx.db.get(chatId);
-		if (chat?.replId === undefined) return null;
-		if ((await ctx.db.get(chat.replId)) === null) return null;
-		await ctx.db.patch(chat.replId, {
-			state: "closed",
-			closedAt: Date.now(),
-			closedSaved: saved,
-		});
-		await appendTo(ctx, chat, [
-			{
-				type: "system",
-				content: saved
-					? "The REPL sat idle, so it was saved and closed. It reopens where it stopped on the next message."
-					: "The REPL sat idle and was closed, but its last state could not be saved. It reopens from its last checkpoint on the next message.",
-				kwargs: { source: "repl" },
-			},
-		]);
-		return null;
-	},
 });
 
 async function standing(
@@ -201,7 +163,6 @@ export const record = internalMutation({
 		await ctx.db.patch(replId, {
 			call: Math.max(repl.call, call),
 			bytes: call >= repl.call ? bytes : repl.bytes,
-			...(call > repl.call ? { lastActiveAt: Date.now() } : {}),
 		});
 		return null;
 	},

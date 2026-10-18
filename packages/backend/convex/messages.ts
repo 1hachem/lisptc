@@ -86,9 +86,9 @@ export const sent = query({
 	},
 });
 
-export type Incoming = Infer<typeof incoming>;
+type Incoming = Infer<typeof incoming>;
 
-export async function appendTo(
+async function appendTo(
 	ctx: MutationCtx,
 	chat: Doc<"chats">,
 	messages: Incoming[],
