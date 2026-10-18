@@ -285,7 +285,11 @@ export class MemoryRepl implements InMemoryRepl {
 			}
 		}
 		const message = notes.filter((m) => m !== undefined).join("\n\n");
-		return { ...result, call, message: message === "" ? undefined : message };
+		return {
+			...result,
+			call: images === undefined ? undefined : call,
+			message: message === "" ? undefined : message,
+		};
 	}
 
 	protected setup(_interp: Interp): void {}

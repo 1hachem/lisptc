@@ -105,6 +105,11 @@ describe("checkpoints", () => {
 		expect(await after).toMatchObject({ user: "1\n", call: 2 });
 	});
 
+	it("numbers no call when it keeps no checkpoints", async () => {
+		const r = new MemoryRepl({ extensions: [] });
+		expect((await r.evalOutput("(setq a 1)")).call).toBeUndefined();
+	});
+
 	it("refuses a call it has no checkpoint for", async () => {
 		await expect(repl().revert(7)).rejects.toThrow("no checkpoint for call 7");
 	});
