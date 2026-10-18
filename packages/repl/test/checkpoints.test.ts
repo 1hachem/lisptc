@@ -3,7 +3,7 @@ import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
-import { MemoryImageStore } from "../src/image-store.ts";
+import { type Checkpoint, MemoryImageStore } from "../src/image-store.ts";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
 function repl(
@@ -11,22 +11,6 @@ function repl(
 	extensions: InterpExtension[] = [],
 ): MemoryRepl {
 	return new MemoryRepl({ extensions, images });
-}
-
-function waiting(): InterpExtension {
-	return (interp: Interp): void => {
-		interp.defineGlobal(
-			newSym("guarded"),
-			new BuiltInFunc("guarded", 0, () => "ran"),
-		);
-		interp.hooks.call.use((i, name, args, next) => {
-			if (name !== "guarded") return next(i, name, args);
-			const hold = i.hold("the call waits for the user");
-			return hold === undefined
-				? next(i, name, args)
-				: hold.until.then(() => next(i, name, args));
-		});
-	};
 }
 
 function opaque(): InterpExtension {
@@ -131,33 +115,32 @@ describe("checkpoints", () => {
 		expect(await repl().resume()).toBeUndefined();
 	});
 
-	it("says when a call could not be checkpointed", async () => {
+	it("numbers no call it could not checkpoint, and tells the model nothing", async () => {
 		const r = repl(new MemoryImageStore(), [opaque()]);
 		const out = await r.evalOutput("(setq h (opaque))");
-		expect(out.message).toContain("Call 1 was not checkpointed");
+		expect(out.call).toBeUndefined();
+		expect(out.message).toBeUndefined();
 	});
 
-	it("tells the session which waiting steps a restore dropped", async () => {
-		const images = new MemoryImageStore();
-		const first = repl(images, [waiting()]);
-		expect((await first.evalOutput("(guarded)")).held).toBe(true);
-		const second = repl(images, [waiting()]);
-		await second.resume();
-		const next = await second.evalOutput("(+ 1 1)");
-		expect(next.message).toContain("waiting on an approval");
-		expect(next.message).toContain("(guarded)");
-		expect((await second.evalOutput("(+ 1 1)")).message).toBeUndefined();
-	});
-
-	it("hands over the dropped steps once, so the next step does not repeat them", async () => {
-		const images = new MemoryImageStore();
-		const first = repl(images, [waiting()]);
-		await first.evalOutput("(guarded)");
-		const second = repl(images, [waiting()]);
-		await second.resume();
-		expect(second.takeDropped()).toEqual(["(guarded)"]);
-		expect(second.takeDropped()).toEqual([]);
-		expect((await second.evalOutput("(+ 1 1)")).message).toBeUndefined();
+	it("keeps checkpointing after a save fails", async () => {
+		class FlakyStore extends MemoryImageStore {
+			private failed = false;
+			override async save(checkpoint: Checkpoint) {
+				if (!this.failed) {
+					this.failed = true;
+					throw new Error("disk full");
+				}
+				return super.save(checkpoint);
+			}
+		}
+		const images = new FlakyStore();
+		const r = repl(images);
+		expect((await r.evalOutput("(setq a 1)")).message).toBeUndefined();
+		await r.evalOutput("(setq a 2)");
+		await expect(r.revert(1)).rejects.toThrow("no checkpoint for call 1");
+		await r.revert(2);
+		expect(await images.at(1)).toBeUndefined();
+		expect((await r.evalOutput("(echo a)")).user).toBe("2\n");
 	});
 
 	it("keeps the call count across a reset", async () => {
