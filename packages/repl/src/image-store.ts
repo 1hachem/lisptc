@@ -8,8 +8,6 @@ export interface Checkpoint {
 export interface ImageStore {
 	save(checkpoint: Checkpoint): Promise<void>;
 	latest(): Promise<Checkpoint | undefined>;
-	at(call: number): Promise<Checkpoint | undefined>;
-	dropAfter(call: number): Promise<void>;
 }
 
 export class MemoryImageStore implements ImageStore {
@@ -21,16 +19,8 @@ export class MemoryImageStore implements ImageStore {
 
 	async latest(): Promise<Checkpoint | undefined> {
 		const calls = [...this.checkpoints.keys()];
-		return calls.length === 0 ? undefined : this.at(Math.max(...calls));
-	}
-
-	async at(call: number): Promise<Checkpoint | undefined> {
-		const json = this.checkpoints.get(call);
-		return json === undefined ? undefined : { call, image: JSON.parse(json) };
-	}
-
-	async dropAfter(call: number): Promise<void> {
-		for (const at of [...this.checkpoints.keys()])
-			if (at > call) this.checkpoints.delete(at);
+		if (calls.length === 0) return undefined;
+		const call = Math.max(...calls);
+		return { call, image: JSON.parse(this.checkpoints.get(call) ?? "") };
 	}
 }

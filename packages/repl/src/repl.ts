@@ -180,18 +180,6 @@ export class MemoryRepl implements InMemoryRepl {
 		return latest.call;
 	}
 
-	revert(call: number): Promise<number> {
-		return this.enqueue(async () => {
-			await this.saving;
-			const checkpoint = await this.images?.at(call);
-			if (checkpoint === undefined)
-				throw new Error(`no checkpoint for call ${call}`);
-			this.load(checkpoint);
-			await this.images?.dropAfter(call);
-			return call;
-		});
-	}
-
 	private load({ call, image }: Checkpoint): void {
 		const interp = new Interp({ extensions: this.extensions });
 		restore(interp, image);
@@ -256,13 +244,9 @@ export class MemoryRepl implements InMemoryRepl {
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
 	): Promise<StepResult> {
-		return this.enqueue(() =>
-			this.runStep(code, body).then((result) => this.checkpoint(result)),
-		);
-	}
-
-	private enqueue<T>(task: () => Promise<T>): Promise<T> {
-		const done = this.inFlight.then(task, task);
+		const run = () =>
+			this.runStep(code, body).then((result) => this.checkpoint(result));
+		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
 			() => undefined,
 			() => undefined,

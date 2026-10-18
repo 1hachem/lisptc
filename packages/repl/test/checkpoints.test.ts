@@ -36,7 +36,7 @@ describe("checkpoints", () => {
 		expect(r.call).toBe(3);
 	});
 
-	it("stamps a step's channel envelopes with its call, across a revert", async () => {
+	it("stamps a step's channel envelopes with its call, across a resume", async () => {
 		const steps: number[] = [];
 		const stamp: InterpExtension = (interp: Interp): void => {
 			interp.defineGlobal(
@@ -47,55 +47,19 @@ describe("checkpoints", () => {
 				}),
 			);
 		};
-		const r = repl(new MemoryImageStore(), [stamp]);
-		await r.evalOutput("(stamp)");
-		await r.evalOutput("(stamp)");
-		await r.evalOutput("(stamp)");
-		await r.revert(2);
-		await r.evalOutput("(stamp)");
-		expect(steps).toEqual([1, 2, 3, 3]);
-	});
-
-	it("reverts to a call, dropping what came after it", async () => {
 		const images = new MemoryImageStore();
-		const r = repl(images);
-		await r.evalOutput("(defun sq (x) (* x x))");
-		await r.evalOutput("(defun cube (x) (* x x x))");
-		expect(await r.revert(1)).toBe(1);
-		expect(await images.at(2)).toBeUndefined();
-		expect((await r.evalOutput("(echo (sq 3))")).user).toBe("9\n");
-		expect((await r.evalOutput("(cube 3)")).failed).toBe(true);
-		expect(r.call).toBe(3);
-	});
-
-	it("runs a call made during a revert on the reverted interpreter", async () => {
-		let release = (): void => {};
-		const gate = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		class SlowStore extends MemoryImageStore {
-			override async at(call: number) {
-				await gate;
-				return super.at(call);
-			}
-		}
-		const r = repl(new SlowStore());
-		await r.evalOutput("(setq a 1)");
-		await r.evalOutput("(setq a 2)");
-		const reverting = r.revert(1);
-		const after = r.evalOutput("(echo a)");
-		release();
-		await reverting;
-		expect(await after).toMatchObject({ user: "1\n", call: 2 });
+		const first = repl(images, [stamp]);
+		await first.evalOutput("(stamp)");
+		await first.evalOutput("(stamp)");
+		const second = repl(images, [stamp]);
+		await second.resume();
+		await second.evalOutput("(stamp)");
+		expect(steps).toEqual([1, 2, 3]);
 	});
 
 	it("numbers no call when it keeps no checkpoints", async () => {
 		const r = new MemoryRepl({ extensions: [] });
 		expect((await r.evalOutput("(setq a 1)")).call).toBeUndefined();
-	});
-
-	it("refuses a call it has no checkpoint for", async () => {
-		await expect(repl().revert(7)).rejects.toThrow("no checkpoint for call 7");
 	});
 
 	it("resumes in a new REPL where the last one stopped", async () => {
@@ -136,11 +100,9 @@ describe("checkpoints", () => {
 		const images = new FlakyStore();
 		const r = repl(images);
 		expect((await r.evalOutput("(setq a 1)")).message).toBeUndefined();
-		await r.evalOutput("(setq a 2)");
-		await expect(r.revert(1)).rejects.toThrow("no checkpoint for call 1");
-		await r.revert(2);
-		expect(await images.at(1)).toBeUndefined();
-		expect((await r.evalOutput("(echo a)")).user).toBe("2\n");
+		expect((await r.evalOutput("(setq a 2)")).call).toBe(2);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect((await images.latest())?.call).toBe(2);
 	});
 
 	it("keeps the call count across a reset", async () => {
