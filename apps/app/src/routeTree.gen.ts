@@ -17,6 +17,7 @@ import { Route as AuthedWorkspaceIdRouteRouteImport } from './routes/_authed/$wo
 import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
+import { Route as SiteVerticalRouteImport } from './routes/site.$vertical'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
 import { Route as AuthedWorkspaceIdAccountRouteImport } from './routes/_authed/$workspaceId/account'
 import { Route as AuthedWorkspaceIdPreferencesRouteImport } from './routes/_authed/$workspaceId/preferences'
@@ -66,6 +67,11 @@ const ApiUiActionRoute = ApiUiActionRouteImport.update({
 const OauthCallbackRoute = OauthCallbackRouteImport.update({
   id: '/oauth/callback',
   path: '/oauth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SiteVerticalRoute = SiteVerticalRouteImport.update({
+  id: '/site/$vertical',
+  path: '/site/$vertical',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedWorkspaceIdIndexRoute = AuthedWorkspaceIdIndexRouteImport.update({
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
+  '/site/$vertical': typeof SiteVerticalRoute
   '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
   '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
   '/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
+  '/site/$vertical': typeof SiteVerticalRoute
   '/': typeof AuthedIndexRoute
   '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
   '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
+  '/site/$vertical': typeof SiteVerticalRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
   '/_authed/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
@@ -201,6 +210,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/ui-action'
     | '/oauth/callback'
+    | '/site/$vertical'
     | '/$workspaceId/account'
     | '/$workspaceId/preferences'
     | '/$workspaceId/readme'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/ui-action'
     | '/oauth/callback'
+    | '/site/$vertical'
     | '/'
     | '/$workspaceId/account'
     | '/$workspaceId/preferences'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/ui-action'
     | '/oauth/callback'
+    | '/site/$vertical'
     | '/_authed/'
     | '/_authed/$workspaceId/account'
     | '/_authed/$workspaceId/preferences'
@@ -261,6 +273,7 @@ export interface RootRouteChildren {
   ApiChatRoute: typeof ApiChatRouteWithChildren
   ApiUiActionRoute: typeof ApiUiActionRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
+  SiteVerticalRoute: typeof SiteVerticalRoute
   ApiOauthCallbackRoute: typeof ApiOauthCallbackRoute
 }
 
@@ -320,6 +333,13 @@ declare module '@tanstack/react-router' {
       path: '/oauth/callback'
       fullPath: '/oauth/callback'
       preLoaderRoute: typeof OauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/site/$vertical': {
+      id: '/site/$vertical'
+      path: '/site/$vertical'
+      fullPath: '/site/$vertical'
+      preLoaderRoute: typeof SiteVerticalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/$workspaceId/': {
@@ -464,6 +484,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatRoute: ApiChatRouteWithChildren,
   ApiUiActionRoute: ApiUiActionRoute,
   OauthCallbackRoute: OauthCallbackRoute,
+  SiteVerticalRoute: SiteVerticalRoute,
   ApiOauthCallbackRoute: ApiOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport

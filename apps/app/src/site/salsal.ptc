@@ -1,0 +1,34 @@
+(:title "salsal: workspaces that learn how you work"
+ :description "Build declarative workspaces where agents work together, and shape them until they fit the way you work."
+ :theme (:base "gruvbox-dark" :font "geist")
+ :sections
+ ((:type :hero
+   :eyebrow "salsal"
+   :title "Software that learns how you work"
+   :subtitle "Describe a workspace and the agents in it. salsal runs them together, learns from what you correct, and keeps adapting until it fits the way you work."
+   :cta (:label "Build your workspace"))
+  (:type :features
+   :title "Everything is yours to change"
+   :items ((:icon "workflow"
+            :title "Declarative workspaces"
+            :body "A workspace is a set of files you can read. Agents, their tools and how they hand work to each other are written down, not hidden in a settings page.")
+           (:icon "brain"
+            :title "It learns from you"
+            :body "Every correction becomes a memory the workspace keeps. The next run starts from what you taught the last one.")
+           (:icon "puzzle"
+            :title "Malleable by design"
+            :body "Ask an agent to change the workspace itself: its prompts, its permissions, its look. You approve what matters.")))
+  (:type :steps
+   :title "How it works"
+   :items ((:title "Start from a workspace"
+            :body "Begin with an empty one, or with a workspace an expert built for your trade.")
+           (:title "Work with your agents"
+            :body "Give them tasks in plain language. They run deterministic programs you can inspect.")
+           (:title "Shape it as you go"
+            :body "Keep what works, change what does not. The workspace adapts and remembers.")))
+  (:type :vertical-directory
+   :title "Workspaces from experts")
+  (:type :cta
+   :title "Make software that fits you"
+   :body "Start with a workspace and shape it into yours."
+   :cta (:label "Get started"))))
