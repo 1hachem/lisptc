@@ -20,6 +20,7 @@ import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as SiteVerticalRouteImport } from './routes/site.$vertical'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
 import { Route as AuthedWorkspaceIdAccountRouteImport } from './routes/_authed/$workspaceId/account'
+import { Route as AuthedWorkspaceIdLandingRouteImport } from './routes/_authed/$workspaceId/landing'
 import { Route as AuthedWorkspaceIdPreferencesRouteImport } from './routes/_authed/$workspaceId/preferences'
 import { Route as AuthedWorkspaceIdReadmeRouteImport } from './routes/_authed/$workspaceId/readme'
 import { Route as AuthedWorkspaceIdSettingsRouteImport } from './routes/_authed/$workspaceId/settings'
@@ -85,6 +86,12 @@ const AuthedWorkspaceIdAccountRoute =
     path: '/account',
     getParentRoute: () => AuthedWorkspaceIdRouteRoute,
   } as any)
+const AuthedWorkspaceIdLandingRoute =
+  AuthedWorkspaceIdLandingRouteImport.update({
+    id: '/landing',
+    path: '/landing',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
 const AuthedWorkspaceIdPreferencesRoute =
   AuthedWorkspaceIdPreferencesRouteImport.update({
     id: '/preferences',
@@ -146,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/oauth/callback': typeof OauthCallbackRoute
   '/site/$vertical': typeof SiteVerticalRoute
   '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
+  '/$workspaceId/landing': typeof AuthedWorkspaceIdLandingRoute
   '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
   '/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
   '/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
@@ -166,6 +174,7 @@ export interface FileRoutesByTo {
   '/site/$vertical': typeof SiteVerticalRoute
   '/': typeof AuthedIndexRoute
   '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
+  '/$workspaceId/landing': typeof AuthedWorkspaceIdLandingRoute
   '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
   '/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
   '/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
@@ -189,6 +198,7 @@ export interface FileRoutesById {
   '/site/$vertical': typeof SiteVerticalRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
+  '/_authed/$workspaceId/landing': typeof AuthedWorkspaceIdLandingRoute
   '/_authed/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
   '/_authed/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
   '/_authed/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/site/$vertical'
     | '/$workspaceId/account'
+    | '/$workspaceId/landing'
     | '/$workspaceId/preferences'
     | '/$workspaceId/readme'
     | '/$workspaceId/settings'
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | '/site/$vertical'
     | '/'
     | '/$workspaceId/account'
+    | '/$workspaceId/landing'
     | '/$workspaceId/preferences'
     | '/$workspaceId/readme'
     | '/$workspaceId/settings'
@@ -254,6 +266,7 @@ export interface FileRouteTypes {
     | '/site/$vertical'
     | '/_authed/'
     | '/_authed/$workspaceId/account'
+    | '/_authed/$workspaceId/landing'
     | '/_authed/$workspaceId/preferences'
     | '/_authed/$workspaceId/readme'
     | '/_authed/$workspaceId/settings'
@@ -356,6 +369,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdAccountRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
+    '/_authed/$workspaceId/landing': {
+      id: '/_authed/$workspaceId/landing'
+      path: '/landing'
+      fullPath: '/$workspaceId/landing'
+      preLoaderRoute: typeof AuthedWorkspaceIdLandingRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
     '/_authed/$workspaceId/preferences': {
       id: '/_authed/$workspaceId/preferences'
       path: '/preferences'
@@ -424,6 +444,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthedWorkspaceIdRouteRouteChildren {
   AuthedWorkspaceIdAccountRoute: typeof AuthedWorkspaceIdAccountRoute
+  AuthedWorkspaceIdLandingRoute: typeof AuthedWorkspaceIdLandingRoute
   AuthedWorkspaceIdPreferencesRoute: typeof AuthedWorkspaceIdPreferencesRoute
   AuthedWorkspaceIdReadmeRoute: typeof AuthedWorkspaceIdReadmeRoute
   AuthedWorkspaceIdSettingsRoute: typeof AuthedWorkspaceIdSettingsRoute
@@ -436,6 +457,7 @@ interface AuthedWorkspaceIdRouteRouteChildren {
 const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
   {
     AuthedWorkspaceIdAccountRoute: AuthedWorkspaceIdAccountRoute,
+    AuthedWorkspaceIdLandingRoute: AuthedWorkspaceIdLandingRoute,
     AuthedWorkspaceIdPreferencesRoute: AuthedWorkspaceIdPreferencesRoute,
     AuthedWorkspaceIdReadmeRoute: AuthedWorkspaceIdReadmeRoute,
     AuthedWorkspaceIdSettingsRoute: AuthedWorkspaceIdSettingsRoute,
