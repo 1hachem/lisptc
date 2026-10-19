@@ -148,6 +148,12 @@ function callOf(message: Doc<"messages">): number {
 	return typeof call === "number" ? call : 0;
 }
 
+function callBefore(kept: Doc<"messages">[], upTo: Doc<"messages">): number {
+	const ranUpTo =
+		upTo.type === "ai" ? kept.filter((m) => m._id !== upTo._id) : kept;
+	return ranUpTo.reduce((last, m) => Math.max(last, callOf(m)), 0);
+}
+
 export const fork = mutation({
 	args: { chatId: v.id("chats"), messageId: v.string() },
 	returns: v.id("chats"),
@@ -161,7 +167,7 @@ export const fork = mutation({
 				q.eq("chatId", chatId).lte("seq", upTo.seq),
 			)
 			.collect();
-		const call = kept.reduce((last, m) => Math.max(last, callOf(m)), 0);
+		const call = callBefore(kept, upTo);
 		const forked = await ctx.db.insert("chats", {
 			workspaceId: chat.workspaceId,
 			userId: user._id,

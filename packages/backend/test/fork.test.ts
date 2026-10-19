@@ -78,6 +78,17 @@ describe("forking a chat at a message", () => {
 		expect(JSON.parse(latest?.chunks.join("") ?? "")).toEqual({ call: 1 });
 	});
 
+	it("starts the fork's repl from before the code an ai message ran", async () => {
+		const { t, alice, chatId } = await conversation();
+		const forked = await alice.as.mutation(api.chats.fork, {
+			chatId,
+			messageId: "a2",
+		});
+		const { replId } = await alice.as.query(api.chats.get, { chatId: forked });
+		if (replId === undefined) throw new Error("the fork has no repl");
+		expect((await t.query(internal.repls.latest, { replId }))?.call).toBe(1);
+	});
+
 	it("starts a fresh repl when no call came before the message", async () => {
 		const { alice, chatId } = await conversation();
 		const forked = await alice.as.mutation(api.chats.fork, {
@@ -95,10 +106,11 @@ describe("forking a chat at a message", () => {
 			chatId,
 			messages: [
 				{ id: "a3", type: "ai", content: "(sq 3)", kwargs: { call: 3 } },
+				{ id: "t3", type: "tool", content: "9" },
 			],
 		});
 		await expect(
-			alice.as.mutation(api.chats.fork, { chatId, messageId: "a3" }),
+			alice.as.mutation(api.chats.fork, { chatId, messageId: "t3" }),
 		).rejects.toThrow("NO_CHECKPOINT");
 	});
 
