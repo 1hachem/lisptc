@@ -14,6 +14,7 @@ import {
 } from "@repo/repl/session-server";
 import { toolkits } from "@repo/toolkit";
 import {
+	CodeActionKind,
 	createConnection,
 	ProposedFeatures,
 	TextDocumentSyncKind,
@@ -56,6 +57,7 @@ connection.onInitialize(() => ({
 		completionProvider: {},
 		hoverProvider: true,
 		signatureHelpProvider: { triggerCharacters: [" ", ":"] },
+		codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
 	},
 }));
 
@@ -81,6 +83,20 @@ connection.onSignatureHelp(async ({ textDocument, position }) => {
 	const document = documents.get(textDocument.uri);
 	if (document === undefined) return null;
 	return (await service()).signatureHelp(document, position);
+});
+
+connection.onCodeAction(async ({ textDocument, range }) => {
+	const document = documents.get(textDocument.uri);
+	if (document === undefined) return [];
+	const edit = (await service()).closer(document, range.end);
+	if (edit === null) return [];
+	return [
+		{
+			title: `close with ${edit.newText}`,
+			kind: CodeActionKind.QuickFix,
+			edit: { changes: { [textDocument.uri]: [edit] } },
+		},
+	];
 });
 
 documents.listen(connection);
