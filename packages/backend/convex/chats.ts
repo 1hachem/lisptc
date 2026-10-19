@@ -1,9 +1,20 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { mutation, query } from "./_generated/server.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
+import {
+	internalMutation,
+	type MutationCtx,
+	mutation,
+	query,
+} from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
+import { waitsOnUser } from "./lib/waiting.js";
+import { STREAMING_LEASE_MS } from "./limits.js";
+import { dropRepl, forkRepl } from "./repls.js";
+import { chatStatus } from "./schema.js";
 
 const MAX_CHATS = 200;
+const PAGE = 20;
 
 const chat = v.object({
 	_id: v.id("chats"),
@@ -13,21 +24,44 @@ const chat = v.object({
 	title: v.string(),
 	lastMessageAt: v.optional(v.number()),
 	archivedAt: v.optional(v.number()),
+	status: v.optional(chatStatus),
+	streamingSince: v.optional(v.number()),
+	failure: v.optional(v.string()),
+	replId: v.optional(v.id("repls")),
 });
 
 export const list = query({
-	args: { workspaceId: v.id("workspaces") },
-	returns: v.array(chat),
-	handler: async (ctx, { workspaceId }) => {
+	args: {
+		workspaceId: v.id("workspaces"),
+		search: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({ chats: v.array(chat), more: v.boolean() }),
+	handler: async (ctx, { workspaceId, search, limit }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const chats = await ctx.db
-			.query("chats")
-			.withIndex("by_workspace_activity", (q) =>
-				q.eq("workspaceId", workspaceId),
-			)
-			.order("desc")
-			.take(MAX_CHATS);
-		return chats.filter((row) => row.archivedAt === undefined);
+		const wanted = Math.min(Math.max(1, Math.floor(limit ?? PAGE)), MAX_CHATS);
+		const term = search?.trim();
+		const rows = term
+			? await ctx.db
+					.query("chats")
+					.withSearchIndex("search_title", (q) =>
+						q
+							.search("title", term)
+							.eq("workspaceId", workspaceId)
+							.eq("archivedAt", undefined),
+					)
+					.take(wanted + 1)
+			: await ctx.db
+					.query("chats")
+					.withIndex("by_workspace_live_activity", (q) =>
+						q.eq("workspaceId", workspaceId).eq("archivedAt", undefined),
+					)
+					.order("desc")
+					.take(wanted + 1);
+		return {
+			chats: rows.slice(0, wanted),
+			more: rows.length > wanted,
+		};
 	},
 });
 
@@ -46,7 +80,66 @@ export const create = mutation({
 			workspaceId,
 			userId: user._id,
 			title: title ?? "",
+			lastMessageAt: Date.now(),
 		});
+	},
+});
+
+export const start = mutation({
+	args: { chatId: v.id("chats") },
+	returns: v.null(),
+	handler: async (ctx, { chatId }) => {
+		await requireChat(ctx, chatId);
+		const since = Date.now();
+		await ctx.db.patch(chatId, {
+			status: "streaming",
+			streamingSince: since,
+			failure: undefined,
+		});
+		await ctx.scheduler.runAfter(STREAMING_LEASE_MS, internal.chats.expire, {
+			chatId,
+			since,
+		});
+		return null;
+	},
+});
+
+export const expire = internalMutation({
+	args: { chatId: v.id("chats"), since: v.number() },
+	returns: v.null(),
+	handler: async (ctx, { chatId, since }) => {
+		const chat = await ctx.db.get(chatId);
+		if (chat?.status !== "streaming" || chat.streamingSince !== since)
+			return null;
+		await ctx.db.patch(chatId, {
+			status: "errored",
+			streamingSince: undefined,
+			failure: "the turn stopped answering",
+		});
+		return null;
+	},
+});
+
+export const settle = mutation({
+	args: { chatId: v.id("chats"), failure: v.optional(v.string()) },
+	returns: v.null(),
+	handler: async (ctx, { chatId, failure }) => {
+		await requireChat(ctx, chatId);
+		if (failure !== undefined) {
+			await ctx.db.patch(chatId, {
+				status: "errored",
+				streamingSince: undefined,
+				failure,
+			});
+			return null;
+		}
+		const waiting = await waitsOnUser(ctx, chatId);
+		await ctx.db.patch(chatId, {
+			status: waiting ? "waiting" : undefined,
+			streamingSince: undefined,
+			failure: undefined,
+		});
+		return null;
 	},
 });
 
@@ -70,12 +163,77 @@ export const archive = mutation({
 	},
 });
 
+async function messageOf(
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+	messageId: string,
+): Promise<Doc<"messages"> | null> {
+	const byWire = await ctx.db
+		.query("messages")
+		.withIndex("by_chat_wire", (q) =>
+			q.eq("chatId", chatId).eq("wireId", messageId),
+		)
+		.first();
+	if (byWire !== null) return byWire;
+	const id = ctx.db.normalizeId("messages", messageId);
+	const stored = id === null ? null : await ctx.db.get(id);
+	return stored?.chatId === chatId ? stored : null;
+}
+
+function layerBefore(
+	kept: Doc<"messages">[],
+	upTo: Doc<"messages">,
+): Id<"replLayers"> | undefined {
+	const settled = upTo.type === "ai" ? kept.at(-2) : upTo;
+	return settled?.layerId;
+}
+
+export const fork = mutation({
+	args: { chatId: v.id("chats"), messageId: v.string() },
+	returns: v.id("chats"),
+	handler: async (ctx, { chatId, messageId }) => {
+		const { user, chat } = await requireChat(ctx, chatId);
+		const upTo = await messageOf(ctx, chatId, messageId);
+		if (upTo === null) throw new ConvexError({ code: "NOT_FOUND" });
+		const kept = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_seq", (q) =>
+				q.eq("chatId", chatId).lte("seq", upTo.seq),
+			)
+			.collect();
+		const forked = await ctx.db.insert("chats", {
+			workspaceId: chat.workspaceId,
+			userId: user._id,
+			title: `${chat.title || "untitled"} (fork)`,
+			lastMessageAt: Date.now(),
+		});
+		const head = layerBefore(kept, upTo);
+		if (head !== undefined)
+			await forkRepl(ctx, { _id: forked, workspaceId: chat.workspaceId }, head);
+		for (const message of kept) {
+			await ctx.db.insert("messages", {
+				chatId: forked,
+				workspaceId: message.workspaceId,
+				seq: message.seq,
+				type: message.type,
+				content: message.content,
+				kwargs: message.kwargs,
+				truncated: message.truncated,
+				wireId: message.wireId,
+				layerId: message.layerId,
+			});
+		}
+		return forked;
+	},
+});
+
 export const remove = mutation({
 	args: { chatId: v.id("chats") },
 	returns: v.null(),
 	handler: async (ctx, { chatId }) => {
-		await requireChat(ctx, chatId);
+		const { chat } = await requireChat(ctx, chatId);
 		await ctx.db.delete(chatId);
+		await dropRepl(ctx, chat);
 		await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
 		return null;
 	},

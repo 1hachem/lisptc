@@ -1,0 +1,29 @@
+PREFERENCES
+
+User's own preferences: theme, font, which channels and metadata fields chat
+shows. Belong to person you work for, not workspace; follow them into every
+workspace. App applies change at once, while they watch.
+
+- (preferences) gives (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :motion id).
+- (preferences/set :theme "gruvbox-light") changes only keys you give.
+  Toggles merge: (preferences/set :channels '(:lisp t)) turns lisp channel on,
+  leaves others as they were.
+- :sidebar is order of sidebar's top-level entries, top first.
+  (preferences/set :sidebar '("README.md" "chat")) moves those two to top,
+  keeps rest in their order. User also drags them by hand.
+- :hidden is every sidebar entry hidden. Replaces whole list:
+  (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
+  '() shows all.
+- :motion is how sidebar animates that drag. (motions) gives alist of
+  (id . description) to choose from. System asks for reduced motion: nothing
+  animates, whatever :motion says.
+- (themes) and (fonts) give alist of (id . name) to choose from.
+
+Change preference only when user asks, not to suit yourself. Say what you
+changed, so screen moving is no surprise.
+
+GOTCHAS
+
+- Channel, metadata, sidebar or hidden id must be one (preferences) already lists.
+  Unknown one errors, naming valid ids.
+- Quote toggle plist, or keywords read as call: '(:lisp t).

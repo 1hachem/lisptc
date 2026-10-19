@@ -6,10 +6,10 @@ import {
 	CallbackServer,
 	completeAuthorization,
 	createAuthCallback,
-	FileOAuthStore,
 	StoredOAuthProvider,
 	sharedAuthCallback,
 } from "../src/mcp-oauth.ts";
+import { FileOAuthStore } from "../src/oauth-host.ts";
 import type { OAuthRecord, OAuthStore } from "../src/ports.ts";
 
 const REDIRECT = "http://127.0.0.1:8991/callback";

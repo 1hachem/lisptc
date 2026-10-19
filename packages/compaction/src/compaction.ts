@@ -7,16 +7,24 @@ import {
 } from "@repo/interpreter/docs";
 import { EvalException } from "@repo/interpreter/errors";
 import { callableKind } from "@repo/interpreter/func";
-import type { Interp } from "@repo/interpreter/lisp";
 import {
+	detachedState,
+	type Interp,
+	type State,
+	type StateCodec,
+} from "@repo/interpreter/lisp";
+import {
+	arrayToList,
 	Cell,
 	type List,
+	listToArray,
 	newSym,
 	Sym,
 	Unspecified,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { echoText, str } from "@repo/interpreter/print";
+import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
@@ -164,12 +172,45 @@ function boolOption(
 	return opts.get(name) !== null;
 }
 
+const counterCodec: StateCodec<Record<string, number>> = {
+	toLisp: (counts) =>
+		arrayToList(
+			Object.entries(counts).map(([base, n]) => new Cell(base, BigInt(n))),
+		),
+	fromLisp: (list) =>
+		Object.fromEntries(
+			listToArray(list as List).map((pair) => [
+				(pair as Cell).car as string,
+				Number((pair as Cell).cdr),
+			]),
+		),
+};
+
+interface Budget {
+	readonly stepping: boolean;
+	readonly spent: number;
+	readonly dropped: number;
+}
+
+const IDLE: Budget = { stepping: false, spent: 0, dropped: 0 };
+
+const budgetCodec: StateCodec<Budget> = {
+	toLisp: ({ stepping, spent, dropped }) =>
+		arrayToList([stepping || null, BigInt(spent), BigInt(dropped)]),
+	fromLisp: (list) => {
+		const [stepping, spent, dropped] = listToArray(list as List);
+		return {
+			stepping: stepping === true,
+			spent: Number(spent),
+			dropped: Number(dropped),
+		};
+	},
+};
+
 export class Compactor {
-	private readonly counters = new Map<string, number>();
-	private spent = 0;
-	private dropped = 0;
+	private counters: State<Record<string, number>> | undefined;
+	private budget: State<Budget> = detachedState(IDLE);
 	private channels?: Channels;
-	private stepping = false;
 	readonly limit: number;
 
 	constructor(limit: number = MAX_WORDS) {
@@ -181,7 +222,7 @@ export class Compactor {
 	}
 
 	result(interp: Interp, form: unknown, value: unknown): string {
-		if (!this.stepping) return "";
+		if (!this.budget.get().stepping) return "";
 		if (value === Unspecified) return "";
 		if (isDocForm(form)) return "";
 		if (isReadForm(form)) {
@@ -193,23 +234,27 @@ export class Compactor {
 			return `${value.name}: ${describe(interp.getGlobal(value))}\n`;
 
 		const name = this.nameFor(interp, form, value);
-		if (value instanceof Promise)
+		if (value instanceof LispPromise)
 			return `${name}: a promise, still running. Its result applies itself when the promise settles, so nothing is owed here; to act on it use the name — (promise-state ${name}) checks it, (await ${name}) waits for it now, (cancel ${name}) aborts it.\n`;
 
 		return `${name}: ${describe(value)}\n`;
 	}
 
 	beginStep(): void {
-		this.stepping = true;
-		this.spent = 0;
-		this.dropped = 0;
+		this.budget.set({ stepping: true, spent: 0, dropped: 0 });
 	}
 
-	reset(): void {
-		this.counters.clear();
-		this.stepping = false;
-		this.spent = 0;
-		this.dropped = 0;
+	keepCountsIn(counters: State<Record<string, number>>): void {
+		this.counters = counters;
+	}
+
+	keepBudgetIn(interp: Interp): void {
+		this.budget = interp.state(
+			"compaction/budget",
+			budgetCodec,
+			IDLE,
+			"What the current step has echoed to the model: whether a step is running, the words shown, and the words held back.",
+		);
 	}
 
 	attach(channels: Channels): void {
@@ -217,17 +262,22 @@ export class Compactor {
 	}
 
 	endStep(): string {
-		if (this.dropped === 0) return "";
-		return `... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
+		const { dropped } = this.budget.get();
+		if (dropped === 0) return "";
+		return `... ${dropped} more word${dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
 	}
 
 	private get remaining(): number {
-		return Math.max(0, this.limit - this.spent);
+		return Math.max(0, this.limit - this.budget.get().spent);
 	}
 
 	private echo(model: string, user: string, dropped: number): Bounded {
-		this.spent += wordSpans(model).length;
-		this.dropped += dropped;
+		const budget = this.budget.get();
+		this.budget.set({
+			...budget,
+			spent: budget.spent + wordSpans(model).length,
+			dropped: budget.dropped + dropped,
+		});
 		output.emit(this.channels, { model, user });
 		return { model, user };
 	}
@@ -399,13 +449,14 @@ export class Compactor {
 		value: unknown,
 		total: number,
 	): string {
-		let n = (this.counters.get(base) ?? 0) + 1;
+		const counts = this.counters?.get() ?? {};
+		let n = (counts[base] ?? 0) + 1;
 		let name = `${base}-${n}`;
 		while (interp.hasGlobal(newSym(name))) name = `${base}-${++n}`;
-		this.counters.set(base, n);
+		this.counters?.set({ ...counts, [base]: n });
 		interp.defineGlobal(newSym(name), value, {
 			signature: name,
-			doc: !(value instanceof Promise)
+			doc: !(value instanceof LispPromise)
 				? `Saved result of a \`${base}\` call (${total} words). The REPL reported its shape rather than printing it; this holds the whole value. Compute over it — (length ${name}), mapcar, assoc — or pull out what you need with (grep ${name} "pattern") or (head ${name} n). To look at it, (echo ${name}).`
 				: `The promise a \`${base}\` call returned. This name is how you address it — its printed form (#<promise>) cannot be read back. It applies its own result when it settles, so awaiting is optional: (await ${name}) waits for it now and returns that result, (promise-state ${name}) checks it without blocking (:pending / :fulfilled / :rejected), (cancel ${name}) aborts it.`,
 		});
@@ -594,13 +645,13 @@ function describe(value: unknown): string {
 	const callable = callableKind(value);
 	if (callable !== undefined) return callable;
 
-	if (value instanceof Promise) return "a promise, still running";
+	if (value instanceof LispPromise) return "a promise, still running";
 
 	const started = listElements(value);
 	if (
 		started !== undefined &&
 		started.length > 0 &&
-		started.every((p) => p instanceof Promise)
+		started.every((p) => p instanceof LispPromise)
 	)
 		return `list of ${started.length} promise${started.length === 1 ? "" : "s"}, still running`;
 
@@ -706,7 +757,15 @@ const GREP_ARGS: DocArg[] = [
 ];
 
 function registerCompaction(interp: Interp, c: Compactor): void {
-	c.reset();
+	c.keepBudgetIn(interp);
+	c.keepCountsIn(
+		interp.state(
+			"compaction/counters",
+			counterCodec,
+			{},
+			"The last number used to name each kind of saved result, so the next one gets the next number.",
+		),
+	);
 	c.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (interp, form, next) {

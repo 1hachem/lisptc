@@ -1,0 +1,23 @@
+WORKSPACE
+
+Workspace you work in, and its chats. User sees same things as files in
+sidebar; every change shows there at once.
+
+- (settings) gives (:name "…" :model "provider/model").
+- (settings/models) lists models workspace can run on.
+- (settings/set :model "provider/model") or (settings/set :name "…") changes
+  them. User approves first. New model answers from next turn.
+
+- (chats) lists (:id id :title title), most recently active first.
+  (chats :search "login" :limit 5) narrows by title.
+- (chat/title "Debug login redirect") titles current chat. Title new chat once
+  you know its topic: few words, no full stop.
+- (chat/rename id "…") retitles another chat.
+- (chat/archive id) takes chat out of sidebar. User approves it.
+- (chat/read id :last 10) gives another chat's last messages as (role . text).
+  User approves it: it brings whole other conversation into this one.
+
+GOTCHAS
+
+- Ids come from (chats). Never guess one.
+- Cannot archive current chat.

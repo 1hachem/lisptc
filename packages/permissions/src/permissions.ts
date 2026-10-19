@@ -330,9 +330,7 @@ export function registerPermissions(
 		z.tuple([zAny]),
 		([form]) => apply(form),
 	);
-	const applying = interp.makeBuiltIn("permission/apply", 1, ([form]) =>
-		apply(form),
-	);
+	const applying = interp.getGlobal(newSym("permission/apply"));
 	interp.def(
 		"permission/expand",
 		2,

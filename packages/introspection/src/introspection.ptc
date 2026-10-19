@@ -1,16 +1,15 @@
 INTROSPECTION
 
-Forms that read what is defined, without running it. Reach for them before
-guessing at a name or an argument.
-- (apropos "text") the documented names whose name or doc contains text. Use it
-  to find a form when you know what it does but not what it is called.
-- (describe 'name) print its kind, arity, signature and doc in one answer.
-- (args 'name) its keyword arguments as (:key "type" required "description")
-  lists, required being t or nil.
-- (arity f) (min max) for a function or macro, max nil when it takes &rest; nil
-  if f is not callable.
-- (signature 'name) · (docstring 'name) the two halves of its doc as strings,
-  nil if undocumented.
-- (source 'name) the defun or defmacro form that last defined name, so you can
-  reread code you wrote steps ago instead of recalling it.
-- (functionp x) · (macrop x) whether x is a function or a macro.
+Read what is defined without running it. Use before guessing name or argument.
+- (apropos "text") documented names whose name or doc contains text. Finds form
+  by what it does, not what it is called.
+- (describe 'name) prints kind, arity, signature, doc at once.
+- (args 'name) keyword arguments as (:key "type" required "description")
+  lists, required t or nil.
+- (arity f) (min max) for function or macro, max nil with &rest; nil if f not
+  callable.
+- (signature 'name) · (docstring 'name) two halves of doc as strings, nil if
+  undocumented.
+- (source 'name) defun or defmacro form that last defined name. Reread own code
+  instead of recalling it.
+- (functionp x) · (macrop x) whether x is function or macro.

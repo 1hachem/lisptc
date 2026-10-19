@@ -1,12 +1,13 @@
 import { convexQuery } from "@convex-dev/react-query";
+import { Logout01Icon, Settings01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
-import { useNewChat } from "../lib/chats.ts";
+import { Link } from "@tanstack/react-router";
 import { useWorkspace } from "../lib/workspace.tsx";
-import { SessionRow } from "./session-row.tsx";
 import { SidePanel } from "./side-panel.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
+import { WorkspaceTree } from "./workspace-tree.tsx";
 
 export function LeftSidebar({
 	open,
@@ -15,16 +16,8 @@ export function LeftSidebar({
 	open: boolean;
 	onSignOut: () => void;
 }) {
-	const newChat = useNewChat();
 	const { data: user } = useQuery(convexQuery(api.users.me, {}));
 	const { workspace } = useWorkspace();
-	const current = useParams({ strict: false }).chatId;
-	const { data: chats } = useQuery(
-		convexQuery(
-			api.chats.list,
-			workspace ? { workspaceId: workspace._id } : "skip",
-		),
-	);
 
 	return (
 		<SidePanel side="left" open={open} className="w-[214px]">
@@ -35,39 +28,11 @@ export function LeftSidebar({
 
 				<WorkspaceMenu />
 
-				<div className="flex flex-col gap-[3px] px-1.5">
-					<button
-						type="button"
-						onClick={() => void newChat()}
-						className="flex cursor-pointer items-baseline gap-2 border-b-2 border-b-bg bg-bg2 px-2.5 py-1 text-left text-blue transition hover:brightness-125 active:translate-y-0.5 active:border-b-0 active:pt-1.5"
-					>
-						<span className="w-[11px] flex-none text-center text-[11px]">
-							›
-						</span>
-						<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-							new session
-						</span>
-					</button>
-				</div>
-
-				<div className="px-4 text-[11px] uppercase tracking-[0.14em] text-dim">
-					sessions
-				</div>
 				<div className="min-h-0 flex-1 overflow-y-auto px-1.5 text-[11.5px]">
-					{chats === undefined ? null : chats.length === 0 ? (
-						<div className="px-2.5 text-dim">no sessions yet</div>
-					) : (
-						chats.map((chat) => (
-							<SessionRow
-								key={chat._id}
-								chat={chat}
-								current={chat._id === current}
-							/>
-						))
-					)}
+					{workspace && <WorkspaceTree workspaceId={workspace._id} />}
 				</div>
 
-				<div className="flex items-baseline gap-2 px-2.5 text-[11px] text-dim">
+				<div className="flex items-center gap-2 px-2.5 text-[11px] text-dim">
 					<span
 						className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
 						title={user?.email}
@@ -78,12 +43,26 @@ export function LeftSidebar({
 								? user.email
 								: user.name}
 					</span>
+					{workspace && (
+						<Link
+							to="/$workspaceId/account"
+							params={{ workspaceId: workspace._id }}
+							className="ml-auto flex-none text-dim hover:text-fg"
+							activeProps={{ className: "text-fg" }}
+							title="settings"
+							aria-label="settings"
+						>
+							<HugeiconsIcon className="size-icon-sm" icon={Settings01Icon} />
+						</Link>
+					)}
 					<button
 						type="button"
 						onClick={onSignOut}
+						title="sign out"
+						aria-label="sign out"
 						className="flex-none cursor-pointer text-dim hover:text-fg"
 					>
-						sign out
+						<HugeiconsIcon className="size-icon-sm" icon={Logout01Icon} />
 					</button>
 				</div>
 			</div>

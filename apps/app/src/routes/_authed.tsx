@@ -1,6 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Navigate,
@@ -8,17 +8,17 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
-import { useState } from "react";
-import { flushSync } from "react-dom";
 import { AppShell } from "../components/app-shell.tsx";
-import { forgetUser, useIdentify } from "../lib/analytics.tsx";
+import { useIdentify } from "../lib/analytics.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
+import { LeaveProvider, useLeaveState } from "../lib/leave.tsx";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
 export const Route = createFileRoute("/_authed")({
+	staticData: { themed: true },
 	beforeLoad: ({ context }) => {
 		if (context.auth.source === "server" && context.auth.token === null) {
 			throw redirect({ to: "/login" });
@@ -42,37 +42,32 @@ function Identify() {
 
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
-	const [leaving, setLeaving] = useState(false);
-	const queryClient = useQueryClient();
+	const departure = useLeaveState();
 
 	if (isLoading) return null;
 	if (!isAuthenticated) return <Navigate to="/login" replace />;
-	if (leaving) return null;
+	if (departure.leaving) return null;
 
 	return (
-		<WorkspaceProvider>
-			<ModelPickerProvider>
-				<AppearanceProvider>
-					<UIProvider>
-						<AppShell
-							onSignOut={async () => {
-								flushSync(() => setLeaving(true));
-								queryClient.removeQueries();
-								try {
-									await authClient.signOut();
-									forgetUser();
-								} catch (failure) {
-									setLeaving(false);
-									throw failure;
+		<LeaveProvider value={departure}>
+			<WorkspaceProvider>
+				<ModelPickerProvider>
+					<AppearanceProvider>
+						<UIProvider>
+							<AppShell
+								onSignOut={() =>
+									void departure.leave(async () => {
+										await authClient.signOut();
+									})
 								}
-							}}
-						>
-							<Identify />
-							<Outlet />
-						</AppShell>
-					</UIProvider>
-				</AppearanceProvider>
-			</ModelPickerProvider>
-		</WorkspaceProvider>
+							>
+								<Identify />
+								<Outlet />
+							</AppShell>
+						</UIProvider>
+					</AppearanceProvider>
+				</ModelPickerProvider>
+			</WorkspaceProvider>
+		</LeaveProvider>
 	);
 }

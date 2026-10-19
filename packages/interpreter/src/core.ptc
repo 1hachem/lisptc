@@ -1,83 +1,75 @@
 LISPTC LANGUAGE REFERENCE
 
-Lisptc is a Common-Lisp-like dialect: a single interpreter with cons cells, symbols,
-lexical scoping, macros, tail-call optimization, and a small standard library,
-the prelude. This document is the authoritative description of the language,
-its data types, every built-in, and its standard library. If a name is not listed
-here, it does not exist — define it yourself.
+Lisptc: Common-Lisp-like dialect. One interpreter, cons cells, symbols, lexical
+scope, macros, tail-call optimization, small standard library called the
+prelude. This reference is authoritative: data types, every built-in, standard
+library. Name not listed here does not exist — define it yourself.
 
 SYNTAX
 
-Source is s-expressions. (f a b) calls f with the evaluated a and b.
+Source is s-expressions. (f a b) calls f with evaluated a and b.
 
-Only the parenthesised top-level forms are program text: anything written around
-them is prose and is ignored, so a program can be prose with forms embedded in it.
-Writing "let me square it" around (sq 5) evaluates just the one form. Two
-consequences: a bare value at top level — 42, "done", my-var — is prose, not an
-expression to evaluate, so wrap it in a form; a stray parenthesis in prose is
-still read as code, so never write one, and a smiley built from a paren is
-unsayable.
+Only parenthesised top-level forms are program text. Text around them is prose,
+ignored. Writing "let me square it" around (sq 5) evaluates only the form.
+Bare value at top level — 42, "done", my-var — is prose, not an expression:
+wrap it in a form. Stray paren in prose still reads as code, so never write
+one; paren smiley unsayable.
 
-NEVER PUT A SENTENCE IN PARENTHESES. Every paren you type is read as code, so a
-remark wrapped in them is a call: writing (the page loaded, title is "hyko")
-calls the with five arguments, and it fails with undefined: the.
-Write the remark as bare prose beside the form instead. There is no bracket that
-makes a comment, in any shape.
+NEVER PUT A SENTENCE IN PARENTHESES. Every paren reads as code, so a wrapped
+remark is a call: (the page loaded, title is "hyko") calls the with five
+arguments, fails with undefined: the. Put remark as bare prose beside the form.
+No bracket makes a comment, any shape.
 
-A parenthesised aside whose head names nothing — (see below) , (one, two,
-  three) — is read as prose rather than run, and comes back as a skipped note, but
-treat that as a mistake the reader forgave, not a way to write. The forgiveness
-is narrow and you cannot predict it: anything shaped like a call is run as one,
-and a keyword argument, a string literal, another call nested inside it, or a
-slashed or underscored name with no words around it — (server/tool :key "value") ,
-dummy names — is code whatever is missing. So (see below) is skipped while (see
-  "below") raises undefined: see, and calling a tool whose server you have not
-loaded is an undefined: error you must fix, not a skip. A reply made only of
-asides ran nothing, which ends the loop, see "Ending the loop".
+Aside whose head names nothing — (see below) , (one, two,
+  three) — reads as prose, comes back as skipped note. Mistake the reader
+forgave, not a way to write. Forgiveness narrow, unpredictable: anything shaped
+like a call runs. Keyword argument, string literal, nested call, or slashed or
+underscored name with no words around it — (server/tool :key "value") , dummy
+names — is code whatever is missing. (see below) skips; (see
+  "below") raises undefined: see. Tool of unloaded server: undefined: error to
+fix, not a skip. Reply of only asides ran nothing, ends the loop, see "Ending
+the loop".
 
-To look at a result, name it in a form: (echo search-mcps-1) . Writing the bare
-name search-mcps-1 on a line of its own is the bare value above — it is prose,
-it evaluates nothing, and a reply that is nothing but prose ENDS THE LOOP with
-that line as your final answer. This is the most expensive typo in the language.
+To see a result, name it in a form: (echo search-mcps-1) . Bare name
+search-mcps-1 on its own line is prose, evaluates nothing. Prose-only reply
+ENDS THE LOOP with that line as final answer. Most expensive typo in the
+language.
 
-- Quote: 'x is the same as (quote x) — returns x unevaluated.
-- Quasiquote: a leading backtick is the same as (quasiquote x) . Inside it, ,x
-  is unquote and inserts the evaluated x, and ,@x is unquote-splicing and splices
-  a list. Example: (a ,(+ 1 2) ,@(list 3 4)) evaluates to the list a 3 3 4.
-- Lists: (a b c) . Dotted pair: (a . b) is a single cons cell.
-- Strings: "..." with escapes \\ \" \n \r \f \b \t \v. There is no character
-  type — a "character" is just a one-character string.
-- Keywords: :foo is a self-evaluating keyword, interned, so (eq :a :a) is t.
-- Numbers: see the numbers section. nil and () are the same value, the empty
-  list and false.
-  t is canonical true.
-- Comments: there is no comment syntax — prose around the forms is the comment.
-  ; is an ordinary symbol character, so "; note" inside a form is read as code.
-- Symbols: any token that is not a number, string, keyword, nil or t. The
-  characters / and - are legal in names, e.g. string-split, acme/get_widget.
+- Quote: 'x same as (quote x) — x unevaluated.
+- Quasiquote: leading backtick same as (quasiquote x) . Inside, ,x unquotes,
+  inserts evaluated x; ,@x unquote-splicing, splices a list.
+  Example: (a ,(+ 1 2) ,@(list 3 4)) evaluates to the list a 3 3 4.
+- Lists: (a b c) . Dotted pair: (a . b) is one cons cell.
+- Strings: "..." with escapes \\ \" \n \r \f \b \t \v. No character type:
+  "character" is one-character string.
+- Keywords: :foo self-evaluating, interned, so (eq :a :a) is t.
+- Numbers: see NUMBERS. nil and () same value: empty list and false. t is
+  canonical true.
+- Comments: there is no comment syntax — prose around forms is the comment.
+  ; is ordinary symbol character, so "; note" inside a form is code.
+- Symbols: any token not number, string, keyword, nil or t. / and - legal in
+  names, e.g. string-split, acme/get_widget.
 
 DATA TYPES
 
-- nil = () = null = the empty list = the ONLY false value.
-- t = canonical true. Everything except nil is truthy, including 0, "",
-  and empty structures.
-- Cons cell — a pair (car . cdr) ; lists are chains of cells ending in nil.
-- Symbol — an interned name; gensym and make-symbol create uninterned ones,
+- nil = () = null = empty list = the ONLY false value.
+- t canonical true. Everything except nil truthy, including 0, "", empty
+  structures.
+- Cons cell — pair (car . cdr) ; list is chain of cells ending in nil.
+- Symbol — interned name; gensym and make-symbol make uninterned ones,
   printed #:name.
 - Keyword — :foo, self-evaluating.
-- String — text; no separate char type.
-- Number — exact integer, a bigint, or inexact float; see the numbers section.
-- Function / closure / macro — created by lambda, defun or defmacro.
-- Secret — a tainted string wrapper, present only when the secrets extension
-  is loaded.
+- String — text; no char type.
+- Number — exact bigint integer or inexact float.
+- Function / closure / macro — from lambda, defun, defmacro.
+- Secret — tainted string wrapper, only when secrets extension loaded.
 
-Truthiness: only nil is false. Test emptiness with null or not, not by
-relying on 0 or "" being false — they are TRUE.
+Test emptiness with null or not. Never rely on 0 or "" being false — they are
+TRUE.
 
 SPECIAL FORMS
 
-These are evaluated specially, not as ordinary function calls. This is the complete
-list of core special forms:
+Evaluated specially, not as function calls. Complete list:
 
 | Form | Shape | Meaning |
 |------|-------|---------|
@@ -93,235 +85,235 @@ list of core special forms:
   (catch (e)
     handler...)) | Eval body; on error, bind e to the error value and run the handler. |
 
-Everything else that looks like a form — if, when, unless, and, or,
-let, let, letrec, while, dolist, dotimes, case, defun,
-defmacro — is a prelude macro, not a core special form, but you use
-them the same way. There is no setf, no block and return-from, no unwind-protect,
-and no throw and catch pair.
+if, when, unless, and, or,
+let, let*, letrec, while, dolist, dotimes, case, defun,
+defmacro are prelude macros, not special forms; use the same way. No setf, no
+block and return-from, no unwind-protect, no throw and catch pair.
 
-Tail calls are optimized: deep recursion in tail position, and the loop macros, do
-not overflow the stack. Prefer tail-recursive helpers or the loop macros for
-iteration.
+Tail calls optimized: tail recursion and loop macros never overflow the stack.
+Iterate with tail-recursive helpers or loop macros.
 
 NUMBERS
 
-Two representations:
-
-- Integer literals are exact bigints: 42 is a bigint.
-- Anything with a decimal or exponent is an inexact float: 42.0 and 4.2e1 are floats.
-
-Rules:
-
-- The operators + -  keep exactness: bigint with bigint gives a bigint. Mixing in
-  ANY float makes the whole result a float, "float contagion": (+ 1 2) is 3,
-(+ 1 2.0) is 3.0.
-- The / operator is ALWAYS a float, even for evenly-divisible integers: (/ 6 2)
-is 3.0. For exact integer division use truncate, which returns a bigint:
+- Integer literal is exact bigint: 42.
+- Decimal or exponent makes inexact float: 42.0, 4.2e1.
+- + - * keep exactness: bigint with bigint gives bigint. ANY float makes the
+  result float, "float contagion": (+ 1 2) is 3,
+(+ 1 2.0) is 3.0, (* 2 3) is 6, (* 2 3.0) is 6.0.
+- / is ALWAYS float, even evenly divisible: (/ 6 2)
+is 3.0. Exact integer division: truncate, gives bigint:
 (truncate 6 2) is 3.
-- Output disambiguates: an integer-valued float prints with a trailing .0, as
-  3.0; a bigint prints bare, as 3.
-- The = and eql operators compare numerically across types: (= 3 3.0) is t.
-- Division by zero: / follows JS, so (/ 1 0) is Infinity and (/ 0 0) is NaN with
-  no error, but integer truncate, % and mod on bigints throw. Guard divisors.
+- Integer-valued float prints 3.0; bigint prints 3.
+- = and eql compare numerically across types: (= 3 3.0) is t.
+- Divide by zero: / follows JS, (/ 1 0) is Infinity, (/ 0 0) is NaN, no error.
+  Integer truncate, % and mod on bigints throw. Guard divisors.
 
 Arithmetic built-ins:
 
-- (+ n...) sum, 0 if none · (n...) product, 1 if none ·
+- (+ n...) sum, 0 if none · (* n...) product, 1 if none ·
 (- n m...) subtract, or negate one arg · (/ n m...) float divide.
 - (% x y) remainder, sign of x, alias rem · (mod x y) modulo, sign of y ·
-(truncate x [y]) truncate toward zero, giving a bigint.
-- (< x y) less-than, a primitive. Prelude adds (> x y) , (>= x y) , (<= x y) ,
+(truncate x [y]) toward zero, gives bigint.
+- (< x y) primitive less-than. Prelude adds (> x y) , (>= x y) , (<= x y) ,
 (/= x y) and (= x y) .
-- (numberp x) is the only numeric predicate. There are NO zerop, evenp,
-  abs, min, max, floor, ceiling, round, expt, sqrt or gcd — build them
-  yourself: even is (= 0 (% n 2)) , abs is (if (< n 0) (- n) n) .
+- (numberp x) only numeric predicate. There are NO zerop, evenp,
+  abs, min, max, floor, ceiling, round, expt, sqrt or gcd — build them:
+  even is (= 0 (% n 2)) , abs is (if (< n 0) (- n) n) .
 
 PRIMITIVE BUILT-INS, DEFINED IN THE INTERPRETER CORE
 
 Lists & pairs
-- (car x) first element · (cdr x) rest · (cons a b) new cell · (list x...) .
-- (length x) length of a list or string, as a bigint.
-- (rplaca cell x) and (rplacd cell x) destructively set car and cdr, aliased
+- (car x) first · (cdr x) rest · (cons a b) new cell · (list x...) .
+- (length x) length of list or string, bigint.
+- (rplaca cell x) and (rplacd cell x) destructively set car and cdr, aliases
   setcar and setcdr.
 
 Predicates
-- (atom x) true if not a cons · (eq x y) identity · (eql x y) identity or
-  numeric and string equality, aliased = · (stringp x) · (numberp x) .
+- (atom x) true if not cons · (eq x y) identity · (eql x y) identity or
+  numeric and string equality, alias = · (stringp x) · (numberp x) .
 
 Symbols
 - (gensym) fresh uninterned symbol · (make-symbol name) · (intern name) ·
 (symbol-name sym) .
 
 Strings
-- (char s i) one-char string at index i, or nil · (concat s...) concatenate
+- (char s i) one-char string at i, or nil · (concat s...) concatenate
   · (string-upcase s) · (string-downcase s) .
-- (string x) convert any value to a string — its printed form, with a string
-  left as itself rather than quoted: (string 12) is "12", (string 'foo) is
-  "foo", (string nil) is "nil". Use it to put a number in text:
-(concat "Chapter " (string n)) . The concat built-in takes strings only, so a
-  number has to go through string first. A float keeps its .0, so (string 3.0)
-is "3.0" and (string (truncate x)) is the way to a bare integer.
+- (string x) any value to string, its printed form; string stays itself,
+  unquoted: (string 12) is "12", (string 'foo) is
+  "foo", (string nil) is "nil". concat takes strings only, so number goes
+  through string first:
+(concat "Chapter " (string n)) . Float keeps .0: (string 3.0)
+is "3.0"; (string (truncate x)) gives bare integer.
 
 Parsing text into data
-- (read s) parse the FIRST Lisp expression in the string s and return it as
-  data, unevaluated: (read "(+ 1 2)") gives the list (+ 1 2) , not 3. Text after
-  that expression is ignored; a string with no expression errors.
-- (json-parse s) parse a JSON document: an object becomes an alist with string
-  keys, an array a list, true becomes t, and false and null become nil. Numbers
-  arrive as floats, so 7 reads back as 7.0, and = still compares them
-  numerically. (cdr (assoc "title" (json-parse s))) reads a field.
-- The two are different parsers, not aliases: JSON is not Lisp syntax, so read
-  on a JSON document returns junk rather than erroring — { is an ordinary symbol
-  character, so {"a": 1} reads as the symbol {. Use json-parse for JSON, read
-  for Lisp.
+- (read s) parse FIRST Lisp expression in s, return as data, unevaluated:
+  (read "(+ 1 2)") gives the list (+ 1 2) , not 3. Trailing text ignored;
+  no expression errors.
+- (json-parse s) parse JSON: object to alist with string keys, array to list,
+  true to t, false and null to nil. Numbers arrive as floats: 7 reads 7.0; =
+  still compares numerically.
+  (cdr (assoc "title" (json-parse s))) reads a field.
+- Different parsers, not aliases. read on JSON returns junk, no error: { is
+  ordinary symbol character, so {"a": 1} reads as symbol {. json-parse for
+  JSON, read for Lisp.
 
 Eval / control
-- (apply f args) call f with the elements of list args.
-- (error value) raise a catchable error carrying value, caught by try.
-- (break) exit the nearest loop; (return value) exit it with a value.
+- (apply f args) call f with elements of list args.
+- (error value) raise catchable error carrying value, caught by try.
+- (break) exit nearest loop; (return value) exit it with value.
 
-Output — echo is the ONLY thing that prints, so nothing you compute is seen
-by anyone until you echo it.
-- (echo x...) print the arguments, space-separated, one newline at the end:
-  strings as they are, everything else re-readable. (echo) is a blank line.
-  A keyword prints as itself when nothing follows it — (echo :ok) prints :ok —
-  because only a keyword carrying a value after it is read as an option. So put
-  a keyword you mean to print LAST, or wrap it in a list.
+Output — echo is the ONLY thing that prints. Nothing computed is seen until
+echoed.
+- (echo x...) print args space-separated, one trailing newline: strings
+  as-is, rest re-readable. (echo) is blank line.
+  Keyword prints as itself only when nothing follows — (echo :ok) prints :ok —
+  since keyword followed by value reads as option. Put keyword to print LAST,
+  or wrap in list.
 
 Introspection
-- (doc name) print a binding's signature and doc; (doc) lists all documented names.
-  Read it before guessing an argument, and again when a call comes back rejected.
-- (dump) list every global symbol · (import "path") load and eval a Lisp file.
+- (doc name) print binding's signature and doc; (doc) lists all documented
+  names. Read it before guessing an argument, and again after a rejected call.
+- (dump) list every global symbol · (import "path") load and eval Lisp file.
 
-Globals: gensym-counter, version.
+Globals: *gensym-counter*, *version*.
 
 PRELUDE STANDARD LIBRARY
 
-Everything below is available by default.
+All available by default.
 
 List access — composed car and cdr: caar cadr cdar cddr caaar caadr cadar
-caddr cdaar cdadr cddar cdddr. So cadr is the 2nd element, caddr the 3rd, and so on.
+caddr cdaar cdadr cddar cdddr. cadr is 2nd element, caddr 3rd, and so on.
 
 List building / manipulation
 - (append list...) concatenate lists, non-destructive.
-- (nreverse list) reverse destructively · (last list) last cons cell ·
+- (nreverse list) destructive reverse · (last list) last cons cell ·
 (nconc lists...) destructive concat.
-- (mapcar f list) new list of f over each element. Example:
-(mapcar (lambda (n) (n n)) '(1 2 3)) gives (1 4 9) .
-- (nth n list) the element at index n, counting from 0; nil past the end.
-- (filter f list) the elements f says yes to. Example:
+- (mapcar f list) new list of f over each element:
+(mapcar (lambda (n) (* n n)) '(1 2 3)) gives (1 4 9) .
+- (nth n list) element at index n from 0; nil past end.
+- (filter f list) elements f says yes to:
 (filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40) .
-- (reduce f list [initial]) fold left into one value: f takes the
-  accumulator and each element. Without initial the first element starts it
-  and an empty list is nil. (reduce + '(1 2 3)) is 6. The list comes
-  SECOND, the initial value last.
-- NOTE: there is no mapc, remove, elt or sort in the prelude. Build them
-  with filter, mapcar or dolist.
+- (reduce f list [initial]) fold left: f takes accumulator and element.
+  No initial: first element starts; empty list gives nil.
+  (reduce + '(1 2 3)) is 6. List SECOND, initial last.
+- No mapc, remove, elt or sort. Build with filter, mapcar or dolist.
 
 Predicates
-- (not x) and (null x) true if nil · (consp x) true if a cons ·
-(listp x) true if nil or a cons · (equal x y) deep structural equality.
+- (not x) and (null x) true if nil · (consp x) true if cons ·
+(listp x) true if nil or cons · (keywordp x) true if keyword ·
+(equal x y) deep structural equality.
 
 Membership / alists
 - (memq key list) tail from first eq match · (member key list) first equal
   match · (assq key alist) first pair with eq car · (assoc key alist) first
-  pair with equal car. Read an alist field:
+  pair with equal car. Alist field:
 (cdr (assoc "content" msg)) .
-- (get-in record key...) read through nested alists and lists in one step, with
-  every step guarded: (get-in config "server" "port") is nil when there is no
-  "server" instead of an error, so no or guard and no assoc chain.
-  A number key indexes a list — (get-in reply "results" 0 "url") — and a
-  keyword key matches the string of its name, so :port finds "port".
+- (get-in record key...) read through nested alists, keyword plists and lists,
+  every step guarded: (get-in config "server" "port") is nil when no
+  "server", not an error. No or guard, no assoc chain.
+  Number key indexes a list — (get-in reply "results" 0 "url") — keyword key
+  matches string of its name, :port finds "port". Plist key matches by name:
+(get-in '(:theme (:accent "red")) :theme :accent) gives "red" .
+
+Nested data, write side of get-in. Pure: return new copy, record unchanged.
+- (set-in record value key...) value at path. Missing key added: plist gets
+  keyword, alist gets pair; nil record becomes plist for keyword key, else alist.
+  Index replaces element, index = length appends:
+(set-in '(:theme (:accent "red")) "blue" :theme :accent) gives (:theme (:accent "blue")) .
+- (update-in record f key...) value at path becomes (f value); f gets nil when
+  path missing:
+(update-in '(:n 1) (lambda (n) (+ n 1)) :n) gives (:n 2) .
+- (remove-in record key...) drop plist key, alist pair or list index; missing
+  path gives record back:
+(remove-in '(:a 1 :b 2) :a) gives (:b 2) .
+- Edit data file: read it, set-in / update-in / remove-in, write whole value back.
 
 Control-flow macros
 - (if test then else...) · (when test body...) · (unless test body...) ·
-(and x...) , nil on first nil, else last · (or x...) , the first non-nil ·
+(and x...) , nil on first nil, else last · (or x...) , first non-nil ·
 (case key (keys forms...) ... (t default...)) — matches key by equal
-  against each clause's key list; the t clause is the default.
+  against each clause's key list; t clause is default.
 
 Binding macros
-- (let ((name val) ...) body...) parallel bindings; a bare name binds nil.
-- (let ((name val) ...) body...) sequential bindings — each val may use the
-  names bound before it, e.g.
-(let ((issue (car issues)) (state (cdr (assoc "state" issue)))) …) .
-- (letrec ((name val) ...) body...) bindings may reference each other — use for
-  local recursive functions.
+- (let ((name val) ...) body...) parallel bindings; bare name binds nil.
+- (let* ((name val) ...) body...) sequential; each val may use earlier names:
+(let* ((issue (car issues)) (state (cdr (assoc "state" issue)))) …) .
+- (letrec ((name val) ...) body...) bindings reference each other — local
+  recursive functions.
 
-Loops, and they support (break) and (return value)
+Loops, all support (break) and (return value)
 - (while test body...) .
 - (dolist (name list [result]) body...) iterate elements.
 - (dotimes (name count [result]) body...) iterate 0..count-1.
 
 Defining
-- (defun name (args...) [doc] body...) define a function; &rest x for variadic.
-- &key after the required arguments makes the ones that follow optional, and
-  nameable: (defun kpi (&key label value unit) ...) is called as
+- (defun name (args...) [doc] body...) define function; &rest x variadic.
+- &key after required args makes the rest optional and nameable:
+  (defun kpi (&key label value unit) ...) is called as
 (kpi "Revenue" 42000) or (kpi :label "Revenue" :value 42000 :unit "USD") .
-  Filling runs left to right until the first keyword; one not given is nil.
+  Filled left to right until first keyword; missing one is nil.
   &key and &rest cannot both appear.
-- (defmacro name (args...) [doc] body...) define a macro.
+- (defmacro name (args...) [doc] body...) define macro.
 
 Strings
-- (string= s1 s2) content equality for strings, the same test equal makes ·
+- (string= s1 s2) string content equality, same test as equal ·
 (substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
-(string-index s sub [start]) giving an index or nil · (string-contains? s sub) ·
+(string-index s sub [start]) index or nil · (string-contains? s sub) ·
 (string-count s sub) · (string-replace s old new) ·
-(string-split s sep) , where an empty sep gives characters · (string-join list sep) ·
+(string-split s sep) , empty sep gives characters · (string-join list sep) ·
 (string-trim s) .
-- (format template arg...) fill a template and return the string: ~a inserts the
-  next argument the way string would, ~% a newline, ~~ a tilde, and the letter
-  is case-insensitive. (format "The sum was ~a" n) is the way to write a
-  sentence around a value; it prints nothing, so echo the result.
+- (format template arg...) fill template, return string: ~a inserts next arg
+  as string would, ~% newline, ~~ tilde; letter case-insensitive.
+  (format "The sum was ~a" n) writes a sentence around a value. Prints
+  nothing: echo result.
 
 Misc
 - (identity x) return x.
-- (think part...) echo reasoning as narration: parts print literally, but a
-  ,x part is evaluated first, e.g. (think "sum is" ,(+ 1 2)) . Returns nil;
-  put the real answer in a separate expression.
+- (think part...) echo reasoning as narration: parts print literally, ,x part
+  evaluated first, e.g. (think "sum is" ,(+ 1 2)) . Returns nil; real answer
+  goes in separate expression.
 
 MACROS
 
-The defmacro form defines a compile-time transformer. Build the expansion with
-quasiquote:
+defmacro defines compile-time transformer. Build expansion with quasiquote:
 
 (defmacro swap (a b)
-  (let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
+  (let ((tmp (gensym)))
+    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))
 
-Use (gensym) for temporaries you introduce, to avoid capturing user variables.
-Macros expand up to 20 nesting levels at compile time.
+(gensym) for temporaries you introduce, so user variables are not captured.
+Expansion depth max 20 nesting levels at compile time.
 
 ERRORS & CONTROL FLOW
 
-- (error value) raises; value can be any Lisp value, often a string.
+- (error value) raises; value any Lisp value, often string.
 - (try
   expr
   (catch (e)
-    handler...)) evaluates expr; if it raises, e is bound
-  to the raised value and the handler runs. This is the ONLY error mechanism —
-  there is no condition system, no unwind-protect.
+    handler...)) evaluates expr; on raise, e bound to raised value, handler
+  runs. ONLY error mechanism — no condition system, no unwind-protect.
 
 (try
-  (/ 1 0)
+  (error "boom")
   (catch (e)
     (concat "failed: " e)))
 
-- (break) and (return value) escape the nearest while, dolist or dotimes.
-  Using them outside a loop is an error.
+- (break) and (return value) escape nearest while, dolist or dotimes. Outside
+  a loop: error.
 
 GOTCHAS
 
-- Only nil is false — 0, 0.0 and "" are all TRUE.
-- Integer division: / gives a float; use truncate for an exact integer.
-- Integer vs float shows in output as 3 vs 3.0.
-- No reduce, filter, mapc or math library — write them or use mapcar, dolist or
+- Only nil is false — 0, 0.0, "" all TRUE.
+- / gives float; truncate for exact integer.
+- Output shows 3 vs 3.0.
+- No mapc or math library — write them with reduce, filter, mapcar, dolist or
   recursion.
-- The read built-in parses LISP text, json-parse parses JSON. Calling read on
-  JSON does not error, it returns junk.
-- JSON numbers come back as floats, so an integer id prints as 7.0; = and
-  eql still compare it equal to 7.
-- No character type: chars are one-character strings.
-- No comment syntax: remarks go in the prose around the forms, never inside one.
-- There is no print, princ, terpri or view — echo does all of it.
-- A hash-and-angle-brackets printout — of a closure, of a live value the reader
-  cannot read back — is a printout, not syntax, so typing one is always an
-  error. Use the name the value was reported under.
+- read parses LISP, json-parse parses JSON. read on JSON returns junk, no error.
+- JSON numbers are floats: integer id prints 7.0; = and eql still equal 7.
+- No character type: one-character strings.
+- No comment syntax: remarks in prose around forms, never inside one.
+- No print, princ, terpri or view — echo does all.
+- Hash-and-angle-brackets printout — closure, live value reader cannot read
+  back — is printout, not syntax; typing one always errors. Use the name the
+  value was reported under.

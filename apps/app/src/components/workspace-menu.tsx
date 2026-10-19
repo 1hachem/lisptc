@@ -1,4 +1,6 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import {
@@ -82,66 +84,79 @@ export function WorkspaceMenu() {
 
 	return (
 		<>
-			<DropdownMenu>
-				<DropdownMenuTrigger className="mx-1.5 flex cursor-pointer items-baseline gap-2 bg-bg2 px-2.5 py-1 text-left text-[11.5px] text-dim hover:text-fg">
-					<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-						{workspace?.name ?? "…"}
-					</span>
-					<span className="flex-none">▾</span>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					align="start"
-					sideOffset={2}
-					className="min-w-[calc(var(--radix-dropdown-menu-trigger-width)/var(--app-zoom))] rounded-none border-bg2 bg-bg1 p-0 text-[11.5px] shadow-none"
-				>
-					{workspaces.map((candidate) => (
-						<DropdownMenuItem
-							key={candidate._id}
-							onSelect={() => void open(candidate._id)}
-							className={item}
-						>
-							<span className="truncate">{candidate.name}</span>
-						</DropdownMenuItem>
-					))}
-					<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
-					<DropdownMenuItem
-						onSelect={() => {
-							setName("");
-							setEditing("create");
-						}}
-						className={item}
+			<div className="mx-1.5 flex items-stretch gap-[3px]">
+				<DropdownMenu>
+					<DropdownMenuTrigger className="flex min-w-0 flex-1 cursor-pointer items-baseline gap-2 bg-bg2 px-2.5 py-1 text-left text-[11.5px] text-dim hover:text-fg">
+						<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+							{workspace?.name ?? "…"}
+						</span>
+						<span className="flex-none">▾</span>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent
+						align="start"
+						sideOffset={2}
+						className="min-w-[calc(var(--radix-dropdown-menu-trigger-width)/var(--app-zoom))] rounded-none border-bg2 bg-bg1 p-0 text-[11.5px] shadow-none"
 					>
-						new workspace
-					</DropdownMenuItem>
-					{workspace && (
-						<>
+						{workspaces.map((candidate) => (
 							<DropdownMenuItem
-								onSelect={() => {
-									setName(workspace.name);
-									setEditing("rename");
-								}}
+								key={candidate._id}
+								onSelect={() => void open(candidate._id)}
 								className={item}
 							>
-								rename workspace
+								<span className="truncate">{candidate.name}</span>
 							</DropdownMenuItem>
-							<ConfirmItem
-								label="delete workspace"
-								confirm="delete it and every session?"
-								className={`${item} focus:text-red`}
-								onConfirm={() => {
-									attempt(async () => {
-										const landing = await removeWorkspace({
-											workspaceId: workspace._id,
+						))}
+						<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
+						<DropdownMenuItem
+							onSelect={() => {
+								setName("");
+								setEditing("create");
+							}}
+							className={item}
+						>
+							new workspace
+						</DropdownMenuItem>
+						{workspace && (
+							<>
+								<DropdownMenuItem
+									onSelect={() => {
+										setName(workspace.name);
+										setEditing("rename");
+									}}
+									className={item}
+								>
+									rename workspace
+								</DropdownMenuItem>
+								<ConfirmItem
+									label="delete workspace"
+									confirm="delete it and every session?"
+									className={`${item} focus:text-red`}
+									onConfirm={() => {
+										attempt(async () => {
+											const landing = await removeWorkspace({
+												workspaceId: workspace._id,
+											});
+											await refresh();
+											await open(landing);
 										});
-										await refresh();
-										await open(landing);
-									});
-								}}
-							/>
-						</>
-					)}
-				</DropdownMenuContent>
-			</DropdownMenu>
+									}}
+								/>
+							</>
+						)}
+					</DropdownMenuContent>
+				</DropdownMenu>
+				<button
+					type="button"
+					title="new workspace"
+					onClick={() => {
+						setName("");
+						setEditing("create");
+					}}
+					className="flex flex-none cursor-pointer items-center bg-bg2 px-2 text-dim hover:text-fg"
+				>
+					<HugeiconsIcon className="size-icon-sm" icon={Add01Icon} />
+				</button>
+			</div>
 			{failure && (
 				<div className="px-2.5 py-1 text-[11px] text-red">{failure}</div>
 			)}

@@ -10,6 +10,7 @@ import {
 } from "../src/lisp.ts";
 import { Cell, Keyword, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
+import { LispPromise } from "../src/promise.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
@@ -58,6 +59,75 @@ describe("extensions", () => {
 	});
 });
 
+describe("the language reference", () => {
+	it("documents multiplication", () => {
+		expect(LANGUAGE_REFERENCE).toContain("(* n...) product, 1 if none");
+	});
+
+	it.each([
+		["(* 2 3)", "6"],
+		["(* 2 3.0)", "6.0"],
+	])("shows %s is %s, and it is", (form, value) => {
+		expect(LANGUAGE_REFERENCE).toContain(`${form} is ${value}`);
+		expect(ev(form)).toBe(value);
+	});
+
+	it("shows a mapcar that squares", () => {
+		const form = "(mapcar (lambda (n) (* n n)) '(1 2 3))";
+		expect(LANGUAGE_REFERENCE).toContain(`${form} gives (1 4 9)`);
+		expect(ev(form)).toBe("(1 4 9)");
+	});
+
+	it.each([
+		[`(get-in '(:theme (:accent "red")) :theme :accent)`, '"red"'],
+		[
+			`(set-in '(:theme (:accent "red")) "blue" :theme :accent)`,
+			'(:theme (:accent "blue"))',
+		],
+		["(update-in '(:n 1) (lambda (n) (+ n 1)) :n)", "(:n 2)"],
+		["(remove-in '(:a 1 :b 2) :a)", "(:b 2)"],
+	])("shows %s gives %s, and it does", (form, value) => {
+		expect(LANGUAGE_REFERENCE).toContain(`${form} gives ${value}`);
+		expect(ev(form)).toBe(value);
+	});
+
+	it("names let* as the sequential binding", () => {
+		expect(LANGUAGE_REFERENCE).toContain(
+			"(let* ((name val) ...) body...) sequential",
+		);
+		expect(ev("(let* ((a 1) (b (+ a 1))) b)")).toBe("2");
+	});
+
+	it("names the earmuffed globals that exist", () => {
+		expect(LANGUAGE_REFERENCE).toContain(
+			"Globals: *gensym-counter*, *version*.",
+		);
+		expect(() => ev("*gensym-counter*")).not.toThrow();
+		expect(() => ev("*version*")).not.toThrow();
+	});
+
+	it("shows a swap that quasiquotes a gensym temporary", () => {
+		const swap =
+			"(defmacro swap (a b)\n  (let ((tmp (gensym)))\n    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))";
+		expect(LANGUAGE_REFERENCE).toContain(swap);
+		const interp = freshInterp();
+		runSync(interp, swap);
+		expect(ev("(let ((x 1) (y 2)) (swap x y) (list x y))", interp)).toBe(
+			"(2 1)",
+		);
+		expect(ev("(let ((tmp 1) (x 2)) (swap tmp x) (list tmp x))", interp)).toBe(
+			"(2 1)",
+		);
+	});
+
+	it("shows a try whose handler runs", () => {
+		expect(LANGUAGE_REFERENCE).toContain('(try\n  (error "boom")');
+		expect(ev('(try (error "boom") (catch (e) (concat "failed: " e)))')).toBe(
+			'"failed: boom"',
+		);
+	});
+});
+
 describe("builtin kinds", () => {
 	it("watches the promise a promise builtin returns", async () => {
 		const interp = freshInterp();
@@ -70,9 +140,9 @@ describe("builtin kinds", () => {
 			async ([x]) => x,
 		);
 		const { value } = await runAsync(interp, "(later 5)");
-		expect(value).toBeInstanceOf(Promise);
+		expect(value).toBeInstanceOf(LispPromise);
 		expect(await value).toBe(5n);
-		expect(interp.async.stateOf(value as Promise<unknown>)).toBe("fulfilled");
+		expect(interp.async.stateOf(value as LispPromise)).toBe("fulfilled");
 		expect(interp.docs().get("later")?.signature).toBe("(later x)");
 	});
 

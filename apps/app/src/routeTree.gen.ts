@@ -18,10 +18,16 @@ import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
-import { Route as AuthedWorkspaceIdChatIdRouteImport } from './routes/_authed/$workspaceId/$chatId'
+import { Route as AuthedWorkspaceIdAccountRouteImport } from './routes/_authed/$workspaceId/account'
+import { Route as AuthedWorkspaceIdPreferencesRouteImport } from './routes/_authed/$workspaceId/preferences'
+import { Route as AuthedWorkspaceIdReadmeRouteImport } from './routes/_authed/$workspaceId/readme'
+import { Route as AuthedWorkspaceIdSettingsRouteImport } from './routes/_authed/$workspaceId/settings'
 import { Route as ApiChatEvalRouteImport } from './routes/api.chat.eval'
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
 import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
+import { Route as AuthedWorkspaceIdChatChatIdRouteImport } from './routes/_authed/$workspaceId/chat/$chatId'
+import { Route as AuthedWorkspaceIdMemoriesKeyRouteImport } from './routes/_authed/$workspaceId/memories/$key'
+import { Route as AuthedWorkspaceIdPermissionsRuleRouteImport } from './routes/_authed/$workspaceId/permissions/$rule'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -67,11 +73,29 @@ const AuthedWorkspaceIdIndexRoute = AuthedWorkspaceIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
-const AuthedWorkspaceIdChatIdRoute = AuthedWorkspaceIdChatIdRouteImport.update({
-  id: '/$chatId',
-  path: '/$chatId',
+const AuthedWorkspaceIdAccountRoute =
+  AuthedWorkspaceIdAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
+const AuthedWorkspaceIdPreferencesRoute =
+  AuthedWorkspaceIdPreferencesRouteImport.update({
+    id: '/preferences',
+    path: '/preferences',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
+const AuthedWorkspaceIdReadmeRoute = AuthedWorkspaceIdReadmeRouteImport.update({
+  id: '/readme',
+  path: '/readme',
   getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
+const AuthedWorkspaceIdSettingsRoute =
+  AuthedWorkspaceIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
 const ApiChatEvalRoute = ApiChatEvalRouteImport.update({
   id: '/eval',
   path: '/eval',
@@ -87,6 +111,24 @@ const ApiOauthCallbackRoute = ApiOauthCallbackRouteImport.update({
   path: '/api/oauth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedWorkspaceIdChatChatIdRoute =
+  AuthedWorkspaceIdChatChatIdRouteImport.update({
+    id: '/chat/$chatId',
+    path: '/chat/$chatId',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
+const AuthedWorkspaceIdMemoriesKeyRoute =
+  AuthedWorkspaceIdMemoriesKeyRouteImport.update({
+    id: '/memories/$key',
+    path: '/memories/$key',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
+const AuthedWorkspaceIdPermissionsRuleRoute =
+  AuthedWorkspaceIdPermissionsRuleRouteImport.update({
+    id: '/permissions/$rule',
+    path: '/permissions/$rule',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
@@ -96,11 +138,17 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
-  '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
+  '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
+  '/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
+  '/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
   '/api/chat/eval': typeof ApiChatEvalRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
+  '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
+  '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
+  '/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
 export interface FileRoutesByTo {
   '/health': typeof HealthRoute
@@ -109,11 +157,17 @@ export interface FileRoutesByTo {
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/': typeof AuthedIndexRoute
-  '/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
+  '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
+  '/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
+  '/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
   '/api/chat/eval': typeof ApiChatEvalRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
+  '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
+  '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
+  '/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,11 +179,17 @@ export interface FileRoutesById {
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/_authed/': typeof AuthedIndexRoute
-  '/_authed/$workspaceId/$chatId': typeof AuthedWorkspaceIdChatIdRoute
+  '/_authed/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
+  '/_authed/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
+  '/_authed/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
+  '/_authed/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
   '/api/chat/eval': typeof ApiChatEvalRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
+  '/_authed/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
+  '/_authed/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
+  '/_authed/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,11 +201,17 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/ui-action'
     | '/oauth/callback'
-    | '/$workspaceId/$chatId'
+    | '/$workspaceId/account'
+    | '/$workspaceId/preferences'
+    | '/$workspaceId/readme'
+    | '/$workspaceId/settings'
     | '/api/chat/eval'
     | '/api/chat/steer'
     | '/api/oauth/callback'
     | '/$workspaceId/'
+    | '/$workspaceId/chat/$chatId'
+    | '/$workspaceId/memories/$key'
+    | '/$workspaceId/permissions/$rule'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/health'
@@ -154,11 +220,17 @@ export interface FileRouteTypes {
     | '/api/ui-action'
     | '/oauth/callback'
     | '/'
-    | '/$workspaceId/$chatId'
+    | '/$workspaceId/account'
+    | '/$workspaceId/preferences'
+    | '/$workspaceId/readme'
+    | '/$workspaceId/settings'
     | '/api/chat/eval'
     | '/api/chat/steer'
     | '/api/oauth/callback'
     | '/$workspaceId'
+    | '/$workspaceId/chat/$chatId'
+    | '/$workspaceId/memories/$key'
+    | '/$workspaceId/permissions/$rule'
   id:
     | '__root__'
     | '/_authed'
@@ -169,11 +241,17 @@ export interface FileRouteTypes {
     | '/api/ui-action'
     | '/oauth/callback'
     | '/_authed/'
-    | '/_authed/$workspaceId/$chatId'
+    | '/_authed/$workspaceId/account'
+    | '/_authed/$workspaceId/preferences'
+    | '/_authed/$workspaceId/readme'
+    | '/_authed/$workspaceId/settings'
     | '/api/chat/eval'
     | '/api/chat/steer'
     | '/api/oauth/callback'
     | '/_authed/$workspaceId/'
+    | '/_authed/$workspaceId/chat/$chatId'
+    | '/_authed/$workspaceId/memories/$key'
+    | '/_authed/$workspaceId/permissions/$rule'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -251,11 +329,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdIndexRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
-    '/_authed/$workspaceId/$chatId': {
-      id: '/_authed/$workspaceId/$chatId'
-      path: '/$chatId'
-      fullPath: '/$workspaceId/$chatId'
-      preLoaderRoute: typeof AuthedWorkspaceIdChatIdRouteImport
+    '/_authed/$workspaceId/account': {
+      id: '/_authed/$workspaceId/account'
+      path: '/account'
+      fullPath: '/$workspaceId/account'
+      preLoaderRoute: typeof AuthedWorkspaceIdAccountRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
+    '/_authed/$workspaceId/preferences': {
+      id: '/_authed/$workspaceId/preferences'
+      path: '/preferences'
+      fullPath: '/$workspaceId/preferences'
+      preLoaderRoute: typeof AuthedWorkspaceIdPreferencesRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
+    '/_authed/$workspaceId/readme': {
+      id: '/_authed/$workspaceId/readme'
+      path: '/readme'
+      fullPath: '/$workspaceId/readme'
+      preLoaderRoute: typeof AuthedWorkspaceIdReadmeRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
+    '/_authed/$workspaceId/settings': {
+      id: '/_authed/$workspaceId/settings'
+      path: '/settings'
+      fullPath: '/$workspaceId/settings'
+      preLoaderRoute: typeof AuthedWorkspaceIdSettingsRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
     '/api/chat/eval': {
@@ -279,18 +378,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/$workspaceId/chat/$chatId': {
+      id: '/_authed/$workspaceId/chat/$chatId'
+      path: '/chat/$chatId'
+      fullPath: '/$workspaceId/chat/$chatId'
+      preLoaderRoute: typeof AuthedWorkspaceIdChatChatIdRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
+    '/_authed/$workspaceId/memories/$key': {
+      id: '/_authed/$workspaceId/memories/$key'
+      path: '/memories/$key'
+      fullPath: '/$workspaceId/memories/$key'
+      preLoaderRoute: typeof AuthedWorkspaceIdMemoriesKeyRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
+    '/_authed/$workspaceId/permissions/$rule': {
+      id: '/_authed/$workspaceId/permissions/$rule'
+      path: '/permissions/$rule'
+      fullPath: '/$workspaceId/permissions/$rule'
+      preLoaderRoute: typeof AuthedWorkspaceIdPermissionsRuleRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
   }
 }
 
 interface AuthedWorkspaceIdRouteRouteChildren {
-  AuthedWorkspaceIdChatIdRoute: typeof AuthedWorkspaceIdChatIdRoute
+  AuthedWorkspaceIdAccountRoute: typeof AuthedWorkspaceIdAccountRoute
+  AuthedWorkspaceIdPreferencesRoute: typeof AuthedWorkspaceIdPreferencesRoute
+  AuthedWorkspaceIdReadmeRoute: typeof AuthedWorkspaceIdReadmeRoute
+  AuthedWorkspaceIdSettingsRoute: typeof AuthedWorkspaceIdSettingsRoute
   AuthedWorkspaceIdIndexRoute: typeof AuthedWorkspaceIdIndexRoute
+  AuthedWorkspaceIdChatChatIdRoute: typeof AuthedWorkspaceIdChatChatIdRoute
+  AuthedWorkspaceIdMemoriesKeyRoute: typeof AuthedWorkspaceIdMemoriesKeyRoute
+  AuthedWorkspaceIdPermissionsRuleRoute: typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
 
 const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
   {
-    AuthedWorkspaceIdChatIdRoute: AuthedWorkspaceIdChatIdRoute,
+    AuthedWorkspaceIdAccountRoute: AuthedWorkspaceIdAccountRoute,
+    AuthedWorkspaceIdPreferencesRoute: AuthedWorkspaceIdPreferencesRoute,
+    AuthedWorkspaceIdReadmeRoute: AuthedWorkspaceIdReadmeRoute,
+    AuthedWorkspaceIdSettingsRoute: AuthedWorkspaceIdSettingsRoute,
     AuthedWorkspaceIdIndexRoute: AuthedWorkspaceIdIndexRoute,
+    AuthedWorkspaceIdChatChatIdRoute: AuthedWorkspaceIdChatChatIdRoute,
+    AuthedWorkspaceIdMemoriesKeyRoute: AuthedWorkspaceIdMemoriesKeyRoute,
+    AuthedWorkspaceIdPermissionsRuleRoute:
+      AuthedWorkspaceIdPermissionsRuleRoute,
   }
 
 const AuthedWorkspaceIdRouteRouteWithChildren =

@@ -1,12 +1,22 @@
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalMutation, mutation, query } from "./_generated/server.js";
-import { requireChat } from "./lib/auth.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
+import {
+	internalMutation,
+	type MutationCtx,
+	mutation,
+	query,
+} from "./_generated/server.js";
+import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
+import { waitsOnUser } from "./lib/waiting.js";
+import { collect, layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
+
+const MAX_SENT = 200;
 
 const PURGE_BATCH = 256;
 
@@ -21,6 +31,7 @@ const message = v.object({
 	kwargs: v.optional(v.record(v.string(), v.any())),
 	truncated: v.optional(v.boolean()),
 	wireId: v.optional(v.string()),
+	layerId: v.optional(v.id("replLayers")),
 });
 
 const incoming = v.object({
@@ -60,6 +71,42 @@ export const transcript = query({
 	},
 });
 
+export const sent = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.array(v.string()),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const rows = await ctx.db
+			.query("messages")
+			.withIndex("by_workspace_type", (q) =>
+				q.eq("workspaceId", workspaceId).eq("type", "human"),
+			)
+			.order("desc")
+			.take(MAX_SENT);
+		return rows.reverse().map((row) => row.content);
+	},
+});
+
+async function layersOf(
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+	messages: { id?: string }[],
+): Promise<(Id<"replLayers"> | undefined)[]> {
+	const repl = chat.replId === undefined ? null : await ctx.db.get(chat.replId);
+	if (repl === null) return messages.map(() => undefined);
+	const own = await Promise.all(
+		messages.map((m) =>
+			m.id === undefined ? null : layerFor(ctx, repl._id, m.id),
+		),
+	);
+	const first = own.find((layer): layer is Doc<"replLayers"> => layer !== null);
+	let head = first === undefined ? repl.head : first.parent;
+	return own.map((layer) => {
+		if (layer !== null) head = layer._id;
+		return head;
+	});
+}
+
 export const append = mutation({
 	args: { chatId: v.id("chats"), messages: v.array(incoming) },
 	returns: v.array(v.id("messages")),
@@ -71,8 +118,9 @@ export const append = mutation({
 			.order("desc")
 			.first();
 		let seq = last === null ? 0 : last.seq + 1;
+		const layers = await layersOf(ctx, chat, messages);
 		const ids = [];
-		for (const entry of messages) {
+		for (const [at, entry] of messages.entries()) {
 			const clamped = clamp(entry.content, entry.kwargs);
 			ids.push(
 				await ctx.db.insert("messages", {
@@ -84,6 +132,7 @@ export const append = mutation({
 					kwargs: clamped.kwargs,
 					truncated: clamped.truncated ? true : undefined,
 					wireId: entry.id,
+					layerId: layers[at],
 				}),
 			);
 			seq += 1;
@@ -101,7 +150,7 @@ export const annotate = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { chatId, id, kwargs }) => {
-		await requireChat(ctx, chatId);
+		const { chat } = await requireChat(ctx, chatId);
 		const row = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
@@ -113,6 +162,8 @@ export const annotate = mutation({
 			kwargs: clamped.kwargs,
 			truncated: clamped.truncated || row.truncated ? true : undefined,
 		});
+		if (chat.status === "waiting" && !(await waitsOnUser(ctx, chatId)))
+			await ctx.db.patch(chatId, { status: undefined });
 		return null;
 	},
 });
@@ -145,6 +196,8 @@ export const purge = internalMutation({
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
 			.take(PURGE_BATCH);
 		for (const message of messages) await ctx.db.delete(message._id);
+		const layers = new Set(messages.map((message) => message.layerId));
+		for (const layerId of layers) await collect(ctx, layerId);
 		if (messages.length === PURGE_BATCH) {
 			await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
 		}

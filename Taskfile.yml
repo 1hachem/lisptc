@@ -40,16 +40,16 @@ tasks:
           CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
 
   up:convex:
-    desc: start postgres and the convex backend in the background and wait until they are healthy
+    desc: start postgres and the convex backend in the background, seed and deploy the functions, and wait until they are done
     cmds:
       - task: _infisical-run
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: "docker compose up -d --wait convex-backend"
+          CMD: "docker compose up -d --wait convex-backend && docker compose run --rm --build convex-deploy"
 
-  up:prod:
-    desc: build and start the whole stack from its production images
+  up:prod-local:
+    desc: build the production images and run them locally, against the dev secrets unless ENV says otherwise
     cmds:
       - task: _infisical-run
         vars:
@@ -68,13 +68,13 @@ tasks:
           CMD: "docker compose down {{.CLI_ARGS}}"
 
   convex:push:
-    desc: push the convex functions and schema to the running deployment, once
+    desc: push the convex functions and schema to the local dev deployment, once (production releases through the cluster's convex-deploy Job)
     cmds:
       - task: _infisical-run
         vars:
-          ENV: '{{.ENV | default "dev"}}'
+          ENV: dev
           PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend exec convex dev --once"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
     desc: regenerate convex/_generated against the local deployment, without pushing
@@ -87,13 +87,13 @@ tasks:
           CMD: "pnpm --filter @repo/backend exec convex codegen --typecheck disable"
 
   convex:dev:
-    desc: watch convex/ and push the functions on every save
+    desc: watch convex/ and push the functions to the local dev deployment on every save
     cmds:
       - task: _infisical-run
         vars:
-          ENV: '{{.ENV | default "dev"}}'
+          ENV: dev
           PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend dev"
+          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
 
   r2:
     desc: sync .r2 with the bucket (pull, push or sync; raw captures stay local)

@@ -1,4 +1,4 @@
-import { useConvexMutation } from "@convex-dev/react-query";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import {
 	type ModelChoice,
@@ -12,6 +12,7 @@ import {
 	PROVIDER_NAMES,
 	type ProviderName,
 } from "@repo/shared/providers";
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useState } from "react";
 import { useWorkspace } from "./workspace.tsx";
 
@@ -29,18 +30,7 @@ const providers: ProviderOption[] = PROVIDER_NAMES.map((id) => ({
 
 interface ModelPicker {
 	choice: ModelChoice;
-	modelName: string;
-	providerName: string;
 	openModelPicker: () => void;
-}
-
-function namesOf(choice: ModelChoice) {
-	const provider = providers.find((p) => p.id === choice.provider);
-	return {
-		modelName:
-			provider?.models.find((m) => m.id === choice.model)?.name ?? choice.model,
-		providerName: provider?.name ?? choice.provider,
-	};
 }
 
 const ModelPickerContext = createContext<ModelPicker | null>(null);
@@ -51,15 +41,14 @@ export function ModelPickerProvider({
 	children: React.ReactNode;
 }) {
 	const { workspace } = useWorkspace();
+	const queryClient = useQueryClient();
 	const setModel = useConvexMutation(api.workspaces.setModel);
 	const [open, setOpen] = useState(false);
 	const choice = workspace?.model ?? DEFAULT_CHOICE;
 	const openModelPicker = useCallback(() => setOpen(true), []);
 
 	return (
-		<ModelPickerContext.Provider
-			value={{ choice, ...namesOf(choice), openModelPicker }}
-		>
+		<ModelPickerContext.Provider value={{ choice, openModelPicker }}>
 			{children}
 			{workspace && (
 				<WorkspaceModelDialog
@@ -67,6 +56,9 @@ export function ModelPickerProvider({
 					onSelect={async (model) => {
 						if (!isCatalogued(model)) throw new Error("model not offered");
 						await setModel({ workspaceId: workspace._id, model });
+						await queryClient.invalidateQueries(
+							convexQuery(api.workspaces.list, {}),
+						);
 					}}
 					open={open}
 					providers={providers}

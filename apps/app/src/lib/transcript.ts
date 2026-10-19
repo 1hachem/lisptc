@@ -1,6 +1,5 @@
 import {
 	type ChatMessage,
-	isGreetingMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
@@ -8,6 +7,7 @@ import {
 	toolResult,
 	toolUi,
 } from "./chat.tsx";
+import { isGreetingMessage } from "./greeting.ts";
 import { toUiNode, uiText } from "./ui-node.ts";
 
 function section(label: string, body: string): string | null {

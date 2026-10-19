@@ -7,7 +7,8 @@ import { introspectionHost } from "@repo/introspection-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
-import { mcpHost } from "@repo/mcp-extension/mcp-host";
+import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { FileOAuthStore } from "@repo/mcp-extension/oauth-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { promisesExtension } from "@repo/promises-extension";
@@ -24,7 +25,7 @@ export function newRepl(): MemoryRepl {
 			secretsExtension(secretsHost),
 			promisesExtension(promisesHost),
 			introspectionExtension(introspectionHost),
-			mcpExtension(mcpHost),
+			mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
 			llmExtension(llmHost),
 			compactionExtension(compactionHost),
 			memoryExtension(memoryHost),

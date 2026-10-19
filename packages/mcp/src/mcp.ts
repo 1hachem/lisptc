@@ -7,7 +7,7 @@ import {
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
-import type { Interp } from "@repo/interpreter/lisp";
+import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -20,6 +20,7 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { keyName, parsePlist } from "@repo/interpreter/plist";
+import type { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
@@ -144,11 +145,73 @@ const zName = z
 	)
 	.transform((x) => asName(x));
 
-interface ServerRec {
-	name: string;
-	serverId: string;
-	toolSyms: Sym[];
-	tools: Map<string, Tool>;
+interface ServerEntry {
+	readonly name: string;
+	readonly serverId: string;
+	readonly state: "loaded" | "dormant" | "failed";
+	readonly reason?: string;
+	readonly tools: readonly Tool[];
+	readonly args: List;
+}
+
+type Servers = State<ServerEntry[]>;
+
+const TOOL_TAG = "mcp/tool";
+
+interface ToolRef {
+	readonly server: string;
+	readonly tool: string;
+}
+
+function field(alist: unknown, key: string): unknown {
+	for (let j = alist as List; j !== null; j = j.cdr as List) {
+		const pair = j.car;
+		if (pair instanceof Cell && pair.car === key) return pair.cdr;
+	}
+	return null;
+}
+
+const serverCodec: StateCodec<ServerEntry[]> = {
+	toLisp: (entries) =>
+		arrayToList(
+			entries.map(
+				(entry) =>
+					new Cell(
+						new Cell("args", entry.args),
+						jsonToLisp({
+							name: entry.name,
+							"server-id": entry.serverId,
+							state: entry.state,
+							reason: entry.reason ?? null,
+							tools: JSON.stringify(entry.tools),
+						}),
+					),
+			),
+		),
+	fromLisp: (list) =>
+		listToArray(list as List).map((alist) => {
+			const reason = field(alist, "reason");
+			return {
+				name: field(alist, "name") as string,
+				serverId: field(alist, "server-id") as string,
+				state: field(alist, "state") as ServerEntry["state"],
+				reason: typeof reason === "string" ? reason : undefined,
+				tools: JSON.parse(field(alist, "tools") as string) as Tool[],
+				args: field(alist, "args") as List,
+			};
+		}),
+};
+
+function entryOf(servers: Servers, name: string): ServerEntry | undefined {
+	return servers.get().find((entry) => entry.name === name);
+}
+
+function statusOf(servers: Servers, name: string): LispKeyword {
+	return newLispKeyword(entryOf(servers, name)?.state ?? "unloaded");
+}
+
+function toolSyms(entry: ServerEntry): Sym[] {
+	return entry.tools.map((tool) => newSym(`${entry.name}/${tool.name}`));
 }
 
 export interface McpExtensionHost {
@@ -370,15 +433,17 @@ const LOAD_MCP_ARGS: DocArg[] = [
 function doUnload(
 	interp: Interp,
 	client: McpClient,
-	servers: Map<string, ServerRec>,
+	servers: Servers,
 	name: string,
 ): Sym[] {
-	const rec = servers.get(name);
-	if (!rec) throw new EvalException("MCP server not loaded", name, false);
-	void client.disconnect(rec.serverId).catch(() => {});
-	for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
-	servers.delete(name);
-	return rec.toolSyms;
+	const entry = entryOf(servers, name);
+	if (!entry) throw new EvalException("MCP server not loaded", name, false);
+	if (entry.state === "loaded")
+		void client.disconnect(entry.serverId).catch(() => {});
+	const syms = toolSyms(entry);
+	for (const sym of syms) interp.undefineGlobal(sym);
+	servers.set(servers.get().filter((e) => e.name !== name));
+	return syms;
 }
 
 function serverOf(error: EvalException): string | undefined {
@@ -393,52 +458,16 @@ function serverOf(error: EvalException): string | undefined {
 function notLoaded(
 	error: EvalException,
 	predefined: Map<string, ConnConfig>,
-	servers: Map<string, ServerRec>,
+	servers: Servers,
 ): string | undefined {
 	const server = serverOf(error);
-	if (server === undefined || servers.has(server) || !predefined.has(server))
+	if (
+		server === undefined ||
+		entryOf(servers, server) !== undefined ||
+		!predefined.has(server)
+	)
 		return undefined;
 	return `${String(error)}\n${server} is in the toolkit and not loaded: (load-mcp "${server}")`;
-}
-
-function installServer(
-	interp: Interp,
-	client: McpClient,
-	servers: Map<string, ServerRec>,
-	name: string,
-	res: ConnectResult,
-	policy: McpPolicy,
-): List {
-	const rec: ServerRec = {
-		name,
-		serverId: res.serverId,
-		toolSyms: [],
-		tools: new Map(),
-	};
-	for (const tool of res.tools) {
-		rec.tools.set(tool.name, tool);
-		const sym = newSym(`${name}/${tool.name}`);
-		const wrapper = interp.makeBuiltIn(sym.name, -1, (f: unknown[]) => {
-			admitServer(policy, name);
-			if (!policy.tool(name, tool.name))
-				throw new EvalException("unknown MCP tool", sym.name, false);
-			const args = plistToJson(f[0] as List);
-			validate(tool, args);
-			return withTimeout(
-				client.callTool({ serverId: rec.serverId, tool: tool.name, args }),
-				CALL_TIMEOUT_MS,
-				sym.name,
-			).then(jsonToLisp);
-		});
-		interp.defineGlobal(sym, wrapper, {
-			signature: toolSignature(sym.name, tool),
-			doc: toolDocBody(tool) || "MCP tool (no description provided).",
-			args: toolArgs(tool),
-		});
-		rec.toolSyms.push(sym);
-	}
-	servers.set(name, rec);
-	return arrayToList(toolRows(rec, policy));
 }
 
 function admitServer(policy: McpPolicy, name: string): void {
@@ -455,28 +484,109 @@ function admitServer(policy: McpPolicy, name: string): void {
 		);
 }
 
-function shownTools(rec: ServerRec, policy: McpPolicy): Sym[] {
-	if (policy.server(rec.name).access !== "open") return [];
-	return rec.toolSyms.filter((sym) =>
-		policy.tool(rec.name, sym.name.slice(rec.name.length + 1)),
+function shownTools(entry: ServerEntry, policy: McpPolicy): readonly Tool[] {
+	if (policy.server(entry.name).access !== "open") return [];
+	return entry.tools.filter((tool) => policy.tool(entry.name, tool.name));
+}
+
+interface Wiring {
+	readonly interp: Interp;
+	readonly client: McpClient;
+	readonly servers: Servers;
+	readonly policy: McpPolicy;
+	readonly reconnect: (entry: ServerEntry) => Promise<unknown>;
+}
+
+function callTool(
+	{ client, servers }: Wiring,
+	ref: ToolRef,
+	f: unknown[],
+): Promise<unknown> {
+	const name = `${ref.server}/${ref.tool}`;
+	const entry = entryOf(servers, ref.server);
+	if (entry === undefined)
+		throw new EvalException("MCP server not loaded", ref.server, false);
+	if (entry.state !== "loaded")
+		throw new EvalException(
+			`${ref.server} is not connected (${entry.reason ?? "failed"}); load it again with (load-mcp "${ref.server}")`,
+			name,
+			false,
+		);
+	const tool = entry.tools.find((t) => t.name === ref.tool);
+	if (tool === undefined)
+		throw new EvalException("MCP tool not loaded", name, false);
+	const args = plistToJson(f[0] as List);
+	validate(tool, args);
+	return withTimeout(
+		client.callTool({ serverId: entry.serverId, tool: tool.name, args }),
+		CALL_TIMEOUT_MS,
+		name,
+	).then(jsonToLisp);
+}
+
+function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
+	return wiring.interp.makeBuiltIn(
+		`${ref.server}/${ref.tool}`,
+		-1,
+		(f: unknown[]) => {
+			admitServer(wiring.policy, ref.server);
+			if (!wiring.policy.tool(ref.server, ref.tool))
+				throw new EvalException(
+					"unknown MCP tool",
+					`${ref.server}/${ref.tool}`,
+					false,
+				);
+			const entry = entryOf(wiring.servers, ref.server);
+			return entry?.state === "dormant"
+				? wiring.reconnect(entry).then(() => callTool(wiring, ref, f))
+				: callTool(wiring, ref, f);
+		},
+		{ tag: TOOL_TAG, data: ref },
 	);
 }
 
-function toolRow(rec: ServerRec, sym: Sym): List {
-	const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
+function installServer(
+	wiring: Wiring,
+	name: string,
+	res: ConnectResult,
+	args: List,
+): List {
+	const { interp, servers, policy } = wiring;
+	for (const tool of res.tools)
+		interp.defineGlobal(
+			newSym(`${name}/${tool.name}`),
+			toolBuiltIn(wiring, { server: name, tool: tool.name }),
+			{
+				signature: toolSignature(`${name}/${tool.name}`, tool),
+				doc: toolDocBody(tool) || "MCP tool (no description provided).",
+				args: toolArgs(tool),
+			},
+		);
+	const entry: ServerEntry = {
+		name,
+		serverId: res.serverId,
+		state: "loaded",
+		tools: res.tools,
+		args,
+	};
+	servers.set([...servers.get().filter((e) => e.name !== name), entry]);
+	return arrayToList(toolRows(entry, policy));
+}
+
+function toolRow(entry: ServerEntry, tool: Tool): List {
 	return arrayToList([
-		sym,
+		newSym(`${entry.name}/${tool.name}`),
 		BigInt(
-			tool?.inputSchema?.properties
+			tool.inputSchema?.properties
 				? Object.keys(tool.inputSchema.properties).length
 				: 0,
 		),
-		firstLine(tool?.description),
+		firstLine(tool.description),
 	]);
 }
 
-function toolRows(rec: ServerRec, policy: McpPolicy): List[] {
-	return shownTools(rec, policy).map((sym) => toolRow(rec, sym));
+function toolRows(entry: ServerEntry, policy: McpPolicy): List[] {
+	return shownTools(entry, policy).map((tool) => toolRow(entry, tool));
 }
 
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
@@ -493,8 +603,13 @@ export function registerMcp(
 	const { client, toolkit, search } = host;
 	const policy = host.policy ?? openPolicy;
 
-	const servers = new Map<string, ServerRec>();
-	const loading = new Set<Promise<unknown>>();
+	const servers = interp.state(
+		"mcp/servers",
+		serverCodec,
+		[],
+		"The MCP servers this session loaded, each with its state (:loaded, :dormant until its next call reconnects it, or :failed), its tools and the arguments it was loaded with. Kept by load-mcp and unload-mcp; read it, never set it.",
+	);
+	const loading = new Set<LispPromise>();
 	const shown = (): Map<string, ConnConfig> =>
 		new Map(
 			toolkit
@@ -502,28 +617,73 @@ export function registerMcp(
 				.filter((conf) => policy.server(conf.name).access !== "hidden")
 				.map((conf) => [conf.name, conf]),
 		);
-	const loaded = (): Map<string, ServerRec> =>
-		new Map(
-			[...servers].filter(([name]) => policy.server(name).access !== "hidden"),
-		);
+	const loaded = (): ServerEntry[] =>
+		servers
+			.get()
+			.filter((entry) => policy.server(entry.name).access !== "hidden");
 
-	function startLoad(conf: ConnConfig): Promise<unknown> {
+	function connect(args: List, signal: AbortSignal): Promise<List> {
+		const conf = connConfigFromArgs(args, shown());
 		admitServer(policy, conf.name);
-		const promise = interp.async.start((signal) =>
-			client.connect(conf, signal).then(
-				(res) => installServer(interp, client, servers, conf.name, res, policy),
-				(error: unknown) => {
-					throw holdForAuthorization(interp, error);
-				},
-			),
+		return client.connect(conf, signal).then(
+			(res) => {
+				if (signal.aborted) {
+					void client.disconnect(res.serverId).catch(() => {});
+					throw new EvalException("MCP load cancelled", conf.name, false);
+				}
+				return installServer(wiring, conf.name, res, args);
+			},
+			(error: unknown) => {
+				throw holdForAuthorization(interp, error);
+			},
 		);
+	}
+
+	function startLoad(args: List): LispPromise {
+		admitServer(policy, connConfigFromArgs(args, shown()).name);
+		const promise = interp.async.start((signal) => connect(args, signal), {
+			kind: "load-mcp",
+			args: [args],
+		});
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
-		void promise.then(forget, forget);
+		void interp.async.promiseOf(promise).then(forget, forget);
 		return promise;
 	}
 
-	interp.defPromise(
+	const reconnecting = new Map<string, Promise<unknown>>();
+
+	function reconnect(entry: ServerEntry): Promise<unknown> {
+		const standing = reconnecting.get(entry.name);
+		if (standing !== undefined) return standing;
+		const fail = (error: unknown): never => {
+			servers.set(
+				servers.get().map((e) =>
+					e.name === entry.name
+						? {
+								...e,
+								state: "failed",
+								reason: `reconnect failed: ${error instanceof Error ? error.message : String(error)}`,
+							}
+						: e,
+				),
+			);
+			throw error;
+		};
+		let running: Promise<unknown>;
+		try {
+			running = interp.async.promiseOf(startLoad(entry.args)).catch(fail);
+		} catch (error) {
+			running = Promise.reject(error).catch(fail);
+		}
+		const done = running.finally(() => reconnecting.delete(entry.name));
+		reconnecting.set(entry.name, done);
+		return done;
+	}
+
+	const wiring: Wiring = { interp, client, servers, policy, reconnect };
+
+	interp.def(
 		"load-mcp",
 		-1,
 		'(load-mcp "server") | (load-mcp :name "server")',
@@ -531,8 +691,9 @@ export function registerMcp(
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, shown());
-			if (servers.has(conf.name)) doUnload(interp, client, servers, conf.name);
-			return startLoad(conf);
+			if (entryOf(servers, conf.name))
+				doUnload(interp, client, servers, conf.name);
+			return startLoad(rest);
 		},
 		LOAD_MCP_ARGS,
 	);
@@ -610,7 +771,7 @@ export function registerMcp(
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(shown(), name);
-			if (servers.has(name)) doUnload(interp, client, servers, name);
+			if (entryOf(servers, name)) doUnload(interp, client, servers, name);
 			return withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout").then(
 				() => newLispKeyword("logged-out"),
 			);
@@ -625,13 +786,16 @@ export function registerMcp(
 		z.tuple([]),
 		() => {
 			const live = loaded();
-			const names = new Set<string>([...shown().keys(), ...live.keys()]);
+			const names = new Set<string>([
+				...shown().keys(),
+				...live.map((entry) => entry.name),
+			]);
 			const rows = [...names].map((name) => {
-				const rec = live.get(name);
+				const entry = live.find((e) => e.name === name);
 				return arrayToList([
 					name,
-					newLispKeyword(rec ? "loaded" : "unloaded"),
-					BigInt(rec ? shownTools(rec, policy).length : 0),
+					newLispKeyword(entry?.state ?? "unloaded"),
+					BigInt(entry ? shownTools(entry, policy).length : 0),
 				]);
 			});
 			return arrayToList(rows);
@@ -650,7 +814,7 @@ export function registerMcp(
 					name,
 					conf.description ?? "",
 					arrayToList(conf.keywords ?? []),
-					newLispKeyword(servers.has(name) ? "loaded" : "unloaded"),
+					statusOf(servers, name),
 				]),
 			);
 			return arrayToList(rows);
@@ -683,7 +847,7 @@ export function registerMcp(
 						conf.name,
 						BigInt(Math.round(score)),
 						firstLine(conf.description),
-						newLispKeyword(servers.has(conf.name) ? "loaded" : "unloaded"),
+						statusOf(servers, conf.name),
 					]),
 				),
 			);
@@ -700,11 +864,11 @@ export function registerMcp(
 			const only = rest !== null ? asName(rest.car) : null;
 			const live = loaded();
 			const rows: unknown[] = [];
-			for (const rec of live.values()) {
-				if (only !== null && rec.name !== only) continue;
-				rows.push(...toolRows(rec, policy));
+			for (const entry of live) {
+				if (only !== null && entry.name !== only) continue;
+				rows.push(...toolRows(entry, policy));
 			}
-			if (only !== null && !live.has(only))
+			if (only !== null && !live.some((entry) => entry.name === only))
 				throw new EvalException("MCP server not loaded", only, false);
 			return arrayToList(rows);
 		},
@@ -721,15 +885,15 @@ export function registerMcp(
 				value: { sym: Sym; doc: string };
 				document: SearchDocument;
 			}[] = [];
-			for (const rec of servers.values()) {
-				for (const sym of shownTools(rec, policy)) {
-					const tool = rec.tools.get(sym.name.slice(rec.name.length + 1));
+			for (const entry of servers.get()) {
+				for (const tool of shownTools(entry, policy)) {
+					const sym = newSym(`${entry.name}/${tool.name}`);
 					candidates.push({
-						value: { sym, doc: firstLine(tool?.description) },
+						value: { sym, doc: firstLine(tool.description) },
 						document: {
 							id: sym.name,
 							name: sym.name,
-							description: tool?.description,
+							description: tool.description,
 						},
 					});
 				}
@@ -744,11 +908,12 @@ export function registerMcp(
 	);
 
 	const shutdown = (): void => {
-		for (const rec of servers.values()) {
-			void client.disconnect(rec.serverId).catch(() => {});
-			for (const sym of rec.toolSyms) interp.undefineGlobal(sym);
+		for (const entry of servers.get()) {
+			if (entry.state === "loaded")
+				void client.disconnect(entry.serverId).catch(() => {});
+			for (const sym of toolSyms(entry)) interp.undefineGlobal(sym);
 		}
-		servers.clear();
+		servers.set([]);
 		for (const promise of loading) interp.async.cancel(promise);
 		loading.clear();
 		void client.shutdown().catch(() => {});
@@ -775,6 +940,27 @@ export function registerMcp(
 	interp.hooks.dispose.use((next) => {
 		shutdown();
 		next();
+	});
+
+	interp.recovery.kind({
+		name: TOOL_TAG,
+		restore: (data) => toolBuiltIn(wiring, data as ToolRef),
+	});
+
+	interp.recovery.resumable("load-mcp", ([args], signal) =>
+		connect(args as List, signal),
+	);
+
+	interp.recovery.afterRestore("mcp/servers", () => {
+		servers.set(
+			servers
+				.get()
+				.map((entry) =>
+					entry.state === "loaded"
+						? { ...entry, state: "dormant", reason: "disconnected by restore" }
+						: entry,
+				),
+		);
 	});
 }
 

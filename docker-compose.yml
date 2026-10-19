@@ -61,6 +61,35 @@ services:
       NEXT_PUBLIC_DEPLOYMENT_URL: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
       NEXT_PUBLIC_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
 
+  convex-deploy:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+      target: prod
+    restart: "no"
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        pnpm run env:seed
+        pnpm exec convex deploy --typecheck disable --codegen disable
+        exec pnpm run migrate
+    environment:
+      - CONVEX_SELF_HOSTED_URL=http://convex-backend:3210
+      - CONVEX_SELF_HOSTED_ADMIN_KEY
+      - SITE_URL
+      - BETTER_AUTH_SECRET
+      - GITHUB_CLIENT_ID
+      - GITHUB_CLIENT_SECRET
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - POSTHOG_API_KEY
+      - POSTHOG_HOST
+
   app:
     build:
       context: .
@@ -76,6 +105,8 @@ services:
     depends_on:
       convex-backend:
         condition: service_healthy
+      convex-deploy:
+        condition: service_completed_successfully
     develop:
       watch:
         - action: sync
@@ -105,6 +136,7 @@ services:
       - LISPTC_OAUTH_REDIRECT_URL
       - CONVEX_URL
       - CONVEX_SITE_URL
+      - CONVEX_SELF_HOSTED_ADMIN_KEY
       - LLM_PROVIDER
       - DO_API_KEY
       - DO_BASE_URL
