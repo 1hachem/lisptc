@@ -1,3 +1,4 @@
+import { ends } from "@repo/interpreter/effects";
 import type {
 	AgentFailure,
 	AgentTurn,
@@ -7,7 +8,6 @@ import type {
 	StepVerdict,
 	TurnOutcome,
 } from "@repo/interpreter/session";
-import { ends } from "@repo/interpreter/effects";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import {
