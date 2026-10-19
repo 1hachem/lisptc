@@ -1,7 +1,13 @@
 import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import type { Steer, SteerInbox } from "./inbox.ts";
-import { joinRiding, replResultContent, type TranscriptEntry } from "./repl.ts";
+import {
+	isUserPrompt,
+	joinRiding,
+	replResultContent,
+	type TranscriptEntry,
+	withItsResult,
+} from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
 import { runAgentTurn, type TurnEvent } from "./turn.ts";
@@ -63,6 +69,7 @@ function resultMessage(
 	if (event.display !== event.output) extras.display = event.display;
 	if (event.failed) extras.failed = true;
 	if (event.riding !== undefined) extras.riding = event.riding;
+	if (event.results.length > 0) extras.results = event.results;
 	return {
 		type: "tool",
 		content: replResultContent(event.output, event.error),
@@ -115,15 +122,24 @@ function eventSource(message: ChatMessageInput): string {
 	return typeof source === "string" ? source : "system";
 }
 
+function toEntry(m: ChatMessageInput): TranscriptEntry {
+	const content = contentToText(m.content);
+	const role = agentRole(m.type ?? m.role);
+	if (role === "system")
+		return { role: "user", content, event: { source: eventSource(m) } };
+	const rode = riding(m);
+	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
+}
+
 function toTranscript(input: ChatInput): TranscriptEntry[] {
-	return (input.messages ?? []).map((m) => {
-		const content = contentToText(m.content);
-		const role = agentRole(m.type ?? m.role);
-		if (role === "system")
-			return { role: "user", content, event: { source: eventSource(m) } };
-		const rode = riding(m);
-		return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
-	});
+	const transcript: TranscriptEntry[] = [];
+	for (const entry of (input.messages ?? []).map(toEntry)) {
+		const previous = transcript.at(-1);
+		if (entry.role === "tool" && previous && isUserPrompt(previous))
+			transcript.splice(-1, 1, ...withItsResult(previous, entry));
+		else transcript.push(entry);
+	}
+	return transcript;
 }
 
 export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
@@ -188,6 +204,9 @@ class TurnWire {
 				return this.delta(event);
 			case "steered":
 				this.wire.push({ type: "human", content: event.content, id: event.id });
+				return this.snapshot();
+			case "evaluated":
+				this.wire.push(event.message);
 				return this.snapshot();
 			case "collected":
 				return (

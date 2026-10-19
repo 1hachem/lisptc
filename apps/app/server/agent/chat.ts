@@ -1,5 +1,5 @@
 import {
-	evalUserCode,
+	evalUserMessage,
 	MemorySteerInbox,
 	type SteerInbox,
 	streamChatResponse,
@@ -46,20 +46,55 @@ async function openingMessage(
 	return toStored([systemEventMessage(event, crypto.randomUUID())])[0];
 }
 
-async function prepareTurn(
+async function runUserForms(
 	convex: ReturnType<typeof convexAs>,
 	chatId: TurnInput["chatId"],
+	message: string,
+): Promise<void> {
+	const evaluated = await evalUserMessage(message, {
+		repls,
+		threadId: chatId,
+	});
+	if (evaluated === undefined) return;
+	await convex.mutation(api.messages.append, {
+		chatId,
+		messages: toStored([evaluated]),
+	});
+}
+
+const preparing = new Map<string, Promise<void>>();
+
+function oneTurnAtATime<T>(chatId: string, run: () => Promise<T>): Promise<T> {
+	const turn = (preparing.get(chatId) ?? Promise.resolve()).then(run);
+	const done = turn.then(
+		() => undefined,
+		() => undefined,
+	);
+	preparing.set(chatId, done);
+	void done.then(() => {
+		if (preparing.get(chatId) === done) preparing.delete(chatId);
+	});
+	return turn;
+}
+
+async function prepareTurn(
+	convex: ReturnType<typeof convexAs>,
+	input: TurnInput,
 	opening: StoredMessage,
 ) {
+	const { chatId } = input;
 	const { workspaceId } = await convex.query(api.chats.get, { chatId });
 	const { provider, model } = chatModel(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
-	await convex.mutation(api.messages.append, {
-		chatId,
-		messages: [opening],
+	const history = await oneTurnAtATime(chatId, async () => {
+		await convex.mutation(api.messages.append, {
+			chatId,
+			messages: [opening],
+		});
+		if ("message" in input) await runUserForms(convex, chatId, input.message);
+		return convex.query(api.messages.transcript, { chatId });
 	});
-	const history = await convex.query(api.messages.transcript, { chatId });
 	return { provider, model, history };
 }
 
@@ -78,11 +113,6 @@ const steers: SteerInbox = new MemorySteerInbox();
 
 const steerKey = (subject: string, chatId: string): string =>
 	`${subject}:${chatId}`;
-
-const evalRequestSchema = z.object({
-	chatId: convexId<"chats">(),
-	code: z.string(),
-});
 
 export const turn = {
 	middleware: [...authed, body(chatRequestSchema)] as const,
@@ -103,7 +133,7 @@ export const turn = {
 		const convex = convexAs(context.session);
 		const { provider, model, history } = await convex
 			.mutation(api.chats.start, { chatId })
-			.then(() => prepareTurn(convex, chatId, opening))
+			.then(() => prepareTurn(convex, input, opening))
 			.catch(async (error: unknown) => {
 				await convex
 					.mutation(api.chats.settle, {
@@ -115,6 +145,10 @@ export const turn = {
 					);
 				throw error;
 			});
+		if (request.signal.aborted) {
+			await convex.mutation(api.chats.settle, { chatId });
+			return new Response(null, { status: 204 });
+		}
 		const deadline = AbortSignal.timeout(TURN_DEADLINE_MS);
 
 		console.log(
@@ -194,27 +228,5 @@ export const withdraw = {
 			id,
 		);
 		return Response.json({ withdrawn }, { status: withdrawn ? 200 : 409 });
-	},
-};
-
-export const evaluate = {
-	middleware: [...authed, body(evalRequestSchema)] as const,
-	handler: async ({
-		context,
-	}: Authed<z.infer<typeof evalRequestSchema>>): Promise<Response> => {
-		const { chatId, code } = context.body;
-		const convex = convexAs(context.session);
-
-		await convex.mutation(api.messages.append, {
-			chatId,
-			messages: [{ id: crypto.randomUUID(), type: "human", content: code }],
-		});
-		console.log(`eval chat=${chatId} chars=${code.length}`);
-		const message = await evalUserCode(code, { repls, threadId: chatId });
-		await convex.mutation(api.messages.append, {
-			chatId,
-			messages: toStored([{ ...message }]),
-		});
-		return Response.json({ message });
 	},
 };

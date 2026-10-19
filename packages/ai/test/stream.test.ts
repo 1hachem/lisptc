@@ -3,6 +3,7 @@ import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
+import { replResultContent } from "../src/repl.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
 import { extension, hearing, reporting, riding, testRepl } from "./helpers.ts";
 
@@ -365,5 +366,33 @@ describe("chat stream", () => {
 		const reloaded = sent[0].find((m) => m.content.includes("tool_result"));
 
 		expect(reloaded?.content).toBe(live?.content);
+	});
+
+	test("a user message's eval result reaches the model as a system event after it and the wire as its own row", async () => {
+		const result = {
+			type: "tool",
+			content: replResultContent("3", false),
+			additional_kwargs: { display: "3", results: ["3"] },
+		};
+		const body = await stream({
+			messages: [{ type: "human", content: "what is (+ 1 2)" }, result],
+		}).text();
+
+		expect(
+			sent[0].filter((m) => m.role === "user").map((m) => m.content),
+		).toEqual([
+			"what is (+ 1 2)",
+			'<system-event source="lisp-repl">the user ran the code in their message above:\n\n3</system-event>',
+		]);
+		const first = records(body).find((r) => r.event === "values")?.data as {
+			messages: WireMessage[];
+		};
+		expect(first.messages.slice(0, 2)).toEqual([
+			expect.objectContaining({ type: "human", content: "what is (+ 1 2)" }),
+			expect.objectContaining({
+				type: "tool",
+				additional_kwargs: { display: "3", results: ["3"] },
+			}),
+		]);
 	});
 });

@@ -1,8 +1,21 @@
+import type { Interp } from "@repo/interpreter/lisp";
+import type { SessionHooks } from "@repo/interpreter/session";
+import { type FormSpan, formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, test } from "vitest";
-import { type EvalMessage, evalUserCode } from "../src/eval.ts";
+import { type EvalMessage, evalUserMessage } from "../src/eval.ts";
 import { extension, testRepls } from "./helpers.ts";
 
 const repls = testRepls();
+
+async function evaluated(
+	message: string,
+	threadId: string,
+	from = repls,
+): Promise<EvalMessage> {
+	const result = await evalUserMessage(message, { repls: from, threadId });
+	if (result === undefined) throw new Error(`nothing ran for ${message}`);
+	return result;
+}
 
 function result(message: EvalMessage): { output: string; error: boolean } {
 	return JSON.parse(message.content) as { output: string; error: boolean };
@@ -12,29 +25,99 @@ function display(message: EvalMessage): string {
 	return (message.additional_kwargs?.display as string) ?? "";
 }
 
-describe("user code", () => {
+describe("a user message", () => {
 	test("runs in the thread's own repl", async () => {
 		const threadId = crypto.randomUUID();
-		await evalUserCode("(setq x 41)", { repls, threadId });
-		const message = await evalUserCode("(echo (+ x 1))", { repls, threadId });
+		await evaluated("(setq x 41)", threadId);
+		const message = await evaluated("(echo (+ x 1))", threadId);
 		expect(display(message)).toContain("42");
 	});
 
+	test("carries the value each form returned", async () => {
+		const message = await evaluated("(+ 40 2) (list 1 2)", crypto.randomUUID());
+		expect(message.additional_kwargs?.results).toEqual(["42", "(1 2)"]);
+	});
+
 	test("cannot reach another thread's definitions", async () => {
-		await evalUserCode("(setq y 1)", {
-			repls,
-			threadId: crypto.randomUUID(),
-		});
-		const message = await evalUserCode("(echo y)", {
-			repls,
-			threadId: crypto.randomUUID(),
-		});
+		await evaluated("(setq y 1)", crypto.randomUUID());
+		const message = await evaluated("(echo y)", crypto.randomUUID());
 		expect(result(message).output).toContain("void variable: y");
+	});
+
+	test("runs nothing when it holds no form", async () => {
+		const threadId = crypto.randomUUID();
+		expect(
+			await evalUserMessage("just a question for the agent", {
+				repls,
+				threadId,
+			}),
+		).toBeUndefined();
+		expect(repls.peek(threadId)).toBeUndefined();
+	});
+
+	test("runs nothing when every form in it reads as prose", async () => {
+		const aside = "(see below)";
+		const blanked = (code: string) =>
+			code.replace(aside, " ".repeat(aside.length));
+		const asides = testRepls([
+			Object.assign(
+				(interp: Interp) =>
+					interp.hooks.readSource.use((i, text, next) =>
+						next(i, blanked(text)),
+					),
+				{
+					session: (hooks: SessionHooks) =>
+						hooks.unrun.use((interp, code, next) => {
+							const at = code.indexOf(aside);
+							const span: FormSpan = [at, at + aside.length];
+							return [
+								...next(interp, code),
+								...(at < 0 ? [] : [{ span, reason: "prose" }]),
+							];
+						}),
+				},
+			),
+		]);
+		const threadId = crypto.randomUUID();
+		expect(
+			await evalUserMessage(`the plan ${aside} is long`, {
+				repls: asides,
+				threadId,
+			}),
+		).toBeUndefined();
+		const ran = await evalUserMessage(`${aside} (echo (+ 40 2))`, {
+			repls: asides,
+			threadId,
+		});
+		expect(ran && display(ran)).toContain("42");
+	});
+
+	test("runs the forms inside ordinary text and skips the text", async () => {
+		const prose = testRepls([
+			(interp: Interp) =>
+				interp.hooks.readSource.use((i, text, next) =>
+					next(i, formsOnly(text)),
+				),
+		]);
+		const threadId = crypto.randomUUID();
+		const message = "what is (+ 40 2) and also (list 1 2), thanks";
+		const ran = await evalUserMessage(message, { repls: prose, threadId });
+		expect(ran?.additional_kwargs?.results).toEqual(["42", "(1 2)"]);
+		expect(ran && result(ran).error).toBe(false);
+	});
+
+	test("finds nothing to run in a message without forms", async () => {
+		expect(
+			await evalUserMessage("no parentheses here", {
+				repls,
+				threadId: crypto.randomUUID(),
+			}),
+		).toBeUndefined();
 	});
 
 	test("leaves the agent loop's halt signal untouched", async () => {
 		const threadId = crypto.randomUUID();
-		await evalUserCode("(just prose, nothing to run)", { repls, threadId });
+		await evaluated("(just prose, nothing to run)", threadId);
 		const repl = repls.peek(threadId);
 		expect(repl?.takeFinished()).toBe(false);
 		expect(repl?.takeProseFeedback()).toBe("");
@@ -52,21 +135,24 @@ describe("a step the host broke on", () => {
 	]);
 
 	test("restores the repl to its last checkpoint", async () => {
-		const source = { repls: broken, threadId: crypto.randomUUID() };
-		await evalUserCode("(setq x 41)", source);
-		const failed = await evalUserCode("(progn (setq x 0) 'boom)", source);
+		const threadId = crypto.randomUUID();
+		await evaluated("(setq x 41)", threadId, broken);
+		const failed = await evaluated(
+			"(progn (setq x 0) 'boom)",
+			threadId,
+			broken,
+		);
 		expect(result(failed)).toMatchObject({
 			output:
 				"REPL error: host broke (interpreter restored to its last checkpoint, changes since then lost)",
 			error: true,
 		});
-		const message = await evalUserCode("(echo (+ x 1))", source);
+		const message = await evaluated("(echo (+ x 1))", threadId, broken);
 		expect(display(message)).toContain("42");
 	});
 
 	test("resets the repl when nothing was checkpointed", async () => {
-		const source = { repls: broken, threadId: crypto.randomUUID() };
-		const failed = await evalUserCode("'boom", source);
+		const failed = await evaluated("(quote boom)", crypto.randomUUID(), broken);
 		expect(result(failed).output).toContain("interpreter was reset");
 	});
 });

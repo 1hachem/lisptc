@@ -1,5 +1,5 @@
 import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
-import type { AgentRepl } from "@repo/repl/repl";
+import type { AgentRepl, EvalOutput } from "@repo/repl/repl";
 import type { AgentMessage } from "./agent.ts";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
@@ -81,10 +81,9 @@ export function proseFeedbackContent(feedback: string): string {
 	);
 }
 
-export async function evalCode(
+async function outcomeOf(
 	repl: AgentRepl,
-	code: string,
-	origin?: string,
+	run: () => Promise<EvalOutput>,
 ): Promise<{
 	output: string;
 	display: string;
@@ -93,10 +92,11 @@ export async function evalCode(
 	emitted: string;
 	failed: boolean;
 	held: boolean;
+	results: readonly string[];
 }> {
 	try {
-		const { model, user, annotations, emitted, failed, held } =
-			await repl.evalOutput(code, origin);
+		const { model, user, annotations, emitted, failed, held, results } =
+			await run();
 		return {
 			output: model,
 			display: user,
@@ -105,6 +105,7 @@ export async function evalCode(
 			emitted,
 			failed,
 			held,
+			results,
 		};
 	} catch (ex) {
 		const restored = await repl.recover();
@@ -121,6 +122,54 @@ export async function evalCode(
 			emitted: "",
 			failed: true,
 			held: false,
+			results: [],
 		};
 	}
+}
+
+export function evalCode(repl: AgentRepl, code: string, origin?: string) {
+	return outcomeOf(repl, () => repl.evalOutput(code, origin));
+}
+
+export function evalMessageCode(
+	repl: AgentRepl,
+	code: string,
+	origin?: string,
+) {
+	return outcomeOf(repl, () => repl.evalMessage(code, origin));
+}
+
+function replOutcome(content: string): { output: string; error: boolean } {
+	try {
+		const parsed = JSON.parse(content);
+		if (parsed?.type === "tool_result")
+			return {
+				output: String(parsed.output ?? ""),
+				error: Boolean(parsed.error),
+			};
+	} catch {}
+	return { output: content, error: false };
+}
+
+function userRanEvent(result: TranscriptEntry): TranscriptEntry {
+	const { output, error } = replOutcome(result.content);
+	return {
+		role: "user",
+		content: [
+			error
+				? "the user ran the code in their message above, and it failed:"
+				: "the user ran the code in their message above:",
+			output,
+		].join("\n\n"),
+		event: { source: "lisp-repl" },
+	};
+}
+
+export function withItsResult(
+	prompt: TranscriptEntry,
+	result: TranscriptEntry,
+): [TranscriptEntry, TranscriptEntry] {
+	const ran = userRanEvent(result);
+	if (result.riding === undefined) return [prompt, ran];
+	return [{ ...prompt, riding: joinRiding(prompt.riding, result.riding) }, ran];
 }
