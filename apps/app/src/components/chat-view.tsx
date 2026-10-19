@@ -11,7 +11,6 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
-	isGreetingMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
@@ -27,6 +26,7 @@ import {
 	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
+import { isGreetingMessage } from "../lib/greeting.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";

@@ -68,6 +68,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 		trustedOrigins: [env.SITE_URL],
 		database: authComponent.adapter(ctx),
 		emailAndPassword: { enabled: true, requireEmailVerification: false },
+		user: { deleteUser: { enabled: true } },
 		socialProviders: {
 			...(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
 				? {

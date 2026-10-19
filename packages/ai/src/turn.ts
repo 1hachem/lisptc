@@ -260,7 +260,7 @@ async function* evaluateStep(
 
 	const evalStartedAt = Date.now();
 	const { output, display, error, annotations, emitted, failed, held } =
-		await evalCode(repl, code);
+		await evalCode(repl, code, stepId);
 	turn.steps += 1;
 	const step = turn.steps;
 

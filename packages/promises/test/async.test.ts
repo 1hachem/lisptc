@@ -4,6 +4,7 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { promisesExtension } from "../src/promises.ts";
@@ -170,7 +171,7 @@ describe("a promise is the host's own promise", () => {
 	function starter(): { interp: Interp; runs: () => number } {
 		const interp = interpWithSlow();
 		let runs = 0;
-		interp.defPromise(
+		interp.def(
 			"start",
 			1,
 			"(start x)",
@@ -184,7 +185,7 @@ describe("a promise is the host's own promise", () => {
 					}),
 				),
 		);
-		interp.defPromise(
+		interp.def(
 			"start-failing",
 			0,
 			"(start-failing)",
@@ -266,7 +267,7 @@ describe("a promise built-in stands on its own", () => {
 	function bare(): Interp {
 		const interp = new Interp();
 		runSync(interp, prelude);
-		interp.defPromise(
+		interp.def(
 			"start-doomed",
 			0,
 			"(start-doomed)",
@@ -284,19 +285,19 @@ describe("a promise built-in stands on its own", () => {
 	}
 
 	it("starts work with no promise built-ins installed", () => {
-		expect(runSync(bare(), "(start-doomed)")).toBeInstanceOf(Promise);
+		expect(runSync(bare(), "(start-doomed)")).toBeInstanceOf(LispPromise);
 	});
 
 	it("absorbs a rejection nobody awaited", async () => {
 		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as Promise<unknown>;
+		const promise = runSync(interp, "(start-doomed)") as LispPromise;
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(interp.async.stateOf(promise)).toBe("rejected");
 	});
 
 	it("is cancellable by the host that dropped the interp", () => {
 		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as Promise<unknown>;
+		const promise = runSync(interp, "(start-doomed)") as LispPromise;
 		expect(interp.async.pending()).toContain(promise);
 		interp.dispose();
 		expect(interp.async.pending()).toHaveLength(0);

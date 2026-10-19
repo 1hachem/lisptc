@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { SIDEBAR_ENTRIES, sidebarOrder } from "../src/lib/sidebar-order.ts";
+import {
+	SIDEBAR_ENTRIES,
+	shownEntries,
+	sidebarOrder,
+	withHidden,
+} from "../src/lib/sidebar-order.ts";
 
 describe("sidebarOrder", () => {
 	it("falls back to the default order when nothing is stored", () => {
@@ -22,5 +27,21 @@ describe("sidebarOrder", () => {
 	it("drops repeats and entries the sidebar no longer has", () => {
 		expect(sidebarOrder(["gone", "tasks", "tasks"])[0]).toBe("tasks");
 		expect(sidebarOrder(["gone"])).toEqual([...SIDEBAR_ENTRIES]);
+	});
+});
+
+describe("hidden entries", () => {
+	const order = sidebarOrder(["README.md", "chat", "tests", "home"]);
+
+	it("leaves the hidden entries out of what the sidebar shows", () => {
+		const shown = shownEntries(order, ["tests", "agents"]);
+		expect(shown.slice(0, 3)).toEqual(["README.md", "chat", "home"]);
+		expect(shown).not.toContain("tests");
+		expect(shown).not.toContain("sub-agents");
+	});
+
+	it("keeps the hidden entries in the stored order after a drag", () => {
+		const next = withHidden(["chat", "README.md", "home"], order.slice(0, 4));
+		expect(next).toEqual(["chat", "README.md", "home", "tests"]);
 	});
 });

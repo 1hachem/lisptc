@@ -19,13 +19,14 @@
     "./memory-store": "./src/memory-store.ts",
     "./secrets-store": "./src/secrets-store.ts",
     "./oauth-store": "./src/oauth-store.ts",
-    "./oauth-callback": "./src/oauth-callback.ts"
+    "./oauth-callback": "./src/oauth-callback.ts",
+    "./server-client": "./src/server-client.ts"
   },
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
     "env:seed": "sh scripts/seed-env.sh",
-    "migrate": "convex run migrations:resetRetiredModels '{\"reset\": true}'",
+    "migrate": "convex run migrations:runAll",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

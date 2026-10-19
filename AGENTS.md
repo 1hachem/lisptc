@@ -264,6 +264,14 @@ outside chat; a prompt is the exception to that exemption. Every form, keyword,
 id and negation survives the rewrite exactly, and a test that pins the old
 wording is changed to match.
 
+The caveman voice is for the prose around the language, never for the language
+itself. Every symbol, operator, signature and example form a prompt carries is
+what the evaluator implements, so it is copied character for character. A
+rewrite that treats `*` or a backtick as markdown and strips it teaches the
+model code that does not run: `(* n n)` becomes `(n n)`, `let*` becomes `let`,
+`*version*` becomes `version`, a quasiquoted expansion loses its backtick. An
+example a prompt shows still evaluates to the result the prompt claims for it.
+
 ## Comments
 
 **The code carries no comments.** Three guards hold it, at commit, at push and
@@ -360,6 +368,7 @@ task up                      # build and run the whole stack in docker, with liv
 task test                    # the vitest suites and the nix flake checks together
 task test:nix                # the nix flake checks, the ptcfmt formatter test included
 task test:nvim               # the nvim integration test
+task convex:generate         # start the local convex backend and regenerate packages/backend/convex/_generated
 
 # Single test file / by name — run inside the package that owns it:
 pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts

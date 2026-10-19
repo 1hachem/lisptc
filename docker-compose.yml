@@ -139,6 +139,7 @@ services:
       - MISTRAL_API_KEY
       - CONVEX_URL
       - CONVEX_SITE_URL
+      - CONVEX_SELF_HOSTED_ADMIN_KEY
       - LLM_PROVIDER
       - DO_API_KEY
       - DO_BASE_URL

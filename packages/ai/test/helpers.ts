@@ -6,6 +6,7 @@ import {
 	type SessionHooks,
 } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
+import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { ReplStore } from "../src/repl-store.ts";
 
@@ -94,8 +95,11 @@ export function notifying(
 	});
 }
 
-export function testRepl(extensions: InterpExtension[] = []): AgentRepl {
-	return new AgentRepl({ extensions: [answering(), ...extensions] });
+export function testRepl(
+	extensions: InterpExtension[] = [],
+	images: MemoryImageStore = new MemoryImageStore(),
+): AgentRepl {
+	return new AgentRepl({ extensions: [answering(), ...extensions], images });
 }
 
 export function testRepls(extensions: InterpExtension[] = []): ReplStore {

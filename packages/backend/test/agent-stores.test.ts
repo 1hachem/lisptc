@@ -72,6 +72,7 @@ describe("the convex preferences store", () => {
 				theme: "borland",
 				themeUses: { borland: 3 },
 				channels: { lisp: true },
+				hidden: ["tests"],
 			},
 		});
 		const store = new ConvexPreferencesStore(() => client);
@@ -80,6 +81,7 @@ describe("the convex preferences store", () => {
 			font: undefined,
 			channels: { lisp: true },
 			metadata: undefined,
+			hidden: ["tests"],
 		});
 	});
 

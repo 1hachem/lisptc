@@ -12,9 +12,8 @@ export async function runUiAction<Id extends string>(
 	threadId: Id,
 	action: string,
 	values: Record<string, unknown>,
-): Promise<UiActionResult | undefined> {
-	const repl = repls.peek(threadId);
-	if (!repl) return undefined;
+): Promise<UiActionResult> {
+	const repl = await repls.get(threadId);
 	try {
 		const { user, annotations, message, failed } = await repl.invokeUi(
 			action,

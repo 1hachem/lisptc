@@ -2,6 +2,7 @@ import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
+import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -605,6 +606,20 @@ describe("the plasticity window", () => {
 		await drive(f.bank.endStep());
 
 		expect((await f.bank.store.get("k"))?.body).toBe("the corrected note");
+	});
+
+	it("keeps the window open across an image taken in the step", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "k" "the old note")');
+		await drive(f.bank.beginStep("", f.interp));
+		await ev(f, '(memory/recall "k")');
+
+		const g = fixture(new MemoryBank(f.bank.store));
+		restore(g.interp, snapshot(f.interp));
+		await ev(g, '(memory/revise "k" "the corrected note")');
+		await drive(g.bank.endStep());
+
+		expect((await g.bank.store.get("k"))?.body).toBe("the corrected note");
 	});
 
 	it("refuses to revise a memory that has not been recalled", async () => {

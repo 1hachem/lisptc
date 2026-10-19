@@ -86,7 +86,7 @@ Evaluated specially, not as function calls. Complete list:
     handler...)) | Eval body; on error, bind e to the error value and run the handler. |
 
 if, when, unless, and, or,
-let, let, letrec, while, dolist, dotimes, case, defun,
+let, let*, letrec, while, dolist, dotimes, case, defun,
 defmacro are prelude macros, not special forms; use the same way. No setf, no
 block and return-from, no unwind-protect, no throw and catch pair.
 
@@ -97,9 +97,9 @@ NUMBERS
 
 - Integer literal is exact bigint: 42.
 - Decimal or exponent makes inexact float: 42.0, 4.2e1.
-- + -  keep exactness: bigint with bigint gives bigint. ANY float makes the
+- + - * keep exactness: bigint with bigint gives bigint. ANY float makes the
   result float, "float contagion": (+ 1 2) is 3,
-(+ 1 2.0) is 3.0.
+(+ 1 2.0) is 3.0, (* 2 3) is 6, (* 2 3.0) is 6.0.
 - / is ALWAYS float, even evenly divisible: (/ 6 2)
 is 3.0. Exact integer division: truncate, gives bigint:
 (truncate 6 2) is 3.
@@ -110,7 +110,7 @@ is 3.0. Exact integer division: truncate, gives bigint:
 
 Arithmetic built-ins:
 
-- (+ n...) sum, 0 if none · (n...) product, 1 if none ·
+- (+ n...) sum, 0 if none · (* n...) product, 1 if none ·
 (- n m...) subtract, or negate one arg · (/ n m...) float divide.
 - (% x y) remainder, sign of x, alias rem · (mod x y) modulo, sign of y ·
 (truncate x [y]) toward zero, gives bigint.
@@ -176,7 +176,7 @@ Introspection
   names. Read it before guessing an argument, and again after a rejected call.
 - (dump) list every global symbol · (import "path") load and eval Lisp file.
 
-Globals: gensym-counter, version.
+Globals: *gensym-counter*, *version*.
 
 PRELUDE STANDARD LIBRARY
 
@@ -190,7 +190,7 @@ List building / manipulation
 - (nreverse list) destructive reverse · (last list) last cons cell ·
 (nconc lists...) destructive concat.
 - (mapcar f list) new list of f over each element:
-(mapcar (lambda (n) (n n)) '(1 2 3)) gives (1 4 9) .
+(mapcar (lambda (n) (* n n)) '(1 2 3)) gives (1 4 9) .
 - (nth n list) element at index n from 0; nil past end.
 - (filter f list) elements f says yes to:
 (filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40) .
@@ -201,18 +201,33 @@ List building / manipulation
 
 Predicates
 - (not x) and (null x) true if nil · (consp x) true if cons ·
-(listp x) true if nil or cons · (equal x y) deep structural equality.
+(listp x) true if nil or cons · (keywordp x) true if keyword ·
+(equal x y) deep structural equality.
 
 Membership / alists
 - (memq key list) tail from first eq match · (member key list) first equal
   match · (assq key alist) first pair with eq car · (assoc key alist) first
   pair with equal car. Alist field:
 (cdr (assoc "content" msg)) .
-- (get-in record key...) read through nested alists and lists, every step
-  guarded: (get-in config "server" "port") is nil when no
+- (get-in record key...) read through nested alists, keyword plists and lists,
+  every step guarded: (get-in config "server" "port") is nil when no
   "server", not an error. No or guard, no assoc chain.
   Number key indexes a list — (get-in reply "results" 0 "url") — keyword key
-  matches string of its name, :port finds "port".
+  matches string of its name, :port finds "port". Plist key matches by name:
+(get-in '(:theme (:accent "red")) :theme :accent) gives "red" .
+
+Nested data, write side of get-in. Pure: return new copy, record unchanged.
+- (set-in record value key...) value at path. Missing key added: plist gets
+  keyword, alist gets pair; nil record becomes plist for keyword key, else alist.
+  Index replaces element, index = length appends:
+(set-in '(:theme (:accent "red")) "blue" :theme :accent) gives (:theme (:accent "blue")) .
+- (update-in record f key...) value at path becomes (f value); f gets nil when
+  path missing:
+(update-in '(:n 1) (lambda (n) (+ n 1)) :n) gives (:n 2) .
+- (remove-in record key...) drop plist key, alist pair or list index; missing
+  path gives record back:
+(remove-in '(:a 1 :b 2) :a) gives (:b 2) .
+- Edit data file: read it, set-in / update-in / remove-in, write whole value back.
 
 Control-flow macros
 - (if test then else...) · (when test body...) · (unless test body...) ·
@@ -222,8 +237,8 @@ Control-flow macros
 
 Binding macros
 - (let ((name val) ...) body...) parallel bindings; bare name binds nil.
-- (let ((name val) ...) body...) sequential; each val may use earlier names:
-(let ((issue (car issues)) (state (cdr (assoc "state" issue)))) …) .
+- (let* ((name val) ...) body...) sequential; each val may use earlier names:
+(let* ((issue (car issues)) (state (cdr (assoc "state" issue)))) …) .
 - (letrec ((name val) ...) body...) bindings reference each other — local
   recursive functions.
 
@@ -264,7 +279,8 @@ MACROS
 defmacro defines compile-time transformer. Build expansion with quasiquote:
 
 (defmacro swap (a b)
-  (let ((tmp ,a)) (setq ,a ,b) (setq ,b tmp)))
+  (let ((tmp (gensym)))
+    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))
 
 (gensym) for temporaries you introduce, so user variables are not captured.
 Expansion depth max 20 nesting levels at compile time.
@@ -279,7 +295,7 @@ ERRORS & CONTROL FLOW
   runs. ONLY error mechanism — no condition system, no unwind-protect.
 
 (try
-  (/ 1 0)
+  (error "boom")
   (catch (e)
     (concat "failed: " e)))
 
@@ -291,7 +307,7 @@ GOTCHAS
 - Only nil is false — 0, 0.0, "" all TRUE.
 - / gives float; truncate for exact integer.
 - Output shows 3 vs 3.0.
-- No reduce, filter, mapc or math library — write them or use mapcar, dolist or
+- No mapc or math library — write them with reduce, filter, mapcar, dolist or
   recursion.
 - read parses LISP, json-parse parses JSON. read on JSON returns junk, no error.
 - JSON numbers are floats: integer id prints 7.0; = and eql still equal 7.

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../src/lib/appearance.tsx", () => ({}));
 vi.mock("../src/lib/chat.tsx", () => ({}));
 vi.mock("../src/lib/chats.ts", () => ({}));
+vi.mock("../src/lib/fork-picker.tsx", () => ({}));
 vi.mock("../src/lib/model-picker.tsx", () => ({}));
 vi.mock("../src/lib/transcript.ts", () => ({}));
 vi.mock("../src/lib/ui.tsx", () => ({}));

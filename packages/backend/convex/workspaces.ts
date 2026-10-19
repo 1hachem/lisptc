@@ -1,11 +1,18 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalMutation, mutation, query } from "./_generated/server.js";
+import type { Id } from "./_generated/dataModel.js";
+import {
+	internalMutation,
+	type MutationCtx,
+	mutation,
+	query,
+} from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
+import { dropRepl } from "./repls.js";
 import { modelChoice, storedModel } from "./schema.js";
 
-const MAX_WORKSPACES = 64;
+export const MAX_WORKSPACES = 25;
 
 const PURGE_BATCH = 256;
 
@@ -17,6 +24,20 @@ const workspace = v.object({
 	slug: v.string(),
 	model: v.optional(storedModel),
 });
+
+export async function dropWorkspace(
+	ctx: MutationCtx,
+	workspaceId: Id<"workspaces">,
+): Promise<void> {
+	await ctx.db.delete(workspaceId);
+	await ctx.scheduler.runAfter(0, internal.workspaces.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.memories.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.mcpServers.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.permissions.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.readmes.purge, { workspaceId });
+}
 
 export const list = query({
 	args: {},
@@ -89,16 +110,7 @@ export const remove = mutation({
 	returns: v.id("workspaces"),
 	handler: async (ctx, { workspaceId }) => {
 		const { user } = await requireWorkspace(ctx, workspaceId);
-		await ctx.db.delete(workspaceId);
-		await ctx.scheduler.runAfter(0, internal.workspaces.purge, { workspaceId });
-		await ctx.scheduler.runAfter(0, internal.memories.purge, { workspaceId });
-		await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
-		await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
-		await ctx.scheduler.runAfter(0, internal.mcpServers.purge, { workspaceId });
-		await ctx.scheduler.runAfter(0, internal.permissions.purge, {
-			workspaceId,
-		});
-		await ctx.scheduler.runAfter(0, internal.readmes.purge, { workspaceId });
+		await dropWorkspace(ctx, workspaceId);
 		const left = await ctx.db
 			.query("workspaces")
 			.withIndex("by_owner", (q) => q.eq("ownerId", user._id))
@@ -123,6 +135,7 @@ export const purge = internalMutation({
 			.take(PURGE_BATCH);
 		for (const chat of chats) {
 			await ctx.db.delete(chat._id);
+			await dropRepl(ctx, chat);
 			await ctx.scheduler.runAfter(0, internal.messages.purge, {
 				chatId: chat._id,
 			});
