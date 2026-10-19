@@ -25,7 +25,7 @@ import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
-import { pickGreeting } from "./greeting.ts";
+import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import type { SystemEventTicket } from "./system-event.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
@@ -95,6 +95,7 @@ function parseMeta(value: unknown): StepMeta | undefined {
 
 export interface ChatSession {
 	messages: ChatMessage[];
+	saved: ChatMessage[];
 	queued: QueuedMessage[];
 	greeting: string | null;
 	meta: Record<string, StepMeta>;
@@ -108,6 +109,7 @@ export interface ChatSession {
 	resume: (event: SystemEventTicket) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
+	fail: (message: string) => void;
 }
 
 type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
@@ -121,12 +123,6 @@ function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	}));
 }
 
-const GREETING_ID = "greeting";
-
-export function isGreetingMessage(message: ChatMessage): boolean {
-	return message.id === GREETING_ID;
-}
-
 function greetingMessage(): ChatMessage {
 	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
 }
@@ -135,6 +131,12 @@ export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
 
 const ChatContext = createContext<ChatStore | null>(null);
 
+const abandoning = new Set<(chatId: Id<"chats">) => void>();
+
+export function abandonChat(chatId: Id<"chats">): void {
+	for (const abandon of abandoning) abandon(chatId);
+}
+
 function titleOf(message: string): string {
 	const line = message.trim().split("\n")[0] ?? "";
 	return line.length > 60 ? `${line.slice(0, 57)}…` : line;
@@ -142,11 +144,16 @@ function titleOf(message: string): string {
 
 function errorFor(
 	chatId: Id<"chats"> | null,
-	stream: unknown,
-	streamingFor: Id<"chats"> | null,
+	sources: {
+		stream: unknown;
+		streamingFor: Id<"chats"> | null;
+		failure: { chatId: Id<"chats"> | null; message: string } | null;
+	},
 ): string | undefined {
+	const { stream, streamingFor, failure } = sources;
 	if (stream && streamingFor === chatId)
 		return stream instanceof Error ? stream.message : String(stream);
+	if (failure?.chatId === chatId) return failure.message;
 	return undefined;
 }
 
@@ -227,6 +234,11 @@ export function ChatProvider({
 		setGreeting(greetingMessage());
 	}, []);
 
+	const [failure, setFailure] = useState<{
+		chatId: Id<"chats"> | null;
+		message: string;
+	} | null>(null);
+
 	const turns =
 		streamingFor.current === chatId
 			? turnsToShow(streamed, persisted, stream.isLoading)
@@ -262,6 +274,7 @@ export function ChatProvider({
 			shown: ChatMessage,
 			title: string,
 		) => {
+			setFailure(null);
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			markStreaming({ chatId: opened }).catch((ex: unknown) =>
@@ -343,8 +356,12 @@ export function ChatProvider({
 		[steering, enqueue, submitTurn],
 	);
 
-	const stop = useCallback(() => {
+	const halt = useCallback(() => {
 		clear();
+		stream.stop();
+	}, [stream, clear]);
+
+	const stop = useCallback(() => {
 		const stopped = streamingFor.current;
 		if (stream.isLoading && stopped !== null)
 			settleChat({ chatId: stopped }).catch((ex: unknown) =>
@@ -353,8 +370,15 @@ export function ChatProvider({
 					thread_id: stopped,
 				}),
 			);
-		stream.stop();
-	}, [stream, clear, settleChat]);
+		halt();
+	}, [stream, halt, settleChat]);
+
+	const abandon = useCallback(
+		(target: Id<"chats">) => {
+			if (streamingFor.current === target) halt();
+		},
+		[halt],
+	);
 
 	const fresh = isFreshChat(chatId, turns);
 
@@ -362,6 +386,7 @@ export function ChatProvider({
 	if (storeRef.current === null) {
 		storeRef.current = create<ChatSession>(() => ({
 			messages: [],
+			saved: [],
 			queued: [],
 			greeting: null,
 			meta: {},
@@ -374,6 +399,7 @@ export function ChatProvider({
 			resume: () => {},
 			stop: () => {},
 			withdraw: () => {},
+			fail: () => {},
 		}));
 	}
 	const store = storeRef.current;
@@ -381,6 +407,7 @@ export function ChatProvider({
 	useEffect(() => {
 		store.setState({
 			messages,
+			saved: persisted,
 			queued,
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
@@ -388,7 +415,11 @@ export function ChatProvider({
 			isLoading: stream.isLoading,
 			chatId,
 			workspaceId,
-			error: errorFor(chatId, stream.error, streamingFor.current),
+			error: errorFor(chatId, {
+				stream: stream.error,
+				streamingFor: streamingFor.current,
+				failure,
+			}),
 			send: (text) => {
 				void send(text);
 			},
@@ -398,16 +429,19 @@ export function ChatProvider({
 			resume,
 			stop,
 			withdraw,
+			fail: (message) => setFailure({ chatId, message }),
 		});
 	}, [
 		store,
 		messages,
+		persisted,
 		queued,
 		meta,
 		greeting,
 		fresh,
 		stream.isLoading,
 		stream.error,
+		failure,
 		chatId,
 		workspaceId,
 		send,
@@ -416,6 +450,13 @@ export function ChatProvider({
 		stop,
 		withdraw,
 	]);
+
+	useEffect(() => {
+		abandoning.add(abandon);
+		return () => {
+			abandoning.delete(abandon);
+		};
+	}, [abandon]);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }

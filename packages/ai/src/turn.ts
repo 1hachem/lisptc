@@ -273,7 +273,7 @@ async function* evaluateStep(
 		failed,
 		held,
 		results,
-	} = await evalCode(repl, code);
+	} = await evalCode(repl, code, stepId);
 	turn.steps += 1;
 	const step = turn.steps;
 

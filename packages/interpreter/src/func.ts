@@ -3,6 +3,7 @@ import type { Eval, Evaluator } from "./drive.ts";
 import { cdrCell, EvalException, LoopSignal, StepHold } from "./errors.ts";
 import { assert, Cell, LispKeyword, type List, type Sym } from "./objects.ts";
 import { str } from "./print.ts";
+import type { ForeignValue } from "./types.ts";
 
 export abstract class Func {
 	constructor(
@@ -210,6 +211,13 @@ export type BuiltInFuncGen = (frame: unknown[]) => Eval;
 
 export type BuiltInKind = "plain" | "generator" | "promise";
 
+export type BuiltInIdentity =
+	| { readonly by: "name" }
+	| { readonly by: "foreign"; readonly foreign: ForeignValue }
+	| { readonly by: "none" };
+
+const byName: BuiltInIdentity = { by: "name" };
+
 export class BuiltInFunc extends Func {
 	constructor(
 		name: string,
@@ -217,6 +225,7 @@ export class BuiltInFunc extends Func {
 		private readonly body: BuiltInFuncBody | BuiltInFuncGen,
 		readonly kind: BuiltInKind = "plain",
 		keys: readonly string[] = [],
+		readonly identity: BuiltInIdentity = byName,
 	) {
 		super(carity, keys, name);
 	}

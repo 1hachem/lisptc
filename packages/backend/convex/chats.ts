@@ -1,9 +1,16 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalMutation, mutation, query } from "./_generated/server.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
+import {
+	internalMutation,
+	type MutationCtx,
+	mutation,
+	query,
+} from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { waitsOnUser } from "./lib/waiting.js";
 import { STREAMING_LEASE_MS } from "./limits.js";
+import { dropRepl, forkRepl } from "./repls.js";
 import { chatStatus } from "./schema.js";
 
 const MAX_CHATS = 200;
@@ -20,6 +27,7 @@ const chat = v.object({
 	status: v.optional(chatStatus),
 	streamingSince: v.optional(v.number()),
 	failure: v.optional(v.string()),
+	replId: v.optional(v.id("repls")),
 });
 
 export const list = query({
@@ -155,12 +163,77 @@ export const archive = mutation({
 	},
 });
 
+async function messageOf(
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+	messageId: string,
+): Promise<Doc<"messages"> | null> {
+	const byWire = await ctx.db
+		.query("messages")
+		.withIndex("by_chat_wire", (q) =>
+			q.eq("chatId", chatId).eq("wireId", messageId),
+		)
+		.first();
+	if (byWire !== null) return byWire;
+	const id = ctx.db.normalizeId("messages", messageId);
+	const stored = id === null ? null : await ctx.db.get(id);
+	return stored?.chatId === chatId ? stored : null;
+}
+
+function layerBefore(
+	kept: Doc<"messages">[],
+	upTo: Doc<"messages">,
+): Id<"replLayers"> | undefined {
+	const settled = upTo.type === "ai" ? kept.at(-2) : upTo;
+	return settled?.layerId;
+}
+
+export const fork = mutation({
+	args: { chatId: v.id("chats"), messageId: v.string() },
+	returns: v.id("chats"),
+	handler: async (ctx, { chatId, messageId }) => {
+		const { user, chat } = await requireChat(ctx, chatId);
+		const upTo = await messageOf(ctx, chatId, messageId);
+		if (upTo === null) throw new ConvexError({ code: "NOT_FOUND" });
+		const kept = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_seq", (q) =>
+				q.eq("chatId", chatId).lte("seq", upTo.seq),
+			)
+			.collect();
+		const forked = await ctx.db.insert("chats", {
+			workspaceId: chat.workspaceId,
+			userId: user._id,
+			title: `${chat.title || "untitled"} (fork)`,
+			lastMessageAt: Date.now(),
+		});
+		const head = layerBefore(kept, upTo);
+		if (head !== undefined)
+			await forkRepl(ctx, { _id: forked, workspaceId: chat.workspaceId }, head);
+		for (const message of kept) {
+			await ctx.db.insert("messages", {
+				chatId: forked,
+				workspaceId: message.workspaceId,
+				seq: message.seq,
+				type: message.type,
+				content: message.content,
+				kwargs: message.kwargs,
+				truncated: message.truncated,
+				wireId: message.wireId,
+				layerId: message.layerId,
+			});
+		}
+		return forked;
+	},
+});
+
 export const remove = mutation({
 	args: { chatId: v.id("chats") },
 	returns: v.null(),
 	handler: async (ctx, { chatId }) => {
-		await requireChat(ctx, chatId);
+		const { chat } = await requireChat(ctx, chatId);
 		await ctx.db.delete(chatId);
+		await dropRepl(ctx, chat);
 		await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
 		return null;
 	},

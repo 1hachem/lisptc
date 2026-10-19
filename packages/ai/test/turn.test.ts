@@ -8,6 +8,7 @@ import {
 	type SessionHooks,
 	type TurnOutcome,
 } from "@repo/interpreter/session";
+import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
@@ -192,6 +193,23 @@ describe("the agent turn", () => {
 			annotations: { output: { waiting: ["approve the write"] } },
 		});
 		expect(calls).toBe(1);
+	});
+
+	test("every step saves its image as a layer of the step that ran it", async () => {
+		script = [
+			[{ text: "(setq a 1)" }],
+			[{ text: "(setq b 2)" }],
+			[{ text: "done." }],
+		];
+		const images = new MemoryImageStore();
+
+		const events = await drain(ask, { repl: testRepl([], images) });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const steps = events.flatMap((e) =>
+			e.type === "assistant" ? [e.stepId] : [],
+		);
+		expect(images.origins()).toEqual(steps);
 	});
 
 	test("an answered step halts without a result event", async () => {

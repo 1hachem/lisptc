@@ -3,15 +3,16 @@ import type { SessionHooks } from "@repo/interpreter/session";
 import { type FormSpan, formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, test } from "vitest";
 import { type EvalMessage, evalUserMessage } from "../src/eval.ts";
-import { testRepls } from "./helpers.ts";
+import { extension, testRepls } from "./helpers.ts";
 
 const repls = testRepls();
 
 async function evaluated(
 	message: string,
 	threadId: string,
+	from = repls,
 ): Promise<EvalMessage> {
-	const result = await evalUserMessage(message, { repls, threadId });
+	const result = await evalUserMessage(message, { repls: from, threadId });
 	if (result === undefined) throw new Error(`nothing ran for ${message}`);
 	return result;
 }
@@ -120,5 +121,38 @@ describe("a user message", () => {
 		const repl = repls.peek(threadId);
 		expect(repl?.takeFinished()).toBe(false);
 		expect(repl?.takeProseFeedback()).toBe("");
+	});
+});
+
+describe("a step the host broke on", () => {
+	const broken = testRepls([
+		extension((hooks) =>
+			hooks.stepOutput.use((ctx, out, next) => {
+				if (ctx.code.includes("boom")) throw new Error("host broke");
+				return next(ctx, out);
+			}),
+		),
+	]);
+
+	test("restores the repl to its last checkpoint", async () => {
+		const threadId = crypto.randomUUID();
+		await evaluated("(setq x 41)", threadId, broken);
+		const failed = await evaluated(
+			"(progn (setq x 0) 'boom)",
+			threadId,
+			broken,
+		);
+		expect(result(failed)).toMatchObject({
+			output:
+				"REPL error: host broke (interpreter restored to its last checkpoint, changes since then lost)",
+			error: true,
+		});
+		const message = await evaluated("(echo (+ x 1))", threadId, broken);
+		expect(display(message)).toContain("42");
+	});
+
+	test("resets the repl when nothing was checkpointed", async () => {
+		const failed = await evaluated("(quote boom)", crypto.randomUUID(), broken);
+		expect(result(failed).output).toContain("interpreter was reset");
 	});
 });

@@ -25,8 +25,9 @@ export async function evalMessage(
 ): Promise<EvalMessage | undefined> {
 	if (formsOnly(message).trim() === "") return undefined;
 	if (!runsAnything(message, repl.unrun(message))) return undefined;
+	const id = crypto.randomUUID();
 	const { output, display, error, failed, annotations, emitted, results } =
-		await evalMessageCode(repl, message);
+		await evalMessageCode(repl, message, id);
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
 	if (failed) extras.failed = true;
@@ -35,7 +36,7 @@ export async function evalMessage(
 	return {
 		type: "tool",
 		content: replResultContent(output, error),
-		id: crypto.randomUUID(),
+		id,
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
 	};
 }

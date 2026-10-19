@@ -108,9 +108,12 @@ async function outcomeOf(
 			results,
 		};
 	} catch (ex) {
-		repl.reset();
+		const restored = await repl.recover();
 		const msg = ex instanceof Error ? ex.message : String(ex);
-		const text = `REPL error: ${msg} (interpreter was reset, definitions lost)`;
+		const text =
+			restored === undefined
+				? `REPL error: ${msg} (interpreter was reset, definitions lost)`
+				: `REPL error: ${msg} (interpreter restored to its last checkpoint, changes since then lost)`;
 		return {
 			output: text,
 			display: text,
@@ -124,12 +127,16 @@ async function outcomeOf(
 	}
 }
 
-export function evalCode(repl: AgentRepl, code: string) {
-	return outcomeOf(repl, () => repl.evalOutput(code));
+export function evalCode(repl: AgentRepl, code: string, origin?: string) {
+	return outcomeOf(repl, () => repl.evalOutput(code, origin));
 }
 
-export function evalMessageCode(repl: AgentRepl, code: string) {
-	return outcomeOf(repl, () => repl.evalMessage(code));
+export function evalMessageCode(
+	repl: AgentRepl,
+	code: string,
+	origin?: string,
+) {
+	return outcomeOf(repl, () => repl.evalMessage(code, origin));
 }
 
 function replOutcome(content: string): { output: string; error: boolean } {
