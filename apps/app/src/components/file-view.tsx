@@ -25,7 +25,7 @@ export function FileView({
 
 	return (
 		<>
-			<div className="min-h-0 flex-1 overflow-y-auto px-8 pt-6">
+			<div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges] px-8 pt-6">
 				<div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
 					<div className="flex items-baseline gap-3 font-mono text-[11.5px] text-dim">
 						<span className="min-w-0 flex-1 truncate">{file?.path ?? ""}</span>
