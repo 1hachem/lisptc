@@ -72,6 +72,7 @@ describe("the convex preferences store", () => {
 				theme: "borland",
 				themeUses: { borland: 3 },
 				channels: { lisp: true },
+				input: { lisp: false },
 				hidden: ["tests"],
 			},
 		});
@@ -81,6 +82,7 @@ describe("the convex preferences store", () => {
 			font: undefined,
 			channels: { lisp: true },
 			metadata: undefined,
+			input: { lisp: false },
 			hidden: ["tests"],
 		});
 	});
