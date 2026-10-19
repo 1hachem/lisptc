@@ -189,9 +189,33 @@ export class MemoryRepl implements InMemoryRepl {
 		}
 	}
 
+	recover(): Promise<number | undefined> {
+		return this.enqueue(async () => {
+			await this.saving;
+			const latest = await this.images?.latest().catch(() => undefined);
+			if (latest !== undefined && this.loaded(latest)) return latest.depth;
+			this.reset();
+			return undefined;
+		});
+	}
+
+	private loaded(checkpoint: Checkpoint): boolean {
+		try {
+			this.load(checkpoint);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	private load({ depth, image }: Checkpoint): void {
 		const interp = new Interp({ extensions: this.extensions });
-		restore(interp, image);
+		try {
+			restore(interp, image);
+		} catch (ex) {
+			interp.dispose();
+			throw ex;
+		}
 		this.parked = [];
 		this.currentInterp.dispose();
 		this.currentInterp = interp;
@@ -256,10 +280,14 @@ export class MemoryRepl implements InMemoryRepl {
 		body: (ctx: StepContext) => Promise<void>,
 		origin?: string,
 	): Promise<StepResult> {
-		const run = () =>
+		return this.enqueue(() =>
 			this.runStep(code, body).then((result) =>
 				this.checkpoint(result, origin),
-			);
+			),
+		);
+	}
+
+	private enqueue<T>(run: () => Promise<T>): Promise<T> {
 		this.queued++;
 		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
@@ -591,6 +619,12 @@ export class AgentRepl extends MemoryRepl {
 	override reset(): void {
 		super.reset();
 		this.clearTurnSignals();
+	}
+
+	override async recover(): Promise<number | undefined> {
+		const depth = await super.recover();
+		this.clearTurnSignals();
+		return depth;
 	}
 }
 

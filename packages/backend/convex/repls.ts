@@ -181,8 +181,7 @@ export const record = internalMutation({
 			await ctx.db.insert("replLayerChunks", { layerId, index, data });
 		await ctx.db.patch(replId, { head: layerId, lastActiveAt: Date.now() });
 		const layer = await ctx.db.get(layerId);
-		if (layer !== null && repl.chatId !== undefined)
-			await settleMessages(ctx, repl.chatId, layer);
+		if (layer !== null) await settleMessages(ctx, repl.chatId, layer);
 		return layerId;
 	},
 });
@@ -233,7 +232,7 @@ async function referenced(
 	return false;
 }
 
-async function collect(
+export async function collect(
 	ctx: MutationCtx,
 	layerId: Id<"replLayers"> | undefined,
 ): Promise<void> {

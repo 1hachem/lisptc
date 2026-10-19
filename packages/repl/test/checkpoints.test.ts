@@ -23,6 +23,17 @@ function opaque(): InterpExtension {
 	};
 }
 
+function breaking(): InterpExtension {
+	return Object.assign((_: Interp) => {}, {
+		session(hooks: SessionHooks): void {
+			hooks.stepOutput.use((ctx, out, next) => {
+				if (ctx.code.includes("boom")) throw new Error("host broke");
+				return next(ctx, out);
+			});
+		},
+	});
+}
+
 function settle(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -90,6 +101,28 @@ describe("checkpoints", () => {
 		await settle();
 		expect(images.origins()).toEqual([]);
 		expect(out.message).toBeUndefined();
+	});
+
+	it("recovers to the last checkpoint after a step the host broke on", async () => {
+		const images = new MemoryImageStore();
+		const r = repl(images, [breaking()]);
+		await r.evalOutput("(setq a 1)");
+		await expect(r.evalOutput("(progn (setq a 2) 'boom)")).rejects.toThrow(
+			"host broke",
+		);
+		expect(r.interp.getGlobal(newSym("a"))).toBe(2n);
+		expect(await r.recover()).toBe(1);
+		expect(r.interp.getGlobal(newSym("a"))).toBe(1n);
+		await r.evalOutput("(setq b 3)", "after");
+		await settle();
+		expect((await images.latest())?.depth).toBe(2);
+	});
+
+	it("resets when there is no checkpoint to recover to", async () => {
+		const r = new MemoryRepl({ extensions: [breaking()] });
+		await r.evalOutput("(setq a 1)");
+		expect(await r.recover()).toBeUndefined();
+		expect(r.interp.hasGlobal(newSym("a"))).toBe(false);
 	});
 
 	it("keeps checkpointing after a save fails", async () => {

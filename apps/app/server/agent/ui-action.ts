@@ -35,10 +35,6 @@ export const uiAction = {
 		const convex = convexAs(context.session);
 		await convex.query(api.chats.get, { chatId });
 		const result = await runUiAction(repls, chatId, action, values ?? {});
-		if (!result) {
-			console.log(`ui action chat=${chatId} action=${action} no-session`);
-			return Response.json({ error: "session expired" }, { status: 409 });
-		}
 		const { annotations, ...reply } = result;
 		if (messageId !== undefined && !result.error)
 			await annotateMessage(convex, chatId, messageId, annotations);
