@@ -143,6 +143,9 @@ importers:
       '@repo/introspection-extension':
         specifier: workspace:*
         version: link:../../packages/introspection
+      '@repo/language-service':
+        specifier: workspace:*
+        version: link:../../packages/language-service
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -176,6 +179,9 @@ importers:
       '@repo/syntax':
         specifier: workspace:*
         version: link:../../packages/syntax
+      '@repo/toolkit':
+        specifier: workspace:*
+        version: link:../../packages/toolkit
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -242,6 +248,12 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.8(react@19.2.8)
+      vscode-languageserver-textdocument:
+        specifier: ^1.0.12
+        version: 1.0.12
+      vscode-languageserver-types:
+        specifier: ^3.17.5
+        version: 3.17.5
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -404,9 +416,9 @@ importers:
       '@repo/introspection-extension':
         specifier: workspace:*
         version: link:../../packages/introspection
-      '@repo/lint-extension':
+      '@repo/language-service':
         specifier: workspace:*
-        version: link:../../packages/lint
+        version: link:../../packages/language-service
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -431,6 +443,9 @@ importers:
       '@repo/secrets-extension':
         specifier: workspace:*
         version: link:../../packages/secrets
+      '@repo/toolkit':
+        specifier: workspace:*
+        version: link:../../packages/toolkit
       vscode-languageserver:
         specifier: ^9.0.1
         version: 9.0.1
@@ -1056,11 +1071,45 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
 
+  packages/language-service:
+    dependencies:
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
+      vscode-languageserver-textdocument:
+        specifier: ^1.0.12
+        version: 1.0.12
+      vscode-languageserver-types:
+        specifier: ^3.17.5
+        version: 3.17.5
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1))
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
+
   packages/lint:
     dependencies:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
+      '@repo/language-service':
+        specifier: workspace:*
+        version: link:../language-service
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
@@ -1129,6 +1178,9 @@ importers:
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
+      '@repo/toolkit':
+        specifier: workspace:*
+        version: link:../toolkit
       minisearch:
         specifier: ^7.2.0
         version: 7.2.0
@@ -1282,6 +1334,9 @@ importers:
         specifier: workspace:*
         version: link:../shared
     devDependencies:
+      '@repo/language-service':
+        specifier: workspace:*
+        version: link:../language-service
       '@repo/tsconfigs':
         specifier: workspace:*
         version: link:../tsconfigs
@@ -1331,6 +1386,9 @@ importers:
       '@repo/interpreter':
         specifier: workspace:*
         version: link:../interpreter
+      '@repo/language-service':
+        specifier: workspace:*
+        version: link:../language-service
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
@@ -1411,6 +1469,24 @@ importers:
       '@tanstack/highlight':
         specifier: ^0.1.0
         version: 0.1.0
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1))
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
+
+  packages/toolkit:
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*

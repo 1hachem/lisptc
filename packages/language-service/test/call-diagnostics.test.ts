@@ -4,7 +4,7 @@ import {
 	callDiagnostics,
 	diagnosticsForCalls,
 	expectedArgs,
-} from "../src/calls.ts";
+} from "../src/call-diagnostics.ts";
 import {
 	collectCalls,
 	parseForms,
@@ -158,29 +158,26 @@ describe("diagnosticsForCalls", () => {
 });
 
 describe("callDiagnostics", () => {
-	it("resolves each distinct call name exactly once via the injected resolver", async () => {
-		const resolved: string[] = [];
-		const resolve = async (name: string): Promise<CallDoc> => {
-			resolved.push(name);
-			return name === "foo"
-				? { args: [{ name: "bar", type: "string", required: true }] }
-				: {};
-		};
-		const diagnostics = await callDiagnostics(
+	it("checks every call in the text against the docs it is given", () => {
+		const diagnostics = callDiagnostics(
 			'(foo) (foo :bar "x") (baz)',
-			resolve,
+			new Map([
+				["foo", { args: [{ name: "bar", type: "string", required: true }] }],
+			]),
 		);
-		expect(resolved.sort()).toEqual(["baz", "foo"]);
 		expect(diagnostics).toHaveLength(1);
 		expect(diagnostics[0].message).toBe(
 			'foo: missing required argument ":bar"',
 		);
 	});
 
-	it("flags a literal keyword argument of the wrong type", async () => {
-		const diagnostics = await callDiagnostics("(foo :bar 1)", async () => ({
-			args: [{ name: "bar", type: "string", required: true }],
-		}));
+	it("flags a literal keyword argument of the wrong type", () => {
+		const diagnostics = callDiagnostics(
+			"(foo :bar 1)",
+			new Map([
+				["foo", { args: [{ name: "bar", type: "string", required: true }] }],
+			]),
+		);
 		expect(diagnostics).toEqual([
 			expect.objectContaining({
 				code: "type",

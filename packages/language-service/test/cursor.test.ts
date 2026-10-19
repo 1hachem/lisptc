@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { enclosingCallHead, markdownFor, symbolAt } from "../src/symbols.ts";
+import { enclosingCallHead, markdownFor, symbolAt } from "../src/cursor.ts";
 
 function doc(content: string): TextDocument {
 	return TextDocument.create("file:///test.lisp", "lisp", 1, content);

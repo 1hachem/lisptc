@@ -1,5 +1,5 @@
+import { checkSyntax } from "@repo/language-service/syntax";
 import { describe, expect, it } from "vitest";
-import { checkSyntax } from "../src/prose.ts";
 import { tolerantly } from "./helpers.ts";
 
 const NOTHING = "#<unspecified>";

@@ -3,7 +3,7 @@ import {
 	type CompletionItem,
 	CompletionItemKind,
 	MarkupKind,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver-types";
 
 export function argCompletionItems(args: DocArg[]): CompletionItem[] {
 	return args.map((arg) => ({

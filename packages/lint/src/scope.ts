@@ -4,7 +4,7 @@ import {
 	callOf,
 	type ListForm,
 	type Node,
-} from "./tokenize.ts";
+} from "@repo/language-service/tokenize";
 
 export interface Known {
 	isGlobal(name: string): boolean;

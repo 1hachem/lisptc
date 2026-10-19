@@ -4,8 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/lint.ts",
-    "./calls": "./src/calls.ts"
+    ".": "./src/lint.ts"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -17,6 +16,7 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
+    "@repo/language-service": "workspace:*",
     "@repo/shared": "workspace:*"
   },
   "devDependencies": {

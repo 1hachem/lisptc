@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
 import { sentHistory } from "../lib/message-history.ts";
+import { useSymbols } from "../lib/symbols.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import { ChatView } from "./chat-view.tsx";
@@ -12,9 +13,10 @@ import { Greeting } from "./greeting.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
-	const { workspaceId, send, stop, isLoading, fresh } = useChatSession(
+	const { workspaceId, chatId, send, stop, isLoading, fresh } = useChatSession(
 		(state) => ({
 			workspaceId: state.workspaceId,
+			chatId: state.chatId,
 			send: state.send,
 			stop: state.stop,
 			isLoading: state.isLoading,
@@ -25,6 +27,7 @@ export function Chat() {
 		convexQuery(api.messages.sent, { workspaceId }),
 	);
 	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
+	const symbols = useSymbols(chatId, isLoading);
 
 	return (
 		<>
@@ -57,6 +60,7 @@ export function Chat() {
 					onCommand={runCommand}
 					isStreaming={isLoading}
 					onStop={stop}
+					symbols={symbols}
 				/>
 			</div>
 		</>

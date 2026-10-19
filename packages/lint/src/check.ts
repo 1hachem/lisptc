@@ -1,9 +1,16 @@
 import type { Arity, Doc } from "@repo/interpreter/docs";
 import { readFailure } from "@repo/interpreter/reader";
+import {
+	type CallDoc,
+	diagnosticsForCalls,
+} from "@repo/language-service/calls";
+import {
+	type Node,
+	parseForms,
+	tokenizeWithPositions,
+} from "@repo/language-service/tokenize";
 import { formSpans } from "@repo/shared/lisp-forms";
-import { type CallDoc, diagnosticsForCalls } from "./calls.ts";
 import { isSymbol, Walk } from "./scope.ts";
-import { type Node, parseForms, tokenizeWithPositions } from "./tokenize.ts";
 
 export interface Defined {
 	docs(): Map<string, Doc>;

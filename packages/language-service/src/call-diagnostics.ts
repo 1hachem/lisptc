@@ -132,23 +132,19 @@ function problemsOf(call: Call, doc: CallDoc): Diagnostic[] {
 
 export function diagnosticsForCalls(
 	calls: Call[],
-	docByName: Map<string, CallDoc>,
+	docByName: ReadonlyMap<string, CallDoc>,
 ): Diagnostic[] {
 	return calls.flatMap((call) =>
 		problemsOf(call, docByName.get(call.name) ?? {}),
 	);
 }
 
-export async function callDiagnostics(
+export function callDiagnostics(
 	text: string,
-	resolve: (name: string) => Promise<CallDoc>,
-): Promise<Diagnostic[]> {
-	const calls = collectCalls(parseForms(tokenizeWithPositions(text)));
-	const names = [...new Set(calls.map((c) => c.name))];
-	const docByName = new Map(
-		await Promise.all(
-			names.map(async (name) => [name, await resolve(name)] as const),
-		),
+	docByName: ReadonlyMap<string, CallDoc>,
+): Diagnostic[] {
+	return diagnosticsForCalls(
+		collectCalls(parseForms(tokenizeWithPositions(text))),
+		docByName,
 	);
-	return diagnosticsForCalls(calls, docByName);
 }

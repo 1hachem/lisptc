@@ -1,7 +1,7 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
-import { EvalException, UnresolvedHead } from "@repo/interpreter/errors";
+import { UnresolvedHead } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
-import { Cell, EndOfFile } from "@repo/interpreter/objects";
+import { Cell } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { Reader, readFailure } from "@repo/interpreter/reader";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
@@ -197,33 +197,6 @@ function readForm(source: string): unknown {
 	const tokens = new Reader();
 	tokens.push(source);
 	return tokens.read();
-}
-
-export interface SyntaxError_ {
-	message: string;
-	line: number;
-}
-
-export function checkSyntax(text: string): SyntaxError_[] {
-	const tokens = new Reader();
-	tokens.push(formsOnly(text));
-	while (!tokens.isEmpty()) {
-		try {
-			tokens.read();
-		} catch (ex) {
-			if (ex === EndOfFile)
-				return [
-					{
-						message: "unexpected end of input (unbalanced parentheses?)",
-						line: tokens.line,
-					},
-				];
-			if (ex instanceof EvalException)
-				return [{ message: String(ex.message), line: tokens.line }];
-			throw ex;
-		}
-	}
-	return [];
 }
 
 function* runNested(interp: Interp, form: Cell): Eval<number> {

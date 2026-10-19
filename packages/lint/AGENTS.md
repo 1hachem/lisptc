@@ -11,23 +11,19 @@ whose code would fail before it ran, and exports the same check for any root
 that wants it without the chain. `src/check.ts` gathers the problems and writes
 the rejection the model reads. `src/scope.ts` walks the forms the way the
 evaluator would, carrying the names each binding form binds, and reports the
-calls it reaches and the names nothing binds. `src/tokenize.ts`
-turns text into positioned atoms, forms and calls. `src/calls.ts` checks each
-call against the arity and the required keyword arguments its doc record
-declares, and owns the diagnostic shape every check returns.
+calls it reaches and the names nothing binds. The positioned forms and the call
+checks come from `@repo/language-service`, the same ones the editor runs, so
+the agent and the editor never disagree about a call.
 
 ## Rules
 
 Read the host-port and seam rules in `packages/interpreter/AGENTS.md`. They
 govern this package.
 
-A diagnostic names no consumer. It carries a range, a message, a severity and a
-code, and the editor and the agent each map it to what they speak at their own
-root. **Do not import an editor protocol type here.**
-
-The tokens come from `@repo/shared/lisp-tokens`. **Do not write a second
-tokenizer.** A checker that disagrees with the reader reports errors that are
-not real.
+Import only `@repo/language-service/tokenize` and
+`@repo/language-service/calls` from that package. **Do not import an editor
+protocol type here**, and nothing else there loads one. A check that belongs to
+both surfaces is written there; one only the agent needs stays here.
 
 What a form expects comes from the interpreter's doc records, handed in through
 a resolver, never from a table kept here. The checker never evaluates anything
@@ -52,4 +48,5 @@ Inside a binding form it does not understand, the check stays silent.
 
 ## Tests
 
-`test/`. A parser change needs a case in `test/tokenize.test.ts`.
+`test/`. The tokenizer and the call checks are tested in
+`@repo/language-service`, and a parser change needs a case there.

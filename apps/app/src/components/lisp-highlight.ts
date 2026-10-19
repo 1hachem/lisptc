@@ -104,7 +104,10 @@ const sameSegments = (a: Segment[], b: Segment[]): boolean =>
 	a.length === b.length &&
 	a.every((s, i) => s.text === b[i]?.text && s.token === b[i]?.token);
 
-function $offsetIn(paragraph: ParagraphNode, point: PointType): number | null {
+export function $offsetIn(
+	paragraph: ParagraphNode,
+	point: PointType,
+): number | null {
 	const node = point.getNode();
 	const children = paragraph.getChildren();
 	const size = (upTo: number) =>

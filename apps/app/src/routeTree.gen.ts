@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedWorkspaceIdRouteRouteImport } from './routes/_authed/$workspaceId/route'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
+import { Route as ApiSymbolsRouteImport } from './routes/api.symbols'
 import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
@@ -55,6 +56,11 @@ const AuthedWorkspaceIdRouteRoute = AuthedWorkspaceIdRouteRouteImport.update({
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSymbolsRoute = ApiSymbolsRouteImport.update({
+  id: '/api/symbols',
+  path: '/api/symbols',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiUiActionRoute = ApiUiActionRouteImport.update({
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByTo {
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/': typeof AuthedIndexRoute
@@ -168,6 +176,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authed/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/_authed/': typeof AuthedIndexRoute
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/$workspaceId'
     | '/api/chat'
+    | '/api/symbols'
     | '/api/ui-action'
     | '/oauth/callback'
     | '/$workspaceId/account'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/health'
     | '/login'
     | '/api/chat'
+    | '/api/symbols'
     | '/api/ui-action'
     | '/oauth/callback'
     | '/'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authed/$workspaceId'
     | '/api/chat'
+    | '/api/symbols'
     | '/api/ui-action'
     | '/oauth/callback'
     | '/_authed/'
@@ -247,6 +259,7 @@ export interface RootRouteChildren {
   HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRoute
   ApiChatRoute: typeof ApiChatRouteWithChildren
+  ApiSymbolsRoute: typeof ApiSymbolsRoute
   ApiUiActionRoute: typeof ApiUiActionRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
   ApiOauthCallbackRoute: typeof ApiOauthCallbackRoute
@@ -294,6 +307,13 @@ declare module '@tanstack/react-router' {
       path: '/api/chat'
       fullPath: '/api/chat'
       preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/symbols': {
+      id: '/api/symbols'
+      path: '/api/symbols'
+      fullPath: '/api/symbols'
+      preLoaderRoute: typeof ApiSymbolsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ui-action': {
@@ -441,6 +461,7 @@ const rootRouteChildren: RootRouteChildren = {
   HealthRoute: HealthRoute,
   LoginRoute: LoginRoute,
   ApiChatRoute: ApiChatRouteWithChildren,
+  ApiSymbolsRoute: ApiSymbolsRoute,
   ApiUiActionRoute: ApiUiActionRoute,
   OauthCallbackRoute: OauthCallbackRoute,
   ApiOauthCallbackRoute: ApiOauthCallbackRoute,
