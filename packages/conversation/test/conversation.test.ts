@@ -3,6 +3,7 @@ import {
 	conversationSlot,
 } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
+import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -139,5 +140,30 @@ describe("the conversation it keeps", () => {
 		s.endStep("(echo 1)", "1", "continue");
 		await s.startTurn();
 		expect(s.hooks.filled(conversationSlot)?.entries()).toEqual(stored);
+	});
+});
+
+describe("across an image", () => {
+	it("keeps the globals the last step saw", async () => {
+		const before = stopped();
+		await before.startTurn();
+		await before.beginStep();
+		const after = stopped();
+		restore(after.interp, snapshot(before.interp));
+		expect(after.read("(length conversation)")).toBe("4");
+		expect(after.read("(car user-messages)")).toBe('"add one and two"');
+	});
+
+	it("lets a setq on them stand only until the next step", async () => {
+		const before = stopped();
+		await before.startTurn();
+		await before.beginStep();
+		before.read("(setq user-messages nil)");
+		const after = stopped();
+		restore(after.interp, snapshot(before.interp));
+		expect(after.read("user-messages")).toBe("nil");
+		await after.startTurn();
+		await after.beginStep();
+		expect(after.read("(car user-messages)")).toBe('"add one and two"');
 	});
 });
