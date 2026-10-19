@@ -44,6 +44,7 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = ORIGIN;
 	process.env.CONVEX_SITE_URL = ORIGIN;
+	process.env.CONVEX_SELF_HOSTED_ADMIN_KEY = "test-admin-key";
 
 	const { edge } = await import("../../server/agent/edge.ts");
 	const { authed } = await import("../../server/agent/session.ts");

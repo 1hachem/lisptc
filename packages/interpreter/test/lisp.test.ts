@@ -10,6 +10,7 @@ import {
 } from "../src/lisp.ts";
 import { Cell, Keyword, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
+import { LispPromise } from "../src/promise.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
@@ -93,6 +94,19 @@ describe("the language reference", () => {
 		expect(ev(form)).toBe("(1 4 9)");
 	});
 
+	it.each([
+		[`(get-in '(:theme (:accent "red")) :theme :accent)`, '"red"'],
+		[
+			`(set-in '(:theme (:accent "red")) "blue" :theme :accent)`,
+			'(:theme (:accent "blue"))',
+		],
+		["(update-in '(:n 1) (lambda (n) (+ n 1)) :n)", "(:n 2)"],
+		["(remove-in '(:a 1 :b 2) :a)", "(:b 2)"],
+	])("shows %s gives %s, and it does", (form, value) => {
+		expect(LANGUAGE_REFERENCE).toContain(`${form} gives ${value}`);
+		expect(ev(form)).toBe(value);
+	});
+
 	it("names let* as the sequential binding", () => {
 		expect(LANGUAGE_REFERENCE).toContain(
 			"(let* ((name val) ...) body...) sequential",
@@ -142,9 +156,9 @@ describe("builtin kinds", () => {
 			async ([x]) => x,
 		);
 		const { value } = await runAsync(interp, "(later 5)");
-		expect(value).toBeInstanceOf(Promise);
+		expect(value).toBeInstanceOf(LispPromise);
 		expect(await value).toBe(5n);
-		expect(interp.async.stateOf(value as Promise<unknown>)).toBe("fulfilled");
+		expect(interp.async.stateOf(value as LispPromise)).toBe("fulfilled");
 		expect(interp.docs().get("later")?.signature).toBe("(later x)");
 	});
 

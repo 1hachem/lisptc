@@ -58,8 +58,9 @@ export async function evalUserCode<Id extends string>(
 	source: ReplSource<Id>,
 ): Promise<EvalMessage> {
 	const repl = await replFrom(source);
+	const id = crypto.randomUUID();
 	const { output, display, error, failed, annotations, emitted } =
-		await evalCode(repl, code);
+		await evalCode(repl, code, id);
 	repl.clearTurnSignals();
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
@@ -68,7 +69,7 @@ export async function evalUserCode<Id extends string>(
 	return {
 		type: "tool",
 		content: replResultContent(output, error),
-		id: crypto.randomUUID(),
+		id,
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
 	};
 }

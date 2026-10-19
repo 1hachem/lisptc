@@ -97,3 +97,33 @@ describe("checking user code", () => {
 		});
 	});
 });
+
+describe("a step the host broke on", () => {
+	const broken = testRepls([
+		extension((hooks) =>
+			hooks.stepOutput.use((ctx, out, next) => {
+				if (ctx.code.includes("boom")) throw new Error("host broke");
+				return next(ctx, out);
+			}),
+		),
+	]);
+
+	test("restores the repl to its last checkpoint", async () => {
+		const source = { repls: broken, threadId: crypto.randomUUID() };
+		await evalUserCode("(setq x 41)", source);
+		const failed = await evalUserCode("(progn (setq x 0) 'boom)", source);
+		expect(result(failed)).toMatchObject({
+			output:
+				"REPL error: host broke (interpreter restored to its last checkpoint, changes since then lost)",
+			error: true,
+		});
+		const message = await evalUserCode("(echo (+ x 1))", source);
+		expect(display(message)).toContain("42");
+	});
+
+	test("resets the repl when nothing was checkpointed", async () => {
+		const source = { repls: broken, threadId: crypto.randomUUID() };
+		const failed = await evalUserCode("'boom", source);
+		expect(result(failed).output).toContain("interpreter was reset");
+	});
+});

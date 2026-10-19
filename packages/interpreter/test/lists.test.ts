@@ -142,6 +142,110 @@ describe("get-in", () => {
 		expect(ev(`${config} (get-in c :server :port)`)).toBe("8080");
 		expect(ev(`${config} (get-in c 'server 'port)`)).toBe("8080");
 	});
+
+	it("reads through keyword plists, matching any key by name", () => {
+		const page = `(setq p '(:theme (:accent "red") :sections ((:type :hero))))`;
+		expect(ev(`${page} (get-in p :theme :accent)`)).toBe('"red"');
+		expect(ev(`${page} (get-in p "theme" 'accent)`)).toBe('"red"');
+		expect(ev(`${page} (get-in p :sections 0 :type)`)).toBe(":hero");
+		expect(ev(`${page} (get-in p :theme :font)`)).toBe("nil");
+	});
+});
+
+describe("set-in", () => {
+	const page = `(setq p '(:theme (:accent "red") :sections ((:type :hero) (:type :faq))))`;
+
+	it("replaces a value at a plist path and leaves the record untouched", () => {
+		expect(ev(`${page} (set-in p "blue" :theme :accent)`)).toBe(
+			'(:theme (:accent "blue") :sections ((:type :hero) (:type :faq)))',
+		);
+		expect(ev(`${page} (set-in p "blue" :theme :accent) p`)).toBe(
+			'(:theme (:accent "red") :sections ((:type :hero) (:type :faq)))',
+		);
+	});
+
+	it("adds a missing keyword key and builds a missing record", () => {
+		expect(ev(`${page} (get-in (set-in p "geist" :theme :font) :theme)`)).toBe(
+			'(:accent "red" :font "geist")',
+		);
+		expect(ev("(set-in nil 1 :a :b)")).toBe("(:a (:b 1))");
+		expect(ev('(set-in nil 1 "a")')).toBe('(("a" . 1))');
+	});
+
+	it("writes through a list index, appending at the length", () => {
+		expect(
+			ev(`${page} (get-in (set-in p :cta :sections 1 :type) :sections)`),
+		).toBe("((:type :hero) (:type :cta))");
+		expect(ev("(set-in '(a b) 'c 2)")).toBe("(a b c)");
+		expect(ev("(try (set-in '(a b) 'c 5) (catch (e) e))")).toContain(
+			"past the end",
+		);
+	});
+
+	it("writes through alists the way get-in reads them", () => {
+		const config = `(setq c '(("server" . (("port" . 8080)))))`;
+		expect(ev(`${config} (set-in c 9090 :server :port)`)).toBe(
+			'(("server" ("port" . 9090)))',
+		);
+		expect(ev(`${config} (set-in c "x" "server" "host")`)).toBe(
+			'(("server" ("port" . 8080) ("host" . "x")))',
+		);
+	});
+
+	it("refuses to descend into a value that is not a record", () => {
+		expect(ev("(try (set-in '(:a 1) 2 :a :b) (catch (e) e))")).toContain(
+			"not a record",
+		);
+		expect(ev('(try (set-in \'(:a 1) 2 "b") (catch (e) e))')).toContain(
+			"must be a keyword",
+		);
+	});
+});
+
+describe("update-in", () => {
+	it("applies a function to the value at the path", () => {
+		expect(ev("(update-in '(:n 1) (lambda (n) (+ n 1)) :n)")).toBe("(:n 2)");
+		expect(
+			ev(
+				"(update-in '(:s ((:t :a))) (lambda (s) (append s (list '(:t :b)))) :s)",
+			),
+		).toBe("(:s ((:t :a) (:t :b)))");
+	});
+
+	it("hands the function nil for a missing path", () => {
+		expect(ev("(update-in '(:a 1) (lambda (x) (if x x 0)) :b)")).toBe(
+			"(:a 1 :b 0)",
+		);
+	});
+});
+
+describe("remove-in", () => {
+	const page = `(setq p '(:theme (:accent "red" :font "geist") :sections ((:type :hero) (:type :faq))))`;
+
+	it("drops a plist key, a list element and an alist pair", () => {
+		expect(ev(`${page} (get-in (remove-in p :theme :font) :theme)`)).toBe(
+			'(:accent "red")',
+		);
+		expect(ev(`${page} (get-in (remove-in p :sections 0) :sections)`)).toBe(
+			"((:type :faq))",
+		);
+		expect(ev(`(remove-in '(("a" . 1) ("b" . 2)) :a)`)).toBe('(("b" . 2))');
+	});
+
+	it("gives the record back for a missing path and never changes it", () => {
+		expect(ev(`${page} (equal (remove-in p :nope :deeper) p)`)).toBe("t");
+		expect(
+			ev(`${page} (remove-in p :sections 0) (length (get-in p :sections))`),
+		).toBe("2");
+	});
+});
+
+describe("keywordp", () => {
+	it("is true only for keywords", () => {
+		expect(ev("(keywordp :a)")).toBe("t");
+		expect(ev("(keywordp 'a)")).toBe("nil");
+		expect(ev('(keywordp ":a")')).toBe("nil");
+	});
 });
 
 describe("apply", () => {

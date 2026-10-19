@@ -380,6 +380,7 @@ task up                      # build and run the whole stack in docker, with liv
 task test                    # the vitest suites and the nix flake checks together
 task test:nix                # the nix flake checks, the ptcfmt formatter test included
 task test:nvim               # the nvim integration test
+task convex:generate         # start the local convex backend and regenerate packages/backend/convex/_generated
 
 # Single test file / by name — run inside the package that owns it:
 pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts

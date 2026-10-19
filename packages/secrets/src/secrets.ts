@@ -52,10 +52,22 @@ export function secretsExtension(host: SecretsHost): SecretsExtension {
 class Secret implements ToJson {
 	readonly keys: readonly string[];
 	constructor(
-		readonly value: string,
+		private readonly plain: string | undefined,
 		keys: Iterable<string>,
 	) {
 		this.keys = [...new Set(keys)];
+	}
+	get lost(): boolean {
+		return this.plain === undefined;
+	}
+	get value(): string {
+		if (this.plain === undefined)
+			throw new EvalException(
+				"secret lost by a restore, take it again with (secret key)",
+				this.toString(),
+				false,
+			);
+		return this.plain;
 	}
 	get length(): number {
 		return this.value.length;
@@ -81,7 +93,38 @@ function propagateTaint(
 	return keys.length > 0 ? new Secret(value, keys) : value;
 }
 
+interface ImagedSecret {
+	readonly keys: string[];
+	readonly whole: boolean;
+}
+
+function imageSecrets(interp: Interp, store: SecretsStore): void {
+	interp.recovery.kind({
+		name: "secret",
+		claims: (x) => x instanceof Secret,
+		save: (x) => {
+			const secret = x as Secret;
+			const [key] = secret.keys;
+			const whole =
+				secret.keys.length === 1 &&
+				key !== undefined &&
+				!secret.lost &&
+				store.get(key)?.value === secret.value;
+			const data: ImagedSecret = { keys: [...secret.keys], whole };
+			return data;
+		},
+		restore: (data) => {
+			const { keys, whole } = data as ImagedSecret;
+			const [key] = keys;
+			const value =
+				whole && key !== undefined ? store.get(key)?.value : undefined;
+			return new Secret(value, keys);
+		},
+	});
+}
+
 export function registerSecrets(interp: Interp, store: SecretsStore): void {
+	imageSecrets(interp, store);
 	interp.def(
 		"secrets",
 		0,

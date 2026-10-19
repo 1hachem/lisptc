@@ -19,7 +19,8 @@
     "./memory-store": "./src/memory-store.ts",
     "./secrets-store": "./src/secrets-store.ts",
     "./oauth-store": "./src/oauth-store.ts",
-    "./oauth-callback": "./src/oauth-callback.ts"
+    "./oauth-callback": "./src/oauth-callback.ts",
+    "./server-client": "./src/server-client.ts"
   },
   "scripts": {
     "dev": "convex dev",

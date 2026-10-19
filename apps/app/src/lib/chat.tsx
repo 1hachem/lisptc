@@ -25,7 +25,7 @@ import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
-import { pickGreeting } from "./greeting.ts";
+import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
 import { type ToolEnvelope, toolEnvelope } from "./tool-result.ts";
@@ -96,6 +96,7 @@ function parseMeta(value: unknown): StepMeta | undefined {
 
 export interface ChatSession {
 	messages: ChatMessage[];
+	saved: ChatMessage[];
 	queued: QueuedMessage[];
 	greeting: string | null;
 	meta: Record<string, StepMeta>;
@@ -110,6 +111,7 @@ export interface ChatSession {
 	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
+	fail: (message: string) => void;
 }
 
 async function evalLisp(
@@ -139,12 +141,6 @@ function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	}));
 }
 
-const GREETING_ID = "greeting";
-
-export function isGreetingMessage(message: ChatMessage): boolean {
-	return message.id === GREETING_ID;
-}
-
 function greetingMessage(): ChatMessage {
 	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
 }
@@ -152,6 +148,12 @@ function greetingMessage(): ChatMessage {
 export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
 
 const ChatContext = createContext<ChatStore | null>(null);
+
+const abandoning = new Set<(chatId: Id<"chats">) => void>();
+
+export function abandonChat(chatId: Id<"chats">): void {
+	for (const abandon of abandoning) abandon(chatId);
+}
 
 function titleOf(message: string): string {
 	const line = message.trim().split("\n")[0] ?? "";
@@ -163,13 +165,13 @@ function errorFor(
 	sources: {
 		stream: unknown;
 		streamingFor: Id<"chats"> | null;
-		evalError: { chatId: Id<"chats"> | null; message: string } | null;
+		failure: { chatId: Id<"chats"> | null; message: string } | null;
 	},
 ): string | undefined {
-	const { stream, streamingFor, evalError } = sources;
+	const { stream, streamingFor, failure } = sources;
 	if (stream && streamingFor === chatId)
 		return stream instanceof Error ? stream.message : String(stream);
-	if (evalError?.chatId === chatId) return evalError.message;
+	if (failure?.chatId === chatId) return failure.message;
 	return undefined;
 }
 
@@ -185,6 +187,7 @@ export function ChatProvider({
 	const navigate = useNavigate();
 	const createChat = useConvexMutation(api.chats.create);
 	const startChat = useConvexMutation(api.chats.start);
+	const settleChat = useConvexMutation(api.chats.settle);
 	const markStreaming = useMemo(
 		() =>
 			startChat.withOptimisticUpdate((store, { chatId: started }) => {
@@ -230,13 +233,27 @@ export function ChatProvider({
 			});
 	}, [stream.error, chatId]);
 
+	useEffect(() => {
+		const failed = streamingFor.current;
+		if (!stream.error || failed === null) return;
+		settleChat({
+			chatId: failed,
+			failure:
+				stream.error instanceof Error
+					? stream.error.message
+					: String(stream.error),
+		}).catch((ex: unknown) =>
+			reportIssue(ex, { $exception_source: "chat settle", thread_id: failed }),
+		);
+	}, [stream.error, settleChat]);
+
 	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
 	useEffect(() => {
 		setGreeting(greetingMessage());
 	}, []);
 
 	const [evaluating, setEvaluating] = useState(false);
-	const [evalError, setEvalError] = useState<{
+	const [failure, setFailure] = useState<{
 		chatId: Id<"chats"> | null;
 		message: string;
 	} | null>(null);
@@ -278,11 +295,13 @@ export function ChatProvider({
 			title: string,
 			into?: Id<"chats">,
 		) => {
-			setEvalError(null);
+			setFailure(null);
 			const opened =
 				into ?? chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
-			void markStreaming({ chatId: opened });
+			markStreaming({ chatId: opened }).catch((ex: unknown) =>
+				reportIssue(ex, { $exception_source: "chat start", thread_id: opened }),
+			);
 			stream.submit(
 				{ chatId: opened, ...input },
 				{ optimisticValues: { messages: [...persisted, shown] } },
@@ -349,7 +368,7 @@ export function ChatProvider({
 			const run = new AbortController();
 			running.current?.abort();
 			running.current = run;
-			setEvalError(null);
+			setFailure(null);
 			setEvaluating(true);
 			let opened = chatId;
 			try {
@@ -370,7 +389,7 @@ export function ChatProvider({
 					$exception_source: "lisp eval",
 					thread_id: chatId ?? "draft",
 				});
-				setEvalError({
+				setFailure({
 					chatId: opened,
 					message: ex instanceof Error ? ex.message : String(ex),
 				});
@@ -405,7 +424,7 @@ export function ChatProvider({
 		[steering, enqueue, submitTurn],
 	);
 
-	const stop = useCallback(() => {
+	const halt = useCallback(() => {
 		clear();
 		running.current?.abort();
 		running.current = null;
@@ -413,12 +432,32 @@ export function ChatProvider({
 		stream.stop();
 	}, [stream, clear]);
 
+	const stop = useCallback(() => {
+		const stopped = streamingFor.current;
+		if (stream.isLoading && stopped !== null)
+			settleChat({ chatId: stopped }).catch((ex: unknown) =>
+				reportIssue(ex, {
+					$exception_source: "chat settle",
+					thread_id: stopped,
+				}),
+			);
+		halt();
+	}, [stream, halt, settleChat]);
+
+	const abandon = useCallback(
+		(target: Id<"chats">) => {
+			if (streamingFor.current === target) halt();
+		},
+		[halt],
+	);
+
 	const fresh = isFreshChat(chatId, turns);
 
 	const storeRef = useRef<ChatStore | null>(null);
 	if (storeRef.current === null) {
 		storeRef.current = create<ChatSession>(() => ({
 			messages: [],
+			saved: [],
 			queued: [],
 			greeting: null,
 			meta: {},
@@ -432,6 +471,7 @@ export function ChatProvider({
 			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
+			fail: () => {},
 		}));
 	}
 	const store = storeRef.current;
@@ -439,6 +479,7 @@ export function ChatProvider({
 	useEffect(() => {
 		store.setState({
 			messages,
+			saved: persisted,
 			queued,
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
@@ -449,7 +490,7 @@ export function ChatProvider({
 			error: errorFor(chatId, {
 				stream: stream.error,
 				streamingFor: streamingFor.current,
-				evalError,
+				failure,
 			}),
 			send: (text) => {
 				void send(text);
@@ -463,10 +504,12 @@ export function ChatProvider({
 			},
 			stop,
 			withdraw,
+			fail: (message) => setFailure({ chatId, message }),
 		});
 	}, [
 		store,
 		messages,
+		persisted,
 		queued,
 		meta,
 		greeting,
@@ -474,7 +517,7 @@ export function ChatProvider({
 		stream.isLoading,
 		stream.error,
 		evaluating,
-		evalError,
+		failure,
 		chatId,
 		workspaceId,
 		send,
@@ -484,6 +527,13 @@ export function ChatProvider({
 		stop,
 		withdraw,
 	]);
+
+	useEffect(() => {
+		abandoning.add(abandon);
+		return () => {
+			abandoning.delete(abandon);
+		};
+	}, [abandon]);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }

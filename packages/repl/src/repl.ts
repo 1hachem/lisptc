@@ -12,6 +12,7 @@ import {
 	type Middleware,
 	noOpinion,
 } from "@repo/interpreter/hooks";
+import { type Image, restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
@@ -35,6 +36,7 @@ import {
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
+import type { Checkpoint, ImageStore } from "./image-store.ts";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -47,6 +49,7 @@ export interface InMemoryRepl extends Repl {
 
 export interface ReplOptions {
 	extensions: InterpExtension[];
+	images?: ImageStore;
 }
 
 export interface EvalOutput extends Bounded {
@@ -129,15 +132,27 @@ function render(result: StepResult): EvalOutput {
 	};
 }
 
+function snapshotOf(interp: Interp): Image | undefined {
+	try {
+		return snapshot(interp);
+	} catch {
+		return undefined;
+	}
+}
+
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
 	private readonly extensions: InterpExtension[];
+	private readonly images: ImageStore | undefined;
+	private saving: Promise<void> = Promise.resolve();
+	private calls = 0;
 	readonly hooks: SessionHooks;
 
 	constructor(options: ReplOptions) {
 		this.extensions = options.extensions;
+		this.images = options.images;
 		this.hooks = openSession(this.extensions);
 		this.currentInterp = this.freshInterp();
 	}
@@ -152,15 +167,70 @@ export class MemoryRepl implements InMemoryRepl {
 		return interp;
 	}
 
-	async evalOutput(code: string): Promise<EvalOutput> {
-		return render(await this.evaluate(code));
+	async resume(): Promise<number | undefined> {
+		const latest = await this.images?.latest();
+		if (latest === undefined) return undefined;
+		this.load(latest);
+		return latest.depth;
 	}
 
-	protected evaluate(code: string): Promise<StepResult> {
-		return this.serialize(code, (ctx) =>
-			this.hooks.evalStep.run(async (c) => {
-				await runAsync(c.interp, c.code);
-			}, ctx),
+	recover(): Promise<number | undefined> {
+		return this.enqueue(async () => {
+			await this.saving;
+			const latest = await this.images?.latest().catch(() => undefined);
+			if (latest !== undefined && this.loaded(latest)) return latest.depth;
+			this.reset();
+			return undefined;
+		});
+	}
+
+	private loaded(checkpoint: Checkpoint): boolean {
+		try {
+			this.load(checkpoint);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private load({ depth, image }: Checkpoint): void {
+		const interp = new Interp({ extensions: this.extensions });
+		try {
+			restore(interp, image);
+		} catch (ex) {
+			interp.dispose();
+			throw ex;
+		}
+		this.parked = [];
+		this.currentInterp.dispose();
+		this.currentInterp = interp;
+		this.calls = depth;
+	}
+
+	private checkpoint(result: StepResult, origin?: string): StepResult {
+		this.calls += 1;
+		const { images } = this;
+		if (images === undefined) return result;
+		const image = snapshotOf(this.currentInterp);
+		if (image === undefined) return result;
+		this.saving = this.saving
+			.then(() => images.save(image, origin))
+			.catch(() => undefined);
+		return result;
+	}
+
+	async evalOutput(code: string, origin?: string): Promise<EvalOutput> {
+		return render(await this.evaluate(code, origin));
+	}
+
+	protected evaluate(code: string, origin?: string): Promise<StepResult> {
+		return this.serialize(
+			code,
+			(ctx) =>
+				this.hooks.evalStep.run(async (c) => {
+					await runAsync(c.interp, c.code);
+				}, ctx),
+			origin,
 		);
 	}
 
@@ -187,8 +257,16 @@ export class MemoryRepl implements InMemoryRepl {
 	private serialize(
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
+		origin?: string,
 	): Promise<StepResult> {
-		const run = () => this.runStep(code, body);
+		return this.enqueue(() =>
+			this.runStep(code, body).then((result) =>
+				this.checkpoint(result, origin),
+			),
+		);
+	}
+
+	private enqueue<T>(run: () => Promise<T>): Promise<T> {
 		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
 			() => undefined,
@@ -211,7 +289,7 @@ export class MemoryRepl implements InMemoryRepl {
 			},
 		};
 		const { channels } = interp;
-		channels.step += 1;
+		channels.step = this.calls + 1;
 		const buffer = bufferTransport();
 		const detach = channels.pipe(buffer);
 		let thrown: unknown;
@@ -327,8 +405,11 @@ export class AgentRepl extends MemoryRepl {
 	private finished = false;
 	private pendingProse: string[] = [];
 
-	override async evalOutput(code: string): Promise<EvalOutput> {
-		const result = await this.evaluate(code);
+	override async evalOutput(
+		code: string,
+		origin?: string,
+	): Promise<EvalOutput> {
+		const result = await this.evaluate(code, origin);
 		if (result.held) {
 			this.finished = true;
 			return render(result);
@@ -499,6 +580,12 @@ export class AgentRepl extends MemoryRepl {
 	override reset(): void {
 		super.reset();
 		this.clearTurnSignals();
+	}
+
+	override async recover(): Promise<number | undefined> {
+		const depth = await super.recover();
+		this.clearTurnSignals();
+		return depth;
 	}
 }
 
