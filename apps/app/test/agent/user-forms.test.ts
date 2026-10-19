@@ -1,6 +1,6 @@
 import type { ChatInput, EvalMessage } from "@repo/ai";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { type Method, post as send } from "../helpers.ts";
+import { type Method, post as send, serve } from "../helpers.ts";
 
 const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 
@@ -9,6 +9,7 @@ const world = vi.hoisted(() => ({
 	storedWhenStreamed: [] as Record<string, unknown>[][],
 	sent: [] as ChatInput[],
 	steered: [] as string[],
+	evaluating: () => {},
 }));
 
 vi.mock("../../server/agent/session.ts", async () => {
@@ -51,6 +52,7 @@ vi.mock("@repo/ai", async (importOriginal) => {
 		evalUserMessage: async (
 			message: string,
 		): Promise<EvalMessage | undefined> => {
+			world.evaluating();
 			if (message.startsWith("slow"))
 				await new Promise((resolve) => setTimeout(resolve, 20));
 			return holdsForms(message)
@@ -92,6 +94,7 @@ beforeEach(() => {
 	world.storedWhenStreamed.length = 0;
 	world.sent.length = 0;
 	world.steered.length = 0;
+	world.evaluating = () => {};
 });
 
 describe("a message that holds forms", () => {
@@ -133,6 +136,24 @@ describe("a message that holds forms", () => {
 		});
 		expect(response.status).toBe(202);
 		expect(world.steered).toEqual(["also (+ 1 2)"]);
+	});
+
+	test("keeps its result when the turn is aborted after the forms ran", async () => {
+		const abort = new AbortController();
+		world.evaluating = () => abort.abort();
+		const response = serve(turn)(
+			new Request("http://app.test/", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					input: { chatId: CHAT, message: "what is (+ 1 2)" },
+				}),
+				signal: abort.signal,
+			}),
+		);
+		expect((await response).status).toBe(204);
+		expect(world.appended.map((m) => m.type)).toEqual(["human", "tool"]);
+		expect(world.sent).toHaveLength(0);
 	});
 });
 

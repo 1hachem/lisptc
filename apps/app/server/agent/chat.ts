@@ -50,13 +50,12 @@ async function runUserForms(
 	convex: ReturnType<typeof convexAs>,
 	chatId: TurnInput["chatId"],
 	message: string,
-	signal: AbortSignal,
 ): Promise<void> {
 	const evaluated = await evalUserMessage(message, {
 		repls,
 		threadId: chatId,
 	});
-	if (evaluated === undefined || signal.aborted) return;
+	if (evaluated === undefined) return;
 	await convex.mutation(api.messages.append, {
 		chatId,
 		messages: toStored([evaluated]),
@@ -82,7 +81,6 @@ async function prepareTurn(
 	convex: ReturnType<typeof convexAs>,
 	input: TurnInput,
 	opening: StoredMessage,
-	signal: AbortSignal,
 ) {
 	const { chatId } = input;
 	const { workspaceId } = await convex.query(api.chats.get, { chatId });
@@ -94,8 +92,7 @@ async function prepareTurn(
 			chatId,
 			messages: [opening],
 		});
-		if ("message" in input)
-			await runUserForms(convex, chatId, input.message, signal);
+		if ("message" in input) await runUserForms(convex, chatId, input.message);
 		return convex.query(api.messages.transcript, { chatId });
 	});
 	return { provider, model, history };
@@ -136,7 +133,7 @@ export const turn = {
 		const convex = convexAs(context.session);
 		const { provider, model, history } = await convex
 			.mutation(api.chats.start, { chatId })
-			.then(() => prepareTurn(convex, input, opening, request.signal))
+			.then(() => prepareTurn(convex, input, opening))
 			.catch(async (error: unknown) => {
 				await convex
 					.mutation(api.chats.settle, {
