@@ -18,6 +18,7 @@ import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
+import { Route as AuthedWorkspaceIdAccountRouteImport } from './routes/_authed/$workspaceId/account'
 import { Route as AuthedWorkspaceIdPreferencesRouteImport } from './routes/_authed/$workspaceId/preferences'
 import { Route as AuthedWorkspaceIdReadmeRouteImport } from './routes/_authed/$workspaceId/readme'
 import { Route as AuthedWorkspaceIdSettingsRouteImport } from './routes/_authed/$workspaceId/settings'
@@ -71,6 +72,12 @@ const AuthedWorkspaceIdIndexRoute = AuthedWorkspaceIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
+const AuthedWorkspaceIdAccountRoute =
+  AuthedWorkspaceIdAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
 const AuthedWorkspaceIdPreferencesRoute =
   AuthedWorkspaceIdPreferencesRouteImport.update({
     id: '/preferences',
@@ -125,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
+  '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
   '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
   '/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
   '/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
@@ -142,6 +150,7 @@ export interface FileRoutesByTo {
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/': typeof AuthedIndexRoute
+  '/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
   '/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
   '/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
   '/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
@@ -162,6 +171,7 @@ export interface FileRoutesById {
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/_authed/': typeof AuthedIndexRoute
+  '/_authed/$workspaceId/account': typeof AuthedWorkspaceIdAccountRoute
   '/_authed/$workspaceId/preferences': typeof AuthedWorkspaceIdPreferencesRoute
   '/_authed/$workspaceId/readme': typeof AuthedWorkspaceIdReadmeRoute
   '/_authed/$workspaceId/settings': typeof AuthedWorkspaceIdSettingsRoute
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/ui-action'
     | '/oauth/callback'
+    | '/$workspaceId/account'
     | '/$workspaceId/preferences'
     | '/$workspaceId/readme'
     | '/$workspaceId/settings'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/api/ui-action'
     | '/oauth/callback'
     | '/'
+    | '/$workspaceId/account'
     | '/$workspaceId/preferences'
     | '/$workspaceId/readme'
     | '/$workspaceId/settings'
@@ -218,6 +230,7 @@ export interface FileRouteTypes {
     | '/api/ui-action'
     | '/oauth/callback'
     | '/_authed/'
+    | '/_authed/$workspaceId/account'
     | '/_authed/$workspaceId/preferences'
     | '/_authed/$workspaceId/readme'
     | '/_authed/$workspaceId/settings'
@@ -304,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdIndexRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
+    '/_authed/$workspaceId/account': {
+      id: '/_authed/$workspaceId/account'
+      path: '/account'
+      fullPath: '/$workspaceId/account'
+      preLoaderRoute: typeof AuthedWorkspaceIdAccountRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
     '/_authed/$workspaceId/preferences': {
       id: '/_authed/$workspaceId/preferences'
       path: '/preferences'
@@ -364,6 +384,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedWorkspaceIdRouteRouteChildren {
+  AuthedWorkspaceIdAccountRoute: typeof AuthedWorkspaceIdAccountRoute
   AuthedWorkspaceIdPreferencesRoute: typeof AuthedWorkspaceIdPreferencesRoute
   AuthedWorkspaceIdReadmeRoute: typeof AuthedWorkspaceIdReadmeRoute
   AuthedWorkspaceIdSettingsRoute: typeof AuthedWorkspaceIdSettingsRoute
@@ -375,6 +396,7 @@ interface AuthedWorkspaceIdRouteRouteChildren {
 
 const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
   {
+    AuthedWorkspaceIdAccountRoute: AuthedWorkspaceIdAccountRoute,
     AuthedWorkspaceIdPreferencesRoute: AuthedWorkspaceIdPreferencesRoute,
     AuthedWorkspaceIdReadmeRoute: AuthedWorkspaceIdReadmeRoute,
     AuthedWorkspaceIdSettingsRoute: AuthedWorkspaceIdSettingsRoute,

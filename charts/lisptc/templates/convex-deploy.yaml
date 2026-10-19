@@ -22,30 +22,19 @@ spec:
               until node -e 'fetch(process.env.CONVEX_SELF_HOSTED_URL + "/version").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'; do
                 sleep 2
               done
-              for f in /etc/convex-env/*; do
-                [ -f "$f" ] || continue
-                pnpm exec convex env set "$(basename "$f")" "$(cat "$f")"
-              done
-              if [ -n "${PREVIEW_SITE_URL:-}" ]; then
-                pnpm exec convex env set SITE_URL "$PREVIEW_SITE_URL"
-              fi
+              pnpm run env:seed
               pnpm exec convex deploy --typecheck disable --codegen disable
               exec pnpm run migrate
-          volumeMounts:
-            - name: convex-env
-              mountPath: /etc/convex-env
-              readOnly: true
+          envFrom:
+            - secretRef:
+                name: lisptc-convex-deploy
           env:
             - name: CONVEX_SELF_HOSTED_URL
               value: http://convex-backend:3210
             {{- include "lisptc.previewEnv" (list . (dict
-                "PREVIEW_SITE_URL" (include "lisptc.appHostname" .))) | nindent 12 }}
+                "SITE_URL" (include "lisptc.appHostname" .))) | nindent 12 }}
             - name: CONVEX_SELF_HOSTED_ADMIN_KEY
               valueFrom:
                 secretKeyRef:
                   name: lisptc-convex
                   key: CONVEX_SELF_HOSTED_ADMIN_KEY
-      volumes:
-        - name: convex-env
-          secret:
-            secretName: lisptc-convex-deploy

@@ -68,6 +68,7 @@ export default defineSchema({
 		lastMessageAt: v.optional(v.number()),
 		archivedAt: v.optional(v.number()),
 		status: v.optional(chatStatus),
+		streamingSince: v.optional(v.number()),
 		failure: v.optional(v.string()),
 	})
 		.index("by_workspace", ["workspaceId"])

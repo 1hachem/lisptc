@@ -162,6 +162,7 @@ export function ChatProvider({
 	const navigate = useNavigate();
 	const createChat = useConvexMutation(api.chats.create);
 	const startChat = useConvexMutation(api.chats.start);
+	const settleChat = useConvexMutation(api.chats.settle);
 	const markStreaming = useMemo(
 		() =>
 			startChat.withOptimisticUpdate((store, { chatId: started }) => {
@@ -207,6 +208,20 @@ export function ChatProvider({
 			});
 	}, [stream.error, chatId]);
 
+	useEffect(() => {
+		const failed = streamingFor.current;
+		if (!stream.error || failed === null) return;
+		settleChat({
+			chatId: failed,
+			failure:
+				stream.error instanceof Error
+					? stream.error.message
+					: String(stream.error),
+		}).catch((ex: unknown) =>
+			reportIssue(ex, { $exception_source: "chat settle", thread_id: failed }),
+		);
+	}, [stream.error, settleChat]);
+
 	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
 	useEffect(() => {
 		setGreeting(greetingMessage());
@@ -249,7 +264,9 @@ export function ChatProvider({
 		) => {
 			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
-			void markStreaming({ chatId: opened });
+			markStreaming({ chatId: opened }).catch((ex: unknown) =>
+				reportIssue(ex, { $exception_source: "chat start", thread_id: opened }),
+			);
 			stream.submit(
 				{ chatId: opened, ...input },
 				{ optimisticValues: { messages: [...persisted, shown] } },
@@ -328,8 +345,16 @@ export function ChatProvider({
 
 	const stop = useCallback(() => {
 		clear();
+		const stopped = streamingFor.current;
+		if (stream.isLoading && stopped !== null)
+			settleChat({ chatId: stopped }).catch((ex: unknown) =>
+				reportIssue(ex, {
+					$exception_source: "chat settle",
+					thread_id: stopped,
+				}),
+			);
 		stream.stop();
-	}, [stream, clear]);
+	}, [stream, clear, settleChat]);
 
 	const fresh = isFreshChat(chatId, turns);
 
