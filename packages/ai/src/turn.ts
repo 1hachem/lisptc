@@ -251,7 +251,7 @@ export interface Written {
 	from?: string;
 }
 
-export function writtenAs(
+function writtenAs(
 	written: string,
 	{ code, because, from }: Admission,
 ): Written | undefined {
