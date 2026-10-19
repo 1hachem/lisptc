@@ -10,8 +10,10 @@ import {
 	MarkupKind,
 	type Position,
 	type SignatureHelp,
+	type TextEdit,
 } from "vscode-languageserver-types";
 import { callDiagnostics } from "./call-diagnostics.ts";
+import { closerAt } from "./closer.ts";
 import { enclosingCallHead, markdownFor, symbolAt } from "./cursor.ts";
 import { argCompletionItems } from "./doc-args.ts";
 import type { SymbolEntry, SymbolTable } from "./symbol-table.ts";
@@ -34,6 +36,7 @@ export interface LanguageService {
 		document: TextDocument,
 		position: Position,
 	): SignatureHelp | null;
+	closer(document: TextDocument, position: Position): TextEdit | null;
 }
 
 export interface LanguageServiceOptions {
@@ -141,6 +144,8 @@ export function languageService(
 		},
 
 		callAt,
+
+		closer: closerAt,
 
 		signatureHelp(document, position) {
 			const call = callAt(document, position);
