@@ -155,19 +155,13 @@ describe("diagnosticsForCalls", () => {
 });
 
 describe("callDiagnostics", () => {
-	it("resolves each distinct call name exactly once via the injected resolver", async () => {
-		const resolved: string[] = [];
-		const resolve = async (name: string): Promise<CallDoc> => {
-			resolved.push(name);
-			return name === "foo"
-				? { args: [{ name: "bar", type: "string", required: true }] }
-				: {};
-		};
-		const diagnostics = await callDiagnostics(
+	it("checks every call in the text against the docs it is given", () => {
+		const diagnostics = callDiagnostics(
 			"(foo) (foo :bar 1) (baz)",
-			resolve,
+			new Map([
+				["foo", { args: [{ name: "bar", type: "string", required: true }] }],
+			]),
 		);
-		expect(resolved.sort()).toEqual(["baz", "foo"]);
 		expect(diagnostics).toHaveLength(1);
 		expect(diagnostics[0].message).toBe(
 			'foo: missing required argument ":bar"',

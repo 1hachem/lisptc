@@ -2,7 +2,7 @@ import type { Arity, DocArg } from "@repo/interpreter/docs";
 import {
 	type Diagnostic,
 	DiagnosticSeverity,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver-types";
 import {
 	type Call,
 	collectCalls,
@@ -22,7 +22,7 @@ export function expectedArgs({ min, max }: Arity): string {
 
 export function diagnosticsForCalls(
 	calls: Call[],
-	docByName: Map<string, CallDoc>,
+	docByName: ReadonlyMap<string, CallDoc>,
 ): Diagnostic[] {
 	const diagnostics: Diagnostic[] = [];
 	for (const call of calls) {
@@ -64,16 +64,12 @@ export function diagnosticsForCalls(
 	return diagnostics;
 }
 
-export async function callDiagnostics(
+export function callDiagnostics(
 	text: string,
-	resolve: (name: string) => Promise<CallDoc>,
-): Promise<Diagnostic[]> {
-	const calls = collectCalls(parseForms(tokenizeWithPositions(text)));
-	const names = [...new Set(calls.map((c) => c.name))];
-	const docByName = new Map(
-		await Promise.all(
-			names.map(async (name) => [name, await resolve(name)] as const),
-		),
+	docByName: ReadonlyMap<string, CallDoc>,
+): Diagnostic[] {
+	return diagnosticsForCalls(
+		collectCalls(parseForms(tokenizeWithPositions(text))),
+		docByName,
 	);
-	return diagnosticsForCalls(calls, docByName);
 }

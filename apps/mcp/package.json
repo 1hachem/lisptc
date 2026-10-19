@@ -18,6 +18,7 @@
     "@repo/compaction-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
+    "@repo/language-service": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",
     "@repo/memory-extension": "workspace:*",
