@@ -1,7 +1,11 @@
-import { evalCode, replResultContent } from "./repl.ts";
+import type { AgentRepl } from "@repo/repl/repl";
+import { formsOnly, type Skipped } from "@repo/shared/lisp-forms";
+import {
+	checkResultContent,
+	evalMessageCode,
+	replResultContent,
+} from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
-import type { SystemEvent } from "./system-event.ts";
-import { writtenAs } from "./turn.ts";
 
 export interface EvalMessage {
 	type: "tool";
@@ -10,66 +14,49 @@ export interface EvalMessage {
 	additional_kwargs?: Record<string, unknown>;
 }
 
-export interface UserLine {
-	type: "human";
-	content: string;
-	id: string;
-	additional_kwargs?: Record<string, unknown>;
+function runsAnything(message: string, unrun: readonly Skipped[]): boolean {
+	let kept = message;
+	for (const {
+		span: [from, to],
+	} of unrun)
+		kept = kept.slice(0, from) + " ".repeat(to - from) + kept.slice(to);
+	return formsOnly(kept).trim() !== "";
 }
 
-export type UserCheck =
-	| { line: UserLine; admitted: string }
-	| { line: UserLine; mistaken: SystemEvent };
-
-export async function checkUserCode<Id extends string>(
-	code: string,
-	source: ReplSource<Id>,
-): Promise<UserCheck> {
-	const repl = await replFrom(source);
-	const admission = await repl.admit(code);
-	const id = crypto.randomUUID();
-	if (admission.rejected === undefined) {
-		const written = writtenAs(code, admission);
+export async function evalMessage(
+	repl: AgentRepl,
+	message: string,
+): Promise<EvalMessage | undefined> {
+	if (formsOnly(message).trim() === "") return undefined;
+	if (!runsAnything(message, repl.unrun(message))) return undefined;
+	const { code, rejected, problems = [] } = await repl.admit(message);
+	if (rejected !== undefined)
 		return {
-			admitted: admission.code,
-			line: {
-				type: "human",
-				content: admission.code,
-				id,
-				...(written ? { additional_kwargs: { written } } : {}),
-			},
+			type: "tool",
+			content: checkResultContent(rejected, problems),
+			id: crypto.randomUUID(),
+			additional_kwargs: { failed: true },
 		};
-	}
-	return {
-		line: { type: "human", content: code, id },
-		mistaken: {
-			source: "lisp-check",
-			text: [
-				"the user ran this code, and it was stopped before it ran:",
-				admission.code,
-				admission.rejected,
-			].join("\n\n"),
-		},
-	};
-}
-
-export async function evalUserCode<Id extends string>(
-	code: string,
-	source: ReplSource<Id>,
-): Promise<EvalMessage> {
-	const repl = await replFrom(source);
 	const id = crypto.randomUUID();
-	const { output, display, error, failed, annotations, emitted } =
-		await evalCode(repl, code, id);
-	repl.clearTurnSignals();
+	const { output, display, error, failed, annotations, emitted, results } =
+		await evalMessageCode(repl, code, id);
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
 	if (failed) extras.failed = true;
 	if (emitted !== "") extras.riding = emitted;
+	if (results.length > 0) extras.results = results;
 	return {
 		type: "tool",
 		content: replResultContent(output, error),
 		id,
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
 	};
+}
+
+export async function evalUserMessage<Id extends string>(
+	message: string,
+	source: ReplSource<Id>,
+): Promise<EvalMessage | undefined> {
+	if (formsOnly(message).trim() === "") return undefined;
+	return evalMessage(await replFrom(source), message);
 }

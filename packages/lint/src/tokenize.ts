@@ -1,4 +1,8 @@
-import { tokenPattern } from "@repo/shared/lisp-tokens";
+import {
+	isKeywordToken,
+	isQuoteToken,
+	tokenPattern,
+} from "@repo/shared/lisp-tokens";
 
 export interface Atom {
 	kind: "atom";
@@ -47,7 +51,7 @@ export function parseForms(tokens: Atom[]): Node[] {
 			const datum = parseOne();
 			return datum === undefined ? datum : { ...datum, quoted: true };
 		}
-		if (t.text === "," || t.text === ",@") {
+		if (isQuoteToken(t.text)) {
 			i++;
 			return parseOne();
 		}
@@ -86,12 +90,12 @@ export interface Call {
 }
 
 function isKeyword(node: Node): node is Atom {
-	return node.kind === "atom" && !node.quoted && node.text.startsWith(":");
+	return node.kind === "atom" && !node.quoted && isKeywordToken(node.text);
 }
 
 export function callOf(form: ListForm): Call | undefined {
 	const [head, ...rest] = form.items;
-	if (head?.kind !== "atom" || head.text.startsWith(":")) return undefined;
+	if (head?.kind !== "atom" || isKeywordToken(head.text)) return undefined;
 	const keywords = new Set(rest.filter(isKeyword).map((k) => k.text.slice(1)));
 	const values = new Map<string, Node>();
 	rest.forEach((item, i) => {

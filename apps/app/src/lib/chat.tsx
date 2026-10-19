@@ -27,7 +27,7 @@ import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
-import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
+import type { SystemEventTicket } from "./system-event.ts";
 import { type ToolEnvelope, toolEnvelope } from "./tool-result.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
@@ -45,6 +45,7 @@ export interface ChatMessage {
 		written?: unknown;
 		failed?: unknown;
 		source?: unknown;
+		results?: unknown;
 	};
 }
 
@@ -108,26 +109,9 @@ export interface ChatSession {
 	send: (text: string) => void;
 	sendAbout: (file: OpenFile, text: string) => void;
 	resume: (event: SystemEventTicket) => void;
-	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
 	fail: (message: string) => void;
-}
-
-async function evalLisp(
-	code: string,
-	chatId: string,
-	signal: AbortSignal,
-): Promise<SystemEventTicket | undefined> {
-	const response = await fetch("/api/chat/eval", {
-		method: "POST",
-		headers: await apiHeaders(),
-		body: JSON.stringify({ chatId, code }),
-		signal,
-	});
-	if (!response.ok) throw new Error(`the repl returned ${response.status}`);
-	const { event } = (await response.json()) as { event?: unknown };
-	return systemEventTicket(event);
 }
 
 type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
@@ -252,12 +236,10 @@ export function ChatProvider({
 		setGreeting(greetingMessage());
 	}, []);
 
-	const [evaluating, setEvaluating] = useState(false);
 	const [failure, setFailure] = useState<{
 		chatId: Id<"chats"> | null;
 		message: string;
 	} | null>(null);
-	const running = useRef<AbortController | null>(null);
 
 	const turns =
 		streamingFor.current === chatId
@@ -293,11 +275,9 @@ export function ChatProvider({
 			input: { message: string } | { event: { token: string } },
 			shown: ChatMessage,
 			title: string,
-			into?: Id<"chats">,
 		) => {
 			setFailure(null);
-			const opened =
-				into ?? chatId ?? (await createChat({ workspaceId, title }));
+			const opened = chatId ?? (await createChat({ workspaceId, title }));
 			streamingFor.current = opened;
 			markStreaming({ chatId: opened }).catch((ex: unknown) =>
 				reportIssue(ex, { $exception_source: "chat start", thread_id: opened }),
@@ -347,60 +327,14 @@ export function ChatProvider({
 		[submitTurn],
 	);
 
-	const resumeIn = useCallback(
-		(into: Id<"chats"> | undefined, event: SystemEventTicket) =>
+	const resume = useCallback(
+		(event: SystemEventTicket) =>
 			void submit(
 				{ event: { token: event.token } },
 				systemMessage(event),
 				titleOf(event.text),
-				into,
 			),
 		[submit],
-	);
-
-	const resume = useCallback(
-		(event: SystemEventTicket) => resumeIn(undefined, event),
-		[resumeIn],
-	);
-
-	const runLisp = useCallback(
-		async (code: string) => {
-			const run = new AbortController();
-			running.current?.abort();
-			running.current = run;
-			setFailure(null);
-			setEvaluating(true);
-			let opened = chatId;
-			try {
-				opened =
-					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
-				if (!chatId) {
-					await navigate({
-						to: "/$workspaceId/chat/$chatId",
-						params: { workspaceId, chatId: opened },
-						replace: true,
-					});
-				}
-				const mistaken = await evalLisp(code, opened, run.signal);
-				if (mistaken !== undefined) resumeIn(opened, mistaken);
-			} catch (ex) {
-				if (run.signal.aborted) return;
-				reportIssue(ex, {
-					$exception_source: "lisp eval",
-					thread_id: chatId ?? "draft",
-				});
-				setFailure({
-					chatId: opened,
-					message: ex instanceof Error ? ex.message : String(ex),
-				});
-			} finally {
-				if (running.current === run) {
-					running.current = null;
-					setEvaluating(false);
-				}
-			}
-		},
-		[chatId, workspaceId, createChat, navigate, resumeIn],
 	);
 
 	const resend = useCallback(
@@ -426,9 +360,6 @@ export function ChatProvider({
 
 	const halt = useCallback(() => {
 		clear();
-		running.current?.abort();
-		running.current = null;
-		setEvaluating(false);
 		stream.stop();
 	}, [stream, clear]);
 
@@ -468,7 +399,6 @@ export function ChatProvider({
 			send: () => {},
 			sendAbout: () => {},
 			resume: () => {},
-			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
 			fail: () => {},
@@ -484,7 +414,7 @@ export function ChatProvider({
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
 			fresh,
-			isLoading: stream.isLoading || evaluating,
+			isLoading: stream.isLoading,
 			chatId,
 			workspaceId,
 			error: errorFor(chatId, {
@@ -499,9 +429,6 @@ export function ChatProvider({
 				void sendAbout(file, text);
 			},
 			resume,
-			runLisp: (code) => {
-				void runLisp(code);
-			},
 			stop,
 			withdraw,
 			fail: (message) => setFailure({ chatId, message }),
@@ -516,14 +443,12 @@ export function ChatProvider({
 		fresh,
 		stream.isLoading,
 		stream.error,
-		evaluating,
 		failure,
 		chatId,
 		workspaceId,
 		send,
 		sendAbout,
 		resume,
-		runLisp,
 		stop,
 		withdraw,
 	]);
@@ -599,6 +524,13 @@ function isSkipped(value: unknown): value is Skipped {
 
 export function toolFailed(message: ChatMessage): boolean {
 	return message.additional_kwargs?.failed === true;
+}
+
+export function toolResults(message: ChatMessage): string[] {
+	const results = message.additional_kwargs?.results;
+	return Array.isArray(results)
+		? results.filter((r): r is string => typeof r === "string")
+		: [];
 }
 
 export function toolUi(message: ChatMessage): unknown {
