@@ -76,6 +76,7 @@ describe("local toolkit commands resolve against the manifest", () => {
 				"--executable-path",
 				"/nix/store/chromium/chrome",
 				"--no-sandbox",
+				"--shared-browser-context",
 			],
 		});
 	});
