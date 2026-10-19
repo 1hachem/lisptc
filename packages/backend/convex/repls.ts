@@ -9,60 +9,19 @@ import {
 	type QueryCtx,
 } from "./_generated/server.js";
 import { requireChat } from "./lib/auth.js";
-import { MAX_REPL_IMAGE_BYTES, REPL_IMAGE_CHUNK_CHARS } from "./limits.js";
+import { MAX_REPL_LAYER_BYTES, REPL_LAYER_CHUNK_CHARS } from "./limits.js";
 
 const PURGE_BATCH = 64;
 
-const checkpoint = v.object({
-	call: v.number(),
-	format: v.number(),
-	chunks: v.array(v.string()),
-});
-
 async function chunksOf(
 	ctx: QueryCtx,
-	imageId: Id<"replImages">,
+	layerId: Id<"replLayers">,
 ): Promise<string[]> {
 	const rows = await ctx.db
-		.query("replImageChunks")
-		.withIndex("by_image", (q) => q.eq("imageId", imageId))
+		.query("replLayerChunks")
+		.withIndex("by_layer", (q) => q.eq("layerId", layerId))
 		.collect();
 	return rows.map((row) => row.data);
-}
-
-async function drop(
-	ctx: MutationCtx,
-	imageId: Id<"replImages">,
-): Promise<void> {
-	const rows = await ctx.db
-		.query("replImageChunks")
-		.withIndex("by_image", (q) => q.eq("imageId", imageId))
-		.collect();
-	for (const row of rows) await ctx.db.delete(row._id);
-	await ctx.db.delete(imageId);
-}
-
-async function imageAt(
-	ctx: QueryCtx,
-	replId: Id<"repls">,
-	call: number,
-): Promise<Doc<"replImages"> | null> {
-	return await ctx.db
-		.query("replImages")
-		.withIndex("by_repl_call", (q) => q.eq("replId", replId).eq("call", call))
-		.unique();
-}
-
-async function stored(
-	ctx: QueryCtx,
-	image: Doc<"replImages"> | null,
-): Promise<{ call: number; format: number; chunks: string[] } | null> {
-	if (image === null) return null;
-	return {
-		call: image.call,
-		format: image.format,
-		chunks: await chunksOf(ctx, image._id),
-	};
 }
 
 async function openRepl(
@@ -72,8 +31,7 @@ async function openRepl(
 	if (chat.replId !== undefined) return chat.replId;
 	const replId = await ctx.db.insert("repls", {
 		workspaceId: chat.workspaceId,
-		call: 0,
-		bytes: 0,
+		chatId: chat._id,
 	});
 	await ctx.db.patch(chat._id, { replId });
 	return replId;
@@ -81,26 +39,17 @@ async function openRepl(
 
 export async function forkRepl(
 	ctx: MutationCtx,
-	chat: Doc<"chats">,
-	call: number,
+	chat: Pick<Doc<"chats">, "_id" | "workspaceId">,
+	head: Id<"replLayers">,
 ): Promise<Id<"repls">> {
-	const image =
-		chat.replId === undefined ? null : await imageAt(ctx, chat.replId, call);
-	if (image === null) throw new ConvexError({ code: "NO_CHECKPOINT", call });
+	if ((await ctx.db.get(head)) === null)
+		throw new ConvexError({ code: "NO_CHECKPOINT" });
 	const replId = await ctx.db.insert("repls", {
 		workspaceId: chat.workspaceId,
-		call: image.call,
-		bytes: image.bytes,
+		chatId: chat._id,
+		head,
 	});
-	const imageId = await ctx.db.insert("replImages", {
-		replId,
-		call: image.call,
-		format: image.format,
-		bytes: image.bytes,
-		chunks: image.chunks,
-	});
-	for (const [index, data] of (await chunksOf(ctx, image._id)).entries())
-		await ctx.db.insert("replImageChunks", { imageId, index, data });
+	await ctx.db.patch(chat._id, { replId });
 	return replId;
 }
 
@@ -109,9 +58,12 @@ export async function dropRepl(
 	chat: Doc<"chats">,
 ): Promise<void> {
 	if (chat.replId === undefined) return;
-	await ctx.db.delete(chat.replId);
+	const repl = await ctx.db.get(chat.replId);
+	if (repl === null) return;
+	await ctx.db.delete(repl._id);
 	await ctx.scheduler.runAfter(0, internal.repls.purge, {
-		replId: chat.replId,
+		replId: repl._id,
+		head: repl.head,
 	});
 }
 
@@ -131,68 +83,168 @@ async function standing(
 	return repl;
 }
 
+export async function layerFor(
+	ctx: QueryCtx,
+	replId: Id<"repls">,
+	origin: string,
+): Promise<Doc<"replLayers"> | null> {
+	return await ctx.db
+		.query("replLayers")
+		.withIndex("by_repl_origin", (q) =>
+			q.eq("replId", replId).eq("origin", origin),
+		)
+		.first();
+}
+
+async function settleMessages(
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+	layer: Doc<"replLayers">,
+): Promise<void> {
+	if (layer.origin === undefined) return;
+	const { origin } = layer;
+	const from = await ctx.db
+		.query("messages")
+		.withIndex("by_chat_wire", (q) =>
+			q.eq("chatId", chatId).eq("wireId", origin),
+		)
+		.first();
+	if (from === null) return;
+	const after = ctx.db
+		.query("messages")
+		.withIndex("by_chat_seq", (q) =>
+			q.eq("chatId", chatId).gte("seq", from.seq),
+		);
+	for await (const message of after) {
+		if (message.layerId !== layer.parent) break;
+		await ctx.db.patch(message._id, { layerId: layer._id });
+	}
+}
+
 export const record = internalMutation({
 	args: {
 		replId: v.id("repls"),
-		call: v.number(),
-		format: v.number(),
+		over: v.optional(v.id("replLayers")),
+		origin: v.optional(v.string()),
+		whole: v.boolean(),
 		chunks: v.array(v.string()),
 	},
-	returns: v.null(),
-	handler: async (ctx, { replId, call, format, chunks }) => {
+	returns: v.id("replLayers"),
+	handler: async (ctx, { replId, over, origin, whole, chunks }) => {
 		const repl = await standing(ctx, replId);
 		const bytes = chunks.reduce(
 			(sum, chunk) => sum + new TextEncoder().encode(chunk).length,
 			0,
 		);
-		if (bytes > MAX_REPL_IMAGE_BYTES)
+		if (bytes > MAX_REPL_LAYER_BYTES)
 			throw new ConvexError({ code: "TOO_LARGE", bytes });
-		if (chunks.some((chunk) => chunk.length > REPL_IMAGE_CHUNK_CHARS))
+		if (chunks.some((chunk) => chunk.length > REPL_LAYER_CHUNK_CHARS))
 			throw new ConvexError({ code: "CHUNK_TOO_LARGE" });
-		const existing = await imageAt(ctx, replId, call);
-		if (existing !== null) await drop(ctx, existing._id);
-		const imageId = await ctx.db.insert("replImages", {
+		if (!whole && over !== repl.head)
+			throw new ConvexError({ code: "STALE_HEAD" });
+		const parent = repl.head === undefined ? null : await ctx.db.get(repl.head);
+		const layerId = await ctx.db.insert("replLayers", {
 			replId,
-			call,
-			format,
+			parent: parent?._id,
+			origin,
+			depth: (parent?.depth ?? 0) + 1,
+			whole,
 			bytes,
 			chunks: chunks.length,
 		});
 		for (const [index, data] of chunks.entries())
-			await ctx.db.insert("replImageChunks", { imageId, index, data });
-		await ctx.db.patch(replId, {
-			call: Math.max(repl.call, call),
-			bytes: call >= repl.call ? bytes : repl.bytes,
-		});
-		return null;
+			await ctx.db.insert("replLayerChunks", { layerId, index, data });
+		await ctx.db.patch(replId, { head: layerId });
+		const layer = await ctx.db.get(layerId);
+		if (layer !== null && repl.chatId !== undefined)
+			await settleMessages(ctx, repl.chatId, layer);
+		return layerId;
 	},
 });
 
 export const latest = internalQuery({
 	args: { replId: v.id("repls") },
-	returns: v.union(checkpoint, v.null()),
+	returns: v.union(
+		v.object({
+			head: v.id("replLayers"),
+			depth: v.number(),
+			layers: v.array(v.array(v.string())),
+		}),
+		v.null(),
+	),
 	handler: async (ctx, { replId }) => {
-		await standing(ctx, replId);
-		const image = await ctx.db
-			.query("replImages")
-			.withIndex("by_repl_call", (q) => q.eq("replId", replId))
-			.order("desc")
-			.first();
-		return await stored(ctx, image);
+		const repl = await standing(ctx, replId);
+		const head = repl.head === undefined ? null : await ctx.db.get(repl.head);
+		if (head === null) return null;
+		const layers: string[][] = [];
+		for (let at: Doc<"replLayers"> | null = head; at !== null; ) {
+			layers.unshift(await chunksOf(ctx, at._id));
+			if (at.whole || at.parent === undefined) break;
+			at = await ctx.db.get(at.parent);
+		}
+		return { head: head._id, depth: head.depth, layers };
 	},
 });
 
+async function referenced(
+	ctx: QueryCtx,
+	layerId: Id<"replLayers">,
+): Promise<boolean> {
+	const child = await ctx.db
+		.query("replLayers")
+		.withIndex("by_parent", (q) => q.eq("parent", layerId))
+		.first();
+	if (child !== null) return true;
+	const repl = await ctx.db
+		.query("repls")
+		.withIndex("by_head", (q) => q.eq("head", layerId))
+		.first();
+	if (repl !== null) return true;
+	const messages = ctx.db
+		.query("messages")
+		.withIndex("by_layer", (q) => q.eq("layerId", layerId));
+	for await (const message of messages)
+		if ((await ctx.db.get(message.chatId)) !== null) return true;
+	return false;
+}
+
+async function collect(
+	ctx: MutationCtx,
+	layerId: Id<"replLayers"> | undefined,
+): Promise<void> {
+	for (let at = layerId; at !== undefined; ) {
+		const layer = await ctx.db.get(at);
+		if (layer === null || (await referenced(ctx, at))) return;
+		const chunks = await ctx.db
+			.query("replLayerChunks")
+			.withIndex("by_layer", (q) => q.eq("layerId", layer._id))
+			.collect();
+		for (const chunk of chunks) await ctx.db.delete(chunk._id);
+		await ctx.db.delete(layer._id);
+		at = layer.parent;
+	}
+}
+
 export const purge = internalMutation({
-	args: { replId: v.id("repls") },
+	args: {
+		replId: v.id("repls"),
+		head: v.optional(v.id("replLayers")),
+		cursor: v.optional(v.string()),
+	},
 	returns: v.null(),
-	handler: async (ctx, { replId }) => {
-		const images = await ctx.db
-			.query("replImages")
-			.withIndex("by_repl_call", (q) => q.eq("replId", replId))
-			.take(PURGE_BATCH);
-		for (const image of images) await drop(ctx, image._id);
-		if (images.length === PURGE_BATCH)
-			await ctx.scheduler.runAfter(0, internal.repls.purge, { replId });
+	handler: async (ctx, { replId, head, cursor }) => {
+		const page = await ctx.db
+			.query("replLayers")
+			.withIndex("by_repl_origin", (q) => q.eq("replId", replId))
+			.paginate({ numItems: PURGE_BATCH, cursor: cursor ?? null });
+		for (const layer of page.page) await collect(ctx, layer._id);
+		if (!page.isDone)
+			await ctx.scheduler.runAfter(0, internal.repls.purge, {
+				replId,
+				head,
+				cursor: page.continueCursor,
+			});
+		else await collect(ctx, head);
 		return null;
 	},
 });

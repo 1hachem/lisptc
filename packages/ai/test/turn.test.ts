@@ -8,6 +8,7 @@ import {
 	type SessionHooks,
 	type TurnOutcome,
 } from "@repo/interpreter/session";
+import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
@@ -167,7 +168,6 @@ describe("the agent turn", () => {
 			"result",
 			"delta",
 			"assistant",
-			"checkpointed",
 			"halt",
 		]);
 		expect(events.at(-1)).toMatchObject({ answer: "three.", steps: 2 });
@@ -195,17 +195,29 @@ describe("the agent turn", () => {
 		expect(calls).toBe(1);
 	});
 
+	test("every step saves its image as a layer of the step that ran it", async () => {
+		script = [
+			[{ text: "(setq a 1)" }],
+			[{ text: "(setq b 2)" }],
+			[{ text: "done." }],
+		];
+		const images = new MemoryImageStore();
+
+		const events = await drain(ask, { repl: testRepl([], images) });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const steps = events.flatMap((e) =>
+			e.type === "assistant" ? [e.stepId] : [],
+		);
+		expect(images.origins()).toEqual(steps);
+	});
+
 	test("an answered step halts without a result event", async () => {
 		script = [[{ text: "three." }]];
 
 		const events = await drain(ask);
 
-		expect(events.map((e) => e.type)).toEqual([
-			"delta",
-			"assistant",
-			"checkpointed",
-			"halt",
-		]);
+		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "halt"]);
 		expect(calls).toBe(1);
 	});
 
@@ -256,7 +268,6 @@ describe("the agent turn", () => {
 			"steered",
 			"delta",
 			"assistant",
-			"checkpointed",
 			"halt",
 		]);
 		expect(events[3]).toEqual({
@@ -438,7 +449,6 @@ describe("the agent turn", () => {
 			"result",
 			"delta",
 			"assistant",
-			"checkpointed",
 			"halt",
 		]);
 		expect(events.at(-1)).toMatchObject({ answer: "really three.", steps: 2 });
@@ -464,11 +474,9 @@ describe("the agent turn", () => {
 		expect(events.map((e) => e.type)).toEqual([
 			"delta",
 			"assistant",
-			"checkpointed",
 			"steered",
 			"delta",
 			"assistant",
-			"checkpointed",
 			"halt",
 		]);
 		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });

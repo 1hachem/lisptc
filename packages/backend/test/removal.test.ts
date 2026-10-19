@@ -42,8 +42,7 @@ describe("removing a chat", () => {
 		const replId = await alice.as.mutation(api.repls.open, { chatId });
 		await t.mutation(internal.repls.record, {
 			replId,
-			call: 1,
-			format: 1,
+			whole: true,
 			chunks: ["{}", "[]"],
 		});
 
@@ -53,8 +52,8 @@ describe("removing a chat", () => {
 
 		const left = await t.run(async (ctx) => [
 			...(await ctx.db.query("repls").collect()),
-			...(await ctx.db.query("replImages").collect()),
-			...(await ctx.db.query("replImageChunks").collect()),
+			...(await ctx.db.query("replLayers").collect()),
+			...(await ctx.db.query("replLayerChunks").collect()),
 		]);
 		expect(left).toEqual([]);
 	});
@@ -109,8 +108,7 @@ describe("removing a workspace", () => {
 		const replId = await alice.as.mutation(api.repls.open, { chatId });
 		await t.mutation(internal.repls.record, {
 			replId,
-			call: 1,
-			format: 1,
+			whole: true,
 			chunks: ["{}"],
 		});
 
@@ -118,16 +116,16 @@ describe("removing a workspace", () => {
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { chats, messages, repls, replImages } = await t.run(async (ctx) => ({
+		const { chats, messages, repls, replLayers } = await t.run(async (ctx) => ({
 			chats: await ctx.db.query("chats").collect(),
 			messages: await ctx.db.query("messages").collect(),
 			repls: await ctx.db.query("repls").collect(),
-			replImages: await ctx.db.query("replImages").collect(),
+			replLayers: await ctx.db.query("replLayers").collect(),
 		}));
 		expect(chats).toEqual([]);
 		expect(messages).toEqual([]);
 		expect(repls).toEqual([]);
-		expect(replImages).toEqual([]);
+		expect(replLayers).toEqual([]);
 	});
 
 	it("takes its secrets, oauth records, permissions and readme with it", async () => {
@@ -273,8 +271,8 @@ async function remaining(t: TestConvex<typeof schema>) {
 		chats: await ctx.db.query("chats").collect(),
 		messages: await ctx.db.query("messages").collect(),
 		repls: await ctx.db.query("repls").collect(),
-		replImages: await ctx.db.query("replImages").collect(),
-		replImageChunks: await ctx.db.query("replImageChunks").collect(),
+		replLayers: await ctx.db.query("replLayers").collect(),
+		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
@@ -290,8 +288,8 @@ const nothing = {
 	chats: [],
 	messages: [],
 	repls: [],
-	replImages: [],
-	replImageChunks: [],
+	replLayers: [],
+	replLayerChunks: [],
 	memories: [],
 	secrets: [],
 	oauthRecords: [],
@@ -342,8 +340,7 @@ describe("deleting an account", () => {
 		const replId = await alice.as.mutation(api.repls.open, { chatId });
 		await t.mutation(internal.repls.record, {
 			replId,
-			call: 1,
-			format: 1,
+			whole: true,
 			chunks: ["{}", "[]"],
 		});
 

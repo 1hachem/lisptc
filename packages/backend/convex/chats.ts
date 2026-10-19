@@ -143,15 +143,12 @@ async function messageOf(
 	return stored?.chatId === chatId ? stored : null;
 }
 
-function callOf(message: Doc<"messages">): number {
-	const call = message.kwargs?.call;
-	return typeof call === "number" ? call : 0;
-}
-
-function callBefore(kept: Doc<"messages">[], upTo: Doc<"messages">): number {
-	const ranUpTo =
-		upTo.type === "ai" ? kept.filter((m) => m._id !== upTo._id) : kept;
-	return ranUpTo.reduce((last, m) => Math.max(last, callOf(m)), 0);
+function layerBefore(
+	kept: Doc<"messages">[],
+	upTo: Doc<"messages">,
+): Id<"replLayers"> | undefined {
+	const settled = upTo.type === "ai" ? kept.at(-2) : upTo;
+	return settled?.layerId;
 }
 
 export const fork = mutation({
@@ -167,14 +164,15 @@ export const fork = mutation({
 				q.eq("chatId", chatId).lte("seq", upTo.seq),
 			)
 			.collect();
-		const call = callBefore(kept, upTo);
 		const forked = await ctx.db.insert("chats", {
 			workspaceId: chat.workspaceId,
 			userId: user._id,
 			title: `${chat.title || "untitled"} (fork)`,
 			lastMessageAt: Date.now(),
-			replId: call > 0 ? await forkRepl(ctx, chat, call) : undefined,
 		});
+		const head = layerBefore(kept, upTo);
+		if (head !== undefined)
+			await forkRepl(ctx, { _id: forked, workspaceId: chat.workspaceId }, head);
 		for (const message of kept) {
 			await ctx.db.insert("messages", {
 				chatId: forked,
@@ -185,6 +183,7 @@ export const fork = mutation({
 				kwargs: message.kwargs,
 				truncated: message.truncated,
 				wireId: message.wireId,
+				layerId: message.layerId,
 			});
 		}
 		return forked;

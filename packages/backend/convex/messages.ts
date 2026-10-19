@@ -1,10 +1,17 @@
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalMutation, mutation, query } from "./_generated/server.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
+import {
+	internalMutation,
+	type MutationCtx,
+	mutation,
+	query,
+} from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { waitsOnUser } from "./lib/waiting.js";
+import { layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
@@ -24,6 +31,7 @@ const message = v.object({
 	kwargs: v.optional(v.record(v.string(), v.any())),
 	truncated: v.optional(v.boolean()),
 	wireId: v.optional(v.string()),
+	layerId: v.optional(v.id("replLayers")),
 });
 
 const incoming = v.object({
@@ -79,6 +87,26 @@ export const sent = query({
 	},
 });
 
+async function layersOf(
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+	messages: { id?: string }[],
+): Promise<(Id<"replLayers"> | undefined)[]> {
+	const repl = chat.replId === undefined ? null : await ctx.db.get(chat.replId);
+	if (repl === null) return messages.map(() => undefined);
+	const own = await Promise.all(
+		messages.map((m) =>
+			m.id === undefined ? null : layerFor(ctx, repl._id, m.id),
+		),
+	);
+	const first = own.find((layer): layer is Doc<"replLayers"> => layer !== null);
+	let head = first === undefined ? repl.head : first.parent;
+	return own.map((layer) => {
+		if (layer !== null) head = layer._id;
+		return head;
+	});
+}
+
 export const append = mutation({
 	args: { chatId: v.id("chats"), messages: v.array(incoming) },
 	returns: v.array(v.id("messages")),
@@ -90,8 +118,9 @@ export const append = mutation({
 			.order("desc")
 			.first();
 		let seq = last === null ? 0 : last.seq + 1;
+		const layers = await layersOf(ctx, chat, messages);
 		const ids = [];
-		for (const entry of messages) {
+		for (const [at, entry] of messages.entries()) {
 			const clamped = clamp(entry.content, entry.kwargs);
 			ids.push(
 				await ctx.db.insert("messages", {
@@ -103,6 +132,7 @@ export const append = mutation({
 					kwargs: clamped.kwargs,
 					truncated: clamped.truncated ? true : undefined,
 					wireId: entry.id,
+					layerId: layers[at],
 				}),
 			);
 			seq += 1;

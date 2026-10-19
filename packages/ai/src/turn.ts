@@ -71,11 +71,9 @@ export type TurnEvent =
 			annotations: StepAnnotations;
 			riding?: string;
 			failed: boolean;
-			call?: number;
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
-	| { type: "checkpointed"; call: number }
 	| { type: "steered"; id: string; content: string }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -247,8 +245,8 @@ async function* evaluateStep(
 	transcript.push({ role: "assistant", content: code });
 
 	const evalStartedAt = Date.now();
-	const { output, display, error, annotations, emitted, failed, held, call } =
-		await evalCode(repl, code);
+	const { output, display, error, annotations, emitted, failed, held } =
+		await evalCode(repl, code, stepId);
 	turn.steps += 1;
 	const step = turn.steps;
 
@@ -266,15 +264,11 @@ async function* evaluateStep(
 		repl.takeFinished() ? "halt" : capped ? "capped" : "continue",
 		turn.telemetry.stepEnd,
 	);
-	if (verdict === "halt" && !held) {
-		if (call !== undefined) yield { type: "checkpointed", call };
-		return verdict;
-	}
+	if (verdict === "halt" && !held) return verdict;
 
 	const riding = emitted === "" ? {} : { riding: emitted };
 	yield {
 		type: "result",
-		...(call === undefined ? {} : { call }),
 		step,
 		output,
 		display,

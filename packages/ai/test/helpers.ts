@@ -80,11 +80,11 @@ export function riding(text: string): InterpExtension {
 	});
 }
 
-export function testRepl(extensions: InterpExtension[] = []): AgentRepl {
-	return new AgentRepl({
-		extensions: [answering(), ...extensions],
-		images: new MemoryImageStore(),
-	});
+export function testRepl(
+	extensions: InterpExtension[] = [],
+	images: MemoryImageStore = new MemoryImageStore(),
+): AgentRepl {
+	return new AgentRepl({ extensions: [answering(), ...extensions], images });
 }
 
 export function testRepls(extensions: InterpExtension[] = []): ReplStore {

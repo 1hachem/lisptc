@@ -26,8 +26,7 @@ describe("repl checkpoint access", () => {
 		await expect(
 			t.mutation(internal.repls.record, {
 				replId,
-				call: 1,
-				format: 1,
+				whole: true,
 				chunks: ["{}"],
 			}),
 		).rejects.toThrow();

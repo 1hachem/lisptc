@@ -1,9 +1,10 @@
 import { BuiltInFunc } from "@repo/interpreter/func";
+import type { Image } from "@repo/interpreter/image";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
-import { type Checkpoint, MemoryImageStore } from "../src/image-store.ts";
+import { MAX_DELTA_RUN, MemoryImageStore } from "../src/image-store.ts";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
 function repl(
@@ -22,21 +23,28 @@ function opaque(): InterpExtension {
 	};
 }
 
+function settle(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe("checkpoints", () => {
-	it("numbers every call, ui answers included", async () => {
+	it("layers every call, ui answers included, under the origin it ran for", async () => {
 		const answers: InterpExtension = Object.assign((_: Interp) => {}, {
 			session(hooks: SessionHooks): void {
 				hooks.invoke.use(async () => {});
 			},
 		});
-		const r = repl(new MemoryImageStore(), [answers]);
-		expect((await r.evalOutput("(setq a 1)")).call).toBe(1);
-		expect((await r.evalOutput("(setq b 2)")).call).toBe(2);
-		expect((await r.invokeUi("nothing")).call).toBe(3);
-		expect(r.call).toBe(3);
+		const images = new MemoryImageStore();
+		const r = repl(images, [answers]);
+		await r.evalOutput("(setq a 1)", "first");
+		await r.evalOutput("(setq b 2)", "second");
+		await r.invokeUi("nothing");
+		await settle();
+		expect(images.origins()).toEqual(["first", "second", undefined]);
+		expect((await images.latest())?.depth).toBe(3);
 	});
 
-	it("stamps a step's channel envelopes with its call, across a resume", async () => {
+	it("stamps a step's channel envelopes with its depth, across a resume", async () => {
 		const steps: number[] = [];
 		const stamp: InterpExtension = (interp: Interp): void => {
 			interp.defineGlobal(
@@ -51,15 +59,11 @@ describe("checkpoints", () => {
 		const first = repl(images, [stamp]);
 		await first.evalOutput("(stamp)");
 		await first.evalOutput("(stamp)");
+		await settle();
 		const second = repl(images, [stamp]);
 		await second.resume();
 		await second.evalOutput("(stamp)");
 		expect(steps).toEqual([1, 2, 3]);
-	});
-
-	it("numbers no call when it keeps no checkpoints", async () => {
-		const r = new MemoryRepl({ extensions: [] });
-		expect((await r.evalOutput("(setq a 1)")).call).toBeUndefined();
 	});
 
 	it("resumes in a new REPL where the last one stopped", async () => {
@@ -69,47 +73,58 @@ describe("checkpoints", () => {
 			"(setq counter (let ((n 0)) (lambda () (setq n (+ n 1)))))",
 		);
 		await first.evalOutput("(counter)");
+		await settle();
 		const second = repl(images);
 		expect(await second.resume()).toBe(2);
 		expect((await second.evalOutput("(echo (counter))")).user).toBe("2\n");
-		expect(second.call).toBe(3);
 	});
 
 	it("resumes nothing from an empty store", async () => {
 		expect(await repl().resume()).toBeUndefined();
 	});
 
-	it("numbers no call it could not checkpoint, and tells the model nothing", async () => {
-		const r = repl(new MemoryImageStore(), [opaque()]);
+	it("layers nothing it could not checkpoint, and tells the model nothing", async () => {
+		const images = new MemoryImageStore();
+		const r = repl(images, [opaque()]);
 		const out = await r.evalOutput("(setq h (opaque))");
-		expect(out.call).toBeUndefined();
+		await settle();
+		expect(images.origins()).toEqual([]);
 		expect(out.message).toBeUndefined();
 	});
 
 	it("keeps checkpointing after a save fails", async () => {
 		class FlakyStore extends MemoryImageStore {
 			private failed = false;
-			override async save(checkpoint: Checkpoint) {
+			override async save(image: Image, origin?: string) {
 				if (!this.failed) {
 					this.failed = true;
 					throw new Error("disk full");
 				}
-				return super.save(checkpoint);
+				return super.save(image, origin);
 			}
 		}
 		const images = new FlakyStore();
 		const r = repl(images);
 		expect((await r.evalOutput("(setq a 1)")).message).toBeUndefined();
-		expect((await r.evalOutput("(setq a 2)")).call).toBe(2);
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		expect((await images.latest())?.call).toBe(2);
+		await r.evalOutput("(setq a 2)", "second");
+		await settle();
+		expect(images.origins()).toEqual(["second"]);
+		const resumed = repl(images);
+		await resumed.resume();
+		expect(resumed.interp.getGlobal(newSym("a"))).toBe(2n);
 	});
 
-	it("keeps the call count across a reset", async () => {
-		const r = repl();
-		await r.evalOutput("(setq a 1)");
-		r.reset();
-		expect((await r.evalOutput("(setq a 2)")).call).toBe(2);
+	it("rebuilds the image from a run of layers past the cap", async () => {
+		const images = new MemoryImageStore();
+		const r = repl(images);
+		for (let n = 0; n < MAX_DELTA_RUN + 3; n++)
+			await r.evalOutput(`(setq v${n} ${n})`);
+		await r.evalOutput("(setq v0 nil)");
+		await settle();
+		const resumed = repl(images);
+		expect(await resumed.resume()).toBe(MAX_DELTA_RUN + 4);
+		expect(resumed.interp.getGlobal(newSym("v0"))).toBeNull();
+		expect(resumed.interp.getGlobal(newSym("v34"))).toBe(34n);
 	});
 
 	it("keeps the conversation globals in the image, still sealed", async () => {
@@ -117,6 +132,7 @@ describe("checkpoints", () => {
 		const first = new AgentRepl({ extensions: [], images });
 		first.setConversationVars({ "user-messages": ["hi"] });
 		await first.evalOutput("(setq seen (length user-messages))");
+		await settle();
 		const second = new AgentRepl({ extensions: [], images });
 		await second.resume();
 		expect(second.interp.getGlobal(newSym("seen"))).toBe(1n);

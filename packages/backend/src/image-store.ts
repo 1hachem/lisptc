@@ -1,47 +1,50 @@
-import type { Checkpoint, ImageStore } from "@repo/repl/image-store";
+import type { Image } from "@repo/interpreter/image";
+import {
+	type Checkpoint,
+	type ImageStore,
+	type Layer,
+	LayerCursor,
+} from "@repo/repl/image-store";
 import { internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
-import { REPL_IMAGE_CHUNK_CHARS } from "../convex/limits.ts";
+import { chunked } from "../convex/lib/chunks.ts";
 import type { ServerClient } from "./server-client.ts";
 
-interface StoredCheckpoint {
-	call: number;
-	format: number;
-	chunks: string[];
-}
-
-export function chunked(json: string): string[] {
-	const chunks: string[] = [];
-	for (let at = 0; at < json.length; at += REPL_IMAGE_CHUNK_CHARS)
-		chunks.push(json.slice(at, at + REPL_IMAGE_CHUNK_CHARS));
-	return chunks;
-}
-
-function decode(stored: StoredCheckpoint | null): Checkpoint | undefined {
-	if (stored === null) return undefined;
-	return { call: stored.call, image: JSON.parse(stored.chunks.join("")) };
-}
-
 export class ConvexImageStore implements ImageStore {
+	private readonly cursor = new LayerCursor();
+	private head: Id<"replLayers"> | undefined;
+
 	constructor(
 		private readonly replId: Id<"repls">,
 		private readonly server: ServerClient,
 	) {}
 
-	async save({ call, image }: Checkpoint): Promise<void> {
-		await this.server.mutation(internal.repls.record, {
-			replId: this.replId,
-			call,
-			format: image.format,
-			chunks: chunked(JSON.stringify(image)),
-		});
+	async save(image: Image, origin?: string): Promise<void> {
+		const layer = this.cursor.over(image);
+		try {
+			this.head = await this.server.mutation(internal.repls.record, {
+				replId: this.replId,
+				over: layer.whole ? undefined : this.head,
+				origin,
+				whole: layer.whole,
+				chunks: chunked(JSON.stringify(layer)),
+			});
+		} catch (ex) {
+			this.cursor.lose();
+			throw ex;
+		}
 	}
 
 	async latest(): Promise<Checkpoint | undefined> {
-		return decode(
-			await this.server.query(internal.repls.latest, {
-				replId: this.replId,
-			}),
+		const stored = await this.server.query(internal.repls.latest, {
+			replId: this.replId,
+		});
+		if (stored === null) return undefined;
+		const layers: Layer[] = stored.layers.map((chunks) =>
+			JSON.parse(chunks.join("")),
 		);
+		const image = this.cursor.restack(layers);
+		this.head = stored.head;
+		return { depth: stored.depth, image };
 	}
 }

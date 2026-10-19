@@ -84,6 +84,7 @@ export function proseFeedbackContent(feedback: string): string {
 export async function evalCode(
 	repl: AgentRepl,
 	code: string,
+	origin?: string,
 ): Promise<{
 	output: string;
 	display: string;
@@ -92,11 +93,10 @@ export async function evalCode(
 	emitted: string;
 	failed: boolean;
 	held: boolean;
-	call: number | undefined;
 }> {
 	try {
-		const { model, user, annotations, emitted, failed, held, call } =
-			await repl.evalOutput(code);
+		const { model, user, annotations, emitted, failed, held } =
+			await repl.evalOutput(code, origin);
 		return {
 			output: model,
 			display: user,
@@ -105,7 +105,6 @@ export async function evalCode(
 			emitted,
 			failed,
 			held,
-			call,
 		};
 	} catch (ex) {
 		repl.reset();
@@ -119,7 +118,6 @@ export async function evalCode(
 			emitted: "",
 			failed: true,
 			held: false,
-			call: undefined,
 		};
 	}
 }
