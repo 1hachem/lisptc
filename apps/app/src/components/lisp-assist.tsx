@@ -1,6 +1,5 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-	LexicalTypeaheadMenuPlugin,
 	MenuOption,
 	type MenuTextMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
@@ -40,6 +39,7 @@ import type {
 	Position,
 } from "vscode-languageserver-types";
 import { $offsetIn } from "./lisp-highlight.ts";
+import { TypeaheadMenu } from "./typeahead-menu.tsx";
 
 const MAX_OPTIONS = 8;
 const DIAGNOSE_MS = 300;
@@ -307,46 +307,14 @@ export function LispAssistPlugin({
 		<>
 			{host.current && strip ? createPortal(strip, host.current) : null}
 			{hover ? <HoverDoc entry={hover.entry} at={hover.at} /> : null}
-			<LexicalTypeaheadMenuPlugin<CompletionOption>
+			<TypeaheadMenu<CompletionOption>
 				options={options}
+				host={host}
+				rowOf={({ item }) => ({ label: item.label, detail: item.detail })}
 				triggerFn={triggerFn}
 				onQueryChange={setQuery}
 				onSelectOption={onSelectOption}
-				onOpen={() => setOpen(true)}
-				onClose={() => setOpen(false)}
-				menuRenderFn={(
-					_anchor,
-					{ selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
-				) =>
-					host.current && options.length > 0
-						? createPortal(
-								<div className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]">
-									{options.map((option, i) => (
-										<button
-											type="button"
-											key={option.key}
-											ref={(element) => option.setRefElement(element)}
-											onMouseEnter={() => setHighlightedIndex(i)}
-											onMouseDown={(event) => event.preventDefault()}
-											onClick={() => selectOptionAndCleanUp(option)}
-											className={cn(
-												"flex items-baseline gap-2.5 px-3 py-0.5 text-left",
-												i === selectedIndex ? "bg-bg2" : "hover:brightness-125",
-											)}
-										>
-											<span className="flex-none whitespace-nowrap text-fg">
-												{option.item.label}
-											</span>
-											<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-dim">
-												{option.item.detail}
-											</span>
-										</button>
-									))}
-								</div>,
-								host.current,
-							)
-						: null
-				}
+				onOpenChange={setOpen}
 			/>
 		</>
 	);
