@@ -8,6 +8,8 @@ import {
 	insideForm,
 	languageService,
 	lispIn,
+	type RankedCompletion,
+	rankCompletions,
 	type SymbolEntry,
 	type SymbolTable,
 	UNCLOSED,
@@ -15,10 +17,14 @@ import {
 import { toolkits } from "@repo/toolkit";
 import { cn } from "@repo/ui";
 import {
+	$addUpdateTag,
 	$getRoot,
 	$getSelection,
 	$isElementNode,
 	$isRangeSelection,
+	$isTextNode,
+	COMMAND_PRIORITY_NORMAL,
+	KEY_TAB_COMMAND,
 	ParagraphNode,
 	type TextNode,
 } from "lexical";
@@ -41,17 +47,89 @@ import type {
 import { $offsetIn } from "./lisp-highlight.ts";
 import { TypeaheadMenu } from "./typeahead-menu.tsx";
 
-const MAX_OPTIONS = 8;
+const MAX_OPTIONS = 50;
 const DIAGNOSE_MS = 300;
-const COMPLETE_MS = 120;
+const COMPLETE_MS = 300;
+const COMPLETED = "lisp-completed";
 const PARAGRAPH_GAP = 2;
 const WORD_BEFORE = /[^\s()'`",]+$/;
+const WORD_AFTER = /^[^\s()'`",]+/;
 
 class CompletionOption extends MenuOption {
 	readonly item: CompletionItem;
-	constructor(item: CompletionItem) {
+	readonly matched: ReadonlySet<number>;
+	constructor({ item, matched }: RankedCompletion) {
 		super(item.label);
 		this.item = item;
+		this.matched = new Set(matched);
+	}
+}
+
+interface LabelRun {
+	start: number;
+	text: string;
+	matched: boolean;
+}
+
+function labelRuns(label: string, matched: ReadonlySet<number>): LabelRun[] {
+	const runs: LabelRun[] = [];
+	[...label].forEach((char, at) => {
+		const last = runs.at(-1);
+		if (last && last.matched === matched.has(at)) last.text += char;
+		else runs.push({ start: at, text: char, matched: matched.has(at) });
+	});
+	return runs;
+}
+
+function MatchedLabel({ option }: { option: CompletionOption }) {
+	return labelRuns(option.item.label, option.matched).map((run) => (
+		<span key={run.start} className={run.matched ? "text-yellow" : undefined}>
+			{run.text}
+		</span>
+	));
+}
+
+function docText(item: CompletionItem): string | undefined {
+	const { documentation } = item;
+	return typeof documentation === "string"
+		? documentation
+		: documentation?.value;
+}
+
+function CompletionDoc({
+	option,
+	symbols,
+}: {
+	option: CompletionOption;
+	symbols: SymbolTable;
+}) {
+	const entry = symbols.get(option.item.label);
+	const signature = entry ? entry.signature : option.item.detail;
+	const doc = entry ? entry.doc : docText(option.item);
+	if (!signature && !doc) return null;
+	return (
+		<div className="flex flex-col px-3 py-1 text-[12px]">
+			{signature ? <span className="text-fg">{signature}</span> : null}
+			{doc ? (
+				<span className="line-clamp-4 whitespace-pre-wrap text-dim">{doc}</span>
+			) : null}
+		</div>
+	);
+}
+
+function $dropWordTail(node: TextNode) {
+	let next = node.getNextSibling();
+	while ($isTextNode(next)) {
+		const text = next.getTextContent();
+		const tail = WORD_AFTER.exec(text)?.[0].length ?? 0;
+		if (tail === 0) return;
+		const following = next.getNextSibling();
+		if (tail < text.length) {
+			next.setTextContent(text.slice(tail));
+			return;
+		}
+		next.remove();
+		next = following;
 	}
 }
 
@@ -235,35 +313,86 @@ function useAssist(
 	return { service, call, diagnostics };
 }
 
+function $caretState(): { size: number; caret: number | null } {
+	return { size: $getRoot().getTextContentSize(), caret: $caretOffset() };
+}
+
+function armedBy(
+	before: ReturnType<typeof $caretState>,
+	after: ReturnType<typeof $caretState>,
+	completed: boolean,
+): boolean | undefined {
+	if (after.size > before.size) return !completed;
+	if (after.size < before.size || after.caret !== before.caret) return false;
+	return undefined;
+}
+
+function useTypingArms(): RefObject<boolean> {
+	const [editor] = useLexicalComposerContext();
+	const armed = useRef(false);
+	useEffect(
+		() =>
+			editor.registerUpdateListener(
+				({ editorState, prevEditorState, tags }) => {
+					const next = armedBy(
+						prevEditorState.read($caretState),
+						editorState.read($caretState),
+						tags.has(COMPLETED),
+					);
+					if (next !== undefined) armed.current = next;
+				},
+			),
+		[editor],
+	);
+	return armed;
+}
+
 function useCompletions(
 	query: string | null,
 	service: ReturnType<typeof languageService>,
 	snapshot: ReturnType<typeof useLispDocument>,
 ): CompletionOption[] {
+	const [editor] = useLexicalComposerContext();
+	const armed = useTypingArms();
 	const [candidates, setCandidates] = useState<CompletionItem[]>([]);
-	useEffect(() => {
-		if (query === null) return setCandidates([]);
-		const timer = setTimeout(() => {
-			const { document, position } = snapshot();
-			setCandidates(
-				position === null ? [] : service.completions(document, position),
-			);
-		}, COMPLETE_MS);
-		return () => clearTimeout(timer);
-	}, [query, service, snapshot]);
+	const complete = useCallback(() => {
+		const { document, position } = snapshot();
+		return position === null ? [] : service.completions(document, position);
+	}, [service, snapshot]);
 
-	return useMemo(
+	useEffect(() => {
+		if (query === null || !armed.current) return setCandidates([]);
+		const timer = setTimeout(() => setCandidates(complete()), COMPLETE_MS);
+		return () => clearTimeout(timer);
+	}, [query, armed, complete]);
+
+	const options = useMemo(
 		() =>
 			query === null
 				? []
-				: candidates
-						.filter(
-							(item) => item.label.startsWith(query) && item.label !== query,
-						)
+				: rankCompletions(candidates, query)
 						.slice(0, MAX_OPTIONS)
-						.map((item) => new CompletionOption(item)),
+						.map((ranked) => new CompletionOption(ranked)),
 		[query, candidates],
 	);
+
+	useEffect(
+		() =>
+			editor.registerCommand(
+				KEY_TAB_COMMAND,
+				(event) => {
+					if (query === null || options.length > 0) return false;
+					event.preventDefault();
+					armed.current = true;
+					setCandidates(complete());
+					return true;
+				},
+				COMMAND_PRIORITY_NORMAL,
+			),
+		[editor, query, options, armed, complete],
+	);
+
+	return options;
 }
 
 export function LispAssistPlugin({
@@ -309,7 +438,11 @@ export function LispAssistPlugin({
 			closeMenu: () => void,
 		) => {
 			editor.update(() => {
-				node?.setTextContent(option.item.label).select();
+				$addUpdateTag(COMPLETED);
+				if (node) {
+					$dropWordTail(node);
+					node.setTextContent(option.item.label).select();
+				}
 				closeMenu();
 			});
 		},
@@ -332,7 +465,13 @@ export function LispAssistPlugin({
 			<TypeaheadMenu<CompletionOption>
 				options={options}
 				host={host}
-				rowOf={({ item }) => ({ label: item.label, detail: item.detail })}
+				rowOf={(option) => ({
+					label: <MatchedLabel option={option} />,
+					detail: option.item.detail,
+				})}
+				asideOf={(option) => (
+					<CompletionDoc option={option} symbols={symbols} />
+				)}
 				triggerFn={triggerFn}
 				onQueryChange={setQuery}
 				onSelectOption={onSelectOption}

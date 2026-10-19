@@ -333,9 +333,13 @@ function Editor({
 	const look = disabled ? DISABLED : ENABLED;
 
 	return (
-		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			<div ref={menuHost} />
-			<Notice text={notice} />
+		<div className="relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
+			<div
+				ref={menuHost}
+				className="absolute inset-x-0 bottom-full z-10 flex flex-col"
+			>
+				<Notice text={notice} />
+			</div>
 			<InputShell
 				prompt={look.prompt}
 				tone={look.tone}

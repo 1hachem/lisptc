@@ -49,7 +49,11 @@ afterEach(() => {
 });
 
 const SYMBOLS = symbolTable([
-	{ name: "list-length" },
+	{
+		name: "list-length",
+		signature: "(list-length xs)",
+		doc: "Count the items of xs.",
+	},
 	{ name: "list-reverse" },
 ]);
 
@@ -124,9 +128,28 @@ async function settled() {
 	await act(async () => {});
 }
 
+async function paused() {
+	await act(() => new Promise((settle) => setTimeout(settle, 400)));
+}
+
 async function completing(field: HTMLElement, text: string) {
 	type(field, text);
-	await act(() => new Promise((settle) => setTimeout(settle, 200)));
+	await paused();
+}
+
+function caretInto(field: HTMLElement, word: string, offset: number) {
+	act(() =>
+		editorOf(field).update(
+			() => {
+				const node = $getRoot()
+					.getAllTextNodes()
+					.find((text) => text.getTextContent() === word);
+				if (!node) throw new Error(`no ${word} token`);
+				node.select(offset, offset);
+			},
+			{ discrete: true },
+		),
+	);
 }
 
 describe("the chat input", () => {
@@ -225,5 +248,62 @@ describe("the chat input", () => {
 		const field = render(vi.fn());
 		type(field, "(list-");
 		expect(host.textContent).not.toContain("list-reverse");
+	});
+
+	it("opens the completions at once on Tab", async () => {
+		const field = render(vi.fn());
+		type(field, "(list-");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(host.textContent).toContain("list-reverse");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-length");
+	});
+
+	it("offers nothing when a backspace walks back into a word", async () => {
+		const field = render(vi.fn());
+		type(field, "(list-length");
+		await paused();
+		type(field, "(list-lengt");
+		await paused();
+		expect(host.textContent).not.toContain("list-reverse");
+	});
+
+	it("offers nothing when the caret moves back into a word", async () => {
+		const field = render(vi.fn());
+		type(field, "(list-length 1)");
+		await paused();
+		caretInto(field, "list-length", 5);
+		await paused();
+		expect(host.textContent).not.toContain("list-reverse");
+	});
+
+	it("finds a symbol from letters that are not contiguous", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(lrev");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-reverse");
+	});
+
+	it("replaces the rest of the word when completing inside it", async () => {
+		const field = render(vi.fn());
+		type(field, "(list-gth 1)");
+		caretInto(field, "list-gth", 5);
+		press(field, { key: "Tab" });
+		await settled();
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-length 1)");
+	});
+
+	it("shows the signature and doc of the highlighted completion", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(list-");
+		const tip = document.querySelector('[role="tooltip"]');
+		expect(tip?.textContent).toContain("(list-length xs)");
+		expect(tip?.textContent).toContain("Count the items of xs.");
+		expect(host.textContent).not.toContain("Count the items of xs.");
 	});
 });
