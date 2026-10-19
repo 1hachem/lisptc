@@ -33,10 +33,9 @@ The tokens come from `@repo/shared/lisp-tokens`. **Do not write a second
 tokenizer.** A checker that disagrees with the reader reports errors that are
 not real.
 
-`@repo/lint-extension` runs the tokenizer and the call checks on every step the
-agent writes, through `src/tokenize.ts` and `src/call-diagnostics.ts`. Those two modules
-import no editor protocol type: a call problem carries a range, a message, a
-severity and a code, and `src/service.ts` maps it to the protocol's.
+The agent checks each step with the same tokenizer and call checks, so the
+editor and the agent never disagree about a call. **Only `src/service.ts`
+speaks the editor protocol.**
 
 ## Tests
 
