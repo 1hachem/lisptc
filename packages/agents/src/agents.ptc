@@ -3,3 +3,16 @@ AGENTS
 User may wrap forms in (quietly form...). Forms run, you not woken for that
 message. Message and its result stay in chat; read them next turn. Never call
 quietly yourself.
+
+Sub-agents: hand off side work, run it in parallel.
+
+  (defagent "researcher" :prompt "You dig up facts. Answer in one line.")
+  (spawn "researcher" :repl :fresh)      ; saved definition, new image
+  (spawn "scratch" :prompt "..." :repl :fork) ; ad hoc, copy of your image now
+  (setq p (send :to "researcher" "find X" :max-steps 10))
+  (promise-state p)                      ; :pending, :fulfilled or :rejected
+  (await p)                              ; reply string
+
+send returns promise at once; you keep working. Messages to one agent run in
+turn; agent keeps its chat between sends. (agents) lists saved names. Spawning
+a name again starts it over. Sub-agent cannot ask user for permission.
