@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AsyncWork } from "../src/async.ts";
+import { LispPromise } from "../src/promise.ts";
 
-describe("AsyncWork tracks the promises it is handed", () => {
+describe("AsyncWork tracks the promises it hands out", () => {
 	it("reports a started promise as pending, then fulfilled", async () => {
 		const work = new AsyncWork();
 		const p = work.start(async () => 1);
@@ -34,20 +35,29 @@ describe("AsyncWork tracks the promises it is handed", () => {
 	it("reports a rejected promise as rejected", async () => {
 		const work = new AsyncWork();
 		const p = work.watch(Promise.reject(new Error("no")));
-		await expect(p).rejects.toThrow("no");
+		await expect(p.promise()).rejects.toThrow("no");
 		await Promise.resolve();
 		expect(work.stateOf(p)).toBe("rejected");
 		expect(work.pending()).toEqual([]);
 	});
 
-	it("says unknown for a promise it never saw", () => {
-		expect(new AsyncWork().stateOf(Promise.resolve())).toBe("unknown");
+	it("reads the state off a promise it never ran", () => {
+		expect(new AsyncWork().stateOf(new LispPromise("fulfilled", 1n))).toBe(
+			"fulfilled",
+		);
+	});
+
+	it("keeps the outcome on the promise", async () => {
+		const work = new AsyncWork();
+		const p = work.start(async () => 7n);
+		expect(await p).toBe(7n);
+		expect(p.outcome).toBe(7n);
 	});
 
 	it("does not record a watched promise twice", () => {
 		const work = new AsyncWork();
 		const p = work.start(() => new Promise(() => {}));
-		expect(work.watch(p)).toBe(p);
+		expect(work.watch(p.promise())).toBe(p);
 		expect(work.pending()).toEqual([p]);
 	});
 

@@ -15,6 +15,7 @@ import {
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
+import { abandonChat } from "../lib/chat.tsx";
 import { ConfirmItem } from "./confirm-item.tsx";
 
 const STATUS_ICONS = {
@@ -128,6 +129,7 @@ export function SessionRow({
 								className={`${item} focus:text-red`}
 								onConfirm={() => {
 									attempt(async () => {
+										abandonChat(chat._id);
 										if (current) {
 											await navigate({
 												to: "/$workspaceId",

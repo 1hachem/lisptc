@@ -2,7 +2,12 @@ import { quotient } from "@repo/interpreter/arith";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import type { Interp } from "@repo/interpreter/lisp";
+import {
+	detachedState,
+	type Interp,
+	type State,
+	type StateCodec,
+} from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -144,17 +149,100 @@ export interface FiredMemory {
 
 export const fired = topic<FiredMemory>("memory");
 
+const countCodec: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
+
+interface Step {
+	readonly fired: readonly string[];
+	readonly open: readonly string[];
+	readonly surfaced: readonly FiredMemory[];
+	readonly pending: string;
+	readonly spent: number;
+	readonly dropped: number;
+	readonly stepping: boolean;
+}
+
+const QUIET: Step = {
+	fired: [],
+	open: [],
+	surfaced: [],
+	pending: "",
+	spent: 0,
+	dropped: 0,
+	stepping: false,
+};
+
+const stepCodec: StateCodec<Step> = {
+	toLisp: (step) =>
+		arrayToList([
+			arrayToList([...step.fired]),
+			arrayToList([...step.open]),
+			arrayToList(
+				step.surfaced.map(({ key, body, on }) =>
+					arrayToList([key, body, on ?? null]),
+				),
+			),
+			step.pending,
+			BigInt(step.spent),
+			BigInt(step.dropped),
+			step.stepping || null,
+		]),
+	fromLisp: (list) => {
+		const [fired, open, surfaced, pending, spent, dropped, stepping] =
+			listToArray(list as List);
+		return {
+			fired: listToArray(fired as List) as string[],
+			open: listToArray(open as List) as string[],
+			surfaced: listToArray(surfaced as List).map((entry) => {
+				const [key, body, on] = listToArray(entry as List) as [
+					string,
+					string,
+					TriggerKind | null,
+				];
+				return on === null ? { key, body } : { key, body, on };
+			}),
+			pending: pending as string,
+			spent: Number(spent),
+			dropped: Number(dropped),
+			stepping: stepping === true,
+		};
+	},
+};
+
 export class MemoryBank {
 	private channels?: Channels;
-	private readonly fired = new Set<string>();
-	private readonly open = new Set<string>();
-	private surfaced: FiredMemory[] = [];
 	private depth = 0;
-	private pending = "";
-	private spent = 0;
-	private dropped = 0;
-	private stepping = false;
-	private heard = 0;
+	private step: State<Step> = detachedState(QUIET);
+	private heardState: State<number> | undefined;
+
+	private get heard(): number {
+		return this.heardState?.get() ?? 0;
+	}
+
+	private set heard(count: number) {
+		this.heardState?.set(count);
+	}
+
+	keepStateIn(interp: Interp): void {
+		this.heardState = interp.state(
+			"memory/heard",
+			countCodec,
+			this.heard,
+			"How many user messages the memory bank has already listened to.",
+		);
+		this.step = interp.state(
+			"memory/step",
+			stepCodec,
+			QUIET,
+			"What the memory bank has fired, opened and surfaced in the current step, and the recall words it has shown and held back.",
+		);
+	}
+
+	private change(next: Partial<Step>): void {
+		this.step.set({ ...this.step.get(), ...next });
+	}
 
 	constructor(
 		readonly store: MemoryStore = new VolatileStore(),
@@ -171,14 +259,8 @@ export class MemoryBank {
 	}
 
 	reset(): void {
-		this.fired.clear();
-		this.open.clear();
-		this.surfaced = [];
 		this.depth = 0;
-		this.pending = "";
-		this.spent = 0;
-		this.dropped = 0;
-		this.stepping = false;
+		this.step.set(QUIET);
 	}
 
 	strength(memory: Memory): number {
@@ -187,7 +269,7 @@ export class MemoryBank {
 	}
 
 	isOpen(key: string): boolean {
-		return this.open.has(key);
+		return this.step.get().open.includes(key);
 	}
 
 	*hear(interp: Interp): Eval<FiredMemory[]> {
@@ -196,27 +278,27 @@ export class MemoryBank {
 		this.heard = said.length;
 		const last = said[said.length - 1];
 		if (last === undefined || last === "") return [];
-		this.stepping = true;
+		this.change({ stepping: true });
 		yield* this.sweep();
-		const before = this.surfaced.length;
+		const before = this.step.get().surfaced.length;
 		yield* this.dispatch({ kind: "user", text: last }, interp);
-		this.stepping = false;
+		this.change({ stepping: false });
 		this.drain();
-		return this.surfaced.slice(before);
+		return this.step.get().surfaced.slice(before);
 	}
 
 	*start(interp: Interp): Eval<FiredMemory[]> {
 		if (this.heard !== 0 || userMessages(interp).length !== 1) return [];
-		this.stepping = true;
+		this.change({ stepping: true });
 		yield* this.sweep();
 		yield* this.dispatch({ kind: "start" }, interp);
-		const started = this.surfaced;
+		const { surfaced } = this.step.get();
 		this.reset();
-		return started;
+		return [...surfaced];
 	}
 
 	*beginStep(code: string, interp: Interp): Eval<string> {
-		this.stepping = true;
+		this.change({ stepping: true });
 		yield* this.sweep();
 		yield* this.dispatch({ kind: "step", text: code }, interp);
 		const prose = proseIn(code);
@@ -233,11 +315,10 @@ export class MemoryBank {
 	}
 
 	private drain(): string {
-		const text = this.pending;
-		this.pending = "";
-		if (this.dropped === 0) return text;
-		const withheld = `... ${this.dropped} more word${this.dropped === 1 ? "" : "s"} of recalled memory not shown (a step surfaces ${MAX_RECALL_WORDS} words); narrow the query, or read one with (recall "key")\n`;
-		this.dropped = 0;
+		const { pending: text, dropped } = this.step.get();
+		this.change({ pending: "", dropped: 0 });
+		if (dropped === 0) return text;
+		const withheld = `... ${dropped} more word${dropped === 1 ? "" : "s"} of recalled memory not shown (a step surfaces ${MAX_RECALL_WORDS} words); narrow the query, or read one with (recall "key")\n`;
 		return text + withheld;
 	}
 
@@ -278,10 +359,13 @@ export class MemoryBank {
 	}
 
 	*fire(memory: Memory, interp: Interp): Eval<void> {
-		if (this.fired.has(memory.key)) return;
+		const { fired, open } = this.step.get();
+		if (fired.includes(memory.key)) return;
 		if (this.depth >= MAX_CASCADE_DEPTH) return;
-		this.fired.add(memory.key);
-		this.open.add(memory.key);
+		this.change({
+			fired: [...fired, memory.key],
+			open: [...open, memory.key],
+		});
 		yield* this.reinforce(memory);
 		this.surface(memory);
 		this.depth++;
@@ -305,7 +389,7 @@ export class MemoryBank {
 	}
 
 	private *wireTogether(): Eval<void> {
-		const keys = [...this.fired];
+		const keys = this.step.get().fired;
 		if (keys.length < 2) return;
 		for (const key of keys) {
 			const memory = yield* settled(this.store.get(key));
@@ -325,7 +409,7 @@ export class MemoryBank {
 	}
 
 	private *dispatch(event: MemoryEvent, interp: Interp): Eval<void> {
-		if (!this.stepping) return;
+		if (!this.step.get().stepping) return;
 		const all = yield* settled(this.store.all());
 		for (const memory of all) {
 			const on = memory.on;
@@ -340,17 +424,20 @@ export class MemoryBank {
 		const body = bodyText(memory.body);
 		const line = `${key}: ${body}\n`;
 		const words = line.split(/\s+/).filter((w) => w !== "").length;
-		if (this.spent >= MAX_RECALL_WORDS) {
-			this.dropped += words;
+		const step = this.step.get();
+		if (step.spent >= MAX_RECALL_WORDS) {
+			this.change({ dropped: step.dropped + words });
 			return;
 		}
-		this.spent += words;
-		this.pending += line;
 		const surfaced: FiredMemory =
 			memory.on === undefined
 				? { key, body }
 				: { key, body, on: memory.on.kind };
-		this.surfaced.push(surfaced);
+		this.change({
+			spent: step.spent + words,
+			pending: step.pending + line,
+			surfaced: [...step.surfaced, surfaced],
+		});
 		fired.emit(this.channels, { user: surfaced });
 	}
 }
@@ -476,7 +563,7 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 }
 
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
-	bank.reset();
+	bank.keepStateIn(interp);
 	bank.attach(interp.channels);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {

@@ -1,8 +1,10 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import { note } from "@repo/interpreter/topics";
+import type { McpExtensionHost } from "../src/mcp.ts";
 import type {
 	ConnConfig,
+	McpClient,
 	McpHost,
 	ServerHandle,
 	ServerState,
@@ -61,4 +63,27 @@ export function reportOf(interp: Interp, code: string): string {
 		.filter((n) => n.kind === "failed")
 		.map((n) => n.text)
 		.join("");
+}
+
+export function countingHost(
+	host: McpExtensionHost,
+	connects: ConnConfig[],
+	refuse?: Error,
+): McpExtensionHost {
+	const { client } = host;
+	const counting: McpClient = {
+		connect: (conf, signal) => {
+			connects.push(conf);
+			return refuse === undefined
+				? client.connect(conf, signal)
+				: Promise.reject(refuse);
+		},
+		callTool: (call, signal) => client.callTool(call, signal),
+		disconnect: (serverId) => client.disconnect(serverId),
+		login: (conf) => client.login(conf),
+		logout: (conf) => client.logout(conf),
+		authorize: (conf, code) => client.authorize(conf, code),
+		shutdown: () => client.shutdown(),
+	};
+	return { ...host, client: counting };
 }

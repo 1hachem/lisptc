@@ -139,6 +139,19 @@ in the lifecycle is a new chain. A new capability is a new slot. A new thing to
 report is a new key. A payload a layer above would have to interpret belongs
 below the seam instead: move the interpretation into the extension.
 
+## State lives in the image
+
+A restore brings back the globals and nothing else. Whatever a session needs
+after one lives in a global.
+
+- State an extension keeps across calls is a global it declares, and Lisp
+  cannot set it. The extension keeps no copy of its own.
+- A live resource is a cache behind a name a global holds. Losing the cache
+  costs a reconnect, never something the session knew.
+- A value of an extension's own class that can reach a global ships with a
+  codec. A secret is stored by its key, never its value.
+- What a restore cannot bring back is marked failed, so the session is told.
+
 ## Tests
 
 `test/helpers.ts` builds the interpreters, and every one it builds carries no

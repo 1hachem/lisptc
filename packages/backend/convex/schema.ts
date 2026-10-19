@@ -84,8 +84,10 @@ export default defineSchema({
 		status: v.optional(chatStatus),
 		streamingSince: v.optional(v.number()),
 		failure: v.optional(v.string()),
+		replId: v.optional(v.id("repls")),
 	})
 		.index("by_workspace", ["workspaceId"])
+		.index("by_repl", ["replId"])
 		.index("by_workspace_live_activity", [
 			"workspaceId",
 			"archivedAt",
@@ -105,10 +107,12 @@ export default defineSchema({
 		kwargs: v.optional(v.record(v.string(), v.any())),
 		truncated: v.optional(v.boolean()),
 		wireId: v.optional(v.string()),
+		layerId: v.optional(v.id("replLayers")),
 	})
 		.index("by_chat_seq", ["chatId", "seq"])
 		.index("by_chat_wire", ["chatId", "wireId"])
-		.index("by_workspace_type", ["workspaceId", "type"]),
+		.index("by_workspace_type", ["workspaceId", "type"])
+		.index("by_layer", ["layerId"]),
 
 	secrets: defineTable({
 		workspaceId: v.id("workspaces"),
@@ -128,6 +132,30 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		source: v.string(),
 	}).index("by_workspace", ["workspaceId"]),
+
+	repls: defineTable({
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		head: v.optional(v.id("replLayers")),
+	}).index("by_head", ["head"]),
+
+	replLayers: defineTable({
+		replId: v.id("repls"),
+		parent: v.optional(v.id("replLayers")),
+		origin: v.optional(v.string()),
+		depth: v.number(),
+		whole: v.boolean(),
+		bytes: v.number(),
+		chunks: v.number(),
+	})
+		.index("by_repl_origin", ["replId", "origin"])
+		.index("by_parent", ["parent"]),
+
+	replLayerChunks: defineTable({
+		layerId: v.id("replLayers"),
+		index: v.number(),
+		data: v.string(),
+	}).index("by_layer", ["layerId", "index"]),
 
 	oauthRecords: defineTable({
 		workspaceId: v.id("workspaces"),

@@ -7,6 +7,7 @@ import {
 	listToArray,
 	newLispKeyword,
 } from "@repo/interpreter/objects";
+import { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
@@ -15,19 +16,20 @@ import { z } from "zod";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
 
-const zPromise = z.custom<Promise<unknown>>(
-	(x) => x instanceof Promise,
+const zPromise = z.custom<LispPromise>(
+	(x) => x instanceof LispPromise,
 	"promise expected",
 );
 
 const message = (e: unknown): string =>
 	e instanceof Error ? e.message : String(e);
 
-function toPromises(x: unknown): Promise<unknown>[] {
+function toPromises(interp: Interp, x: unknown): Promise<unknown>[] {
 	const arr = x === null || x instanceof Cell ? listToArray(x as List) : [x];
 	return arr.map((p) => {
-		if (!(p instanceof Promise)) throw new EvalException("not a promise", p);
-		return p;
+		if (!(p instanceof LispPromise))
+			throw new EvalException("not a promise", p);
+		return interp.async.promiseOf(p);
 	});
 }
 
@@ -45,7 +47,7 @@ export interface PromisesHost {
 
 function unawaited(error: EvalException): string | undefined {
 	if (!(error instanceof ArgumentException)) return undefined;
-	if (!(error.value instanceof Promise)) return undefined;
+	if (!(error.value instanceof LispPromise)) return undefined;
 	const where =
 		error.at === undefined ? "an argument" : `argument ${error.at + 1}`;
 	const of = error.callee === undefined ? "" : ` of ${error.callee}`;
@@ -75,30 +77,33 @@ export function registerPromises(interp: Interp): void {
 		z.tuple([zList]),
 		([rest]) => {
 			const args = listToArray(rest);
-			const [promise] = toPromises(args[0]);
+			const target = args[0];
+			const [promise] = toPromises(interp, target);
 			return withTimeout(promise, parseTimeout(args[1]), "await", () =>
-				interp.async.progressOf(promise),
+				target instanceof LispPromise
+					? interp.async.progressOf(target)
+					: undefined,
 			);
 		},
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-all",
 		1,
 		"(promise-all promises)",
 		"Return one promise for the values of every promise in the list, in order. It rejects as soon as any of them does, like JavaScript's Promise.all — use promise-all-settled to keep the ones that succeeded.",
 		z.tuple([zList]),
-		([list]) => Promise.all(toPromises(list)).then(arrayToList),
+		([list]) => Promise.all(toPromises(interp, list)).then(arrayToList),
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-all-settled",
 		1,
 		"(promise-all-settled promises)",
 		'Return one promise for how every promise in the list turned out, in order, as (:fulfilled value) or (:rejected "message"). It never rejects, so one failure does not discard its siblings. Like JavaScript\'s Promise.allSettled.',
 		z.tuple([zList]),
 		([list]) =>
-			Promise.allSettled(toPromises(list)).then((results) =>
+			Promise.allSettled(toPromises(interp, list)).then((results) =>
 				arrayToList(
 					results.map((r) =>
 						r.status === "fulfilled"
@@ -109,14 +114,14 @@ export function registerPromises(interp: Interp): void {
 			),
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-any",
 		1,
 		"(promise-any promises)",
 		"Return one promise for the value of the first promise in the list to succeed. It rejects only if they all do, like JavaScript's Promise.any.",
 		z.tuple([zList]),
 		([list]) =>
-			Promise.any(toPromises(list)).catch((ex) => {
+			Promise.any(toPromises(interp, list)).catch((ex) => {
 				const errors = (ex as { errors?: unknown[] }).errors;
 				throw new EvalException(
 					"every promise rejected",
@@ -126,13 +131,13 @@ export function registerPromises(interp: Interp): void {
 			}),
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-race",
 		1,
 		"(promise-race promises)",
 		"Return one promise that settles the way the first promise in the list to settle did, whether it succeeded or failed. Like JavaScript's Promise.race.",
 		z.tuple([zList]),
-		([list]) => Promise.race(toPromises(list)),
+		([list]) => Promise.race(toPromises(interp, list)),
 	);
 
 	interp.def(

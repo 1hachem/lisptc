@@ -38,3 +38,9 @@ export function pickGreeting(now: Date, roll: number = Math.random()): string {
 	const lines = LINES[momentOf(now.getHours())];
 	return lines[Math.floor(roll * lines.length) % lines.length];
 }
+
+export const GREETING_ID = "greeting";
+
+export function isGreetingMessage(message: { id?: string }): boolean {
+	return message.id === GREETING_ID;
+}
