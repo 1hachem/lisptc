@@ -168,6 +168,15 @@ describe("the chat input", () => {
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
+	it("keeps the menu's caret anchor out of the page layout", async () => {
+		const field = render(vi.fn());
+		type(field, "/cl");
+		await act(async () => {});
+		expect(document.getElementById("typeahead-menu")?.className).toContain(
+			"hidden!",
+		);
+	});
+
 	it("highlights the forms in the text without changing it", () => {
 		const field = render(vi.fn());
 		type(field, "hello (+ 1 2)");

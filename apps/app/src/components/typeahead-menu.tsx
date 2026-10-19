@@ -40,6 +40,7 @@ export function TypeaheadMenu<T extends MenuOption>({
 			onSelectOption={onSelectOption}
 			onOpen={() => onOpenChange(true)}
 			onClose={() => onOpenChange(false)}
+			anchorClassName="hidden!"
 			menuRenderFn={(
 				_anchor,
 				{ selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
