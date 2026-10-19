@@ -107,9 +107,8 @@ MCP built-ins are installed on every Interp:
   search-tools / mcp-shutdown
 Tool docs surface through the generic `doc` built-in.
 
-Load a server ad-hoc. Here we boot the repo's fixture stdio server,
-which exposes a single tool, `echo`.
-(await (load-mcp :name "fs" :command "npx" :args '("-y" "@modelcontextprotocol/server-filesystem" "/tmp")))
+Load a server from the toolkit by name.
+(await (load-mcp "fs"))
 
 (fs/read_file "/tmp/test")
 

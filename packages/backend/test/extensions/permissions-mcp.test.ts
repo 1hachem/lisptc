@@ -6,7 +6,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { MemoryRepl } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
-import { mockMcpClient } from "./helpers.ts";
+import { mockMcpClient, mockToolkit } from "./helpers.ts";
 
 const CONFIG = `
 (permission/server fx
@@ -17,22 +17,28 @@ const CONFIG = `
 `;
 
 function replWith(config: string) {
-	const client = mockMcpClient({
+	const servers = {
 		fx: { tools: ["echo", "send_mail", "drop", "admin_reset"] },
 		"secret-fx": { tools: ["echo"] },
-	});
+	};
+	const client = mockMcpClient(servers);
 	const permissions = permissionsExtension(textPermissionsHost(config));
 	const repl = new MemoryRepl({
 		extensions: [
 			permissions,
 			promisesExtension(promisesHost),
-			mcpExtension({ ...mcpHost, client, policy: permissions.rules }),
+			mcpExtension({
+				...mcpHost,
+				client,
+				toolkit: mockToolkit(servers),
+				policy: permissions.rules,
+			}),
 		],
 	});
 	return { repl, client };
 }
 
-const LOAD = '(echo (await (load-mcp :name "fx" :command "node")))';
+const LOAD = '(echo (await (load-mcp "fx")))';
 
 async function printed(repl: MemoryRepl, code: string): Promise<string> {
 	return (await repl.evalOutput(code)).user;
@@ -103,11 +109,9 @@ describe("permissions over a loaded MCP server", () => {
 
 	it("treats a hidden server as one that does not exist", async () => {
 		const { repl } = replWith(CONFIG);
-		const out = await repl.evalOutput(
-			'(await (load-mcp :name "secret-fx" :command "node"))',
-		);
+		const out = await repl.evalOutput('(await (load-mcp "secret-fx"))');
 		expect(out.failed).toBe(true);
-		expect(out.model).toContain("unknown MCP server");
+		expect(out.model).toContain("unknown predefined MCP server");
 	});
 
 	it("asks for a tool, and carries the held call on once the user approves through the ui action", async () => {

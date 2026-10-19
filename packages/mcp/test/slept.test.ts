@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
@@ -8,24 +7,22 @@ import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
 import { MemoryOAuthStore } from "../src/oauth-host.ts";
-import { recordingHost } from "./helpers.ts";
-
-const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
-);
+import { fixtureServer, recordingHost, withServers } from "./helpers.ts";
 
 async function loaded() {
 	const host = recordingHost();
-	const extension = mcpExtension({
-		...mcpHost,
-		client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
-	});
+	const extension = mcpExtension(
+		withServers(
+			{
+				...mcpHost,
+				client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
+			},
+			fixtureServer("fx"),
+		),
+	);
 	const interp = new Interp({ extensions: [extension] });
 	runSync(interp, prelude);
-	await (runSync(
-		interp,
-		`(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`,
-	) as Promise<unknown>);
+	await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
 	return { host, interp, hooks: openSession([extension]) };
 }
 

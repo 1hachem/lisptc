@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
@@ -8,19 +7,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type McpExtensionHost, mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { ConnConfig } from "../src/ports.ts";
-import { countingHost } from "./helpers.ts";
+import { countingHost, fixtureServer, withServers } from "./helpers.ts";
 
-const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
+const LOAD = '(load-mcp "fx")';
+
+const FX_HOST = withServers(mcpHost, fixtureServer("fx"));
+
+const SLOW_FX_HOST = withServers(
+	mcpHost,
+	fixtureServer("fx", { delayMs: 300 }),
 );
-
-const SLOW_LOAD = `(load-mcp :name "fx" :command "node" :env (quote (("LISPTC_FIXTURE_DELAY_MS" . "300"))) :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`;
-
-const LOAD = `(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`;
 
 const opened: Interp[] = [];
 
-function mcpInterp(host: McpExtensionHost = mcpHost): Interp {
+function mcpInterp(host: McpExtensionHost = FX_HOST): Interp {
 	const interp = new Interp({ extensions: [mcpExtension(host)] });
 	opened.push(interp);
 	return interp;
@@ -68,7 +68,7 @@ describe("a loaded MCP server in an image", () => {
 
 	it("reconnects on its first tool call and returns the result", async () => {
 		const connects: ConnConfig[] = [];
-		const back = imaged(await loaded(), countingHost(mcpHost, connects));
+		const back = imaged(await loaded(), countingHost(FX_HOST, connects));
 		expect(await evalStr(back, '(fx/echo :message "hi")')).toBe('"hi"');
 		expect(await evalStr(back, "(list-mcps)")).toContain('("fx" :loaded 3)');
 		expect(await evalStr(back, '(fx/echo :message "again")')).toBe('"again"');
@@ -77,7 +77,7 @@ describe("a loaded MCP server in an image", () => {
 
 	it("reconnects once for two calls made at the same time", async () => {
 		const connects: ConnConfig[] = [];
-		const back = imaged(await loaded(), countingHost(mcpHost, connects));
+		const back = imaged(await loaded(), countingHost(FX_HOST, connects));
 		const calls = [
 			evalStr(back, '(fx/echo :message "a")'),
 			evalStr(back, '(fx/echo :message "b")'),
@@ -92,7 +92,7 @@ describe("a loaded MCP server in an image", () => {
 	it("is marked failed with the reason when the reconnect fails", async () => {
 		const back = imaged(
 			await loaded(),
-			countingHost(mcpHost, [], new Error("no route to fx")),
+			countingHost(FX_HOST, [], new Error("no route to fx")),
 		);
 		await expect(runAsync(back, '(fx/echo :message "hi")')).rejects.toThrow(
 			"no route to fx",
@@ -113,19 +113,19 @@ describe("a loaded MCP server in an image", () => {
 	it("unloads a dormant server without a connection to close", async () => {
 		const back = imaged(await loaded());
 		await evalStr(back, '(unload-mcp "fx")');
-		expect(await evalStr(back, "(list-mcps)")).not.toContain('"fx"');
+		expect(await evalStr(back, "(list-mcps)")).toContain('("fx" :unloaded 0)');
 		await expect(runAsync(back, '(fx/echo :message "hi")')).rejects.toThrow();
 	});
 });
 
 describe("a load-mcp pending in an image", () => {
 	it("completes after restore", async () => {
-		const interp = mcpInterp();
-		runSync(interp, `(setq loading ${SLOW_LOAD})`);
+		const interp = mcpInterp(SLOW_FX_HOST);
+		runSync(interp, `(setq loading ${LOAD})`);
 		const image = JSON.parse(JSON.stringify(snapshot(interp)));
 		interp.dispose();
 		const connects: ConnConfig[] = [];
-		const back = mcpInterp(countingHost(mcpHost, connects));
+		const back = mcpInterp(countingHost(FX_HOST, connects));
 		restore(back, image);
 		await (back.getGlobal(newSym("loading")) as LispPromise);
 		expect(connects.map((conf) => conf.name)).toEqual(["fx"]);
