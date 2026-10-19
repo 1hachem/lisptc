@@ -15,11 +15,8 @@ extension's to read, and the types that describe them are in its `ports.ts`.
 ## Rules
 
 This package is data. **A `static` package depends on a `foundation` package
-at most**: the tag denies every other tag in `pnpm boundaries`, and
-`check:arch` finds every package carrying it and refuses any other dependency
-in its manifest. Any package or app may depend on it. It reaches nothing at
+at most**, and any package or app may depend on it. It reaches nothing at
 runtime, so it loads in the browser.
 
-A relative path in an entry's `args` resolves against the manifest's own
-location, so the file keeps its depth under the repository root. The app copies
-it beside its server bundle; `apps/app/runtime-assets.ts` names it.
+**Do not move `mcp.toolkit.json` to another depth under the repository root.**
+A relative path in an entry is written for where the manifest sits.
