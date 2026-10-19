@@ -98,7 +98,7 @@ describe("a rejected promise is an ordinary Lisp error", () => {
 describe("an await that runs out of time", () => {
 	it("says what the work is still doing, so it can be awaited again", async () => {
 		const interp = interpWithSlow();
-		interp.defPromise(
+		interp.def(
 			"stuck",
 			0,
 			"(stuck)",
