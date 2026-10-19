@@ -22,6 +22,7 @@ import {
 	splitKeywordArgs,
 } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
+import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
@@ -152,7 +153,7 @@ function asText(x: unknown, what: string): string {
 function asContent(x: unknown, what: string): string {
 	if (typeof x === "string") return x;
 	if (x === null) throw new EvalException(`${what} must not be nil`, x);
-	if (x instanceof Promise)
+	if (x instanceof LispPromise)
 		throw new EvalException(`${what} must not be a promise; await it first`, x);
 	if (
 		x === true ||

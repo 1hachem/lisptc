@@ -22,6 +22,10 @@ export const MAX_OAUTH_RECORDS = 100;
 
 export const MAX_TRANSCRIPT = 200;
 
+export const MAX_REPL_LAYER_BYTES = 8_388_608;
+
+export const REPL_LAYER_CHUNK_CHARS = 262_144;
+
 export const TURN_DEADLINE_MS = 600_000;
 
 export const STREAMING_LEASE_MS = TURN_DEADLINE_MS + 60_000;

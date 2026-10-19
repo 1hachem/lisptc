@@ -26,6 +26,7 @@ import type * as permissions from "../permissions.js";
 import type * as posthog from "../posthog.js";
 import type * as preferences from "../preferences.js";
 import type * as readmes from "../readmes.js";
+import type * as repls from "../repls.js";
 import type * as secrets from "../secrets.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   posthog: typeof posthog;
   preferences: typeof preferences;
   readmes: typeof readmes;
+  repls: typeof repls;
   secrets: typeof secrets;
   users: typeof users;
   workspaces: typeof workspaces;

@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useAppearance } from "./appearance.tsx";
 import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
+import { useForkPicker } from "./fork-picker.tsx";
 import { useModelPicker } from "./model-picker.tsx";
 import { darkVariant } from "./theme-uses.ts";
 import { transcript } from "./transcript.ts";
@@ -31,6 +32,11 @@ export const commands: Command[] = [
 		aliases: ["/panel", "/right"],
 	},
 	{ name: "/prompt", desc: "search the prompts sent in this workspace" },
+	{
+		name: "/revert",
+		desc: "fork the chat and its repl at an earlier message",
+		aliases: ["/fork"],
+	},
 	{
 		name: "/sidebar",
 		desc: "toggle the sidebar",
@@ -81,6 +87,7 @@ export function useCommandRunner() {
 	const { openModelPicker } = useModelPicker();
 	const { theme, chooseTheme, openThemePicker, openFontPicker } =
 		useAppearance();
+	const { openForkPicker } = useForkPicker();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
@@ -98,6 +105,11 @@ export function useCommandRunner() {
 				"/model": quietly(openModelPicker),
 				"/theme": quietly(openThemePicker),
 				"/font": quietly(openFontPicker),
+				"/revert": () => {
+					if (store.getState().chatId === null) return "nothing to revert yet";
+					openForkPicker();
+					return null;
+				},
 				"/dark": () => {
 					const dark = darkVariant(themes, theme);
 					if (typeof dark === "string") return dark;
@@ -125,6 +137,7 @@ export function useCommandRunner() {
 			chooseTheme,
 			openThemePicker,
 			openFontPicker,
+			openForkPicker,
 		],
 	);
 }
