@@ -349,7 +349,7 @@ describe("a toolkit server bundled with the repo", () => {
 				toolkit: jsonToolkit(
 					toolkitJson,
 					undefined,
-					new URL("../mcp.toolkit.json", import.meta.url),
+					new URL("../package.json", import.meta.url),
 				),
 			}),
 		],
