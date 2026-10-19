@@ -235,6 +235,37 @@ function useAssist(
 	return { service, call, diagnostics };
 }
 
+function useCompletions(
+	query: string | null,
+	service: ReturnType<typeof languageService>,
+	snapshot: ReturnType<typeof useLispDocument>,
+): CompletionOption[] {
+	const [candidates, setCandidates] = useState<CompletionItem[]>([]);
+	useEffect(() => {
+		if (query === null) return setCandidates([]);
+		const timer = setTimeout(() => {
+			const { document, position } = snapshot();
+			setCandidates(
+				position === null ? [] : service.completions(document, position),
+			);
+		}, COMPLETE_MS);
+		return () => clearTimeout(timer);
+	}, [query, service, snapshot]);
+
+	return useMemo(
+		() =>
+			query === null
+				? []
+				: candidates
+						.filter(
+							(item) => item.label.startsWith(query) && item.label !== query,
+						)
+						.slice(0, MAX_OPTIONS)
+						.map((item) => new CompletionOption(item)),
+		[query, candidates],
+	);
+}
+
 export function LispAssistPlugin({
 	symbols,
 	host,
@@ -250,31 +281,7 @@ export function LispAssistPlugin({
 	const hover = useHover(symbols);
 	const [query, setQuery] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
-
-	const [candidates, setCandidates] = useState<CompletionItem[]>([]);
-	useEffect(() => {
-		if (query === null) return setCandidates([]);
-		const timer = setTimeout(() => {
-			const { document, position } = snapshot();
-			setCandidates(
-				position === null ? [] : service.completions(document, position),
-			);
-		}, COMPLETE_MS);
-		return () => clearTimeout(timer);
-	}, [query, service, snapshot]);
-
-	const options = useMemo(
-		() =>
-			query === null
-				? []
-				: candidates
-						.filter(
-							(item) => item.label.startsWith(query) && item.label !== query,
-						)
-						.slice(0, MAX_OPTIONS)
-						.map((item) => new CompletionOption(item)),
-		[query, candidates],
-	);
+	const options = useCompletions(query, service, snapshot);
 
 	useEffect(() => {
 		active.current = open && options.length > 0;

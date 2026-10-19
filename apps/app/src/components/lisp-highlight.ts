@@ -39,11 +39,11 @@ export class LispTokenNode extends TextNode {
 		return new LispTokenNode(json.text, json.token).updateFromJSON(json);
 	}
 
-	isSimpleText(): boolean {
+	override isSimpleText(): boolean {
 		return !this.isToken() && !this.isSegmented();
 	}
 
-	isUnmergeable(): boolean {
+	override isUnmergeable(): boolean {
 		return true;
 	}
 
