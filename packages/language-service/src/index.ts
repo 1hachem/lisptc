@@ -1,4 +1,5 @@
 export { lispIn } from "./forms.ts";
+export { type RankedCompletion, rankCompletions } from "./fuzzy.ts";
 export {
 	type CallAt,
 	insideForm,
