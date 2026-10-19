@@ -1,4 +1,4 @@
-import type { ChatInput, EvalMessage } from "@repo/ai";
+import type { ChatInput, Evaluated } from "@repo/ai";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { type Method, post as send, serve } from "../helpers.ts";
 
@@ -8,6 +8,7 @@ const world = vi.hoisted(() => ({
 	appended: [] as Record<string, unknown>[],
 	storedWhenStreamed: [] as Record<string, unknown>[][],
 	sent: [] as ChatInput[],
+	quiet: [] as boolean[],
 	steered: [] as string[],
 	evaluating: () => {},
 }));
@@ -51,12 +52,15 @@ vi.mock("@repo/ai", async (importOriginal) => {
 		...real,
 		evalUserMessage: async (
 			message: string,
-		): Promise<EvalMessage | undefined> => {
+		): Promise<Evaluated | undefined> => {
 			world.evaluating();
 			if (message.startsWith("slow"))
 				await new Promise((resolve) => setTimeout(resolve, 20));
 			return holdsForms(message)
-				? { type: "tool", content: "3", id: "result" }
+				? {
+						message: { type: "tool", content: "3", id: "result" },
+						quiet: message.includes("quietly"),
+					}
 				: undefined;
 		},
 		MemorySteerInbox: class extends real.MemorySteerInbox {
@@ -68,8 +72,9 @@ vi.mock("@repo/ai", async (importOriginal) => {
 				return true;
 			}
 		},
-		streamChatResponse: (input: ChatInput) => {
+		streamChatResponse: (input: ChatInput, options: { quiet?: boolean }) => {
 			world.sent.push(input);
+			world.quiet.push(options.quiet === true);
 			world.storedWhenStreamed.push([...world.appended]);
 			return new Response("");
 		},
@@ -93,6 +98,7 @@ beforeEach(() => {
 	world.appended.length = 0;
 	world.storedWhenStreamed.length = 0;
 	world.sent.length = 0;
+	world.quiet.length = 0;
 	world.steered.length = 0;
 	world.evaluating = () => {};
 });
@@ -102,6 +108,20 @@ describe("a message that holds forms", () => {
 		await send(turn, { input: { chatId: CHAT, message: "what is (+ 1 2)" } });
 		expect(world.storedWhenStreamed).toHaveLength(1);
 		expect(world.storedWhenStreamed[0].map((m) => m.type)).toEqual([
+			"human",
+			"tool",
+		]);
+	});
+
+	test("starts the agent unless a form asked to stay quiet", async () => {
+		await send(turn, { input: { chatId: CHAT, message: "what is (+ 1 2)" } });
+		await send(turn, {
+			input: { chatId: CHAT, message: "(quietly (+ 1 2))" },
+		});
+		expect(world.quiet).toEqual([false, true]);
+		expect(world.appended.map((m) => m.type)).toEqual([
+			"human",
+			"tool",
 			"human",
 			"tool",
 		]);
