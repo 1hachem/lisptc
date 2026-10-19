@@ -24,8 +24,11 @@ describe("rankCompletions", () => {
 		]);
 	});
 
-	it("drops a label that is exactly what was typed", () => {
-		expect(labels("list", "list", "list-length")).toEqual(["list-length"]);
+	it("ranks the label that is exactly what was typed first", () => {
+		expect(labels("load-mcp", "unload-mcp", "load-mcp")).toEqual([
+			"load-mcp",
+			"unload-mcp",
+		]);
 	});
 
 	it("ignores case", () => {

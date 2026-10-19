@@ -6,6 +6,7 @@ export interface RankedCompletion {
 }
 
 const WORD_BOUNDARY = /[-:/*_.?!>]/;
+const EXACT_BONUS = 100;
 const PREFIX_BONUS = 10;
 const BOUNDARY_BONUS = 3;
 const ADJACENT_BONUS = 2;
@@ -57,6 +58,7 @@ function fuzzyMatch(typed: string, label: string): Match | undefined {
 		at = folded.indexOf(query[0] ?? "", at + 1);
 	}
 	if (best && folded.startsWith(query)) best.score += PREFIX_BONUS;
+	if (best && folded === query) best.score += EXACT_BONUS;
 	return best;
 }
 
@@ -65,7 +67,6 @@ export function rankCompletions(
 	typed: string,
 ): RankedCompletion[] {
 	return items
-		.filter((item) => item.label !== typed)
 		.flatMap((item) => {
 			const match = fuzzyMatch(typed, item.label);
 			return match ? [{ item, ...match }] : [];
