@@ -7,11 +7,8 @@ Turbo tag: `product`.
 
 ## Shape
 
-`src/server.ts` is the binary: it owns the connection and the document
-lifecycle, and answers every request through `@repo/language-service`. The
-symbol table comes from the shared session server while one runs, and from a
-local `Interp` otherwise. `src/table-cache.ts` holds the session's answer for a
-moment so a burst of requests asks once.
+`src/server.ts` is the binary. It holds the transport and nothing else: every
+answer it sends comes from `@repo/language-service`.
 
 `src/extensions.ts` holds the two rosters this app composes: the one the local
 `Interp` reads its docs from, and the one the shared session server runs on.
