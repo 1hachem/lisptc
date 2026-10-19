@@ -1,27 +1,39 @@
+import type { Recipe } from "./recovery.ts";
+
 export type PromiseState = "pending" | "fulfilled" | "rejected";
 
 export class LispPromise implements PromiseLike<unknown> {
 	private running: Promise<unknown> | undefined;
+
+	recipe: Recipe | undefined;
 
 	constructor(
 		public state: PromiseState = "pending",
 		public outcome: unknown = null,
 	) {}
 
-	static of(promise: Promise<unknown>): LispPromise {
-		const lispPromise = new LispPromise();
-		lispPromise.running = promise;
+	static of(promise: Promise<unknown>, recipe?: Recipe): LispPromise {
+		return new LispPromise().follow(promise, recipe);
+	}
+
+	follow(promise: Promise<unknown>, recipe?: Recipe): LispPromise {
+		this.state = "pending";
+		this.outcome = null;
+		this.recipe = recipe;
+		this.running = promise;
 		promise.then(
 			(value) => {
-				lispPromise.state = "fulfilled";
-				lispPromise.outcome = value;
+				this.state = "fulfilled";
+				this.outcome = value;
+				this.recipe = undefined;
 			},
 			(error: unknown) => {
-				lispPromise.state = "rejected";
-				lispPromise.outcome = error;
+				this.state = "rejected";
+				this.outcome = error;
+				this.recipe = undefined;
 			},
 		);
-		return lispPromise;
+		return this;
 	}
 
 	promise(): Promise<unknown> {

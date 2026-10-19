@@ -1,4 +1,5 @@
 import { LispPromise, type PromiseState } from "./promise.ts";
+import type { Recipe } from "./recovery.ts";
 
 export type { PromiseState };
 
@@ -7,15 +8,31 @@ export class AsyncWork {
 	private readonly lispPromises = new WeakMap<Promise<unknown>, LispPromise>();
 	private readonly live = new Set<LispPromise>();
 
-	start(run: (signal: AbortSignal) => Promise<unknown>): LispPromise {
-		const controller = new AbortController();
-		const lispPromise = this.record(run(controller.signal));
-		this.controllers.set(lispPromise, controller);
-		return lispPromise;
+	start(
+		run: (signal: AbortSignal) => Promise<unknown>,
+		recipe?: Recipe,
+	): LispPromise {
+		return this.resume(new LispPromise(), run, recipe);
 	}
 
-	watch(promise: Promise<unknown>): LispPromise {
-		return this.lispPromises.get(promise) ?? this.record(promise);
+	resume(
+		into: LispPromise,
+		run: (signal: AbortSignal) => Promise<unknown>,
+		recipe?: Recipe,
+	): LispPromise {
+		const controller = new AbortController();
+		this.controllers.set(into, controller);
+		let running: Promise<unknown>;
+		try {
+			running = run(controller.signal);
+		} catch (error) {
+			running = Promise.reject(error);
+		}
+		return this.record(running, recipe, into);
+	}
+
+	watch(promise: Promise<unknown>, recipe?: Recipe): LispPromise {
+		return this.lispPromises.get(promise) ?? this.record(promise, recipe);
 	}
 
 	stateOf(lispPromise: LispPromise): PromiseState {
@@ -44,8 +61,12 @@ export class AsyncWork {
 		this.live.clear();
 	}
 
-	private record(promise: Promise<unknown>): LispPromise {
-		const lispPromise = LispPromise.of(promise);
+	private record(
+		promise: Promise<unknown>,
+		recipe: Recipe | undefined,
+		into = new LispPromise(),
+	): LispPromise {
+		const lispPromise = into.follow(promise, recipe);
 		this.lispPromises.set(promise, lispPromise);
 		this.live.add(lispPromise);
 		const settle = () => {

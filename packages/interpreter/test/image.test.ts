@@ -112,32 +112,18 @@ describe("an image", () => {
 			constructor(readonly id: string) {}
 		}
 		const codec = (interp: Interp): void => {
-			interp.hooks.encodeValue.use((x, next) =>
-				x instanceof Handle ? { tag: "handle", data: x.id } : next(x),
-			);
-			interp.hooks.decodeValue.use((f, next) =>
-				f.tag === "handle" ? new Handle(f.data as string) : next(f),
-			);
+			interp.recovery.kind({
+				name: "handle",
+				claims: (x) => x instanceof Handle,
+				save: (x) => (x as Handle).id,
+				restore: (data) => new Handle(data as string),
+			});
 		};
 		const interp = freshInterp({ extensions: [codec] });
 		interp.defineGlobal(newSym("h"), new Handle("h1"));
 		const back = roundTrip(interp, { extensions: [codec] });
 		expect(back.getGlobal(newSym("h"))).toEqual(new Handle("h1"));
-		expect(() => roundTrip(interp)).toThrow("no extension decodes handle");
-	});
-
-	it("runs the revive chain once it has loaded", () => {
-		const seen: string[] = [];
-		const reviving = (interp: Interp): void => {
-			interp.hooks.revive.use((i, next) => {
-				seen.push(ev("(sq 3)", i));
-				next(i);
-			});
-		};
-		const interp = freshInterp();
-		ev("(defun sq (x) (* x x))", interp);
-		roundTrip(interp, { extensions: [reviving] });
-		expect(seen).toEqual(["9"]);
+		expect(() => roundTrip(interp)).toThrow("no extension restores handle");
 	});
 });
 

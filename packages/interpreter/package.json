@@ -25,6 +25,7 @@
     "./prelude": "./src/prelude.ts",
     "./print": "./src/print.ts",
     "./reader": "./src/reader.ts",
+    "./recovery": "./src/recovery.ts",
     "./schema": "./src/schema.ts",
     "./session": "./src/session.ts",
     "./source": "./src/source.ts",

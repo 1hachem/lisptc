@@ -60,6 +60,7 @@ import {
 import { str } from "./print.ts";
 import { qqExpand, qqQuote } from "./quasiquote.ts";
 import { Reader } from "./reader.ts";
+import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
 import { note } from "./topics.ts";
@@ -81,9 +82,6 @@ export interface Hooks {
 		Awaitable<void>
 	>;
 	readonly dispose: Chain<[], void>;
-	readonly revive: Chain<[interp: Interp], void>;
-	readonly encodeValue: Chain<[value: unknown], ForeignValue | undefined>;
-	readonly decodeValue: Chain<[foreign: ForeignValue], unknown>;
 }
 
 export function newHooks(): Hooks {
@@ -93,9 +91,6 @@ export function newHooks(): Hooks {
 		failedForm: new Chain(),
 		call: new Chain(),
 		dispose: new Chain(),
-		revive: new Chain(),
-		encodeValue: new Chain(),
-		decodeValue: new Chain(),
 	};
 }
 
@@ -172,6 +167,8 @@ export class Interp {
 	private readonly sealed: Map<Sym, string> = new Map();
 
 	readonly hooks: Hooks = newHooks();
+
+	readonly recovery: Recovery = new Recovery();
 
 	readonly channels: Channels = new Channels();
 
@@ -276,6 +273,20 @@ export class Interp {
 		this.docTable.set(name, { signature, doc, args });
 	}
 
+	defResumable<T extends z.ZodType>(
+		name: string,
+		carity: number,
+		signature: string,
+		doc: string,
+		schema: T,
+		body: (a: z.infer<T>) => Promise<unknown>,
+		args?: DocArg[],
+		keys?: readonly string[],
+	) {
+		this.defPromise(name, carity, signature, doc, schema, body, args, keys);
+		this.recovery.resumable(name, (a) => body(parseArgs(schema, [...a])));
+	}
+
 	defineGlobal(sym: Sym, value: unknown, doc?: Doc): void {
 		this.globals.set(sym, value);
 		this.sources.delete(sym.name);
@@ -335,7 +346,6 @@ export class Interp {
 		for (const [name, doc] of contents.docs) this.docTable.set(name, doc);
 		this.sources.clear();
 		for (const [name, form] of contents.sources) this.sources.set(name, form);
-		this.hooks.revive.run(() => undefined, this);
 	}
 
 	setDoc(name: string, doc: Doc): void {
@@ -524,9 +534,14 @@ export class Interp {
 		if (fn.kind === "generator") return yield* fn.callGen(frame);
 		const value = fn.call(frame);
 		if (!(value instanceof Promise)) return value;
-		return fn.kind === "plain"
-			? yield* fn.settle(value)
-			: this.async.watch(value);
+		if (fn.kind === "plain") return yield* fn.settle(value);
+		const name = fn.callName as string;
+		return this.async.watch(
+			value,
+			this.recovery.resumer(name) === undefined
+				? undefined
+				: { kind: name, args: [...frame] },
+		);
 	}
 
 	private *applyForm([f, args]: [unknown, List]): Eval {

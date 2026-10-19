@@ -372,12 +372,12 @@ function elementOf(node: UiNode): UiElement {
 function registerUi(interp: Interp, surface: UiSurface): void {
 	surface.bind(interp);
 	surface.reset();
-	interp.hooks.encodeValue.use((x, next) =>
-		x instanceof UiElement ? { tag: UI_TAG, data: nodeToJson(x) } : next(x),
-	);
-	interp.hooks.decodeValue.use((foreign, next) =>
-		foreign.tag === UI_TAG ? elementOf(foreign.data as UiNode) : next(foreign),
-	);
+	interp.recovery.kind({
+		name: UI_TAG,
+		claims: (x) => x instanceof UiElement,
+		save: (x) => nodeToJson(x as UiElement),
+		restore: (data) => elementOf(data as UiNode),
+	});
 
 	interp.def(
 		"ui/text",

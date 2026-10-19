@@ -1,5 +1,5 @@
 import { bufferTransport } from "../src/channels-host.ts";
-import { restore, snapshot } from "../src/image.ts";
+import { type Image, restore, snapshot } from "../src/image.ts";
 import { Interp, type InterpOptions, runSync } from "../src/lisp.ts";
 import { prelude } from "../src/prelude.ts";
 import { str } from "../src/print.ts";
@@ -29,9 +29,12 @@ export function evWithOutput(
 	}
 }
 
+export function imageOf(interp: Interp): Image {
+	return JSON.parse(JSON.stringify(snapshot(interp)));
+}
+
 export function roundTrip(interp: Interp, options?: InterpOptions): Interp {
-	const image = JSON.parse(JSON.stringify(snapshot(interp)));
 	const next = new Interp(options);
-	restore(next, image);
+	restore(next, imageOf(interp));
 	return next;
 }

@@ -99,24 +99,27 @@ interface ImagedSecret {
 }
 
 function imageSecrets(interp: Interp, store: SecretsStore): void {
-	interp.hooks.encodeValue.use((x, next) => {
-		if (!(x instanceof Secret)) return next(x);
-		const [key] = x.keys;
-		const whole =
-			x.keys.length === 1 &&
-			key !== undefined &&
-			!x.lost &&
-			store.get(key)?.value === x.value;
-		const data: ImagedSecret = { keys: [...x.keys], whole };
-		return { tag: "secret", data };
-	});
-	interp.hooks.decodeValue.use((foreign, next) => {
-		if (foreign.tag !== "secret") return next(foreign);
-		const { keys, whole } = foreign.data as ImagedSecret;
-		const [key] = keys;
-		const value =
-			whole && key !== undefined ? store.get(key)?.value : undefined;
-		return new Secret(value, keys);
+	interp.recovery.kind({
+		name: "secret",
+		claims: (x) => x instanceof Secret,
+		save: (x) => {
+			const secret = x as Secret;
+			const [key] = secret.keys;
+			const whole =
+				secret.keys.length === 1 &&
+				key !== undefined &&
+				!secret.lost &&
+				store.get(key)?.value === secret.value;
+			const data: ImagedSecret = { keys: [...secret.keys], whole };
+			return data;
+		},
+		restore: (data) => {
+			const { keys, whole } = data as ImagedSecret;
+			const [key] = keys;
+			const value =
+				whole && key !== undefined ? store.get(key)?.value : undefined;
+			return new Secret(value, keys);
+		},
 	});
 }
 

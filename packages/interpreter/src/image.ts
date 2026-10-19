@@ -14,6 +14,7 @@ import {
 } from "./objects.ts";
 import { str } from "./print.ts";
 import { LispPromise } from "./promise.ts";
+import { RecoveryError, type RecoveryFailure } from "./recovery.ts";
 import type { ForeignValue } from "./types.ts";
 
 export const IMAGE_FORMAT = 2;
@@ -106,12 +107,20 @@ class Writer {
 						x.state === "rejected"
 							? reasonOf(x.outcome)
 							: this.value(x.outcome),
+					...(x.state === "pending" && x.recipe !== undefined
+						? {
+								resume: {
+									kind: x.recipe.kind,
+									args: x.recipe.args.map((a) => this.value(a)),
+								},
+							}
+						: {}),
 				},
 			};
 		if (x instanceof BuiltInFunc) return this.builtin(x);
-		const foreign = this.interp.hooks.encodeValue.run(() => undefined, x);
+		const foreign = this.interp.recovery.encode(x);
 		if (foreign !== undefined) return foreignJson(foreign);
-		throw new ImageError(`cannot image ${str(x)}`);
+		throw new ImageError(`cannot image ${str(x)}: no kind claims it`);
 	}
 
 	private builtin(x: BuiltInFunc): Json {
@@ -144,6 +153,12 @@ export function snapshot(interp: Interp): Image {
 		throw new ImageError(
 			"cannot image an interpreter in the middle of an import",
 		);
+	try {
+		interp.recovery.runBeforeSave();
+	} catch (error) {
+		if (error instanceof RecoveryError) throw new ImageError(error.message);
+		throw error;
+	}
 	const writer = new Writer(interp);
 	const { globals, docs, sources } = interp.contents();
 	const image: Image = {
@@ -176,8 +191,15 @@ function only(x: { [key: string]: Json }): [string, Json] {
 	return [kind, x[kind] as Json];
 }
 
+interface Resumed {
+	readonly into: LispPromise;
+	readonly kind: string;
+	readonly args: Json[];
+}
+
 class ImageReader {
 	private readonly values: unknown[];
+	readonly resumed: Resumed[] = [];
 	private readonly builtins = new Map<string, BuiltInFunc>();
 
 	constructor(
@@ -211,11 +233,14 @@ class ImageReader {
 				target.car = this.value(car);
 				target.cdr = this.value(cdr);
 			} else if (target instanceof LispPromise) {
-				const { state, outcome } = record.promise as {
+				const { state, outcome, resume } = record.promise as {
 					state: string;
 					outcome: Json;
+					resume?: { kind: string; args: Json[] };
 				};
-				if (state === "fulfilled") {
+				if (state === "pending" && resume !== undefined) {
+					this.resumed.push({ into: target, ...resume });
+				} else if (state === "fulfilled") {
 					target.state = "fulfilled";
 					target.outcome = this.value(outcome);
 				} else {
@@ -287,13 +312,10 @@ class ImageReader {
 	private foreign(json: { [key: string]: Json }): unknown {
 		const { tag, data } = json.foreign as { tag: string; data: Json };
 		const name = typeof json.builtin === "string" ? json.builtin : undefined;
-		return this.interp.hooks.decodeValue.run(
-			() => {
-				if (name !== undefined) return gone(name);
-				throw new ImageError(`no extension decodes ${tag}`);
-			},
-			{ tag, data },
-		);
+		const { recovery } = this.interp;
+		if (recovery.decodes(tag)) return recovery.decode({ tag, data });
+		if (name !== undefined) return gone(name);
+		throw new ImageError(`no extension decodes ${tag}`);
 	}
 
 	private builtin(name: string): BuiltInFunc {
@@ -307,9 +329,38 @@ function gone(name: string): BuiltInFunc {
 	});
 }
 
-export function restore(interp: Interp, image: Image): void {
+export function kindsOf(image: Image): string[] {
+	const kinds = new Set<string>();
+	for (const json of image.objects) {
+		if (!isRecord(json)) continue;
+		if (isRecord(json.foreign ?? null) && !("builtin" in json))
+			kinds.add((json.foreign as { tag: string }).tag);
+		const resume = isRecord(json.promise ?? null)
+			? (json.promise as { resume?: { kind: string } }).resume
+			: undefined;
+		if (resume !== undefined) kinds.add(resume.kind);
+	}
+	return [...kinds].sort();
+}
+
+export interface Restored {
+	readonly failed: readonly RecoveryFailure[];
+}
+
+function interrupted(into: LispPromise, reason: string): void {
+	into.state = "rejected";
+	into.outcome = new Error(reason);
+}
+
+export function restore(interp: Interp, image: Image): Restored {
 	if (image.format !== IMAGE_FORMAT)
 		throw new ImageError(`image format ${image.format} is not ${IMAGE_FORMAT}`);
+	const { recovery } = interp;
+	const missing = kindsOf(image).filter(
+		(kind) => !recovery.decodes(kind) && recovery.resumer(kind) === undefined,
+	);
+	if (missing.length > 0)
+		throw new ImageError(`no extension restores ${missing.join(", ")}`);
 	const reader = new ImageReader(interp, image.objects);
 	reader.read();
 	interp.load({
@@ -322,4 +373,19 @@ export function restore(interp: Interp, image: Image): void {
 			([name, form]) => [name, reader.value(form)] as const,
 		),
 	});
+	const failed = recovery.runAfterRestore();
+	for (const { into, kind, args } of reader.resumed) {
+		const resume = recovery.resumer(kind);
+		if (resume === undefined) {
+			interrupted(into, INTERRUPTED);
+			continue;
+		}
+		const values = args.map((a) => reader.value(a));
+		interp.async.resume(
+			into,
+			(signal) => Promise.resolve().then(() => resume(values, signal)),
+			{ kind, args: values },
+		);
+	}
+	return { failed };
 }

@@ -82,7 +82,7 @@ export function registerPromises(interp: Interp): void {
 		},
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-all",
 		1,
 		"(promise-all promises)",
@@ -91,7 +91,7 @@ export function registerPromises(interp: Interp): void {
 		([list]) => Promise.all(toPromises(interp, list)).then(arrayToList),
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-all-settled",
 		1,
 		"(promise-all-settled promises)",
@@ -109,7 +109,7 @@ export function registerPromises(interp: Interp): void {
 			),
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-any",
 		1,
 		"(promise-any promises)",
@@ -126,7 +126,7 @@ export function registerPromises(interp: Interp): void {
 			}),
 	);
 
-	interp.defPromise(
+	interp.defResumable(
 		"promise-race",
 		1,
 		"(promise-race promises)",
