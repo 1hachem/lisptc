@@ -17,9 +17,8 @@ export function FileView({
 	body?: ReactNode;
 }) {
 	const runCommand = useCommandRunner();
-	const { sendAbout, runLisp, stop, isLoading } = useChatSession((state) => ({
+	const { sendAbout, stop, isLoading } = useChatSession((state) => ({
 		sendAbout: state.sendAbout,
-		runLisp: state.runLisp,
 		stop: state.stop,
 		isLoading: state.isLoading,
 	}));
@@ -49,13 +48,12 @@ export function FileView({
 				<ChatInput
 					placeholder={
 						file
-							? `ask about ${file.path}  ·  / for commands  ·  ! for lisp`
-							: "type a message  ·  / for commands  ·  ! for lisp"
+							? `ask about ${file.path}, (lisp) runs inline  ·  / for commands`
+							: "type a message, (lisp) runs inline  ·  / for commands"
 					}
 					onSubmit={(text) => {
 						if (file) sendAbout(file, text);
 					}}
-					onLisp={runLisp}
 					onCommand={runCommand}
 					isStreaming={isLoading}
 					onStop={stop}

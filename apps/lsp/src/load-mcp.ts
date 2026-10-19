@@ -1,6 +1,7 @@
 import toolkitConfig from "@repo/mcp-extension/mcp.toolkit.json" with {
 	type: "json",
 };
+import { openAtEnd } from "@repo/shared/lisp-forms";
 import {
 	type CompletionItem,
 	CompletionItemKind,
@@ -29,28 +30,9 @@ function insideString(
 	document: TextDocument,
 	position: { line: number; character: number },
 ): boolean {
-	const text = document.getText({
-		start: { line: 0, character: 0 },
-		end: position,
-	});
-	let inString = false;
-	for (let i = 0; i < text.length; i++) {
-		const c = text[i];
-		if (c === "\n") {
-			inString = false;
-			continue;
-		}
-		if (inString) {
-			if (c === "\\") {
-				i++;
-				continue;
-			}
-			if (c === '"') inString = false;
-			continue;
-		}
-		if (c === '"') inString = true;
-	}
-	return inString;
+	return openAtEnd(
+		document.getText({ start: { line: 0, character: 0 }, end: position }),
+	).inString;
 }
 
 export function loadMcpCompletions(

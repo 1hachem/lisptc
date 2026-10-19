@@ -39,6 +39,20 @@ describe("reading lisptc", () => {
 		]);
 	});
 
+	test("an atom is a number or a keyword exactly when the reader reads one", () => {
+		expect(tokens("(f 1e3 0x1F Infinity : ~ x)")).toEqual([
+			["(", "operator"],
+			["f", "function"],
+			["1e3", "number"],
+			["0x1F", "number"],
+			["Infinity", "number"],
+			[":", "variable"],
+			["~", "variable"],
+			["x", "variable"],
+			[")", "operator"],
+		]);
+	});
+
 	test("text around a form is prose, as the reader sees it", () => {
 		expect(tokens("summing them (+ 1 2) gives three")).toEqual([
 			["summing them ", undefined],
@@ -178,6 +192,10 @@ describe("formsIn", () => {
 		const { prose, heads } = formsIn('Working on it.\n(load-mcp "playw');
 		expect(prose).toBe("Working on it.");
 		expect(heads).toEqual(["load-mcp"]);
+	});
+
+	test("names no call for a keyword in head position, as the language server does", () => {
+		expect(formsIn("(echo :k (:a x))").heads).toEqual(["echo"]);
 	});
 
 	test("takes no call out of a parenthesis inside a string", () => {

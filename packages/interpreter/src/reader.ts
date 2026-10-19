@@ -1,4 +1,4 @@
-import { tokenPattern } from "@repo/shared/lisp-tokens";
+import { isKeywordToken, tokenPattern } from "@repo/shared/lisp-tokens";
 import { tryToParse } from "./arith.ts";
 import { EvalException } from "./errors.ts";
 import {
@@ -175,7 +175,7 @@ function atomFor(t: string): unknown {
 	if (n !== null) return n;
 	if (t === "nil") return null;
 	if (t === "t") return true;
-	if (t.length > 1 && t[0] === ":") return newLispKeyword(t.slice(1));
+	if (isKeywordToken(t)) return newLispKeyword(t.slice(1));
 	if (t.startsWith("#<"))
 		throw new EvalException(
 			"a #<…> form is a printed handle, not something that can be read back; use the name the REPL reported the value under",

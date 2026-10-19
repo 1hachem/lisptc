@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { FORM_FIXTURES } from "../src/lisp-form-fixtures.ts";
-import { formSpans, formsOnly, openForms } from "../src/lisp-forms.ts";
+import {
+	formSpans,
+	formsOnly,
+	openAtEnd,
+	openForms,
+} from "../src/lisp-forms.ts";
 
 describe("one scanner decides where a form starts and ends", () => {
 	it.each(FORM_FIXTURES)("finds the forms of $source", ({ source, forms }) => {
@@ -33,5 +38,19 @@ describe("open forms count what is still waiting to be closed", () => {
 	it("does not close a form on a paren the reader never saw", () => {
 		expect(openForms("(defun add (a b)")).toBe(1);
 		expect(openForms('(echo "hi')).toBe(1);
+	});
+
+	it("says where each open form starts and whether the text ends in a string", () => {
+		expect(openAtEnd('(a "(" (b')).toEqual({ parens: [0, 7], inString: false });
+		expect(openAtEnd('(load-mcp "gi')).toEqual({
+			parens: [0],
+			inString: true,
+		});
+		expect(openAtEnd('(echo "a")')).toEqual({ parens: [], inString: false });
+		expect(openAtEnd('say "(hi')).toEqual({ parens: [5], inString: false });
+	});
+
+	it("ends a string at the line it opened on, as the reader does", () => {
+		expect(openAtEnd('(echo "a\n')).toEqual({ parens: [0], inString: false });
 	});
 });

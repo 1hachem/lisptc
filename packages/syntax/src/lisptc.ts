@@ -1,16 +1,19 @@
 import { type FormSpan, formSpans } from "@repo/shared/lisp-forms";
 import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
-import { tokenPattern } from "@repo/shared/lisp-tokens";
+import {
+	isKeywordToken,
+	isQuoteToken,
+	numberIn,
+	type QuoteToken,
+	tokenPattern,
+} from "@repo/shared/lisp-tokens";
 import {
 	createHighlighter,
 	defineLanguage,
 	type TokenRange,
 } from "@tanstack/highlight/core";
 
-const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)$/;
-const QUOTE = new Set(["'", "`", "~", ",", ",@"]);
-const QUOTES = new Set(["'", "`"]);
-const UNQUOTES = new Set([",", ",@"]);
+const QUOTES: ReadonlySet<QuoteToken> = new Set(["'", "`"]);
 
 interface Scan {
 	ranges: TokenRange[];
@@ -23,8 +26,8 @@ export interface Forms {
 }
 
 function atomClass(text: string, head: boolean): TokenRange["className"] {
-	if (text.startsWith(":")) return "attr";
-	if (NUMBER.test(text)) return "number";
+	if (isKeywordToken(text)) return "attr";
+	if (numberIn(text) !== null) return "number";
 	return head ? "function" : "variable";
 }
 
@@ -58,12 +61,11 @@ class Scanner {
 			this.ranges.push({ className, start, end });
 	}
 
-	quote(word: string, start: number, end: number) {
+	quote(word: QuoteToken, start: number, end: number) {
 		if (this.depth > 0) this.push(start, end, "operator");
 		else if (this.quoteEnd !== start) this.quoteAt = start;
 		this.quoteEnd = end;
-		if (QUOTES.has(word)) this.mark = "quote";
-		else if (UNQUOTES.has(word)) this.mark = "unquote";
+		this.mark = QUOTES.has(word) ? "quote" : "unquote";
 		this.quasi = word === "`";
 	}
 
@@ -107,7 +109,7 @@ class Scanner {
 
 	private names(word: string) {
 		if (!this.head) return false;
-		if (!this.quoted) return true;
+		if (!this.quoted) return !isKeywordToken(word);
 		return this.template && atomClass(word, true) === "function";
 	}
 
@@ -150,7 +152,7 @@ function scanWord(
 	lineEnd: number,
 ): Next {
 	const end = start + word.length;
-	if (QUOTE.has(word)) {
+	if (isQuoteToken(word)) {
 		scanner.quote(word, start, end);
 		return undefined;
 	}

@@ -43,6 +43,7 @@ export interface ChatMessage {
 		prose?: unknown;
 		failed?: unknown;
 		source?: unknown;
+		results?: unknown;
 	};
 }
 
@@ -106,24 +107,9 @@ export interface ChatSession {
 	send: (text: string) => void;
 	sendAbout: (file: OpenFile, text: string) => void;
 	resume: (event: SystemEventTicket) => void;
-	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
 	fail: (message: string) => void;
-}
-
-async function evalLisp(
-	code: string,
-	chatId: string,
-	signal: AbortSignal,
-): Promise<void> {
-	const response = await fetch("/api/chat/eval", {
-		method: "POST",
-		headers: await apiHeaders(),
-		body: JSON.stringify({ chatId, code }),
-		signal,
-	});
-	if (!response.ok) throw new Error(`the repl returned ${response.status}`);
 }
 
 type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
@@ -248,12 +234,10 @@ export function ChatProvider({
 		setGreeting(greetingMessage());
 	}, []);
 
-	const [evaluating, setEvaluating] = useState(false);
 	const [failure, setFailure] = useState<{
 		chatId: Id<"chats"> | null;
 		message: string;
 	} | null>(null);
-	const running = useRef<AbortController | null>(null);
 
 	const turns =
 		streamingFor.current === chatId
@@ -283,45 +267,6 @@ export function ChatProvider({
 		if (Object.keys(found).length > 0)
 			setMeta((prev) => ({ ...prev, ...found }));
 	}, [turns, meta]);
-
-	const runLisp = useCallback(
-		async (code: string) => {
-			const run = new AbortController();
-			running.current?.abort();
-			running.current = run;
-			setFailure(null);
-			setEvaluating(true);
-			let opened = chatId;
-			try {
-				opened =
-					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
-				if (!chatId) {
-					await navigate({
-						to: "/$workspaceId/chat/$chatId",
-						params: { workspaceId, chatId: opened },
-						replace: true,
-					});
-				}
-				await evalLisp(code, opened, run.signal);
-			} catch (ex) {
-				if (run.signal.aborted) return;
-				reportIssue(ex, {
-					$exception_source: "lisp eval",
-					thread_id: chatId ?? "draft",
-				});
-				setFailure({
-					chatId: opened,
-					message: ex instanceof Error ? ex.message : String(ex),
-				});
-			} finally {
-				if (running.current === run) {
-					running.current = null;
-					setEvaluating(false);
-				}
-			}
-		},
-		[chatId, workspaceId, createChat, navigate],
-	);
 
 	const submit = useCallback(
 		async (
@@ -413,9 +358,6 @@ export function ChatProvider({
 
 	const halt = useCallback(() => {
 		clear();
-		running.current?.abort();
-		running.current = null;
-		setEvaluating(false);
 		stream.stop();
 	}, [stream, clear]);
 
@@ -455,7 +397,6 @@ export function ChatProvider({
 			send: () => {},
 			sendAbout: () => {},
 			resume: () => {},
-			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
 			fail: () => {},
@@ -471,7 +412,7 @@ export function ChatProvider({
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
 			fresh,
-			isLoading: stream.isLoading || evaluating,
+			isLoading: stream.isLoading,
 			chatId,
 			workspaceId,
 			error: errorFor(chatId, {
@@ -486,9 +427,6 @@ export function ChatProvider({
 				void sendAbout(file, text);
 			},
 			resume,
-			runLisp: (code) => {
-				void runLisp(code);
-			},
 			stop,
 			withdraw,
 			fail: (message) => setFailure({ chatId, message }),
@@ -503,14 +441,12 @@ export function ChatProvider({
 		fresh,
 		stream.isLoading,
 		stream.error,
-		evaluating,
 		failure,
 		chatId,
 		workspaceId,
 		send,
 		sendAbout,
 		resume,
-		runLisp,
 		stop,
 		withdraw,
 	]);
@@ -586,6 +522,13 @@ function isSkipped(value: unknown): value is Skipped {
 
 export function toolFailed(message: ChatMessage): boolean {
 	return message.additional_kwargs?.failed === true;
+}
+
+export function toolResults(message: ChatMessage): string[] {
+	const results = message.additional_kwargs?.results;
+	return Array.isArray(results)
+		? results.filter((r): r is string => typeof r === "string")
+		: [];
 }
 
 export function toolUi(message: ChatMessage): unknown {
