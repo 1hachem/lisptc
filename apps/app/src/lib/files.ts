@@ -23,6 +23,12 @@ export function memorySource(
 	return `${lines.join("\n")})`;
 }
 
+export function agentSource(
+	agent: Pick<Doc<"agents">, "name" | "prompt">,
+): string {
+	return `(defagent ${quoted(agent.name)}\n  :prompt ${quoted(agent.prompt)})`;
+}
+
 export function settingsSource(
 	workspace: Pick<Doc<"workspaces">, "name">,
 	model: { provider: string; model: string },
