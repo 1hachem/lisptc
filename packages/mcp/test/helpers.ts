@@ -83,6 +83,7 @@ export function countingHost(
 		login: (conf) => client.login(conf),
 		logout: (conf) => client.logout(conf),
 		authorize: (conf, code) => client.authorize(conf, code),
+		asleep: (serverId) => client.asleep(serverId),
 		shutdown: () => client.shutdown(),
 	};
 	return { ...host, client: counting };
