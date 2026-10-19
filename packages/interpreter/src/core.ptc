@@ -201,18 +201,33 @@ List building / manipulation
 
 Predicates
 - (not x) and (null x) true if nil · (consp x) true if cons ·
-(listp x) true if nil or cons · (equal x y) deep structural equality.
+(listp x) true if nil or cons · (keywordp x) true if keyword ·
+(equal x y) deep structural equality.
 
 Membership / alists
 - (memq key list) tail from first eq match · (member key list) first equal
   match · (assq key alist) first pair with eq car · (assoc key alist) first
   pair with equal car. Alist field:
 (cdr (assoc "content" msg)) .
-- (get-in record key...) read through nested alists and lists, every step
-  guarded: (get-in config "server" "port") is nil when no
+- (get-in record key...) read through nested alists, keyword plists and lists,
+  every step guarded: (get-in config "server" "port") is nil when no
   "server", not an error. No or guard, no assoc chain.
   Number key indexes a list — (get-in reply "results" 0 "url") — keyword key
-  matches string of its name, :port finds "port".
+  matches string of its name, :port finds "port". Plist key matches by name:
+(get-in '(:theme (:accent "red")) :theme :accent) gives "red" .
+
+Nested data, write side of get-in. Pure: return new copy, record unchanged.
+- (set-in record value key...) value at path. Missing key added: plist gets
+  keyword, alist gets pair; nil record becomes plist for keyword key, else alist.
+  Index replaces element, index = length appends:
+(set-in '(:theme (:accent "red")) "blue" :theme :accent) gives (:theme (:accent "blue")) .
+- (update-in record f key...) value at path becomes (f value); f gets nil when
+  path missing:
+(update-in '(:n 1) (lambda (n) (+ n 1)) :n) gives (:n 2) .
+- (remove-in record key...) drop plist key, alist pair or list index; missing
+  path gives record back:
+(remove-in '(:a 1 :b 2) :a) gives (:b 2) .
+- Edit data file: read it, set-in / update-in / remove-in, write whole value back.
 
 Control-flow macros
 - (if test then else...) · (when test body...) · (unless test body...) ·

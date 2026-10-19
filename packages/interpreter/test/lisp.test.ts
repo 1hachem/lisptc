@@ -77,6 +77,19 @@ describe("the language reference", () => {
 		expect(ev(form)).toBe("(1 4 9)");
 	});
 
+	it.each([
+		[`(get-in '(:theme (:accent "red")) :theme :accent)`, '"red"'],
+		[
+			`(set-in '(:theme (:accent "red")) "blue" :theme :accent)`,
+			'(:theme (:accent "blue"))',
+		],
+		["(update-in '(:n 1) (lambda (n) (+ n 1)) :n)", "(:n 2)"],
+		["(remove-in '(:a 1 :b 2) :a)", "(:b 2)"],
+	])("shows %s gives %s, and it does", (form, value) => {
+		expect(LANGUAGE_REFERENCE).toContain(`${form} gives ${value}`);
+		expect(ev(form)).toBe(value);
+	});
+
 	it("names let* as the sequential binding", () => {
 		expect(LANGUAGE_REFERENCE).toContain(
 			"(let* ((name val) ...) body...) sequential",
