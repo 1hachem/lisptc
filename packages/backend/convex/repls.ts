@@ -156,8 +156,7 @@ export const record = internalMutation({
 			await ctx.db.insert("replLayerChunks", { layerId, index, data });
 		await ctx.db.patch(replId, { head: layerId });
 		const layer = await ctx.db.get(layerId);
-		if (layer !== null && repl.chatId !== undefined)
-			await settleMessages(ctx, repl.chatId, layer);
+		if (layer !== null) await settleMessages(ctx, repl.chatId, layer);
 		return layerId;
 	},
 });

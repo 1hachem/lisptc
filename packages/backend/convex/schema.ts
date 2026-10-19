@@ -121,10 +121,8 @@ export default defineSchema({
 
 	repls: defineTable({
 		workspaceId: v.id("workspaces"),
-		chatId: v.optional(v.id("chats")),
+		chatId: v.id("chats"),
 		head: v.optional(v.id("replLayers")),
-		call: v.optional(v.number()),
-		bytes: v.optional(v.number()),
 	}).index("by_head", ["head"]),
 
 	replLayers: defineTable({
@@ -135,25 +133,9 @@ export default defineSchema({
 		whole: v.boolean(),
 		bytes: v.number(),
 		chunks: v.number(),
-		legacyCall: v.optional(v.number()),
 	})
 		.index("by_repl_origin", ["replId", "origin"])
-		.index("by_repl_call", ["replId", "legacyCall"])
 		.index("by_parent", ["parent"]),
-
-	replImages: defineTable({
-		replId: v.id("repls"),
-		call: v.number(),
-		format: v.number(),
-		bytes: v.number(),
-		chunks: v.number(),
-	}).index("by_repl_call", ["replId", "call"]),
-
-	replImageChunks: defineTable({
-		imageId: v.id("replImages"),
-		index: v.number(),
-		data: v.string(),
-	}).index("by_image", ["imageId", "index"]),
 
 	replLayerChunks: defineTable({
 		layerId: v.id("replLayers"),
