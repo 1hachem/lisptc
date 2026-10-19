@@ -1,3 +1,4 @@
+import { openAtEnd } from "@repo/shared/lisp-forms";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 
 const symbolChar = /[^()'`~" \t]/;
@@ -10,23 +11,13 @@ export function enclosingCallHead(
 		start: { line: 0, character: 0 },
 		end: position,
 	});
-	let depth = 0;
-	for (let i = text.length - 1; i >= 0; i--) {
-		const c = text[i];
-		if (c === ")") {
-			depth++;
-		} else if (c === "(") {
-			if (depth === 0) {
-				let j = i + 1;
-				while (j < text.length && /\s/.test(text[j])) j++;
-				let k = j;
-				while (k < text.length && symbolChar.test(text[k])) k++;
-				return k > j ? text.slice(j, k) : undefined;
-			}
-			depth--;
-		}
-	}
-	return undefined;
+	const open = openAtEnd(text).parens.at(-1);
+	if (open === undefined) return undefined;
+	let j = open + 1;
+	while (j < text.length && /\s/.test(text[j])) j++;
+	let k = j;
+	while (k < text.length && symbolChar.test(text[k])) k++;
+	return k > j ? text.slice(j, k) : undefined;
 }
 
 export function symbolAt(
