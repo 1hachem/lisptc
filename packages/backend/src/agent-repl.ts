@@ -1,3 +1,5 @@
+import { agentsExtension } from "@repo/agents-extension";
+import { agentsHost } from "@repo/agents-extension/host";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -76,6 +78,7 @@ export async function workspaceExtensions(
 		}),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
+		agentsExtension(agentsHost),
 		mcpExtension({
 			...mcpHostFor({
 				scope: workspaceId,
