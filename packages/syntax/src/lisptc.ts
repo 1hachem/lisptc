@@ -43,6 +43,8 @@ function scan(text: string, prose: readonly FormSpan[]): Scan {
 	let head = false;
 	let quoted = false;
 	let mark: "quote" | "unquote" | undefined;
+	let quasi = false;
+	let template = false;
 	let base = 0;
 	let quoteAt = -1;
 	let quoteEnd = -1;
@@ -74,6 +76,7 @@ function scan(text: string, prose: readonly FormSpan[]): Scan {
 				quoteEnd = end;
 				if (QUOTES.has(word)) mark = "quote";
 				else if (UNQUOTES.has(word)) mark = "unquote";
+				quasi = word === "`";
 				continue;
 			}
 
@@ -82,6 +85,7 @@ function scan(text: string, prose: readonly FormSpan[]): Scan {
 			quoteEnd = -1;
 
 			if (word === "(") {
+				template = depth === 0 && quasi;
 				enclosing.push(quoted);
 				if (mark !== undefined) quoted = mark === "quote";
 				depth += 1;
@@ -110,7 +114,7 @@ function scan(text: string, prose: readonly FormSpan[]): Scan {
 				push(start, end, atomClass(word, head && !quoted));
 				if (
 					head &&
-					!quoted &&
+					(!quoted || (template && atomClass(word, true) === "function")) &&
 					!prose.some(
 						([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
 					)
@@ -119,11 +123,13 @@ function scan(text: string, prose: readonly FormSpan[]): Scan {
 				head = false;
 			}
 			mark = undefined;
+			quasi = false;
 		}
 		base += line.length + 1;
 		quoteAt = -1;
 		quoteEnd = -1;
 		mark = undefined;
+		quasi = false;
 	}
 
 	return { ranges, heads };

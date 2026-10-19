@@ -203,6 +203,28 @@ describe("formsIn", () => {
 		expect(heads).toEqual(["echo"]);
 	});
 
+	test("names a quasiquoted form by its head, since it shows nothing else", () => {
+		const { prose, heads } = formsIn("Here it is.\n`(ui/card :title ,title)");
+		expect(prose).toBe("Here it is.");
+		expect(heads).toEqual(["ui/card"]);
+	});
+
+	test("names a quasiquoted form beside the calls it unquotes", () => {
+		expect(formsIn("`(ui/row ,(ui/text name))").heads).toEqual([
+			"ui/row",
+			"ui/text",
+		]);
+	});
+
+	test("names no head of a quasiquoted list nested in a call", () => {
+		expect(formsIn("(echo `(a b))").heads).toEqual(["echo"]);
+	});
+
+	test("names no quasiquoted list headed by data", () => {
+		expect(formsIn("`(:a 1)").heads).toEqual([]);
+		expect(formsIn("`(1 ,x)").heads).toEqual([]);
+	});
+
 	test("leaves a reply that is all prose alone", () => {
 		const { prose, heads } = formsIn("The answer is 42.");
 		expect(prose).toBe("The answer is 42.");
