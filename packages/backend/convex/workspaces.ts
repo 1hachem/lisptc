@@ -32,6 +32,7 @@ export async function dropWorkspace(
 	await ctx.db.delete(workspaceId);
 	await ctx.scheduler.runAfter(0, internal.workspaces.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.memories.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.agents.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.permissions.purge, { workspaceId });

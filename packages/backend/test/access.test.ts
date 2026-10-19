@@ -2,6 +2,7 @@ import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import {
+	MAX_AGENT_BYTES,
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
 	STREAMING_LEASE_MS,
@@ -415,6 +416,72 @@ describe("permissions access", () => {
 		).toBe("(permission/ask eval)");
 		const rows = await t.run((ctx) => ctx.db.query("permissions").collect());
 		expect(rows).toHaveLength(1);
+	});
+});
+
+describe("agent definition access", () => {
+	it("keeps a workspace's agents to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.agents.put, {
+			workspaceId: bob.workspace,
+			agent: { name: "researcher", prompt: "dig" },
+		});
+		await expect(
+			alice.as.query(api.agents.list, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.agents.put, {
+				workspaceId: bob.workspace,
+				agent: { name: "researcher", prompt: "mine now" },
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.agents.remove, {
+				workspaceId: bob.workspace,
+				name: "researcher",
+			}),
+		).rejects.toThrow();
+		await expect(
+			t.query(api.agents.list, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+	});
+
+	it("holds one definition per name, replaced on save", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.agents.put, {
+			workspaceId,
+			agent: { name: "researcher", prompt: "dig" },
+		});
+		await alice.as.mutation(api.agents.put, {
+			workspaceId,
+			agent: { name: "researcher", prompt: "dig deeper" },
+		});
+		const listed = await alice.as.query(api.agents.list, { workspaceId });
+		expect(listed.map(({ name, prompt }) => ({ name, prompt }))).toEqual([
+			{ name: "researcher", prompt: "dig deeper" },
+		]);
+		expect(
+			await alice.as.mutation(api.agents.remove, {
+				workspaceId,
+				name: "researcher",
+			}),
+		).toBe(true);
+		expect(await alice.as.query(api.agents.list, { workspaceId })).toEqual([]);
+	});
+
+	it("refuses a definition past the size limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.agents.put, {
+				workspaceId: alice.workspace,
+				agent: { name: "big", prompt: "x".repeat(MAX_AGENT_BYTES) },
+			}),
+		).rejects.toThrow(/AGENT_TOO_LARGE/);
 	});
 });
 

@@ -274,6 +274,7 @@ async function remaining(t: TestConvex<typeof schema>) {
 		replLayers: await ctx.db.query("replLayers").collect(),
 		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
+		agents: await ctx.db.query("agents").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
 		permissions: await ctx.db.query("permissions").collect(),
@@ -291,6 +292,7 @@ const nothing = {
 	replLayers: [],
 	replLayerChunks: [],
 	memories: [],
+	agents: [],
 	secrets: [],
 	oauthRecords: [],
 	permissions: [],
@@ -349,9 +351,13 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, secrets, oauth records, permissions, readme and preferences", async () => {
+	it("takes its memories, agents, secrets, oauth records, permissions, readme and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.agents.put, {
+			workspaceId: alice.workspace,
+			agent: { name: "doomed", prompt: "doomed" },
+		});
 		await alice.as.mutation(api.readmes.put, {
 			workspaceId: alice.workspace,
 			body: "doomed",

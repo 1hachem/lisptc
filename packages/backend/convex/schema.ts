@@ -165,4 +165,12 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	agents: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		prompt: v.string(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"]),
 });
