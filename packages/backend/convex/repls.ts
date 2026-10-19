@@ -208,7 +208,7 @@ async function referenced(
 	return false;
 }
 
-async function collect(
+export async function collect(
 	ctx: MutationCtx,
 	layerId: Id<"replLayers"> | undefined,
 ): Promise<void> {

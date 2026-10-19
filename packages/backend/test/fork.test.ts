@@ -223,6 +223,61 @@ describe("forking a chat at a message", () => {
 		expect(gone).toEqual([]);
 	});
 
+	it("keeps a fork's layers when the original and a sibling fork are removed", async () => {
+		const { t, alice, chatId, second } = await conversation();
+		await alice.as.mutation(api.messages.append, {
+			chatId,
+			messages: [{ id: "f2", type: "ai", content: "cube is defined" }],
+		});
+		const { forked: sibling } = await forkedRepl(alice, chatId, "f2");
+		const { forked, replId } = await forkedRepl(alice, chatId, "f2");
+		const ownedBefore = await t.query(internal.repls.latest, { replId });
+		expect(ownedBefore?.head).toBe(second);
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await alice.as.mutation(api.chats.remove, { chatId: sibling });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const latest = await t.query(internal.repls.latest, { replId });
+		expect(latest?.head).toBe(second);
+		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
+			[{ layer: 1 }, { layer: 2 }],
+		);
+
+		await alice.as.mutation(api.chats.remove, { chatId: forked });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+		const gone = await t.run(async (ctx) => [
+			...(await ctx.db.query("replLayers").collect()),
+			...(await ctx.db.query("replLayerChunks").collect()),
+		]);
+		expect(gone).toEqual([]);
+	});
+
+	it("leaves no layer behind once every chat over it is removed after a fork at an ai message", async () => {
+		const { t, alice, chatId } = await conversation();
+		const { forked, replId } = await forkedRepl(alice, chatId, "a2");
+		await t.mutation(internal.repls.record, {
+			replId,
+			over: (await t.query(internal.repls.latest, { replId }))?.head,
+			origin: "a3",
+			whole: false,
+			chunks: [JSON.stringify({ layer: 3 })],
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+		await alice.as.mutation(api.chats.remove, { chatId: forked });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const gone = await t.run(async (ctx) => [
+			...(await ctx.db.query("replLayers").collect()),
+			...(await ctx.db.query("replLayerChunks").collect()),
+		]);
+		expect(gone).toEqual([]);
+	});
+
 	it("refuses a message that is not in the chat", async () => {
 		const { alice, chatId } = await conversation();
 		await expect(

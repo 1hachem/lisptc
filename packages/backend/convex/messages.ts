@@ -11,7 +11,7 @@ import {
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { waitsOnUser } from "./lib/waiting.js";
-import { layerFor } from "./repls.js";
+import { collect, layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
 
 const MAX_TRANSCRIPT = 200;
@@ -196,6 +196,8 @@ export const purge = internalMutation({
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
 			.take(PURGE_BATCH);
 		for (const message of messages) await ctx.db.delete(message._id);
+		const layers = new Set(messages.map((message) => message.layerId));
+		for (const layerId of layers) await collect(ctx, layerId);
 		if (messages.length === PURGE_BATCH) {
 			await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
 		}
