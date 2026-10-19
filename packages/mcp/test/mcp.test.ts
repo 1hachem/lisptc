@@ -344,7 +344,14 @@ describe("a toolkit server bundled with the repo", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
+			mcpExtension({
+				...mcpHost,
+				toolkit: jsonToolkit(
+					toolkitJson,
+					undefined,
+					new URL("../mcp.toolkit.json", import.meta.url),
+				),
+			}),
 		],
 	});
 	runSync(interp, prelude);
