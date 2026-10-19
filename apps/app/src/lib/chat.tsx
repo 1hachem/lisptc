@@ -145,6 +145,12 @@ export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
 
 const ChatContext = createContext<ChatStore | null>(null);
 
+const abandoning = new Set<(chatId: Id<"chats">) => void>();
+
+export function abandonChat(chatId: Id<"chats">): void {
+	for (const abandon of abandoning) abandon(chatId);
+}
+
 function titleOf(message: string): string {
 	const line = message.trim().split("\n")[0] ?? "";
 	return line.length > 60 ? `${line.slice(0, 57)}…` : line;
@@ -405,11 +411,15 @@ export function ChatProvider({
 		[steering, enqueue, submitTurn],
 	);
 
-	const stop = useCallback(() => {
+	const halt = useCallback(() => {
 		clear();
 		running.current?.abort();
 		running.current = null;
 		setEvaluating(false);
+		stream.stop();
+	}, [stream, clear]);
+
+	const stop = useCallback(() => {
 		const stopped = streamingFor.current;
 		if (stream.isLoading && stopped !== null)
 			settleChat({ chatId: stopped }).catch((ex: unknown) =>
@@ -418,8 +428,15 @@ export function ChatProvider({
 					thread_id: stopped,
 				}),
 			);
-		stream.stop();
-	}, [stream, clear, settleChat]);
+		halt();
+	}, [stream, halt, settleChat]);
+
+	const abandon = useCallback(
+		(target: Id<"chats">) => {
+			if (streamingFor.current === target) halt();
+		},
+		[halt],
+	);
 
 	const fresh = isFreshChat(chatId, turns);
 
@@ -497,6 +514,13 @@ export function ChatProvider({
 		stop,
 		withdraw,
 	]);
+
+	useEffect(() => {
+		abandoning.add(abandon);
+		return () => {
+			abandoning.delete(abandon);
+		};
+	}, [abandon]);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }
