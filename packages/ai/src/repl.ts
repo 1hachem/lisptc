@@ -84,6 +84,7 @@ export function proseFeedbackContent(feedback: string): string {
 export async function evalCode(
 	repl: AgentRepl,
 	code: string,
+	origin?: string,
 ): Promise<{
 	output: string;
 	display: string;
@@ -95,7 +96,7 @@ export async function evalCode(
 }> {
 	try {
 		const { model, user, annotations, emitted, failed, held } =
-			await repl.evalOutput(code);
+			await repl.evalOutput(code, origin);
 		return {
 			output: model,
 			display: user,
@@ -106,9 +107,12 @@ export async function evalCode(
 			held,
 		};
 	} catch (ex) {
-		repl.reset();
+		const restored = await repl.recover();
 		const msg = ex instanceof Error ? ex.message : String(ex);
-		const text = `REPL error: ${msg} (interpreter was reset, definitions lost)`;
+		const text =
+			restored === undefined
+				? `REPL error: ${msg} (interpreter was reset, definitions lost)`
+				: `REPL error: ${msg} (interpreter restored to its last checkpoint, changes since then lost)`;
 		return {
 			output: text,
 			display: text,

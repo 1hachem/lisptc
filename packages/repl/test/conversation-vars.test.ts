@@ -38,12 +38,12 @@ describe("AgentRepl conversation variables", () => {
 		).toBe('("user" "assistant")\n');
 	});
 
-	it("re-injection restores a global the user reassigned (not hard read-only)", async () => {
+	it("refuses to let code reassign a conversation global", async () => {
 		const r = agentRepl();
 		r.setConversationVars(sampleVars());
-		await r.eval("(setq conversation 1)");
-		expect((await r.evalOutput("(echo conversation)")).user).toBe("1\n");
-		r.setConversationVars(sampleVars());
+		const out = await r.evalOutput("(setq conversation 1)");
+		expect(out.failed).toBe(true);
+		expect(out.user).toContain("read-only global owned by repl");
 		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
 			"2\n",
 		);
