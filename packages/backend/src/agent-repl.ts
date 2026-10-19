@@ -122,3 +122,12 @@ export function chatRepls(
 		return repl;
 	};
 }
+
+export function draftRepls(
+	connect: Connect,
+): (workspaceId: Id<"workspaces">) => Promise<AgentRepl> {
+	return async (workspaceId) =>
+		new AgentRepl({
+			extensions: await workspaceExtensions(workspaceId, connect),
+		});
+}
