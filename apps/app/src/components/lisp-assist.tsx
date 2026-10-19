@@ -25,6 +25,7 @@ import {
 	$isTextNode,
 	COMMAND_PRIORITY_NORMAL,
 	KEY_TAB_COMMAND,
+	type LexicalEditor,
 	ParagraphNode,
 	type TextNode,
 } from "lexical";
@@ -43,6 +44,7 @@ import type {
 	CompletionItem,
 	Diagnostic,
 	Position,
+	TextEdit,
 } from "vscode-languageserver-types";
 import { $offsetIn } from "./lisp-highlight.ts";
 import { TypeaheadMenu } from "./typeahead-menu.tsx";
@@ -51,6 +53,7 @@ const MAX_OPTIONS = 50;
 const DIAGNOSE_MS = 300;
 const COMPLETE_MS = 300;
 const COMPLETED = "lisp-completed";
+const SQUIGGLE = "lisp-error";
 const PARAGRAPH_GAP = 2;
 const WORD_BEFORE = /[^\s()'`",]+$/;
 const WORD_AFTER = /^[^\s()'`",]+/;
@@ -216,11 +219,74 @@ function CallHint({ call }: { call: CallAt }) {
 	);
 }
 
+function $domPointAt(
+	editor: LexicalEditor,
+	offset: number,
+): [Node, number] | null {
+	let before = 0;
+	for (const block of $getRoot().getChildren()) {
+		const size = block.getTextContentSize();
+		if (offset <= before + size && $isElementNode(block)) {
+			let at = before;
+			for (const child of block.getChildren()) {
+				const length = child.getTextContentSize();
+				const text = editor.getElementByKey(child.getKey())?.firstChild;
+				if ($isTextNode(child) && text && offset <= at + length)
+					return [text, offset - at];
+				at += length;
+			}
+			return null;
+		}
+		before += size + PARAGRAPH_GAP;
+	}
+	return null;
+}
+
+function $rangeOf(
+	editor: LexicalEditor,
+	from: number,
+	to: number,
+): Range | null {
+	const start = $domPointAt(editor, Math.min(from, Math.max(to - 1, 0)));
+	const end = $domPointAt(editor, Math.max(to, from + 1));
+	if (!start || !end) return null;
+	const range = document.createRange();
+	range.setStart(...start);
+	range.setEnd(...end);
+	return range;
+}
+
+function useSquiggles(
+	diagnostics: Diagnostic[],
+	snapshot: ReturnType<typeof useLispDocument>,
+) {
+	const [editor] = useLexicalComposerContext();
+	useEffect(() => {
+		if (typeof CSS === "undefined" || !("highlights" in CSS)) return;
+		const { document: lisp } = snapshot();
+		const ranges = editor.getEditorState().read(() =>
+			diagnostics.flatMap((d) => {
+				const range = $rangeOf(
+					editor,
+					lisp.offsetAt(d.range.start),
+					lisp.offsetAt(d.range.end),
+				);
+				return range ? [range] : [];
+			}),
+		);
+		const { highlights } = CSS;
+		highlights.set(SQUIGGLE, new Highlight(...ranges));
+		return () => {
+			highlights.delete(SQUIGGLE);
+		};
+	}, [editor, diagnostics, snapshot]);
+}
+
 function Problems({ diagnostics }: { diagnostics: Diagnostic[] }) {
 	return diagnostics.map((d) => (
 		<div
 			key={`${d.range.start.line}:${d.message}`}
-			className="truncate px-3 py-0.5 text-red"
+			className="truncate px-3 text-[11px] text-red"
 		>
 			{d.message}
 		</div>
@@ -347,6 +413,15 @@ function useTypingArms(): RefObject<boolean> {
 	return armed;
 }
 
+function $insertAtCaret(edit: TextEdit | null, event: KeyboardEvent): boolean {
+	const selection = $getSelection();
+	if (edit === null || !$isRangeSelection(selection)) return false;
+	event.preventDefault();
+	$addUpdateTag(COMPLETED);
+	selection.insertText(edit.newText);
+	return true;
+}
+
 function useCompletions(
 	query: string | null,
 	service: ReturnType<typeof languageService>,
@@ -376,20 +451,30 @@ function useCompletions(
 		[query, candidates],
 	);
 
+	const closer = useCallback(() => {
+		const { document, position } = snapshot();
+		return position === null ? null : service.closer(document, position);
+	}, [service, snapshot]);
+
 	useEffect(
 		() =>
 			editor.registerCommand(
 				KEY_TAB_COMMAND,
 				(event) => {
-					if (query === null || options.length > 0) return false;
+					if (options.length > 0) return false;
+					const close = closer();
+					if (close?.newText === '"') return $insertAtCaret(close, event);
+					const offered = query === null ? [] : complete();
+					if (query === null || rankCompletions(offered, query).length === 0)
+						return $insertAtCaret(close, event);
 					event.preventDefault();
 					armed.current = true;
-					setCandidates(complete());
+					setCandidates(offered);
 					return true;
 				},
 				COMMAND_PRIORITY_NORMAL,
 			),
-		[editor, query, options, armed, complete],
+		[editor, query, options, armed, complete, closer],
 	);
 
 	return options;
@@ -407,6 +492,7 @@ export function LispAssistPlugin({
 	const [editor] = useLexicalComposerContext();
 	const snapshot = useLispDocument();
 	const { service, call, diagnostics } = useAssist(symbols, snapshot);
+	useSquiggles(diagnostics, snapshot);
 	const hover = useHover(symbols);
 	const [query, setQuery] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);

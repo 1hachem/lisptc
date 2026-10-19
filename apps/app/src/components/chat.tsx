@@ -6,6 +6,7 @@ import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
 import { sentHistory } from "../lib/message-history.ts";
 import { useSymbols } from "../lib/symbols.ts";
+import { useUI } from "../lib/ui.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import { ChatView } from "./chat-view.tsx";
@@ -13,6 +14,7 @@ import { Greeting } from "./greeting.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
+	const { inputOn } = useUI();
 	const { workspaceId, chatId, send, stop, isLoading, fresh } = useChatSession(
 		(state) => ({
 			workspaceId: state.workspaceId,
@@ -61,6 +63,7 @@ export function Chat() {
 					isStreaming={isLoading}
 					onStop={stop}
 					symbols={symbols}
+					lisp={inputOn.lisp}
 				/>
 			</div>
 		</>

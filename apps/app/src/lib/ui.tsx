@@ -7,6 +7,7 @@ import {
 	useState,
 } from "react";
 import { CHANNELS, type ChannelId } from "./channels.ts";
+import { INPUT_HELPERS, type InputHelper } from "./input-helpers.ts";
 import { META_FIELDS, type MetaField } from "./meta-fields.ts";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
 import {
@@ -21,6 +22,8 @@ type Shown = Record<ChannelId, boolean>;
 
 type MetaShown = Record<MetaField, boolean>;
 
+type InputOn = Record<InputHelper, boolean>;
+
 interface UIContextValue {
 	leftOpen: boolean;
 	setLeftOpen: (open: boolean) => void;
@@ -32,6 +35,8 @@ interface UIContextValue {
 	toggleChannel: (id: ChannelId) => void;
 	metaShown: MetaShown;
 	toggleMeta: (id: MetaField) => void;
+	inputOn: InputOn;
+	toggleInput: (id: InputHelper) => void;
 }
 
 const UIContext = createContext<UIContextValue | null>(null);
@@ -63,11 +68,16 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		() => togglesOf(META_FIELDS, stored?.metadata),
 		[stored?.metadata],
 	);
+	const inputOn: InputOn = useMemo(
+		() => togglesOf(INPUT_HELPERS, stored?.input),
+		[stored?.input],
+	);
 
 	useEffect(() => {
 		if (stored === undefined) return;
 		if (!stored.channels) put({ channels: togglesOf(CHANNELS, undefined) });
 		if (!stored.metadata) put({ metadata: togglesOf(META_FIELDS, undefined) });
+		if (!stored.input) put({ input: togglesOf(INPUT_HELPERS, undefined) });
 	}, [stored, put]);
 
 	const toggleChannel = useCallback(
@@ -79,6 +89,11 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		(id: MetaField) =>
 			put({ metadata: { ...metaShown, [id]: !metaShown[id] } }),
 		[metaShown, put],
+	);
+
+	const toggleInput = useCallback(
+		(id: InputHelper) => put({ input: { ...inputOn, [id]: !inputOn[id] } }),
+		[inputOn, put],
 	);
 
 	const value = useMemo<UIContextValue>(
@@ -93,6 +108,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 			toggleChannel,
 			metaShown,
 			toggleMeta,
+			inputOn,
+			toggleInput,
 		}),
 		[
 			leftOpen,
@@ -103,6 +120,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 			setRightOpen,
 			toggleChannel,
 			toggleMeta,
+			inputOn,
+			toggleInput,
 		],
 	);
 

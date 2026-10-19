@@ -4,6 +4,7 @@ import { motions } from "@repo/ui/motions.ts";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { CHANNELS, type Channel } from "../lib/channels.ts";
+import { INPUT_HELPERS, type InputHelper } from "../lib/input-helpers.ts";
 import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
 import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useUI } from "../lib/ui.tsx";
@@ -43,6 +44,29 @@ function MetaToggle({ field }: { field: { id: MetaField; label: string } }) {
 		>
 			<span className={`flex-1 ${on ? "text-fg" : "text-dim line-through"}`}>
 				{field.label}
+			</span>
+			<span className="flex-none text-dim">{on ? "on" : "off"}</span>
+		</button>
+	);
+}
+
+function InputToggle({
+	helper,
+}: {
+	helper: { id: InputHelper; label: string; hint: string };
+}) {
+	const { inputOn, toggleInput } = useUI();
+	const on = inputOn[helper.id];
+	return (
+		<button
+			type="button"
+			aria-pressed={on}
+			title={helper.hint}
+			onClick={() => toggleInput(helper.id)}
+			className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+		>
+			<span className={`flex-1 ${on ? "text-fg" : "text-dim line-through"}`}>
+				{helper.label}
 			</span>
 			<span className="flex-none text-dim">{on ? "on" : "off"}</span>
 		</button>
@@ -164,6 +188,14 @@ export function PreferencesPanel({ open }: { open: boolean }) {
 				<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
 					{META_FIELDS.map((field) => (
 						<MetaToggle key={field.id} field={field} />
+					))}
+				</div>
+				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+					input
+				</div>
+				<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+					{INPUT_HELPERS.map((helper) => (
+						<InputToggle key={helper.id} helper={helper} />
 					))}
 				</div>
 				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">

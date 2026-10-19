@@ -3,6 +3,7 @@ import { tokensIn } from "@repo/syntax";
 import {
 	$applyNodeReplacement,
 	$createTextNode,
+	$getRoot,
 	$getSelection,
 	$isRangeSelection,
 	$isTextNode,
@@ -200,6 +201,11 @@ export function LispHighlightPlugin(): null {
 		];
 		return () => {
 			for (const off of unregister) off();
+			editor.update(() => {
+				for (const node of $getRoot().getAllTextNodes())
+					if ($isLispTokenNode(node))
+						node.replace($createTextNode(node.getTextContent()));
+			});
 		};
 	}, [editor]);
 	return null;

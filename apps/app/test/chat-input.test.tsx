@@ -55,6 +55,7 @@ const SYMBOLS = symbolTable([
 		doc: "Count the items of xs.",
 	},
 	{ name: "list-reverse" },
+	{ name: "one-arg", arity: { min: 1, max: 1 } },
 ]);
 
 function render(
@@ -305,5 +306,68 @@ describe("the chat input", () => {
 		expect(tip?.textContent).toContain("(list-length xs)");
 		expect(tip?.textContent).toContain("Count the items of xs.");
 		expect(host.textContent).not.toContain("Count the items of xs.");
+	});
+
+	it("underlines the form an error is about, in smaller text below", async () => {
+		const highlights = new Map<string, { size: number }>();
+		vi.stubGlobal("CSS", { highlights });
+		vi.stubGlobal(
+			"Highlight",
+			class {
+				size: number;
+				constructor(...ranges: Range[]) {
+					this.size = ranges.length;
+				}
+			},
+		);
+		const field = render(vi.fn());
+		type(field, "(one-arg)");
+		await paused();
+		expect(highlights.get("lisp-error")?.size).toBe(1);
+		const problem = host.querySelector(".text-red");
+		expect(problem?.className).toContain("text-[11px]");
+		vi.unstubAllGlobals();
+	});
+
+	it("runs no lisp help in the input when the preference is off", async () => {
+		act(() =>
+			root.render(
+				<ChatInput onSubmit={vi.fn()} symbols={SYMBOLS} lisp={false} />,
+			),
+		);
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		await completing(field, "(list-");
+		expect(field.querySelector('[class^="th-"]')).toBeNull();
+		expect(host.textContent).not.toContain("list-reverse");
+	});
+
+	it("closes the open form on Tab when nothing completes", async () => {
+		const field = render(vi.fn());
+		type(field, "(one-arg 1");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(one-arg 1)");
+	});
+
+	it("closes an open string on Tab before the form around it", async () => {
+		const field = render(vi.fn());
+		type(field, '(one-arg "hi');
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe('(one-arg "hi"');
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe('(one-arg "hi")');
+	});
+
+	it("offers a fully typed name first, with its doc", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(list-length");
+		const rows = [...host.querySelectorAll('[role="option"]')];
+		expect(rows[0]?.textContent).toContain("list-length");
+		expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+			"Count the items of xs.",
+		);
 	});
 });
