@@ -43,6 +43,7 @@ import { TypeaheadMenu } from "./typeahead-menu.tsx";
 
 const MAX_OPTIONS = 8;
 const DIAGNOSE_MS = 300;
+const COMPLETE_MS = 120;
 const PARAGRAPH_GAP = 2;
 const WORD_BEFORE = /[^\s()'`",]+$/;
 
@@ -250,16 +251,30 @@ export function LispAssistPlugin({
 	const [query, setQuery] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
 
-	const options = useMemo(() => {
-		if (query === null) return [];
-		const { document, position } = snapshot();
-		if (position === null) return [];
-		return service
-			.completions(document, position)
-			.filter((item) => item.label.startsWith(query) && item.label !== query)
-			.slice(0, MAX_OPTIONS)
-			.map((item) => new CompletionOption(item));
+	const [candidates, setCandidates] = useState<CompletionItem[]>([]);
+	useEffect(() => {
+		if (query === null) return setCandidates([]);
+		const timer = setTimeout(() => {
+			const { document, position } = snapshot();
+			setCandidates(
+				position === null ? [] : service.completions(document, position),
+			);
+		}, COMPLETE_MS);
+		return () => clearTimeout(timer);
 	}, [query, service, snapshot]);
+
+	const options = useMemo(
+		() =>
+			query === null
+				? []
+				: candidates
+						.filter(
+							(item) => item.label.startsWith(query) && item.label !== query,
+						)
+						.slice(0, MAX_OPTIONS)
+						.map((item) => new CompletionOption(item)),
+		[query, candidates],
+	);
 
 	useEffect(() => {
 		active.current = open && options.length > 0;

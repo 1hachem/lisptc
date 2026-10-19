@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+
+import { symbolTable } from "@repo/language-service";
 import {
 	$createParagraphNode,
 	$createTextNode,
@@ -46,12 +48,19 @@ afterEach(() => {
 	host.remove();
 });
 
+const SYMBOLS = symbolTable([
+	{ name: "list-length" },
+	{ name: "list-reverse" },
+]);
+
 function render(
 	onSubmit: (text: string) => void,
 	onCommand?: (name: string) => Promise<string | null>,
 ): HTMLElement {
 	act(() =>
-		root.render(<ChatInput onSubmit={onSubmit} onCommand={onCommand} />),
+		root.render(
+			<ChatInput onSubmit={onSubmit} onCommand={onCommand} symbols={SYMBOLS} />,
+		),
 	);
 	const field = host.querySelector<HTMLElement>("[contenteditable]");
 	if (!field) throw new Error("no editor");
@@ -95,17 +104,29 @@ function textOf(field: HTMLElement): string {
 		.read(() => $getRoot().getTextContent());
 }
 
-function enter(field: HTMLElement, isComposing: boolean) {
+function press(field: HTMLElement, init: KeyboardEventInit) {
 	act(() => {
 		field.dispatchEvent(
 			new KeyboardEvent("keydown", {
-				key: "Enter",
 				bubbles: true,
 				cancelable: true,
-				isComposing,
+				...init,
 			}),
 		);
 	});
+}
+
+function enter(field: HTMLElement, isComposing: boolean) {
+	press(field, { key: "Enter", isComposing });
+}
+
+async function settled() {
+	await act(async () => {});
+}
+
+async function completing(field: HTMLElement, text: string) {
+	type(field, text);
+	await act(() => new Promise((settle) => setTimeout(settle, 200)));
 }
 
 describe("the chat input", () => {
@@ -159,5 +180,41 @@ describe("the chat input", () => {
 		type(field, "see (+ 1");
 		typeAtCaret(field, " 2) ok");
 		expect(textOf(field)).toBe("see (+ 1 2) ok");
+	});
+
+	it("completes the highlighted symbol on Enter instead of sending", async () => {
+		const onSubmit = vi.fn();
+		const field = render(onSubmit);
+		await completing(field, "(list-");
+		expect(host.textContent).toContain("list-reverse");
+		enter(field, false);
+		await settled();
+		expect(textOf(field)).toBe("(list-length");
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	it("completes the highlighted symbol on Tab", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(list-");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-length");
+	});
+
+	it("completes the symbol a click picks", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(list-");
+		const row = [...host.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("list-reverse"),
+		);
+		act(() => row?.click());
+		await settled();
+		expect(textOf(field)).toBe("(list-reverse");
+	});
+
+	it("waits for typing to pause before offering completions", () => {
+		const field = render(vi.fn());
+		type(field, "(list-");
+		expect(host.textContent).not.toContain("list-reverse");
 	});
 });

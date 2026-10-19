@@ -39,6 +39,14 @@ export class LispTokenNode extends TextNode {
 		return new LispTokenNode(json.text, json.token).updateFromJSON(json);
 	}
 
+	isSimpleText(): boolean {
+		return !this.isToken() && !this.isSegmented();
+	}
+
+	isUnmergeable(): boolean {
+		return true;
+	}
+
 	exportJSON(): SerializedTextNode & { token: string } {
 		return { ...super.exportJSON(), token: this.__token };
 	}
