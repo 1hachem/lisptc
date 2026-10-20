@@ -10,6 +10,7 @@ import type {
 	McpClient,
 	StartWatch,
 	ToolCall,
+	ToolkitRegistry,
 } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
@@ -71,6 +72,16 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 			{ once: true },
 		);
 	});
+}
+
+export function mockToolkit(
+	servers: Record<string, MockServer>,
+): ToolkitRegistry {
+	const entries = Object.keys(servers).map((name) => ({
+		name,
+		command: "node",
+	}));
+	return { all: () => entries };
 }
 
 export function mockMcpClient(

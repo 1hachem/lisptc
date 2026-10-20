@@ -8,6 +8,7 @@ import type {
 	McpClient,
 	StartWatch,
 	ToolCall,
+	ToolkitRegistry,
 } from "@repo/mcp-extension/ports";
 import {
 	type SecretsExtension,
@@ -43,7 +44,27 @@ function run(what: string): EvalRun {
 
 export function mockedMcpExtension(): InterpExtension {
 	const { trace, mocks } = run("mockedMcpExtension()");
-	return mcpExtension({ ...mcpHost, client: trace.client(mockClient(mocks)) });
+	return mcpExtension({
+		...mcpHost,
+		client: trace.client(mockClient(mocks)),
+		toolkit: withMockedServers(mcpHost.toolkit, mocks),
+	});
+}
+
+function withMockedServers(
+	toolkit: ToolkitRegistry,
+	mocks: MockSpec,
+): ToolkitRegistry {
+	return {
+		all: () => {
+			const known = toolkit.all();
+			const names = new Set(known.map((conf) => conf.name));
+			const mocked = Object.keys(mocks.servers)
+				.filter((name) => !names.has(name))
+				.map((name) => ({ name, command: "none" }));
+			return [...known, ...mocked];
+		},
+	};
 }
 
 export function tracedSecretsExtension(): SecretsExtension {

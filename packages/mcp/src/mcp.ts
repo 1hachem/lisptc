@@ -362,18 +362,12 @@ function connConfigFromArgs(
 			: undefined;
 		return { name, url, headers, oauth, scopes };
 	}
-	if (opts.has("command")) {
-		const command = opts.get("command");
-		if (typeof command !== "string")
-			throw new EvalException("load-mcp :command must be a string", command);
-		const cmdArgs = opts.has("args")
-			? listToArray(opts.get("args") as List).map(String)
-			: [];
-		const env = opts.has("env")
-			? (lispToJson(opts.get("env")) as Record<string, string>)
-			: undefined;
-		return { name, command, args: cmdArgs, env };
-	}
+	if (opts.has("command"))
+		throw new EvalException(
+			"load-mcp :command is not supported: load a toolkit server by name, (search-mcps) finds one",
+			name,
+			false,
+		);
 	return lookupPredefined(predefined, name);
 }
 
@@ -395,29 +389,10 @@ const LOAD_MCP_ARGS: DocArg[] = [
 		description: "A name for this server; its tools install as `name/tool`.",
 	},
 	{
-		name: "command",
-		type: "string",
-		required: false,
-		description: "Spawn a stdio server by running this command.",
-	},
-	{
-		name: "args",
-		type: "list",
-		required: false,
-		description: "Arguments to `:command`.",
-	},
-	{
-		name: "env",
-		type: "alist",
-		required: false,
-		description: "Extra environment variables for `:command`.",
-	},
-	{
 		name: "url",
 		type: "string",
 		required: false,
-		description:
-			"Connect to an HTTP server at this URL instead of spawning one.",
+		description: "Connect to an HTTP server at this URL.",
 	},
 	{
 		name: "headers",
@@ -747,7 +722,7 @@ export function registerMcp(
 		"load-mcp",
 		-1,
 		'(load-mcp "server") | (load-mcp :name "server")',
-		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url or :command to load an ad-hoc server instead.',
+		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url to load an ad-hoc remote server instead.',
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, predefined);

@@ -68,7 +68,7 @@ describe("the prompt the extension carries", () => {
 	it("shows how to load a predefined server and an ad-hoc one", () => {
 		expect(PROMPT).toMatch(/\(await \(load-mcp "acme"\)\)/);
 		expect(PROMPT).toMatch(/:url "https:\/\/\.\.\."/);
-		expect(PROMPT).toMatch(/:command "npx"/);
+		expect(PROMPT).not.toMatch(/:command "npx"/);
 	});
 
 	it("shows how to load several servers concurrently", () => {

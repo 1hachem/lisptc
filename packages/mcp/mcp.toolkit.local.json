@@ -28,7 +28,8 @@
       "chromium",
       "--executable-path",
       "${PLAYWRIGHT_MCP_EXECUTABLE}",
-      "--no-sandbox"
+      "--no-sandbox",
+      "--shared-browser-context"
     ]
   },
   {
