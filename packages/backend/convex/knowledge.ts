@@ -10,6 +10,7 @@ import {
 } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
 import { intoBin } from "./lib/bin.js";
+import { served, servedFile } from "./lib/served.js";
 import {
 	MAX_KNOWLEDGE,
 	MAX_KNOWLEDGE_BYTES,
@@ -78,25 +79,10 @@ export const list = query({
 
 export const get = query({
 	args: { workspaceId: v.id("workspaces"), name: v.string() },
-	returns: v.union(
-		v.object({
-			name: v.string(),
-			contentType: v.union(v.string(), v.null()),
-			size: v.number(),
-			url: v.union(v.string(), v.null()),
-		}),
-		v.null(),
-	),
+	returns: servedFile,
 	handler: async (ctx, { workspaceId, name }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const row = await held(ctx, workspaceId, name);
-		if (row === null) return null;
-		return {
-			name: row.name,
-			contentType: row.contentType ?? null,
-			size: row.size,
-			url: await ctx.storage.getUrl(row.storageId),
-		};
+		return await served(ctx, await held(ctx, workspaceId, name));
 	},
 });
 
