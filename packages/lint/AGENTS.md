@@ -6,14 +6,11 @@ Turbo tag: `extension`.
 
 ## Shape
 
-`src/lint.ts` is the extension: it hooks the `admit` chain and rejects a step
-whose code would fail before it ran, and exports the same check for any root
-that wants it without the chain. `src/check.ts` gathers the problems and writes
-the rejection the model reads. `src/scope.ts` walks the forms the way the
-evaluator would, carrying the names each binding form binds, and reports the
-calls it reaches and the names nothing binds. The positioned forms and the call
-checks come from `@repo/language-service`, the same ones the editor runs, so
-the agent and the editor never disagree about a call.
+One extension, which stops a step whose code would fail before it runs, and the
+same check exported on its own for a root that wants it without the extension.
+The check reads code the way the evaluator would and takes its call checks from
+`@repo/language-service`, so the agent and the editor never disagree about a
+call.
 
 ## Rules
 
