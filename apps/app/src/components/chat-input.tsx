@@ -18,7 +18,6 @@ import {
 } from "lexical";
 import {
 	type DragEvent,
-	type RefObject,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -38,6 +37,7 @@ import { quietly } from "../lib/quietly.ts";
 import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
+import { type Mentionable, MentionMenuPlugin } from "./mention-menu.tsx";
 
 export interface ChatInputProps {
 	placeholder?: string;
@@ -47,6 +47,7 @@ export interface ChatInputProps {
 	isStreaming?: boolean;
 	onStop?: () => void;
 	disabled?: boolean;
+	mentions?: readonly Mentionable[];
 }
 
 const NOTICE_MS = 2000;
@@ -243,7 +244,7 @@ function useKeys({
 	enter,
 }: {
 	disabled?: boolean;
-	menuActive: RefObject<boolean>;
+	menuActive: { readonly current: boolean };
 	recall: (direction: RecallDirection) => string | null;
 	replace: (text: string) => void;
 	enter?: (quiet: boolean) => void;
@@ -465,6 +466,7 @@ function Editor({
 	isStreaming,
 	onStop,
 	disabled,
+	mentions = [],
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const [notice, flash] = useNotice();
@@ -499,7 +501,16 @@ function Editor({
 	});
 
 	const menuHost = useRef<HTMLDivElement>(null);
-	const menuActive = useRef(false);
+	const commandOpen = useRef(false);
+	const mentionOpen = useRef(false);
+	const menuActive = useMemo(
+		() => ({
+			get current() {
+				return commandOpen.current || mentionOpen.current;
+			},
+		}),
+		[],
+	);
 
 	useKeys({
 		disabled: busy,
@@ -559,7 +570,12 @@ function Editor({
 			</InputShell>
 			<HistoryPlugin />
 			<LispHighlightPlugin />
-			<CommandMenuPlugin onPick={pick} host={menuHost} active={menuActive} />
+			<CommandMenuPlugin onPick={pick} host={menuHost} active={commandOpen} />
+			<MentionMenuPlugin
+				files={mentions}
+				host={menuHost}
+				active={mentionOpen}
+			/>
 			<PromptDialog
 				onOpenChange={setSearching}
 				onSelect={insertPrompt}

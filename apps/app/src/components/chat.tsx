@@ -10,6 +10,7 @@ import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import { ChatView } from "./chat-view.tsx";
 import { Greeting } from "./greeting.tsx";
+import type { Mentionable } from "./mention-menu.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
@@ -26,6 +27,25 @@ export function Chat() {
 		convexQuery(api.messages.sent, { workspaceId }),
 	);
 	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
+	const { data: knowledge } = useQuery(
+		convexQuery(api.knowledge.list, { workspaceId }),
+	);
+	const { data: bin } = useQuery(convexQuery(api.bin.list, { workspaceId }));
+	const mentions = useMemo<Mentionable[]>(
+		() => [
+			...(knowledge ?? []).map(({ name, contentType }) => ({
+				folder: "knowledge" as const,
+				name,
+				contentType,
+			})),
+			...(bin ?? []).map(({ name, contentType }) => ({
+				folder: "bin" as const,
+				name,
+				contentType,
+			})),
+		],
+		[knowledge, bin],
+	);
 	const toBin = useBinUpload(workspaceId);
 	const submit = useCallback(
 		async (text: string, files: File[]) => {
@@ -62,6 +82,7 @@ export function Chat() {
 				<ChatInput
 					placeholder="type a message, (lisp) runs inline  ·  / for commands"
 					onSubmit={submit}
+					mentions={mentions}
 					history={history}
 					onCommand={runCommand}
 					isStreaming={isLoading}

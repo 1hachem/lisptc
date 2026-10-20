@@ -147,6 +147,31 @@ describe("the chat input", () => {
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
+	it("offers the files for an @ and puts the one Enter picks in the text", async () => {
+		const onSubmit = vi.fn();
+		act(() =>
+			root.render(
+				<ChatInput
+					onSubmit={onSubmit}
+					mentions={[
+						{ folder: "knowledge", name: "report.md", contentType: null },
+						{ folder: "bin", name: "spec.pdf", contentType: null },
+					]}
+				/>,
+			),
+		);
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		type(field, "see @spe");
+		await act(async () => {});
+		expect(host.textContent).toContain("spec.pdf");
+		expect(host.textContent).not.toContain("report.md");
+		enter(field, false);
+		await act(async () => {});
+		expect(textOf(field)).toBe("see @bin/spec.pdf ");
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
 	it("keeps the menu's caret anchor out of the page layout", async () => {
 		const field = render(vi.fn());
 		type(field, "/cl");
