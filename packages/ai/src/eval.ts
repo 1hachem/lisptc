@@ -1,7 +1,11 @@
 import { quiets } from "@repo/interpreter/effects";
 import type { AgentRepl } from "@repo/repl/repl";
 import { formsOnly, type Skipped } from "@repo/shared/lisp-forms";
-import { evalMessageCode, replResultContent } from "./repl.ts";
+import {
+	checkResultContent,
+	evalMessageCode,
+	replResultContent,
+} from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 
 export interface EvalMessage {
@@ -31,6 +35,17 @@ export async function evalMessage(
 ): Promise<Evaluated | undefined> {
 	if (formsOnly(message).trim() === "") return undefined;
 	if (!runsAnything(message, repl.unrun(message))) return undefined;
+	const { code, rejected, problems = [] } = await repl.admit(message);
+	if (rejected !== undefined)
+		return {
+			message: {
+				type: "tool",
+				content: checkResultContent(rejected, problems),
+				id: crypto.randomUUID(),
+				additional_kwargs: { failed: true },
+			},
+			quiet: false,
+		};
 	const id = crypto.randomUUID();
 	const {
 		output,
@@ -41,7 +56,7 @@ export async function evalMessage(
 		effects,
 		emitted,
 		results,
-	} = await evalMessageCode(repl, message, id);
+	} = await evalMessageCode(repl, code, id);
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
 	if (failed) extras.failed = true;

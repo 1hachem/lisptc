@@ -2,6 +2,7 @@ import { contentToText } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import type { Steer, SteerInbox } from "./inbox.ts";
 import {
+	checkResultContent,
 	isUserPrompt,
 	joinRiding,
 	replResultContent,
@@ -72,7 +73,9 @@ function resultMessage(
 	if (event.results.length > 0) extras.results = event.results;
 	return {
 		type: "tool",
-		content: replResultContent(event.output, event.error),
+		content: event.rejected
+			? checkResultContent(event.output, event.problems)
+			: replResultContent(event.output, event.error),
 		id: crypto.randomUUID(),
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
 	};
@@ -267,6 +270,7 @@ class TurnWire {
 			id: event.stepId,
 			additional_kwargs: {
 				...(event.reasoning ? { reasoning_content: event.reasoning } : {}),
+				...(event.written ? { written: event.written } : {}),
 				prose: event.prose,
 				meta: this.lastMeta,
 			},

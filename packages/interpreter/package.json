@@ -21,6 +21,7 @@
     "./promise": "./src/promise.ts",
     "./lisp": "./src/lisp.ts",
     "./objects": "./src/objects.ts",
+    "./conversation": "./src/conversation.ts",
     "./observe": "./src/observe.ts",
     "./plist": "./src/plist.ts",
     "./prelude": "./src/prelude.ts",

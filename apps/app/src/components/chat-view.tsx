@@ -28,6 +28,7 @@ import { isGreetingMessage } from "../lib/greeting.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
+import { messageWritten } from "../lib/written.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { AskCard } from "./ask-card.tsx";
 import { Building } from "./building.tsx";
@@ -38,6 +39,7 @@ import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 import { SteerQueue } from "./steer-queue.tsx";
 import { UserLine } from "./user-line.tsx";
+import { WrittenAs } from "./written-as.tsx";
 
 const FOLD_LINES = 25;
 const PAGE_LINES = 200;
@@ -295,6 +297,7 @@ function ChatLine({
 	const { shown } = useUI();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
+	const written = shown.edits ? messageWritten(message) : undefined;
 	return (
 		<div className="min-w-0 break-words text-fg">
 			{reasoning && (
@@ -303,6 +306,12 @@ function ChatLine({
 					<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
 						{reasoning}
 					</div>
+				</div>
+			)}
+			{written && (
+				<div className="mb-2">
+					<ChannelLabel id="edits" />
+					<WrittenAs written={written} ran={messageText(message)} />
 				</div>
 			)}
 			{isUserMessage(message) ? (

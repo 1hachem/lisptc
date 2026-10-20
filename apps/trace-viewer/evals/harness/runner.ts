@@ -6,6 +6,7 @@ import {
 } from "@repo/ai";
 import { Checks } from "@repo/checks/checks";
 import { Trace } from "@repo/checks/trace";
+import type { ConversationStore } from "@repo/conversation-extension";
 import { evalsEnv } from "@repo/env/evals";
 import type { CaseInfo, ReportRow } from "@repo/evals/report";
 import type {
@@ -16,6 +17,7 @@ import type {
 	TranscriptEntry,
 } from "@repo/evals/runner";
 import { createEvalSuite, runCase as runEvalCase } from "@repo/evals/runner";
+import type { ConversationEntry } from "@repo/interpreter/conversation";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { ExtensionsFor } from "./harness.ts";
 import { tracedRepl } from "./harness.ts";
@@ -64,11 +66,28 @@ function mockedServers(spec: TraceViewerEvalSpec) {
 	}));
 }
 
+class TranscriptConversation implements ConversationStore {
+	private transcript: readonly ConversationEntry[] = [];
+
+	reads(transcript: readonly ConversationEntry[]): void {
+		this.transcript = transcript;
+	}
+
+	stored(): readonly ConversationEntry[] {
+		return this.transcript;
+	}
+}
+
+const conversations = new WeakMap<AgentRepl, TranscriptConversation>();
+
 function open(spec: TraceViewerEvalSpec): EvalRunContext<AgentRepl> {
+	const conversation = new TranscriptConversation();
 	const { repl, trace } = tracedRepl({
 		...(spec.mocks ? { mocks: spec.mocks } : {}),
 		extensions: spec.extensions,
+		conversation,
 	});
+	conversations.set(repl, conversation);
 	const checks = new Checks(trace, spec.checks);
 	return {
 		repl,
@@ -110,6 +129,7 @@ const runtime = {
 				system: string;
 			},
 		) {
+			conversations.get(options.repl)?.reads(transcript);
 			for await (const event of runAgentTurn(transcript, {
 				repl: options.repl,
 				maxSteps: options.maxSteps,

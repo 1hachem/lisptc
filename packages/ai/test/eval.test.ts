@@ -143,6 +143,49 @@ describe("a user message", () => {
 	});
 });
 
+describe("checking user code", () => {
+	const checked = testRepls([
+		extension((hooks) =>
+			hooks.admit.use(async (interp, code, next) =>
+				code.includes("bad")
+					? { code, rejected: "line 1: bad call" }
+					: next(interp, code),
+			),
+		),
+	]);
+
+	test("runs code nothing rejects", async () => {
+		const message = await evaluated(
+			"(echo (+ 1 2))",
+			crypto.randomUUID(),
+			checked,
+		);
+		expect(display(message)).toContain("3");
+	});
+
+	test("hands back a rejection as a stopped result instead of running it", async () => {
+		const message = await evaluated("(bad)", crypto.randomUUID(), checked);
+		expect(JSON.parse(message.content)).toMatchObject({
+			source: "lisp-check",
+			error: true,
+			output: "line 1: bad call",
+		});
+		expect(message.additional_kwargs?.failed).toBe(true);
+	});
+
+	test("runs the code admit rewrote in place of the typed code", async () => {
+		const rewriting = testRepls([
+			extension((hooks) =>
+				hooks.admit.use(async (interp, code, next) =>
+					next(interp, code.replace("(fix)", "(echo (+ 1 1))")),
+				),
+			),
+		]);
+		const message = await evaluated("(fix)", crypto.randomUUID(), rewriting);
+		expect(display(message)).toContain("2");
+	});
+});
+
 describe("a step the host broke on", () => {
 	const broken = testRepls([
 		extension((hooks) =>

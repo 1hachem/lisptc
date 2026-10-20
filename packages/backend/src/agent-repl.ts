@@ -2,11 +2,17 @@ import { agentsExtension } from "@repo/agents-extension";
 import { agentsHost } from "@repo/agents-extension/host";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
+import { conversationExtension } from "@repo/conversation-extension";
+import {
+	conversationHostFor,
+	unstoredConversation,
+} from "@repo/conversation-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
+import { lintExtension } from "@repo/lint-extension";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
@@ -22,6 +28,8 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import { recoveryExtension } from "@repo/recovery-extension";
+import { recoveryHost } from "@repo/recovery-extension/host";
 import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
@@ -35,6 +43,7 @@ import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { ConvexConversationStore } from "./conversation-store.ts";
 import { ConvexImageStore } from "./image-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
@@ -106,6 +115,15 @@ export async function workspaceExtensions(
 			}),
 		),
 		proseExtension(proseHost),
+		conversationExtension(
+			conversationHostFor(
+				chatId === undefined
+					? unstoredConversation
+					: new ConvexConversationStore(chatId, connect),
+			),
+		),
+		recoveryExtension(recoveryHost),
+		lintExtension(),
 		uiExtension(uiHost),
 		diagnosticsExtension(diagnosticsHost),
 	];
