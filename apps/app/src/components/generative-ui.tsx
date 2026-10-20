@@ -1,8 +1,9 @@
+import { viewKey } from "@repo/interpreter/annotations";
 import { useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
-import { toUiNode, type UiNode } from "../lib/ui-node.ts";
+import type { UiNode } from "../lib/ui-node.ts";
 import { Markdown } from "./markdown.tsx";
 
 function text(props: Record<string, unknown>, key: string): string {
@@ -283,7 +284,7 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 					return;
 				}
 				const data = result.response;
-				const next = toUiNode(data.ui);
+				const next = viewKey.schema.safeParse(data.ui).data;
 				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));

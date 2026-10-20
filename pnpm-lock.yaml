@@ -1005,6 +1005,9 @@ importers:
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*
@@ -1021,9 +1024,6 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
 
   packages/introspection:
     dependencies:
@@ -1333,6 +1333,10 @@ importers:
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
 
   packages/shared:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*

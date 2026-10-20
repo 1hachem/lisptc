@@ -1,14 +1,6 @@
-export interface UiNode {
-	tag: string;
-	props: Record<string, unknown>;
-	children: UiNode[];
-}
+import type { ViewNode } from "@repo/interpreter/annotations";
 
-export function toUiNode(value: unknown): UiNode | undefined {
-	if (!value || typeof value !== "object") return undefined;
-	const node = value as Partial<UiNode>;
-	return typeof node.tag === "string" ? (value as UiNode) : undefined;
-}
+export type UiNode = ViewNode;
 
 function prop(node: UiNode, key: string): string {
 	const value = node.props[key];

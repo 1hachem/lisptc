@@ -10,6 +10,7 @@ import type {
 } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
+import type { StepMeta } from "@repo/shared/messages";
 import {
 	type AgentConfig,
 	type AgentDelta,
@@ -45,15 +46,7 @@ export interface TurnOptions {
 	inbox?: () => Promise<Steer[]>;
 }
 
-export interface StepMeta {
-	at: string;
-	durationMs: number;
-	provider: string;
-	model: string;
-	inputTokens?: number;
-	outputTokens?: number;
-	cachedInputTokens?: number;
-}
+export type { StepMeta };
 
 export type TurnEvent =
 	| { type: "delta"; stepId: string; text?: string; reasoning?: string }

@@ -140,6 +140,8 @@ describe("a user message", () => {
 		});
 		expect(loud?.quiet).toBe(false);
 		expect(hushed?.quiet).toBe(true);
+		expect(loud?.message.additional_kwargs?.quiet).toBeUndefined();
+		expect(hushed?.message.additional_kwargs?.quiet).toBe(true);
 	});
 });
 
