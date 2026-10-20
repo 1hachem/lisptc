@@ -16,7 +16,7 @@ import type { Mentionable } from "./mention-menu.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
-	const { inputOn } = useUI();
+	const { inputOn, sendLabel } = useUI();
 	const { workspaceId, chatId, draftChatId, send, stop, isLoading, fresh } =
 		useChatSession((state) => ({
 			workspaceId: state.workspaceId,
@@ -93,7 +93,8 @@ export function Chat() {
 					isStreaming={isLoading}
 					onStop={stop}
 					symbols={symbols}
-					lisp={inputOn.lisp}
+					{...inputOn}
+					sendLabel={sendLabel}
 				/>
 			</div>
 		</>

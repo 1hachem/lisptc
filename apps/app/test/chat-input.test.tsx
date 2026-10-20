@@ -397,6 +397,58 @@ describe("the chat input", () => {
 		vi.unstubAllGlobals();
 	});
 
+	it("shows the send button under the label the user chose", () => {
+		act(() => root.render(<ChatInput onSubmit={vi.fn()} sendLabel="go" />));
+		const buttons = [...host.querySelectorAll("button")].map(
+			(button) => button.textContent,
+		);
+		expect(buttons).toContain("go⏎");
+	});
+
+	it("hides the send and attach buttons, and Enter still sends", () => {
+		const onSubmit = vi.fn();
+		act(() =>
+			root.render(
+				<ChatInput onSubmit={onSubmit} send={false} attach={false} />,
+			),
+		);
+		expect(host.querySelector("button")).toBeNull();
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		type(field, "hello");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("hello", []);
+	});
+
+	it("edits in normal mode after Escape when vim keys are on", async () => {
+		act(() => root.render(<ChatInput onSubmit={vi.fn()} vim />));
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		type(field, "one two");
+		press(field, { key: "Escape" });
+		await settled();
+		expect(host.textContent).toContain(":");
+		for (const key of ["0", "x", "w", "D"]) {
+			press(field, { key });
+			await settled();
+		}
+		expect(textOf(field)).toBe("ne ");
+		press(field, { key: "A" });
+		await settled();
+		typeAtCaret(field, "!");
+		expect(textOf(field)).toBe("ne !");
+	});
+
+	it("types every key as text when vim keys are off", () => {
+		act(() => root.render(<ChatInput onSubmit={vi.fn()} />));
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		type(field, "one");
+		press(field, { key: "Escape" });
+		press(field, { key: "x" });
+		expect(textOf(field)).toBe("one");
+	});
+
 	it("runs no lisp help in the input when the preference is off", async () => {
 		act(() =>
 			root.render(

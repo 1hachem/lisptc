@@ -128,7 +128,11 @@ export function $offsetIn(
 	return index < 0 ? null : size(index) + point.offset;
 }
 
-function $placeAt(paragraph: ParagraphNode, point: PointType, offset: number) {
+export function $placeAt(
+	paragraph: ParagraphNode,
+	point: PointType,
+	offset: number,
+) {
 	let start = 0;
 	let index = 0;
 	for (const child of paragraph.getChildren()) {

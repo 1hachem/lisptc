@@ -19,7 +19,7 @@ export function FileView({
 	body?: ReactNode;
 }) {
 	const runCommand = useCommandRunner();
-	const { inputOn } = useUI();
+	const { inputOn, sendLabel } = useUI();
 	const { chatId, draftChatId, sendAbout, stop, isLoading } = useChatSession(
 		(state) => ({
 			chatId: state.chatId,
@@ -62,7 +62,8 @@ export function FileView({
 					isStreaming={isLoading}
 					onStop={stop}
 					symbols={symbols}
-					lisp={inputOn.lisp}
+					{...inputOn}
+					sendLabel={sendLabel}
 				/>
 			</div>
 		</>

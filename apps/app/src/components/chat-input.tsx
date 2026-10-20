@@ -36,11 +36,13 @@ import {
 	recall,
 } from "../lib/message-history.ts";
 import { quietly } from "../lib/quietly.ts";
+import type { VimMode } from "../lib/vim.ts";
 import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispAssistPlugin } from "./lisp-assist.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 import { type Mentionable, MentionMenuPlugin } from "./mention-menu.tsx";
+import { VimKeysPlugin } from "./vim-keys.tsx";
 
 export interface ChatInputProps {
 	placeholder?: string;
@@ -53,6 +55,10 @@ export interface ChatInputProps {
 	mentions?: readonly Mentionable[];
 	symbols?: SymbolTable;
 	lisp?: boolean;
+	vim?: boolean;
+	send?: boolean;
+	sendLabel?: string;
+	attach?: boolean;
 }
 
 const NO_SYMBOLS: SymbolTable = new Map();
@@ -114,12 +120,14 @@ function $replaceText(text: string) {
 }
 
 function SendAction({
+	label,
 	isStreaming,
 	empty,
 	disabled,
 	onStop,
 	onSend,
 }: {
+	label: string;
 	isStreaming?: boolean;
 	empty: boolean;
 	disabled?: boolean;
@@ -146,7 +154,7 @@ function SendAction({
 		);
 	return (
 		<InputAction
-			label="send"
+			label={label}
 			glyph="⏎"
 			tone="text-green hover:brightness-125"
 			onClick={onSend}
@@ -232,6 +240,7 @@ function useDraft(
 }
 
 const ENABLED = { prompt: "›", tone: "text-green" };
+const NORMAL = { prompt: ":", tone: "text-yellow" };
 const DISABLED = { prompt: "⋯", tone: "text-dim" };
 
 function Notice({ text }: { text: string | null }) {
@@ -572,6 +581,7 @@ function useComposer({
 		attach,
 	});
 	const stops = isStreaming === true && empty;
+	const [mode, setMode] = useState<VimMode>("insert");
 
 	useKeys({
 		disabled: busy,
@@ -592,7 +602,8 @@ function useComposer({
 		search,
 		menus,
 		pick,
-		look: busy ? DISABLED : ENABLED,
+		setMode,
+		look: busy ? DISABLED : mode === "normal" ? NORMAL : ENABLED,
 		notice: noticeOf(sending, over, notice),
 		pickFiles: (files: File[]) => {
 			attachments.add(files);
@@ -611,6 +622,10 @@ function Editor(props: ChatInputProps) {
 		mentions = [],
 		symbols = NO_SYMBOLS,
 		lisp = true,
+		vim = false,
+		send = true,
+		sendLabel = "send",
+		attach = true,
 	} = props;
 	const c = useComposer(props);
 
@@ -639,14 +654,17 @@ function Editor(props: ChatInputProps) {
 				dim={c.busy}
 				action={
 					<>
-						<AttachAction onClick={c.attach} disabled={c.busy} />
-						<SendAction
-							isStreaming={isStreaming}
-							empty={c.empty}
-							disabled={c.busy}
-							onStop={onStop}
-							onSend={c.sendNow}
-						/>
+						{attach && <AttachAction onClick={c.attach} disabled={c.busy} />}
+						{send && (
+							<SendAction
+								label={sendLabel}
+								isStreaming={isStreaming}
+								empty={c.empty}
+								disabled={c.busy}
+								onStop={onStop}
+								onSend={c.sendNow}
+							/>
+						)}
 					</>
 				}
 			>
@@ -671,6 +689,11 @@ function Editor(props: ChatInputProps) {
 				symbols={symbols}
 				host={c.menus.host}
 				active={c.menus.assistOpen}
+			/>
+			<VimKeysPlugin
+				on={vim}
+				menuActive={() => c.menus.active.current}
+				onMode={c.setMode}
 			/>
 			<PromptDialog
 				onOpenChange={c.search.setSearching}
