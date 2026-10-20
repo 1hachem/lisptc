@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
 import type { OpenFile } from "../lib/files.ts";
+import { useSymbols } from "../lib/symbols.ts";
 import { useUI } from "../lib/ui.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import { LispSource } from "./lisp-text.tsx";
@@ -19,11 +20,16 @@ export function FileView({
 }) {
 	const runCommand = useCommandRunner();
 	const { inputOn } = useUI();
-	const { sendAbout, stop, isLoading } = useChatSession((state) => ({
-		sendAbout: state.sendAbout,
-		stop: state.stop,
-		isLoading: state.isLoading,
-	}));
+	const { workspaceId, chatId, sendAbout, stop, isLoading } = useChatSession(
+		(state) => ({
+			workspaceId: state.workspaceId,
+			chatId: state.chatId,
+			sendAbout: state.sendAbout,
+			stop: state.stop,
+			isLoading: state.isLoading,
+		}),
+	);
+	const symbols = useSymbols(workspaceId, chatId, isLoading);
 
 	return (
 		<>
@@ -59,6 +65,7 @@ export function FileView({
 					onCommand={runCommand}
 					isStreaming={isLoading}
 					onStop={stop}
+					symbols={symbols}
 					lisp={inputOn.lisp}
 				/>
 			</div>
