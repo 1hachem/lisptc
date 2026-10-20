@@ -9,6 +9,7 @@ let server: Server;
 let jwks: string;
 let sign: (claims: Record<string, unknown>) => Promise<string>;
 let fetchApp: (request: Request) => Response | Promise<Response>;
+let verifyToken: typeof import("../../server/token.ts").verifyToken;
 
 beforeAll(async () => {
 	const { SignJWT, exportJWK, generateKeyPair } = await import("jose");
@@ -49,6 +50,7 @@ beforeAll(async () => {
 	const { edge } = await import("../../server/agent/edge.ts");
 	const { authed } = await import("../../server/agent/session.ts");
 	const { ConvexError } = await import("convex/values");
+	({ verifyToken } = await import("../../server/token.ts"));
 
 	const routes: Record<string, (request: Request) => Promise<Response>> = {
 		"/api/refused": serve({
@@ -132,5 +134,31 @@ describe("a refusal from the deployment", () => {
 	test("leaves an unrecognised failure a server error", async () => {
 		const response = await fetchApp(new Request("http://api.test/api/broken"));
 		expect(response.status).toBe(500);
+	});
+});
+
+describe("a token left over from another deployment", () => {
+	test("reads as forged when no key here signed it", async () => {
+		const { SignJWT, generateKeyPair } = await import("jose");
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const elsewhere = await new SignJWT({ sub: "user-1" })
+			.setProtectedHeader({ alg: "RS256", kid: "wiped" })
+			.setIssuer(ORIGIN)
+			.setAudience("convex")
+			.setExpirationTime("5m")
+			.sign(privateKey);
+		expect(await verifyToken(elsewhere)).toEqual({
+			signed: false,
+			forged: true,
+		});
+	});
+
+	test("reads as signed when this deployment signed it", async () => {
+		expect(await verifyToken(await sign({ sub: "user-1" }))).toEqual({
+			signed: true,
+			subject: "user-1",
+		});
 	});
 });
