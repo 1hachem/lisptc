@@ -6,6 +6,7 @@ export const SIDEBAR_ENTRIES = [
 	"permissions",
 	"knowledge",
 	"attachments",
+	"bin",
 	"sub-agents",
 	"triggers",
 	"tasks",

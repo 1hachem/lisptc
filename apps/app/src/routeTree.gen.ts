@@ -26,6 +26,7 @@ import { Route as AuthedWorkspaceIdSettingsRouteImport } from './routes/_authed/
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
 import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
 import { Route as AuthedWorkspaceIdAttachmentsNameRouteImport } from './routes/_authed/$workspaceId/attachments/$name'
+import { Route as AuthedWorkspaceIdBinNameRouteImport } from './routes/_authed/$workspaceId/bin/$name'
 import { Route as AuthedWorkspaceIdChatChatIdRouteImport } from './routes/_authed/$workspaceId/chat/$chatId'
 import { Route as AuthedWorkspaceIdKnowledgeNameRouteImport } from './routes/_authed/$workspaceId/knowledge/$name'
 import { Route as AuthedWorkspaceIdMemoriesKeyRouteImport } from './routes/_authed/$workspaceId/memories/$key'
@@ -119,6 +120,12 @@ const AuthedWorkspaceIdAttachmentsNameRoute =
     path: '/attachments/$name',
     getParentRoute: () => AuthedWorkspaceIdRouteRoute,
   } as any)
+const AuthedWorkspaceIdBinNameRoute =
+  AuthedWorkspaceIdBinNameRouteImport.update({
+    id: '/bin/$name',
+    path: '/bin/$name',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
 const AuthedWorkspaceIdChatChatIdRoute =
   AuthedWorkspaceIdChatChatIdRouteImport.update({
     id: '/chat/$chatId',
@@ -161,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
   '/$workspaceId/attachments/$name': typeof AuthedWorkspaceIdAttachmentsNameRoute
+  '/$workspaceId/bin/$name': typeof AuthedWorkspaceIdBinNameRoute
   '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
   '/$workspaceId/knowledge/$name': typeof AuthedWorkspaceIdKnowledgeNameRoute
   '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
@@ -182,6 +190,7 @@ export interface FileRoutesByTo {
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
   '/$workspaceId/attachments/$name': typeof AuthedWorkspaceIdAttachmentsNameRoute
+  '/$workspaceId/bin/$name': typeof AuthedWorkspaceIdBinNameRoute
   '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
   '/$workspaceId/knowledge/$name': typeof AuthedWorkspaceIdKnowledgeNameRoute
   '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
@@ -206,6 +215,7 @@ export interface FileRoutesById {
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
   '/_authed/$workspaceId/attachments/$name': typeof AuthedWorkspaceIdAttachmentsNameRoute
+  '/_authed/$workspaceId/bin/$name': typeof AuthedWorkspaceIdBinNameRoute
   '/_authed/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
   '/_authed/$workspaceId/knowledge/$name': typeof AuthedWorkspaceIdKnowledgeNameRoute
   '/_authed/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/api/oauth/callback'
     | '/$workspaceId/'
     | '/$workspaceId/attachments/$name'
+    | '/$workspaceId/bin/$name'
     | '/$workspaceId/chat/$chatId'
     | '/$workspaceId/knowledge/$name'
     | '/$workspaceId/memories/$key'
@@ -251,6 +262,7 @@ export interface FileRouteTypes {
     | '/api/oauth/callback'
     | '/$workspaceId'
     | '/$workspaceId/attachments/$name'
+    | '/$workspaceId/bin/$name'
     | '/$workspaceId/chat/$chatId'
     | '/$workspaceId/knowledge/$name'
     | '/$workspaceId/memories/$key'
@@ -274,6 +286,7 @@ export interface FileRouteTypes {
     | '/api/oauth/callback'
     | '/_authed/$workspaceId/'
     | '/_authed/$workspaceId/attachments/$name'
+    | '/_authed/$workspaceId/bin/$name'
     | '/_authed/$workspaceId/chat/$chatId'
     | '/_authed/$workspaceId/knowledge/$name'
     | '/_authed/$workspaceId/memories/$key'
@@ -412,6 +425,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdAttachmentsNameRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
+    '/_authed/$workspaceId/bin/$name': {
+      id: '/_authed/$workspaceId/bin/$name'
+      path: '/bin/$name'
+      fullPath: '/$workspaceId/bin/$name'
+      preLoaderRoute: typeof AuthedWorkspaceIdBinNameRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
     '/_authed/$workspaceId/chat/$chatId': {
       id: '/_authed/$workspaceId/chat/$chatId'
       path: '/chat/$chatId'
@@ -450,6 +470,7 @@ interface AuthedWorkspaceIdRouteRouteChildren {
   AuthedWorkspaceIdSettingsRoute: typeof AuthedWorkspaceIdSettingsRoute
   AuthedWorkspaceIdIndexRoute: typeof AuthedWorkspaceIdIndexRoute
   AuthedWorkspaceIdAttachmentsNameRoute: typeof AuthedWorkspaceIdAttachmentsNameRoute
+  AuthedWorkspaceIdBinNameRoute: typeof AuthedWorkspaceIdBinNameRoute
   AuthedWorkspaceIdChatChatIdRoute: typeof AuthedWorkspaceIdChatChatIdRoute
   AuthedWorkspaceIdKnowledgeNameRoute: typeof AuthedWorkspaceIdKnowledgeNameRoute
   AuthedWorkspaceIdMemoriesKeyRoute: typeof AuthedWorkspaceIdMemoriesKeyRoute
@@ -465,6 +486,7 @@ const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
     AuthedWorkspaceIdIndexRoute: AuthedWorkspaceIdIndexRoute,
     AuthedWorkspaceIdAttachmentsNameRoute:
       AuthedWorkspaceIdAttachmentsNameRoute,
+    AuthedWorkspaceIdBinNameRoute: AuthedWorkspaceIdBinNameRoute,
     AuthedWorkspaceIdChatChatIdRoute: AuthedWorkspaceIdChatChatIdRoute,
     AuthedWorkspaceIdKnowledgeNameRoute: AuthedWorkspaceIdKnowledgeNameRoute,
     AuthedWorkspaceIdMemoriesKeyRoute: AuthedWorkspaceIdMemoriesKeyRoute,

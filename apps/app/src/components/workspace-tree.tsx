@@ -3,6 +3,7 @@ import {
 	Attachment01Icon,
 	Book02Icon,
 	BubbleChatIcon,
+	Delete02Icon,
 	FlashIcon,
 	Home01Icon,
 	InformationCircleIcon,
@@ -32,9 +33,10 @@ import {
 	useNavigate,
 	useParams,
 } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
+import { byDate } from "../lib/date-groups.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { knowledgeIcon, useKnowledgeUpload } from "../lib/knowledge.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
@@ -57,6 +59,7 @@ type Folder =
 	| "permissions"
 	| "knowledge"
 	| "attachments"
+	| "bin"
 	| (typeof PLACEHOLDERS)[number];
 
 const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
@@ -65,6 +68,7 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
 	attachments: Attachment01Icon,
+	bin: Delete02Icon,
 	"sub-agents": restingIcon(),
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
@@ -102,12 +106,34 @@ function Listing<T>({
 	return items.map(children);
 }
 
+function DatedListing<T>({
+	items,
+	at,
+	empty,
+	children,
+}: {
+	items: T[] | undefined;
+	at: (item: T) => number;
+	empty: string;
+	children: (item: T) => ReactNode;
+}) {
+	if (items === undefined) return null;
+	if (items.length === 0) return <Empty>{empty}</Empty>;
+	return byDate(items, at, Date.now()).map(({ group, items: dated }) => (
+		<Fragment key={group}>
+			<div className="pt-1.5 pb-0.5 pl-9 text-[10.5px] text-dim">{group}</div>
+			{dated.map(children)}
+		</Fragment>
+	));
+}
+
 const FOLDERS = [
 	"chat",
 	"memories",
 	"permissions",
 	"knowledge",
 	"attachments",
+	"bin",
 	...PLACEHOLDERS,
 ] as const satisfies readonly Folder[];
 
@@ -332,12 +358,16 @@ function AttachmentsFolder({
 		...convexQuery(api.attachments.list, { workspaceId }),
 		enabled: folder.open,
 	});
-	const removeFile = useConvexMutation(api.attachments.remove);
+	const toBin = useConvexMutation(api.bin.put);
 	const leave = useLeave(workspaceId);
 
 	return (
 		<TreeFolder name="attachments" icon={FOLDER_ICONS.attachments} {...folder}>
-			<Listing items={files} empty="nothing attached lately">
+			<DatedListing
+				items={files}
+				at={(file) => file.attachedAt}
+				empty="nothing attached lately"
+			>
 				{(file) => (
 					<TreeFile
 						key={file.name}
@@ -348,10 +378,10 @@ function AttachmentsFolder({
 						trailing={
 							<FileMenu
 								name={file.name}
-								confirm="delete this file for good?"
+								confirm="move it to the bin?"
 								onDelete={async () => {
 									await leave(current === file.name);
-									await removeFile({ workspaceId, name: file.name });
+									await toBin({ workspaceId, name: file.name });
 								}}
 							/>
 						}
@@ -366,7 +396,78 @@ function AttachmentsFolder({
 						)}
 					/>
 				)}
-			</Listing>
+			</DatedListing>
+		</TreeFolder>
+	);
+}
+
+const RESTORE_FAILURES: Record<string, string> = {
+	NO_SUCH_FILE: "it is no longer in the bin",
+	TOO_MANY_FILES: "attachments are full",
+};
+
+function BinFolder({
+	workspaceId,
+	current,
+	folder,
+}: {
+	workspaceId: Id<"workspaces">;
+	current: string | undefined;
+	folder: { open: boolean; onToggle: () => void };
+}) {
+	const { data: files } = useQuery({
+		...convexQuery(api.bin.list, { workspaceId }),
+		enabled: folder.open,
+	});
+	const restore = useConvexMutation(api.bin.restore);
+	const removeFile = useConvexMutation(api.bin.remove);
+	const leave = useLeave(workspaceId);
+
+	return (
+		<TreeFolder name="bin" icon={FOLDER_ICONS.bin} {...folder}>
+			<DatedListing
+				items={files}
+				at={(file) => file.binnedAt}
+				empty="the bin is empty"
+			>
+				{(file) => (
+					<TreeFile
+						key={file.name}
+						name={file.name}
+						icon={knowledgeIcon(file.name, file.contentType)}
+						depth={1}
+						selected={current === file.name}
+						trailing={
+							<FileMenu
+								name={file.name}
+								confirm="delete this file for good?"
+								onRestore={async () => {
+									const refused = await restore({
+										workspaceId,
+										name: file.name,
+									});
+									if (refused !== null)
+										throw new Error(RESTORE_FAILURES[refused] ?? refused);
+									await leave(current === file.name);
+								}}
+								onDelete={async () => {
+									await leave(current === file.name);
+									await removeFile({ workspaceId, name: file.name });
+								}}
+							/>
+						}
+						link={(content, className) => (
+							<Link
+								to="/$workspaceId/bin/$name"
+								params={{ workspaceId, name: file.name }}
+								className={className}
+							>
+								{content}
+							</Link>
+						)}
+					/>
+				)}
+			</DatedListing>
 		</TreeFolder>
 	);
 }
@@ -501,9 +602,8 @@ export function WorkspaceTree({
 	const newChat = useNewChat();
 	const folder = useFolders();
 	const params = useParams({ strict: false });
-	const inAttachments = useLocation({
-		select: (location) =>
-			location.pathname.startsWith(`/${workspaceId}/attachments/`),
+	const fileFolder = useLocation({
+		select: (location) => location.pathname.split("/")[2],
 	});
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
@@ -565,15 +665,22 @@ export function WorkspaceTree({
 		knowledge: () => (
 			<KnowledgeFolder
 				workspaceId={workspaceId}
-				current={inAttachments ? undefined : params.name}
+				current={fileFolder === "knowledge" ? params.name : undefined}
 				folder={folder("knowledge")}
 			/>
 		),
 		attachments: () => (
 			<AttachmentsFolder
 				workspaceId={workspaceId}
-				current={inAttachments ? params.name : undefined}
+				current={fileFolder === "attachments" ? params.name : undefined}
 				folder={folder("attachments")}
+			/>
+		),
+		bin: () => (
+			<BinFolder
+				workspaceId={workspaceId}
+				current={fileFolder === "bin" ? params.name : undefined}
+				folder={folder("bin")}
 			/>
 		),
 		"sub-agents": placeholder("sub-agents"),
