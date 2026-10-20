@@ -2,6 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { FileView } from "../../../../components/file-view.tsx";
 import { Markdown } from "../../../../components/markdown.tsx";
 import {
@@ -22,7 +23,60 @@ export const Route = createFileRoute("/_authed/$workspaceId/knowledge/$name")({
 	component: KnowledgeFile,
 });
 
-const READS_TEXT: ReadonlySet<KnowledgeViewer> = new Set(["markdown", "text"]);
+type TextViewer = Extract<KnowledgeViewer, "markdown" | "text">;
+type MediaViewer = Exclude<KnowledgeViewer, TextViewer>;
+
+const MEDIA: Record<MediaViewer, (name: string, url: string) => ReactNode> = {
+	image: (name, url) => (
+		<img src={url} alt={name} className="max-w-full self-start" />
+	),
+	pdf: (name, url) => (
+		<iframe
+			src={url}
+			title={name}
+			className="h-[75vh] w-full border border-bg2"
+		/>
+	),
+	video: (_name, url) => (
+		// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
+		<video src={url} controls className="w-full" />
+	),
+	audio: (_name, url) => (
+		// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
+		<audio src={url} controls className="w-full" />
+	),
+	download: () => <div className="text-dim">no preview for this file type</div>,
+};
+
+const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
+	markdown: (text) => <Markdown>{text}</Markdown>,
+	text: (text) => (
+		<pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>
+	),
+};
+
+function readsText(viewer: KnowledgeViewer | undefined): viewer is TextViewer {
+	return viewer === "markdown" || viewer === "text";
+}
+
+async function fetchText(url: string): Promise<string> {
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`fetch failed (${response.status})`);
+	return await response.text();
+}
+
+function useKnowledgeText(
+	url: string | undefined,
+	viewer: KnowledgeViewer | undefined,
+): string | undefined {
+	const { data } = useQuery({
+		queryKey: ["knowledge-text", url],
+		queryFn: () => fetchText(url ?? ""),
+		enabled: url !== undefined && readsText(viewer),
+		staleTime: Number.POSITIVE_INFINITY,
+	});
+	return data;
+}
 
 function KnowledgeBody({
 	name,
@@ -31,42 +85,29 @@ function KnowledgeBody({
 	text,
 }: {
 	name: string;
-	url: string;
-	viewer: KnowledgeViewer;
+	url: string | undefined;
+	viewer: KnowledgeViewer | undefined;
 	text: string | undefined;
 }) {
-	switch (viewer) {
-		case "image":
-			return <img src={url} alt={name} className="max-w-full self-start" />;
-		case "pdf":
-			return (
-				<iframe
-					src={url}
-					title={name}
-					className="h-[75vh] w-full border border-bg2"
-				/>
-			);
-		case "video":
-			// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
-			return <video src={url} controls className="w-full" />;
-		case "audio":
-			// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
-			return <audio src={url} controls className="w-full" />;
-		case "markdown":
-			return text === undefined ? (
-				<div className="text-dim">loading…</div>
-			) : (
-				<Markdown>{text}</Markdown>
-			);
-		case "text":
-			return text === undefined ? (
-				<div className="text-dim">loading…</div>
-			) : (
-				<pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>
-			);
-		case "download":
-			return <div className="text-dim">no preview for this file type</div>;
-	}
+	if (url === undefined || viewer === undefined)
+		return <div className="text-dim">this file is gone from storage</div>;
+	if (!readsText(viewer)) return MEDIA[viewer](name, url);
+	if (text === undefined) return <div className="text-dim">loading…</div>;
+	return TEXT[viewer](text);
+}
+
+function DownloadLink({ name, url }: { name: string; url: string }) {
+	return (
+		<a
+			href={url}
+			download={name}
+			target="_blank"
+			rel="noreferrer"
+			className="text-dim hover:text-fg"
+		>
+			download
+		</a>
+	);
 }
 
 function KnowledgeFile() {
@@ -79,17 +120,7 @@ function KnowledgeFile() {
 	const viewer = file
 		? knowledgeViewer(file.name, file.contentType)
 		: undefined;
-	const { data: text } = useQuery({
-		queryKey: ["knowledge-text", url],
-		queryFn: async () => {
-			const response = await fetch(url ?? "");
-			if (!response.ok) throw new Error(`fetch failed (${response.status})`);
-			return await response.text();
-		},
-		enabled:
-			url !== undefined && viewer !== undefined && READS_TEXT.has(viewer),
-		staleTime: Number.POSITIVE_INFINITY,
-	});
+	const text = useKnowledgeText(url, viewer);
 
 	return (
 		<FileView
@@ -97,26 +128,8 @@ function KnowledgeFile() {
 				file ? { path: `knowledge/${name}`, source: text ?? "" } : undefined
 			}
 			missing={file === undefined ? undefined : `no file named ${name}`}
-			actions={
-				url && (
-					<a
-						href={url}
-						download={name}
-						target="_blank"
-						rel="noreferrer"
-						className="text-dim hover:text-fg"
-					>
-						download
-					</a>
-				)
-			}
-			body={
-				url && viewer ? (
-					<KnowledgeBody name={name} url={url} viewer={viewer} text={text} />
-				) : (
-					<div className="text-dim">this file is gone from storage</div>
-				)
-			}
+			actions={url && <DownloadLink name={name} url={url} />}
+			body={<KnowledgeBody name={name} url={url} viewer={viewer} text={text} />}
 		/>
 	);
 }
