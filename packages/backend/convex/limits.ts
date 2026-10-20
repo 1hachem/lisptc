@@ -30,6 +30,10 @@ export const MAX_ATTACHMENTS = 200;
 
 export const ATTACHMENT_TTL_MS = 604_800_000;
 
+export const MAX_BIN = 1_000;
+
+export const BIN_TTL_MS = 2_592_000_000;
+
 export const MAX_REPL_LAYER_BYTES = 8_388_608;
 
 export const REPL_LAYER_CHUNK_CHARS = 262_144;

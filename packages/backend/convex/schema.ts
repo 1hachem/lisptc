@@ -127,10 +127,11 @@ export default defineSchema({
 		contentType: v.optional(v.string()),
 		size: v.number(),
 		attachedAt: v.number(),
+		binnedAt: v.optional(v.number()),
 	})
-		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_binned", ["workspaceId", "binnedAt"])
 		.index("by_workspace_name", ["workspaceId", "name"])
-		.index("by_attached", ["attachedAt"]),
+		.index("by_binned_attached", ["binnedAt", "attachedAt"]),
 
 	readmes: defineTable({
 		workspaceId: v.id("workspaces"),

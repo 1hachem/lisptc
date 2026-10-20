@@ -34,7 +34,7 @@ export const DEFAULT_TOGGLES = {
 
 export const DEFAULT_SEND_LABEL = "send";
 
-export const DEFAULT_HIDDEN: readonly string[] = ["attachments"];
+export const DEFAULT_HIDDEN: readonly string[] = ["attachments", "bin"];
 
 export type Toggles = Record<string, boolean>;
 

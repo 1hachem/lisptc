@@ -10,6 +10,7 @@
 
 import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
+import type * as bin from "../bin.js";
 import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
@@ -45,6 +46,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   attachments: typeof attachments;
   auth: typeof auth;
+  bin: typeof bin;
   chats: typeof chats;
   crons: typeof crons;
   http: typeof http;

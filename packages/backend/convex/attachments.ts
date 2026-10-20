@@ -40,6 +40,15 @@ async function held(
 		.unique();
 }
 
+async function live(
+	ctx: QueryCtx | MutationCtx,
+	workspaceId: Id<"workspaces">,
+	name: string,
+) {
+	const row = await held(ctx, workspaceId, name);
+	return row?.binnedAt === undefined ? row : null;
+}
+
 function numbered(name: string, n: number): string {
 	const dot = name.lastIndexOf(".");
 	return dot <= 0
@@ -67,7 +76,9 @@ export const list = query({
 		await requireWorkspace(ctx, workspaceId);
 		const rows = await ctx.db
 			.query("attachments")
-			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.withIndex("by_workspace_binned", (q) =>
+				q.eq("workspaceId", workspaceId).eq("binnedAt", undefined),
+			)
 			.take(MAX_ATTACHMENTS);
 		return rows
 			.map(({ name, contentType, size, attachedAt }) => ({
@@ -93,7 +104,7 @@ export const get = query({
 	),
 	handler: async (ctx, { workspaceId, name }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const row = await held(ctx, workspaceId, name);
+		const row = await live(ctx, workspaceId, name);
 		if (row === null) return null;
 		return {
 			name: row.name,
@@ -135,7 +146,9 @@ export const add = mutation({
 		if (blob.size > MAX_KNOWLEDGE_BYTES) return await refused("FILE_TOO_LARGE");
 		const owned = await ctx.db
 			.query("attachments")
-			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.withIndex("by_workspace_binned", (q) =>
+				q.eq("workspaceId", workspaceId).eq("binnedAt", undefined),
+			)
 			.take(MAX_ATTACHMENTS);
 		if (owned.length >= MAX_ATTACHMENTS) return await refused("TOO_MANY_FILES");
 		const free = await freeName(ctx, workspaceId, name);
@@ -158,7 +171,7 @@ export const remove = mutation({
 	returns: v.boolean(),
 	handler: async (ctx, { workspaceId, name }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const existing = await held(ctx, workspaceId, name);
+		const existing = await live(ctx, workspaceId, name);
 		if (existing === null) return false;
 		await ctx.storage.delete(existing.storageId);
 		await ctx.db.delete(existing._id);
@@ -176,7 +189,7 @@ export const keep = mutation({
 	),
 	handler: async (ctx, { workspaceId, name }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const attached = await held(ctx, workspaceId, name);
+		const attached = await live(ctx, workspaceId, name);
 		if (attached === null) return "NO_SUCH_FILE";
 		if ((await heldKnowledge(ctx, workspaceId, name)) !== null)
 			return "NAME_TAKEN";
@@ -203,14 +216,14 @@ export const expire = internalMutation({
 	handler: async (ctx) => {
 		const rows = await ctx.db
 			.query("attachments")
-			.withIndex("by_attached", (q) =>
-				q.lt("attachedAt", Date.now() - ATTACHMENT_TTL_MS),
+			.withIndex("by_binned_attached", (q) =>
+				q
+					.eq("binnedAt", undefined)
+					.lt("attachedAt", Date.now() - ATTACHMENT_TTL_MS),
 			)
 			.take(PURGE_BATCH);
-		for (const row of rows) {
-			await ctx.storage.delete(row.storageId);
-			await ctx.db.delete(row._id);
-		}
+		const binnedAt = Date.now();
+		for (const row of rows) await ctx.db.patch(row._id, { binnedAt });
 		if (rows.length === PURGE_BATCH)
 			await ctx.scheduler.runAfter(0, internal.attachments.expire, {});
 		return null;
@@ -223,7 +236,7 @@ export const purge = internalMutation({
 	handler: async (ctx, { workspaceId }) => {
 		const rows = await ctx.db
 			.query("attachments")
-			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.withIndex("by_workspace_binned", (q) => q.eq("workspaceId", workspaceId))
 			.take(PURGE_BATCH);
 		for (const row of rows) {
 			await ctx.storage.delete(row.storageId);

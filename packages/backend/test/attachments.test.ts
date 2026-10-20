@@ -134,7 +134,7 @@ describe("attachments", () => {
 		).toBe("NAME_TAKEN");
 	});
 
-	it("expires a file left in attachments past its time, and only that one", async () => {
+	it("moves a file left in attachments past its time to the bin, and only that one", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
@@ -159,6 +159,9 @@ describe("attachments", () => {
 				(f) => f.name,
 			),
 		).toEqual(["new.txt"]);
-		expect(await blobs(t)).toHaveLength(1);
+		expect(
+			(await alice.as.query(api.bin.list, { workspaceId })).map((f) => f.name),
+		).toEqual(["old.txt"]);
+		expect(await blobs(t)).toHaveLength(2);
 	});
 });

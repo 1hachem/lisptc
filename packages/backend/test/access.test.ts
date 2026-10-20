@@ -635,11 +635,12 @@ describe("preferences access", () => {
 		expect(rows[0].hidden).toBeUndefined();
 	});
 
-	it("hides attachments until the user shows it", async () => {
+	it("hides attachments and the bin until the user shows them", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		expect((await alice.as.query(api.preferences.get, {})).hidden).toEqual([
 			"attachments",
+			"bin",
 		]);
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { hidden: [] },
