@@ -437,9 +437,6 @@ importers:
       '@repo/secrets-extension':
         specifier: workspace:*
         version: link:../../packages/secrets
-      '@repo/toolkit':
-        specifier: workspace:*
-        version: link:../../packages/toolkit
       vscode-languageserver:
         specifier: ^9.0.1
         version: 9.0.1
