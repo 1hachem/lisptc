@@ -42,6 +42,10 @@ is WRONG, an arity error. For one server: load it, then
 (search-tools "widget") ; list with (list-tools "acme") .
 - (unload-mcp "name") , (login "name") , (logout "name") ,
 (mcp-authorize "name" "code") , (mcp-shutdown) .
+- Load is per workspace, not per chat: server loaded in one chat is bound in
+  every chat; unload-mcp and mcp-shutdown remove it from all. Server loaded
+  elsewhere, or stopped while unused, shows :dormant : tools defined, first
+  call reconnects. No load-mcp needed for it.
 - login/logout only for :oauth t servers:
   - (login "name") gives :logged-in if authenticated. Else, like load needing
     login, asks user to authorize, ends turn; you are told when they answer.

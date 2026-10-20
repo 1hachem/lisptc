@@ -191,6 +191,31 @@ export interface ToolkitRegistry {
 	all(): ConnConfig[];
 }
 
+export interface McpMount {
+	readonly server: string;
+	readonly conf?: HttpConnConfig;
+	readonly tools: readonly Tool[];
+}
+
+export interface McpRegistry {
+	mounts(): readonly McpMount[] | Promise<readonly McpMount[]>;
+	mount(mount: McpMount): void | Promise<void>;
+	unmount(server: string): void | Promise<void>;
+}
+
+export function memoryRegistry(): McpRegistry {
+	const mounted = new Map<string, McpMount>();
+	return {
+		mounts: () => [...mounted.values()],
+		mount: (mount) => {
+			mounted.set(mount.server, mount);
+		},
+		unmount: (server) => {
+			mounted.delete(server);
+		},
+	};
+}
+
 export type ServerAccess =
 	| { readonly access: "open" }
 	| { readonly access: "hidden" }
