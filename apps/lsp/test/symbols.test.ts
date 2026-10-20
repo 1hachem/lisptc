@@ -28,6 +28,13 @@ describe("enclosingCallHead", () => {
 		);
 	});
 
+	it("is not thrown off by a paren inside a string", () => {
+		const document = doc('(outer (inner ")" :k');
+		expect(enclosingCallHead(document, { line: 0, character: 20 })).toBe(
+			"inner",
+		);
+	});
+
 	it("returns undefined right after the opening paren with no head yet", () => {
 		const document = doc("(");
 		expect(

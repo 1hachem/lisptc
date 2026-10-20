@@ -1,5 +1,6 @@
 export type ChannelId =
 	| "user"
+	| "results"
 	| "ui"
 	| "lisp"
 	| "thinking"
@@ -25,6 +26,14 @@ export const CHANNELS: Channel[] = [
 		hint: "what a step printed for you",
 		dot: "bg-fg",
 		text: "text-dim",
+		shownByDefault: true,
+	},
+	{
+		id: "results",
+		label: "results",
+		hint: "the value each form returned, as the interpreter printed it",
+		dot: "bg-fg",
+		text: "text-fg",
 		shownByDefault: true,
 	},
 	{
