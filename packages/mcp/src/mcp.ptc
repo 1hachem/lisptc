@@ -42,20 +42,23 @@ is WRONG, an arity error. For one server: load it, then
 (search-tools "widget") ; list with (list-tools "acme") .
 - (unload-mcp "name") , (login "name") , (logout "name") ,
 (mcp-authorize "name" "code") , (mcp-shutdown) .
-- Loaded server can go away between steps: falls asleep after going unused,
-  fails, or removed from workspace. Before each step every held server is
-  checked; a change shows as system event from mcp holding form that ran and
-  what it returned, e.g.
-(mcp/observe "acme" :sleeping nil)
-  => acme is asleep and its tools were unloaded. (load-mcp "acme") wakes it.
+- Load is per workspace, not per chat: server loaded in one chat is bound in
+  every chat; unload-mcp and mcp-shutdown remove it from all. Server loaded
+  elsewhere, or stopped while unused, shows :dormant : tools defined, first
+  call reconnects. No load-mcp needed for it.
+- Loaded server can fail or be removed from workspace between steps. Before
+  each step every held server is checked; a change shows as system event from
+  mcp holding form that ran and what it returned, e.g.
+(mcp/observe "acme" :gone nil)
+  => acme was removed from the workspace.
   - Its acme/* tools already gone by then. Do not call them; run
     (await (load-mcp "acme")) first if task still needs it.
   - (mcp/phase "acme") gives phase recorded for held server: :ready while
     loaded, nil once not.
   - (mcp/on-change "acme" (lambda (name old new reason) ...)) replaces text
-    that event carries with what function returns. old and new are
-    :ready , :sleeping , :failed or :gone ; reason is string or nil. Handler
-    that errors is reported as its answer, server unloaded all the same.
+    that event carries with what function returns. old is :ready ; new is
+    :failed or :gone ; reason is string or nil. Handler that errors is
+    reported as its answer, server unloaded all the same.
     (mcp/on-change "acme" nil) restores default.
   - (mcp/observe "name" phase reason) is what runs. Returns nil when phase
     is one already recorded, so you are told once per change.

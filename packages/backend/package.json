@@ -37,6 +37,7 @@
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/migrations": "^0.3.6",
     "@posthog/convex": "^2.1.5",
+    "@repo/agents-extension": "workspace:*",
     "@repo/compaction-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",

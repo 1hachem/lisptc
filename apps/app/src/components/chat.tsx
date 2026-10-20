@@ -13,11 +13,10 @@ import { McpServers } from "./mcp-servers.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
-	const { workspaceId, send, runLisp, stop, isLoading, fresh } = useChatSession(
+	const { workspaceId, send, stop, isLoading, fresh } = useChatSession(
 		(state) => ({
 			workspaceId: state.workspaceId,
 			send: state.send,
-			runLisp: state.runLisp,
 			stop: state.stop,
 			isLoading: state.isLoading,
 			fresh: state.fresh,
@@ -54,10 +53,9 @@ export function Chat() {
 				</div>
 				<McpServers />
 				<ChatInput
-					placeholder="type a message  ·  / for commands  ·  ! for lisp"
+					placeholder="type a message, (lisp) runs inline  ·  / for commands"
 					onSubmit={send}
 					history={history}
-					onLisp={runLisp}
 					onCommand={runCommand}
 					isStreaming={isLoading}
 					onStop={stop}

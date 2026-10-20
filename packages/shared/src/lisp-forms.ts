@@ -10,14 +10,18 @@ export interface Skipped {
 	readonly reason: string;
 }
 
-function endOfString(text: string, i: number): number {
+function stringFrom(text: string, i: number): { end: number; closed: boolean } {
 	for (let j = i + 1; j < text.length; j++) {
 		const c = text[j];
-		if (c === "\n") return j;
+		if (c === "\n") return { end: j, closed: false };
 		if (c === "\\") j++;
-		else if (c === '"') return j + 1;
+		else if (c === '"') return { end: j + 1, closed: true };
 	}
-	return text.length;
+	return { end: text.length, closed: false };
+}
+
+function endOfString(text: string, i: number): number {
+	return stringFrom(text, i).end;
 }
 
 export function endOfForm(text: string, i: number): number {
@@ -89,13 +93,25 @@ export function formsOnly(
 	return out.join("");
 }
 
-export function openForms(text: string): number {
-	let depth = 0;
+export interface OpenAtEnd {
+	readonly parens: readonly number[];
+	readonly inString: boolean;
+}
+
+export function openAtEnd(text: string): OpenAtEnd {
+	const parens: number[] = [];
 	for (let i = 0; i < text.length; i++) {
 		const c = text[i];
-		if (c === '"' && depth > 0) i = endOfString(text, i) - 1;
-		else if (c === "(") depth++;
-		else if (c === ")" && depth > 0) depth--;
+		if (c === '"' && parens.length > 0) {
+			const { end, closed } = stringFrom(text, i);
+			if (end === text.length && !closed) return { parens, inString: true };
+			i = end - 1;
+		} else if (c === "(") parens.push(i);
+		else if (c === ")") parens.pop();
 	}
-	return depth;
+	return { parens, inString: false };
+}
+
+export function openForms(text: string): number {
+	return openAtEnd(text).parens.length;
 }

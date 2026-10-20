@@ -1,5 +1,6 @@
 import { topic } from "@repo/interpreter/channels";
 import { settled } from "@repo/interpreter/drive";
+import { ends } from "@repo/interpreter/effects";
 import {
 	type AgentStep,
 	type AgentTurn,
@@ -66,9 +67,9 @@ describe("an extension hooking the session", () => {
 			extensions: [extension((hooks) => hooks.answered.use(() => true))],
 		});
 
-		await r.evalOutput('(echo "hi")');
+		const out = await r.evalOutput('(echo "hi")');
 
-		expect(r.takeFinished()).toBe(true);
+		expect(ends(out.effects)).toBe(true);
 	});
 
 	it("speaks before the model does, and its words ride the turn", async () => {

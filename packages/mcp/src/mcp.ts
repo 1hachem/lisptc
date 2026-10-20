@@ -41,9 +41,13 @@ import {
 	type ConnConfig,
 	type ConnectResult,
 	type HeldState,
+	type HttpConnConfig,
 	type JsonSchema,
 	type McpClient,
+	type McpMount,
 	type McpPolicy,
+	type McpRegistry,
+	memoryRegistry,
 	type OAuthConnConfig,
 	openPolicy,
 	type SearchDocument,
@@ -230,6 +234,7 @@ export interface McpExtensionHost {
 	search: SearchEngine;
 	prompt: PromptSource;
 	policy?: McpPolicy;
+	registry?: McpRegistry;
 }
 
 function extractAuthCode(raw: string): string {
@@ -522,14 +527,13 @@ function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
 	);
 }
 
-function installServer(
+function defineTools(
 	wiring: Wiring,
 	name: string,
-	res: ConnectResult,
-	args: List,
-): List {
-	const { interp, servers, policy } = wiring;
-	const tools = res.tools.filter((tool) => policy.tool(name, tool.name));
+	all: readonly Tool[],
+): Tool[] {
+	const { interp, policy } = wiring;
+	const tools = all.filter((tool) => policy.tool(name, tool.name));
 	for (const tool of tools)
 		interp.defineGlobal(
 			newSym(`${name}/${tool.name}`),
@@ -540,16 +544,55 @@ function installServer(
 				args: toolArgs(tool),
 			},
 		);
+	return tools;
+}
+
+function putEntry(servers: Servers, entry: ServerEntry): void {
+	servers.set([...servers.get().filter((e) => e.name !== entry.name), entry]);
+}
+
+function installServer(
+	wiring: Wiring,
+	name: string,
+	res: ConnectResult,
+	args: List,
+): List {
 	const entry: ServerEntry = {
 		name,
 		serverId: res.serverId,
 		state: "loaded",
-		tools,
+		tools: defineTools(wiring, name, res.tools),
 		args,
 	};
-	servers.set([...servers.get().filter((e) => e.name !== name), entry]);
-	recordPhase(interp, name, newLispKeyword("ready"));
+	putEntry(wiring.servers, entry);
+	recordPhase(wiring.interp, name, newLispKeyword("ready"));
 	return arrayToList(toolRows(entry));
+}
+
+function argsOf(mount: McpMount): List {
+	const conf = mount.conf;
+	if (conf === undefined) return arrayToList([mount.server]);
+	const key = newLispKeyword;
+	return arrayToList([
+		key("name"),
+		mount.server,
+		key("url"),
+		conf.url,
+		...(conf.headers === undefined
+			? []
+			: [key("headers"), jsonToLisp(conf.headers)]),
+		...(conf.oauth ? [key("oauth"), true] : []),
+		...(conf.scopes === undefined
+			? []
+			: [key("scopes"), arrayToList(conf.scopes)]),
+	]);
+}
+
+function settle<T>(
+	value: T | Promise<T>,
+	then: (value: T) => unknown,
+): unknown {
+	return value instanceof Promise ? value.then(then) : then(value);
 }
 
 function toolRow(entry: ServerEntry, tool: Tool): List {
@@ -604,16 +647,55 @@ function observeHeld(
 	});
 }
 
+interface Rebound {
+	readonly bound: readonly string[];
+	readonly dropped: readonly string[];
+}
+
+export type Reconcile = () => Promise<Rebound>;
+
+function reboundText({ bound, dropped }: Rebound): string {
+	const lines: string[] = [];
+	if (bound.length > 0)
+		lines.push(
+			`MCP servers loaded elsewhere in this workspace are bound here too: ${bound.join(", ")}. Their tools are defined; (list-tools "name") lists them.`,
+		);
+	if (dropped.length > 0)
+		lines.push(
+			`MCP servers unloaded elsewhere in this workspace: ${dropped.join(", ")}. Their tools are no longer defined.`,
+		);
+	return lines.join("\n");
+}
+
+function reconcileEachTurn(
+	hooks: SessionHooks,
+	reconcilers: WeakMap<Interp, Reconcile>,
+): void {
+	hooks.turnStart.use(function* (ctx, next) {
+		const reconcile = reconcilers.get(ctx.interp);
+		if (reconcile !== undefined) {
+			const text = reboundText(yield* settled(reconcile()));
+			if (text !== "") ctx.emit(text);
+		}
+		yield* next(ctx);
+	});
+}
+
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	const held = new WeakMap<Interp, HeldServers>();
+	const reconcilers = new WeakMap<Interp, Reconcile>();
+	const registry = host.registry ?? memoryRegistry();
 	return Object.assign(
 		(interp: Interp): void => {
-			held.set(interp, registerMcp(interp, host));
+			const watch = registerMcp(interp, { ...host, registry });
+			held.set(interp, watch.held);
+			reconcilers.set(interp, watch.reconcile);
 		},
 		{
 			prompt: host.prompt(),
 			session: (hooks: SessionHooks): void => {
 				answerAuthorization(hooks);
+				reconcileEachTurn(hooks, reconcilers);
 				observeHeld(hooks, held);
 			},
 		},
@@ -622,16 +704,18 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy">,
-): HeldServers {
-	const { client, toolkit, search } = host;
+	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy"> & {
+		registry: McpRegistry;
+	},
+): { held: HeldServers; reconcile: Reconcile } {
+	const { client, toolkit, search, registry } = host;
 	const policy = host.policy ?? openPolicy;
 
 	const servers = interp.state(
 		"mcp/servers",
 		serverCodec,
 		[],
-		"The MCP servers this session loaded, each with its state (:loaded, :dormant until its next call reconnects it, or :failed), its tools and the arguments it was loaded with. Kept by load-mcp and unload-mcp; read it, never set it.",
+		"The MCP servers bound in this session, each with its state (:loaded, :dormant until its next call reconnects it, or :failed), its tools and the arguments it was loaded with. The workspace's registry decides which servers are loaded; this is the session's copy, brought in line with it at every turn. Read it, never set it.",
 	);
 	const predefined = new Map<string, ConnConfig>();
 	const loading = new Set<LispPromise>();
@@ -653,6 +737,12 @@ export function registerMcp(
 			);
 	}
 
+	function mountOf(conf: ConnConfig, tools: readonly Tool[]): McpMount {
+		return predefined.get(conf.name) === conf
+			? { server: conf.name, tools }
+			: { server: conf.name, conf: conf as HttpConnConfig, tools };
+	}
+
 	function connect(
 		args: List,
 		signal: AbortSignal,
@@ -661,10 +751,14 @@ export function registerMcp(
 		const conf = connConfigFromArgs(args, predefined);
 		admit(conf);
 		return client.connect(conf, { signal, progress }).then(
-			(res) => {
-				if (signal.aborted) {
+			async (res) => {
+				try {
+					if (signal.aborted)
+						throw new EvalException("MCP load cancelled", conf.name, false);
+					await registry.mount(mountOf(conf, res.tools));
+				} catch (error) {
 					void client.disconnect(res.serverId).catch(() => {});
-					throw new EvalException("MCP load cancelled", conf.name, false);
+					throw error;
 				}
 				return installServer(wiring, conf.name, res, args);
 			},
@@ -739,7 +833,17 @@ export function registerMcp(
 		'(unload-mcp "server")',
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
-		([name]) => arrayToList(doUnload(interp, client, servers, name)),
+		([name]) => {
+			if (entryOf(servers, name) === undefined)
+				throw new EvalException("MCP server not loaded", name, false);
+			return settle(registry.unmount(name), () =>
+				arrayToList(
+					entryOf(servers, name) === undefined
+						? []
+						: doUnload(interp, client, servers, name),
+				),
+			);
+		},
 	);
 
 	interp.def(
@@ -806,10 +910,14 @@ export function registerMcp(
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(predefined, name);
-			if (entryOf(servers, name)) doUnload(interp, client, servers, name);
-			return withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout").then(
-				() => newLispKeyword("logged-out"),
-			);
+			const unloaded = entryOf(servers, name)
+				? settle(registry.unmount(name), () => {
+						if (entryOf(servers, name)) doUnload(interp, client, servers, name);
+					})
+				: undefined;
+			return Promise.resolve(unloaded)
+				.then(() => withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout"))
+				.then(() => newLispKeyword("logged-out"));
 		},
 	);
 
@@ -958,8 +1066,17 @@ export function registerMcp(
 		"Disconnect every loaded MCP server and unload its bindings.",
 		z.tuple([]),
 		() => {
-			shutdown();
-			return true;
+			const names = servers.get().map((entry) => entry.name);
+			const unmounted = names.map((name) => registry.unmount(name));
+			return settle(
+				unmounted.some((done) => done instanceof Promise)
+					? Promise.all(unmounted)
+					: unmounted,
+				() => {
+					shutdown();
+					return true;
+				},
+			);
 		},
 	);
 
@@ -1012,7 +1129,34 @@ export function registerMcp(
 		);
 	});
 
-	return async () => {
+	function bindMount(mount: McpMount): boolean {
+		const entry = entryOf(servers, mount.server);
+		const conf = mount.conf ?? predefined.get(mount.server);
+		if (conf === undefined || policy.server(mount.server).access !== "open") {
+			if (entry !== undefined) doUnload(interp, client, servers, mount.server);
+			return false;
+		}
+		const tools = mount.tools.filter((tool) =>
+			policy.tool(mount.server, tool.name),
+		);
+		if (
+			entry !== undefined &&
+			JSON.stringify(entry.tools) === JSON.stringify(tools)
+		)
+			return false;
+		if (entry !== undefined) doUnload(interp, client, servers, mount.server);
+		putEntry(servers, {
+			name: mount.server,
+			serverId: "",
+			state: "dormant",
+			reason: "loaded elsewhere in the workspace",
+			tools: defineTools(wiring, mount.server, mount.tools),
+			args: argsOf(mount),
+		});
+		return entry === undefined;
+	}
+
+	async function heldPhases(): Promise<[name: string, state: HeldState][]> {
 		const loaded = servers.get().filter((entry) => entry.state === "loaded");
 		const states = await Promise.all(
 			loaded.map((entry) =>
@@ -1021,16 +1165,42 @@ export function registerMcp(
 					.catch((): HeldState => ({ phase: "ready" })),
 			),
 		);
-		return loaded
-			.map((entry, i): [ServerEntry, HeldState] => [entry, states[i]])
-			.filter(([entry]) => {
-				const current = entryOf(servers, entry.name);
-				return (
-					current?.state === "loaded" && current.serverId === entry.serverId
-				);
-			})
-			.map(([entry, state]) => [entry.name, state]);
+		const changed: [name: string, state: HeldState][] = [];
+		loaded.forEach((entry, i) => {
+			const current = entryOf(servers, entry.name);
+			if (current?.state !== "loaded" || current.serverId !== entry.serverId)
+				return;
+			if (states[i].phase !== "sleeping") {
+				changed.push([entry.name, states[i]]);
+				return;
+			}
+			void client.disconnect(entry.serverId).catch(() => {});
+			putEntry(servers, {
+				...current,
+				state: "dormant",
+				reason: "stopped after going unused",
+			});
+		});
+		return changed;
+	}
+
+	const reconcile: Reconcile = async () => {
+		const mounts = new Map(
+			(await registry.mounts()).map((mount) => [mount.server, mount]),
+		);
+		const dropped = servers
+			.get()
+			.map((entry) => entry.name)
+			.filter((name) => !mounts.has(name));
+		for (const name of dropped) doUnload(interp, client, servers, name);
+		const bound = [...mounts.values()]
+			.filter((mount) => bindMount(mount))
+			.map((mount) => mount.server);
+		await heldPhases();
+		return { bound, dropped };
 	};
+
+	return { held: heldPhases, reconcile };
 }
 
 const OBSERVE = `

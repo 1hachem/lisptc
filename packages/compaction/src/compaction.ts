@@ -1,4 +1,4 @@
-import type { Addressed, Channels } from "@repo/interpreter/channels";
+import type { Channels, Reader } from "@repo/interpreter/channels";
 import {
 	DOC_DOC,
 	DOC_SIGNATURE,
@@ -61,7 +61,7 @@ function wordSpans(text: string): [number, number][] {
 	return spans;
 }
 
-export type Bounded = Required<Addressed<string>>;
+export type Bounded = Record<Reader, string>;
 
 interface Slice {
 	text: string;

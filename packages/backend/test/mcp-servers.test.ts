@@ -85,3 +85,107 @@ describe("the MCP servers a docker host reports", () => {
 		expect(servers).toEqual([]);
 	});
 });
+
+describe("the MCP servers a workspace has loaded", () => {
+	it("keeps one mount per server, replaced when its tools change and gone on unmount", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		const tools = JSON.stringify([{ name: "echo" }]);
+
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "fx",
+			tools,
+		});
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "fx",
+			tools: JSON.stringify([{ name: "echo" }, { name: "add" }]),
+		});
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "remote",
+			conf: JSON.stringify({ name: "remote", url: "https://x.test/mcp" }),
+			tools,
+		});
+
+		const mounts = await alice.as.query(api.mcpServers.mounts, {
+			workspaceId,
+		});
+		expect(mounts.sort((a, b) => a.server.localeCompare(b.server))).toEqual([
+			{
+				server: "fx",
+				tools: JSON.stringify([{ name: "echo" }, { name: "add" }]),
+			},
+			{
+				server: "remote",
+				conf: JSON.stringify({ name: "remote", url: "https://x.test/mcp" }),
+				tools,
+			},
+		]);
+
+		await alice.as.mutation(api.mcpServers.unmount, {
+			workspaceId,
+			server: "fx",
+		});
+		expect(
+			(await alice.as.query(api.mcpServers.mounts, { workspaceId })).map(
+				(mount) => mount.server,
+			),
+		).toEqual(["remote"]);
+	});
+
+	it("survives the operator's snapshot, which owns only the status", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "fx",
+			tools: "[]",
+		});
+
+		await t.mutation(internal.mcpServers.reconcile, { servers: [], state: [] });
+
+		expect(
+			await alice.as.query(api.mcpServers.mounts, { workspaceId }),
+		).toEqual([{ server: "fx", tools: "[]" }]);
+	});
+
+	it("refuses a mount into someone else's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const mallory = await signIn(t, "mallory@example.com");
+
+		await expect(
+			mallory.as.mutation(api.mcpServers.mount, {
+				workspaceId: alice.workspace,
+				server: "fx",
+				tools: "[]",
+			}),
+		).rejects.toThrow();
+		await expect(
+			mallory.as.query(api.mcpServers.mounts, {
+				workspaceId: alice.workspace,
+			}),
+		).rejects.toThrow();
+	});
+
+	it("goes with the workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "fx",
+			tools: "[]",
+		});
+
+		await t.mutation(internal.mcpServers.purge, { workspaceId });
+
+		expect(await t.run((ctx) => ctx.db.query("mcpMounts").collect())).toEqual(
+			[],
+		);
+	});
+});

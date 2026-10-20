@@ -11,6 +11,7 @@ function rootOf(entry: string): URL {
 
 export const PROMPT_ROOTS = [
 	rootOf(require.resolve("@repo/interpreter/source")),
+	rootOf(require.resolve("@repo/agents-extension")),
 	rootOf(require.resolve("@repo/compaction-extension")),
 	rootOf(require.resolve("@repo/diagnostics-extension")),
 	rootOf(require.resolve("@repo/introspection-extension")),
