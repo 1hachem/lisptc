@@ -13,6 +13,13 @@
 			"version": "1.0.0",
 			"source": "./plugins/merge-conflicts",
 			"category": "development"
+		},
+		{
+			"name": "hunk-walk",
+			"description": "Step a prepared Hunk walkthrough with /hunk-next, /hunk-prev and /hunk-go <stop>, without a model call",
+			"version": "0.1.0",
+			"source": "./plugins/hunk-walk",
+			"category": "development"
 		}
 	]
 }

@@ -81,8 +81,17 @@
       }
     ]
   },
+  "extraKnownMarketplaces": {
+    "lisptc": {
+      "source": {
+        "source": "directory",
+        "path": "./.agents"
+      }
+    }
+  },
   "enabledPlugins": {
     "convex@claude-plugins-official": true,
-    "typesafe@typesafe-ai": true
+    "typesafe@typesafe-ai": true,
+    "hunk-walk@lisptc": true
   }
 }
