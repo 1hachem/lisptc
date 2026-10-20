@@ -6,7 +6,13 @@ import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
 import { compileFunc } from "./compile.ts";
 import { installCore } from "./core-builtins.ts";
-import { type Arity, type Doc, type DocArg, specialFormDocs } from "./docs.ts";
+import {
+	type Arity,
+	type Doc,
+	type DocArgSpec,
+	type DocValue,
+	specialFormDocs,
+} from "./docs.ts";
 import {
 	driveAsync,
 	driveSync,
@@ -181,6 +187,9 @@ export class Interp {
 
 	private readonly docTable: Map<string, Doc> = new Map();
 
+	private readonly liveValues: Map<string, Map<string, () => DocValue[]>> =
+		new Map();
+
 	private readonly sources: Map<string, unknown> = new Map();
 
 	private readonly prompts: string[] = [];
@@ -190,7 +199,42 @@ export class Interp {
 	}
 
 	docs(): Map<string, Doc> {
-		return new Map([...Object.entries(specialFormDocs), ...this.docTable]);
+		return new Map([
+			...Object.entries(specialFormDocs),
+			...[...this.docTable].map(
+				([name, doc]) => [name, this.withLiveValues(name, doc)] as const,
+			),
+		]);
+	}
+
+	private withLiveValues(name: string, doc: Doc): Doc {
+		const live = this.liveValues.get(name);
+		if (live === undefined || doc.args === undefined) return doc;
+		return {
+			...doc,
+			args: doc.args.map((arg) => {
+				const values = live.get(arg.name);
+				return values === undefined ? arg : { ...arg, values: values() };
+			}),
+		};
+	}
+
+	private document(
+		name: string,
+		signature: string,
+		doc: string,
+		specs?: DocArgSpec[],
+	): void {
+		const live = new Map<string, () => DocValue[]>();
+		const args = specs?.map(({ values, ...arg }) => {
+			if (typeof values !== "function")
+				return values === undefined ? arg : { ...arg, values };
+			live.set(arg.name, values);
+			return arg;
+		});
+		if (live.size > 0) this.liveValues.set(name, live);
+		else this.liveValues.delete(name);
+		this.docTable.set(name, { signature, doc, args });
 	}
 
 	arityOf(name: string): Arity | undefined {
@@ -226,7 +270,7 @@ export class Interp {
 		doc: string,
 		schema: T,
 		body: (a: z.infer<T>) => unknown,
-		args?: DocArg[],
+		args?: DocArgSpec[],
 		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
@@ -234,7 +278,7 @@ export class Interp {
 			newSym(name),
 			new BuiltInFunc(name, carity, wrapped, "plain", keys),
 		);
-		this.docTable.set(name, { signature, doc, args });
+		this.document(name, signature, doc, args);
 	}
 
 	defGen<T extends z.ZodType>(
@@ -244,7 +288,7 @@ export class Interp {
 		doc: string,
 		schema: T,
 		body: (a: z.infer<T>) => Eval,
-		args?: DocArg[],
+		args?: DocArgSpec[],
 		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncGen = (a) => body(parseArgs(schema, a));
@@ -252,7 +296,7 @@ export class Interp {
 			newSym(name),
 			new BuiltInFunc(name, carity, wrapped, "generator", keys),
 		);
-		this.docTable.set(name, { signature, doc, args });
+		this.document(name, signature, doc, args);
 	}
 
 	defPromise<T extends z.ZodType>(
@@ -262,7 +306,7 @@ export class Interp {
 		doc: string,
 		schema: T,
 		body: (a: z.infer<T>) => Promise<unknown>,
-		args?: DocArg[],
+		args?: DocArgSpec[],
 		keys?: readonly string[],
 	) {
 		const wrapped: BuiltInFuncBody = (a) => body(parseArgs(schema, a));
@@ -270,7 +314,7 @@ export class Interp {
 			newSym(name),
 			new BuiltInFunc(name, carity, wrapped, "promise", keys),
 		);
-		this.docTable.set(name, { signature, doc, args });
+		this.document(name, signature, doc, args);
 	}
 
 	defResumable<T extends z.ZodType>(
@@ -280,7 +324,7 @@ export class Interp {
 		doc: string,
 		schema: T,
 		body: (a: z.infer<T>) => Promise<unknown>,
-		args?: DocArg[],
+		args?: DocArgSpec[],
 		keys?: readonly string[],
 	) {
 		this.defPromise(name, carity, signature, doc, schema, body, args, keys);
@@ -297,6 +341,7 @@ export class Interp {
 		this.globals.delete(sym);
 		this.sealed.delete(sym);
 		this.docTable.delete(sym.name);
+		this.liveValues.delete(sym.name);
 		this.sources.delete(sym.name);
 	}
 

@@ -18,6 +18,10 @@ export interface DocArg {
 	values?: DocValue[];
 }
 
+export interface DocArgSpec extends Omit<DocArg, "values"> {
+	values?: DocValue[] | (() => DocValue[]);
+}
+
 export interface Arity {
 	min: number;
 	max?: number;
