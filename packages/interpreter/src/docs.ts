@@ -16,6 +16,7 @@ export interface DocArg {
 	required: boolean;
 	description?: string;
 	values?: DocValue[];
+	repeats?: boolean;
 }
 
 export interface DocArgSpec extends Omit<DocArg, "values"> {

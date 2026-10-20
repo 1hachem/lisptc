@@ -858,21 +858,23 @@ export function registerMcp(
 	interp.def(
 		"list-tools",
 		-1,
-		'(list-tools ["server"])',
-		"Return the tools of all loaded MCP servers (or one server).",
+		'(list-tools "server"...)',
+		"Return the tools of the named loaded MCP servers, or of every loaded server when none is named.",
 		z.tuple([zList]),
 		([rest]) => {
-			const only = rest !== null ? asName(rest.car) : null;
-			const rows: unknown[] = [];
-			for (const entry of servers.get()) {
-				if (only !== null && entry.name !== only) continue;
-				rows.push(...toolRows(entry));
-			}
-			if (only !== null && entryOf(servers, only) === undefined)
-				throw new EvalException("MCP server not loaded", only, false);
-			return arrayToList(rows);
+			const names = listToArray(rest).map(asName);
+			for (const name of names)
+				if (entryOf(servers, name) === undefined)
+					throw new EvalException("MCP server not loaded", name, false);
+			const only = new Set(names);
+			return arrayToList(
+				servers
+					.get()
+					.filter((entry) => only.size === 0 || only.has(entry.name))
+					.flatMap(toolRows),
+			);
 		},
-		[{ ...loadedServer, required: false }],
+		[{ ...loadedServer, required: false, repeats: true }],
 	);
 
 	interp.def(

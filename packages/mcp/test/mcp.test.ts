@@ -95,6 +95,15 @@ describe("MCP integration (stdio fixture)", () => {
 		expect(await evalStr(interp, '(list-tools "fx")')).toContain("fx/echo");
 	});
 
+	it("lists several named servers, refusing one that is not loaded", async () => {
+		expect(await evalStr(interp, '(list-tools "fx" "fx")')).toContain(
+			"fx/echo",
+		);
+		await expect(evalStr(interp, '(list-tools "fx" "nope")')).rejects.toThrow(
+			/MCP server not loaded/,
+		);
+	});
+
 	it("lists every loaded server's tools without a server", async () => {
 		expect(await evalStr(interp, "(list-tools)")).toContain("fx/echo");
 	});
