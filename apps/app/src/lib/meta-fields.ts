@@ -11,14 +11,13 @@ export type MetaField =
 export const META_FIELDS: {
 	id: MetaField;
 	label: string;
-	shownByDefault: boolean;
 }[] = [
-	{ id: "time", label: "time", shownByDefault: true },
-	{ id: "duration", label: "duration", shownByDefault: true },
-	{ id: "steps", label: "steps", shownByDefault: true },
-	{ id: "input", label: "input tokens", shownByDefault: false },
-	{ id: "cached", label: "cached tokens", shownByDefault: false },
-	{ id: "output", label: "output tokens", shownByDefault: false },
-	{ id: "model", label: "model", shownByDefault: false },
-	{ id: "provider", label: "provider", shownByDefault: false },
+	{ id: "time", label: "time" },
+	{ id: "duration", label: "duration" },
+	{ id: "steps", label: "steps" },
+	{ id: "input", label: "input tokens" },
+	{ id: "cached", label: "cached tokens" },
+	{ id: "output", label: "output tokens" },
+	{ id: "model", label: "model" },
+	{ id: "provider", label: "provider" },
 ];

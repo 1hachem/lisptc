@@ -7,6 +7,7 @@ export interface Preferences {
 	font?: string;
 	channels?: Toggles;
 	metadata?: Toggles;
+	input?: Toggles;
 	sidebar?: string[];
 	hidden?: string[];
 	motion?: string;

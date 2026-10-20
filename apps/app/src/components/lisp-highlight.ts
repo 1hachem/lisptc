@@ -3,6 +3,7 @@ import { tokensIn } from "@repo/syntax";
 import {
 	$applyNodeReplacement,
 	$createTextNode,
+	$getRoot,
 	$getSelection,
 	$isRangeSelection,
 	$isTextNode,
@@ -37,6 +38,14 @@ export class LispTokenNode extends TextNode {
 		json: SerializedTextNode & { token: string },
 	): LispTokenNode {
 		return new LispTokenNode(json.text, json.token).updateFromJSON(json);
+	}
+
+	override isSimpleText(): boolean {
+		return !this.isToken() && !this.isSegmented();
+	}
+
+	override isUnmergeable(): boolean {
+		return true;
 	}
 
 	exportJSON(): SerializedTextNode & { token: string } {
@@ -104,7 +113,10 @@ const sameSegments = (a: Segment[], b: Segment[]): boolean =>
 	a.length === b.length &&
 	a.every((s, i) => s.text === b[i]?.text && s.token === b[i]?.token);
 
-function $offsetIn(paragraph: ParagraphNode, point: PointType): number | null {
+export function $offsetIn(
+	paragraph: ParagraphNode,
+	point: PointType,
+): number | null {
 	const node = point.getNode();
 	const children = paragraph.getChildren();
 	const size = (upTo: number) =>
@@ -189,6 +201,11 @@ export function LispHighlightPlugin(): null {
 		];
 		return () => {
 			for (const off of unregister) off();
+			editor.update(() => {
+				for (const node of $getRoot().getAllTextNodes())
+					if ($isLispTokenNode(node))
+						node.replace($createTextNode(node.getTextContent()));
+			});
 		};
 	}, [editor]);
 	return null;

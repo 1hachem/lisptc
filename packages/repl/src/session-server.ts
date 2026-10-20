@@ -6,23 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replEnv } from "@repo/env/repl";
 import type { Ask } from "@repo/interpreter/asks";
-import type { Arity, DocArg } from "@repo/interpreter/docs";
 import type { InterpExtension } from "@repo/interpreter/session";
+import { type SymbolEntry, symbolsOf } from "@repo/language-service";
 import { openAsks } from "./asks.ts";
 import { MemoryRepl } from "./repl.ts";
-
-export interface CompletionEntry {
-	name: string;
-	signature?: string;
-	doc?: string;
-}
-
-export interface DocEntry {
-	signature: string;
-	doc: string;
-	args?: DocArg[];
-	arity?: Arity;
-}
 
 export interface SteppedEntry {
 	output: string;
@@ -31,22 +18,13 @@ export interface SteppedEntry {
 
 interface Request {
 	id: number;
-	op:
-		| "eval"
-		| "step"
-		| "answer"
-		| "completions"
-		| "doc"
-		| "reset"
-		| "shutdown"
-		| "version";
+	op: "eval" | "step" | "answer" | "symbols" | "reset" | "shutdown" | "version";
 	code?: string;
-	symbol?: string;
 	action?: string;
 	values?: Record<string, unknown>;
 }
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 interface Reply {
 	id: number;
@@ -98,29 +76,8 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 			return "";
 		case "version":
 			return PROTOCOL_VERSION;
-		case "completions": {
-			const docs = repl.interp.docs();
-			const names = new Set([...repl.interp.globalNames(), ...docs.keys()]);
-			const out: CompletionEntry[] = [];
-			for (const name of names) {
-				if (name.startsWith("_")) continue;
-				const d = docs.get(name);
-				out.push({ name, signature: d?.signature, doc: d?.doc });
-			}
-			return out;
-		}
-		case "doc": {
-			const symbol = req.symbol ?? "";
-			const d = repl.interp.docs().get(symbol);
-			return d
-				? {
-						signature: d.signature,
-						doc: d.doc,
-						args: d.args,
-						arity: repl.interp.arityOf(symbol),
-					}
-				: null;
-		}
+		case "symbols":
+			return symbolsOf(repl.interp);
 		default:
 			throw new Error(`unknown op: ${(req as Request).op}`);
 	}
@@ -266,11 +223,8 @@ export class SessionClient {
 	reset(): Promise<string> {
 		return this.send({ op: "reset" }) as Promise<string>;
 	}
-	completions(): Promise<CompletionEntry[]> {
-		return this.send({ op: "completions" }) as Promise<CompletionEntry[]>;
-	}
-	doc(symbol: string): Promise<DocEntry | null> {
-		return this.send({ op: "doc", symbol }) as Promise<DocEntry | null>;
+	symbols(): Promise<SymbolEntry[]> {
+		return this.send({ op: "symbols" }) as Promise<SymbolEntry[]>;
 	}
 	shutdown(): Promise<string> {
 		return this.send({ op: "shutdown" }) as Promise<string>;

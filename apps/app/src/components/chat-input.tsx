@@ -5,6 +5,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
+import type { SymbolTable } from "@repo/language-service";
 import { cn } from "@repo/ui";
 import {
 	$createLineBreakNode,
@@ -14,14 +15,7 @@ import {
 	COMMAND_PRIORITY_HIGH,
 	KEY_DOWN_COMMAND,
 } from "lexical";
-import {
-	type RefObject,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Command } from "../lib/commands.ts";
 import {
 	newestFirst,
@@ -33,6 +27,7 @@ import {
 import { quietly } from "../lib/quietly.ts";
 import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
+import { LispAssistPlugin } from "./lisp-assist.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 
 export interface ChatInputProps {
@@ -43,7 +38,11 @@ export interface ChatInputProps {
 	isStreaming?: boolean;
 	onStop?: () => void;
 	disabled?: boolean;
+	symbols?: SymbolTable;
+	lisp?: boolean;
 }
+
+const NO_SYMBOLS: SymbolTable = new Map();
 
 const NOTICE_MS = 2000;
 
@@ -225,7 +224,7 @@ function useKeys({
 	enter,
 }: {
 	disabled?: boolean;
-	menuActive: RefObject<boolean>;
+	menuActive: () => boolean;
 	recall: (direction: RecallDirection) => string | null;
 	replace: (text: string) => void;
 	enter?: (quiet: boolean) => void;
@@ -233,7 +232,7 @@ function useKeys({
 	const [editor] = useLexicalComposerContext();
 	const onKeyDown = (event: KeyboardEvent): boolean => {
 		if (event.isComposing || disabled) return true;
-		if (menuActive.current) return false;
+		if (menuActive()) return false;
 		const direction = RECALL_KEYS[event.key];
 		const recalled = direction ? recall(direction) : null;
 		if (recalled !== null) replace(recalled);
@@ -286,6 +285,24 @@ function Field({
 	);
 }
 
+function LispPlugins({
+	on,
+	...props
+}: Parameters<typeof LispAssistPlugin>[0] & { on: boolean }) {
+	if (!on) return null;
+	return (
+		<>
+			<LispHighlightPlugin />
+			<LispAssistPlugin {...props} />
+		</>
+	);
+}
+
+function hintOf(lead: string, lisp: boolean, commands: boolean): string {
+	const typed = lisp ? `${lead}, (lisp) runs inline` : lead;
+	return commands ? `${typed}  ·  / for commands` : typed;
+}
+
 export function ChatInput(props: ChatInputProps) {
 	return (
 		<LexicalComposer
@@ -311,6 +328,8 @@ function Editor({
 	isStreaming,
 	onStop,
 	disabled,
+	symbols = NO_SYMBOLS,
+	lisp = true,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const { text, empty, replace, send } = useDraft(onSubmit, disabled);
@@ -331,10 +350,11 @@ function Editor({
 
 	const menuHost = useRef<HTMLDivElement>(null);
 	const menuActive = useRef(false);
+	const assistActive = useRef(false);
 
 	useKeys({
 		disabled,
-		menuActive,
+		menuActive: () => menuActive.current || assistActive.current,
 		recall: (direction) => step(text, direction),
 		replace,
 		enter: isStreaming && empty ? onStop : send,
@@ -342,9 +362,13 @@ function Editor({
 	const look = disabled ? DISABLED : ENABLED;
 
 	return (
-		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			<div ref={menuHost} />
-			<Notice text={notice} />
+		<div className="relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
+			<div
+				ref={menuHost}
+				className="absolute inset-x-0 bottom-full z-10 flex flex-col"
+			>
+				<Notice text={notice} />
+			</div>
 			<InputShell
 				prompt={look.prompt}
 				tone={look.tone}
@@ -359,11 +383,19 @@ function Editor({
 					/>
 				}
 			>
-				<Field placeholder={placeholder} disabled={disabled} />
+				<Field
+					placeholder={hintOf(placeholder, lisp, onCommand !== undefined)}
+					disabled={disabled}
+				/>
 			</InputShell>
 			<HistoryPlugin />
-			<LispHighlightPlugin />
 			<CommandMenuPlugin onPick={pick} host={menuHost} active={menuActive} />
+			<LispPlugins
+				on={lisp}
+				symbols={symbols}
+				host={menuHost}
+				active={assistActive}
+			/>
 			<PromptDialog
 				onOpenChange={setSearching}
 				onSelect={insertPrompt}

@@ -6,6 +6,9 @@
     "apps/app/server/routes/**/*.ts",
     "apps/app/server/plugins/**/*.ts"
   ],
+  "usedClassMembers": [
+    { "extends": "TextNode", "members": ["isSimpleText", "isUnmergeable"] }
+  ],
   "rules": {
     "unused-files": "error",
     "unused-exports": "error",

@@ -1,6 +1,6 @@
 import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
+import { checkSyntax } from "@repo/language-service/syntax";
 import { describe, expect, it } from "vitest";
-import { checkSyntax } from "../src/prose.ts";
 import { evProse } from "./helpers.ts";
 
 const REPLIES: [source: string, value: string][] = [
