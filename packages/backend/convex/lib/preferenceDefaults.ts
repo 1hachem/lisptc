@@ -25,7 +25,6 @@ export const DEFAULT_TOGGLES = {
 		send: true,
 		attach: true,
 		lisp: true,
-		vim: false,
 	},
 } as const satisfies Record<
 	"channels" | "metadata" | "input",
@@ -63,4 +62,18 @@ export function withDefaults<
 		sendLabel: stored.sendLabel ?? DEFAULT_SEND_LABEL,
 		hidden: stored.hidden ?? [...DEFAULT_HIDDEN],
 	};
+}
+
+const RETIRED_INPUT_TOGGLES: readonly string[] = ["vim"];
+
+export function retiredInputTogglesDropped(
+	input: Toggles | undefined,
+): { input: Toggles } | undefined {
+	if (input === undefined) return undefined;
+	const kept = Object.fromEntries(
+		Object.entries(input).filter(([id]) => !RETIRED_INPUT_TOGGLES.includes(id)),
+	);
+	return Object.keys(kept).length === Object.keys(input).length
+		? undefined
+		: { input: kept };
 }
