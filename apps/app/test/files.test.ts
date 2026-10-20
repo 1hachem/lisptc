@@ -40,12 +40,13 @@ describe("preferencesSource", () => {
 				font: "mono",
 				channels: { lisp: false, thinking: true },
 				metadata: { tokens: true },
+				input: { lisp: true },
 				sidebar: ["README.md", "home"],
 				hidden: ["tests"],
 				motion: "lift",
 			}),
 		).toBe(
-			'(preferences :theme "dusk"\n  :font "mono"\n  :channels (:lisp nil :thinking t)\n  :metadata (:tokens t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift")',
+			'(preferences :theme "dusk"\n  :font "mono"\n  :channels (:lisp nil :thinking t)\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift")',
 		);
 	});
 });

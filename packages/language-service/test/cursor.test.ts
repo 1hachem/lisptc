@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { enclosingCallHead, markdownFor, symbolAt } from "../src/symbols.ts";
+import { enclosingCallHead, markdownFor, symbolAt } from "../src/cursor.ts";
 
 function doc(content: string): TextDocument {
 	return TextDocument.create("file:///test.lisp", "lisp", 1, content);
@@ -24,6 +24,13 @@ describe("enclosingCallHead", () => {
 	it("picks the innermost enclosing call for nested forms", () => {
 		const document = doc("(outer (inner :k");
 		expect(enclosingCallHead(document, { line: 0, character: 16 })).toBe(
+			"inner",
+		);
+	});
+
+	it("is not thrown off by a paren inside a string", () => {
+		const document = doc('(outer (inner ")" :k');
+		expect(enclosingCallHead(document, { line: 0, character: 20 })).toBe(
 			"inner",
 		);
 	});

@@ -123,3 +123,33 @@ describe("the mcp policy port", () => {
 		}, 30_000);
 	});
 });
+
+describe("load-mcp's name argument", () => {
+	it("lists the toolkit servers the policy shows, with their descriptions", () => {
+		const interp = new Interp({
+			extensions: [
+				mcpExtension({
+					...mcpHost,
+					toolkit: {
+						all: () => [
+							{ name: "shown", description: "A shown server.", url: "x" },
+							{ name: "secret", url: "x" },
+						],
+					},
+					policy: {
+						server: (name) =>
+							name === "secret" ? { access: "hidden" } : { access: "open" },
+						tool: () => true,
+					},
+				}),
+			],
+		});
+		const name = interp
+			.docs()
+			.get("load-mcp")
+			?.args?.find((arg) => arg.name === "name");
+		expect(name?.values).toEqual([
+			{ value: "shown", description: "A shown server." },
+		]);
+	});
+});

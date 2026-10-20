@@ -1,0 +1,195 @@
+import type { DocArg } from "@repo/interpreter/docs";
+import { openAtEnd } from "@repo/shared/lisp-forms";
+import { isKeywordToken } from "@repo/shared/lisp-tokens";
+import type { TextDocument } from "vscode-languageserver-textdocument";
+import {
+	type CompletionItem,
+	CompletionItemKind,
+	type Diagnostic,
+	type Hover,
+	MarkupKind,
+	type Position,
+	type SignatureHelp,
+	type TextEdit,
+} from "vscode-languageserver-types";
+import { stringArgAt } from "./arg-at.ts";
+import { callDiagnostics } from "./call-diagnostics.ts";
+import { closerAt } from "./closer.ts";
+import {
+	enclosingCallHead,
+	markdownFor,
+	symbolAt,
+	wordBefore,
+} from "./cursor.ts";
+import { argCompletionItems, valueCompletionItems } from "./doc-args.ts";
+import type { SymbolEntry, SymbolTable } from "./symbol-table.ts";
+import { syntaxDiagnostics } from "./syntax.ts";
+import { parseForms, tokenizeWithPositions } from "./tokenize.ts";
+
+export const COMPLETION_TRIGGERS: readonly string[] = [":", '"'];
+
+export interface CallAt {
+	entry: SymbolEntry;
+	supplied: ReadonlySet<string>;
+	active?: string;
+}
+
+export interface LanguageService {
+	completions(document: TextDocument, position: Position): CompletionItem[];
+	hover(document: TextDocument, position: Position): Hover | null;
+	diagnostics(document: TextDocument): Diagnostic[];
+	callAt(document: TextDocument, position: Position): CallAt | undefined;
+	signatureHelp(
+		document: TextDocument,
+		position: Position,
+	): SignatureHelp | null;
+	closer(document: TextDocument, position: Position): TextEdit | null;
+}
+
+function symbolItem(entry: SymbolEntry): CompletionItem {
+	const markdown = markdownFor(entry.signature, entry.doc);
+	return {
+		label: entry.name,
+		kind: CompletionItemKind.Function,
+		detail: entry.signature,
+		documentation:
+			markdown === undefined
+				? undefined
+				: { kind: MarkupKind.Markdown, value: markdown },
+		sortText: `2${entry.name}`,
+	};
+}
+
+function textBefore(document: TextDocument, position: Position): string {
+	return document.getText({ start: { line: 0, character: 0 }, end: position });
+}
+
+export function insideForm(
+	document: TextDocument,
+	position: Position,
+): boolean {
+	return openAtEnd(textBefore(document, position)).parens.length > 0;
+}
+
+export function insideString(
+	document: TextDocument,
+	position: Position,
+): boolean {
+	return openAtEnd(textBefore(document, position)).inString;
+}
+
+function keywordsOf(slice: string): string[] {
+	const [form] = parseForms(tokenizeWithPositions(slice));
+	if (form?.kind !== "list") return [];
+	return form.items.flatMap((item) =>
+		item.kind === "atom" && isKeywordToken(item.text)
+			? [item.text.slice(1)]
+			: [],
+	);
+}
+
+function keywordItems(
+	before: string,
+	word: string,
+	args: readonly DocArg[],
+): CompletionItem[] {
+	const open = openAtEnd(before).parens.at(-1) ?? 0;
+	const supplied = new Set(
+		keywordsOf(before.slice(open, before.length - word.length)),
+	);
+	return argCompletionItems(args.filter((arg) => !supplied.has(arg.name)));
+}
+
+function parameterDoc(arg: DocArg): string {
+	const kind = `${arg.type}${arg.required ? " (required)" : ""}`;
+	return arg.description === undefined ? kind : `${kind}: ${arg.description}`;
+}
+
+export function languageService(table: SymbolTable): LanguageService {
+	let symbolItems: CompletionItem[] | undefined;
+
+	const callAt = (
+		document: TextDocument,
+		position: Position,
+	): CallAt | undefined => {
+		const before = textBefore(document, position);
+		const open = openAtEnd(before).parens.at(-1);
+		if (open === undefined) return undefined;
+		const head = enclosingCallHead(document, position);
+		const entry = head === undefined ? undefined : table.get(head);
+		if (entry === undefined) return undefined;
+		const keywords = keywordsOf(before.slice(open));
+		const names = new Set(entry.args?.map((arg) => arg.name));
+		return {
+			entry,
+			supplied: new Set(keywords),
+			active: [...keywords].reverse().find((keyword) => names.has(keyword)),
+		};
+	};
+
+	return {
+		completions(document, position) {
+			const head = enclosingCallHead(document, position);
+			const args = head === undefined ? undefined : table.get(head)?.args;
+			const before = textBefore(document, position);
+			const values = args && stringArgAt(before, args)?.values;
+			if (values?.length) return valueCompletionItems(values);
+			const word = wordBefore(document, position);
+			if (args?.length && word.startsWith(":") && !openAtEnd(before).inString)
+				return keywordItems(before, word, args);
+			symbolItems ??= [...table.values()].map(symbolItem);
+			return args?.length
+				? [...argCompletionItems(args), ...symbolItems]
+				: symbolItems;
+		},
+
+		hover(document, position) {
+			const symbol = symbolAt(document, position.line, position.character);
+			const entry = symbol === undefined ? undefined : table.get(symbol.name);
+			const markdown = markdownFor(entry?.signature, entry?.doc);
+			if (symbol === undefined || markdown === undefined) return null;
+			return {
+				contents: { kind: MarkupKind.Markdown, value: markdown },
+				range: symbol.range,
+			};
+		},
+
+		diagnostics(document) {
+			const syntax = syntaxDiagnostics(document);
+			return syntax.length > 0
+				? syntax
+				: callDiagnostics(document.getText(), table);
+		},
+
+		callAt,
+
+		closer: closerAt,
+
+		signatureHelp(document, position) {
+			const call = callAt(document, position);
+			if (call?.entry.signature === undefined) return null;
+			const args = call.entry.args ?? [];
+			const active = args.findIndex((arg) => arg.name === call.active);
+			return {
+				signatures: [
+					{
+						label: call.entry.signature,
+						documentation:
+							call.entry.doc === undefined
+								? undefined
+								: { kind: MarkupKind.Markdown, value: call.entry.doc },
+						parameters: args.map((arg) => ({
+							label: `:${arg.name}`,
+							documentation: {
+								kind: MarkupKind.Markdown,
+								value: parameterDoc(arg),
+							},
+						})),
+					},
+				],
+				activeSignature: 0,
+				activeParameter: active < 0 ? undefined : active,
+			};
+		},
+	};
+}
