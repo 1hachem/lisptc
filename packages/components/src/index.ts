@@ -17,6 +17,24 @@ export { PromptDialog } from "./prompt-dialog.tsx";
 export { Scramble, type ScrambleProps } from "./scramble.tsx";
 export { moved, SortableTree } from "./sortable-tree.tsx";
 export {
+	allTabs,
+	closeTab,
+	type Direction,
+	type Drop,
+	type Edge,
+	emptyLayout,
+	focusTab,
+	type Group,
+	MAX_SPLITS,
+	openTab,
+	type Pane,
+	type Placement,
+	paneOf,
+	type SplitLayout,
+	type Tab,
+} from "./split-layout.ts";
+export { SplitView, type SplitViewProps } from "./split-view.tsx";
+export {
 	FontDialog,
 	FontSample,
 	ThemeDialog,
