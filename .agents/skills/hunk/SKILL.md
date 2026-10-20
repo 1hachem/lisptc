@@ -106,8 +106,8 @@ From then on, every move is one command that runs without you.
    .agents/skills/hunk/walk.sh load <plan.json> [session-id]
    ```
 
-Print what the script printed, and say how to move on: `/hunk-next` and
-`/hunk-prev`, which the `hunk-walk` plugin under `.agents/plugins/` answers
+Print what the script printed, and say how to move on: `/hunk-next`,
+`/hunk-prev` and `/hunk-go <stop>`, which the `hunk-walk` plugin under `.agents/plugins/` answers
 without a model call, or "next", "prev" or "go 5" to you.
 
 ### Each stop
