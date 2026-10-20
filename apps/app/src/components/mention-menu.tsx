@@ -5,7 +5,6 @@ import {
 	MenuOption,
 	type MenuTextMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
-import { cn } from "@repo/ui";
 import { $createTextNode, type TextNode } from "lexical";
 import {
 	type RefObject,
@@ -14,8 +13,8 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { knowledgeIcon } from "../lib/knowledge.ts";
+import { typeaheadList } from "./typeahead-list.tsx";
 
 export interface Mentionable {
 	folder: "knowledge" | "bin";
@@ -112,45 +111,27 @@ export function MentionMenuPlugin({
 			onOpen={() => setOpen(true)}
 			onClose={() => setOpen(false)}
 			anchorClassName="hidden!"
-			menuRenderFn={(
-				_anchor,
-				{ selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
-			) =>
-				host.current && options.length > 0
-					? createPortal(
-							<div className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]">
-								{options.map((option, i) => (
-									<button
-										type="button"
-										key={option.key}
-										ref={(element) => option.setRefElement(element)}
-										onMouseEnter={() => setHighlightedIndex(i)}
-										onMouseDown={(event) => event.preventDefault()}
-										onClick={() => selectOptionAndCleanUp(option)}
-										className={cn(
-											"flex items-center gap-2.5 px-3 py-0.5 text-left",
-											i === selectedIndex ? "bg-bg2" : "hover:brightness-125",
-										)}
-									>
-										<HugeiconsIcon
-											icon={knowledgeIcon(
-												option.file.name,
-												option.file.contentType,
-											)}
-											className="size-icon-sm flex-none text-dim"
-										/>
-										<span className="min-w-0 flex-1 truncate text-fg">
-											{option.file.name}
-										</span>
-										<span className="flex-none text-[12px] text-dim">
-											{option.file.folder}/
-										</span>
-									</button>
-								))}
-							</div>,
-							host.current,
-						)
-					: null
+			menuRenderFn={(_anchor, state) =>
+				typeaheadList(
+					host,
+					options,
+					state,
+					(option) => (
+						<>
+							<HugeiconsIcon
+								icon={knowledgeIcon(option.file.name, option.file.contentType)}
+								className="size-icon-sm flex-none text-dim"
+							/>
+							<span className="min-w-0 flex-1 truncate text-fg">
+								{option.file.name}
+							</span>
+							<span className="flex-none text-[12px] text-dim">
+								{option.file.folder}/
+							</span>
+						</>
+					),
+					"center",
+				)
 			}
 		/>
 	);

@@ -18,6 +18,7 @@ import {
 } from "lexical";
 import {
 	type DragEvent,
+	type RefObject,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -458,20 +459,75 @@ export function ChatInput(props: ChatInputProps) {
 	);
 }
 
-function Editor({
-	placeholder = "",
+function useMenus() {
+	const host = useRef<HTMLDivElement>(null);
+	const commandOpen = useRef(false);
+	const mentionOpen = useRef(false);
+	const active = useMemo(
+		() => ({
+			get current() {
+				return commandOpen.current || mentionOpen.current;
+			},
+		}),
+		[],
+	);
+	return { host, commandOpen, mentionOpen, active };
+}
+
+function FilePicker({
+	picker,
+	onPick,
+}: {
+	picker: RefObject<HTMLInputElement | null>;
+	onPick: (files: File[]) => void;
+}) {
+	return (
+		<input
+			ref={picker}
+			type="file"
+			multiple
+			hidden
+			onChange={(event) => {
+				const picked = event.target.files;
+				if (picked !== null) onPick([...picked]);
+				event.target.value = "";
+			}}
+		/>
+	);
+}
+
+function noticeOf(sending: boolean, over: boolean, notice: string | null) {
+	if (sending) return "attaching…";
+	if (over) return "drop to attach";
+	return notice;
+}
+
+function usePromptSearch(history: string[], replace: (text: string) => void) {
+	const [editor] = useLexicalComposerContext();
+	const [searching, setSearching] = useState(false);
+	const prompts = useMemo(() => newestFirst(history), [history]);
+	const insert = useCallback(
+		(prompt: string) => {
+			replace(prompt);
+			editor.focus();
+		},
+		[editor, replace],
+	);
+	return { searching, setSearching, prompts, insert };
+}
+
+function useComposer({
 	onSubmit,
 	history = [],
 	onCommand,
 	isStreaming,
 	onStop,
 	disabled,
-	mentions = [],
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const [notice, flash] = useNotice();
 	const { attachments, submit, sending } = useAttach(onSubmit, flash);
-	const busy = disabled || sending;
+	const busy = disabled === true || sending;
 	const { text, empty, replace, send } = useDraft(
 		submit,
 		busy,
@@ -480,107 +536,102 @@ function Editor({
 	const picker = useRef<HTMLInputElement>(null);
 	const attach = useCallback(() => picker.current?.click(), []);
 	const { over, zone } = useDropZone(attachments.add, busy);
-	const [searching, setSearching] = useState(false);
-	const prompts = useMemo(() => newestFirst(history), [history]);
+	const search = usePromptSearch(history, replace);
 	const step = useRecall(history);
-
-	const insertPrompt = useCallback(
-		(prompt: string) => {
-			replace(prompt);
-			editor.focus();
-		},
-		[editor, replace],
-	);
-
+	const menus = useMenus();
 	const pick = usePick({
 		replace,
 		onCommand,
 		flash,
-		search: setSearching,
+		search: search.setSearching,
 		attach,
 	});
-
-	const menuHost = useRef<HTMLDivElement>(null);
-	const commandOpen = useRef(false);
-	const mentionOpen = useRef(false);
-	const menuActive = useMemo(
-		() => ({
-			get current() {
-				return commandOpen.current || mentionOpen.current;
-			},
-		}),
-		[],
-	);
+	const stops = isStreaming === true && empty;
 
 	useKeys({
 		disabled: busy,
-		menuActive,
+		menuActive: menus.active,
 		recall: (direction) => step(text, direction),
 		replace,
-		enter: isStreaming && empty ? onStop : send,
+		enter: stops ? onStop : send,
 	});
-	const look = busy ? DISABLED : ENABLED;
+
+	return {
+		attachments,
+		busy,
+		empty,
+		over,
+		zone,
+		picker,
+		attach,
+		search,
+		menus,
+		pick,
+		look: busy ? DISABLED : ENABLED,
+		notice: noticeOf(sending, over, notice),
+		pickFiles: (files: File[]) => {
+			attachments.add(files);
+			editor.focus();
+		},
+		sendNow: () => send(),
+	};
+}
+
+function Editor(props: ChatInputProps) {
+	const { placeholder = "", isStreaming, onStop, mentions = [] } = props;
+	const c = useComposer(props);
 
 	return (
 		<div
-			{...zone}
+			{...c.zone}
 			className={cn(
 				"mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]",
-				over && "outline outline-1 outline-dashed outline-yellow",
+				c.over && "outline outline-1 outline-dashed outline-yellow",
 			)}
 		>
-			<input
-				ref={picker}
-				type="file"
-				multiple
-				hidden
-				onChange={(event) => {
-					const picked = event.target.files;
-					if (picked !== null) attachments.add([...picked]);
-					event.target.value = "";
-					editor.focus();
-				}}
-			/>
-			<div ref={menuHost} />
-			<Notice
-				text={sending ? "attaching…" : over ? "drop to attach" : notice}
-			/>
+			<FilePicker picker={c.picker} onPick={c.pickFiles} />
+			<div ref={c.menus.host} />
+			<Notice text={c.notice} />
 			<AttachmentChips
-				files={attachments.files}
-				onRemove={attachments.remove}
+				files={c.attachments.files}
+				onRemove={c.attachments.remove}
 			/>
 			<InputShell
-				prompt={look.prompt}
-				tone={look.tone}
-				dim={busy}
+				prompt={c.look.prompt}
+				tone={c.look.tone}
+				dim={c.busy}
 				action={
 					<>
-						<AttachAction onClick={attach} disabled={busy} />
+						<AttachAction onClick={c.attach} disabled={c.busy} />
 						<SendAction
 							isStreaming={isStreaming}
-							empty={empty}
-							disabled={busy}
+							empty={c.empty}
+							disabled={c.busy}
 							onStop={onStop}
-							onSend={() => send()}
+							onSend={c.sendNow}
 						/>
 					</>
 				}
 			>
-				<Field placeholder={placeholder} disabled={busy} />
+				<Field placeholder={placeholder} disabled={c.busy} />
 			</InputShell>
 			<HistoryPlugin />
 			<LispHighlightPlugin />
-			<CommandMenuPlugin onPick={pick} host={menuHost} active={commandOpen} />
+			<CommandMenuPlugin
+				onPick={c.pick}
+				host={c.menus.host}
+				active={c.menus.commandOpen}
+			/>
 			<MentionMenuPlugin
 				files={mentions}
-				host={menuHost}
-				active={mentionOpen}
+				host={c.menus.host}
+				active={c.menus.mentionOpen}
 			/>
 			<PromptDialog
-				onOpenChange={setSearching}
-				onSelect={insertPrompt}
-				open={searching}
-				prompts={prompts}
+				onOpenChange={c.search.setSearching}
+				onSelect={c.search.insert}
+				open={c.search.searching}
+				prompts={c.search.prompts}
 			/>
 		</div>
 	);
