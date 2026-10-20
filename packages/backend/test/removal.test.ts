@@ -128,7 +128,7 @@ describe("removing a workspace", () => {
 		expect(replLayers).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records, permissions, readme, knowledge and attachments with it", async () => {
+	it("takes its secrets, oauth records, permissions, readme, knowledge, attachments and bin with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -163,6 +163,15 @@ describe("removing a workspace", () => {
 				ctx.storage.store(new Blob(["attached"])),
 			),
 		});
+		await alice.as.mutation(api.knowledge.add, {
+			workspaceId: doomed,
+			name: "binned.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["binned"]))),
+		});
+		await alice.as.mutation(api.knowledge.remove, {
+			workspaceId: doomed,
+			name: "binned.txt",
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
@@ -175,6 +184,7 @@ describe("removing a workspace", () => {
 			readmes,
 			knowledge,
 			attachments,
+			bin,
 			blobs,
 		} = await t.run(async (ctx) => ({
 			secrets: await ctx.db.query("secrets").collect(),
@@ -183,6 +193,7 @@ describe("removing a workspace", () => {
 			readmes: await ctx.db.query("readmes").collect(),
 			knowledge: await ctx.db.query("knowledge").collect(),
 			attachments: await ctx.db.query("attachments").collect(),
+			bin: await ctx.db.query("bin").collect(),
 			blobs: await ctx.db.system.query("_storage").collect(),
 		}));
 		expect(secrets).toEqual([]);
@@ -191,6 +202,7 @@ describe("removing a workspace", () => {
 		expect(readmes).toEqual([]);
 		expect(knowledge).toEqual([]);
 		expect(attachments).toEqual([]);
+		expect(bin).toEqual([]);
 		expect(blobs).toEqual([]);
 	});
 

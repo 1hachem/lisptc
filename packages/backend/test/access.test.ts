@@ -1007,3 +1007,39 @@ describe("attachments access", () => {
 		).toHaveLength(1);
 	});
 });
+
+describe("bin access", () => {
+	it("keeps a workspace's bin to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.attachments.add, {
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await bob.as.mutation(api.attachments.remove, {
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+		});
+		for (const denied of [
+			alice.as.query(api.bin.list, { workspaceId: bob.workspace }),
+			alice.as.query(api.bin.get, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.restore, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.remove, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		])
+			await expect(denied).rejects.toThrow();
+		expect(
+			await bob.as.query(api.bin.list, { workspaceId: bob.workspace }),
+		).toHaveLength(1);
+	});
+});

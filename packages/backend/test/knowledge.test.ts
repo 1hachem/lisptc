@@ -52,7 +52,12 @@ describe("knowledge", () => {
 				name: "spec.pdf",
 			}),
 		).toBeNull();
-		expect(await blobs(t)).toHaveLength(1);
+		expect(
+			(await alice.as.query(api.bin.list, { workspaceId })).map(
+				({ name, from }) => [name, from],
+			),
+		).toEqual([["spec.pdf", "knowledge"]]);
+		expect(await blobs(t)).toHaveLength(2);
 	});
 
 	it("replaces a file of the same name and drops the old blob", async () => {

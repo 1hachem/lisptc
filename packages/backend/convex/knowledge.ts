@@ -9,6 +9,7 @@ import {
 	query,
 } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
+import { intoBin } from "./lib/bin.js";
 import {
 	MAX_KNOWLEDGE,
 	MAX_KNOWLEDGE_BYTES,
@@ -151,8 +152,7 @@ export const remove = mutation({
 		await requireWorkspace(ctx, workspaceId);
 		const existing = await held(ctx, workspaceId, name);
 		if (existing === null) return false;
-		await ctx.storage.delete(existing.storageId);
-		await ctx.db.delete(existing._id);
+		await intoBin(ctx, existing, "knowledge");
 		return true;
 	},
 });
