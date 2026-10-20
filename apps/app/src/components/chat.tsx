@@ -29,7 +29,7 @@ export function Chat() {
 		convexQuery(api.messages.sent, { workspaceId }),
 	);
 	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
-	const symbols = useSymbols(workspaceId, chatId, isLoading);
+	const symbols = useSymbols(chatId, isLoading);
 
 	return (
 		<>
