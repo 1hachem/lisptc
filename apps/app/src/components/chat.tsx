@@ -56,7 +56,7 @@ export function Chat() {
 					) : null}
 				</div>
 				<ChatInput
-					placeholder="type a message, (lisp) runs inline  ·  / for commands"
+					placeholder="type a message"
 					onSubmit={send}
 					history={history}
 					onCommand={runCommand}
