@@ -42,7 +42,7 @@ export function stringArgAt(
 	const [form] = parseForms(tokenizeWithPositions(call));
 	if (form?.kind !== "list") return undefined;
 	const slot = slotAfter(form.items.slice(1));
-	return typeof slot === "number"
-		? args[slot]
-		: args.find((arg) => arg.name === slot);
+	if (typeof slot !== "number") return args.find((arg) => arg.name === slot);
+	const last = args.at(-1);
+	return args[slot] ?? (last?.repeats ? last : undefined);
 }

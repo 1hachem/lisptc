@@ -33,7 +33,7 @@ import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
 import { motions } from "@repo/ui/motions.ts";
-import { themes } from "@repo/ui/themes";
+import { defaultThemeId, themes } from "@repo/ui/themes";
 import { uiExtension } from "@repo/ui-extension";
 import { uiHost } from "@repo/ui-extension/host";
 import { workspaceExtension } from "@repo/workspace-extension";
@@ -103,7 +103,10 @@ export async function workspaceExtensions(
 				themes: themes.map((theme) => ({
 					id: theme.id,
 					name: `${theme.name} ${theme.scheme}`,
+					family: theme.name,
+					scheme: theme.scheme,
 				})),
+				defaultDarkTheme: defaultThemeId,
 				fonts,
 				motions,
 			}),

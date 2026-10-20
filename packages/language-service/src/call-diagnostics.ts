@@ -83,6 +83,14 @@ function error(
 	return { severity: "error", range: rangeOf(call), message, code };
 }
 
+function missingArgument(call: Call, arg: DocArg): Diagnostic {
+	return error(
+		call,
+		"missing-argument",
+		`${call.name}: missing required argument ":${arg.name}"`,
+	);
+}
+
 function keywordProblems(call: Call, args: DocArg[]): Diagnostic[] {
 	const problems: Diagnostic[] = [];
 	for (const arg of args) {
@@ -96,13 +104,7 @@ function keywordProblems(call: Call, args: DocArg[]): Diagnostic[] {
 				),
 			);
 		if (arg.required && !call.keywords.has(arg.name))
-			problems.push(
-				error(
-					call,
-					"missing-argument",
-					`${call.name}: missing required argument ":${arg.name}"`,
-				),
-			);
+			problems.push(missingArgument(call, arg));
 	}
 	return problems;
 }
@@ -122,12 +124,24 @@ function arityProblems(call: Call, arity: Arity): Diagnostic[] {
 	];
 }
 
+function positionalProblems(
+	call: Call,
+	arity: Arity,
+	args: DocArg[],
+): Diagnostic[] {
+	const wrongCount = arityProblems(call, arity);
+	if (wrongCount.length) return wrongCount;
+	return args.flatMap((arg, index) =>
+		arg.required && index >= call.argCount ? [missingArgument(call, arg)] : [],
+	);
+}
+
 function problemsOf(call: Call, doc: CallDoc): Diagnostic[] {
 	const { args, arity } = doc;
-	const bareFormOfHybrid =
-		arity !== undefined && call.keywords.size === 0 && call.argCount > 0;
-	if (args?.length && !bareFormOfHybrid) return keywordProblems(call, args);
-	return arity === undefined ? [] : arityProblems(call, arity);
+	const positional =
+		arity !== undefined && (call.keywords.size === 0 || !args?.length);
+	if (positional) return positionalProblems(call, arity, args ?? []);
+	return keywordProblems(call, args ?? []);
 }
 
 export function diagnosticsForCalls(

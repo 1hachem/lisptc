@@ -91,6 +91,30 @@ describe("MCP integration (stdio fixture)", () => {
 		expect(await evalStr(interp, "(list-mcps)")).toContain(":loaded");
 	});
 
+	it("lists one loaded server's tools", async () => {
+		expect(await evalStr(interp, '(list-tools "fx")')).toContain("fx/echo");
+	});
+
+	it("lists several named servers, refusing one that is not loaded", async () => {
+		expect(await evalStr(interp, '(list-tools "fx" "fx")')).toContain(
+			"fx/echo",
+		);
+		await expect(evalStr(interp, '(list-tools "fx" "nope")')).rejects.toThrow(
+			/MCP server not loaded/,
+		);
+	});
+
+	it("lists every loaded server's tools without a server", async () => {
+		expect(await evalStr(interp, "(list-tools)")).toContain("fx/echo");
+	});
+
+	it("offers the loaded servers as the optional server argument's values", () => {
+		const [server] = interp.docs().get("list-tools")?.args ?? [];
+		expect(server?.required).toBe(false);
+		expect(server?.values?.map((entry) => entry.value)).toEqual(["fx"]);
+		expect(interp.arityOf("list-tools")).toEqual({ min: 0 });
+	});
+
 	it("calls a tool with native keyword syntax", async () => {
 		expect(await evalStr(interp, '(fx/echo :message "hi")')).toBe('"hi"');
 	});

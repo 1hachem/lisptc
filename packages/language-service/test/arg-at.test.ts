@@ -41,6 +41,13 @@ describe("stringArgAt", () => {
 		expect(nameAt('(f "a" "b" "c" "')).toBeUndefined();
 	});
 
+	it("is the last argument for every position past it when it repeats", () => {
+		const repeating: DocArg[] = [
+			{ name: "server", type: "string", required: false, repeats: true },
+		];
+		expect(stringArgAt('(f "a" "b" "', repeating)?.name).toBe("server");
+	});
+
 	it("is nothing outside a string", () => {
 		expect(nameAt("(f ")).toBeUndefined();
 		expect(nameAt('(f "a" ')).toBeUndefined();
