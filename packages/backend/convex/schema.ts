@@ -104,14 +104,6 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
 
-	files: defineTable({
-		workspaceId: v.id("workspaces"),
-		path: v.string(),
-		source: v.string(),
-	})
-		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_path", ["workspaceId", "path"]),
-
 	knowledge: defineTable({
 		workspaceId: v.id("workspaces"),
 		name: v.string(),

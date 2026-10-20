@@ -63,6 +63,60 @@ describe("the convex workspace store", () => {
 		await expect(store.choose("openai/gpt-9")).rejects.toThrow(/not offered/);
 		expect(sent).toEqual([]);
 	});
+
+	it("reads an uploaded file through its served url", async () => {
+		const { client } = spyClient({
+			[named(api.knowledge.get)]: { name: "a.md", url: "https://blob/a" },
+		});
+		const fetched: string[] = [];
+		const store = new ConvexWorkspaceStore(WORKSPACE, () => client, {
+			download: async (url) => {
+				fetched.push(url);
+				return new TextEncoder().encode("# a");
+			},
+			upload: async () => "never" as Id<"_storage">,
+		});
+		expect(new TextDecoder().decode(await store.file("a.md"))).toBe("# a");
+		expect(fetched).toEqual(["https://blob/a"]);
+	});
+
+	it("writes a file by uploading the blob and recording it", async () => {
+		const { client, sent } = spyClient({
+			[named(api.knowledge.uploadUrl)]: "https://upload",
+		});
+		const uploaded: Array<[string, string, string]> = [];
+		const store = new ConvexWorkspaceStore(WORKSPACE, () => client, {
+			download: async () => new Uint8Array(),
+			upload: async (url, blob) => {
+				uploaded.push([url, blob.type, await blob.text()]);
+				return "blob-1" as Id<"_storage">;
+			},
+		});
+		await store.write("a.md", "# a", "text/markdown");
+		expect(uploaded).toEqual([["https://upload", "text/markdown", "# a"]]);
+		expect(sent.at(-1)).toEqual([
+			named(api.knowledge.add),
+			{
+				workspaceId: WORKSPACE,
+				name: "a.md",
+				storageId: "blob-1",
+				contentType: "text/markdown",
+			},
+		]);
+	});
+
+	it("raises the refusal a write comes back with", async () => {
+		const { client } = spyClient({
+			[named(api.knowledge.add)]: "FILE_TOO_LARGE",
+		});
+		const store = new ConvexWorkspaceStore(WORKSPACE, () => client, {
+			download: async () => new Uint8Array(),
+			upload: async () => "blob-1" as Id<"_storage">,
+		});
+		await expect(store.write("a.md", "x", "text/markdown")).rejects.toThrow(
+			/FILE_TOO_LARGE/,
+		);
+	});
 });
 
 describe("the convex preferences store", () => {

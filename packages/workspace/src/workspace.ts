@@ -6,7 +6,9 @@ import {
 	arrayToList,
 	Cell,
 	EndOfFile,
+	jsonToLisp,
 	type List,
+	lispToJson,
 	newLispKeyword,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
@@ -15,16 +17,12 @@ import { Reader } from "@repo/interpreter/reader";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
-import {
-	type ChatEntry,
-	isFilePath,
-	type Settings,
-	type WorkspaceHost,
-} from "./ports.ts";
+import type { ChatEntry, Settings, WorkspaceHost } from "./ports.ts";
 
 const SETTINGS_SET = "settings/set";
 const CHAT_ARCHIVE = "chat/archive";
 const CHAT_READ = "chat/read";
+const FILE_WRITE = "file/write";
 const FILE_DELETE = "file/delete";
 
 const DEFAULT_CHATS = 20;
@@ -72,13 +70,92 @@ function count(kind: string, value: unknown, fallback: number): number {
 	return Math.floor(Number(value));
 }
 
-function filePath(path: string): string {
-	if (!isFilePath(path))
+const CONTENT_TYPES: Record<string, string> = {
+	csv: "text/csv",
+	htm: "text/html",
+	html: "text/html",
+	json: "application/json",
+	md: "text/markdown",
+	ptc: "text/plain",
+	txt: "text/plain",
+	xml: "application/xml",
+	yaml: "application/yaml",
+	yml: "application/yaml",
+};
+
+const utf8 = new TextDecoder("utf-8", { fatal: true });
+
+function extensionOf(name: string): string {
+	const dot = name.lastIndexOf(".");
+	return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+export function contentTypeOf(name: string): string {
+	return CONTENT_TYPES[extensionOf(name)] ?? "text/plain";
+}
+
+function textOf(name: string, bytes: Uint8Array): string {
+	let decoded: string | undefined;
+	try {
+		decoded = utf8.decode(bytes);
+	} catch {
+		decoded = undefined;
+	}
+	if (decoded === undefined || decoded.includes("\0"))
 		throw new EvalException(
-			"a file path is lowercase segments ending in .ptc, like landing-page.ptc",
-			path,
+			`${name} is binary and cannot be read as text`,
+			name,
 		);
-	return path;
+	return decoded;
+}
+
+function parseJson(name: string, text: string): unknown {
+	try {
+		return jsonToLisp(JSON.parse(text));
+	} catch (ex) {
+		throw new EvalException(
+			`${name} is not JSON: ${ex instanceof Error ? ex.message : String(ex)}`,
+			name,
+		);
+	}
+}
+
+export function readFile(name: string, bytes: Uint8Array): unknown {
+	const text = textOf(name, bytes);
+	switch (extensionOf(name)) {
+		case "ptc":
+			return parseFile(name, text);
+		case "json":
+			return parseJson(name, text);
+		default:
+			return text;
+	}
+}
+
+function encodeJson(name: string, value: unknown): string {
+	if (typeof value === "string") {
+		parseJson(name, value);
+		return value;
+	}
+	try {
+		return `${JSON.stringify(lispToJson(value), null, 2)}\n`;
+	} catch (ex) {
+		throw new EvalException(
+			`${name} takes data JSON can hold: ${ex instanceof Error ? ex.message : String(ex)}`,
+			value,
+		);
+	}
+}
+
+export function encodeFile(name: string, value: unknown): string {
+	if (extensionOf(name) === "ptc") return printFile(value);
+	if (extensionOf(name) === "json") return encodeJson(name, value);
+	if (typeof value !== "string")
+		throw new EvalException(
+			`${name} holds text, so write a string; only a .ptc or .json file takes data`,
+			value,
+		);
+	return value;
 }
 
 function readsAsOneForm(source: string): unknown {
@@ -269,7 +346,7 @@ export function registerWorkspace(interp: Interp, host: WorkspaceHost): void {
 		"files",
 		0,
 		"(files)",
-		"Return the paths of the workspace's files, as strings.",
+		"Return the names of the files the user uploaded to the workspace, as strings.",
 		z.tuple([]),
 		function* (): Eval {
 			return arrayToList(yield* settled(store.files()));
@@ -279,35 +356,43 @@ export function registerWorkspace(interp: Interp, host: WorkspaceHost): void {
 	interp.defGen(
 		"file/read",
 		1,
-		'(file/read "path.ptc")',
-		"Read a workspace file as data: its one form, parsed and never run. Returns nil when there is no such file.",
+		'(file/read "name")',
+		"Read a workspace file. A .ptc file gives its one form as data, never run; a .json file gives its JSON as data; any other text file gives its text as a string. A binary file is refused. Returns nil when there is no such file.",
 		z.tuple([zString]),
-		function* ([path]): Eval {
-			const source = yield* settled(store.file(filePath(path)));
-			return source === undefined ? null : parseFile(path, source);
+		function* ([name]): Eval {
+			const checked = text("a file name", name);
+			const bytes = yield* settled(store.file(checked));
+			return bytes === undefined ? null : readFile(checked, bytes);
 		},
 	);
 
 	interp.defGen(
-		"file/write",
+		FILE_WRITE,
 		2,
-		'(file/write "path.ptc" value)',
-		"Write value to a workspace file as printed data, replacing what it held. Only data reads back, so a function or other live value is refused. Returns the path.",
+		'(file/write "name" value)',
+		"Write a workspace file, replacing what it held. The user approves it first. A .ptc file takes any data and stores it printed; a .json file takes data and stores it as JSON, or takes a string of JSON text; any other file takes a string. Returns the name.",
 		z.tuple([zString, zAny]),
-		function* ([path, value]): Eval {
-			yield* settled(store.write(filePath(path), printFile(value)));
-			return path;
+		function* ([name, value]): Eval {
+			const checked = text("a file name", name);
+			yield* settled(
+				store.write(
+					checked,
+					encodeFile(checked, value),
+					contentTypeOf(checked),
+				),
+			);
+			return checked;
 		},
 	);
 
 	interp.defGen(
 		FILE_DELETE,
 		1,
-		'(file/delete "path.ptc")',
+		'(file/delete "name")',
 		"Delete a workspace file. The user approves it first.",
 		z.tuple([zString]),
-		function* ([path]): Eval {
-			yield* settled(store.remove(filePath(path)));
+		function* ([name]): Eval {
+			yield* settled(store.remove(text("a file name", name)));
 			return true;
 		},
 	);
@@ -317,7 +402,7 @@ export function workspaceExtension(host: WorkspaceHost): WorkspaceExtension {
 	return Object.assign(
 		(interp: Interp): void => registerWorkspace(interp, host),
 		{
-			asks: [SETTINGS_SET, CHAT_ARCHIVE, CHAT_READ, FILE_DELETE],
+			asks: [SETTINGS_SET, CHAT_ARCHIVE, CHAT_READ, FILE_WRITE, FILE_DELETE],
 			prompt: host.prompt(),
 		},
 	);

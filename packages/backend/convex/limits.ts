@@ -20,10 +20,6 @@ export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
 
-export const MAX_FILE_BYTES = 65_536;
-
-export const MAX_FILES = 256;
-
 export const MAX_KNOWLEDGE_BYTES = 20_971_520;
 
 export const MAX_KNOWLEDGE = 200;
