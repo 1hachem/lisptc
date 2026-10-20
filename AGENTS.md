@@ -144,7 +144,9 @@ Everything else:
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
+- `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
+- `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
 - `packages/ui` (`@repo/ui`) — the base design system.
@@ -194,6 +196,8 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   ships, and `apps/app/AGENTS.md` carries that rule.
 - `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
+- A package tagged `static` is data, like `@repo/toolkit`. It depends on a
+  `foundation` package at most, and every package and app may depend on it.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
   above it reaches past the entrypoints its `package.json` exports. Its stores
   satisfy the language's ports and its `agent-repl` composes the extensions the
