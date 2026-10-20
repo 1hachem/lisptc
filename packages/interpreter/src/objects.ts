@@ -146,3 +146,52 @@ export function jsonToLisp(x: unknown): unknown {
 		);
 	return String(x);
 }
+
+function properItems(list: Cell): unknown[] {
+	const items: unknown[] = [];
+	let j: unknown = list;
+	for (; j instanceof Cell; j = j.cdr) items.push(j.car);
+	if (j !== null) throw new TypeError("a dotted pair has no JSON form");
+	return items;
+}
+
+function isPlist(items: unknown[]): boolean {
+	return (
+		items.length % 2 === 0 &&
+		items.every((item, i) => i % 2 === 1 || item instanceof LispKeyword)
+	);
+}
+
+function isAlist(items: unknown[]): items is Cell[] {
+	return items.every(
+		(item) => item instanceof Cell && typeof item.car === "string",
+	);
+}
+
+export function lispToJson(x: unknown): unknown {
+	if (x === null || x === true || typeof x === "string") return x;
+	if (typeof x === "number") {
+		if (!Number.isFinite(x)) throw new TypeError(`${x} has no JSON form`);
+		return x;
+	}
+	if (typeof x === "bigint") {
+		if (!Number.isSafeInteger(Number(x)))
+			throw new TypeError(`${x} is too large for JSON`);
+		return Number(x);
+	}
+	if (x instanceof LispKeyword) return x.name;
+	if (!(x instanceof Cell))
+		throw new TypeError(`${String(x)} has no JSON form`);
+	const items = properItems(x);
+	if (isPlist(items)) {
+		const object: Record<string, unknown> = {};
+		for (let i = 0; i < items.length; i += 2)
+			object[(items[i] as LispKeyword).name] = lispToJson(items[i + 1]);
+		return object;
+	}
+	if (isAlist(items))
+		return Object.fromEntries(
+			items.map((pair) => [pair.car as string, lispToJson(pair.cdr)]),
+		);
+	return items.map(lispToJson);
+}

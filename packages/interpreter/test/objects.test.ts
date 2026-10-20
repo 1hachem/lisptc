@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+	arrayToList,
 	assert,
 	Cell,
 	EndOfFile,
 	isSpecialForm,
 	jsonToLisp,
+	lispToJson,
 	listToArray,
 	mapcar,
+	newLispKeyword,
 	newSym,
 	quoteSym,
 	Unspecified,
@@ -55,5 +58,49 @@ describe("objects", () => {
 		expect(jsonToLisp(Symbol.for("s"))).toBe("Symbol(s)");
 		expect(jsonToLisp(undefined)).toBeNull();
 		expect(jsonToLisp(false)).toBeNull();
+	});
+
+	it("gives back the JSON that jsonToLisp read", () => {
+		const json = {
+			region: "north",
+			rows: [{ total: 12, open: true }],
+			none: null,
+		};
+		expect(lispToJson(jsonToLisp(json))).toEqual(json);
+	});
+
+	it("writes a plist as an object and a keyword as its name", () => {
+		const plist = arrayToList([
+			newLispKeyword("type"),
+			newLispKeyword("hero"),
+			newLispKeyword("n"),
+			3n,
+		]);
+		expect(lispToJson(plist)).toEqual({ type: "hero", n: 3 });
+	});
+
+	it("writes a list of plists as an array of objects", () => {
+		const row = (n: bigint) => arrayToList([newLispKeyword("total"), n]);
+		expect(lispToJson(arrayToList([row(12n), row(7n)]))).toEqual([
+			{ total: 12 },
+			{ total: 7 },
+		]);
+	});
+
+	it("writes a list that is neither plist nor alist as an array", () => {
+		expect(lispToJson(arrayToList([1n, "a", newLispKeyword("b")]))).toEqual([
+			1,
+			"a",
+			"b",
+		]);
+	});
+
+	it("refuses what JSON cannot hold", () => {
+		expect(() => lispToJson(new Cell(1n, 2n))).toThrow(/dotted pair/);
+		expect(() => lispToJson(newSym("objects-test-sym"))).toThrow(
+			/no JSON form/,
+		);
+		expect(() => lispToJson(Number.NaN)).toThrow(/no JSON form/);
+		expect(() => lispToJson(2n ** 64n)).toThrow(/too large/);
 	});
 });
