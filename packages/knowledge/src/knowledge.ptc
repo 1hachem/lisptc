@@ -20,7 +20,8 @@ change shows there at once.
 ATTACHMENTS
 
 Files user attached to message land in attachments, shown as attachments/ in
-sidebar. Attachments expire after a week unless kept.
+sidebar. Unkept attachment moves to bin after a week; bin deletes it a
+month later. Agent cannot read bin.
 
 - User message can point at file: @knowledge/report.md or
   @attachments/spec.pdf; quoted when name has space:
