@@ -1,3 +1,4 @@
+import { quiets } from "@repo/interpreter/effects";
 import type { AgentRepl } from "@repo/repl/repl";
 import { formsOnly, type Skipped } from "@repo/shared/lisp-forms";
 import {
@@ -14,6 +15,11 @@ export interface EvalMessage {
 	additional_kwargs?: Record<string, unknown>;
 }
 
+export interface Evaluated {
+	message: EvalMessage;
+	quiet: boolean;
+}
+
 function runsAnything(message: string, unrun: readonly Skipped[]): boolean {
 	let kept = message;
 	for (const {
@@ -26,37 +32,51 @@ function runsAnything(message: string, unrun: readonly Skipped[]): boolean {
 export async function evalMessage(
 	repl: AgentRepl,
 	message: string,
-): Promise<EvalMessage | undefined> {
+): Promise<Evaluated | undefined> {
 	if (formsOnly(message).trim() === "") return undefined;
 	if (!runsAnything(message, repl.unrun(message))) return undefined;
 	const { code, rejected, problems = [] } = await repl.admit(message);
 	if (rejected !== undefined)
 		return {
-			type: "tool",
-			content: checkResultContent(rejected, problems),
-			id: crypto.randomUUID(),
-			additional_kwargs: { failed: true },
+			message: {
+				type: "tool",
+				content: checkResultContent(rejected, problems),
+				id: crypto.randomUUID(),
+				additional_kwargs: { failed: true },
+			},
+			quiet: false,
 		};
 	const id = crypto.randomUUID();
-	const { output, display, error, failed, annotations, emitted, results } =
-		await evalMessageCode(repl, code, id);
+	const {
+		output,
+		display,
+		error,
+		failed,
+		annotations,
+		effects,
+		emitted,
+		results,
+	} = await evalMessageCode(repl, code, id);
 	const extras: Record<string, unknown> = { ...annotations.output };
 	if (display !== output) extras.display = display;
 	if (failed) extras.failed = true;
 	if (emitted !== "") extras.riding = emitted;
 	if (results.length > 0) extras.results = results;
 	return {
-		type: "tool",
-		content: replResultContent(output, error),
-		id,
-		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
+		message: {
+			type: "tool",
+			content: replResultContent(output, error),
+			id,
+			...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
+		},
+		quiet: quiets(effects),
 	};
 }
 
 export async function evalUserMessage<Id extends string>(
 	message: string,
 	source: ReplSource<Id>,
-): Promise<EvalMessage | undefined> {
+): Promise<Evaluated | undefined> {
 	if (formsOnly(message).trim() === "") return undefined;
 	return evalMessage(await replFrom(source), message);
 }

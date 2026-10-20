@@ -19,6 +19,7 @@
     "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
   },
   "dependencies": {
+    "@repo/agents-extension": "workspace:*",
     "@repo/compaction-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
     "@repo/env": "workspace:*",

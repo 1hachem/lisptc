@@ -1,3 +1,4 @@
+import type { Effect } from "@repo/interpreter/effects";
 import {
 	noAnnotations,
 	type Problem,
@@ -91,19 +92,29 @@ async function outcomeOf(
 	display: string;
 	error: boolean;
 	annotations: StepAnnotations;
+	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
 	held: boolean;
 	results: readonly string[];
 }> {
 	try {
-		const { model, user, annotations, emitted, failed, held, results } =
-			await run();
+		const {
+			model,
+			user,
+			annotations,
+			effects,
+			emitted,
+			failed,
+			held,
+			results,
+		} = await run();
 		return {
 			output: model,
 			display: user,
 			error: false,
 			annotations,
+			effects,
 			emitted,
 			failed,
 			held,
@@ -121,6 +132,7 @@ async function outcomeOf(
 			display: text,
 			error: true,
 			annotations: noAnnotations(),
+			effects: [],
 			emitted: "",
 			failed: true,
 			held: false,

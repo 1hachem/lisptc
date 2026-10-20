@@ -113,6 +113,9 @@ importers:
       '@posthog/react':
         specifier: ^1.10.5
         version: 1.10.5(@types/react@19.2.18)(posthog-js@1.425.1(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
+      '@repo/agents-extension':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@repo/ai':
         specifier: workspace:*
         version: link:../../packages/ai
@@ -300,6 +303,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@repo/agents-extension':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../../packages/compaction
@@ -404,6 +410,9 @@ importers:
 
   apps/lsp:
     dependencies:
+      '@repo/agents-extension':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../../packages/compaction
@@ -634,6 +643,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
 
+  packages/agents:
+    dependencies:
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
+
   packages/ai:
     dependencies:
       '@langchain/core':
@@ -691,6 +725,9 @@ importers:
       '@posthog/convex':
         specifier: ^2.1.5
         version: 2.1.5(convex@1.46.0(react@19.2.8))
+      '@repo/agents-extension':
+        specifier: workspace:*
+        version: link:../agents
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../compaction

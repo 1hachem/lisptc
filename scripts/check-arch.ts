@@ -63,6 +63,7 @@ const IMPORTS: ImportRule[] = [
 ];
 
 const EXTENSION_DIRS = [
+	"packages/agents/src/",
 	"packages/compaction/src/",
 	"packages/conversation/src/",
 	"packages/diagnostics/src/",

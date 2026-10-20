@@ -1,11 +1,11 @@
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
-import type { Addressed } from "./channels.ts";
+import type { Reader } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
 import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
 import type { Installable, Interp } from "./lisp.ts";
-export type Bounded = Required<Addressed<string>>;
+export type Bounded = Record<Reader, string>;
 
 export type Annotations = Record<string, unknown>;
 

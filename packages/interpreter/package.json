@@ -13,6 +13,7 @@
     "./core-builtins": "./src/core-builtins.ts",
     "./docs": "./src/docs.ts",
     "./drive": "./src/drive.ts",
+    "./effects": "./src/effects.ts",
     "./errors": "./src/errors.ts",
     "./func": "./src/func.ts",
     "./hooks": "./src/hooks.ts",

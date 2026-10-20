@@ -1,3 +1,4 @@
+import { ends } from "@repo/interpreter/effects";
 import {
 	type Admission,
 	type AgentFailure,
@@ -133,13 +134,19 @@ async function* takeSteers({
 	let taken = 0;
 	for (const steer of (await inbox?.()) ?? []) {
 		const prompt: TranscriptEntry = { role: "user", content: steer.content };
-		transcript.push(prompt);
-		taken += 1;
 		yield { type: "steered", ...steer };
 		const evaluated = await evalMessage(repl, steer.content);
-		if (evaluated === undefined) continue;
-		transcript.splice(-1, 1, ...withItsResult(prompt, resultEntry(evaluated)));
-		yield { type: "evaluated", message: evaluated };
+		if (evaluated === undefined) {
+			transcript.push(prompt);
+			taken += 1;
+			continue;
+		}
+		const { message, quiet } = evaluated;
+		if (!quiet) {
+			transcript.push(...withItsResult(prompt, resultEntry(message)));
+			taken += 1;
+		}
+		yield { type: "evaluated", message };
 	}
 	return taken;
 }
@@ -346,6 +353,7 @@ async function* evaluateStep(
 		display,
 		error,
 		annotations,
+		effects,
 		emitted,
 		failed,
 		held,
@@ -365,7 +373,7 @@ async function* evaluateStep(
 			failed,
 			latencyMs: Date.now() - evalStartedAt,
 		},
-		repl.takeFinished() ? "halt" : capped ? "capped" : "continue",
+		ends(effects) ? "halt" : capped ? "capped" : "continue",
 		turn.telemetry.stepEnd,
 	);
 	if (verdict === "halt" && !held) return verdict;

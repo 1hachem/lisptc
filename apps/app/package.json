@@ -31,6 +31,7 @@
     "@opentelemetry/sdk-logs": "^0.223.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "@posthog/react": "^1.10.5",
+    "@repo/agents-extension": "workspace:*",
     "@repo/ai": "workspace:*",
     "@repo/backend": "workspace:*",
     "@repo/bloub": "workspace:*",

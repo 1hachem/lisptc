@@ -9,6 +9,7 @@ import {
 	type Hold,
 	settled,
 } from "@repo/interpreter/drive";
+import { type Effect, effect } from "@repo/interpreter/effects";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import {
 	type Chain,
@@ -58,6 +59,7 @@ export interface ReplOptions {
 
 export interface EvalOutput extends Bounded {
 	annotations: StepAnnotations;
+	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
 	held: boolean;
@@ -159,6 +161,7 @@ function render(result: StepResult): EvalOutput {
 		model: result.model + notes,
 		user: result.user + notes,
 		annotations: result.annotations,
+		effects: result.effects,
 		emitted: result.emitted,
 		failed: result.failed,
 		held: result.held,
@@ -166,6 +169,8 @@ function render(result: StepResult): EvalOutput {
 		results: result.results,
 	};
 }
+
+const END: Effect = { type: "end" };
 
 function snapshotOf(interp: Interp): Image | undefined {
 	try {
@@ -400,6 +405,7 @@ export class MemoryRepl implements InMemoryRepl {
 				buffer,
 				noAnnotations(),
 			),
+			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
 			held: held.length > 0,
 			message: carried
@@ -476,7 +482,6 @@ export class MemoryRepl implements InMemoryRepl {
 }
 
 export class AgentRepl extends MemoryRepl {
-	private finished = false;
 	private pendingProse: string[] = [];
 
 	async evalMessage(code: string, origin?: string): Promise<EvalOutput> {
@@ -488,17 +493,14 @@ export class AgentRepl extends MemoryRepl {
 		origin?: string,
 	): Promise<EvalOutput> {
 		const result = await this.evaluate(code, origin);
-		if (result.held) {
-			this.finished = true;
-			return render(result);
-		}
+		if (result.held) return ending(render(result));
 		if (!this.answered(code, result)) return render(result);
-		this.finished = true;
 		this.pendingProse.push(...result.skipped);
 		return {
 			model: result.model,
 			user: result.user,
 			annotations: result.annotations,
+			effects: [...result.effects, END],
 			emitted: result.emitted,
 			failed: result.failed,
 			held: result.held,
@@ -639,12 +641,6 @@ export class AgentRepl extends MemoryRepl {
 		};
 	}
 
-	takeFinished(): boolean {
-		const f = this.finished;
-		this.finished = false;
-		return f;
-	}
-
 	takeProseFeedback(): string {
 		const notes = this.pendingProse;
 		this.pendingProse = [];
@@ -652,7 +648,6 @@ export class AgentRepl extends MemoryRepl {
 	}
 
 	clearTurnSignals(): void {
-		this.finished = false;
 		this.pendingProse = [];
 	}
 
@@ -666,6 +661,10 @@ export class AgentRepl extends MemoryRepl {
 		this.clearTurnSignals();
 		return depth;
 	}
+}
+
+function ending(output: EvalOutput): EvalOutput {
+	return { ...output, effects: [...output.effects, END] };
 }
 
 function outermost<A extends unknown[], R>(

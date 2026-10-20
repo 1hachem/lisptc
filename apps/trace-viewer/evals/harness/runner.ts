@@ -117,11 +117,7 @@ function open(spec: TraceViewerEvalSpec): EvalRunContext<AgentRepl> {
 
 const runtime = {
 	agent: {
-		async eval(repl: AgentRepl, code: string) {
-			const result = await evalCode(repl, code);
-			repl.takeFinished();
-			return result;
-		},
+		eval: (repl: AgentRepl, code: string) => evalCode(repl, code),
 		resultContent: replResultContent,
 		systemPrompt: (repl: AgentRepl) => systemPromptFor(repl.interp),
 		async *turn(

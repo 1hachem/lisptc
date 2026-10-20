@@ -1,5 +1,10 @@
+import { ends } from "@repo/interpreter/effects";
 import { describe, expect, it } from "vitest";
 import { agentRepl } from "./helpers.ts";
+
+async function ended(code: string, r = agentRepl()): Promise<boolean> {
+	return ends((await r.evalOutput(code)).effects);
+}
 
 describe("a REPL the model faces", () => {
 	it("returns the value of the last form", async () => {
@@ -34,37 +39,32 @@ describe("a REPL the model faces", () => {
 		expect(await r.eval("(+ 1 2")).toContain('unclosed "("');
 	});
 
-	describe("the finished signal", () => {
-		it("raises the flag on prose with no form in it, and prints nothing", async () => {
-			const r = agentRepl();
-			expect(await r.eval("the answer is 42")).toBe("");
-			expect(r.takeFinished()).toBe(true);
+	describe("the end effect", () => {
+		it("is raised on prose with no form in it, which prints nothing", async () => {
+			const out = await agentRepl().evalOutput("the answer is 42");
+			expect(out.model).toBe("");
+			expect(ends(out.effects)).toBe(true);
 		});
 
-		it("raises it on an empty program", async () => {
-			const r = agentRepl();
-			await r.eval("   \n  ");
-			expect(r.takeFinished()).toBe(true);
+		it("is raised on an empty program", async () => {
+			expect(await ended("   \n  ")).toBe(true);
 		});
 
-		it("is false when prose merely surrounds a form", async () => {
-			const r = agentRepl();
-			expect(await r.eval("first square it: (* 3 3) and there it is")).toBe(
-				"*-1: 9\n",
+		it("is not raised when prose merely surrounds a form", async () => {
+			const out = await agentRepl().evalOutput(
+				"first square it: (* 3 3) and there it is",
 			);
-			expect(r.takeFinished()).toBe(false);
+			expect(out.model).toBe("*-1: 9\n");
+			expect(ends(out.effects)).toBe(false);
 		});
 
-		it("stays down for a form that only errors", async () => {
-			const r = agentRepl();
-			await r.eval("(car 1)");
-			expect(r.takeFinished()).toBe(false);
+		it("is not raised for a form that only errors", async () => {
+			expect(await ended("(car 1)")).toBe(false);
 		});
 
 		it("has no halt built-in — prose replaced it", async () => {
 			const r = agentRepl();
-			await r.eval("(halt)");
-			expect(r.takeFinished()).toBe(true);
+			expect(await ended("(halt)", r)).toBe(true);
 			expect(r.takeProseFeedback()).toContain('"halt" is not defined');
 		});
 	});
@@ -130,8 +130,9 @@ describe("prose with parentheses in it", () => {
 
 		it("does not end the loop, and holds nothing back", async () => {
 			const r = agentRepl();
-			await r.eval('(playwright/browser_navigate :url "test")');
-			expect(r.takeFinished()).toBe(false);
+			expect(await ended('(playwright/browser_navigate :url "test")', r)).toBe(
+				false,
+			);
 			expect(r.takeProseFeedback()).toBe("");
 		});
 
@@ -144,47 +145,42 @@ describe("prose with parentheses in it", () => {
 		});
 	});
 
-	describe("the finished signal", () => {
+	describe("the end effect", () => {
 		it("is raised for a reply with no parenthesis at all", async () => {
-			const r = agentRepl();
-			await r.eval("the sum is 3");
-			expect(r.takeFinished()).toBe(true);
+			expect(await ended("the sum is 3")).toBe(true);
 		});
 
 		it("is not raised for a reply truncated mid-form", async () => {
-			const r = agentRepl();
-			await r.eval('(princ "hi"');
-			expect(r.takeFinished()).toBe(false);
+			expect(await ended('(princ "hi"')).toBe(false);
 		});
 
 		it("is raised for a reply that is only a prose aside", async () => {
-			const r = agentRepl();
-			expect(await r.eval("all done (see above)")).toBe("");
-			expect(r.takeFinished()).toBe(true);
+			const out = await agentRepl().evalOutput("all done (see above)");
+			expect(out.model).toBe("");
+			expect(ends(out.effects)).toBe(true);
 		});
 
 		it("is raised for an answer whose aside could not be parsed", async () => {
 			const r = agentRepl();
-			expect(
-				await r.eval("And others (including a deprecated `read_file`)."),
-			).toBe("");
-			expect(r.takeFinished()).toBe(true);
+			const out = await r.evalOutput(
+				"And others (including a deprecated `read_file`).",
+			);
+			expect(out.model).toBe("");
+			expect(ends(out.effects)).toBe(true);
 			expect(r.takeProseFeedback()).toContain('unexpected ")" on line 1');
 		});
 
 		it("is raised for an answer that quotes its code in backticks", async () => {
 			const r = agentRepl();
-			const out = await r.eval(
+			const out = await r.evalOutput(
 				"`(echo (car))` passed car nothing; `(failed-forms)` lists it.",
 			);
-			expect(out).not.toMatch(/quasiquote/);
-			expect(r.takeFinished()).toBe(true);
+			expect(out.model).not.toMatch(/quasiquote/);
+			expect(ends(out.effects)).toBe(true);
 		});
 
 		it("is not raised when a form ran alongside the aside", async () => {
-			const r = agentRepl();
-			await r.eval("almost (see above): (+ 1 2)");
-			expect(r.takeFinished()).toBe(false);
+			expect(await ended("almost (see above): (+ 1 2)")).toBe(false);
 		});
 	});
 

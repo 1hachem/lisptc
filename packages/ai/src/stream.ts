@@ -155,6 +155,7 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 		failure: string | undefined,
 	) => Promise<void> | void;
 	steer?: { inbox: SteerInbox; key: string };
+	quiet?: boolean;
 };
 
 function steerLine(steer: ChatStreamOptions["steer"]) {
@@ -324,7 +325,7 @@ export function streamChatResponse<Id extends string>(
 	input: ChatInput,
 	options: ChatStreamOptions<Id>,
 ): Response {
-	const { threadId, config, identity, onTurn, signal, steer } = options;
+	const { threadId, config, identity, onTurn, signal, steer, quiet } = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
 	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
@@ -348,16 +349,18 @@ export function streamChatResponse<Id extends string>(
 			try {
 				await steering.open();
 				turn.snapshot();
-				const repl = await replFrom(options);
-				for await (const event of runAgentTurn(toTranscript(input), {
-					repl,
-					threadId,
-					config,
-					signal: abort.signal,
-					identity,
-					inbox: steering.take,
-				}))
-					if (!turn.apply(event)) break;
+				if (!quiet) {
+					const repl = await replFrom(options);
+					for await (const event of runAgentTurn(toTranscript(input), {
+						repl,
+						threadId,
+						config,
+						signal: abort.signal,
+						identity,
+						inbox: steering.take,
+					}))
+						if (!turn.apply(event)) break;
+				}
 			} catch (error) {
 				console.error("[ai] the turn could not run:", error);
 				turn.failure = errorText(error);

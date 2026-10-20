@@ -1,3 +1,4 @@
+import { effect } from "@repo/interpreter/effects";
 import type { Interp } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { type FormSpan, formsOnly } from "@repo/shared/lisp-forms";
@@ -14,7 +15,7 @@ async function evaluated(
 ): Promise<EvalMessage> {
 	const result = await evalUserMessage(message, { repls: from, threadId });
 	if (result === undefined) throw new Error(`nothing ran for ${message}`);
-	return result;
+	return result.message;
 }
 
 function result(message: EvalMessage): { output: string; error: boolean } {
@@ -89,7 +90,7 @@ describe("a user message", () => {
 			repls: asides,
 			threadId,
 		});
-		expect(ran && display(ran)).toContain("42");
+		expect(ran && display(ran.message)).toContain("42");
 	});
 
 	test("runs the forms inside ordinary text and skips the text", async () => {
@@ -102,8 +103,8 @@ describe("a user message", () => {
 		const threadId = crypto.randomUUID();
 		const message = "what is (+ 40 2) and also (list 1 2), thanks";
 		const ran = await evalUserMessage(message, { repls: prose, threadId });
-		expect(ran?.additional_kwargs?.results).toEqual(["42", "(1 2)"]);
-		expect(ran && result(ran).error).toBe(false);
+		expect(ran?.message.additional_kwargs?.results).toEqual(["42", "(1 2)"]);
+		expect(ran && result(ran.message).error).toBe(false);
 	});
 
 	test("finds nothing to run in a message without forms", async () => {
@@ -115,12 +116,30 @@ describe("a user message", () => {
 		).toBeUndefined();
 	});
 
-	test("leaves the agent loop's halt signal untouched", async () => {
+	test("leaves the agent loop's prose feedback untouched", async () => {
 		const threadId = crypto.randomUUID();
 		await evaluated("(just prose, nothing to run)", threadId);
-		const repl = repls.peek(threadId);
-		expect(repl?.takeFinished()).toBe(false);
-		expect(repl?.takeProseFeedback()).toBe("");
+		expect(repls.peek(threadId)?.takeProseFeedback()).toBe("");
+	});
+
+	test("is handed to the agent unless a form asked to stay quiet", async () => {
+		const quiet = testRepls([
+			extension((hooks) =>
+				hooks.evalStep.use((ctx, next) => {
+					if (ctx.code.includes("hush"))
+						effect.emit(ctx.interp.channels, { harness: { type: "quiet" } });
+					return next(ctx);
+				}),
+			),
+		]);
+		const threadId = crypto.randomUUID();
+		const loud = await evalUserMessage("(+ 1 2)", { repls: quiet, threadId });
+		const hushed = await evalUserMessage("(list 'hush)", {
+			repls: quiet,
+			threadId,
+		});
+		expect(loud?.quiet).toBe(false);
+		expect(hushed?.quiet).toBe(true);
 	});
 });
 
