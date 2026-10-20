@@ -88,13 +88,15 @@ async function prepareTurn(
 	const { provider, model } = chatModel(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
+	const runsForms =
+		(await convex.query(api.preferences.get, {}))?.input?.lisp !== false;
 	const { history, quiet } = await oneTurnAtATime(chatId, async () => {
 		await convex.mutation(api.messages.append, {
 			chatId,
 			messages: [opening],
 		});
 		const { quiet } =
-			"message" in input
+			"message" in input && runsForms
 				? await runUserForms(convex, chatId, input.message)
 				: { quiet: false };
 		return {
@@ -102,7 +104,7 @@ async function prepareTurn(
 			quiet,
 		};
 	});
-	return { provider, model, history, quiet };
+	return { provider, model, history, quiet, runsForms };
 }
 
 export const steerRequestSchema = z.object({
@@ -138,7 +140,7 @@ export const turn = {
 			);
 		}
 		const convex = convexAs(context.session);
-		const { provider, model, history, quiet } = await convex
+		const { provider, model, history, quiet, runsForms } = await convex
 			.mutation(api.chats.start, { chatId })
 			.then(() => prepareTurn(convex, input, opening))
 			.catch(async (error: unknown) => {
@@ -169,6 +171,7 @@ export const turn = {
 				config: { provider, model },
 				signal: AbortSignal.any([request.signal, deadline]),
 				quiet,
+				runsForms,
 				steer: {
 					inbox: steers,
 					key: steerKey(context.session.subject, chatId),
