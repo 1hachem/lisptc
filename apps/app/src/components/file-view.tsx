@@ -20,13 +20,16 @@ export function FileView({
 }) {
 	const runCommand = useCommandRunner();
 	const { inputOn } = useUI();
-	const { chatId, sendAbout, stop, isLoading } = useChatSession((state) => ({
-		chatId: state.chatId,
-		sendAbout: state.sendAbout,
-		stop: state.stop,
-		isLoading: state.isLoading,
-	}));
-	const symbols = useSymbols(chatId, isLoading);
+	const { chatId, draftChatId, sendAbout, stop, isLoading } = useChatSession(
+		(state) => ({
+			chatId: state.chatId,
+			draftChatId: state.draftChatId,
+			sendAbout: state.sendAbout,
+			stop: state.stop,
+			isLoading: state.isLoading,
+		}),
+	);
+	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
 	return (
 		<>

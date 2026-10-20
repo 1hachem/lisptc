@@ -15,21 +15,21 @@ import { Greeting } from "./greeting.tsx";
 export function Chat() {
 	const runCommand = useCommandRunner();
 	const { inputOn } = useUI();
-	const { workspaceId, chatId, send, stop, isLoading, fresh } = useChatSession(
-		(state) => ({
+	const { workspaceId, chatId, draftChatId, send, stop, isLoading, fresh } =
+		useChatSession((state) => ({
 			workspaceId: state.workspaceId,
 			chatId: state.chatId,
+			draftChatId: state.draftChatId,
 			send: state.send,
 			stop: state.stop,
 			isLoading: state.isLoading,
 			fresh: state.fresh,
-		}),
-	);
+		}));
 	const { data: sent } = useQuery(
 		convexQuery(api.messages.sent, { workspaceId }),
 	);
 	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
-	const symbols = useSymbols(chatId, isLoading);
+	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
 	return (
 		<>
