@@ -285,5 +285,30 @@ describe("attachments", () => {
 		await expect(ev('(knowledge/keep "a.md")')).rejects.toThrow(
 			/already holds/,
 		);
+
+		describe("attach", () => {
+			it("shows an attachments or knowledge file to the user, naming its folder", async () => {
+				const { ev, store, attached } = await world();
+				await ev('(attachments/write "chart.svg" "<svg/>")');
+				store.write("report.md", "# r", "text/markdown");
+				expect(await ev('(attachments/attach "chart.svg")')).toBe(
+					'"chart.svg"',
+				);
+				expect(await ev('(knowledge/attach "report.md")')).toBe('"report.md"');
+				expect(attached).toEqual([
+					{ folder: "attachments", name: "chart.svg" },
+					{ folder: "knowledge", name: "report.md" },
+				]);
+			});
+
+			it("refuses a file the folder does not hold", async () => {
+				const { ev, store, attached } = await world();
+				store.write("report.md", "# r", "text/markdown");
+				await expect(ev('(attachments/attach "report.md")')).rejects.toThrow(
+					/no file named report.md in attachments/,
+				);
+				expect(attached).toEqual([]);
+			});
+		});
 	});
 });

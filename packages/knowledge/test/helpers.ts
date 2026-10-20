@@ -1,13 +1,18 @@
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { knowledgeExtension } from "../src/knowledge.ts";
+import {
+	type AttachedFile,
+	attached,
+	knowledgeExtension,
+} from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { type Downloader, MemoryKnowledgeStore } from "../src/ports.ts";
 
 export interface World {
 	ev(code: string): Promise<string>;
 	store: MemoryKnowledgeStore;
+	attached: AttachedFile[];
 }
 
 const offline: Downloader = {
@@ -22,8 +27,11 @@ export async function world(downloader = offline): Promise<World> {
 		extensions: [knowledgeExtension(knowledgeHostFor({ store, downloader }))],
 	});
 	await runAsync(interp, prelude);
+	const shown: AttachedFile[] = [];
+	attached.on(interp.channels, (file) => shown.push(file));
 	return {
 		store,
+		attached: shown,
 		ev: async (code) => str((await runAsync(interp, code)).value),
 	};
 }

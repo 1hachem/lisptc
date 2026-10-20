@@ -1,3 +1,4 @@
+import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
@@ -13,7 +14,11 @@ import { plistOptions } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { zAny, zList } from "@repo/interpreter/schema";
-import type { InterpExtension } from "@repo/interpreter/session";
+import {
+	annotating,
+	type InterpExtension,
+	type SessionHooks,
+} from "@repo/interpreter/session";
 import type { Awaitable } from "@repo/shared/host";
 import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
@@ -377,12 +382,62 @@ function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 	);
 }
 
+export type AttachedFolder = "attachments" | "knowledge";
+
+export interface AttachedFile {
+	folder: AttachedFolder;
+	name: string;
+}
+
+export const attached = topic<AttachedFile>("attachments");
+
+function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
+	const held: Record<AttachedFolder, () => Awaitable<string[]>> = {
+		attachments: () => store.attachments(),
+		knowledge: () => store.files(),
+	};
+	for (const folder of ["attachments", "knowledge"] as const)
+		interp.defGen(
+			`${folder}/attach`,
+			1,
+			`(${folder}/attach "name")`,
+			`Attach a ${folder} file to your reply, so the user sees it under the message and opens it with a click. Errors when there is no such file. Returns the name.`,
+			z.tuple([zString]),
+			function* ([name]): Eval {
+				const checked = fileName(name);
+				if (!(yield* settled(held[folder]())).includes(checked))
+					throw new EvalException(
+						`no file named ${checked} in ${folder}`,
+						name,
+					);
+				attached.emit(interp.channels, { user: { folder, name: checked } });
+				return checked;
+			},
+		);
+}
+
+function attachSession(hooks: SessionHooks): void {
+	hooks.annotate.use((buffer, into, next) => {
+		const attachments = buffer.collect(attached);
+		return next(
+			buffer,
+			attachments.length === 0
+				? into
+				: annotating(into, "output", { attachments }),
+		);
+	});
+}
+
 export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 	return Object.assign(
-		(interp: Interp): void => registerKnowledge(interp, host),
+		(interp: Interp): void => {
+			registerKnowledge(interp, host);
+			registerAttach(interp, host);
+		},
 		{
 			asks: [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE, ATTACHMENTS_FETCH],
 			prompt: host.prompt(),
+			session: attachSession,
 		},
 	);
 }

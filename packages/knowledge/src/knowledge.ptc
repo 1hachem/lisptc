@@ -36,3 +36,9 @@ sidebar. Attachments expire after a week unless kept.
 - (attachments/fetch "https://…") downloads url into attachments;
   (attachments/fetch url "name") names it. User approves it. Returns stored
   name.
+
+ATTACH
+
+- (attachments/attach "name") or (knowledge/attach "name") shows file under
+  your reply; user clicks to open it. Use after attachments/write or
+  attachments/fetch to hand user the file. Errors when no such file.
