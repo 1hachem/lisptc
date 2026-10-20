@@ -1,9 +1,11 @@
 import type { Id } from "@repo/backend/dataModel";
 import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
 import { AnimatedFavicon } from "../../../components/animated-favicon.tsx";
+import { PanelSplit } from "../../../components/panel-split.tsx";
 import { AgentProvider } from "../../../lib/agent.tsx";
 import { ChatProvider } from "../../../lib/chat.tsx";
 import { ForkPickerProvider } from "../../../lib/fork-picker.tsx";
+import { PanelsProvider } from "../../../lib/panels.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId")({
 	params: {
@@ -25,8 +27,12 @@ function WorkspaceLayout() {
 		<ChatProvider workspaceId={workspaceId} chatId={chatId ?? null}>
 			<ForkPickerProvider>
 				<AgentProvider>
-					<AnimatedFavicon />
-					<Outlet />
+					<PanelsProvider workspaceId={workspaceId}>
+						<AnimatedFavicon />
+						<PanelSplit>
+							<Outlet />
+						</PanelSplit>
+					</PanelsProvider>
 				</AgentProvider>
 			</ForkPickerProvider>
 		</ChatProvider>

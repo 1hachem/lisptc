@@ -1,3 +1,6 @@
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { type KnowledgeViewer, knowledgeViewer } from "../lib/knowledge.ts";
@@ -136,6 +139,54 @@ function openedAs(
 ) {
 	if (!file) return undefined;
 	return { path: `${folder}/${name}`, source: text ?? "" };
+}
+
+export function FilePreview({
+	workspaceId,
+	folder,
+	name,
+}: {
+	workspaceId: Id<"workspaces">;
+	folder: "attachments" | "knowledge";
+	name: string;
+}) {
+	const { data: file, error } = useQuery(
+		convexQuery(
+			folder === "knowledge" ? api.knowledge.get : api.attachments.get,
+			{
+				workspaceId,
+				name,
+			},
+		),
+	);
+	const { url, viewer, text, fills } = useStored(file);
+	if (error) return <div className="p-3 text-dim">{error.message}</div>;
+	if (file === undefined) return <div className="p-3 text-dim">loading…</div>;
+	if (file === null)
+		return (
+			<div className="p-3 text-dim">
+				no file named {name} in {folder}
+			</div>
+		);
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			<div className="flex h-row flex-none items-center justify-between gap-2 px-3 text-dim">
+				<span className="truncate">
+					{folder}/{name}
+				</span>
+				{url && <DownloadLink name={name} url={url} />}
+			</div>
+			<div
+				className={
+					fills
+						? "flex min-h-0 flex-1 flex-col px-3 pb-3"
+						: "min-h-0 flex-1 overflow-auto px-3 pb-3"
+				}
+			>
+				<StoredBody name={name} url={url} viewer={viewer} text={text} />
+			</div>
+		</div>
+	);
 }
 
 export function StoredFile({

@@ -39,6 +39,7 @@ export interface ChatMessage {
 		meta?: unknown;
 		display?: unknown;
 		ui?: unknown;
+		panel?: unknown;
 		asks?: unknown;
 		prose?: unknown;
 		failed?: unknown;

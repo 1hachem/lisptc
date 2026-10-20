@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
+import { toPanelOps } from "../lib/panel-ops.ts";
+import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
 import { toUiNode, type UiNode } from "../lib/ui-node.ts";
 import { Markdown } from "./markdown.tsx";
@@ -61,6 +63,24 @@ function changed(
 	if (action) fire(action, controlValues(el));
 }
 
+function FileLink({ props }: { props: Record<string, unknown> }) {
+	const { openFile } = usePanels();
+	const folder = text(props, "folder");
+	const name = text(props, "name");
+	if (folder !== "knowledge" && folder !== "attachments")
+		return <span className="text-dim">{text(props, "text") || name}</span>;
+	return (
+		<button
+			type="button"
+			title={`${folder}/${name}`}
+			onClick={() => openFile(folder, name)}
+			className="w-fit cursor-pointer text-left text-accent underline decoration-dim/50 hover:decoration-accent"
+		>
+			{text(props, "text") || name}
+		</button>
+	);
+}
+
 function Node({
 	node,
 	fire,
@@ -114,6 +134,8 @@ function Node({
 					{text(node.props, "text") || text(node.props, "href")}
 				</a>
 			);
+		case "file-link":
+			return <FileLink props={node.props} />;
 		case "badge":
 			return (
 				<span
@@ -266,6 +288,7 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 		chatId: state.chatId,
 		send: state.send,
 	}));
+	const { apply } = usePanels();
 	const [ui, setUi] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
@@ -285,6 +308,7 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 				const data = result.response;
 				const next = toUiNode(data.ui);
 				if (next) setUi(next);
+				apply(toPanelOps(data.panel));
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
 				if (data.message) send(data.message);
