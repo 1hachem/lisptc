@@ -22,6 +22,9 @@ BIN
 Files user attached to message land in bin, shown as bin/ in sidebar. Bin
 files expire after a week unless kept.
 
+- User message can point at file: @knowledge/report.md or @bin/spec.pdf;
+  quoted when name has space: @"bin/Q3 Sales.json". Read it with
+  (knowledge/read "report.md") or (bin/read "spec.pdf"), name without folder.
 - (bin/list) lists bin file names.
 - (bin/read "name") reads bin file, same rules as knowledge/read.
 - (knowledge/keep "name") moves bin file into knowledge, kept for good. Keep
