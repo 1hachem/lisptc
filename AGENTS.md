@@ -143,7 +143,7 @@ Everything else:
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
-- `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension and listed by the chat input and the language server.
+- `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.

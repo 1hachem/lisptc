@@ -1,16 +1,15 @@
 # @repo/toolkit
 
 The bundled MCP toolkit: the servers `load-mcp` can start by name. The MCP
-extension connects to them; the chat input and the language server only list
-them.
+extension connects to them.
 
 Turbo tag: `static`.
 
 ## Shape
 
-`mcp.toolkit.json` is the manifest. `src/toolkit.ts` exports where it lives and
-the name and description of each entry. The connection fields are the MCP
-extension's to read, and the types that describe them are in its `ports.ts`.
+`mcp.toolkit.json` is the manifest. `src/toolkit.ts` exports where it lives.
+The connection fields are the MCP extension's to read, and the types that
+describe them are in its `ports.ts`.
 
 ## Rules
 
