@@ -12,7 +12,7 @@ function held(store: World["store"], name: string) {
 }
 
 describe("what waits on the user", () => {
-	it("asks before writing or deleting a file, or fetching a url", () => {
+	it("asks before writing, deleting or restoring a file, or fetching a url", () => {
 		const extension = knowledgeExtension(
 			knowledgeHostFor({ store: new MemoryKnowledgeStore() }),
 		);
@@ -20,6 +20,9 @@ describe("what waits on the user", () => {
 			"knowledge/write",
 			"knowledge/delete",
 			"attachments/fetch",
+			"attachments/delete",
+			"bin/restore",
+			"bin/delete",
 		]);
 	});
 });
@@ -176,11 +179,12 @@ describe("knowledge", () => {
 		expect(await ev('(knowledge/read "nope.ptc")')).toBe("nil");
 	});
 
-	it("deletes a file", async () => {
+	it("deletes a file into the bin", async () => {
 		const { ev, store } = await world();
 		store.write("a.md", "# a", "text/markdown");
 		expect(await ev('(knowledge/delete "a.md")')).toBe("t");
 		expect(store.files()).toEqual([]);
+		expect(store.binned()).toEqual([{ name: "a.md", from: "knowledge" }]);
 	});
 
 	it("refuses a value that does not read back", async () => {
@@ -310,5 +314,51 @@ describe("attachments", () => {
 				expect(attached).toEqual([]);
 			});
 		});
+	});
+});
+
+describe("bin", () => {
+	async function binned() {
+		const w = await world();
+		w.store.write("Q3 Report.md", "# q3", "text/markdown");
+		await w.ev('(attachments/write "spec.pdf" "spec")');
+		await w.ev('(knowledge/delete "Q3 Report.md")');
+		await w.ev('(attachments/delete "spec.pdf")');
+		return w;
+	}
+
+	it("takes what knowledge and attachments delete", async () => {
+		const { ev, store } = await binned();
+		expect(store.files()).toEqual([]);
+		expect(store.attachments()).toEqual([]);
+		expect(await ev("(bin/list)")).toBe('("Q3 Report.md" "spec.pdf")');
+	});
+
+	it("searches names, ignoring case", async () => {
+		const { ev } = await binned();
+		expect(await ev('(bin/search "report")')).toBe('("Q3 Report.md")');
+		expect(await ev('(bin/search "nothing")')).toBe("nil");
+	});
+
+	it("restores a file to the folder it came from", async () => {
+		const { ev, store } = await binned();
+		expect(await ev('(bin/restore "Q3 Report.md")')).toBe(
+			'"knowledge/Q3 Report.md"',
+		);
+		expect(await ev('(bin/restore "spec.pdf")')).toBe('"attachments/spec.pdf"');
+		expect(store.files()).toEqual(["Q3 Report.md"]);
+		expect(store.attachments()).toEqual(["spec.pdf"]);
+		expect(await ev("(bin/list)")).toBe("nil");
+	});
+
+	it("deletes a file for good", async () => {
+		const { ev, store } = await binned();
+		expect(await ev('(bin/delete "spec.pdf")')).toBe("t");
+		expect(store.binned()).toEqual([
+			{ name: "Q3 Report.md", from: "knowledge" },
+		]);
+		await expect(ev('(bin/delete "spec.pdf")')).rejects.toThrow(
+			/no file spec.pdf in the bin/,
+		);
 	});
 });

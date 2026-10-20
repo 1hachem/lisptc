@@ -1,4 +1,7 @@
-import type { KnowledgeStore } from "@repo/knowledge-extension/ports";
+import type {
+	BinnedFile,
+	KnowledgeStore,
+} from "@repo/knowledge-extension/ports";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
@@ -124,5 +127,37 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 			name,
 		});
 		if (refused !== null) throw new Error(`${refused}: ${name}`);
+	}
+
+	async unattach(name: string): Promise<void> {
+		const removed = await this.connect().mutation(api.attachments.remove, {
+			workspaceId: this.workspaceId,
+			name,
+		});
+		if (!removed) throw new Error(`no file ${name} in attachments`);
+	}
+
+	async binned(): Promise<BinnedFile[]> {
+		const entries = await this.connect().query(api.bin.list, {
+			workspaceId: this.workspaceId,
+		});
+		return entries.map(({ name, from }) => ({ name, from }));
+	}
+
+	async restore(name: string): Promise<BinnedFile> {
+		const restored = await this.connect().mutation(api.bin.restore, {
+			workspaceId: this.workspaceId,
+			name,
+		});
+		if ("refused" in restored) throw new Error(`${restored.refused}: ${name}`);
+		return { name: restored.name, from: restored.folder };
+	}
+
+	async erase(name: string): Promise<void> {
+		const removed = await this.connect().mutation(api.bin.remove, {
+			workspaceId: this.workspaceId,
+			name,
+		});
+		if (!removed) throw new Error(`no file ${name} in the bin`);
 	}
 }

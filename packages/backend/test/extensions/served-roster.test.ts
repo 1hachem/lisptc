@@ -40,6 +40,9 @@ describe("the agent the app serves", () => {
 			"knowledge/write",
 			"knowledge/delete",
 			"attachments/fetch",
+			"attachments/delete",
+			"bin/restore",
+			"bin/delete",
 		])
 			expect(await ev(`(permission/check '${form})`)).toBe("ask");
 	});
@@ -54,6 +57,8 @@ describe("the agent the app serves", () => {
 			"attachments/read",
 			"attachments/write",
 			"knowledge/keep",
+			"bin/list",
+			"bin/search",
 			"preferences",
 			"preferences/set",
 		])

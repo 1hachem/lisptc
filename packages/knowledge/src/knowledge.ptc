@@ -15,13 +15,12 @@ change shows there at once.
   string.
 - Edit .ptc file: read, change with set-in / update-in / remove-in, write back:
   (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
-- (knowledge/delete "name") removes file. User approves it.
+- (knowledge/delete "name") moves file to bin. User approves it.
 
 ATTACHMENTS
 
 Files user attached to message land in attachments, shown as attachments/ in
-sidebar. Unkept attachment moves to bin after a week; bin deletes it a
-month later. Agent cannot read bin.
+sidebar. Unkept attachment moves to bin after a week.
 
 - User message can point at file: @knowledge/report.md or
   @attachments/spec.pdf; quoted when name has space:
@@ -37,6 +36,19 @@ month later. Agent cannot read bin.
 - (attachments/fetch "https://…") downloads url into attachments;
   (attachments/fetch url "name") names it. User approves it. Returns stored
   name.
+- (attachments/delete "name") moves attachment to bin. User approves it.
+
+BIN
+
+Deleted knowledge and attachments land in bin, shown as bin/ in sidebar. Bin
+deletes them for good a month later. Bin file cannot be read; restore it first.
+
+- (bin/list) lists bin file names, newest first.
+- (bin/search "text") lists bin file names holding text, any case.
+- (bin/restore "name") moves file back to folder it came from. User approves
+  it. Returns "knowledge/name" or "attachments/name"; name gains number when
+  taken.
+- (bin/delete "name") deletes bin file for good. User approves it.
 
 ATTACH
 

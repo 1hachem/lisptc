@@ -22,11 +22,14 @@ import {
 import type { Awaitable } from "@repo/shared/host";
 import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
-import type { Downloaded, KnowledgeHost } from "./ports.ts";
+import type { Downloaded, KnowledgeHost, StoreFolder } from "./ports.ts";
 
 const KNOWLEDGE_WRITE = "knowledge/write";
 const KNOWLEDGE_DELETE = "knowledge/delete";
 const ATTACHMENTS_FETCH = "attachments/fetch";
+const ATTACHMENTS_DELETE = "attachments/delete";
+const BIN_RESTORE = "bin/restore";
+const BIN_DELETE = "bin/delete";
 
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
@@ -308,6 +311,18 @@ function registerAttachments(
 	);
 
 	interp.defGen(
+		ATTACHMENTS_DELETE,
+		1,
+		'(attachments/delete "name")',
+		"Move an attachment to the bin. The user approves it first.",
+		z.tuple([zString]),
+		function* ([name]): Eval {
+			yield* settled(store.unattach(fileName(name)));
+			return true;
+		},
+	);
+
+	interp.defGen(
 		"knowledge/keep",
 		1,
 		'(knowledge/keep "name")',
@@ -373,7 +388,7 @@ function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 		KNOWLEDGE_DELETE,
 		1,
 		'(knowledge/delete "name")',
-		"Delete a knowledge file. The user approves it first.",
+		"Move a knowledge file to the bin. The user approves it first.",
 		z.tuple([zString]),
 		function* ([name]): Eval {
 			yield* settled(store.remove(fileName(name)));
@@ -382,7 +397,62 @@ function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 	);
 }
 
-export type AttachedFolder = "attachments" | "knowledge";
+function registerBin(interp: Interp, { store }: KnowledgeHost): void {
+	interp.defGen(
+		"bin/list",
+		0,
+		"(bin/list)",
+		"Return the names of the files in the bin, newest first: what was deleted from knowledge or attachments, or what expired from attachments. The bin deletes them for good a month later.",
+		z.tuple([]),
+		function* (): Eval {
+			const binned = yield* settled(store.binned());
+			return arrayToList(binned.map(({ name }) => name));
+		},
+	);
+
+	interp.defGen(
+		"bin/search",
+		1,
+		'(bin/search "text")',
+		"Return the names of the files in the bin whose name holds the text, ignoring case.",
+		z.tuple([zString]),
+		function* ([text]): Eval {
+			const needle = text.toLowerCase();
+			const binned = yield* settled(store.binned());
+			return arrayToList(
+				binned
+					.map(({ name }) => name)
+					.filter((name) => name.toLowerCase().includes(needle)),
+			);
+		},
+	);
+
+	interp.defGen(
+		BIN_RESTORE,
+		1,
+		'(bin/restore "name")',
+		'Move a file out of the bin, back into the folder it was deleted from. The user approves it first. Returns where it went, as "folder/name".',
+		z.tuple([zString]),
+		function* ([name]): Eval {
+			const restored = yield* settled(store.restore(fileName(name)));
+			return `${restored.from}/${restored.name}`;
+		},
+	);
+
+	interp.defGen(
+		BIN_DELETE,
+		1,
+		'(bin/delete "name")',
+		"Delete a file in the bin for good. The user approves it first.",
+		z.tuple([zString]),
+		function* ([name]): Eval {
+			yield* settled(store.erase(fileName(name)));
+			return true;
+		},
+	);
+}
+
+export type AttachedFolder = StoreFolder;
 
 export interface AttachedFile {
 	folder: AttachedFolder;
@@ -433,9 +503,17 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 		(interp: Interp): void => {
 			registerKnowledge(interp, host);
 			registerAttach(interp, host);
+			registerBin(interp, host);
 		},
 		{
-			asks: [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE, ATTACHMENTS_FETCH],
+			asks: [
+				KNOWLEDGE_WRITE,
+				KNOWLEDGE_DELETE,
+				ATTACHMENTS_FETCH,
+				ATTACHMENTS_DELETE,
+				BIN_RESTORE,
+				BIN_DELETE,
+			],
 			prompt: host.prompt(),
 			session: attachSession,
 		},
