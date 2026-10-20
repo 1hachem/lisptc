@@ -8,7 +8,7 @@ import {
 	query,
 } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
-import { MAX_MCP_REASON_LENGTH } from "./limits.js";
+import { MAX_MCP_MOUNT_BYTES, MAX_MCP_REASON_LENGTH } from "./limits.js";
 import { mcpServerPhase, mcpStatePhase } from "./schema.js";
 
 const PURGE_BATCH = 256;
@@ -199,6 +199,85 @@ export const report = mutation({
 	},
 });
 
+const mountRow = v.object({
+	server: v.string(),
+	conf: v.optional(v.string()),
+	tools: v.string(),
+});
+
+export const mounts = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.array(mountRow),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const rows = await ctx.db
+			.query("mcpMounts")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(LIST_LIMIT);
+		return rows.map(({ server, conf, tools }) => ({
+			server,
+			...(conf === undefined ? {} : { conf }),
+			tools,
+		}));
+	},
+});
+
+async function mountOf(
+	ctx: MutationCtx,
+	workspaceId: Doc<"mcpMounts">["workspaceId"],
+	server: string,
+): Promise<Doc<"mcpMounts"> | null> {
+	return await ctx.db
+		.query("mcpMounts")
+		.withIndex("by_workspace_server", (q) =>
+			q.eq("workspaceId", workspaceId).eq("server", server),
+		)
+		.unique();
+}
+
+export const mount = mutation({
+	args: { workspaceId: v.id("workspaces"), ...mountRow.fields },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, server, conf, tools }) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (tools.length + (conf?.length ?? 0) > MAX_MCP_MOUNT_BYTES)
+			throw new Error(
+				`the tools of ${server} exceed ${MAX_MCP_MOUNT_BYTES} bytes`,
+			);
+		const existing = await mountOf(ctx, workspaceId, server);
+		if (existing === null) {
+			await ctx.db.insert("mcpMounts", {
+				workspaceId,
+				server,
+				...(conf === undefined ? {} : { conf }),
+				tools,
+				mountedAt: Date.now(),
+			});
+			return null;
+		}
+		if (existing.conf === conf && existing.tools === tools) return null;
+		await ctx.db.replace(existing._id, {
+			workspaceId,
+			server,
+			...(conf === undefined ? {} : { conf }),
+			tools,
+			mountedAt: existing.mountedAt,
+		});
+		return null;
+	},
+});
+
+export const unmount = mutation({
+	args: { workspaceId: v.id("workspaces"), server: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, server }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const existing = await mountOf(ctx, workspaceId, server);
+		if (existing !== null) await ctx.db.delete(existing._id);
+		return null;
+	},
+});
+
 export const observeState = internalMutation({
 	args: stateRow.fields,
 	returns: v.null(),
@@ -242,8 +321,17 @@ export const purge = internalMutation({
 			.query("mcpState")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.take(PURGE_BATCH);
-		for (const row of [...servers, ...state]) await ctx.db.delete(row._id);
-		if (servers.length === PURGE_BATCH || state.length === PURGE_BATCH)
+		const mounts = await ctx.db
+			.query("mcpMounts")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(PURGE_BATCH);
+		for (const row of [...servers, ...state, ...mounts])
+			await ctx.db.delete(row._id);
+		if (
+			servers.length === PURGE_BATCH ||
+			state.length === PURGE_BATCH ||
+			mounts.length === PURGE_BATCH
+		)
 			await ctx.scheduler.runAfter(0, internal.mcpServers.purge, {
 				workspaceId,
 			});

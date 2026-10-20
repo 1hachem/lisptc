@@ -36,6 +36,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { ConvexImageStore } from "./image-store.ts";
+import { ConvexMcpRegistry } from "./mcp-registry.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
@@ -100,6 +101,7 @@ export async function workspaceExtensions(
 				host: containerHost(workspaceId, reportsOf(workspaceId, connect)),
 			}),
 			policy: permissions.rules,
+			registry: new ConvexMcpRegistry(workspaceId, connect),
 		}),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
