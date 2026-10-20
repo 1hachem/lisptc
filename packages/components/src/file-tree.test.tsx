@@ -9,6 +9,7 @@ import {
 	TreeFilter,
 	TreeFolder,
 	TreeMore,
+	TreePending,
 } from "./file-tree.tsx";
 
 beforeAll(() => {
@@ -139,5 +140,23 @@ describe("FileTree", () => {
 		});
 		expect(onChange).toHaveBeenCalledWith("login");
 		expect(onMore).toHaveBeenCalledOnce();
+	});
+});
+
+describe("TreePending", () => {
+	it("shows a spinner and keeps a long name on one truncated line", async () => {
+		const name = "a-very-long-upload-name-that-would-otherwise-wrap.pdf";
+		const host = await mounted(
+			<TreePending name={name} label="uploading" depth={1} />,
+		);
+		const row = host.querySelector('[role="status"]');
+		expect(row?.getAttribute("aria-label")).toBe(`uploading ${name}`);
+		expect(row?.querySelector("svg")?.getAttribute("class")).toContain(
+			"animate-spin",
+		);
+		const label = row?.querySelector("span");
+		expect(label?.textContent).toBe(name);
+		expect(label?.className).toContain("truncate");
+		expect(label?.className).toContain("whitespace-nowrap");
 	});
 });

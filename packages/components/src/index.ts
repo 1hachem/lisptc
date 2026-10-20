@@ -7,6 +7,7 @@ export {
 	TreeFilter,
 	TreeFolder,
 	TreeMore,
+	TreePending,
 } from "./file-tree.tsx";
 export type { FiredMemory } from "./memories.ts";
 export { firedMemories } from "./memories.ts";

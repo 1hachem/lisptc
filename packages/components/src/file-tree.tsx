@@ -6,6 +6,7 @@ import {
 	File01Icon,
 	Folder01Icon,
 	Folder02Icon,
+	Loading03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { ReactNode } from "react";
@@ -116,6 +117,32 @@ export function TreeFile({
 				)}
 			</div>
 			{trailing}
+		</div>
+	);
+}
+
+export function TreePending({
+	name,
+	label,
+	depth = 0,
+}: {
+	name: string;
+	label: string;
+	depth?: number;
+}) {
+	return (
+		<div
+			role="status"
+			aria-label={`${label} ${name}`}
+			title={`${label} ${name}`}
+			style={indent(depth)}
+			className="flex min-w-0 items-center gap-1.5 py-1 pr-1 text-dim"
+		>
+			<HugeiconsIcon
+				className="size-icon-sm flex-none animate-spin"
+				icon={Loading03Icon}
+			/>
+			<span className="min-w-0 truncate whitespace-nowrap">{name}</span>
 		</div>
 	);
 }

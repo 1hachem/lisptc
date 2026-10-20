@@ -23,6 +23,7 @@ import {
 	TreeFilter,
 	TreeFolder,
 	TreeMore,
+	TreePending,
 } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -306,7 +307,7 @@ function KnowledgeFolder({
 					)}
 				</Listing>
 				{uploading.map((name) => (
-					<Empty key={name}>uploading {name}…</Empty>
+					<TreePending key={name} name={name} label="uploading" depth={1} />
 				))}
 				{failures.map((failure) => (
 					<div key={failure} className="py-1 pl-9 text-red">
