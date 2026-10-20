@@ -12,9 +12,28 @@ export class ConvexPreferencesStore implements PreferencesStore {
 
 	async read(): Promise<Preferences> {
 		const stored = await this.connect().query(api.preferences.get, {});
-		const { theme, font, channels, metadata, input, sidebar, hidden, motion } =
-			stored;
-		return { theme, font, channels, metadata, input, sidebar, hidden, motion };
+		const {
+			theme,
+			font,
+			channels,
+			metadata,
+			input,
+			sendLabel,
+			sidebar,
+			hidden,
+			motion,
+		} = stored;
+		return {
+			theme,
+			font,
+			channels,
+			metadata,
+			input,
+			sendLabel,
+			sidebar,
+			hidden,
+			motion,
+		};
 	}
 
 	async write(change: Preferences): Promise<void> {

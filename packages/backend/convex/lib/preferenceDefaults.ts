@@ -22,22 +22,45 @@ export const DEFAULT_TOGGLES = {
 		provider: false,
 	},
 	input: {
+		send: true,
+		attach: true,
 		lisp: true,
+		vim: false,
 	},
 } as const satisfies Record<
 	"channels" | "metadata" | "input",
 	Record<string, boolean>
 >;
 
+export const DEFAULT_SEND_LABEL = "send";
+
+export const DEFAULT_HIDDEN: readonly string[] = ["bin"];
+
 type Toggles = Record<string, boolean>;
 
-export function withDefaultToggles<
-	T extends { channels?: Toggles; metadata?: Toggles; input?: Toggles },
->(stored: T): T & { channels: Toggles; metadata: Toggles; input: Toggles } {
+export function withDefaults<
+	T extends {
+		channels?: Toggles;
+		metadata?: Toggles;
+		input?: Toggles;
+		sendLabel?: string;
+		hidden?: string[];
+	},
+>(
+	stored: T,
+): T & {
+	channels: Toggles;
+	metadata: Toggles;
+	input: Toggles;
+	sendLabel: string;
+	hidden: string[];
+} {
 	return {
 		...stored,
 		channels: { ...DEFAULT_TOGGLES.channels, ...stored.channels },
 		metadata: { ...DEFAULT_TOGGLES.metadata, ...stored.metadata },
 		input: { ...DEFAULT_TOGGLES.input, ...stored.input },
+		sendLabel: stored.sendLabel ?? DEFAULT_SEND_LABEL,
+		hidden: stored.hidden ?? [...DEFAULT_HIDDEN],
 	};
 }
