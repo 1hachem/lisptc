@@ -20,7 +20,7 @@ A form that changes or removes a file the user holds is in the extension's
 `asks`, so it waits on a human unless a rule says otherwise.
 
 How a file is read back is decided by its extension, one loader per format.
-Reading a new format means adding a loader, never a branch in `knowledge/read`.
+Reading a new format means adding a loader, never a branch in the read form.
 
 ## Tests
 
