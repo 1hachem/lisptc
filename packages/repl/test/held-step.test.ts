@@ -1,4 +1,5 @@
 import type { Hold } from "@repo/interpreter/drive";
+import { ends } from "@repo/interpreter/effects";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
@@ -118,6 +119,6 @@ describe("a held step", () => {
 		const out = await r.evalOutput("(hold)");
 		expect(out.failed).toBe(false);
 		expect(out.held).toBe(true);
-		expect(r.takeFinished()).toBe(true);
+		expect(ends(out.effects)).toBe(true);
 	});
 });

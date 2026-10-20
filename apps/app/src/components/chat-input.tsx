@@ -30,6 +30,7 @@ import {
 	rebase,
 	recall,
 } from "../lib/message-history.ts";
+import { quietly } from "../lib/quietly.ts";
 import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
@@ -84,6 +85,10 @@ function useRecall(history: string[]) {
 
 function submitsOnEnter(event: KeyboardEvent): boolean {
 	return event.key === "Enter" && !event.shiftKey;
+}
+
+function sendsQuietly(event: KeyboardEvent): boolean {
+	return event.ctrlKey || event.metaKey;
 }
 
 function $replaceText(text: string) {
@@ -187,11 +192,15 @@ function useDraft(onSubmit: (text: string) => void, disabled?: boolean) {
 		[editor],
 	);
 
-	const send = useCallback(() => {
-		if (disabled || empty) return;
-		onSubmit(text.trim());
-		replace("");
-	}, [text, empty, onSubmit, disabled, replace]);
+	const send = useCallback(
+		(quiet = false) => {
+			if (disabled || empty) return;
+			const message = text.trim();
+			onSubmit(quiet ? quietly(message) : message);
+			replace("");
+		},
+		[text, empty, onSubmit, disabled, replace],
+	);
 
 	return { text, empty, replace, send };
 }
@@ -219,7 +228,7 @@ function useKeys({
 	menuActive: RefObject<boolean>;
 	recall: (direction: RecallDirection) => string | null;
 	replace: (text: string) => void;
-	enter?: () => void;
+	enter?: (quiet: boolean) => void;
 }) {
 	const [editor] = useLexicalComposerContext();
 	const onKeyDown = (event: KeyboardEvent): boolean => {
@@ -231,7 +240,7 @@ function useKeys({
 		const handled = direction ? recalled !== null : submitsOnEnter(event);
 		if (!handled) return false;
 		event.preventDefault();
-		if (!direction) enter?.();
+		if (!direction) enter?.(sendsQuietly(event));
 		return true;
 	};
 	const keys = useRef(onKeyDown);
@@ -346,7 +355,7 @@ function Editor({
 						empty={empty}
 						disabled={disabled}
 						onStop={onStop}
-						onSend={send}
+						onSend={() => send()}
 					/>
 				}
 			>

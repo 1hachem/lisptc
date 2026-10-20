@@ -375,7 +375,6 @@ describe("the agent turn", () => {
 	test("withheld prose feedback reaches the model, and the caller's transcript is untouched", async () => {
 		const repl = testRepl([noting("(see above)")]);
 		await repl.evalOutput("all done");
-		repl.takeFinished();
 		script = [[{ text: "three." }]];
 
 		await drain(ask, { repl });
