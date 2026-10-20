@@ -200,7 +200,7 @@ async function stored(url: string, file: File): Promise<Id<"_storage">> {
 }
 
 export function useBinUpload(workspaceId: Id<"workspaces">) {
-	const uploadUrl = useConvexMutation(api.bin.uploadUrl);
+	const uploadUrl = useConvexMutation(api.knowledge.uploadUrl);
 	const add = useConvexMutation(api.bin.add);
 
 	const uploadOne = async (file: File): Promise<string> => {

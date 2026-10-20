@@ -101,7 +101,7 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 		contentType: string,
 	): Promise<string> {
 		const client = this.connect();
-		const url = await client.mutation(api.bin.uploadUrl, {
+		const url = await client.mutation(api.knowledge.uploadUrl, {
 			workspaceId: this.workspaceId,
 		});
 		const storageId = await this.transfer.upload(

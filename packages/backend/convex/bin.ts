@@ -60,15 +60,6 @@ async function freeName(
 	return null;
 }
 
-export const uploadUrl = mutation({
-	args: { workspaceId: v.id("workspaces") },
-	returns: v.string(),
-	handler: async (ctx, { workspaceId }) => {
-		await requireWorkspace(ctx, workspaceId);
-		return await ctx.storage.generateUploadUrl();
-	},
-});
-
 export const list = query({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.array(entry),
