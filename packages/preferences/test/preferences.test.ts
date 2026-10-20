@@ -23,7 +23,7 @@ describe("reading preferences", () => {
 	it("lists the themes and fonts there are to choose from", async () => {
 		const { ev } = await world();
 		expect(await ev("(themes)")).toBe(
-			'(("gruvbox-dark" . "gruvbox dark") ("gruvbox-light" . "gruvbox light"))',
+			'(("gruvbox-dark" . "gruvbox dark") ("gruvbox-light" . "gruvbox light") ("tokyonight-dark" . "tokyonight dark") ("tokyonight-light" . "tokyonight light") ("paper" . "paper light"))',
 		);
 		expect(await ev("(fonts)")).toBe('(("geist" . "Geist"))');
 		expect(await ev("(motions)")).toBe(
@@ -37,6 +37,30 @@ describe("changing preferences", () => {
 		const { ev, store } = await world(HELD);
 		await ev('(preferences/set :theme "gruvbox-light")');
 		expect(store.read()).toEqual({ ...HELD, theme: "gruvbox-light" });
+	});
+
+	it("flips the current theme to its dark counterpart", async () => {
+		const { ev, store } = await world({ ...HELD, theme: "tokyonight-light" });
+		await ev('(preferences/set :theme "dark")');
+		expect(store.read().theme).toBe("tokyonight-dark");
+	});
+
+	it("keeps a theme that is already dark", async () => {
+		const { ev, store } = await world({ ...HELD, theme: "tokyonight-dark" });
+		await ev('(preferences/set :theme "dark")');
+		expect(store.read().theme).toBe("tokyonight-dark");
+	});
+
+	it("falls back to the default dark theme when there is no counterpart", async () => {
+		const { ev, store } = await world({ ...HELD, theme: "paper" });
+		await ev('(preferences/set :theme "dark")');
+		expect(store.read().theme).toBe("gruvbox-dark");
+	});
+
+	it("falls back to the default dark theme when no theme is stored", async () => {
+		const { ev, store } = await world();
+		await ev('(preferences/set :theme "dark")');
+		expect(store.read().theme).toBe("gruvbox-dark");
 	});
 
 	it("merges toggles and keeps the ones it does not name", async () => {

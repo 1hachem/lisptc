@@ -1,62 +1,78 @@
-export type PromiseState = "pending" | "fulfilled" | "rejected";
+import { LispPromise, type PromiseState } from "./promise.ts";
+import type { Recipe } from "./recovery.ts";
 
-interface Tracked {
-	state: PromiseState;
-	controller?: AbortController;
-}
+export type { PromiseState };
 
 export class AsyncWork {
-	private readonly tracked = new WeakMap<Promise<unknown>, Tracked>();
-	private readonly live = new Set<Promise<unknown>>();
+	private readonly controllers = new WeakMap<LispPromise, AbortController>();
+	private readonly lispPromises = new WeakMap<Promise<unknown>, LispPromise>();
+	private readonly live = new Set<LispPromise>();
 
-	start<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+	start(
+		run: (signal: AbortSignal) => Promise<unknown>,
+		recipe?: Recipe,
+	): LispPromise {
+		return this.resume(new LispPromise(), run, recipe);
+	}
+
+	resume(
+		into: LispPromise,
+		run: (signal: AbortSignal) => Promise<unknown>,
+		recipe?: Recipe,
+	): LispPromise {
 		const controller = new AbortController();
-		return this.record(run(controller.signal), controller);
+		this.controllers.set(into, controller);
+		let running: Promise<unknown>;
+		try {
+			running = run(controller.signal);
+		} catch (error) {
+			running = Promise.reject(error);
+		}
+		return this.record(running, recipe, into);
 	}
 
-	watch<T>(promise: Promise<T>): Promise<T> {
-		return this.tracked.has(promise) ? promise : this.record(promise);
+	watch(promise: Promise<unknown>, recipe?: Recipe): LispPromise {
+		return this.lispPromises.get(promise) ?? this.record(promise, recipe);
 	}
 
-	stateOf(promise: Promise<unknown>): PromiseState | "unknown" {
-		return this.tracked.get(promise)?.state ?? "unknown";
+	stateOf(lispPromise: LispPromise): PromiseState {
+		return lispPromise.state;
 	}
 
-	pending(): Promise<unknown>[] {
+	promiseOf(lispPromise: LispPromise): Promise<unknown> {
+		return lispPromise.promise();
+	}
+
+	pending(): LispPromise[] {
 		return [...this.live];
 	}
 
-	cancel(promise: Promise<unknown>): boolean {
-		this.live.delete(promise);
-		const controller = this.tracked.get(promise)?.controller;
+	cancel(lispPromise: LispPromise): boolean {
+		this.live.delete(lispPromise);
+		const controller = this.controllers.get(lispPromise);
 		if (!controller) return false;
 		controller.abort();
 		return true;
 	}
 
 	abortAll(): void {
-		for (const promise of this.live)
-			this.tracked.get(promise)?.controller?.abort();
+		for (const lispPromise of this.live)
+			this.controllers.get(lispPromise)?.abort();
 		this.live.clear();
 	}
 
-	private record<T>(
-		promise: Promise<T>,
-		controller?: AbortController,
-	): Promise<T> {
-		const record: Tracked = { state: "pending", controller };
-		this.tracked.set(promise, record);
-		this.live.add(promise);
-		promise.then(
-			() => {
-				record.state = "fulfilled";
-				this.live.delete(promise);
-			},
-			() => {
-				record.state = "rejected";
-				this.live.delete(promise);
-			},
-		);
-		return promise;
+	private record(
+		promise: Promise<unknown>,
+		recipe: Recipe | undefined,
+		into = new LispPromise(),
+	): LispPromise {
+		const lispPromise = into.follow(promise, recipe);
+		this.lispPromises.set(promise, lispPromise);
+		this.live.add(lispPromise);
+		const settle = () => {
+			this.live.delete(lispPromise);
+		};
+		promise.then(settle, settle);
+		return lispPromise;
 	}
 }

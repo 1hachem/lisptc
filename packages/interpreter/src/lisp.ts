@@ -60,9 +60,11 @@ import {
 import { str } from "./print.ts";
 import { qqExpand, qqQuote } from "./quasiquote.ts";
 import { Reader } from "./reader.ts";
+import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
 import { note } from "./topics.ts";
+import type { ForeignValue } from "./types.ts";
 
 export type FailedForm =
 	| { readonly skipped: string }
@@ -90,6 +92,32 @@ export function newHooks(): Hooks {
 		call: new Chain(),
 		dispose: new Chain(),
 	};
+}
+
+export interface StateCodec<T> {
+	toLisp(value: T): unknown;
+	fromLisp(x: unknown): T;
+}
+
+export interface State<T> {
+	get(): T;
+	set(value: T): void;
+}
+
+export function detachedState<T>(initial: T): State<T> {
+	let value = initial;
+	return {
+		get: () => value,
+		set: (next) => {
+			value = next;
+		},
+	};
+}
+
+export interface Contents {
+	readonly globals: readonly (readonly [Sym, unknown, string | undefined])[];
+	readonly docs: readonly (readonly [string, Doc])[];
+	readonly sources: readonly (readonly [string, unknown])[];
 }
 
 export interface Installable {
@@ -136,7 +164,11 @@ function copyTree(x: unknown): unknown {
 export class Interp {
 	private readonly globals: Map<Sym, unknown> = new Map();
 
+	private readonly sealed: Map<Sym, string> = new Map();
+
 	readonly hooks: Hooks = newHooks();
+
+	readonly recovery: Recovery = new Recovery();
 
 	readonly channels: Channels = new Channels();
 
@@ -241,6 +273,20 @@ export class Interp {
 		this.docTable.set(name, { signature, doc, args });
 	}
 
+	defResumable<T extends z.ZodType>(
+		name: string,
+		carity: number,
+		signature: string,
+		doc: string,
+		schema: T,
+		body: (a: z.infer<T>) => Promise<unknown>,
+		args?: DocArg[],
+		keys?: readonly string[],
+	) {
+		this.defPromise(name, carity, signature, doc, schema, body, args, keys);
+		this.recovery.resumable(name, (a) => body(parseArgs(schema, [...a])));
+	}
+
 	defineGlobal(sym: Sym, value: unknown, doc?: Doc): void {
 		this.globals.set(sym, value);
 		this.sources.delete(sym.name);
@@ -249,16 +295,73 @@ export class Interp {
 
 	undefineGlobal(sym: Sym): void {
 		this.globals.delete(sym);
+		this.sealed.delete(sym);
 		this.docTable.delete(sym.name);
 		this.sources.delete(sym.name);
 	}
 
+	seal(sym: Sym, owner: string): void {
+		this.sealed.set(sym, owner);
+	}
+
+	ownerOf(sym: Sym): string | undefined {
+		return this.sealed.get(sym);
+	}
+
+	state<T>(
+		name: string,
+		codec: StateCodec<T>,
+		initial: T,
+		doc: string,
+	): State<T> {
+		const sym = newSym(`*${name}*`);
+		if (this.globals.has(sym))
+			throw new EvalException("state declared twice", sym);
+		this.defineGlobal(sym, codec.toLisp(initial), { signature: sym.name, doc });
+		this.seal(sym, name.split("/")[0]);
+		return {
+			get: () => codec.fromLisp(this.globals.get(sym)),
+			set: (value) => {
+				this.globals.set(sym, codec.toLisp(value));
+			},
+		};
+	}
+
+	contents(): Contents {
+		return {
+			globals: [...this.globals].map(
+				([sym, value]) => [sym, value, this.sealed.get(sym)] as const,
+			),
+			docs: [...this.docTable],
+			sources: [...this.sources],
+		};
+	}
+
+	load(contents: Contents): void {
+		for (const [sym, value, owner] of contents.globals) {
+			this.globals.set(sym, value);
+			if (owner === undefined) this.sealed.delete(sym);
+			else this.sealed.set(sym, owner);
+		}
+		for (const [name, doc] of contents.docs) this.docTable.set(name, doc);
+		this.sources.clear();
+		for (const [name, form] of contents.sources) this.sources.set(name, form);
+	}
+
 	setDoc(name: string, doc: Doc): void {
+		this.refuseSealed(newSym(name));
 		this.docTable.set(name, doc);
 	}
 
 	setSource(name: string, form: unknown): void {
+		this.refuseSealed(newSym(name));
 		this.sources.set(name, copyTree(form));
+	}
+
+	private refuseSealed(sym: Sym): void {
+		const owner = this.sealed.get(sym);
+		if (owner !== undefined)
+			throw new EvalException(`read-only global owned by ${owner}`, sym, false);
 	}
 
 	sourceOf(name: string): unknown {
@@ -291,8 +394,20 @@ export class Interp {
 		return this.holds.park(new Hold(reason));
 	}
 
-	makeBuiltIn(name: string, carity: number, body: BuiltInFuncBody): unknown {
-		return new BuiltInFunc(name, carity, body);
+	makeBuiltIn(
+		name: string,
+		carity: number,
+		body: BuiltInFuncBody,
+		foreign?: ForeignValue,
+	): unknown {
+		return new BuiltInFunc(
+			name,
+			carity,
+			body,
+			"plain",
+			[],
+			foreign === undefined ? { by: "none" } : { by: "foreign", foreign },
+		);
 	}
 
 	evalNow(x: unknown, env: List): unknown {
@@ -303,7 +418,7 @@ export class Interp {
 		if (x instanceof Sym) {
 			const value = this.globals.get(x);
 			if (value === undefined) throw new VoidVariable(x);
-			return value;
+			return this.sealed.has(x) ? copyTree(value) : value;
 		}
 		if (x instanceof Lambda) return Closure.makeFrom(x, env);
 		return x;
@@ -419,9 +534,14 @@ export class Interp {
 		if (fn.kind === "generator") return yield* fn.callGen(frame);
 		const value = fn.call(frame);
 		if (!(value instanceof Promise)) return value;
-		return fn.kind === "plain"
-			? yield* fn.settle(value)
-			: this.async.watch(value);
+		if (fn.kind === "plain") return yield* fn.settle(value);
+		const name = fn.callName as string;
+		return this.async.watch(
+			value,
+			this.recovery.resumer(name) === undefined
+				? undefined
+				: { kind: name, args: [...frame] },
+		);
 	}
 
 	private *applyForm([f, args]: [unknown, List]): Eval {
@@ -547,6 +667,7 @@ export class Interp {
 				assert(env !== null);
 				lval.setValue(result, env);
 			} else if (lval instanceof Sym && !(lval instanceof Keyword)) {
+				this.refuseSealed(lval);
 				this.globals.set(lval, result);
 				this.sources.delete(lval.name);
 			} else {

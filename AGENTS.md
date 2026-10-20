@@ -123,6 +123,7 @@ The extensions, one language surface each. Every one depends on the
 interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
+- `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when.
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
@@ -367,6 +368,7 @@ task up                      # build and run the whole stack in docker, with liv
 task test                    # the vitest suites and the nix flake checks together
 task test:nix                # the nix flake checks, the ptcfmt formatter test included
 task test:nvim               # the nvim integration test
+task convex:generate         # start the local convex backend and regenerate packages/backend/convex/_generated
 
 # Single test file / by name — run inside the package that owns it:
 pnpm --filter @repo/interpreter exec vitest run test/macros.test.ts

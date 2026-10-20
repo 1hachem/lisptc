@@ -33,6 +33,31 @@ describe("removing a chat", () => {
 		expect(left).toEqual([]);
 	});
 
+	it("takes its repl checkpoints with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const replId = await alice.as.mutation(api.repls.open, { chatId });
+		await t.mutation(internal.repls.record, {
+			replId,
+			whole: true,
+			chunks: ["{}", "[]"],
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("repls").collect()),
+			...(await ctx.db.query("replLayers").collect()),
+			...(await ctx.db.query("replLayerChunks").collect()),
+		]);
+		expect(left).toEqual([]);
+	});
+
 	it("drops it from the list at once", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -80,17 +105,27 @@ describe("removing a workspace", () => {
 			chatId,
 			messages: [{ type: "human", content: "hello" }],
 		});
+		const replId = await alice.as.mutation(api.repls.open, { chatId });
+		await t.mutation(internal.repls.record, {
+			replId,
+			whole: true,
+			chunks: ["{}"],
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { chats, messages } = await t.run(async (ctx) => ({
+		const { chats, messages, repls, replLayers } = await t.run(async (ctx) => ({
 			chats: await ctx.db.query("chats").collect(),
 			messages: await ctx.db.query("messages").collect(),
+			repls: await ctx.db.query("repls").collect(),
+			replLayers: await ctx.db.query("replLayers").collect(),
 		}));
 		expect(chats).toEqual([]);
 		expect(messages).toEqual([]);
+		expect(repls).toEqual([]);
+		expect(replLayers).toEqual([]);
 	});
 
 	it("takes its secrets, oauth records, permissions, readme and knowledge with it", async () => {
@@ -243,6 +278,9 @@ async function remaining(t: TestConvex<typeof schema>) {
 		workspaces: await ctx.db.query("workspaces").collect(),
 		chats: await ctx.db.query("chats").collect(),
 		messages: await ctx.db.query("messages").collect(),
+		repls: await ctx.db.query("repls").collect(),
+		replLayers: await ctx.db.query("replLayers").collect(),
+		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
@@ -258,6 +296,9 @@ const nothing = {
 	workspaces: [],
 	chats: [],
 	messages: [],
+	repls: [],
+	replLayers: [],
+	replLayerChunks: [],
 	memories: [],
 	secrets: [],
 	oauthRecords: [],
@@ -293,6 +334,24 @@ describe("deleting an account", () => {
 					slug: `extra-${i}`,
 				});
 			}
+		});
+
+		await deleteAccount(t, alice);
+
+		expect(await remaining(t)).toEqual(nothing);
+	});
+
+	it("takes the repl checkpoints of its chats", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const replId = await alice.as.mutation(api.repls.open, { chatId });
+		await t.mutation(internal.repls.record, {
+			replId,
+			whole: true,
+			chunks: ["{}", "[]"],
 		});
 
 		await deleteAccount(t, alice);

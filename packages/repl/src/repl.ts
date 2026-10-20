@@ -1,20 +1,31 @@
-import type { Envelope } from "@repo/interpreter/channels";
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import type { Channels, Envelope } from "@repo/interpreter/channels";
+import {
+	bufferTransport,
+	type ChannelBuffer,
+} from "@repo/interpreter/channels-host";
 import {
 	driveAsync,
 	type Eval,
 	type Hold,
 	settled,
 } from "@repo/interpreter/drive";
+import { type Effect, effect } from "@repo/interpreter/effects";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import {
 	type Chain,
 	type Middleware,
 	noOpinion,
 } from "@repo/interpreter/hooks";
+import { type Image, restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { EndOfFile, jsonToLisp, newSym } from "@repo/interpreter/objects";
+import {
+	EndOfFile,
+	jsonToLisp,
+	newSym,
+	Unspecified,
+} from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import {
 	type AgentEnd,
 	type AgentStep,
@@ -34,6 +45,7 @@ import {
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
+import type { Checkpoint, ImageStore } from "./image-store.ts";
 
 export interface Repl {
 	readonly interp: Interp;
@@ -46,14 +58,17 @@ export interface InMemoryRepl extends Repl {
 
 export interface ReplOptions {
 	extensions: InterpExtension[];
+	images?: ImageStore;
 }
 
 export interface EvalOutput extends Bounded {
 	annotations: StepAnnotations;
+	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
 	held: boolean;
 	message?: string;
+	results: readonly string[];
 }
 
 export interface StepResult extends EvalOutput {
@@ -86,6 +101,35 @@ function partition(notes: readonly Note[]): {
 			}
 		}
 	return { skipped, failed, held };
+}
+
+interface FormRecorder {
+	begin(): number;
+	end(skipsBefore: number, value: unknown): void;
+}
+
+function recordTopLevel(buffer: ChannelBuffer): {
+	recorder: FormRecorder;
+	results: string[];
+} {
+	const results: string[] = [];
+	const skips = () =>
+		buffer.collect(note).filter((n) => n.kind === "skipped").length;
+	let depth = 0;
+	return {
+		results,
+		recorder: {
+			begin: () => {
+				depth++;
+				return skips();
+			},
+			end: (skipsBefore, value) => {
+				depth--;
+				if (depth > 0 || value === Unspecified) return;
+				if (skips() === skipsBefore) results.push(str(value));
+			},
+		},
+	};
 }
 
 interface Parked {
@@ -121,22 +165,42 @@ function render(result: StepResult): EvalOutput {
 		model: result.model + notes,
 		user: result.user + notes,
 		annotations: result.annotations,
+		effects: result.effects,
 		emitted: result.emitted,
 		failed: result.failed,
 		held: result.held,
 		message: result.message,
+		results: result.results,
 	};
+}
+
+const END: Effect = { type: "end" };
+
+function snapshotOf(interp: Interp): Image | undefined {
+	try {
+		return snapshot(interp);
+	} catch {
+		return undefined;
+	}
 }
 
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
+	private recorder: FormRecorder | undefined;
+	private betweenSteps:
+		| { channels: Channels; buffer: ChannelBuffer; detach: () => void }
+		| undefined;
 	private readonly extensions: InterpExtension[];
+	private readonly images: ImageStore | undefined;
+	private saving: Promise<void> = Promise.resolve();
+	private calls = 0;
 	readonly hooks: SessionHooks;
 
 	constructor(options: ReplOptions) {
 		this.extensions = options.extensions;
+		this.images = options.images;
 		this.hooks = openSession(this.extensions);
 		this.currentInterp = this.freshInterp();
 	}
@@ -147,22 +211,96 @@ export class MemoryRepl implements InMemoryRepl {
 
 	private freshInterp(): Interp {
 		const interp = new Interp({ extensions: this.extensions });
+		const recording = () => this.recorder;
+		interp.hooks.evalForm.use(function* (i, form, next) {
+			const record = recording();
+			if (record === undefined) return yield* next(i, form);
+			const mark = record.begin();
+			let value: unknown;
+			try {
+				value = yield* next(i, form);
+			} catch (ex) {
+				record.end(mark, Unspecified);
+				throw ex;
+			}
+			record.end(mark, value);
+			return value;
+		});
 		runSync(interp, prelude);
 		this.setup(interp);
 		return interp;
 	}
 
-	protected setup(_interp: Interp): void {}
-
-	async evalOutput(code: string): Promise<EvalOutput> {
-		return render(await this.evaluate(code));
+	async resume(): Promise<number | undefined> {
+		const latest = await this.images?.latest();
+		if (latest === undefined) return undefined;
+		this.load(latest);
+		return latest.depth;
 	}
 
-	protected evaluate(code: string): Promise<StepResult> {
-		return this.serialize(code, (ctx) =>
-			this.hooks.evalStep.run(async (c) => {
-				await runAsync(c.interp, c.code);
-			}, ctx),
+	recover(): Promise<number | undefined> {
+		return this.enqueue(async () => {
+			await this.saving;
+			const latest = await this.images?.latest().catch(() => undefined);
+			if (latest !== undefined && this.loaded(latest)) return latest.depth;
+			this.reset();
+			return undefined;
+		});
+	}
+
+	private loaded(checkpoint: Checkpoint): boolean {
+		try {
+			this.load(checkpoint);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private load({ depth, image }: Checkpoint): void {
+		const interp = new Interp({ extensions: this.extensions });
+		try {
+			restore(interp, image);
+		} catch (ex) {
+			interp.dispose();
+			throw ex;
+		}
+		this.parked = [];
+		this.currentInterp.dispose();
+		this.currentInterp = interp;
+		this.calls = depth;
+	}
+
+	private checkpoint(result: StepResult, origin?: string): StepResult {
+		this.calls += 1;
+		const { images } = this;
+		if (images === undefined) return result;
+		const image = snapshotOf(this.currentInterp);
+		if (image === undefined) return result;
+		this.saving = this.saving
+			.then(() => images.save(image, origin))
+			.catch(() => undefined);
+		return result;
+	}
+
+	protected setup(_interp: Interp): void {}
+
+	protected currentInterpOrUndefined(): Interp | undefined {
+		return this.currentInterp as Interp | undefined;
+	}
+
+	async evalOutput(code: string, origin?: string): Promise<EvalOutput> {
+		return render(await this.evaluate(code, origin));
+	}
+
+	protected evaluate(code: string, origin?: string): Promise<StepResult> {
+		return this.serialize(
+			code,
+			(ctx) =>
+				this.hooks.evalStep.run(async (c) => {
+					await runAsync(c.interp, c.code);
+				}, ctx),
+			origin,
 		);
 	}
 
@@ -189,14 +327,35 @@ export class MemoryRepl implements InMemoryRepl {
 	private serialize(
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
+		origin?: string,
 	): Promise<StepResult> {
-		const run = () => this.runStep(code, body);
+		return this.enqueue(() =>
+			this.runStep(code, body).then((result) =>
+				this.checkpoint(result, origin),
+			),
+		);
+	}
+
+	private enqueue<T>(run: () => Promise<T>): Promise<T> {
 		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
 			() => undefined,
 			() => undefined,
 		);
 		return done;
+	}
+
+	private listenBetweenSteps(channels: Channels): void {
+		const buffer = bufferTransport();
+		this.betweenSteps = { channels, buffer, detach: channels.pipe(buffer) };
+	}
+
+	private takeBetweenSteps(channels: Channels): readonly Envelope[] {
+		const between = this.betweenSteps;
+		this.betweenSteps = undefined;
+		if (between === undefined) return [];
+		between.detach();
+		return between.channels === channels ? between.buffer.envelopes : [];
 	}
 
 	private async runStep(
@@ -213,9 +372,13 @@ export class MemoryRepl implements InMemoryRepl {
 			},
 		};
 		const { channels } = interp;
-		channels.step += 1;
+		channels.step = this.calls + 1;
 		const buffer = bufferTransport();
+		for (const envelope of this.takeBetweenSteps(channels))
+			buffer.send(envelope);
 		const detach = channels.pipe(buffer);
+		const { recorder, results } = recordTopLevel(buffer);
+		this.recorder = recorder;
 		let thrown: unknown;
 		let carried = false;
 		let carriedThrown: unknown;
@@ -230,7 +393,9 @@ export class MemoryRepl implements InMemoryRepl {
 				}
 			}
 		} finally {
+			this.recorder = undefined;
 			detach();
+			this.listenBetweenSteps(channels);
 		}
 		const { skipped, failed, held } = partition(buffer.collect(note));
 		const holding = held.map((n) => `held: ${n.text}\n`).join("");
@@ -251,6 +416,7 @@ export class MemoryRepl implements InMemoryRepl {
 				buffer,
 				noAnnotations(),
 			),
+			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
 			held: held.length > 0,
 			message: carried
@@ -258,6 +424,7 @@ export class MemoryRepl implements InMemoryRepl {
 						.filter((m) => m !== undefined)
 						.join("\n\n")
 				: message,
+			results,
 			skipped,
 		};
 	}
@@ -326,32 +493,40 @@ export class MemoryRepl implements InMemoryRepl {
 }
 
 export class AgentRepl extends MemoryRepl {
-	private finished = false;
 	private pendingProse: string[] = [];
-	private readonly conversationVars = new Map<string, unknown>();
+	private conversationNames: string[] = [];
 
 	protected override setup(interp: Interp): void {
-		const vars = this.conversationVars;
-		if (vars) for (const [name, value] of vars) defineVar(interp, name, value);
+		const previous = this.currentInterpOrUndefined();
+		for (const name of this.conversationNames ?? []) {
+			const sym = newSym(name);
+			if (previous?.hasGlobal(sym))
+				defineConversationVar(interp, name, previous.getGlobal(sym));
+		}
 	}
 
-	override async evalOutput(code: string): Promise<EvalOutput> {
-		const result = await this.evaluate(code);
-		if (result.held) {
-			this.finished = true;
-			return render(result);
-		}
+	async evalMessage(code: string, origin?: string): Promise<EvalOutput> {
+		return render(await this.evaluate(code, origin));
+	}
+
+	override async evalOutput(
+		code: string,
+		origin?: string,
+	): Promise<EvalOutput> {
+		const result = await this.evaluate(code, origin);
+		if (result.held) return ending(render(result));
 		if (!this.answered(code, result)) return render(result);
-		this.finished = true;
 		this.pendingProse.push(...result.skipped);
 		return {
 			model: result.model,
 			user: result.user,
 			annotations: result.annotations,
+			effects: [...result.effects, END],
 			emitted: result.emitted,
 			failed: result.failed,
 			held: result.held,
 			message: result.message,
+			results: result.results,
 		};
 	}
 
@@ -480,17 +655,9 @@ export class AgentRepl extends MemoryRepl {
 	}
 
 	setConversationVars(vars: Record<string, unknown>): void {
-		this.conversationVars.clear();
-		for (const [name, value] of Object.entries(vars)) {
-			this.conversationVars.set(name, value);
-			defineVar(this.interp, name, value);
-		}
-	}
-
-	takeFinished(): boolean {
-		const f = this.finished;
-		this.finished = false;
-		return f;
+		this.conversationNames = Object.keys(vars);
+		for (const [name, value] of Object.entries(vars))
+			defineConversationVar(this.interp, name, jsonToLisp(value));
 	}
 
 	takeProseFeedback(): string {
@@ -500,7 +667,6 @@ export class AgentRepl extends MemoryRepl {
 	}
 
 	clearTurnSignals(): void {
-		this.finished = false;
 		this.pendingProse = [];
 	}
 
@@ -508,6 +674,16 @@ export class AgentRepl extends MemoryRepl {
 		super.reset();
 		this.clearTurnSignals();
 	}
+
+	override async recover(): Promise<number | undefined> {
+		const depth = await super.recover();
+		this.clearTurnSignals();
+		return depth;
+	}
+}
+
+function ending(output: EvalOutput): EvalOutput {
+	return { ...output, effects: [...output.effects, END] };
 }
 
 function outermost<A extends unknown[], R>(
@@ -517,11 +693,17 @@ function outermost<A extends unknown[], R>(
 	return around === undefined ? chain : chain.wrappedBy(around);
 }
 
-function defineVar(interp: Interp, name: string, value: unknown): void {
-	interp.defineGlobal(newSym(name), jsonToLisp(value), {
+function defineConversationVar(
+	interp: Interp,
+	name: string,
+	value: unknown,
+): void {
+	const sym = newSym(name);
+	interp.defineGlobal(sym, value, {
 		signature: name,
 		doc: "Read-only live conversation state (auto-updated each step).",
 	});
+	interp.seal(sym, "repl");
 }
 
 function carriedOn(printed: string): string {

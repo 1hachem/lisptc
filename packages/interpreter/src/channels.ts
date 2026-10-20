@@ -1,6 +1,8 @@
-export const AUDIENCES = ["user", "model"] as const;
+export const AUDIENCES = ["user", "model", "harness"] as const;
 
 export type Audience = (typeof AUDIENCES)[number];
+
+export type Reader = Exclude<Audience, "harness">;
 
 export type Addressed<T> = Partial<Record<Audience, T>>;
 

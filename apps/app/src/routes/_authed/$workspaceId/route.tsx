@@ -3,6 +3,7 @@ import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
 import { AnimatedFavicon } from "../../../components/animated-favicon.tsx";
 import { AgentProvider } from "../../../lib/agent.tsx";
 import { ChatProvider } from "../../../lib/chat.tsx";
+import { ForkPickerProvider } from "../../../lib/fork-picker.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId")({
 	params: {
@@ -22,10 +23,12 @@ function WorkspaceLayout() {
 
 	return (
 		<ChatProvider workspaceId={workspaceId} chatId={chatId ?? null}>
-			<AgentProvider>
-				<AnimatedFavicon />
-				<Outlet />
-			</AgentProvider>
+			<ForkPickerProvider>
+				<AgentProvider>
+					<AnimatedFavicon />
+					<Outlet />
+				</AgentProvider>
+			</ForkPickerProvider>
 		</ChatProvider>
 	);
 }

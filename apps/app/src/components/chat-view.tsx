@@ -9,7 +9,6 @@ import { useEffect, useMemo, useState } from "react";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
-	isGreetingMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
@@ -21,9 +20,11 @@ import {
 	toolFailed,
 	toolModelOutput,
 	toolResult,
+	toolResults,
 	toolUi,
 	useChatSession,
 } from "../lib/chat.tsx";
+import { isGreetingMessage } from "../lib/greeting.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
@@ -154,11 +155,14 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 	const { output } = toolResult(message);
 	const ui = toUiNode(toolUi(message));
 	const model = toolModelOutput(message).output;
+	const results = toolResults(message).join("\n");
 	return {
 		output,
+		results,
 		ui: shown.ui ? ui : undefined,
 		model,
 		drawsUser: shown.user && output !== "",
+		drawsResults: shown.results && results !== "",
 		drawsError: shown.errors && toolFailed(message),
 		drawsModel: shown.model && model !== "",
 	};
@@ -167,13 +171,17 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 type ToolChannels = ReturnType<typeof toolChannels>;
 
 function drawsAny(channels: ToolChannels): boolean {
-	const { ui, drawsUser, drawsError, drawsModel } = channels;
-	return ui !== undefined || drawsUser || drawsError || drawsModel;
+	const { ui, drawsUser, drawsResults, drawsError, drawsModel } = channels;
+	return (
+		ui !== undefined || drawsUser || drawsResults || drawsError || drawsModel
+	);
 }
 
 function isLabelled(channels: ToolChannels): boolean {
-	const { ui, drawsUser, drawsError, drawsModel } = channels;
-	const drawn = [ui !== undefined, drawsUser, drawsModel].filter(Boolean);
+	const { ui, drawsUser, drawsResults, drawsError, drawsModel } = channels;
+	const drawn = [ui !== undefined, drawsUser, drawsResults, drawsModel].filter(
+		Boolean,
+	);
 	return drawn.length > 1 || (drawsError && drawsModel);
 }
 
@@ -198,7 +206,16 @@ function ToolResult({ message }: { message: ChatMessage }) {
 	const { shown } = useUI();
 	const channels = toolChannels(message, shown);
 	if (!drawsAny(channels)) return null;
-	const { output, ui, model, drawsUser, drawsError, drawsModel } = channels;
+	const {
+		output,
+		results,
+		ui,
+		model,
+		drawsUser,
+		drawsResults,
+		drawsError,
+		drawsModel,
+	} = channels;
 	const labelled = isLabelled(channels);
 	return (
 		<div
@@ -214,6 +231,11 @@ function ToolResult({ message }: { message: ChatMessage }) {
 			{drawsUser && (
 				<Channel id="user" labelled={labelled}>
 					<ChannelText text={output} tone="text-dim" />
+				</Channel>
+			)}
+			{drawsResults && (
+				<Channel id="results" labelled={labelled}>
+					<ChannelText text={results} tone={channel("results").text} />
 				</Channel>
 			)}
 			{drawsError && (

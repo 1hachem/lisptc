@@ -1,3 +1,5 @@
+import { agentsExtension } from "@repo/agents-extension";
+import { agentsHost } from "@repo/agents-extension/host";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -25,7 +27,7 @@ import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
 import { motions } from "@repo/ui/motions.ts";
-import { themes } from "@repo/ui/themes";
+import { defaultThemeId, themes } from "@repo/ui/themes";
 import { uiExtension } from "@repo/ui-extension";
 import { uiHost } from "@repo/ui-extension/host";
 import { workspaceExtension } from "@repo/workspace-extension";
@@ -33,11 +35,13 @@ import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { ConvexImageStore } from "./image-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
+import type { ServerClient } from "./server-client.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
 export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
@@ -74,6 +78,7 @@ export async function workspaceExtensions(
 		}),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
+		agentsExtension(agentsHost),
 		mcpExtension({
 			...mcpHostFor({
 				scope: workspaceId,
@@ -92,7 +97,10 @@ export async function workspaceExtensions(
 				themes: themes.map((theme) => ({
 					id: theme.id,
 					name: `${theme.name} ${theme.scheme}`,
+					family: theme.name,
+					scheme: theme.scheme,
 				})),
+				defaultDarkTheme: defaultThemeId,
 				fonts,
 				motions,
 			}),
@@ -103,21 +111,20 @@ export async function workspaceExtensions(
 	];
 }
 
-export async function openWorkspaceRepl(
-	workspaceId: Id<"workspaces">,
-	connect: Connect,
-	chatId?: Id<"chats">,
-): Promise<AgentRepl> {
-	return new AgentRepl({
-		extensions: await workspaceExtensions(workspaceId, connect, chatId),
-	});
-}
-
 export function chatRepls(
 	connect: Connect,
+	server: ServerClient,
 ): (chatId: Id<"chats">) => Promise<AgentRepl> {
 	return async (chatId) => {
 		const { workspaceId } = await connect().query(api.chats.get, { chatId });
-		return openWorkspaceRepl(workspaceId, connect, chatId);
+		const replId = await connect().mutation(api.repls.open, { chatId });
+		const repl = new AgentRepl({
+			extensions: await workspaceExtensions(workspaceId, connect, chatId),
+			images: new ConvexImageStore(replId, server),
+		});
+		await repl.resume().catch((ex) => {
+			console.error(`[backend] chat ${chatId} resumed fresh:`, ex);
+		});
+		return repl;
 	};
 }
