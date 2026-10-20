@@ -1,36 +1,54 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { type KnowledgeViewer, knowledgeViewer } from "../lib/knowledge.ts";
+import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
 import { Markdown } from "./markdown.tsx";
 
 type TextViewer = Extract<KnowledgeViewer, "markdown" | "text">;
 type MediaViewer = Exclude<KnowledgeViewer, TextViewer>;
 
+function MediaFrame({ children }: { children: ReactNode }) {
+	return (
+		<div className="relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden border border-bg2 bg-bg1">
+			{children}
+		</div>
+	);
+}
+
 const MEDIA: Record<MediaViewer, (name: string, url: string) => ReactNode> = {
 	image: (name, url) => (
-		<img src={url} alt={name} className="max-w-full self-start" />
+		<MediaFrame>
+			<img
+				src={url}
+				alt={name}
+				className="max-h-full max-w-full object-contain"
+			/>
+		</MediaFrame>
 	),
-	pdf: (_name, url) => (
-		<div className="relative h-[65vh] min-h-80 w-full overflow-hidden rounded-sm border border-bg2">
+	pdf: (name, url) => (
+		<MediaFrame>
 			<embed
 				src={`${url}#view=FitH&navpanes=0`}
 				type="application/pdf"
-				title="PDF Viewer"
+				title={name}
 				className="absolute top-0 left-0 h-[200%] w-[200%] origin-top-left scale-50"
 			/>
-		</div>
+		</MediaFrame>
 	),
 	video: (_name, url) => (
-		// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
-		<video src={url} controls className="w-full" />
+		<MediaFrame>
+			{
+				// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
+				<video src={url} controls className="h-full w-full object-contain" />
+			}
+		</MediaFrame>
 	),
-	audio: (_name, url) => (
-		// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
-		<audio src={url} controls className="w-full" />
-	),
+	audio: (name, url) => <AudioPlayer name={name} url={url} />,
 	download: () => <div className="text-dim">no preview for this file type</div>,
 };
+
+const FILLS: ReadonlySet<KnowledgeViewer> = new Set(["image", "pdf", "video"]);
 
 const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 	markdown: (text) => <Markdown>{text}</Markdown>,
@@ -100,6 +118,26 @@ export interface StoredFileRow {
 	url: string | null;
 }
 
+function useStored(file: StoredFileRow | null | undefined) {
+	const url = file?.url ?? undefined;
+	const viewer = file
+		? knowledgeViewer(file.name, file.contentType)
+		: undefined;
+	const text = useStoredText(url, viewer);
+	const fills = url !== undefined && viewer !== undefined && FILLS.has(viewer);
+	return { url, viewer, text, fills };
+}
+
+function openedAs(
+	folder: string,
+	name: string,
+	file: StoredFileRow | null | undefined,
+	text: string | undefined,
+) {
+	if (!file) return undefined;
+	return { path: `${folder}/${name}`, source: text ?? "" };
+}
+
 export function StoredFile({
 	folder,
 	name,
@@ -111,17 +149,11 @@ export function StoredFile({
 	file: StoredFileRow | null | undefined;
 	actions?: ReactNode;
 }) {
-	const url = file?.url ?? undefined;
-	const viewer = file
-		? knowledgeViewer(file.name, file.contentType)
-		: undefined;
-	const text = useStoredText(url, viewer);
+	const { url, viewer, text, fills } = useStored(file);
 
 	return (
 		<FileView
-			file={
-				file ? { path: `${folder}/${name}`, source: text ?? "" } : undefined
-			}
+			file={openedAs(folder, name, file, text)}
 			missing={file === undefined ? undefined : `no file named ${name}`}
 			actions={
 				url && (
@@ -132,6 +164,7 @@ export function StoredFile({
 				)
 			}
 			body={<StoredBody name={name} url={url} viewer={viewer} text={text} />}
+			fill={fills}
 		/>
 	);
 }
