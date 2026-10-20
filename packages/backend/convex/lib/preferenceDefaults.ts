@@ -3,6 +3,7 @@ export const DEFAULT_TOGGLES = {
 		user: true,
 		results: true,
 		ui: true,
+		attachments: true,
 		lisp: false,
 		thinking: true,
 		memory: true,
