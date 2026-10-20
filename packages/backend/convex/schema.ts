@@ -32,6 +32,37 @@ export const storedModel = v.union(
 	...[...CATALOGUED_CHOICES, ...RETIRED_MODELS].map(pair),
 );
 
+const panelTab = v.object({
+	id: v.string(),
+	content: v.union(
+		v.object({
+			kind: v.literal("file"),
+			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
+			name: v.string(),
+		}),
+		v.object({ kind: v.literal("view"), title: v.string(), node: v.any() }),
+	),
+});
+
+export const panelLayout = v.object({
+	direction: v.union(v.literal("row"), v.literal("column")),
+	focused: v.union(v.string(), v.null()),
+	groups: v.array(
+		v.object({
+			id: v.string(),
+			size: v.number(),
+			panes: v.array(
+				v.object({
+					id: v.string(),
+					size: v.number(),
+					tabs: v.array(panelTab),
+					active: v.union(v.string(), v.null()),
+				}),
+			),
+		}),
+	),
+});
+
 export default defineSchema({
 	users: defineTable({
 		authId: v.string(),
@@ -152,6 +183,11 @@ export default defineSchema({
 	permissions: defineTable({
 		workspaceId: v.id("workspaces"),
 		source: v.string(),
+	}).index("by_workspace", ["workspaceId"]),
+
+	layouts: defineTable({
+		workspaceId: v.id("workspaces"),
+		layout: panelLayout,
 	}).index("by_workspace", ["workspaceId"]),
 
 	repls: defineTable({

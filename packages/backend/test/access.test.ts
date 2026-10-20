@@ -376,6 +376,86 @@ describe("messages", () => {
 	});
 });
 
+describe("panel layout access", () => {
+	const tab = (name: string) => ({
+		id: `file:knowledge/${name}`,
+		content: { kind: "file" as const, folder: "knowledge" as const, name },
+	});
+	const pane = (id: string) => ({
+		id,
+		size: 100,
+		tabs: [tab(`${id}.md`)],
+		active: `file:knowledge/${id}.md`,
+	});
+	const layout = (groups: number, panes = 1) => ({
+		direction: "row" as const,
+		focused: null,
+		groups: Array.from({ length: groups }, (_, g) => ({
+			id: `g${g}`,
+			size: 100 / groups,
+			panes: Array.from({ length: panes }, (_, p) => pane(`p${g}-${p}`)),
+		})),
+	});
+
+	it("keeps a workspace's layout to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.layouts.put, {
+			workspaceId: bob.workspace,
+			layout: layout(2),
+		});
+		expect(
+			await bob.as.query(api.layouts.get, { workspaceId: bob.workspace }),
+		).toEqual(layout(2));
+		await expect(
+			alice.as.query(api.layouts.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.layouts.put, {
+				workspaceId: bob.workspace,
+				layout: layout(1),
+			}),
+		).rejects.toThrow();
+	});
+
+	it("holds one layout per workspace, replaced on save, and none before the first", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toBeNull();
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: layout(1),
+		});
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: layout(3, 3),
+		});
+		const rows = await t.run((ctx) => ctx.db.query("layouts").collect());
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.layout.groups).toHaveLength(3);
+	});
+
+	it("refuses more than three splits either way", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.layouts.put, {
+				workspaceId: alice.workspace,
+				layout: layout(4),
+			}),
+		).rejects.toThrow(/LAYOUT_TOO_MANY_SPLITS/);
+		await expect(
+			alice.as.mutation(api.layouts.put, {
+				workspaceId: alice.workspace,
+				layout: layout(1, 4),
+			}),
+		).rejects.toThrow(/LAYOUT_TOO_MANY_SPLITS/);
+	});
+});
+
 describe("permissions access", () => {
 	it("keeps a workspace's config to its owner", async () => {
 		const t = harness();

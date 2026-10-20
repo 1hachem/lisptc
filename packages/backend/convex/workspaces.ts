@@ -39,6 +39,7 @@ export async function dropWorkspace(
 	await ctx.scheduler.runAfter(0, internal.knowledge.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.attachments.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.bin.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.layouts.purge, { workspaceId });
 }
 
 export const list = query({
