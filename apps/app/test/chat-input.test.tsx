@@ -358,6 +358,28 @@ describe("the chat input", () => {
 		expect(host.textContent).not.toContain("list-reverse");
 	});
 
+	it("says (lisp) runs inline only while the lisp preference is on", () => {
+		const hint = (lisp: boolean) => {
+			act(() =>
+				root.render(
+					<ChatInput
+						placeholder="type a message"
+						onSubmit={vi.fn()}
+						onCommand={vi.fn()}
+						lisp={lisp}
+					/>,
+				),
+			);
+			return host
+				.querySelector("[contenteditable]")
+				?.getAttribute("aria-placeholder");
+		};
+		expect(hint(true)).toBe(
+			"type a message, (lisp) runs inline  ·  / for commands",
+		);
+		expect(hint(false)).toBe("type a message  ·  / for commands");
+	});
+
 	it("closes the open form on Tab when nothing completes", async () => {
 		const field = render(vi.fn());
 		type(field, "(one-arg 1");

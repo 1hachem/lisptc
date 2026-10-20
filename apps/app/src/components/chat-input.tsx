@@ -298,6 +298,11 @@ function LispPlugins({
 	);
 }
 
+function hintOf(lead: string, lisp: boolean, commands: boolean): string {
+	const typed = lisp ? `${lead}, (lisp) runs inline` : lead;
+	return commands ? `${typed}  ·  / for commands` : typed;
+}
+
 export function ChatInput(props: ChatInputProps) {
 	return (
 		<LexicalComposer
@@ -378,7 +383,10 @@ function Editor({
 					/>
 				}
 			>
-				<Field placeholder={placeholder} disabled={disabled} />
+				<Field
+					placeholder={hintOf(placeholder, lisp, onCommand !== undefined)}
+					disabled={disabled}
+				/>
 			</InputShell>
 			<HistoryPlugin />
 			<CommandMenuPlugin onPick={pick} host={menuHost} active={menuActive} />

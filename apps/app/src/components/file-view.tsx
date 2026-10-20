@@ -54,11 +54,7 @@ export function FileView({
 			</div>
 			<div className="px-8 pb-7">
 				<ChatInput
-					placeholder={
-						file
-							? `ask about ${file.path}, (lisp) runs inline  ·  / for commands`
-							: "type a message, (lisp) runs inline  ·  / for commands"
-					}
+					placeholder={file ? `ask about ${file.path}` : "type a message"}
 					onSubmit={(text) => {
 						if (file) sendAbout(file, text);
 					}}
