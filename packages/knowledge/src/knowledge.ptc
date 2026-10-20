@@ -16,3 +16,18 @@ change shows there at once.
 - Edit .ptc file: read, change with set-in / update-in / remove-in, write back:
   (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
 - (knowledge/delete "name") removes file. User approves it.
+
+BIN
+
+Files user attached to message land in bin, shown as bin/ in sidebar. Bin
+files expire after a week unless kept.
+
+- (bin/list) lists bin file names.
+- (bin/read "name") reads bin file, same rules as knowledge/read.
+- (knowledge/keep "name") moves bin file into knowledge, kept for good. Keep
+  what user wants to reuse later; leave rest to expire.
+- (bin/write "name" value) puts file in bin. String stored as text;
+  (:base64 "…" :type "image/png") stored as bytes, like image from tool.
+  Returns stored name; gains number when name taken.
+- (bin/fetch "https://…") downloads url into bin; (bin/fetch url "name")
+  names it. User approves it. Returns stored name.

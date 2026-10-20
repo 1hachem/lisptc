@@ -3,17 +3,23 @@ import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
-import { MemoryKnowledgeStore } from "../src/ports.ts";
+import { type Downloader, MemoryKnowledgeStore } from "../src/ports.ts";
 
 export interface World {
 	ev(code: string): Promise<string>;
 	store: MemoryKnowledgeStore;
 }
 
-export async function world(): Promise<World> {
+const offline: Downloader = {
+	download: async (url) => {
+		throw new Error(`offline: ${url.href}`);
+	},
+};
+
+export async function world(downloader = offline): Promise<World> {
 	const store = new MemoryKnowledgeStore();
 	const interp = new Interp({
-		extensions: [knowledgeExtension(knowledgeHostFor({ store }))],
+		extensions: [knowledgeExtension(knowledgeHostFor({ store, downloader }))],
 	});
 	await runAsync(interp, prelude);
 	return {

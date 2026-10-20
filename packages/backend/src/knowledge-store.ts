@@ -78,4 +78,51 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 		});
 		if (!removed) throw new Error(`no file ${name}`);
 	}
+
+	async binned(): Promise<string[]> {
+		const entries = await this.connect().query(api.bin.list, {
+			workspaceId: this.workspaceId,
+		});
+		return entries.map((entry) => entry.name);
+	}
+
+	async binFile(name: string): Promise<Uint8Array | undefined> {
+		const held = await this.connect().query(api.bin.get, {
+			workspaceId: this.workspaceId,
+			name,
+		});
+		if (held?.url == null) return undefined;
+		return await this.transfer.download(held.url);
+	}
+
+	async bin(
+		name: string,
+		bytes: Uint8Array,
+		contentType: string,
+	): Promise<string> {
+		const client = this.connect();
+		const url = await client.mutation(api.bin.uploadUrl, {
+			workspaceId: this.workspaceId,
+		});
+		const storageId = await this.transfer.upload(
+			url,
+			new Blob([new Uint8Array(bytes)], { type: contentType }),
+		);
+		const added = await client.mutation(api.bin.add, {
+			workspaceId: this.workspaceId,
+			name,
+			storageId,
+			contentType,
+		});
+		if ("refused" in added) throw new Error(`${added.refused}: ${name}`);
+		return added.name;
+	}
+
+	async keep(name: string): Promise<void> {
+		const refused = await this.connect().mutation(api.bin.keep, {
+			workspaceId: this.workspaceId,
+			name,
+		});
+		if (refused !== null) throw new Error(`${refused}: ${name}`);
+	}
 }

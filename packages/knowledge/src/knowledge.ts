@@ -3,21 +3,25 @@ import { EvalException } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
+	Cell,
 	EndOfFile,
 	jsonToLisp,
 	lispToJson,
+	listToArray,
 } from "@repo/interpreter/objects";
+import { plistOptions } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
-import { zAny } from "@repo/interpreter/schema";
+import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import type { Awaitable } from "@repo/shared/host";
 import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
-import type { KnowledgeHost } from "./ports.ts";
+import type { Downloaded, KnowledgeHost } from "./ports.ts";
 
 const KNOWLEDGE_WRITE = "knowledge/write";
 const KNOWLEDGE_DELETE = "knowledge/delete";
+const BIN_FETCH = "bin/fetch";
 
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
@@ -176,7 +180,145 @@ function printFile(value: unknown): string {
 	return `${source}\n`;
 }
 
-function registerKnowledge(interp: Interp, { store }: KnowledgeHost): void {
+function base64Bytes(name: string, encoded: unknown): Uint8Array {
+	if (typeof encoded !== "string")
+		throw new EvalException(`${name} takes :base64 as a string`, encoded);
+	try {
+		return Uint8Array.from(atob(encoded.replace(/\s+/g, "")), (c) =>
+			c.charCodeAt(0),
+		);
+	} catch {
+		throw new EvalException(`${name} :base64 is not base64`, encoded);
+	}
+}
+
+function binned(name: string, value: unknown): Downloaded {
+	if (typeof value === "string")
+		return {
+			bytes: new TextEncoder().encode(value),
+			contentType: contentTypeOf(name),
+		};
+	if (!(value instanceof Cell))
+		throw new EvalException(
+			`${name} takes a string, or (:base64 "…" :type "…") for bytes`,
+			value,
+		);
+	const options = plistOptions(value, ["base64", "type"]);
+	const type = options.get("type");
+	return {
+		bytes: base64Bytes(name, options.get("base64")),
+		contentType:
+			typeof type === "string" && type !== ""
+				? type
+				: "application/octet-stream",
+	};
+}
+
+function fetchedUrl(value: unknown): URL {
+	let url: URL | undefined;
+	try {
+		url = typeof value === "string" ? new URL(value) : undefined;
+	} catch {
+		url = undefined;
+	}
+	if (
+		url === undefined ||
+		(url.protocol !== "https:" && url.protocol !== "http:")
+	)
+		throw new EvalException("an http or https url expected", value);
+	return url;
+}
+
+function nameFromUrl(url: URL): string {
+	const last = decodeURIComponent(url.pathname.split("/").pop() ?? "").trim();
+	return last === "" || last.startsWith(".") ? url.hostname : last;
+}
+
+function registerBin(
+	interp: Interp,
+	{ store, downloader }: KnowledgeHost,
+): void {
+	interp.defGen(
+		"bin/list",
+		0,
+		"(bin/list)",
+		"Return the names of the files in the bin, as strings: what the user attached to a message, or what bin/write and bin/fetch put there. They expire unless kept.",
+		z.tuple([]),
+		function* (): Eval {
+			return arrayToList(yield* settled(store.binned()));
+		},
+	);
+
+	interp.defGen(
+		"bin/read",
+		1,
+		'(bin/read "name")',
+		"Read a file in the bin the way knowledge/read reads a knowledge file. Returns nil when there is no such file.",
+		z.tuple([zString]),
+		function* ([name]): Eval {
+			const checked = fileName(name);
+			const bytes = yield* settled(store.binFile(checked));
+			return bytes === undefined
+				? null
+				: yield* settled(readFile(checked, bytes));
+		},
+	);
+
+	interp.defGen(
+		"bin/write",
+		2,
+		'(bin/write "name" value)',
+		'Put a file in the bin. A string is stored as text under the type its name implies; (:base64 "…" :type "image/png") is stored as those bytes. Returns the name it was stored under, which gains a number when the bin already holds that name.',
+		z.tuple([zString, zAny]),
+		function* ([name, value]): Eval {
+			const checked = fileName(name);
+			const { bytes, contentType } = binned(checked, value);
+			return yield* settled(store.bin(checked, bytes, contentType));
+		},
+	);
+
+	interp.defGen(
+		BIN_FETCH,
+		-1,
+		'(bin/fetch "https://…" ["name"])',
+		"Download a url into the bin. The user approves it first. The name defaults to the last part of the url's path. Returns the name it was stored under.",
+		z.tuple([zList]),
+		function* ([rest]): Eval {
+			const [target, named] = listToArray(rest);
+			const url = fetchedUrl(target);
+			const name = fileName(named ?? nameFromUrl(url));
+			let fetched: Downloaded;
+			try {
+				fetched = yield* settled(downloader.download(url));
+			} catch (ex) {
+				throw new EvalException(
+					`could not fetch ${url.href}: ${ex instanceof Error ? ex.message : String(ex)}`,
+					target,
+				);
+			}
+			return yield* settled(
+				store.bin(name, fetched.bytes, fetched.contentType),
+			);
+		},
+	);
+
+	interp.defGen(
+		"knowledge/keep",
+		1,
+		'(knowledge/keep "name")',
+		"Move a file from the bin into the knowledge folder, so it is kept for good and no longer expires. Returns the name.",
+		z.tuple([zString]),
+		function* ([name]): Eval {
+			const checked = fileName(name);
+			yield* settled(store.keep(checked));
+			return checked;
+		},
+	);
+}
+
+function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
+	const { store } = host;
+	registerBin(interp, host);
 	interp.defGen(
 		"knowledge/list",
 		0,
@@ -239,7 +381,7 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 	return Object.assign(
 		(interp: Interp): void => registerKnowledge(interp, host),
 		{
-			asks: [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE],
+			asks: [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE, BIN_FETCH],
 			prompt: host.prompt(),
 		},
 	);
