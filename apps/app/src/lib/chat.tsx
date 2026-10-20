@@ -44,6 +44,7 @@ export interface ChatMessage {
 		failed?: unknown;
 		source?: unknown;
 		results?: unknown;
+		attachments?: unknown;
 	};
 }
 

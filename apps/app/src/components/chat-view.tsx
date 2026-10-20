@@ -6,6 +6,7 @@ import {
 	useStickToBottomContext,
 } from "@repo/ui";
 import { useEffect, useMemo, useState } from "react";
+import { toolAttachments, userAttachments } from "../lib/attached-files.ts";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
@@ -30,6 +31,7 @@ import { useUI } from "../lib/ui.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { AskCard } from "./ask-card.tsx";
+import { AttachedFiles } from "./attached-files.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { SkippedProse } from "./lisp-text.tsx";
@@ -156,10 +158,12 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 	const ui = toUiNode(toolUi(message));
 	const model = toolModelOutput(message).output;
 	const results = toolResults(message).join("\n");
+	const attachments = shown.attachments ? toolAttachments(message) : [];
 	return {
 		output,
 		results,
 		ui: shown.ui ? ui : undefined,
+		attachments,
 		model,
 		drawsUser: shown.user && output !== "",
 		drawsResults: shown.results && results !== "",
@@ -171,17 +175,28 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 type ToolChannels = ReturnType<typeof toolChannels>;
 
 function drawsAny(channels: ToolChannels): boolean {
-	const { ui, drawsUser, drawsResults, drawsError, drawsModel } = channels;
+	const { ui, attachments, drawsUser, drawsResults, drawsError, drawsModel } =
+		channels;
 	return (
-		ui !== undefined || drawsUser || drawsResults || drawsError || drawsModel
+		ui !== undefined ||
+		attachments.length > 0 ||
+		drawsUser ||
+		drawsResults ||
+		drawsError ||
+		drawsModel
 	);
 }
 
 function isLabelled(channels: ToolChannels): boolean {
-	const { ui, drawsUser, drawsResults, drawsError, drawsModel } = channels;
-	const drawn = [ui !== undefined, drawsUser, drawsResults, drawsModel].filter(
-		Boolean,
-	);
+	const { ui, attachments, drawsUser, drawsResults, drawsError, drawsModel } =
+		channels;
+	const drawn = [
+		ui !== undefined,
+		attachments.length > 0,
+		drawsUser,
+		drawsResults,
+		drawsModel,
+	].filter(Boolean);
 	return drawn.length > 1 || (drawsError && drawsModel);
 }
 
@@ -210,6 +225,7 @@ function ToolResult({ message }: { message: ChatMessage }) {
 		output,
 		results,
 		ui,
+		attachments,
 		model,
 		drawsUser,
 		drawsResults,
@@ -226,6 +242,11 @@ function ToolResult({ message }: { message: ChatMessage }) {
 			{ui !== undefined && (
 				<Channel id="ui" labelled={labelled}>
 					<GenerativeUI node={ui} />
+				</Channel>
+			)}
+			{attachments.length > 0 && (
+				<Channel id="attachments" labelled={labelled}>
+					<AttachedFiles files={attachments} />
 				</Channel>
 			)}
 			{drawsUser && (
@@ -283,6 +304,19 @@ function SystemLine({ message }: { message: ChatMessage }) {
 	);
 }
 
+function UserMessage({ text }: { text: string }) {
+	const { shown } = useUI();
+	const attached = shown.attachments ? userAttachments(text) : undefined;
+	if (attached === undefined || attached.files.length === 0)
+		return <UserLine text={text} />;
+	return (
+		<>
+			{attached.text !== "" && <UserLine text={attached.text} />}
+			<AttachedFiles files={attached.files} />
+		</>
+	);
+}
+
 function ChatLine({
 	message,
 	index,
@@ -306,7 +340,7 @@ function ChatLine({
 				</div>
 			)}
 			{isUserMessage(message) ? (
-				<UserLine text={messageText(message)} />
+				<UserMessage text={messageText(message)} />
 			) : (
 				<AssistantText
 					id={message.id ?? String(index)}
