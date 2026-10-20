@@ -143,7 +143,7 @@ Everything else:
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter.
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
-- `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
+- `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
@@ -192,7 +192,7 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   that runs a REPL itself, and `@repo/backend` for the agent `apps/app` serves.
   Adding one to the served agent means adding its prompt to what `apps/app`
   ships, and `apps/app/AGENTS.md` carries that rule.
-- `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
+- `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
   above it reaches past the entrypoints its `package.json` exports. Its stores
