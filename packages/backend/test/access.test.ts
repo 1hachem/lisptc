@@ -1,6 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
+import { DEFAULT_TOGGLES } from "../convex/lib/preference-defaults.ts";
 import {
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
@@ -585,8 +586,13 @@ describe("preferences access", () => {
 		const bob = await signIn(t, "bob@example.com");
 		const preferences = { theme: "dusk", font: "mono", themeUses: { dusk: 2 } };
 		await bob.as.mutation(api.preferences.put, { preferences });
-		expect(await bob.as.query(api.preferences.get, {})).toEqual(preferences);
-		expect(await alice.as.query(api.preferences.get, {})).toBeNull();
+		expect(await bob.as.query(api.preferences.get, {})).toEqual({
+			...DEFAULT_TOGGLES,
+			...preferences,
+		});
+		expect(await alice.as.query(api.preferences.get, {})).toEqual(
+			DEFAULT_TOGGLES,
+		);
 		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
 	});
 
@@ -605,11 +611,17 @@ describe("preferences access", () => {
 		expect(await alice.as.query(api.preferences.get, {})).toEqual({
 			theme: "dusk",
 			font: "mono",
-			channels: { lisp: false },
-			metadata: { tokens: true },
+			channels: { ...DEFAULT_TOGGLES.channels, lisp: false },
+			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
+			input: DEFAULT_TOGGLES.input,
 		});
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			channels: { lisp: false },
+			metadata: { tokens: true },
+		});
+		expect(rows[0].input).toBeUndefined();
 	});
 
 	it("refuses preferences past the size limit", async () => {

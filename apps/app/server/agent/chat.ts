@@ -89,7 +89,7 @@ async function prepareTurn(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
 	const runsForms =
-		(await convex.query(api.preferences.get, {}))?.input?.lisp !== false;
+		(await convex.query(api.preferences.get, {})).input?.lisp !== false;
 	const { history, quiet } = await oneTurnAtATime(chatId, async () => {
 		await convex.mutation(api.messages.append, {
 			chatId,

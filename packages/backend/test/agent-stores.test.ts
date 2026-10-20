@@ -86,9 +86,4 @@ describe("the convex preferences store", () => {
 			hidden: ["tests"],
 		});
 	});
-
-	it("reads nothing for a user who never saved", async () => {
-		const { client } = spyClient({});
-		expect(await new ConvexPreferencesStore(() => client).read()).toEqual({});
-	});
 });
