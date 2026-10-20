@@ -30,11 +30,12 @@ const MEDIA: Record<MediaViewer, (name: string, url: string) => ReactNode> = {
 	image: (name, url) => (
 		<img src={url} alt={name} className="max-w-full self-start" />
 	),
-	pdf: (name, url) => (
-		<iframe
-			src={url}
-			title={name}
-			className="h-[75vh] w-full border border-bg2"
+	pdf: (_name, url) => (
+		<embed
+			src={`${url}#view=FitH`}
+			type="application/pdf"
+			title="PDF Viewer"
+			className="h-[calc(100vh-10rem)] min-h-96 w-full rounded-sm border border-bg2"
 		/>
 	),
 	video: (_name, url) => (
