@@ -1,9 +1,10 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
+import { useBinUpload, withAttachments } from "../lib/knowledge.ts";
 import { sentHistory } from "../lib/message-history.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatInput } from "./chat-input.tsx";
@@ -25,6 +26,14 @@ export function Chat() {
 		convexQuery(api.messages.sent, { workspaceId }),
 	);
 	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
+	const toBin = useBinUpload(workspaceId);
+	const submit = useCallback(
+		async (text: string, files: File[]) => {
+			const names = files.length === 0 ? [] : await toBin(files);
+			send(withAttachments(text, names));
+		},
+		[toBin, send],
+	);
 
 	return (
 		<>
@@ -52,7 +61,7 @@ export function Chat() {
 				</div>
 				<ChatInput
 					placeholder="type a message, (lisp) runs inline  ·  / for commands"
-					onSubmit={send}
+					onSubmit={submit}
 					history={history}
 					onCommand={runCommand}
 					isStreaming={isLoading}

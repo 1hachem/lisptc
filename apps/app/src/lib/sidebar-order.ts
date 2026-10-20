@@ -5,6 +5,7 @@ export const SIDEBAR_ENTRIES = [
 	"memories",
 	"permissions",
 	"knowledge",
+	"bin",
 	"sub-agents",
 	"triggers",
 	"tasks",

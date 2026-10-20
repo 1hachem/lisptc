@@ -166,7 +166,7 @@ export function knowledgeViewer(
 const UPLOAD_FAILURES: Record<string, string> = {
 	BAD_KNOWLEDGE_NAME: "a name with no slashes, not starting with a dot",
 	FILE_TOO_LARGE: `over the ${MAX_KNOWLEDGE_BYTES / 1_048_576} MB limit`,
-	TOO_MANY_FILES: "the knowledge folder is full",
+	TOO_MANY_FILES: "the folder is full",
 	FORBIDDEN: "no access to this workspace",
 };
 
@@ -184,6 +184,60 @@ function uploadFailure(name: string, error: unknown): string {
 	return `${name} not uploaded: ${reason}`;
 }
 
+async function stored(url: string, file: File): Promise<Id<"_storage">> {
+	if (file.size > MAX_KNOWLEDGE_BYTES)
+		throw new ConvexError({ code: "FILE_TOO_LARGE" });
+	const response = await fetch(url, {
+		method: "POST",
+		headers: { "Content-Type": file.type || "application/octet-stream" },
+		body: file,
+	});
+	if (!response.ok) throw new Error(`upload failed (${response.status})`);
+	const { storageId } = (await response.json()) as {
+		storageId: Id<"_storage">;
+	};
+	return storageId;
+}
+
+export function useBinUpload(workspaceId: Id<"workspaces">) {
+	const uploadUrl = useConvexMutation(api.bin.uploadUrl);
+	const add = useConvexMutation(api.bin.add);
+
+	const uploadOne = async (file: File): Promise<string> => {
+		const storageId = await stored(await uploadUrl({ workspaceId }), file);
+		const added = await add({
+			workspaceId,
+			name: file.name,
+			storageId,
+			contentType: file.type,
+		});
+		if ("refused" in added) throw new ConvexError({ code: added.refused });
+		return added.name;
+	};
+
+	return async (files: readonly File[]): Promise<string[]> => {
+		const settled = await Promise.allSettled(files.map(uploadOne));
+		const failures = settled.flatMap((result, index) =>
+			result.status === "rejected"
+				? [uploadFailure(files[index].name, result.reason)]
+				: [],
+		);
+		if (failures.length > 0) throw new Error(failures.join("; "));
+		return settled.flatMap((result) =>
+			result.status === "fulfilled" ? [result.value] : [],
+		);
+	};
+}
+
+export function withAttachments(
+	text: string,
+	names: readonly string[],
+): string {
+	if (names.length === 0) return text;
+	const attached = `attached: ${names.map((name) => `bin/${name}`).join(", ")}`;
+	return text === "" ? attached : `${text}\n\n${attached}`;
+}
+
 export function useKnowledgeUpload(workspaceId: Id<"workspaces">) {
 	const uploadUrl = useConvexMutation(api.knowledge.uploadUrl);
 	const add = useConvexMutation(api.knowledge.add);
@@ -191,17 +245,7 @@ export function useKnowledgeUpload(workspaceId: Id<"workspaces">) {
 	const [failures, setFailures] = useState<string[]>([]);
 
 	const uploadOne = async (file: File) => {
-		if (file.size > MAX_KNOWLEDGE_BYTES)
-			throw new ConvexError({ code: "FILE_TOO_LARGE" });
-		const response = await fetch(await uploadUrl({ workspaceId }), {
-			method: "POST",
-			headers: { "Content-Type": file.type || "application/octet-stream" },
-			body: file,
-		});
-		if (!response.ok) throw new Error(`upload failed (${response.status})`);
-		const { storageId } = (await response.json()) as {
-			storageId: Id<"_storage">;
-		};
+		const storageId = await stored(await uploadUrl({ workspaceId }), file);
 		const refused = await add({
 			workspaceId,
 			name: file.name,

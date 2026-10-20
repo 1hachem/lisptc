@@ -1,3 +1,5 @@
+import { Attachment01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -5,7 +7,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
-import { cn } from "@repo/ui";
+import { cn, PromptInputProvider, usePromptInputAttachments } from "@repo/ui";
 import {
 	$createLineBreakNode,
 	$createParagraphNode,
@@ -15,6 +17,7 @@ import {
 	KEY_DOWN_COMMAND,
 } from "lexical";
 import {
+	type DragEvent,
 	type RefObject,
 	useCallback,
 	useEffect,
@@ -23,6 +26,7 @@ import {
 	useState,
 } from "react";
 import type { Command } from "../lib/commands.ts";
+import { knowledgeIcon } from "../lib/knowledge.ts";
 import {
 	newestFirst,
 	type RecallDirection,
@@ -37,7 +41,7 @@ import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 
 export interface ChatInputProps {
 	placeholder?: string;
-	onSubmit: (text: string) => void;
+	onSubmit: (text: string, files: File[]) => void | Promise<void>;
 	history?: string[];
 	onCommand?: (name: string) => Promise<string | null>;
 	isStreaming?: boolean;
@@ -148,11 +152,13 @@ function usePick({
 	onCommand,
 	flash,
 	search,
+	attach,
 }: {
 	replace: (text: string) => void;
 	onCommand?: (name: string) => Promise<string | null>;
 	flash: (message: string) => void;
 	search: (open: boolean) => void;
+	attach: () => void;
 }) {
 	const [editor] = useLexicalComposerContext();
 	return useCallback(
@@ -167,18 +173,26 @@ function usePick({
 				search(true);
 				return;
 			}
+			if (command.name === "/attachment") {
+				attach();
+				return;
+			}
 			void Promise.resolve(onCommand?.(command.name)).then((shown) => {
 				if (shown) flash(shown);
 			});
 		},
-		[editor, replace, onCommand, flash, search],
+		[editor, replace, onCommand, flash, search, attach],
 	);
 }
 
-function useDraft(onSubmit: (text: string) => void, disabled?: boolean) {
+function useDraft(
+	onSubmit: (text: string) => boolean | Promise<boolean>,
+	disabled: boolean | undefined,
+	attached: boolean,
+) {
 	const [editor] = useLexicalComposerContext();
 	const [text, setText] = useState("");
-	const empty = text.trim() === "";
+	const empty = text.trim() === "" && !attached;
 
 	useEffect(() => {
 		editor.setEditable(!disabled);
@@ -196,8 +210,12 @@ function useDraft(onSubmit: (text: string) => void, disabled?: boolean) {
 		(quiet = false) => {
 			if (disabled || empty) return;
 			const message = text.trim();
-			onSubmit(quiet ? quietly(message) : message);
-			replace("");
+			const sent = onSubmit(quiet ? quietly(message) : message);
+			if (sent === true) replace("");
+			else if (sent !== false)
+				void sent.then((done) => {
+					if (done) replace("");
+				});
 		},
 		[text, empty, onSubmit, disabled, replace],
 	);
@@ -256,6 +274,140 @@ function useKeys({
 	);
 }
 
+async function asFile(part: {
+	url: string;
+	filename?: string;
+	mediaType: string;
+}): Promise<File> {
+	const blob = await (await fetch(part.url)).blob();
+	return new File([blob], part.filename ?? "file", { type: part.mediaType });
+}
+
+function useAttach(
+	onSubmit: ChatInputProps["onSubmit"],
+	flash: (message: string) => void,
+) {
+	const attachments = usePromptInputAttachments();
+	const [sending, setSending] = useState(false);
+	const submit = useCallback(
+		(text: string): boolean | Promise<boolean> => {
+			if (attachments.files.length === 0) {
+				void onSubmit(text, []);
+				return true;
+			}
+			setSending(true);
+			return (async () => {
+				try {
+					await onSubmit(
+						text,
+						await Promise.all(attachments.files.map(asFile)),
+					);
+					attachments.clear();
+					return true;
+				} catch (error) {
+					flash(error instanceof Error ? error.message : String(error));
+					return false;
+				} finally {
+					setSending(false);
+				}
+			})();
+		},
+		[attachments, onSubmit, flash],
+	);
+	return { attachments, submit, sending };
+}
+
+function AttachAction({
+	onClick,
+	disabled,
+}: {
+	onClick: () => void;
+	disabled?: boolean;
+}) {
+	return (
+		<button
+			type="button"
+			aria-label="attach"
+			title="attach files"
+			onClick={onClick}
+			disabled={disabled}
+			className={cn(
+				"group flex h-auto flex-none items-center self-center rounded-none bg-bg2 px-[9px] py-px text-[11.5px]",
+				disabled ? "cursor-not-allowed text-dim" : "text-dim hover:text-fg",
+			)}
+		>
+			<span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover:mr-[7px] group-hover:max-w-16 group-hover:opacity-100 group-focus-visible:mr-[7px] group-focus-visible:max-w-16 group-focus-visible:opacity-100">
+				attach
+			</span>
+			<HugeiconsIcon
+				icon={Attachment01Icon}
+				className="size-icon-sm flex-none"
+			/>
+		</button>
+	);
+}
+
+function AttachmentChips({
+	files,
+	onRemove,
+}: {
+	files: { id: string; filename?: string; mediaType: string }[];
+	onRemove: (id: string) => void;
+}) {
+	if (files.length === 0) return null;
+	return (
+		<div className="flex flex-wrap gap-1.5 border-b border-bg2 bg-bg1 px-3 py-1">
+			{files.map((file) => (
+				<span
+					key={file.id}
+					className="flex h-control-xs items-center gap-1.5 bg-bg2 px-2 text-[11.5px]"
+				>
+					<HugeiconsIcon
+						icon={knowledgeIcon(file.filename ?? "", file.mediaType)}
+						className="size-icon-sm text-dim"
+					/>
+					<span className="max-w-48 truncate">{file.filename}</span>
+					<button
+						type="button"
+						aria-label={`remove ${file.filename}`}
+						onClick={() => onRemove(file.id)}
+						className="flex items-center text-dim hover:text-red"
+					>
+						<HugeiconsIcon icon={Cancel01Icon} className="size-icon-xs" />
+					</button>
+				</span>
+			))}
+		</div>
+	);
+}
+
+function useDropZone(add: (files: File[]) => void, disabled?: boolean) {
+	const [over, setOver] = useState(false);
+	const carriesFiles = (event: DragEvent) =>
+		!disabled && event.dataTransfer.types.includes("Files");
+	return {
+		over,
+		zone: {
+			onDragOver: (event: DragEvent) => {
+				if (!carriesFiles(event)) return;
+				event.preventDefault();
+				setOver(true);
+			},
+			onDragLeave: (event: DragEvent) => {
+				if (event.currentTarget.contains(event.relatedTarget as Node | null))
+					return;
+				setOver(false);
+			},
+			onDrop: (event: DragEvent) => {
+				setOver(false);
+				if (!carriesFiles(event)) return;
+				event.preventDefault();
+				add([...event.dataTransfer.files]);
+			},
+		},
+	};
+}
+
 function Field({
 	placeholder,
 	disabled,
@@ -288,18 +440,20 @@ function Field({
 
 export function ChatInput(props: ChatInputProps) {
 	return (
-		<LexicalComposer
-			initialConfig={{
-				namespace: "chat-input",
-				theme: {},
-				nodes: [LispTokenNode],
-				onError: (error) => {
-					throw error;
-				},
-			}}
-		>
-			<Editor {...props} />
-		</LexicalComposer>
+		<PromptInputProvider>
+			<LexicalComposer
+				initialConfig={{
+					namespace: "chat-input",
+					theme: {},
+					nodes: [LispTokenNode],
+					onError: (error) => {
+						throw error;
+					},
+				}}
+			>
+				<Editor {...props} />
+			</LexicalComposer>
+		</PromptInputProvider>
 	);
 }
 
@@ -313,8 +467,17 @@ function Editor({
 	disabled,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
-	const { text, empty, replace, send } = useDraft(onSubmit, disabled);
 	const [notice, flash] = useNotice();
+	const { attachments, submit, sending } = useAttach(onSubmit, flash);
+	const busy = disabled || sending;
+	const { text, empty, replace, send } = useDraft(
+		submit,
+		busy,
+		attachments.files.length > 0,
+	);
+	const picker = useRef<HTMLInputElement>(null);
+	const attach = useCallback(() => picker.current?.click(), []);
+	const { over, zone } = useDropZone(attachments.add, busy);
 	const [searching, setSearching] = useState(false);
 	const prompts = useMemo(() => newestFirst(history), [history]);
 	const step = useRecall(history);
@@ -327,39 +490,72 @@ function Editor({
 		[editor, replace],
 	);
 
-	const pick = usePick({ replace, onCommand, flash, search: setSearching });
+	const pick = usePick({
+		replace,
+		onCommand,
+		flash,
+		search: setSearching,
+		attach,
+	});
 
 	const menuHost = useRef<HTMLDivElement>(null);
 	const menuActive = useRef(false);
 
 	useKeys({
-		disabled,
+		disabled: busy,
 		menuActive,
 		recall: (direction) => step(text, direction),
 		replace,
 		enter: isStreaming && empty ? onStop : send,
 	});
-	const look = disabled ? DISABLED : ENABLED;
+	const look = busy ? DISABLED : ENABLED;
 
 	return (
-		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
+		<div
+			{...zone}
+			className={cn(
+				"mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]",
+				over && "outline outline-1 outline-dashed outline-yellow",
+			)}
+		>
+			<input
+				ref={picker}
+				type="file"
+				multiple
+				hidden
+				onChange={(event) => {
+					const picked = event.target.files;
+					if (picked !== null) attachments.add([...picked]);
+					event.target.value = "";
+					editor.focus();
+				}}
+			/>
 			<div ref={menuHost} />
-			<Notice text={notice} />
+			<Notice
+				text={sending ? "attaching…" : over ? "drop to attach" : notice}
+			/>
+			<AttachmentChips
+				files={attachments.files}
+				onRemove={attachments.remove}
+			/>
 			<InputShell
 				prompt={look.prompt}
 				tone={look.tone}
-				dim={disabled}
+				dim={busy}
 				action={
-					<SendAction
-						isStreaming={isStreaming}
-						empty={empty}
-						disabled={disabled}
-						onStop={onStop}
-						onSend={() => send()}
-					/>
+					<>
+						<AttachAction onClick={attach} disabled={busy} />
+						<SendAction
+							isStreaming={isStreaming}
+							empty={empty}
+							disabled={busy}
+							onStop={onStop}
+							onSend={() => send()}
+						/>
+					</>
 				}
 			>
-				<Field placeholder={placeholder} disabled={disabled} />
+				<Field placeholder={placeholder} disabled={busy} />
 			</InputShell>
 			<HistoryPlugin />
 			<LispHighlightPlugin />

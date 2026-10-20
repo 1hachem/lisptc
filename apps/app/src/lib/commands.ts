@@ -19,6 +19,11 @@ export interface Command {
 }
 
 export const commands: Command[] = [
+	{
+		name: "/attachment",
+		desc: "attach files to the next message",
+		aliases: ["/attach", "/upload"],
+	},
 	{ name: "/copy", desc: "copy the conversation to the clipboard" },
 	{ name: "/dark", desc: "switch to the dark variant of the theme" },
 	{ name: "/debug", desc: "show what each step sent back to the model" },

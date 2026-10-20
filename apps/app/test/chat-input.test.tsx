@@ -47,7 +47,7 @@ afterEach(() => {
 });
 
 function render(
-	onSubmit: (text: string) => void,
+	onSubmit: (text: string, files: File[]) => void,
 	onCommand?: (name: string) => Promise<string | null>,
 ): HTMLElement {
 	act(() =>
@@ -114,7 +114,7 @@ describe("the chat input", () => {
 		const field = render(onSubmit);
 		type(field, "hello (+ 1 2)");
 		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("hello (+ 1 2)");
+		expect(onSubmit).toHaveBeenCalledWith("hello (+ 1 2)", []);
 		expect(textOf(field)).toBe("");
 	});
 
@@ -132,7 +132,7 @@ describe("the chat input", () => {
 		const field = render(onSubmit);
 		type(field, "(let ((x 1))");
 		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("(let ((x 1))");
+		expect(onSubmit).toHaveBeenCalledWith("(let ((x 1))", []);
 	});
 
 	it("offers the commands for a leading slash and runs the one Enter picks", async () => {
@@ -168,5 +168,32 @@ describe("the chat input", () => {
 		type(field, "see (+ 1");
 		typeAtCaret(field, " 2) ok");
 		expect(textOf(field)).toBe("see (+ 1 2) ok");
+	});
+
+	it("shows a dropped file as a chip that can be taken off again", () => {
+		const field = render(vi.fn());
+		const zone = host.firstElementChild;
+		if (!zone) throw new Error("no drop zone");
+		const file = new File(["%PDF"], "spec.pdf", { type: "application/pdf" });
+		act(() => {
+			const drop = new Event("drop", { bubbles: true, cancelable: true });
+			Object.assign(drop, {
+				dataTransfer: { types: ["Files"], files: [file] },
+			});
+			zone.dispatchEvent(drop);
+		});
+		expect(host.textContent).toContain("spec.pdf");
+		const remove = host.querySelector<HTMLButtonElement>(
+			'[aria-label="remove spec.pdf"]',
+		);
+		act(() => remove?.click());
+		expect(host.textContent).not.toContain("spec.pdf");
+		expect(textOf(field)).toBe("");
+	});
+
+	it("offers an attach button beside send", () => {
+		render(vi.fn());
+		expect(host.querySelector('button[aria-label="attach"]')).not.toBeNull();
+		expect(host.querySelector('input[type="file"]')).not.toBeNull();
 	});
 });
