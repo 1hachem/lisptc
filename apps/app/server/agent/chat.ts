@@ -50,16 +50,17 @@ async function runUserForms(
 	convex: ReturnType<typeof convexAs>,
 	chatId: TurnInput["chatId"],
 	message: string,
-): Promise<void> {
+): Promise<{ quiet: boolean }> {
 	const evaluated = await evalUserMessage(message, {
 		repls,
 		threadId: chatId,
 	});
-	if (evaluated === undefined) return;
+	if (evaluated === undefined) return { quiet: false };
 	await convex.mutation(api.messages.append, {
 		chatId,
-		messages: toStored([evaluated]),
+		messages: toStored([evaluated.message]),
 	});
+	return { quiet: evaluated.quiet };
 }
 
 const preparing = new Map<string, Promise<void>>();
@@ -87,15 +88,21 @@ async function prepareTurn(
 	const { provider, model } = chatModel(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
-	const history = await oneTurnAtATime(chatId, async () => {
+	const { history, quiet } = await oneTurnAtATime(chatId, async () => {
 		await convex.mutation(api.messages.append, {
 			chatId,
 			messages: [opening],
 		});
-		if ("message" in input) await runUserForms(convex, chatId, input.message);
-		return convex.query(api.messages.transcript, { chatId });
+		const { quiet } =
+			"message" in input
+				? await runUserForms(convex, chatId, input.message)
+				: { quiet: false };
+		return {
+			history: await convex.query(api.messages.transcript, { chatId }),
+			quiet,
+		};
 	});
-	return { provider, model, history };
+	return { provider, model, history, quiet };
 }
 
 export const steerRequestSchema = z.object({
@@ -131,7 +138,7 @@ export const turn = {
 			);
 		}
 		const convex = convexAs(context.session);
-		const { provider, model, history } = await convex
+		const { provider, model, history, quiet } = await convex
 			.mutation(api.chats.start, { chatId })
 			.then(() => prepareTurn(convex, input, opening))
 			.catch(async (error: unknown) => {
@@ -161,6 +168,7 @@ export const turn = {
 				threadId: chatId,
 				config: { provider, model },
 				signal: AbortSignal.any([request.signal, deadline]),
+				quiet,
 				steer: {
 					inbox: steers,
 					key: steerKey(context.session.subject, chatId),

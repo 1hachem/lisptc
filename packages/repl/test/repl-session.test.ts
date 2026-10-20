@@ -1,3 +1,4 @@
+import { ends } from "@repo/interpreter/effects";
 import { type LlmCall, llmSlot } from "@repo/interpreter/observe";
 import { describe, expect, it } from "vitest";
 import { agentRepl, answering, noting, observedExtension } from "./helpers.ts";
@@ -32,37 +33,28 @@ describe("AgentRepl (in-process REPL binding)", () => {
 		expect(await r.eval("(progn sq)")).toContain("void variable");
 	});
 
-	describe("the finished signal", () => {
-		it("raises the flag on a step an extension answered, and prints nothing", async () => {
+	describe("the end effect", () => {
+		it("ends a step an extension answered, and prints nothing", async () => {
 			const r = agentRepl([answering(), noting("an aside")]);
-			expect(await r.eval("   \n  ")).toBe("");
-			expect(r.takeFinished()).toBe(true);
+			const out = await r.evalOutput("   \n  ");
+			expect(out.model).toBe("");
+			expect(ends(out.effects)).toBe(true);
 		});
 
-		it("takeFinished() clears the flag after reading", async () => {
+		it("belongs to the step that raised it, not the next one", async () => {
 			const r = agentRepl([answering(), noting("an aside")]);
-			await r.eval("   ");
-			expect(r.takeFinished()).toBe(true);
-			expect(r.takeFinished()).toBe(false);
+			expect(ends((await r.evalOutput("   ")).effects)).toBe(true);
+			expect(ends((await r.evalOutput("(+ 1 2)")).effects)).toBe(false);
 		});
 
-		it("is false when the step ran a form", async () => {
+		it("is not raised when the step ran a form", async () => {
 			const r = agentRepl([answering(), noting("an aside")]);
-			await r.eval("(+ 1 2)");
-			expect(r.takeFinished()).toBe(false);
+			expect(ends((await r.evalOutput("(+ 1 2)")).effects)).toBe(false);
 		});
 
-		it("is false when no extension claims the step", async () => {
+		it("is not raised when no extension claims the step", async () => {
 			const r = agentRepl();
-			await r.eval("   ");
-			expect(r.takeFinished()).toBe(false);
-		});
-
-		it("reset() clears a raised flag", async () => {
-			const r = agentRepl([answering(), noting("an aside")]);
-			await r.eval("   ");
-			r.reset();
-			expect(r.takeFinished()).toBe(false);
+			expect(ends((await r.evalOutput("   ")).effects)).toBe(false);
 		});
 	});
 

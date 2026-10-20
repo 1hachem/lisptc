@@ -1,3 +1,5 @@
+import { agentsExtension } from "@repo/agents-extension";
+import { agentsHost } from "@repo/agents-extension/host";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -26,6 +28,7 @@ export function docExtensions(): InterpExtension[] {
 	return [
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
+		agentsExtension(agentsHost),
 		mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
@@ -42,6 +45,7 @@ export function sessionExtensions(): InterpExtension[] {
 		secretsExtension(secretsHost),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
+		agentsExtension(agentsHost),
 		mcpExtension({
 			...mcpHostFor({
 				host: new LocalProcessHost(),

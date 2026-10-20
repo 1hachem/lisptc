@@ -1,0 +1,5 @@
+AGENTS
+
+User may wrap forms in (quietly form...). Forms run, you not woken for that
+message. Message and its result stay in chat; read them next turn. Never call
+quietly yourself.
