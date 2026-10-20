@@ -9,6 +9,9 @@ const world = vi.hoisted(() => ({
 	storedWhenStreamed: [] as Record<string, unknown>[][],
 	sent: [] as ChatInput[],
 	quiet: [] as boolean[],
+	runsForms: [] as (boolean | undefined)[],
+	evaluated: [] as string[],
+	lisp: true,
 	steered: [] as string[],
 	evaluating: () => {},
 }));
@@ -27,22 +30,27 @@ vi.mock("../../server/agent/session.ts", async () => {
 
 vi.mock("../../server/agent/repls.ts", () => ({ repls: {} }));
 
-vi.mock("../../server/agent/convex.ts", () => ({
-	convexAs: () => ({
-		mutation: async (
-			_ref: unknown,
-			args: { messages?: Record<string, unknown>[] },
-		) => {
-			if (args.messages) world.appended.push(...args.messages);
-		},
-		query: async () =>
-			world.appended.map(({ id, ...m }, i) => ({
-				...m,
-				wireId: id,
-				_id: `row${i}`,
-			})),
-	}),
-}));
+vi.mock("../../server/agent/convex.ts", async () => {
+	const { getFunctionName } = await import("convex/server");
+	return {
+		convexAs: () => ({
+			mutation: async (
+				_ref: unknown,
+				args: { messages?: Record<string, unknown>[] },
+			) => {
+				if (args.messages) world.appended.push(...args.messages);
+			},
+			query: async (ref: Parameters<typeof getFunctionName>[0]) =>
+				getFunctionName(ref) === "preferences:get"
+					? { input: { lisp: world.lisp } }
+					: world.appended.map(({ id, ...m }, i) => ({
+							...m,
+							wireId: id,
+							_id: `row${i}`,
+						})),
+		}),
+	};
+});
 
 const holdsForms = (message: string) => message.includes("(");
 
@@ -54,6 +62,7 @@ vi.mock("@repo/ai", async (importOriginal) => {
 			message: string,
 		): Promise<Evaluated | undefined> => {
 			world.evaluating();
+			world.evaluated.push(message);
 			if (message.startsWith("slow"))
 				await new Promise((resolve) => setTimeout(resolve, 20));
 			return holdsForms(message)
@@ -72,9 +81,13 @@ vi.mock("@repo/ai", async (importOriginal) => {
 				return true;
 			}
 		},
-		streamChatResponse: (input: ChatInput, options: { quiet?: boolean }) => {
+		streamChatResponse: (
+			input: ChatInput,
+			options: { quiet?: boolean; runsForms?: boolean },
+		) => {
 			world.sent.push(input);
 			world.quiet.push(options.quiet === true);
+			world.runsForms.push(options.runsForms);
 			world.storedWhenStreamed.push([...world.appended]);
 			return new Response("");
 		},
@@ -99,6 +112,9 @@ beforeEach(() => {
 	world.storedWhenStreamed.length = 0;
 	world.sent.length = 0;
 	world.quiet.length = 0;
+	world.runsForms.length = 0;
+	world.evaluated.length = 0;
+	world.lisp = true;
 	world.steered.length = 0;
 	world.evaluating = () => {};
 });
@@ -193,5 +209,25 @@ describe("a message without forms", () => {
 		});
 		expect(response.status).toBe(202);
 		expect(world.steered).toEqual(["use hex"]);
+	});
+});
+
+describe("a message sent with lisp input turned off", () => {
+	test("reaches the agent as its plain text, its forms never run", async () => {
+		world.lisp = false;
+		await send(turn, { input: { chatId: CHAT, message: "what is (+ 1 2)" } });
+		expect(world.evaluated).toEqual([]);
+		expect(world.appended.map((m) => m.type)).toEqual(["human"]);
+		expect(world.sent[0].messages).toEqual([
+			expect.objectContaining({ type: "human", content: "what is (+ 1 2)" }),
+		]);
+	});
+
+	test("tells the turn not to run the forms of a steered message either", async () => {
+		world.lisp = false;
+		await send(turn, { input: { chatId: CHAT, message: "use hex" } });
+		world.lisp = true;
+		await send(turn, { input: { chatId: CHAT, message: "use hex" } });
+		expect(world.runsForms).toEqual([false, true]);
 	});
 });

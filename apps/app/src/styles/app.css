@@ -12,3 +12,8 @@
 		zoom: var(--app-zoom);
 	}
 }
+
+::highlight(lisp-error) {
+	text-decoration: underline wavy var(--color-red);
+	text-decoration-skip-ink: none;
+}

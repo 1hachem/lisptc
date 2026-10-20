@@ -153,6 +153,7 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	) => Promise<void> | void;
 	steer?: { inbox: SteerInbox; key: string };
 	quiet?: boolean;
+	runsForms?: boolean;
 };
 
 function steerLine(steer: ChatStreamOptions["steer"]) {
@@ -321,7 +322,16 @@ export function streamChatResponse<Id extends string>(
 	input: ChatInput,
 	options: ChatStreamOptions<Id>,
 ): Response {
-	const { threadId, config, identity, onTurn, signal, steer, quiet } = options;
+	const {
+		threadId,
+		config,
+		identity,
+		onTurn,
+		signal,
+		steer,
+		quiet,
+		runsForms,
+	} = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
 	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
@@ -354,6 +364,7 @@ export function streamChatResponse<Id extends string>(
 						signal: abort.signal,
 						identity,
 						inbox: steering.take,
+						runsForms,
 					}))
 						if (!turn.apply(event)) break;
 				}

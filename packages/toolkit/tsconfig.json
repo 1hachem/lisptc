@@ -1,0 +1,7 @@
+{
+  "extends": "@repo/tsconfigs/base.json",
+  "compilerOptions": {
+    "resolveJsonModule": true
+  },
+  "include": ["src", "test", "vitest.config.ts", "mcp.toolkit.json"]
+}

@@ -1,7 +1,6 @@
 import { effect } from "@repo/interpreter/effects";
-import type { Interp } from "@repo/interpreter/lisp";
-import { Cell, type List } from "@repo/interpreter/objects";
-import { zList } from "@repo/interpreter/schema";
+import { type Interp, runSync } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
@@ -16,22 +15,27 @@ export function agentsExtension(host: AgentsHost): InterpExtension {
 	});
 }
 
-function lastOf(values: List): unknown {
-	let last: unknown = null;
-	for (let at: unknown = values; at instanceof Cell; at = at.cdr) last = at.car;
-	return last;
-}
-
 export function registerAgents(interp: Interp): void {
 	interp.def(
-		"quietly",
-		-1,
-		"(quietly form...)",
-		"Run the forms of a message without handing the message to the agent. The message and what the forms printed stay in the chat, so the agent reads them on its next turn. Return the value of the last form.",
-		z.tuple([zList]),
-		([forms]) => {
+		"agents/quiet",
+		0,
+		"(agents/quiet)",
+		"Ask the harness not to hand this message to the agent. quietly calls it before its forms run; call quietly instead.",
+		z.tuple([]),
+		() => {
 			effect.emit(interp.channels, { harness: { type: "quiet" } });
-			return lastOf(forms);
+			return null;
+		},
+	);
+	interp.defineGlobal(
+		newSym("quietly"),
+		runSync(
+			interp,
+			"(macro (&rest forms) (cons 'progn (cons '(agents/quiet) forms)))",
+		),
+		{
+			signature: "(quietly form...)",
+			doc: "Run the forms of a message without handing the message to the agent, even when a form inside fails or waits. The message and what the forms printed stay in the chat, so the agent reads them on its next turn. Return the value of the last form.",
 		},
 	);
 }

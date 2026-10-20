@@ -19,6 +19,7 @@ const RULES: Rule[] = [
 		forbidden: () => true,
 		reason: "@repo/shared is the no-dependency utility layer.",
 	},
+	...staticRules(),
 	{
 		manifest: "packages/ui/package.json",
 		fields: ["dependencies", "devDependencies", "peerDependencies"],
@@ -144,6 +145,47 @@ function runtimeImports(text: string): Import[] {
 	for (let m = re.exec(text); m !== null; m = re.exec(text))
 		if (m[1] === undefined) out.push({ module: m[3], names: valueNames(m[2]) });
 	return out;
+}
+
+function manifestsTagged(tag: string): string[] {
+	return execFileSync(
+		"git",
+		["ls-files", "packages/*/turbo.json", "apps/*/turbo.json"],
+		{ encoding: "utf8" },
+	)
+		.split("\n")
+		.filter((file) => file !== "")
+		.filter((file) =>
+			(
+				JSON.parse(readFileSync(file, "utf8")) as { tags?: string[] }
+			).tags?.includes(tag),
+		)
+		.map((file) => join(dirname(file), "package.json"));
+}
+
+function staticRules(): Rule[] {
+	const foundation = new Set(
+		manifestsTagged("foundation").map(
+			(manifest) =>
+				(JSON.parse(readFileSync(manifest, "utf8")) as { name: string }).name,
+		),
+	);
+	return manifestsTagged("static").flatMap((manifest): Rule[] => [
+		{
+			manifest,
+			fields: ["dependencies", "peerDependencies"],
+			forbidden: (name) => !foundation.has(name),
+			reason:
+				"A static package is data and depends on a foundation package at most.",
+		},
+		{
+			manifest,
+			fields: ["devDependencies"],
+			forbidden: (name) => name.startsWith("@repo/") && !foundation.has(name),
+			reason:
+				"A static package builds on no workspace package outside the foundation.",
+		},
+	]);
 }
 
 function exportedFiles(): Map<string, string> {

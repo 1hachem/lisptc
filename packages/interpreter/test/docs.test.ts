@@ -1,5 +1,6 @@
 import { output } from "@repo/interpreter/topics";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { runSync } from "../src/lisp.ts";
 import { ev, evWithOutput, freshInterp } from "./helpers.ts";
 
@@ -122,5 +123,32 @@ describe("(doc name) edge cases", () => {
 				.get("kw")
 				?.args?.map((x) => x.name),
 		).toEqual(["b", "c"]);
+	});
+});
+
+describe("argument values", () => {
+	it("reads a function's values each time the docs are read", () => {
+		const interp = freshInterp();
+		let names = ["a"];
+		interp.def(
+			"pick",
+			1,
+			'(pick "name")',
+			"Pick a name.",
+			z.tuple([z.unknown()]),
+			() => null,
+			[
+				{
+					name: "name",
+					type: "string",
+					required: true,
+					values: () => names.map((value) => ({ value })),
+				},
+			],
+		);
+		const valuesOf = () => interp.docs().get("pick")?.args?.[0]?.values;
+		expect(valuesOf()).toEqual([{ value: "a" }]);
+		names = ["a", "b"];
+		expect(valuesOf()).toEqual([{ value: "a" }, { value: "b" }]);
 	});
 });
