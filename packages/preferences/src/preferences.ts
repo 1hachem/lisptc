@@ -12,7 +12,13 @@ import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
-import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
+import type {
+	Choice,
+	Preferences,
+	PreferencesHost,
+	ThemeChoice,
+	Toggles,
+} from "./ports.ts";
 
 const SET_KEYS = [
 	"theme",
@@ -30,7 +36,8 @@ const SET_ARGS = [
 		name: "theme",
 		type: "string",
 		required: false,
-		description: "a theme id from (themes)",
+		description:
+			'a theme id from (themes), or "dark" for the dark counterpart of the current theme, falling back to the default dark theme',
 	},
 	{
 		name: "font",
@@ -123,6 +130,24 @@ function chosen(
 	return value;
 }
 
+function darkCounterpart(
+	current: string | undefined,
+	offered: readonly ThemeChoice[],
+	fallback: string | undefined,
+): string {
+	const family = offered.find((theme) => theme.id === current)?.family;
+	const dark = offered.find(
+		(theme) => theme.family === family && theme.scheme === "dark",
+	);
+	const id = dark?.id ?? fallback;
+	if (id === undefined)
+		throw new EvalException(
+			"no dark theme to switch to, see (themes)",
+			current ?? null,
+		);
+	return id;
+}
+
 function toggled(
 	kind: "channels" | "metadata" | "input",
 	value: unknown,
@@ -204,7 +229,10 @@ export function registerPreferences(
 			const current = yield* settled(store.read());
 			const change: Preferences = {};
 			if (options.has("theme"))
-				change.theme = chosen("theme", options.get("theme"), host.themes);
+				change.theme =
+					options.get("theme") === "dark"
+						? darkCounterpart(current.theme, host.themes, host.defaultDarkTheme)
+						: chosen("theme", options.get("theme"), host.themes);
 			if (options.has("font"))
 				change.font = chosen("font", options.get("font"), host.fonts);
 			if (options.has("channels"))
