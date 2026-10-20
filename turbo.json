@@ -55,6 +55,21 @@
             "product"
           ]
         }
+      },
+      "static": {
+        "dependencies": {
+          "deny": [
+            "static",
+            "platform",
+            "ui",
+            "language",
+            "extension",
+            "runtime",
+            "backend",
+            "frontend",
+            "product"
+          ]
+        }
       }
     }
   },

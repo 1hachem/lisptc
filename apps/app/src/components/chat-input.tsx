@@ -7,6 +7,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
+import type { SymbolTable } from "@repo/language-service";
 import { cn, PromptInputProvider, usePromptInputAttachments } from "@repo/ui";
 import {
 	$createLineBreakNode,
@@ -37,6 +38,7 @@ import {
 import { quietly } from "../lib/quietly.ts";
 import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
+import { LispAssistPlugin } from "./lisp-assist.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 import { type Mentionable, MentionMenuPlugin } from "./mention-menu.tsx";
 
@@ -49,7 +51,11 @@ export interface ChatInputProps {
 	onStop?: () => void;
 	disabled?: boolean;
 	mentions?: readonly Mentionable[];
+	symbols?: SymbolTable;
+	lisp?: boolean;
 }
+
+const NO_SYMBOLS: SymbolTable = new Map();
 
 const NOTICE_MS = 2000;
 
@@ -245,7 +251,7 @@ function useKeys({
 	enter,
 }: {
 	disabled?: boolean;
-	menuActive: { readonly current: boolean };
+	menuActive: () => boolean;
 	recall: (direction: RecallDirection) => string | null;
 	replace: (text: string) => void;
 	enter?: (quiet: boolean) => void;
@@ -253,7 +259,7 @@ function useKeys({
 	const [editor] = useLexicalComposerContext();
 	const onKeyDown = (event: KeyboardEvent): boolean => {
 		if (event.isComposing || disabled) return true;
-		if (menuActive.current) return false;
+		if (menuActive()) return false;
 		const direction = RECALL_KEYS[event.key];
 		const recalled = direction ? recall(direction) : null;
 		if (recalled !== null) replace(recalled);
@@ -440,6 +446,24 @@ function Field({
 	);
 }
 
+function LispPlugins({
+	on,
+	...props
+}: Parameters<typeof LispAssistPlugin>[0] & { on: boolean }) {
+	if (!on) return null;
+	return (
+		<>
+			<LispHighlightPlugin />
+			<LispAssistPlugin {...props} />
+		</>
+	);
+}
+
+function hintOf(lead: string, lisp: boolean, commands: boolean): string {
+	const typed = lisp ? `${lead}, (lisp) runs inline` : lead;
+	return commands ? `${typed}  ·  / for commands` : typed;
+}
+
 export function ChatInput(props: ChatInputProps) {
 	return (
 		<PromptInputProvider>
@@ -463,15 +487,16 @@ function useMenus() {
 	const host = useRef<HTMLDivElement>(null);
 	const commandOpen = useRef(false);
 	const mentionOpen = useRef(false);
+	const assistOpen = useRef(false);
 	const active = useMemo(
 		() => ({
 			get current() {
-				return commandOpen.current || mentionOpen.current;
+				return commandOpen.current || mentionOpen.current || assistOpen.current;
 			},
 		}),
 		[],
 	);
-	return { host, commandOpen, mentionOpen, active };
+	return { host, commandOpen, mentionOpen, assistOpen, active };
 }
 
 function FilePicker({
@@ -550,7 +575,7 @@ function useComposer({
 
 	useKeys({
 		disabled: busy,
-		menuActive: menus.active,
+		menuActive: () => menus.active.current,
 		recall: (direction) => step(text, direction),
 		replace,
 		enter: stops ? onStop : send,
@@ -578,20 +603,32 @@ function useComposer({
 }
 
 function Editor(props: ChatInputProps) {
-	const { placeholder = "", isStreaming, onStop, mentions = [] } = props;
+	const {
+		placeholder = "",
+		onCommand,
+		isStreaming,
+		onStop,
+		mentions = [],
+		symbols = NO_SYMBOLS,
+		lisp = true,
+	} = props;
 	const c = useComposer(props);
 
 	return (
 		<div
 			{...c.zone}
 			className={cn(
-				"mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]",
+				"relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]",
 				c.over && "outline outline-1 outline-dashed outline-yellow",
 			)}
 		>
 			<FilePicker picker={c.picker} onPick={c.pickFiles} />
-			<div ref={c.menus.host} />
-			<Notice text={c.notice} />
+			<div
+				ref={c.menus.host}
+				className="absolute inset-x-0 bottom-full z-10 flex flex-col"
+			>
+				<Notice text={c.notice} />
+			</div>
 			<AttachmentChips
 				files={c.attachments.files}
 				onRemove={c.attachments.remove}
@@ -613,10 +650,12 @@ function Editor(props: ChatInputProps) {
 					</>
 				}
 			>
-				<Field placeholder={placeholder} disabled={c.busy} />
+				<Field
+					placeholder={hintOf(placeholder, lisp, onCommand !== undefined)}
+					disabled={c.busy}
+				/>
 			</InputShell>
 			<HistoryPlugin />
-			<LispHighlightPlugin />
 			<CommandMenuPlugin
 				onPick={c.pick}
 				host={c.menus.host}
@@ -626,6 +665,12 @@ function Editor(props: ChatInputProps) {
 				files={mentions}
 				host={c.menus.host}
 				active={c.menus.mentionOpen}
+			/>
+			<LispPlugins
+				on={lisp}
+				symbols={symbols}
+				host={c.menus.host}
+				active={c.menus.assistOpen}
 			/>
 			<PromptDialog
 				onOpenChange={c.search.setSearching}

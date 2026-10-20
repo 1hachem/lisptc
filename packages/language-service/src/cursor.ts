@@ -1,11 +1,12 @@
 import { openAtEnd } from "@repo/shared/lisp-forms";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import type { Position, Range } from "vscode-languageserver-types";
 
-const symbolChar = /[^()'`~" \t]/;
+const symbolChar = /[^()'`~" \t\r\n]/;
 
 export function enclosingCallHead(
 	document: TextDocument,
-	position: { line: number; character: number },
+	position: Position,
 ): string | undefined {
 	const text = document.getText({
 		start: { line: 0, character: 0 },
@@ -24,7 +25,7 @@ export function symbolAt(
 	document: TextDocument,
 	line: number,
 	character: number,
-) {
+): { name: string; range: Range } | undefined {
 	const text = document.getText({
 		start: { line, character: 0 },
 		end: { line: line + 1, character: 0 },
@@ -41,6 +42,12 @@ export function symbolAt(
 			end: { line, character: end },
 		},
 	};
+}
+
+export function wordBefore(document: TextDocument, position: Position): string {
+	const symbol = symbolAt(document, position.line, position.character);
+	const start = symbol?.range.start.character ?? position.character;
+	return symbol?.name.slice(0, position.character - start) ?? "";
 }
 
 export function markdownFor(sig?: string, doc?: string): string | undefined {

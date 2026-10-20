@@ -1,6 +1,5 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-	LexicalTypeaheadMenuPlugin,
 	MenuOption,
 	type MenuTextMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
@@ -14,7 +13,7 @@ import {
 	useState,
 } from "react";
 import { type Command, commands, matchesCommand } from "../lib/commands.ts";
-import { typeaheadList } from "./typeahead-list.tsx";
+import { TypeaheadMenu } from "./typeahead-menu.tsx";
 
 const COMMAND_QUERY = /^\/(\S*)$/;
 
@@ -78,31 +77,18 @@ export function CommandMenuPlugin({
 	);
 
 	return (
-		<LexicalTypeaheadMenuPlugin<CommandOption>
+		<TypeaheadMenu<CommandOption>
 			options={options}
+			host={host}
+			rowOf={({ command }) => ({
+				label: command.name,
+				detail: command.desc,
+				hint: command.hint,
+			})}
 			triggerFn={triggerFn}
 			onQueryChange={setQuery}
 			onSelectOption={onSelectOption}
-			onOpen={() => setOpen(true)}
-			onClose={() => setOpen(false)}
-			anchorClassName="hidden!"
-			menuRenderFn={(_anchor, state) =>
-				typeaheadList(host, options, state, (option) => (
-					<>
-						<span className="flex-none whitespace-nowrap text-fg">
-							{option.command.name}
-						</span>
-						<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-dim">
-							{option.command.desc}
-						</span>
-						{option.command.hint && (
-							<span className="flex-none text-[10.5px] text-dim">
-								{option.command.hint}
-							</span>
-						)}
-					</>
-				))
-			}
+			onOpenChange={setOpen}
 		/>
 	);
 }

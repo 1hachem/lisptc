@@ -19,6 +19,7 @@ import type * as lib_chunks from "../lib/chunks.js";
 import type * as lib_clamp from "../lib/clamp.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_models from "../lib/models.js";
+import type * as lib_preferenceDefaults from "../lib/preferenceDefaults.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_waiting from "../lib/waiting.js";
 import type * as limits from "../limits.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "lib/clamp": typeof lib_clamp;
   "lib/env": typeof lib_env;
   "lib/models": typeof lib_models;
+  "lib/preferenceDefaults": typeof lib_preferenceDefaults;
   "lib/slug": typeof lib_slug;
   "lib/waiting": typeof lib_waiting;
   limits: typeof limits;

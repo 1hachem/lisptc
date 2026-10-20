@@ -24,13 +24,10 @@ export function motionOf(stored: StoredChoices | undefined): MotionId {
 }
 
 export function togglesOf<Id extends string>(
-	fields: readonly { id: Id; shownByDefault: boolean }[],
+	fields: readonly { id: Id }[],
 	stored: Readonly<Record<string, boolean>> | undefined,
 ): Record<Id, boolean> {
 	return Object.fromEntries(
-		fields.map((field) => [
-			field.id,
-			stored?.[field.id] ?? field.shownByDefault,
-		]),
+		fields.map((field) => [field.id, stored?.[field.id] === true]),
 	) as Record<Id, boolean>;
 }
