@@ -1,8 +1,8 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import {
+	Attachment01Icon,
 	Book02Icon,
 	BubbleChatIcon,
-	Delete02Icon,
 	FlashIcon,
 	Home01Icon,
 	InformationCircleIcon,
@@ -56,7 +56,7 @@ type Folder =
 	| "memories"
 	| "permissions"
 	| "knowledge"
-	| "bin"
+	| "attachments"
 	| (typeof PLACEHOLDERS)[number];
 
 const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
@@ -64,7 +64,7 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	memories: StickyNote01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
-	bin: Delete02Icon,
+	attachments: Attachment01Icon,
 	"sub-agents": restingIcon(),
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
@@ -107,7 +107,7 @@ const FOLDERS = [
 	"memories",
 	"permissions",
 	"knowledge",
-	"bin",
+	"attachments",
 	...PLACEHOLDERS,
 ] as const satisfies readonly Folder[];
 
@@ -319,7 +319,7 @@ function KnowledgeFolder({
 	);
 }
 
-function BinFolder({
+function AttachmentsFolder({
 	workspaceId,
 	current,
 	folder,
@@ -329,14 +329,14 @@ function BinFolder({
 	folder: { open: boolean; onToggle: () => void };
 }) {
 	const { data: files } = useQuery({
-		...convexQuery(api.bin.list, { workspaceId }),
+		...convexQuery(api.attachments.list, { workspaceId }),
 		enabled: folder.open,
 	});
-	const removeFile = useConvexMutation(api.bin.remove);
+	const removeFile = useConvexMutation(api.attachments.remove);
 	const leave = useLeave(workspaceId);
 
 	return (
-		<TreeFolder name="bin" icon={FOLDER_ICONS.bin} {...folder}>
+		<TreeFolder name="attachments" icon={FOLDER_ICONS.attachments} {...folder}>
 			<Listing items={files} empty="nothing attached lately">
 				{(file) => (
 					<TreeFile
@@ -357,7 +357,7 @@ function BinFolder({
 						}
 						link={(content, className) => (
 							<Link
-								to="/$workspaceId/bin/$name"
+								to="/$workspaceId/attachments/$name"
 								params={{ workspaceId, name: file.name }}
 								className={className}
 							>
@@ -501,8 +501,9 @@ export function WorkspaceTree({
 	const newChat = useNewChat();
 	const folder = useFolders();
 	const params = useParams({ strict: false });
-	const inBin = useLocation({
-		select: (location) => location.pathname.startsWith(`/${workspaceId}/bin/`),
+	const inAttachments = useLocation({
+		select: (location) =>
+			location.pathname.startsWith(`/${workspaceId}/attachments/`),
 	});
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
@@ -564,15 +565,15 @@ export function WorkspaceTree({
 		knowledge: () => (
 			<KnowledgeFolder
 				workspaceId={workspaceId}
-				current={inBin ? undefined : params.name}
+				current={inAttachments ? undefined : params.name}
 				folder={folder("knowledge")}
 			/>
 		),
-		bin: () => (
-			<BinFolder
+		attachments: () => (
+			<AttachmentsFolder
 				workspaceId={workspaceId}
-				current={inBin ? params.name : undefined}
-				folder={folder("bin")}
+				current={inAttachments ? params.name : undefined}
+				folder={folder("attachments")}
 			/>
 		),
 		"sub-agents": placeholder("sub-agents"),

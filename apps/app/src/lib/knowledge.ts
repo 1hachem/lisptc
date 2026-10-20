@@ -199,10 +199,10 @@ async function stored(url: string, file: File): Promise<Id<"_storage">> {
 	return storageId;
 }
 
-export function useBinUpload(workspaceId: Id<"workspaces">) {
+export function useAttachmentUpload(workspaceId: Id<"workspaces">) {
 	const uploadUrl = useConvexMutation(api.knowledge.uploadUrl);
-	const add = useConvexMutation(api.bin.add);
-	const remove = useConvexMutation(api.bin.remove);
+	const add = useConvexMutation(api.attachments.add);
+	const remove = useConvexMutation(api.attachments.remove);
 
 	const upload = useCallback(
 		async (file: File): Promise<string> => {
@@ -238,7 +238,7 @@ export function withAttachments(
 	names: readonly string[],
 ): string {
 	if (names.length === 0) return text;
-	const attached = `attached: ${names.map((name) => `bin/${name}`).join(", ")}`;
+	const attached = `attached: ${names.map((name) => `attachments/${name}`).join(", ")}`;
 	return text === "" ? attached : `${text}\n\n${attached}`;
 }
 

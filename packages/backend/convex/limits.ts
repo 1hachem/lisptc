@@ -26,9 +26,9 @@ export const MAX_KNOWLEDGE = 200;
 
 export const MAX_KNOWLEDGE_NAME = 128;
 
-export const MAX_BIN = 200;
+export const MAX_ATTACHMENTS = 200;
 
-export const BIN_TTL_MS = 604_800_000;
+export const ATTACHMENT_TTL_MS = 604_800_000;
 
 export const MAX_REPL_LAYER_BYTES = 8_388_608;
 

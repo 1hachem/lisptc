@@ -37,7 +37,7 @@ export async function dropWorkspace(
 	await ctx.scheduler.runAfter(0, internal.permissions.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.readmes.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.knowledge.purge, { workspaceId });
-	await ctx.scheduler.runAfter(0, internal.bin.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.attachments.purge, { workspaceId });
 }
 
 export const list = query({

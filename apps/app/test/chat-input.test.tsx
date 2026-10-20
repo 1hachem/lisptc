@@ -238,7 +238,7 @@ describe("the chat input", () => {
 					onSubmit={onSubmit}
 					mentions={[
 						{ folder: "knowledge", name: "report.md", contentType: null },
-						{ folder: "bin", name: "spec.pdf", contentType: null },
+						{ folder: "attachments", name: "spec.pdf", contentType: null },
 					]}
 				/>,
 			),
@@ -251,7 +251,7 @@ describe("the chat input", () => {
 		expect(host.textContent).not.toContain("report.md");
 		enter(field, false);
 		await act(async () => {});
-		expect(textOf(field)).toBe("see @bin/spec.pdf ");
+		expect(textOf(field)).toBe("see @attachments/spec.pdf ");
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 

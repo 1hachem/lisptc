@@ -79,15 +79,15 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 		if (!removed) throw new Error(`no file ${name}`);
 	}
 
-	async binned(): Promise<string[]> {
-		const entries = await this.connect().query(api.bin.list, {
+	async attachments(): Promise<string[]> {
+		const entries = await this.connect().query(api.attachments.list, {
 			workspaceId: this.workspaceId,
 		});
 		return entries.map((entry) => entry.name);
 	}
 
-	async binFile(name: string): Promise<Uint8Array | undefined> {
-		const held = await this.connect().query(api.bin.get, {
+	async attachment(name: string): Promise<Uint8Array | undefined> {
+		const held = await this.connect().query(api.attachments.get, {
 			workspaceId: this.workspaceId,
 			name,
 		});
@@ -95,7 +95,7 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 		return await this.transfer.download(held.url);
 	}
 
-	async bin(
+	async attach(
 		name: string,
 		bytes: Uint8Array,
 		contentType: string,
@@ -108,7 +108,7 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 			url,
 			new Blob([new Uint8Array(bytes)], { type: contentType }),
 		);
-		const added = await client.mutation(api.bin.add, {
+		const added = await client.mutation(api.attachments.add, {
 			workspaceId: this.workspaceId,
 			name,
 			storageId,
@@ -119,7 +119,7 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 	}
 
 	async keep(name: string): Promise<void> {
-		const refused = await this.connect().mutation(api.bin.keep, {
+		const refused = await this.connect().mutation(api.attachments.keep, {
 			workspaceId: this.workspaceId,
 			name,
 		});

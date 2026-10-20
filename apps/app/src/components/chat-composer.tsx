@@ -5,7 +5,7 @@ import { useCallback, useMemo } from "react";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
 import type { OpenFile } from "../lib/files.ts";
-import { useBinUpload, withAttachments } from "../lib/knowledge.ts";
+import { useAttachmentUpload, withAttachments } from "../lib/knowledge.ts";
 import { sentHistory } from "../lib/message-history.ts";
 import { useSymbols } from "../lib/symbols.ts";
 import { useUI } from "../lib/ui.tsx";
@@ -32,7 +32,9 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 	const { data: knowledge } = useQuery(
 		convexQuery(api.knowledge.list, { workspaceId }),
 	);
-	const { data: bin } = useQuery(convexQuery(api.bin.list, { workspaceId }));
+	const { data: attachments } = useQuery(
+		convexQuery(api.attachments.list, { workspaceId }),
+	);
 	const mentions = useMemo<Mentionable[]>(
 		() => [
 			...(knowledge ?? []).map(({ name, contentType }) => ({
@@ -40,15 +42,15 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 				name,
 				contentType,
 			})),
-			...(bin ?? []).map(({ name, contentType }) => ({
-				folder: "bin" as const,
+			...(attachments ?? []).map(({ name, contentType }) => ({
+				folder: "attachments" as const,
 				name,
 				contentType,
 			})),
 		],
-		[knowledge, bin],
+		[knowledge, attachments],
 	);
-	const toBin = useBinUpload(workspaceId);
+	const toAttachments = useAttachmentUpload(workspaceId);
 	const submit = useCallback(
 		(text: string, attached: string[]) => {
 			const message = withAttachments(text, attached);
@@ -63,8 +65,8 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 		<ChatInput
 			placeholder={about ? `ask about ${about.path}` : "type a message"}
 			onSubmit={submit}
-			upload={toBin.upload}
-			discard={toBin.discard}
+			upload={toAttachments.upload}
+			discard={toAttachments.discard}
 			mentions={mentions}
 			history={history}
 			onCommand={runCommand}

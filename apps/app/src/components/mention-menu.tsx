@@ -17,7 +17,7 @@ import { knowledgeIcon } from "../lib/knowledge.ts";
 import { typeaheadList } from "./typeahead-list.tsx";
 
 export interface Mentionable {
-	folder: "knowledge" | "bin";
+	folder: "knowledge" | "attachments";
 	name: string;
 	contentType: string | null;
 }

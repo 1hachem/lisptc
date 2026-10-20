@@ -18,7 +18,7 @@ workspace. App applies change at once, while they watch.
   keeps rest in their order. User also drags them by hand.
 - :hidden is every sidebar entry hidden. Replaces whole list:
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
-  '() shows all. Bin hidden until user shows it.
+  '() shows all. Attachments hidden until user shows it.
 - :motion is how sidebar animates that drag. (motions) gives alist of
   (id . description) to choose from. System asks for reduced motion: nothing
   animates, whatever :motion says.

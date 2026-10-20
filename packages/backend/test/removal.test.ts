@@ -128,7 +128,7 @@ describe("removing a workspace", () => {
 		expect(replLayers).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records, permissions, readme, knowledge and bin with it", async () => {
+	it("takes its secrets, oauth records, permissions, readme, knowledge and attachments with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -156,7 +156,7 @@ describe("removing a workspace", () => {
 			name: "doomed.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
 		});
-		await alice.as.mutation(api.bin.add, {
+		await alice.as.mutation(api.attachments.add, {
 			workspaceId: doomed,
 			name: "attached.txt",
 			storageId: await t.run((ctx) =>
@@ -174,7 +174,7 @@ describe("removing a workspace", () => {
 			permissions,
 			readmes,
 			knowledge,
-			bin,
+			attachments,
 			blobs,
 		} = await t.run(async (ctx) => ({
 			secrets: await ctx.db.query("secrets").collect(),
@@ -182,7 +182,7 @@ describe("removing a workspace", () => {
 			permissions: await ctx.db.query("permissions").collect(),
 			readmes: await ctx.db.query("readmes").collect(),
 			knowledge: await ctx.db.query("knowledge").collect(),
-			bin: await ctx.db.query("bin").collect(),
+			attachments: await ctx.db.query("attachments").collect(),
 			blobs: await ctx.db.system.query("_storage").collect(),
 		}));
 		expect(secrets).toEqual([]);
@@ -190,7 +190,7 @@ describe("removing a workspace", () => {
 		expect(permissions).toEqual([]);
 		expect(readmes).toEqual([]);
 		expect(knowledge).toEqual([]);
-		expect(bin).toEqual([]);
+		expect(attachments).toEqual([]);
 		expect(blobs).toEqual([]);
 	});
 

@@ -120,17 +120,17 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_name", ["workspaceId", "name"]),
-	bin: defineTable({
+	attachments: defineTable({
 		workspaceId: v.id("workspaces"),
 		name: v.string(),
 		storageId: v.id("_storage"),
 		contentType: v.optional(v.string()),
 		size: v.number(),
-		binnedAt: v.number(),
+		attachedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_name", ["workspaceId", "name"])
-		.index("by_binned", ["binnedAt"]),
+		.index("by_attached", ["attachedAt"]),
 
 	readmes: defineTable({
 		workspaceId: v.id("workspaces"),

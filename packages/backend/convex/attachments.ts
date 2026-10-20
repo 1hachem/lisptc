@@ -11,8 +11,8 @@ import {
 import { held as heldKnowledge, isKnowledgeName } from "./knowledge.js";
 import { requireWorkspace } from "./lib/auth.js";
 import {
-	BIN_TTL_MS,
-	MAX_BIN,
+	ATTACHMENT_TTL_MS,
+	MAX_ATTACHMENTS,
 	MAX_KNOWLEDGE,
 	MAX_KNOWLEDGE_BYTES,
 } from "./limits.js";
@@ -24,7 +24,7 @@ const entry = v.object({
 	name: v.string(),
 	contentType: v.union(v.string(), v.null()),
 	size: v.number(),
-	binnedAt: v.number(),
+	attachedAt: v.number(),
 });
 
 async function held(
@@ -33,7 +33,7 @@ async function held(
 	name: string,
 ) {
 	return await ctx.db
-		.query("bin")
+		.query("attachments")
 		.withIndex("by_workspace_name", (q) =>
 			q.eq("workspaceId", workspaceId).eq("name", name),
 		)
@@ -66,17 +66,17 @@ export const list = query({
 	handler: async (ctx, { workspaceId }) => {
 		await requireWorkspace(ctx, workspaceId);
 		const rows = await ctx.db
-			.query("bin")
+			.query("attachments")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-			.take(MAX_BIN);
+			.take(MAX_ATTACHMENTS);
 		return rows
-			.map(({ name, contentType, size, binnedAt }) => ({
+			.map(({ name, contentType, size, attachedAt }) => ({
 				name,
 				contentType: contentType ?? null,
 				size,
-				binnedAt,
+				attachedAt,
 			}))
-			.sort((a, b) => b.binnedAt - a.binnedAt);
+			.sort((a, b) => b.attachedAt - a.attachedAt);
 	},
 });
 
@@ -134,20 +134,20 @@ export const add = mutation({
 		if (!isKnowledgeName(name)) return await refused("BAD_KNOWLEDGE_NAME");
 		if (blob.size > MAX_KNOWLEDGE_BYTES) return await refused("FILE_TOO_LARGE");
 		const owned = await ctx.db
-			.query("bin")
+			.query("attachments")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-			.take(MAX_BIN);
-		if (owned.length >= MAX_BIN) return await refused("TOO_MANY_FILES");
+			.take(MAX_ATTACHMENTS);
+		if (owned.length >= MAX_ATTACHMENTS) return await refused("TOO_MANY_FILES");
 		const free = await freeName(ctx, workspaceId, name);
 		if (free === null || !isKnowledgeName(free))
 			return await refused("BAD_KNOWLEDGE_NAME");
-		await ctx.db.insert("bin", {
+		await ctx.db.insert("attachments", {
 			workspaceId,
 			name: free,
 			storageId,
 			contentType: blob.contentType ?? (contentType || undefined),
 			size: blob.size,
-			binnedAt: Date.now(),
+			attachedAt: Date.now(),
 		});
 		return { name: free };
 	},
@@ -176,8 +176,8 @@ export const keep = mutation({
 	),
 	handler: async (ctx, { workspaceId, name }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const binned = await held(ctx, workspaceId, name);
-		if (binned === null) return "NO_SUCH_FILE";
+		const attached = await held(ctx, workspaceId, name);
+		if (attached === null) return "NO_SUCH_FILE";
 		if ((await heldKnowledge(ctx, workspaceId, name)) !== null)
 			return "NAME_TAKEN";
 		const owned = await ctx.db
@@ -187,12 +187,12 @@ export const keep = mutation({
 		if (owned.length >= MAX_KNOWLEDGE) return "TOO_MANY_FILES";
 		await ctx.db.insert("knowledge", {
 			workspaceId,
-			name: binned.name,
-			storageId: binned.storageId,
-			contentType: binned.contentType,
-			size: binned.size,
+			name: attached.name,
+			storageId: attached.storageId,
+			contentType: attached.contentType,
+			size: attached.size,
 		});
-		await ctx.db.delete(binned._id);
+		await ctx.db.delete(attached._id);
 		return null;
 	},
 });
@@ -202,15 +202,17 @@ export const expire = internalMutation({
 	returns: v.null(),
 	handler: async (ctx) => {
 		const rows = await ctx.db
-			.query("bin")
-			.withIndex("by_binned", (q) => q.lt("binnedAt", Date.now() - BIN_TTL_MS))
+			.query("attachments")
+			.withIndex("by_attached", (q) =>
+				q.lt("attachedAt", Date.now() - ATTACHMENT_TTL_MS),
+			)
 			.take(PURGE_BATCH);
 		for (const row of rows) {
 			await ctx.storage.delete(row.storageId);
 			await ctx.db.delete(row._id);
 		}
 		if (rows.length === PURGE_BATCH)
-			await ctx.scheduler.runAfter(0, internal.bin.expire, {});
+			await ctx.scheduler.runAfter(0, internal.attachments.expire, {});
 		return null;
 	},
 });
@@ -220,7 +222,7 @@ export const purge = internalMutation({
 	returns: v.null(),
 	handler: async (ctx, { workspaceId }) => {
 		const rows = await ctx.db
-			.query("bin")
+			.query("attachments")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.take(PURGE_BATCH);
 		for (const row of rows) {
@@ -228,7 +230,9 @@ export const purge = internalMutation({
 			await ctx.db.delete(row._id);
 		}
 		if (rows.length === PURGE_BATCH)
-			await ctx.scheduler.runAfter(0, internal.bin.purge, { workspaceId });
+			await ctx.scheduler.runAfter(0, internal.attachments.purge, {
+				workspaceId,
+			});
 		return null;
 	},
 });

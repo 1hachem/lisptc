@@ -635,11 +635,11 @@ describe("preferences access", () => {
 		expect(rows[0].hidden).toBeUndefined();
 	});
 
-	it("hides the bin until the user shows it", async () => {
+	it("hides attachments until the user shows it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		expect((await alice.as.query(api.preferences.get, {})).hidden).toEqual([
-			"bin",
+			"attachments",
 		]);
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { hidden: [] },
@@ -973,36 +973,36 @@ describe("knowledge access", () => {
 	});
 });
 
-describe("bin access", () => {
-	it("keeps a workspace's bin to its owner", async () => {
+describe("attachments access", () => {
+	it("keeps a workspace's attachments to its owner", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.bin.add, {
+		await bob.as.mutation(api.attachments.add, {
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
 		});
 		await expect(
-			alice.as.query(api.bin.get, {
+			alice.as.query(api.attachments.get, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.bin.keep, {
+			alice.as.mutation(api.attachments.keep, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.bin.remove, {
+			alice.as.mutation(api.attachments.remove, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		expect(
-			await bob.as.query(api.bin.list, { workspaceId: bob.workspace }),
+			await bob.as.query(api.attachments.list, { workspaceId: bob.workspace }),
 		).toHaveLength(1);
 	});
 });

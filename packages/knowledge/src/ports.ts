@@ -5,9 +5,13 @@ export interface KnowledgeStore {
 	file(name: string): Awaitable<Uint8Array | undefined>;
 	write(name: string, text: string, contentType: string): Awaitable<void>;
 	remove(name: string): Awaitable<void>;
-	binned(): Awaitable<string[]>;
-	binFile(name: string): Awaitable<Uint8Array | undefined>;
-	bin(name: string, bytes: Uint8Array, contentType: string): Awaitable<string>;
+	attachments(): Awaitable<string[]>;
+	attachment(name: string): Awaitable<Uint8Array | undefined>;
+	attach(
+		name: string,
+		bytes: Uint8Array,
+		contentType: string,
+	): Awaitable<string>;
 	keep(name: string): Awaitable<void>;
 }
 
@@ -34,7 +38,7 @@ export interface HeldFile {
 export class MemoryKnowledgeStore implements KnowledgeStore {
 	constructor(
 		public filesHeld: Map<string, HeldFile> = new Map(),
-		public binHeld: Map<string, HeldFile> = new Map(),
+		public attachmentsHeld: Map<string, HeldFile> = new Map(),
 	) {}
 
 	files(): string[] {
@@ -56,25 +60,26 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
 		if (!this.filesHeld.delete(name)) throw new Error(`no file ${name}`);
 	}
 
-	binned(): string[] {
-		return [...this.binHeld.keys()].sort();
+	attachments(): string[] {
+		return [...this.attachmentsHeld.keys()].sort();
 	}
 
-	binFile(name: string): Uint8Array | undefined {
-		return this.binHeld.get(name)?.bytes;
+	attachment(name: string): Uint8Array | undefined {
+		return this.attachmentsHeld.get(name)?.bytes;
 	}
 
-	bin(name: string, bytes: Uint8Array, contentType: string): string {
-		this.binHeld.set(name, { bytes, contentType });
+	attach(name: string, bytes: Uint8Array, contentType: string): string {
+		this.attachmentsHeld.set(name, { bytes, contentType });
 		return name;
 	}
 
 	keep(name: string): void {
-		const binned = this.binHeld.get(name);
-		if (binned === undefined) throw new Error(`no file ${name} in the bin`);
+		const attached = this.attachmentsHeld.get(name);
+		if (attached === undefined)
+			throw new Error(`no file ${name} in attachments`);
 		if (this.filesHeld.has(name))
 			throw new Error(`knowledge already holds ${name}`);
-		this.filesHeld.set(name, binned);
-		this.binHeld.delete(name);
+		this.filesHeld.set(name, attached);
+		this.attachmentsHeld.delete(name);
 	}
 }

@@ -8,13 +8,13 @@ import {
 const files: Mentionable[] = [
 	{ folder: "knowledge", name: "report.md", contentType: "text/markdown" },
 	{ folder: "knowledge", name: "Q3 Sales.json", contentType: null },
-	{ folder: "bin", name: "spec.pdf", contentType: "application/pdf" },
+	{ folder: "attachments", name: "spec.pdf", contentType: "application/pdf" },
 ];
 
 describe("a file mention", () => {
 	it("names the folder and the file", () => {
 		expect(mentionOf(files[0])).toBe("@knowledge/report.md");
-		expect(mentionOf(files[2])).toBe("@bin/spec.pdf");
+		expect(mentionOf(files[2])).toBe("@attachments/spec.pdf");
 	});
 
 	it("is quoted when the name holds a space", () => {
@@ -27,9 +27,9 @@ describe("a file mention", () => {
 			"Q3 Sales.json",
 			"spec.pdf",
 		]);
-		expect(matchingMentions(files, "bin").map((file) => file.name)).toEqual([
-			"spec.pdf",
-		]);
+		expect(
+			matchingMentions(files, "attachments").map((file) => file.name),
+		).toEqual(["spec.pdf"]);
 		expect(matchingMentions(files, "sal").map((file) => file.name)).toEqual([
 			"Q3 Sales.json",
 		]);

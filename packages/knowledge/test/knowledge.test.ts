@@ -19,7 +19,7 @@ describe("what waits on the user", () => {
 		expect(extension.asks).toEqual([
 			"knowledge/write",
 			"knowledge/delete",
-			"bin/fetch",
+			"attachments/fetch",
 		]);
 	});
 });
@@ -205,34 +205,36 @@ describe("knowledge", () => {
 	});
 });
 
-describe("bin", () => {
+describe("attachments", () => {
 	it("reads what the user attached, then keeps it as knowledge", async () => {
 		const { ev, store } = await world();
-		store.binHeld.set("spec.pdf", {
+		store.attachmentsHeld.set("spec.pdf", {
 			bytes: pdfSaying("Q3 revenue up"),
 			contentType: "application/pdf",
 		});
-		expect(await ev("(bin/list)")).toBe('("spec.pdf")');
-		expect(await ev('(bin/read "spec.pdf")')).toMatch(/Q3 revenue up/);
+		expect(await ev("(attachments/list)")).toBe('("spec.pdf")');
+		expect(await ev('(attachments/read "spec.pdf")')).toMatch(/Q3 revenue up/);
 		expect(await ev('(knowledge/keep "spec.pdf")')).toBe('"spec.pdf"');
-		expect(store.binned()).toEqual([]);
+		expect(store.attachments()).toEqual([]);
 		expect(store.files()).toEqual(["spec.pdf"]);
 		expect(await ev('(knowledge/read "spec.pdf")')).toMatch(/Q3 revenue up/);
 	});
 
-	it("gives nil for a file the bin does not hold", async () => {
+	it("gives nil for a file attachments do not hold", async () => {
 		const { ev } = await world();
-		expect(await ev('(bin/read "nope.md")')).toBe("nil");
+		expect(await ev('(attachments/read "nope.md")')).toBe("nil");
 	});
 
-	it("writes text, or bytes given as base64, into the bin", async () => {
+	it("writes text, or bytes given as base64, into attachments", async () => {
 		const { ev, store } = await world();
-		expect(await ev('(bin/write "note.md" "# hi")')).toBe('"note.md"');
-		expect(store.binHeld.get("note.md")?.contentType).toBe("text/markdown");
-		await ev(
-			'(bin/write "dot.png" (list :base64 "iVBORw0K" :type "image/png"))',
+		expect(await ev('(attachments/write "note.md" "# hi")')).toBe('"note.md"');
+		expect(store.attachmentsHeld.get("note.md")?.contentType).toBe(
+			"text/markdown",
 		);
-		expect(store.binHeld.get("dot.png")).toEqual({
+		await ev(
+			'(attachments/write "dot.png" (list :base64 "iVBORw0K" :type "image/png"))',
+		);
+		expect(store.attachmentsHeld.get("dot.png")).toEqual({
 			bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
 			contentType: "image/png",
 		});
@@ -241,11 +243,11 @@ describe("bin", () => {
 	it("refuses base64 that is not", async () => {
 		const { ev } = await world();
 		await expect(
-			ev('(bin/write "x.png" (list :base64 "!!" :type "image/png"))'),
+			ev('(attachments/write "x.png" (list :base64 "!!" :type "image/png"))'),
 		).rejects.toThrow(/not base64/);
 	});
 
-	it("fetches a url into the bin under the last part of its path", async () => {
+	it("fetches a url into attachments under the last part of its path", async () => {
 		const fetched: string[] = [];
 		const { ev, store } = await world({
 			download: async (url) => {
@@ -253,33 +255,33 @@ describe("bin", () => {
 				return { bytes: pdfSaying("hello"), contentType: "application/pdf" };
 			},
 		});
-		expect(await ev('(bin/fetch "https://example.com/docs/spec.pdf")')).toBe(
-			'"spec.pdf"',
-		);
-		expect(await ev('(bin/fetch "https://example.com/a" "named.pdf")')).toBe(
-			'"named.pdf"',
-		);
+		expect(
+			await ev('(attachments/fetch "https://example.com/docs/spec.pdf")'),
+		).toBe('"spec.pdf"');
+		expect(
+			await ev('(attachments/fetch "https://example.com/a" "named.pdf")'),
+		).toBe('"named.pdf"');
 		expect(fetched).toEqual([
 			"https://example.com/docs/spec.pdf",
 			"https://example.com/a",
 		]);
-		expect(store.binned()).toEqual(["named.pdf", "spec.pdf"]);
+		expect(store.attachments()).toEqual(["named.pdf", "spec.pdf"]);
 	});
 
 	it("refuses a url that is not http, and says why a fetch failed", async () => {
 		const { ev } = await world();
-		await expect(ev('(bin/fetch "file:///etc/passwd")')).rejects.toThrow(
-			/http or https/,
-		);
-		await expect(ev('(bin/fetch "https://example.com/a.pdf")')).rejects.toThrow(
-			/could not fetch .*offline/,
-		);
+		await expect(
+			ev('(attachments/fetch "file:///etc/passwd")'),
+		).rejects.toThrow(/http or https/);
+		await expect(
+			ev('(attachments/fetch "https://example.com/a.pdf")'),
+		).rejects.toThrow(/could not fetch .*offline/);
 	});
 
 	it("refuses to keep a name knowledge already holds", async () => {
 		const { ev, store } = await world();
 		store.write("a.md", "kept", "text/markdown");
-		store.bin("a.md", new TextEncoder().encode("new"), "text/markdown");
+		store.attach("a.md", new TextEncoder().encode("new"), "text/markdown");
 		await expect(ev('(knowledge/keep "a.md")')).rejects.toThrow(
 			/already holds/,
 		);

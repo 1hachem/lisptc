@@ -6,21 +6,23 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { StoredFile } from "../../../../components/stored-file.tsx";
 
-export const Route = createFileRoute("/_authed/$workspaceId/bin/$name")({
-	loader: async ({ context, params }) => {
-		if (context.auth.source === "browser") return;
-		await context.queryClient.ensureQueryData(
-			convexQuery(api.bin.get, {
-				workspaceId: params.workspaceId,
-				name: params.name,
-			}),
-		);
+export const Route = createFileRoute("/_authed/$workspaceId/attachments/$name")(
+	{
+		loader: async ({ context, params }) => {
+			if (context.auth.source === "browser") return;
+			await context.queryClient.ensureQueryData(
+				convexQuery(api.attachments.get, {
+					workspaceId: params.workspaceId,
+					name: params.name,
+				}),
+			);
+		},
+		component: AttachmentFile,
 	},
-	component: BinFile,
-});
+);
 
 const KEEP_FAILURES: Record<string, string> = {
-	NO_SUCH_FILE: "it is no longer in the bin",
+	NO_SUCH_FILE: "it is no longer in attachments",
 	NAME_TAKEN: "knowledge already holds a file of that name",
 	TOO_MANY_FILES: "the knowledge folder is full",
 };
@@ -32,7 +34,7 @@ function KeepAction({
 	workspaceId: Id<"workspaces">;
 	name: string;
 }) {
-	const keep = useConvexMutation(api.bin.keep);
+	const keep = useConvexMutation(api.attachments.keep);
 	const navigate = useNavigate();
 	const [failure, setFailure] = useState<string | null>(null);
 	return (
@@ -60,15 +62,15 @@ function KeepAction({
 	);
 }
 
-function BinFile() {
+function AttachmentFile() {
 	const { workspaceId, name } = Route.useParams();
 	const { data: file, error } = useQuery(
-		convexQuery(api.bin.get, { workspaceId, name }),
+		convexQuery(api.attachments.get, { workspaceId, name }),
 	);
 	if (error) throw error;
 	return (
 		<StoredFile
-			folder="bin"
+			folder="attachments"
 			name={name}
 			file={file}
 			actions={<KeepAction workspaceId={workspaceId} name={name} />}

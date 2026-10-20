@@ -21,7 +21,7 @@ import type { Downloaded, KnowledgeHost } from "./ports.ts";
 
 const KNOWLEDGE_WRITE = "knowledge/write";
 const KNOWLEDGE_DELETE = "knowledge/delete";
-const BIN_FETCH = "bin/fetch";
+const ATTACHMENTS_FETCH = "attachments/fetch";
 
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
@@ -192,7 +192,7 @@ function base64Bytes(name: string, encoded: unknown): Uint8Array {
 	}
 }
 
-function binned(name: string, value: unknown): Downloaded {
+function written(name: string, value: unknown): Downloaded {
 	if (typeof value === "string")
 		return {
 			bytes: new TextEncoder().encode(value),
@@ -234,30 +234,30 @@ function nameFromUrl(url: URL): string {
 	return last === "" || last.startsWith(".") ? url.hostname : last;
 }
 
-function registerBin(
+function registerAttachments(
 	interp: Interp,
 	{ store, downloader }: KnowledgeHost,
 ): void {
 	interp.defGen(
-		"bin/list",
+		"attachments/list",
 		0,
-		"(bin/list)",
-		"Return the names of the files in the bin, as strings: what the user attached to a message, or what bin/write and bin/fetch put there. They expire unless kept.",
+		"(attachments/list)",
+		"Return the names of the attachments, as strings: what the user attached to a message, or what attachments/write and attachments/fetch put there. They expire unless kept.",
 		z.tuple([]),
 		function* (): Eval {
-			return arrayToList(yield* settled(store.binned()));
+			return arrayToList(yield* settled(store.attachments()));
 		},
 	);
 
 	interp.defGen(
-		"bin/read",
+		"attachments/read",
 		1,
-		'(bin/read "name")',
-		"Read a file in the bin the way knowledge/read reads a knowledge file. Returns nil when there is no such file.",
+		'(attachments/read "name")',
+		"Read an attachment the way knowledge/read reads a knowledge file. Returns nil when there is no such file.",
 		z.tuple([zString]),
 		function* ([name]): Eval {
 			const checked = fileName(name);
-			const bytes = yield* settled(store.binFile(checked));
+			const bytes = yield* settled(store.attachment(checked));
 			return bytes === undefined
 				? null
 				: yield* settled(readFile(checked, bytes));
@@ -265,23 +265,23 @@ function registerBin(
 	);
 
 	interp.defGen(
-		"bin/write",
+		"attachments/write",
 		2,
-		'(bin/write "name" value)',
-		'Put a file in the bin. A string is stored as text under the type its name implies; (:base64 "…" :type "image/png") is stored as those bytes. Returns the name it was stored under, which gains a number when the bin already holds that name.',
+		'(attachments/write "name" value)',
+		'Put a file in attachments. A string is stored as text under the type its name implies; (:base64 "…" :type "image/png") is stored as those bytes. Returns the name it was stored under, which gains a number when attachments already hold that name.',
 		z.tuple([zString, zAny]),
 		function* ([name, value]): Eval {
 			const checked = fileName(name);
-			const { bytes, contentType } = binned(checked, value);
-			return yield* settled(store.bin(checked, bytes, contentType));
+			const { bytes, contentType } = written(checked, value);
+			return yield* settled(store.attach(checked, bytes, contentType));
 		},
 	);
 
 	interp.defGen(
-		BIN_FETCH,
+		ATTACHMENTS_FETCH,
 		-1,
-		'(bin/fetch "https://…" ["name"])',
-		"Download a url into the bin. The user approves it first. The name defaults to the last part of the url's path. Returns the name it was stored under.",
+		'(attachments/fetch "https://…" ["name"])',
+		"Download a url into attachments. The user approves it first. The name defaults to the last part of the url's path. Returns the name it was stored under.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const [target, named] = listToArray(rest);
@@ -297,7 +297,7 @@ function registerBin(
 				);
 			}
 			return yield* settled(
-				store.bin(name, fetched.bytes, fetched.contentType),
+				store.attach(name, fetched.bytes, fetched.contentType),
 			);
 		},
 	);
@@ -306,7 +306,7 @@ function registerBin(
 		"knowledge/keep",
 		1,
 		'(knowledge/keep "name")',
-		"Move a file from the bin into the knowledge folder, so it is kept for good and no longer expires. Returns the name.",
+		"Move a file from attachments into the knowledge folder, so it is kept for good and no longer expires. Returns the name.",
 		z.tuple([zString]),
 		function* ([name]): Eval {
 			const checked = fileName(name);
@@ -318,7 +318,7 @@ function registerBin(
 
 function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 	const { store } = host;
-	registerBin(interp, host);
+	registerAttachments(interp, host);
 	interp.defGen(
 		"knowledge/list",
 		0,
@@ -381,7 +381,7 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 	return Object.assign(
 		(interp: Interp): void => registerKnowledge(interp, host),
 		{
-			asks: [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE, BIN_FETCH],
+			asks: [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE, ATTACHMENTS_FETCH],
 			prompt: host.prompt(),
 		},
 	);
