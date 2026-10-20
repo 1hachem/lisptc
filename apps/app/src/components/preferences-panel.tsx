@@ -11,7 +11,8 @@ import {
 	type InputHelper,
 } from "../lib/input-helpers.ts";
 import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
-import { useSidebarMotion } from "../lib/sidebar.ts";
+import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
+import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useUI } from "../lib/ui.tsx";
 import { SidePanel } from "./side-panel.tsx";
 
@@ -129,6 +130,46 @@ function InputSection({ group }: { group: InputGroup }) {
 				{group === "shows" && <SendLabel />}
 			</div>
 		</>
+	);
+}
+
+function SidebarToggle({
+	name,
+	on,
+	onToggle,
+}: {
+	name: SidebarEntry;
+	on: boolean;
+	onToggle: (name: SidebarEntry) => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-pressed={on}
+			onClick={() => onToggle(name)}
+			className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+		>
+			<span className={`flex-1 ${on ? "text-fg" : "text-dim line-through"}`}>
+				{name}
+			</span>
+			<span className="flex-none text-dim">{on ? "on" : "off"}</span>
+		</button>
+	);
+}
+
+function SidebarList() {
+	const { order, shown, toggleHidden } = useSidebarOrder();
+	return (
+		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			{order.map((name) => (
+				<SidebarToggle
+					key={name}
+					name={name}
+					on={shown.includes(name)}
+					onToggle={toggleHidden}
+				/>
+			))}
+		</div>
 	);
 }
 
@@ -252,6 +293,10 @@ export function PreferencesPanel({ open }: { open: boolean }) {
 				{INPUT_GROUPS.map((group) => (
 					<InputSection key={group} group={group} />
 				))}
+				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+					sidebar
+				</div>
+				<SidebarList />
 				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 					recent themes
 				</div>
