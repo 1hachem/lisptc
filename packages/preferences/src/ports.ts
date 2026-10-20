@@ -7,6 +7,7 @@ export interface Preferences {
 	font?: string;
 	channels?: Toggles;
 	metadata?: Toggles;
+	input?: Toggles;
 	sidebar?: string[];
 	hidden?: string[];
 	motion?: string;
@@ -22,9 +23,15 @@ export interface Choice {
 	name: string;
 }
 
+export interface ThemeChoice extends Choice {
+	family: string;
+	scheme: "light" | "dark";
+}
+
 export interface PreferencesHost {
 	store: PreferencesStore;
-	themes: readonly Choice[];
+	themes: readonly ThemeChoice[];
+	defaultDarkTheme?: string;
 	fonts: readonly Choice[];
 	motions: readonly Choice[];
 	prompt: PromptSource;

@@ -11,6 +11,7 @@ function rootOf(entry: string): URL {
 
 export const PROMPT_ROOTS = [
 	rootOf(require.resolve("@repo/interpreter/source")),
+	rootOf(require.resolve("@repo/agents-extension")),
 	rootOf(require.resolve("@repo/compaction-extension")),
 	rootOf(require.resolve("@repo/diagnostics-extension")),
 	rootOf(require.resolve("@repo/introspection-extension")),
@@ -34,7 +35,7 @@ function promptFiles(dir: URL): URL[] {
 
 export const RUNTIME_ASSETS: URL[] = [
 	...PROMPT_ROOTS.flatMap(promptFiles),
-	pathToFileURL(require.resolve("@repo/mcp-extension/mcp.toolkit.json")),
+	pathToFileURL(require.resolve("@repo/toolkit/mcp.toolkit.json")),
 ];
 
 export function assetName(asset: URL): string {

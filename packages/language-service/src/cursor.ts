@@ -1,39 +1,31 @@
+import { openAtEnd } from "@repo/shared/lisp-forms";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import type { Position, Range } from "vscode-languageserver-types";
 
-const symbolChar = /[^()'`~" \t]/;
+const symbolChar = /[^()'`~" \t\r\n]/;
 
 export function enclosingCallHead(
 	document: TextDocument,
-	position: { line: number; character: number },
+	position: Position,
 ): string | undefined {
 	const text = document.getText({
 		start: { line: 0, character: 0 },
 		end: position,
 	});
-	let depth = 0;
-	for (let i = text.length - 1; i >= 0; i--) {
-		const c = text[i];
-		if (c === ")") {
-			depth++;
-		} else if (c === "(") {
-			if (depth === 0) {
-				let j = i + 1;
-				while (j < text.length && /\s/.test(text[j])) j++;
-				let k = j;
-				while (k < text.length && symbolChar.test(text[k])) k++;
-				return k > j ? text.slice(j, k) : undefined;
-			}
-			depth--;
-		}
-	}
-	return undefined;
+	const open = openAtEnd(text).parens.at(-1);
+	if (open === undefined) return undefined;
+	let j = open + 1;
+	while (j < text.length && /\s/.test(text[j])) j++;
+	let k = j;
+	while (k < text.length && symbolChar.test(text[k])) k++;
+	return k > j ? text.slice(j, k) : undefined;
 }
 
 export function symbolAt(
 	document: TextDocument,
 	line: number,
 	character: number,
-) {
+): { name: string; range: Range } | undefined {
 	const text = document.getText({
 		start: { line, character: 0 },
 		end: { line: line + 1, character: 0 },
@@ -50,6 +42,12 @@ export function symbolAt(
 			end: { line, character: end },
 		},
 	};
+}
+
+export function wordBefore(document: TextDocument, position: Position): string {
+	const symbol = symbolAt(document, position.line, position.character);
+	const start = symbol?.range.start.character ?? position.character;
+	return symbol?.name.slice(0, position.character - start) ?? "";
 }
 
 export function markdownFor(sig?: string, doc?: string): string | undefined {

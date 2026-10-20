@@ -43,6 +43,7 @@ export interface ChatMessage {
 		prose?: unknown;
 		failed?: unknown;
 		source?: unknown;
+		results?: unknown;
 	};
 }
 
@@ -101,29 +102,15 @@ export interface ChatSession {
 	fresh: boolean;
 	isLoading: boolean;
 	chatId: Id<"chats"> | null;
+	draftChatId: Id<"chats"> | null;
 	workspaceId: Id<"workspaces">;
 	error?: string;
 	send: (text: string) => void;
 	sendAbout: (file: OpenFile, text: string) => void;
 	resume: (event: SystemEventTicket) => void;
-	runLisp: (code: string) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
 	fail: (message: string) => void;
-}
-
-async function evalLisp(
-	code: string,
-	chatId: string,
-	signal: AbortSignal,
-): Promise<void> {
-	const response = await fetch("/api/chat/eval", {
-		method: "POST",
-		headers: await apiHeaders(),
-		body: JSON.stringify({ chatId, code }),
-		signal,
-	});
-	if (!response.ok) throw new Error(`the repl returned ${response.status}`);
 }
 
 type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
@@ -181,7 +168,24 @@ export function ChatProvider({
 	children: React.ReactNode;
 }) {
 	const navigate = useNavigate();
-	const createChat = useConvexMutation(api.chats.create);
+	const draftChat = useConvexMutation(api.chats.draft);
+	const renameChat = useConvexMutation(api.chats.rename);
+	const [drafted, setDrafted] = useState<Id<"chats"> | null>(null);
+	useEffect(() => {
+		setDrafted(null);
+		if (chatId !== null) return;
+		let current = true;
+		draftChat({ workspaceId })
+			.then((draft) => {
+				if (current) setDrafted(draft);
+			})
+			.catch((ex: unknown) =>
+				reportIssue(ex, { $exception_source: "chat draft" }),
+			);
+		return () => {
+			current = false;
+		};
+	}, [chatId, workspaceId, draftChat]);
 	const startChat = useConvexMutation(api.chats.start);
 	const settleChat = useConvexMutation(api.chats.settle);
 	const markStreaming = useMemo(
@@ -248,12 +252,10 @@ export function ChatProvider({
 		setGreeting(greetingMessage());
 	}, []);
 
-	const [evaluating, setEvaluating] = useState(false);
 	const [failure, setFailure] = useState<{
 		chatId: Id<"chats"> | null;
 		message: string;
 	} | null>(null);
-	const running = useRef<AbortController | null>(null);
 
 	const turns =
 		streamingFor.current === chatId
@@ -284,45 +286,6 @@ export function ChatProvider({
 			setMeta((prev) => ({ ...prev, ...found }));
 	}, [turns, meta]);
 
-	const runLisp = useCallback(
-		async (code: string) => {
-			const run = new AbortController();
-			running.current?.abort();
-			running.current = run;
-			setFailure(null);
-			setEvaluating(true);
-			let opened = chatId;
-			try {
-				opened =
-					chatId ?? (await createChat({ workspaceId, title: titleOf(code) }));
-				if (!chatId) {
-					await navigate({
-						to: "/$workspaceId/chat/$chatId",
-						params: { workspaceId, chatId: opened },
-						replace: true,
-					});
-				}
-				await evalLisp(code, opened, run.signal);
-			} catch (ex) {
-				if (run.signal.aborted) return;
-				reportIssue(ex, {
-					$exception_source: "lisp eval",
-					thread_id: chatId ?? "draft",
-				});
-				setFailure({
-					chatId: opened,
-					message: ex instanceof Error ? ex.message : String(ex),
-				});
-			} finally {
-				if (running.current === run) {
-					running.current = null;
-					setEvaluating(false);
-				}
-			}
-		},
-		[chatId, workspaceId, createChat, navigate],
-	);
-
 	const submit = useCallback(
 		async (
 			input: { message: string } | { event: { token: string } },
@@ -330,7 +293,14 @@ export function ChatProvider({
 			title: string,
 		) => {
 			setFailure(null);
-			const opened = chatId ?? (await createChat({ workspaceId, title }));
+			const opened = chatId ?? (await draftChat({ workspaceId }));
+			if (chatId === null && title.trim() !== "")
+				renameChat({ chatId: opened, title }).catch((ex: unknown) =>
+					reportIssue(ex, {
+						$exception_source: "chat title",
+						thread_id: opened,
+					}),
+				);
 			streamingFor.current = opened;
 			markStreaming({ chatId: opened }).catch((ex: unknown) =>
 				reportIssue(ex, { $exception_source: "chat start", thread_id: opened }),
@@ -350,7 +320,8 @@ export function ChatProvider({
 		[
 			chatId,
 			workspaceId,
-			createChat,
+			draftChat,
+			renameChat,
 			markStreaming,
 			navigate,
 			persisted,
@@ -413,9 +384,6 @@ export function ChatProvider({
 
 	const halt = useCallback(() => {
 		clear();
-		running.current?.abort();
-		running.current = null;
-		setEvaluating(false);
 		stream.stop();
 	}, [stream, clear]);
 
@@ -451,11 +419,11 @@ export function ChatProvider({
 			fresh,
 			isLoading: false,
 			chatId,
+			draftChatId: null,
 			workspaceId,
 			send: () => {},
 			sendAbout: () => {},
 			resume: () => {},
-			runLisp: () => {},
 			stop: () => {},
 			withdraw: () => {},
 			fail: () => {},
@@ -471,8 +439,9 @@ export function ChatProvider({
 			meta,
 			greeting: greeting ? messageText(greeting) : null,
 			fresh,
-			isLoading: stream.isLoading || evaluating,
+			isLoading: stream.isLoading,
 			chatId,
+			draftChatId: chatId === null ? drafted : null,
 			workspaceId,
 			error: errorFor(chatId, {
 				stream: stream.error,
@@ -486,9 +455,6 @@ export function ChatProvider({
 				void sendAbout(file, text);
 			},
 			resume,
-			runLisp: (code) => {
-				void runLisp(code);
-			},
 			stop,
 			withdraw,
 			fail: (message) => setFailure({ chatId, message }),
@@ -503,14 +469,13 @@ export function ChatProvider({
 		fresh,
 		stream.isLoading,
 		stream.error,
-		evaluating,
 		failure,
 		chatId,
+		drafted,
 		workspaceId,
 		send,
 		sendAbout,
 		resume,
-		runLisp,
 		stop,
 		withdraw,
 	]);
@@ -586,6 +551,13 @@ function isSkipped(value: unknown): value is Skipped {
 
 export function toolFailed(message: ChatMessage): boolean {
 	return message.additional_kwargs?.failed === true;
+}
+
+export function toolResults(message: ChatMessage): string[] {
+	const results = message.additional_kwargs?.results;
+	return Array.isArray(results)
+		? results.filter((r): r is string => typeof r === "string")
+		: [];
 }
 
 export function toolUi(message: ChatMessage): unknown {

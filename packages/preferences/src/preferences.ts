@@ -12,13 +12,20 @@ import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
-import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
+import type {
+	Choice,
+	Preferences,
+	PreferencesHost,
+	ThemeChoice,
+	Toggles,
+} from "./ports.ts";
 
 const SET_KEYS = [
 	"theme",
 	"font",
 	"channels",
 	"metadata",
+	"input",
 	"sidebar",
 	"hidden",
 	"motion",
@@ -29,7 +36,8 @@ const SET_ARGS = [
 		name: "theme",
 		type: "string",
 		required: false,
-		description: "a theme id from (themes)",
+		description:
+			'a theme id from (themes), or "dark" for the dark counterpart of the current theme, falling back to the default dark theme',
 	},
 	{
 		name: "font",
@@ -50,6 +58,13 @@ const SET_ARGS = [
 		required: false,
 		description:
 			"which metadata fields the chat shows, as (:id t-or-nil ...); ids not named keep their value",
+	},
+	{
+		name: "input",
+		type: "plist",
+		required: false,
+		description:
+			"which helpers the chat input runs as the user types, as (:id t-or-nil ...); ids not named keep their value",
 	},
 	{
 		name: "sidebar",
@@ -92,6 +107,7 @@ export function preferencesList(preferences: Preferences): List {
 		["font", preferences.font ?? null],
 		["channels", togglesList(preferences.channels)],
 		["metadata", togglesList(preferences.metadata)],
+		["input", togglesList(preferences.input)],
 		["sidebar", arrayToList([...(preferences.sidebar ?? [])])],
 		["hidden", arrayToList([...(preferences.hidden ?? [])])],
 		["motion", preferences.motion ?? null],
@@ -114,8 +130,26 @@ function chosen(
 	return value;
 }
 
+function darkCounterpart(
+	current: string | undefined,
+	offered: readonly ThemeChoice[],
+	fallback: string | undefined,
+): string {
+	const family = offered.find((theme) => theme.id === current)?.family;
+	const dark = offered.find(
+		(theme) => theme.family === family && theme.scheme === "dark",
+	);
+	const id = dark?.id ?? fallback;
+	if (id === undefined)
+		throw new EvalException(
+			"no dark theme to switch to, see (themes)",
+			current ?? null,
+		);
+	return id;
+}
+
 function toggled(
-	kind: "channels" | "metadata",
+	kind: "channels" | "metadata" | "input",
 	value: unknown,
 	known: Toggles | undefined,
 ): Toggles {
@@ -172,7 +206,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :motion id). They belong to the user, not the workspace, and the app applies them live.',
+		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :motion id). They belong to the user, not the workspace, and the app applies them live.',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -182,20 +216,23 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id])',
+		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :theme :font :channels :metadata :sidebar :hidden :motion",
+					"nothing to set, give one of :theme :font :channels :metadata :input :sidebar :hidden :motion",
 					null,
 				);
 			const current = yield* settled(store.read());
 			const change: Preferences = {};
 			if (options.has("theme"))
-				change.theme = chosen("theme", options.get("theme"), host.themes);
+				change.theme =
+					options.get("theme") === "dark"
+						? darkCounterpart(current.theme, host.themes, host.defaultDarkTheme)
+						: chosen("theme", options.get("theme"), host.themes);
 			if (options.has("font"))
 				change.font = chosen("font", options.get("font"), host.fonts);
 			if (options.has("channels"))
@@ -210,6 +247,8 @@ export function registerPreferences(
 					options.get("metadata"),
 					current.metadata,
 				);
+			if (options.has("input"))
+				change.input = toggled("input", options.get("input"), current.input);
 			if (options.has("sidebar"))
 				change.sidebar = ordered(options.get("sidebar"), current.sidebar);
 			if (options.has("hidden"))

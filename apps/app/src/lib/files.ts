@@ -44,6 +44,7 @@ export function preferencesSource(preferences: {
 	font: string;
 	channels: Record<string, boolean>;
 	metadata: Record<string, boolean>;
+	input: Record<string, boolean>;
 	sidebar: readonly string[];
 	hidden: readonly string[];
 	motion: string;
@@ -53,6 +54,7 @@ export function preferencesSource(preferences: {
 		`  :font ${quoted(preferences.font)}`,
 		`  :channels ${toggles(preferences.channels)}`,
 		`  :metadata ${toggles(preferences.metadata)}`,
+		`  :input ${toggles(preferences.input)}`,
 		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
 		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
 		`  :motion ${quoted(preferences.motion)})`,
