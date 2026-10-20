@@ -1,4 +1,4 @@
-export const DATE_GROUPS = [
+const DATE_GROUPS = [
 	"today",
 	"yesterday",
 	"last week",
