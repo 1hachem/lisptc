@@ -35,7 +35,7 @@ export const DEFAULT_SEND_LABEL = "send";
 
 export const DEFAULT_HIDDEN: readonly string[] = ["bin"];
 
-type Toggles = Record<string, boolean>;
+export type Toggles = Record<string, boolean>;
 
 export function withDefaults<
 	T extends {
