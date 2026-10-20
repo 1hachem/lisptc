@@ -36,13 +36,11 @@ import {
 	recall,
 } from "../lib/message-history.ts";
 import { quietly } from "../lib/quietly.ts";
-import type { VimMode } from "../lib/vim.ts";
 import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispAssistPlugin } from "./lisp-assist.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 import { type Mentionable, MentionMenuPlugin } from "./mention-menu.tsx";
-import { VimKeysPlugin } from "./vim-keys.tsx";
 
 export interface ChatInputProps {
 	placeholder?: string;
@@ -55,7 +53,6 @@ export interface ChatInputProps {
 	mentions?: readonly Mentionable[];
 	symbols?: SymbolTable;
 	lisp?: boolean;
-	vim?: boolean;
 	send?: boolean;
 	sendLabel?: string;
 	attach?: boolean;
@@ -240,7 +237,6 @@ function useDraft(
 }
 
 const ENABLED = { prompt: "›", tone: "text-green" };
-const NORMAL = { prompt: ":", tone: "text-yellow" };
 const DISABLED = { prompt: "⋯", tone: "text-dim" };
 
 function Notice({ text }: { text: string | null }) {
@@ -581,7 +577,6 @@ function useComposer({
 		attach,
 	});
 	const stops = isStreaming === true && empty;
-	const [mode, setMode] = useState<VimMode>("insert");
 
 	useKeys({
 		disabled: busy,
@@ -602,8 +597,7 @@ function useComposer({
 		search,
 		menus,
 		pick,
-		setMode,
-		look: busy ? DISABLED : mode === "normal" ? NORMAL : ENABLED,
+		look: busy ? DISABLED : ENABLED,
 		notice: noticeOf(sending, over, notice),
 		pickFiles: (files: File[]) => {
 			attachments.add(files);
@@ -622,7 +616,6 @@ function Editor(props: ChatInputProps) {
 		mentions = [],
 		symbols = NO_SYMBOLS,
 		lisp = true,
-		vim = false,
 		send = true,
 		sendLabel = "send",
 		attach = true,
@@ -689,11 +682,6 @@ function Editor(props: ChatInputProps) {
 				symbols={symbols}
 				host={c.menus.host}
 				active={c.menus.assistOpen}
-			/>
-			<VimKeysPlugin
-				on={vim}
-				menuActive={() => c.menus.active.current}
-				onMode={c.setMode}
 			/>
 			<PromptDialog
 				onOpenChange={c.search.setSearching}

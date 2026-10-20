@@ -420,35 +420,6 @@ describe("the chat input", () => {
 		expect(onSubmit).toHaveBeenCalledWith("hello", []);
 	});
 
-	it("edits in normal mode after Escape when vim keys are on", async () => {
-		act(() => root.render(<ChatInput onSubmit={vi.fn()} vim />));
-		const field = host.querySelector<HTMLElement>("[contenteditable]");
-		if (!field) throw new Error("no editor");
-		type(field, "one two");
-		press(field, { key: "Escape" });
-		await settled();
-		expect(host.textContent).toContain(":");
-		for (const key of ["0", "x", "w", "D"]) {
-			press(field, { key });
-			await settled();
-		}
-		expect(textOf(field)).toBe("ne ");
-		press(field, { key: "A" });
-		await settled();
-		typeAtCaret(field, "!");
-		expect(textOf(field)).toBe("ne !");
-	});
-
-	it("types every key as text when vim keys are off", () => {
-		act(() => root.render(<ChatInput onSubmit={vi.fn()} />));
-		const field = host.querySelector<HTMLElement>("[contenteditable]");
-		if (!field) throw new Error("no editor");
-		type(field, "one");
-		press(field, { key: "Escape" });
-		press(field, { key: "x" });
-		expect(textOf(field)).toBe("one");
-	});
-
 	it("runs no lisp help in the input when the preference is off", async () => {
 		act(() =>
 			root.render(

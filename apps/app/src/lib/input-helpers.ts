@@ -1,4 +1,4 @@
-export type InputHelper = "send" | "attach" | "lisp" | "vim";
+export type InputHelper = "send" | "attach" | "lisp";
 
 export type InputGroup = "shows" | "behaves";
 
@@ -27,11 +27,5 @@ export const INPUT_HELPERS: {
 		group: "behaves",
 		label: "lisp",
 		hint: "highlight, complete, check and document the lisp you type",
-	},
-	{
-		id: "vim",
-		group: "behaves",
-		label: "vim keys",
-		hint: "Escape for normal mode: h j k l w b 0 $ x dd i a I A o",
 	},
 ];

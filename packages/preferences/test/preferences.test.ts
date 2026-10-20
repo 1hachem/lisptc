@@ -7,7 +7,7 @@ const HELD = {
 	font: "geist",
 	channels: { lisp: false, thinking: true },
 	metadata: { tokens: true },
-	input: { lisp: true, vim: false, send: true },
+	input: { lisp: true, send: true },
 	sendLabel: "send",
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
@@ -18,7 +18,7 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:theme "gruvbox-dark" :font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :vim nil :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :motion "slide")',
+			'(:theme "gruvbox-dark" :font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :motion "slide")',
 		);
 	});
 
@@ -75,10 +75,10 @@ describe("changing preferences", () => {
 
 	it("changes what the chat input shows and how it behaves, and keeps the rest", async () => {
 		const { ev, store } = await world(HELD);
-		expect(await ev("(preferences/set :input '(:send nil :vim t))")).toContain(
-			":input (:lisp t :vim t :send nil)",
+		expect(await ev("(preferences/set :input '(:send nil))")).toContain(
+			":input (:lisp t :send nil)",
 		);
-		expect(store.read().input).toEqual({ lisp: true, vim: true, send: false });
+		expect(store.read().input).toEqual({ lisp: true, send: false });
 	});
 
 	it("relabels the send button", async () => {

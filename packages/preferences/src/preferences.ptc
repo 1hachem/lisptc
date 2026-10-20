@@ -10,8 +10,7 @@ workspace. App applies change at once, while they watch.
   leaves others as they were.
 - :input is what chat input shows and how it behaves. Shows: :send is send
   button, :attach is attach button. Behaves: :lisp is highlight, completion,
-  errors, docs for lisp in input; :vim is vim keys, Escape for normal mode.
-  (preferences/set :input '(:send nil :vim t)).
+  errors, docs for lisp in input. (preferences/set :input '(:send nil :lisp nil)).
 - :send-label is word on send button, 1 to 16 chars:
   (preferences/set :send-label "go").
 - :sidebar is order of sidebar's top-level entries, top first.
