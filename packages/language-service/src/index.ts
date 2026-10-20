@@ -2,9 +2,10 @@ export { lispIn } from "./forms.ts";
 export { type RankedCompletion, rankCompletions } from "./fuzzy.ts";
 export {
 	type CallAt,
+	COMPLETION_TRIGGERS,
 	insideForm,
+	insideString,
 	type LanguageService,
-	type LanguageServiceOptions,
 	languageService,
 } from "./service.ts";
 export {
@@ -15,4 +16,3 @@ export {
 	symbolTable,
 } from "./symbol-table.ts";
 export { UNCLOSED } from "./syntax.ts";
-export type { Toolkit } from "./toolkits.ts";

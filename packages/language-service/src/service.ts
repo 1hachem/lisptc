@@ -12,14 +12,21 @@ import {
 	type SignatureHelp,
 	type TextEdit,
 } from "vscode-languageserver-types";
+import { stringArgAt } from "./arg-at.ts";
 import { callDiagnostics } from "./call-diagnostics.ts";
 import { closerAt } from "./closer.ts";
-import { enclosingCallHead, markdownFor, symbolAt } from "./cursor.ts";
-import { argCompletionItems } from "./doc-args.ts";
+import {
+	enclosingCallHead,
+	markdownFor,
+	symbolAt,
+	wordBefore,
+} from "./cursor.ts";
+import { argCompletionItems, valueCompletionItems } from "./doc-args.ts";
 import type { SymbolEntry, SymbolTable } from "./symbol-table.ts";
 import { syntaxDiagnostics } from "./syntax.ts";
 import { parseForms, tokenizeWithPositions } from "./tokenize.ts";
-import { loadMcpCompletions, type Toolkit } from "./toolkits.ts";
+
+export const COMPLETION_TRIGGERS: readonly string[] = [":", '"'];
 
 export interface CallAt {
 	entry: SymbolEntry;
@@ -37,10 +44,6 @@ export interface LanguageService {
 		position: Position,
 	): SignatureHelp | null;
 	closer(document: TextDocument, position: Position): TextEdit | null;
-}
-
-export interface LanguageServiceOptions {
-	toolkits?: readonly Toolkit[];
 }
 
 function symbolItem(entry: SymbolEntry): CompletionItem {
@@ -68,6 +71,13 @@ export function insideForm(
 	return openAtEnd(textBefore(document, position)).parens.length > 0;
 }
 
+export function insideString(
+	document: TextDocument,
+	position: Position,
+): boolean {
+	return openAtEnd(textBefore(document, position)).inString;
+}
+
 function keywordsOf(slice: string): string[] {
 	const [form] = parseForms(tokenizeWithPositions(slice));
 	if (form?.kind !== "list") return [];
@@ -78,15 +88,24 @@ function keywordsOf(slice: string): string[] {
 	);
 }
 
+function keywordItems(
+	before: string,
+	word: string,
+	args: readonly DocArg[],
+): CompletionItem[] {
+	const open = openAtEnd(before).parens.at(-1) ?? 0;
+	const supplied = new Set(
+		keywordsOf(before.slice(open, before.length - word.length)),
+	);
+	return argCompletionItems(args.filter((arg) => !supplied.has(arg.name)));
+}
+
 function parameterDoc(arg: DocArg): string {
 	const kind = `${arg.type}${arg.required ? " (required)" : ""}`;
 	return arg.description === undefined ? kind : `${kind}: ${arg.description}`;
 }
 
-export function languageService(
-	table: SymbolTable,
-	options: LanguageServiceOptions = {},
-): LanguageService {
+export function languageService(table: SymbolTable): LanguageService {
 	let symbolItems: CompletionItem[] | undefined;
 
 	const callAt = (
@@ -111,14 +130,13 @@ export function languageService(
 	return {
 		completions(document, position) {
 			const head = enclosingCallHead(document, position);
-			const toolkits = loadMcpCompletions(
-				head,
-				document,
-				position,
-				options.toolkits ?? [],
-			);
-			if (toolkits) return toolkits;
 			const args = head === undefined ? undefined : table.get(head)?.args;
+			const before = textBefore(document, position);
+			const values = args && stringArgAt(before, args)?.values;
+			if (values?.length) return valueCompletionItems(values);
+			const word = wordBefore(document, position);
+			if (args?.length && word.startsWith(":") && !openAtEnd(before).inString)
+				return keywordItems(before, word, args);
 			symbolItems ??= [...table.values()].map(symbolItem);
 			return args?.length
 				? [...argCompletionItems(args), ...symbolItems]

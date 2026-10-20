@@ -31,6 +31,10 @@ describe("rankCompletions", () => {
 		]);
 	});
 
+	it("offers every label, in sort order, when nothing is typed yet", () => {
+		expect(labels("", "sheets", "fs")).toEqual(["fs", "sheets"]);
+	});
+
 	it("ignores case", () => {
 		expect(labels("LS", "list")).toEqual(["list"]);
 	});

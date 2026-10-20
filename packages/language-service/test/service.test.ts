@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
+	COMPLETION_TRIGGERS,
 	insideForm,
 	languageService,
 	lispIn,
@@ -26,12 +27,25 @@ const ENTRIES: SymbolEntry[] = [
 			{ name: "encoding", type: "string", required: false },
 		],
 	},
-	{ name: "load-mcp", signature: "(load-mcp name)" },
+	{
+		name: "paint",
+		signature: "(paint target :mode)",
+		args: [
+			{ name: "target", type: "string", required: true },
+			{
+				name: "mode",
+				type: "string",
+				required: false,
+				values: [
+					{ value: "wash", description: "Thin coat.\nDries fast." },
+					{ value: "fill" },
+				],
+			},
+		],
+	},
 ];
 
-const service = languageService(symbolTable(ENTRIES), {
-	toolkits: [{ name: "playwright" }],
-});
+const service = languageService(symbolTable(ENTRIES));
 
 function doc(content: string): TextDocument {
 	return TextDocument.create("file:///test.lisp", "lisp", 1, content);
@@ -46,11 +60,11 @@ describe("completions", () => {
 		const document = doc("(c");
 		expect(
 			service.completions(document, endOf(document)).map((i) => i.label),
-		).toEqual(["car", "fs/read_file", "load-mcp"]);
+		).toEqual(["car", "fs/read_file", "paint"]);
 	});
 
 	it("puts the call's keyword arguments first, required before optional", () => {
-		const document = doc("(fs/read_file :");
+		const document = doc("(fs/read_file ");
 		const labels = service
 			.completions(document, endOf(document))
 			.map((i) => i.label);
@@ -58,11 +72,67 @@ describe("completions", () => {
 		expect(labels).toContain("car");
 	});
 
-	it("offers only toolkit names inside load-mcp's string", () => {
-		const document = doc('(load-mcp "p');
+	it("offers only the call's keyword arguments after a colon", () => {
+		const document = doc("(fs/read_file :");
 		expect(
 			service.completions(document, endOf(document)).map((i) => i.label),
-		).toEqual(["playwright"]);
+		).toEqual([":path", ":encoding"]);
+	});
+
+	it("keeps offering the keyword arguments while one is being typed", () => {
+		const document = doc("(fs/read_file :path");
+		expect(
+			service.completions(document, endOf(document)).map((i) => i.label),
+		).toEqual([":path", ":encoding"]);
+	});
+
+	it("leaves out a keyword argument the call already supplies", () => {
+		const document = doc('(fs/read_file :path "a" :en');
+		expect(
+			service.completions(document, endOf(document)).map((i) => i.label),
+		).toEqual([":encoding"]);
+	});
+
+	it("offers keyword arguments in an inner call after a colon", () => {
+		const document = doc('(car (paint "wall" :');
+		expect(
+			service.completions(document, endOf(document)).map((i) => i.label),
+		).toEqual([":target", ":mode"]);
+	});
+
+	it("offers symbols after a colon in a call that declares no arguments", () => {
+		const document = doc("(car :");
+		expect(
+			service.completions(document, endOf(document)).map((i) => i.label),
+		).toContain("car");
+	});
+
+	it("offers only a keyword argument's values inside its string", () => {
+		const document = doc('(paint "wall" :mode "');
+		const items = service.completions(document, endOf(document));
+		expect(items.map((i) => i.label)).toEqual(["wash", "fill"]);
+		expect(items[0]?.detail).toBe("Thin coat.");
+		expect(items.map((i) => i.sortText)).toEqual(["0", "1"]);
+	});
+
+	it("offers a positional argument's values inside its string", () => {
+		const document = doc('(paint "wall" "');
+		expect(
+			service.completions(document, endOf(document)).map((i) => i.label),
+		).toEqual(["wash", "fill"]);
+	});
+
+	it("falls back to symbols in a string whose argument declares no values", () => {
+		const document = doc('(paint "w');
+		expect(
+			service.completions(document, endOf(document)).map((i) => i.label),
+		).toContain("car");
+	});
+});
+
+describe("COMPLETION_TRIGGERS", () => {
+	it("are the characters that open a keyword argument and a string value", () => {
+		expect(COMPLETION_TRIGGERS).toEqual([":", '"']);
 	});
 });
 

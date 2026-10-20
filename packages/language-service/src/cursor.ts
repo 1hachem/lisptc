@@ -44,6 +44,12 @@ export function symbolAt(
 	};
 }
 
+export function wordBefore(document: TextDocument, position: Position): string {
+	const symbol = symbolAt(document, position.line, position.character);
+	const start = symbol?.range.start.character ?? position.character;
+	return symbol?.name.slice(0, position.character - start) ?? "";
+}
+
 export function markdownFor(sig?: string, doc?: string): string | undefined {
 	if (sig === undefined && (doc === undefined || doc === "")) return undefined;
 	const body = doc ?? "";

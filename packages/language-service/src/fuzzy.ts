@@ -51,6 +51,7 @@ function matchFrom(
 function fuzzyMatch(typed: string, label: string): Match | undefined {
 	const query = typed.toLowerCase();
 	const folded = label.toLowerCase();
+	if (query === "") return { score: 0, matched: [] };
 	let best: Match | undefined;
 	for (let at = folded.indexOf(query[0] ?? ""); at >= 0; ) {
 		const match = matchFrom(query, label, at);
