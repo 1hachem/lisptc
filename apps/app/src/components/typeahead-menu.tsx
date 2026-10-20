@@ -6,6 +6,7 @@ import { cn } from "@repo/ui";
 import {
 	type ReactNode,
 	type RefObject,
+	useEffect,
 	useLayoutEffect,
 	useState,
 } from "react";
@@ -63,51 +64,55 @@ function Row({
 }
 
 const BESIDE_GAP = 6;
+const ZOOM = "var(--app-zoom, 1)";
+const UNZOOM = `calc(1 / ${ZOOM})`;
+
+const TIP_DELAY_MS = 350;
 
 interface Place {
-	top: number;
-	left?: number;
-	right?: number;
+	bottom: number;
+	left: number;
 }
 
-function placeBeside(row: DOMRect, menu: DOMRect, width: number): Place {
-	const roomRight = window.innerWidth - menu.right - BESIDE_GAP;
-	return roomRight >= width
-		? { top: row.top, left: menu.right + BESIDE_GAP }
-		: { top: row.top, right: window.innerWidth - menu.left + BESIDE_GAP };
+function placeAbove(row: DOMRect): Place {
+	return { bottom: window.innerHeight - row.top + BESIDE_GAP, left: row.left };
 }
 
 const samePlace = (a: Place | null, b: Place) =>
-	a?.top === b.top && a.left === b.left && a.right === b.right;
+	a?.bottom === b.bottom && a.left === b.left;
 
 function Beside({
 	row,
 	children,
 }: {
-	row: RefObject<HTMLElement | null>;
+	row: () => HTMLElement | null | undefined;
 	children: ReactNode;
 }) {
-	const [tip, setTip] = useState<HTMLDivElement | null>(null);
+	const [due, setDue] = useState(false);
 	const [place, setPlace] = useState<Place | null>(null);
+	useEffect(() => {
+		const timer = setTimeout(() => setDue(true), TIP_DELAY_MS);
+		return () => clearTimeout(timer);
+	}, []);
 	useLayoutEffect(() => {
-		const element = row.current;
-		const menu = element?.closest("[role=listbox]");
-		if (!element || !menu || !tip) return;
-		const next = placeBeside(
-			element.getBoundingClientRect(),
-			menu.getBoundingClientRect(),
-			tip.offsetWidth,
-		);
+		const element = row();
+		if (!due || !element) return;
+		const next = placeAbove(element.getBoundingClientRect());
 		setPlace((standing) => (samePlace(standing, next) ? standing : next));
 	});
+	if (!due) return null;
 	return createPortal(
 		<div
-			ref={setTip}
 			role="tooltip"
-			style={place ?? { visibility: "hidden" }}
-			className="pointer-events-none fixed z-50 max-w-dialog-sm border border-bg2 bg-bg1 font-mono"
+			style={{ ...(place ?? { visibility: "hidden" }), zoom: UNZOOM }}
+			className="pointer-events-none fixed z-50"
 		>
-			{children}
+			<div
+				style={{ zoom: ZOOM }}
+				className="max-w-dialog-sm border border-bg2 bg-bg1 font-mono"
+			>
+				{children}
+			</div>
 		</div>,
 		document.body,
 	);
@@ -164,8 +169,10 @@ export function TypeaheadMenu<T extends MenuOption>({
 								/>
 							))}
 						</div>
-						{selected?.ref && asideOf ? (
-							<Beside row={selected.ref}>{asideOf(selected)}</Beside>
+						{selected && asideOf ? (
+							<Beside key={selected.key} row={() => selected.ref?.current}>
+								{asideOf(selected)}
+							</Beside>
 						) : null}
 					</div>,
 					host.current,

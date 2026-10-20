@@ -56,6 +56,19 @@ const SYMBOLS = symbolTable([
 	},
 	{ name: "list-reverse" },
 	{ name: "one-arg", arity: { min: 1, max: 1 } },
+	{
+		name: "paint",
+		args: [
+			{
+				name: "mode",
+				type: "string",
+				required: true,
+				values: [{ value: "wash" }, { value: "fill" }],
+			},
+			{ name: "size", type: "number", required: false },
+			{ name: "shade", type: "string", required: false },
+		],
+	},
 ]);
 
 function render(
@@ -302,7 +315,10 @@ describe("the chat input", () => {
 	it("shows the signature and doc of the highlighted completion", async () => {
 		const field = render(vi.fn());
 		await completing(field, "(list-");
-		const tip = document.querySelector('[role="tooltip"]');
+		expect(document.querySelector('[role="tooltip"]')).toBeNull();
+		await paused();
+		const tip = document.querySelector<HTMLElement>('[role="tooltip"]');
+		expect(tip?.style.visibility).not.toBe("hidden");
 		expect(tip?.textContent).toContain("(list-length xs)");
 		expect(tip?.textContent).toContain("Count the items of xs.");
 		expect(host.textContent).not.toContain("Count the items of xs.");
@@ -366,8 +382,68 @@ describe("the chat input", () => {
 		await completing(field, "(list-length");
 		const rows = [...host.querySelectorAll('[role="option"]')];
 		expect(rows[0]?.textContent).toContain("list-length");
+		await paused();
 		expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
 			"Count the items of xs.",
 		);
+	});
+
+	it("offers an argument's declared values as soon as its string opens", async () => {
+		const field = render(vi.fn());
+		await completing(field, '(await (paint "');
+		expect(host.textContent).toContain("wash");
+		expect(host.textContent).toContain("fill");
+		enter(field, false);
+		await settled();
+		expect(textOf(field)).toBe('(await (paint "wash');
+	});
+
+	it("offers the call's keyword arguments at once after a colon", async () => {
+		const field = render(vi.fn());
+		type(field, '(paint :mode "wash" :');
+		await settled();
+		const rows = [...host.querySelectorAll('[role="option"]')].map(
+			(row) => row.textContent,
+		);
+		expect(rows.some((row) => row?.includes(":size"))).toBe(true);
+		expect(rows.some((row) => row?.includes(":shade"))).toBe(true);
+		expect(rows.some((row) => row?.includes(":mode"))).toBe(false);
+		expect(rows.some((row) => row?.includes("list-length"))).toBe(false);
+		enter(field, false);
+		await settled();
+		expect(textOf(field)).toBe('(paint :mode "wash" :shade');
+	});
+
+	it("narrows the keyword arguments as the name is typed", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(paint :sh");
+		enter(field, false);
+		await settled();
+		expect(textOf(field)).toBe("(paint :shade");
+	});
+
+	it("cycles to the next completion on each Tab right after one", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(list-");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-length");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-reverse");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-length");
+	});
+
+	it("stops cycling once something is typed", async () => {
+		const field = render(vi.fn());
+		await completing(field, "(list-");
+		press(field, { key: "Tab" });
+		await settled();
+		typeAtCaret(field, " ");
+		press(field, { key: "Tab" });
+		await settled();
+		expect(textOf(field)).toBe("(list-length )");
 	});
 });

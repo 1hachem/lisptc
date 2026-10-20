@@ -5,7 +5,9 @@ import {
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import {
 	type CallAt,
+	COMPLETION_TRIGGERS,
 	insideForm,
+	insideString,
 	languageService,
 	lispIn,
 	type RankedCompletion,
@@ -14,7 +16,6 @@ import {
 	type SymbolTable,
 	UNCLOSED,
 } from "@repo/language-service";
-import { toolkits } from "@repo/toolkit";
 import { cn } from "@repo/ui";
 import {
 	$addUpdateTag,
@@ -23,6 +24,7 @@ import {
 	$isElementNode,
 	$isRangeSelection,
 	$isTextNode,
+	COMMAND_PRIORITY_HIGH,
 	COMMAND_PRIORITY_NORMAL,
 	KEY_TAB_COMMAND,
 	type LexicalEditor,
@@ -30,7 +32,6 @@ import {
 	type TextNode,
 } from "lexical";
 import {
-	type ReactNode,
 	type RefObject,
 	useCallback,
 	useEffect,
@@ -297,15 +298,24 @@ function HoverDoc({ entry, at }: { entry: SymbolEntry; at: DOMRect }) {
 	return createPortal(
 		<div
 			role="tooltip"
-			style={{ left: at.left, bottom: window.innerHeight - at.top + 4 }}
-			className="pointer-events-none fixed z-50 max-w-[480px] border border-bg2 bg-bg1 px-3 py-1 font-mono text-[12px]"
+			style={{
+				left: at.left,
+				bottom: window.innerHeight - at.top + 4,
+				zoom: "calc(1 / var(--app-zoom, 1))",
+			}}
+			className="pointer-events-none fixed z-50"
 		>
-			{entry.signature ? (
-				<div className="text-fg">{entry.signature}</div>
-			) : null}
-			{entry.doc ? (
-				<div className="whitespace-pre-wrap text-dim">{entry.doc}</div>
-			) : null}
+			<div
+				style={{ zoom: "var(--app-zoom, 1)" }}
+				className="max-w-[480px] border border-bg2 bg-bg1 px-3 py-1 font-mono text-[12px]"
+			>
+				{entry.signature ? (
+					<div className="text-fg">{entry.signature}</div>
+				) : null}
+				{entry.doc ? (
+					<div className="whitespace-pre-wrap text-dim">{entry.doc}</div>
+				) : null}
+			</div>
 		</div>,
 		document.body,
 	);
@@ -347,10 +357,7 @@ function useAssist(
 	snapshot: ReturnType<typeof useLispDocument>,
 ) {
 	const [editor] = useLexicalComposerContext();
-	const service = useMemo(
-		() => languageService(symbols, { toolkits }),
-		[symbols],
-	);
+	const service = useMemo(() => languageService(symbols), [symbols]);
 	const [call, setCall] = useState<CallAt | undefined>();
 	const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
 	useEffect(() => {
@@ -377,6 +384,10 @@ function useAssist(
 		};
 	}, [editor, service, snapshot]);
 	return { service, call, diagnostics };
+}
+
+function triggered(query: string): boolean {
+	return query === "" || COMPLETION_TRIGGERS.includes(query);
 }
 
 function $caretState(): { size: number; caret: number | null } {
@@ -422,6 +433,68 @@ function $insertAtCaret(edit: TextEdit | null, event: KeyboardEvent): boolean {
 	return true;
 }
 
+interface Cycle {
+	labels: string[];
+	index: number;
+}
+
+function $swapWordBeforeCaret(from: string, to: string): boolean {
+	const selection = $getSelection();
+	if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+	const node = selection.anchor.getNode();
+	const offset = selection.anchor.offset;
+	if (
+		!$isTextNode(node) ||
+		!node.getTextContent().slice(0, offset).endsWith(from)
+	)
+		return false;
+	$addUpdateTag(COMPLETED);
+	node.spliceText(offset - from.length, from.length, to, true);
+	return true;
+}
+
+function useTabCycle(): (cycle: Cycle) => void {
+	const [editor] = useLexicalComposerContext();
+	const cycle = useRef<Cycle | null>(null);
+	useEffect(
+		() =>
+			editor.registerUpdateListener(
+				({ editorState, prevEditorState, tags }) => {
+					if (tags.has(COMPLETED)) return;
+					const text = (state: typeof editorState) =>
+						state.read(() => $getRoot().getTextContent());
+					if (text(editorState) !== text(prevEditorState)) cycle.current = null;
+				},
+			),
+		[editor],
+	);
+	useEffect(
+		() =>
+			editor.registerCommand(
+				KEY_TAB_COMMAND,
+				(event) => {
+					const standing = cycle.current;
+					if (!standing || standing.labels.length < 2) return false;
+					const next = (standing.index + 1) % standing.labels.length;
+					const from = standing.labels[standing.index] ?? "";
+					const to = standing.labels[next] ?? "";
+					if (!$swapWordBeforeCaret(from, to)) {
+						cycle.current = null;
+						return false;
+					}
+					event.preventDefault();
+					cycle.current = { ...standing, index: next };
+					return true;
+				},
+				COMMAND_PRIORITY_HIGH,
+			),
+		[editor],
+	);
+	return useCallback((started: Cycle) => {
+		cycle.current = started;
+	}, []);
+}
+
 function useCompletions(
 	query: string | null,
 	service: ReturnType<typeof languageService>,
@@ -437,6 +510,7 @@ function useCompletions(
 
 	useEffect(() => {
 		if (query === null || !armed.current) return setCandidates([]);
+		if (triggered(query)) return setCandidates(complete());
 		const timer = setTimeout(() => setCandidates(complete()), COMPLETE_MS);
 		return () => clearTimeout(timer);
 	}, [query, armed, complete]);
@@ -480,6 +554,58 @@ function useCompletions(
 	return options;
 }
 
+function useAccept(options: CompletionOption[]) {
+	const [editor] = useLexicalComposerContext();
+	const startCycle = useTabCycle();
+	return useCallback(
+		(
+			option: CompletionOption,
+			node: TextNode | null,
+			closeMenu: () => void,
+			typed: string,
+		) => {
+			editor.update(() => {
+				$addUpdateTag(COMPLETED);
+				const selection = $getSelection();
+				if (typed === "" && $isRangeSelection(selection))
+					selection.insertText(option.item.label);
+				else if (node) {
+					$dropWordTail(node);
+					node.setTextContent(option.item.label).select();
+				}
+				closeMenu();
+			});
+			startCycle({
+				labels: options.map(({ item }) => item.label),
+				index: options.indexOf(option),
+			});
+		},
+		[editor, options, startCycle],
+	);
+}
+
+function HintStrip({
+	host,
+	hidden,
+	call,
+	diagnostics,
+}: {
+	host: RefObject<HTMLDivElement | null>;
+	hidden: boolean;
+	call: CallAt | undefined;
+	diagnostics: Diagnostic[];
+}) {
+	if (hidden || !host.current) return null;
+	if (call === undefined && diagnostics.length === 0) return null;
+	return createPortal(
+		<div className="flex w-full flex-col border-b border-bg2 bg-bg1 py-0.5 font-mono text-[13px]">
+			{call ? <CallHint call={call} /> : null}
+			<Problems diagnostics={diagnostics} />
+		</div>,
+		host.current,
+	);
+}
+
 export function LispAssistPlugin({
 	symbols,
 	host,
@@ -489,7 +615,6 @@ export function LispAssistPlugin({
 	host: RefObject<HTMLDivElement | null>;
 	active: RefObject<boolean>;
 }) {
-	const [editor] = useLexicalComposerContext();
 	const snapshot = useLispDocument();
 	const { service, call, diagnostics } = useAssist(symbols, snapshot);
 	useSquiggles(diagnostics, snapshot);
@@ -504,10 +629,12 @@ export function LispAssistPlugin({
 
 	const triggerFn = useCallback(
 		(typed: string): MenuTextMatch | null => {
-			const word = WORD_BEFORE.exec(typed)?.[0];
+			const word =
+				WORD_BEFORE.exec(typed)?.[0] ?? (typed.endsWith('"') ? "" : undefined);
 			if (word === undefined) return null;
 			const { document, position } = snapshot();
 			if (position === null || !insideForm(document, position)) return null;
+			if (word === "" && !insideString(document, position)) return null;
 			return {
 				leadOffset: typed.length - word.length,
 				matchingString: word,
@@ -517,36 +644,16 @@ export function LispAssistPlugin({
 		[snapshot],
 	);
 
-	const onSelectOption = useCallback(
-		(
-			option: CompletionOption,
-			node: TextNode | null,
-			closeMenu: () => void,
-		) => {
-			editor.update(() => {
-				$addUpdateTag(COMPLETED);
-				if (node) {
-					$dropWordTail(node);
-					node.setTextContent(option.item.label).select();
-				}
-				closeMenu();
-			});
-		},
-		[editor],
-	);
-
-	const shown = open && options.length > 0;
-	const strip: ReactNode =
-		!shown && (call !== undefined || diagnostics.length > 0) ? (
-			<div className="flex w-full flex-col border-b border-bg2 bg-bg1 py-0.5 font-mono text-[13px]">
-				{call ? <CallHint call={call} /> : null}
-				<Problems diagnostics={diagnostics} />
-			</div>
-		) : null;
+	const onSelectOption = useAccept(options);
 
 	return (
 		<>
-			{host.current && strip ? createPortal(strip, host.current) : null}
+			<HintStrip
+				host={host}
+				hidden={open && options.length > 0}
+				call={call}
+				diagnostics={diagnostics}
+			/>
 			{hover ? <HoverDoc entry={hover.entry} at={hover.at} /> : null}
 			<TypeaheadMenu<CompletionOption>
 				options={options}
