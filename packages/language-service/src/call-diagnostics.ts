@@ -34,20 +34,10 @@ export function diagnosticsForCalls(
 			},
 		};
 		const { args, arity } = docByName.get(call.name) ?? {};
-		const bareFormOfHybrid =
-			arity !== undefined && call.keywords.size === 0 && call.argCount > 0;
-		if (args?.length && !bareFormOfHybrid) {
-			for (const arg of args) {
-				if (!arg.required || call.keywords.has(arg.name)) continue;
-				diagnostics.push({
-					severity: DiagnosticSeverity.Error,
-					range,
-					message: `${call.name}: missing required argument ":${arg.name}"`,
-					source: "lisptc",
-				});
-			}
-		} else if (
-			arity !== undefined &&
+		const positional =
+			arity !== undefined && (call.keywords.size === 0 || !args?.length);
+		if (
+			positional &&
 			(call.argCount < arity.min ||
 				(arity.max !== undefined && call.argCount > arity.max))
 		) {
@@ -57,6 +47,19 @@ export function diagnosticsForCalls(
 				severity: DiagnosticSeverity.Error,
 				range,
 				message: `${call.name}: expected ${expected} ${plural ? "arguments" : "argument"}, got ${call.argCount}`,
+				source: "lisptc",
+			});
+			continue;
+		}
+		for (const [index, arg] of (args ?? []).entries()) {
+			const supplied = positional
+				? index < call.argCount
+				: call.keywords.has(arg.name);
+			if (!arg.required || supplied) continue;
+			diagnostics.push({
+				severity: DiagnosticSeverity.Error,
+				range,
+				message: `${call.name}: missing required argument ":${arg.name}"`,
 				source: "lisptc",
 			});
 		}
