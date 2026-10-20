@@ -202,7 +202,7 @@ async function stored(url: string, file: File): Promise<Id<"_storage">> {
 export function useAttachmentUpload(workspaceId: Id<"workspaces">) {
 	const uploadUrl = useConvexMutation(api.knowledge.uploadUrl);
 	const add = useConvexMutation(api.attachments.add);
-	const remove = useConvexMutation(api.attachments.remove);
+	const remove = useConvexMutation(api.attachments.discard);
 
 	const upload = useCallback(
 		async (file: File): Promise<string> => {

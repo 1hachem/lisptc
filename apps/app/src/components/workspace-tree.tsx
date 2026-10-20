@@ -34,6 +34,7 @@ import {
 	useParams,
 } from "@tanstack/react-router";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
+import { binSearched, restoreFailure } from "../lib/bin.ts";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { byDate } from "../lib/date-groups.ts";
@@ -313,7 +314,7 @@ function KnowledgeFolder({
 							trailing={
 								<FileMenu
 									name={file.name}
-									confirm="delete this file for good?"
+									confirm="move it to the bin?"
 									onDelete={async () => {
 										await leave(current === file.name);
 										await removeFile({ workspaceId, name: file.name });
@@ -358,7 +359,7 @@ function AttachmentsFolder({
 		...convexQuery(api.attachments.list, { workspaceId }),
 		enabled: folder.open,
 	});
-	const toBin = useConvexMutation(api.bin.put);
+	const toBin = useConvexMutation(api.attachments.remove);
 	const leave = useLeave(workspaceId);
 
 	return (
@@ -401,11 +402,6 @@ function AttachmentsFolder({
 	);
 }
 
-const RESTORE_FAILURES: Record<string, string> = {
-	NO_SUCH_FILE: "it is no longer in the bin",
-	TOO_MANY_FILES: "attachments are full",
-};
-
 function BinFolder({
 	workspaceId,
 	current,
@@ -422,13 +418,24 @@ function BinFolder({
 	const restore = useConvexMutation(api.bin.restore);
 	const removeFile = useConvexMutation(api.bin.remove);
 	const leave = useLeave(workspaceId);
+	const [query, setQuery] = useState("");
 
 	return (
 		<TreeFolder name="bin" icon={FOLDER_ICONS.bin} {...folder}>
+			{files !== undefined && files.length > 0 && (
+				<input
+					type="search"
+					value={query}
+					onChange={(event) => setQuery(event.target.value)}
+					placeholder="search the bin"
+					aria-label="search the bin"
+					className="mx-3 my-1 w-[calc(100%-1.5rem)] border-bg2 border-b bg-transparent py-0.5 pl-6 text-[11.5px] outline-none placeholder:text-dim focus:border-dim"
+				/>
+			)}
 			<DatedListing
-				items={files}
+				items={binSearched(files, query)}
 				at={(file) => file.binnedAt}
-				empty="the bin is empty"
+				empty={query.trim() === "" ? "the bin is empty" : "nothing matches"}
 			>
 				{(file) => (
 					<TreeFile
@@ -441,13 +448,14 @@ function BinFolder({
 							<FileMenu
 								name={file.name}
 								confirm="delete this file for good?"
+								restoreLabel={`restore to ${file.from}`}
 								onRestore={async () => {
-									const refused = await restore({
+									const restored = await restore({
 										workspaceId,
 										name: file.name,
 									});
-									if (refused !== null)
-										throw new Error(RESTORE_FAILURES[refused] ?? refused);
+									if ("refused" in restored)
+										throw new Error(restoreFailure(restored.refused));
 									await leave(current === file.name);
 								}}
 								onDelete={async () => {

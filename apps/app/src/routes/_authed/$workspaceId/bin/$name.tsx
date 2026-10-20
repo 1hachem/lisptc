@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { StoredFile } from "../../../../components/stored-file.tsx";
+import { restoreFailure } from "../../../../lib/bin.ts";
 
 export const Route = createFileRoute("/_authed/$workspaceId/bin/$name")({
 	loader: async ({ context, params }) => {
@@ -19,17 +20,14 @@ export const Route = createFileRoute("/_authed/$workspaceId/bin/$name")({
 	component: BinnedFile,
 });
 
-const RESTORE_FAILURES: Record<string, string> = {
-	NO_SUCH_FILE: "it is no longer in the bin",
-	TOO_MANY_FILES: "attachments are full",
-};
-
 function RestoreAction({
 	workspaceId,
 	name,
+	from,
 }: {
 	workspaceId: Id<"workspaces">;
 	name: string;
+	from: "knowledge" | "attachments";
 }) {
 	const restore = useConvexMutation(api.bin.restore);
 	const navigate = useNavigate();
@@ -41,19 +39,22 @@ function RestoreAction({
 				type="button"
 				className="text-dim hover:text-fg"
 				onClick={async () => {
-					const refused = await restore({ workspaceId, name });
-					if (refused !== null) {
-						setFailure(RESTORE_FAILURES[refused] ?? refused);
+					const restored = await restore({ workspaceId, name });
+					if ("refused" in restored) {
+						setFailure(restoreFailure(restored.refused));
 						return;
 					}
 					await navigate({
-						to: "/$workspaceId/attachments/$name",
-						params: { workspaceId, name },
+						to:
+							restored.folder === "knowledge"
+								? "/$workspaceId/knowledge/$name"
+								: "/$workspaceId/attachments/$name",
+						params: { workspaceId, name: restored.name },
 						replace: true,
 					});
 				}}
 			>
-				restore to attachments
+				restore to {from}
 			</button>
 		</>
 	);
@@ -70,7 +71,15 @@ function BinnedFile() {
 			folder="bin"
 			name={name}
 			file={file}
-			actions={<RestoreAction workspaceId={workspaceId} name={name} />}
+			actions={
+				file && (
+					<RestoreAction
+						workspaceId={workspaceId}
+						name={name}
+						from={file.from}
+					/>
+				)
+			}
 		/>
 	);
 }

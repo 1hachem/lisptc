@@ -15,11 +15,13 @@ export function FileMenu({
 	confirm,
 	onDelete,
 	onRestore,
+	restoreLabel = "restore",
 }: {
 	name: string;
 	confirm: string;
 	onDelete: () => Promise<unknown>;
 	onRestore?: () => Promise<unknown>;
+	restoreLabel?: string;
 }) {
 	const { failure, attempt } = useAttempt(`delete ${name}`);
 
@@ -41,7 +43,7 @@ export function FileMenu({
 						className={item}
 						onSelect={() => attempt(onRestore)}
 					>
-						restore
+						{restoreLabel}
 					</DropdownMenuItem>
 				)}
 				<ConfirmItem
