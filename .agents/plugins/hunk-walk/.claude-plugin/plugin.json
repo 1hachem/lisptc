@@ -1,0 +1,8 @@
+{
+	"name": "hunk-walk",
+	"description": "Step a prepared Hunk walkthrough with /hunk-next, /hunk-prev and /hunk-go <stop>, without a model call",
+	"version": "0.1.0",
+	"author": {
+		"name": "1hachem"
+	}
+}

@@ -73,10 +73,11 @@ the failure, and leave the change in the tree for the user to see.
 
 ## Walkthrough
 
-The user wants to read a change with you steering. You choose the stops, put
-them on the code, and move their view from one to the next.
+The user wants to read a change with you steering. All the thinking happens
+once, up front: you write the whole walk as a plan, and `walk.sh` loads it.
+From then on, every move is one command that runs without you.
 
-### Lay out the stops
+### Write the plan
 
 1. Read the session's file and hunk structure, never its whole patch. Read the
    files themselves for the lines you anchor to.
@@ -86,31 +87,43 @@ them on the code, and move their view from one to the next.
 3. Pick the stops the user would not find alone: a decision, a seam, the line
    that fixes the bug. Leave out generated files, lockfiles and plain renames.
    Keep to about a dozen.
-4. Put every stop on the code in one batch of notes, each anchored to the new
-   line of the declaration it is about. A summary is one sentence, starting
-   with its place in the walk (`3/12`). The detail goes in the rationale.
-5. Move the view to stop 1 and mark the name it is about with the `current`
-   tone.
+4. Write the plan to a JSON file in the scratchpad:
 
-Then list the stops in the terminal, one line each with its file:line, and say
-how to move on: the user's own next-comment key in Hunk, or "next" to you.
+   ```json
+   {"stops": [{"file": "packages/x/src/y.ts", "line": 12, "mark": "nameAtLine",
+     "summary": "One sentence for the note.", "rationale": "The note's detail.",
+     "say": "What the terminal shows at this stop, a few lines."}]}
+   ```
+
+   `line` is the new line of the declaration the stop is about, and `mark` is
+   the exact text on that line to light up. `summary` leaves out the `3/12`
+   prefix, because the script numbers the stops. `say` says what the code does
+   without repeating the note.
+5. Load it, which puts every note on the code, moves the view to stop 1 and
+   prints the list:
+
+   ```bash
+   .agents/skills/hunk/walk.sh load <plan.json> [session-id]
+   ```
+
+Print what the script printed, and say how to move on: `/hunk-next`,
+`/hunk-prev` and `/hunk-go <stop>`, which the `hunk-walk` plugin under `.agents/plugins/` answers
+without a model call, or "next", "prev" or "go 5" to you.
 
 ### Each stop
 
-When the user says next, or names a stop:
-
-1. Clear the marks.
-2. Mark the name the stop is about with the `current` tone, with the view
-   focused on it.
-3. Say in the terminal what that code does, in a few lines, without repeating
-   the note.
+When the user says next, prev, or names a stop, run the matching
+`walk.sh next`, `walk.sh prev` or `walk.sh go <n>`, and print its output as
+it is. Write nothing else. The script clears the marks, moves the view, lights
+up the stop's `mark` and prints its `say`.
 
 A question the user asks mid-walk is answered in the terminal and, when it
 says something the notes should keep, as a reply on that stop's note.
 
 ### Rules
 
-- Mark exactly one range at a time, the one under discussion.
+- Mark exactly one range at a time, the one under discussion. `walk.sh`
+  already does this.
 - Leave the notes in place when the walk ends; they are the record of it.
 - The walk changes nothing in the tree. A change the user asks for mid-walk is
   made as in review mode, and the walk resumes where it stopped.
