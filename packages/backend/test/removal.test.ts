@@ -128,7 +128,7 @@ describe("removing a workspace", () => {
 		expect(replLayers).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records, permissions, readme and knowledge with it", async () => {
+	it("takes its secrets, oauth records, permissions, readme, knowledge and bin with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -156,25 +156,41 @@ describe("removing a workspace", () => {
 			name: "doomed.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
 		});
+		await alice.as.mutation(api.bin.add, {
+			workspaceId: doomed,
+			name: "attached.txt",
+			storageId: await t.run((ctx) =>
+				ctx.storage.store(new Blob(["attached"])),
+			),
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords, permissions, readmes, knowledge, blobs } =
-			await t.run(async (ctx) => ({
-				secrets: await ctx.db.query("secrets").collect(),
-				oauthRecords: await ctx.db.query("oauthRecords").collect(),
-				permissions: await ctx.db.query("permissions").collect(),
-				readmes: await ctx.db.query("readmes").collect(),
-				knowledge: await ctx.db.query("knowledge").collect(),
-				blobs: await ctx.db.system.query("_storage").collect(),
-			}));
+		const {
+			secrets,
+			oauthRecords,
+			permissions,
+			readmes,
+			knowledge,
+			bin,
+			blobs,
+		} = await t.run(async (ctx) => ({
+			secrets: await ctx.db.query("secrets").collect(),
+			oauthRecords: await ctx.db.query("oauthRecords").collect(),
+			permissions: await ctx.db.query("permissions").collect(),
+			readmes: await ctx.db.query("readmes").collect(),
+			knowledge: await ctx.db.query("knowledge").collect(),
+			bin: await ctx.db.query("bin").collect(),
+			blobs: await ctx.db.system.query("_storage").collect(),
+		}));
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
 		expect(permissions).toEqual([]);
 		expect(readmes).toEqual([]);
 		expect(knowledge).toEqual([]);
+		expect(bin).toEqual([]);
 		expect(blobs).toEqual([]);
 	});
 

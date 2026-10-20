@@ -870,3 +870,37 @@ describe("knowledge access", () => {
 		).toHaveLength(1);
 	});
 });
+
+describe("bin access", () => {
+	it("keeps a workspace's bin to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.bin.add, {
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await expect(
+			alice.as.query(api.bin.get, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.bin.keep, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.bin.remove, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		expect(
+			await bob.as.query(api.bin.list, { workspaceId: bob.workspace }),
+		).toHaveLength(1);
+	});
+});

@@ -24,7 +24,7 @@ const entry = v.object({
 	size: v.number(),
 });
 
-function isKnowledgeName(name: string): boolean {
+export function isKnowledgeName(name: string): boolean {
 	return (
 		name.length > 0 &&
 		name.length <= MAX_KNOWLEDGE_NAME &&
@@ -34,7 +34,7 @@ function isKnowledgeName(name: string): boolean {
 	);
 }
 
-async function held(
+export async function held(
 	ctx: QueryCtx | MutationCtx,
 	workspaceId: Id<"workspaces">,
 	name: string,

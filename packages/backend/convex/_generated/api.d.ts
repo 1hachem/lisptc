@@ -9,10 +9,13 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as bin from "../bin.js";
 import type * as chats from "../chats.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as knowledge from "../knowledge.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_chunks from "../lib/chunks.js";
 import type * as lib_clamp from "../lib/clamp.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_models from "../lib/models.js";
@@ -40,10 +43,13 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  bin: typeof bin;
   chats: typeof chats;
+  crons: typeof crons;
   http: typeof http;
   knowledge: typeof knowledge;
   "lib/auth": typeof lib_auth;
+  "lib/chunks": typeof lib_chunks;
   "lib/clamp": typeof lib_clamp;
   "lib/env": typeof lib_env;
   "lib/models": typeof lib_models;
