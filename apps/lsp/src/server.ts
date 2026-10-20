@@ -12,14 +12,14 @@ import {
 	type SessionClient,
 	socketPathFor,
 } from "@repo/repl/session-server";
-import { toolkits } from "@repo/toolkit";
 import {
+	CodeActionKind,
 	createConnection,
 	ProposedFeatures,
-	TextDocumentSyncKind,
 	TextDocuments,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { capabilities } from "./capabilities.ts";
 import { docExtensions } from "./extensions.ts";
 import { cachedFor } from "./table-cache.ts";
 
@@ -28,7 +28,7 @@ const documents = new TextDocuments(TextDocument);
 
 const interp = new Interp({ extensions: docExtensions() });
 runSync(interp, prelude);
-const local = languageService(symbolTable(symbolsOf(interp)), { toolkits });
+const local = languageService(symbolTable(symbolsOf(interp)));
 
 const SESSION_ENTRY = fileURLToPath(new URL("./session.ts", import.meta.url));
 
@@ -43,21 +43,14 @@ const CACHE_MS = 400;
 
 const fromSession = cachedFor(async () => {
 	if (session === undefined) throw new Error("no session");
-	return languageService(symbolTable(await session.symbols()), { toolkits });
+	return languageService(symbolTable(await session.symbols()));
 }, CACHE_MS);
 
 async function service(): Promise<LanguageService> {
 	return fromSession().catch(() => local);
 }
 
-connection.onInitialize(() => ({
-	capabilities: {
-		textDocumentSync: TextDocumentSyncKind.Incremental,
-		completionProvider: {},
-		hoverProvider: true,
-		signatureHelpProvider: { triggerCharacters: [" ", ":"] },
-	},
-}));
+connection.onInitialize(() => ({ capabilities }));
 
 documents.onDidChangeContent(async ({ document }) => {
 	const diagnostics = (await service()).diagnostics(document);
@@ -81,6 +74,20 @@ connection.onSignatureHelp(async ({ textDocument, position }) => {
 	const document = documents.get(textDocument.uri);
 	if (document === undefined) return null;
 	return (await service()).signatureHelp(document, position);
+});
+
+connection.onCodeAction(async ({ textDocument, range }) => {
+	const document = documents.get(textDocument.uri);
+	if (document === undefined) return [];
+	const edit = (await service()).closer(document, range.end);
+	if (edit === null) return [];
+	return [
+		{
+			title: `close with ${edit.newText}`,
+			kind: CodeActionKind.QuickFix,
+			edit: { changes: { [textDocument.uri]: [edit] } },
+		},
+	];
 });
 
 documents.listen(connection);

@@ -1,7 +1,7 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import { type Ask, asking } from "@repo/interpreter/asks";
 import { topic } from "@repo/interpreter/channels";
-import type { DocArg } from "@repo/interpreter/docs";
+import type { DocArg, DocValue } from "@repo/interpreter/docs";
 import {
 	EvalException,
 	StepHold,
@@ -377,13 +377,14 @@ function lookupPredefined(
 	return conf;
 }
 
-const LOAD_MCP_ARGS: DocArg[] = [
-	{
-		name: "name",
-		type: "string",
-		required: true,
-		description: "A name for this server; its tools install as `name/tool`.",
-	},
+const LOAD_MCP_NAME: DocArg = {
+	name: "name",
+	type: "string",
+	required: true,
+	description: "A name for this server; its tools install as `name/tool`.",
+};
+
+const LOAD_MCP_OPTIONS: DocArg[] = [
 	{
 		name: "command",
 		type: "string",
@@ -429,6 +430,14 @@ const LOAD_MCP_ARGS: DocArg[] = [
 		description: "OAuth scopes to request when `:oauth` is set.",
 	},
 ];
+
+function loadMcpArgs(predefined: Map<string, ConnConfig>): DocArg[] {
+	const values = [...predefined.values()].map((conf) => ({
+		value: conf.name,
+		description: conf.description,
+	}));
+	return [{ ...LOAD_MCP_NAME, values }, ...LOAD_MCP_OPTIONS];
+}
 
 function doUnload(
 	interp: Interp,
@@ -677,7 +686,7 @@ export function registerMcp(
 				doUnload(interp, client, servers, conf.name);
 			return startLoad(rest);
 		},
-		LOAD_MCP_ARGS,
+		loadMcpArgs(predefined),
 	);
 
 	interp.def(
@@ -1020,6 +1029,12 @@ function toolSignature(name: string, tool: Tool): string {
 	return `(${name} ${sig})`;
 }
 
+function enumValues(spec: JsonSchema): DocValue[] | undefined {
+	return spec.enum?.map((value) => ({
+		value: typeof value === "string" ? value : JSON.stringify(value),
+	}));
+}
+
 function toolArgs(tool: Tool): DocArg[] {
 	const required = new Set(tool.inputSchema?.required ?? []);
 	return orderedProps(tool).map(([key, spec]) => ({
@@ -1027,6 +1042,7 @@ function toolArgs(tool: Tool): DocArg[] {
 		type: schemaType(spec),
 		required: required.has(key),
 		description: spec.description,
+		values: enumValues(spec),
 	}));
 }
 

@@ -5,11 +5,17 @@ export interface DocSource {
 	docs(): Map<string, Doc>;
 }
 
+export interface DocValue {
+	value: string;
+	description?: string;
+}
+
 export interface DocArg {
 	name: string;
 	type: string;
 	required: boolean;
 	description?: string;
+	values?: DocValue[];
 }
 
 export interface Arity {

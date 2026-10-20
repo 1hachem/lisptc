@@ -12,6 +12,7 @@ const preferences = v.object({
 	themeUses: v.optional(v.record(v.string(), v.number())),
 	channels: v.optional(v.record(v.string(), v.boolean())),
 	metadata: v.optional(v.record(v.string(), v.boolean())),
+	input: v.optional(v.record(v.string(), v.boolean())),
 	sidebar: v.optional(v.array(v.string())),
 	hidden: v.optional(v.array(v.string())),
 	motion: v.optional(v.string()),

@@ -32,5 +32,5 @@ belongs behind the cache.
 
 ## Tests
 
-`test/` covers the cache. The language itself is tested in
+`test/` covers the cache and the capabilities the server advertises. The language itself is tested in
 `@repo/language-service`.

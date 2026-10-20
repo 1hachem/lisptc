@@ -38,6 +38,7 @@ export interface ChatInputProps {
 	onStop?: () => void;
 	disabled?: boolean;
 	symbols?: SymbolTable;
+	lisp?: boolean;
 }
 
 const NO_SYMBOLS: SymbolTable = new Map();
@@ -275,6 +276,19 @@ function Field({
 	);
 }
 
+function LispPlugins({
+	on,
+	...props
+}: Parameters<typeof LispAssistPlugin>[0] & { on: boolean }) {
+	if (!on) return null;
+	return (
+		<>
+			<LispHighlightPlugin />
+			<LispAssistPlugin {...props} />
+		</>
+	);
+}
+
 export function ChatInput(props: ChatInputProps) {
 	return (
 		<LexicalComposer
@@ -301,6 +315,7 @@ function Editor({
 	onStop,
 	disabled,
 	symbols = NO_SYMBOLS,
+	lisp = true,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const { text, empty, replace, send } = useDraft(onSubmit, disabled);
@@ -333,9 +348,13 @@ function Editor({
 	const look = disabled ? DISABLED : ENABLED;
 
 	return (
-		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			<div ref={menuHost} />
-			<Notice text={notice} />
+		<div className="relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
+			<div
+				ref={menuHost}
+				className="absolute inset-x-0 bottom-full z-10 flex flex-col"
+			>
+				<Notice text={notice} />
+			</div>
 			<InputShell
 				prompt={look.prompt}
 				tone={look.tone}
@@ -353,9 +372,9 @@ function Editor({
 				<Field placeholder={placeholder} disabled={disabled} />
 			</InputShell>
 			<HistoryPlugin />
-			<LispHighlightPlugin />
 			<CommandMenuPlugin onPick={pick} host={menuHost} active={menuActive} />
-			<LispAssistPlugin
+			<LispPlugins
+				on={lisp}
 				symbols={symbols}
 				host={menuHost}
 				active={assistActive}

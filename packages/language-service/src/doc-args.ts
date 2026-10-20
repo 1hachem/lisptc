@@ -1,4 +1,4 @@
-import type { DocArg } from "@repo/interpreter/docs";
+import type { DocArg, DocValue } from "@repo/interpreter/docs";
 import {
 	type CompletionItem,
 	CompletionItemKind,
@@ -15,5 +15,21 @@ export function argCompletionItems(args: DocArg[]): CompletionItem[] {
 				? undefined
 				: { kind: MarkupKind.Markdown, value: arg.description },
 		sortText: `${arg.required ? 0 : 1}${arg.name}`,
+	}));
+}
+
+export function valueCompletionItems(
+	values: readonly DocValue[],
+): CompletionItem[] {
+	const width = String(values.length).length;
+	return values.map((entry, index) => ({
+		label: entry.value,
+		kind: CompletionItemKind.EnumMember,
+		detail: entry.description?.split("\n")[0],
+		documentation:
+			entry.description === undefined
+				? undefined
+				: { kind: MarkupKind.Markdown, value: entry.description },
+		sortText: String(index).padStart(width, "0"),
 	}));
 }

@@ -387,6 +387,18 @@ describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 		expect(doc).toContain("png");
 		expect(doc).toContain("jpeg");
 	});
+
+	it("exposes each schema property as a keyword argument with its enum values", () => {
+		expect(interp.docs().get("en/render")?.args).toEqual([
+			{
+				name: "format",
+				type: ":string",
+				required: true,
+				description: "the output image format",
+				values: [{ value: "png" }, { value: "jpeg" }],
+			},
+		]);
+	});
 });
 
 describe("the MCP extension adds no promise vocabulary of its own", () => {

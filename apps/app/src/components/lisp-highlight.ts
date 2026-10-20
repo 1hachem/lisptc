@@ -3,6 +3,7 @@ import { tokensIn } from "@repo/syntax";
 import {
 	$applyNodeReplacement,
 	$createTextNode,
+	$getRoot,
 	$getSelection,
 	$isRangeSelection,
 	$isTextNode,
@@ -37,6 +38,14 @@ export class LispTokenNode extends TextNode {
 		json: SerializedTextNode & { token: string },
 	): LispTokenNode {
 		return new LispTokenNode(json.text, json.token).updateFromJSON(json);
+	}
+
+	override isSimpleText(): boolean {
+		return !this.isToken() && !this.isSegmented();
+	}
+
+	override isUnmergeable(): boolean {
+		return true;
 	}
 
 	exportJSON(): SerializedTextNode & { token: string } {
@@ -192,6 +201,11 @@ export function LispHighlightPlugin(): null {
 		];
 		return () => {
 			for (const off of unregister) off();
+			editor.update(() => {
+				for (const node of $getRoot().getAllTextNodes())
+					if ($isLispTokenNode(node))
+						node.replace($createTextNode(node.getTextContent()));
+			});
 		};
 	}, [editor]);
 	return null;
