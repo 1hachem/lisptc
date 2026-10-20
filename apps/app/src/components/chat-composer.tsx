@@ -1,0 +1,77 @@
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useChatSession } from "../lib/chat.tsx";
+import { useCommandRunner } from "../lib/commands.ts";
+import type { OpenFile } from "../lib/files.ts";
+import { useBinUpload, withAttachments } from "../lib/knowledge.ts";
+import { sentHistory } from "../lib/message-history.ts";
+import { useSymbols } from "../lib/symbols.ts";
+import { useUI } from "../lib/ui.tsx";
+import { ChatInput } from "./chat-input.tsx";
+import type { Mentionable } from "./mention-menu.tsx";
+
+export function ChatComposer({ about }: { about?: OpenFile }) {
+	const runCommand = useCommandRunner();
+	const { inputOn, sendLabel } = useUI();
+	const { workspaceId, chatId, draftChatId, send, sendAbout, stop, isLoading } =
+		useChatSession((state) => ({
+			workspaceId: state.workspaceId,
+			chatId: state.chatId,
+			draftChatId: state.draftChatId,
+			send: state.send,
+			sendAbout: state.sendAbout,
+			stop: state.stop,
+			isLoading: state.isLoading,
+		}));
+	const { data: sent } = useQuery(
+		convexQuery(api.messages.sent, { workspaceId }),
+	);
+	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
+	const { data: knowledge } = useQuery(
+		convexQuery(api.knowledge.list, { workspaceId }),
+	);
+	const { data: bin } = useQuery(convexQuery(api.bin.list, { workspaceId }));
+	const mentions = useMemo<Mentionable[]>(
+		() => [
+			...(knowledge ?? []).map(({ name, contentType }) => ({
+				folder: "knowledge" as const,
+				name,
+				contentType,
+			})),
+			...(bin ?? []).map(({ name, contentType }) => ({
+				folder: "bin" as const,
+				name,
+				contentType,
+			})),
+		],
+		[knowledge, bin],
+	);
+	const toBin = useBinUpload(workspaceId);
+	const submit = useCallback(
+		async (text: string, files: File[]) => {
+			const names = files.length === 0 ? [] : await toBin(files);
+			const message = withAttachments(text, names);
+			if (about) sendAbout(about, message);
+			else send(message);
+		},
+		[about, toBin, send, sendAbout],
+	);
+	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
+
+	return (
+		<ChatInput
+			placeholder={about ? `ask about ${about.path}` : "type a message"}
+			onSubmit={submit}
+			mentions={mentions}
+			history={history}
+			onCommand={runCommand}
+			isStreaming={isLoading}
+			onStop={stop}
+			symbols={symbols}
+			{...inputOn}
+			sendLabel={sendLabel}
+		/>
+	);
+}

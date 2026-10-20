@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
-import { useChatSession } from "../lib/chat.tsx";
-import { useCommandRunner } from "../lib/commands.ts";
 import type { OpenFile } from "../lib/files.ts";
-import { useSymbols } from "../lib/symbols.ts";
-import { useUI } from "../lib/ui.tsx";
-import { ChatInput } from "./chat-input.tsx";
+import { ChatComposer } from "./chat-composer.tsx";
 import { LispSource } from "./lisp-text.tsx";
 
 export function FileView({
@@ -18,19 +14,6 @@ export function FileView({
 	actions?: ReactNode;
 	body?: ReactNode;
 }) {
-	const runCommand = useCommandRunner();
-	const { inputOn, sendLabel } = useUI();
-	const { chatId, draftChatId, sendAbout, stop, isLoading } = useChatSession(
-		(state) => ({
-			chatId: state.chatId,
-			draftChatId: state.draftChatId,
-			sendAbout: state.sendAbout,
-			stop: state.stop,
-			isLoading: state.isLoading,
-		}),
-	);
-	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
-
 	return (
 		<>
 			<div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges] px-8 pt-6">
@@ -53,18 +36,7 @@ export function FileView({
 				</div>
 			</div>
 			<div className="px-8 pb-7">
-				<ChatInput
-					placeholder={file ? `ask about ${file.path}` : "type a message"}
-					onSubmit={(text) => {
-						if (file) sendAbout(file, text);
-					}}
-					onCommand={runCommand}
-					isStreaming={isLoading}
-					onStop={stop}
-					symbols={symbols}
-					{...inputOn}
-					sendLabel={sendLabel}
-				/>
+				<ChatComposer about={file} />
 			</div>
 		</>
 	);
