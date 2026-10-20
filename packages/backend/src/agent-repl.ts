@@ -1,5 +1,6 @@
 import { agentsExtension } from "@repo/agents-extension";
-import { agentsHost } from "@repo/agents-extension/host";
+import { agentsHostFor } from "@repo/agents-extension/host";
+import type { AgentRunner, ReplSeed } from "@repo/agents-extension/ports";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -22,6 +23,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
@@ -35,6 +37,7 @@ import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { ConvexAgentStore } from "./agent-store.ts";
 import { ConvexImageStore } from "./image-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
@@ -52,6 +55,7 @@ export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
 	chatId?: Id<"chats">,
+	runner?: AgentRunner,
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -78,7 +82,12 @@ export async function workspaceExtensions(
 		}),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
-		agentsExtension(agentsHost),
+		agentsExtension(
+			agentsHostFor({
+				definitions: new ConvexAgentStore(workspaceId, connect),
+				...(runner === undefined ? {} : { runner }),
+			}),
+		),
 		mcpExtension({
 			...mcpHostFor({
 				scope: workspaceId,
@@ -108,15 +117,46 @@ export async function workspaceExtensions(
 	];
 }
 
+export type RunnerFor = (workspaceId: Id<"workspaces">) => AgentRunner;
+
+export async function seededRepl(
+	workspaceId: Id<"workspaces">,
+	connect: Connect,
+	seed: ReplSeed,
+	runner?: AgentRunner,
+): Promise<AgentRepl> {
+	const images = new MemoryImageStore();
+	const repl = new AgentRepl({
+		extensions: await workspaceExtensions(
+			workspaceId,
+			connect,
+			undefined,
+			runner,
+		),
+		images,
+	});
+	if (seed.from === "fork") {
+		await images.save(seed.image);
+		await repl.resume();
+	}
+	return repl;
+}
+
 export function chatRepls(
 	connect: Connect,
 	server: ServerClient,
+	runnerFor?: RunnerFor,
 ): (chatId: Id<"chats">) => Promise<AgentRepl> {
 	return async (chatId) => {
 		const { workspaceId } = await connect().query(api.chats.get, { chatId });
 		const replId = await connect().mutation(api.repls.open, { chatId });
 		const repl = new AgentRepl({
-			extensions: await workspaceExtensions(workspaceId, connect, chatId),
+			extensions: await workspaceExtensions(
+				workspaceId,
+				connect,
+				chatId,
+				runnerFor?.(workspaceId),
+			),
 			images: new ConvexImageStore(replId, server),
 		});
 		await repl.resume().catch((ex) => {

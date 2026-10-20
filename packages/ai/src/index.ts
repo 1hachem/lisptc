@@ -7,6 +7,7 @@ export {
 	type Role,
 	streamAgent,
 } from "./agent.ts";
+export { Conversation, ConversationStopped } from "./conversation.ts";
 export {
 	type EvalMessage,
 	type Evaluated,

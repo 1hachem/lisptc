@@ -27,6 +27,7 @@ import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callbac
 import { Route as AuthedWorkspaceIdChatChatIdRouteImport } from './routes/_authed/$workspaceId/chat/$chatId'
 import { Route as AuthedWorkspaceIdMemoriesKeyRouteImport } from './routes/_authed/$workspaceId/memories/$key'
 import { Route as AuthedWorkspaceIdPermissionsRuleRouteImport } from './routes/_authed/$workspaceId/permissions/$rule'
+import { Route as AuthedWorkspaceIdSubAgentsNameRouteImport } from './routes/_authed/$workspaceId/sub-agents/$name'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -123,6 +124,12 @@ const AuthedWorkspaceIdPermissionsRuleRoute =
     path: '/permissions/$rule',
     getParentRoute: () => AuthedWorkspaceIdRouteRoute,
   } as any)
+const AuthedWorkspaceIdSubAgentsNameRoute =
+  AuthedWorkspaceIdSubAgentsNameRouteImport.update({
+    id: '/sub-agents/$name',
+    path: '/sub-agents/$name',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
   '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
   '/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
+  '/$workspaceId/sub-agents/$name': typeof AuthedWorkspaceIdSubAgentsNameRoute
 }
 export interface FileRoutesByTo {
   '/health': typeof HealthRoute
@@ -160,6 +168,7 @@ export interface FileRoutesByTo {
   '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
   '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
   '/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
+  '/$workspaceId/sub-agents/$name': typeof AuthedWorkspaceIdSubAgentsNameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -181,6 +190,7 @@ export interface FileRoutesById {
   '/_authed/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
   '/_authed/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
   '/_authed/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
+  '/_authed/$workspaceId/sub-agents/$name': typeof AuthedWorkspaceIdSubAgentsNameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/$workspaceId/chat/$chatId'
     | '/$workspaceId/memories/$key'
     | '/$workspaceId/permissions/$rule'
+    | '/$workspaceId/sub-agents/$name'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/health'
@@ -220,6 +231,7 @@ export interface FileRouteTypes {
     | '/$workspaceId/chat/$chatId'
     | '/$workspaceId/memories/$key'
     | '/$workspaceId/permissions/$rule'
+    | '/$workspaceId/sub-agents/$name'
   id:
     | '__root__'
     | '/_authed'
@@ -240,6 +252,7 @@ export interface FileRouteTypes {
     | '/_authed/$workspaceId/chat/$chatId'
     | '/_authed/$workspaceId/memories/$key'
     | '/_authed/$workspaceId/permissions/$rule'
+    | '/_authed/$workspaceId/sub-agents/$name'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -380,6 +393,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdPermissionsRuleRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
+    '/_authed/$workspaceId/sub-agents/$name': {
+      id: '/_authed/$workspaceId/sub-agents/$name'
+      path: '/sub-agents/$name'
+      fullPath: '/$workspaceId/sub-agents/$name'
+      preLoaderRoute: typeof AuthedWorkspaceIdSubAgentsNameRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
   }
 }
 
@@ -392,6 +412,7 @@ interface AuthedWorkspaceIdRouteRouteChildren {
   AuthedWorkspaceIdChatChatIdRoute: typeof AuthedWorkspaceIdChatChatIdRoute
   AuthedWorkspaceIdMemoriesKeyRoute: typeof AuthedWorkspaceIdMemoriesKeyRoute
   AuthedWorkspaceIdPermissionsRuleRoute: typeof AuthedWorkspaceIdPermissionsRuleRoute
+  AuthedWorkspaceIdSubAgentsNameRoute: typeof AuthedWorkspaceIdSubAgentsNameRoute
 }
 
 const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
@@ -405,6 +426,7 @@ const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
     AuthedWorkspaceIdMemoriesKeyRoute: AuthedWorkspaceIdMemoriesKeyRoute,
     AuthedWorkspaceIdPermissionsRuleRoute:
       AuthedWorkspaceIdPermissionsRuleRoute,
+    AuthedWorkspaceIdSubAgentsNameRoute: AuthedWorkspaceIdSubAgentsNameRoute,
   }
 
 const AuthedWorkspaceIdRouteRouteWithChildren =

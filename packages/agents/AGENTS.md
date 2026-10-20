@@ -1,7 +1,7 @@
 # @repo/agents-extension
 
 Agents. The surface through which the language drives the harness that runs
-it: what reaches the agent, and when.
+it: what reaches the agent, and when, and the sub-agents it starts.
 
 Turbo tag: `extension`.
 
@@ -20,7 +20,12 @@ A form here asks the harness for something by emitting an effect from
 never reaches the loop, the REPL or the transport itself, and a new kind of
 request is a new variant of the effect union, not a key of this package's own.
 
+This package never runs an agent itself. Another agent is asked of the host
+through a port, and a session whose host offers none refuses the forms that
+need one. A running agent is never part of the image, so nothing a session must
+keep across a restore is held by one.
+
 ## Tests
 
 `test/`. A test installs this extension and no other, and asserts on the
-effects a form emits.
+effects a form emits or on what a fake runner was asked.

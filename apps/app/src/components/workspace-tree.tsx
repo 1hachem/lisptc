@@ -40,19 +40,13 @@ import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { FileMenu } from "./file-menu.tsx";
 import { SessionRow } from "./session-row.tsx";
 
-const PLACEHOLDERS = [
-	"knowledge",
-	"sub-agents",
-	"triggers",
-	"tasks",
-	"ui",
-	"tests",
-] as const;
+const PLACEHOLDERS = ["knowledge", "triggers", "tasks", "ui", "tests"] as const;
 
 type Folder =
 	| "chat"
 	| "memories"
 	| "permissions"
+	| "sub-agents"
 	| (typeof PLACEHOLDERS)[number];
 
 const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
@@ -101,6 +95,7 @@ const FOLDERS = [
 	"chat",
 	"memories",
 	"permissions",
+	"sub-agents",
 	...PLACEHOLDERS,
 ] as const satisfies readonly Folder[];
 
@@ -164,6 +159,47 @@ function MemoryFile({
 				<Link
 					to="/$workspaceId/memories/$key"
 					params={{ workspaceId: memory.workspaceId, key: memory.key }}
+					className={className}
+				>
+					{content}
+				</Link>
+			)}
+		/>
+	);
+}
+
+function AgentFile({
+	agent,
+	selected,
+}: {
+	agent: Doc<"agents">;
+	selected: boolean;
+}) {
+	const removeAgent = useConvexMutation(api.agents.remove);
+	const leave = useLeave(agent.workspaceId);
+
+	return (
+		<TreeFile
+			name={agent.name}
+			depth={1}
+			selected={selected}
+			trailing={
+				<FileMenu
+					name={agent.name}
+					confirm="delete this agent for good?"
+					onDelete={async () => {
+						await leave(selected);
+						await removeAgent({
+							workspaceId: agent.workspaceId,
+							name: agent.name,
+						});
+					}}
+				/>
+			}
+			link={(content, className) => (
+				<Link
+					to="/$workspaceId/sub-agents/$name"
+					params={{ workspaceId: agent.workspaceId, name: agent.name }}
 					className={className}
 				>
 					{content}
@@ -360,6 +396,9 @@ export function WorkspaceTree({
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
+	const { data: agents } = useQuery(
+		convexQuery(api.agents.list, { workspaceId }),
+	);
 
 	const { shown, reorder } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
@@ -415,7 +454,23 @@ export function WorkspaceTree({
 			</TreeFolder>
 		),
 		knowledge: placeholder("knowledge"),
-		"sub-agents": placeholder("sub-agents"),
+		"sub-agents": () => (
+			<TreeFolder
+				name="sub-agents"
+				icon={FOLDER_ICONS["sub-agents"]}
+				{...folder("sub-agents")}
+			>
+				<Listing items={agents} empty="no sub-agents yet">
+					{(agent) => (
+						<AgentFile
+							key={agent._id}
+							agent={agent}
+							selected={params.name === agent.name}
+						/>
+					)}
+				</Listing>
+			</TreeFolder>
+		),
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),
 		ui: placeholder("ui"),
