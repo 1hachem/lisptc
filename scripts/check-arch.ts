@@ -16,8 +16,9 @@ const RULES: Rule[] = [
 	{
 		manifest: "packages/shared/package.json",
 		fields: ["dependencies", "peerDependencies"],
-		forbidden: () => true,
-		reason: "@repo/shared is the no-dependency utility layer.",
+		forbidden: (name) => name !== "zod",
+		reason:
+			"@repo/shared is the utility layer and carries zod, the schemas its contracts are written in, and nothing else.",
 	},
 	{
 		manifest: "packages/ui/package.json",
