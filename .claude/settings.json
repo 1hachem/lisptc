@@ -4,11 +4,11 @@
       "Edit(./.claude/canvas/sessions/**)",
       "Edit(./artifacts/**/*.html)"
     ],
-    "ask": [
-      "Read(./artifacts/**)"
-    ],
     "deny": [
       "Agent(Explore)"
+    ],
+    "ask": [
+      "Read(./artifacts/**)"
     ]
   },
   "hooks": {
@@ -72,14 +72,19 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git push*)",
             "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.agents/hooks/ci-watch.sh\"",
-            "asyncRewake": true,
-            "timeout": 2700
+            "if": "Bash(git push*)",
+            "timeout": 2700,
+            "asyncRewake": true
           }
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "typesafe@typesafe-ai": true,
+    "hunk-walk@lisptc": true,
+    "convex@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "lisptc": {
@@ -88,10 +93,5 @@
         "path": "./.agents"
       }
     }
-  },
-  "enabledPlugins": {
-    "convex@claude-plugins-official": true,
-    "typesafe@typesafe-ai": true,
-    "hunk-walk@lisptc": true
   }
 }
