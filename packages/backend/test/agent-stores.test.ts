@@ -2,6 +2,7 @@ import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { ConvexKnowledgeStore } from "../src/knowledge-store.ts";
 import {
 	ConvexPreferencesStore,
 	type PreferencesClient,
@@ -63,13 +64,15 @@ describe("the convex workspace store", () => {
 		await expect(store.choose("openai/gpt-9")).rejects.toThrow(/not offered/);
 		expect(sent).toEqual([]);
 	});
+});
 
+describe("the convex knowledge store", () => {
 	it("reads an uploaded file through its served url", async () => {
 		const { client } = spyClient({
 			[named(api.knowledge.get)]: { name: "a.md", url: "https://blob/a" },
 		});
 		const fetched: string[] = [];
-		const store = new ConvexWorkspaceStore(WORKSPACE, () => client, {
+		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
 			download: async (url) => {
 				fetched.push(url);
 				return new TextEncoder().encode("# a");
@@ -85,7 +88,7 @@ describe("the convex workspace store", () => {
 			[named(api.knowledge.uploadUrl)]: "https://upload",
 		});
 		const uploaded: Array<[string, string, string]> = [];
-		const store = new ConvexWorkspaceStore(WORKSPACE, () => client, {
+		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
 			download: async () => new Uint8Array(),
 			upload: async (url, blob) => {
 				uploaded.push([url, blob.type, await blob.text()]);
@@ -109,7 +112,7 @@ describe("the convex workspace store", () => {
 		const { client } = spyClient({
 			[named(api.knowledge.add)]: "FILE_TOO_LARGE",
 		});
-		const store = new ConvexWorkspaceStore(WORKSPACE, () => client, {
+		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
 			download: async () => new Uint8Array(),
 			upload: async () => "blob-1" as Id<"_storage">,
 		});

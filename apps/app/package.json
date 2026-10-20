@@ -41,6 +41,7 @@
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
+    "@repo/knowledge-extension": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",
     "@repo/memory-extension": "workspace:*",

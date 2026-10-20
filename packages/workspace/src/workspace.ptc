@@ -17,19 +17,6 @@ sidebar; every change shows there at once.
 - (chat/read id :last 10) gives another chat's last messages as (role . text).
   User approves it: it brings whole other conversation into this one.
 
-- (files) lists names of files user uploaded, like "report.md".
-- (file/read "name") by extension: .ptc gives its one form as data, never
-  run; .json gives JSON as data, object as alist; other text gives string.
-  Binary file (pdf, image) refused. nil when no file.
-- (file/write "name" value) replaces file; user can open and download it.
-  User approves it. .ptc takes data, printed; function refused. .json takes
-  data, written as JSON: plist or alist becomes object, other list becomes
-  array, keyword becomes its name; or takes JSON text string. Other file takes
-  string.
-- Edit .ptc file: read, change with set-in / update-in / remove-in, write back:
-  (file/write "notes.ptc" (set-in (file/read "notes.ptc") "done" :status))
-- (file/delete "name") removes file. User approves it.
-
 GOTCHAS
 
 - Ids come from (chats). Never guess one.

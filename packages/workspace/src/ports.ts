@@ -29,10 +29,6 @@ export interface WorkspaceStore {
 	retitle(chatId: string, title: string): Awaitable<void>;
 	archive(chatId: string): Awaitable<void>;
 	transcript(chatId: string): Awaitable<ChatLine[]>;
-	files(): Awaitable<string[]>;
-	file(name: string): Awaitable<Uint8Array | undefined>;
-	write(name: string, text: string, contentType: string): Awaitable<void>;
-	remove(name: string): Awaitable<void>;
 }
 
 export interface WorkspaceHost {
@@ -47,16 +43,10 @@ export interface HeldChat extends ChatEntry {
 	lines: ChatLine[];
 }
 
-export interface HeldFile {
-	bytes: Uint8Array;
-	contentType: string;
-}
-
 export class MemoryWorkspaceStore implements WorkspaceStore {
 	constructor(
 		public held: Settings,
 		public chatsHeld: HeldChat[] = [],
-		public filesHeld: Map<string, HeldFile> = new Map(),
 	) {}
 
 	settings(): Settings {
@@ -96,25 +86,6 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
 
 	transcript(chatId: string): ChatLine[] {
 		return this.chat(chatId).lines;
-	}
-
-	files(): string[] {
-		return [...this.filesHeld.keys()].sort();
-	}
-
-	file(name: string): Uint8Array | undefined {
-		return this.filesHeld.get(name)?.bytes;
-	}
-
-	write(name: string, text: string, contentType: string): void {
-		this.filesHeld.set(name, {
-			bytes: new TextEncoder().encode(text),
-			contentType,
-		});
-	}
-
-	remove(name: string): void {
-		if (!this.filesHeld.delete(name)) throw new Error(`no file ${name}`);
 	}
 
 	private chat(chatId: string): HeldChat {
