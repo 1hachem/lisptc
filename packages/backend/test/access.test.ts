@@ -1,7 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
-import { DEFAULT_TOGGLES } from "../convex/lib/preference-defaults.ts";
+import { DEFAULT_TOGGLES } from "../convex/lib/preferenceDefaults.ts";
 import {
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,

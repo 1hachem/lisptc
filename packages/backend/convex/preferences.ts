@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel.js";
 import { mutation, query } from "./_generated/server.js";
 import { requireUser } from "./lib/auth.js";
-import { withDefaultToggles } from "./lib/preference-defaults.js";
+import { withDefaultToggles } from "./lib/preferenceDefaults.js";
 import { MAX_PREFERENCES_BYTES } from "./limits.js";
 
 const encoder = new TextEncoder();
