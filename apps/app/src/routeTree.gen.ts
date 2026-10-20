@@ -26,6 +26,7 @@ import { Route as ApiChatEvalRouteImport } from './routes/api.chat.eval'
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
 import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
 import { Route as AuthedWorkspaceIdChatChatIdRouteImport } from './routes/_authed/$workspaceId/chat/$chatId'
+import { Route as AuthedWorkspaceIdKnowledgeNameRouteImport } from './routes/_authed/$workspaceId/knowledge/$name'
 import { Route as AuthedWorkspaceIdMemoriesKeyRouteImport } from './routes/_authed/$workspaceId/memories/$key'
 import { Route as AuthedWorkspaceIdPermissionsRuleRouteImport } from './routes/_authed/$workspaceId/permissions/$rule'
 
@@ -117,6 +118,12 @@ const AuthedWorkspaceIdChatChatIdRoute =
     path: '/chat/$chatId',
     getParentRoute: () => AuthedWorkspaceIdRouteRoute,
   } as any)
+const AuthedWorkspaceIdKnowledgeNameRoute =
+  AuthedWorkspaceIdKnowledgeNameRouteImport.update({
+    id: '/knowledge/$name',
+    path: '/knowledge/$name',
+    getParentRoute: () => AuthedWorkspaceIdRouteRoute,
+  } as any)
 const AuthedWorkspaceIdMemoriesKeyRoute =
   AuthedWorkspaceIdMemoriesKeyRouteImport.update({
     id: '/memories/$key',
@@ -147,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
   '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
+  '/$workspaceId/knowledge/$name': typeof AuthedWorkspaceIdKnowledgeNameRoute
   '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
   '/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
@@ -166,6 +174,7 @@ export interface FileRoutesByTo {
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
   '/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
+  '/$workspaceId/knowledge/$name': typeof AuthedWorkspaceIdKnowledgeNameRoute
   '/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
   '/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
@@ -188,6 +197,7 @@ export interface FileRoutesById {
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
   '/_authed/$workspaceId/chat/$chatId': typeof AuthedWorkspaceIdChatChatIdRoute
+  '/_authed/$workspaceId/knowledge/$name': typeof AuthedWorkspaceIdKnowledgeNameRoute
   '/_authed/$workspaceId/memories/$key': typeof AuthedWorkspaceIdMemoriesKeyRoute
   '/_authed/$workspaceId/permissions/$rule': typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/api/oauth/callback'
     | '/$workspaceId/'
     | '/$workspaceId/chat/$chatId'
+    | '/$workspaceId/knowledge/$name'
     | '/$workspaceId/memories/$key'
     | '/$workspaceId/permissions/$rule'
   fileRoutesByTo: FileRoutesByTo
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/api/oauth/callback'
     | '/$workspaceId'
     | '/$workspaceId/chat/$chatId'
+    | '/$workspaceId/knowledge/$name'
     | '/$workspaceId/memories/$key'
     | '/$workspaceId/permissions/$rule'
   id:
@@ -250,6 +262,7 @@ export interface FileRouteTypes {
     | '/api/oauth/callback'
     | '/_authed/$workspaceId/'
     | '/_authed/$workspaceId/chat/$chatId'
+    | '/_authed/$workspaceId/knowledge/$name'
     | '/_authed/$workspaceId/memories/$key'
     | '/_authed/$workspaceId/permissions/$rule'
   fileRoutesById: FileRoutesById
@@ -385,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdChatChatIdRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
+    '/_authed/$workspaceId/knowledge/$name': {
+      id: '/_authed/$workspaceId/knowledge/$name'
+      path: '/knowledge/$name'
+      fullPath: '/$workspaceId/knowledge/$name'
+      preLoaderRoute: typeof AuthedWorkspaceIdKnowledgeNameRouteImport
+      parentRoute: typeof AuthedWorkspaceIdRouteRoute
+    }
     '/_authed/$workspaceId/memories/$key': {
       id: '/_authed/$workspaceId/memories/$key'
       path: '/memories/$key'
@@ -409,6 +429,7 @@ interface AuthedWorkspaceIdRouteRouteChildren {
   AuthedWorkspaceIdSettingsRoute: typeof AuthedWorkspaceIdSettingsRoute
   AuthedWorkspaceIdIndexRoute: typeof AuthedWorkspaceIdIndexRoute
   AuthedWorkspaceIdChatChatIdRoute: typeof AuthedWorkspaceIdChatChatIdRoute
+  AuthedWorkspaceIdKnowledgeNameRoute: typeof AuthedWorkspaceIdKnowledgeNameRoute
   AuthedWorkspaceIdMemoriesKeyRoute: typeof AuthedWorkspaceIdMemoriesKeyRoute
   AuthedWorkspaceIdPermissionsRuleRoute: typeof AuthedWorkspaceIdPermissionsRuleRoute
 }
@@ -421,6 +442,7 @@ const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
     AuthedWorkspaceIdSettingsRoute: AuthedWorkspaceIdSettingsRoute,
     AuthedWorkspaceIdIndexRoute: AuthedWorkspaceIdIndexRoute,
     AuthedWorkspaceIdChatChatIdRoute: AuthedWorkspaceIdChatChatIdRoute,
+    AuthedWorkspaceIdKnowledgeNameRoute: AuthedWorkspaceIdKnowledgeNameRoute,
     AuthedWorkspaceIdMemoriesKeyRoute: AuthedWorkspaceIdMemoriesKeyRoute,
     AuthedWorkspaceIdPermissionsRuleRoute:
       AuthedWorkspaceIdPermissionsRuleRoute,
@@ -469,12 +491,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

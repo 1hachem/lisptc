@@ -112,6 +112,16 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_path", ["workspaceId", "path"]),
 
+	knowledge: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		storageId: v.id("_storage"),
+		contentType: v.optional(v.string()),
+		size: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"]),
+
 	readmes: defineTable({
 		workspaceId: v.id("workspaces"),
 		body: v.string(),

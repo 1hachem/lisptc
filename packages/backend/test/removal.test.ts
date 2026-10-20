@@ -93,7 +93,7 @@ describe("removing a workspace", () => {
 		expect(messages).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records, permissions, readme and files with it", async () => {
+	it("takes its secrets, oauth records, permissions, readme and knowledge with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -116,30 +116,31 @@ describe("removing a workspace", () => {
 			workspaceId: doomed,
 			body: "# doomed",
 		});
-		await alice.as.mutation(api.files.put, {
+		await alice.as.mutation(api.knowledge.add, {
 			workspaceId: doomed,
-			path: "landing-page.ptc",
-			source: '(:title "doomed")\n',
+			name: "doomed.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
 		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords, permissions, readmes, files } = await t.run(
-			async (ctx) => ({
+		const { secrets, oauthRecords, permissions, readmes, knowledge, blobs } =
+			await t.run(async (ctx) => ({
 				secrets: await ctx.db.query("secrets").collect(),
 				oauthRecords: await ctx.db.query("oauthRecords").collect(),
 				permissions: await ctx.db.query("permissions").collect(),
 				readmes: await ctx.db.query("readmes").collect(),
-				files: await ctx.db.query("files").collect(),
-			}),
-		);
+				knowledge: await ctx.db.query("knowledge").collect(),
+				blobs: await ctx.db.system.query("_storage").collect(),
+			}));
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
 		expect(permissions).toEqual([]);
 		expect(readmes).toEqual([]);
-		expect(files).toEqual([]);
+		expect(knowledge).toEqual([]);
+		expect(blobs).toEqual([]);
 	});
 
 	it("leaves the other workspaces alone", async () => {
@@ -247,7 +248,7 @@ async function remaining(t: TestConvex<typeof schema>) {
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
 		permissions: await ctx.db.query("permissions").collect(),
 		readmes: await ctx.db.query("readmes").collect(),
-		files: await ctx.db.query("files").collect(),
+		knowledge: await ctx.db.query("knowledge").collect(),
 		preferences: await ctx.db.query("preferences").collect(),
 	}));
 }
@@ -262,7 +263,7 @@ const nothing = {
 	oauthRecords: [],
 	permissions: [],
 	readmes: [],
-	files: [],
+	knowledge: [],
 	preferences: [],
 };
 
@@ -299,17 +300,17 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, secrets, oauth records, permissions, readme, files and preferences", async () => {
+	it("takes its memories, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.readmes.put, {
 			workspaceId: alice.workspace,
 			body: "doomed",
 		});
-		await alice.as.mutation(api.files.put, {
+		await alice.as.mutation(api.knowledge.add, {
 			workspaceId: alice.workspace,
-			path: "notes.ptc",
-			source: "(:a 1)\n",
+			name: "notes.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
 		});
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { theme: "dusk", themeUses: {} },

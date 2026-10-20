@@ -764,3 +764,31 @@ describe("readme access", () => {
 		).rejects.toThrow("README_TOO_LARGE");
 	});
 });
+
+describe("knowledge access", () => {
+	it("keeps a workspace's knowledge to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.knowledge.add, {
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await expect(
+			alice.as.query(api.knowledge.get, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.knowledge.remove, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		expect(
+			await bob.as.query(api.knowledge.list, { workspaceId: bob.workspace }),
+		).toHaveLength(1);
+	});
+});

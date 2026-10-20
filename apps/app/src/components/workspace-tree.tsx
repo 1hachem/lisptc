@@ -30,10 +30,11 @@ import {
 	useNavigate,
 	useParams,
 } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
+import { knowledgeIcon, useKnowledgeUpload } from "../lib/knowledge.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
@@ -41,7 +42,6 @@ import { FileMenu } from "./file-menu.tsx";
 import { SessionRow } from "./session-row.tsx";
 
 const PLACEHOLDERS = [
-	"knowledge",
 	"sub-agents",
 	"triggers",
 	"tasks",
@@ -53,6 +53,7 @@ type Folder =
 	| "chat"
 	| "memories"
 	| "permissions"
+	| "knowledge"
 	| (typeof PLACEHOLDERS)[number];
 
 const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
@@ -89,11 +90,11 @@ function Listing<T>({
 	children,
 }: {
 	items: T[] | undefined;
-	empty: string;
+	empty: string | null;
 	children: (item: T) => ReactNode;
 }) {
 	if (items === undefined) return null;
-	if (items.length === 0) return <Empty>{empty}</Empty>;
+	if (items.length === 0) return empty && <Empty>{empty}</Empty>;
 	return items.map(children);
 }
 
@@ -101,6 +102,7 @@ const FOLDERS = [
 	"chat",
 	"memories",
 	"permissions",
+	"knowledge",
 	...PLACEHOLDERS,
 ] as const satisfies readonly Folder[];
 
@@ -224,6 +226,91 @@ function PermissionFiles({
 				);
 			}}
 		</Listing>
+	);
+}
+
+function KnowledgeFolder({
+	workspaceId,
+	current,
+	folder,
+}: {
+	workspaceId: Id<"workspaces">;
+	current: string | undefined;
+	folder: { open: boolean; onToggle: () => void };
+}) {
+	const { data: files } = useQuery(
+		convexQuery(api.knowledge.list, { workspaceId }),
+	);
+	const removeFile = useConvexMutation(api.knowledge.remove);
+	const leave = useLeave(workspaceId);
+	const picker = useRef<HTMLInputElement>(null);
+	const { upload, uploading, failures } = useKnowledgeUpload(workspaceId);
+
+	return (
+		<>
+			<input
+				ref={picker}
+				type="file"
+				multiple
+				hidden
+				onChange={(event) => {
+					const picked = event.target.files;
+					if (picked === null || picked.length === 0) return;
+					if (!folder.open) folder.onToggle();
+					void upload([...picked]);
+					event.target.value = "";
+				}}
+			/>
+			<TreeFolder
+				name="knowledge"
+				icon={FOLDER_ICONS.knowledge}
+				{...folder}
+				onCreate={() => picker.current?.click()}
+				createLabel="upload to knowledge/"
+			>
+				<Listing
+					items={files}
+					empty={uploading.length > 0 ? null : "no knowledge yet"}
+				>
+					{(file) => (
+						<TreeFile
+							key={file.name}
+							name={file.name}
+							icon={knowledgeIcon(file.name, file.contentType)}
+							depth={1}
+							selected={current === file.name}
+							trailing={
+								<FileMenu
+									name={file.name}
+									confirm="delete this file for good?"
+									onDelete={async () => {
+										await leave(current === file.name);
+										await removeFile({ workspaceId, name: file.name });
+									}}
+								/>
+							}
+							link={(content, className) => (
+								<Link
+									to="/$workspaceId/knowledge/$name"
+									params={{ workspaceId, name: file.name }}
+									className={className}
+								>
+									{content}
+								</Link>
+							)}
+						/>
+					)}
+				</Listing>
+				{uploading.map((name) => (
+					<Empty key={name}>uploading {name}…</Empty>
+				))}
+				{failures.map((failure) => (
+					<div key={failure} className="py-1 pl-9 text-red">
+						{failure}
+					</div>
+				))}
+			</TreeFolder>
+		</>
 	);
 }
 
@@ -414,7 +501,13 @@ export function WorkspaceTree({
 				<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
 			</TreeFolder>
 		),
-		knowledge: placeholder("knowledge"),
+		knowledge: () => (
+			<KnowledgeFolder
+				workspaceId={workspaceId}
+				current={params.name}
+				folder={folder("knowledge")}
+			/>
+		),
 		"sub-agents": placeholder("sub-agents"),
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),
