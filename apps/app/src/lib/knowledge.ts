@@ -34,7 +34,7 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { MAX_KNOWLEDGE_BYTES } from "@repo/backend/limits";
 import { ConvexError } from "convex/values";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 const EXTENSION_ICONS: Record<string, IconSvgElement> = {
 	pdf: Pdf01Icon,
@@ -202,31 +202,35 @@ async function stored(url: string, file: File): Promise<Id<"_storage">> {
 export function useBinUpload(workspaceId: Id<"workspaces">) {
 	const uploadUrl = useConvexMutation(api.knowledge.uploadUrl);
 	const add = useConvexMutation(api.bin.add);
+	const remove = useConvexMutation(api.bin.remove);
 
-	const uploadOne = async (file: File): Promise<string> => {
-		const storageId = await stored(await uploadUrl({ workspaceId }), file);
-		const added = await add({
-			workspaceId,
-			name: file.name,
-			storageId,
-			contentType: file.type,
-		});
-		if ("refused" in added) throw new ConvexError({ code: added.refused });
-		return added.name;
-	};
+	const upload = useCallback(
+		async (file: File): Promise<string> => {
+			try {
+				const storageId = await stored(await uploadUrl({ workspaceId }), file);
+				const added = await add({
+					workspaceId,
+					name: file.name,
+					storageId,
+					contentType: file.type,
+				});
+				if ("refused" in added) throw new ConvexError({ code: added.refused });
+				return added.name;
+			} catch (error) {
+				throw new Error(uploadFailure(file.name, error));
+			}
+		},
+		[uploadUrl, add, workspaceId],
+	);
 
-	return async (files: readonly File[]): Promise<string[]> => {
-		const settled = await Promise.allSettled(files.map(uploadOne));
-		const failures = settled.flatMap((result, index) =>
-			result.status === "rejected"
-				? [uploadFailure(files[index].name, result.reason)]
-				: [],
-		);
-		if (failures.length > 0) throw new Error(failures.join("; "));
-		return settled.flatMap((result) =>
-			result.status === "fulfilled" ? [result.value] : [],
-		);
-	};
+	const discard = useCallback(
+		(name: string) => {
+			void remove({ workspaceId, name });
+		},
+		[remove, workspaceId],
+	);
+
+	return { upload, discard };
 }
 
 export function withAttachments(

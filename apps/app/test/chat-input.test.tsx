@@ -72,7 +72,7 @@ const SYMBOLS = symbolTable([
 ]);
 
 function render(
-	onSubmit: (text: string, files: File[]) => void,
+	onSubmit: (text: string, attached: string[]) => void,
 	onCommand?: (name: string) => Promise<string | null>,
 ): HTMLElement {
 	act(() =>
@@ -83,6 +83,31 @@ function render(
 	const field = host.querySelector<HTMLElement>("[contenteditable]");
 	if (!field) throw new Error("no editor");
 	return field;
+}
+
+function renderUploading(
+	onSubmit: (text: string, attached: string[]) => void,
+	upload: (file: File) => Promise<string>,
+): HTMLElement {
+	act(() => root.render(<ChatInput onSubmit={onSubmit} upload={upload} />));
+	const field = host.querySelector<HTMLElement>("[contenteditable]");
+	if (!field) throw new Error("no editor");
+	return field;
+}
+
+function attach(files: File[]) {
+	const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+	if (!input) throw new Error("no file input");
+	Object.defineProperty(input, "files", { value: files, configurable: true });
+	act(() => {
+		input.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+}
+
+function chip(name: string): HTMLElement | undefined {
+	return [...host.querySelectorAll<HTMLElement>("[data-upload]")].find(
+		(element) => element.textContent === name,
+	);
 }
 
 function editorOf(field: HTMLElement): LexicalEditor {
@@ -254,7 +279,7 @@ describe("the chat input", () => {
 	});
 
 	it("shows a dropped file as a chip that can be taken off again", () => {
-		const field = render(vi.fn());
+		const field = renderUploading(vi.fn(), () => new Promise(() => {}));
 		const zone = host.firstElementChild;
 		if (!zone) throw new Error("no drop zone");
 		const file = new File(["%PDF"], "spec.pdf", { type: "application/pdf" });
@@ -274,10 +299,110 @@ describe("the chat input", () => {
 		expect(textOf(field)).toBe("");
 	});
 
-	it("offers an attach button beside send", () => {
+	it("offers an attach button beside send only when it can upload", () => {
 		render(vi.fn());
+		expect(host.querySelector('button[aria-label="attach"]')).toBeNull();
+		act(() => root.render(<ChatInput onSubmit={vi.fn()} upload={vi.fn()} />));
 		expect(host.querySelector('button[aria-label="attach"]')).not.toBeNull();
 		expect(host.querySelector('input[type="file"]')).not.toBeNull();
+	});
+
+	it("uploads a file the moment it is attached", () => {
+		const upload = vi.fn(() => new Promise<string>(() => {}));
+		renderUploading(vi.fn(), upload);
+		const file = new File(["%PDF"], "spec.pdf", { type: "application/pdf" });
+		attach([file]);
+		expect(upload).toHaveBeenCalledWith(file);
+		expect(chip("spec.pdf")?.dataset.upload).toBe("uploading");
+	});
+
+	it("holds the message until the upload is in, then sends the stored name", async () => {
+		const onSubmit = vi.fn();
+		let finish: (name: string) => void = () => {};
+		const upload = vi.fn(
+			() =>
+				new Promise<string>((resolve) => {
+					finish = resolve;
+				}),
+		);
+		const field = renderUploading(onSubmit, upload);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		type(field, "see this");
+		enter(field, false);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(host.textContent).toContain("still uploading");
+		expect(textOf(field)).toBe("see this");
+		await act(async () => finish("spec (2).pdf"));
+		expect(chip("spec.pdf")?.dataset.upload).toBe("done");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("see this", ["spec (2).pdf"]);
+		expect(chip("spec.pdf")).toBeUndefined();
+	});
+
+	it("refuses to send while an upload has failed, and says why on the chip", async () => {
+		const onSubmit = vi.fn();
+		const upload = vi.fn(() =>
+			Promise.reject(new Error("spec.pdf not uploaded: the folder is full")),
+		);
+		const field = renderUploading(onSubmit, upload);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		await settled();
+		expect(chip("spec.pdf")?.dataset.upload).toBe("failed");
+		expect(chip("spec.pdf")?.title).toBe(
+			"spec.pdf not uploaded: the folder is full",
+		);
+		type(field, "see this");
+		enter(field, false);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(host.textContent).toContain("remove the files that failed");
+	});
+
+	it("deletes an uploaded file removed before sending", async () => {
+		const discard = vi.fn();
+		const upload = vi.fn(() => Promise.resolve("spec.pdf"));
+		act(() =>
+			root.render(
+				<ChatInput onSubmit={vi.fn()} upload={upload} discard={discard} />,
+			),
+		);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		await settled();
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>(
+					'button[aria-label="remove spec.pdf"]',
+				)
+				?.click(),
+		);
+		expect(discard).toHaveBeenCalledWith("spec.pdf");
+		expect(chip("spec.pdf")).toBeUndefined();
+	});
+
+	it("deletes a file whose upload lands after it was removed", async () => {
+		const discard = vi.fn();
+		let finish: (name: string) => void = () => {};
+		const upload = vi.fn(
+			() =>
+				new Promise<string>((resolve) => {
+					finish = resolve;
+				}),
+		);
+		act(() =>
+			root.render(
+				<ChatInput onSubmit={vi.fn()} upload={upload} discard={discard} />,
+			),
+		);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>(
+					'button[aria-label="remove spec.pdf"]',
+				)
+				?.click(),
+		);
+		expect(discard).not.toHaveBeenCalled();
+		await act(async () => finish("spec.pdf"));
+		expect(discard).toHaveBeenCalledWith("spec.pdf");
 	});
 
 	it("completes the highlighted symbol on Enter instead of sending", async () => {

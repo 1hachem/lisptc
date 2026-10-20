@@ -50,13 +50,12 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 	);
 	const toBin = useBinUpload(workspaceId);
 	const submit = useCallback(
-		async (text: string, files: File[]) => {
-			const names = files.length === 0 ? [] : await toBin(files);
-			const message = withAttachments(text, names);
+		(text: string, attached: string[]) => {
+			const message = withAttachments(text, attached);
 			if (about) sendAbout(about, message);
 			else send(message);
 		},
-		[about, toBin, send, sendAbout],
+		[about, send, sendAbout],
 	);
 	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
@@ -64,6 +63,8 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 		<ChatInput
 			placeholder={about ? `ask about ${about.path}` : "type a message"}
 			onSubmit={submit}
+			upload={toBin.upload}
+			discard={toBin.discard}
 			mentions={mentions}
 			history={history}
 			onCommand={runCommand}
