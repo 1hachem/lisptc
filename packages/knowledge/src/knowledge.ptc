@@ -44,7 +44,8 @@ Deleted knowledge and attachments land in bin, shown as bin/ in sidebar. Bin
 deletes them for good a month later. Bin file cannot be read; restore it first.
 
 - (bin/list) lists bin file names, newest first.
-- (bin/search "text") lists bin file names holding text, any case.
+- (bin/search "text") lists bin file names containing text, any case. Matches
+  name only, never content.
 - (bin/restore "name") moves file back to folder it came from. User approves
   it. Returns "knowledge/name" or "attachments/name"; name gains number when
   taken.
