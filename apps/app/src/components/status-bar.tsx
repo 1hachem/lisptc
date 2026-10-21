@@ -1,16 +1,18 @@
+import { SortableTree } from "@repo/components";
 import { type ReactNode, useEffect, useState } from "react";
-import type { BarItem } from "../lib/status-bar-order.ts";
+import { useSidebarMotion } from "../lib/sidebar.ts";
+import {
+	type BarItem,
+	type BarPlace,
+	placeOf,
+} from "../lib/status-bar-order.ts";
 
 const TICK_MS = 15_000;
 
-const LEFT = "col-start-1 justify-self-start";
-const CENTRE = "col-start-2 justify-self-center";
-const RIGHT = "col-start-3 justify-self-end";
-
-const PLACES: Record<number, readonly string[]> = {
-	1: [RIGHT],
-	2: [LEFT, RIGHT],
-	3: [LEFT, CENTRE, RIGHT],
+const PLACE_CLASS: Record<BarPlace, string> = {
+	left: "col-start-1 justify-self-start",
+	centre: "col-start-2 justify-self-center",
+	right: "col-start-3 justify-self-end",
 };
 
 function clockTime(at: Date): string {
@@ -37,21 +39,28 @@ function Clock() {
 export function StatusBar({
 	order,
 	items,
+	onReorder,
 }: {
 	order: readonly BarItem[];
 	items: Record<Exclude<BarItem, "clock">, ReactNode>;
+	onReorder: (next: BarItem[]) => void;
 }) {
+	const { motion } = useSidebarMotion();
 	const drawn: Record<BarItem, ReactNode> = { ...items, clock: <Clock /> };
 	return (
-		<footer className="grid h-row flex-none grid-cols-[1fr_auto_1fr] items-center border-sidebar border-t bg-sidebar text-[11px] text-dim">
-			{order.map((item, i) => (
-				<div
-					key={item}
-					className={`row-start-1 flex h-full min-w-0 items-center ${PLACES[order.length]?.[i] ?? RIGHT}`}
-				>
-					{drawn[item]}
-				</div>
-			))}
+		<footer className="h-row flex-none border-sidebar border-t bg-sidebar text-[11px] text-dim">
+			<SortableTree
+				order={order}
+				onReorder={onReorder}
+				motion={motion}
+				axis="horizontal"
+				className="grid h-full grid-cols-[1fr_auto_1fr] items-center"
+				entryClassName={(item) =>
+					`row-start-1 flex h-full min-w-0 items-center ${PLACE_CLASS[placeOf(order, item)]}`
+				}
+			>
+				{(item) => drawn[item]}
+			</SortableTree>
 		</footer>
 	);
 }

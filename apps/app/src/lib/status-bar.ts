@@ -3,6 +3,7 @@ import { usePreferences, usePutPreferences } from "./preferences.ts";
 import {
 	type BarItem,
 	barOrder,
+	reorderedShown,
 	shownItems,
 	toggledItem,
 } from "./status-bar-order.ts";
@@ -32,5 +33,10 @@ export function useStatusBarOrder() {
 		[put, stored?.statusBarHidden],
 	);
 
-	return { order, shown, reorder, toggle };
+	const reorderShown = useCallback(
+		(next: BarItem[]) => put({ statusBar: reorderedShown(order, next) }),
+		[put, order],
+	);
+
+	return { order, shown, reorder, reorderShown, toggle };
 }
