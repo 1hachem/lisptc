@@ -37,9 +37,15 @@ export function useAttachments(upload?: UploadFile, discard?: DiscardUpload) {
 	const [items, setItems] = useState<Attachment[]>([]);
 	const gone = useRef(new Set<string>());
 	const live = useRef(true);
+	const held = useRef(items);
+	held.current = items;
+	const discardOnLeave = useRef(discard);
+	discardOnLeave.current = discard;
 	useEffect(
 		() => () => {
 			live.current = false;
+			for (const name of attachedNames(held.current))
+				discardOnLeave.current?.(name);
 		},
 		[],
 	);
