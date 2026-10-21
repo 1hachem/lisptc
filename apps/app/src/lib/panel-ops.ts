@@ -7,6 +7,7 @@ import {
 	paneOf,
 	type SplitLayout,
 	type Tab,
+	vacantPane,
 } from "@repo/components";
 
 export type Folder = "attachments" | "knowledge";
@@ -44,6 +45,8 @@ export function chatDocked(layout: PanelLayout): boolean {
 export function withMain(layout: PanelLayout): PanelLayout {
 	if (paneOf(layout, MAIN_TAB.id) !== undefined) return layout;
 	if (layout.root === null) return openTab(layout, MAIN_TAB);
+	const vacant = vacantPane(layout);
+	if (vacant !== undefined) return dropTab(layout, MAIN_TAB, { pane: vacant });
 	return dropTab(layout, MAIN_TAB, { node: layout.root.id, edge: "left" });
 }
 

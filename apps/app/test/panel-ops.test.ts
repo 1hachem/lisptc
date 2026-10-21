@@ -104,6 +104,14 @@ describe("the chat pinned in the layout", () => {
 		expect(chatDocked(withMain(closed))).toBe(true);
 	});
 
+	it("docks back into the pane it left empty", () => {
+		const layout = applyPanelOps(withMain(emptyLayout()), [
+			{ op: "open", tab: "a", split: "right", content: report },
+		]);
+		const closed = applyPanelOps(layout, [{ op: "close", tab: "main" }]);
+		expect(withMain(closed).root).toEqual(layout.root);
+	});
+
 	it("goes back to the left of a layout that lost it", () => {
 		const others = applyPanelOps(emptyLayout(), [
 			{ op: "open", tab: "a", split: "here", content: report },

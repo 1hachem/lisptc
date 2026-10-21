@@ -8,6 +8,7 @@ import {
 } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { usePanelMotion } from "../lib/preferences.ts";
+import { IdleWorkspace } from "./idle-workspace.tsx";
 import { MiniChat } from "./mini-chat.tsx";
 import { PanelTab } from "./panel-tab.tsx";
 import { StatusBar } from "./status-bar.tsx";
@@ -36,6 +37,7 @@ export function PanelSplit({ children }: { children: ReactNode }) {
 					tabLabel={tabLabel}
 					external={EXTERNAL}
 					animated={panelMotion}
+					placeholder={<IdleWorkspace />}
 				/>
 			</div>
 			<StatusBar>
