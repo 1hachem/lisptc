@@ -66,11 +66,19 @@ describe("opening tabs", () => {
 		expect(shape(down)).toEqual({ row: [["a"], { column: [["b"], ["c"]] }] });
 	});
 
-	it(`stops at ${MAX_SPLITS} side by side and opens in the focused pane instead`, () => {
+	it("keeps adding panes side by side with no limit", () => {
 		let layout = opened("a");
-		for (const id of ["b", "c", "d"])
+		for (const id of ["b", "c", "d", "e"])
 			layout = openTab(layout, tab(id), "right");
-		expect(shape(layout)).toEqual({ row: [["a"], ["b"], ["c", "d"]] });
+		expect(shape(layout)).toEqual({
+			row: [["a"], ["b"], ["c"], ["d"], ["e"]],
+		});
+	});
+
+	it(`stops at ${MAX_SPLITS} stacked and opens in the focused pane instead`, () => {
+		let layout = opened("a");
+		for (const id of ["b", "c", "d"]) layout = openTab(layout, tab(id), "down");
+		expect(shape(layout)).toEqual({ column: [["a"], ["b"], ["c", "d"]] });
 	});
 
 	it("keeps sizes summing to a whole", () => {

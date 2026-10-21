@@ -62,6 +62,34 @@ const two = openTab(
 	"right",
 );
 
+function sideBySide(count: number): SplitLayout<string> {
+	let layout = openTab(emptyLayout<string>(), { id: "t0", content: "t0" });
+	for (let i = 1; i < count; i++)
+		layout = openTab(layout, { id: `t${i}`, content: `t${i}` }, "right");
+	return layout;
+}
+
+describe("SplitView side scrolling", () => {
+	it("fits two panes side by side in the view", async () => {
+		const host = await mounted(view(sideBySide(2), []));
+		const group = host.querySelector<HTMLElement>(
+			'[data-slot="resizable-panel-group"]',
+		);
+		expect(["", "100%"]).toContain(group?.style.width);
+		expect(host.querySelector(".snap-start")).toBeNull();
+	});
+
+	it("widens past the view beyond two panes and snaps to each one", async () => {
+		const host = await mounted(view(sideBySide(5), []));
+		const group = host.querySelector<HTMLElement>(
+			'[data-slot="resizable-panel-group"]',
+		);
+		expect(group?.style.width).toBe("250%");
+		expect(host.querySelectorAll(".snap-start")).toHaveLength(5);
+		expect(group?.parentElement?.className).toContain("snap-x");
+	});
+});
+
 describe("SplitView", () => {
 	it("draws one tab strip per split with the active tab's body", async () => {
 		const host = await mounted(view(two, []));

@@ -78,6 +78,7 @@ const MEASURE_WHILE_DRAGGING = {
 	droppable: { strategy: MeasuringStrategy.Always },
 };
 const MIN_SPLIT = "12%";
+const VISIBLE_COLUMNS = 2;
 const EDGES: Edge[] = ["left", "right", "top", "bottom"];
 const EDGE_ZONE: Record<Edge, string> = {
 	left: "inset-y-0 left-0 w-1/4",
@@ -194,7 +195,9 @@ export function SplitView<T>({
 					className="group/split relative h-full min-h-0"
 				>
 					{layout.root ? (
-						<NodeView node={layout.root} view={view} />
+						<div className="h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-none">
+							<NodeView node={layout.root} view={view} root />
+						</div>
 					) : (
 						<div className="flex h-full items-center justify-center">
 							{placeholder}
@@ -256,12 +259,28 @@ function paneIds<T>(node: Node<T> | null): string[] {
 	return node.children.flatMap((child) => paneIds(child));
 }
 
-function NodeView<T>({ node, view }: { node: Node<T>; view: View<T> }) {
+function overflowWidth<T>(node: Node<T>): string | undefined {
+	if (node.kind !== "split" || node.direction !== "row") return undefined;
+	if (node.children.length <= VISIBLE_COLUMNS) return undefined;
+	return `${(node.children.length / VISIBLE_COLUMNS) * 100}%`;
+}
+
+function NodeView<T>({
+	node,
+	view,
+	root = false,
+}: {
+	node: Node<T>;
+	view: View<T>;
+	root?: boolean;
+}) {
 	if (node.kind === "pane") return <PaneView pane={node} {...view} />;
+	const width = root ? overflowWidth(node) : undefined;
 	return (
 		<ResizablePanelGroup
 			key={`${node.direction}:${node.children.map((c) => c.id).join(",")}`}
 			orientation={node.direction === "row" ? "horizontal" : "vertical"}
+			style={width ? { width } : undefined}
 			onLayoutChanged={(sizes, meta) => {
 				if (meta.isUserInteraction)
 					view.onChange(resizeSplit(view.layout, node.id, sizes));
@@ -273,6 +292,7 @@ function NodeView<T>({ node, view }: { node: Node<T>; view: View<T> }) {
 						id={child.id}
 						defaultSize={`${node.sizes[i] ?? 100 / node.children.length}%`}
 						minSize={MIN_SPLIT}
+						className={width ? "snap-start" : undefined}
 					>
 						<NodeView node={child} view={view} />
 					</ResizablePanel>
@@ -309,6 +329,17 @@ function PaneView<T>({
 	entrance: (pane: Pane<T>) => string;
 }) {
 	const focused = layout.focused === pane.id;
+	const arrival = entrance(pane);
+	const shown = useRef<HTMLDivElement>(null);
+	const arrived = arrival !== "";
+	useEffect(() => {
+		if (arrived)
+			shown.current?.scrollIntoView?.({
+				behavior: "smooth",
+				block: "nearest",
+				inline: "nearest",
+			});
+	}, [arrived]);
 	const lone = pane.tabs.length < 2;
 	const splitActive = (edge: Edge) => {
 		if (pane.active)
@@ -316,9 +347,10 @@ function PaneView<T>({
 	};
 	return (
 		<Tabs
+			ref={shown}
 			value={pane.active ?? undefined}
 			onValueChange={(id) => onChange(focusTab(layout, id))}
-			className={`flex h-full min-h-0 flex-col gap-0 ${entrance(pane)}`}
+			className={`flex h-full min-h-0 flex-col gap-0 ${arrival}`}
 		>
 			<div
 				data-focused={focused}

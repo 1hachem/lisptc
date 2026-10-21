@@ -183,6 +183,10 @@ function freshPane<T>(layout: SplitLayout<T>, tab: Tab<T>): Pane<T> {
 	return { kind: "pane", id: nextId(layout, "p"), tabs: [tab], active: tab.id };
 }
 
+function full(direction: Direction, count: number): boolean {
+	return direction === "column" && count >= MAX_SPLITS;
+}
+
 function axisOf(edge: Edge): Direction {
 	return edge === "left" || edge === "right" ? "row" : "column";
 }
@@ -205,7 +209,7 @@ function splitAt<T>(
 	};
 	const self = nodes(layout.root).find((n) => n.id === nodeId);
 	if (self?.kind === "split" && self.direction === direction) {
-		if (self.children.length >= MAX_SPLITS) return fallback();
+		if (full(direction, self.children.length)) return fallback();
 		const children = after
 			? [...self.children, pane]
 			: [pane, ...self.children];
@@ -220,7 +224,7 @@ function splitAt<T>(
 	}
 	const parent = parentOf(layout.root, nodeId);
 	if (parent !== undefined && parent.direction === direction) {
-		if (parent.children.length >= MAX_SPLITS) return fallback();
+		if (full(direction, parent.children.length)) return fallback();
 		const at = parent.children.findIndex((c) => c.id === nodeId);
 		const children = [...parent.children];
 		children.splice(after ? at + 1 : at, 0, pane);
