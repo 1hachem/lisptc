@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/core";
 import {
 	Cancel01Icon,
+	DragDropIcon,
 	LayoutTwoColumnIcon,
 	LayoutTwoRowIcon,
 	MoreHorizontalIcon,
@@ -45,6 +46,7 @@ import {
 import { createPortal } from "react-dom";
 import { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 import {
+	closePane,
 	closeTab,
 	type Drop,
 	dropTab,
@@ -109,6 +111,7 @@ export interface SplitViewProps<T> {
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
 	animated?: boolean;
+	placeholder?: ReactNode;
 	external?: {
 		type: string;
 		read: (data: DataTransfer) => Tab<T> | undefined;
@@ -121,6 +124,7 @@ export function SplitView<T>({
 	renderTab,
 	tabLabel,
 	animated = false,
+	placeholder,
 	external,
 }: SplitViewProps<T>) {
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
@@ -189,7 +193,16 @@ export function SplitView<T>({
 					data-animated={animated}
 					className="group/split relative h-full min-h-0"
 				>
-					{layout.root && <NodeView node={layout.root} view={view} />}
+					{layout.root ? (
+						<NodeView node={layout.root} view={view} />
+					) : (
+						<div className="flex h-full items-center justify-center">
+							{placeholder}
+						</div>
+					)}
+					{dragging && !layout.root && (
+						<Zone id="view" drop={{ pane: "" }} hit="inset-0" lands="inset-0" />
+					)}
 					{dragging &&
 						layout.root &&
 						EDGES.map((edge) => (
@@ -359,10 +372,18 @@ function PaneView<T>({
 						>
 							flip split
 						</DropdownMenuItem>
+						<DropdownMenuItem
+							disabled={pane.tabs.some((t) => t.fixed)}
+							onSelect={() => onChange(closePane(layout, pane.id))}
+						>
+							<HugeiconsIcon icon={Cancel01Icon} />
+							close pane
+						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>
 			<div className="relative min-h-0 flex-1">
+				{pane.tabs.length === 0 && <EmptyPane />}
 				{pane.tabs.map((tab) => (
 					<TabsContent
 						key={tab.id}
@@ -393,6 +414,15 @@ function PaneView<T>({
 				)}
 			</div>
 		</Tabs>
+	);
+}
+
+function EmptyPane() {
+	return (
+		<div className="absolute inset-2 flex flex-col items-center justify-center gap-2 rounded-md border border-border border-dashed text-dim">
+			<HugeiconsIcon className="size-icon" icon={DragDropIcon} />
+			drag anything in here
+		</div>
 	);
 }
 

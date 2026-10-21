@@ -19,6 +19,7 @@ export { Scramble, type ScrambleProps } from "./scramble.tsx";
 export { moved, SortableTree } from "./sortable-tree.tsx";
 export {
 	allTabs,
+	closePane,
 	closeTab,
 	type Direction,
 	type Drop,
@@ -38,6 +39,7 @@ export {
 	type SplitLayout,
 	type Tab,
 	unflatten,
+	vacantPane,
 } from "./split-layout.ts";
 export {
 	DropPreview,

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
 	allTabs,
+	closeTab,
 	emptyLayout,
 	openTab,
 	type SplitLayout,
@@ -148,6 +149,38 @@ describe("SplitView", () => {
 		expect(moving.querySelector('[data-animated="true"]')).not.toBeNull();
 	});
 
+	it("asks for a drop into a pane whose last tab was closed", async () => {
+		const host = await mounted(view(closeTab(two, "b"), []));
+		expect(host.textContent).toContain("body of a");
+		expect(host.textContent).toContain("drag anything in here");
+	});
+
+	it("shows its placeholder when nothing is open, and takes a drop over it", async () => {
+		const changes: SplitLayout<string>[] = [];
+		const host = await mounted(
+			<SplitView
+				layout={emptyLayout<string>()}
+				onChange={(next) => changes.push(next)}
+				renderTab={(content) => content}
+				tabLabel={(content) => content}
+				placeholder={<p>come on</p>}
+				external={{
+					type: PANEL,
+					read: (data) => ({ id: "b", content: data.getData(PANEL) }),
+				}}
+			/>,
+		);
+		expect(host.textContent).toContain("come on");
+		await act(async () => {
+			window.dispatchEvent(dragEvent("dragenter"));
+		});
+		const zone = host.querySelector('[data-drop="view"]') as HTMLElement;
+		await act(async () => {
+			zone.dispatchEvent(dragEvent("drop"));
+		});
+		expect(allTabs(changes[0]).map((t) => t.id)).toEqual(["b"]);
+	});
+
 	it("closes a tab through its close button", async () => {
 		const changes: SplitLayout<string>[] = [];
 		const host = await mounted(view(two, changes));
@@ -155,6 +188,8 @@ describe("SplitView", () => {
 			'[aria-label="close b"]',
 		) as HTMLButtonElement;
 		await act(async () => close.click());
-		expect(changes.at(-1)?.root?.kind).toBe("pane");
+		expect(
+			allTabs(changes.at(-1) as SplitLayout<string>).map((t) => t.id),
+		).toEqual(["a"]);
 	});
 });

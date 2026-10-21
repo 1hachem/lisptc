@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	allTabs,
+	closePane,
 	closeTab,
 	dropTab,
 	emptyLayout,
@@ -16,6 +17,7 @@ import {
 	type SplitLayout,
 	type Tab,
 	unflatten,
+	vacantPane,
 } from "./split-layout.ts";
 
 const tab = (id: string): Tab<string> => ({ id, content: id });
@@ -120,9 +122,31 @@ describe("splitting the whole view, not just one pane", () => {
 });
 
 describe("closing and joining", () => {
-	it("collapses a pane emptied by closing its last tab", () => {
+	it("keeps a pane emptied by closing its last tab, to drop into", () => {
 		const layout = closeTab(openTab(opened("a"), tab("b"), "right"), "b");
-		expect(shape(layout)).toEqual(["a"]);
+		expect(shape(layout)).toEqual({ row: [["a"], []] });
+		const vacant = vacantPane(layout) as string;
+		expect(shape(dropTab(layout, tab("c"), { pane: vacant }))).toEqual({
+			row: [["a"], ["c"]],
+		});
+	});
+
+	it("keeps an empty pane across a save and a load", () => {
+		const layout = closeTab(openTab(opened("a"), tab("b"), "right"), "b");
+		expect(unflatten(flatten(layout))).toEqual(layout);
+	});
+
+	it("closes an empty pane through its menu", () => {
+		const layout = closeTab(openTab(opened("a"), tab("b"), "right"), "b");
+		expect(shape(closePane(layout, vacantPane(layout) as string))).toEqual([
+			"a",
+		]);
+	});
+
+	it("collapses the pane a tab is dragged out of", () => {
+		const split = openTab(opened("a"), tab("b"), "right");
+		const moved = moveTab(split, "b", { pane: pane(split, "a") });
+		expect(shape(moved)).toEqual(["a", "b"]);
 	});
 
 	it("never closes a fixed tab", () => {
@@ -139,7 +163,11 @@ describe("closing and joining", () => {
 	});
 
 	it("ends empty when the last tab closes", () => {
-		const layout = closeTab(opened("a"), "a");
+		const layout = closeTab(
+			closeTab(openTab(opened("a"), tab("b"), "right"), "b"),
+			"a",
+		);
+		expect(layout.root).toBeNull();
 		expect(allTabs(layout)).toEqual([]);
 		expect(layout.focused).toBeNull();
 	});
