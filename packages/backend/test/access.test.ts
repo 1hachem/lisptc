@@ -119,6 +119,42 @@ describe("workspace icon", () => {
 	});
 });
 
+describe("workspace theme", () => {
+	it("lets the owner pick one per workspace, and no one else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await alice.as.mutation(api.workspaces.setTheme, {
+			workspaceId: alice.workspace,
+			theme: "borland",
+		});
+		expect(
+			(
+				await alice.as.query(api.workspaces.get, {
+					workspaceId: alice.workspace,
+				})
+			).theme,
+		).toBe("borland");
+		await expect(
+			bob.as.mutation(api.workspaces.setTheme, {
+				workspaceId: alice.workspace,
+				theme: "gruvbox-light",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses a theme the app does not offer", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setTheme, {
+				workspaceId: alice.workspace,
+				theme: "neon",
+			}),
+		).rejects.toThrow("UNKNOWN_THEME");
+	});
+});
+
 describe("workspace model", () => {
 	const model = {
 		provider: "openrouter",
@@ -750,7 +786,7 @@ describe("preferences access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		const preferences = { theme: "dusk", font: "mono", themeUses: { dusk: 2 } };
+		const preferences = { font: "mono", themeUses: { dusk: 2 } };
 		await bob.as.mutation(api.preferences.put, { preferences });
 		expect(await bob.as.query(api.preferences.get, {})).toEqual({
 			...DEFAULTS,
@@ -764,7 +800,7 @@ describe("preferences access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { theme: "dusk", channels: { lisp: true } },
+			preferences: { motion: "lift", channels: { lisp: true } },
 		});
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { font: "mono", channels: { lisp: false } },
@@ -773,7 +809,7 @@ describe("preferences access", () => {
 			preferences: { metadata: { tokens: true } },
 		});
 		expect(await alice.as.query(api.preferences.get, {})).toEqual({
-			theme: "dusk",
+			motion: "lift",
 			font: "mono",
 			channels: { ...DEFAULT_TOGGLES.channels, lisp: false },
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
@@ -811,11 +847,20 @@ describe("preferences access", () => {
 		await expect(
 			alice.as.mutation(api.preferences.put, {
 				preferences: {
-					theme: "x".repeat(MAX_PREFERENCES_BYTES),
+					font: "x".repeat(MAX_PREFERENCES_BYTES),
 					themeUses: {},
 				},
 			}),
 		).rejects.toThrow("PREFERENCES_TOO_LARGE");
+	});
+
+	it("leaves out a theme stored before it became the workspace's", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await t.run((ctx) =>
+			ctx.db.insert("preferences", { userId: alice.user, theme: "borland" }),
+		);
+		expect(await alice.as.query(api.preferences.get, {})).toEqual(DEFAULTS);
 	});
 });
 

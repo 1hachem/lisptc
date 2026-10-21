@@ -407,7 +407,7 @@ describe("deleting an account", () => {
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
 		});
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { theme: "dusk", themeUses: {} },
+			preferences: { font: "mono", themeUses: {} },
 		});
 		await alice.as.mutation(api.secrets.put, {
 			workspaceId: alice.workspace,
@@ -465,7 +465,7 @@ describe("removing a user", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { theme: "dusk", themeUses: {} },
+			preferences: { font: "mono", themeUses: {} },
 		});
 
 		await t.mutation(internal.users.purge, { userId: alice.user });

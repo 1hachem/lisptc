@@ -50,8 +50,8 @@ export function useCachedWorkspace(
 ): Workspace | null {
 	const workspaces = useSyncExternalStore(
 		(onChange) => queryClient.getQueryCache().subscribe(onChange),
-		() => queryClient.getQueryData(workspacesQuery.queryKey),
-		() => queryClient.getQueryData(workspacesQuery.queryKey),
+		() => queryClient.getQueryData<Workspace[]>(workspacesQuery.queryKey),
+		() => queryClient.getQueryData<Workspace[]>(workspacesQuery.queryKey),
 	);
 	return picked(workspaces ?? [], inRoute);
 }

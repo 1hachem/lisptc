@@ -37,6 +37,7 @@ import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { ConvexImageStore } from "./image-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -45,7 +46,6 @@ import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 import type { ServerClient } from "./server-client.ts";
-import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
 export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
