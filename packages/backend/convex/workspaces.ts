@@ -10,7 +10,7 @@ import {
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
 import { dropRepl } from "./repls.js";
-import { modelChoice, storedModel } from "./schema.js";
+import { modelChoice, storedModel, workspaceIcon } from "./schema.js";
 
 export const MAX_WORKSPACES = 25;
 
@@ -23,6 +23,7 @@ const workspace = v.object({
 	name: v.string(),
 	slug: v.string(),
 	model: v.optional(storedModel),
+	icon: v.optional(workspaceIcon),
 });
 
 export async function dropWorkspace(
@@ -104,6 +105,16 @@ export const setModel = mutation({
 	handler: async (ctx, { workspaceId, model }) => {
 		await requireWorkspace(ctx, workspaceId);
 		await ctx.db.patch(workspaceId, { model });
+		return null;
+	},
+});
+
+export const setIcon = mutation({
+	args: { workspaceId: v.id("workspaces"), icon: workspaceIcon },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, icon }) => {
+		await requireWorkspace(ctx, workspaceId);
+		await ctx.db.patch(workspaceId, { icon });
 		return null;
 	},
 });

@@ -2,6 +2,7 @@ import { CATALOGUED_CHOICES, type ProviderName } from "@repo/shared/providers";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { RETIRED_MODELS } from "./lib/models.js";
+import { WORKSPACE_ICONS } from "./lib/workspaceIcons.js";
 
 export const messageType = v.union(
 	v.literal("human"),
@@ -27,6 +28,10 @@ function pair<P extends ProviderName, M extends string>(choice: {
 }
 
 export const modelChoice = v.union(...CATALOGUED_CHOICES.map(pair));
+
+export const workspaceIcon = v.union(
+	...WORKSPACE_ICONS.map((icon) => v.literal(icon)),
+);
 
 export const storedModel = v.union(
 	...[...CATALOGUED_CHOICES, ...RETIRED_MODELS].map(pair),
@@ -134,6 +139,7 @@ export default defineSchema({
 		name: v.string(),
 		slug: v.string(),
 		model: v.optional(storedModel),
+		icon: v.optional(workspaceIcon),
 	})
 		.index("by_owner", ["ownerId"])
 		.index("by_owner_slug", ["ownerId", "slug"]),

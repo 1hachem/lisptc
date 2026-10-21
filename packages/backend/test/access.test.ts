@@ -83,6 +83,42 @@ describe("workspace access", () => {
 	});
 });
 
+describe("workspace icon", () => {
+	it("lets the owner pick one, and no one else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await alice.as.mutation(api.workspaces.setIcon, {
+			workspaceId: alice.workspace,
+			icon: "rocket",
+		});
+		expect(
+			(
+				await alice.as.query(api.workspaces.get, {
+					workspaceId: alice.workspace,
+				})
+			).icon,
+		).toBe("rocket");
+		await expect(
+			bob.as.mutation(api.workspaces.setIcon, {
+				workspaceId: alice.workspace,
+				icon: "leaf",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses an icon the app cannot draw", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setIcon, {
+				workspaceId: alice.workspace,
+				icon: "unicorn" as "rocket",
+			}),
+		).rejects.toThrow();
+	});
+});
+
 describe("workspace model", () => {
 	const model = {
 		provider: "openrouter",
