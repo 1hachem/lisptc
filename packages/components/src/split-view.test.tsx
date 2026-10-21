@@ -111,6 +111,21 @@ describe("SplitView", () => {
 		expect(host.querySelector("[data-drop]")).toBeNull();
 	});
 
+	it("animates panes only when asked to", async () => {
+		const still = await mounted(view(two, []));
+		expect(still.querySelector('[data-animated="true"]')).toBeNull();
+		const moving = await mounted(
+			<SplitView
+				layout={two}
+				onChange={() => {}}
+				renderTab={(content) => content}
+				tabLabel={(content) => content}
+				animated
+			/>,
+		);
+		expect(moving.querySelector('[data-animated="true"]')).not.toBeNull();
+	});
+
 	it("closes a tab through its close button", async () => {
 		const changes: SplitLayout<string>[] = [];
 		const host = await mounted(view(two, changes));

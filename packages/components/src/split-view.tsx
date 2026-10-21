@@ -60,6 +60,10 @@ import {
 } from "./split-layout.ts";
 
 const DRAG_AFTER_PX = 4;
+const APPEARS =
+	"group-data-[animated=true]/split:animate-appear motion-reduce:animate-none";
+const FADES =
+	"group-data-[animated=true]/split:animate-fade motion-reduce:animate-none";
 const CURSOR_GAP = 8;
 const UNZOOMED = "calc(1 / var(--app-zoom, 1))";
 const REZOOMED = "var(--app-zoom, 1)";
@@ -99,6 +103,7 @@ export interface SplitViewProps<T> {
 	onChange: (layout: SplitLayout<T>) => void;
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
+	animated?: boolean;
 	external?: {
 		type: string;
 		read: (data: DataTransfer) => Tab<T> | undefined;
@@ -110,6 +115,7 @@ export function SplitView<T>({
 	onChange,
 	renderTab,
 	tabLabel,
+	animated = false,
 	external,
 }: SplitViewProps<T>) {
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
@@ -163,7 +169,10 @@ export function SplitView<T>({
 				onDragEnd={onDragEnd}
 				onDragCancel={() => setDragged(null)}
 			>
-				<div className="relative h-full min-h-0">
+				<div
+					data-animated={animated}
+					className="group/split relative h-full min-h-0"
+				>
 					{layout.root && <NodeView node={layout.root} view={view} />}
 					{dragging &&
 						layout.root &&
@@ -271,7 +280,7 @@ function PaneView<T>({
 		<Tabs
 			value={pane.active ?? undefined}
 			onValueChange={(id) => onChange(focusTab(layout, id))}
-			className="flex h-full min-h-0 flex-col gap-0"
+			className={`flex h-full min-h-0 flex-col gap-0 ${APPEARS}`}
 		>
 			<div
 				data-focused={focused}
@@ -333,7 +342,7 @@ function PaneView<T>({
 					<TabsContent
 						key={tab.id}
 						value={tab.id}
-						className={`absolute inset-0 overflow-auto ${dragging ? "pointer-events-none" : ""}`}
+						className={`absolute inset-0 overflow-auto ${FADES} ${dragging ? "pointer-events-none" : ""}`}
 					>
 						{renderTab(tab.content, tab.id)}
 					</TabsContent>
@@ -466,7 +475,7 @@ function Zone({
 export function DropPreview({ className }: { className: string }) {
 	return (
 		<div
-			className={`pointer-events-none absolute z-10 rounded-sm border-2 border-accent bg-accent/15 ${className}`}
+			className={`pointer-events-none absolute z-10 rounded-sm border-2 border-accent bg-accent/15 ${FADES} ${className}`}
 		/>
 	);
 }

@@ -7,6 +7,7 @@ import {
 	tabLabel,
 } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
+import { usePanelMotion } from "../lib/preferences.ts";
 import { MiniChat } from "./mini-chat.tsx";
 import { PanelTab } from "./panel-tab.tsx";
 import { StatusBar } from "./status-bar.tsx";
@@ -15,6 +16,7 @@ const EXTERNAL = { type: PANEL_DRAG, read: readPanelDrag };
 
 export function PanelSplit({ children }: { children: ReactNode }) {
 	const { layout, change, dockChat } = usePanels();
+	const { panelMotion } = usePanelMotion();
 	const docked = chatDocked(layout);
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -33,6 +35,7 @@ export function PanelSplit({ children }: { children: ReactNode }) {
 					}
 					tabLabel={tabLabel}
 					external={EXTERNAL}
+					animated={panelMotion}
 				/>
 			</div>
 			<StatusBar>

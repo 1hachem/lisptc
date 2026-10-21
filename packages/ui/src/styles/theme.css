@@ -46,6 +46,8 @@
 	--animate-blk: blk 1.06s steps(1, end) infinite;
 	--animate-orbit: orbit 2.4s linear infinite;
 	--animate-dot: dot 1.5s ease-in-out infinite both;
+	--animate-appear: appear 200ms ease-out both;
+	--animate-fade: fade 150ms ease-out both;
 }
 
 @theme inline {
@@ -193,6 +195,19 @@
 
 [data-font] {
 	font-family: var(--font-face), ui-monospace, monospace;
+}
+
+@keyframes appear {
+	from {
+		opacity: 0;
+		transform: scale(0.97);
+	}
+}
+
+@keyframes fade {
+	from {
+		opacity: 0;
+	}
 }
 
 @keyframes blk {
