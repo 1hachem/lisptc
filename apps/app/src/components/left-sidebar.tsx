@@ -22,7 +22,11 @@ import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { WorkspaceMenu, WorkspaceRailMenu } from "./workspace-menu.tsx";
-import { ENTRY_ICONS, WorkspaceTree } from "./workspace-tree.tsx";
+import {
+	ENTRY_ICONS,
+	openFolderOnMount,
+	WorkspaceTree,
+} from "./workspace-tree.tsx";
 
 const PAGES: Partial<
 	Record<SidebarEntry, "readme" | "settings" | "preferences">
@@ -50,6 +54,7 @@ function useRailPick() {
 				to: `/$workspaceId/${page}`,
 				params: { workspaceId: workspace._id },
 			});
+		openFolderOnMount(entry);
 		setOpen(true);
 	};
 }

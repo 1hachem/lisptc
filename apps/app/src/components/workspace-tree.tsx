@@ -159,6 +159,10 @@ function folderCookie(folder: Folder) {
 	return `ui.folder.${folder}`;
 }
 
+export function openFolderOnMount(entry: SidebarEntry) {
+	if (isFolder(entry)) writeBoolPref(folderCookie(entry), true);
+}
+
 function useFolders() {
 	const [opened, setOpened] = useState(
 		() =>
