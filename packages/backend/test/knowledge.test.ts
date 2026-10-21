@@ -60,7 +60,7 @@ describe("knowledge", () => {
 		expect(await blobs(t)).toHaveLength(2);
 	});
 
-	it("replaces a file of the same name and drops the old blob", async () => {
+	it("replaces a file of the same name and bins the old one", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
@@ -74,7 +74,12 @@ describe("knowledge", () => {
 		expect(await alice.as.query(api.knowledge.list, { workspaceId })).toEqual([
 			{ name: "notes.txt", contentType: "text/plain", size: 5 },
 		]);
-		expect(await blobs(t)).toHaveLength(1);
+		expect(
+			(await alice.as.query(api.bin.list, { workspaceId })).map(
+				({ name, from, size }) => [name, from, size],
+			),
+		).toEqual([["notes.txt", "knowledge", 3]]);
+		expect(await blobs(t)).toHaveLength(2);
 	});
 
 	it("refuses another user's workspace", async () => {

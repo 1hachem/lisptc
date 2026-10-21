@@ -370,7 +370,7 @@ function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 		KNOWLEDGE_WRITE,
 		2,
 		'(knowledge/write "name" value)',
-		"Write a knowledge file, replacing what it held. The user approves it first. A .ptc file takes any data and stores it printed; a .json file takes data and stores it as JSON, or takes a string of JSON text; any other file takes a string. Returns the name.",
+		"Write a knowledge file, moving what it held to the bin. The user approves it first. A .ptc file takes any data and stores it printed; a .json file takes data and stores it as JSON, or takes a string of JSON text; any other file takes a string. Returns the name.",
 		z.tuple([zString, zAny]),
 		function* ([name, value]): Eval {
 			const checked = fileName(name);

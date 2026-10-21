@@ -117,8 +117,8 @@ export const add = mutation({
 		};
 		const existing = await held(ctx, workspaceId, name);
 		if (existing !== null) {
-			await ctx.storage.delete(existing.storageId);
-			await ctx.db.patch(existing._id, stored);
+			await intoBin(ctx, existing, "knowledge");
+			await ctx.db.insert("knowledge", { workspaceId, name, ...stored });
 			return null;
 		}
 		const owned = await ctx.db

@@ -73,6 +73,7 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
 	}
 
 	write(name: string, text: string, contentType: string): void {
+		if (this.filesHeld.has(name)) this.toBin("knowledge", name);
 		this.filesHeld.set(name, {
 			bytes: new TextEncoder().encode(text),
 			contentType,
