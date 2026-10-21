@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import type { SignJWT } from "jose";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { serve } from "../helpers.ts";
 
@@ -7,7 +8,10 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 let server: Server;
 let jwks: string;
-let sign: (claims: Record<string, unknown>) => Promise<string>;
+let sign: (
+	claims: Record<string, unknown>,
+	alter?: (jwt: SignJWT) => SignJWT,
+) => Promise<string>;
 let fetchApp: (request: Request) => Response | Promise<Response>;
 let verifyToken: typeof import("../../server/token.ts").verifyToken;
 
@@ -19,14 +23,15 @@ beforeAll(async () => {
 	jwks = JSON.stringify({
 		keys: [{ ...(await exportJWK(publicKey)), alg: "RS256", kid: "test" }],
 	});
-	sign = (claims) =>
-		new SignJWT(claims)
-			.setProtectedHeader({ alg: "RS256", kid: "test" })
-			.setIssuer(ORIGIN)
-			.setAudience("convex")
-			.setIssuedAt()
-			.setExpirationTime("5m")
-			.sign(privateKey);
+	sign = (claims, alter = (jwt) => jwt) =>
+		alter(
+			new SignJWT(claims)
+				.setProtectedHeader({ alg: "RS256", kid: "test" })
+				.setIssuer(ORIGIN)
+				.setAudience("convex")
+				.setIssuedAt()
+				.setExpirationTime("5m"),
+		).sign(privateKey);
 
 	server = createServer((req, res) => {
 		if (req.url === "/api/auth/convex/jwks") {
@@ -155,10 +160,33 @@ describe("a token left over from another deployment", () => {
 		});
 	});
 
+	test("reads as forged when it was minted for another issuer", async () => {
+		const token = await sign({ sub: "user-1" }, (jwt) =>
+			jwt.setIssuer("http://elsewhere.test"),
+		);
+		expect(await verifyToken(token)).toEqual({ signed: false, forged: true });
+	});
+
 	test("reads as signed when this deployment signed it", async () => {
 		expect(await verifyToken(await sign({ sub: "user-1" }))).toEqual({
 			signed: true,
 			subject: "user-1",
 		});
+	});
+});
+
+describe("a token this deployment signed that no longer verifies", () => {
+	test("is not forged once it has expired", async () => {
+		const token = await sign({ sub: "user-1" }, (jwt) =>
+			jwt.setExpirationTime(Math.floor(Date.now() / 1000) - 30),
+		);
+		expect(await verifyToken(token)).toEqual({ signed: false, forged: false });
+	});
+
+	test("is not forged while it is not yet valid", async () => {
+		const token = await sign({ sub: "user-1" }, (jwt) =>
+			jwt.setNotBefore(Math.floor(Date.now() / 1000) + 60),
+		);
+		expect(await verifyToken(token)).toEqual({ signed: false, forged: false });
 	});
 });

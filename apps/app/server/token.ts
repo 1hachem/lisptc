@@ -14,9 +14,15 @@ const FORGED: readonly (abstract new (...args: never[]) => Error)[] = [
 	errors.JWSSignatureVerificationFailed,
 	errors.JWSInvalid,
 	errors.JWTInvalid,
-	errors.JWTClaimValidationFailed,
-	errors.JWTExpired,
 ];
+
+const FOREIGN_CLAIMS: readonly string[] = ["iss", "aud"];
+
+function isForged(error: unknown): boolean {
+	if (error instanceof errors.JWTClaimValidationFailed)
+		return FOREIGN_CLAIMS.includes(error.claim);
+	return FORGED.some((kind) => error instanceof kind);
+}
 
 export async function verifyToken(token: string): Promise<Verdict> {
 	try {
@@ -31,7 +37,7 @@ export async function verifyToken(token: string): Promise<Verdict> {
 	} catch (error) {
 		return {
 			signed: false,
-			forged: FORGED.some((kind) => error instanceof kind),
+			forged: isForged(error),
 		};
 	}
 }
