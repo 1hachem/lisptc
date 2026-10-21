@@ -30,6 +30,7 @@ const SET_KEYS = [
 	"sidebar",
 	"hidden",
 	"motion",
+	"panel-motion",
 ];
 
 const MAX_SEND_LABEL = 16;
@@ -96,6 +97,13 @@ const SET_ARGS = [
 		description:
 			"how the sidebar animates a drag, a motion id from (motions); the system's reduced-motion setting still wins",
 	},
+	{
+		name: "panel-motion",
+		type: "boolean",
+		required: false,
+		description:
+			"t to animate panels as they open, split and switch tabs, nil to keep them still; the system's reduced-motion setting still wins",
+	},
 ];
 
 function plist(entries: [string, unknown][]): List {
@@ -121,6 +129,7 @@ export function preferencesList(preferences: Preferences): List {
 		["sidebar", arrayToList([...(preferences.sidebar ?? [])])],
 		["hidden", arrayToList([...(preferences.hidden ?? [])])],
 		["motion", preferences.motion ?? null],
+		["panel-motion", preferences.panelMotion === false ? null : true],
 	]);
 }
 
@@ -228,7 +237,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id). They belong to the user, not the workspace, and the app applies them live.',
+		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id :panel-motion t). They belong to the user, not the workspace, and the app applies them live.',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -238,14 +247,14 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id])',
+		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id] [:panel-motion t])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :theme :font :channels :metadata :input :send-label :sidebar :hidden :motion",
+					"nothing to set, give one of :theme :font :channels :metadata :input :send-label :sidebar :hidden :motion :panel-motion",
 					null,
 				);
 			const current = yield* settled(store.read());
@@ -283,6 +292,8 @@ export function registerPreferences(
 				);
 			if (options.has("motion"))
 				change.motion = chosen("motion", options.get("motion"), host.motions);
+			if (options.has("panel-motion"))
+				change.panelMotion = options.get("panel-motion") !== null;
 			yield* settled(store.write(change));
 			return preferencesList({ ...current, ...change });
 		},

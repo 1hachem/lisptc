@@ -12,13 +12,14 @@ const HELD = {
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
 	motion: "slide",
+	panelMotion: true,
 };
 
 describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:theme "gruvbox-dark" :font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :motion "slide")',
+			'(:theme "gruvbox-dark" :font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :motion "slide" :panel-motion t)',
 		);
 	});
 
@@ -181,6 +182,15 @@ describe("changing preferences", () => {
 		await expect(ev('(preferences/set :motion "spin")')).rejects.toThrow(
 			/unknown motion, see \(motions\)/,
 		);
+	});
+
+	it("turns panel animation off and back on", async () => {
+		const { ev, store } = await world(HELD);
+		await ev("(preferences/set :panel-motion nil)");
+		expect(store.read().panelMotion).toBe(false);
+		expect(await ev("(preferences)")).toContain(":panel-motion nil");
+		await ev("(preferences/set :panel-motion t)");
+		expect(store.read().panelMotion).toBe(true);
 	});
 
 	it("refuses a call that sets nothing", async () => {

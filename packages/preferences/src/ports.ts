@@ -12,6 +12,7 @@ export interface Preferences {
 	sidebar?: string[];
 	hidden?: string[];
 	motion?: string;
+	panelMotion?: boolean;
 }
 
 export interface PreferencesStore {
