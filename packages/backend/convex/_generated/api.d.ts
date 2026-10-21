@@ -23,6 +23,7 @@ import type * as lib_env from "../lib/env.js";
 import type * as lib_models from "../lib/models.js";
 import type * as lib_names from "../lib/names.js";
 import type * as lib_preferenceDefaults from "../lib/preferenceDefaults.js";
+import type * as lib_served from "../lib/served.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_waiting from "../lib/waiting.js";
 import type * as limits from "../limits.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   "lib/models": typeof lib_models;
   "lib/names": typeof lib_names;
   "lib/preferenceDefaults": typeof lib_preferenceDefaults;
+  "lib/served": typeof lib_served;
   "lib/slug": typeof lib_slug;
   "lib/waiting": typeof lib_waiting;
   limits: typeof limits;
