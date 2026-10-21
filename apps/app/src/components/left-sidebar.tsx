@@ -178,13 +178,24 @@ function UserRow({
 
 export function LeftSidebar({ onSignOut }: { onSignOut: () => void }) {
 	const { workspace } = useWorkspace();
-	const { state } = useSidebar();
+	const { state, setOpen } = useSidebar();
 	const expanded = state === "expanded";
+	const [creating, setCreating] = useState(false);
+	if (!expanded && creating) setCreating(false);
 
 	return (
 		<Sidebar side="left" collapsible="icon" className="border-sidebar">
 			<SidebarHeader className={expanded ? "pt-3.5" : "items-center pt-3.5"}>
-				{expanded ? <WorkspaceMenu /> : <WorkspaceRailMenu />}
+				{expanded ? (
+					<WorkspaceMenu startCreating={creating} />
+				) : (
+					<WorkspaceRailMenu
+						onCreate={() => {
+							setCreating(true);
+							setOpen(true);
+						}}
+					/>
+				)}
 			</SidebarHeader>
 			<SidebarContent>
 				{expanded ? (

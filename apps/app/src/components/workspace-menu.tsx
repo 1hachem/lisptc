@@ -95,7 +95,7 @@ function IconPicker() {
 	);
 }
 
-export function WorkspaceRailMenu() {
+export function WorkspaceRailMenu({ onCreate }: { onCreate: () => void }) {
 	const { workspace } = useWorkspace();
 	return (
 		<DropdownMenu>
@@ -114,7 +114,10 @@ export function WorkspaceRailMenu() {
 			<DropdownMenuContent side="right" align="start" className={menu}>
 				<WorkspaceItems />
 				<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
-				<IconPicker />
+				<DropdownMenuItem onSelect={onCreate} className={item}>
+					<HugeiconsIcon className="size-icon-sm flex-none" icon={Add01Icon} />
+					new workspace
+				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
@@ -122,7 +125,11 @@ export function WorkspaceRailMenu() {
 
 type Editing = "create" | "rename";
 
-export function WorkspaceMenu() {
+export function WorkspaceMenu({
+	startCreating = false,
+}: {
+	startCreating?: boolean;
+}) {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { workspace } = useWorkspace();
@@ -130,7 +137,9 @@ export function WorkspaceMenu() {
 	const renameWorkspace = useConvexMutation(api.workspaces.rename);
 	const removeWorkspace = useConvexMutation(api.workspaces.remove);
 	const { failure, attempt } = useAttempt("workspace action");
-	const [editing, setEditing] = useState<Editing | null>(null);
+	const [editing, setEditing] = useState<Editing | null>(
+		startCreating ? "create" : null,
+	);
 	const [name, setName] = useState("");
 
 	const open = (workspaceId: Id<"workspaces">) =>
