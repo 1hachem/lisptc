@@ -16,6 +16,8 @@ const preferences = v.object({
 	sendLabel: v.optional(v.string()),
 	sidebar: v.optional(v.array(v.string())),
 	hidden: v.optional(v.array(v.string())),
+	statusBar: v.optional(v.array(v.string())),
+	statusBarHidden: v.optional(v.array(v.string())),
 	motion: v.optional(v.string()),
 	panelMotion: v.optional(v.boolean()),
 });

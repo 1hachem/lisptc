@@ -20,6 +20,8 @@ export class ConvexPreferencesStore implements PreferencesStore {
 			sendLabel,
 			sidebar,
 			hidden,
+			statusBar,
+			statusBarHidden,
 			motion,
 			panelMotion,
 		} = stored;
@@ -31,6 +33,8 @@ export class ConvexPreferencesStore implements PreferencesStore {
 			sendLabel,
 			sidebar,
 			hidden,
+			statusBar,
+			statusBarHidden,
 			motion,
 			panelMotion,
 		};
