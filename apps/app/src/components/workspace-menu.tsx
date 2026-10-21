@@ -3,7 +3,7 @@ import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { WORKSPACE_ICONS } from "@repo/backend/workspace-icons";
+import { WORKSPACE_ICONS, workspaceIcon } from "@repo/backend/workspace-icons";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -16,7 +16,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
-import { ICONS, workspaceIcon } from "../lib/workspace-icons.ts";
+import { ICONS } from "../lib/workspace-icons.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
 
 const item =

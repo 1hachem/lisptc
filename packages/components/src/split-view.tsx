@@ -30,7 +30,6 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-	type ResizableGroupHandle,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
@@ -40,8 +39,10 @@ import {
 	TabsTrigger,
 } from "@repo/ui";
 import {
+	type ComponentProps,
 	createContext,
 	type ReactNode,
+	type Ref,
 	type RefObject,
 	useContext,
 	useEffect,
@@ -84,6 +85,13 @@ const REZOOMED = "var(--app-zoom, 1)";
 const MEASURE_WHILE_DRAGGING = {
 	droppable: { strategy: MeasuringStrategy.Always },
 };
+type GroupHandle =
+	NonNullable<
+		ComponentProps<typeof ResizablePanelGroup>["groupRef"]
+	> extends Ref<infer Handle>
+		? Handle
+		: never;
+
 const MIN_SPLIT = "12%";
 const VISIBLE_COLUMNS = 2;
 const PAGE_AFTER = 0.2;
@@ -713,7 +721,7 @@ function GroupView<T>({
 	view: View<T>;
 	root: boolean;
 }) {
-	const group = useRef<ResizableGroupHandle | null>(null);
+	const group = useRef<GroupHandle | null>(null);
 	const count = split.children.length;
 	const wide = widened(split, root, view.maximized);
 	const screens =

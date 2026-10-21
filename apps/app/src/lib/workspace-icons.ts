@@ -15,8 +15,6 @@ import {
 import type { IconSvgElement } from "@hugeicons/react";
 import type { WorkspaceIcon } from "@repo/backend/workspace-icons";
 
-export { workspaceIcon } from "@repo/backend/workspace-icons";
-
 export const ICONS: Record<WorkspaceIcon, IconSvgElement> = {
 	folder: Folder01Icon,
 	rocket: Rocket01Icon,
