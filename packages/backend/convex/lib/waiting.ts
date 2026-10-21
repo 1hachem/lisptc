@@ -1,22 +1,12 @@
+import { readAnnotation } from "@repo/interpreter/annotations";
+import { asksKey, unansweredAsks } from "@repo/interpreter/asks";
 import type { Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 
 const TURN_SCAN = 64;
 
-function record(value: unknown): Record<string, unknown> | undefined {
-	return value && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: undefined;
-}
-
 function unanswered(kwargs: Record<string, unknown> | undefined): boolean {
-	const asks = record(kwargs?.asks);
-	const answered = record(asks?.answered) ?? {};
-	const open = Array.isArray(asks?.open) ? asks.open : [];
-	return open.some((ask) => {
-		const id = record(ask)?.id;
-		return typeof id === "string" && !(id in answered);
-	});
+	return unansweredAsks(readAnnotation(kwargs, asksKey)).length > 0;
 }
 
 export async function waitsOnUser(

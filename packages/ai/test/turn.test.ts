@@ -2,6 +2,7 @@ import { topic } from "@repo/interpreter/channels";
 import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
+import type { ModelDelta } from "@repo/interpreter/session";
 import {
 	annotating,
 	type InterpExtension,
@@ -10,19 +11,19 @@ import {
 } from "@repo/interpreter/session";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
+import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
 import { extension, noting, riding, testRepl } from "./helpers.ts";
 
 interface Seen {
-	messages: AgentMessage[];
+	messages: ChatMessage[];
 	system?: string;
 }
 
 const seen: Seen[] = [];
-let script: AgentDelta[][] = [];
+let script: ModelDelta[][] = [];
 let throws: string | undefined;
 let calls = 0;
 let onCall: (() => void) | undefined;
@@ -51,7 +52,7 @@ vi.mock("../src/telemetry.ts", () => ({
 
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (
-		messages: AgentMessage[],
+		messages: ChatMessage[],
 		config?: { system?: string },
 	) {
 		seen.push({ messages, system: config?.system });
@@ -536,7 +537,7 @@ describe("the agent turn", () => {
 		});
 	});
 
-	test.each<[string, AgentDelta[][], TurnOutcome]>([
+	test.each<[string, ModelDelta[][], TurnOutcome]>([
 		["halt", [[{ text: "three." }]], "halt"],
 		["capped", [[{ text: "(+ 1 2)" }]], "capped"],
 		["silent", [[{ text: "" }]], "silent"],

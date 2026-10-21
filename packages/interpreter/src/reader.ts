@@ -1,5 +1,8 @@
-import { isKeywordToken, tokenPattern } from "@repo/shared/lisp-tokens";
-import { tryToParse } from "./arith.ts";
+import {
+	isKeywordToken,
+	numberIn,
+	tokenPattern,
+} from "@repo/shared/lisp-tokens";
 import { EvalException } from "./errors.ts";
 import {
 	backQuoteSym,
@@ -171,7 +174,7 @@ function unquoted(t: string): string {
 }
 
 function atomFor(t: string): unknown {
-	const n = tryToParse(t);
+	const n = numberIn(t);
 	if (n !== null) return n;
 	if (t === "nil") return null;
 	if (t === "t") return true;

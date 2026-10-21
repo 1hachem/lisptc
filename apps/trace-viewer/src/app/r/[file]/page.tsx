@@ -1,3 +1,4 @@
+import type { CaseInfo, ReportRow } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,7 +14,6 @@ import {
 	Title,
 } from "@/components/ui.tsx";
 import { duration, when } from "@/lib/format.ts";
-import type { CaseInfo, ReportRow } from "@/lib/reports.ts";
 import { readReport, scoreOf, targetOf } from "@/lib/reports.ts";
 import type { ReviewTarget } from "@/lib/reviews.ts";
 import { reviewTarget } from "@/lib/reviews.ts";

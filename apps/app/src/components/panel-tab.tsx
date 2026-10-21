@@ -1,4 +1,5 @@
 import type { Id } from "@repo/backend/dataModel";
+import { viewKey } from "@repo/interpreter/annotations";
 import { type ReactNode, useMemo } from "react";
 import { AgentProvider } from "../lib/agent.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
@@ -7,7 +8,6 @@ import { ClaimLead } from "../lib/lead-chat.tsx";
 import { PageHostProvider } from "../lib/page-host.tsx";
 import { leadChat, type PanelContent } from "../lib/panel-ops.ts";
 import { PanelLiveOps, usePanels } from "../lib/panels.tsx";
-import { toUiNode } from "../lib/ui-node.ts";
 import { AccountPage } from "./account-page.tsx";
 import { AnimatedFavicon } from "./animated-favicon.tsx";
 import { BinPage } from "./bin-page.tsx";
@@ -117,7 +117,7 @@ function ViewTab({
 	node: unknown;
 	chatId: string | undefined;
 }) {
-	const drawn = toUiNode(node);
+	const drawn = viewKey.schema.safeParse(node).data;
 	if (drawn === undefined)
 		return <div className="p-3 text-dim">this view cannot be drawn</div>;
 	if (chatId === undefined)

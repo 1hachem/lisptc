@@ -2,6 +2,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import type { Ask } from "@repo/interpreter/asks";
 import {
 	QueryClient,
 	QueryClientProvider,
@@ -21,7 +22,6 @@ import {
 } from "vitest";
 import { AskCard } from "../src/components/ask-card.tsx";
 import {
-	type Ask,
 	type AskOutcome,
 	type AskTransport,
 	answersOf,

@@ -1,9 +1,12 @@
+import { asksKey } from "@repo/interpreter/asks";
 import { MAX_MESSAGE_BYTES } from "../limits.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 const CONTENT_SHARE = Math.floor(MAX_MESSAGE_BYTES / 2);
+
+const KEPT_FIRST: ReadonlySet<string> = new Set([asksKey.name]);
 
 function bytes(value: unknown): number {
 	const json = JSON.stringify(value);
@@ -31,7 +34,10 @@ export function clamp(
 	const head = truncate(content, CONTENT_SHARE);
 	let budget = MAX_MESSAGE_BYTES - bytes(head);
 	const kept: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(kwargs ?? {})) {
+	const entries = Object.entries(kwargs ?? {}).sort(
+		([a], [b]) => Number(KEPT_FIRST.has(b)) - Number(KEPT_FIRST.has(a)),
+	);
+	for (const [key, value] of entries) {
 		const cost = bytes(key) + bytes(value);
 		if (cost > budget) continue;
 		kept[key] = value;

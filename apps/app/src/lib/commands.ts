@@ -1,11 +1,11 @@
-import { themes } from "@repo/ui";
+import { type ThemeScheme, themes } from "@repo/ui";
 import { useCallback } from "react";
 import { useAppearance } from "./appearance.tsx";
 import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
 import { useForkPicker } from "./fork-picker.tsx";
 import { useModelPicker } from "./model-picker.tsx";
-import { darkVariant } from "./theme-uses.ts";
+import { schemeVariant } from "./theme-uses.ts";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
 
@@ -28,6 +28,7 @@ export const commands: Command[] = [
 	{ name: "/dark", desc: "switch to the dark variant of the theme" },
 	{ name: "/debug", desc: "show what each step sent back to the model" },
 	{ name: "/font", desc: "choose the font" },
+	{ name: "/light", desc: "switch to the light variant of the theme" },
 	{ name: "/model", desc: "choose the model this workspace runs on" },
 	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
 	{
@@ -96,6 +97,12 @@ export function useCommandRunner() {
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
+			const switchScheme = (scheme: ThemeScheme): string | null => {
+				const variant = schemeVariant(themes, theme, scheme);
+				if (typeof variant === "string") return variant;
+				chooseTheme(variant.id);
+				return null;
+			};
 			const actions: Record<
 				string,
 				() => Promise<string | null> | string | null
@@ -115,12 +122,8 @@ export function useCommandRunner() {
 					openForkPicker();
 					return null;
 				},
-				"/dark": () => {
-					const dark = darkVariant(themes, theme);
-					if (typeof dark === "string") return dark;
-					chooseTheme(dark.id);
-					return null;
-				},
+				"/dark": () => switchScheme("dark"),
+				"/light": () => switchScheme("light"),
 				"/debug": () => {
 					toggleChannel("model");
 					return shown.model
