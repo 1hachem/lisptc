@@ -35,8 +35,11 @@ export type PanelLayout = SplitLayout<PanelContent>;
 const MAIN_TAB: Tab<PanelContent> = {
 	id: "main",
 	content: { kind: "main" },
-	fixed: true,
 };
+
+export function chatDocked(layout: PanelLayout): boolean {
+	return paneOf(layout, MAIN_TAB.id) !== undefined;
+}
 
 export function withMain(layout: PanelLayout): PanelLayout {
 	if (paneOf(layout, MAIN_TAB.id) !== undefined) return layout;

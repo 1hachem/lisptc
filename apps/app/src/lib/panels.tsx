@@ -42,6 +42,7 @@ export interface Panels {
 	apply: (ops: readonly PanelOp[]) => void;
 	openFile: (folder: Folder, name: string) => void;
 	retab: (tabId: string, content: PanelContent, keepId?: boolean) => void;
+	dockChat: () => void;
 }
 
 const PanelsContext = createContext<Panels | null>(null);
@@ -52,6 +53,7 @@ const NO_PANELS: Panels = {
 	apply: () => {},
 	openFile: () => {},
 	retab: () => {},
+	dockChat: () => {},
 };
 
 export function usePanels(): Panels {
@@ -74,9 +76,9 @@ function usePanelLayout(workspaceId: Id<"workspaces">) {
 	);
 	const stored = useMemo<PanelLayout>(
 		() =>
-			withMain(
-				data ? unflatten(data as FlatLayout<PanelContent>) : emptyLayout(),
-			),
+			data
+				? unflatten(data as FlatLayout<PanelContent>)
+				: withMain(emptyLayout()),
 		[data],
 	);
 	const latest = useRef(stored);
@@ -146,6 +148,10 @@ export function PanelsProvider({
 			]),
 		[apply],
 	);
+	const dockChat = useCallback(
+		() => change(withMain(latest.current)),
+		[change, latest],
+	);
 	const retab = useCallback(
 		(tabId: string, content: PanelContent, keepId = false) =>
 			change(
@@ -158,8 +164,8 @@ export function PanelsProvider({
 		[change, latest],
 	);
 	const value = useMemo(
-		() => ({ layout, change, apply, openFile, retab }),
-		[layout, change, apply, openFile, retab],
+		() => ({ layout, change, apply, openFile, retab, dockChat }),
+		[layout, change, apply, openFile, retab, dockChat],
 	);
 	return (
 		<PanelsContext.Provider value={value}>

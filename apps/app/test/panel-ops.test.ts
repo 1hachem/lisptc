@@ -2,6 +2,7 @@ import { allTabs, emptyLayout } from "@repo/components";
 import { describe, expect, it } from "vitest";
 import {
 	applyPanelOps,
+	chatDocked,
 	PANEL_DRAG,
 	type PanelContent,
 	readPanelDrag,
@@ -95,12 +96,12 @@ describe("the panel lane off the wire", () => {
 });
 
 describe("the chat pinned in the layout", () => {
-	it("is always there, and cannot be closed", () => {
+	it("leaves the layout when closed, to float as a small chat, and docks back", () => {
 		const layout = withMain(emptyLayout());
-		expect(allTabs(layout).map((t) => t.id)).toEqual(["main"]);
-		expect(applyPanelOps(layout, [{ op: "close", tab: "main" }])).toEqual(
-			layout,
-		);
+		expect(chatDocked(layout)).toBe(true);
+		const closed = applyPanelOps(layout, [{ op: "close", tab: "main" }]);
+		expect(chatDocked(closed)).toBe(false);
+		expect(chatDocked(withMain(closed))).toBe(true);
 	});
 
 	it("goes back to the left of a layout that lost it", () => {
