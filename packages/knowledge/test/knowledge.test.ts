@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { MemoryKnowledgeStore } from "../src/ports.ts";
@@ -14,7 +14,10 @@ function held(store: World["store"], name: string) {
 describe("what waits on the user", () => {
 	it("asks before writing, deleting, keeping or restoring a file, or fetching a url", () => {
 		const extension = knowledgeExtension(
-			knowledgeHostFor({ store: new MemoryKnowledgeStore() }),
+			knowledgeHostFor({
+				store: new MemoryKnowledgeStore(),
+				maxDownloadBytes: 1024,
+			}),
 		);
 		expect(extension.asks).toEqual([
 			"knowledge/write",
@@ -25,6 +28,37 @@ describe("what waits on the user", () => {
 			"bin/restore",
 			"bin/delete",
 		]);
+	});
+});
+
+describe("a download", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	function serving(body: string, headers: Record<string, string> = {}) {
+		vi.stubGlobal("fetch", async () => new Response(body, { headers }));
+		return knowledgeHostFor({
+			store: new MemoryKnowledgeStore(),
+			maxDownloadBytes: 4,
+		}).downloader;
+	}
+
+	it("takes a body within the cap", async () => {
+		const { bytes } = await serving("abcd").download(new URL("https://x.test"));
+		expect(new TextDecoder().decode(bytes)).toBe("abcd");
+	});
+
+	it("stops reading once the body passes the cap", async () => {
+		await expect(
+			serving("abcde").download(new URL("https://x.test")),
+		).rejects.toThrow("larger than 4 bytes");
+	});
+
+	it("refuses a declared length past the cap before reading", async () => {
+		await expect(
+			serving("ab", { "content-length": "5" }).download(
+				new URL("https://x.test"),
+			),
+		).rejects.toThrow("larger than 4 bytes");
 	});
 });
 

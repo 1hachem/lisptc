@@ -9,7 +9,7 @@ function attachingRepl() {
 	store.write("report.md", "# r", "text/markdown");
 	return memoryRepl([
 		...modelFacing(),
-		knowledgeExtension(knowledgeHostFor({ store })),
+		knowledgeExtension(knowledgeHostFor({ store, maxDownloadBytes: 1024 })),
 	]);
 }
 

@@ -37,6 +37,7 @@ import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import { ConvexImageStore } from "./image-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -70,6 +71,7 @@ export async function workspaceExtensions(
 	const knowledge = knowledgeExtension(
 		knowledgeHostFor({
 			store: new ConvexKnowledgeStore(workspaceId, connect),
+			maxDownloadBytes: MAX_KNOWLEDGE_BYTES,
 		}),
 	);
 	const permissions = permissionsExtension(
