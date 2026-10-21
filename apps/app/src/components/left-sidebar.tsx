@@ -13,14 +13,14 @@ import {
 	useSidebar,
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useNewChat } from "../lib/chats.ts";
-import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
+import { PanelLink } from "./panel-link.tsx";
 import { WorkspaceMenu, WorkspaceRailMenu } from "./workspace-menu.tsx";
 import {
 	ENTRY_ICONS,
@@ -30,32 +30,24 @@ import {
 
 const TREE_ROW = "flex h-[calc(1lh+0.5rem)] items-center text-[11.5px]";
 
-const PAGES: Partial<
-	Record<SidebarEntry, "readme" | "settings" | "preferences">
-> = {
-	"README.md": "readme",
-	"settings.ptc": "settings",
-	"preferences.ptc": "preferences",
+const PAGES: Partial<Record<SidebarEntry, PanelContent>> = {
+	home: NEW_CHAT,
+	"README.md": { kind: "page", page: "readme", title: "README.md" },
+	"settings.ptc": { kind: "page", page: "settings", title: "settings.ptc" },
+	"preferences.ptc": {
+		kind: "page",
+		page: "preferences",
+		title: "preferences.ptc",
+	},
 };
 
 function useRailPick() {
 	const { setOpen } = useSidebar();
 	const newChat = useNewChat();
-	const navigate = useNavigate();
-	const { workspace } = useWorkspace();
 	return (entry: SidebarEntry) => {
-		if (entry === "new_chat") return void newChat();
+		if (entry === "new_chat") return newChat();
 		const page = PAGES[entry];
-		if (workspace && entry === "home")
-			return void navigate({
-				to: "/$workspaceId",
-				params: { workspaceId: workspace._id },
-			});
-		if (workspace && page !== undefined)
-			return void navigate({
-				to: `/$workspaceId/${page}`,
-				params: { workspaceId: workspace._id },
-			});
+		if (page !== undefined) return requestPanel(page);
 		openFolderOnMount(entry);
 		setOpen(true);
 	};
@@ -104,34 +96,20 @@ function UserName() {
 	);
 }
 
-function opensInPlace(event: {
-	button: number;
-	metaKey: boolean;
-	ctrlKey: boolean;
-}): boolean {
-	return event.button === 0 && !event.metaKey && !event.ctrlKey;
-}
-
 function SettingsLink({ expanded }: { expanded: boolean }) {
 	const { workspace } = useWorkspace();
 	if (!workspace) return null;
 	return (
-		<Link
-			to="/$workspaceId/account"
-			params={{ workspaceId: workspace._id }}
+		<PanelLink
+			workspaceId={workspace._id}
+			content={ACCOUNT}
 			className={`${expanded ? "ml-auto" : ""} flex-none text-dim hover:text-fg`}
-			activeProps={{ className: "text-fg" }}
 			title="settings"
-			aria-label="settings"
-			onClick={(event) => {
-				if (!opensInPlace(event)) return;
-				event.preventDefault();
-				requestPanel(ACCOUNT);
-			}}
+			label="settings"
 			onDragStart={dragsAs(ACCOUNT)}
 		>
 			<HugeiconsIcon className="size-icon-sm" icon={Settings01Icon} />
-		</Link>
+		</PanelLink>
 	);
 }
 

@@ -2,13 +2,17 @@ import { allTabs, emptyLayout } from "@repo/components";
 import { describe, expect, it } from "vitest";
 import {
 	applyPanelOps,
-	chatDocked,
+	dockTab,
+	lastChatLeaving,
+	leadChat,
+	NEW_CHAT,
 	PANEL_DRAG,
 	type PanelContent,
 	readPanelDrag,
+	retireMain,
+	STARTING_LAYOUT,
 	startPanelDrag,
 	toPanelOps,
-	withMain,
 } from "../src/lib/panel-ops.ts";
 
 const report: PanelContent = {
@@ -95,38 +99,89 @@ describe("the panel lane off the wire", () => {
 	});
 });
 
-describe("the chat pinned in the layout", () => {
-	it("leaves the layout when closed, to float as a small chat, and docks back", () => {
-		const layout = withMain(emptyLayout());
-		expect(chatDocked(layout)).toBe(true);
-		const closed = applyPanelOps(layout, [{ op: "close", tab: "main" }]);
-		expect(chatDocked(closed)).toBe(false);
-		expect(chatDocked(withMain(closed))).toBe(true);
-	});
+const chat: PanelContent = { kind: "chat", chatId: "c1", title: "chat" };
 
-	it("docks back into the pane it left empty", () => {
-		const layout = applyPanelOps(withMain(emptyLayout()), [
-			{ op: "open", tab: "a", split: "right", content: report },
+describe("chats in the layout", () => {
+	it("starts a workspace with nothing saved on one empty chat, the same on every render", () => {
+		expect(allTabs(STARTING_LAYOUT)).toEqual([
+			{ id: "chat:new:start", content: NEW_CHAT },
 		]);
-		const closed = applyPanelOps(layout, [{ op: "close", tab: "main" }]);
-		expect(withMain(closed).root).toEqual(layout.root);
+		expect(leadChat(STARTING_LAYOUT)).toBe("chat:new:start");
 	});
 
-	it("goes back to the left of a layout that lost it", () => {
-		const others = applyPanelOps(emptyLayout(), [
-			{ op: "open", tab: "a", split: "here", content: report },
-		]);
-		const layout = withMain(others);
-		expect(allTabs(layout).map((t) => t.id)).toEqual(["main", "a"]);
-		expect(layout.root?.kind).toBe("split");
-	});
-
-	it("opens a file beside the chat, never over it", () => {
-		const layout = applyPanelOps(withMain(emptyLayout()), [
+	it("opens a file beside a focused chat, never over it", () => {
+		const layout = applyPanelOps(emptyLayout(), [
+			{ op: "open", tab: "chat:c1", split: "here", content: chat },
 			{ op: "open", tab: "a", split: "here", content: report },
 		]);
 		const root = layout.root;
 		expect(root?.kind === "split" && root.direction).toBe("row");
-		expect(allTabs(layout).map((t) => t.id)).toEqual(["main", "a"]);
+		expect(allTabs(layout).map((t) => t.id)).toEqual(["chat:c1", "a"]);
+	});
+
+	it("leads with the focused chat, else the first chat on show, else a minimized one", () => {
+		const layout = applyPanelOps(emptyLayout(), [
+			{ op: "open", tab: "chat:c1", split: "here", content: chat },
+			{ op: "open", tab: "a", split: "here", content: report },
+		]);
+		expect(leadChat(layout)).toBe("chat:c1");
+		const closed = applyPanelOps(layout, [{ op: "close", tab: "chat:c1" }]);
+		expect(leadChat(closed)).toBeUndefined();
+		expect(leadChat(closed, [{ id: "chat:c1", content: chat }])).toBe(
+			"chat:c1",
+		);
+	});
+
+	it("puts a restored tab into the pane it left empty, or to the left", () => {
+		const others = applyPanelOps(emptyLayout(), [
+			{ op: "open", tab: "a", split: "here", content: report },
+		]);
+		const docked = dockTab(others, { id: "chat:c1", content: chat });
+		expect(allTabs(docked).map((t) => t.id)).toEqual(["chat:c1", "a"]);
+		expect(docked.root?.kind).toBe("split");
+		expect(
+			dockTab(emptyLayout(), { id: "chat:c1", content: chat }).root,
+		).toEqual(expect.objectContaining({ kind: "pane" }));
+	});
+
+	it("catches the last chat leaving the layout, to keep it minimized", () => {
+		const layout = applyPanelOps(emptyLayout(), [
+			{ op: "open", tab: "chat:c1", split: "here", content: chat },
+			{ op: "open", tab: "a", split: "here", content: report },
+		]);
+		const closed = applyPanelOps(layout, [{ op: "close", tab: "chat:c1" }]);
+		expect(lastChatLeaving(layout, closed, [])?.id).toBe("chat:c1");
+		expect(lastChatLeaving(layout, layout, [])).toBeUndefined();
+		expect(
+			lastChatLeaving(layout, closed, [{ id: "chat:c2", content: chat }]),
+		).toBeUndefined();
+	});
+
+	it("turns a layout saved with the old main tab into a new chat", () => {
+		const saved = applyPanelOps(emptyLayout(), [
+			{ op: "open", tab: "main", split: "here", content: chat },
+		]);
+		const [tab] = allTabs(retireMain(saved));
+		expect(tab?.id.startsWith("chat:new:")).toBe(true);
+		expect(tab?.content).toEqual(NEW_CHAT);
+	});
+
+	it("keeps the chat a drawn view came from", () => {
+		expect(
+			toPanelOps([
+				{
+					op: "open",
+					tab: "view:t",
+					content: { kind: "view", title: "t", node: null, chatId: "c1" },
+				},
+			]),
+		).toEqual([
+			{
+				op: "open",
+				tab: "view:t",
+				split: "here",
+				content: { kind: "view", title: "t", node: null, chatId: "c1" },
+			},
+		]);
 	});
 });

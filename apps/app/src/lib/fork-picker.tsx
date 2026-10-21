@@ -2,7 +2,6 @@ import { useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { type Choice, ChoiceDialog } from "@repo/components/choice-dialog.tsx";
-import { useNavigate } from "@tanstack/react-router";
 import {
 	createContext,
 	useCallback,
@@ -24,11 +23,10 @@ export function ForkPickerProvider({
 	onForked,
 	children,
 }: {
-	onForked?: (chatId: Id<"chats">) => void;
+	onForked: (chatId: Id<"chats">) => void;
 	children: React.ReactNode;
 }) {
 	const store = useChatStore();
-	const navigate = useNavigate();
 	const fork = useConvexMutation(api.chats.fork);
 	const [choices, setChoices] = useState<Choice[] | null>(null);
 
@@ -39,16 +37,11 @@ export function ForkPickerProvider({
 
 	const forkAt = useCallback(
 		async (messageId: string) => {
-			const { chatId, workspaceId, fail } = store.getState();
+			const { chatId, fail } = store.getState();
 			if (chatId === null) return;
 			try {
 				const forked = await fork({ chatId, messageId });
-				if (onForked) onForked(forked);
-				else
-					await navigate({
-						to: "/$workspaceId/chat/$chatId",
-						params: { workspaceId, chatId: forked },
-					});
+				onForked(forked);
 			} catch (ex) {
 				reportIssue(ex, { $exception_source: "chat fork", thread_id: chatId });
 				fail(
@@ -56,7 +49,7 @@ export function ForkPickerProvider({
 				);
 			}
 		},
-		[store, fork, navigate, onForked],
+		[store, fork, onForked],
 	);
 
 	const value = useMemo(() => ({ openForkPicker }), [openForkPicker]);

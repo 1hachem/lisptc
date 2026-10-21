@@ -1,7 +1,6 @@
-import type { Id } from "@repo/backend/dataModel";
-import { useNavigate, useParams } from "@tanstack/react-router";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 import type { PanelContent } from "./panel-ops.ts";
+import { requestPanel } from "./panel-requests.ts";
 
 export interface PageHost {
 	show: (content: PanelContent) => void;
@@ -21,52 +20,8 @@ export function PageHostProvider({
 	);
 }
 
-function useRouteHost(): PageHost {
-	const navigate = useNavigate();
-	const workspaceId = useParams({ strict: false }).workspaceId as
-		| Id<"workspaces">
-		| undefined;
-	return useMemo(
-		() => ({
-			show: (content: PanelContent) => {
-				if (workspaceId === undefined) return;
-				const at = { workspaceId };
-				switch (content.kind) {
-					case "file":
-						void navigate(
-							content.folder === "knowledge"
-								? {
-										to: "/$workspaceId/knowledge/$name",
-										params: { ...at, name: content.name },
-										replace: true,
-									}
-								: {
-										to: "/$workspaceId/attachments/$name",
-										params: { ...at, name: content.name },
-										replace: true,
-									},
-						);
-						return;
-					case "chat":
-						void navigate(
-							content.chatId === null
-								? { to: "/$workspaceId", params: at }
-								: {
-										to: "/$workspaceId/chat/$chatId",
-										params: { ...at, chatId: content.chatId as Id<"chats"> },
-									},
-						);
-						return;
-					default:
-						return;
-				}
-			},
-		}),
-		[navigate, workspaceId],
-	);
-}
+const OPENS_A_PANEL: PageHost = { show: requestPanel };
 
 export function usePageHost(): PageHost {
-	const routed = useRouteHost();
-	return useContext(PageHostContext) ?? routed;
+	return useContext(PageHostContext) ?? OPENS_A_PANEL;
 }

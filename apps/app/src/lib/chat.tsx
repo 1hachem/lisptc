@@ -8,7 +8,6 @@ import type { Id } from "@repo/backend/dataModel";
 import { type FiredMemory, firedMemories } from "@repo/components";
 import type { Skipped } from "@repo/syntax";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import {
 	createContext,
@@ -168,10 +167,9 @@ export function ChatProvider({
 }: {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
-	onOpened?: (chatId: Id<"chats">) => void;
+	onOpened: (chatId: Id<"chats">) => void;
 	children: React.ReactNode;
 }) {
-	const navigate = useNavigate();
 	const announce = useRef(onOpened);
 	announce.current = onOpened;
 	const draftChat = useConvexMutation(api.chats.draft);
@@ -315,15 +313,7 @@ export function ChatProvider({
 				{ chatId: opened, ...input },
 				{ optimisticValues: { messages: [...persisted, shown] } },
 			);
-			if (!chatId) {
-				if (announce.current) announce.current(opened);
-				else
-					await navigate({
-						to: "/$workspaceId/chat/$chatId",
-						params: { workspaceId, chatId: opened },
-						replace: true,
-					});
-			}
+			if (!chatId) announce.current(opened);
 		},
 		[
 			chatId,
@@ -331,7 +321,6 @@ export function ChatProvider({
 			draftChat,
 			renameChat,
 			markStreaming,
-			navigate,
 			persisted,
 			stream,
 		],
@@ -504,6 +493,16 @@ export function useChatSession<U>(selector: (state: ChatSession) => U): U {
 		throw new Error("useChatSession must be used within a ChatProvider");
 	}
 	return store(useShallow(selector));
+}
+
+export function ChatStoreProvider({
+	store,
+	children,
+}: {
+	store: ChatStore;
+	children: React.ReactNode;
+}) {
+	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }
 
 export function useChatStore(): ChatStore {

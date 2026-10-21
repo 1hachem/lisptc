@@ -12,12 +12,13 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@repo/ui";
-import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { abandonChat } from "../lib/chat.tsx";
-import { dragsAs } from "../lib/panel-ops.ts";
+import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
+import { PanelLink, useShown } from "./panel-link.tsx";
 
 const STATUS_ICONS = {
 	waiting: { icon: BubbleChatIcon, iconClassName: "text-yellow" },
@@ -44,14 +45,13 @@ function statusGlyph(chat: Doc<"chats">) {
 const item =
 	"rounded-none px-2.5 py-1 text-[11.5px] text-dim focus:bg-bg2 focus:text-fg";
 
-export function SessionRow({
-	chat,
-	current,
-}: {
-	chat: Doc<"chats">;
-	current: boolean;
-}) {
-	const navigate = useNavigate();
+export function SessionRow({ chat }: { chat: Doc<"chats"> }) {
+	const shown = useShown();
+	const opens: PanelContent = {
+		kind: "chat",
+		chatId: chat._id,
+		title: chat.title === "" ? "untitled" : chat.title,
+	};
 	const renameChat = useConvexMutation(api.chats.rename);
 	const removeChat = useConvexMutation(api.chats.remove);
 	const { failure, attempt } = useAttempt("session action");
@@ -90,21 +90,17 @@ export function SessionRow({
 			<TreeFile
 				name={chat.title === "" ? "untitled" : chat.title}
 				{...statusGlyph(chat)}
-				selected={current}
+				selected={shown(opens)}
 				depth={1}
-				onDragStart={dragsAs({
-					kind: "chat",
-					chatId: chat._id,
-					title: chat.title === "" ? "untitled" : chat.title,
-				})}
+				onDragStart={dragsAs(opens)}
 				link={(content, className) => (
-					<Link
-						to="/$workspaceId/chat/$chatId"
-						params={{ workspaceId: chat.workspaceId, chatId: chat._id }}
+					<PanelLink
+						workspaceId={chat.workspaceId}
+						content={opens}
 						className={className}
 					>
 						{content}
-					</Link>
+					</PanelLink>
 				)}
 				trailing={
 					<DropdownMenu>
@@ -136,13 +132,7 @@ export function SessionRow({
 								onConfirm={() => {
 									attempt(async () => {
 										abandonChat(chat._id);
-										if (current) {
-											await navigate({
-												to: "/$workspaceId",
-												params: { workspaceId: chat.workspaceId },
-												replace: true,
-											});
-										}
+										requestPanelClosed(opens);
 										await removeChat({ chatId: chat._id });
 									});
 								}}

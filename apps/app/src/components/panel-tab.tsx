@@ -1,13 +1,15 @@
 import type { Id } from "@repo/backend/dataModel";
 import { type ReactNode, useMemo } from "react";
 import { AgentProvider } from "../lib/agent.tsx";
-import { ChatProvider, useChatSession } from "../lib/chat.tsx";
+import { ChatProvider } from "../lib/chat.tsx";
 import { ForkPickerProvider } from "../lib/fork-picker.tsx";
+import { ClaimLead } from "../lib/lead-chat.tsx";
 import { PageHostProvider } from "../lib/page-host.tsx";
-import type { PanelContent } from "../lib/panel-ops.ts";
+import { leadChat, type PanelContent } from "../lib/panel-ops.ts";
 import { PanelLiveOps, usePanels } from "../lib/panels.tsx";
 import { toUiNode } from "../lib/ui-node.ts";
 import { AccountPage } from "./account-page.tsx";
+import { AnimatedFavicon } from "./animated-favicon.tsx";
 import { BinPage } from "./bin-page.tsx";
 import { Chat } from "./chat.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
@@ -22,6 +24,39 @@ function Column({ children }: { children: ReactNode }) {
 	return <div className="flex h-full min-h-0 flex-col">{children}</div>;
 }
 
+function ChatPane({
+	workspaceId,
+	chatId,
+	lead,
+	onOpened,
+	onForked,
+}: {
+	workspaceId: Id<"workspaces">;
+	chatId: Id<"chats"> | null;
+	lead: boolean;
+	onOpened: (chatId: Id<"chats">) => void;
+	onForked: (chatId: Id<"chats">) => void;
+}) {
+	return (
+		<ChatProvider workspaceId={workspaceId} chatId={chatId} onOpened={onOpened}>
+			<ForkPickerProvider onForked={onForked}>
+				<AgentProvider>
+					{lead && (
+						<>
+							<AnimatedFavicon />
+							<ClaimLead />
+						</>
+					)}
+					<PanelLiveOps />
+					<Column>
+						<Chat />
+					</Column>
+				</AgentProvider>
+			</ForkPickerProvider>
+		</ChatProvider>
+	);
+}
+
 function ChatTab({
 	id,
 	workspaceId,
@@ -31,28 +66,19 @@ function ChatTab({
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
 }) {
-	const { retab } = usePanels();
+	const { retab, layout, minimized } = usePanels();
 	return (
-		<ChatProvider
+		<ChatPane
 			workspaceId={workspaceId}
 			chatId={chatId}
+			lead={leadChat(layout, minimized) === id}
 			onOpened={(opened) =>
 				retab(id, { kind: "chat", chatId: opened, title: "chat" }, true)
 			}
-		>
-			<ForkPickerProvider
-				onForked={(forked) =>
-					retab(id, { kind: "chat", chatId: forked, title: "fork" })
-				}
-			>
-				<AgentProvider>
-					<PanelLiveOps />
-					<Column>
-						<Chat />
-					</Column>
-				</AgentProvider>
-			</ForkPickerProvider>
-		</ChatProvider>
+			onForked={(forked) =>
+				retab(id, { kind: "chat", chatId: forked, title: "fork" })
+			}
+		/>
 	);
 }
 
@@ -82,14 +108,34 @@ function PageTab({
 	}
 }
 
-function ViewTab({ node }: { node: unknown }) {
+function ViewTab({
+	workspaceId,
+	node,
+	chatId,
+}: {
+	workspaceId: Id<"workspaces">;
+	node: unknown;
+	chatId: string | undefined;
+}) {
 	const drawn = toUiNode(node);
 	if (drawn === undefined)
 		return <div className="p-3 text-dim">this view cannot be drawn</div>;
+	if (chatId === undefined)
+		return (
+			<div className="p-3 text-dim">
+				this view is no longer live — ask again to rebuild it
+			</div>
+		);
 	return (
-		<div className="p-3">
-			<GenerativeUI key={JSON.stringify(drawn)} node={drawn} />
-		</div>
+		<ChatProvider
+			workspaceId={workspaceId}
+			chatId={chatId as Id<"chats">}
+			onOpened={() => {}}
+		>
+			<div className="p-3">
+				<GenerativeUI key={JSON.stringify(drawn)} node={drawn} />
+			</div>
+		</ChatProvider>
 	);
 }
 
@@ -100,8 +146,8 @@ export function PanelTab({
 	id: string;
 	content: PanelContent;
 }) {
-	const workspaceId = useChatSession((state) => state.workspaceId);
-	const { retab } = usePanels();
+	const { retab, workspaceId: panelsWorkspace } = usePanels();
+	const workspaceId = panelsWorkspace as Id<"workspaces">;
 	const host = useMemo(
 		() => ({ show: (next: PanelContent) => retab(id, next) }),
 		[retab, id],
@@ -115,7 +161,13 @@ export function PanelTab({
 					name={content.name}
 				/>
 			)}
-			{content.kind === "view" && <ViewTab node={content.node} />}
+			{content.kind === "view" && (
+				<ViewTab
+					workspaceId={workspaceId}
+					node={content.node}
+					chatId={content.chatId}
+				/>
+			)}
 			{content.kind === "chat" && (
 				<ChatTab
 					id={id}

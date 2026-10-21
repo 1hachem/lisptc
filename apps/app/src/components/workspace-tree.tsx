@@ -30,12 +30,6 @@ import {
 	TreePending,
 } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
-import {
-	Link,
-	useLocation,
-	useNavigate,
-	useParams,
-} from "@tanstack/react-router";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { binSearched, restoreFailure } from "../lib/bin.ts";
 import { restingIcon } from "../lib/bot-icon.ts";
@@ -43,11 +37,18 @@ import { useNewChat } from "../lib/chats.ts";
 import { byDate } from "../lib/date-groups.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { knowledgeIcon, useKnowledgeUpload } from "../lib/knowledge.ts";
-import { dragsAs, startPanelDrag } from "../lib/panel-ops.ts";
+import {
+	dragsAs,
+	NEW_CHAT,
+	type PanelContent,
+	startPanelDrag,
+} from "../lib/panel-ops.ts";
+import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { FileMenu } from "./file-menu.tsx";
+import { PanelLink, useShown } from "./panel-link.tsx";
 import { SessionRow } from "./session-row.tsx";
 
 const PLACEHOLDERS = [
@@ -90,16 +91,40 @@ export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
 	"preferences.ptc": File01Icon,
 };
 
-function useLeave(workspaceId: Id<"workspaces">) {
-	const navigate = useNavigate();
-	return (selected: boolean) =>
-		selected
-			? navigate({
-					to: "/$workspaceId",
-					params: { workspaceId },
-					replace: true,
-				})
-			: Promise.resolve();
+function memoryPage(key: string): PanelContent {
+	return { kind: "page", page: "memory", id: key, title: `memories/${key}` };
+}
+
+function permissionPage(index: number, name: string): PanelContent {
+	return {
+		kind: "page",
+		page: "permission",
+		id: String(index),
+		title: `permissions/${name}`,
+	};
+}
+
+function binPage(name: string): PanelContent {
+	return { kind: "page", page: "bin", id: name, title: `bin/${name}` };
+}
+
+function storedFile(
+	folder: "knowledge" | "attachments",
+	name: string,
+): PanelContent {
+	return { kind: "file", folder, name };
+}
+
+function linkTo(workspaceId: Id<"workspaces">, content: PanelContent) {
+	return (children: ReactNode, className: string) => (
+		<PanelLink
+			workspaceId={workspaceId}
+			content={content}
+			className={className}
+		>
+			{children}
+		</PanelLink>
+	);
 }
 
 function Empty({ children }: { children: ReactNode }) {
@@ -183,33 +208,23 @@ function useFolders() {
 	});
 }
 
-function MemoryFile({
-	memory,
-	selected,
-}: {
-	memory: Doc<"memories">;
-	selected: boolean;
-}) {
+function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 	const removeMemory = useConvexMutation(api.memories.remove);
-	const leave = useLeave(memory.workspaceId);
+	const shown = useShown();
+	const page = memoryPage(memory.key);
 
 	return (
 		<TreeFile
 			name={memory.key}
 			depth={1}
-			selected={selected}
-			onDragStart={dragsAs({
-				kind: "page",
-				page: "memory",
-				id: memory.key,
-				title: `memories/${memory.key}`,
-			})}
+			selected={shown(page)}
+			onDragStart={dragsAs(page)}
 			trailing={
 				<FileMenu
 					name={memory.key}
 					confirm="forget it for good?"
 					onDelete={async () => {
-						await leave(selected);
+						requestPanelClosed(page);
 						await removeMemory({
 							workspaceId: memory.workspaceId,
 							key: memory.key,
@@ -217,31 +232,17 @@ function MemoryFile({
 					}}
 				/>
 			}
-			link={(content, className) => (
-				<Link
-					to="/$workspaceId/memories/$key"
-					params={{ workspaceId: memory.workspaceId, key: memory.key }}
-					className={className}
-				>
-					{content}
-				</Link>
-			)}
+			link={linkTo(memory.workspaceId, page)}
 		/>
 	);
 }
 
-function PermissionFiles({
-	workspaceId,
-	selected,
-}: {
-	workspaceId: Id<"workspaces">;
-	selected: number | undefined;
-}) {
+function PermissionFiles({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	const { data: source } = useQuery(
 		convexQuery(api.permissions.get, { workspaceId }),
 	);
 	const putPermissions = useConvexMutation(api.permissions.put);
-	const leave = useLeave(workspaceId);
+	const shown = useShown();
 	const rules =
 		source === undefined ? undefined : permissionRules(source ?? "");
 
@@ -249,24 +250,20 @@ function PermissionFiles({
 		<Listing items={rules} empty="no rules yet">
 			{(rule) => {
 				const index = rules?.indexOf(rule) ?? -1;
+				const page = permissionPage(index, rule.name);
 				return (
 					<TreeFile
 						key={rule.start}
 						name={rule.name}
 						depth={1}
-						selected={selected === index}
-						onDragStart={dragsAs({
-							kind: "page",
-							page: "permission",
-							id: String(index),
-							title: `permissions/${rule.name}`,
-						})}
+						selected={shown(page)}
+						onDragStart={dragsAs(page)}
 						trailing={
 							<FileMenu
 								name={rule.name}
 								confirm="drop this rule?"
 								onDelete={async () => {
-									await leave(selected === index);
+									requestPanelClosed(page);
 									await putPermissions({
 										workspaceId,
 										source: withoutRule(source ?? "", rule),
@@ -274,15 +271,7 @@ function PermissionFiles({
 								}}
 							/>
 						}
-						link={(content, className) => (
-							<Link
-								to="/$workspaceId/permissions/$rule"
-								params={{ workspaceId, rule: index }}
-								className={className}
-							>
-								{content}
-							</Link>
-						)}
+						link={linkTo(workspaceId, page)}
 					/>
 				);
 			}}
@@ -292,18 +281,16 @@ function PermissionFiles({
 
 function KnowledgeFolder({
 	workspaceId,
-	current,
 	folder,
 }: {
 	workspaceId: Id<"workspaces">;
-	current: string | undefined;
 	folder: { open: boolean; onToggle: () => void };
 }) {
 	const { data: files } = useQuery(
 		convexQuery(api.knowledge.list, { workspaceId }),
 	);
 	const removeFile = useConvexMutation(api.knowledge.remove);
-	const leave = useLeave(workspaceId);
+	const shown = useShown();
 	const picker = useRef<HTMLInputElement>(null);
 	const { upload, uploading, failures } = useKnowledgeUpload(workspaceId);
 
@@ -339,33 +326,24 @@ function KnowledgeFolder({
 							name={file.name}
 							icon={knowledgeIcon(file.name, file.contentType)}
 							depth={1}
-							selected={current === file.name}
+							selected={shown(storedFile("knowledge", file.name))}
 							onDragStart={(event) =>
-								startPanelDrag(event.dataTransfer, {
-									kind: "file",
-									folder: "knowledge",
-									name: file.name,
-								})
+								startPanelDrag(
+									event.dataTransfer,
+									storedFile("knowledge", file.name),
+								)
 							}
 							trailing={
 								<FileMenu
 									name={file.name}
 									confirm="move it to the bin?"
 									onDelete={async () => {
-										await leave(current === file.name);
+										requestPanelClosed(storedFile("knowledge", file.name));
 										await removeFile({ workspaceId, name: file.name });
 									}}
 								/>
 							}
-							link={(content, className) => (
-								<Link
-									to="/$workspaceId/knowledge/$name"
-									params={{ workspaceId, name: file.name }}
-									className={className}
-								>
-									{content}
-								</Link>
-							)}
+							link={linkTo(workspaceId, storedFile("knowledge", file.name))}
 						/>
 					)}
 				</Listing>
@@ -384,11 +362,9 @@ function KnowledgeFolder({
 
 function AttachmentsFolder({
 	workspaceId,
-	current,
 	folder,
 }: {
 	workspaceId: Id<"workspaces">;
-	current: string | undefined;
 	folder: { open: boolean; onToggle: () => void };
 }) {
 	const { data: files } = useQuery({
@@ -396,7 +372,7 @@ function AttachmentsFolder({
 		enabled: folder.open,
 	});
 	const toBin = useConvexMutation(api.attachments.remove);
-	const leave = useLeave(workspaceId);
+	const shown = useShown();
 
 	return (
 		<TreeFolder name="attachments" icon={FOLDER_ICONS.attachments} {...folder}>
@@ -411,33 +387,24 @@ function AttachmentsFolder({
 						name={file.name}
 						icon={knowledgeIcon(file.name, file.contentType)}
 						depth={1}
-						selected={current === file.name}
+						selected={shown(storedFile("attachments", file.name))}
 						onDragStart={(event) =>
-							startPanelDrag(event.dataTransfer, {
-								kind: "file",
-								folder: "attachments",
-								name: file.name,
-							})
+							startPanelDrag(
+								event.dataTransfer,
+								storedFile("attachments", file.name),
+							)
 						}
 						trailing={
 							<FileMenu
 								name={file.name}
 								confirm="move it to the bin?"
 								onDelete={async () => {
-									await leave(current === file.name);
+									requestPanelClosed(storedFile("attachments", file.name));
 									await toBin({ workspaceId, name: file.name });
 								}}
 							/>
 						}
-						link={(content, className) => (
-							<Link
-								to="/$workspaceId/attachments/$name"
-								params={{ workspaceId, name: file.name }}
-								className={className}
-							>
-								{content}
-							</Link>
-						)}
+						link={linkTo(workspaceId, storedFile("attachments", file.name))}
 					/>
 				)}
 			</DatedListing>
@@ -447,11 +414,9 @@ function AttachmentsFolder({
 
 function BinFolder({
 	workspaceId,
-	current,
 	folder,
 }: {
 	workspaceId: Id<"workspaces">;
-	current: string | undefined;
 	folder: { open: boolean; onToggle: () => void };
 }) {
 	const { data: files } = useQuery({
@@ -460,7 +425,7 @@ function BinFolder({
 	});
 	const restore = useConvexMutation(api.bin.restore);
 	const removeFile = useConvexMutation(api.bin.remove);
-	const leave = useLeave(workspaceId);
+	const shown = useShown();
 	const [query, setQuery] = useState("");
 
 	return (
@@ -486,13 +451,8 @@ function BinFolder({
 						name={file.name}
 						icon={knowledgeIcon(file.name, file.contentType)}
 						depth={1}
-						selected={current === file.name}
-						onDragStart={dragsAs({
-							kind: "page",
-							page: "bin",
-							id: file.name,
-							title: `bin/${file.name}`,
-						})}
+						selected={shown(binPage(file.name))}
+						onDragStart={dragsAs(binPage(file.name))}
 						trailing={
 							<FileMenu
 								name={file.name}
@@ -505,23 +465,15 @@ function BinFolder({
 									});
 									if ("refused" in restored)
 										throw new Error(restoreFailure(restored.refused));
-									await leave(current === file.name);
+									requestPanelClosed(binPage(file.name));
 								}}
 								onDelete={async () => {
-									await leave(current === file.name);
+									requestPanelClosed(binPage(file.name));
 									await removeFile({ workspaceId, name: file.name });
 								}}
 							/>
 						}
-						link={(content, className) => (
-							<Link
-								to="/$workspaceId/bin/$name"
-								params={{ workspaceId, name: file.name }}
-								className={className}
-							>
-								{content}
-							</Link>
-						)}
+						link={linkTo(workspaceId, binPage(file.name))}
 					/>
 				)}
 			</DatedListing>
@@ -530,21 +482,13 @@ function BinFolder({
 }
 
 function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
-	const selected = useLocation({
-		select: (location) =>
-			location.pathname.replace(/\/$/, "") === `/${workspaceId}`,
-	});
 	return (
 		<TreeFile
 			name="home"
 			icon={Home01Icon}
-			selected={selected}
-			onDragStart={dragsAs({ kind: "chat", chatId: null, title: "new chat" })}
-			link={(content, className) => (
-				<Link to="/$workspaceId" params={{ workspaceId }} className={className}>
-					{content}
-				</Link>
-			)}
+			selected={false}
+			onDragStart={dragsAs(NEW_CHAT)}
+			link={linkTo(workspaceId, NEW_CHAT)}
 		/>
 	);
 }
@@ -565,28 +509,19 @@ function RootFile({
 	workspaceId: Id<"workspaces">;
 	page: keyof typeof ROOT_FILES;
 }) {
-	const selected = useLocation({
-		select: (location) => location.pathname.endsWith(`/${page}`),
-	});
+	const shown = useShown();
+	const content: PanelContent = {
+		kind: "page",
+		page,
+		title: ROOT_FILES[page].name,
+	};
 	return (
 		<TreeFile
 			name={ROOT_FILES[page].name}
 			icon={ROOT_FILES[page].icon}
-			selected={selected}
-			onDragStart={dragsAs({
-				kind: "page",
-				page,
-				title: ROOT_FILES[page].name,
-			})}
-			link={(content, className) => (
-				<Link
-					to={`/$workspaceId/${page}`}
-					params={{ workspaceId }}
-					className={className}
-				>
-					{content}
-				</Link>
-			)}
+			selected={shown(content)}
+			onDragStart={dragsAs(content)}
+			link={linkTo(workspaceId, content)}
 		/>
 	);
 }
@@ -605,11 +540,9 @@ function useSettled(value: string) {
 
 function ChatFolder({
 	workspaceId,
-	current,
 	folder,
 }: {
 	workspaceId: Id<"workspaces">;
-	current: string | undefined;
 	folder: { open: boolean; onToggle: () => void };
 }) {
 	const newChat = useNewChat();
@@ -642,13 +575,7 @@ function ChatFolder({
 				items={page?.chats}
 				empty={settled ? `nothing matches ${settled}` : "no chats yet"}
 			>
-				{(chat) => (
-					<SessionRow
-						key={chat._id}
-						chat={chat}
-						current={chat._id === current}
-					/>
-				)}
+				{(chat) => <SessionRow key={chat._id} chat={chat} />}
 			</Listing>
 			{page?.more && (
 				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />
@@ -664,10 +591,6 @@ export function WorkspaceTree({
 }) {
 	const newChat = useNewChat();
 	const folder = useFolders();
-	const params = useParams({ strict: false });
-	const fileFolder = useLocation({
-		select: (location) => location.pathname.split("/")[2],
-	});
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
@@ -693,11 +616,7 @@ export function WorkspaceTree({
 			<TreeCommand name="new_chat" onRun={() => void newChat()} />
 		),
 		chat: () => (
-			<ChatFolder
-				workspaceId={workspaceId}
-				current={params.chatId}
-				folder={folder("chat")}
-			/>
+			<ChatFolder workspaceId={workspaceId} folder={folder("chat")} />
 		),
 		memories: () => (
 			<TreeFolder
@@ -706,13 +625,7 @@ export function WorkspaceTree({
 				{...folder("memories")}
 			>
 				<Listing items={memories} empty="no memories yet">
-					{(memory) => (
-						<MemoryFile
-							key={memory._id}
-							memory={memory}
-							selected={params.key === memory.key}
-						/>
-					)}
+					{(memory) => <MemoryFile key={memory._id} memory={memory} />}
 				</Listing>
 			</TreeFolder>
 		),
@@ -722,30 +635,19 @@ export function WorkspaceTree({
 				icon={FOLDER_ICONS.permissions}
 				{...folder("permissions")}
 			>
-				<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
+				<PermissionFiles workspaceId={workspaceId} />
 			</TreeFolder>
 		),
 		knowledge: () => (
-			<KnowledgeFolder
-				workspaceId={workspaceId}
-				current={fileFolder === "knowledge" ? params.name : undefined}
-				folder={folder("knowledge")}
-			/>
+			<KnowledgeFolder workspaceId={workspaceId} folder={folder("knowledge")} />
 		),
 		attachments: () => (
 			<AttachmentsFolder
 				workspaceId={workspaceId}
-				current={fileFolder === "attachments" ? params.name : undefined}
 				folder={folder("attachments")}
 			/>
 		),
-		bin: () => (
-			<BinFolder
-				workspaceId={workspaceId}
-				current={fileFolder === "bin" ? params.name : undefined}
-				folder={folder("bin")}
-			/>
-		),
+		bin: () => <BinFolder workspaceId={workspaceId} folder={folder("bin")} />,
 		"sub-agents": placeholder("sub-agents"),
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),

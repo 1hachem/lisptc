@@ -1,30 +1,16 @@
 import { FileTree, TreeFile } from "@repo/components";
-import { Link } from "@tanstack/react-router";
-import type { MouseEvent as ReactMouseEvent } from "react";
 import type { AttachedFile } from "../lib/attached-files.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { knowledgeIcon } from "../lib/knowledge.ts";
-import { startPanelDrag } from "../lib/panel-ops.ts";
-import { usePanels } from "../lib/panels.tsx";
-
-function inPlace(event: MouseEvent): boolean {
-	return (
-		event.button === 0 &&
-		!event.metaKey &&
-		!event.ctrlKey &&
-		!event.shiftKey &&
-		!event.altKey
-	);
-}
+import { type PanelContent, startPanelDrag } from "../lib/panel-ops.ts";
+import { PanelLink } from "./panel-link.tsx";
 
 function AttachedRow({ file }: { file: AttachedFile }) {
 	const workspaceId = useChatSession((state) => state.workspaceId);
-	const { openFile } = usePanels();
-	const params = { workspaceId, name: file.name };
-	const onClick = (event: ReactMouseEvent) => {
-		if (!inPlace(event.nativeEvent)) return;
-		event.preventDefault();
-		openFile(file.folder, file.name);
+	const opens: PanelContent = {
+		kind: "file",
+		folder: file.folder,
+		name: file.name,
 	};
 	return (
 		<TreeFile
@@ -32,34 +18,16 @@ function AttachedRow({ file }: { file: AttachedFile }) {
 			icon={knowledgeIcon(file.name, null)}
 			iconLabel={`${file.folder}/${file.name}`}
 			selected={false}
-			onDragStart={(event) =>
-				startPanelDrag(event.dataTransfer, {
-					kind: "file",
-					folder: file.folder,
-					name: file.name,
-				})
-			}
-			link={(content, className) =>
-				file.folder === "knowledge" ? (
-					<Link
-						to="/$workspaceId/knowledge/$name"
-						params={params}
-						className={className}
-						onClick={onClick}
-					>
-						{content}
-					</Link>
-				) : (
-					<Link
-						to="/$workspaceId/attachments/$name"
-						params={params}
-						className={className}
-						onClick={onClick}
-					>
-						{content}
-					</Link>
-				)
-			}
+			onDragStart={(event) => startPanelDrag(event.dataTransfer, opens)}
+			link={(content, className) => (
+				<PanelLink
+					workspaceId={workspaceId}
+					content={opens}
+					className={className}
+				>
+					{content}
+				</PanelLink>
+			)}
 		/>
 	);
 }

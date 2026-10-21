@@ -1,17 +1,9 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import {
-	createFileRoute,
-	notFound,
-	Outlet,
-	useParams,
-} from "@tanstack/react-router";
-import { AnimatedFavicon } from "../../../components/animated-favicon.tsx";
+import { createFileRoute, notFound, Outlet } from "@tanstack/react-router";
 import { PanelSplit } from "../../../components/panel-split.tsx";
-import { AgentProvider } from "../../../lib/agent.tsx";
-import { ChatProvider } from "../../../lib/chat.tsx";
-import { ForkPickerProvider } from "../../../lib/fork-picker.tsx";
+import { prefetchPanels } from "../../../lib/panel-prefetch.ts";
 import { PanelsProvider } from "../../../lib/panels.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId")({
@@ -30,26 +22,17 @@ export const Route = createFileRoute("/_authed/$workspaceId")({
 		);
 		if (workspaces.every((workspace) => workspace._id !== params.workspaceId))
 			throw notFound();
+		await prefetchPanels(context.queryClient, params.workspaceId);
 	},
 	component: WorkspaceLayout,
 });
 
 function WorkspaceLayout() {
 	const { workspaceId } = Route.useParams();
-	const chatId = useParams({ strict: false }).chatId;
-
 	return (
-		<ChatProvider workspaceId={workspaceId} chatId={chatId ?? null}>
-			<ForkPickerProvider>
-				<AgentProvider>
-					<PanelsProvider workspaceId={workspaceId}>
-						<AnimatedFavicon />
-						<PanelSplit>
-							<Outlet />
-						</PanelSplit>
-					</PanelsProvider>
-				</AgentProvider>
-			</ForkPickerProvider>
-		</ChatProvider>
+		<PanelsProvider workspaceId={workspaceId}>
+			<PanelSplit />
+			<Outlet />
+		</PanelsProvider>
 	);
 }

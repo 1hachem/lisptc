@@ -1,10 +1,12 @@
 import {
+	allTabs,
 	closeTab,
 	dropTab,
 	focusTab,
 	openTab,
 	type Placement,
 	paneOf,
+	replaceTab,
 	type SplitLayout,
 	type Tab,
 	vacantPane,
@@ -25,35 +27,88 @@ const PAGES = [
 export type Page = (typeof PAGES)[number];
 
 export type PanelContent =
-	| { kind: "main" }
 	| { kind: "file"; folder: Folder; name: string }
-	| { kind: "view"; title: string; node: unknown }
+	| { kind: "view"; title: string; node: unknown; chatId?: string }
 	| { kind: "chat"; chatId: string | null; title: string }
 	| { kind: "page"; page: Page; id?: string; title: string };
 
 export type PanelLayout = SplitLayout<PanelContent>;
 
-const MAIN_TAB: Tab<PanelContent> = {
-	id: "main",
-	content: { kind: "main" },
+const RETIRED_MAIN = "main";
+
+export const NEW_CHAT: PanelContent = {
+	kind: "chat",
+	chatId: null,
+	title: "new chat",
 };
 
-export function chatDocked(layout: PanelLayout): boolean {
-	return paneOf(layout, MAIN_TAB.id) !== undefined;
+export const STARTING_LAYOUT: PanelLayout = openTab(
+	{ root: null, focused: null },
+	{ id: "chat:new:start", content: NEW_CHAT },
+);
+
+export function focusedTab(layout: PanelLayout): Tab<PanelContent> | undefined {
+	return allTabs(layout).find((tab) => {
+		const pane = paneOf(layout, tab.id);
+		return pane?.id === layout.focused && pane.active === tab.id;
+	});
 }
 
-export function withMain(layout: PanelLayout): PanelLayout {
-	if (paneOf(layout, MAIN_TAB.id) !== undefined) return layout;
-	if (layout.root === null) return openTab(layout, MAIN_TAB);
+export function shownTabs(layout: PanelLayout): Tab<PanelContent>[] {
+	return allTabs(layout).filter(
+		(tab) => paneOf(layout, tab.id)?.active === tab.id,
+	);
+}
+
+export function leadChat(
+	layout: PanelLayout,
+	minimized: readonly Tab<PanelContent>[] = [],
+): string | undefined {
+	const focused = focusedTab(layout);
+	if (focused?.content.kind === "chat") return focused.id;
+	return (
+		shownTabs(layout).find((t) => t.content.kind === "chat")?.id ??
+		minimized.find((t) => t.content.kind === "chat")?.id
+	);
+}
+
+function chatTabs(tabs: readonly Tab<PanelContent>[]): Tab<PanelContent>[] {
+	return tabs.filter((t) => t.content.kind === "chat");
+}
+
+export function lastChatLeaving(
+	before: PanelLayout,
+	after: PanelLayout,
+	minimized: readonly Tab<PanelContent>[],
+): Tab<PanelContent> | undefined {
+	if (chatTabs(minimized).length > 0) return undefined;
+	if (chatTabs(allTabs(after)).length > 0) return undefined;
+	return chatTabs(allTabs(before)).at(-1);
+}
+
+export function dockTab(
+	layout: PanelLayout,
+	tab: Tab<PanelContent>,
+): PanelLayout {
+	if (paneOf(layout, tab.id) !== undefined) return focusTab(layout, tab.id);
+	if (layout.root === null) return openTab(layout, tab);
 	const vacant = vacantPane(layout);
-	if (vacant !== undefined) return dropTab(layout, MAIN_TAB, { pane: vacant });
-	return dropTab(layout, MAIN_TAB, { node: layout.root.id, edge: "left" });
+	if (vacant !== undefined) return dropTab(layout, tab, { pane: vacant });
+	return dropTab(layout, tab, { node: layout.root.id, edge: "left" });
 }
 
-function placed(layout: PanelLayout, split: Split): Placement {
+export function retireMain(layout: PanelLayout): PanelLayout {
+	if (paneOf(layout, RETIRED_MAIN) === undefined) return layout;
+	return replaceTab(layout, RETIRED_MAIN, panelTab(NEW_CHAT));
+}
+
+function placed(
+	layout: PanelLayout,
+	split: Split,
+	content: PanelContent,
+): Placement {
 	if (split !== "here") return PLACEMENT[split];
-	const focused = paneOf(layout, MAIN_TAB.id);
-	return focused !== undefined && focused.id === layout.focused
+	return content.kind !== "chat" && focusedTab(layout)?.content.kind === "chat"
 		? "right"
 		: "focused";
 }
@@ -90,7 +145,12 @@ function contentOf(value: unknown): PanelContent | undefined {
 	)
 		return { kind: "file", folder: content.folder, name: content.name };
 	if (content?.kind === "view" && typeof content.title === "string")
-		return { kind: "view", title: content.title, node: content.node };
+		return {
+			kind: "view",
+			title: content.title,
+			node: content.node,
+			...(typeof content.chatId === "string" ? { chatId: content.chatId } : {}),
+		};
 	if (
 		content?.kind === "chat" &&
 		(typeof content.chatId === "string" || content.chatId === null) &&
@@ -112,7 +172,6 @@ function contentOf(value: unknown): PanelContent | undefined {
 }
 
 export function tabLabel(content: PanelContent): string {
-	if (content.kind === "main") return "chat";
 	return content.kind === "file" ? content.name : content.title;
 }
 
@@ -120,8 +179,6 @@ export const PANEL_DRAG = "application/x-lisptc-panel";
 
 function tabId(content: PanelContent): string {
 	switch (content.kind) {
-		case "main":
-			return MAIN_TAB.id;
 		case "file":
 			return fileTab(content.folder, content.name);
 		case "view":
@@ -187,7 +244,7 @@ export function applyPanelOps(
 		return openTab(
 			current,
 			{ id: op.tab, content: op.content },
-			placed(current, op.split),
+			placed(current, op.split, op.content),
 		);
 	}, layout);
 }
