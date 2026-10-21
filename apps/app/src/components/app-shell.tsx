@@ -1,5 +1,6 @@
 import { SidebarProvider } from "@repo/ui";
 import type { CSSProperties } from "react";
+import { useNoSwipeNavigation } from "../lib/swipe-guard.ts";
 import { useUI } from "../lib/ui.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
 import { PreferencesPanel } from "./preferences-panel.tsx";
@@ -17,6 +18,7 @@ export function AppShell({
 	onSignOut: () => void;
 }) {
 	const { leftOpen, setLeftOpen, rightOpen, setRightOpen } = useUI();
+	useNoSwipeNavigation();
 
 	return (
 		<div className="h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
