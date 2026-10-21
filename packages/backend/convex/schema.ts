@@ -93,6 +93,7 @@ const legacyLayout = v.object({
 export const panelLayout = v.object({
 	root: v.union(v.string(), v.null()),
 	focused: v.union(v.string(), v.null()),
+	minimized: v.optional(v.array(panelTab)),
 	nodes: v.array(
 		v.union(
 			v.object({
