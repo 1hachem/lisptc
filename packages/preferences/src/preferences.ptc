@@ -4,7 +4,7 @@ User's own preferences: font, which channels and metadata fields chat
 shows, what chat input shows and how it behaves. Belong to person you work for, not workspace; follow them into every
 workspace. App applies change at once, while they watch.
 
-- (preferences) gives (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id :panel-motion t).
+- (preferences) gives (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t).
 - (preferences/set :font "geist") changes only keys you give.
   Toggles merge: (preferences/set :channels '(:lisp t)) turns lisp channel on,
   leaves others as they were.
@@ -20,6 +20,11 @@ workspace. App applies change at once, while they watch.
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
   '() shows all. Attachments and bin hidden until user
   shows them.
+- :status-bar is order of bottom bar items, left to right. First three fill
+  left, centre, right. (preferences/set :status-bar '("clock" "panes")) moves
+  those two first, keeps rest in order. User also drags them in preferences.
+- :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
+  (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
 - :motion is how sidebar animates that drag. (motions) gives alist of
   (id . description) to choose from. System asks for reduced motion: nothing
   animates, whatever :motion says.
@@ -33,6 +38,7 @@ changed, so screen moving is no surprise.
 
 GOTCHAS
 
-- Channel, metadata, input, sidebar or hidden id must be one (preferences) already lists.
+- Channel, metadata, input, sidebar, hidden, status-bar or status-bar-hidden id
+  must be one (preferences) already lists.
   Unknown one errors, naming valid ids.
 - Quote toggle plist, or keywords read as call: '(:lisp t).

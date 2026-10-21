@@ -10,6 +10,8 @@ export interface Preferences {
 	sendLabel?: string;
 	sidebar?: string[];
 	hidden?: string[];
+	statusBar?: string[];
+	statusBarHidden?: string[];
 	motion?: string;
 	panelMotion?: boolean;
 }
