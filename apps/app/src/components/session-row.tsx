@@ -31,7 +31,7 @@ function statusGlyph(chat: Doc<"chats">) {
 	if (chat.status === undefined) return {};
 	if (chat.status === "streaming")
 		return {
-			glyph: <Dots className="size-icon-sm" label="streaming" />,
+			glyph: <Dots className="size-icon-lg" label="streaming" />,
 			iconLabel: "streaming",
 		};
 	const label =
