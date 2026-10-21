@@ -22,6 +22,7 @@ export class ConvexPreferencesStore implements PreferencesStore {
 			sidebar,
 			hidden,
 			motion,
+			panelMotion,
 		} = stored;
 		return {
 			theme,
@@ -33,6 +34,7 @@ export class ConvexPreferencesStore implements PreferencesStore {
 			sidebar,
 			hidden,
 			motion,
+			panelMotion,
 		};
 	}
 

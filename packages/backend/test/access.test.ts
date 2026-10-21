@@ -742,6 +742,7 @@ const DEFAULTS = {
 	...DEFAULT_TOGGLES,
 	sendLabel: DEFAULT_SEND_LABEL,
 	hidden: DEFAULT_HIDDEN,
+	panelMotion: true,
 };
 
 describe("preferences access", () => {
@@ -779,6 +780,7 @@ describe("preferences access", () => {
 			input: DEFAULT_TOGGLES.input,
 			sendLabel: DEFAULT_SEND_LABEL,
 			hidden: DEFAULT_HIDDEN,
+			panelMotion: true,
 		});
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows).toHaveLength(1);

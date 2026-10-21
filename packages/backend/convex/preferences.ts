@@ -18,6 +18,7 @@ const preferences = v.object({
 	sidebar: v.optional(v.array(v.string())),
 	hidden: v.optional(v.array(v.string())),
 	motion: v.optional(v.string()),
+	panelMotion: v.optional(v.boolean()),
 });
 
 function stripped(row: Doc<"preferences"> | null) {

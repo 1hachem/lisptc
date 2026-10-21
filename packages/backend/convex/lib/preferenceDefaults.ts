@@ -45,6 +45,7 @@ export function withDefaults<
 		input?: Toggles;
 		sendLabel?: string;
 		hidden?: string[];
+		panelMotion?: boolean;
 	},
 >(
 	stored: T,
@@ -54,6 +55,7 @@ export function withDefaults<
 	input: Toggles;
 	sendLabel: string;
 	hidden: string[];
+	panelMotion: boolean;
 } {
 	return {
 		...stored,
@@ -62,6 +64,7 @@ export function withDefaults<
 		input: { ...DEFAULT_TOGGLES.input, ...stored.input },
 		sendLabel: stored.sendLabel ?? DEFAULT_SEND_LABEL,
 		hidden: stored.hidden ?? [...DEFAULT_HIDDEN],
+		panelMotion: stored.panelMotion ?? true,
 	};
 }
 

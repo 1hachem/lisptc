@@ -132,6 +132,7 @@ export default defineSchema({
 		sidebar: v.optional(v.array(v.string())),
 		hidden: v.optional(v.array(v.string())),
 		motion: v.optional(v.string()),
+		panelMotion: v.optional(v.boolean()),
 	}).index("by_user", ["userId"]),
 
 	workspaces: defineTable({
