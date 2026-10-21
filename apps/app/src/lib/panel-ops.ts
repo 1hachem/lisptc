@@ -13,7 +13,9 @@ export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
 	| { kind: "view"; title: string; node: unknown };
 
-export type PanelLayout = SplitLayout<PanelContent>;
+export type Dock = "side" | "below";
+
+export type PanelLayout = SplitLayout<PanelContent> & { dock?: Dock };
 
 export type Split = "here" | "right" | "down";
 

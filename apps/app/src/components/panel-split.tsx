@@ -1,14 +1,9 @@
-import {
-	DropPreview,
-	type Placement,
-	SplitView,
-	useNativeDrag,
-	useNativeDropTarget,
-} from "@repo/components";
+import { DropPreview, SplitView, useNativeDrag } from "@repo/components";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@repo/ui";
-import type { ReactNode } from "react";
+import { type DragEvent, type ReactNode, useState } from "react";
 import { useChatSession } from "../lib/chat.tsx";
 import {
+	type Dock,
 	PANEL_DRAG,
 	type PanelContent,
 	readPanelDrag,
@@ -44,32 +39,68 @@ function PanelTab({ content }: { content: PanelContent }) {
 
 const EXTERNAL = { type: PANEL_DRAG, read: readPanelDrag };
 
-function ChatDropZone({
-	placement,
-	hit,
-	lands,
-	label,
-}: {
-	placement: Placement;
-	hit: string;
-	lands: string;
-	label: string;
-}) {
-	const { place } = usePanels();
-	const target = useNativeDropTarget(PANEL_DRAG, (data) => {
-		const tab = readPanelDrag(data);
-		if (tab) place(tab, placement);
-	});
+const BELOW_FROM = 0.7;
+
+const LANDS: Record<Dock, string> = {
+	side: "inset-y-0 right-0 w-1/2",
+	below: "inset-x-0 bottom-0 h-1/2",
+};
+
+function landingLabel(target: Dock, open: boolean, docked: Dock): string {
+	if (open && target === docked) return "add as a tab in the panel";
+	if (open)
+		return target === "below"
+			? "move the panel below the chat"
+			: "move the panel beside the chat";
+	return target === "below" ? "open below the chat" : "open beside the chat";
+}
+
+function landingAt(event: DragEvent<HTMLElement>): Dock {
+	const box = event.currentTarget.getBoundingClientRect();
+	return event.clientY - box.top > box.height * BELOW_FROM ? "below" : "side";
+}
+
+function carriesPanel(event: DragEvent<HTMLElement>): boolean {
+	return event.dataTransfer.types.includes(PANEL_DRAG);
+}
+
+function ChatDropZones({ open, docked }: { open: boolean; docked: Dock }) {
+	const dragging = useNativeDrag(PANEL_DRAG);
+	const { dockTab } = usePanels();
+	const [landing, setLanding] = useState<Dock | null>(null);
+	if (!dragging) return null;
 	return (
 		<>
-			<div {...target.handlers} className={`absolute z-20 ${hit}`} />
-			{target.over && (
+			<section
+				data-drop="chat"
+				aria-label="drop to open in the panel"
+				className="absolute inset-0 z-30"
+				onDragOver={(event) => {
+					if (!carriesPanel(event)) return;
+					event.preventDefault();
+					event.dataTransfer.dropEffect = "copy";
+					setLanding(landingAt(event));
+				}}
+				onDragLeave={(event) => {
+					if (event.currentTarget.contains(event.relatedTarget as Node | null))
+						return;
+					setLanding(null);
+				}}
+				onDrop={(event) => {
+					setLanding(null);
+					if (!carriesPanel(event)) return;
+					event.preventDefault();
+					const tab = readPanelDrag(event.dataTransfer);
+					if (tab) dockTab(tab, landingAt(event));
+				}}
+			/>
+			{landing && (
 				<>
-					<DropPreview className={lands} />
+					<DropPreview className={`z-30 ${LANDS[landing]}`} />
 					<div
-						className={`pointer-events-none absolute z-20 flex items-center justify-center text-accent ${lands}`}
+						className={`pointer-events-none absolute z-30 flex items-center justify-center text-accent ${LANDS[landing]}`}
 					>
-						{label}
+						{landingLabel(landing, open, docked)}
 					</div>
 				</>
 			)}
@@ -77,36 +108,19 @@ function ChatDropZone({
 	);
 }
 
-function ChatDropZones({ open }: { open: boolean }) {
-	const dragging = useNativeDrag(PANEL_DRAG);
-	if (!dragging) return null;
-	return (
-		<>
-			<ChatDropZone
-				placement="focused"
-				hit="inset-y-0 right-0 w-2/5"
-				lands="inset-y-0 right-0 w-1/2"
-				label={open ? "add as a tab in the panel" : "open beside the chat"}
-			/>
-			<ChatDropZone
-				placement="down"
-				hit="bottom-0 left-0 h-1/4 w-3/5"
-				lands="inset-x-0 bottom-0 h-1/2"
-				label={open ? "open in a split below" : "open beside the chat"}
-			/>
-		</>
-	);
-}
-
 export function PanelSplit({ children }: { children: ReactNode }) {
 	const { layout, change } = usePanels();
 	const open = hasTabs(layout);
+	const docked = layout.dock ?? "side";
 	return (
-		<ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+		<ResizablePanelGroup
+			orientation={docked === "below" ? "vertical" : "horizontal"}
+			className="min-h-0 flex-1"
+		>
 			<ResizablePanel id="chat" minSize="25%">
 				<div className="relative flex h-full min-h-0 min-w-0 flex-col">
 					{children}
-					<ChatDropZones open={open} />
+					<ChatDropZones open={open} docked={docked} />
 				</div>
 			</ResizablePanel>
 			{open && (
