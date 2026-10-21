@@ -1,4 +1,4 @@
-import type { ThemeDef } from "@repo/ui";
+import type { ThemeDef, ThemeScheme } from "@repo/ui";
 
 export type ThemeUses = Record<string, number>;
 
@@ -18,14 +18,15 @@ export function mostUsedThemes(
 		.map(({ theme }) => theme);
 }
 
-export function darkVariant(
+export function schemeVariant(
 	themes: readonly ThemeDef[],
 	current: ThemeDef,
+	scheme: ThemeScheme,
 ): ThemeDef | string {
-	if (current.scheme === "dark") return `${current.name} is already dark`;
+	if (current.scheme === scheme) return `${current.name} is already ${scheme}`;
 	return (
 		themes.find(
-			(theme) => theme.name === current.name && theme.scheme === "dark",
-		) ?? `${current.name} has no dark variant`
+			(theme) => theme.name === current.name && theme.scheme === scheme,
+		) ?? `${current.name} has no ${scheme} variant`
 	);
 }
