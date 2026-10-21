@@ -35,7 +35,7 @@ import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import type { SystemEventTicket } from "./system-event.ts";
-import { isFreshChat, turnsToShow } from "./turns.ts";
+import { isFreshChat, keepUnchanged, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
 	id?: string;
@@ -229,10 +229,12 @@ function useGreeting(): ChatMessage | null {
 function freshMeta(
 	turns: readonly ChatMessage[],
 	meta: Record<string, StepMeta>,
+	read: WeakSet<ChatMessage>,
 ): Record<string, StepMeta> {
 	const found: Record<string, StepMeta> = {};
 	for (const m of turns) {
-		if (!m.id) continue;
+		if (!m.id || read.has(m)) continue;
+		read.add(m);
 		const known = meta[m.id];
 		if (known?.memories) continue;
 		const parsed = parseMeta(m);
@@ -245,12 +247,24 @@ function freshMeta(
 
 function useStepMeta(turns: readonly ChatMessage[]): Record<string, StepMeta> {
 	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
+	const read = useRef(new WeakSet<ChatMessage>());
 	useEffect(() => {
-		const found = freshMeta(turns, meta);
+		const found = freshMeta(turns, meta, read.current);
 		if (Object.keys(found).length > 0)
 			setMeta((prev) => ({ ...prev, ...found }));
 	}, [turns, meta]);
 	return meta;
+}
+
+function useKeptMessages(shown: ChatMessage[]): ChatMessage[] {
+	const seen = useRef(new Map<string, ChatMessage>());
+	return useMemo(() => {
+		const kept = keepUnchanged(seen.current, shown);
+		seen.current = new Map(
+			kept.flatMap((m) => (m.id === undefined ? [] : [[m.id, m] as const])),
+		);
+		return kept;
+	}, [shown]);
 }
 
 function useAbandoning(abandon: (target: Id<"chats">) => void) {
@@ -409,10 +423,11 @@ export function ChatProvider({
 		message: string;
 	} | null>(null);
 
-	const turns =
+	const turns = useKeptMessages(
 		streamingFor.current === chatId
 			? turnsToShow(streamed, persisted, stream.isLoading)
-			: persisted;
+			: persisted,
+	);
 
 	const messages = useMemo(
 		() =>

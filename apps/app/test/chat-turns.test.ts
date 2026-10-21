@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { ChatMessage } from "../src/lib/chat.tsx";
-import { isFreshChat, turnsToShow } from "../src/lib/turns.ts";
+import { isFreshChat, keepUnchanged, turnsToShow } from "../src/lib/turns.ts";
 
 function messages(...ids: string[]): ChatMessage[] {
 	return ids.map((id) => ({ id, type: "ai", content: id }));
@@ -46,5 +46,52 @@ describe("where the input sits", () => {
 
 	test("never centres a chat opened by id, even before its turns land", () => {
 		expect(isFreshChat("chat-1", [])).toBe(false);
+	});
+});
+
+describe("which messages keep their identity across chunks", () => {
+	const byId = (list: ChatMessage[]) =>
+		new Map(list.map((m) => [m.id ?? "", m]));
+
+	test("hands back the earlier object for a message that did not change", () => {
+		const before = [
+			{
+				id: "a",
+				type: "ai",
+				content: "a",
+				additional_kwargs: { meta: { at: "t" } },
+			},
+		];
+		const after = [
+			{
+				id: "a",
+				type: "ai",
+				content: "a",
+				additional_kwargs: { meta: { at: "t" } },
+			},
+		];
+		expect(keepUnchanged(byId(before), after)[0]).toBe(before[0]);
+	});
+
+	test("takes the new object for a message still streaming", () => {
+		const after = messages("a", "b2");
+		const kept = keepUnchanged(byId(messages("a", "b")), [
+			after[0] as ChatMessage,
+			{ id: "b", type: "ai", content: "b2" },
+		]);
+		expect(kept[1]?.content).toBe("b2");
+	});
+
+	test("takes the new object when only the extras changed", () => {
+		const before = [{ id: "t", type: "tool", content: "x" }];
+		const after = [
+			{
+				id: "t",
+				type: "tool",
+				content: "x",
+				additional_kwargs: { failed: true as const },
+			},
+		];
+		expect(keepUnchanged(byId(before), after)[0]).toBe(after[0]);
 	});
 });

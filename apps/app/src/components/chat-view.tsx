@@ -2,7 +2,7 @@ import { MessageMemories } from "@repo/components";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { toolAttachments, userAttachments } from "../lib/attached-files.ts";
 import { CHANNELS } from "../lib/channels.ts";
@@ -14,6 +14,7 @@ import {
 	messageProse,
 	messageReasoning,
 	messageText,
+	type StepMeta,
 	toolAnswers,
 	toolAsks,
 	toolFailed,
@@ -350,6 +351,50 @@ function ChatLine({
 	);
 }
 
+const MessageRow = memo(function MessageRow({
+	message,
+	index,
+	stats,
+	busy,
+}: {
+	message: ChatMessage;
+	index: number;
+	stats: StepMeta | undefined;
+	busy: boolean;
+}) {
+	const { shown, metaShown } = useUI();
+	const { openModelPicker } = useModelPicker();
+	if (isSystemMessage(message))
+		return (
+			<div className="min-w-0">
+				<SystemLine message={message} />
+			</div>
+		);
+	const tool = isToolMessage(message);
+	return (
+		<div className="group relative min-w-0 empty:hidden">
+			{tool ? (
+				<ToolMessage message={message} />
+			) : (
+				<ChatLine message={message} index={index} busy={busy} />
+			)}
+			{stats?.memories && shown.memory && (
+				<MessageMemories memories={stats.memories} />
+			)}
+			{stats && (
+				<MessageMeta
+					meta={stats}
+					show={metaShown}
+					onPickModel={openModelPicker}
+				/>
+			)}
+			{!tool && !isUserMessage(message) && (
+				<MessageFeedback messageId={message.id} index={index} />
+			)}
+		</div>
+	);
+});
+
 function StickOnSend({ turn }: { turn: string | undefined }) {
 	const { scrollToBottom } = useStickToBottomContext();
 	useEffect(() => {
@@ -380,8 +425,7 @@ export function ChatView() {
 		error: state.error,
 		isLoading: state.isLoading,
 	}));
-	const { shown, metaShown } = useUI();
-	const { openModelPicker } = useModelPicker();
+	const { shown } = useUI();
 	const lastSent = messages
 		.filter((m) => isUserMessage(m) || isSystemMessage(m))
 		.at(-1)?.id;
@@ -398,45 +442,15 @@ export function ChatView() {
 						(m) =>
 							!isGreetingMessage(m) && (shown.system || !isSystemMessage(m)),
 					)
-					.map((m, i, all) => {
-						const stats = m.id ? meta[m.id] : undefined;
-						const tool = isToolMessage(m);
-						if (isSystemMessage(m))
-							return (
-								<div key={m.id ?? i} className="min-w-0">
-									<SystemLine message={m} />
-								</div>
-							);
-						return (
-							<div
-								key={m.id ?? i}
-								className="group relative min-w-0 empty:hidden"
-							>
-								{tool ? (
-									<ToolMessage message={m} />
-								) : (
-									<ChatLine
-										message={m}
-										index={i}
-										busy={isLoading && i === all.length - 1}
-									/>
-								)}
-								{stats?.memories && shown.memory && (
-									<MessageMemories memories={stats.memories} />
-								)}
-								{stats && (
-									<MessageMeta
-										meta={stats}
-										show={metaShown}
-										onPickModel={openModelPicker}
-									/>
-								)}
-								{!tool && !isUserMessage(m) && (
-									<MessageFeedback messageId={m.id} index={i} />
-								)}
-							</div>
-						);
-					})}
+					.map((m, i, all) => (
+						<MessageRow
+							key={m.id ?? i}
+							message={m}
+							index={i}
+							stats={m.id ? meta[m.id] : undefined}
+							busy={isLoading && i === all.length - 1}
+						/>
+					))}
 				<SteerQueue />
 				<div className="-mt-5 pt-[1.7em]">
 					<AgentAvatar />
