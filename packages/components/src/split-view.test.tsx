@@ -111,6 +111,28 @@ describe("SplitView", () => {
 		expect(host.querySelector("[data-drop]")).toBeNull();
 	});
 
+	it("zooms in only the pane an opening creates, not the ones already there", async () => {
+		const host = document.createElement("div");
+		document.body.append(host);
+		const root = createRoot(host);
+		const draw = (layout: SplitLayout<string>) => (
+			<SplitView
+				layout={layout}
+				onChange={() => {}}
+				renderTab={(content) => content}
+				tabLabel={(content) => content}
+				animated
+			/>
+		);
+		const one = openTab(emptyLayout<string>(), { id: "a", content: "a" });
+		await act(async () => root.render(draw(one)));
+		expect(host.querySelector('[class*="animate-zoom-in"]')).toBeNull();
+		await act(async () =>
+			root.render(draw(openTab(one, { id: "b", content: "b" }, "right"))),
+		);
+		expect(host.querySelectorAll('[class*="animate-zoom-in"]')).toHaveLength(1);
+	});
+
 	it("animates panes only when asked to", async () => {
 		const still = await mounted(view(two, []));
 		expect(still.querySelector('[data-animated="true"]')).toBeNull();

@@ -37,6 +37,7 @@ import {
 	createContext,
 	type ReactNode,
 	useContext,
+	useEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -60,8 +61,12 @@ import {
 } from "./split-layout.ts";
 
 const DRAG_AFTER_PX = 4;
-const APPEARS =
-	"group-data-[animated=true]/split:animate-appear motion-reduce:animate-none";
+const ZOOMS_IN =
+	"group-data-[animated=true]/split:animate-zoom-in motion-reduce:animate-none";
+const SLIDES_IN =
+	"group-data-[animated=true]/split:animate-slide-in motion-reduce:animate-none";
+const SLIDES_SHORT =
+	"group-data-[animated=true]/split:animate-slide-short motion-reduce:animate-none";
 const FADES =
 	"group-data-[animated=true]/split:animate-fade motion-reduce:animate-none";
 const CURSOR_GAP = 8;
@@ -121,6 +126,16 @@ export function SplitView<T>({
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
 	const [pointer, setPointer] = useState({ x: 0, y: 0 });
 	const origin = useRef({ x: 0, y: 0 });
+	const known = useRef(new Set(paneIds(layout.root)));
+	const moved = useRef<string | null>(null);
+	useEffect(() => {
+		known.current = new Set(paneIds(layout.root));
+		moved.current = null;
+	}, [layout]);
+	const entrance = (pane: Pane<T>) => {
+		if (known.current.has(pane.id)) return "";
+		return pane.tabs.some((t) => t.id === moved.current) ? SLIDES_IN : ZOOMS_IN;
+	};
 	const outside = useNativeDrag(external?.type);
 	const accepts = useMemo<External | null>(
 		() =>
@@ -154,10 +169,11 @@ export function SplitView<T>({
 	const onDragEnd = (event: DragEndEvent) => {
 		setDragged(null);
 		const drop = event.over?.data.current?.drop as Drop | undefined;
+		moved.current = String(event.active.id);
 		if (drop) onChange(moveTab(layout, String(event.active.id), drop));
 	};
 	const dragging = dragged !== null || outside;
-	const view = { layout, dragging, onChange, renderTab, tabLabel };
+	const view = { layout, dragging, onChange, renderTab, tabLabel, entrance };
 	return (
 		<ExternalDrop.Provider value={accepts}>
 			<DndContext
@@ -218,6 +234,13 @@ interface View<T> {
 	onChange: (layout: SplitLayout<T>) => void;
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
+	entrance: (pane: Pane<T>) => string;
+}
+
+function paneIds<T>(node: Node<T> | null): string[] {
+	if (node === null) return [];
+	if (node.kind === "pane") return [node.id];
+	return node.children.flatMap((child) => paneIds(child));
 }
 
 function NodeView<T>({ node, view }: { node: Node<T>; view: View<T> }) {
@@ -262,6 +285,7 @@ function PaneView<T>({
 	onChange,
 	renderTab,
 	tabLabel,
+	entrance,
 }: {
 	pane: Pane<T>;
 	layout: SplitLayout<T>;
@@ -269,6 +293,7 @@ function PaneView<T>({
 	onChange: (layout: SplitLayout<T>) => void;
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
+	entrance: (pane: Pane<T>) => string;
 }) {
 	const focused = layout.focused === pane.id;
 	const lone = pane.tabs.length < 2;
@@ -280,7 +305,7 @@ function PaneView<T>({
 		<Tabs
 			value={pane.active ?? undefined}
 			onValueChange={(id) => onChange(focusTab(layout, id))}
-			className={`flex h-full min-h-0 flex-col gap-0 ${APPEARS}`}
+			className={`flex h-full min-h-0 flex-col gap-0 ${entrance(pane)}`}
 		>
 			<div
 				data-focused={focused}
@@ -342,7 +367,7 @@ function PaneView<T>({
 					<TabsContent
 						key={tab.id}
 						value={tab.id}
-						className={`absolute inset-0 overflow-auto ${FADES} ${dragging ? "pointer-events-none" : ""}`}
+						className={`absolute inset-0 overflow-auto ${SLIDES_SHORT} ${dragging ? "pointer-events-none" : ""}`}
 					>
 						{renderTab(tab.content, tab.id)}
 					</TabsContent>
