@@ -9,7 +9,7 @@ import {
 	TextFontIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { ThemeSwatches } from "@repo/components";
+import { SortableTree, ThemeSwatches } from "@repo/components";
 import {
 	fonts,
 	Sidebar,
@@ -34,6 +34,8 @@ import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
 import { usePanelMotion } from "../lib/preferences.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
+import { useStatusBarOrder } from "../lib/status-bar.ts";
+import type { BarItem } from "../lib/status-bar-order.ts";
 import { useUI } from "../lib/ui.tsx";
 
 function ChannelToggle({ channel }: { channel: Channel }) {
@@ -189,6 +191,42 @@ function SidebarList() {
 					onToggle={toggleHidden}
 				/>
 			))}
+		</div>
+	);
+}
+
+const BAR_LABELS: Record<BarItem, string> = {
+	minimized: "minimized tabs",
+	panes: "pane indicator",
+	clock: "clock",
+};
+
+function StatusBarList() {
+	const { order, shown, reorder, toggle } = useStatusBarOrder();
+	const { motion } = useSidebarMotion();
+	return (
+		<div className="px-4 text-[11.5px]">
+			<SortableTree order={order} onReorder={reorder} motion={motion}>
+				{(item) => (
+					<div className="py-0.5">
+						<button
+							type="button"
+							aria-pressed={shown.includes(item)}
+							onClick={() => toggle(item)}
+							className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+						>
+							<span
+								className={`flex-1 ${shown.includes(item) ? "text-fg" : "text-dim line-through"}`}
+							>
+								{BAR_LABELS[item]}
+							</span>
+							<span className="flex-none text-dim">
+								{shown.includes(item) ? "on" : "off"}
+							</span>
+						</button>
+					</div>
+				)}
+			</SortableTree>
 		</div>
 	);
 }
@@ -379,6 +417,10 @@ function Preferences() {
 				sidebar
 			</div>
 			<SidebarList />
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				bottom bar
+			</div>
+			<StatusBarList />
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 				recent themes
 			</div>
