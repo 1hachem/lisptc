@@ -32,10 +32,18 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@repo/ui";
-import { type ReactNode, useState } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useMemo,
+	useState,
+} from "react";
+import { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 import {
 	closeTab,
 	type Drop,
+	dropTab,
 	type Edge,
 	flip,
 	focusTab,
@@ -57,12 +65,29 @@ const EDGE_ZONE: Record<Edge, string> = {
 	top: "inset-x-0 top-0 h-1/4",
 	bottom: "inset-x-0 bottom-0 h-1/4",
 };
+const EDGE_LANDS: Record<Edge, string> = {
+	left: "inset-y-0 left-0 w-1/2",
+	right: "inset-y-0 right-0 w-1/2",
+	top: "inset-x-0 top-0 h-1/2",
+	bottom: "inset-x-0 bottom-0 h-1/2",
+};
+
+interface External {
+	type: string;
+	drop: (drop: Drop, data: DataTransfer) => void;
+}
+
+const ExternalDrop = createContext<External | null>(null);
 
 export interface SplitViewProps<T> {
 	layout: SplitLayout<T>;
 	onChange: (layout: SplitLayout<T>) => void;
 	renderTab: (content: T) => ReactNode;
 	tabLabel: (content: T) => string;
+	external?: {
+		type: string;
+		read: (data: DataTransfer) => Tab<T> | undefined;
+	};
 }
 
 export function SplitView<T>({
@@ -70,8 +95,23 @@ export function SplitView<T>({
 	onChange,
 	renderTab,
 	tabLabel,
+	external,
 }: SplitViewProps<T>) {
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
+	const outside = useNativeDrag(external?.type);
+	const accepts = useMemo<External | null>(
+		() =>
+			external === undefined
+				? null
+				: {
+						type: external.type,
+						drop: (drop, data) => {
+							const tab = external.read(data);
+							if (tab) onChange(dropTab(layout, tab, drop));
+						},
+					},
+		[external, layout, onChange],
+	);
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
 			activationConstraint: { distance: DRAG_AFTER_PX },
@@ -86,66 +126,68 @@ export function SplitView<T>({
 	};
 	const horizontal = layout.direction === "row";
 	return (
-		<DndContext
-			sensors={sensors}
-			collisionDetection={pointerWithin}
-			onDragStart={onDragStart}
-			onDragEnd={onDragEnd}
-			onDragCancel={() => setDragged(null)}
-		>
-			<ResizablePanelGroup
-				key={`${layout.direction}:${layout.groups.map((g) => g.id).join(",")}`}
-				orientation={horizontal ? "horizontal" : "vertical"}
-				onLayoutChanged={(sizes, meta) => {
-					if (meta.isUserInteraction) onChange(resizeGroups(layout, sizes));
-				}}
+		<ExternalDrop.Provider value={accepts}>
+			<DndContext
+				sensors={sensors}
+				collisionDetection={pointerWithin}
+				onDragStart={onDragStart}
+				onDragEnd={onDragEnd}
+				onDragCancel={() => setDragged(null)}
 			>
-				{layout.groups.map((group, g) => (
-					<Split key={group.id} first={g === 0}>
-						<ResizablePanel
-							id={group.id}
-							defaultSize={`${group.size}%`}
-							minSize={MIN_SPLIT}
-						>
-							<ResizablePanelGroup
-								key={group.panes.map((p) => p.id).join(",")}
-								orientation={horizontal ? "vertical" : "horizontal"}
-								onLayoutChanged={(sizes, meta) => {
-									if (meta.isUserInteraction)
-										onChange(resizePanes(layout, group.id, sizes));
-								}}
+				<ResizablePanelGroup
+					key={`${layout.direction}:${layout.groups.map((g) => g.id).join(",")}`}
+					orientation={horizontal ? "horizontal" : "vertical"}
+					onLayoutChanged={(sizes, meta) => {
+						if (meta.isUserInteraction) onChange(resizeGroups(layout, sizes));
+					}}
+				>
+					{layout.groups.map((group, g) => (
+						<Split key={group.id} first={g === 0}>
+							<ResizablePanel
+								id={group.id}
+								defaultSize={`${group.size}%`}
+								minSize={MIN_SPLIT}
 							>
-								{group.panes.map((pane, p) => (
-									<Split key={pane.id} first={p === 0}>
-										<ResizablePanel
-											id={pane.id}
-											defaultSize={`${pane.size}%`}
-											minSize={MIN_SPLIT}
-										>
-											<PaneView
-												pane={pane}
-												layout={layout}
-												dragging={dragged !== null}
-												onChange={onChange}
-												renderTab={renderTab}
-												tabLabel={tabLabel}
-											/>
-										</ResizablePanel>
-									</Split>
-								))}
-							</ResizablePanelGroup>
-						</ResizablePanel>
-					</Split>
-				))}
-			</ResizablePanelGroup>
-			<DragOverlay dropAnimation={null}>
-				{dragged && (
-					<div className="flex h-row items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm">
-						{tabLabel(dragged.content)}
-					</div>
-				)}
-			</DragOverlay>
-		</DndContext>
+								<ResizablePanelGroup
+									key={group.panes.map((p) => p.id).join(",")}
+									orientation={horizontal ? "vertical" : "horizontal"}
+									onLayoutChanged={(sizes, meta) => {
+										if (meta.isUserInteraction)
+											onChange(resizePanes(layout, group.id, sizes));
+									}}
+								>
+									{group.panes.map((pane, p) => (
+										<Split key={pane.id} first={p === 0}>
+											<ResizablePanel
+												id={pane.id}
+												defaultSize={`${pane.size}%`}
+												minSize={MIN_SPLIT}
+											>
+												<PaneView
+													pane={pane}
+													layout={layout}
+													dragging={dragged !== null || outside}
+													onChange={onChange}
+													renderTab={renderTab}
+													tabLabel={tabLabel}
+												/>
+											</ResizablePanel>
+										</Split>
+									))}
+								</ResizablePanelGroup>
+							</ResizablePanel>
+						</Split>
+					))}
+				</ResizablePanelGroup>
+				<DragOverlay dropAnimation={null}>
+					{dragged && (
+						<div className="flex h-row items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm">
+							{tabLabel(dragged.content)}
+						</div>
+					)}
+				</DragOverlay>
+			</DndContext>
+		</ExternalDrop.Provider>
 	);
 }
 
@@ -250,14 +292,16 @@ function PaneView<T>({
 						<Zone
 							id={`center:${pane.id}`}
 							drop={{ pane: pane.id }}
-							className="inset-1/4"
+							hit="inset-1/4"
+							lands="inset-0"
 						/>
 						{EDGES.map((edge) => (
 							<Zone
 								key={edge}
 								id={`edge:${pane.id}:${edge}`}
 								drop={{ pane: pane.id, edge }}
-								className={EDGE_ZONE[edge]}
+								hit={EDGE_ZONE[edge]}
+								lands={EDGE_LANDS[edge]}
 							/>
 						))}
 					</>
@@ -265,6 +309,25 @@ function PaneView<T>({
 			</div>
 		</Tabs>
 	);
+}
+
+function useTarget(id: string, drop: Drop) {
+	const target = useDroppable({ id, data: { drop } });
+	const external = useContext(ExternalDrop);
+	const native = useNativeDropTarget(external?.type, (data) =>
+		external?.drop(drop, data),
+	);
+	return {
+		ref: target.setNodeRef,
+		over: target.isOver || native.over,
+		native: native.handlers,
+	};
+}
+
+function InsertMark({ shown }: { shown: boolean }) {
+	return shown ? (
+		<span className="pointer-events-none absolute inset-y-1 left-0 w-0.5 bg-accent" />
+	) : null;
 }
 
 function TabHandle<T>({
@@ -279,12 +342,14 @@ function TabHandle<T>({
 	onClose: () => void;
 }) {
 	const drag = useDraggable({ id: tab.id, data: { tab } });
-	const target = useDroppable({ id: `tab:${tab.id}`, data: { drop } });
+	const target = useTarget(`tab:${tab.id}`, drop);
 	return (
 		<div
-			ref={target.setNodeRef}
-			className={`group/tab flex h-full flex-none items-center border-border border-r ${target.isOver ? "bg-bg2" : ""}`}
+			ref={target.ref}
+			{...target.native}
+			className="group/tab relative flex h-full flex-none items-center border-border border-r"
 		>
+			<InsertMark shown={target.over} />
 			<TabsTrigger
 				ref={drag.setNodeRef}
 				{...drag.listeners}
@@ -308,29 +373,47 @@ function TabHandle<T>({
 }
 
 function StripEnd({ drop }: { drop: Drop }) {
-	const target = useDroppable({ id: `end:${drop.pane}`, data: { drop } });
+	const target = useTarget(`end:${drop.pane}`, drop);
 	return (
 		<div
-			ref={target.setNodeRef}
-			className={`h-full min-w-6 flex-1 ${target.isOver ? "bg-bg2" : ""}`}
-		/>
+			ref={target.ref}
+			{...target.native}
+			className="relative h-full min-w-6 flex-1"
+		>
+			<InsertMark shown={target.over} />
+		</div>
 	);
 }
 
 function Zone({
 	id,
 	drop,
-	className,
+	hit,
+	lands,
 }: {
 	id: string;
 	drop: Drop;
-	className: string;
+	hit: string;
+	lands: string;
 }) {
-	const target = useDroppable({ id, data: { drop } });
+	const target = useTarget(id, drop);
+	return (
+		<>
+			<div
+				ref={target.ref}
+				{...target.native}
+				data-drop={id}
+				className={`absolute ${hit}`}
+			/>
+			{target.over && <DropPreview className={lands} />}
+		</>
+	);
+}
+
+export function DropPreview({ className }: { className: string }) {
 	return (
 		<div
-			ref={target.setNodeRef}
-			className={`absolute ${className} ${target.isOver ? "bg-accent/15 outline outline-1 outline-accent" : ""}`}
+			className={`pointer-events-none absolute z-10 rounded-sm border-2 border-accent bg-accent/15 ${className}`}
 		/>
 	);
 }

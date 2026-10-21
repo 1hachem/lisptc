@@ -13,6 +13,7 @@ export type { FiredMemory } from "./memories.ts";
 export { firedMemories } from "./memories.ts";
 export { MessageFeedback } from "./message-feedback.tsx";
 export { MessageMemories } from "./message-memories.tsx";
+export { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 export { PromptDialog } from "./prompt-dialog.tsx";
 export { Scramble, type ScrambleProps } from "./scramble.tsx";
 export { moved, SortableTree } from "./sortable-tree.tsx";
@@ -21,6 +22,7 @@ export {
 	closeTab,
 	type Direction,
 	type Drop,
+	dropTab,
 	type Edge,
 	emptyLayout,
 	focusTab,
@@ -33,7 +35,11 @@ export {
 	type SplitLayout,
 	type Tab,
 } from "./split-layout.ts";
-export { SplitView, type SplitViewProps } from "./split-view.tsx";
+export {
+	DropPreview,
+	SplitView,
+	type SplitViewProps,
+} from "./split-view.tsx";
 export {
 	FontDialog,
 	FontSample,

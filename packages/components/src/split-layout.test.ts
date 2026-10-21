@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	allTabs,
 	closeTab,
+	dropTab,
 	emptyLayout,
 	flip,
 	joinPane,
@@ -142,3 +143,35 @@ describe("moving tabs", () => {
 function focus(layout: SplitLayout<string>, id: string) {
 	return openTab(layout, tab(id));
 }
+
+describe("dropping something from outside", () => {
+	it("adds it as a tab where it lands", () => {
+		const layout = opened("a", "b");
+		const pane = layout.groups[0].panes[0].id;
+		const dropped = dropTab(layout, tab("c"), { pane, index: 1 });
+		expect(shape(dropped)).toEqual([[["a", "c", "b"]]]);
+		expect(dropped.groups[0].panes[0].active).toBe("c");
+	});
+
+	it("splits the pane when it lands on an edge", () => {
+		const layout = opened("a");
+		const pane = layout.groups[0].panes[0].id;
+		expect(shape(dropTab(layout, tab("c"), { pane, edge: "bottom" }))).toEqual([
+			[["a"], ["c"]],
+		]);
+	});
+
+	it("moves it when it is already open somewhere else", () => {
+		const split = openTab(opened("a"), tab("b"), "right");
+		const left = paneOf(split, "a")?.id as string;
+		expect(shape(dropTab(split, tab("b"), { pane: left }))).toEqual([
+			[["a", "b"]],
+		]);
+	});
+
+	it("opens it in the focused pane when the target is gone", () => {
+		expect(shape(dropTab(opened("a"), tab("c"), { pane: "nowhere" }))).toEqual([
+			[["a", "c"]],
+		]);
+	});
+});

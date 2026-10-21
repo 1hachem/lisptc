@@ -9,7 +9,7 @@ import {
 	Loading03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import type { ReactNode } from "react";
+import type { DragEvent, ReactNode } from "react";
 import { useEntryDragged } from "./sortable-tree.tsx";
 
 const INDENT_REM = 0.875;
@@ -81,6 +81,7 @@ export function TreeFile({
 	depth = 0,
 	link,
 	trailing,
+	onDragStart,
 }: {
 	name: string;
 	icon?: IconSvgElement;
@@ -91,9 +92,18 @@ export function TreeFile({
 	depth?: number;
 	link: (content: ReactNode, className: string) => ReactNode;
 	trailing?: ReactNode;
+	onDragStart?: (event: DragEvent<HTMLElement>) => void;
 }) {
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: the whole row is what drags into a panel, while its link stays the control a keyboard reaches
 		<div
+			draggable={onDragStart !== undefined || undefined}
+			onDragStart={onDragStart}
+			onPointerDown={
+				onDragStart === undefined
+					? undefined
+					: (event) => event.stopPropagation()
+			}
 			data-selected={selected}
 			className={`group/row flex items-center ${selected ? "bg-bg2" : ""}`}
 		>

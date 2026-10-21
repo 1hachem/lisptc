@@ -280,6 +280,21 @@ export function moveTab<T>(
 	);
 }
 
+export function dropTab<T>(
+	layout: SplitLayout<T>,
+	tab: Tab<T>,
+	drop: Drop,
+): SplitLayout<T> {
+	if (paneOf(layout, tab.id) !== undefined)
+		return moveTab(openTab(layout, tab, { pane: drop.pane }), tab.id, drop);
+	if (locate(layout, drop.pane) === undefined) return openTab(layout, tab);
+	if ("edge" in drop) return splitAt(layout, drop.pane, drop.edge, tab);
+	return focusIn(
+		mapPane(layout, drop.pane, (p) => withTab(p, tab, drop.index)),
+		drop.pane,
+	);
+}
+
 export function joinPane<T>(
 	layout: SplitLayout<T>,
 	paneId: string,
