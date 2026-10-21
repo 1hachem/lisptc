@@ -3,7 +3,7 @@
 import {
 	DndContext,
 	type DragEndEvent,
-	DragOverlay,
+	type DragMoveEvent,
 	type DragStartEvent,
 	MeasuringStrategy,
 	PointerSensor,
@@ -38,6 +38,7 @@ import {
 	type ReactNode,
 	useContext,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
@@ -59,6 +60,9 @@ import {
 } from "./split-layout.ts";
 
 const DRAG_AFTER_PX = 4;
+const CURSOR_GAP = 8;
+const UNZOOMED = "calc(1 / var(--app-zoom, 1))";
+const REZOOMED = "var(--app-zoom, 1)";
 const MEASURE_WHILE_DRAGGING = {
 	droppable: { strategy: MeasuringStrategy.Always },
 };
@@ -103,6 +107,8 @@ export function SplitView<T>({
 	external,
 }: SplitViewProps<T>) {
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
+	const [pointer, setPointer] = useState({ x: 0, y: 0 });
+	const origin = useRef({ x: 0, y: 0 });
 	const outside = useNativeDrag(external?.type);
 	const accepts = useMemo<External | null>(
 		() =>
@@ -122,8 +128,17 @@ export function SplitView<T>({
 			activationConstraint: { distance: DRAG_AFTER_PX },
 		}),
 	);
-	const onDragStart = (event: DragStartEvent) =>
+	const onDragStart = (event: DragStartEvent) => {
+		const start = event.activatorEvent as PointerEvent;
+		origin.current = { x: start.clientX, y: start.clientY };
+		setPointer(origin.current);
 		setDragged((event.active.data.current?.tab as Tab<T>) ?? null);
+	};
+	const onDragMove = (event: DragMoveEvent) =>
+		setPointer({
+			x: origin.current.x + event.delta.x,
+			y: origin.current.y + event.delta.y,
+		});
 	const onDragEnd = (event: DragEndEvent) => {
 		setDragged(null);
 		const drop = event.over?.data.current?.drop as Drop | undefined;
@@ -137,6 +152,7 @@ export function SplitView<T>({
 				collisionDetection={pointerWithin}
 				measuring={MEASURE_WHILE_DRAGGING}
 				onDragStart={onDragStart}
+				onDragMove={onDragMove}
 				onDragEnd={onDragEnd}
 				onDragCancel={() => setDragged(null)}
 			>
@@ -187,13 +203,23 @@ export function SplitView<T>({
 				</ResizablePanelGroup>
 				{typeof document !== "undefined" &&
 					createPortal(
-						<DragOverlay dropAnimation={null}>
-							{dragged && (
-								<div className="flex h-row w-fit items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm">
+						dragged && (
+							<div
+								className="pointer-events-none fixed z-50"
+								style={{
+									zoom: UNZOOMED,
+									left: pointer.x + CURSOR_GAP,
+									top: pointer.y + CURSOR_GAP,
+								}}
+							>
+								<div
+									className="flex h-row items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm"
+									style={{ zoom: REZOOMED }}
+								>
 									{tabLabel(dragged.content)}
 								</div>
-							)}
-						</DragOverlay>,
+							</div>
+						),
 						document.body,
 					)}
 			</DndContext>
