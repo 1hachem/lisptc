@@ -6,11 +6,12 @@ import {
 	allTabs,
 	closeTab,
 	emptyLayout,
+	type Node,
 	openTab,
 	paneOf,
 	type SplitLayout,
 } from "./split-layout.ts";
-import { pagedStop, SplitView } from "./split-view.tsx";
+import { pagedStop, SplitView, widthFloor } from "./split-view.tsx";
 
 beforeAll(() => {
 	(
@@ -114,6 +115,40 @@ describe("paging between panes", () => {
 	it("stays put at either end", () => {
 		expect(pagedStop(stops, 0, -500)).toBe(0);
 		expect(pagedStop(stops, 3, 500)).toBe(3);
+	});
+});
+
+describe("the width a pane cannot shrink below", () => {
+	const floor = (content: string) => (content === "chat" ? 360 : 0);
+	const pane = (...contents: string[]): Node<string> => ({
+		kind: "pane",
+		id: contents.join(),
+		tabs: contents.map((content, i) => ({ id: `${i}`, content })),
+		active: "0",
+	});
+	const split = (
+		direction: "row" | "column",
+		...children: Node<string>[]
+	): Node<string> => ({
+		kind: "split",
+		id: direction,
+		direction,
+		children,
+		sizes: children.map(() => 100 / children.length),
+	});
+
+	it("holds a pane to its widest tab", () => {
+		expect(widthFloor(pane("file", "chat"), floor)).toBe(360);
+		expect(widthFloor(pane("file"), floor)).toBe(0);
+	});
+
+	it("adds up side by side panes and takes the widest of stacked ones", () => {
+		expect(widthFloor(split("row", pane("chat"), pane("chat")), floor)).toBe(
+			720,
+		);
+		expect(widthFloor(split("column", pane("chat"), pane("chat")), floor)).toBe(
+			360,
+		);
 	});
 });
 

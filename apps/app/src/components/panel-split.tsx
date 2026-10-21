@@ -1,6 +1,11 @@
 import { SplitView } from "@repo/components";
 import { LeadChatProvider } from "../lib/lead-chat.tsx";
-import { PANEL_DRAG, readPanelDrag, tabLabel } from "../lib/panel-ops.ts";
+import {
+	PANEL_DRAG,
+	readPanelDrag,
+	tabLabel,
+	tabMinWidth,
+} from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { usePanelMotion } from "../lib/preferences.ts";
 import { IdleWorkspace } from "./idle-workspace.tsx";
@@ -20,6 +25,7 @@ export function PanelSplit() {
 					onChange={arrange}
 					renderTab={(content, id) => <PanelTab id={id} content={content} />}
 					tabLabel={tabLabel}
+					minWidth={tabMinWidth}
 					external={EXTERNAL}
 					animated={panelMotion}
 					placeholder={<IdleWorkspace />}

@@ -54,6 +54,7 @@ import { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 import {
 	closePane,
 	closeTab,
+	type Direction,
 	type Drop,
 	dropTab,
 	type Edge,
@@ -140,6 +141,7 @@ export interface SplitViewProps<T> {
 	};
 	onMinimize?: (tabId: string) => void;
 	tray?: (indicator: ReactNode) => ReactNode;
+	minWidth?: (content: T) => number;
 }
 
 export function SplitView<T>({
@@ -152,6 +154,7 @@ export function SplitView<T>({
 	external,
 	onMinimize,
 	tray,
+	minWidth,
 }: SplitViewProps<T>) {
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
 	const [pointer, setPointer] = useState({ x: 0, y: 0 });
@@ -221,6 +224,7 @@ export function SplitView<T>({
 		maximized,
 		maximize,
 		onMinimize,
+		minWidth,
 	};
 	return (
 		<ExternalDrop.Provider value={accepts}>
@@ -480,6 +484,7 @@ interface View<T> {
 	maximized: Maximized | null;
 	maximize: (maximized: Maximized | null) => void;
 	onMinimize: ((tabId: string) => void) | undefined;
+	minWidth: ((content: T) => number) | undefined;
 }
 
 const TRAY = "tray";
@@ -595,6 +600,18 @@ function paneIds<T>(node: Node<T> | null): string[] {
 	return node.children.flatMap((child) => paneIds(child));
 }
 
+export function widthFloor<T>(
+	node: Node<T>,
+	minWidth: (content: T) => number,
+): number {
+	if (node.kind === "pane")
+		return Math.max(0, ...node.tabs.map((tab) => minWidth(tab.content)));
+	const floors = node.children.map((child) => widthFloor(child, minWidth));
+	return node.direction === "row"
+		? floors.reduce((sum, floor) => sum + floor, 0)
+		: Math.max(0, ...floors);
+}
+
 function widened<T>(
 	node: Node<T>,
 	root: boolean,
@@ -683,7 +700,7 @@ function GroupView<T>({
 					<ResizablePanel
 						id={child.id}
 						defaultSize={`${split.sizes[i] ?? 100 / count}%`}
-						minSize={MIN_SPLIT}
+						minSize={minSizeOf(child, split.direction, view.minWidth)}
 						maxSize={widest === undefined ? undefined : `${widest}%`}
 					>
 						<NodeView node={child} view={view} />
@@ -692,6 +709,16 @@ function GroupView<T>({
 			))}
 		</ResizablePanelGroup>
 	);
+}
+
+function minSizeOf<T>(
+	child: Node<T>,
+	direction: Direction,
+	minWidth: ((content: T) => number) | undefined,
+): number | string {
+	if (direction !== "row" || minWidth === undefined) return MIN_SPLIT;
+	const floor = widthFloor(child, minWidth);
+	return floor > 0 ? floor : MIN_SPLIT;
 }
 
 function Split({ first, children }: { first: boolean; children: ReactNode }) {
