@@ -5,6 +5,7 @@ import { createFileRoute, notFound, Outlet } from "@tanstack/react-router";
 import { PanelSplit } from "../../../components/panel-split.tsx";
 import { prefetchPanels } from "../../../lib/panel-prefetch.ts";
 import { PanelsProvider } from "../../../lib/panels.tsx";
+import { prefetchSidebar } from "../../../lib/sidebar-prefetch.ts";
 
 export const Route = createFileRoute("/_authed/$workspaceId")({
 	params: {
@@ -22,7 +23,10 @@ export const Route = createFileRoute("/_authed/$workspaceId")({
 		);
 		if (workspaces.every((workspace) => workspace._id !== params.workspaceId))
 			throw notFound();
-		await prefetchPanels(context.queryClient, params.workspaceId);
+		await Promise.all([
+			prefetchPanels(context.queryClient, params.workspaceId),
+			prefetchSidebar(context.queryClient, params.workspaceId),
+		]);
 	},
 	component: WorkspaceLayout,
 });

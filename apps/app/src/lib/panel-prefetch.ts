@@ -9,6 +9,7 @@ import {
 	retireMain,
 	shownTabs,
 } from "./panel-ops.ts";
+import { panelAt } from "./panel-paths.ts";
 
 type Prefetch<K extends PanelContent["kind"]> = (
 	queryClient: QueryClient,
@@ -16,14 +17,15 @@ type Prefetch<K extends PanelContent["kind"]> = (
 	content: Extract<PanelContent, { kind: K }>,
 ) => Promise<unknown>;
 
-const prefetchChat: Prefetch<"chat"> = (queryClient, _workspaceId, content) =>
-	content.chatId === null
-		? Promise.resolve()
-		: queryClient.ensureQueryData(
-				convexQuery(api.messages.transcript, {
-					chatId: content.chatId as Id<"chats">,
-				}),
-			);
+function prefetchTranscript(
+	queryClient: QueryClient,
+	chatId: string | null | undefined,
+): Promise<unknown> {
+	if (chatId === null || chatId === undefined) return Promise.resolve();
+	return queryClient.ensureQueryData(
+		convexQuery(api.messages.transcript, { chatId: chatId as Id<"chats"> }),
+	);
+}
 
 const prefetchFile: Prefetch<"file"> = (queryClient, workspaceId, content) =>
 	queryClient.ensureQueryData(
@@ -50,8 +52,8 @@ function prefetch(
 	workspaceId: Id<"workspaces">,
 	content: PanelContent,
 ): Promise<unknown> {
-	if (content.kind === "chat")
-		return prefetchChat(queryClient, workspaceId, content);
+	if (content.kind === "chat" || content.kind === "view")
+		return prefetchTranscript(queryClient, content.chatId);
 	if (content.kind === "file")
 		return prefetchFile(queryClient, workspaceId, content);
 	if (content.kind === "page")
@@ -75,4 +77,14 @@ export async function prefetchPanels(
 			prefetch(queryClient, workspaceId, tab.content),
 		),
 	);
+}
+
+export async function prefetchPanelAt(
+	queryClient: QueryClient,
+	workspaceId: Id<"workspaces">,
+	path: string,
+): Promise<void> {
+	const asked = panelAt(path);
+	if (asked === undefined) return;
+	await prefetch(queryClient, workspaceId, asked).catch(() => undefined);
 }

@@ -44,9 +44,14 @@ import {
 	startPanelDrag,
 } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
-import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
+import { writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
+import {
+	CHAT_PAGE,
+	folderCookie,
+	folderOpen,
+} from "../lib/sidebar-prefetch.ts";
 import { FileMenu } from "./file-menu.tsx";
 import { PanelLink, useShown } from "./panel-link.tsx";
 import { SessionRow } from "./session-row.tsx";
@@ -180,10 +185,6 @@ function isFolder(entry: SidebarEntry): entry is Folder {
 	return FOLDERS.some((folder) => folder === entry);
 }
 
-function folderCookie(folder: Folder) {
-	return `ui.folder.${folder}`;
-}
-
 export function openFolderOnMount(entry: SidebarEntry) {
 	if (isFolder(entry)) writeBoolPref(folderCookie(entry), true);
 }
@@ -192,10 +193,7 @@ function useFolders() {
 	const [opened, setOpened] = useState(
 		() =>
 			Object.fromEntries(
-				FOLDERS.map((folder) => [
-					folder,
-					readBoolPref(folderCookie(folder), folder === "chat"),
-				]),
+				FOLDERS.map((folder) => [folder, folderOpen(folder)]),
 			) as Record<Folder, boolean>,
 	);
 	return (folder: Folder) => ({
@@ -526,7 +524,6 @@ function RootFile({
 	);
 }
 
-const CHAT_PAGE = 20;
 const SEARCH_DELAY_MS = 200;
 
 function useSettled(value: string) {
