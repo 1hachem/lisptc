@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import type { Verdict } from "@repo/evals/report";
+import type { RunResult } from "@repo/evals/runner";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
@@ -12,7 +13,7 @@ import { proseHost } from "@repo/prose-extension/host";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { playwright } from "./fixtures/server.ts";
 import { mockedMcpExtension, tracedSecretsExtension } from "./mocks.ts";
-import type { EvalSpec, RunResult } from "./runner.ts";
+import type { EvalSpec } from "./runner.ts";
 
 const extensions = () => [
 	tracedSecretsExtension(),

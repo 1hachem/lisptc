@@ -1,9 +1,10 @@
 import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
+import { checkSyntax } from "@repo/language-service/syntax";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, it } from "vitest";
 import type { ProseClassifier } from "../src/ports.ts";
-import { checkSyntax, isTruncated, stripProse } from "../src/prose.ts";
+import { isTruncated, stripProse } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
 import {
 	collectSkips,

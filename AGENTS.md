@@ -143,8 +143,10 @@ Everything else:
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter.
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
-- `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
+- `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
+- `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
+- `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
 - `packages/ui` (`@repo/ui`) — the base design system.
@@ -193,8 +195,10 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   that runs a REPL itself, and `@repo/backend` for the agent `apps/app` serves.
   Adding one to the served agent means adding its prompt to what `apps/app`
   ships, and `apps/app/AGENTS.md` carries that rule.
-- `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
+- `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
+- A package tagged `static` is data, like `@repo/toolkit`. It depends on a
+  `foundation` package at most, and every package and app may depend on it.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
   above it reaches past the entrypoints its `package.json` exports. Its stores
   satisfy the language's ports and its `agent-repl` composes the extensions the
@@ -210,10 +214,15 @@ tag may not depend on. `pnpm boundaries` fails on a wrong-direction dependency,
 on an import of a package missing from a `package.json`, on an import that
 reaches into another package's files, and on cycles between workspace packages.
 It does not detect circular imports between files within a package. Do not add
-circular imports between files in a package. `scripts/check-arch/`
+circular imports between files in a package.
+
+A name is exported once, by the module that declares it, and imported from
+there. No module re-exports a name it imported, and none renames one with an
+alias type or const. Only a package's root entrypoint gathers names, and only
+from its own files. `check:arch` fails on a relay. `scripts/check-arch/`
 (`pnpm check:arch`) holds the rules a manifest cannot express, one check per
-file, including the two below. Every failure prints the way out. Take it. Do not widen a list to get
-past one.
+file, including the two below. Every failure prints the way out. Take it. Do not
+widen a list to get past one.
 
 ## Host ports
 

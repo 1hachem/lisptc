@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     "./asks": "./src/asks.ts",
+    "./image-layer": "./src/image-layer.ts",
     "./image-store": "./src/image-store.ts",
     "./repl": "./src/repl.ts",
     "./session-server": "./src/session-server.ts"
@@ -21,6 +22,7 @@
   "dependencies": {
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/language-service": "workspace:*",
     "@repo/shared": "workspace:*"
   },
   "devDependencies": {

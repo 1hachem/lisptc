@@ -87,6 +87,13 @@ extension added to that agent is named in `runtime-assets.ts` too, or it is
 served without its prompt. `test/agent/runtime-assets.test.ts` fails on a
 prompt a module asks for at runtime and the build does not ship.
 
+## Preferences
+
+**Every preference the user can set here, the agent can set too.** A new one
+is added to `packages/preferences` in the same change: its forms read and write
+it, its prompt names it, and a test there sets it. A preference this app stores
+and that extension does not expose fails the rule.
+
 ## Tests
 
 `test/` holds them, under happy-dom. `test/chat-turns.test.ts` and

@@ -32,6 +32,7 @@
 	--spacing-icon-sm: 12px;
 	--spacing-icon: 14px;
 	--spacing-row: 24px;
+	--spacing-menu: calc(var(--spacing-row) * 8);
 	--spacing-switch-width-sm: 24px;
 	--spacing-switch-width: 28px;
 	--spacing-switch-height-sm: 14px;
@@ -158,6 +159,38 @@
 	--purple: #9854f1;
 	--aqua: #118c74;
 	--orange: #b15c00;
+}
+
+[data-theme="rose-pine-dark"] {
+	color-scheme: dark;
+	--bg: #1e1418;
+	--bg1: #261a20;
+	--bg2: #34242c;
+	--fg: #e0def4;
+	--dim: #908caa;
+	--red: #eb6f92;
+	--green: #31748f;
+	--yellow: #f6c177;
+	--blue: #9ccfd8;
+	--purple: #c4a7e7;
+	--aqua: #ebbcba;
+	--orange: #ebbcba;
+}
+
+[data-theme="rose-pine-light"] {
+	color-scheme: light;
+	--bg: #fdf1f4;
+	--bg1: #fff7f9;
+	--bg2: #f5e0e7;
+	--fg: #575279;
+	--dim: #797593;
+	--red: #b4637a;
+	--green: #286983;
+	--yellow: #ea9d34;
+	--blue: #56949f;
+	--purple: #907aa9;
+	--aqua: #d7827e;
+	--orange: #d7827e;
 }
 
 [data-theme="borland"] {

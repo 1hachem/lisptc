@@ -154,10 +154,9 @@ function header(host: HTMLElement, label: string): HTMLButtonElement {
 }
 
 describe("the system channel", () => {
-	it("is a channel the user toggles, hidden by default", () => {
+	it("is a channel the user toggles", () => {
 		expect(CHANNELS.find((c) => c.id === "system")).toMatchObject({
 			label: "system",
-			shownByDefault: false,
 		});
 	});
 

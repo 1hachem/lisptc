@@ -1,16 +1,12 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { TOOLKIT_URL } from "@repo/toolkit";
 import type { ConnConfig, EnvLookup, ToolkitRegistry } from "./ports.ts";
 
-const FROM_SOURCE = import.meta.url.endsWith(".ts");
-
-const TOOLKIT_URL = new URL(
-	FROM_SOURCE ? "../mcp.toolkit.json" : "./mcp.toolkit.json",
-	import.meta.url,
-);
-
 const LOCAL_TOOLKIT_URL = new URL(
-	FROM_SOURCE ? "../mcp.toolkit.local.json" : "./mcp.toolkit.local.json",
+	import.meta.url.endsWith(".ts")
+		? "../mcp.toolkit.local.json"
+		: "./mcp.toolkit.local.json",
 	import.meta.url,
 );
 
@@ -23,15 +19,16 @@ function expandEnv(s: string, env: EnvLookup): string {
 	return s.replace(/\$\{(\w+)\}/g, (_, name) => env.get(name) ?? "");
 }
 
-function resolveBundled(s: string): string {
+function resolveAgainst(s: string, manifest: URL): string {
 	return s.startsWith("./") || s.startsWith("../")
-		? fileURLToPath(new URL(s, TOOLKIT_URL))
+		? fileURLToPath(new URL(s, manifest))
 		: s;
 }
 
 export function jsonToolkit(
 	raw: string,
 	env: EnvLookup = processEnv,
+	manifest: URL = TOOLKIT_URL,
 ): ToolkitRegistry {
 	let configs: ConnConfig[];
 	try {
@@ -39,7 +36,9 @@ export function jsonToolkit(
 		configs = parsed.filter((conf) => Boolean(conf?.name));
 		for (const conf of configs)
 			if ("args" in conf && conf.args)
-				conf.args = conf.args.map((a) => resolveBundled(expandEnv(a, env)));
+				conf.args = conf.args.map((a) =>
+					resolveAgainst(expandEnv(a, env), manifest),
+				);
 	} catch {
 		configs = [];
 	}

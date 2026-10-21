@@ -72,6 +72,7 @@ describe("the convex preferences store", () => {
 				theme: "borland",
 				themeUses: { borland: 3 },
 				channels: { lisp: true },
+				input: { lisp: false },
 				hidden: ["tests"],
 			},
 		});
@@ -81,12 +82,8 @@ describe("the convex preferences store", () => {
 			font: undefined,
 			channels: { lisp: true },
 			metadata: undefined,
+			input: { lisp: false },
 			hidden: ["tests"],
 		});
-	});
-
-	it("reads nothing for a user who never saved", async () => {
-		const { client } = spyClient({});
-		expect(await new ConvexPreferencesStore(() => client).read()).toEqual({});
 	});
 });

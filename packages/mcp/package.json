@@ -14,7 +14,6 @@
     "./oauth-host": "./src/oauth-host.ts",
     "./ports": "./src/ports.ts",
     "./toolkit": "./src/toolkit.ts",
-    "./mcp.toolkit.json": "./mcp.toolkit.json",
     "./mcp.toolkit.local.json": "./mcp.toolkit.local.json"
   },
   "engines": {
@@ -32,6 +31,7 @@
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/shared": "workspace:*",
+    "@repo/toolkit": "workspace:*",
     "minisearch": "^7.2.0",
     "zod": "^4.4.3"
   },

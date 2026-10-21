@@ -4,10 +4,11 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
+import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
-import type { ConnConfig, SearchDocument, SearchEngine } from "../src/ports.ts";
+import type { ConnConfig } from "../src/ports.ts";
 import { jsonToolkit } from "../src/toolkit.ts";
 import {
 	countingHost,
@@ -99,6 +100,30 @@ describe("MCP integration (stdio fixture)", () => {
 	it("lists loaded servers", async () => {
 		expect(await evalStr(interp, "(list-mcps)")).toContain("fx");
 		expect(await evalStr(interp, "(list-mcps)")).toContain(":loaded");
+	});
+
+	it("lists one loaded server's tools", async () => {
+		expect(await evalStr(interp, '(list-tools "fx")')).toContain("fx/echo");
+	});
+
+	it("lists several named servers, refusing one that is not loaded", async () => {
+		expect(await evalStr(interp, '(list-tools "fx" "fx")')).toContain(
+			"fx/echo",
+		);
+		await expect(evalStr(interp, '(list-tools "fx" "nope")')).rejects.toThrow(
+			/MCP server not loaded/,
+		);
+	});
+
+	it("lists every loaded server's tools without a server", async () => {
+		expect(await evalStr(interp, "(list-tools)")).toContain("fx/echo");
+	});
+
+	it("offers the loaded servers as the optional server argument's values", () => {
+		const [server] = interp.docs().get("list-tools")?.args ?? [];
+		expect(server?.required).toBe(false);
+		expect(server?.values?.map((entry) => entry.value)).toEqual(["fx"]);
+		expect(interp.arityOf("list-tools")).toEqual({ min: 0 });
 	});
 
 	it("calls a tool with native keyword syntax", async () => {
@@ -370,7 +395,14 @@ describe("a toolkit server bundled with the repo", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
+			mcpExtension({
+				...mcpHost,
+				toolkit: jsonToolkit(
+					toolkitJson,
+					undefined,
+					new URL("../package.json", import.meta.url),
+				),
+			}),
 		],
 	});
 	runSync(interp, prelude);
@@ -402,6 +434,18 @@ describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 		expect(doc).toContain("one of");
 		expect(doc).toContain("png");
 		expect(doc).toContain("jpeg");
+	});
+
+	it("exposes each schema property as a keyword argument with its enum values", () => {
+		expect(interp.docs().get("en/render")?.args).toEqual([
+			{
+				name: "format",
+				type: ":string",
+				required: true,
+				description: "the output image format",
+				values: [{ value: "png" }, { value: "jpeg" }],
+			},
+		]);
 	});
 });
 

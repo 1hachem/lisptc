@@ -1,3 +1,8 @@
+import {
+	annotate,
+	type ViewNode,
+	viewKey,
+} from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
 import { driveAsync } from "@repo/interpreter/drive";
@@ -16,11 +21,7 @@ import {
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 
@@ -200,6 +201,14 @@ function toJson(x: unknown): UiValue {
 		return items.map(toJson);
 	}
 	return str(x, false);
+}
+
+function viewOf(node: UiNode): ViewNode {
+	return {
+		tag: node.tag,
+		props: node.props,
+		children: node.children.map(viewOf),
+	};
 }
 
 export function nodeToJson(node: UiNode): UiValue {
@@ -712,9 +721,7 @@ export function uiExtension(
 				const view = buffer.collect(rendered).at(-1);
 				return next(
 					buffer,
-					view === undefined
-						? into
-						: annotating(into, "output", { ui: nodeToJson(view) }),
+					view === undefined ? into : annotate(into, viewKey, viewOf(view)),
 				);
 			});
 			hooks.message.use(

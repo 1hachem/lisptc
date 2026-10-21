@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ASKS_KEY, type Ask, asking } from "../src/asks.ts";
+import { type Ask, asking, asksKey } from "../src/asks.ts";
 import { noAnnotations } from "../src/session.ts";
 
 const ask = (id: string): Ask => ({
@@ -28,7 +28,7 @@ describe("asking", () => {
 			open: [ask("b")],
 			answered: { c: { accepted: false, label: "Denied" } },
 		});
-		expect(both.output[ASKS_KEY]).toEqual({
+		expect(both.output[asksKey.name]).toEqual({
 			open: [ask("a"), ask("b")],
 			answered: { c: { accepted: false, label: "Denied" } },
 		});
@@ -43,7 +43,7 @@ describe("asking", () => {
 		const out = asking(noAnnotations(), {
 			answered: { a: { accepted: true, label: "Gone" } },
 		});
-		expect(out.output[ASKS_KEY]).toEqual({
+		expect(out.output[asksKey.name]).toEqual({
 			answered: { a: { accepted: true, label: "Gone" } },
 		});
 	});
@@ -53,7 +53,7 @@ describe("asking", () => {
 			answered: { a: { accepted: true, label: "Gone" } },
 		});
 		const both = asking(first, { open: [ask("b")] });
-		expect(both.output[ASKS_KEY]).toEqual({
+		expect(both.output[asksKey.name]).toEqual({
 			open: [ask("b")],
 			answered: { a: { accepted: true, label: "Gone" } },
 		});

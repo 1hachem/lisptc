@@ -22,7 +22,8 @@ state is the root's to keep**: every root hands the client an `OAuthStore`. The 
 that run on the user's own machine, never for the served agent. The served
 agent keeps it in Convex, whichever container host it runs.
 
-`src/toolkit.ts` and `mcp.toolkit.json` hold the bundled server registry.
+`src/toolkit.ts` reads the bundled server registry, whose manifest lives in
+`@repo/toolkit`.
 
 **Never give a client a callback server of its own.** The OAuth callback server
 is one per port for the whole process, shared by every REPL in it, and reached

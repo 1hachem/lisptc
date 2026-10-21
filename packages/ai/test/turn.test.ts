@@ -2,6 +2,7 @@ import { topic } from "@repo/interpreter/channels";
 import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
+import type { ModelDelta } from "@repo/interpreter/session";
 import {
 	annotating,
 	type InterpExtension,
@@ -10,20 +11,20 @@ import {
 } from "@repo/interpreter/session";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
+import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
 import { renderSystemEvent } from "../src/system-event.ts";
 import type { TurnEvent } from "../src/turn.ts";
 import { extension, notifying, noting, riding, testRepl } from "./helpers.ts";
 
 interface Seen {
-	messages: AgentMessage[];
+	messages: ChatMessage[];
 	system?: string;
 }
 
 const seen: Seen[] = [];
-let script: AgentDelta[][] = [];
+let script: ModelDelta[][] = [];
 let throws: string | undefined;
 let calls = 0;
 let onCall: (() => void) | undefined;
@@ -52,7 +53,7 @@ vi.mock("../src/telemetry.ts", () => ({
 
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (
-		messages: AgentMessage[],
+		messages: ChatMessage[],
 		config?: { system?: string },
 	) {
 		seen.push({ messages, system: config?.system });
@@ -337,6 +338,20 @@ describe("the agent turn", () => {
 		]);
 	});
 
+	test("a steer's lisp does not run when the turn runs no forms, and the model reads the steer as plain text", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
+		const pending = [{ id: "s1", content: "(+ 40 2)" }];
+
+		const events = await drain(ask, {
+			inbox: async () => pending.splice(0),
+			runsForms: false,
+		});
+
+		expect(events.map((e) => e.type)).not.toContain("evaluated");
+		expect(seen[1].messages.at(-1)).toMatchObject({ content: "(+ 40 2)" });
+		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
+	});
+
 	test("the inbox is not read before the first step", async () => {
 		script = [[{ text: "three." }]];
 		let readBeforeModel = false;
@@ -563,7 +578,7 @@ describe("the agent turn", () => {
 		});
 	});
 
-	test.each<[string, AgentDelta[][], TurnOutcome]>([
+	test.each<[string, ModelDelta[][], TurnOutcome]>([
 		["halt", [[{ text: "three." }]], "halt"],
 		["capped", [[{ text: "(+ 1 2)" }]], "capped"],
 		["silent", [[{ text: "" }]], "silent"],

@@ -10,7 +10,7 @@ export interface Atom {
 	line: number;
 	char: number;
 }
-interface ListForm {
+export interface ListForm {
 	kind: "list";
 	items: Node[];
 	openLine: number;

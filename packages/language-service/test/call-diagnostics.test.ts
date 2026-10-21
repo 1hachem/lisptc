@@ -140,6 +140,43 @@ describe("diagnosticsForCalls", () => {
 			);
 		});
 
+		it("checks a bare positional call against its arity first", () => {
+			const calls = callsFor("(pick)");
+			const diagnostics = diagnosticsForCalls(
+				calls,
+				new Map([
+					[
+						"pick",
+						{
+							args: [{ name: "server", type: "string", required: true }],
+							arity: { min: 1, max: 1 },
+						},
+					],
+				]),
+			);
+			expect(diagnostics.map((d) => d.message)).toEqual([
+				"pick: expected 1 argument, got 0",
+			]);
+		});
+
+		it("accepts a bare call that leaves an optional positional arg out", () => {
+			const calls = callsFor("(pick)");
+			expect(
+				diagnosticsForCalls(
+					calls,
+					new Map([
+						[
+							"pick",
+							{
+								args: [{ name: "server", type: "string", required: false }],
+								arity: { min: 0 },
+							},
+						],
+					]),
+				),
+			).toEqual([]);
+		});
+
 		it("still flags a call with no arguments at all", () => {
 			const calls = callsFor("(load-mcp)");
 			const diagnostics = diagnosticsForCalls(
@@ -155,19 +192,13 @@ describe("diagnosticsForCalls", () => {
 });
 
 describe("callDiagnostics", () => {
-	it("resolves each distinct call name exactly once via the injected resolver", async () => {
-		const resolved: string[] = [];
-		const resolve = async (name: string): Promise<CallDoc> => {
-			resolved.push(name);
-			return name === "foo"
-				? { args: [{ name: "bar", type: "string", required: true }] }
-				: {};
-		};
-		const diagnostics = await callDiagnostics(
+	it("checks every call in the text against the docs it is given", () => {
+		const diagnostics = callDiagnostics(
 			"(foo) (foo :bar 1) (baz)",
-			resolve,
+			new Map([
+				["foo", { args: [{ name: "bar", type: "string", required: true }] }],
+			]),
 		);
-		expect(resolved.sort()).toEqual(["baz", "foo"]);
 		expect(diagnostics).toHaveLength(1);
 		expect(diagnostics[0].message).toBe(
 			'foo: missing required argument ":bar"',
