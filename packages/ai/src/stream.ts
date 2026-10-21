@@ -202,6 +202,9 @@ class TurnWire {
 			case "rode":
 				this.reviseLastHuman((m) => carrying(m, event.text));
 				return true;
+			case "notice":
+				this.wire.push(systemEventMessage(event, event.id));
+				return this.snapshot();
 			case "assistant":
 				this.assistant(event);
 				return true;

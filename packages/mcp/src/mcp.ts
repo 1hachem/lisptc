@@ -9,7 +9,13 @@ import {
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
-import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
+import {
+	type Interp,
+	runGen,
+	runSync,
+	type State,
+	type StateCodec,
+} from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -22,6 +28,7 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { keyName, parsePlist } from "@repo/interpreter/plist";
+import { str } from "@repo/interpreter/print";
 import type { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
@@ -34,6 +41,7 @@ import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
+	type HeldState,
 	type HttpConnConfig,
 	type JsonSchema,
 	type McpClient,
@@ -433,7 +441,25 @@ function doUnload(
 	const syms = toolSyms(entry);
 	for (const sym of syms) interp.undefineGlobal(sym);
 	servers.set(servers.get().filter((e) => e.name !== name));
+	recordPhase(interp, name, undefined);
 	return syms;
+}
+
+const HELD = newSym("mcp/*servers*");
+
+function recordPhase(
+	interp: Interp,
+	name: string,
+	phase: LispKeyword | undefined,
+): void {
+	const standing = interp.hasGlobal(HELD)
+		? (listToArray(interp.getGlobal(HELD) as List) as Cell[])
+		: [];
+	const kept = standing.filter((entry) => entry.car !== name);
+	interp.defineGlobal(
+		HELD,
+		arrayToList(phase === undefined ? kept : [new Cell(name, phase), ...kept]),
+	);
 }
 
 function serverOf(error: EvalException): string | undefined {
@@ -547,6 +573,7 @@ function installServer(
 		args,
 	};
 	putEntry(wiring.servers, entry);
+	recordPhase(wiring.interp, name, newLispKeyword("ready"));
 	return arrayToList(toolRows(entry));
 }
 
@@ -592,6 +619,42 @@ function toolRows(entry: ServerEntry): List[] {
 	return entry.tools.map((tool) => toolRow(entry, tool));
 }
 
+export type HeldServers = () => Promise<[name: string, state: HeldState][]>;
+
+function observeForm(name: string, state: HeldState): string {
+	return str(
+		arrayToList([
+			newSym("mcp/observe"),
+			name,
+			newLispKeyword(state.phase),
+			state.reason ?? null,
+		]),
+	);
+}
+
+function observeHeld(
+	hooks: SessionHooks,
+	held: WeakMap<Interp, HeldServers>,
+): void {
+	hooks.beginStep.use(function* (ctx, next) {
+		const ask = held.get(ctx.interp);
+		const states = ask ? yield* settled(ask()) : [];
+		for (const [name, state] of states) {
+			const form = observeForm(name, state);
+			let told: string;
+			try {
+				const result = yield* runGen(ctx.interp, form);
+				if (result === null) continue;
+				told = str(result, false);
+			} catch (error) {
+				told = `error: ${error instanceof Error ? error.message : String(error)}`;
+			}
+			ctx.notify("mcp", `${form}\n=> ${told}`);
+		}
+		yield* next(ctx);
+	});
+}
+
 interface Rebound {
 	readonly bound: readonly string[];
 	readonly dropped: readonly string[];
@@ -627,17 +690,21 @@ function reconcileEachTurn(
 }
 
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
+	const held = new WeakMap<Interp, HeldServers>();
 	const reconcilers = new WeakMap<Interp, Reconcile>();
 	const registry = host.registry ?? memoryRegistry();
 	return Object.assign(
 		(interp: Interp): void => {
-			reconcilers.set(interp, registerMcp(interp, { ...host, registry }));
+			const watch = registerMcp(interp, { ...host, registry });
+			held.set(interp, watch.held);
+			reconcilers.set(interp, watch.reconcile);
 		},
 		{
 			prompt: host.prompt(),
 			session: (hooks: SessionHooks): void => {
 				answerAuthorization(hooks);
 				reconcileEachTurn(hooks, reconcilers);
+				observeHeld(hooks, held);
 			},
 		},
 	);
@@ -648,7 +715,7 @@ export function registerMcp(
 	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy"> & {
 		registry: McpRegistry;
 	},
-): Reconcile {
+): { held: HeldServers; reconcile: Reconcile } {
 	const { client, toolkit, search, registry } = host;
 	const policy = host.policy ?? openPolicy;
 
@@ -1047,6 +1114,23 @@ export function registerMcp(
 		next();
 	});
 
+	interp.def(
+		"_mcp-unload",
+		1,
+		'(_mcp-unload "server")',
+		"Unload a server if it is held and forget its phase; return t when it was held.",
+		z.tuple([zName]),
+		([name]) => {
+			recordPhase(interp, name, undefined);
+			if (entryOf(servers, name) === undefined) return null;
+			doUnload(interp, client, servers, name);
+			return true;
+		},
+	);
+
+	interp.defineGlobal(HELD, null);
+	runSync(interp, OBSERVE);
+
 	interp.recovery.kind({
 		name: TOOL_TAG,
 		restore: (data) => toolBuiltIn(wiring, data as ToolRef),
@@ -1095,19 +1179,24 @@ export function registerMcp(
 		return entry === undefined;
 	}
 
-	async function sleepIdle(): Promise<void> {
+	async function heldPhases(): Promise<[name: string, state: HeldState][]> {
 		const loaded = servers.get().filter((entry) => entry.state === "loaded");
-		const asleep = await Promise.all(
-			loaded.map((entry) => client.asleep(entry.serverId).catch(() => false)),
+		const states = await Promise.all(
+			loaded.map((entry) =>
+				Promise.resolve()
+					.then(() => client.phase(entry.serverId))
+					.catch((): HeldState => ({ phase: "ready" })),
+			),
 		);
+		const changed: [name: string, state: HeldState][] = [];
 		loaded.forEach((entry, i) => {
 			const current = entryOf(servers, entry.name);
-			if (
-				!asleep[i] ||
-				current?.state !== "loaded" ||
-				current.serverId !== entry.serverId
-			)
+			if (current?.state !== "loaded" || current.serverId !== entry.serverId)
 				return;
+			if (states[i].phase !== "sleeping") {
+				changed.push([entry.name, states[i]]);
+				return;
+			}
 			void client.disconnect(entry.serverId).catch(() => {});
 			putEntry(servers, {
 				...current,
@@ -1115,9 +1204,10 @@ export function registerMcp(
 				reason: "stopped after going unused",
 			});
 		});
+		return changed;
 	}
 
-	return async () => {
+	const reconcile: Reconcile = async () => {
 		const mounts = new Map(
 			(await registry.mounts()).map((mount) => [mount.server, mount]),
 		);
@@ -1129,10 +1219,81 @@ export function registerMcp(
 		const bound = [...mounts.values()]
 			.filter((mount) => bindMount(mount))
 			.map((mount) => mount.server);
-		await sleepIdle();
+		await heldPhases();
 		return { bound, dropped };
 	};
+
+	return { held: heldPhases, reconcile };
 }
+
+const OBSERVE = `
+(setq mcp/*on-change* nil)
+
+(setq _mcp-entry
+      (lambda (name alist)
+        (cond ((eq alist nil) nil)
+              ((eq (car (car alist)) name) (car alist))
+              (t (_mcp-entry name (cdr alist))))))
+
+(setq mcp/phase
+      (lambda (name)
+        (cdr (_mcp-entry name mcp/*servers*))))
+(_set-doc 'mcp/phase '(name)
+  "The phase recorded for the held server name: :ready while it is held, nil once it is not.")
+
+(setq mcp/on-change
+      (lambda (name handler)
+        (setq mcp/*on-change* (cons (cons name handler) mcp/*on-change*))
+        name))
+(_set-doc 'mcp/on-change '(name handler)
+  "Have (handler name old new reason) answer when the server name changes phase, in place of the default text. Pass nil to restore the default.")
+
+(setq mcp/default-on-change
+      (lambda (name old new reason)
+        (cond ((eq new :sleeping)
+               (concat name " is asleep and its tools were unloaded. (load-mcp \\"" name "\\") wakes it."))
+              ((eq new :failed)
+               (concat name " failed: " (cond (reason reason) (t "no reason given")) ". Its tools were unloaded."))
+              ((eq new :gone)
+               (concat name " was removed from the workspace."))
+              (t (concat name " is " (string new) ".")))))
+
+(setq _mcp-record
+      (lambda (name phase)
+        ((lambda (entry)
+           (cond (entry (rplacd entry phase))
+                 (t (setq mcp/*servers* (cons (cons name phase) mcp/*servers*)))))
+         (_mcp-entry name mcp/*servers*))))
+
+(setq _mcp-unloads
+      (lambda (phase)
+        (cond ((eq phase :sleeping) t)
+              ((eq phase :failed) t)
+              ((eq phase :gone) t))))
+
+(setq _mcp-tell
+      (lambda (name old new reason)
+        ((lambda (handler)
+           (try (apply (cond (handler handler) (t mcp/default-on-change))
+                       (list name old new reason))
+                (catch (e)
+                  (concat "the on-change handler for " name " failed: " (string e)))))
+         (cdr (_mcp-entry name mcp/*on-change*)))))
+
+(setq mcp/observe
+      (lambda (name phase reason)
+        ((lambda (old)
+           (cond ((eq old phase) nil)
+                 ((cond ((eq old nil) (eq phase :ready)))
+                  (_mcp-record name phase)
+                  nil)
+                 (t (cond ((_mcp-unloads phase) (_mcp-unload name))
+                          (t (_mcp-record name phase)))
+                    (_mcp-tell name old phase reason))))
+         (mcp/phase name))))
+(_set-doc 'mcp/observe '(name phase reason)
+  "Record that the server name is now in phase (:ready, :sleeping, :failed or :gone). Return nil when that is the phase already recorded; otherwise unload the server unless it is :ready, and return what its on-change handler answered.")
+`;
 
 function oauthServer(
 	predefined: Map<string, ConnConfig>,

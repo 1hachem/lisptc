@@ -131,6 +131,7 @@ export function session(
 					hooks.turnStart.run(() => settled(undefined), {
 						interp,
 						emit: () => {},
+						notify: () => {},
 					}),
 				);
 				return undefined;

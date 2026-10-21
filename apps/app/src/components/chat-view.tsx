@@ -1,8 +1,10 @@
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { MessageMemories } from "@repo/components";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { CHANNELS } from "../lib/channels.ts";
 import {
@@ -13,6 +15,7 @@ import {
 	messageProse,
 	messageReasoning,
 	messageText,
+	systemSource,
 	toolAnswers,
 	toolAsks,
 	toolFailed,
@@ -42,16 +45,46 @@ const PAGE_LINES = 200;
 const channel = (id: string) =>
 	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
 
-function ChannelLabel({ id }: { id: string }) {
+function ChannelLabel({
+	id,
+	note,
+	open,
+	body,
+	onToggle,
+}: {
+	id: string;
+	note?: string;
+	open: boolean;
+	body: string;
+	onToggle: () => void;
+}) {
 	const { label, dot, text } = channel(id);
 	return (
-		<div className="mt-2 mb-1 flex items-center gap-2">
+		<button
+			type="button"
+			aria-expanded={open}
+			aria-controls={body}
+			onClick={onToggle}
+			className="group/label mt-2 mb-1 flex w-full cursor-pointer items-center gap-2 text-left"
+		>
+			<HugeiconsIcon
+				aria-hidden
+				icon={ArrowRight01Icon}
+				className={`size-icon-sm flex-none text-dim transition-transform group-hover/label:text-fg ${
+					open ? "rotate-90" : ""
+				}`}
+			/>
 			<span aria-hidden className={`size-1.5 flex-none rounded-full ${dot}`} />
 			<span className={`flex-none text-[11px] tracking-[0.1em] ${text}`}>
 				{label}
 			</span>
+			{note && (
+				<span className="flex-none text-[11px] text-dim tracking-[0.1em]">
+					{note}
+				</span>
+			)}
 			<span aria-hidden className="h-px flex-1 bg-dim/20" />
-		</div>
+		</button>
 	);
 }
 
@@ -185,16 +218,29 @@ function isLabelled(channels: ToolChannels): boolean {
 function Channel({
 	id,
 	labelled,
+	note,
+	openByDefault = true,
 	children,
 }: {
 	id: string;
 	labelled: boolean;
+	note?: string;
+	openByDefault?: boolean;
 	children: React.ReactNode;
 }) {
+	const [open, setOpen] = useState(openByDefault);
+	const body = useId();
+	if (!labelled) return children;
 	return (
 		<>
-			{labelled && <ChannelLabel id={id} />}
-			{children}
+			<ChannelLabel
+				id={id}
+				note={note}
+				open={open}
+				body={body}
+				onToggle={() => setOpen(!open)}
+			/>
+			{open && <div id={body}>{children}</div>}
 		</>
 	);
 }
@@ -266,20 +312,6 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 	);
 }
 
-function SystemLine({ message }: { message: ChatMessage }) {
-	const { text } = channel("system");
-	return (
-		<div className="min-w-0 break-words">
-			<ChannelLabel id="system" />
-			<div
-				className={`whitespace-pre-wrap break-words border-dim/40 border-l pl-3 ${text}`}
-			>
-				{messageText(message)}
-			</div>
-		</div>
-	);
-}
-
 function ChatLine({
 	message,
 	index,
@@ -296,10 +328,11 @@ function ChatLine({
 		<div className="min-w-0 break-words text-fg">
 			{reasoning && (
 				<div className="mb-2">
-					<ChannelLabel id="thinking" />
-					<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
-						{reasoning}
-					</div>
+					<Channel id="thinking" labelled>
+						<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
+							{reasoning}
+						</div>
+					</Channel>
 				</div>
 			)}
 			{isUserMessage(message) ? (
@@ -366,8 +399,20 @@ export function ChatView() {
 						const tool = isToolMessage(m);
 						if (isSystemMessage(m))
 							return (
-								<div key={m.id ?? i} className="min-w-0">
-									<SystemLine message={m} />
+								<div key={m.id ?? i} className="min-w-0 break-words">
+									<Channel
+										id="system"
+										labelled
+										note={systemSource(m)}
+										openByDefault={false}
+									>
+										<div className="border-dim/40 border-l pl-3">
+											<ChannelText
+												text={messageText(m)}
+												tone={channel("system").text}
+											/>
+										</div>
+									</Channel>
 								</div>
 							);
 						return (

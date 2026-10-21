@@ -2,12 +2,15 @@ import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { stateEntries } from "./mcp-server-resource.ts";
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type HeldState,
+	logTail,
+	type McpHost,
+	type ServerHandle,
+	type ServerState,
+	type StartWatch,
+	stillHeld,
 } from "./ports.ts";
 import { reachable, START_LIMITS, waitForStart } from "./start-wait.ts";
 
@@ -19,7 +22,7 @@ interface LocalServer {
 }
 
 function whyItDied(server: LocalServer): string {
-	const tail = server.stderr.trim().split("\n").slice(-6).join("\n");
+	const tail = logTail(server.stderr);
 	return tail ? `\n${tail}` : "";
 }
 
@@ -110,8 +113,12 @@ export class LocalProcessHost implements McpHost {
 
 	used(_name: string): void {}
 
-	async asleep(_name: string): Promise<boolean> {
-		return false;
+	async phase(name: string): Promise<HeldState> {
+		const server = this.started.get(name);
+		if (server === undefined || server.child.exitCode === null)
+			return stillHeld;
+		const reason = logTail(server.stderr);
+		return reason === "" ? { phase: "failed" } : { phase: "failed", reason };
 	}
 
 	private spawn(

@@ -73,6 +73,7 @@ async function opening(f: Fixture): Promise<string> {
 			emit: (text) => {
 				emitted += text;
 			},
+			notify: () => {},
 		}),
 	);
 	return emitted;

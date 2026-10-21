@@ -14,8 +14,9 @@ import { AgentRepl } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
+import { renderSystemEvent } from "../src/system-event.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { extension, noting, riding, testRepl } from "./helpers.ts";
+import { extension, notifying, noting, riding, testRepl } from "./helpers.ts";
 
 interface Seen {
 	messages: ChatMessage[];
@@ -237,6 +238,46 @@ describe("the agent turn", () => {
 				"what is 1 + 2?\n\nyou are a pirate",
 			);
 		expect(ask[0].riding).toBeUndefined();
+	});
+
+	test("a notice lands after the latest tool result and leaves earlier messages alone", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		const events = await drain(ask, {
+			repl: testRepl([notifying("mcp", "github went to sleep", 2)]),
+		});
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"notice",
+			"delta",
+			"assistant",
+			"halt",
+		]);
+		expect(events[3]).toMatchObject({
+			type: "notice",
+			source: "mcp",
+			text: "github went to sleep",
+		});
+		expect(seen[1].messages.slice(0, seen[0].messages.length)).toEqual(
+			seen[0].messages,
+		);
+		expect(seen[1].messages.map((m) => m.role)).toEqual([
+			"user",
+			"assistant",
+			"user",
+			"user",
+		]);
+		expect(seen[1].messages[0].content).toBe("what is 1 + 2?");
+		expect(seen[1].messages.at(-1)).toEqual({
+			role: "user",
+			content: renderSystemEvent({
+				source: "mcp",
+				text: "github went to sleep",
+			}),
+		});
 	});
 
 	test("what rode an earlier message reaches the model, but not the conversation vars", async () => {

@@ -8,6 +8,7 @@ import { CHANNELS } from "../src/lib/channels.ts";
 import { UIProvider, useUI } from "../src/lib/ui.tsx";
 
 const NOTE = "I approved (fs/write a). Carry on.";
+const REASONING = "weighing whether to write a";
 
 const session = vi.hoisted(() => ({
 	messages: [
@@ -17,6 +18,12 @@ const session = vi.hoisted(() => ({
 			type: "system",
 			content: "I approved (fs/write a). Carry on.",
 			additional_kwargs: { source: "permissions/decide" },
+		},
+		{
+			id: "a1",
+			type: "ai",
+			content: "done",
+			additional_kwargs: { reasoning_content: "weighing whether to write a" },
 		},
 	],
 	meta: {},
@@ -137,6 +144,15 @@ async function mount() {
 	return host;
 }
 
+function header(host: HTMLElement, label: string): HTMLButtonElement {
+	const found = [...host.querySelectorAll("button[aria-expanded]")].find(
+		(button) => button.textContent?.includes(label),
+	);
+	if (!(found instanceof HTMLButtonElement))
+		throw new Error(`no channel header for ${label}`);
+	return found;
+}
+
 describe("the system channel", () => {
 	it("is a channel the user toggles", () => {
 		expect(CHANNELS.find((c) => c.id === "system")).toMatchObject({
@@ -147,15 +163,53 @@ describe("the system channel", () => {
 	it("hides what the system told the agent until it is shown, and never draws it as the user's words", async () => {
 		const host = await mount();
 		expect(host.textContent).toContain("write a");
-		expect(host.textContent).not.toContain(NOTE);
+		expect(host.textContent).not.toContain("permissions/decide");
 
 		await act(async () => toggle?.());
 
+		const system = header(host, "system");
+		expect(system.textContent).toContain("permissions/decide");
+		expect(system.getAttribute("aria-expanded")).toBe("false");
+		expect(host.textContent).not.toContain(NOTE);
+
+		await act(async () => system.click());
+
+		expect(system.getAttribute("aria-expanded")).toBe("true");
 		expect(host.textContent).toContain(NOTE);
 		const userLines = [...host.querySelectorAll("[data-user-line]")].map(
 			(line) => line.textContent,
 		);
 		expect(userLines).toEqual(["write a"]);
 		expect(stored.get().channels?.system).toBe(true);
+	});
+});
+
+describe("a channel header", () => {
+	it("starts open and folds its body away and back on a click", async () => {
+		const host = await mount();
+		const thinking = header(host, "thinking");
+		expect(thinking.getAttribute("aria-expanded")).toBe("true");
+		expect(host.textContent).toContain(REASONING);
+
+		await act(async () => thinking.click());
+
+		expect(thinking.getAttribute("aria-expanded")).toBe("false");
+		expect(host.textContent).not.toContain(REASONING);
+		expect(host.textContent).toContain("thinking");
+
+		await act(async () => thinking.click());
+
+		expect(thinking.getAttribute("aria-expanded")).toBe("true");
+		expect(host.textContent).toContain(REASONING);
+	});
+
+	it("points at the body it controls", async () => {
+		const host = await mount();
+		const thinking = header(host, "thinking");
+		const body = thinking.getAttribute("aria-controls");
+		expect(body).toBeTruthy();
+		expect(document.getElementById(body ?? "")?.textContent).toContain(
+			REASONING,
+		);
 	});
 });

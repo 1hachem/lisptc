@@ -87,6 +87,38 @@ describe("an extension hooking the session", () => {
 		expect((await r.beginStep()).emitted).toBe("something worth knowing");
 	});
 
+	it("hands what it was told before a step over as notices, apart from what rides", async () => {
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.beginStep.use(function* (ctx, next) {
+						ctx.notify("mcp", "github went to sleep");
+						ctx.notify("mcp", "linear was removed");
+						yield* next(ctx);
+					});
+				}),
+			],
+		});
+
+		const begun = await r.beginStep();
+
+		expect(begun.emitted).toBe("");
+		expect(begun.notices).toEqual([
+			{ source: "mcp", text: "github went to sleep" },
+			{ source: "mcp", text: "linear was removed" },
+		]);
+		expect((await r.beginStep()).notices).toEqual([
+			{ source: "mcp", text: "github went to sleep" },
+			{ source: "mcp", text: "linear was removed" },
+		]);
+	});
+
+	it("hands no notices over when nobody is told anything", async () => {
+		const r = new AgentRepl({ extensions: [] });
+
+		expect((await r.beginStep()).notices).toEqual([]);
+	});
+
 	it("annotates the step on a lane of its own, beside the output", async () => {
 		const r = new MemoryRepl({
 			extensions: [
@@ -359,8 +391,16 @@ describe("an extension hooking the turn", () => {
 	it("settles as the loop asked when nobody hooks it", async () => {
 		const r = new AgentRepl({ extensions: [] });
 
-		expect(await r.beforeSettle(false)).toEqual({ more: false, emitted: "" });
-		expect(await r.beforeSettle(true)).toEqual({ more: true, emitted: "" });
+		expect(await r.beforeSettle(false)).toEqual({
+			more: false,
+			emitted: "",
+			notices: [],
+		});
+		expect(await r.beforeSettle(true)).toEqual({
+			more: true,
+			emitted: "",
+			notices: [],
+		});
 	});
 
 	it("asks for one more step, and says why", async () => {
@@ -379,6 +419,7 @@ describe("an extension hooking the turn", () => {
 		expect(await r.beforeSettle(false)).toEqual({
 			more: true,
 			emitted: "check your answer",
+			notices: [],
 		});
 	});
 
