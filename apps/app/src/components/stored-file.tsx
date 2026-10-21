@@ -1,14 +1,15 @@
-import { convexQuery } from "@convex-dev/react-query";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
-import { lazy, type ReactNode, Suspense } from "react";
+import { lazy, type ReactNode, Suspense, useState } from "react";
 import {
 	type KnowledgeViewer,
 	knowledgeIcon,
 	knowledgeViewer,
 } from "../lib/knowledge.ts";
+import { usePageHost } from "../lib/page-host.tsx";
 import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
 import { Markdown } from "./markdown.tsx";
@@ -159,7 +160,7 @@ function DownloadLink({ name, url }: { name: string; url: string }) {
 	);
 }
 
-export interface StoredFileRow {
+interface StoredFileRow {
 	name: string;
 	contentType: string | null;
 	url: string | null;
@@ -175,14 +176,41 @@ function useStored(file: StoredFileRow | null | undefined) {
 	return { url, viewer, text, fills };
 }
 
-function openedAs(
-	folder: string,
-	name: string,
-	file: StoredFileRow | null | undefined,
-	text: string | undefined,
-) {
-	if (!file) return undefined;
-	return { path: `${folder}/${name}`, source: text ?? "" };
+const KEEP_FAILURES: Record<string, string> = {
+	NO_SUCH_FILE: "it is no longer in attachments",
+	NAME_TAKEN: "knowledge already holds a file of that name",
+	TOO_MANY_FILES: "the knowledge folder is full",
+};
+
+function KeepAction({
+	workspaceId,
+	name,
+}: {
+	workspaceId: Id<"workspaces">;
+	name: string;
+}) {
+	const keep = useConvexMutation(api.attachments.keep);
+	const host = usePageHost();
+	const [failure, setFailure] = useState<string | null>(null);
+	return (
+		<>
+			{failure && <span className="text-red">{failure}</span>}
+			<button
+				type="button"
+				className="text-dim hover:text-fg"
+				onClick={async () => {
+					const refused = await keep({ workspaceId, name });
+					if (refused !== null) {
+						setFailure(KEEP_FAILURES[refused] ?? refused);
+						return;
+					}
+					host.show({ kind: "file", folder: "knowledge", name });
+				}}
+			>
+				keep in knowledge
+			</button>
+		</>
+	);
 }
 
 export function FilePreview({
@@ -218,7 +246,12 @@ export function FilePreview({
 				<span className="truncate">
 					{folder}/{name}
 				</span>
-				{url && <DownloadLink name={name} url={url} />}
+				<span className="flex flex-none items-center gap-3">
+					{folder === "attachments" && (
+						<KeepAction workspaceId={workspaceId} name={name} />
+					)}
+					{url && <DownloadLink name={name} url={url} />}
+				</span>
 			</div>
 			<div
 				className={
@@ -231,6 +264,16 @@ export function FilePreview({
 			</div>
 		</div>
 	);
+}
+
+function openedAs(
+	folder: string,
+	name: string,
+	file: StoredFileRow | null | undefined,
+	text: string | undefined,
+) {
+	if (!file) return undefined;
+	return { path: `${folder}/${name}`, source: text ?? "" };
 }
 
 export function StoredFile({
