@@ -66,12 +66,12 @@ function ChatTab({
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
 }) {
-	const { retab, layout, minimized } = usePanels();
+	const { retab, layout } = usePanels();
 	return (
 		<ChatPane
 			workspaceId={workspaceId}
 			chatId={chatId}
-			lead={leadChat(layout, minimized) === id}
+			lead={leadChat(layout) === id}
 			onOpened={(opened) =>
 				retab(id, { kind: "chat", chatId: opened, title: "chat" }, true)
 			}

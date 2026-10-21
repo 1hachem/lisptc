@@ -3,12 +3,10 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import {
 	allTabs,
-	closeTab,
 	emptyLayout,
 	type FlatLayout,
 	flatten,
 	replaceTab,
-	type Tab,
 	unflatten,
 } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
@@ -27,11 +25,9 @@ import type { ChatMessage } from "./chat.tsx";
 import { useChatSession } from "./chat.tsx";
 import {
 	applyPanelOps,
-	dockTab,
 	type Folder,
 	fileTab,
 	focusedTab,
-	lastChatLeaving,
 	type PanelContent,
 	type PanelLayout,
 	type PanelOp,
@@ -54,20 +50,14 @@ function toolPanel(message: ChatMessage, chatId: string | null): PanelOp[] {
 	);
 }
 
-export type Minimized = readonly Tab<PanelContent>[];
-
 export interface Panels {
 	workspaceId: Id<"workspaces"> | null;
 	layout: PanelLayout;
-	minimized: Minimized;
 	change: (layout: PanelLayout) => void;
 	arrange: (layout: PanelLayout) => void;
 	apply: (ops: readonly PanelOp[]) => void;
 	openFile: (folder: Folder, name: string) => void;
 	retab: (tabId: string, content: PanelContent, keepId?: boolean) => void;
-	minimize: (tabId: string) => void;
-	restore: (tabId: string) => void;
-	dismiss: (tabId: string) => void;
 }
 
 const PanelsContext = createContext<Panels | null>(null);
@@ -75,22 +65,12 @@ const PanelsContext = createContext<Panels | null>(null);
 const NO_PANELS: Panels = {
 	workspaceId: null,
 	layout: emptyLayout(),
-	minimized: [],
 	change: () => {},
 	arrange: () => {},
 	apply: () => {},
 	openFile: () => {},
 	retab: () => {},
-	minimize: () => {},
-	restore: () => {},
-	dismiss: () => {},
 };
-
-const NOTHING_MINIMIZED: Minimized = [];
-
-function without(minimized: Minimized, tabId: string): Minimized {
-	return minimized.filter((t) => t.id !== tabId);
-}
 
 export function usePanels(): Panels {
 	return useContext(PanelsContext) ?? NO_PANELS;
@@ -111,41 +91,27 @@ function usePanelLayout(workspaceId: Id<"workspaces">) {
 		[mutation],
 	);
 	const [arranged, setArranged] = useState(false);
-	const minimized = useMemo<Minimized>(
-		() => (data?.minimized as Minimized | undefined) ?? NOTHING_MINIMIZED,
-		[data],
-	);
 	const stored = useMemo<PanelLayout>(() => {
 		if (data === undefined) return emptyLayout();
 		const saved =
 			data === null
 				? emptyLayout<PanelContent>()
 				: retireMain(unflatten(data as FlatLayout<PanelContent>));
-		return saved.root === null && minimized.length === 0 && !arranged
-			? STARTING_LAYOUT
-			: saved;
-	}, [data, minimized, arranged]);
+		return saved.root === null && !arranged ? STARTING_LAYOUT : saved;
+	}, [data, arranged]);
 	const latest = useRef(stored);
 	latest.current = stored;
-	const latestMinimized = useRef(minimized);
-	latestMinimized.current = minimized;
 	const save = useCallback(
-		(layout: PanelLayout, held: Minimized) => {
+		(layout: PanelLayout) => {
 			latest.current = layout;
-			latestMinimized.current = held;
 			setArranged(true);
-			void put({
-				workspaceId,
-				layout: { ...flatten(layout), minimized: [...held] },
-			});
+			void put({ workspaceId, layout: flatten(layout) });
 		},
 		[put, workspaceId],
 	);
 	return {
 		layout: stored,
-		minimized,
 		latest,
-		latestMinimized,
 		save,
 		ready: data !== undefined,
 	};
@@ -239,36 +205,13 @@ export function PanelsProvider({
 	workspaceId: Id<"workspaces">;
 	children: ReactNode;
 }) {
-	const {
-		layout: stored,
-		minimized,
-		latest,
-		latestMinimized,
-		save,
-		ready,
-	} = usePanelLayout(workspaceId);
-	const change = useCallback(
-		(layout: PanelLayout) => save(layout, latestMinimized.current),
-		[save, latestMinimized],
-	);
-	const arrange = useCallback(
-		(layout: PanelLayout) => {
-			const held = latestMinimized.current;
-			const leaving = lastChatLeaving(latest.current, layout, held);
-			save(layout, leaving === undefined ? held : [...held, leaving]);
-		},
-		[save, latest, latestMinimized],
-	);
+	const { layout: stored, latest, save, ready } = usePanelLayout(workspaceId);
 	const apply = useCallback(
 		(ops: readonly PanelOp[]) => {
 			if (ops.length === 0) return;
-			const touched = new Set(ops.map((op) => op.tab));
-			save(
-				applyPanelOps(latest.current, ops),
-				latestMinimized.current.filter((t) => !touched.has(t.id)),
-			);
+			save(applyPanelOps(latest.current, ops));
 		},
-		[save, latest, latestMinimized],
+		[save, latest],
 	);
 	const openFile = useCallback(
 		(folder: Folder, name: string) =>
@@ -284,73 +227,24 @@ export function PanelsProvider({
 	);
 	usePanelRequests(apply);
 	const layout = useUrlFocus(workspaceId, stored, ready, apply);
-	const minimize = useCallback(
-		(tabId: string) => {
-			const tab = allTabs(latest.current).find((t) => t.id === tabId);
-			if (tab === undefined || tab.fixed) return;
-			save(closeTab(latest.current, tabId), [
-				...without(latestMinimized.current, tabId),
-				tab,
-			]);
-		},
-		[save, latest, latestMinimized],
-	);
-	const restore = useCallback(
-		(tabId: string) => {
-			const tab = latestMinimized.current.find((t) => t.id === tabId);
-			if (tab === undefined) return;
-			save(
-				dockTab(latest.current, tab),
-				without(latestMinimized.current, tabId),
-			);
-		},
-		[save, latest, latestMinimized],
-	);
-	const dismiss = useCallback(
-		(tabId: string) =>
-			save(latest.current, without(latestMinimized.current, tabId)),
-		[save, latest, latestMinimized],
-	);
 	const retab = useCallback(
 		(tabId: string, content: PanelContent, keepId = false) => {
 			const next = keepId ? { id: tabId, content } : panelTab(content);
-			const held = latestMinimized.current;
-			if (held.some((t) => t.id === tabId))
-				return save(
-					latest.current,
-					held.map((t) => (t.id === tabId ? next : t)),
-				);
-			change(replaceTab(latest.current, tabId, next));
+			save(replaceTab(latest.current, tabId, next));
 		},
-		[save, change, latest, latestMinimized],
+		[save, latest],
 	);
 	const value = useMemo(
 		() => ({
 			workspaceId,
 			layout,
-			minimized,
-			change,
-			arrange,
+			change: save,
+			arrange: save,
 			apply,
 			openFile,
 			retab,
-			minimize,
-			restore,
-			dismiss,
 		}),
-		[
-			workspaceId,
-			layout,
-			minimized,
-			change,
-			arrange,
-			apply,
-			openFile,
-			retab,
-			minimize,
-			restore,
-			dismiss,
-		],
+		[workspaceId, layout, save, apply, openFile, retab],
 	);
 	return (
 		<PanelsContext.Provider value={value}>{children}</PanelsContext.Provider>

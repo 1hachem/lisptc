@@ -2,8 +2,6 @@ import { allTabs, emptyLayout } from "@repo/components";
 import { describe, expect, it } from "vitest";
 import {
 	applyPanelOps,
-	dockTab,
-	lastChatLeaving,
 	leadChat,
 	NEW_CHAT,
 	PANEL_DRAG,
@@ -119,7 +117,7 @@ describe("chats in the layout", () => {
 		expect(allTabs(layout).map((t) => t.id)).toEqual(["chat:c1", "a"]);
 	});
 
-	it("leads with the focused chat, else the first chat on show, else a minimized one", () => {
+	it("leads with the focused chat, else the first chat on show", () => {
 		const layout = applyPanelOps(emptyLayout(), [
 			{ op: "open", tab: "chat:c1", split: "here", content: chat },
 			{ op: "open", tab: "a", split: "here", content: report },
@@ -127,34 +125,6 @@ describe("chats in the layout", () => {
 		expect(leadChat(layout)).toBe("chat:c1");
 		const closed = applyPanelOps(layout, [{ op: "close", tab: "chat:c1" }]);
 		expect(leadChat(closed)).toBeUndefined();
-		expect(leadChat(closed, [{ id: "chat:c1", content: chat }])).toBe(
-			"chat:c1",
-		);
-	});
-
-	it("puts a restored tab into the pane it left empty, or to the left", () => {
-		const others = applyPanelOps(emptyLayout(), [
-			{ op: "open", tab: "a", split: "here", content: report },
-		]);
-		const docked = dockTab(others, { id: "chat:c1", content: chat });
-		expect(allTabs(docked).map((t) => t.id)).toEqual(["chat:c1", "a"]);
-		expect(docked.root?.kind).toBe("split");
-		expect(
-			dockTab(emptyLayout(), { id: "chat:c1", content: chat }).root,
-		).toEqual(expect.objectContaining({ kind: "pane" }));
-	});
-
-	it("catches the last chat leaving the layout, to keep it minimized", () => {
-		const layout = applyPanelOps(emptyLayout(), [
-			{ op: "open", tab: "chat:c1", split: "here", content: chat },
-			{ op: "open", tab: "a", split: "here", content: report },
-		]);
-		const closed = applyPanelOps(layout, [{ op: "close", tab: "chat:c1" }]);
-		expect(lastChatLeaving(layout, closed, [])?.id).toBe("chat:c1");
-		expect(lastChatLeaving(layout, layout, [])).toBeUndefined();
-		expect(
-			lastChatLeaving(layout, closed, [{ id: "chat:c2", content: chat }]),
-		).toBeUndefined();
 	});
 
 	it("turns a layout saved with the old main tab into a new chat", () => {

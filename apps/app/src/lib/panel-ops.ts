@@ -1,7 +1,6 @@
 import {
 	allTabs,
 	closeTab,
-	dropTab,
 	focusTab,
 	openTab,
 	type Placement,
@@ -9,7 +8,6 @@ import {
 	replaceTab,
 	type SplitLayout,
 	type Tab,
-	vacantPane,
 } from "@repo/components";
 
 export type Folder = "attachments" | "knowledge";
@@ -60,41 +58,10 @@ export function shownTabs(layout: PanelLayout): Tab<PanelContent>[] {
 	);
 }
 
-export function leadChat(
-	layout: PanelLayout,
-	minimized: readonly Tab<PanelContent>[] = [],
-): string | undefined {
+export function leadChat(layout: PanelLayout): string | undefined {
 	const focused = focusedTab(layout);
 	if (focused?.content.kind === "chat") return focused.id;
-	return (
-		shownTabs(layout).find((t) => t.content.kind === "chat")?.id ??
-		minimized.find((t) => t.content.kind === "chat")?.id
-	);
-}
-
-function chatTabs(tabs: readonly Tab<PanelContent>[]): Tab<PanelContent>[] {
-	return tabs.filter((t) => t.content.kind === "chat");
-}
-
-export function lastChatLeaving(
-	before: PanelLayout,
-	after: PanelLayout,
-	minimized: readonly Tab<PanelContent>[],
-): Tab<PanelContent> | undefined {
-	if (chatTabs(minimized).length > 0) return undefined;
-	if (chatTabs(allTabs(after)).length > 0) return undefined;
-	return chatTabs(allTabs(before)).at(-1);
-}
-
-export function dockTab(
-	layout: PanelLayout,
-	tab: Tab<PanelContent>,
-): PanelLayout {
-	if (paneOf(layout, tab.id) !== undefined) return focusTab(layout, tab.id);
-	if (layout.root === null) return openTab(layout, tab);
-	const vacant = vacantPane(layout);
-	if (vacant !== undefined) return dropTab(layout, tab, { pane: vacant });
-	return dropTab(layout, tab, { node: layout.root.id, edge: "left" });
+	return shownTabs(layout).find((t) => t.content.kind === "chat")?.id;
 }
 
 export function retireMain(layout: PanelLayout): PanelLayout {

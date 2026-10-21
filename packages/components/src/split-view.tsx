@@ -21,7 +21,6 @@ import {
 	LayoutTwoColumnIcon,
 	LayoutTwoRowIcon,
 	Minimize01Icon,
-	MinusSignIcon,
 	MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -147,8 +146,7 @@ export interface SplitViewProps<T> {
 		type: string;
 		read: (data: DataTransfer) => Tab<T> | undefined;
 	};
-	onMinimize?: (tabId: string) => void;
-	tray?: (indicator: ReactNode) => ReactNode;
+	footer?: (indicator: ReactNode) => ReactNode;
 	minWidth?: (content: T) => number;
 }
 
@@ -160,8 +158,7 @@ export function SplitView<T>({
 	animated = false,
 	placeholder,
 	external,
-	onMinimize,
-	tray,
+	footer,
 	minWidth,
 }: SplitViewProps<T>) {
 	const { moved, entrance } = useEntrance(layout);
@@ -172,12 +169,7 @@ export function SplitView<T>({
 			activationConstraint: { distance: DRAG_AFTER_PX },
 		}),
 	);
-	const { dragged, pointer, handlers } = useTabDrag(
-		layout,
-		onChange,
-		onMinimize,
-		moved,
-	);
+	const { dragged, pointer, handlers } = useTabDrag(layout, onChange, moved);
 	const dragging = dragged !== null || outside;
 	const pager = usePagedScroll(layout.root !== null);
 	const [held, maximize] = useState<Maximized | null>(null);
@@ -192,7 +184,6 @@ export function SplitView<T>({
 		entrance,
 		maximized,
 		maximize,
-		onMinimize,
 		minWidth,
 	};
 	return (
@@ -211,11 +202,7 @@ export function SplitView<T>({
 						animated={animated}
 						placeholder={placeholder}
 					/>
-					{tray !== undefined && (
-						<Tray takes={dragged !== null && onMinimize !== undefined}>
-							{tray(<PageIndicator layout={layout} pager={pager} />)}
-						</Tray>
-					)}
+					{footer?.(<PageIndicator layout={layout} pager={pager} />)}
 				</div>
 				{dragged && (
 					<DragGhost label={tabLabel(dragged.content)} pointer={pointer} />
@@ -242,7 +229,6 @@ function useEntrance<T>(layout: SplitLayout<T>) {
 function useTabDrag<T>(
 	layout: SplitLayout<T>,
 	onChange: (layout: SplitLayout<T>) => void,
-	onMinimize: ((tabId: string) => void) | undefined,
 	moved: RefObject<string | null>,
 ) {
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
@@ -261,10 +247,6 @@ function useTabDrag<T>(
 		});
 	const onDragEnd = (event: DragEndEvent) => {
 		setDragged(null);
-		if (event.over?.id === TRAY && onMinimize) {
-			onMinimize(String(event.active.id));
-			return;
-		}
 		const drop = event.over?.data.current?.drop as Drop | undefined;
 		moved.current = String(event.active.id);
 		if (drop) onChange(moveTab(layout, String(event.active.id), drop));
@@ -547,11 +529,8 @@ interface View<T> {
 	entrance: (pane: Pane<T>) => string;
 	maximized: Maximized | null;
 	maximize: (maximized: Maximized | null) => void;
-	onMinimize: ((tabId: string) => void) | undefined;
 	minWidth: ((content: T) => number) | undefined;
 }
-
-const TRAY = "tray";
 
 function useColumnsInView(
 	pager: RefObject<HTMLDivElement | null>,
@@ -634,20 +613,6 @@ function PageIndicator<T>({
 				/>
 			))}
 		</nav>
-	);
-}
-
-function Tray({ takes, children }: { takes: boolean; children: ReactNode }) {
-	const target = useDroppable({ id: TRAY, disabled: !takes });
-	return (
-		<div ref={target.setNodeRef} className="relative flex-none">
-			{children}
-			{takes && target.isOver && (
-				<div
-					className={`pointer-events-none absolute inset-0 z-10 rounded-sm border-2 border-accent bg-accent/15 ${FADES}`}
-				/>
-			)}
-		</div>
 	);
 }
 
@@ -804,7 +769,6 @@ function PaneView<T>({
 	entrance,
 	maximized,
 	maximize,
-	onMinimize,
 }: {
 	pane: Pane<T>;
 	layout: SplitLayout<T>;
@@ -815,7 +779,6 @@ function PaneView<T>({
 	entrance: (pane: Pane<T>) => string;
 	maximized: Maximized | null;
 	maximize: (maximized: Maximized | null) => void;
-	onMinimize: ((tabId: string) => void) | undefined;
 }) {
 	const axes = axesAround(layout.root, pane.id);
 	const enlarged = maximized?.pane === pane.id;
@@ -869,9 +832,6 @@ function PaneView<T>({
 							label={tabLabel(tab.content)}
 							onClose={
 								tab.fixed ? undefined : () => onChange(closeTab(layout, tab.id))
-							}
-							onMinimize={
-								tab.fixed || !onMinimize ? undefined : () => onMinimize(tab.id)
 							}
 						/>
 					))}
@@ -1012,13 +972,11 @@ function TabHandle<T>({
 	drop,
 	label,
 	onClose,
-	onMinimize,
 }: {
 	tab: Tab<T>;
 	drop: Drop;
 	label: string;
 	onClose?: () => void;
-	onMinimize?: () => void;
 }) {
 	const drag = useDraggable({ id: tab.id, data: { tab } });
 	const target = useTarget(`tab:${tab.id}`, drop);
@@ -1039,17 +997,6 @@ function TabHandle<T>({
 			>
 				<span className="truncate">{label}</span>
 			</TabsTrigger>
-			{onMinimize && (
-				<button
-					type="button"
-					aria-label={`minimize ${label}`}
-					title="minimize"
-					onClick={onMinimize}
-					className="flex h-full flex-none cursor-pointer items-center pr-1 text-dim opacity-0 hover:text-fg group-focus-within/tab:opacity-100 group-hover/tab:opacity-100"
-				>
-					<HugeiconsIcon className="size-icon-xs" icon={MinusSignIcon} />
-				</button>
-			)}
 			{onClose && (
 				<button
 					type="button"

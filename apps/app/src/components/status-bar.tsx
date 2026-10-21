@@ -1,9 +1,11 @@
 import { SortableTree } from "@repo/components";
 import { type ReactNode, useEffect, useState } from "react";
 import { useSidebarMotion } from "../lib/sidebar.ts";
+import { useStatusBarOrder } from "../lib/status-bar.ts";
 import {
-	type BarItem,
 	type BarPlace,
+	type BarSlot,
+	GAP,
 	placeOf,
 } from "../lib/status-bar-order.ts";
 
@@ -36,22 +38,19 @@ function Clock() {
 	);
 }
 
-export function StatusBar({
-	order,
-	items,
-	onReorder,
-}: {
-	order: readonly BarItem[];
-	items: Record<Exclude<BarItem, "clock">, ReactNode>;
-	onReorder: (next: BarItem[]) => void;
-}) {
+export function StatusBar({ indicator }: { indicator: ReactNode }) {
 	const { motion } = useSidebarMotion();
-	const drawn: Record<BarItem, ReactNode> = { ...items, clock: <Clock /> };
+	const { order, shown, reorder } = useStatusBarOrder();
+	const drawn: Record<BarSlot, ReactNode> = {
+		panes: indicator,
+		clock: <Clock />,
+		gap: null,
+	};
 	return (
 		<footer className="h-row flex-none border-sidebar border-t bg-sidebar text-[11px] text-dim">
 			<SortableTree
 				order={order}
-				onReorder={onReorder}
+				onReorder={reorder}
 				motion={motion}
 				axis="horizontal"
 				className="grid h-full grid-cols-[1fr_auto_1fr] items-center"
@@ -59,7 +58,7 @@ export function StatusBar({
 					`row-start-1 flex h-full min-w-0 items-center ${PLACE_CLASS[placeOf(order, item)]}`
 				}
 			>
-				{(item) => drawn[item]}
+				{(slot) => (slot === GAP || shown.includes(slot) ? drawn[slot] : null)}
 			</SortableTree>
 		</footer>
 	);

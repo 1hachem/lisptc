@@ -35,7 +35,7 @@ import { usePanelMotion } from "../lib/preferences.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
-import type { BarItem } from "../lib/status-bar-order.ts";
+import { type BarItem, GAP } from "../lib/status-bar-order.ts";
 import { useUI } from "../lib/ui.tsx";
 
 function ChannelToggle({ channel }: { channel: Channel }) {
@@ -196,10 +196,13 @@ function SidebarList() {
 }
 
 const BAR_LABELS: Record<BarItem, string> = {
-	minimized: "minimized tabs",
 	panes: "pane indicator",
 	clock: "clock",
 };
+
+function EmptySlot() {
+	return <div className="py-0.5 text-dim">empty slot</div>;
+}
 
 function StatusBarList() {
 	const { order, shown, reorder, toggle } = useStatusBarOrder();
@@ -207,25 +210,29 @@ function StatusBarList() {
 	return (
 		<div className="px-4 text-[11.5px]">
 			<SortableTree order={order} onReorder={reorder} motion={motion}>
-				{(item) => (
-					<div className="py-0.5">
-						<button
-							type="button"
-							aria-pressed={shown.includes(item)}
-							onClick={() => toggle(item)}
-							className="flex w-full cursor-pointer items-baseline gap-2 text-left"
-						>
-							<span
-								className={`flex-1 ${shown.includes(item) ? "text-fg" : "text-dim line-through"}`}
+				{(item) =>
+					item === GAP ? (
+						<EmptySlot />
+					) : (
+						<div className="py-0.5">
+							<button
+								type="button"
+								aria-pressed={shown.includes(item)}
+								onClick={() => toggle(item)}
+								className="flex w-full cursor-pointer items-baseline gap-2 text-left"
 							>
-								{BAR_LABELS[item]}
-							</span>
-							<span className="flex-none text-dim">
-								{shown.includes(item) ? "on" : "off"}
-							</span>
-						</button>
-					</div>
-				)}
+								<span
+									className={`flex-1 ${shown.includes(item) ? "text-fg" : "text-dim line-through"}`}
+								>
+									{BAR_LABELS[item]}
+								</span>
+								<span className="flex-none text-dim">
+									{shown.includes(item) ? "on" : "off"}
+								</span>
+							</button>
+						</div>
+					)
+				}
 			</SortableTree>
 		</div>
 	);

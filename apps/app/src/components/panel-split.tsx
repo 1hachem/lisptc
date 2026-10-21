@@ -9,13 +9,13 @@ import {
 import { usePanels } from "../lib/panels.tsx";
 import { usePanelMotion } from "../lib/preferences.ts";
 import { IdleWorkspace } from "./idle-workspace.tsx";
-import { MinimizedTray } from "./minimized-tray.tsx";
 import { PanelTab } from "./panel-tab.tsx";
+import { StatusBar } from "./status-bar.tsx";
 
 const EXTERNAL = { type: PANEL_DRAG, read: readPanelDrag };
 
 export function PanelSplit() {
-	const { layout, arrange, minimize } = usePanels();
+	const { layout, arrange } = usePanels();
 	const { panelMotion } = usePanelMotion();
 	return (
 		<LeadChatProvider>
@@ -29,8 +29,7 @@ export function PanelSplit() {
 					external={EXTERNAL}
 					animated={panelMotion}
 					placeholder={<IdleWorkspace />}
-					onMinimize={minimize}
-					tray={(indicator) => <MinimizedTray indicator={indicator} />}
+					footer={(indicator) => <StatusBar indicator={indicator} />}
 				/>
 			</div>
 		</LeadChatProvider>

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo } from "react";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
 import {
 	type BarItem,
+	type BarSlot,
 	barOrder,
-	reorderedShown,
 	shownItems,
 	toggledItem,
 } from "./status-bar-order.ts";
@@ -23,7 +23,7 @@ export function useStatusBarOrder() {
 	}, [stored, complete, order, put]);
 
 	const reorder = useCallback(
-		(next: BarItem[]) => put({ statusBar: next }),
+		(next: BarSlot[]) => put({ statusBar: next }),
 		[put],
 	);
 
@@ -33,10 +33,5 @@ export function useStatusBarOrder() {
 		[put, stored?.statusBarHidden],
 	);
 
-	const reorderShown = useCallback(
-		(next: BarItem[]) => put({ statusBar: reorderedShown(order, next) }),
-		[put, order],
-	);
-
-	return { order, shown, reorder, reorderShown, toggle };
+	return { order, shown, reorder, toggle };
 }
