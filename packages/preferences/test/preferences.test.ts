@@ -3,7 +3,6 @@ import { preferencesHost } from "../src/preferences-host.ts";
 import { world } from "./helpers.ts";
 
 const HELD = {
-	theme: "gruvbox-dark",
 	font: "geist",
 	channels: { lisp: false, thinking: true },
 	metadata: { tokens: true },
@@ -19,15 +18,12 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:theme "gruvbox-dark" :font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :motion "slide" :panel-motion t)',
+			'(:font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :motion "slide" :panel-motion t)',
 		);
 	});
 
-	it("lists the themes and fonts there are to choose from", async () => {
+	it("lists the fonts and motions there are to choose from", async () => {
 		const { ev } = await world();
-		expect(await ev("(themes)")).toBe(
-			'(("gruvbox-dark" . "gruvbox dark") ("gruvbox-light" . "gruvbox light") ("tokyonight-dark" . "tokyonight dark") ("tokyonight-light" . "tokyonight light") ("paper" . "paper light"))',
-		);
 		expect(await ev("(fonts)")).toBe('(("geist" . "Geist"))');
 		expect(await ev("(motions)")).toBe(
 			'(("slide" . "rows slide") ("lift" . "the row lifts"))',
@@ -38,32 +34,16 @@ describe("reading preferences", () => {
 describe("changing preferences", () => {
 	it("changes only the keys it is given", async () => {
 		const { ev, store } = await world(HELD);
-		await ev('(preferences/set :theme "gruvbox-light")');
-		expect(store.read()).toEqual({ ...HELD, theme: "gruvbox-light" });
+		await ev('(preferences/set :motion "lift")');
+		expect(store.read()).toEqual({ ...HELD, motion: "lift" });
 	});
 
-	it("flips the current theme to its dark counterpart", async () => {
-		const { ev, store } = await world({ ...HELD, theme: "tokyonight-light" });
-		await ev('(preferences/set :theme "dark")');
-		expect(store.read().theme).toBe("tokyonight-dark");
-	});
-
-	it("keeps a theme that is already dark", async () => {
-		const { ev, store } = await world({ ...HELD, theme: "tokyonight-dark" });
-		await ev('(preferences/set :theme "dark")');
-		expect(store.read().theme).toBe("tokyonight-dark");
-	});
-
-	it("falls back to the default dark theme when there is no counterpart", async () => {
-		const { ev, store } = await world({ ...HELD, theme: "paper" });
-		await ev('(preferences/set :theme "dark")');
-		expect(store.read().theme).toBe("gruvbox-dark");
-	});
-
-	it("falls back to the default dark theme when no theme is stored", async () => {
-		const { ev, store } = await world();
-		await ev('(preferences/set :theme "dark")');
-		expect(store.read().theme).toBe("gruvbox-dark");
+	it("has no theme to set, the theme being the workspace's", async () => {
+		const { ev } = await world(HELD);
+		await expect(
+			ev('(preferences/set :theme "gruvbox-light")'),
+		).rejects.toThrow();
+		await expect(ev("(themes)")).rejects.toThrow();
 	});
 
 	it("merges toggles and keeps the ones it does not name", async () => {
@@ -104,11 +84,8 @@ describe("changing preferences", () => {
 		expect(store.read()).toEqual(HELD);
 	});
 
-	it("refuses a theme or font the app does not offer", async () => {
+	it("refuses a font the app does not offer", async () => {
 		const { ev, store } = await world(HELD);
-		await expect(ev('(preferences/set :theme "neon")')).rejects.toThrow(
-			/unknown theme/,
-		);
 		await expect(ev('(preferences/set :font "comic")')).rejects.toThrow(
 			/unknown font/,
 		);
@@ -205,7 +182,7 @@ describe("the prompt", () => {
 		for (const form of [
 			"(preferences)",
 			"(preferences/set",
-			"(themes)",
+			"(fonts)",
 			"(motions)",
 		])
 			expect(prompt).toContain(form);

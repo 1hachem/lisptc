@@ -1,3 +1,4 @@
+import type { Id } from "@repo/backend/dataModel";
 import { describe, expect, it } from "vitest";
 import {
 	fileContext,
@@ -54,13 +55,15 @@ describe("preferencesSource", () => {
 });
 
 describe("settingsSource", () => {
-	it("names the workspace and its model", () => {
+	it("names the workspace, its model and its icon", () => {
 		expect(
 			settingsSource(
-				{ name: "personal" },
+				{ _id: "w1" as Id<"workspaces">, name: "personal", icon: "rocket" },
 				{ provider: "anthropic", model: "claude-opus-5-5" },
 			),
-		).toBe('(settings :name "personal"\n  :model "anthropic/claude-opus-5-5")');
+		).toBe(
+			'(settings :name "personal"\n  :model "anthropic/claude-opus-5-5"\n  :icon "rocket")',
+		);
 	});
 });
 

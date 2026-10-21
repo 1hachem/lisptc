@@ -141,6 +141,7 @@ export default defineSchema({
 		slug: v.string(),
 		model: v.optional(storedModel),
 		icon: v.optional(workspaceIcon),
+		theme: v.optional(v.string()),
 	})
 		.index("by_owner", ["ownerId"])
 		.index("by_owner_slug", ["ownerId", "slug"]),

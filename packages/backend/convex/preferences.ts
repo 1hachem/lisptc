@@ -8,7 +8,6 @@ import { MAX_PREFERENCES_BYTES } from "./limits.js";
 const encoder = new TextEncoder();
 
 const preferences = v.object({
-	theme: v.optional(v.string()),
 	font: v.optional(v.string()),
 	themeUses: v.optional(v.record(v.string(), v.number())),
 	channels: v.optional(v.record(v.string(), v.boolean())),
@@ -23,7 +22,7 @@ const preferences = v.object({
 
 function stripped(row: Doc<"preferences"> | null) {
 	if (row === null) return {};
-	const { _id, _creationTime, userId, ...stored } = row;
+	const { _id, _creationTime, userId, theme, ...stored } = row;
 	return stored;
 }
 

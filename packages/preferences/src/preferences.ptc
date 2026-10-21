@@ -1,11 +1,11 @@
 PREFERENCES
 
-User's own preferences: theme, font, which channels and metadata fields chat
+User's own preferences: font, which channels and metadata fields chat
 shows, what chat input shows and how it behaves. Belong to person you work for, not workspace; follow them into every
 workspace. App applies change at once, while they watch.
 
-- (preferences) gives (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id :panel-motion t).
-- (preferences/set :theme "gruvbox-light") changes only keys you give.
+- (preferences) gives (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id :panel-motion t).
+- (preferences/set :font "geist") changes only keys you give.
   Toggles merge: (preferences/set :channels '(:lisp t)) turns lisp channel on,
   leaves others as they were.
 - :input is what chat input shows and how it behaves. Shows: :send is send
@@ -25,9 +25,8 @@ workspace. App applies change at once, while they watch.
   animates, whatever :motion says.
 - :panel-motion t animates panels as they open, split, switch tab; nil keeps
   them still: (preferences/set :panel-motion nil). Reduced motion wins here too.
-- (themes) and (fonts) give alist of (id . name) to choose from.
-- (preferences/set :theme "dark") flips current theme to its dark twin.
-  No dark twin: default dark theme.
+- (fonts) gives alist of (id . name) to choose from.
+- Theme is not preference: belongs to workspace, see (settings).
 
 Change preference only when user asks, not to suit yourself. Say what you
 changed, so screen moving is no surprise.

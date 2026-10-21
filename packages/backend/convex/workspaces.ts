@@ -1,3 +1,4 @@
+import { themes } from "@repo/ui/themes";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -24,6 +25,7 @@ const workspace = v.object({
 	slug: v.string(),
 	model: v.optional(storedModel),
 	icon: v.optional(workspaceIcon),
+	theme: v.optional(v.string()),
 });
 
 export async function dropWorkspace(
@@ -115,6 +117,19 @@ export const setIcon = mutation({
 	handler: async (ctx, { workspaceId, icon }) => {
 		await requireWorkspace(ctx, workspaceId);
 		await ctx.db.patch(workspaceId, { icon });
+		return null;
+	},
+});
+
+export const setTheme = mutation({
+	args: { workspaceId: v.id("workspaces"), theme: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, theme }) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (!themes.some((offered) => offered.id === theme)) {
+			throw new ConvexError({ code: "UNKNOWN_THEME" });
+		}
+		await ctx.db.patch(workspaceId, { theme });
 		return null;
 	},
 });

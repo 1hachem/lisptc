@@ -3,7 +3,6 @@ import type { Awaitable, PromptSource } from "@repo/shared/host";
 export type Toggles = Readonly<Record<string, boolean>>;
 
 export interface Preferences {
-	theme?: string;
 	font?: string;
 	channels?: Toggles;
 	metadata?: Toggles;
@@ -25,15 +24,8 @@ export interface Choice {
 	name: string;
 }
 
-export interface ThemeChoice extends Choice {
-	family: string;
-	scheme: "light" | "dark";
-}
-
 export interface PreferencesHost {
 	store: PreferencesStore;
-	themes: readonly ThemeChoice[];
-	defaultDarkTheme?: string;
 	fonts: readonly Choice[];
 	motions: readonly Choice[];
 	prompt: PromptSource;

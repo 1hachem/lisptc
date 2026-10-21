@@ -7,9 +7,12 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { useConvexMutation } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
 import { fontOf, themeOf } from "./resolved-preferences.ts";
 import { mostUsedThemes, recordThemeUse } from "./theme-uses.ts";
+import { useWorkspace } from "./workspace.tsx";
 
 const SHORTLIST = 6;
 
@@ -31,6 +34,34 @@ function offered<T extends { id: string }>(list: T[], id: string): T {
 	return found;
 }
 
+function useSetTheme() {
+	const mutation = useConvexMutation(api.workspaces.setTheme);
+	return useMemo(
+		() =>
+			mutation.withOptimisticUpdate((store, { workspaceId, theme }) => {
+				const list = store.getQuery(api.workspaces.list, {});
+				if (list !== undefined)
+					store.setQuery(
+						api.workspaces.list,
+						{},
+						list.map((candidate) =>
+							candidate._id === workspaceId
+								? { ...candidate, theme }
+								: candidate,
+						),
+					);
+				const single = store.getQuery(api.workspaces.get, { workspaceId });
+				if (single !== undefined)
+					store.setQuery(
+						api.workspaces.get,
+						{ workspaceId },
+						{ ...single, theme },
+					);
+			}),
+		[mutation],
+	);
+}
+
 export function AppearanceProvider({
 	children,
 }: {
@@ -39,7 +70,9 @@ export function AppearanceProvider({
 	const [picking, setPicking] = useState<"theme" | "font" | null>(null);
 	const stored = usePreferences();
 	const put = usePutPreferences();
-	const currentTheme = themeOf(stored);
+	const { workspace } = useWorkspace();
+	const setTheme = useSetTheme();
+	const currentTheme = themeOf(workspace ?? undefined);
 	const currentFont = fontOf(stored);
 	const uses = stored?.themeUses;
 	const openThemePicker = useCallback(() => setPicking("theme"), []);
@@ -50,8 +83,9 @@ export function AppearanceProvider({
 	);
 
 	const chooseTheme = (id: string) => {
-		if (id === currentTheme) return;
-		put({ theme: id, themeUses: recordThemeUse(uses ?? {}, id) });
+		if (!workspace || id === currentTheme) return;
+		void setTheme({ workspaceId: workspace._id, theme: id });
+		put({ themeUses: recordThemeUse(uses ?? {}, id) });
 	};
 
 	const chooseFont = (id: string) => {

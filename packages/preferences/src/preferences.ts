@@ -12,16 +12,9 @@ import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
-import type {
-	Choice,
-	Preferences,
-	PreferencesHost,
-	ThemeChoice,
-	Toggles,
-} from "./ports.ts";
+import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
 
 const SET_KEYS = [
-	"theme",
 	"font",
 	"channels",
 	"metadata",
@@ -36,13 +29,6 @@ const SET_KEYS = [
 const MAX_SEND_LABEL = 16;
 
 const SET_ARGS = [
-	{
-		name: "theme",
-		type: "string",
-		required: false,
-		description:
-			'a theme id from (themes), or "dark" for the dark counterpart of the current theme, falling back to the default dark theme',
-	},
 	{
 		name: "font",
 		type: "string",
@@ -120,7 +106,6 @@ function togglesList(toggles: Toggles | undefined): List {
 
 export function preferencesList(preferences: Preferences): List {
 	return plist([
-		["theme", preferences.theme ?? null],
 		["font", preferences.font ?? null],
 		["channels", togglesList(preferences.channels)],
 		["metadata", togglesList(preferences.metadata)],
@@ -138,7 +123,7 @@ function choices(offered: readonly Choice[]): List {
 }
 
 function chosen(
-	kind: "theme" | "font" | "motion",
+	kind: "font" | "motion",
 	value: unknown,
 	offered: readonly Choice[],
 ): string {
@@ -147,24 +132,6 @@ function chosen(
 	if (offered.length > 0 && !offered.some((choice) => choice.id === value))
 		throw new EvalException(`unknown ${kind}, see (${kind}s)`, value);
 	return value;
-}
-
-function darkCounterpart(
-	current: string | undefined,
-	offered: readonly ThemeChoice[],
-	fallback: string | undefined,
-): string {
-	const family = offered.find((theme) => theme.id === current)?.family;
-	const dark = offered.find(
-		(theme) => theme.family === family && theme.scheme === "dark",
-	);
-	const id = dark?.id ?? fallback;
-	if (id === undefined)
-		throw new EvalException(
-			"no dark theme to switch to, see (themes)",
-			current ?? null,
-		);
-	return id;
 }
 
 function toggled(
@@ -237,7 +204,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id :panel-motion t). They belong to the user, not the workspace, and the app applies them live.',
+		'Return the user\'s preferences as a plist: (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id :panel-motion t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -247,23 +214,18 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id] [:panel-motion t])',
+		'(preferences/set [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id] [:panel-motion t])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :theme :font :channels :metadata :input :send-label :sidebar :hidden :motion :panel-motion",
+					"nothing to set, give one of :font :channels :metadata :input :send-label :sidebar :hidden :motion :panel-motion",
 					null,
 				);
 			const current = yield* settled(store.read());
 			const change: Preferences = {};
-			if (options.has("theme"))
-				change.theme =
-					options.get("theme") === "dark"
-						? darkCounterpart(current.theme, host.themes, host.defaultDarkTheme)
-						: chosen("theme", options.get("theme"), host.themes);
 			if (options.has("font"))
 				change.font = chosen("font", options.get("font"), host.fonts);
 			if (options.has("channels"))
@@ -298,15 +260,6 @@ export function registerPreferences(
 			return preferencesList({ ...current, ...change });
 		},
 		SET_ARGS,
-	);
-
-	interp.def(
-		"themes",
-		0,
-		"(themes)",
-		"Return an alist of (id . name) for every theme the app offers.",
-		z.tuple([]),
-		() => choices(host.themes),
 	);
 
 	interp.def(

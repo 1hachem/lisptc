@@ -6,7 +6,7 @@ import { useUI } from "../lib/ui.tsx";
 import { FileView } from "./file-view.tsx";
 
 export function PreferencesPage() {
-	const { theme, font, openThemePicker, openFontPicker } = useAppearance();
+	const { font, openFontPicker } = useAppearance();
 	const { shown, metaShown, inputOn, sendLabel } = useUI();
 	const { order, hidden } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
@@ -17,7 +17,6 @@ export function PreferencesPage() {
 			file={{
 				path: "preferences.ptc",
 				source: preferencesSource({
-					theme: theme.id,
 					font: font.id,
 					channels: shown,
 					metadata: metaShown,
@@ -30,22 +29,13 @@ export function PreferencesPage() {
 				}),
 			}}
 			actions={
-				<>
-					<button
-						type="button"
-						onClick={openThemePicker}
-						className="flex-none cursor-pointer hover:text-fg"
-					>
-						change theme
-					</button>
-					<button
-						type="button"
-						onClick={openFontPicker}
-						className="flex-none cursor-pointer hover:text-fg"
-					>
-						change font
-					</button>
-				</>
+				<button
+					type="button"
+					onClick={openFontPicker}
+					className="flex-none cursor-pointer hover:text-fg"
+				>
+					change font
+				</button>
 			}
 		/>
 	);
