@@ -296,11 +296,12 @@ const SECTIONS: { name: string; icon: IconSvgElement }[] = [
 function SectionRail() {
 	const { setOpen } = useSidebar();
 	return (
-		<SidebarMenu className="items-center gap-1 py-3.5">
+		<SidebarMenu className="items-center gap-0.5 py-3.5">
 			{SECTIONS.map((section) => (
 				<SidebarMenuItem key={section.name}>
 					<SidebarMenuButton
 						tooltip={section.name}
+						className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
 						onClick={() => setOpen(true)}
 					>
 						<HugeiconsIcon icon={section.icon} />
@@ -319,7 +320,7 @@ export function PreferencesPanel() {
 			<SidebarContent>
 				{state === "expanded" ? <Preferences /> : <SectionRail />}
 			</SidebarContent>
-			<SidebarRail />
+			<SidebarRail className="hover:after:bg-transparent" />
 		</Sidebar>
 	);
 }

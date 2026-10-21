@@ -4,7 +4,10 @@ import { useUI } from "../lib/ui.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
 import { PreferencesPanel } from "./preferences-panel.tsx";
 
-const SIDEBAR_SIZE = { "--sidebar-width": "214px" } as CSSProperties;
+const SIDEBAR_SIZE = {
+	"--sidebar-width": "190px",
+	"--sidebar-width-icon": "2rem",
+} as CSSProperties;
 
 export function AppShell({
 	children,

@@ -15,6 +15,7 @@ import {
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useNewChat } from "../lib/chats.ts";
 import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
 import { useSidebarOrder } from "../lib/sidebar.ts";
@@ -25,11 +26,18 @@ import { ENTRY_ICONS, WorkspaceTree } from "./workspace-tree.tsx";
 function EntryRail() {
 	const { shown } = useSidebarOrder();
 	const { setOpen } = useSidebar();
+	const newChat = useNewChat();
 	return (
-		<SidebarMenu className="items-center gap-1 py-1">
+		<SidebarMenu className="items-center gap-0.5 py-1">
 			{shown.map((entry) => (
 				<SidebarMenuItem key={entry}>
-					<SidebarMenuButton tooltip={entry} onClick={() => setOpen(true)}>
+					<SidebarMenuButton
+						tooltip={entry}
+						className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
+						onClick={() =>
+							entry === "new_chat" ? void newChat() : setOpen(true)
+						}
+					>
 						<HugeiconsIcon icon={ENTRY_ICONS[entry]} />
 						<span>{entry}</span>
 					</SidebarMenuButton>
@@ -123,7 +131,7 @@ export function LeftSidebar({ onSignOut }: { onSignOut: () => void }) {
 				)}
 			</SidebarContent>
 			<UserRow expanded={expanded} onSignOut={onSignOut} />
-			<SidebarRail />
+			<SidebarRail className="hover:after:bg-transparent" />
 		</Sidebar>
 	);
 }
