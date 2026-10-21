@@ -24,6 +24,7 @@ export {
 } from "./components/ui/dropdown-menu.tsx";
 export { Input } from "./components/ui/input.tsx";
 export {
+	type ResizableGroupHandle,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,

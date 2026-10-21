@@ -14,10 +14,14 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import {
+	ArrowLeftRightIcon,
+	ArrowUpDownIcon,
 	Cancel01Icon,
 	DragDropIcon,
 	LayoutTwoColumnIcon,
 	LayoutTwoRowIcon,
+	Minimize01Icon,
+	MinusSignIcon,
 	MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -26,6 +30,7 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
+	type ResizableGroupHandle,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
@@ -37,6 +42,7 @@ import {
 import {
 	createContext,
 	type ReactNode,
+	type RefObject,
 	useContext,
 	useEffect,
 	useMemo,
@@ -79,6 +85,9 @@ const MEASURE_WHILE_DRAGGING = {
 };
 const MIN_SPLIT = "12%";
 const VISIBLE_COLUMNS = 2;
+const PAGE_AFTER = 0.2;
+const GESTURE_IDLE_MS = 220;
+const COAST_STEPS = 3;
 const EDGES: Edge[] = ["left", "right", "top", "bottom"];
 const EDGE_ZONE: Record<Edge, string> = {
 	left: "inset-y-0 left-0 w-1/4",
@@ -99,6 +108,18 @@ const EDGE_LANDS: Record<Edge, string> = {
 	bottom: "inset-x-0 bottom-0 h-1/2",
 };
 
+type Axis = "width" | "height";
+
+interface Maximized {
+	pane: string;
+	axis: Axis;
+}
+
+const AXIS_OF: Record<"row" | "column", Axis> = {
+	row: "width",
+	column: "height",
+};
+
 interface External {
 	type: string;
 	drop: (drop: Drop, data: DataTransfer) => void;
@@ -117,6 +138,8 @@ export interface SplitViewProps<T> {
 		type: string;
 		read: (data: DataTransfer) => Tab<T> | undefined;
 	};
+	onMinimize?: (tabId: string) => void;
+	tray?: (indicator: ReactNode) => ReactNode;
 }
 
 export function SplitView<T>({
@@ -127,6 +150,8 @@ export function SplitView<T>({
 	animated = false,
 	placeholder,
 	external,
+	onMinimize,
+	tray,
 }: SplitViewProps<T>) {
 	const [dragged, setDragged] = useState<Tab<T> | null>(null);
 	const [pointer, setPointer] = useState({ x: 0, y: 0 });
@@ -173,12 +198,30 @@ export function SplitView<T>({
 		});
 	const onDragEnd = (event: DragEndEvent) => {
 		setDragged(null);
+		if (event.over?.id === TRAY && onMinimize) {
+			onMinimize(String(event.active.id));
+			return;
+		}
 		const drop = event.over?.data.current?.drop as Drop | undefined;
 		moved.current = String(event.active.id);
 		if (drop) onChange(moveTab(layout, String(event.active.id), drop));
 	};
 	const dragging = dragged !== null || outside;
-	const view = { layout, dragging, onChange, renderTab, tabLabel, entrance };
+	const pager = usePagedScroll(layout.root !== null);
+	const [held, maximize] = useState<Maximized | null>(null);
+	const maximized =
+		held !== null && paneIds(layout.root).includes(held.pane) ? held : null;
+	const view = {
+		layout,
+		dragging,
+		onChange,
+		renderTab,
+		tabLabel,
+		entrance,
+		maximized,
+		maximize,
+		onMinimize,
+	};
 	return (
 		<ExternalDrop.Provider value={accepts}>
 			<DndContext
@@ -190,33 +233,48 @@ export function SplitView<T>({
 				onDragEnd={onDragEnd}
 				onDragCancel={() => setDragged(null)}
 			>
-				<div
-					data-animated={animated}
-					className="group/split relative h-full min-h-0"
-				>
-					{layout.root ? (
-						<div className="h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-none">
-							<NodeView node={layout.root} view={view} root />
-						</div>
-					) : (
-						<div className="flex h-full items-center justify-center">
-							{placeholder}
-						</div>
-					)}
-					{dragging && !layout.root && (
-						<Zone id="view" drop={{ pane: "" }} hit="inset-0" lands="inset-0" />
-					)}
-					{dragging &&
-						layout.root &&
-						EDGES.map((edge) => (
+				<div className="flex h-full min-h-0 flex-col">
+					<div
+						data-animated={animated}
+						className="group/split relative min-h-0 flex-1"
+					>
+						{layout.root ? (
+							<div
+								ref={pager}
+								className="h-full overflow-hidden overscroll-x-none"
+							>
+								<NodeView node={layout.root} view={view} root />
+							</div>
+						) : (
+							<div className="flex h-full items-center justify-center">
+								{placeholder}
+							</div>
+						)}
+						{dragging && !layout.root && (
 							<Zone
-								key={edge}
-								id={`view:${edge}`}
-								drop={{ node: (layout.root as Node<T>).id, edge }}
-								hit={`z-20 ${VIEW_EDGE_ZONE[edge]}`}
-								lands={`z-20 ${EDGE_LANDS[edge]}`}
+								id="view"
+								drop={{ pane: "" }}
+								hit="inset-0"
+								lands="inset-0"
 							/>
-						))}
+						)}
+						{dragging &&
+							layout.root &&
+							EDGES.map((edge) => (
+								<Zone
+									key={edge}
+									id={`view:${edge}`}
+									drop={{ node: (layout.root as Node<T>).id, edge }}
+									hit={`z-20 ${VIEW_EDGE_ZONE[edge]}`}
+									lands={`z-20 ${EDGE_LANDS[edge]}`}
+								/>
+							))}
+					</div>
+					{tray !== undefined && (
+						<Tray takes={dragged !== null && onMinimize !== undefined}>
+							{tray(<PageIndicator layout={layout} pager={pager} />)}
+						</Tray>
+					)}
 				</div>
 				{typeof document !== "undefined" &&
 					createPortal(
@@ -244,6 +302,174 @@ export function SplitView<T>({
 	);
 }
 
+export function pagedStop(
+	stops: readonly number[],
+	settled: number,
+	travelled: number,
+	after = PAGE_AFTER,
+): number {
+	if (travelled === 0) return settled;
+	const next = settled + Math.sign(travelled);
+	const from = stops[settled];
+	const to = stops[next];
+	if (from === undefined || to === undefined) return settled;
+	return Math.abs(travelled) >= after * Math.abs(to - from) ? next : settled;
+}
+
+function stopsOf(scroller: HTMLElement): number[] {
+	const max = scroller.scrollWidth - scroller.clientWidth;
+	const origin = scroller.getBoundingClientRect().left - scroller.scrollLeft;
+	const panels = scroller.querySelectorAll(
+		':scope > [data-slot="resizable-panel-group"] > [data-slot="resizable-panel"]',
+	);
+	const starts = [...panels]
+		.map((panel) => panel.getBoundingClientRect().left - origin)
+		.filter((start) => start < max - 1);
+	return [...starts, max];
+}
+
+function nearest(stops: readonly number[], at: number): number {
+	let best = 0;
+	stops.forEach((stop, i) => {
+		if (Math.abs(stop - at) < Math.abs((stops[best] ?? 0) - at)) best = i;
+	});
+	return best;
+}
+
+function scrollsItself(
+	from: EventTarget | null,
+	scroller: HTMLElement,
+	dx: number,
+): boolean {
+	for (
+		let at = from instanceof HTMLElement ? from : null;
+		at && at !== scroller;
+		at = at.parentElement
+	) {
+		if (at.scrollWidth <= at.clientWidth) continue;
+		const room =
+			dx > 0 ? at.scrollWidth - at.clientWidth - at.scrollLeft : at.scrollLeft;
+		if (room > 0 && getComputedStyle(at).overflowX !== "hidden") return true;
+	}
+	return false;
+}
+
+function usePagedScroll(shown: boolean) {
+	const ref = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const scroller = ref.current;
+		if (!shown || !scroller) return;
+		let gesture: {
+			stops: number[];
+			settled: number;
+			travelled: number;
+			released: boolean;
+			peak: number;
+			last: number;
+			fading: number;
+		} | null = null;
+		let idle: ReturnType<typeof setTimeout> | undefined;
+		const release = () => {
+			if (gesture === null || gesture.released) return;
+			gesture.released = true;
+			const target = pagedStop(
+				gesture.stops,
+				gesture.settled,
+				gesture.travelled,
+			);
+			scroller.scrollTo({
+				left: gesture.stops[target] ?? 0,
+				behavior: "smooth",
+			});
+		};
+		const finish = () => {
+			release();
+			gesture = null;
+		};
+		const follow = (dx: number) => {
+			if (gesture === null) {
+				const stops = stopsOf(scroller);
+				gesture = {
+					stops,
+					settled: nearest(stops, scroller.scrollLeft),
+					travelled: 0,
+					released: false,
+					peak: 0,
+					last: 0,
+					fading: 0,
+				};
+			}
+			if (gesture.released) return;
+			const { stops, settled } = gesture;
+			const base = stops[settled] ?? 0;
+			const back = base - (stops[settled - 1] ?? base);
+			const ahead = (stops[settled + 1] ?? base) - base;
+			gesture.travelled = Math.min(
+				ahead,
+				Math.max(-back, gesture.travelled + dx),
+			);
+			scroller.scrollLeft = base + gesture.travelled;
+		};
+		const coasting = (dx: number) => {
+			if (gesture === null) return false;
+			const size = Math.abs(dx);
+			gesture.fading = size < gesture.last ? gesture.fading + 1 : 0;
+			gesture.last = size;
+			gesture.peak = Math.max(gesture.peak, size);
+			return gesture.fading >= COAST_STEPS && size < gesture.peak / 2;
+		};
+		const onWheel = (event: WheelEvent) => {
+			const dx =
+				event.shiftKey && event.deltaX === 0 ? event.deltaY : event.deltaX;
+			if (Math.abs(dx) <= Math.abs(event.shiftKey ? 0 : event.deltaY)) return;
+			if (scroller.scrollWidth <= scroller.clientWidth) return;
+			if (gesture === null && scrollsItself(event.target, scroller, dx)) return;
+			event.preventDefault();
+			follow(dx);
+			if (coasting(dx)) release();
+			clearTimeout(idle);
+			idle = setTimeout(finish, GESTURE_IDLE_MS);
+		};
+		let touch: { x: number; y: number; sideways: boolean | null } | null = null;
+		const onTouchStart = (event: TouchEvent) => {
+			const point = event.touches[0];
+			if (event.touches.length === 1 && point)
+				touch = { x: point.clientX, y: point.clientY, sideways: null };
+		};
+		const onTouchMove = (event: TouchEvent) => {
+			const point = event.touches[0];
+			if (!touch || !point) return;
+			const dx = touch.x - point.clientX;
+			const dy = touch.y - point.clientY;
+			touch.sideways ??= Math.abs(dx) > Math.abs(dy);
+			if (!touch.sideways || scroller.scrollWidth <= scroller.clientWidth)
+				return;
+			event.preventDefault();
+			touch.x = point.clientX;
+			touch.y = point.clientY;
+			follow(dx);
+		};
+		const onTouchEnd = () => {
+			if (touch?.sideways) finish();
+			touch = null;
+		};
+		scroller.addEventListener("wheel", onWheel, { passive: false });
+		scroller.addEventListener("touchstart", onTouchStart, { passive: true });
+		scroller.addEventListener("touchmove", onTouchMove, { passive: false });
+		scroller.addEventListener("touchend", onTouchEnd);
+		scroller.addEventListener("touchcancel", onTouchEnd);
+		return () => {
+			clearTimeout(idle);
+			scroller.removeEventListener("wheel", onWheel);
+			scroller.removeEventListener("touchstart", onTouchStart);
+			scroller.removeEventListener("touchmove", onTouchMove);
+			scroller.removeEventListener("touchend", onTouchEnd);
+			scroller.removeEventListener("touchcancel", onTouchEnd);
+		};
+	}, [shown]);
+	return ref;
+}
+
 interface View<T> {
 	layout: SplitLayout<T>;
 	dragging: boolean;
@@ -251,6 +477,116 @@ interface View<T> {
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
 	entrance: (pane: Pane<T>) => string;
+	maximized: Maximized | null;
+	maximize: (maximized: Maximized | null) => void;
+	onMinimize: ((tabId: string) => void) | undefined;
+}
+
+const TRAY = "tray";
+
+function useColumnsInView(
+	pager: RefObject<HTMLDivElement | null>,
+	count: number,
+): readonly number[] {
+	const [seen, setSeen] = useState<readonly number[]>([]);
+	useEffect(() => {
+		const scroller = pager.current;
+		if (!scroller || count === 0) return;
+		let frame = 0;
+		const measure = () => {
+			frame = 0;
+			const view = scroller.getBoundingClientRect();
+			const panels = scroller.querySelectorAll(
+				':scope > [data-slot="resizable-panel-group"] > [data-slot="resizable-panel"]',
+			);
+			const inView = [...panels].flatMap((panel, i) => {
+				const box = panel.getBoundingClientRect();
+				const overlap =
+					Math.min(box.right, view.right) - Math.max(box.left, view.left);
+				return box.width > 0 && overlap >= box.width / 2 ? [i] : [];
+			});
+			setSeen((held) => (held.join() === inView.join() ? held : inView));
+		};
+		const soon = () => {
+			if (frame === 0) frame = requestAnimationFrame(measure);
+		};
+		measure();
+		scroller.addEventListener("scroll", soon, { passive: true });
+		const watch =
+			typeof ResizeObserver === "undefined" ? null : new ResizeObserver(soon);
+		watch?.observe(scroller);
+		return () => {
+			cancelAnimationFrame(frame);
+			scroller.removeEventListener("scroll", soon);
+			watch?.disconnect();
+		};
+	}, [pager, count]);
+	return seen;
+}
+
+function PageIndicator<T>({
+	layout,
+	pager,
+}: {
+	layout: SplitLayout<T>;
+	pager: RefObject<HTMLDivElement | null>;
+}) {
+	const root = layout.root;
+	const columns =
+		root?.kind === "split" && root.direction === "row" ? root.children : [];
+	const seen = useColumnsInView(pager, columns.length);
+	if (columns.length < 2) return null;
+	const active = columns.findIndex((c) =>
+		paneIds(c).includes(layout.focused ?? ""),
+	);
+	const show = (i: number) => {
+		const scroller = pager.current;
+		const panel = scroller?.querySelectorAll<HTMLElement>(
+			':scope > [data-slot="resizable-panel-group"] > [data-slot="resizable-panel"]',
+		)[i];
+		if (!scroller || !panel) return;
+		const left =
+			panel.getBoundingClientRect().left -
+			scroller.getBoundingClientRect().left +
+			scroller.scrollLeft;
+		scroller.scrollTo({ left, behavior: "smooth" });
+	};
+	return (
+		<nav aria-label="panes" className="flex h-full items-center gap-1 px-2">
+			{columns.map((column, i) => (
+				<button
+					key={column.id}
+					type="button"
+					aria-label={`pane ${i + 1} of ${columns.length}`}
+					aria-current={i === active ? "true" : undefined}
+					data-in-view={seen.includes(i)}
+					onClick={() => show(i)}
+					className={`h-1.5 cursor-pointer rounded-full transition-all ${seen.includes(i) ? "w-3" : "w-1.5"} ${i === active ? "bg-accent" : seen.includes(i) ? "bg-fg/60" : "bg-dim/40 hover:bg-dim"}`}
+				/>
+			))}
+		</nav>
+	);
+}
+
+function Tray({ takes, children }: { takes: boolean; children: ReactNode }) {
+	const target = useDroppable({ id: TRAY, disabled: !takes });
+	return (
+		<div ref={target.setNodeRef} className="relative flex-none">
+			{children}
+			{takes && target.isOver && (
+				<div
+					className={`pointer-events-none absolute inset-0 z-10 rounded-sm border-2 border-accent bg-accent/15 ${FADES}`}
+				/>
+			)}
+		</div>
+	);
+}
+
+function axesAround<T>(node: Node<T> | null, paneId: string): Axis[] {
+	if (node === null || node.kind === "pane") return [];
+	const inside = node.children.find((child) => paneIds(child).includes(paneId));
+	if (inside === undefined) return [];
+	return [AXIS_OF[node.direction], ...axesAround(inside, paneId)];
 }
 
 function paneIds<T>(node: Node<T> | null): string[] {
@@ -259,10 +595,16 @@ function paneIds<T>(node: Node<T> | null): string[] {
 	return node.children.flatMap((child) => paneIds(child));
 }
 
-function overflowWidth<T>(node: Node<T>): string | undefined {
-	if (node.kind !== "split" || node.direction !== "row") return undefined;
-	if (node.children.length <= VISIBLE_COLUMNS) return undefined;
-	return `${(node.children.length / VISIBLE_COLUMNS) * 100}%`;
+function widened<T>(
+	node: Node<T>,
+	root: boolean,
+	maximized: Maximized | null,
+): number {
+	if (!root || node.kind !== "split" || node.direction !== "row") return -1;
+	if (maximized?.axis !== "width") return -1;
+	return node.children.findIndex((child) =>
+		paneIds(child).includes(maximized.pane),
+	);
 }
 
 function NodeView<T>({
@@ -275,24 +617,74 @@ function NodeView<T>({
 	root?: boolean;
 }) {
 	if (node.kind === "pane") return <PaneView pane={node} {...view} />;
-	const width = root ? overflowWidth(node) : undefined;
+	const { maximized } = view;
+	const kept =
+		maximized !== null && AXIS_OF[node.direction] === maximized.axis
+			? node.children.find((child) => paneIds(child).includes(maximized.pane))
+			: undefined;
+	if (kept !== undefined && widened(node, root, maximized) === -1)
+		return (
+			<div className="h-full w-full">
+				<NodeView node={kept} view={view} />
+			</div>
+		);
+	return <GroupView split={node} view={view} root={root} />;
+}
+
+function GroupView<T>({
+	split,
+	view,
+	root,
+}: {
+	split: Extract<Node<T>, { kind: "split" }>;
+	view: View<T>;
+	root: boolean;
+}) {
+	const group = useRef<ResizableGroupHandle | null>(null);
+	const count = split.children.length;
+	const wide = widened(split, root, view.maximized);
+	const screens =
+		wide === -1
+			? Math.max(1, count / VISIBLE_COLUMNS)
+			: 1 + (count - 1) / VISIBLE_COLUMNS;
+	const scrolls = root && split.direction === "row" && screens > 1;
+	const widest = scrolls ? 100 / screens : undefined;
+	useEffect(() => {
+		const handle = group.current;
+		if (!handle || !scrolls) return;
+		const share = 100 / screens;
+		const rest = count > 1 ? (100 - share) / (count - 1) : 100;
+		handle.setLayout(
+			Object.fromEntries(
+				split.children.map((child, i) => [
+					child.id,
+					wide === -1
+						? (split.sizes[i] ?? 100 / count)
+						: i === wide
+							? share
+							: rest,
+				]),
+			),
+		);
+	}, [wide, screens, scrolls, count, split]);
 	return (
 		<ResizablePanelGroup
-			key={`${node.direction}:${node.children.map((c) => c.id).join(",")}`}
-			orientation={node.direction === "row" ? "horizontal" : "vertical"}
-			style={width ? { width } : undefined}
-			onLayoutChanged={(sizes, meta) => {
-				if (meta.isUserInteraction)
-					view.onChange(resizeSplit(view.layout, node.id, sizes));
+			key={`${split.direction}:${split.children.map((c) => c.id).join(",")}`}
+			groupRef={group}
+			orientation={split.direction === "row" ? "horizontal" : "vertical"}
+			style={scrolls ? { width: `${screens * 100}%` } : undefined}
+			onLayoutChanged={(next, meta) => {
+				if (meta.isUserInteraction && wide === -1)
+					view.onChange(resizeSplit(view.layout, split.id, next));
 			}}
 		>
-			{node.children.map((child, i) => (
+			{split.children.map((child, i) => (
 				<Split key={child.id} first={i === 0}>
 					<ResizablePanel
 						id={child.id}
-						defaultSize={`${node.sizes[i] ?? 100 / node.children.length}%`}
+						defaultSize={`${split.sizes[i] ?? 100 / count}%`}
 						minSize={MIN_SPLIT}
-						className={width ? "snap-start" : undefined}
+						maxSize={widest === undefined ? undefined : `${widest}%`}
 					>
 						<NodeView node={child} view={view} />
 					</ResizablePanel>
@@ -319,6 +711,9 @@ function PaneView<T>({
 	renderTab,
 	tabLabel,
 	entrance,
+	maximized,
+	maximize,
+	onMinimize,
 }: {
 	pane: Pane<T>;
 	layout: SplitLayout<T>;
@@ -327,20 +722,36 @@ function PaneView<T>({
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
 	entrance: (pane: Pane<T>) => string;
+	maximized: Maximized | null;
+	maximize: (maximized: Maximized | null) => void;
+	onMinimize: ((tabId: string) => void) | undefined;
 }) {
+	const axes = axesAround(layout.root, pane.id);
+	const enlarged = maximized?.pane === pane.id;
 	const focused = layout.focused === pane.id;
 	const arrival = entrance(pane);
 	const shown = useRef<HTMLDivElement>(null);
 	const arrived = arrival !== "";
 	useEffect(() => {
+		if (enlarged)
+			shown.current?.scrollIntoView?.({
+				behavior: "smooth",
+				block: "nearest",
+				inline: "start",
+			});
+	}, [enlarged]);
+	useEffect(() => {
 		if (arrived)
 			shown.current?.scrollIntoView?.({
 				behavior: "smooth",
 				block: "nearest",
-				inline: "nearest",
+				inline: "start",
 			});
 	}, [arrived]);
 	const lone = pane.tabs.length < 2;
+	const takeFocus = () => {
+		if (!focused && pane.active) onChange(focusTab(layout, pane.active));
+	};
 	const splitActive = (edge: Edge) => {
 		if (pane.active)
 			onChange(moveTab(layout, pane.active, { pane: pane.id, edge }));
@@ -350,11 +761,13 @@ function PaneView<T>({
 			ref={shown}
 			value={pane.active ?? undefined}
 			onValueChange={(id) => onChange(focusTab(layout, id))}
+			onPointerDownCapture={takeFocus}
+			onFocusCapture={takeFocus}
 			className={`flex h-full min-h-0 flex-col gap-0 ${arrival}`}
 		>
 			<div
 				data-focused={focused}
-				className="flex h-control flex-none items-center border-border border-b"
+				className="flex h-control flex-none items-center border-border border-b data-[focused=true]:border-b-accent"
 			>
 				<TabsList className="h-full min-w-0 flex-1 justify-start overflow-x-auto rounded-none bg-transparent p-0">
 					{pane.tabs.map((tab, index) => (
@@ -365,6 +778,9 @@ function PaneView<T>({
 							label={tabLabel(tab.content)}
 							onClose={
 								tab.fixed ? undefined : () => onChange(closeTab(layout, tab.id))
+							}
+							onMinimize={
+								tab.fixed || !onMinimize ? undefined : () => onMinimize(tab.id)
 							}
 						/>
 					))}
@@ -378,6 +794,29 @@ function PaneView<T>({
 						<HugeiconsIcon className="size-icon-sm" icon={MoreHorizontalIcon} />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
+						{enlarged ? (
+							<DropdownMenuItem onSelect={() => maximize(null)}>
+								<HugeiconsIcon icon={Minimize01Icon} />
+								restore size
+							</DropdownMenuItem>
+						) : (
+							<>
+								<DropdownMenuItem
+									disabled={!axes.includes("width")}
+									onSelect={() => maximize({ pane: pane.id, axis: "width" })}
+								>
+									<HugeiconsIcon icon={ArrowLeftRightIcon} />
+									maximize width
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									disabled={!axes.includes("height")}
+									onSelect={() => maximize({ pane: pane.id, axis: "height" })}
+								>
+									<HugeiconsIcon icon={ArrowUpDownIcon} />
+									maximize height
+								</DropdownMenuItem>
+							</>
+						)}
 						<DropdownMenuItem
 							disabled={lone}
 							onSelect={() => splitActive("right")}
@@ -482,11 +921,13 @@ function TabHandle<T>({
 	drop,
 	label,
 	onClose,
+	onMinimize,
 }: {
 	tab: Tab<T>;
 	drop: Drop;
 	label: string;
 	onClose?: () => void;
+	onMinimize?: () => void;
 }) {
 	const drag = useDraggable({ id: tab.id, data: { tab } });
 	const target = useTarget(`tab:${tab.id}`, drop);
@@ -507,6 +948,17 @@ function TabHandle<T>({
 			>
 				<span className="truncate">{label}</span>
 			</TabsTrigger>
+			{onMinimize && (
+				<button
+					type="button"
+					aria-label={`minimize ${label}`}
+					title="minimize"
+					onClick={onMinimize}
+					className="flex h-full flex-none cursor-pointer items-center pr-1 text-dim opacity-0 hover:text-fg group-hover/tab:opacity-100"
+				>
+					<HugeiconsIcon className="size-icon-xs" icon={MinusSignIcon} />
+				</button>
+			)}
 			{onClose && (
 				<button
 					type="button"

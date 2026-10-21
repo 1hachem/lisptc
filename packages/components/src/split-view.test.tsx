@@ -7,9 +7,10 @@ import {
 	closeTab,
 	emptyLayout,
 	openTab,
+	paneOf,
 	type SplitLayout,
 } from "./split-layout.ts";
-import { SplitView } from "./split-view.tsx";
+import { pagedStop, SplitView } from "./split-view.tsx";
 
 beforeAll(() => {
 	(
@@ -76,21 +77,115 @@ describe("SplitView side scrolling", () => {
 			'[data-slot="resizable-panel-group"]',
 		);
 		expect(["", "100%"]).toContain(group?.style.width);
-		expect(host.querySelector(".snap-start")).toBeNull();
 	});
 
-	it("widens past the view beyond two panes and snaps to each one", async () => {
+	it("widens past the view beyond two panes, paged rather than scrolled freely", async () => {
 		const host = await mounted(view(sideBySide(5), []));
 		const group = host.querySelector<HTMLElement>(
 			'[data-slot="resizable-panel-group"]',
 		);
 		expect(group?.style.width).toBe("250%");
-		expect(host.querySelectorAll(".snap-start")).toHaveLength(5);
-		expect(group?.parentElement?.className).toContain("snap-x");
+		expect(group?.parentElement?.className).toContain("overflow-hidden");
 	});
 });
 
+describe("paging between panes", () => {
+	const stops = [0, 400, 800, 1000];
+
+	it("springs back below the threshold", () => {
+		expect(pagedStop(stops, 1, 60)).toBe(1);
+		expect(pagedStop(stops, 1, -60)).toBe(1);
+	});
+
+	it("moves one pane once past it, either way", () => {
+		expect(pagedStop(stops, 1, 80)).toBe(2);
+		expect(pagedStop(stops, 1, -80)).toBe(0);
+	});
+
+	it("never moves more than one pane however far the gesture goes", () => {
+		expect(pagedStop(stops, 0, 5000)).toBe(1);
+	});
+
+	it("measures the threshold against the pane it moves into", () => {
+		expect(pagedStop(stops, 2, 39)).toBe(2);
+		expect(pagedStop(stops, 2, 40)).toBe(3);
+	});
+
+	it("stays put at either end", () => {
+		expect(pagedStop(stops, 0, -500)).toBe(0);
+		expect(pagedStop(stops, 3, 500)).toBe(3);
+	});
+});
+
+async function pick(host: HTMLElement, menu: number, item: string) {
+	const trigger = host.querySelectorAll<HTMLElement>(
+		'[aria-label="split menu"]',
+	)[menu];
+	await act(async () => {
+		trigger?.dispatchEvent(
+			new PointerEvent("pointerdown", { bubbles: true, button: 0 }),
+		);
+	});
+	const entry = [
+		...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+	].find((el) => el.textContent?.includes(item));
+	await act(async () => {
+		entry?.click();
+	});
+}
+
+describe("maximizing a pane", () => {
+	it("widens a pane to the whole view and keeps its neighbour a page away", async () => {
+		const host = await mounted(view(two, []));
+		const group = () =>
+			host.querySelector<HTMLElement>('[data-slot="resizable-panel-group"]');
+		await pick(host, 0, "maximize width");
+		expect(host.querySelectorAll('[data-slot="tabs-list"]')).toHaveLength(2);
+		expect(group()?.style.width).toBe("150%");
+		await pick(host, 0, "restore size");
+		expect(["", "100%"]).toContain(group()?.style.width);
+	});
+
+	it("fills the height with one pane, hiding the ones stacked with it", async () => {
+		const stacked = openTab(
+			openTab(emptyLayout<string>(), { id: "a", content: "a" }),
+			{ id: "b", content: "b" },
+			"down",
+		);
+		const host = await mounted(view(stacked, []));
+		await pick(host, 0, "maximize height");
+		expect(host.querySelectorAll('[data-slot="tabs-list"]')).toHaveLength(1);
+		await pick(host, 0, "restore size");
+		expect(host.querySelectorAll('[data-slot="tabs-list"]')).toHaveLength(2);
+	});
+
+	it("caps each side by side pane at the width of the view", async () => {
+		const host = await mounted(view(sideBySide(4), []));
+		const group = host.querySelector<HTMLElement>(
+			'[data-slot="resizable-panel-group"]',
+		);
+		expect(group?.style.width).toBe("200%");
+	});
+});
+
+function pane(layout: SplitLayout<string>, tab: string): string | undefined {
+	return paneOf(layout, tab)?.id;
+}
+
 describe("SplitView", () => {
+	it("focuses a pane when the user presses anywhere in it", async () => {
+		const changes: SplitLayout<string>[] = [];
+		const host = await mounted(view(two, changes));
+		const unfocused = two.focused === pane(two, "a") ? "b" : "a";
+		const body = [...host.querySelectorAll("p")].find(
+			(p) => p.textContent === `body of ${unfocused}`,
+		);
+		await act(async () => {
+			body?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+		});
+		expect(changes.at(-1)?.focused).toBe(pane(two, unfocused));
+	});
+
 	it("draws one tab strip per split with the active tab's body", async () => {
 		const host = await mounted(view(two, []));
 		expect(host.querySelectorAll('[data-slot="tabs-list"]')).toHaveLength(2);
