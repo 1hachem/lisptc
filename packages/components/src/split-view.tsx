@@ -5,6 +5,7 @@ import {
 	type DragEndEvent,
 	DragOverlay,
 	type DragStartEvent,
+	MeasuringStrategy,
 	PointerSensor,
 	pointerWithin,
 	useDraggable,
@@ -39,6 +40,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 import {
 	closeTab,
@@ -57,6 +59,9 @@ import {
 } from "./split-layout.ts";
 
 const DRAG_AFTER_PX = 4;
+const MEASURE_WHILE_DRAGGING = {
+	droppable: { strategy: MeasuringStrategy.Always },
+};
 const MIN_SPLIT = "12%";
 const EDGES: Edge[] = ["left", "right", "top", "bottom"];
 const EDGE_ZONE: Record<Edge, string> = {
@@ -82,7 +87,7 @@ const ExternalDrop = createContext<External | null>(null);
 export interface SplitViewProps<T> {
 	layout: SplitLayout<T>;
 	onChange: (layout: SplitLayout<T>) => void;
-	renderTab: (content: T) => ReactNode;
+	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
 	external?: {
 		type: string;
@@ -130,6 +135,7 @@ export function SplitView<T>({
 			<DndContext
 				sensors={sensors}
 				collisionDetection={pointerWithin}
+				measuring={MEASURE_WHILE_DRAGGING}
 				onDragStart={onDragStart}
 				onDragEnd={onDragEnd}
 				onDragCancel={() => setDragged(null)}
@@ -179,13 +185,17 @@ export function SplitView<T>({
 						</Split>
 					))}
 				</ResizablePanelGroup>
-				<DragOverlay dropAnimation={null}>
-					{dragged && (
-						<div className="flex h-row items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm">
-							{tabLabel(dragged.content)}
-						</div>
+				{typeof document !== "undefined" &&
+					createPortal(
+						<DragOverlay dropAnimation={null}>
+							{dragged && (
+								<div className="flex h-row w-fit items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm">
+									{tabLabel(dragged.content)}
+								</div>
+							)}
+						</DragOverlay>,
+						document.body,
 					)}
-				</DragOverlay>
 			</DndContext>
 		</ExternalDrop.Provider>
 	);
@@ -212,7 +222,7 @@ function PaneView<T>({
 	layout: SplitLayout<T>;
 	dragging: boolean;
 	onChange: (layout: SplitLayout<T>) => void;
-	renderTab: (content: T) => ReactNode;
+	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
 }) {
 	const focused = layout.focused === pane.id;
@@ -282,9 +292,9 @@ function PaneView<T>({
 					<TabsContent
 						key={tab.id}
 						value={tab.id}
-						className="absolute inset-0 overflow-auto"
+						className={`absolute inset-0 overflow-auto ${dragging ? "pointer-events-none" : ""}`}
 					>
-						{renderTab(tab.content)}
+						{renderTab(tab.content, tab.id)}
 					</TabsContent>
 				))}
 				{dragging && (

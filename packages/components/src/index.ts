@@ -32,6 +32,7 @@ export {
 	type Pane,
 	type Placement,
 	paneOf,
+	replaceTab,
 	type SplitLayout,
 	type Tab,
 } from "./split-layout.ts";

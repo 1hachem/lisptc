@@ -10,6 +10,7 @@ import {
 	moveTab,
 	openTab,
 	paneOf,
+	replaceTab,
 	type SplitLayout,
 	type Tab,
 } from "./split-layout.ts";
@@ -143,6 +144,29 @@ describe("moving tabs", () => {
 function focus(layout: SplitLayout<string>, id: string) {
 	return openTab(layout, tab(id));
 }
+
+describe("replacing what a tab shows", () => {
+	it("keeps the tab where it is under its new id", () => {
+		const layout = replaceTab(opened("a", "b"), "a", tab("c"));
+		expect(shape(layout)).toEqual([[["c", "b"]]]);
+	});
+
+	it("keeps the same id when only the content changes", () => {
+		const layout = replaceTab(opened("a", "b"), "a", {
+			id: "a",
+			content: "a2",
+		});
+		expect(layout.groups[0].panes[0].tabs[0]).toEqual({
+			id: "a",
+			content: "a2",
+		});
+	});
+
+	it("folds into a tab already showing the new content", () => {
+		const split = openTab(opened("a"), tab("b"), "right");
+		expect(shape(replaceTab(split, "a", tab("b")))).toEqual([[["b"]]]);
+	});
+});
 
 describe("dropping something from outside", () => {
 	it("adds it as a tab where it lands", () => {

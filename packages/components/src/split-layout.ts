@@ -280,6 +280,25 @@ export function moveTab<T>(
 	);
 }
 
+export function replaceTab<T>(
+	layout: SplitLayout<T>,
+	tabId: string,
+	tab: Tab<T>,
+): SplitLayout<T> {
+	if (tabId !== tab.id && paneOf(layout, tab.id) !== undefined)
+		return focusTab(openTab(closeTab(layout, tabId), tab), tab.id);
+	const pane = paneOf(layout, tabId);
+	if (pane === undefined) return openTab(layout, tab);
+	return focusIn(
+		mapPane(layout, pane.id, (p) => ({
+			...p,
+			tabs: p.tabs.map((t) => (t.id === tabId ? tab : t)),
+			active: p.active === tabId ? tab.id : p.active,
+		})),
+		pane.id,
+	);
+}
+
 export function dropTab<T>(
 	layout: SplitLayout<T>,
 	tab: Tab<T>,
