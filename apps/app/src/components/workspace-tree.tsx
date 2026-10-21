@@ -40,6 +40,7 @@ import { useNewChat } from "../lib/chats.ts";
 import { byDate } from "../lib/date-groups.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { knowledgeIcon, useKnowledgeUpload } from "../lib/knowledge.ts";
+import { startPanelDrag } from "../lib/panel-ops.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
@@ -311,6 +312,13 @@ function KnowledgeFolder({
 							icon={knowledgeIcon(file.name, file.contentType)}
 							depth={1}
 							selected={current === file.name}
+							onDragStart={(event) =>
+								startPanelDrag(event.dataTransfer, {
+									kind: "file",
+									folder: "knowledge",
+									name: file.name,
+								})
+							}
 							trailing={
 								<FileMenu
 									name={file.name}
@@ -376,6 +384,13 @@ function AttachmentsFolder({
 						icon={knowledgeIcon(file.name, file.contentType)}
 						depth={1}
 						selected={current === file.name}
+						onDragStart={(event) =>
+							startPanelDrag(event.dataTransfer, {
+								kind: "file",
+								folder: "attachments",
+								name: file.name,
+							})
+						}
 						trailing={
 							<FileMenu
 								name={file.name}

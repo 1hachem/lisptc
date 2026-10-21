@@ -2,7 +2,10 @@ import { allTabs, emptyLayout } from "@repo/components";
 import { describe, expect, it } from "vitest";
 import {
 	applyPanelOps,
+	PANEL_DRAG,
 	type PanelContent,
+	readPanelDrag,
+	startPanelDrag,
 	toPanelOps,
 } from "../src/lib/panel-ops.ts";
 
@@ -11,6 +14,33 @@ const report: PanelContent = {
 	folder: "knowledge",
 	name: "q3.pdf",
 };
+
+function transfer(): DataTransfer {
+	const held = new Map<string, string>();
+	return {
+		effectAllowed: "none",
+		setData: (key: string, value: string) => held.set(key, value),
+		getData: (key: string) => held.get(key) ?? "",
+	} as unknown as DataTransfer;
+}
+
+describe("dragging a file into the panel", () => {
+	it("carries the file across as the tab it opens", () => {
+		const data = transfer();
+		startPanelDrag(data, report);
+		expect(readPanelDrag(data)).toEqual({
+			id: "file:knowledge/q3.pdf",
+			content: report,
+		});
+	});
+
+	it("reads nothing from a drag that carries something else", () => {
+		const data = transfer();
+		data.setData(PANEL_DRAG, "{not json");
+		expect(readPanelDrag(data)).toBeUndefined();
+		expect(readPanelDrag(transfer())).toBeUndefined();
+	});
+});
 
 describe("the panel lane off the wire", () => {
 	it("keeps the ops it can place and drops the rest", () => {

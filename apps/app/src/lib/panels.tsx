@@ -1,7 +1,13 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { allTabs, emptyLayout } from "@repo/components";
+import {
+	allTabs,
+	emptyLayout,
+	openTab,
+	type Placement,
+	type Tab,
+} from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
 import {
 	createContext,
@@ -18,6 +24,7 @@ import {
 	applyPanelOps,
 	type Folder,
 	fileTab,
+	type PanelContent,
 	type PanelLayout,
 	type PanelOp,
 	toPanelOps,
@@ -32,6 +39,7 @@ export interface Panels {
 	change: (layout: PanelLayout) => void;
 	apply: (ops: readonly PanelOp[]) => void;
 	openFile: (folder: Folder, name: string) => void;
+	place: (tab: Tab<PanelContent>, placement: Placement) => void;
 }
 
 const PanelsContext = createContext<Panels | null>(null);
@@ -41,6 +49,7 @@ const NO_PANELS: Panels = {
 	change: () => {},
 	apply: () => {},
 	openFile: () => {},
+	place: () => {},
 };
 
 export function usePanels(): Panels {
@@ -127,10 +136,15 @@ export function PanelsProvider({
 			]),
 		[apply],
 	);
+	const place = useCallback(
+		(tab: Tab<PanelContent>, placement: Placement) =>
+			change(openTab(latest.current, tab, placement)),
+		[change, latest],
+	);
 	useLiveOps(apply);
 	const value = useMemo(
-		() => ({ layout, change, apply, openFile }),
-		[layout, change, apply, openFile],
+		() => ({ layout, change, apply, openFile, place }),
+		[layout, change, apply, openFile, place],
 	);
 	return (
 		<PanelsContext.Provider value={value}>{children}</PanelsContext.Provider>

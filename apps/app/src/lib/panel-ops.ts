@@ -4,6 +4,7 @@ import {
 	openTab,
 	type Placement,
 	type SplitLayout,
+	type Tab,
 } from "@repo/components";
 
 export type Folder = "attachments" | "knowledge";
@@ -48,6 +49,34 @@ function contentOf(value: unknown): PanelContent | undefined {
 	if (content?.kind === "view" && typeof content.title === "string")
 		return { kind: "view", title: content.title, node: content.node };
 	return undefined;
+}
+
+export const PANEL_DRAG = "application/x-lisptc-panel";
+
+function panelTab(content: PanelContent): Tab<PanelContent> {
+	return {
+		id:
+			content.kind === "file"
+				? fileTab(content.folder, content.name)
+				: `view:${content.title}`,
+		content,
+	};
+}
+
+export function startPanelDrag(data: DataTransfer, content: PanelContent) {
+	data.setData(PANEL_DRAG, JSON.stringify(content));
+	data.effectAllowed = "copyMove";
+}
+
+export function readPanelDrag(
+	data: DataTransfer,
+): Tab<PanelContent> | undefined {
+	try {
+		const content = contentOf(JSON.parse(data.getData(PANEL_DRAG)));
+		return content === undefined ? undefined : panelTab(content);
+	} catch {
+		return undefined;
+	}
 }
 
 export function toPanelOps(value: unknown): PanelOp[] {

@@ -4,6 +4,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import type { AttachedFile } from "../lib/attached-files.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { knowledgeIcon } from "../lib/knowledge.ts";
+import { startPanelDrag } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 
 function inPlace(event: MouseEvent): boolean {
@@ -31,6 +32,13 @@ function AttachedRow({ file }: { file: AttachedFile }) {
 			icon={knowledgeIcon(file.name, null)}
 			iconLabel={`${file.folder}/${file.name}`}
 			selected={false}
+			onDragStart={(event) =>
+				startPanelDrag(event.dataTransfer, {
+					kind: "file",
+					folder: file.folder,
+					name: file.name,
+				})
+			}
 			link={(content, className) =>
 				file.folder === "knowledge" ? (
 					<Link

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
-import { toPanelOps } from "../lib/panel-ops.ts";
+import { startPanelDrag, toPanelOps } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
 import { toUiNode, type UiNode } from "../lib/ui-node.ts";
@@ -73,6 +73,10 @@ function FileLink({ props }: { props: Record<string, unknown> }) {
 		<button
 			type="button"
 			title={`${folder}/${name}`}
+			draggable
+			onDragStart={(event) =>
+				startPanelDrag(event.dataTransfer, { kind: "file", folder, name })
+			}
 			onClick={() => openFile(folder, name)}
 			className="w-fit cursor-pointer text-left text-accent underline decoration-dim/50 hover:decoration-accent"
 		>
