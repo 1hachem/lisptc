@@ -15,7 +15,7 @@ import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { extension, noting, riding, testRepl } from "./helpers.ts";
+import { extension, noting, receiving, riding, testRepl } from "./helpers.ts";
 
 interface Seen {
 	messages: ChatMessage[];
@@ -237,6 +237,31 @@ describe("the agent turn", () => {
 				"what is 1 + 2?\n\nyou are a pirate",
 			);
 		expect(ask[0].riding).toBeUndefined();
+	});
+
+	test("what the user's message carried beside its text rides it, told by whoever reads it", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask, {
+			repl: testRepl([receiving()]),
+			received: { said: "in hex" },
+		});
+
+		expect(events.filter((e) => e.type === "rode")).toEqual([
+			{ type: "rode", text: "the user also said: in hex" },
+		]);
+		expect(seen[0].messages[0].content).toBe(
+			"what is 1 + 2?\n\nthe user also said: in hex",
+		);
+	});
+
+	test("what a message carried rides nothing when no extension reads it", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask, { received: { said: "in hex" } });
+
+		expect(events.some((e) => e.type === "rode")).toBe(false);
+		expect(seen[0].messages[0].content).toBe("what is 1 + 2?");
 	});
 
 	test("what rode an earlier message reaches the model, but not the conversation vars", async () => {

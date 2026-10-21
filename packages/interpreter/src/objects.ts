@@ -158,7 +158,8 @@ function properItems(list: Cell): unknown[] {
 function isPlist(items: unknown[]): boolean {
 	return (
 		items.length % 2 === 0 &&
-		items.every((item, i) => i % 2 === 1 || item instanceof LispKeyword)
+		items.every((item, i) => i % 2 === 1 || item instanceof LispKeyword) &&
+		!items.every((item) => item instanceof LispKeyword)
 	);
 }
 

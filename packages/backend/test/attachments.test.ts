@@ -164,4 +164,40 @@ describe("attachments", () => {
 		).toEqual(["old.txt"]);
 		expect(await blobs(t)).toHaveLength(2);
 	});
+
+	it("keeps expiring when the bin holds every numbered copy of a name", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		const filler = await uploaded(t, "filler", "text/plain");
+		const old = await uploaded(t, "old", "text/plain");
+		const attachedId = await t.run(async (ctx) => {
+			for (const name of [
+				"old.txt",
+				...Array.from({ length: 99 }, (_, i) => `old (${i + 2}).txt`),
+			])
+				await ctx.db.insert("bin", {
+					workspaceId,
+					name,
+					from: "attachments",
+					storageId: filler,
+					size: 6,
+					binnedAt: Date.now(),
+				});
+			return await ctx.db.insert("attachments", {
+				workspaceId,
+				name: "old.txt",
+				storageId: old,
+				size: 3,
+				attachedAt: Date.now() - ATTACHMENT_TTL_MS - 1,
+			});
+		});
+		await t.mutation(internal.attachments.expire, {});
+		expect(await alice.as.query(api.attachments.list, { workspaceId })).toEqual(
+			[],
+		);
+		const binned = await alice.as.query(api.bin.list, { workspaceId });
+		expect(binned).toHaveLength(101);
+		expect(binned.map((f) => f.name)).toContain(`old (${attachedId}).txt`);
+	});
 });

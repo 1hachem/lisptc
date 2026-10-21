@@ -4,7 +4,7 @@ import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import { useEffect, useMemo, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
-import { toolAttachments, userAttachments } from "../lib/attached-files.ts";
+import { attachedFiles } from "../lib/attached-files.ts";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
@@ -155,7 +155,7 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 	const ui = toolUi(message);
 	const model = toolModelOutput(message).output;
 	const results = toolResults(message).join("\n");
-	const attachments = shown.attachments ? toolAttachments(message) : [];
+	const attachments = shown.attachments ? attachedFiles(message) : [];
 	return {
 		output,
 		results,
@@ -301,15 +301,15 @@ function SystemLine({ message }: { message: ChatMessage }) {
 	);
 }
 
-function UserMessage({ text }: { text: string }) {
+function UserMessage({ message }: { message: ChatMessage }) {
 	const { shown } = useUI();
-	const attached = shown.attachments ? userAttachments(text) : undefined;
-	if (attached === undefined || attached.files.length === 0)
-		return <UserLine text={text} />;
+	const text = messageText(message);
+	const files = shown.attachments ? attachedFiles(message) : [];
+	if (files.length === 0) return <UserLine text={text} />;
 	return (
 		<>
-			{attached.text !== "" && <UserLine text={attached.text} />}
-			<AttachedFiles files={attached.files} />
+			{text !== "" && <UserLine text={text} />}
+			<AttachedFiles files={files} />
 		</>
 	);
 }
@@ -337,7 +337,7 @@ function ChatLine({
 				</div>
 			)}
 			{isUserMessage(message) ? (
-				<UserMessage text={messageText(message)} />
+				<UserMessage message={message} />
 			) : (
 				<AssistantText
 					id={message.id ?? String(index)}

@@ -301,11 +301,12 @@ function useAttach(
 	flash: (message: string) => void,
 	upload: UploadFile | undefined,
 	discard: DiscardUpload | undefined,
+	streaming: boolean,
 ) {
 	const attachments = useAttachments(upload, discard);
 	const submit = useCallback(
 		(text: string): boolean => {
-			const blocked = blockedSend(attachments.items);
+			const blocked = blockedSend(attachments.items, streaming);
 			if (blocked !== null) {
 				flash(blocked);
 				return false;
@@ -314,7 +315,7 @@ function useAttach(
 			attachments.clear();
 			return true;
 		},
-		[attachments, onSubmit, flash],
+		[attachments, onSubmit, flash, streaming],
 	);
 	return { attachments, submit };
 }
@@ -569,7 +570,13 @@ function useComposer({
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const [notice, flash] = useNotice();
-	const { attachments, submit } = useAttach(onSubmit, flash, upload, discard);
+	const { attachments, submit } = useAttach(
+		onSubmit,
+		flash,
+		upload,
+		discard,
+		isStreaming === true,
+	);
 	const busy = disabled === true;
 	const { text, empty, replace, send } = useDraft(
 		submit,

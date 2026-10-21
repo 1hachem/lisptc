@@ -30,6 +30,7 @@ import {
 	type AgentEnd,
 	type AgentStep,
 	type AgentTurn,
+	type Annotations,
 	type Bounded,
 	type InterpExtension,
 	type ModelDelta,
@@ -555,6 +556,15 @@ export class AgentRepl extends MemoryRepl {
 			chain.run(() => settled(undefined), ctx),
 		);
 		return { emitted, annotations };
+	}
+
+	received(received: Annotations): Promise<{
+		emitted: string;
+		annotations: StepAnnotations;
+	}> {
+		return this.emitting((ctx) =>
+			this.hooks.received.run(() => settled(undefined), ctx, received),
+		);
 	}
 
 	async system(

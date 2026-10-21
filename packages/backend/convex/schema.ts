@@ -205,7 +205,8 @@ export default defineSchema({
 		size: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_name", ["workspaceId", "name"]),
+		.index("by_workspace_name", ["workspaceId", "name"])
+		.index("by_storage", ["storageId"]),
 	attachments: defineTable({
 		workspaceId: v.id("workspaces"),
 		name: v.string(),
@@ -216,7 +217,8 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_name", ["workspaceId", "name"])
-		.index("by_attached", ["attachedAt"]),
+		.index("by_attached", ["attachedAt"])
+		.index("by_storage", ["storageId"]),
 	bin: defineTable({
 		workspaceId: v.id("workspaces"),
 		name: v.string(),
@@ -228,7 +230,8 @@ export default defineSchema({
 	})
 		.index("by_workspace_binned", ["workspaceId", "binnedAt"])
 		.index("by_workspace_name", ["workspaceId", "name"])
-		.index("by_binned", ["binnedAt"]),
+		.index("by_binned", ["binnedAt"])
+		.index("by_storage", ["storageId"]),
 
 	readmes: defineTable({
 		workspaceId: v.id("workspaces"),

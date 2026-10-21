@@ -95,6 +95,12 @@ describe("objects", () => {
 		]);
 	});
 
+	it("writes a list of keywords alone as an array of their names", () => {
+		expect(
+			lispToJson(arrayToList([newLispKeyword("red"), newLispKeyword("green")])),
+		).toEqual(["red", "green"]);
+	});
+
 	it("refuses what JSON cannot hold", () => {
 		expect(() => lispToJson(new Cell(1n, 2n))).toThrow(/dotted pair/);
 		expect(() => lispToJson(newSym("objects-test-sym"))).toThrow(

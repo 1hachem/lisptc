@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { driveAsync, settled } from "@repo/interpreter/drive";
+import { Interp } from "@repo/interpreter/lisp";
+import { openSession } from "@repo/interpreter/session";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { MemoryKnowledgeStore } from "../src/ports.ts";
@@ -12,18 +15,53 @@ function held(store: World["store"], name: string) {
 }
 
 describe("what waits on the user", () => {
-	it("asks before writing, deleting or restoring a file, or fetching a url", () => {
+	it("asks before writing, deleting, keeping or restoring a file, or fetching a url", () => {
 		const extension = knowledgeExtension(
-			knowledgeHostFor({ store: new MemoryKnowledgeStore() }),
+			knowledgeHostFor({
+				store: new MemoryKnowledgeStore(),
+				maxDownloadBytes: 1024,
+			}),
 		);
 		expect(extension.asks).toEqual([
 			"knowledge/write",
 			"knowledge/delete",
+			"knowledge/keep",
 			"attachments/fetch",
 			"attachments/delete",
 			"bin/restore",
 			"bin/delete",
 		]);
+	});
+});
+
+describe("a download", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	function serving(body: string, headers: Record<string, string> = {}) {
+		vi.stubGlobal("fetch", async () => new Response(body, { headers }));
+		return knowledgeHostFor({
+			store: new MemoryKnowledgeStore(),
+			maxDownloadBytes: 4,
+		}).downloader;
+	}
+
+	it("takes a body within the cap", async () => {
+		const { bytes } = await serving("abcd").download(new URL("https://x.test"));
+		expect(new TextDecoder().decode(bytes)).toBe("abcd");
+	});
+
+	it("stops reading once the body passes the cap", async () => {
+		await expect(
+			serving("abcde").download(new URL("https://x.test")),
+		).rejects.toThrow("larger than 4 bytes");
+	});
+
+	it("refuses a declared length past the cap before reading", async () => {
+		await expect(
+			serving("ab", { "content-length": "5" }).download(
+				new URL("https://x.test"),
+			),
+		).rejects.toThrow("larger than 4 bytes");
 	});
 });
 
@@ -360,5 +398,44 @@ describe("bin", () => {
 		await expect(ev('(bin/delete "spec.pdf")')).rejects.toThrow(
 			/no file spec.pdf in the bin/,
 		);
+	});
+});
+
+describe("a message the user attached files to", () => {
+	async function told(received: Record<string, unknown>): Promise<string[]> {
+		const extension = knowledgeExtension(
+			knowledgeHostFor({
+				store: new MemoryKnowledgeStore(),
+				maxDownloadBytes: 1024,
+			}),
+		);
+		const interp = new Interp({ extensions: [extension] });
+		const said: string[] = [];
+		await driveAsync(
+			openSession([extension]).received.run(
+				() => settled(undefined),
+				{ interp, emit: (text) => said.push(text) },
+				received,
+			),
+		);
+		return said;
+	}
+
+	it("tells the model which files came with it", async () => {
+		expect(
+			await told({
+				attachments: [
+					{ folder: "attachments", name: "spec.pdf" },
+					{ folder: "knowledge", name: "report.md" },
+				],
+			}),
+		).toEqual(["user attached: attachments/spec.pdf, knowledge/report.md"]);
+	});
+
+	it("tells the model nothing of a list it cannot read", async () => {
+		expect(
+			await told({ attachments: [{ folder: "elsewhere", name: "x" }] }),
+		).toEqual([]);
+		expect(await told({})).toEqual([]);
 	});
 });

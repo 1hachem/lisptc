@@ -24,7 +24,11 @@ const offline: Downloader = {
 export async function world(downloader = offline): Promise<World> {
 	const store = new MemoryKnowledgeStore();
 	const interp = new Interp({
-		extensions: [knowledgeExtension(knowledgeHostFor({ store, downloader }))],
+		extensions: [
+			knowledgeExtension(
+				knowledgeHostFor({ store, downloader, maxDownloadBytes: 1024 }),
+			),
+		],
 	});
 	await runAsync(interp, prelude);
 	const shown: AttachedFile[] = [];

@@ -1,3 +1,8 @@
+import {
+	annotate,
+	annotationKey,
+	readAnnotation,
+} from "@repo/interpreter/annotations";
 import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -14,11 +19,7 @@ import { plistOptions } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { zAny, zList } from "@repo/interpreter/schema";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { Awaitable } from "@repo/shared/host";
 import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
@@ -26,6 +27,7 @@ import type { Downloaded, KnowledgeHost, StoreFolder } from "./ports.ts";
 
 const KNOWLEDGE_WRITE = "knowledge/write";
 const KNOWLEDGE_DELETE = "knowledge/delete";
+const KNOWLEDGE_KEEP = "knowledge/keep";
 const ATTACHMENTS_FETCH = "attachments/fetch";
 const ATTACHMENTS_DELETE = "attachments/delete";
 const BIN_RESTORE = "bin/restore";
@@ -323,10 +325,10 @@ function registerAttachments(
 	);
 
 	interp.defGen(
-		"knowledge/keep",
+		KNOWLEDGE_KEEP,
 		1,
 		'(knowledge/keep "name")',
-		"Move a file from attachments into the knowledge folder, so it is kept for good and no longer expires. Returns the name.",
+		"Move a file from attachments into the knowledge folder, so it is kept for good and no longer expires. The user approves it first. Returns the name.",
 		z.tuple([zString]),
 		function* ([name]): Eval {
 			const checked = fileName(name);
@@ -369,7 +371,7 @@ function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 		KNOWLEDGE_WRITE,
 		2,
 		'(knowledge/write "name" value)',
-		"Write a knowledge file, replacing what it held. The user approves it first. A .ptc file takes any data and stores it printed; a .json file takes data and stores it as JSON, or takes a string of JSON text; any other file takes a string. Returns the name.",
+		"Write a knowledge file, moving what it held to the bin. The user approves it first. A .ptc file takes any data and stores it printed; a .json file takes data and stores it as JSON, or takes a string of JSON text; any other file takes a string. Returns the name.",
 		z.tuple([zString, zAny]),
 		function* ([name, value]): Eval {
 			const checked = fileName(name);
@@ -459,6 +461,17 @@ export interface AttachedFile {
 
 export const attached = topic<AttachedFile>("attachments");
 
+const attachmentsKey = annotationKey({
+	name: "attachments",
+	lane: "output",
+	schema: z.array(
+		z.object({
+			folder: z.enum(["attachments", "knowledge"]),
+			name: z.string().min(1),
+		}),
+	),
+});
+
 function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 	const held: Record<StoreFolder, () => Awaitable<string[]>> = {
 		attachments: () => store.attachments(),
@@ -485,13 +498,21 @@ function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 }
 
 function attachSession(hooks: SessionHooks): void {
+	hooks.received.use(function* (ctx, received, next) {
+		const files = readAnnotation(received, attachmentsKey) ?? [];
+		if (files.length > 0)
+			ctx.emit(
+				`user attached: ${files.map(({ folder, name }) => `${folder}/${name}`).join(", ")}`,
+			);
+		yield* next(ctx, received);
+	});
 	hooks.annotate.use((buffer, into, next) => {
 		const attachments = buffer.collect(attached);
 		return next(
 			buffer,
 			attachments.length === 0
 				? into
-				: annotating(into, "output", { attachments }),
+				: annotate(into, attachmentsKey, attachments),
 		);
 	});
 }
@@ -507,6 +528,7 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 			asks: [
 				KNOWLEDGE_WRITE,
 				KNOWLEDGE_DELETE,
+				KNOWLEDGE_KEEP,
 				ATTACHMENTS_FETCH,
 				ATTACHMENTS_DELETE,
 				BIN_RESTORE,

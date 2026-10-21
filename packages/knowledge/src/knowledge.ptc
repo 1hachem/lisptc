@@ -8,10 +8,11 @@ change shows there at once.
   run; .json gives JSON as data, object as alist; .pdf gives page text as
   string; other text gives string. Other binary (image) refused. nil when no
   file.
-- (knowledge/write "name" value) replaces file; user can open and download it.
-  User approves it. .ptc takes data, printed; function refused. .json takes
-  data, written as JSON: plist or alist becomes object, other list becomes
-  array, keyword becomes its name; or takes JSON text string. Other file takes
+- (knowledge/write "name" value) replaces file, old one to bin; user can open
+  and download it. User approves it. .ptc takes data, printed; function
+  refused. .json takes data, written as JSON: plist or alist becomes object,
+  other list becomes array, keywords alone like (:red :green) become array,
+  keyword becomes its name; or takes JSON text string. Other file takes
   string.
 - Edit .ptc file: read, change with set-in / update-in / remove-in, write back:
   (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
@@ -20,7 +21,8 @@ change shows there at once.
 ATTACHMENTS
 
 Files user attached to message land in attachments, shown as attachments/ in
-sidebar. Unkept attachment moves to bin after a week.
+sidebar; message then carries "user attached: attachments/spec.pdf". Unkept
+attachment moves to bin after a week.
 
 - User message can point at file: @knowledge/report.md or
   @attachments/spec.pdf; quoted when name has space:
@@ -28,8 +30,8 @@ sidebar. Unkept attachment moves to bin after a week.
   (attachments/read "spec.pdf"), name without folder.
 - (attachments/list) lists attachment names.
 - (attachments/read "name") reads attachment, same rules as knowledge/read.
-- (knowledge/keep "name") moves attachment into knowledge, kept for good. Keep
-  what user wants to reuse later; leave rest to expire.
+- (knowledge/keep "name") moves attachment into knowledge, kept for good. User
+  approves it. Keep what user wants to reuse later; leave rest to expire.
 - (attachments/write "name" value) puts file in attachments. String stored as
   text; (:base64 "…" :type "image/png") stored as bytes, like image from tool.
   Returns stored name; gains number when name taken.
@@ -44,7 +46,8 @@ Deleted knowledge and attachments land in bin, shown as bin/ in sidebar. Bin
 deletes them for good a month later. Bin file cannot be read; restore it first.
 
 - (bin/list) lists bin file names, newest first.
-- (bin/search "text") lists bin file names holding text, any case.
+- (bin/search "text") lists bin file names containing text, any case. Matches
+  name only, never content.
 - (bin/restore "name") moves file back to folder it came from. User approves
   it. Returns "knowledge/name" or "attachments/name"; name gains number when
   taken.
