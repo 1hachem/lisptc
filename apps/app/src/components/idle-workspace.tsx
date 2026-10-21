@@ -1,7 +1,12 @@
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Button } from "@repo/ui";
 import { useId } from "react";
+import { useNewChat } from "../lib/chats.ts";
 
 export function IdleWorkspace() {
 	const pencil = `pencil-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+	const newChat = useNewChat();
 	return (
 		<div className="flex items-center gap-6 text-dim">
 			<svg
@@ -59,6 +64,15 @@ export function IdleWorkspace() {
 				<div className="text-fg">c'mon,</div>
 				<div className="text-fg">do something..</div>
 				<div className="mt-3">drag anything in here</div>
+				<Button
+					variant="outline"
+					size="sm"
+					className="mt-3 self-start"
+					onClick={newChat}
+				>
+					<HugeiconsIcon icon={Add01Icon} />
+					new chat
+				</Button>
 			</div>
 		</div>
 	);
