@@ -32,7 +32,6 @@
 	--spacing-icon-xs: 10px;
 	--spacing-icon-sm: 12px;
 	--spacing-icon: 14px;
-	--spacing-icon-lg: 16px;
 	--spacing-row: 24px;
 	--spacing-menu: calc(var(--spacing-row) * 8);
 	--spacing-switch-width-sm: 24px;

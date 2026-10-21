@@ -49,7 +49,7 @@ export function TreeFolder({
 					className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-1 pr-1 text-left text-blue hover:brightness-125"
 				>
 					<HugeiconsIcon
-						className="size-icon-lg flex-none"
+						className="size-icon-sm flex-none"
 						icon={icon ?? (shown ? Folder02Icon : Folder01Icon)}
 					/>
 					<span className="truncate">{name}/</span>
@@ -113,7 +113,7 @@ export function TreeFile({
 						<span title={iconLabel} className="flex flex-none">
 							{glyph ?? (
 								<HugeiconsIcon
-									className={`size-icon-lg ${iconClassName}`}
+									className={`size-icon-sm ${iconClassName}`}
 									icon={icon ?? File01Icon}
 								/>
 							)}
@@ -149,7 +149,7 @@ export function TreePending({
 			className="flex min-w-0 items-center gap-1.5 py-1 pr-1 text-dim"
 		>
 			<HugeiconsIcon
-				className="size-icon-lg flex-none animate-spin"
+				className="size-icon-sm flex-none animate-spin"
 				icon={Loading03Icon}
 			/>
 			<span className="min-w-0 truncate whitespace-nowrap">{name}</span>
@@ -175,7 +175,7 @@ export function TreeCommand({
 			className="flex w-full min-w-0 cursor-pointer items-center gap-1.5 py-1 pr-1 text-left text-green hover:brightness-125"
 		>
 			<HugeiconsIcon
-				className="size-icon-lg flex-none"
+				className="size-icon-sm flex-none"
 				icon={CommandLineIcon}
 			/>
 			<span className="truncate">{name}</span>
