@@ -213,7 +213,12 @@ tag may not depend on. `pnpm boundaries` fails on a wrong-direction dependency,
 on an import of a package missing from a `package.json`, on an import that
 reaches into another package's files, and on cycles between workspace packages.
 It does not detect circular imports between files within a package. Do not add
-circular imports between files in a package. `scripts/check-arch.ts`
+circular imports between files in a package.
+
+A name is exported once, by the module that declares it, and imported from
+there. No module re-exports a name it imported, and none renames one with an
+alias type or const. Only a package's root entrypoint gathers names, and only
+from its own files. `check:arch` fails on a relay. `scripts/check-arch.ts`
 (`pnpm check:arch`) holds the rules a manifest cannot express, including the two
 below. Every failure prints the way out. Take it. Do not widen a list to get
 past one.
