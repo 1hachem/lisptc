@@ -453,17 +453,15 @@ function registerBin(interp: Interp, { store }: KnowledgeHost): void {
 	);
 }
 
-export type AttachedFolder = StoreFolder;
-
 export interface AttachedFile {
-	folder: AttachedFolder;
+	folder: StoreFolder;
 	name: string;
 }
 
 export const attached = topic<AttachedFile>("attachments");
 
 function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
-	const held: Record<AttachedFolder, () => Awaitable<string[]>> = {
+	const held: Record<StoreFolder, () => Awaitable<string[]>> = {
 		attachments: () => store.attachments(),
 		knowledge: () => store.files(),
 	};
