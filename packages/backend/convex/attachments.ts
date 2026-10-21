@@ -12,6 +12,7 @@ import { held as heldKnowledge, isKnowledgeName } from "./knowledge.js";
 import { requireWorkspace } from "./lib/auth.js";
 import { intoBin } from "./lib/bin.js";
 import { freeName } from "./lib/names.js";
+import { storedFile, withUrl } from "./lib/stored.js";
 import {
 	ATTACHMENT_TTL_MS,
 	MAX_ATTACHMENTS,
@@ -63,25 +64,10 @@ export const list = query({
 
 export const get = query({
 	args: { workspaceId: v.id("workspaces"), name: v.string() },
-	returns: v.union(
-		v.object({
-			name: v.string(),
-			contentType: v.union(v.string(), v.null()),
-			size: v.number(),
-			url: v.union(v.string(), v.null()),
-		}),
-		v.null(),
-	),
+	returns: storedFile,
 	handler: async (ctx, { workspaceId, name }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const row = await held(ctx, workspaceId, name);
-		if (row === null) return null;
-		return {
-			name: row.name,
-			contentType: row.contentType ?? null,
-			size: row.size,
-			url: await ctx.storage.getUrl(row.storageId),
-		};
+		return await withUrl(ctx, await held(ctx, workspaceId, name));
 	},
 });
 
