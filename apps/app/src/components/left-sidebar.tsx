@@ -28,6 +28,8 @@ import {
 	WorkspaceTree,
 } from "./workspace-tree.tsx";
 
+const TREE_ROW = "flex h-[calc(1lh+0.5rem)] items-center text-[11.5px]";
+
 const PAGES: Partial<
 	Record<SidebarEntry, "readme" | "settings" | "preferences">
 > = {
@@ -64,10 +66,10 @@ function EntryRail() {
 	const { motion } = useSidebarMotion();
 	const pick = useRailPick();
 	return (
-		<div className="flex w-full flex-col items-center py-1">
+		<div className="flex w-full flex-col items-center">
 			<SortableTree order={shown} onReorder={reorder} motion={motion}>
 				{(entry) => (
-					<div className="py-px">
+					<div className={TREE_ROW}>
 						<SidebarMenuButton
 							tooltip={entry}
 							className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
@@ -194,12 +196,14 @@ export function LeftSidebar({ onSignOut }: { onSignOut: () => void }) {
 				{expanded ? (
 					<WorkspaceMenu startCreating={creating} />
 				) : (
-					<WorkspaceRailMenu
-						onCreate={() => {
-							setCreating(true);
-							setOpen(true);
-						}}
-					/>
+					<div className={TREE_ROW}>
+						<WorkspaceRailMenu
+							onCreate={() => {
+								setCreating(true);
+								setOpen(true);
+							}}
+						/>
+					</div>
 				)}
 			</SidebarHeader>
 			<SidebarContent>
