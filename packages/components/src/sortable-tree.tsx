@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	type ClientRect,
 	closestCenter,
 	DndContext,
 	type DragEndEvent,
@@ -22,8 +23,8 @@ import {
 	type AnimateLayoutChanges,
 	arrayMove,
 	defaultAnimateLayoutChanges,
-	horizontalListSortingStrategy,
 	SortableContext,
+	type SortingStrategy,
 	sortableKeyboardCoordinates,
 	useSortable,
 	verticalListSortingStrategy,
@@ -46,6 +47,37 @@ const REMEASURE_AS_ENTRIES_COLLAPSE = {
 	droppable: { strategy: MeasuringStrategy.Always },
 };
 
+export function slotShift(
+	rects: readonly ClientRect[],
+	activeIndex: number,
+	overIndex: number,
+	index: number,
+): number {
+	const rect = rects[index];
+	if (!rect || index === activeIndex) return 0;
+	if (index > activeIndex && index <= overIndex) {
+		const slot = rects[index - 1];
+		return slot ? slot.left - rect.left : 0;
+	}
+	if (index < activeIndex && index >= overIndex) {
+		const slot = rects[index + 1];
+		return slot ? slot.right - rect.right : 0;
+	}
+	return 0;
+}
+
+const horizontalSlotStrategy: SortingStrategy = ({
+	rects,
+	activeIndex,
+	overIndex,
+	index,
+}) => ({
+	x: slotShift(rects, activeIndex, overIndex, index),
+	y: 0,
+	scaleX: 1,
+	scaleY: 1,
+});
+
 const AXES = {
 	vertical: {
 		modifier: restrictToVerticalAxis,
@@ -53,7 +85,7 @@ const AXES = {
 	},
 	horizontal: {
 		modifier: restrictToHorizontalAxis,
-		strategy: horizontalListSortingStrategy,
+		strategy: horizontalSlotStrategy,
 	},
 };
 
@@ -90,6 +122,11 @@ export function unzoomed(
 ): Transform | null {
 	if (transform === null || zoom === 1) return transform;
 	return { ...transform, x: transform.x / zoom, y: transform.y / zoom };
+}
+
+export function ownSize(transform: Transform, motion: MotionId): Transform {
+	const scale = motion === "lift" ? LIFT_SCALE : 1;
+	return { ...transform, scaleX: scale, scaleY: scale };
 }
 
 function subscribeReducedMotion(onChange: () => void) {
@@ -148,10 +185,7 @@ function SortableEntry({
 	} = useSortable({ id, ...ENTRY_MOTION[motion] });
 	const zoom = node.current?.currentCSSZoom ?? 1;
 	const shifted = unzoomed(transform, zoom);
-	const lifted =
-		shifted && isDragging && motion === "lift"
-			? { ...shifted, scaleX: LIFT_SCALE, scaleY: LIFT_SCALE }
-			: shifted;
+	const lifted = shifted && isDragging ? ownSize(shifted, motion) : shifted;
 	return (
 		<div
 			ref={(element) => {
