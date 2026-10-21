@@ -14,6 +14,7 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import {
+	restrictToHorizontalAxis,
 	restrictToParentElement,
 	restrictToVerticalAxis,
 } from "@dnd-kit/modifiers";
@@ -21,6 +22,7 @@ import {
 	type AnimateLayoutChanges,
 	arrayMove,
 	defaultAnimateLayoutChanges,
+	horizontalListSortingStrategy,
 	SortableContext,
 	sortableKeyboardCoordinates,
 	useSortable,
@@ -42,6 +44,17 @@ const SETTLE = { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" };
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 const REMEASURE_AS_ENTRIES_COLLAPSE = {
 	droppable: { strategy: MeasuringStrategy.Always },
+};
+
+const AXES = {
+	vertical: {
+		modifier: restrictToVerticalAxis,
+		strategy: verticalListSortingStrategy,
+	},
+	horizontal: {
+		modifier: restrictToHorizontalAxis,
+		strategy: horizontalListSortingStrategy,
+	},
 };
 
 const EntryDragged = createContext(false);
@@ -115,10 +128,12 @@ const DRAGGING_CLASS: Record<MotionId, string> = {
 function SortableEntry({
 	id,
 	motion,
+	className = "",
 	children,
 }: {
 	id: string;
 	motion: MotionId;
+	className?: string;
 	children: ReactNode;
 }) {
 	const {
@@ -148,7 +163,7 @@ function SortableEntry({
 			data-entry={id}
 			data-dragging={isDragging}
 			style={{ transform: CSS.Transform.toString(lifted), transition }}
-			className={`outline-none focus-visible:bg-bg2 ${
+			className={`outline-none focus-visible:bg-bg2 ${className} ${
 				isDragging ? DRAGGING_CLASS[motion] : ""
 			}`}
 		>
@@ -162,12 +177,18 @@ export function SortableTree<Id extends string>({
 	onReorder,
 	onPickUp,
 	motion = "slide",
+	axis = "vertical",
+	className,
+	entryClassName,
 	children,
 }: {
 	order: readonly Id[];
 	onReorder: (next: Id[]) => void;
 	onPickUp?: (id: Id) => void;
 	motion?: MotionId;
+	axis?: keyof typeof AXES;
+	className?: string;
+	entryClassName?: (id: Id, index: number) => string;
 	children: (id: Id) => ReactNode;
 }) {
 	const reduced = usePrefersReducedMotion();
@@ -204,22 +225,24 @@ export function SortableTree<Id extends string>({
 	};
 	const zoom = root?.currentCSSZoom ?? 1;
 	return (
-		<div ref={setRoot} data-motion={shown}>
+		<div ref={setRoot} data-motion={shown} className={className}>
 			<DndContext
 				sensors={sensors}
 				measuring={REMEASURE_AS_ENTRIES_COLLAPSE}
 				collisionDetection={closestCenter}
-				modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+				modifiers={[AXES[axis].modifier, restrictToParentElement]}
 				onDragStart={onDragStart}
 				onDragEnd={onDragEnd}
 				onDragCancel={() => setDragged(undefined)}
 			>
-				<SortableContext
-					items={[...order]}
-					strategy={verticalListSortingStrategy}
-				>
-					{order.map((id) => (
-						<SortableEntry key={id} id={id} motion={shown}>
+				<SortableContext items={[...order]} strategy={AXES[axis].strategy}>
+					{order.map((id, index) => (
+						<SortableEntry
+							key={id}
+							id={id}
+							motion={shown}
+							className={entryClassName?.(id, index)}
+						>
 							{children(id)}
 						</SortableEntry>
 					))}
