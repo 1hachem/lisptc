@@ -28,6 +28,7 @@ import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
 import type { PromptSource } from "@repo/shared/host";
+import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import {
 	AuthorizationRequired,
@@ -42,8 +43,6 @@ import {
 	memoryRegistry,
 	type OAuthConnConfig,
 	openPolicy,
-	type SearchDocument,
-	type SearchEngine,
 	type Tool,
 	type ToolkitRegistry,
 } from "./ports.ts";

@@ -1,8 +1,6 @@
 import type { Image } from "@repo/interpreter/image";
 import { type Layer, layerOver, stack } from "./image-layer.ts";
 
-export type { Layer };
-
 export interface Checkpoint {
 	readonly depth: number;
 	readonly image: Image;

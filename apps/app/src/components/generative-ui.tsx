@@ -1,8 +1,9 @@
+import type { ViewNode } from "@repo/interpreter/annotations";
+import { viewKey } from "@repo/interpreter/annotations";
 import { useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
-import { toUiNode, type UiNode } from "../lib/ui-node.ts";
 import { Markdown } from "./markdown.tsx";
 
 function text(props: Record<string, unknown>, key: string): string {
@@ -53,7 +54,7 @@ const TONE_CLASSES: Record<string, string> = {
 };
 
 function changed(
-	node: UiNode,
+	node: ViewNode,
 	fire: Fire,
 	el: HTMLInputElement | HTMLSelectElement,
 ): void {
@@ -66,7 +67,7 @@ function Node({
 	fire,
 	busy,
 }: {
-	node: UiNode;
+	node: ViewNode;
 	fire: Fire;
 	busy: boolean;
 }) {
@@ -226,7 +227,7 @@ function Node({
 	}
 }
 
-function Table({ node }: { node: UiNode }) {
+function Table({ node }: { node: ViewNode }) {
 	const columns = strings(node.props, "columns");
 	const rows = Array.isArray(node.props.rows) ? node.props.rows : [];
 	return (
@@ -261,7 +262,7 @@ function Table({ node }: { node: UiNode }) {
 	);
 }
 
-export function GenerativeUI({ node }: { node: UiNode }) {
+export function GenerativeUI({ node }: { node: ViewNode }) {
 	const { chatId, send } = useChatSession((state) => ({
 		chatId: state.chatId,
 		send: state.send,
@@ -283,7 +284,7 @@ export function GenerativeUI({ node }: { node: UiNode }) {
 					return;
 				}
 				const data = result.response;
-				const next = toUiNode(data.ui);
+				const next = viewKey.schema.safeParse(data.ui).data;
 				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));

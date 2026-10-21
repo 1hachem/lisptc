@@ -5,8 +5,16 @@ import {
 } from "@langchain/langgraph-sdk/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { type FiredMemory, firedMemories } from "@repo/components";
-import type { Skipped } from "@repo/syntax";
+import type { FiredMemory } from "@repo/components";
+import {
+	memoriesKey,
+	readAnnotation,
+	type ViewNode,
+	viewKey,
+} from "@repo/interpreter/annotations";
+import type { Answered, Ask } from "@repo/interpreter/asks";
+import type { Skipped } from "@repo/shared/lisp-forms";
+import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
@@ -23,7 +31,7 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
-import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
+import { answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
@@ -34,17 +42,7 @@ export interface ChatMessage {
 	id?: string;
 	type: string;
 	content: unknown;
-	additional_kwargs?: {
-		reasoning_content?: unknown;
-		meta?: unknown;
-		display?: unknown;
-		ui?: unknown;
-		asks?: unknown;
-		prose?: unknown;
-		failed?: unknown;
-		source?: unknown;
-		results?: unknown;
-	};
+	additional_kwargs?: MessageKwargs;
 }
 
 export interface StepMeta {
@@ -59,36 +57,25 @@ export interface StepMeta {
 	memories?: FiredMemory[];
 }
 
-function num(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isFinite(value)
-		? value
-		: undefined;
+function named(value: string | undefined): string | undefined {
+	return value === "" ? undefined : value;
 }
 
-function text(value: unknown): string | undefined {
-	return typeof value === "string" && value !== "" ? value : undefined;
-}
-
-function parseMemories(value: unknown): FiredMemory[] | undefined {
-	const fired = firedMemories(value);
-	return fired.length > 0 ? fired : undefined;
-}
-
-function parseMeta(value: unknown): StepMeta | undefined {
-	if (!value || typeof value !== "object") return undefined;
-	const raw = value as Record<string, unknown>;
-	const durationMs = num(raw.durationMs);
-	const memories = parseMemories(raw.memories);
-	if (durationMs === undefined && memories === undefined) return undefined;
+function parseMeta(message: ChatMessage): StepMeta | undefined {
+	const { meta } = envelopeOf(message.additional_kwargs);
+	if (meta === undefined) return undefined;
+	const fired = readAnnotation(meta, memoriesKey);
+	const memories = fired === undefined ? undefined : [...fired];
+	if (meta.durationMs === undefined && memories === undefined) return undefined;
 	return {
-		at: typeof raw.at === "string" ? raw.at : undefined,
-		durationMs,
-		provider: text(raw.provider),
-		model: text(raw.model),
-		inputTokens: num(raw.inputTokens),
-		outputTokens: num(raw.outputTokens),
-		cachedInputTokens: num(raw.cachedInputTokens),
-		steps: num(raw.steps),
+		at: meta.at,
+		durationMs: meta.durationMs,
+		provider: named(meta.provider),
+		model: named(meta.model),
+		inputTokens: meta.inputTokens,
+		outputTokens: meta.outputTokens,
+		cachedInputTokens: meta.cachedInputTokens,
+		steps: meta.steps,
 		memories,
 	};
 }
@@ -277,7 +264,7 @@ export function ChatProvider({
 			if (!m.id) continue;
 			const known = meta[m.id];
 			if (known?.memories) continue;
-			const parsed = parseMeta(m.additional_kwargs?.meta);
+			const parsed = parseMeta(m);
 			if (!parsed) continue;
 			if (known && !parsed.memories) continue;
 			found[m.id] = parsed;
@@ -507,8 +494,7 @@ export function useChatStore(): ChatStore {
 }
 
 export function messageReasoning(message: ChatMessage): string {
-	const reasoning = message.additional_kwargs?.reasoning_content;
-	return typeof reasoning === "string" ? reasoning : "";
+	return envelopeOf(message.additional_kwargs).reasoning_content ?? "";
 }
 
 export function isToolMessage(message: ChatMessage): boolean {
@@ -533,35 +519,19 @@ export function isUserMessage(message: ChatMessage): boolean {
 }
 
 export function messageProse(message: ChatMessage): Skipped[] {
-	const prose = message.additional_kwargs?.prose;
-	return Array.isArray(prose) ? prose.filter(isSkipped) : [];
-}
-
-function isSkipped(value: unknown): value is Skipped {
-	if (typeof value !== "object" || value === null) return false;
-	const { span, reason } = value as { span?: unknown; reason?: unknown };
-	return (
-		typeof reason === "string" &&
-		Array.isArray(span) &&
-		span.length === 2 &&
-		typeof span[0] === "number" &&
-		typeof span[1] === "number"
-	);
+	return [...(envelopeOf(message.additional_kwargs).prose ?? [])];
 }
 
 export function toolFailed(message: ChatMessage): boolean {
-	return message.additional_kwargs?.failed === true;
+	return envelopeOf(message.additional_kwargs).failed === true;
 }
 
 export function toolResults(message: ChatMessage): string[] {
-	const results = message.additional_kwargs?.results;
-	return Array.isArray(results)
-		? results.filter((r): r is string => typeof r === "string")
-		: [];
+	return [...(envelopeOf(message.additional_kwargs).results ?? [])];
 }
 
-export function toolUi(message: ChatMessage): unknown {
-	return message.additional_kwargs?.ui;
+export function toolUi(message: ChatMessage): ViewNode | undefined {
+	return readAnnotation(message.additional_kwargs, viewKey);
 }
 
 export function toolAsks(message: ChatMessage): Ask[] {
@@ -599,7 +569,7 @@ export function toolResult(message: ChatMessage): {
 	error: boolean;
 } {
 	const text = messageText(message);
-	const display = message.additional_kwargs?.display;
+	const { display } = envelopeOf(message.additional_kwargs);
 	try {
 		const parsed = JSON.parse(text) as {
 			source?: unknown;
@@ -608,8 +578,7 @@ export function toolResult(message: ChatMessage): {
 		};
 		if (parsed?.source === "lisp-repl")
 			return {
-				output:
-					typeof display === "string" ? display : String(parsed.output ?? ""),
+				output: display ?? String(parsed.output ?? ""),
 				error: Boolean(parsed.error),
 			};
 	} catch {}

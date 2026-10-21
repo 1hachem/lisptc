@@ -7,6 +7,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import type { Answered, Ask, AskChoice } from "@repo/interpreter/asks";
 import {
 	Confirmation,
 	ConfirmationAccepted,
@@ -22,9 +23,6 @@ import type { FunctionReturnType } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import {
-	type Answered,
-	type Ask,
-	type AskChoice,
 	type AskTransport,
 	uiActionTransport,
 	withAnswer,

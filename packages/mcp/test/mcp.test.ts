@@ -4,10 +4,11 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
+import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
-import type { ConnConfig, SearchDocument, SearchEngine } from "../src/ports.ts";
+import type { ConnConfig } from "../src/ports.ts";
 import { jsonToolkit } from "../src/toolkit.ts";
 import {
 	countingHost,

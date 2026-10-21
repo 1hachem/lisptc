@@ -9,8 +9,6 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 
-export { useStickToBottomContext };
-
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (

@@ -1,8 +1,6 @@
 import { LispPromise, type PromiseState } from "./promise.ts";
 import type { Recipe } from "./recovery.ts";
 
-export type { PromiseState };
-
 export type Progress = (note: string) => void;
 
 export class AsyncWork {

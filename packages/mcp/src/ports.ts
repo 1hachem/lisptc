@@ -231,12 +231,6 @@ export const openPolicy: McpPolicy = {
 	tool: () => true,
 };
 
-export type {
-	SearchDocument,
-	SearchEngine,
-	SearchHit,
-} from "@repo/shared/search";
-
 export interface PendingAuthorization {
 	state: string;
 	serverUrl: string;

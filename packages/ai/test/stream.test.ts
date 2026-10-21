@@ -1,7 +1,7 @@
 import { providerSpecs } from "@repo/env/providers";
+import type { ModelDelta } from "@repo/interpreter/session";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
 import { replResultContent } from "../src/repl.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
@@ -15,7 +15,7 @@ const emitting = (text: string) =>
 		}),
 	);
 
-const TURNS: AgentDelta[][] = [
+const TURNS: ModelDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
 	[{ text: "three." }, { usage: { input: 20, output: 6, cachedInput: 10 } }],
 ];

@@ -1,11 +1,9 @@
 import { MessageMemories } from "@repo/components";
-import { formsIn, type Skipped } from "@repo/syntax";
-import {
-	Conversation,
-	ConversationContent,
-	useStickToBottomContext,
-} from "@repo/ui";
+import type { Skipped } from "@repo/shared/lisp-forms";
+import { formsIn } from "@repo/syntax";
+import { Conversation, ConversationContent } from "@repo/ui";
 import { useEffect, useMemo, useState } from "react";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
@@ -27,7 +25,6 @@ import {
 import { isGreetingMessage } from "../lib/greeting.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { useUI } from "../lib/ui.tsx";
-import { toUiNode } from "../lib/ui-node.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { AskCard } from "./ask-card.tsx";
 import { Building } from "./building.tsx";
@@ -153,7 +150,7 @@ type Shown = ReturnType<typeof useUI>["shown"];
 
 function toolChannels(message: ChatMessage, shown: Shown) {
 	const { output } = toolResult(message);
-	const ui = toUiNode(toolUi(message));
+	const ui = toolUi(message);
 	const model = toolModelOutput(message).output;
 	const results = toolResults(message).join("\n");
 	return {
