@@ -7,6 +7,7 @@ import {
 	readPanelDrag,
 	startPanelDrag,
 	toPanelOps,
+	withMain,
 } from "../src/lib/panel-ops.ts";
 
 const report: PanelContent = {
@@ -87,8 +88,36 @@ describe("the panel lane off the wire", () => {
 				content: { kind: "view", title: "b", node: null },
 			},
 		]);
-		expect(opened.groups).toHaveLength(2);
+		expect(opened.root?.kind).toBe("split");
 		const closed = applyPanelOps(opened, [{ op: "close", tab: "a" }]);
 		expect(allTabs(closed).map((t) => t.id)).toEqual(["b"]);
+	});
+});
+
+describe("the chat pinned in the layout", () => {
+	it("is always there, and cannot be closed", () => {
+		const layout = withMain(emptyLayout());
+		expect(allTabs(layout).map((t) => t.id)).toEqual(["main"]);
+		expect(applyPanelOps(layout, [{ op: "close", tab: "main" }])).toEqual(
+			layout,
+		);
+	});
+
+	it("goes back to the left of a layout that lost it", () => {
+		const others = applyPanelOps(emptyLayout(), [
+			{ op: "open", tab: "a", split: "here", content: report },
+		]);
+		const layout = withMain(others);
+		expect(allTabs(layout).map((t) => t.id)).toEqual(["main", "a"]);
+		expect(layout.root?.kind).toBe("split");
+	});
+
+	it("opens a file beside the chat, never over it", () => {
+		const layout = applyPanelOps(withMain(emptyLayout()), [
+			{ op: "open", tab: "a", split: "here", content: report },
+		]);
+		const root = layout.root;
+		expect(root?.kind === "split" && root.direction).toBe("row");
+		expect(allTabs(layout).map((t) => t.id)).toEqual(["main", "a"]);
 	});
 });

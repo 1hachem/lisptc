@@ -2,11 +2,11 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import {
-	allTabs,
 	emptyLayout,
-	openTab,
+	type FlatLayout,
+	flatten,
 	replaceTab,
-	type Tab,
+	unflatten,
 } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -22,7 +22,6 @@ import type { ChatMessage } from "./chat.tsx";
 import { useChatSession } from "./chat.tsx";
 import {
 	applyPanelOps,
-	type Dock,
 	type Folder,
 	fileTab,
 	type PanelContent,
@@ -30,6 +29,7 @@ import {
 	type PanelOp,
 	panelTab,
 	toPanelOps,
+	withMain,
 } from "./panel-ops.ts";
 
 function toolPanel(message: ChatMessage): PanelOp[] {
@@ -41,7 +41,6 @@ export interface Panels {
 	change: (layout: PanelLayout) => void;
 	apply: (ops: readonly PanelOp[]) => void;
 	openFile: (folder: Folder, name: string) => void;
-	dockTab: (tab: Tab<PanelContent>, dock: Dock) => void;
 	retab: (tabId: string, content: PanelContent, keepId?: boolean) => void;
 }
 
@@ -52,16 +51,11 @@ const NO_PANELS: Panels = {
 	change: () => {},
 	apply: () => {},
 	openFile: () => {},
-	dockTab: () => {},
 	retab: () => {},
 };
 
 export function usePanels(): Panels {
 	return useContext(PanelsContext) ?? NO_PANELS;
-}
-
-export function hasTabs(layout: PanelLayout): boolean {
-	return allTabs(layout).length > 0;
 }
 
 function usePanelLayout(workspaceId: Id<"workspaces">) {
@@ -78,13 +72,19 @@ function usePanelLayout(workspaceId: Id<"workspaces">) {
 			}),
 		[mutation],
 	);
-	const stored: PanelLayout = data ?? emptyLayout();
+	const stored = useMemo<PanelLayout>(
+		() =>
+			withMain(
+				data ? unflatten(data as FlatLayout<PanelContent>) : emptyLayout(),
+			),
+		[data],
+	);
 	const latest = useRef(stored);
 	latest.current = stored;
 	const change = useCallback(
 		(layout: PanelLayout) => {
 			latest.current = layout;
-			void put({ workspaceId, layout });
+			void put({ workspaceId, layout: flatten(layout) });
 		},
 		[put, workspaceId],
 	);
@@ -146,11 +146,6 @@ export function PanelsProvider({
 			]),
 		[apply],
 	);
-	const dockTab = useCallback(
-		(tab: Tab<PanelContent>, dock: Dock) =>
-			change({ ...openTab(latest.current, tab, "focused"), dock }),
-		[change, latest],
-	);
 	const retab = useCallback(
 		(tabId: string, content: PanelContent, keepId = false) =>
 			change(
@@ -163,8 +158,8 @@ export function PanelsProvider({
 		[change, latest],
 	);
 	const value = useMemo(
-		() => ({ layout, change, apply, openFile, dockTab, retab }),
-		[layout, change, apply, openFile, dockTab, retab],
+		() => ({ layout, change, apply, openFile, retab }),
+		[layout, change, apply, openFile, retab],
 	);
 	return (
 		<PanelsContext.Provider value={value}>

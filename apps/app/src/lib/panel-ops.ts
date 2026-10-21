@@ -1,8 +1,10 @@
 import {
 	closeTab,
+	dropTab,
 	focusTab,
 	openTab,
 	type Placement,
+	paneOf,
 	type SplitLayout,
 	type Tab,
 } from "@repo/components";
@@ -22,14 +24,33 @@ const PAGES = [
 export type Page = (typeof PAGES)[number];
 
 export type PanelContent =
+	| { kind: "main" }
 	| { kind: "file"; folder: Folder; name: string }
 	| { kind: "view"; title: string; node: unknown }
 	| { kind: "chat"; chatId: string | null; title: string }
 	| { kind: "page"; page: Page; id?: string; title: string };
 
-export type Dock = "side" | "below";
+export type PanelLayout = SplitLayout<PanelContent>;
 
-export type PanelLayout = SplitLayout<PanelContent> & { dock?: Dock };
+const MAIN_TAB: Tab<PanelContent> = {
+	id: "main",
+	content: { kind: "main" },
+	fixed: true,
+};
+
+export function withMain(layout: PanelLayout): PanelLayout {
+	if (paneOf(layout, MAIN_TAB.id) !== undefined) return layout;
+	if (layout.root === null) return openTab(layout, MAIN_TAB);
+	return dropTab(layout, MAIN_TAB, { node: layout.root.id, edge: "left" });
+}
+
+function placed(layout: PanelLayout, split: Split): Placement {
+	if (split !== "here") return PLACEMENT[split];
+	const focused = paneOf(layout, MAIN_TAB.id);
+	return focused !== undefined && focused.id === layout.focused
+		? "right"
+		: "focused";
+}
 
 export type Split = "here" | "right" | "down";
 
@@ -85,6 +106,7 @@ function contentOf(value: unknown): PanelContent | undefined {
 }
 
 export function tabLabel(content: PanelContent): string {
+	if (content.kind === "main") return "chat";
 	return content.kind === "file" ? content.name : content.title;
 }
 
@@ -92,6 +114,8 @@ export const PANEL_DRAG = "application/x-lisptc-panel";
 
 function tabId(content: PanelContent): string {
 	switch (content.kind) {
+		case "main":
+			return MAIN_TAB.id;
 		case "file":
 			return fileTab(content.folder, content.name);
 		case "view":
@@ -157,7 +181,7 @@ export function applyPanelOps(
 		return openTab(
 			current,
 			{ id: op.tab, content: op.content },
-			PLACEMENT[op.split],
+			placed(current, op.split),
 		);
 	}, layout);
 }
