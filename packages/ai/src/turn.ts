@@ -43,6 +43,7 @@ export interface TurnOptions {
 	maxSteps?: number;
 	inbox?: () => Promise<Steer[]>;
 	runsForms?: boolean;
+	received?: Annotations;
 }
 
 export type TurnEvent =
@@ -200,6 +201,7 @@ interface Turn {
 	readonly signal?: AbortSignal;
 	readonly inbox?: () => Promise<Steer[]>;
 	readonly runsForms: boolean;
+	readonly received?: Annotations;
 	readonly agent: AgentTurn;
 	readonly telemetry: TurnTelemetry;
 	steps: number;
@@ -224,6 +226,13 @@ async function* openTurn(
 	const started = await repl.turnStart(turn.telemetry.turnStart);
 	if (started.emitted !== "") transcript.push(noteEntry(started.emitted));
 	yield* collect(started.annotations);
+
+	if (turn.received !== undefined) {
+		const heard = await repl.received(turn.received);
+		yield* collect(heard.annotations);
+		if (heard.emitted !== "" && ride(transcript, heard.emitted))
+			yield { type: "rode", text: heard.emitted };
+	}
 
 	const { prompt: system, annotations } = await repl.system(
 		config?.system ?? systemPromptFor(repl.interp),
@@ -397,6 +406,7 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 		signal,
 		inbox,
 		runsForms: options.runsForms ?? true,
+		received: options.received,
 		steps: 0,
 	};
 }

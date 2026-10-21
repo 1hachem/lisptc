@@ -233,15 +233,6 @@ export function useAttachmentUpload(workspaceId: Id<"workspaces">) {
 	return { upload, discard };
 }
 
-export function withAttachments(
-	text: string,
-	names: readonly string[],
-): string {
-	if (names.length === 0) return text;
-	const attached = `attached: ${names.map((name) => `attachments/${name}`).join(", ")}`;
-	return text === "" ? attached : `${text}\n\n${attached}`;
-}
-
 export function useKnowledgeUpload(workspaceId: Id<"workspaces">) {
 	const uploadUrl = useConvexMutation(api.knowledge.uploadUrl);
 	const add = useConvexMutation(api.knowledge.add);

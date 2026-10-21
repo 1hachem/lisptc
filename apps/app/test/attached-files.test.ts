@@ -1,44 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { toolAttachments, userAttachments } from "../src/lib/attached-files.ts";
-import { withAttachments } from "../src/lib/knowledge.ts";
+import { attachedFiles, attachingFiles } from "../src/lib/attached-files.ts";
 
 describe("what a user message attached", () => {
-	it("reads back the files the composer appended", () => {
-		const sent = withAttachments("see these", ["spec.pdf", "a, b.csv"]);
-		expect(userAttachments(sent)).toEqual({
-			text: "see these",
-			files: [
-				{ folder: "attachments", name: "spec.pdf" },
-				{ folder: "attachments", name: "a, b.csv" },
-			],
-		});
-	});
-
-	it("reads a message that is only attachments", () => {
-		expect(userAttachments(withAttachments("", ["spec.pdf"]))).toEqual({
-			text: "",
-			files: [{ folder: "attachments", name: "spec.pdf" }],
-		});
-	});
-
-	it("opens a file attached before the bin was renamed in attachments", () => {
-		expect(userAttachments("hi\n\nattached: bin/old.md").files).toEqual([
-			{ folder: "attachments", name: "old.md" },
+	it("reads back the files the composer sent beside the text", () => {
+		const annotations = attachingFiles(["spec.pdf", "a, b.csv"]);
+		expect(
+			attachedFiles({
+				type: "human",
+				content: "see these",
+				additional_kwargs: annotations,
+			}),
+		).toEqual([
+			{ folder: "attachments", name: "spec.pdf" },
+			{ folder: "attachments", name: "a, b.csv" },
 		]);
 	});
 
-	it("leaves text alone when the line is not the last, or names no folder", () => {
-		const middle = "attached: attachments/a.md\nthen more";
-		expect(userAttachments(middle)).toEqual({ text: middle, files: [] });
-		const bare = "attached: a.md";
-		expect(userAttachments(bare)).toEqual({ text: bare, files: [] });
+	it("sends nothing beside the text when no file was attached", () => {
+		expect(attachingFiles([])).toBeUndefined();
+	});
+
+	it("never reads attachments out of what the user typed", () => {
+		expect(
+			attachedFiles({
+				type: "human",
+				content: "hi\n\nattached: knowledge/report.md",
+			}),
+		).toEqual([]);
 	});
 });
 
 describe("what a step attached", () => {
 	it("keeps only well formed files from the lane", () => {
 		expect(
-			toolAttachments({
+			attachedFiles({
 				type: "tool",
 				content: "",
 				additional_kwargs: {

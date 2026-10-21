@@ -80,6 +80,16 @@ export function riding(text: string): InterpExtension {
 	});
 }
 
+export function receiving(): InterpExtension {
+	return extension((hooks) => {
+		hooks.received.use(function* (ctx, received, next) {
+			const said = received.said;
+			if (typeof said === "string") ctx.emit(`the user also said: ${said}`);
+			yield* next(ctx, received);
+		});
+	});
+}
+
 export function testRepl(
 	extensions: InterpExtension[] = [],
 	images: MemoryImageStore = new MemoryImageStore(),

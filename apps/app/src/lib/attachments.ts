@@ -25,7 +25,12 @@ export function attachedNames(items: readonly Attachment[]): string[] {
 	);
 }
 
-export function blockedSend(items: readonly Attachment[]): string | null {
+export function blockedSend(
+	items: readonly Attachment[],
+	streaming = false,
+): string | null {
+	if (streaming && items.length > 0)
+		return "files go with the next message, once this reply ends";
 	if (items.some(({ upload }) => upload.state === "uploading"))
 		return "still uploading, sends once the files are in";
 	if (items.some(({ upload }) => upload.state === "failed"))

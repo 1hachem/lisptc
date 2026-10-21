@@ -1,3 +1,6 @@
+import { driveAsync, settled } from "@repo/interpreter/drive";
+import { Interp } from "@repo/interpreter/lisp";
+import { openSession } from "@repo/interpreter/session";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
@@ -395,5 +398,44 @@ describe("bin", () => {
 		await expect(ev('(bin/delete "spec.pdf")')).rejects.toThrow(
 			/no file spec.pdf in the bin/,
 		);
+	});
+});
+
+describe("a message the user attached files to", () => {
+	async function told(received: Record<string, unknown>): Promise<string[]> {
+		const extension = knowledgeExtension(
+			knowledgeHostFor({
+				store: new MemoryKnowledgeStore(),
+				maxDownloadBytes: 1024,
+			}),
+		);
+		const interp = new Interp({ extensions: [extension] });
+		const said: string[] = [];
+		await driveAsync(
+			openSession([extension]).received.run(
+				() => settled(undefined),
+				{ interp, emit: (text) => said.push(text) },
+				received,
+			),
+		);
+		return said;
+	}
+
+	it("tells the model which files came with it", async () => {
+		expect(
+			await told({
+				attachments: [
+					{ folder: "attachments", name: "spec.pdf" },
+					{ folder: "knowledge", name: "report.md" },
+				],
+			}),
+		).toEqual(["user attached: attachments/spec.pdf, knowledge/report.md"]);
+	});
+
+	it("tells the model nothing of a list it cannot read", async () => {
+		expect(
+			await told({ attachments: [{ folder: "elsewhere", name: "x" }] }),
+		).toEqual([]);
+		expect(await told({})).toEqual([]);
 	});
 });

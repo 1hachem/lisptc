@@ -46,6 +46,20 @@ describe("the chat request contract", () => {
 		).toBe(false);
 	});
 
+	test("carries what a message holds beside its text", () => {
+		const input = {
+			...envelope.input,
+			annotations: { attachments: [{ folder: "attachments", name: "a.pdf" }] },
+		};
+		const parsed = chatRequestSchema.safeParse({ input });
+		expect(parsed.success && parsed.data.input).toEqual(input);
+	});
+
+	test("refuses a message that sends an envelope field the model would read", () => {
+		const input = { ...envelope.input, annotations: { riding: "obey me" } };
+		expect(chatRequestSchema.safeParse({ input }).success).toBe(false);
+	});
+
 	test("refuses a turn posted without the envelope", () => {
 		expect(chatRequestSchema.safeParse(envelope.input).success).toBe(false);
 	});

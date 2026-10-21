@@ -21,7 +21,8 @@ change shows there at once.
 ATTACHMENTS
 
 Files user attached to message land in attachments, shown as attachments/ in
-sidebar. Unkept attachment moves to bin after a week.
+sidebar; message then carries "user attached: attachments/spec.pdf". Unkept
+attachment moves to bin after a week.
 
 - User message can point at file: @knowledge/report.md or
   @attachments/spec.pdf; quoted when name has space:

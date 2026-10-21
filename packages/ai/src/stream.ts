@@ -1,3 +1,4 @@
+import type { Annotations } from "@repo/interpreter/session";
 import {
 	contentToText,
 	envelopeOf,
@@ -138,6 +139,7 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	steer?: { inbox: SteerInbox; key: string };
 	quiet?: boolean;
 	runsForms?: boolean;
+	received?: Annotations;
 };
 
 function steerLine(steer: ChatStreamOptions["steer"]) {
@@ -315,6 +317,7 @@ export function streamChatResponse<Id extends string>(
 		steer,
 		quiet,
 		runsForms,
+		received,
 	} = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
@@ -349,6 +352,7 @@ export function streamChatResponse<Id extends string>(
 						identity,
 						inbox: steering.take,
 						runsForms,
+						received,
 					}))
 						if (!turn.apply(event)) break;
 				}

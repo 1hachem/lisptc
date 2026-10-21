@@ -1,3 +1,8 @@
+import {
+	annotate,
+	annotationKey,
+	readAnnotation,
+} from "@repo/interpreter/annotations";
 import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -14,11 +19,7 @@ import { plistOptions } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { zAny, zList } from "@repo/interpreter/schema";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { Awaitable } from "@repo/shared/host";
 import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
@@ -460,6 +461,17 @@ export interface AttachedFile {
 
 export const attached = topic<AttachedFile>("attachments");
 
+const attachmentsKey = annotationKey({
+	name: "attachments",
+	lane: "output",
+	schema: z.array(
+		z.object({
+			folder: z.enum(["attachments", "knowledge"]),
+			name: z.string().min(1),
+		}),
+	),
+});
+
 function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 	const held: Record<StoreFolder, () => Awaitable<string[]>> = {
 		attachments: () => store.attachments(),
@@ -486,13 +498,21 @@ function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 }
 
 function attachSession(hooks: SessionHooks): void {
+	hooks.received.use(function* (ctx, received, next) {
+		const files = readAnnotation(received, attachmentsKey) ?? [];
+		if (files.length > 0)
+			ctx.emit(
+				`user attached: ${files.map(({ folder, name }) => `${folder}/${name}`).join(", ")}`,
+			);
+		yield* next(ctx, received);
+	});
 	hooks.annotate.use((buffer, into, next) => {
 		const attachments = buffer.collect(attached);
 		return next(
 			buffer,
 			attachments.length === 0
 				? into
-				: annotating(into, "output", { attachments }),
+				: annotate(into, attachmentsKey, attachments),
 		);
 	});
 }
