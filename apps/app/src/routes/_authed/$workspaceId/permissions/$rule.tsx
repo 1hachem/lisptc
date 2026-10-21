@@ -1,9 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { FileView } from "../../../../components/file-view.tsx";
-import { permissionRules } from "../../../../lib/files.ts";
+import { PermissionPage } from "../../../../components/permission-page.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId/permissions/$rule")(
 	{
@@ -23,19 +21,5 @@ export const Route = createFileRoute("/_authed/$workspaceId/permissions/$rule")(
 
 function PermissionFile() {
 	const { workspaceId, rule } = Route.useParams();
-	const { data: source, error } = useQuery(
-		convexQuery(api.permissions.get, { workspaceId }),
-	);
-	if (error) throw error;
-	const found =
-		source === undefined ? undefined : permissionRules(source ?? "")[rule];
-
-	return (
-		<FileView
-			file={
-				found && { path: `permissions/${found.name}`, source: found.source }
-			}
-			missing={source === undefined ? undefined : "no such rule"}
-		/>
-	);
+	return <PermissionPage workspaceId={workspaceId} rule={rule} />;
 }

@@ -1,9 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { FileView } from "../../../../components/file-view.tsx";
-import { memorySource } from "../../../../lib/files.ts";
+import { MemoryPage } from "../../../../components/memory-page.tsx";
 
 export const Route = createFileRoute("/_authed/$workspaceId/memories/$key")({
 	loader: async ({ context, params }) => {
@@ -17,16 +15,5 @@ export const Route = createFileRoute("/_authed/$workspaceId/memories/$key")({
 
 function MemoryFile() {
 	const { workspaceId, key } = Route.useParams();
-	const { data: memories, error } = useQuery(
-		convexQuery(api.memories.list, { workspaceId }),
-	);
-	if (error) throw error;
-	const memory = memories?.find((candidate) => candidate.key === key);
-
-	return (
-		<FileView
-			file={memory && { path: `memories/${key}`, source: memorySource(memory) }}
-			missing={memories === undefined ? undefined : `no memory named ${key}`}
-		/>
-	);
+	return <MemoryPage workspaceId={workspaceId} memoryKey={key} />;
 }
