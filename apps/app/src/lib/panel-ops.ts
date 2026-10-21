@@ -175,7 +175,7 @@ export function tabLabel(content: PanelContent): string {
 	return content.kind === "file" ? content.name : content.title;
 }
 
-export const CHAT_MIN_WIDTH = 360;
+const CHAT_MIN_WIDTH = 360;
 
 export function tabMinWidth(content: PanelContent): number {
 	return content.kind === "chat" ? CHAT_MIN_WIDTH : 0;
