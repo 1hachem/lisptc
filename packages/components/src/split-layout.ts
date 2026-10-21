@@ -7,69 +7,87 @@ export type Placement = "focused" | "right" | "down" | { pane: string };
 export interface Tab<T> {
 	id: string;
 	content: T;
+	fixed?: boolean;
 }
 
 export interface Pane<T> {
+	kind: "pane";
 	id: string;
-	size: number;
 	tabs: Tab<T>[];
 	active: string | null;
 }
 
-export interface Group<T> {
+export interface Split<T> {
+	kind: "split";
 	id: string;
-	size: number;
-	panes: Pane<T>[];
+	direction: Direction;
+	children: Node<T>[];
+	sizes: number[];
 }
 
+export type Node<T> = Pane<T> | Split<T>;
+
 export interface SplitLayout<T> {
-	direction: Direction;
-	groups: Group<T>[];
+	root: Node<T> | null;
 	focused: string | null;
 }
 
-export function emptyLayout<T>(direction: Direction = "row"): SplitLayout<T> {
-	return { direction, groups: [], focused: null };
+export type Drop =
+	| { pane: string; index?: number }
+	| { pane: string; edge: Edge }
+	| { node: string; edge: Edge };
+
+export function emptyLayout<T>(): SplitLayout<T> {
+	return { root: null, focused: null };
+}
+
+function nodes<T>(node: Node<T> | null): Node<T>[] {
+	if (node === null) return [];
+	if (node.kind === "pane") return [node];
+	return [node, ...node.children.flatMap((child) => nodes(child))];
+}
+
+function panes<T>(layout: SplitLayout<T>): Pane<T>[] {
+	return nodes(layout.root).filter((n): n is Pane<T> => n.kind === "pane");
 }
 
 export function allTabs<T>(layout: SplitLayout<T>): Tab<T>[] {
-	return layout.groups.flatMap((g) => g.panes.flatMap((p) => p.tabs));
+	return panes(layout).flatMap((p) => p.tabs);
 }
 
 export function paneOf<T>(
 	layout: SplitLayout<T>,
 	tabId: string,
 ): Pane<T> | undefined {
-	for (const group of layout.groups)
-		for (const pane of group.panes)
-			if (pane.tabs.some((t) => t.id === tabId)) return pane;
-	return undefined;
+	return panes(layout).find((p) => p.tabs.some((t) => t.id === tabId));
 }
 
-function panes<T>(layout: SplitLayout<T>): Pane<T>[] {
-	return layout.groups.flatMap((g) => g.panes);
-}
-
-function nextId<T>(layout: SplitLayout<T>, prefix: "g" | "p"): string {
-	const taken = new Set([
-		...layout.groups.map((g) => g.id),
-		...panes(layout).map((p) => p.id),
-	]);
+function nextId<T>(
+	layout: SplitLayout<T>,
+	prefix: "s" | "p",
+	also: string[] = [],
+): string {
+	const taken = new Set([...nodes(layout.root).map((n) => n.id), ...also]);
 	let n = 1;
 	while (taken.has(`${prefix}${n}`)) n++;
 	return `${prefix}${n}`;
 }
 
-function even<S extends { size: number }>(items: S[]): S[] {
-	return items.map((item) => ({ ...item, size: 100 / items.length }));
+function even(count: number): number[] {
+	return Array.from({ length: count }, () => 100 / count);
 }
 
-function locate<T>(layout: SplitLayout<T>, paneId: string) {
-	const g = layout.groups.findIndex((group) =>
-		group.panes.some((p) => p.id === paneId),
-	);
-	if (g === -1) return undefined;
-	return { g, p: layout.groups[g].panes.findIndex((p) => p.id === paneId) };
+function mapNode<T>(
+	node: Node<T>,
+	id: string,
+	update: (node: Node<T>) => Node<T>,
+): Node<T> {
+	if (node.id === id) return update(node);
+	if (node.kind === "pane") return node;
+	return {
+		...node,
+		children: node.children.map((child) => mapNode(child, id, update)),
+	};
 }
 
 function mapPane<T>(
@@ -77,32 +95,47 @@ function mapPane<T>(
 	paneId: string,
 	update: (pane: Pane<T>) => Pane<T>,
 ): SplitLayout<T> {
+	if (layout.root === null) return layout;
 	return {
 		...layout,
-		groups: layout.groups.map((group) => ({
-			...group,
-			panes: group.panes.map((p) => (p.id === paneId ? update(p) : p)),
-		})),
+		root: mapNode(layout.root, paneId, (n) =>
+			n.kind === "pane" ? update(n) : n,
+		),
 	};
 }
 
+function parentOf<T>(node: Node<T> | null, id: string): Split<T> | undefined {
+	if (node === null || node.kind === "pane") return undefined;
+	if (node.children.some((child) => child.id === id)) return node;
+	for (const child of node.children) {
+		const found = parentOf(child, id);
+		if (found) return found;
+	}
+	return undefined;
+}
+
+function settle<T>(node: Node<T>): Node<T> | null {
+	if (node.kind === "pane") return node.tabs.length === 0 ? null : node;
+	const kept = node.children
+		.map((child) => settle(child))
+		.filter((child): child is Node<T> => child !== null);
+	if (kept.length === 0) return null;
+	if (kept.length === 1) return kept[0];
+	const sizes =
+		kept.length === node.children.length ? node.sizes : even(kept.length);
+	return { ...node, children: kept, sizes };
+}
+
 function prune<T>(layout: SplitLayout<T>): SplitLayout<T> {
-	const groups = layout.groups
-		.map((group) => {
-			const kept = group.panes.filter((p) => p.tabs.length > 0);
-			return kept.length === group.panes.length
-				? group
-				: { ...group, panes: even(kept) };
-		})
-		.filter((group) => group.panes.length > 0);
-	const pruned = {
-		...layout,
-		groups: groups.length === layout.groups.length ? groups : even(groups),
+	const root = layout.root === null ? null : settle(layout.root);
+	const pruned = { ...layout, root };
+	const ids = panes(pruned).map((p) => p.id);
+	return {
+		...pruned,
+		focused: ids.includes(layout.focused ?? "")
+			? layout.focused
+			: (ids[0] ?? null),
 	};
-	const focused = panes(pruned).some((p) => p.id === layout.focused)
-		? layout.focused
-		: (panes(pruned)[0]?.id ?? null);
-	return { ...pruned, focused };
 }
 
 function withTab<T>(pane: Pane<T>, tab: Tab<T>, index?: number): Pane<T> {
@@ -126,76 +159,75 @@ function withoutTab<T>(pane: Pane<T>, tabId: string): Pane<T> {
 	return { ...pane, tabs, active };
 }
 
-function seeded<T>(layout: SplitLayout<T>, tab: Tab<T>): SplitLayout<T> {
-	const pane: Pane<T> = {
-		id: nextId(layout, "p"),
-		size: 100,
-		tabs: [tab],
-		active: tab.id,
-	};
-	return {
-		...layout,
-		groups: [{ id: nextId(layout, "g"), size: 100, panes: [pane] }],
-		focused: pane.id,
-	};
+function focusIn<T>(layout: SplitLayout<T>, paneId: string): SplitLayout<T> {
+	return { ...layout, focused: paneId };
 }
 
-function acrossGroups(direction: Direction, edge: Edge): boolean {
-	const horizontal = edge === "left" || edge === "right";
-	return direction === "row" ? horizontal : !horizontal;
+function freshPane<T>(layout: SplitLayout<T>, tab: Tab<T>): Pane<T> {
+	return { kind: "pane", id: nextId(layout, "p"), tabs: [tab], active: tab.id };
+}
+
+function axisOf(edge: Edge): Direction {
+	return edge === "left" || edge === "right" ? "row" : "column";
 }
 
 function splitAt<T>(
 	layout: SplitLayout<T>,
-	paneId: string,
+	nodeId: string,
 	edge: Edge,
 	tab: Tab<T>,
 ): SplitLayout<T> {
-	const at = locate(layout, paneId);
-	if (at === undefined) return openTab(layout, tab, "focused");
+	if (layout.root === null) return openTab(layout, tab);
+	if (!nodes(layout.root).some((n) => n.id === nodeId))
+		return openTab(layout, tab);
+	const pane = freshPane(layout, tab);
 	const after = edge === "right" || edge === "bottom";
-	if (acrossGroups(layout.direction, edge)) {
-		if (layout.groups.length >= MAX_SPLITS)
-			return focusIn(
-				mapPane(layout, paneId, (p) => withTab(p, tab)),
-				paneId,
-			);
-		const pane: Pane<T> = {
-			id: nextId(layout, "p"),
-			size: 100,
-			tabs: [tab],
-			active: tab.id,
-		};
-		const group: Group<T> = { id: nextId(layout, "g"), size: 0, panes: [pane] };
-		const groups = [...layout.groups];
-		groups.splice(after ? at.g + 1 : at.g, 0, group);
-		return { ...layout, groups: even(groups), focused: pane.id };
-	}
-	const host = layout.groups[at.g];
-	if (host.panes.length >= MAX_SPLITS)
-		return focusIn(
-			mapPane(layout, paneId, (p) => withTab(p, tab)),
-			paneId,
-		);
-	const pane: Pane<T> = {
-		id: nextId(layout, "p"),
-		size: 0,
-		tabs: [tab],
-		active: tab.id,
+	const direction = axisOf(edge);
+	const fallback = () => {
+		const host = panes(layout).find((p) => p.id === nodeId);
+		return openTab(layout, tab, host ? { pane: host.id } : "focused");
 	};
-	const list = [...host.panes];
-	list.splice(after ? at.p + 1 : at.p, 0, pane);
+	const self = nodes(layout.root).find((n) => n.id === nodeId);
+	if (self?.kind === "split" && self.direction === direction) {
+		if (self.children.length >= MAX_SPLITS) return fallback();
+		const children = after
+			? [...self.children, pane]
+			: [pane, ...self.children];
+		return {
+			root: mapNode(layout.root, self.id, () => ({
+				...self,
+				children,
+				sizes: even(children.length),
+			})),
+			focused: pane.id,
+		};
+	}
+	const parent = parentOf(layout.root, nodeId);
+	if (parent !== undefined && parent.direction === direction) {
+		if (parent.children.length >= MAX_SPLITS) return fallback();
+		const at = parent.children.findIndex((c) => c.id === nodeId);
+		const children = [...parent.children];
+		children.splice(after ? at + 1 : at, 0, pane);
+		return {
+			root: mapNode(layout.root, parent.id, () => ({
+				...parent,
+				children,
+				sizes: even(children.length),
+			})),
+			focused: pane.id,
+		};
+	}
+	const splitId = nextId(layout, "s", [pane.id]);
 	return {
-		...layout,
-		groups: layout.groups.map((g, i) =>
-			i === at.g ? { ...g, panes: even(list) } : g,
-		),
+		root: mapNode(layout.root, nodeId, (node) => ({
+			kind: "split",
+			id: splitId,
+			direction,
+			children: after ? [node, pane] : [pane, node],
+			sizes: even(2),
+		})),
 		focused: pane.id,
 	};
-}
-
-function focusIn<T>(layout: SplitLayout<T>, paneId: string): SplitLayout<T> {
-	return { ...layout, focused: paneId };
 }
 
 export function focusTab<T>(
@@ -225,7 +257,10 @@ export function openTab<T>(
 			tab.id,
 		);
 	const all = panes(layout);
-	if (all.length === 0) return seeded(layout, tab);
+	if (all.length === 0 || layout.root === null) {
+		const pane = freshPane(layout, tab);
+		return { root: pane, focused: pane.id };
+	}
 	const focused = all.find((p) => p.id === layout.focused) ?? all[0];
 	if (placement === "right") return splitAt(layout, focused.id, "right", tab);
 	if (placement === "down") return splitAt(layout, focused.id, "bottom", tab);
@@ -245,12 +280,35 @@ export function closeTab<T>(
 ): SplitLayout<T> {
 	const pane = paneOf(layout, tabId);
 	if (pane === undefined) return layout;
+	if (pane.tabs.find((t) => t.id === tabId)?.fixed) return layout;
 	return prune(mapPane(layout, pane.id, (p) => withoutTab(p, tabId)));
 }
 
-export type Drop =
-	| { pane: string; index?: number }
-	| { pane: string; edge: Edge };
+function lift<T>(layout: SplitLayout<T>, tabId: string): SplitLayout<T> {
+	const source = paneOf(layout, tabId);
+	if (source === undefined) return layout;
+	return prune(mapPane(layout, source.id, (p) => withoutTab(p, tabId)));
+}
+
+function place<T>(
+	layout: SplitLayout<T>,
+	tab: Tab<T>,
+	drop: Drop,
+): SplitLayout<T> {
+	if ("edge" in drop)
+		return splitAt(
+			layout,
+			"node" in drop ? drop.node : drop.pane,
+			drop.edge,
+			tab,
+		);
+	if (!panes(layout).some((p) => p.id === drop.pane))
+		return openTab(layout, tab);
+	return focusIn(
+		mapPane(layout, drop.pane, (p) => withTab(p, tab, drop.index)),
+		drop.pane,
+	);
+}
 
 export function moveTab<T>(
 	layout: SplitLayout<T>,
@@ -260,24 +318,29 @@ export function moveTab<T>(
 	const source = paneOf(layout, tabId);
 	if (source === undefined) return layout;
 	const tab = source.tabs.find((t) => t.id === tabId) as Tab<T>;
-	if ("edge" in drop) {
-		if (drop.pane === source.id && source.tabs.length === 1) return layout;
-		if (locate(layout, drop.pane) === undefined) return layout;
-		const lifted = prune(
-			mapPane(layout, source.id, (p) => withoutTab(p, tabId)),
+	if ("pane" in drop && !("edge" in drop) && drop.pane === source.id)
+		return focusIn(
+			mapPane(layout, source.id, (p) => withTab(p, tab, drop.index)),
+			source.id,
 		);
-		return splitAt(lifted, drop.pane, drop.edge, tab);
-	}
-	const lifted =
-		drop.pane === source.id
-			? layout
-			: mapPane(layout, source.id, (p) => withoutTab(p, tabId));
-	return prune(
-		focusIn(
-			mapPane(lifted, drop.pane, (p) => withTab(p, tab, drop.index)),
-			drop.pane,
-		),
-	);
+	const target = "node" in drop ? drop.node : drop.pane;
+	if (target === source.id && source.tabs.length === 1) return layout;
+	const lifted = lift(layout, tabId);
+	if (!nodes(lifted.root).some((n) => n.id === target))
+		return "edge" in drop && lifted.root !== null
+			? splitAt(lifted, lifted.root.id, drop.edge, tab)
+			: openTab(lifted, tab);
+	return place(lifted, tab, drop);
+}
+
+export function dropTab<T>(
+	layout: SplitLayout<T>,
+	tab: Tab<T>,
+	drop: Drop,
+): SplitLayout<T> {
+	if (paneOf(layout, tab.id) !== undefined)
+		return moveTab(openTab(layout, tab), tab.id, drop);
+	return place(layout, tab, drop);
 }
 
 export function replaceTab<T>(
@@ -299,35 +362,19 @@ export function replaceTab<T>(
 	);
 }
 
-export function dropTab<T>(
-	layout: SplitLayout<T>,
-	tab: Tab<T>,
-	drop: Drop,
-): SplitLayout<T> {
-	if (paneOf(layout, tab.id) !== undefined)
-		return moveTab(openTab(layout, tab, { pane: drop.pane }), tab.id, drop);
-	if (locate(layout, drop.pane) === undefined) return openTab(layout, tab);
-	if ("edge" in drop) return splitAt(layout, drop.pane, drop.edge, tab);
-	return focusIn(
-		mapPane(layout, drop.pane, (p) => withTab(p, tab, drop.index)),
-		drop.pane,
-	);
-}
-
 export function joinPane<T>(
 	layout: SplitLayout<T>,
 	paneId: string,
 ): SplitLayout<T> {
-	const at = locate(layout, paneId);
-	if (at === undefined) return layout;
-	const group = layout.groups[at.g];
-	const into =
-		group.panes[at.p - 1] ??
-		group.panes[at.p + 1] ??
-		layout.groups[at.g - 1]?.panes[0] ??
-		layout.groups[at.g + 1]?.panes[0];
-	if (into === undefined) return layout;
-	const leaving = group.panes[at.p];
+	const parent = parentOf(layout.root, paneId);
+	if (parent === undefined) return layout;
+	const at = parent.children.findIndex((c) => c.id === paneId);
+	const sibling = parent.children[at - 1] ?? parent.children[at + 1];
+	const into = nodes(sibling ?? null).find(
+		(n): n is Pane<T> => n.kind === "pane",
+	);
+	const leaving = panes(layout).find((p) => p.id === paneId);
+	if (into === undefined || leaving === undefined) return layout;
 	const merged = mapPane(layout, into.id, (p) => ({
 		...p,
 		tabs: [...p.tabs, ...leaving.tabs],
@@ -341,37 +388,85 @@ export function joinPane<T>(
 	);
 }
 
-export function flip<T>(layout: SplitLayout<T>): SplitLayout<T> {
+export function flip<T>(
+	layout: SplitLayout<T>,
+	paneId: string,
+): SplitLayout<T> {
+	const parent = parentOf(layout.root, paneId);
+	if (parent === undefined || layout.root === null) return layout;
 	return {
 		...layout,
-		direction: layout.direction === "row" ? "column" : "row",
+		root: mapNode(layout.root, parent.id, () => ({
+			...parent,
+			direction: parent.direction === "row" ? "column" : "row",
+		})),
 	};
 }
 
-export function resizeGroups<T>(
+export function resizeSplit<T>(
 	layout: SplitLayout<T>,
+	splitId: string,
 	sizes: Record<string, number>,
 ): SplitLayout<T> {
+	if (layout.root === null) return layout;
 	return {
 		...layout,
-		groups: layout.groups.map((g) => ({ ...g, size: sizes[g.id] ?? g.size })),
-	};
-}
-
-export function resizePanes<T>(
-	layout: SplitLayout<T>,
-	groupId: string,
-	sizes: Record<string, number>,
-): SplitLayout<T> {
-	return {
-		...layout,
-		groups: layout.groups.map((g) =>
-			g.id === groupId
+		root: mapNode(layout.root, splitId, (node) =>
+			node.kind === "split"
 				? {
-						...g,
-						panes: g.panes.map((p) => ({ ...p, size: sizes[p.id] ?? p.size })),
+						...node,
+						sizes: node.children.map((c, i) => sizes[c.id] ?? node.sizes[i]),
 					}
-				: g,
+				: node,
 		),
 	};
+}
+
+export interface FlatPane<T> {
+	kind: "pane";
+	id: string;
+	tabs: Tab<T>[];
+	active: string | null;
+}
+
+export interface FlatSplit {
+	kind: "split";
+	id: string;
+	direction: Direction;
+	children: string[];
+	sizes: number[];
+}
+
+export interface FlatLayout<T> {
+	root: string | null;
+	focused: string | null;
+	nodes: (FlatPane<T> | FlatSplit)[];
+}
+
+export function flatten<T>(layout: SplitLayout<T>): FlatLayout<T> {
+	return {
+		root: layout.root?.id ?? null,
+		focused: layout.focused,
+		nodes: nodes(layout.root).map((node) =>
+			node.kind === "pane"
+				? node
+				: { ...node, children: node.children.map((c) => c.id) },
+		),
+	};
+}
+
+export function unflatten<T>(flat: FlatLayout<T>): SplitLayout<T> {
+	const byId = new Map(flat.nodes.map((n) => [n.id, n]));
+	const build = (id: string, seen: Set<string>): Node<T> | null => {
+		const node = byId.get(id);
+		if (node === undefined || seen.has(id)) return null;
+		const next = new Set(seen).add(id);
+		if (node.kind === "pane") return node;
+		const children = node.children
+			.map((child) => build(child, next))
+			.filter((child): child is Node<T> => child !== null);
+		return { ...node, children };
+	};
+	const root = flat.root === null ? null : build(flat.root, new Set());
+	return prune({ root, focused: flat.focused });
 }

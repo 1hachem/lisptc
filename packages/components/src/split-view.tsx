@@ -52,9 +52,9 @@ import {
 	focusTab,
 	joinPane,
 	moveTab,
+	type Node,
 	type Pane,
-	resizeGroups,
-	resizePanes,
+	resizeSplit,
 	type SplitLayout,
 	type Tab,
 } from "./split-layout.ts";
@@ -73,6 +73,12 @@ const EDGE_ZONE: Record<Edge, string> = {
 	right: "inset-y-0 right-0 w-1/4",
 	top: "inset-x-0 top-0 h-1/4",
 	bottom: "inset-x-0 bottom-0 h-1/4",
+};
+const VIEW_EDGE_ZONE: Record<Edge, string> = {
+	left: "inset-y-0 left-0 w-3",
+	right: "inset-y-0 right-0 w-3",
+	top: "inset-x-0 top-0 h-3",
+	bottom: "inset-x-0 bottom-0 h-3",
 };
 const EDGE_LANDS: Record<Edge, string> = {
 	left: "inset-y-0 left-0 w-1/2",
@@ -144,7 +150,8 @@ export function SplitView<T>({
 		const drop = event.over?.data.current?.drop as Drop | undefined;
 		if (drop) onChange(moveTab(layout, String(event.active.id), drop));
 	};
-	const horizontal = layout.direction === "row";
+	const dragging = dragged !== null || outside;
+	const view = { layout, dragging, onChange, renderTab, tabLabel };
 	return (
 		<ExternalDrop.Provider value={accepts}>
 			<DndContext
@@ -156,51 +163,20 @@ export function SplitView<T>({
 				onDragEnd={onDragEnd}
 				onDragCancel={() => setDragged(null)}
 			>
-				<ResizablePanelGroup
-					key={`${layout.direction}:${layout.groups.map((g) => g.id).join(",")}`}
-					orientation={horizontal ? "horizontal" : "vertical"}
-					onLayoutChanged={(sizes, meta) => {
-						if (meta.isUserInteraction) onChange(resizeGroups(layout, sizes));
-					}}
-				>
-					{layout.groups.map((group, g) => (
-						<Split key={group.id} first={g === 0}>
-							<ResizablePanel
-								id={group.id}
-								defaultSize={`${group.size}%`}
-								minSize={MIN_SPLIT}
-							>
-								<ResizablePanelGroup
-									key={group.panes.map((p) => p.id).join(",")}
-									orientation={horizontal ? "vertical" : "horizontal"}
-									onLayoutChanged={(sizes, meta) => {
-										if (meta.isUserInteraction)
-											onChange(resizePanes(layout, group.id, sizes));
-									}}
-								>
-									{group.panes.map((pane, p) => (
-										<Split key={pane.id} first={p === 0}>
-											<ResizablePanel
-												id={pane.id}
-												defaultSize={`${pane.size}%`}
-												minSize={MIN_SPLIT}
-											>
-												<PaneView
-													pane={pane}
-													layout={layout}
-													dragging={dragged !== null || outside}
-													onChange={onChange}
-													renderTab={renderTab}
-													tabLabel={tabLabel}
-												/>
-											</ResizablePanel>
-										</Split>
-									))}
-								</ResizablePanelGroup>
-							</ResizablePanel>
-						</Split>
-					))}
-				</ResizablePanelGroup>
+				<div className="relative h-full min-h-0">
+					{layout.root && <NodeView node={layout.root} view={view} />}
+					{dragging &&
+						layout.root &&
+						EDGES.map((edge) => (
+							<Zone
+								key={edge}
+								id={`view:${edge}`}
+								drop={{ node: (layout.root as Node<T>).id, edge }}
+								hit={`z-20 ${VIEW_EDGE_ZONE[edge]}`}
+								lands={`z-20 ${EDGE_LANDS[edge]}`}
+							/>
+						))}
+				</div>
 				{typeof document !== "undefined" &&
 					createPortal(
 						dragged && (
@@ -224,6 +200,40 @@ export function SplitView<T>({
 					)}
 			</DndContext>
 		</ExternalDrop.Provider>
+	);
+}
+
+interface View<T> {
+	layout: SplitLayout<T>;
+	dragging: boolean;
+	onChange: (layout: SplitLayout<T>) => void;
+	renderTab: (content: T, id: string) => ReactNode;
+	tabLabel: (content: T) => string;
+}
+
+function NodeView<T>({ node, view }: { node: Node<T>; view: View<T> }) {
+	if (node.kind === "pane") return <PaneView pane={node} {...view} />;
+	return (
+		<ResizablePanelGroup
+			key={`${node.direction}:${node.children.map((c) => c.id).join(",")}`}
+			orientation={node.direction === "row" ? "horizontal" : "vertical"}
+			onLayoutChanged={(sizes, meta) => {
+				if (meta.isUserInteraction)
+					view.onChange(resizeSplit(view.layout, node.id, sizes));
+			}}
+		>
+			{node.children.map((child, i) => (
+				<Split key={child.id} first={i === 0}>
+					<ResizablePanel
+						id={child.id}
+						defaultSize={`${node.sizes[i] ?? 100 / node.children.length}%`}
+						minSize={MIN_SPLIT}
+					>
+						<NodeView node={child} view={view} />
+					</ResizablePanel>
+				</Split>
+			))}
+		</ResizablePanelGroup>
 	);
 }
 
@@ -274,7 +284,9 @@ function PaneView<T>({
 							tab={tab}
 							drop={{ pane: pane.id, index }}
 							label={tabLabel(tab.content)}
-							onClose={() => onChange(closeTab(layout, tab.id))}
+							onClose={
+								tab.fixed ? undefined : () => onChange(closeTab(layout, tab.id))
+							}
 						/>
 					))}
 					<StripEnd drop={{ pane: pane.id, index: pane.tabs.length }} />
@@ -302,13 +314,16 @@ function PaneView<T>({
 							split down
 						</DropdownMenuItem>
 						<DropdownMenuItem
-							disabled={layout.groups.flatMap((g) => g.panes).length < 2}
+							disabled={layout.root?.kind !== "split"}
 							onSelect={() => onChange(joinPane(layout, pane.id))}
 						>
 							join with neighbour
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => onChange(flip(layout))}>
-							flip layout
+						<DropdownMenuItem
+							disabled={layout.root?.kind !== "split"}
+							onSelect={() => onChange(flip(layout, pane.id))}
+						>
+							flip split
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
@@ -375,7 +390,7 @@ function TabHandle<T>({
 	tab: Tab<T>;
 	drop: Drop;
 	label: string;
-	onClose: () => void;
+	onClose?: () => void;
 }) {
 	const drag = useDraggable({ id: tab.id, data: { tab } });
 	const target = useTarget(`tab:${tab.id}`, drop);
@@ -396,19 +411,21 @@ function TabHandle<T>({
 			>
 				<span className="truncate">{label}</span>
 			</TabsTrigger>
-			<button
-				type="button"
-				aria-label={`close ${label}`}
-				onClick={onClose}
-				className="flex h-full flex-none cursor-pointer items-center pr-1.5 text-dim opacity-0 hover:text-fg group-hover/tab:opacity-100"
-			>
-				<HugeiconsIcon className="size-icon-xs" icon={Cancel01Icon} />
-			</button>
+			{onClose && (
+				<button
+					type="button"
+					aria-label={`close ${label}`}
+					onClick={onClose}
+					className="flex h-full flex-none cursor-pointer items-center pr-1.5 text-dim opacity-0 hover:text-fg group-hover/tab:opacity-100"
+				>
+					<HugeiconsIcon className="size-icon-xs" icon={Cancel01Icon} />
+				</button>
+			)}
 		</div>
 	);
 }
 
-function StripEnd({ drop }: { drop: Drop }) {
+function StripEnd({ drop }: { drop: { pane: string; index: number } }) {
 	const target = useTarget(`end:${drop.pane}`, drop);
 	return (
 		<div

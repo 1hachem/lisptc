@@ -2,7 +2,12 @@
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it } from "vitest";
-import { emptyLayout, openTab, type SplitLayout } from "./split-layout.ts";
+import {
+	allTabs,
+	emptyLayout,
+	openTab,
+	type SplitLayout,
+} from "./split-layout.ts";
 import { SplitView } from "./split-view.tsx";
 
 beforeAll(() => {
@@ -83,7 +88,7 @@ describe("SplitView", () => {
 			/>,
 		);
 		await act(async () => host.dispatchEvent(dragEvent("dragenter")));
-		const pane = one.groups[0].panes[0].id;
+		const pane = one.root?.id as string;
 		const bottom = host.querySelector(
 			`[data-drop="edge:${pane}:bottom"]`,
 		) as HTMLElement;
@@ -91,10 +96,11 @@ describe("SplitView", () => {
 		await act(async () => bottom.dispatchEvent(dragEvent("dragover")));
 		expect(host.querySelector(".bg-accent\\/15")).not.toBeNull();
 		await act(async () => bottom.dispatchEvent(dragEvent("drop")));
-		expect(changes.at(-1)?.groups[0].panes.map((p) => p.tabs[0].id)).toEqual([
-			"a",
-			"b",
-		]);
+		const root = changes.at(-1)?.root;
+		expect(root?.kind === "split" && root.direction).toBe("column");
+		expect(
+			allTabs(changes.at(-1) as SplitLayout<string>).map((t) => t.id),
+		).toEqual(["a", "b"]);
 	});
 
 	it("ignores a drag that carries something else, like a file from the desktop", async () => {
@@ -112,6 +118,6 @@ describe("SplitView", () => {
 			'[aria-label="close b"]',
 		) as HTMLButtonElement;
 		await act(async () => close.click());
-		expect(changes.at(-1)?.groups).toHaveLength(1);
+		expect(changes.at(-1)?.root?.kind).toBe("pane");
 	});
 });

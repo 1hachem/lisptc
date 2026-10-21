@@ -25,9 +25,11 @@ export {
 	dropTab,
 	type Edge,
 	emptyLayout,
+	type FlatLayout,
+	flatten,
 	focusTab,
-	type Group,
 	MAX_SPLITS,
+	type Node,
 	openTab,
 	type Pane,
 	type Placement,
@@ -35,6 +37,7 @@ export {
 	replaceTab,
 	type SplitLayout,
 	type Tab,
+	unflatten,
 } from "./split-layout.ts";
 export {
 	DropPreview,
