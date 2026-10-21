@@ -32,7 +32,7 @@ import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
-import { GREETING_ID, pickGreeting } from "./greeting.ts";
+import { GREETING_ID, greetingOfVisit } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import type { SystemEventTicket } from "./system-event.ts";
 import { isFreshChat, keepUnchanged, turnsToShow } from "./turns.ts";
@@ -111,7 +111,7 @@ function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 }
 
 function greetingMessage(): ChatMessage {
-	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
+	return { id: GREETING_ID, type: "ai", content: greetingOfVisit(new Date()) };
 }
 
 export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;

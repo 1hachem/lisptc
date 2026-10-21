@@ -39,6 +39,13 @@ export function pickGreeting(now: Date, roll: number = Math.random()): string {
 	return lines[Math.floor(roll * lines.length) % lines.length];
 }
 
+let visitGreeting: string | undefined;
+
+export function greetingOfVisit(now: Date): string {
+	visitGreeting ??= pickGreeting(now);
+	return visitGreeting;
+}
+
 export const GREETING_ID = "greeting";
 
 export function isGreetingMessage(message: { id?: string }): boolean {
