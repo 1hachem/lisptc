@@ -1026,7 +1026,7 @@ function TabHandle<T>({
 		<div
 			ref={target.ref}
 			{...target.native}
-			className="group/tab relative flex h-full flex-none items-center"
+			className="group/tab relative flex h-full flex-none items-center border-border border-r has-[[data-state=active]]:bg-background dark:has-[[data-state=active]]:bg-input/30"
 		>
 			<InsertMark shown={target.over} />
 			<TabsTrigger
@@ -1035,7 +1035,7 @@ function TabHandle<T>({
 				{...drag.attributes}
 				value={tab.id}
 				title={label}
-				className={`h-full max-w-48 flex-none truncate rounded-none border-0 shadow-none ${drag.isDragging ? "opacity-40" : ""}`}
+				className={`h-full max-w-48 flex-none truncate rounded-none border-0 shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent ${drag.isDragging ? "opacity-40" : ""}`}
 			>
 				<span className="truncate">{label}</span>
 			</TabsTrigger>
@@ -1045,7 +1045,7 @@ function TabHandle<T>({
 					aria-label={`minimize ${label}`}
 					title="minimize"
 					onClick={onMinimize}
-					className="flex h-full flex-none cursor-pointer items-center pr-1 text-dim opacity-0 hover:text-fg group-hover/tab:opacity-100"
+					className="flex h-full flex-none cursor-pointer items-center pr-1 text-dim opacity-0 hover:text-fg group-focus-within/tab:opacity-100 group-hover/tab:opacity-100"
 				>
 					<HugeiconsIcon className="size-icon-xs" icon={MinusSignIcon} />
 				</button>
@@ -1055,7 +1055,7 @@ function TabHandle<T>({
 					type="button"
 					aria-label={`close ${label}`}
 					onClick={onClose}
-					className="flex h-full flex-none cursor-pointer items-center pr-1.5 text-dim opacity-0 hover:text-fg group-hover/tab:opacity-100"
+					className="flex h-full flex-none cursor-pointer items-center pr-1.5 text-dim opacity-0 hover:text-fg group-focus-within/tab:opacity-100 group-hover/tab:opacity-100"
 				>
 					<HugeiconsIcon className="size-icon-xs" icon={Cancel01Icon} />
 				</button>
