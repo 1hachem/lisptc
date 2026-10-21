@@ -26,6 +26,7 @@ import type { Downloaded, KnowledgeHost, StoreFolder } from "./ports.ts";
 
 const KNOWLEDGE_WRITE = "knowledge/write";
 const KNOWLEDGE_DELETE = "knowledge/delete";
+const KNOWLEDGE_KEEP = "knowledge/keep";
 const ATTACHMENTS_FETCH = "attachments/fetch";
 const ATTACHMENTS_DELETE = "attachments/delete";
 const BIN_RESTORE = "bin/restore";
@@ -323,10 +324,10 @@ function registerAttachments(
 	);
 
 	interp.defGen(
-		"knowledge/keep",
+		KNOWLEDGE_KEEP,
 		1,
 		'(knowledge/keep "name")',
-		"Move a file from attachments into the knowledge folder, so it is kept for good and no longer expires. Returns the name.",
+		"Move a file from attachments into the knowledge folder, so it is kept for good and no longer expires. The user approves it first. Returns the name.",
 		z.tuple([zString]),
 		function* ([name]): Eval {
 			const checked = fileName(name);
@@ -509,6 +510,7 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 			asks: [
 				KNOWLEDGE_WRITE,
 				KNOWLEDGE_DELETE,
+				KNOWLEDGE_KEEP,
 				ATTACHMENTS_FETCH,
 				ATTACHMENTS_DELETE,
 				BIN_RESTORE,

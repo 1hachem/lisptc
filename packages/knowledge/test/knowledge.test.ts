@@ -12,13 +12,14 @@ function held(store: World["store"], name: string) {
 }
 
 describe("what waits on the user", () => {
-	it("asks before writing, deleting or restoring a file, or fetching a url", () => {
+	it("asks before writing, deleting, keeping or restoring a file, or fetching a url", () => {
 		const extension = knowledgeExtension(
 			knowledgeHostFor({ store: new MemoryKnowledgeStore() }),
 		);
 		expect(extension.asks).toEqual([
 			"knowledge/write",
 			"knowledge/delete",
+			"knowledge/keep",
 			"attachments/fetch",
 			"attachments/delete",
 			"bin/restore",
