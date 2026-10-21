@@ -17,4 +17,11 @@ crons.interval(
 	{},
 );
 
+crons.interval(
+	"free day-old uploads no file claimed",
+	{ hours: 24 },
+	internal.uploads.sweep,
+	{},
+);
+
 export default crons;

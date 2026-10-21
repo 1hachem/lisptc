@@ -1,7 +1,7 @@
 import type { TestConvex } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
-import { BIN_TTL_MS } from "../convex/limits.ts";
+import { BIN_TTL_MS, UNCLAIMED_UPLOAD_TTL_MS } from "../convex/limits.ts";
 import type schema from "../convex/schema.ts";
 import { harness, signIn } from "./helpers.ts";
 
@@ -187,5 +187,43 @@ describe("bin", () => {
 		await t.mutation(internal.bin.empty, {});
 		expect((await folders(alice)).bin).toEqual(["knowledge/fresh.md"]);
 		expect(await blobs(t)).toHaveLength(1);
+	});
+});
+
+describe("an upload no file claimed", () => {
+	afterEach(() => vi.useRealTimers());
+
+	it("is freed a day on, while every claimed blob stays", async () => {
+		vi.useFakeTimers();
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		const unclaimed = await stored(t, "lost");
+		await inKnowledge(t, alice, "kept.txt");
+		await inAttachments(t, alice, "attached.txt");
+		await inKnowledge(t, alice, "binned.txt");
+		await alice.as.mutation(api.knowledge.remove, {
+			workspaceId,
+			name: "binned.txt",
+		});
+		vi.setSystemTime(Date.now() + UNCLAIMED_UPLOAD_TTL_MS + 1);
+		const fresh = await stored(t, "in flight");
+		const before = (await blobs(t)).map((blob) => blob._id);
+		await t.mutation(internal.uploads.sweep, {});
+		const after = (await blobs(t)).map((blob) => blob._id);
+		expect(after).toHaveLength(before.length - 1);
+		expect(after).not.toContain(unclaimed);
+		expect(after).toContain(fresh);
+		const held = await t.run(async (ctx) => [
+			...(await ctx.db.query("knowledge").collect()),
+			...(await ctx.db.query("attachments").collect()),
+			...(await ctx.db.query("bin").collect()),
+		]);
+		expect(held.map((row) => row.name).sort()).toEqual([
+			"attached.txt",
+			"binned.txt",
+			"kept.txt",
+		]);
+		for (const row of held) expect(after).toContain(row.storageId);
 	});
 });
