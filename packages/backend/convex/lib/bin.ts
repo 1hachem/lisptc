@@ -1,7 +1,6 @@
-import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "../_generated/server.js";
-import { freeName } from "./names.js";
+import { freeName, numbered } from "./names.js";
 
 export type BinnedFrom = Doc<"bin">["from"];
 
@@ -23,12 +22,12 @@ export async function intoBin(
 	row: Doc<"knowledge"> | Doc<"attachments">,
 	from: BinnedFrom,
 ): Promise<string> {
-	const name = await freeName(
-		async (candidate) =>
-			(await heldInBin(ctx, row.workspaceId, candidate)) !== null,
-		row.name,
-	);
-	if (name === null) throw new ConvexError({ code: "BIN_NAME_TAKEN" });
+	const name =
+		(await freeName(
+			async (candidate) =>
+				(await heldInBin(ctx, row.workspaceId, candidate)) !== null,
+			row.name,
+		)) ?? numbered(row.name, row._id);
 	await ctx.db.insert("bin", {
 		workspaceId: row.workspaceId,
 		name,

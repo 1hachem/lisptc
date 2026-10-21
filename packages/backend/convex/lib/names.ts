@@ -1,6 +1,6 @@
 const MAX_RENAMES = 100;
 
-function numbered(name: string, n: number): string {
+export function numbered(name: string, n: number | string): string {
 	const dot = name.lastIndexOf(".");
 	return dot <= 0
 		? `${name} (${n})`
