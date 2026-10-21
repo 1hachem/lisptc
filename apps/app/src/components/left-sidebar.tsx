@@ -2,14 +2,13 @@ import { convexQuery } from "@convex-dev/react-query";
 import { Logout01Icon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
+import { SortableTree } from "@repo/components";
 import {
 	Sidebar,
 	SidebarContent,
 	SidebarFooter,
 	SidebarHeader,
-	SidebarMenu,
 	SidebarMenuButton,
-	SidebarMenuItem,
 	SidebarRail,
 	useSidebar,
 } from "@repo/ui";
@@ -18,32 +17,35 @@ import { Link } from "@tanstack/react-router";
 import { useNewChat } from "../lib/chats.ts";
 import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
-import { useSidebarOrder } from "../lib/sidebar.ts";
+import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
 import { ENTRY_ICONS, WorkspaceTree } from "./workspace-tree.tsx";
 
 function EntryRail() {
-	const { shown } = useSidebarOrder();
+	const { shown, reorder } = useSidebarOrder();
+	const { motion } = useSidebarMotion();
 	const { setOpen } = useSidebar();
 	const newChat = useNewChat();
 	return (
-		<SidebarMenu className="items-center gap-0.5 py-1">
-			{shown.map((entry) => (
-				<SidebarMenuItem key={entry}>
-					<SidebarMenuButton
-						tooltip={entry}
-						className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
-						onClick={() =>
-							entry === "new_chat" ? void newChat() : setOpen(true)
-						}
-					>
-						<HugeiconsIcon icon={ENTRY_ICONS[entry]} />
-						<span>{entry}</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
-			))}
-		</SidebarMenu>
+		<div className="flex w-full flex-col items-center py-1">
+			<SortableTree order={shown} onReorder={reorder} motion={motion}>
+				{(entry) => (
+					<div className="py-px">
+						<SidebarMenuButton
+							tooltip={entry}
+							className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
+							onClick={() =>
+								entry === "new_chat" ? void newChat() : setOpen(true)
+							}
+						>
+							<HugeiconsIcon icon={ENTRY_ICONS[entry]} />
+							<span>{entry}</span>
+						</SidebarMenuButton>
+					</div>
+				)}
+			</SortableTree>
+		</div>
 	);
 }
 
