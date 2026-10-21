@@ -1,6 +1,7 @@
 import {
 	BubbleChatIcon,
 	KeyboardIcon,
+	LayoutTwoColumnIcon,
 	Move01Icon,
 	PaintBoardIcon,
 	SidebarLeftIcon,
@@ -30,6 +31,7 @@ import {
 	type InputHelper,
 } from "../lib/input-helpers.ts";
 import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
+import { usePanelMotion } from "../lib/preferences.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useUI } from "../lib/ui.tsx";
@@ -257,6 +259,31 @@ function FontList() {
 	);
 }
 
+function PanelMotionToggle() {
+	const { panelMotion, setPanelMotion } = usePanelMotion();
+	return (
+		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			{[true, false].map((on) => {
+				const chosen = on === panelMotion;
+				return (
+					<button
+						key={String(on)}
+						type="button"
+						aria-pressed={chosen}
+						onClick={() => setPanelMotion(on)}
+						className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+					>
+						<span className={`flex-1 ${chosen ? "text-fg" : "text-dim"}`}>
+							{on ? "animate" : "still"}
+						</span>
+						{chosen && <span className="flex-none text-dim">on</span>}
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
 function MotionList() {
 	const { motion, chooseMotion } = useSidebarMotion();
 	return (
@@ -291,6 +318,7 @@ const SECTIONS: { name: string; icon: IconSvgElement }[] = [
 	{ name: "recent themes", icon: PaintBoardIcon },
 	{ name: "font", icon: TextFontIcon },
 	{ name: "drag motion", icon: Move01Icon },
+	{ name: "panel motion", icon: LayoutTwoColumnIcon },
 ];
 
 function SectionRail() {
@@ -363,6 +391,10 @@ function Preferences() {
 				drag motion
 			</div>
 			<MotionList />
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				panel motion
+			</div>
+			<PanelMotionToggle />
 		</div>
 	);
 }

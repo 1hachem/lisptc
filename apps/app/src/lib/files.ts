@@ -49,6 +49,7 @@ export function preferencesSource(preferences: {
 	sidebar: readonly string[];
 	hidden: readonly string[];
 	motion: string;
+	panelMotion: boolean;
 }): string {
 	return [
 		`(preferences :theme ${quoted(preferences.theme)}`,
@@ -59,7 +60,8 @@ export function preferencesSource(preferences: {
 		`  :send-label ${preferences.sendLabel === undefined ? "nil" : quoted(preferences.sendLabel)}`,
 		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
 		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
-		`  :motion ${quoted(preferences.motion)})`,
+		`  :motion ${quoted(preferences.motion)}`,
+		`  :panel-motion ${preferences.panelMotion ? "t" : "nil"})`,
 	].join("\n");
 }
 

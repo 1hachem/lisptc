@@ -1,5 +1,6 @@
 import { useAppearance } from "../lib/appearance.tsx";
 import { preferencesSource } from "../lib/files.ts";
+import { usePanelMotion } from "../lib/preferences.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import { useUI } from "../lib/ui.tsx";
 import { FileView } from "./file-view.tsx";
@@ -9,6 +10,7 @@ export function PreferencesPage() {
 	const { shown, metaShown, inputOn, sendLabel } = useUI();
 	const { order, hidden } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
+	const { panelMotion } = usePanelMotion();
 
 	return (
 		<FileView
@@ -24,6 +26,7 @@ export function PreferencesPage() {
 					sidebar: order,
 					hidden,
 					motion,
+					panelMotion,
 				}),
 			}}
 			actions={
