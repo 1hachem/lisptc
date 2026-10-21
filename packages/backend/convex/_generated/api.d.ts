@@ -36,6 +36,7 @@ import type * as preferences from "../preferences.js";
 import type * as readmes from "../readmes.js";
 import type * as repls from "../repls.js";
 import type * as secrets from "../secrets.js";
+import type * as uploads from "../uploads.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   readmes: typeof readmes;
   repls: typeof repls;
   secrets: typeof secrets;
+  uploads: typeof uploads;
   users: typeof users;
   workspaces: typeof workspaces;
 }>;
