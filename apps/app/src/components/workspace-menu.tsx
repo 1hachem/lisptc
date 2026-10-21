@@ -13,7 +13,7 @@ import {
 } from "@repo/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { ICONS, workspaceIcon } from "../lib/workspace-icons.ts";
@@ -49,7 +49,33 @@ function WorkspaceItems() {
 
 function IconPicker() {
 	const { workspace } = useWorkspace();
-	const setIcon = useConvexMutation(api.workspaces.setIcon);
+	const mutation = useConvexMutation(api.workspaces.setIcon);
+	const setIcon = useMemo(
+		() =>
+			mutation.withOptimisticUpdate((store, { workspaceId, icon }) => {
+				const list = store.getQuery(api.workspaces.list, {});
+				if (list !== undefined) {
+					store.setQuery(
+						api.workspaces.list,
+						{},
+						list.map((candidate) =>
+							candidate._id === workspaceId
+								? { ...candidate, icon }
+								: candidate,
+						),
+					);
+				}
+				const single = store.getQuery(api.workspaces.get, { workspaceId });
+				if (single !== undefined) {
+					store.setQuery(
+						api.workspaces.get,
+						{ workspaceId },
+						{ ...single, icon },
+					);
+				}
+			}),
+		[mutation],
+	);
 	if (!workspace) return null;
 	const current = workspaceIcon(workspace);
 	return (
