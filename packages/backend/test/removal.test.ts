@@ -174,7 +174,7 @@ describe("removing a workspace", () => {
 		});
 		await alice.as.mutation(api.layouts.put, {
 			workspaceId: doomed,
-			layout: { direction: "row", focused: null, groups: [] },
+			layout: { root: null, focused: null, nodes: [] },
 		});
 
 		vi.useFakeTimers();

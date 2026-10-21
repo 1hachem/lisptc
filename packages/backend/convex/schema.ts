@@ -34,7 +34,9 @@ export const storedModel = v.union(
 
 const panelTab = v.object({
 	id: v.string(),
+	fixed: v.optional(v.boolean()),
 	content: v.union(
+		v.object({ kind: v.literal("main") }),
 		v.object({
 			kind: v.literal("file"),
 			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
@@ -63,7 +65,7 @@ const panelTab = v.object({
 	),
 });
 
-export const panelLayout = v.object({
+const legacyLayout = v.object({
 	direction: v.union(v.literal("row"), v.literal("column")),
 	dock: v.optional(v.union(v.literal("side"), v.literal("below"))),
 	focused: v.union(v.string(), v.null()),
@@ -80,6 +82,28 @@ export const panelLayout = v.object({
 				}),
 			),
 		}),
+	),
+});
+
+export const panelLayout = v.object({
+	root: v.union(v.string(), v.null()),
+	focused: v.union(v.string(), v.null()),
+	nodes: v.array(
+		v.union(
+			v.object({
+				kind: v.literal("pane"),
+				id: v.string(),
+				tabs: v.array(panelTab),
+				active: v.union(v.string(), v.null()),
+			}),
+			v.object({
+				kind: v.literal("split"),
+				id: v.string(),
+				direction: v.union(v.literal("row"), v.literal("column")),
+				children: v.array(v.string()),
+				sizes: v.array(v.number()),
+			}),
+		),
 	),
 });
 
@@ -207,7 +231,7 @@ export default defineSchema({
 
 	layouts: defineTable({
 		workspaceId: v.id("workspaces"),
-		layout: panelLayout,
+		layout: v.union(panelLayout, legacyLayout),
 	}).index("by_workspace", ["workspaceId"]),
 
 	repls: defineTable({

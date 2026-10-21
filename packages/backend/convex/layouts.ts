@@ -15,7 +15,8 @@ export const get = query({
 			.query("layouts")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.unique();
-		return row?.layout ?? null;
+		if (row === null || !("nodes" in row.layout)) return null;
+		return row.layout;
 	},
 });
 
@@ -25,8 +26,9 @@ export const put = mutation({
 	handler: async (ctx, { workspaceId, layout }) => {
 		await requireWorkspace(ctx, workspaceId);
 		if (
-			layout.groups.length > MAX_SPLITS ||
-			layout.groups.some((g) => g.panes.length > MAX_SPLITS)
+			layout.nodes.some(
+				(node) => node.kind === "split" && node.children.length > MAX_SPLITS,
+			)
 		) {
 			throw new ConvexError({ code: "LAYOUT_TOO_MANY_SPLITS" });
 		}

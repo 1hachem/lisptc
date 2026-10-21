@@ -382,20 +382,43 @@ describe("panel layout access", () => {
 		content: { kind: "file" as const, folder: "knowledge" as const, name },
 	});
 	const pane = (id: string) => ({
+		kind: "pane" as const,
 		id,
-		size: 100,
 		tabs: [tab(`${id}.md`)],
 		active: `file:knowledge/${id}.md`,
 	});
-	const layout = (groups: number, panes = 1) => ({
-		direction: "row" as const,
-		focused: null,
-		groups: Array.from({ length: groups }, (_, g) => ({
-			id: `g${g}`,
-			size: 100 / groups,
-			panes: Array.from({ length: panes }, (_, p) => pane(`p${g}-${p}`)),
-		})),
+	const split = (
+		id: string,
+		direction: "row" | "column",
+		children: string[],
+	) => ({
+		kind: "split" as const,
+		id,
+		direction,
+		children,
+		sizes: children.map(() => 100 / children.length),
 	});
+	const layout = (columns: number, rows = 1) => {
+		const ids = Array.from({ length: columns }, (_, c) => `c${c}`);
+		const cells = ids.flatMap((column) =>
+			Array.from({ length: rows }, (_, r) => `${column}-${r}`),
+		);
+		return {
+			root: "root",
+			focused: null,
+			nodes: [
+				split("root", "row", ids),
+				...ids.map((column) =>
+					split(
+						column,
+						"column",
+						cells.filter((cell) => cell.startsWith(`${column}-`)),
+					),
+				),
+				...cells.map(pane),
+			],
+		};
+	};
 
 	it("keeps a workspace's layout to its owner", async () => {
 		const t = harness();
@@ -435,7 +458,23 @@ describe("panel layout access", () => {
 		});
 		const rows = await t.run((ctx) => ctx.db.query("layouts").collect());
 		expect(rows).toHaveLength(1);
-		expect(rows[0]?.layout.groups).toHaveLength(3);
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(layout(3, 3));
+	});
+
+	it("reads a layout stored in the old shape as none", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await t.run((ctx) =>
+			ctx.db.insert("layouts", {
+				workspaceId: alice.workspace,
+				layout: { direction: "row", focused: null, groups: [] },
+			}),
+		);
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toBeNull();
 	});
 
 	it("refuses more than three splits either way", async () => {
