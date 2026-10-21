@@ -41,6 +41,25 @@ const panelTab = v.object({
 			name: v.string(),
 		}),
 		v.object({ kind: v.literal("view"), title: v.string(), node: v.any() }),
+		v.object({
+			kind: v.literal("chat"),
+			chatId: v.union(v.string(), v.null()),
+			title: v.string(),
+		}),
+		v.object({
+			kind: v.literal("page"),
+			page: v.union(
+				v.literal("memory"),
+				v.literal("permission"),
+				v.literal("readme"),
+				v.literal("settings"),
+				v.literal("preferences"),
+				v.literal("account"),
+				v.literal("bin"),
+			),
+			id: v.optional(v.string()),
+			title: v.string(),
+		}),
 	),
 });
 
