@@ -11,8 +11,9 @@ change shows there at once.
 - (knowledge/write "name" value) replaces file, old one to bin; user can open
   and download it. User approves it. .ptc takes data, printed; function
   refused. .json takes data, written as JSON: plist or alist becomes object,
-  other list becomes array, keyword becomes its name; or takes JSON text
-  string. Other file takes string.
+  other list becomes array, keywords alone like (:red :green) become array,
+  keyword becomes its name; or takes JSON text string. Other file takes
+  string.
 - Edit .ptc file: read, change with set-in / update-in / remove-in, write back:
   (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
 - (knowledge/delete "name") moves file to bin. User approves it.
