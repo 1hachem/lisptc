@@ -1,5 +1,5 @@
+import type { CaseInfo } from "@repo/evals/report";
 import { Label, Panel, Summary, Tag, Tags, Turn } from "@/components/ui.tsx";
-import type { CaseInfo } from "@/lib/reports.ts";
 
 function Mock({ mock }: { mock: CaseInfo["mocks"][number] }) {
 	return (

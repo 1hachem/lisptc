@@ -1,21 +1,11 @@
-export interface UiNode {
-	tag: string;
-	props: Record<string, unknown>;
-	children: UiNode[];
-}
+import type { ViewNode } from "@repo/interpreter/annotations";
 
-export function toUiNode(value: unknown): UiNode | undefined {
-	if (!value || typeof value !== "object") return undefined;
-	const node = value as Partial<UiNode>;
-	return typeof node.tag === "string" ? (value as UiNode) : undefined;
-}
-
-function prop(node: UiNode, key: string): string {
+function prop(node: ViewNode, key: string): string {
 	const value = node.props[key];
 	return typeof value === "string" ? value : "";
 }
 
-function tableText(node: UiNode): string {
+function tableText(node: ViewNode): string {
 	const columns = Array.isArray(node.props.columns)
 		? node.props.columns.map((c) => String(c ?? ""))
 		: [];
@@ -30,7 +20,7 @@ function tableText(node: UiNode): string {
 		.join("\n");
 }
 
-export function uiText(node: UiNode): string {
+export function uiText(node: ViewNode): string {
 	const kids = (): string =>
 		node.children
 			.map(uiText)

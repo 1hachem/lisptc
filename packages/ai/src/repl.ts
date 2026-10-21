@@ -1,7 +1,7 @@
 import type { Effect } from "@repo/interpreter/effects";
 import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
 import type { AgentRepl, EvalOutput } from "@repo/repl/repl";
-import type { AgentMessage } from "./agent.ts";
+import type { ChatMessage } from "@repo/shared/messages";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
 export interface TranscriptEntry {
@@ -36,7 +36,7 @@ export function joinRiding(standing: string | undefined, text: string): string {
 		: `${standing}\n\n${text}`;
 }
 
-export function toLlmMessages(transcript: TranscriptEntry[]): AgentMessage[] {
+export function toLlmMessages(transcript: TranscriptEntry[]): ChatMessage[] {
 	return transcript.map((e) => ({
 		role: e.role === "tool" ? "user" : e.role,
 		content: e.riding

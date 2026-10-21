@@ -6,19 +6,12 @@ import {
 } from "@langchain/core/messages";
 import type { ModelDelta, ModelUsage } from "@repo/interpreter/session";
 import type { ChatMessage } from "@repo/shared/messages";
-import { getProvider, type ProviderName } from "./provider.ts";
+import type { ProviderName } from "@repo/shared/providers";
+import { getProvider } from "./provider/registry.ts";
 import { type TraceContext, traceCallbacks } from "./telemetry.ts";
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"You are the reasoning core of a neuro-symbolic agent. Think step by step and answer clearly and concisely.";
-
-export type { Role } from "@repo/shared/messages";
-
-export type AgentMessage = ChatMessage;
-
-export type TokenUsage = ModelUsage;
-
-export type AgentDelta = ModelDelta;
 
 export interface AgentConfig {
 	provider?: ProviderName;
@@ -43,7 +36,7 @@ function chunkReasoning(chunk: { additional_kwargs?: unknown }): string {
 
 function chunkUsage(chunk: {
 	usage_metadata?: unknown;
-}): TokenUsage | undefined {
+}): ModelUsage | undefined {
 	const usage = chunk.usage_metadata as
 		| {
 				input_tokens?: unknown;
@@ -68,9 +61,9 @@ export class Agent {
 	constructor(private readonly config: AgentConfig = {}) {}
 
 	async *stream(
-		messages: AgentMessage[],
+		messages: ChatMessage[],
 		options?: { signal?: AbortSignal },
-	): AsyncGenerator<AgentDelta> {
+	): AsyncGenerator<ModelDelta> {
 		const model = getProvider(this.config.provider)({
 			model: this.config.model,
 			streaming: true,
@@ -100,9 +93,9 @@ export class Agent {
 }
 
 export function streamAgent(
-	messages: AgentMessage[],
+	messages: ChatMessage[],
 	config?: AgentConfig,
 	options?: { signal?: AbortSignal },
-): AsyncGenerator<AgentDelta> {
+): AsyncGenerator<ModelDelta> {
 	return new Agent(config).stream(messages, options);
 }

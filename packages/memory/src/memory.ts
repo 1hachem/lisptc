@@ -1,3 +1,4 @@
+import { annotate, memoriesKey } from "@repo/interpreter/annotations";
 import { quotient } from "@repo/interpreter/arith";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
@@ -20,7 +21,6 @@ import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zList } from "@repo/interpreter/schema";
 import {
-	annotating,
 	type InterpExtension,
 	type SessionHooks,
 	slot,
@@ -503,7 +503,7 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 			const memories = buffer.collect(fired);
 			return next(
 				buffer,
-				memories.length === 0 ? into : annotating(into, "step", { memories }),
+				memories.length === 0 ? into : annotate(into, memoriesKey, memories),
 			);
 		});
 	};

@@ -75,6 +75,7 @@
     "posthog-js": "^1.425.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "use-stick-to-bottom": "^1.1.6",
     "vscode-languageserver-textdocument": "^1.0.12",
     "vscode-languageserver-types": "^3.17.5",
     "zod": "^4.4.3",

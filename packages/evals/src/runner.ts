@@ -16,9 +16,6 @@ import { reportSchema } from "./report.ts";
 import { shardPath } from "./shards.ts";
 import { evalMatrix, reachable, type Target } from "./targets.ts";
 
-export type { Target } from "./targets.ts";
-export { evalConcurrency, evalMatrix, reachable } from "./targets.ts";
-
 export type SeedEntry = { user: string } | { assistant: string };
 
 export interface CheckEvaluator {
