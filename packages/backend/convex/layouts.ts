@@ -27,7 +27,10 @@ export const put = mutation({
 		await requireWorkspace(ctx, workspaceId);
 		if (
 			layout.nodes.some(
-				(node) => node.kind === "split" && node.children.length > MAX_SPLITS,
+				(node) =>
+					node.kind === "split" &&
+					node.direction === "column" &&
+					node.children.length > MAX_SPLITS,
 			)
 		) {
 			throw new ConvexError({ code: "LAYOUT_TOO_MANY_SPLITS" });

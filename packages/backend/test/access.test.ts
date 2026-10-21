@@ -549,15 +549,15 @@ describe("panel layout access", () => {
 		).toBeNull();
 	});
 
-	it("refuses more than three splits either way", async () => {
+	it("takes any number of panes side by side but refuses more than three stacked", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.layouts.put, {
 				workspaceId: alice.workspace,
-				layout: layout(4),
+				layout: layout(6),
 			}),
-		).rejects.toThrow(/LAYOUT_TOO_MANY_SPLITS/);
+		).resolves.toBeNull();
 		await expect(
 			alice.as.mutation(api.layouts.put, {
 				workspaceId: alice.workspace,
