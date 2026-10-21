@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { dragsAs } from "../lib/panel-ops.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { SidePanel } from "./side-panel.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
@@ -51,6 +52,11 @@ export function LeftSidebar({
 							activeProps={{ className: "text-fg" }}
 							title="settings"
 							aria-label="settings"
+							onDragStart={dragsAs({
+								kind: "page",
+								page: "account",
+								title: "account",
+							})}
 						>
 							<HugeiconsIcon className="size-icon-sm" icon={Settings01Icon} />
 						</Link>

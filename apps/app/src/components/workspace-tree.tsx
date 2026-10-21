@@ -40,7 +40,7 @@ import { useNewChat } from "../lib/chats.ts";
 import { byDate } from "../lib/date-groups.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { knowledgeIcon, useKnowledgeUpload } from "../lib/knowledge.ts";
-import { startPanelDrag } from "../lib/panel-ops.ts";
+import { dragsAs, startPanelDrag } from "../lib/panel-ops.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
@@ -182,6 +182,12 @@ function MemoryFile({
 			name={memory.key}
 			depth={1}
 			selected={selected}
+			onDragStart={dragsAs({
+				kind: "page",
+				page: "memory",
+				id: memory.key,
+				title: `memories/${memory.key}`,
+			})}
 			trailing={
 				<FileMenu
 					name={memory.key}
@@ -233,6 +239,12 @@ function PermissionFiles({
 						name={rule.name}
 						depth={1}
 						selected={selected === index}
+						onDragStart={dragsAs({
+							kind: "page",
+							page: "permission",
+							id: String(index),
+							title: `permissions/${rule.name}`,
+						})}
 						trailing={
 							<FileMenu
 								name={rule.name}
@@ -459,6 +471,12 @@ function BinFolder({
 						icon={knowledgeIcon(file.name, file.contentType)}
 						depth={1}
 						selected={current === file.name}
+						onDragStart={dragsAs({
+							kind: "page",
+							page: "bin",
+							id: file.name,
+							title: `bin/${file.name}`,
+						})}
 						trailing={
 							<FileMenu
 								name={file.name}
@@ -505,6 +523,7 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 			name="home"
 			icon={Home01Icon}
 			selected={selected}
+			onDragStart={dragsAs({ kind: "chat", chatId: null, title: "new chat" })}
 			link={(content, className) => (
 				<Link to="/$workspaceId" params={{ workspaceId }} className={className}>
 					{content}
@@ -538,6 +557,11 @@ function RootFile({
 			name={ROOT_FILES[page].name}
 			icon={ROOT_FILES[page].icon}
 			selected={selected}
+			onDragStart={dragsAs({
+				kind: "page",
+				page,
+				title: ROOT_FILES[page].name,
+			})}
 			link={(content, className) => (
 				<Link
 					to={`/$workspaceId/${page}`}

@@ -163,13 +163,17 @@ function errorFor(
 export function ChatProvider({
 	workspaceId,
 	chatId,
+	onOpened,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
+	onOpened?: (chatId: Id<"chats">) => void;
 	children: React.ReactNode;
 }) {
 	const navigate = useNavigate();
+	const announce = useRef(onOpened);
+	announce.current = onOpened;
 	const draftChat = useConvexMutation(api.chats.draft);
 	const renameChat = useConvexMutation(api.chats.rename);
 	const [drafted, setDrafted] = useState<Id<"chats"> | null>(null);
@@ -312,11 +316,13 @@ export function ChatProvider({
 				{ optimisticValues: { messages: [...persisted, shown] } },
 			);
 			if (!chatId) {
-				await navigate({
-					to: "/$workspaceId/chat/$chatId",
-					params: { workspaceId, chatId: opened },
-					replace: true,
-				});
+				if (announce.current) announce.current(opened);
+				else
+					await navigate({
+						to: "/$workspaceId/chat/$chatId",
+						params: { workspaceId, chatId: opened },
+						replace: true,
+					});
 			}
 		},
 		[

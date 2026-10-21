@@ -1,41 +1,14 @@
 import { DropPreview, SplitView, useNativeDrag } from "@repo/components";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@repo/ui";
 import { type DragEvent, type ReactNode, useState } from "react";
-import { useChatSession } from "../lib/chat.tsx";
 import {
 	type Dock,
 	PANEL_DRAG,
-	type PanelContent,
 	readPanelDrag,
+	tabLabel,
 } from "../lib/panel-ops.ts";
 import { hasTabs, usePanels } from "../lib/panels.tsx";
-import { toUiNode } from "../lib/ui-node.ts";
-import { GenerativeUI } from "./generative-ui.tsx";
-import { FilePreview } from "./stored-file.tsx";
-
-function tabLabel(content: PanelContent): string {
-	return content.kind === "file" ? content.name : content.title;
-}
-
-function PanelTab({ content }: { content: PanelContent }) {
-	const workspaceId = useChatSession((state) => state.workspaceId);
-	if (content.kind === "file")
-		return (
-			<FilePreview
-				workspaceId={workspaceId}
-				folder={content.folder}
-				name={content.name}
-			/>
-		);
-	const node = toUiNode(content.node);
-	if (node === undefined)
-		return <div className="p-3 text-dim">this view cannot be drawn</div>;
-	return (
-		<div className="p-3">
-			<GenerativeUI key={JSON.stringify(node)} node={node} />
-		</div>
-	);
-}
+import { PanelTab } from "./panel-tab.tsx";
 
 const EXTERNAL = { type: PANEL_DRAG, read: readPanelDrag };
 
@@ -130,7 +103,9 @@ export function PanelSplit({ children }: { children: ReactNode }) {
 						<SplitView
 							layout={layout}
 							onChange={change}
-							renderTab={(content) => <PanelTab content={content} />}
+							renderTab={(content, id) => (
+								<PanelTab id={id} content={content} />
+							)}
 							tabLabel={tabLabel}
 							external={EXTERNAL}
 						/>

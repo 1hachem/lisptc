@@ -1,7 +1,13 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { allTabs, emptyLayout, openTab, type Tab } from "@repo/components";
+import {
+	allTabs,
+	emptyLayout,
+	openTab,
+	replaceTab,
+	type Tab,
+} from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
 import {
 	createContext,
@@ -22,6 +28,7 @@ import {
 	type PanelContent,
 	type PanelLayout,
 	type PanelOp,
+	panelTab,
 	toPanelOps,
 } from "./panel-ops.ts";
 
@@ -35,6 +42,7 @@ export interface Panels {
 	apply: (ops: readonly PanelOp[]) => void;
 	openFile: (folder: Folder, name: string) => void;
 	dockTab: (tab: Tab<PanelContent>, dock: Dock) => void;
+	retab: (tabId: string, content: PanelContent, keepId?: boolean) => void;
 }
 
 const PanelsContext = createContext<Panels | null>(null);
@@ -45,6 +53,7 @@ const NO_PANELS: Panels = {
 	apply: () => {},
 	openFile: () => {},
 	dockTab: () => {},
+	retab: () => {},
 };
 
 export function usePanels(): Panels {
@@ -105,6 +114,12 @@ function useLiveOps(apply: (ops: readonly PanelOp[]) => void) {
 	}, [messages, isLoading, chatId, apply]);
 }
 
+export function PanelLiveOps() {
+	const { apply } = usePanels();
+	useLiveOps(apply);
+	return null;
+}
+
 export function PanelsProvider({
 	workspaceId,
 	children,
@@ -136,12 +151,25 @@ export function PanelsProvider({
 			change({ ...openTab(latest.current, tab, "focused"), dock }),
 		[change, latest],
 	);
-	useLiveOps(apply);
+	const retab = useCallback(
+		(tabId: string, content: PanelContent, keepId = false) =>
+			change(
+				replaceTab(
+					latest.current,
+					tabId,
+					keepId ? { id: tabId, content } : panelTab(content),
+				),
+			),
+		[change, latest],
+	);
 	const value = useMemo(
-		() => ({ layout, change, apply, openFile, dockTab }),
-		[layout, change, apply, openFile, dockTab],
+		() => ({ layout, change, apply, openFile, dockTab, retab }),
+		[layout, change, apply, openFile, dockTab, retab],
 	);
 	return (
-		<PanelsContext.Provider value={value}>{children}</PanelsContext.Provider>
+		<PanelsContext.Provider value={value}>
+			{children}
+			<PanelLiveOps />
+		</PanelsContext.Provider>
 	);
 }

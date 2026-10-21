@@ -9,9 +9,23 @@ import {
 
 export type Folder = "attachments" | "knowledge";
 
+const PAGES = [
+	"memory",
+	"permission",
+	"readme",
+	"settings",
+	"preferences",
+	"account",
+	"bin",
+] as const;
+
+export type Page = (typeof PAGES)[number];
+
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
-	| { kind: "view"; title: string; node: unknown };
+	| { kind: "view"; title: string; node: unknown }
+	| { kind: "chat"; chatId: string | null; title: string }
+	| { kind: "page"; page: Page; id?: string; title: string };
 
 export type Dock = "side" | "below";
 
@@ -50,24 +64,61 @@ function contentOf(value: unknown): PanelContent | undefined {
 		return { kind: "file", folder: content.folder, name: content.name };
 	if (content?.kind === "view" && typeof content.title === "string")
 		return { kind: "view", title: content.title, node: content.node };
+	if (
+		content?.kind === "chat" &&
+		(typeof content.chatId === "string" || content.chatId === null) &&
+		typeof content.title === "string"
+	)
+		return { kind: "chat", chatId: content.chatId, title: content.title };
+	if (
+		content?.kind === "page" &&
+		(PAGES as readonly unknown[]).includes(content.page) &&
+		typeof content.title === "string"
+	)
+		return {
+			kind: "page",
+			page: content.page as Page,
+			title: content.title,
+			...(typeof content.id === "string" ? { id: content.id } : {}),
+		};
 	return undefined;
+}
+
+export function tabLabel(content: PanelContent): string {
+	return content.kind === "file" ? content.name : content.title;
 }
 
 export const PANEL_DRAG = "application/x-lisptc-panel";
 
-function panelTab(content: PanelContent): Tab<PanelContent> {
-	return {
-		id:
-			content.kind === "file"
-				? fileTab(content.folder, content.name)
-				: `view:${content.title}`,
-		content,
-	};
+function tabId(content: PanelContent): string {
+	switch (content.kind) {
+		case "file":
+			return fileTab(content.folder, content.name);
+		case "view":
+			return `view:${content.title}`;
+		case "chat":
+			return content.chatId === null
+				? `chat:new:${Date.now()}`
+				: `chat:${content.chatId}`;
+		case "page":
+			return content.id === undefined
+				? `page:${content.page}`
+				: `page:${content.page}/${content.id}`;
+	}
+}
+
+export function panelTab(content: PanelContent): Tab<PanelContent> {
+	return { id: tabId(content), content };
 }
 
 export function startPanelDrag(data: DataTransfer, content: PanelContent) {
 	data.setData(PANEL_DRAG, JSON.stringify(content));
 	data.effectAllowed = "copyMove";
+}
+
+export function dragsAs(content: PanelContent) {
+	return (event: { dataTransfer: DataTransfer }) =>
+		startPanelDrag(event.dataTransfer, content);
 }
 
 export function readPanelDrag(

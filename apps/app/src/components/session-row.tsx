@@ -16,6 +16,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { abandonChat } from "../lib/chat.tsx";
+import { dragsAs } from "../lib/panel-ops.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
 
 const STATUS_ICONS = {
@@ -91,6 +92,11 @@ export function SessionRow({
 				{...statusGlyph(chat)}
 				selected={current}
 				depth={1}
+				onDragStart={dragsAs({
+					kind: "chat",
+					chatId: chat._id,
+					title: chat.title === "" ? "untitled" : chat.title,
+				})}
 				link={(content, className) => (
 					<Link
 						to="/$workspaceId/chat/$chatId"
