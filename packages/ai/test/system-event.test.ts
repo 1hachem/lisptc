@@ -1,16 +1,17 @@
+import type { ModelDelta } from "@repo/interpreter/session";
+import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import { MemorySystemEventBox } from "../src/event-box.ts";
 import { toLlmMessages } from "../src/repl.ts";
 import type { WireMessage } from "../src/stream.ts";
 import { testRepl } from "./helpers.ts";
 
-const seen: AgentMessage[][] = [];
+const seen: ChatMessage[][] = [];
 
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (
-		messages: AgentMessage[],
-	): AsyncGenerator<AgentDelta> {
+		messages: ChatMessage[],
+	): AsyncGenerator<ModelDelta> {
 		seen.push(messages);
 		yield { text: "carrying on." };
 	},

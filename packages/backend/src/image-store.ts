@@ -1,8 +1,8 @@
 import type { Image } from "@repo/interpreter/image";
+import type { Layer } from "@repo/repl/image-layer";
 import {
 	type Checkpoint,
 	type ImageStore,
-	type Layer,
 	LayerCursor,
 } from "@repo/repl/image-store";
 import { internal } from "../convex/_generated/api.js";

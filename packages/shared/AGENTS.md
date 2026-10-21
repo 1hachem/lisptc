@@ -1,8 +1,9 @@
 # @repo/shared
 
-The no-dependency utility layer, for what two packages both need and neither
-owns. **It carries no dependencies at all**, workspace or otherwise, and
-`pnpm check:arch` fails on anything in `dependencies` or `peerDependencies`.
+The utility layer, for what two packages both need and neither owns. **Its one
+dependency is zod**, the language its contracts are validated in. It carries no
+workspace package and nothing else, and `pnpm check:arch` fails on anything
+else in `dependencies` or `peerDependencies`.
 
 Turbo tag: `foundation`.
 

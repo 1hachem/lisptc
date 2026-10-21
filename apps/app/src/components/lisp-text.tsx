@@ -1,4 +1,5 @@
-import { type FormSpan, sourceTokensIn, tokensIn } from "@repo/syntax";
+import type { FormSpan } from "@repo/shared/lisp-forms";
+import { sourceTokensIn, tokensIn } from "@repo/syntax";
 import {
 	Children,
 	createContext,

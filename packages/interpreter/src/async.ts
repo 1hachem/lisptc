@@ -1,8 +1,6 @@
 import { LispPromise, type PromiseState } from "./promise.ts";
 import type { Recipe } from "./recovery.ts";
 
-export type { PromiseState };
-
 export class AsyncWork {
 	private readonly controllers = new WeakMap<LispPromise, AbortController>();
 	private readonly lispPromises = new WeakMap<Promise<unknown>, LispPromise>();
