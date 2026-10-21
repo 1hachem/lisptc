@@ -156,59 +156,20 @@ export function SplitView<T>({
 	tray,
 	minWidth,
 }: SplitViewProps<T>) {
-	const [dragged, setDragged] = useState<Tab<T> | null>(null);
-	const [pointer, setPointer] = useState({ x: 0, y: 0 });
-	const origin = useRef({ x: 0, y: 0 });
-	const known = useRef(new Set(paneIds(layout.root)));
-	const moved = useRef<string | null>(null);
-	useEffect(() => {
-		known.current = new Set(paneIds(layout.root));
-		moved.current = null;
-	}, [layout]);
-	const entrance = (pane: Pane<T>) => {
-		if (known.current.has(pane.id)) return "";
-		return pane.tabs.some((t) => t.id === moved.current) ? SLIDES_IN : ZOOMS_IN;
-	};
+	const { moved, entrance } = useEntrance(layout);
 	const outside = useNativeDrag(external?.type);
-	const accepts = useMemo<External | null>(
-		() =>
-			external === undefined
-				? null
-				: {
-						type: external.type,
-						drop: (drop, data) => {
-							const tab = external.read(data);
-							if (tab) onChange(dropTab(layout, tab, drop));
-						},
-					},
-		[external, layout, onChange],
-	);
+	const accepts = useExternalDrop(external, layout, onChange);
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
 			activationConstraint: { distance: DRAG_AFTER_PX },
 		}),
 	);
-	const onDragStart = (event: DragStartEvent) => {
-		const start = event.activatorEvent as PointerEvent;
-		origin.current = { x: start.clientX, y: start.clientY };
-		setPointer(origin.current);
-		setDragged((event.active.data.current?.tab as Tab<T>) ?? null);
-	};
-	const onDragMove = (event: DragMoveEvent) =>
-		setPointer({
-			x: origin.current.x + event.delta.x,
-			y: origin.current.y + event.delta.y,
-		});
-	const onDragEnd = (event: DragEndEvent) => {
-		setDragged(null);
-		if (event.over?.id === TRAY && onMinimize) {
-			onMinimize(String(event.active.id));
-			return;
-		}
-		const drop = event.over?.data.current?.drop as Drop | undefined;
-		moved.current = String(event.active.id);
-		if (drop) onChange(moveTab(layout, String(event.active.id), drop));
-	};
+	const { dragged, pointer, handlers } = useTabDrag(
+		layout,
+		onChange,
+		onMinimize,
+		moved,
+	);
 	const dragging = dragged !== null || outside;
 	const pager = usePagedScroll(layout.root !== null);
 	const [held, maximize] = useState<Maximized | null>(null);
@@ -232,77 +193,172 @@ export function SplitView<T>({
 				sensors={sensors}
 				collisionDetection={pointerWithin}
 				measuring={MEASURE_WHILE_DRAGGING}
-				onDragStart={onDragStart}
-				onDragMove={onDragMove}
-				onDragEnd={onDragEnd}
-				onDragCancel={() => setDragged(null)}
+				{...handlers}
 			>
 				<div className="flex h-full min-h-0 flex-col">
-					<div
-						data-animated={animated}
-						className="group/split relative min-h-0 flex-1"
-					>
-						{layout.root ? (
-							<div
-								ref={pager}
-								className="h-full overflow-hidden overscroll-x-none"
-							>
-								<NodeView node={layout.root} view={view} root />
-							</div>
-						) : (
-							<div className="flex h-full items-center justify-center">
-								{placeholder}
-							</div>
-						)}
-						{dragging && !layout.root && (
-							<Zone
-								id="view"
-								drop={{ pane: "" }}
-								hit="inset-0"
-								lands="inset-0"
-							/>
-						)}
-						{dragging &&
-							layout.root &&
-							EDGES.map((edge) => (
-								<Zone
-									key={edge}
-									id={`view:${edge}`}
-									drop={{ node: (layout.root as Node<T>).id, edge }}
-									hit={`z-20 ${VIEW_EDGE_ZONE[edge]}`}
-									lands={`z-20 ${EDGE_LANDS[edge]}`}
-								/>
-							))}
-					</div>
+					<Stage
+						layout={layout}
+						view={view}
+						pager={pager}
+						animated={animated}
+						placeholder={placeholder}
+					/>
 					{tray !== undefined && (
 						<Tray takes={dragged !== null && onMinimize !== undefined}>
 							{tray(<PageIndicator layout={layout} pager={pager} />)}
 						</Tray>
 					)}
 				</div>
-				{typeof document !== "undefined" &&
-					createPortal(
-						dragged && (
-							<div
-								className="pointer-events-none fixed z-50"
-								style={{
-									zoom: UNZOOMED,
-									left: pointer.x + CURSOR_GAP,
-									top: pointer.y + CURSOR_GAP,
-								}}
-							>
-								<div
-									className="flex h-row items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm"
-									style={{ zoom: REZOOMED }}
-								>
-									{tabLabel(dragged.content)}
-								</div>
-							</div>
-						),
-						document.body,
-					)}
+				{dragged && (
+					<DragGhost label={tabLabel(dragged.content)} pointer={pointer} />
+				)}
 			</DndContext>
 		</ExternalDrop.Provider>
+	);
+}
+
+function useEntrance<T>(layout: SplitLayout<T>) {
+	const known = useRef(new Set(paneIds(layout.root)));
+	const moved = useRef<string | null>(null);
+	useEffect(() => {
+		known.current = new Set(paneIds(layout.root));
+		moved.current = null;
+	}, [layout]);
+	const entrance = (pane: Pane<T>) => {
+		if (known.current.has(pane.id)) return "";
+		return pane.tabs.some((t) => t.id === moved.current) ? SLIDES_IN : ZOOMS_IN;
+	};
+	return { moved, entrance };
+}
+
+function useTabDrag<T>(
+	layout: SplitLayout<T>,
+	onChange: (layout: SplitLayout<T>) => void,
+	onMinimize: ((tabId: string) => void) | undefined,
+	moved: RefObject<string | null>,
+) {
+	const [dragged, setDragged] = useState<Tab<T> | null>(null);
+	const [pointer, setPointer] = useState({ x: 0, y: 0 });
+	const origin = useRef({ x: 0, y: 0 });
+	const onDragStart = (event: DragStartEvent) => {
+		const start = event.activatorEvent as PointerEvent;
+		origin.current = { x: start.clientX, y: start.clientY };
+		setPointer(origin.current);
+		setDragged((event.active.data.current?.tab as Tab<T>) ?? null);
+	};
+	const onDragMove = (event: DragMoveEvent) =>
+		setPointer({
+			x: origin.current.x + event.delta.x,
+			y: origin.current.y + event.delta.y,
+		});
+	const onDragEnd = (event: DragEndEvent) => {
+		setDragged(null);
+		if (event.over?.id === TRAY && onMinimize) {
+			onMinimize(String(event.active.id));
+			return;
+		}
+		const drop = event.over?.data.current?.drop as Drop | undefined;
+		moved.current = String(event.active.id);
+		if (drop) onChange(moveTab(layout, String(event.active.id), drop));
+	};
+	const onDragCancel = () => setDragged(null);
+	return {
+		dragged,
+		pointer,
+		handlers: { onDragStart, onDragMove, onDragEnd, onDragCancel },
+	};
+}
+
+function useExternalDrop<T>(
+	external: SplitViewProps<T>["external"],
+	layout: SplitLayout<T>,
+	onChange: (layout: SplitLayout<T>) => void,
+): External | null {
+	return useMemo<External | null>(
+		() =>
+			external === undefined
+				? null
+				: {
+						type: external.type,
+						drop: (drop, data) => {
+							const tab = external.read(data);
+							if (tab) onChange(dropTab(layout, tab, drop));
+						},
+					},
+		[external, layout, onChange],
+	);
+}
+
+function Stage<T>({
+	layout,
+	view,
+	pager,
+	animated,
+	placeholder,
+}: {
+	layout: SplitLayout<T>;
+	view: View<T>;
+	pager: RefObject<HTMLDivElement | null>;
+	animated: boolean;
+	placeholder: ReactNode;
+}) {
+	return (
+		<div
+			data-animated={animated}
+			className="group/split relative min-h-0 flex-1"
+		>
+			{layout.root ? (
+				<div ref={pager} className="h-full overflow-hidden overscroll-x-none">
+					<NodeView node={layout.root} view={view} root />
+				</div>
+			) : (
+				<div className="flex h-full items-center justify-center">
+					{placeholder}
+				</div>
+			)}
+			{view.dragging && !layout.root && (
+				<Zone id="view" drop={{ pane: "" }} hit="inset-0" lands="inset-0" />
+			)}
+			{view.dragging &&
+				layout.root &&
+				EDGES.map((edge) => (
+					<Zone
+						key={edge}
+						id={`view:${edge}`}
+						drop={{ node: (layout.root as Node<T>).id, edge }}
+						hit={`z-20 ${VIEW_EDGE_ZONE[edge]}`}
+						lands={`z-20 ${EDGE_LANDS[edge]}`}
+					/>
+				))}
+		</div>
+	);
+}
+
+function DragGhost({
+	label,
+	pointer,
+}: {
+	label: string;
+	pointer: { x: number; y: number };
+}) {
+	if (typeof document === "undefined") return null;
+	return createPortal(
+		<div
+			className="pointer-events-none fixed z-50"
+			style={{
+				zoom: UNZOOMED,
+				left: pointer.x + CURSOR_GAP,
+				top: pointer.y + CURSOR_GAP,
+			}}
+		>
+			<div
+				className="flex h-row items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm"
+				style={{ zoom: REZOOMED }}
+			>
+				{label}
+			</div>
+		</div>,
+		document.body,
 	);
 }
 

@@ -10,42 +10,53 @@ import {
 	shownTabs,
 } from "./panel-ops.ts";
 
+type Prefetch<K extends PanelContent["kind"]> = (
+	queryClient: QueryClient,
+	workspaceId: Id<"workspaces">,
+	content: Extract<PanelContent, { kind: K }>,
+) => Promise<unknown>;
+
+const prefetchChat: Prefetch<"chat"> = (queryClient, _workspaceId, content) =>
+	content.chatId === null
+		? Promise.resolve()
+		: queryClient.ensureQueryData(
+				convexQuery(api.messages.transcript, {
+					chatId: content.chatId as Id<"chats">,
+				}),
+			);
+
+const prefetchFile: Prefetch<"file"> = (queryClient, workspaceId, content) =>
+	queryClient.ensureQueryData(
+		convexQuery(
+			content.folder === "knowledge" ? api.knowledge.get : api.attachments.get,
+			{ workspaceId, name: content.name },
+		),
+	);
+
+const prefetchPage: Prefetch<"page"> = (queryClient, workspaceId, content) => {
+	if (content.page === "memory")
+		return queryClient.ensureQueryData(
+			convexQuery(api.memories.list, { workspaceId }),
+		);
+	if (content.page === "bin" && content.id !== undefined)
+		return queryClient.ensureQueryData(
+			convexQuery(api.bin.get, { workspaceId, name: content.id }),
+		);
+	return Promise.resolve();
+};
+
 function prefetch(
 	queryClient: QueryClient,
 	workspaceId: Id<"workspaces">,
 	content: PanelContent,
 ): Promise<unknown> {
-	switch (content.kind) {
-		case "chat":
-			return content.chatId === null
-				? Promise.resolve()
-				: queryClient.ensureQueryData(
-						convexQuery(api.messages.transcript, {
-							chatId: content.chatId as Id<"chats">,
-						}),
-					);
-		case "file":
-			return queryClient.ensureQueryData(
-				convexQuery(
-					content.folder === "knowledge"
-						? api.knowledge.get
-						: api.attachments.get,
-					{ workspaceId, name: content.name },
-				),
-			);
-		case "page":
-			if (content.page === "memory")
-				return queryClient.ensureQueryData(
-					convexQuery(api.memories.list, { workspaceId }),
-				);
-			if (content.page === "bin" && content.id !== undefined)
-				return queryClient.ensureQueryData(
-					convexQuery(api.bin.get, { workspaceId, name: content.id }),
-				);
-			return Promise.resolve();
-		case "view":
-			return Promise.resolve();
-	}
+	if (content.kind === "chat")
+		return prefetchChat(queryClient, workspaceId, content);
+	if (content.kind === "file")
+		return prefetchFile(queryClient, workspaceId, content);
+	if (content.kind === "page")
+		return prefetchPage(queryClient, workspaceId, content);
+	return Promise.resolve();
 }
 
 export async function prefetchPanels(

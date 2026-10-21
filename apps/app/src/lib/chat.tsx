@@ -159,21 +159,11 @@ function errorFor(
 	return undefined;
 }
 
-export function ChatProvider({
-	workspaceId,
-	chatId,
-	onOpened,
-	children,
-}: {
-	workspaceId: Id<"workspaces">;
-	chatId: Id<"chats"> | null;
-	onOpened: (chatId: Id<"chats">) => void;
-	children: React.ReactNode;
-}) {
-	const announce = useRef(onOpened);
-	announce.current = onOpened;
-	const draftChat = useConvexMutation(api.chats.draft);
-	const renameChat = useConvexMutation(api.chats.rename);
+function useDraftedChat(
+	chatId: Id<"chats"> | null,
+	workspaceId: Id<"workspaces">,
+	draftChat: (args: { workspaceId: Id<"workspaces"> }) => Promise<Id<"chats">>,
+): Id<"chats"> | null {
 	const [drafted, setDrafted] = useState<Id<"chats"> | null>(null);
 	useEffect(() => {
 		setDrafted(null);
@@ -190,9 +180,12 @@ export function ChatProvider({
 			current = false;
 		};
 	}, [chatId, workspaceId, draftChat]);
+	return drafted;
+}
+
+function useMarkStreaming() {
 	const startChat = useConvexMutation(api.chats.start);
-	const settleChat = useConvexMutation(api.chats.settle);
-	const markStreaming = useMemo(
+	return useMemo(
 		() =>
 			startChat.withOptimisticUpdate((store, { chatId: started }) => {
 				for (const { args, value } of store.getAllQueries(api.chats.list)) {
@@ -209,88 +202,110 @@ export function ChatProvider({
 			}),
 		[startChat],
 	);
-	const transport = useMemo(
-		() =>
-			new FetchStreamTransport({
-				apiUrl: "/api/chat",
-				onRequest: async (_url, init) => ({
-					...init,
-					headers: { ...init.headers, ...(await apiHeaders()) },
-				}),
-			}),
-		[],
-	);
-	const stream = useStream({ transport });
-	const streamed: ChatMessage[] = stream.messages;
-	const streamingFor = useRef<Id<"chats"> | null>(null);
+}
 
-	const { data: stored } = useQuery(
-		convexQuery(api.messages.transcript, chatId ? { chatId } : "skip"),
-	);
-	const persisted = useMemo(() => toChatMessages(stored ?? []), [stored]);
-
+function useStreamFailure(
+	error: unknown,
+	chatId: Id<"chats"> | null,
+	streamingFor: { readonly current: Id<"chats"> | null },
+	settleChat: (args: {
+		chatId: Id<"chats">;
+		failure?: string;
+	}) => Promise<unknown>,
+) {
 	useEffect(() => {
-		if (stream.error)
-			reportIssue(stream.error, {
+		if (error)
+			reportIssue(error, {
 				$exception_source: "chat stream",
 				thread_id: chatId ?? "draft",
 			});
-	}, [stream.error, chatId]);
+	}, [error, chatId]);
 
 	useEffect(() => {
 		const failed = streamingFor.current;
-		if (!stream.error || failed === null) return;
+		if (!error || failed === null) return;
 		settleChat({
 			chatId: failed,
-			failure:
-				stream.error instanceof Error
-					? stream.error.message
-					: String(stream.error),
+			failure: error instanceof Error ? error.message : String(error),
 		}).catch((ex: unknown) =>
 			reportIssue(ex, { $exception_source: "chat settle", thread_id: failed }),
 		);
-	}, [stream.error, settleChat]);
+	}, [error, settleChat, streamingFor]);
+}
 
+function useGreeting(): ChatMessage | null {
 	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
 	useEffect(() => {
 		setGreeting(greetingMessage());
 	}, []);
+	return greeting;
+}
 
-	const [failure, setFailure] = useState<{
-		chatId: Id<"chats"> | null;
-		message: string;
-	} | null>(null);
+function freshMeta(
+	turns: readonly ChatMessage[],
+	meta: Record<string, StepMeta>,
+): Record<string, StepMeta> {
+	const found: Record<string, StepMeta> = {};
+	for (const m of turns) {
+		if (!m.id) continue;
+		const known = meta[m.id];
+		if (known?.memories) continue;
+		const parsed = parseMeta(m.additional_kwargs?.meta);
+		if (!parsed) continue;
+		if (known && !parsed.memories) continue;
+		found[m.id] = parsed;
+	}
+	return found;
+}
 
-	const turns =
-		streamingFor.current === chatId
-			? turnsToShow(streamed, persisted, stream.isLoading)
-			: persisted;
-
-	const messages = useMemo(
-		() =>
-			!greeting || turns.some((m) => m.id === GREETING_ID)
-				? turns
-				: [greeting, ...turns],
-		[greeting, turns],
-	);
-
+function useStepMeta(turns: readonly ChatMessage[]): Record<string, StepMeta> {
 	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
 	useEffect(() => {
-		const found: Record<string, StepMeta> = {};
-		for (const m of turns) {
-			if (!m.id) continue;
-			const known = meta[m.id];
-			if (known?.memories) continue;
-			const parsed = parseMeta(m.additional_kwargs?.meta);
-			if (!parsed) continue;
-			if (known && !parsed.memories) continue;
-			found[m.id] = parsed;
-		}
+		const found = freshMeta(turns, meta);
 		if (Object.keys(found).length > 0)
 			setMeta((prev) => ({ ...prev, ...found }));
 	}, [turns, meta]);
+	return meta;
+}
 
-	const submit = useCallback(
+function useAbandoning(abandon: (target: Id<"chats">) => void) {
+	useEffect(() => {
+		abandoning.add(abandon);
+		return () => {
+			abandoning.delete(abandon);
+		};
+	}, [abandon]);
+}
+
+type Stream = ReturnType<typeof useStream>;
+
+function useSubmit({
+	chatId,
+	workspaceId,
+	draftChat,
+	renameChat,
+	markStreaming,
+	persisted,
+	stream,
+	streamingFor,
+	announce,
+	setFailure,
+}: {
+	chatId: Id<"chats"> | null;
+	workspaceId: Id<"workspaces">;
+	draftChat: (args: { workspaceId: Id<"workspaces"> }) => Promise<Id<"chats">>;
+	renameChat: (args: {
+		chatId: Id<"chats">;
+		title: string;
+	}) => Promise<unknown>;
+	markStreaming: (args: { chatId: Id<"chats"> }) => Promise<unknown>;
+	persisted: ChatMessage[];
+	stream: Stream;
+	streamingFor: { current: Id<"chats"> | null };
+	announce: { readonly current: (chatId: Id<"chats">) => void };
+	setFailure: (failure: null) => void;
+}) {
+	return useCallback(
 		async (
 			input: { message: string } | { event: { token: string } },
 			shown: ChatMessage,
@@ -323,8 +338,119 @@ export function ChatProvider({
 			markStreaming,
 			persisted,
 			stream,
+			streamingFor,
+			announce,
+			setFailure,
 		],
 	);
+}
+
+function useStopping(
+	stream: Stream,
+	streamingFor: { readonly current: Id<"chats"> | null },
+	settleChat: (args: { chatId: Id<"chats"> }) => Promise<unknown>,
+	clear: () => void,
+) {
+	const halt = useCallback(() => {
+		clear();
+		stream.stop();
+	}, [stream, clear]);
+
+	const stop = useCallback(() => {
+		const stopped = streamingFor.current;
+		if (stream.isLoading && stopped !== null)
+			settleChat({ chatId: stopped }).catch((ex: unknown) =>
+				reportIssue(ex, {
+					$exception_source: "chat settle",
+					thread_id: stopped,
+				}),
+			);
+		halt();
+	}, [stream, halt, settleChat, streamingFor]);
+
+	const abandon = useCallback(
+		(target: Id<"chats">) => {
+			if (streamingFor.current === target) halt();
+		},
+		[halt, streamingFor],
+	);
+	return { stop, abandon };
+}
+
+export function ChatProvider({
+	workspaceId,
+	chatId,
+	onOpened,
+	children,
+}: {
+	workspaceId: Id<"workspaces">;
+	chatId: Id<"chats"> | null;
+	onOpened: (chatId: Id<"chats">) => void;
+	children: React.ReactNode;
+}) {
+	const announce = useRef(onOpened);
+	announce.current = onOpened;
+	const draftChat = useConvexMutation(api.chats.draft);
+	const renameChat = useConvexMutation(api.chats.rename);
+	const drafted = useDraftedChat(chatId, workspaceId, draftChat);
+	const settleChat = useConvexMutation(api.chats.settle);
+	const markStreaming = useMarkStreaming();
+	const transport = useMemo(
+		() =>
+			new FetchStreamTransport({
+				apiUrl: "/api/chat",
+				onRequest: async (_url, init) => ({
+					...init,
+					headers: { ...init.headers, ...(await apiHeaders()) },
+				}),
+			}),
+		[],
+	);
+	const stream = useStream({ transport });
+	const streamed: ChatMessage[] = stream.messages;
+	const streamingFor = useRef<Id<"chats"> | null>(null);
+
+	const { data: stored } = useQuery(
+		convexQuery(api.messages.transcript, chatId ? { chatId } : "skip"),
+	);
+	const persisted = useMemo(() => toChatMessages(stored ?? []), [stored]);
+
+	useStreamFailure(stream.error, chatId, streamingFor, settleChat);
+
+	const greeting = useGreeting();
+
+	const [failure, setFailure] = useState<{
+		chatId: Id<"chats"> | null;
+		message: string;
+	} | null>(null);
+
+	const turns =
+		streamingFor.current === chatId
+			? turnsToShow(streamed, persisted, stream.isLoading)
+			: persisted;
+
+	const messages = useMemo(
+		() =>
+			!greeting || turns.some((m) => m.id === GREETING_ID)
+				? turns
+				: [greeting, ...turns],
+		[greeting, turns],
+	);
+
+	const meta = useStepMeta(turns);
+
+	const submit = useSubmit({
+		chatId,
+		workspaceId,
+		draftChat,
+		renameChat,
+		markStreaming,
+		persisted,
+		stream,
+		streamingFor,
+		announce,
+		setFailure,
+	});
 
 	const submitTurn = useCallback(
 		async (text: string, title = titleOf(text)) => {
@@ -379,28 +505,11 @@ export function ChatProvider({
 		[steering, enqueue, submitTurn],
 	);
 
-	const halt = useCallback(() => {
-		clear();
-		stream.stop();
-	}, [stream, clear]);
-
-	const stop = useCallback(() => {
-		const stopped = streamingFor.current;
-		if (stream.isLoading && stopped !== null)
-			settleChat({ chatId: stopped }).catch((ex: unknown) =>
-				reportIssue(ex, {
-					$exception_source: "chat settle",
-					thread_id: stopped,
-				}),
-			);
-		halt();
-	}, [stream, halt, settleChat]);
-
-	const abandon = useCallback(
-		(target: Id<"chats">) => {
-			if (streamingFor.current === target) halt();
-		},
-		[halt],
+	const { stop, abandon } = useStopping(
+		stream,
+		streamingFor,
+		settleChat,
+		clear,
 	);
 
 	const fresh = isFreshChat(chatId, turns);
@@ -477,12 +586,7 @@ export function ChatProvider({
 		withdraw,
 	]);
 
-	useEffect(() => {
-		abandoning.add(abandon);
-		return () => {
-			abandoning.delete(abandon);
-		};
-	}, [abandon]);
+	useAbandoning(abandon);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }

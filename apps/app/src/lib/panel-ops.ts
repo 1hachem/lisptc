@@ -136,39 +136,54 @@ function record(value: unknown): Record<string, unknown> | undefined {
 		: undefined;
 }
 
+type Fields = Record<string, unknown>;
+
+function fileOf(content: Fields): PanelContent | undefined {
+	if (content.folder !== "attachments" && content.folder !== "knowledge")
+		return undefined;
+	if (typeof content.name !== "string") return undefined;
+	return { kind: "file", folder: content.folder, name: content.name };
+}
+
+function viewOf(content: Fields): PanelContent | undefined {
+	if (typeof content.title !== "string") return undefined;
+	return {
+		kind: "view",
+		title: content.title,
+		node: content.node,
+		...(typeof content.chatId === "string" ? { chatId: content.chatId } : {}),
+	};
+}
+
+function chatOf(content: Fields): PanelContent | undefined {
+	const { chatId, title } = content;
+	if (typeof chatId !== "string" && chatId !== null) return undefined;
+	if (typeof title !== "string") return undefined;
+	return { kind: "chat", chatId, title };
+}
+
+function pageOf(content: Fields): PanelContent | undefined {
+	if (!(PAGES as readonly unknown[]).includes(content.page)) return undefined;
+	if (typeof content.title !== "string") return undefined;
+	return {
+		kind: "page",
+		page: content.page as Page,
+		title: content.title,
+		...(typeof content.id === "string" ? { id: content.id } : {}),
+	};
+}
+
+const CONTENT_OF: Record<
+	PanelContent["kind"],
+	(content: Fields) => PanelContent | undefined
+> = { file: fileOf, view: viewOf, chat: chatOf, page: pageOf };
+
 function contentOf(value: unknown): PanelContent | undefined {
 	const content = record(value);
-	if (
-		content?.kind === "file" &&
-		(content.folder === "attachments" || content.folder === "knowledge") &&
-		typeof content.name === "string"
-	)
-		return { kind: "file", folder: content.folder, name: content.name };
-	if (content?.kind === "view" && typeof content.title === "string")
-		return {
-			kind: "view",
-			title: content.title,
-			node: content.node,
-			...(typeof content.chatId === "string" ? { chatId: content.chatId } : {}),
-		};
-	if (
-		content?.kind === "chat" &&
-		(typeof content.chatId === "string" || content.chatId === null) &&
-		typeof content.title === "string"
-	)
-		return { kind: "chat", chatId: content.chatId, title: content.title };
-	if (
-		content?.kind === "page" &&
-		(PAGES as readonly unknown[]).includes(content.page) &&
-		typeof content.title === "string"
-	)
-		return {
-			kind: "page",
-			page: content.page as Page,
-			title: content.title,
-			...(typeof content.id === "string" ? { id: content.id } : {}),
-		};
-	return undefined;
+	if (content === undefined || typeof content.kind !== "string")
+		return undefined;
+	if (!Object.hasOwn(CONTENT_OF, content.kind)) return undefined;
+	return CONTENT_OF[content.kind as PanelContent["kind"]](content);
 }
 
 export function tabLabel(content: PanelContent): string {
