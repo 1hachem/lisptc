@@ -1,15 +1,46 @@
 import { convexQuery } from "@convex-dev/react-query";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
-import { type KnowledgeViewer, knowledgeViewer } from "../lib/knowledge.ts";
+import { lazy, type ReactNode, Suspense } from "react";
+import {
+	type KnowledgeViewer,
+	knowledgeIcon,
+	knowledgeViewer,
+} from "../lib/knowledge.ts";
 import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
 import { Markdown } from "./markdown.tsx";
 
+const StlViewer = lazy(async () => ({
+	default: (await import("@repo/components/stl-viewer.tsx")).StlViewer,
+}));
+
 type TextViewer = Extract<KnowledgeViewer, "markdown" | "text">;
 type MediaViewer = Exclude<KnowledgeViewer, TextViewer>;
+
+function NoPreview({ name, url }: { name: string; url: string }) {
+	const dot = name.lastIndexOf(".");
+	const kind =
+		dot > 0 ? `.${name.slice(dot + 1).toLowerCase()} files` : "this file";
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-2 text-dim">
+			<HugeiconsIcon icon={knowledgeIcon(name, null)} className="size-icon" />
+			<span className="max-w-full truncate text-fg">{name}</span>
+			<span>no preview for {kind} yet</span>
+			<a
+				href={url}
+				download={name}
+				target="_blank"
+				rel="noreferrer"
+				className="hover:text-fg"
+			>
+				download
+			</a>
+		</div>
+	);
+}
 
 function MediaFrame({ children }: { children: ReactNode }) {
 	return (
@@ -48,10 +79,23 @@ const MEDIA: Record<MediaViewer, (name: string, url: string) => ReactNode> = {
 		</MediaFrame>
 	),
 	audio: (name, url) => <AudioPlayer name={name} url={url} />,
-	download: () => <div className="text-dim">no preview for this file type</div>,
+	stl: (name, url) => (
+		<MediaFrame>
+			<Suspense fallback={<div className="text-dim">loading…</div>}>
+				<StlViewer url={url} name={name} />
+			</Suspense>
+		</MediaFrame>
+	),
+	download: (name, url) => <NoPreview name={name} url={url} />,
 };
 
-const FILLS: ReadonlySet<KnowledgeViewer> = new Set(["image", "pdf", "video"]);
+const FILLS: ReadonlySet<KnowledgeViewer> = new Set([
+	"image",
+	"pdf",
+	"video",
+	"stl",
+	"download",
+]);
 
 const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 	markdown: (text) => <Markdown>{text}</Markdown>,
