@@ -54,7 +54,7 @@ function toolPanel(message: ChatMessage, chatId: string | null): PanelOp[] {
 	);
 }
 
-type Minimized = readonly Tab<PanelContent>[];
+export type Minimized = readonly Tab<PanelContent>[];
 
 export interface Panels {
 	workspaceId: Id<"workspaces"> | null;

@@ -1,4 +1,4 @@
-export const BAR_ITEMS = ["minimized", "panes", "clock"] as const;
+const BAR_ITEMS = ["minimized", "panes", "clock"] as const;
 
 export type BarItem = (typeof BAR_ITEMS)[number];
 

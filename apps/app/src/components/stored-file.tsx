@@ -160,7 +160,7 @@ function DownloadLink({ name, url }: { name: string; url: string }) {
 	);
 }
 
-interface StoredFileRow {
+export interface StoredFileRow {
 	name: string;
 	contentType: string | null;
 	url: string | null;
