@@ -46,6 +46,7 @@ const panelTab = v.object({
 
 export const panelLayout = v.object({
 	direction: v.union(v.literal("row"), v.literal("column")),
+	dock: v.optional(v.union(v.literal("side"), v.literal("below"))),
 	focused: v.union(v.string(), v.null()),
 	groups: v.array(
 		v.object({
