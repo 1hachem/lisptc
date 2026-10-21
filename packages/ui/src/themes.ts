@@ -30,6 +30,16 @@ export const themes: ThemeDef[] = [
 		scheme: "light",
 	},
 	{
+		id: "rose-pine-dark",
+		name: "rose-pine",
+		scheme: "dark",
+	},
+	{
+		id: "rose-pine-light",
+		name: "rose-pine",
+		scheme: "light",
+	},
+	{
 		id: "borland",
 		name: "borland",
 		scheme: "dark",
