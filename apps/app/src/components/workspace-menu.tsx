@@ -3,6 +3,7 @@ import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { WORKSPACE_ICONS } from "@repo/backend/workspace-icons";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -15,17 +16,90 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
+import { ICONS, workspaceIcon } from "../lib/workspace-icons.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
 
 const item =
 	"rounded-none px-2.5 py-1 text-[11.5px] text-dim focus:bg-bg2 focus:text-fg";
+
+const menu = "rounded-none border-bg2 bg-bg1 p-0 text-[11.5px] shadow-none";
+
+function WorkspaceItems() {
+	const navigate = useNavigate();
+	const { workspaces } = useWorkspace();
+	return workspaces.map((candidate) => (
+		<DropdownMenuItem
+			key={candidate._id}
+			onSelect={() =>
+				void navigate({
+					to: "/$workspaceId",
+					params: { workspaceId: candidate._id },
+				})
+			}
+			className={item}
+		>
+			<HugeiconsIcon
+				className="size-icon-sm flex-none"
+				icon={ICONS[workspaceIcon(candidate)]}
+			/>
+			<span className="truncate">{candidate.name}</span>
+		</DropdownMenuItem>
+	));
+}
+
+function IconPicker() {
+	const { workspace } = useWorkspace();
+	const setIcon = useConvexMutation(api.workspaces.setIcon);
+	if (!workspace) return null;
+	const current = workspaceIcon(workspace);
+	return (
+		<div className="grid grid-cols-6 gap-px p-1">
+			{WORKSPACE_ICONS.map((icon) => (
+				<DropdownMenuItem
+					key={icon}
+					title={icon}
+					aria-label={`use the ${icon} icon`}
+					onSelect={() => void setIcon({ workspaceId: workspace._id, icon })}
+					className={`justify-center rounded-none p-1 focus:bg-bg2 ${icon === current ? "bg-bg2 text-fg" : "text-dim"}`}
+				>
+					<HugeiconsIcon className="size-icon-sm" icon={ICONS[icon]} />
+				</DropdownMenuItem>
+			))}
+		</div>
+	);
+}
+
+export function WorkspaceRailMenu() {
+	const { workspace } = useWorkspace();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				aria-label="switch workspace"
+				title={workspace?.name ?? "workspace"}
+				className="flex size-6 cursor-pointer items-center justify-center rounded-md bg-bg2 text-fg hover:text-fg"
+			>
+				{workspace && (
+					<HugeiconsIcon
+						className="size-icon-sm"
+						icon={ICONS[workspaceIcon(workspace)]}
+					/>
+				)}
+			</DropdownMenuTrigger>
+			<DropdownMenuContent side="right" align="start" className={menu}>
+				<WorkspaceItems />
+				<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
+				<IconPicker />
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
 
 type Editing = "create" | "rename";
 
 export function WorkspaceMenu() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const { workspaces, workspace } = useWorkspace();
+	const { workspace } = useWorkspace();
 	const createWorkspace = useConvexMutation(api.workspaces.create);
 	const renameWorkspace = useConvexMutation(api.workspaces.rename);
 	const removeWorkspace = useConvexMutation(api.workspaces.remove);
@@ -86,7 +160,13 @@ export function WorkspaceMenu() {
 		<>
 			<div className="mx-1.5 flex items-stretch gap-[3px]">
 				<DropdownMenu>
-					<DropdownMenuTrigger className="flex min-w-0 flex-1 cursor-pointer items-baseline gap-2 bg-bg2 px-2.5 py-1 text-left text-[11.5px] text-dim hover:text-fg">
+					<DropdownMenuTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 bg-bg2 px-2.5 py-1 text-left text-[11.5px] text-dim hover:text-fg">
+						{workspace && (
+							<HugeiconsIcon
+								className="size-icon-sm flex-none text-fg"
+								icon={ICONS[workspaceIcon(workspace)]}
+							/>
+						)}
 						<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
 							{workspace?.name ?? "…"}
 						</span>
@@ -95,17 +175,9 @@ export function WorkspaceMenu() {
 					<DropdownMenuContent
 						align="start"
 						sideOffset={2}
-						className="min-w-[calc(var(--radix-dropdown-menu-trigger-width)/var(--app-zoom))] rounded-none border-bg2 bg-bg1 p-0 text-[11.5px] shadow-none"
+						className={`min-w-[calc(var(--radix-dropdown-menu-trigger-width)/var(--app-zoom))] ${menu}`}
 					>
-						{workspaces.map((candidate) => (
-							<DropdownMenuItem
-								key={candidate._id}
-								onSelect={() => void open(candidate._id)}
-								className={item}
-							>
-								<span className="truncate">{candidate.name}</span>
-							</DropdownMenuItem>
-						))}
+						<WorkspaceItems />
 						<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
 						<DropdownMenuItem
 							onSelect={() => {
@@ -127,6 +199,9 @@ export function WorkspaceMenu() {
 								>
 									rename workspace
 								</DropdownMenuItem>
+								<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
+								<IconPicker />
+								<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
 								<ConfirmItem
 									label="delete workspace"
 									confirm="delete it and every session?"

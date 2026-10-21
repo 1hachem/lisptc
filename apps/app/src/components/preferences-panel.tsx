@@ -316,7 +316,7 @@ function SectionRail() {
 export function PreferencesPanel() {
 	const { state } = useSidebar();
 	return (
-		<Sidebar side="right" collapsible="icon">
+		<Sidebar side="right" collapsible="icon" className="border-sidebar">
 			<SidebarContent>
 				{state === "expanded" ? <Preferences /> : <SectionRail />}
 			</SidebarContent>
