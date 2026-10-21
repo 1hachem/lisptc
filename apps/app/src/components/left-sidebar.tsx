@@ -14,6 +14,7 @@ import {
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useNewChat } from "../lib/chats.ts";
 import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
@@ -64,6 +65,7 @@ function UserRow({
 }) {
 	const { data: user } = useQuery(convexQuery(api.users.me, {}));
 	const { workspace } = useWorkspace();
+	const [armed, setArmed] = useState(false);
 	return (
 		<SidebarFooter
 			className={
@@ -100,11 +102,22 @@ function UserRow({
 			)}
 			<button
 				type="button"
-				onClick={onSignOut}
-				title="sign out"
-				aria-label="sign out"
-				className="flex-none cursor-pointer text-dim hover:text-fg"
+				onClick={() => {
+					if (!armed) {
+						setArmed(true);
+						return;
+					}
+					onSignOut();
+				}}
+				onBlur={() => setArmed(false)}
+				onMouseLeave={() => setArmed(false)}
+				title={armed ? "click again to sign out" : "sign out"}
+				aria-label={armed ? "confirm sign out" : "sign out"}
+				className={`flex flex-none cursor-pointer items-center gap-1 ${armed ? "text-red" : "text-dim hover:text-fg"}`}
 			>
+				{armed && expanded && (
+					<span className="whitespace-nowrap">sign out?</span>
+				)}
 				<HugeiconsIcon className="size-icon-sm" icon={Logout01Icon} />
 			</button>
 		</SidebarFooter>
