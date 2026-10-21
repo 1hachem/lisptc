@@ -5,10 +5,8 @@ import { evalMessageCode } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import { type ToolMessage, toolMessage } from "./tool-message.ts";
 
-export type EvalMessage = ToolMessage;
-
 export interface Evaluated {
-	message: EvalMessage;
+	message: ToolMessage;
 	quiet: boolean;
 }
 

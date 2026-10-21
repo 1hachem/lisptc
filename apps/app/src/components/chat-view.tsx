@@ -1,11 +1,9 @@
 import { MessageMemories } from "@repo/components";
-import { formsIn, type Skipped } from "@repo/syntax";
-import {
-	Conversation,
-	ConversationContent,
-	useStickToBottomContext,
-} from "@repo/ui";
+import type { Skipped } from "@repo/shared/lisp-forms";
+import { formsIn } from "@repo/syntax";
+import { Conversation, ConversationContent } from "@repo/ui";
 import { useEffect, useMemo, useState } from "react";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,

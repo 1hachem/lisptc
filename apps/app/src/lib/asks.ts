@@ -9,8 +9,6 @@ import {
 import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
 import { postUiAction } from "./ui-action.ts";
 
-export type { Answered, Ask, AskChoice };
-
 export type AskOutcome =
 	| { readonly ok: true; readonly event?: SystemEventTicket }
 	| { readonly ok: false; readonly error: string };

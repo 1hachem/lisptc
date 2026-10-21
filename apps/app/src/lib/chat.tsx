@@ -12,8 +12,9 @@ import {
 	type ViewNode,
 	viewKey,
 } from "@repo/interpreter/annotations";
+import type { Answered, Ask } from "@repo/interpreter/asks";
+import type { Skipped } from "@repo/shared/lisp-forms";
 import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
-import type { Skipped } from "@repo/syntax";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
@@ -30,7 +31,7 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
-import { type Answered, type Ask, answersOf, asksOf } from "./asks.ts";
+import { answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";

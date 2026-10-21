@@ -3,7 +3,9 @@ import type {
 	AgentFailure,
 	AgentTurn,
 	Annotations,
+	ModelDelta,
 	ModelRequest,
+	ModelUsage,
 	StepAnnotations,
 	StepVerdict,
 	TurnOutcome,
@@ -11,16 +13,11 @@ import type {
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
-import {
-	type AgentConfig,
-	type AgentDelta,
-	streamAgent,
-	type TokenUsage,
-} from "./agent.ts";
-import { type EvalMessage, evalMessage } from "./eval.ts";
+import { type AgentConfig, streamAgent } from "./agent.ts";
+import { evalMessage } from "./eval.ts";
 import type { Steer } from "./inbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
-import { resolveModel } from "./provider.ts";
+import { resolveModel } from "./provider/registry.ts";
 import {
 	evalCode,
 	isUserPrompt,
@@ -34,6 +31,7 @@ import {
 	withItsResult,
 } from "./repl.ts";
 import type { TraceContext } from "./telemetry.ts";
+import type { ToolMessage } from "./tool-message.ts";
 import { type TurnTelemetry, turnTelemetry } from "./turn-telemetry.ts";
 
 export interface TurnOptions {
@@ -46,8 +44,6 @@ export interface TurnOptions {
 	inbox?: () => Promise<Steer[]>;
 	runsForms?: boolean;
 }
-
-export type { StepMeta };
 
 export type TurnEvent =
 	| { type: "delta"; stepId: string; text?: string; reasoning?: string }
@@ -73,7 +69,7 @@ export type TurnEvent =
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
 	| { type: "steered"; id: string; content: string }
-	| { type: "evaluated"; message: EvalMessage }
+	| { type: "evaluated"; message: ToolMessage }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
@@ -85,7 +81,7 @@ function lastUserPrompt(transcript: TranscriptEntry[]): string {
 
 function stepMeta(
 	startedAt: number,
-	usage: TokenUsage | undefined,
+	usage: ModelUsage | undefined,
 	ran: { provider: string; model: string },
 ): StepMeta {
 	return {
@@ -105,7 +101,7 @@ function stepMeta(
 	};
 }
 
-function resultEntry(message: EvalMessage): TranscriptEntry {
+function resultEntry(message: ToolMessage): TranscriptEntry {
 	const riding = message.additional_kwargs?.riding;
 	return {
 		role: "tool",
@@ -169,14 +165,14 @@ async function* prepareStep(
 interface Reply {
 	full: string;
 	reasoning: string;
-	usage?: TokenUsage;
+	usage?: ModelUsage;
 }
 
 async function* callModel(
 	repl: AgentRepl,
 	request: ModelRequest,
 	stepId: string,
-	call: (request: ModelRequest) => AsyncIterable<AgentDelta>,
+	call: (request: ModelRequest) => AsyncIterable<ModelDelta>,
 ): AsyncGenerator<TurnEvent, Reply> {
 	const reply: Reply = { full: "", reasoning: "" };
 	for await (const delta of repl.modelCall(request, call)) {
@@ -209,7 +205,7 @@ interface Turn {
 	steps: number;
 }
 
-type ModelCall = (request: ModelRequest) => AsyncIterable<AgentDelta>;
+type ModelCall = (request: ModelRequest) => AsyncIterable<ModelDelta>;
 
 function* collect(annotations: StepAnnotations): Generator<TurnEvent> {
 	if (Object.keys(annotations.step).length > 0)
