@@ -20,10 +20,10 @@ workspace. App applies change at once, while they watch.
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
   '() shows all. Attachments and bin hidden until user
   shows them.
-- :status-bar is order of bottom bar items, left to right. First three fill
-  left, centre, right. (preferences/set :status-bar '("clock" "panes")) moves
-  those two first, keeps rest in order. User also drags them on bar or in
-  preferences. Minimized tabs sit in bar at "minimized" slot, open upward.
+- :status-bar is bottom bar's three slots: left, centre, right. Empty slot
+  has name too, read it from plist. (preferences/set :status-bar '("clock"
+  "panes")) puts clock left, panes centre, keeps rest in order. User also
+  drags them on bar or in preferences.
 - :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
   (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
 - :motion is how sidebar animates that drag. (motions) gives alist of

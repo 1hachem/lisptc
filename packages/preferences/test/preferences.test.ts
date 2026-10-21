@@ -10,7 +10,7 @@ const HELD = {
 	sendLabel: "send",
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
-	statusBar: ["minimized", "panes", "clock"],
+	statusBar: ["gap", "panes", "clock"],
 	statusBarHidden: [],
 	motion: "slide",
 	panelMotion: true,
@@ -20,7 +20,7 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("minimized" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t)',
+			'(:font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("gap" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t)',
 		);
 	});
 
@@ -158,8 +158,8 @@ describe("changing preferences", () => {
 		const { ev, store } = await world(HELD);
 		expect(
 			await ev('(preferences/set :status-bar \'("clock" "panes"))'),
-		).toContain(':status-bar ("clock" "panes" "minimized")');
-		expect(store.read().statusBar).toEqual(["clock", "panes", "minimized"]);
+		).toContain(':status-bar ("clock" "panes" "gap")');
+		expect(store.read().statusBar).toEqual(["clock", "panes", "gap"]);
 	});
 
 	it("hides bottom bar items and shows them again", async () => {
@@ -175,7 +175,7 @@ describe("changing preferences", () => {
 		await expect(
 			ev('(preferences/set :status-bar-hidden \'("weather"))'),
 		).rejects.toThrow(
-			/unknown status bar item, there are "minimized" "panes" "clock"/,
+			/unknown status bar item, there are "gap" "panes" "clock"/,
 		);
 		expect(store.read()).toEqual(HELD);
 	});

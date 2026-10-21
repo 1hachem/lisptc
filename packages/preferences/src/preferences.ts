@@ -83,7 +83,7 @@ const SET_ARGS = [
 		type: "list",
 		required: false,
 		description:
-			'the order of the bottom bar\'s items, left to right, as ("name" ...); the first three fill the left, centre and right; items not named follow in their current order',
+			'the bottom bar\'s three slots, left, centre and right, as ("name" ...); an empty slot is named like an item; slots not named follow in their current order',
 	},
 	{
 		name: "status-bar-hidden",
