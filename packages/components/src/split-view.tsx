@@ -1026,7 +1026,7 @@ function TabHandle<T>({
 		<div
 			ref={target.ref}
 			{...target.native}
-			className="group/tab relative flex h-full flex-none items-center border-border border-r"
+			className="group/tab relative flex h-full flex-none items-center"
 		>
 			<InsertMark shown={target.over} />
 			<TabsTrigger
