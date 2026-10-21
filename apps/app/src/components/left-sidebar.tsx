@@ -15,7 +15,8 @@ import {
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { dragsAs } from "../lib/panel-ops.ts";
+import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import { requestPanel } from "../lib/panel-requests.ts";
 import { useSidebarOrder } from "../lib/sidebar.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
@@ -37,6 +38,12 @@ function EntryRail() {
 		</SidebarMenu>
 	);
 }
+
+const ACCOUNT: PanelContent = {
+	kind: "page",
+	page: "account",
+	title: "account",
+};
 
 function UserRow({
 	expanded,
@@ -71,11 +78,12 @@ function UserRow({
 					activeProps={{ className: "text-fg" }}
 					title="settings"
 					aria-label="settings"
-					onDragStart={dragsAs({
-						kind: "page",
-						page: "account",
-						title: "account",
-					})}
+					onClick={(event) => {
+						if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
+						event.preventDefault();
+						requestPanel(ACCOUNT);
+					}}
+					onDragStart={dragsAs(ACCOUNT)}
 				>
 					<HugeiconsIcon className="size-icon-sm" icon={Settings01Icon} />
 				</Link>

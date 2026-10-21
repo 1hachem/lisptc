@@ -31,6 +31,7 @@ import {
 	toPanelOps,
 	withMain,
 } from "./panel-ops.ts";
+import { usePanelRequests } from "./panel-requests.ts";
 
 function toolPanel(message: ChatMessage): PanelOp[] {
 	return toPanelOps(message.additional_kwargs?.panel);
@@ -148,6 +149,14 @@ export function PanelsProvider({
 			]),
 		[apply],
 	);
+	const openContent = useCallback(
+		(content: PanelContent) =>
+			apply([
+				{ op: "open", tab: panelTab(content).id, split: "here", content },
+			]),
+		[apply],
+	);
+	usePanelRequests(openContent);
 	const dockChat = useCallback(
 		() => change(withMain(latest.current)),
 		[change, latest],
