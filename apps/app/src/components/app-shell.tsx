@@ -1,31 +1,10 @@
+import { SidebarProvider } from "@repo/ui";
+import type { CSSProperties } from "react";
 import { useUI } from "../lib/ui.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
 import { PreferencesPanel } from "./preferences-panel.tsx";
 
-function PanelToggle({
-	side,
-	open,
-	onToggle,
-}: {
-	side: "left" | "right";
-	open: boolean;
-	onToggle: () => void;
-}) {
-	const noun = side === "left" ? "sidebar" : "preferences";
-	const points = side === "left" ? open : !open;
-	return (
-		<button
-			type="button"
-			onClick={onToggle}
-			title={`${open ? "collapse" : "expand"} ${noun}`}
-			className={`absolute top-3.5 z-30 cursor-pointer text-dim hover:text-fg ${
-				side === "left" ? "left-4" : "right-4"
-			}`}
-		>
-			{points ? "«" : "»"}
-		</button>
-	);
-}
+const SIDEBAR_SIZE = { "--sidebar-width": "214px" } as CSSProperties;
 
 export function AppShell({
 	children,
@@ -34,15 +13,30 @@ export function AppShell({
 	children: React.ReactNode;
 	onSignOut: () => void;
 }) {
-	const { leftOpen, toggleLeft, rightOpen, toggleRight } = useUI();
+	const { leftOpen, setLeftOpen, rightOpen, setRightOpen } = useUI();
 
 	return (
-		<div className="relative h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
-			<main className="flex h-full min-w-0 flex-col">{children}</main>
-			<LeftSidebar open={leftOpen} onSignOut={onSignOut} />
-			<PreferencesPanel open={rightOpen} />
-			<PanelToggle side="left" open={leftOpen} onToggle={toggleLeft} />
-			<PanelToggle side="right" open={rightOpen} onToggle={toggleRight} />
+		<div className="h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
+			<SidebarProvider
+				open={leftOpen}
+				onOpenChange={setLeftOpen}
+				style={SIDEBAR_SIZE}
+				className="h-full min-h-0"
+			>
+				<LeftSidebar onSignOut={onSignOut} />
+				<SidebarProvider
+					open={rightOpen}
+					onOpenChange={setRightOpen}
+					shortcut={null}
+					style={SIDEBAR_SIZE}
+					className="h-full min-h-0 min-w-0 flex-1"
+				>
+					<main className="flex h-full min-w-0 flex-1 flex-col">
+						{children}
+					</main>
+					<PreferencesPanel />
+				</SidebarProvider>
+			</SidebarProvider>
 		</div>
 	);
 }

@@ -2,76 +2,120 @@ import { convexQuery } from "@convex-dev/react-query";
 import { Logout01Icon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
+import {
+	Sidebar,
+	SidebarContent,
+	SidebarFooter,
+	SidebarHeader,
+	SidebarMenu,
+	SidebarMenuButton,
+	SidebarMenuItem,
+	SidebarRail,
+	useSidebar,
+} from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { dragsAs } from "../lib/panel-ops.ts";
+import { useSidebarOrder } from "../lib/sidebar.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
-import { SidePanel } from "./side-panel.tsx";
 import { WorkspaceMenu } from "./workspace-menu.tsx";
-import { WorkspaceTree } from "./workspace-tree.tsx";
+import { ENTRY_ICONS, WorkspaceTree } from "./workspace-tree.tsx";
 
-export function LeftSidebar({
-	open,
+function EntryRail() {
+	const { shown } = useSidebarOrder();
+	const { setOpen } = useSidebar();
+	return (
+		<SidebarMenu className="items-center gap-1 py-1">
+			{shown.map((entry) => (
+				<SidebarMenuItem key={entry}>
+					<SidebarMenuButton tooltip={entry} onClick={() => setOpen(true)}>
+						<HugeiconsIcon icon={ENTRY_ICONS[entry]} />
+						<span>{entry}</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+			))}
+		</SidebarMenu>
+	);
+}
+
+function UserRow({
+	expanded,
 	onSignOut,
 }: {
-	open: boolean;
+	expanded: boolean;
 	onSignOut: () => void;
 }) {
 	const { data: user } = useQuery(convexQuery(api.users.me, {}));
 	const { workspace } = useWorkspace();
+	return (
+		<SidebarFooter
+			className={
+				expanded
+					? "flex-row items-center gap-2 px-2.5 pb-3.5 text-[11px] text-dim"
+					: "items-center gap-2 pb-3.5 text-dim"
+			}
+		>
+			{expanded && (
+				<span
+					className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+					title={user?.email}
+				>
+					{user === undefined ? "" : user.name === "" ? user.email : user.name}
+				</span>
+			)}
+			{workspace && (
+				<Link
+					to="/$workspaceId/account"
+					params={{ workspaceId: workspace._id }}
+					className={`${expanded ? "ml-auto" : ""} flex-none text-dim hover:text-fg`}
+					activeProps={{ className: "text-fg" }}
+					title="settings"
+					aria-label="settings"
+					onDragStart={dragsAs({
+						kind: "page",
+						page: "account",
+						title: "account",
+					})}
+				>
+					<HugeiconsIcon className="size-icon-sm" icon={Settings01Icon} />
+				</Link>
+			)}
+			<button
+				type="button"
+				onClick={onSignOut}
+				title="sign out"
+				aria-label="sign out"
+				className="flex-none cursor-pointer text-dim hover:text-fg"
+			>
+				<HugeiconsIcon className="size-icon-sm" icon={Logout01Icon} />
+			</button>
+		</SidebarFooter>
+	);
+}
+
+export function LeftSidebar({ onSignOut }: { onSignOut: () => void }) {
+	const { workspace } = useWorkspace();
+	const { state } = useSidebar();
+	const expanded = state === "expanded";
 
 	return (
-		<SidePanel side="left" open={open} className="w-[214px]">
-			<div className="flex h-full flex-col gap-3.5 py-3.5">
-				<div aria-hidden className="invisible px-4">
-					«
-				</div>
-
-				<WorkspaceMenu />
-
-				<div className="min-h-0 flex-1 overflow-y-auto px-1.5 text-[11.5px]">
-					{workspace && <WorkspaceTree workspaceId={workspace._id} />}
-				</div>
-
-				<div className="flex items-center gap-2 px-2.5 text-[11px] text-dim">
-					<span
-						className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-						title={user?.email}
-					>
-						{user === undefined
-							? ""
-							: user.name === ""
-								? user.email
-								: user.name}
-					</span>
-					{workspace && (
-						<Link
-							to="/$workspaceId/account"
-							params={{ workspaceId: workspace._id }}
-							className="ml-auto flex-none text-dim hover:text-fg"
-							activeProps={{ className: "text-fg" }}
-							title="settings"
-							aria-label="settings"
-							onDragStart={dragsAs({
-								kind: "page",
-								page: "account",
-								title: "account",
-							})}
-						>
-							<HugeiconsIcon className="size-icon-sm" icon={Settings01Icon} />
-						</Link>
-					)}
-					<button
-						type="button"
-						onClick={onSignOut}
-						title="sign out"
-						aria-label="sign out"
-						className="flex-none cursor-pointer text-dim hover:text-fg"
-					>
-						<HugeiconsIcon className="size-icon-sm" icon={Logout01Icon} />
-					</button>
-				</div>
-			</div>
-		</SidePanel>
+		<Sidebar side="left" collapsible="icon">
+			{expanded && (
+				<SidebarHeader className="pt-3.5">
+					<WorkspaceMenu />
+				</SidebarHeader>
+			)}
+			<SidebarContent>
+				{expanded ? (
+					<div className="min-h-0 flex-1 overflow-y-auto px-1.5 text-[11.5px]">
+						{workspace && <WorkspaceTree workspaceId={workspace._id} />}
+					</div>
+				) : (
+					<EntryRail />
+				)}
+			</SidebarContent>
+			<UserRow expanded={expanded} onSignOut={onSignOut} />
+			<SidebarRail />
+		</Sidebar>
 	);
 }

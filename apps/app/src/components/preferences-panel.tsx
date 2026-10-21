@@ -1,5 +1,24 @@
+import {
+	BubbleChatIcon,
+	KeyboardIcon,
+	Move01Icon,
+	PaintBoardIcon,
+	SidebarLeftIcon,
+	Tag01Icon,
+	TextFontIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { ThemeSwatches } from "@repo/components";
-import { fonts } from "@repo/ui";
+import {
+	fonts,
+	Sidebar,
+	SidebarContent,
+	SidebarMenu,
+	SidebarMenuButton,
+	SidebarMenuItem,
+	SidebarRail,
+	useSidebar,
+} from "@repo/ui";
 import { motions } from "@repo/ui/motions.ts";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
@@ -14,7 +33,6 @@ import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useUI } from "../lib/ui.tsx";
-import { SidePanel } from "./side-panel.tsx";
 
 function ChannelToggle({ channel }: { channel: Channel }) {
 	const { shown, toggleChannel } = useUI();
@@ -265,51 +283,85 @@ function MotionList() {
 	);
 }
 
-export function PreferencesPanel({ open }: { open: boolean }) {
+const SECTIONS: { name: string; icon: IconSvgElement }[] = [
+	{ name: "channels", icon: BubbleChatIcon },
+	{ name: "metadata", icon: Tag01Icon },
+	{ name: "input", icon: KeyboardIcon },
+	{ name: "sidebar", icon: SidebarLeftIcon },
+	{ name: "recent themes", icon: PaintBoardIcon },
+	{ name: "font", icon: TextFontIcon },
+	{ name: "drag motion", icon: Move01Icon },
+];
+
+function SectionRail() {
+	const { setOpen } = useSidebar();
 	return (
-		<SidePanel side="right" open={open} className="w-[214px]">
-			<div className="flex h-full flex-col gap-5 overflow-y-auto py-3.5">
-				<div className="flex items-baseline gap-2 px-4">
-					<span className="flex-1 text-[11px] text-dim uppercase tracking-[0.14em]">
-						channels
-					</span>
-					<span aria-hidden className="invisible">
-						»
-					</span>
-				</div>
-				<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
-					{CHANNELS.map((channel) => (
-						<ChannelToggle key={channel.id} channel={channel} />
-					))}
-				</div>
-				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-					metadata
-				</div>
-				<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
-					{META_FIELDS.map((field) => (
-						<MetaToggle key={field.id} field={field} />
-					))}
-				</div>
-				{INPUT_GROUPS.map((group) => (
-					<InputSection key={group} group={group} />
-				))}
-				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-					sidebar
-				</div>
-				<SidebarList />
-				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-					recent themes
-				</div>
-				<ThemeList open={open} />
-				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-					font
-				</div>
-				<FontList />
-				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-					drag motion
-				</div>
-				<MotionList />
+		<SidebarMenu className="items-center gap-1 py-3.5">
+			{SECTIONS.map((section) => (
+				<SidebarMenuItem key={section.name}>
+					<SidebarMenuButton
+						tooltip={section.name}
+						onClick={() => setOpen(true)}
+					>
+						<HugeiconsIcon icon={section.icon} />
+						<span>{section.name}</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+			))}
+		</SidebarMenu>
+	);
+}
+
+export function PreferencesPanel() {
+	const { state } = useSidebar();
+	return (
+		<Sidebar side="right" collapsible="icon">
+			<SidebarContent>
+				{state === "expanded" ? <Preferences /> : <SectionRail />}
+			</SidebarContent>
+			<SidebarRail />
+		</Sidebar>
+	);
+}
+
+function Preferences() {
+	return (
+		<div className="flex h-full flex-col gap-5 overflow-y-auto py-3.5">
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				channels
 			</div>
-		</SidePanel>
+			<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+				{CHANNELS.map((channel) => (
+					<ChannelToggle key={channel.id} channel={channel} />
+				))}
+			</div>
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				metadata
+			</div>
+			<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+				{META_FIELDS.map((field) => (
+					<MetaToggle key={field.id} field={field} />
+				))}
+			</div>
+			{INPUT_GROUPS.map((group) => (
+				<InputSection key={group} group={group} />
+			))}
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				sidebar
+			</div>
+			<SidebarList />
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				recent themes
+			</div>
+			<ThemeList open />
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				font
+			</div>
+			<FontList />
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				drag motion
+			</div>
+			<MotionList />
+		</div>
 	);
 }

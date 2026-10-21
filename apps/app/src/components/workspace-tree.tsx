@@ -1,13 +1,16 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import {
+	Add01Icon,
 	Attachment01Icon,
 	Book02Icon,
 	BubbleChatIcon,
 	Delete02Icon,
+	File01Icon,
 	FlashIcon,
 	Home01Icon,
 	InformationCircleIcon,
 	PaintBoardIcon,
+	Settings02Icon,
 	ShieldKeyIcon,
 	StickyNote01Icon,
 	TaskDone01Icon,
@@ -76,6 +79,15 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	tasks: TaskDone01Icon,
 	ui: PaintBoardIcon,
 	tests: TestTube01Icon,
+};
+
+export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
+	...FOLDER_ICONS,
+	home: Home01Icon,
+	new_chat: Add01Icon,
+	"README.md": InformationCircleIcon,
+	"settings.ptc": Settings02Icon,
+	"preferences.ptc": File01Icon,
 };
 
 function useLeave(workspaceId: Id<"workspaces">) {
