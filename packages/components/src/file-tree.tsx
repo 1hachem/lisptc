@@ -11,7 +11,7 @@ import {
 	SquareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { type ReactNode, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEntryDragged } from "./sortable-tree.tsx";
 
@@ -217,23 +217,17 @@ export function TreeAction({
 	);
 }
 
-const SELECTIONS_HOST = "tree-selections";
-
-function selectionsHost(): HTMLElement {
-	const found = document.getElementById(SELECTIONS_HOST);
-	if (found !== null) return found;
-	const host = document.createElement("div");
-	host.id = SELECTIONS_HOST;
-	host.className =
-		"pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4";
-	document.body.append(host);
-	return host;
-}
+const SelectionHost = createContext<{ host: HTMLElement | null } | undefined>(
+	undefined,
+);
 
 export function TreeSelection({
 	count,
 	total,
-	where,
+	label,
+	summary,
+	allLabel,
+	clearLabel,
 	onAll,
 	onClear,
 	failure,
@@ -242,29 +236,26 @@ export function TreeSelection({
 }: {
 	count: number;
 	total: number;
-	where: string;
+	label: string;
+	summary: ReactNode;
+	allLabel: string;
+	clearLabel: string;
 	onAll: () => void;
 	onClear: () => void;
 	failure?: string | null;
 	busy?: boolean;
 	children: ReactNode;
 }) {
-	const [host, setHost] = useState<HTMLElement | null>(null);
-	useEffect(() => setHost(selectionsHost()), []);
-	if (host === null) return null;
-	const picked = `${count} ${count === 1 ? "file" : "files"} selected`;
-
-	return createPortal(
+	const floating = useContext(SelectionHost);
+	const toolbar = (
 		<div
 			role="toolbar"
-			aria-label={`${picked} in ${where}`}
+			aria-label={label}
 			className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 border border-bg2 bg-bg1 px-3 py-1.5 font-mono text-[11.5px] text-dim shadow-lg"
 		>
-			<span className="text-fg">
-				{picked} in <span className="text-blue">{where}</span>
-			</span>
-			{count < total && <TreeAction label="all" onRun={onAll} />}
-			<TreeAction label="clear" onRun={onClear} />
+			<span className="text-fg">{summary}</span>
+			{count < total && <TreeAction label={allLabel} onRun={onAll} />}
+			<TreeAction label={clearLabel} onRun={onClear} />
 			<span aria-hidden className="text-bg2">
 				|
 			</span>
@@ -276,10 +267,15 @@ export function TreeSelection({
 			) : (
 				children
 			)}
-			{failure && <div className="w-full text-red">{failure}</div>}
-		</div>,
-		host,
+			{failure && (
+				<div role="alert" className="w-full text-red">
+					{failure}
+				</div>
+			)}
+		</div>
 	);
+	if (floating === undefined) return toolbar;
+	return floating.host === null ? null : createPortal(toolbar, floating.host);
 }
 
 export function TreePending({
@@ -419,5 +415,16 @@ export function TreeMore({
 }
 
 export function FileTree({ children }: { children: ReactNode }) {
-	return <div className="font-mono">{children}</div>;
+	const [host, setHost] = useState<HTMLElement | null>(null);
+	return (
+		<SelectionHost.Provider value={{ host }}>
+			<div className="font-mono">
+				{children}
+				<div
+					ref={setHost}
+					className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4"
+				/>
+			</div>
+		</SelectionHost.Provider>
+	);
 }

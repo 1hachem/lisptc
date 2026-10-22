@@ -207,23 +207,47 @@ describe("TreeGroup check", () => {
 	});
 });
 
+function selection(props: {
+	busy?: boolean;
+	failure?: string | null;
+	onRun?: () => void;
+}) {
+	return (
+		<TreeSelection
+			count={1}
+			total={5}
+			label="1 picked from bin/"
+			summary="1 picked from bin/"
+			allLabel="every"
+			clearLabel="none"
+			onAll={() => {}}
+			onClear={() => {}}
+			busy={props.busy}
+			failure={props.failure}
+		>
+			<TreeAction
+				label="delete"
+				confirm="sure?"
+				onRun={props.onRun ?? (() => {})}
+			/>
+		</TreeSelection>
+	);
+}
+
 describe("TreeSelection", () => {
-	it("floats over the page and asks once more before a confirmed action runs", async () => {
+	it("floats out of the tree and asks once more before a confirmed action runs", async () => {
 		const onRun = vi.fn();
 		const host = await mounted(
-			<TreeSelection
-				count={1}
-				total={5}
-				where="bin/"
-				onAll={() => {}}
-				onClear={() => {}}
-			>
-				<TreeAction label="delete" confirm="sure?" onRun={onRun} />
-			</TreeSelection>,
+			<FileTree>
+				<div data-testid="rows">{selection({ onRun })}</div>
+			</FileTree>,
 		);
-		expect(host.querySelector('[role="toolbar"]')).toBeNull();
-		const toolbar = document.querySelector('#tree-selections [role="toolbar"]');
-		expect(toolbar?.textContent).toContain("1 file selected in bin/");
+		expect(
+			host.querySelector('[data-testid="rows"] [role="toolbar"]'),
+		).toBeNull();
+		const toolbar = host.querySelector('[role="toolbar"]');
+		expect(toolbar?.getAttribute("aria-label")).toBe("1 picked from bin/");
+		expect(document.getElementById("tree-selections")).toBeNull();
 		const action = () =>
 			[...(toolbar?.querySelectorAll("button") ?? [])].find((each) =>
 				["delete", "sure?"].includes(each.textContent ?? ""),
@@ -233,5 +257,31 @@ describe("TreeSelection", () => {
 		expect(action()?.textContent).toBe("sure?");
 		await act(async () => action()?.click());
 		expect(onRun).toHaveBeenCalledOnce();
+	});
+
+	it("speaks only in the words it is given", async () => {
+		const host = await mounted(selection({}));
+		const words = [...host.querySelectorAll("button")].map(
+			(button) => button.textContent,
+		);
+		expect(words).toEqual(["every", "none", "delete"]);
+		expect(host.textContent).not.toMatch(/selected|all|clear/);
+	});
+
+	it("shows a spinner in place of its actions while busy", async () => {
+		const host = await mounted(selection({ busy: true }));
+		expect(host.querySelector(".animate-spin")).not.toBeNull();
+		expect(
+			[...host.querySelectorAll("button")].map((button) => button.textContent),
+		).toEqual(["every", "none"]);
+	});
+
+	it("says what failed where everyone can see it", async () => {
+		const host = await mounted(
+			selection({ failure: "1 of 2 failed. a: gone" }),
+		);
+		expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+			"1 of 2 failed. a: gone",
+		);
 	});
 });
