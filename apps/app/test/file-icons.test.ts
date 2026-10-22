@@ -5,7 +5,7 @@ import {
 	Xls01Icon,
 } from "@hugeicons/core-free-icons";
 import { describe, expect, it } from "vitest";
-import { knowledgeIcon, knowledgeViewer } from "../src/lib/knowledge.ts";
+import { knowledgeIcon } from "../src/lib/file-icons.ts";
 
 describe("knowledgeIcon", () => {
 	it("reads the extension, whatever its case", () => {
@@ -20,20 +20,9 @@ describe("knowledgeIcon", () => {
 		expect(knowledgeIcon(".bashrc", null)).toBe(File01Icon);
 		expect(knowledgeIcon("blob", "application/octet-stream")).toBe(File01Icon);
 	});
-});
 
-describe("knowledgeViewer", () => {
-	it.each([
-		["photo.png", "image/png", "image"],
-		["spec.pdf", "application/pdf", "pdf"],
-		["spec.pdf", null, "pdf"],
-		["talk.mp4", "video/mp4", "video"],
-		["talk.mp3", "audio/mpeg", "audio"],
-		["notes.md", "text/plain", "markdown"],
-		["data.csv", null, "text"],
-		["config.json", "application/json", "text"],
-		["deck.pptx", "application/octet-stream", "download"],
-	] as const)("opens %s (%s) as %s", (name, contentType, viewer) => {
-		expect(knowledgeViewer(name, contentType)).toBe(viewer);
+	it("never reads an icon off the object prototype", () => {
+		expect(knowledgeIcon("x.constructor", null)).toBe(File01Icon);
+		expect(knowledgeIcon("x.__proto__", "constructor/x")).toBe(File01Icon);
 	});
 });
