@@ -1,7 +1,7 @@
 import type { Ask } from "@repo/interpreter/asks";
 import { type KwargMessage, lighten } from "@repo/shared/messages";
 
-type Kwargs = Record<string, unknown>;
+export type Kwargs = Record<string, unknown>;
 
 interface WireMessage extends KwargMessage {
 	id: string;
@@ -509,109 +509,153 @@ export class MockAgent {
 					fail(new Error("aborted"));
 				});
 			});
-		let provisional: WireMessage | undefined;
-		let intent: Kwargs | undefined;
-		const holding = (kwargs: Kwargs | undefined): Kwargs => {
-			const next = kwargs?.intent as Kwargs | undefined;
-			if (next) intent = { ...intent, ...next };
-			return intent ? { ...kwargs, intent } : { ...kwargs };
-		};
-		let lastAi: WireMessage | undefined;
-		let steps = 0;
-		const snapshot = () => {
-			const shown = provisional ? [...this.wire, provisional] : this.wire;
-			controller.enqueue(sse("values", { messages: lighten(shown) }));
-		};
-
+		const playback = new Playback(
+			() => this.wire,
+			() => this.save(),
+			controller,
+			wait,
+		);
 		try {
 			await wait(250);
-			for (const beat of picked.beats) {
-				if (beat.kind === "pause") await wait(beat.ms);
-				if (beat.kind === "say") {
-					const id = crypto.randomUUID();
-					const started = Date.now();
-					for (const chunk of beat.thinking?.match(/\S+\s*|\s+/g) ?? []) {
-						controller.enqueue(
-							sse("messages", [
-								{
-									type: "ai",
-									id,
-									content: "",
-									additional_kwargs: { reasoning_content: chunk },
-								},
-								{},
-							]),
-						);
-						await wait(18);
-					}
-					for (const chunk of beat.text.match(/\S+\s*|\s+/g) ?? []) {
-						controller.enqueue(
-							sse("messages", [{ type: "ai", id, content: chunk }, {}]),
-						);
-						await wait(28);
-					}
-					steps += 1;
-					lastAi = {
-						type: "ai",
-						content: beat.text,
-						id,
-						additional_kwargs: {
-							...(beat.thinking ? { reasoning_content: beat.thinking } : {}),
-							meta: {
-								at: new Date().toISOString(),
-								durationMs: Date.now() - started,
-								provider: "mock",
-								model: "mock-1",
-								inputTokens: 1200 + steps * 300,
-								outputTokens: beat.text.length,
-							},
-						},
-					};
-					this.wire.push(lastAi);
-				}
-				if (beat.kind === "live") {
-					provisional = {
-						type: "tool",
-						content: "",
-						id: `${lastAi?.id ?? "step"}:live`,
-						additional_kwargs: holding(beat.kwargs),
-					};
-					snapshot();
-					await wait(beat.ms ?? 900);
-				}
-				if (beat.kind === "result") {
-					provisional = undefined;
-					this.wire.push({
-						type: "tool",
-						content: JSON.stringify({
-							source: "lisp-repl",
-							output: beat.output ?? "ok",
-						}),
-						id: crypto.randomUUID(),
-						additional_kwargs: {
-							display: beat.output ?? "",
-							...holding(beat.kwargs),
-						},
-					});
-					this.save();
-					snapshot();
-					await wait(300);
-				}
-				if (beat.kind === "fail") {
-					controller.enqueue(
-						sse("error", { error: "AgentError", message: beat.message }),
-					);
-					return;
-				}
-			}
-			provisional = undefined;
-			const meta = lastAi?.additional_kwargs?.meta as Kwargs | undefined;
-			if (meta) meta.steps = steps;
-			snapshot();
+			for (const beat of picked.beats) if (!(await playback.play(beat))) return;
+			playback.finish();
 		} catch {
-			provisional = undefined;
 		} finally {
 			this.save();
 		}
+	}
+}
+
+const WORDS = /\S+\s*|\s+/g;
+
+type BeatOf<K extends Beat["kind"]> = Extract<Beat, { kind: K }>;
+
+class Playback {
+	private provisional: WireMessage | undefined;
+	private intent: Kwargs | undefined;
+	private lastAi: WireMessage | undefined;
+	private steps = 0;
+
+	constructor(
+		private readonly wire: () => WireMessage[],
+		private readonly save: () => void,
+		private readonly controller: ReadableStreamDefaultController<Uint8Array>,
+		private readonly wait: (ms: number) => Promise<void>,
+	) {}
+
+	async play(beat: Beat): Promise<boolean> {
+		switch (beat.kind) {
+			case "pause":
+				await this.wait(beat.ms);
+				return true;
+			case "say":
+				await this.say(beat);
+				return true;
+			case "live":
+				await this.live(beat);
+				return true;
+			case "result":
+				await this.result(beat);
+				return true;
+			case "fail":
+				this.controller.enqueue(
+					sse("error", { error: "AgentError", message: beat.message }),
+				);
+				return false;
+		}
+	}
+
+	finish(): void {
+		this.provisional = undefined;
+		const meta = this.lastAi?.additional_kwargs?.meta as Kwargs | undefined;
+		if (meta) meta.steps = this.steps;
+		this.snapshot();
+	}
+
+	private snapshot(): void {
+		const wire = this.wire();
+		const shown = this.provisional ? [...wire, this.provisional] : wire;
+		this.controller.enqueue(sse("values", { messages: lighten(shown) }));
+	}
+
+	private holding(kwargs: Kwargs | undefined): Kwargs {
+		const next = kwargs?.intent as Kwargs | undefined;
+		if (next) this.intent = { ...this.intent, ...next };
+		return this.intent ? { ...kwargs, intent: this.intent } : { ...kwargs };
+	}
+
+	private async stream(
+		text: string | undefined,
+		ms: number,
+		chunk: (words: string) => Kwargs,
+	): Promise<void> {
+		for (const words of text?.match(WORDS) ?? []) {
+			this.controller.enqueue(sse("messages", [chunk(words), {}]));
+			await this.wait(ms);
+		}
+	}
+
+	private async say(beat: BeatOf<"say">): Promise<void> {
+		const id = crypto.randomUUID();
+		const started = Date.now();
+		await this.stream(beat.thinking, 18, (words) => ({
+			type: "ai",
+			id,
+			content: "",
+			additional_kwargs: { reasoning_content: words },
+		}));
+		await this.stream(beat.text, 28, (words) => ({
+			type: "ai",
+			id,
+			content: words,
+		}));
+		this.steps += 1;
+		this.lastAi = {
+			type: "ai",
+			content: beat.text,
+			id,
+			additional_kwargs: {
+				...(beat.thinking ? { reasoning_content: beat.thinking } : {}),
+				meta: {
+					at: new Date().toISOString(),
+					durationMs: Date.now() - started,
+					provider: "mock",
+					model: "mock-1",
+					inputTokens: 1200 + this.steps * 300,
+					outputTokens: beat.text.length,
+				},
+			},
+		};
+		this.wire().push(this.lastAi);
+	}
+
+	private async live(beat: BeatOf<"live">): Promise<void> {
+		this.provisional = {
+			type: "tool",
+			content: "",
+			id: `${this.lastAi?.id ?? "step"}:live`,
+			additional_kwargs: this.holding(beat.kwargs),
+		};
+		this.snapshot();
+		await this.wait(beat.ms ?? 900);
+	}
+
+	private async result(beat: BeatOf<"result">): Promise<void> {
+		this.provisional = undefined;
+		this.wire().push({
+			type: "tool",
+			content: JSON.stringify({
+				source: "lisp-repl",
+				output: beat.output ?? "ok",
+			}),
+			id: crypto.randomUUID(),
+			additional_kwargs: {
+				display: beat.output ?? "",
+				...this.holding(beat.kwargs),
+			},
+		});
+		this.save();
+		this.snapshot();
+		await this.wait(300);
 	}
 }

@@ -119,8 +119,18 @@ const WRAPS_LINES = [
 const OUTSIDE_ITS_BOX =
 	/^-?(left|right|inset-x)-full$|^-(left|right|inset-x|mx|ml|mr)-|^-?translate-x-/;
 
-export function sidewaysLeaks(root: Element): string[] {
-	const leaks = new Set<string>();
+type Leaks = Set<string>;
+
+interface Reach {
+	fits: boolean;
+	anywhere: boolean;
+}
+
+function hasAny(classes: Set<string>, names: readonly string[]): boolean {
+	return names.some((name) => classes.has(name));
+}
+
+function placedOutside(root: Element, leaks: Leaks): void {
 	for (const element of root.querySelectorAll("*")) {
 		const placed = [...classesOf(element)].find((name) =>
 			OUTSIDE_ITS_BOX.test(name),
@@ -128,46 +138,74 @@ export function sidewaysLeaks(root: Element): string[] {
 		if (placed)
 			leaks.add(`sits outside its box (${placed}): ${named(element)}`);
 	}
+}
+
+function longTexts(root: Element): Node[] {
+	const found: Node[] = [];
 	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-	for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-		if (!UNBROKEN.test(node.textContent ?? "")) continue;
-		let fits = false;
-		let anywhere = false;
-		for (
-			let at = node.parentElement;
-			at !== null && root.contains(at);
-			at = at.parentElement
-		) {
-			const classes = classesOf(at);
-			if (ends(classes) || WRAPS_ANYWHERE.some((name) => classes.has(name)))
-				anywhere = true;
-			if ((at.tagName === "TD" || at.tagName === "TH") && !anywhere)
-				leaks.add(`cell does not wrap anywhere: ${named(at)}`);
-			if (ends(classes)) fits = true;
-			else if (
-				!fits &&
-				(KEEPS_ONE_LINE.some((name) => classes.has(name)) ||
-					(at.tagName === "PRE" &&
-						!WRAPS_LINES.some((name) => classes.has(name))))
-			) {
-				leaks.add(`does not wrap: ${named(at)}`);
-				fits = true;
-			} else if (WRAPS.some((name) => classes.has(name))) fits = true;
-			if (CLIPS.some((name) => classes.has(name)) && !ends(classes))
-				leaks.add(`clips: ${named(at)}`);
-			if (SCROLLS_SIDEWAYS.some((name) => classes.has(name)))
-				leaks.add(`scrolls sideways: ${named(at)}`);
-			if (
-				at !== root &&
-				laidInARow(classesOf(at.parentElement)) &&
-				(!classes.has("min-w-0") || classes.has("flex-none"))
-			)
-				leaks.add(`cannot shrink: ${named(at)}`);
-		}
-		if (!fits)
-			leaks.add(
-				`does not wrap: ${node.parentElement ? named(node.parentElement) : "#text"}`,
-			);
+	for (let node = walker.nextNode(); node; node = walker.nextNode())
+		if (UNBROKEN.test(node.textContent ?? "")) found.push(node);
+	return found;
+}
+
+function keepsOneLine(at: Element, classes: Set<string>): boolean {
+	return (
+		hasAny(classes, KEEPS_ONE_LINE) ||
+		(at.tagName === "PRE" && !hasAny(classes, WRAPS_LINES))
+	);
+}
+
+function wrapping(
+	at: Element,
+	classes: Set<string>,
+	reach: Reach,
+	leaks: Leaks,
+): void {
+	if (ends(classes) || hasAny(classes, WRAPS_ANYWHERE)) reach.anywhere = true;
+	if ((at.tagName === "TD" || at.tagName === "TH") && !reach.anywhere)
+		leaks.add(`cell does not wrap anywhere: ${named(at)}`);
+	if (ends(classes)) reach.fits = true;
+	else if (!reach.fits && keepsOneLine(at, classes)) {
+		leaks.add(`does not wrap: ${named(at)}`);
+		reach.fits = true;
+	} else if (hasAny(classes, WRAPS)) reach.fits = true;
+}
+
+function bounds(
+	at: Element,
+	classes: Set<string>,
+	root: Element,
+	leaks: Leaks,
+): void {
+	if (hasAny(classes, CLIPS) && !ends(classes))
+		leaks.add(`clips: ${named(at)}`);
+	if (hasAny(classes, SCROLLS_SIDEWAYS))
+		leaks.add(`scrolls sideways: ${named(at)}`);
+	const shrinks = classes.has("min-w-0") && !classes.has("flex-none");
+	if (at !== root && laidInARow(classesOf(at.parentElement)) && !shrinks)
+		leaks.add(`cannot shrink: ${named(at)}`);
+}
+
+function followText(node: Node, root: Element, leaks: Leaks): void {
+	const reach: Reach = { fits: false, anywhere: false };
+	for (
+		let at = node.parentElement;
+		at !== null && root.contains(at);
+		at = at.parentElement
+	) {
+		const classes = classesOf(at);
+		wrapping(at, classes, reach, leaks);
+		bounds(at, classes, root, leaks);
 	}
+	if (!reach.fits)
+		leaks.add(
+			`does not wrap: ${node.parentElement ? named(node.parentElement) : "#text"}`,
+		);
+}
+
+export function sidewaysLeaks(root: Element): string[] {
+	const leaks: Leaks = new Set();
+	placedOutside(root, leaks);
+	for (const node of longTexts(root)) followText(node, root, leaks);
 	return [...leaks];
 }
