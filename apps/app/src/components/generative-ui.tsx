@@ -3,6 +3,8 @@ import { viewKey } from "@repo/interpreter/annotations";
 import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
+import { startPanelDrag, toPanelOps } from "../lib/panel-ops.ts";
+import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
 import { Markdown } from "./markdown.tsx";
 
@@ -93,6 +95,28 @@ function Link({ node }: WidgetProps) {
 		>
 			{text(node.props, "text") || text(node.props, "href")}
 		</a>
+	);
+}
+
+function FileLink({ node }: WidgetProps) {
+	const { openFile } = usePanels();
+	const folder = text(node.props, "folder");
+	const name = text(node.props, "name");
+	if (folder !== "knowledge" && folder !== "attachments")
+		return <span className="text-dim">{text(node.props, "text") || name}</span>;
+	return (
+		<button
+			type="button"
+			title={`${folder}/${name}`}
+			draggable
+			onDragStart={(event) =>
+				startPanelDrag(event.dataTransfer, { kind: "file", folder, name })
+			}
+			onClick={() => openFile(folder, name)}
+			className="w-fit cursor-pointer text-left text-accent underline decoration-dim/50 hover:decoration-accent"
+		>
+			{text(node.props, "text") || name}
+		</button>
 	);
 }
 
@@ -239,6 +263,7 @@ const WIDGETS = new Map<string, (props: WidgetProps) => ReactNode>([
 	],
 	["markdown", ({ node }) => <Markdown>{text(node.props, "text")}</Markdown>],
 	["link", Link],
+	["file-link", FileLink],
 	["badge", Badge],
 	["kpi", Kpi],
 	["button", Button],
@@ -310,6 +335,7 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 		chatId: state.chatId,
 		send: state.send,
 	}));
+	const { apply } = usePanels();
 	const [ui, setUi] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
@@ -329,6 +355,7 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 				const data = result.response;
 				const next = viewKey.schema.safeParse(data.ui).data;
 				if (next) setUi(next);
+				apply(toPanelOps(data.panel));
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
 				if (data.message) void send(data.message);

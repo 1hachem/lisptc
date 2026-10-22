@@ -1,14 +1,9 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { DeleteAccount } from "../../../components/delete-account.tsx";
+import { DeleteAccount } from "./delete-account.tsx";
 
-export const Route = createFileRoute("/_authed/$workspaceId/account")({
-	component: AccountSettings,
-});
-
-function AccountSettings() {
+export function AccountPage() {
 	const { data: user } = useQuery(convexQuery(api.users.me, {}));
 
 	return (

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { OpenFile } from "../lib/files.ts";
+import { OnLeadChat } from "../lib/lead-chat.tsx";
 import { ChatComposer } from "./chat-composer.tsx";
 import { LispSource } from "./lisp-text.tsx";
 
@@ -63,7 +64,9 @@ export function FileView({
 				</div>
 			</div>
 			<div className="px-8 pb-7">
-				<ChatComposer about={file} blocked={blocked} />
+				<OnLeadChat>
+					<ChatComposer about={file} blocked={blocked} />
+				</OnLeadChat>
 			</div>
 		</>
 	);

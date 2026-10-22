@@ -31,6 +31,7 @@ export type KnowledgeViewer =
 	| "pdf"
 	| "video"
 	| "audio"
+	| "stl"
 	| "markdown"
 	| "text"
 	| "download";
@@ -66,10 +67,12 @@ export function knowledgeViewer(
 ): KnowledgeViewer {
 	const extension = extensionOf(name);
 	const type = contentType ?? "";
+	if (extension === "dwg" || type === "image/vnd.dwg") return "download";
 	if (type.startsWith("image/")) return "image";
 	if (type === "application/pdf" || extension === "pdf") return "pdf";
 	if (type.startsWith("video/")) return "video";
 	if (type.startsWith("audio/")) return "audio";
+	if (type === "model/stl" || extension === "stl") return "stl";
 	if (
 		type === "text/markdown" ||
 		extension === "md" ||

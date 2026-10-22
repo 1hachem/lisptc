@@ -9,20 +9,17 @@ import {
 	TreePending,
 } from "@repo/components";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
 import { restoreFailure } from "../lib/bin.ts";
 import { knowledgeIcon } from "../lib/file-icons.ts";
 import { searched, useSelection } from "../lib/file-list.ts";
+import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { useKnowledgeUpload } from "../lib/uploads.ts";
 import { BulkToolbar } from "./bulk-toolbar.tsx";
 import { FileMenu } from "./file-menu.tsx";
-import {
-	DatedListing,
-	type FolderState,
-	Listing,
-	useLeave,
-} from "./tree-listing.tsx";
+import { linkTo, useShown } from "./panel-link.tsx";
+import { DatedListing, type FolderState, Listing } from "./tree-listing.tsx";
 
 export type FileFolderName = "knowledge" | "attachments" | "bin";
 
@@ -32,6 +29,16 @@ type Restore<T> = {
 	run: (name: string) => Promise<unknown>;
 	label: (file: T) => string;
 };
+
+function panelOf(folder: FileFolderName, name: string): PanelContent {
+	if (folder === "bin")
+		return { kind: "page", page: "bin", id: name, title: `bin/${name}` };
+	return { kind: "file", folder, name };
+}
+
+function closePanels(folder: FileFolderName, names: readonly string[]) {
+	for (const name of names) requestPanelClosed(panelOf(folder, name));
+}
 
 function newestFirst<T>(
 	found: T[] | undefined,
@@ -45,30 +52,29 @@ function FileRow<T extends StoredFile>({
 	file,
 	workspaceId,
 	folder,
-	current,
+	shown,
 	check,
 	confirm,
 	restore,
-	leave,
 	onDelete,
 }: {
 	file: T;
 	workspaceId: Id<"workspaces">;
 	folder: FileFolderName;
-	current: string | undefined;
+	shown: (content: PanelContent) => boolean;
 	check: TreeCheck | undefined;
 	confirm: string;
 	restore?: Restore<T>;
-	leave: ReturnType<typeof useLeave>;
 	onDelete: (name: string) => Promise<unknown>;
 }) {
-	const open = current === file.name;
+	const page = panelOf(folder, file.name);
 	return (
 		<TreeFile
 			name={file.name}
 			icon={knowledgeIcon(file.name, file.contentType)}
 			depth={1}
-			selected={open}
+			selected={shown(page)}
+			onDragStart={dragsAs(page)}
 			check={check}
 			trailing={
 				<FileMenu
@@ -79,24 +85,16 @@ function FileRow<T extends StoredFile>({
 						restore &&
 						(async () => {
 							await restore.run(file.name);
-							await leave(open);
+							requestPanelClosed(page);
 						})
 					}
 					onDelete={async () => {
-						await leave(open);
+						requestPanelClosed(page);
 						await onDelete(file.name);
 					}}
 				/>
 			}
-			link={(content, className) => (
-				<Link
-					to={`/$workspaceId/${folder}/$name`}
-					params={{ workspaceId, name: file.name }}
-					className={className}
-				>
-					{content}
-				</Link>
-			)}
+			link={linkTo(workspaceId, page)}
 		/>
 	);
 }
@@ -133,7 +131,6 @@ function FolderListing<T>({
 
 function FileFolder<T extends StoredFile>({
 	workspaceId,
-	current,
 	folder,
 	files,
 	at,
@@ -149,7 +146,6 @@ function FileFolder<T extends StoredFile>({
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
-	current: string | undefined;
 	folder: FolderState<FileFolderName>;
 	files: T[] | undefined;
 	at?: (file: T) => number;
@@ -167,7 +163,7 @@ function FileFolder<T extends StoredFile>({
 	createLabel?: string;
 	children?: ReactNode;
 }) {
-	const leave = useLeave(workspaceId);
+	const shownPanel = useShown();
 	const [query, setQuery] = useState("");
 	const shown = newestFirst(searched(files, query), at);
 	const selection = useSelection(shown?.map((file) => file.name));
@@ -179,11 +175,10 @@ function FileFolder<T extends StoredFile>({
 			file={file}
 			workspaceId={workspaceId}
 			folder={folder.name}
-			current={current}
+			shown={shownPanel}
 			check={selection.check(file.name)}
 			confirm={confirm.one}
 			restore={restore}
-			leave={leave}
 			onDelete={onDelete}
 		/>
 	);
@@ -202,8 +197,7 @@ function FileFolder<T extends StoredFile>({
 				selection={selection}
 				total={shown?.length ?? 0}
 				folder={folder.name}
-				current={current}
-				leave={leave}
+				close={(names) => closePanels(folder.name, names)}
 				served={served}
 				confirm={confirm.all}
 				onDelete={onDeleteAll}
@@ -224,7 +218,6 @@ function FileFolder<T extends StoredFile>({
 
 export type FolderProps<Name extends FileFolderName> = {
 	workspaceId: Id<"workspaces">;
-	current: string | undefined;
 	folder: FolderState<Name>;
 };
 
@@ -254,7 +247,6 @@ function useStored(
 
 export function KnowledgeFolder({
 	workspaceId,
-	current,
 	folder,
 }: FolderProps<"knowledge">) {
 	const stored = useStored(workspaceId, "knowledge", true);
@@ -278,7 +270,6 @@ export function KnowledgeFolder({
 			/>
 			<FileFolder
 				workspaceId={workspaceId}
-				current={current}
 				folder={folder}
 				{...stored}
 				search="search knowledge"
@@ -302,7 +293,6 @@ export function KnowledgeFolder({
 
 export function AttachmentsFolder({
 	workspaceId,
-	current,
 	folder,
 }: FolderProps<"attachments">) {
 	const stored = useStored(workspaceId, "attachments", folder.open);
@@ -310,7 +300,6 @@ export function AttachmentsFolder({
 	return (
 		<FileFolder
 			workspaceId={workspaceId}
-			current={current}
 			folder={folder}
 			{...stored}
 			at={(file) => file.addedAt}
@@ -321,11 +310,7 @@ export function AttachmentsFolder({
 	);
 }
 
-export function BinFolder({
-	workspaceId,
-	current,
-	folder,
-}: FolderProps<"bin">) {
+export function BinFolder({ workspaceId, folder }: FolderProps<"bin">) {
 	const { data: files } = useQuery({
 		...convexQuery(api.bin.list, { workspaceId }),
 		enabled: folder.open,
@@ -338,7 +323,6 @@ export function BinFolder({
 	return (
 		<FileFolder
 			workspaceId={workspaceId}
-			current={current}
 			folder={folder}
 			files={files}
 			at={(file) => file.binnedAt}

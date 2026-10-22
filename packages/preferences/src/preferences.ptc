@@ -1,11 +1,11 @@
 PREFERENCES
 
-User's own preferences: theme, font, which channels and metadata fields chat
+User's own preferences: font, which channels and metadata fields chat
 shows, which helpers chat input runs. Belong to person you work for, not workspace; follow them into every
 workspace. App applies change at once, while they watch.
 
-- (preferences) gives (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :motion id).
-- (preferences/set :theme "gruvbox-light") changes only keys you give.
+- (preferences) gives (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t).
+- (preferences/set :font "geist") changes only keys you give.
   Toggles merge: (preferences/set :channels '(:lisp t)) turns lisp channel on,
   leaves others as they were.
 - :input is helpers chat input runs while user types. :attach is attach
@@ -16,19 +16,28 @@ workspace. App applies change at once, while they watch.
   keeps rest in their order. User also drags them by hand.
 - :hidden is every sidebar entry hidden. Replaces whole list:
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
-  '() shows all.
+  '() shows all. Attachments and bin hidden until user
+  shows them.
+- :status-bar is bottom bar's three slots: left, centre, right. Empty slot
+  has name too, read it from plist. (preferences/set :status-bar '("clock"
+  "panes")) puts clock left, panes centre, keeps rest in order. User also
+  drags them on bar or in preferences.
+- :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
+  (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
 - :motion is how sidebar animates that drag. (motions) gives alist of
   (id . description) to choose from. System asks for reduced motion: nothing
   animates, whatever :motion says.
-- (themes) and (fonts) give alist of (id . name) to choose from.
-- (preferences/set :theme "dark") flips current theme to its dark twin.
-  No dark twin: default dark theme.
+- :panel-motion t animates panels as they open, split, switch tab; nil keeps
+  them still: (preferences/set :panel-motion nil). Reduced motion wins here too.
+- (fonts) gives alist of (id . name) to choose from.
+- Theme is not preference: belongs to workspace, see (settings).
 
 Change preference only when user asks, not to suit yourself. Say what you
 changed, so screen moving is no surprise.
 
 GOTCHAS
 
-- Channel, metadata, input, sidebar or hidden id must be one (preferences) already lists.
+- Channel, metadata, input, sidebar, hidden, status-bar or status-bar-hidden id
+  must be one (preferences) already lists.
   Unknown one errors, naming valid ids.
 - Quote toggle plist, or keywords read as call: '(:lisp t).

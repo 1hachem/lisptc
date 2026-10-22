@@ -5,10 +5,10 @@ import { TreeFilter, TreeFolder, TreeMore } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNewChat } from "../lib/chats.ts";
+import { CHAT_PAGE } from "../lib/sidebar-prefetch.ts";
 import { SessionRow } from "./session-row.tsx";
 import { type FolderState, Listing } from "./tree-listing.tsx";
 
-const CHAT_PAGE = 20;
 const SEARCH_DELAY_MS = 200;
 
 function useSettled(value: string) {
@@ -22,11 +22,9 @@ function useSettled(value: string) {
 
 export function ChatFolder({
 	workspaceId,
-	current,
 	folder,
 }: {
 	workspaceId: Id<"workspaces">;
-	current: string | undefined;
 	folder: FolderState;
 }) {
 	const newChat = useNewChat();
@@ -57,13 +55,7 @@ export function ChatFolder({
 				items={page?.chats}
 				empty={settled ? `nothing matches ${settled}` : "no chats yet"}
 			>
-				{(chat) => (
-					<SessionRow
-						key={chat._id}
-						chat={chat}
-						current={chat._id === current}
-					/>
-				)}
+				{(chat) => <SessionRow key={chat._id} chat={chat} />}
 			</Listing>
 			{page?.more && (
 				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />

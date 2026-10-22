@@ -16,7 +16,6 @@ import type { Answered, Ask } from "@repo/interpreter/asks";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import {
 	createContext,
@@ -369,8 +368,8 @@ function useSubmit(
 	streamingFor: { current: Id<"chats"> | null },
 	persisted: ChatMessage[],
 	setFailure: (failure: Failure) => void,
+	announce: { readonly current: (chatId: Id<"chats">) => void },
 ) {
-	const navigate = useNavigate();
 	const draftChat = useConvexMutation(api.chats.draft);
 	const renameChat = useConvexMutation(api.chats.rename);
 	const markStreaming = useMarkStreaming();
@@ -388,12 +387,7 @@ function useSubmit(
 				{ chatId: opened, ...input },
 				{ optimisticValues: { messages: [...persisted, shown] } },
 			);
-			if (chatId === null)
-				await navigate({
-					to: "/$workspaceId/chat/$chatId",
-					params: { workspaceId, chatId: opened },
-					replace: true,
-				}).catch(reported("chat open", opened));
+			if (chatId === null) announce.current(opened);
 		},
 		[
 			chatId,
@@ -401,11 +395,11 @@ function useSubmit(
 			draftChat,
 			renameChat,
 			markStreaming,
-			navigate,
 			persisted,
 			stream,
 			streamingFor,
 			setFailure,
+			announce,
 		],
 	);
 }
@@ -545,12 +539,16 @@ function useSessionStore(
 export function ChatProvider({
 	workspaceId,
 	chatId,
+	onOpened,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
+	onOpened: (chatId: Id<"chats">) => void;
 	children: React.ReactNode;
 }) {
+	const announce = useRef(onOpened);
+	announce.current = onOpened;
 	const drafted = useDrafted(workspaceId, chatId);
 	const settleChat = useConvexMutation(api.chats.settle);
 	const stream = useChatStream();
@@ -585,6 +583,7 @@ export function ChatProvider({
 		streamingFor,
 		persisted,
 		setFailure,
+		announce,
 	);
 	const { submitTurn, sendAbout, resume, resend } = useTurnSend(
 		chatId,
@@ -670,6 +669,16 @@ export function useChatSession<U>(selector: (state: ChatSession) => U): U {
 		throw new Error("useChatSession must be used within a ChatProvider");
 	}
 	return store(useShallow(selector));
+}
+
+export function ChatStoreProvider({
+	store,
+	children,
+}: {
+	store: ChatStore;
+	children: React.ReactNode;
+}) {
+	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }
 
 export function useChatStore(): ChatStore {

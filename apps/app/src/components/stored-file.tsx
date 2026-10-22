@@ -1,6 +1,11 @@
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { lazy, type ReactNode, Suspense, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
+import { knowledgeIcon } from "../lib/file-icons.ts";
 import { saveAs } from "../lib/file-list.ts";
 import {
 	type KnowledgeViewer,
@@ -10,11 +15,30 @@ import {
 	sendBlocked,
 	type TextViewer,
 } from "../lib/file-viewer.ts";
+import { usePageHost } from "../lib/page-host.tsx";
 import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
 import { Markdown } from "./markdown.tsx";
 
+const StlViewer = lazy(async () => ({
+	default: (await import("@repo/components/stl-viewer.tsx")).StlViewer,
+}));
+
 type MediaViewer = Exclude<KnowledgeViewer, TextViewer>;
+
+function NoPreview({ name, url }: { name: string; url: string }) {
+	const dot = name.lastIndexOf(".");
+	const kind =
+		dot > 0 ? `.${name.slice(dot + 1).toLowerCase()} files` : "this file";
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-2 text-dim">
+			<HugeiconsIcon icon={knowledgeIcon(name, null)} className="size-icon" />
+			<span className="max-w-full truncate text-fg">{name}</span>
+			<span>no preview for {kind} yet</span>
+			<DownloadButton name={name} url={url} />
+		</div>
+	);
+}
 
 function MediaFrame({ children }: { children: ReactNode }) {
 	return (
@@ -53,10 +77,23 @@ const MEDIA: Record<MediaViewer, (name: string, url: string) => ReactNode> = {
 		</MediaFrame>
 	),
 	audio: (name, url) => <AudioPlayer name={name} url={url} />,
-	download: () => <div className="text-dim">no preview for this file type</div>,
+	stl: (name, url) => (
+		<MediaFrame>
+			<Suspense fallback={<div className="text-dim">loading…</div>}>
+				<StlViewer url={url} name={name} />
+			</Suspense>
+		</MediaFrame>
+	),
+	download: (name, url) => <NoPreview name={name} url={url} />,
 };
 
-const FILLS: ReadonlySet<KnowledgeViewer> = new Set(["image", "pdf", "video"]);
+const FILLS: ReadonlySet<KnowledgeViewer> = new Set([
+	"image",
+	"pdf",
+	"video",
+	"stl",
+	"download",
+]);
 
 const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 	markdown: (text) => <Markdown>{text}</Markdown>,
@@ -135,6 +172,90 @@ function useStored(file: StoredFileRow | null | undefined) {
 	const loaded = useStoredText(url, viewer);
 	const fills = url !== undefined && viewer !== undefined && FILLS.has(viewer);
 	return { url, viewer, loaded, fills };
+}
+
+const KEEP_FAILURES: Record<string, string> = {
+	NO_SUCH_FILE: "it is no longer in attachments",
+	NAME_TAKEN: "knowledge already holds a file of that name",
+	TOO_MANY_FILES: "the knowledge folder is full",
+};
+
+function KeepAction({
+	workspaceId,
+	name,
+}: {
+	workspaceId: Id<"workspaces">;
+	name: string;
+}) {
+	const keep = useConvexMutation(api.files.keep);
+	const host = usePageHost();
+	const [failure, setFailure] = useState<string | null>(null);
+	return (
+		<>
+			{failure && <span className="text-red">{failure}</span>}
+			<button
+				type="button"
+				className="text-dim hover:text-fg"
+				onClick={async () => {
+					const refused = await keep({ workspaceId, name });
+					if (refused !== null) {
+						setFailure(KEEP_FAILURES[refused] ?? refused);
+						return;
+					}
+					host.show({ kind: "file", folder: "knowledge", name });
+				}}
+			>
+				keep in knowledge
+			</button>
+		</>
+	);
+}
+
+export function FilePreview({
+	workspaceId,
+	folder,
+	name,
+}: {
+	workspaceId: Id<"workspaces">;
+	folder: "attachments" | "knowledge";
+	name: string;
+}) {
+	const { data: file, error } = useQuery(
+		convexQuery(api.files.get, { workspaceId, folder, name }),
+	);
+	const { url, viewer, loaded, fills } = useStored(file);
+	if (error) return <div className="p-3 text-dim">{error.message}</div>;
+	if (file === undefined) return <div className="p-3 text-dim">loading…</div>;
+	if (file === null)
+		return (
+			<div className="p-3 text-dim">
+				no file named {name} in {folder}
+			</div>
+		);
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			<div className="flex h-row flex-none items-center justify-between gap-2 px-3 text-dim">
+				<span className="truncate">
+					{folder}/{name}
+				</span>
+				<span className="flex flex-none items-center gap-3">
+					{folder === "attachments" && (
+						<KeepAction workspaceId={workspaceId} name={name} />
+					)}
+					{url && <DownloadButton name={name} url={url} />}
+				</span>
+			</div>
+			<div
+				className={
+					fills
+						? "flex min-h-0 flex-1 flex-col px-3 pb-3"
+						: "min-h-0 flex-1 overflow-auto px-3 pb-3"
+				}
+			>
+				<StoredBody name={name} url={url} viewer={viewer} loaded={loaded} />
+			</div>
+		</div>
+	);
 }
 
 function openedAs(
