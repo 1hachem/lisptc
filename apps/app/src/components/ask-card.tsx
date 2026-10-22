@@ -196,7 +196,7 @@ export function AskCard({
 			<ConfirmationTitle>
 				<span className="flex items-center gap-2 text-yellow">
 					<HugeiconsIcon icon={SecurityCheckIcon} size={14} />
-					<span className="font-mono">{ask.title}</span>
+					<span className="min-w-0 break-words font-mono">{ask.title}</span>
 				</span>
 				{ask.detail && (
 					<span className="block whitespace-pre-wrap break-words font-mono text-dim text-xs">
@@ -204,7 +204,7 @@ export function AskCard({
 					</span>
 				)}
 				<ConfirmationRequest>
-					<span className="block text-dim">
+					<span className="block break-words text-dim">
 						{linked
 							? "Finish in the tab that opened; this carries on when you are back."
 							: ask.prompt}
@@ -229,7 +229,7 @@ export function AskCard({
 				{ask.choices.map((choice) => (
 					<ConfirmationAction
 						key={choice.label}
-						className="h-7 px-2.5"
+						className="h-auto min-h-7 min-w-0 max-w-full shrink whitespace-normal wrap-anywhere px-2.5 text-left"
 						variant={choice.primary ? "default" : "outline"}
 						disabled={mutation.isPending}
 						onClick={() => choose(choice)}
