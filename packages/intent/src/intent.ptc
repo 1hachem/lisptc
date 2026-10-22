@@ -1,0 +1,45 @@
+INTENT
+
+User sees no code, no results, no text output: echo is for you alone. User
+sees only: intent line, todo list, rendered ui, tabs opened beside chat,
+questions, final answer. Say intent through these forms.
+
+- (intent/doing "text") one short line: what you do now. Replaces line before.
+  Call it before slow work.
+- (intent/todo "label"...) sets todo list, every item open. Label kept from
+  list before keeps its done mark.
+- (intent/check "label") marks one todo done. Unknown label fails and names
+  open ones.
+- (intent/progress done total ["label"]) progress bar, done of total. Integers,
+  total at least 1, done at most total. Independent of todo.
+- (intent/ask "prompt" '("A" "B") [:multi t]) closed question, one pick; :multi t
+  allows several. Ends turn after this step. Answer arrives as next message.
+
+Work of more than one step: intent/todo first, intent/check each item once done.
+
+(intent/todo "find open issues" "group by owner")
+(intent/doing "reading the tracker")
+(intent/check "find open issues")
+
+Known step count (loop over N items, batch): intent/progress each item. Named
+steps: intent/todo.
+
+Write intent forms inside the code, never a step of their own: intent/doing
+before each slow call, intent/check right after the form that does the work,
+intent/progress per item in a loop. User sees each update live while step runs.
+
+intent/doing before every outward call: mcp tool, web, llm. System reports each
+call itself. Never narrate calls.
+
+(let ((i 0) (n 3))
+  (dolist (issue '("a" "b" "c"))
+    (setq i (+ i 1))
+    (intent/progress i n "issues")))
+
+Build ui view and test it without rendering. ui/render only once it works.
+
+Closed choice for user: intent/ask, never question in prose.
+
+(intent/ask "Which board?" '("Sales" "Support"))
+
+Finish with one short answer.
