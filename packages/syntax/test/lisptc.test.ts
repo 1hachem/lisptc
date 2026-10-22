@@ -208,6 +208,12 @@ describe("formsIn", () => {
 		expect(prose).toBe("an aside (see below)");
 	});
 
+	test("masks every form, prose-looking ones too, when told not to guess", () => {
+		const reply = "Sure (as in yes, of course).\n(+ 1 2)";
+		expect(formsIn(reply).prose).toContain("(as in yes, of course)");
+		expect(formsIn(reply, [], false).prose).toBe("Sure .");
+	});
+
 	test("reads an ambiguous parenthesis as a call without a skipped-head hint", () => {
 		expect(formsIn("an aside (see below)\n(+ 1 2)").heads).toEqual([
 			"see",
