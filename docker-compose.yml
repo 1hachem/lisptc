@@ -89,16 +89,6 @@ services:
       - GOOGLE_CLIENT_SECRET
       - POSTHOG_API_KEY
       - POSTHOG_HOST
-    develop:
-      watch:
-        - action: rebuild
-          path: ./packages/backend/convex
-        - action: rebuild
-          path: ./packages/shared/src
-        - action: rebuild
-          path: ./packages/backend/package.json
-        - action: rebuild
-          path: ./pnpm-lock.yaml
 
   app:
     build:
