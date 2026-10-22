@@ -79,7 +79,7 @@ export function TodoCard({
 				data-todo-card="chip"
 				aria-expanded={false}
 				onClick={unfold}
-				className="absolute top-2 right-3 z-10 flex items-center gap-1.5 border border-bg2 bg-bg1 px-2 py-0.5 text-[11px] text-dim tabular-nums hover:text-fg"
+				className="absolute top-11 right-2 z-10 flex items-center gap-1.5 border border-bg2 bg-bg1 px-2 py-0.5 text-[11px] text-dim tabular-nums hover:text-fg"
 			>
 				<HugeiconsIcon
 					icon={CheckmarkSquare02Icon}
@@ -91,7 +91,7 @@ export function TodoCard({
 	return (
 		<div
 			data-todo-card="card"
-			className="absolute top-2 right-3 z-10 flex w-64 max-w-[calc(100%-1.5rem)] flex-col gap-1.5 border border-bg2 bg-bg1 px-3 py-2 text-[12px]"
+			className="absolute top-11 right-2 z-10 flex w-64 max-w-[calc(100%-1.5rem)] flex-col gap-1.5 border border-bg2 bg-bg1 px-3 py-2 text-[12px]"
 		>
 			<button
 				type="button"
