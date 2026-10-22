@@ -1,8 +1,4 @@
-import {
-	annotate,
-	annotationKey,
-	readAnnotation,
-} from "@repo/interpreter/annotations";
+import { annotate, readAnnotation } from "@repo/interpreter/annotations";
 import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -23,7 +19,13 @@ import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { Awaitable } from "@repo/shared/host";
 import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
-import type { Downloaded, KnowledgeHost, StoreFolder } from "./ports.ts";
+import { type AttachedFile, attachmentsKey } from "./attached.ts";
+import {
+	type Downloaded,
+	type KnowledgeHost,
+	STORE_FOLDERS,
+	type StoreFolder,
+} from "./ports.ts";
 
 const KNOWLEDGE_WRITE = "knowledge/write";
 const KNOWLEDGE_DELETE = "knowledge/delete";
@@ -454,30 +456,14 @@ function registerBin(interp: Interp, { store }: KnowledgeHost): void {
 	);
 }
 
-export interface AttachedFile {
-	folder: StoreFolder;
-	name: string;
-}
-
 export const attached = topic<AttachedFile>("attachments");
-
-const attachmentsKey = annotationKey({
-	name: "attachments",
-	lane: "output",
-	schema: z.array(
-		z.object({
-			folder: z.enum(["attachments", "knowledge"]),
-			name: z.string().min(1),
-		}),
-	),
-});
 
 function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 	const held: Record<StoreFolder, () => Awaitable<string[]>> = {
 		attachments: () => store.attachments(),
 		knowledge: () => store.files(),
 	};
-	for (const folder of ["attachments", "knowledge"] as const)
+	for (const folder of STORE_FOLDERS)
 		interp.defGen(
 			`${folder}/attach`,
 			1,

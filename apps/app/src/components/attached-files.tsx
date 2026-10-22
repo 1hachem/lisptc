@@ -1,6 +1,6 @@
 import { FileTree, TreeFile } from "@repo/components";
+import type { AttachedFile } from "@repo/knowledge-extension/attached";
 import { Link } from "@tanstack/react-router";
-import type { AttachedFile } from "../lib/attached-files.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { knowledgeIcon } from "../lib/knowledge.ts";
 

@@ -1,11 +1,8 @@
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import {
-	type AttachedFile,
-	attached,
-	knowledgeExtension,
-} from "../src/knowledge.ts";
+import type { AttachedFile } from "../src/attached.ts";
+import { attached, knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { type Downloader, MemoryKnowledgeStore } from "../src/ports.ts";
 

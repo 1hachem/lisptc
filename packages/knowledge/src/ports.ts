@@ -1,6 +1,8 @@
 import type { Awaitable, PromptSource } from "@repo/shared/host";
 
-export type StoreFolder = "attachments" | "knowledge";
+export const STORE_FOLDERS = ["attachments", "knowledge"] as const;
+
+export type StoreFolder = (typeof STORE_FOLDERS)[number];
 
 export interface BinnedFile {
 	name: string;

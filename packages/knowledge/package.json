@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     ".": "./src/knowledge.ts",
+    "./attached": "./src/attached.ts",
     "./host": "./src/knowledge-host.ts",
     "./ports": "./src/ports.ts"
   },

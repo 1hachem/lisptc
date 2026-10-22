@@ -31,7 +31,19 @@ describe("what a user message attached", () => {
 });
 
 describe("what a step attached", () => {
-	it("keeps only well formed files from the lane", () => {
+	it("reads the files off the lane", () => {
+		expect(
+			attachedFiles({
+				type: "tool",
+				content: "",
+				additional_kwargs: {
+					attachments: [{ folder: "knowledge", name: "report.md" }],
+				},
+			}),
+		).toEqual([{ folder: "knowledge", name: "report.md" }]);
+	});
+
+	it("reads nothing from a lane that is not well formed", () => {
 		expect(
 			attachedFiles({
 				type: "tool",
@@ -40,10 +52,9 @@ describe("what a step attached", () => {
 					attachments: [
 						{ folder: "knowledge", name: "report.md" },
 						{ folder: "elsewhere", name: "x" },
-						"nope",
 					],
 				},
 			}),
-		).toEqual([{ folder: "knowledge", name: "report.md" }]);
+		).toEqual([]);
 	});
 });

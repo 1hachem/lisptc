@@ -1,27 +1,12 @@
+import { readAnnotation } from "@repo/interpreter/annotations";
+import {
+	type AttachedFile,
+	attachmentsKey,
+} from "@repo/knowledge-extension/attached";
 import type { ChatMessage } from "./chat.tsx";
 
-export type AttachedFolder = "attachments" | "knowledge";
-
-export interface AttachedFile {
-	folder: AttachedFolder;
-	name: string;
-}
-
-const FOLDERS: readonly AttachedFolder[] = ["attachments", "knowledge"];
-
-function isAttachedFile(value: unknown): value is AttachedFile {
-	if (typeof value !== "object" || value === null) return false;
-	const { folder, name } = value as Record<string, unknown>;
-	return (
-		FOLDERS.includes(folder as AttachedFolder) &&
-		typeof name === "string" &&
-		name !== ""
-	);
-}
-
 export function attachedFiles(message: ChatMessage): AttachedFile[] {
-	const attachments = message.additional_kwargs?.attachments;
-	return Array.isArray(attachments) ? attachments.filter(isAttachedFile) : [];
+	return readAnnotation(message.additional_kwargs, attachmentsKey) ?? [];
 }
 
 export function attachingFiles(
@@ -32,5 +17,5 @@ export function attachingFiles(
 		folder: "attachments",
 		name,
 	}));
-	return { attachments };
+	return { [attachmentsKey.name]: attachments };
 }
