@@ -1,5 +1,3 @@
-import { Loading03Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { MessageMemories } from "@repo/components";
 import type { Progress } from "@repo/interpreter/annotations";
 import type { Skipped } from "@repo/shared/lisp-forms";
@@ -17,6 +15,11 @@ import {
 	useState,
 } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
+import {
+	type AgentStatus,
+	agentStatus,
+	pickStatusLine,
+} from "../lib/agent-status.ts";
 import { askText } from "../lib/asks.ts";
 import { attachedFiles } from "../lib/attached-files.ts";
 import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
@@ -46,7 +49,7 @@ import { useModelPicker } from "../lib/model-picker.tsx";
 import { traceOpen } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { useTraceLink } from "../lib/preferences.ts";
-import { questionText } from "../lib/question.ts";
+import { openQuestion, questionText } from "../lib/question.ts";
 import { useSideTrace } from "../lib/side-trace.tsx";
 import {
 	groupTurns,
@@ -457,11 +460,11 @@ function useStepProse(message: ChatMessage | undefined) {
 		[message],
 	);
 	const classified = message !== undefined && messageClassified(message);
-	const { prose, heads } = useMemo(
+	const { prose } = useMemo(
 		() => formsIn(text, spans, classified),
 		[text, spans, classified],
 	);
-	return { text, spans, prose, heads };
+	return { text, spans, prose };
 }
 
 function StepThinking({ thinking }: { thinking: string }) {
@@ -504,55 +507,31 @@ function StepText({ message }: { message: ChatMessage }) {
 }
 
 function StepCall({
-	call,
 	result,
 	doing,
 	entries,
 	progress,
 	live,
-	running,
 }: {
-	call: ChatMessage | undefined;
-	result: ChatMessage | undefined;
+	result: ChatMessage;
 	doing: string | undefined;
 	entries: readonly TimelineEntry[];
 	progress: Progress | undefined;
 	live: boolean;
-	running: boolean;
 }) {
-	const { heads } = useStepProse(call);
-	const writing = result === undefined;
-	const failed = result !== undefined && toolFailed(result);
 	const label =
-		result === undefined
-			? "writing"
-			: (doing ??
-				toolActivity(result)
-					.map((entry) => entry.label)
-					.join(", "));
-	const tone = failed
-		? "bg-red"
-		: running
-			? "bg-yellow animate-pulse"
-			: "bg-green";
+		doing ??
+		toolActivity(result)
+			.map((entry) => entry.label)
+			.join(", ");
 	return (
 		<div className="flex min-w-0 flex-col gap-2 empty:hidden">
-			{(heads.length > 0 || (!writing && label)) && (
+			{label && (
 				<div
 					data-step-call
-					data-state={failed ? "failed" : running ? "running" : "done"}
-					className="flex min-w-0 items-center gap-2 font-mono text-dim text-xs"
+					className="min-w-0 truncate font-mono text-dim text-xs"
 				>
-					<span
-						aria-hidden
-						className={`size-1.5 flex-none rounded-full ${tone}`}
-					/>
-					{!writing && heads.length > 0 && (
-						<span className="min-w-0 truncate text-fg/80">
-							{heads.join(" ")}
-						</span>
-					)}
-					{label && <span className="min-w-0 truncate">{label}</span>}
+					{label}
 				</div>
 			)}
 			<CallTimeline entries={entries} live={live} />
@@ -581,6 +560,7 @@ function TurnFoot({
 }) {
 	const { metaShown } = useUI();
 	const { openModelPicker } = useModelPicker();
+	if (live && !failure) return null;
 	return (
 		<div
 			data-turn-answer
@@ -590,15 +570,6 @@ function TurnFoot({
 			{failure && (
 				<span className="whitespace-pre-wrap break-words text-red">
 					{failure}
-				</span>
-			)}
-			{live && !failure && (
-				<span className="flex items-center gap-1.5">
-					<HugeiconsIcon
-						icon={Loading03Icon}
-						className="size-icon-sm flex-none animate-spin"
-					/>
-					working
 				</span>
 			)}
 			{!live && memories.length > 0 && <MessageMemories memories={memories} />}
@@ -644,37 +615,20 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 		[turn, meta],
 	);
 	const placed = useMemo(() => placeTimeline(shape, live), [shape, live]);
-	const last = shape.chain.at(-1);
-	const writing = live && last?.kind === "text" ? last.message : undefined;
 	const items = shape.chain.map((link, at) =>
 		link.kind === "text" ? (
 			<StepText key={`text:${link.message.id ?? at}`} message={link.message} />
 		) : (
 			<StepCall
 				key={`call:${link.call?.id ?? link.result.id ?? at}`}
-				call={link.call}
 				result={link.result}
 				doing={link.doing}
 				entries={placed.get(at) ?? []}
 				progress={link.progress ? shape.intent?.progress : undefined}
 				live={live}
-				running={live && at === shape.chain.length - 1}
 			/>
 		),
 	);
-	if (writing)
-		items.push(
-			<StepCall
-				key={`call:${writing.id ?? "writing"}`}
-				call={writing}
-				result={undefined}
-				doing={undefined}
-				entries={[]}
-				progress={undefined}
-				live
-				running
-			/>,
-		);
 	const traceAt = (message: ChatMessage | undefined) => {
 		const id = message?.id;
 		return onTrace && id !== undefined ? () => onTrace(id) : undefined;
@@ -726,14 +680,27 @@ function sameTurn(before: TurnProps, after: TurnProps): boolean {
 
 const TurnView = memo(TurnBody, sameTurn);
 
+function StatusLine({ status }: { status: AgentStatus }) {
+	const [line] = useState(() => pickStatusLine(status));
+	return (
+		<span
+			data-agent-status={status}
+			className="min-w-0 break-words text-[11px] text-dim"
+		>
+			{status === "waiting" ? line : `${line}...`}
+		</span>
+	);
+}
+
 export function ChatView() {
-	const { messages, meta, error, isLoading, chatId } = useChatSession(
+	const { messages, meta, error, isLoading, chatId, queued } = useChatSession(
 		(state) => ({
 			messages: state.messages,
 			meta: state.meta,
 			error: state.error,
 			isLoading: state.isLoading,
 			chatId: state.chatId,
+			queued: state.queued.length,
 		}),
 	);
 	const { apply } = usePanels();
@@ -757,6 +724,18 @@ export function ChatView() {
 	);
 	const last = turns.length - 1;
 	const todos = useMemo(() => latestTodos(turns), [turns]);
+	const writing = useMemo(() => {
+		const turn = turns.at(-1);
+		const link = turn === undefined ? undefined : shapeTurn(turn).chain.at(-1);
+		return link?.kind === "text" ? messageText(link.message) : undefined;
+	}, [turns]);
+	const asking = useMemo(
+		() => openQuestion(messages) !== undefined,
+		[messages],
+	);
+	const status = error
+		? undefined
+		: agentStatus({ loading: isLoading, writing, queued, asking });
 	const area = useRef<HTMLDivElement>(null);
 
 	return (
@@ -784,8 +763,9 @@ export function ChatView() {
 					/>
 				))}
 				<SteerQueue />
-				<div className="-mt-5 pt-[1.7em]">
+				<div className="-mt-5 flex items-center gap-2 pt-[1.7em]">
 					<AgentAvatar />
+					{status && <StatusLine key={status} status={status} />}
 				</div>
 				{error && turns.length === 0 && (
 					<div className="whitespace-pre-wrap break-words text-red">

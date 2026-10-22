@@ -51,6 +51,7 @@ const session = vi.hoisted(() => ({
 	error: undefined as string | undefined,
 	isLoading: false,
 	chatId: "c1",
+	queued: [] as unknown[],
 }));
 
 vi.mock("../src/lib/chat.tsx", async (importOriginal) => ({
@@ -196,10 +197,7 @@ describe("a chat drawn by turn", () => {
 		expect(text).toContain("drawn ui");
 		expect(text).not.toContain("drawn for you");
 		expect(text).toContain(PROSE);
-		expect(host.querySelector("[data-step-call]")?.textContent).toContain(
-			"draw-chart",
-		);
-		expect(text).not.toContain("(draw-chart)");
+		expect(text).not.toContain("draw-chart");
 		expect(text).not.toContain("RESULT-VALUE");
 		expect(text).not.toContain("MODEL-SAW");
 	});
@@ -291,6 +289,25 @@ describe("a chat drawn by turn", () => {
 		]);
 		expect(host.textContent).toContain(PROSE);
 		expect(host.querySelector("[data-show-in-trace]")).toBeNull();
+	});
+
+	it("says what the agent is doing beside its avatar, not on the turn", async () => {
+		session.messages = MESSAGES;
+		session.isLoading = true;
+		const host = await mount(<ChatView />);
+		const status = host.querySelector("[data-agent-status]");
+
+		expect(status?.getAttribute("data-agent-status")).toBe("writing");
+		expect(status?.textContent).not.toBe("");
+		expect(status?.textContent?.endsWith("...")).toBe(true);
+		expect(host.querySelector('[data-turn-foot="live"]')).toBeNull();
+	});
+
+	it("shows no status once the turn settles", async () => {
+		session.messages = MESSAGES;
+		const host = await mount(<ChatView />);
+
+		expect(host.querySelector("[data-agent-status]")).toBeNull();
 	});
 
 	it("names a failed step on the turn it belongs to", async () => {
@@ -769,34 +786,21 @@ describe("a turn's chain", () => {
 		session.isLoading = false;
 		const host = await mount(<ChatView />);
 
-		const at = order(host, [
-			"Let me look.",
-			"fs/list",
-			"Found it.",
-			"fs/read",
-			"It is empty.",
-		]);
+		const at = order(host, ["Let me look.", "Found it.", "It is empty."]);
 		expect(at.every((n) => n >= 0)).toBe(true);
 		expect([...at].sort((a, b) => a - b)).toEqual(at);
-		expect(
-			[...host.querySelectorAll("[data-step-call]")].map((row) =>
-				row.getAttribute("data-state"),
-			),
-		).toEqual(["done", "failed"]);
+		expect(host.textContent).not.toContain("fs/list");
+		expect(host.textContent).not.toContain("fs/read");
 	});
 
-	it("keeps the calls already made while the next one runs", async () => {
+	it("keeps the text already written while the next call runs", async () => {
 		session.messages = CHAIN.slice(0, 5);
 		session.isLoading = true;
 		const host = await mount(<ChatView />);
 
 		expect(host.textContent).toContain("Let me look.");
 		expect(host.textContent).toContain("Found it.");
-		expect(
-			[...host.querySelectorAll("[data-step-call]")].map((row) =>
-				row.getAttribute("data-state"),
-			),
-		).toEqual(["done", "failed"]);
+		expect(host.querySelector("[data-step-call]")).toBeNull();
 	});
 });
 
@@ -827,9 +831,6 @@ describe("a step's thinking", () => {
 				(block) => block.textContent,
 			),
 		).toEqual(["list them first", "b is earliest"]);
-		expect(text.indexOf("list them first")).toBeLessThan(
-			text.indexOf("fs/list"),
-		);
 		expect(text.indexOf("b is earliest")).toBeLessThan(
 			text.indexOf("It is b.md."),
 		);
@@ -837,18 +838,16 @@ describe("a step's thinking", () => {
 });
 
 describe("a step still being written", () => {
-	it("marks a form being written on a running row, and streams none of its code", async () => {
+	it("draws no row for a form being written, and streams none of its code", async () => {
 		session.messages = [
 			{ id: "h1", type: "human", content: "list" },
 			{ id: "a1", type: "ai", content: 'Let me look.\n(fs/list "no' },
 		];
 		session.isLoading = true;
 		const host = await mount(<ChatView />);
-		const row = host.querySelector("[data-step-call]");
 
 		expect(host.textContent).toContain("Let me look.");
-		expect(row?.getAttribute("data-state")).toBe("running");
-		expect(row?.textContent).toContain("writing");
+		expect(host.querySelector("[data-step-call]")).toBeNull();
 		expect(host.textContent).not.toContain("fs/list");
 		expect(host.textContent).not.toContain('"no');
 	});

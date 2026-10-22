@@ -23,6 +23,7 @@ const session = vi.hoisted(() => ({
 	meta: {},
 	error: undefined,
 	isLoading: false,
+	queued: [] as unknown[],
 }));
 
 vi.mock("../src/lib/chat.tsx", async (importOriginal) => ({
