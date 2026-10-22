@@ -16,9 +16,9 @@ Turbo tag: `extension`.
 `src/ports.ts` is the contract layer: the client, host, registry and store
 interfaces, and the tool and connection shapes that cross them. A consumer
 imports it without pulling in the extension. `src/mcp-client.ts`,
-`src/local-host.ts`, `src/docker-host.ts` and `src/mcp-oauth.ts` implement
-against it. **The OAuth state is the root's to keep**: every root hands the
-client an `OAuthStore`. The file one in `src/oauth-host.ts` is for the apps
+`src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts`,
+`src/probed-host.ts` and `src/mcp-oauth.ts` implement against it. **The OAuth
+state is the root's to keep**: every root hands the client an `OAuthStore`. The file one in `src/oauth-host.ts` is for the apps
 that run on the user's own machine, never for the served agent. The served
 agent keeps it in Convex, whichever container host it runs.
 
@@ -30,8 +30,8 @@ is one per port for the whole process, shared by every REPL in it, and reached
 through `sharedAuthCallback`. A client that binds its own loses the flows the
 shared one is holding.
 
-`DockerHost` is the one strategy the extension is handed, and it covers every
-modality a toolkit entry can have. Read the modalities off the entry shapes in
+A container host is the one strategy the extension is handed, and it covers
+every modality a toolkit entry can have. Read the modalities off the entry shapes in
 `src/toolkit.ts`, not from prose.
 
 **An entry that names an `image` carries a `port` and never a `url`.** The
@@ -40,16 +40,39 @@ is reachable from outside is the host's to decide, not the manifest's. A `url`
 is an address a client dials as written, so only a remote server, or one a
 `command` starts on a fixed local port, carries one.
 
-An image built here lives in a Dockerfile under `docker/`;
-`task mcp:browser:build` builds the browser one.
+**`mcp.toolkit.json` is what the cluster and docker hosts read, and it holds
+only servers that work in production**: each runs from its own image or is a
+remote url, never a local command. `mcp.toolkit.local.json` is what the local
+process host reads, commands included. A server's image is built from
+`docker/mcp/<name>.Dockerfile`; CI and `task mcp:images:build` build every file
+there.
 
-`mcpHostFor` defaults to `LocalProcessHost`, so this package needs no daemon to
-be used or tested. `DockerHost` is chosen at a composition root instead:
-`@repo/backend`'s `agent-repl.ts` and the CLI both pass it. A test that wants
-containers has to ask for them.
+**An image holds no credential of its own.** A key it needs is a secret the
+host already keeps, named in its entry, and a user's sign-in belongs to the
+client, never to the server.
 
-**`task mcp:reap` clears the containers a dead process left behind.** No host
-instance reaps another's, so nothing else will.
+This package needs no daemon to be used or tested. A container host is chosen
+at a composition root, never by default, and a test that wants containers has
+to ask for them. A test of a host that talks to a cluster hands it a fake
+cluster, never a real one.
+
+**A workspace's servers run apart from every other workspace's.** On a cluster
+that boundary is its namespace. **What the cluster lets the api do is granted
+in `charts/lisptc`**, so a host that creates a new kind of object needs a new
+rule there too.
+
+**On a cluster the host creates no pod.** It writes an `McpServer` and waits on
+its status; `apps/mcp-operator` runs it. `src/mcp-server-resource.ts` is that
+resource's contract, which the package exports under the name kubernetes, and the schema in
+`charts/lisptc/crds` has to accept what it writes.
+
+**A server's state outlives its process, so a host never deletes the
+resource.** What someone changed on the live one is theirs, and a host keeps
+it.
+
+**`task mcp:reap` clears the containers a dead process left behind, and the
+state volumes with them.** No host instance reaps another's, so nothing else
+will. `task mcp:reap:state` drops the volumes alone, for one workspace or all.
 
 `check:arch` treats `src/mcp.ts` and `src/ports.ts` as extension modules. They
 import no `node:` builtin, no typed env module, no SDK and no `process.env`.

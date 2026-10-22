@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -7,25 +6,26 @@ import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
 import { MemoryOAuthStore } from "../src/oauth-host.ts";
 import type { McpPolicy, ServerAccess } from "../src/ports.ts";
-import { recordingHost } from "./helpers.ts";
+import { fixtureServer, recordingHost, withServers } from "./helpers.ts";
 
-const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
-);
-
-const LOAD_FX = `(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`;
+const LOAD_FX = '(load-mcp "fx")';
 
 function interpWith(policy: McpPolicy): Interp {
 	const interp = new Interp({
 		extensions: [
-			mcpExtension({
-				...mcpHost,
-				client: localMcpClient({
-					host: recordingHost(),
-					oauth: new MemoryOAuthStore(),
-				}),
-				policy,
-			}),
+			mcpExtension(
+				withServers(
+					{
+						...mcpHost,
+						client: localMcpClient({
+							host: recordingHost(),
+							oauth: new MemoryOAuthStore(),
+						}),
+						policy,
+					},
+					fixtureServer("fx"),
+				),
+			),
 		],
 	});
 	runSync(interp, prelude);
@@ -60,7 +60,9 @@ describe("the mcp policy port", () => {
 
 	it("treats a hidden server as one that does not exist", () => {
 		const interp = interpWith(serverPolicy({ access: "hidden" }));
-		expect(() => runSync(interp, LOAD_FX)).toThrow("unknown MCP server");
+		expect(() => runSync(interp, LOAD_FX)).toThrow(
+			"unknown predefined MCP server",
+		);
 		expect(str(runSync(interp, "(list-toolkit)"))).toBe("nil");
 	});
 });

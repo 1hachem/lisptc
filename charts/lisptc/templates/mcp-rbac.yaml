@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.app.serviceAccount }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-host
+rules:
+  - apiGroups: [lisptc.io]
+    resources: [mcpservers]
+    verbs: [get, list, create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-host
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mcp-host
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.app.serviceAccount }}
+    namespace: {{ .Release.Namespace }}

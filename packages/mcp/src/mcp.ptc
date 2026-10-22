@@ -14,9 +14,14 @@ MCP SERVERS
   Do NOT call (load-mcp "acme") then (await (load-mcp "acme")) : TWO
   connections. Wrap directly, or bind one promise:
   (setq p (load-mcp "acme")) then later (await p) .
-- Ad-hoc servers, awaited same way:
-  - Remote: (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
-- Local stdio: (load-mcp :name "acme" :command "npx" :args '("-y" "acme-mcp-server"))
+- First start can take minutes while image is fetched. Await of load timing
+  out "while the work kept running" is NOT failed: it says what server is
+  doing, so tell user, await again. No name to await: run
+  (await (load-mcp "acme")) once more; second load of server still starting
+  joins that start, begins no other.
+- Ad-hoc remote server, awaited same way:
+  (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
+- No :command : only toolkit servers run here. Never spawn own server.
 - OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
 - Several concurrently:
 (await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) . Settled,
@@ -39,6 +44,10 @@ is WRONG, an arity error. For one server: load it, then
   lists only those servers. Unloaded name is error.
 - (unload-mcp "name") , (login "name") , (logout "name") ,
 (mcp-authorize "name" "code") , (mcp-shutdown) .
+- Load is per workspace, not per chat: server loaded in one chat is bound in
+  every chat; unload-mcp and mcp-shutdown remove it from all. Server loaded
+  elsewhere, or stopped while unused, shows :dormant : tools defined, first
+  call reconnects. No load-mcp needed for it.
 - login/logout only for :oauth t servers:
   - (login "name") gives :logged-in if authenticated. Else, like load needing
     login, asks user to authorize, ends turn; you are told when they answer.

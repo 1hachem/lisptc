@@ -162,6 +162,7 @@ Everything else:
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.
+- `apps/mcp-operator` (`@lisptc/mcp-operator`) — the controller that runs each `McpServer` on the cluster.
 - `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases and their concrete hosts.
 
 ## Dependency flow
@@ -218,10 +219,10 @@ circular imports between files in a package.
 A name is exported once, by the module that declares it, and imported from
 there. No module re-exports a name it imported, and none renames one with an
 alias type or const. Only a package's root entrypoint gathers names, and only
-from its own files. `check:arch` fails on a relay. `scripts/check-arch.ts`
-(`pnpm check:arch`) holds the rules a manifest cannot express, including the two
-below. Every failure prints the way out. Take it. Do not widen a list to get
-past one.
+from its own files. `check:arch` fails on a relay. `scripts/check-arch/`
+(`pnpm check:arch`) holds the rules a manifest cannot express, one check per
+file, including the two below. Every failure prints the way out. Take it. Do not
+widen a list to get past one.
 
 ## Host ports
 
@@ -397,7 +398,8 @@ The remote Turbo cache is shared, and `turbo.json` is where it is named. Its
 token is a secret like any other, kept at the `/turbo` Infisical path.
 
 Runtime requires **Node >= 22.6.0**, and `.ts` files run directly with no build
-step. `.github/workflows/` holds the CI jobs and the order their checks run in,
+step. A package or app that does need a build bundles it with esbuild, and only
+`apps/app`, whose frontend vite builds, takes another bundler. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails
 there fails the same way locally, under the command it names.
 

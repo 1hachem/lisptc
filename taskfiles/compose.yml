@@ -1,0 +1,42 @@
+version: '3'
+silent: true
+tasks:
+  up:
+    desc: build and run the whole stack in docker with live reload, secrets from infisical
+    aliases:
+      - dev
+    deps: [mcp:images:build]
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/db /convex /auth /api /web /ai /analytics /mcps/google /mcps/mistral"
+          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
+
+  up:convex:
+    desc: start postgres and the convex backend in the background, seed and deploy the functions, and wait until they are done
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/db /convex /auth /api /web /ai /analytics /mcps/google /mcps/mistral"
+          CMD: "docker compose up -d --wait convex-backend && docker compose run --rm --build convex-deploy"
+
+  up:prod:
+    desc: build and start the whole stack from its production images
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/db /convex /auth /api /web /ai /analytics /mcps/google /mcps/mistral"
+          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}'
+      - echo "app http://localhost:3000 · dashboard http://127.0.0.1:6791"
+
+  down:
+    desc: stop the whole stack (pass -- -v to drop its data)
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: '{{.ENV | default "dev"}}'
+          PATHS: "/db /convex"
+          CMD: "docker compose down {{.CLI_ARGS}}"

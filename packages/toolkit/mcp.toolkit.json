@@ -20,23 +20,14 @@
       "headless",
       "automation"
     ],
-    "image": "lisptc/browser-mcp:v1.63.0",
+    "image": "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+    "internal": true,
     "port": 8931,
-    "command": "npx",
-    "args": [
-      "-y",
-      "@playwright/mcp@0.0.81",
-      "--browser",
-      "chromium",
-      "--executable-path",
-      "${PLAYWRIGHT_MCP_EXECUTABLE}",
-      "--no-sandbox",
-      "--isolated"
-    ]
+    "state": "/home/pwuser/profile"
   },
   {
     "name": "fs",
-    "description": "Read, write, and list files under the current working directory.",
+    "description": "Read, write, and list files in this workspace's own directory, kept across restarts.",
     "keywords": [
       "file",
       "files",
@@ -51,12 +42,14 @@
       "disk",
       "text"
     ],
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    "image": "ghcr.io/1hachem/lisptc-mcp-fs:main",
+    "internal": true,
+    "port": 8000,
+    "state": "/home/lisptc/files"
   },
   {
     "name": "sheets",
-    "description": "Google Sheets over your Google account: list spreadsheets, describe a workbook's tabs and sizes, read a range (raw rows or header-keyed alists), overwrite a range, append rows, clear a range, add a tab, create a spreadsheet. (load-mcp \"sheets\") starts the server if it is not already up, then returns an authorization link; approve it and it is captured for you, then load again. (login \"sheets\") asks for the link on its own and (logout \"sheets\") forgets the account.",
+    "description": "Google Sheets over your Google account: list spreadsheets, describe a workbook's tabs and sizes, read a range (raw rows or header-keyed alists), overwrite a range, append rows, clear a range, add a tab, create a spreadsheet. First (load-mcp \"sheets\") returns an authorization link; once approved, load again. (login \"sheets\") asks for the link on its own and (logout \"sheets\") forgets the account.",
     "keywords": [
       "google",
       "spreadsheet",
@@ -75,14 +68,27 @@
       "append",
       "data-entry"
     ],
-    "url": "http://localhost:8911/mcp",
-    "oauth": true,
-    "command": "task",
-    "args": ["--dir", "../..", "mcp:sheets"]
+    "image": "ghcr.io/1hachem/lisptc-mcp-sheets:main",
+    "internal": true,
+    "port": 8911,
+    "oauth": {
+      "issuer": "https://accounts.google.com",
+      "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token": "https://oauth2.googleapis.com/token",
+      "client": "google",
+      "params": { "access_type": "offline", "prompt": "consent" }
+    },
+    "scopes": [
+      "openid",
+      "email",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive.metadata.readonly"
+    ]
   },
   {
     "name": "ocr",
-    "description": "Read a scanned PDF or image with Mistral OCR and get its text back as Markdown, one entry per page, tables included. Takes a public URL or a local file path. Its Mistral key comes from Infisical at /mcps/mistral.",
+    "description": "Read a scanned PDF or image with Mistral OCR and get its text back as Markdown, one entry per page, tables included. Takes a public URL.",
     "keywords": [
       "ocr",
       "vision",
@@ -102,8 +108,10 @@
       "markdown",
       "mistral"
     ],
-    "command": "task",
-    "args": ["--dir", "../..", "mcp:ocr"]
+    "image": "ghcr.io/1hachem/lisptc-mcp-ocr:main",
+    "internal": true,
+    "port": 8000,
+    "secret": { "name": "lisptc-mcp-ocr", "keys": ["MISTRAL_API_KEY"] }
   },
   {
     "name": "linear",

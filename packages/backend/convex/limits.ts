@@ -20,6 +20,10 @@ export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
 
+export const MAX_MCP_REASON_LENGTH = 4_096;
+
+export const MAX_MCP_MOUNT_BYTES = 524_288;
+
 export const MAX_REPL_LAYER_BYTES = 8_388_608;
 
 export const REPL_LAYER_CHUNK_CHARS = 262_144;

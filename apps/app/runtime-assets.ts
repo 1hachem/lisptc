@@ -36,6 +36,7 @@ function promptFiles(dir: URL): URL[] {
 export const RUNTIME_ASSETS: URL[] = [
 	...PROMPT_ROOTS.flatMap(promptFiles),
 	pathToFileURL(require.resolve("@repo/toolkit/mcp.toolkit.json")),
+	pathToFileURL(require.resolve("@repo/mcp-extension/mcp.toolkit.local.json")),
 ];
 
 export function assetName(asset: URL): string {

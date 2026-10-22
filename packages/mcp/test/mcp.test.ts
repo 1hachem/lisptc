@@ -8,7 +8,14 @@ import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
+import type { ConnConfig } from "../src/ports.ts";
 import { jsonToolkit } from "../src/toolkit.ts";
+import {
+	countingHost,
+	FIXTURE,
+	fixtureServer,
+	withServers,
+} from "./helpers.ts";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
 	return str((await runAsync(interp, code)).value);
@@ -26,7 +33,7 @@ async function evalOutput(interp: Interp, code: string): Promise<string> {
 }
 
 function mcpInterp(): Interp {
-	return new Interp({ extensions: [mcpExtension(mcpHost)] });
+	return new Interp({ extensions: [mcpExtension(FIXTURE_HOST)] });
 }
 
 function start(interp: Interp, form: string): LispPromise {
@@ -37,9 +44,6 @@ async function load(interp: Interp, form: string): Promise<string> {
 	return str(await start(interp, form));
 }
 
-const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
-);
 const EMPTY_FIXTURE = fileURLToPath(
 	new URL("./fixture-empty-mcp-server.ts", import.meta.url),
 );
@@ -47,12 +51,19 @@ const ENUM_FIXTURE = fileURLToPath(
 	new URL("./fixture-enum-mcp-server.ts", import.meta.url),
 );
 
-function loadForm(name: string, delayMs = 0): string {
-	const env =
-		delayMs > 0
-			? ` :env (quote (("LISPTC_FIXTURE_DELAY_MS" . "${delayMs}")))`
-			: "";
-	return `(load-mcp :name "${name}" :command "node"${env} :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`;
+const FIXTURE_HOST = withServers(
+	mcpHost,
+	...["fx", "sfx", "alone", "autofx"].map((name) => fixtureServer(name)),
+	fixtureServer("afx", { delayMs: 300 }),
+	fixtureServer("concSlow", { delayMs: 4000 }),
+	fixtureServer("concFast", { delayMs: 50 }),
+	fixtureServer("killme", { delayMs: 3000 }),
+	fixtureServer("en", { script: ENUM_FIXTURE }),
+	fixtureServer("degraded", { script: EMPTY_FIXTURE }),
+);
+
+function loadForm(name: string): string {
+	return `(load-mcp "${name}")`;
 }
 
 describe("self-evaluating keywords", () => {
@@ -325,6 +336,22 @@ describe("loading a toolkit server by name", () => {
 	});
 });
 
+describe("an ad-hoc command server", () => {
+	const connects: ConnConfig[] = [];
+	const interp = new Interp({
+		extensions: [mcpExtension(countingHost(FIXTURE_HOST, connects))],
+	});
+	runSync(interp, prelude);
+
+	it("is refused before any connection starts", () => {
+		expect(() =>
+			runSync(interp, '(load-mcp :name "x" :command "node")'),
+		).toThrow("load-mcp :command is not supported");
+		expect(connects).toEqual([]);
+		expect(str(runSync(interp, "(list-mcps)"))).not.toContain('"x"');
+	});
+});
+
 describe("a url server the interpreter starts for you", () => {
 	const toolkitJson = JSON.stringify([
 		{
@@ -401,10 +428,7 @@ describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 	});
 
 	it("surfaces an argument's enum allowed values", async () => {
-		await load(
-			interp,
-			`(load-mcp :name "en" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${ENUM_FIXTURE}")))`,
-		);
+		await load(interp, loadForm("en"));
 		const doc = await evalOutput(interp, "(doc 'en/render)");
 		expect(doc).toContain("format");
 		expect(doc).toContain("one of");
@@ -451,7 +475,7 @@ describe("a load runs in the background", () => {
 	});
 
 	it("load-mcp returns a promise immediately", async () => {
-		expect(await evalStr(interp, `(setq j ${loadForm("afx", 300)})`)).toBe(
+		expect(await evalStr(interp, `(setq j ${loadForm("afx")})`)).toBe(
 			"#<promise>",
 		);
 	});
@@ -470,9 +494,9 @@ describe("a load runs in the background", () => {
 	});
 
 	it("runs two loads concurrently, not sequentially", async () => {
-		const slow = start(interp, loadForm("concSlow", 4000));
+		const slow = start(interp, loadForm("concSlow"));
 		slow.then(undefined, () => {});
-		const fast = start(interp, loadForm("concFast", 50));
+		const fast = start(interp, loadForm("concFast"));
 		await fast;
 
 		expect(interp.async.stateOf(fast)).toBe("fulfilled");
@@ -481,17 +505,22 @@ describe("a load runs in the background", () => {
 	});
 
 	it("cancelling a load rejects it and leaves no server behind", async () => {
-		const killme = start(interp, loadForm("killme", 3000));
+		const killme = start(interp, loadForm("killme"));
 		expect(interp.async.cancel(killme)).toBe(true);
 		await expect(killme.promise()).rejects.toThrow();
 		expect(interp.async.stateOf(killme)).toBe("rejected");
-		expect(await evalStr(interp, "(list-mcps)")).not.toContain("killme");
+		expect(await evalStr(interp, "(list-mcps)")).toContain(
+			'("killme" :unloaded 0)',
+		);
 	});
 
 	it("treats a connected server with no tools as a failure, not :loaded", async () => {
-		const form = `(load-mcp :name "degraded" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${EMPTY_FIXTURE}")))`;
-		await expect(start(interp, form)).rejects.toThrow(/no tools/);
-		expect(await evalStr(interp, "(list-mcps)")).not.toContain("degraded");
+		await expect(start(interp, loadForm("degraded"))).rejects.toThrow(
+			/no tools/,
+		);
+		expect(await evalStr(interp, "(list-mcps)")).toContain(
+			'("degraded" :unloaded 0)',
+		);
 		expect(await evalStr(interp, "(list-tools)")).not.toContain("degraded");
 	});
 });

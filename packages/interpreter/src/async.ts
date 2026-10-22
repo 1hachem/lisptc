@@ -1,13 +1,16 @@
 import { LispPromise, type PromiseState } from "./promise.ts";
 import type { Recipe } from "./recovery.ts";
 
+export type Progress = (note: string) => void;
+
 export class AsyncWork {
 	private readonly controllers = new WeakMap<LispPromise, AbortController>();
 	private readonly lispPromises = new WeakMap<Promise<unknown>, LispPromise>();
 	private readonly live = new Set<LispPromise>();
+	private readonly notes = new WeakMap<LispPromise, string>();
 
 	start(
-		run: (signal: AbortSignal) => Promise<unknown>,
+		run: (signal: AbortSignal, progress: Progress) => Promise<unknown>,
 		recipe?: Recipe,
 	): LispPromise {
 		return this.resume(new LispPromise(), run, recipe);
@@ -15,14 +18,18 @@ export class AsyncWork {
 
 	resume(
 		into: LispPromise,
-		run: (signal: AbortSignal) => Promise<unknown>,
+		run: (signal: AbortSignal, progress: Progress) => Promise<unknown>,
 		recipe?: Recipe,
 	): LispPromise {
 		const controller = new AbortController();
 		this.controllers.set(into, controller);
+		this.notes.delete(into);
+		const progress: Progress = (note) => {
+			if (this.controllers.get(into) === controller) this.notes.set(into, note);
+		};
 		let running: Promise<unknown>;
 		try {
-			running = run(controller.signal);
+			running = run(controller.signal, progress);
 		} catch (error) {
 			running = Promise.reject(error);
 		}
@@ -31,6 +38,12 @@ export class AsyncWork {
 
 	watch(promise: Promise<unknown>, recipe?: Recipe): LispPromise {
 		return this.lispPromises.get(promise) ?? this.record(promise, recipe);
+	}
+
+	progressOf(lispPromise: LispPromise): string | undefined {
+		return lispPromise.state === "pending"
+			? this.notes.get(lispPromise)
+			: undefined;
 	}
 
 	stateOf(lispPromise: LispPromise): PromiseState {

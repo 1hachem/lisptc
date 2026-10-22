@@ -6,7 +6,9 @@ import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import type {
 	ConnectResult,
 	McpClient,
+	StartWatch,
 	ToolCall,
+	ToolkitRegistry,
 } from "@repo/mcp-extension/ports";
 import {
 	type SecretsExtension,
@@ -42,7 +44,27 @@ function run(what: string): EvalRun {
 
 export function mockedMcpExtension(): InterpExtension {
 	const { trace, mocks } = run("mockedMcpExtension()");
-	return mcpExtension({ ...mcpHost, client: trace.client(mockClient(mocks)) });
+	return mcpExtension({
+		...mcpHost,
+		client: trace.client(mockClient(mocks)),
+		toolkit: withMockedServers(mcpHost.toolkit, mocks),
+	});
+}
+
+function withMockedServers(
+	toolkit: ToolkitRegistry,
+	mocks: MockSpec,
+): ToolkitRegistry {
+	return {
+		all: () => {
+			const known = toolkit.all();
+			const names = new Set(known.map((conf) => conf.name));
+			const mocked = Object.keys(mocks.servers)
+				.filter((name) => !names.has(name))
+				.map((name) => ({ name, command: "none" }));
+			return [...known, ...mocked];
+		},
+	};
 }
 
 export function tracedSecretsExtension(): SecretsExtension {
@@ -107,7 +129,7 @@ function mockClient(spec: MockSpec): McpClient {
 
 	async function connect(
 		conf: { name: string },
-		signal?: AbortSignal,
+		watch?: StartWatch,
 	): Promise<ConnectResult> {
 		const name = conf.name;
 		const server = spec.servers[name];
@@ -117,7 +139,8 @@ function mockClient(spec: MockSpec): McpClient {
 			);
 			throw new Error(`cannot start MCP server "${name}"`);
 		}
-		if (server.connectDelayMs) await delay(server.connectDelayMs, signal);
+		if (server.connectDelayMs)
+			await delay(server.connectDelayMs, watch?.signal);
 		if (server.fails) throw new Error(server.fails);
 		if (server.tools.length === 0)
 			throw new Error("connected but the server exposed no tools");
@@ -156,6 +179,7 @@ function mockClient(spec: MockSpec): McpClient {
 		disconnect: async (serverId) => {
 			live.delete(serverId);
 		},
+		asleep: async () => false,
 		login: async () => ({ authUrl: null }),
 		logout: async () => {},
 		authorize: async () => {},

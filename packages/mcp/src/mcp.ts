@@ -1,7 +1,9 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import { type Ask, asking } from "@repo/interpreter/asks";
+import type { Progress } from "@repo/interpreter/async";
 import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
+import { settled } from "@repo/interpreter/drive";
 import {
 	EvalException,
 	StepHold,
@@ -35,7 +37,11 @@ import {
 	type HttpConnConfig,
 	type JsonSchema,
 	type McpClient,
+	type McpMount,
 	type McpPolicy,
+	type McpRegistry,
+	memoryRegistry,
+	type OAuthConnConfig,
 	openPolicy,
 	type Tool,
 	type ToolkitRegistry,
@@ -219,6 +225,7 @@ export interface McpExtensionHost {
 	search: SearchEngine;
 	prompt: PromptSource;
 	policy?: McpPolicy;
+	registry?: McpRegistry;
 }
 
 function extractAuthCode(raw: string): string {
@@ -351,18 +358,12 @@ function connConfigFromArgs(
 			: undefined;
 		return { name, url, headers, oauth, scopes };
 	}
-	if (opts.has("command")) {
-		const command = opts.get("command");
-		if (typeof command !== "string")
-			throw new EvalException("load-mcp :command must be a string", command);
-		const cmdArgs = opts.has("args")
-			? listToArray(opts.get("args") as List).map(String)
-			: [];
-		const env = opts.has("env")
-			? (lispToJson(opts.get("env")) as Record<string, string>)
-			: undefined;
-		return { name, command, args: cmdArgs, env };
-	}
+	if (opts.has("command"))
+		throw new EvalException(
+			"load-mcp :command is not supported: load a toolkit server by name, (search-mcps) finds one",
+			name,
+			false,
+		);
 	return lookupPredefined(predefined, name);
 }
 
@@ -385,29 +386,10 @@ const LOAD_MCP_NAME: DocArg = {
 
 const LOAD_MCP_OPTIONS: DocArg[] = [
 	{
-		name: "command",
-		type: "string",
-		required: false,
-		description: "Spawn a stdio server by running this command.",
-	},
-	{
-		name: "args",
-		type: "list",
-		required: false,
-		description: "Arguments to `:command`.",
-	},
-	{
-		name: "env",
-		type: "alist",
-		required: false,
-		description: "Extra environment variables for `:command`.",
-	},
-	{
 		name: "url",
 		type: "string",
 		required: false,
-		description:
-			"Connect to an HTTP server at this URL instead of spawning one.",
+		description: "Connect to an HTTP server at this URL.",
 	},
 	{
 		name: "headers",
@@ -527,14 +509,13 @@ function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
 	);
 }
 
-function installServer(
+function defineTools(
 	wiring: Wiring,
 	name: string,
-	res: ConnectResult,
-	args: List,
-): List {
-	const { interp, servers, policy } = wiring;
-	const tools = res.tools.filter((tool) => policy.tool(name, tool.name));
+	all: readonly Tool[],
+): Tool[] {
+	const { interp, policy } = wiring;
+	const tools = all.filter((tool) => policy.tool(name, tool.name));
 	for (const tool of tools)
 		interp.defineGlobal(
 			newSym(`${name}/${tool.name}`),
@@ -545,15 +526,54 @@ function installServer(
 				args: toolArgs(tool),
 			},
 		);
+	return tools;
+}
+
+function putEntry(servers: Servers, entry: ServerEntry): void {
+	servers.set([...servers.get().filter((e) => e.name !== entry.name), entry]);
+}
+
+function installServer(
+	wiring: Wiring,
+	name: string,
+	res: ConnectResult,
+	args: List,
+): List {
 	const entry: ServerEntry = {
 		name,
 		serverId: res.serverId,
 		state: "loaded",
-		tools,
+		tools: defineTools(wiring, name, res.tools),
 		args,
 	};
-	servers.set([...servers.get().filter((e) => e.name !== name), entry]);
+	putEntry(wiring.servers, entry);
 	return arrayToList(toolRows(entry));
+}
+
+function argsOf(mount: McpMount): List {
+	const conf = mount.conf;
+	if (conf === undefined) return arrayToList([mount.server]);
+	const key = newLispKeyword;
+	return arrayToList([
+		key("name"),
+		mount.server,
+		key("url"),
+		conf.url,
+		...(conf.headers === undefined
+			? []
+			: [key("headers"), jsonToLisp(conf.headers)]),
+		...(conf.oauth ? [key("oauth"), true] : []),
+		...(conf.scopes === undefined
+			? []
+			: [key("scopes"), arrayToList(conf.scopes)]),
+	]);
+}
+
+function settle<T>(
+	value: T | Promise<T>,
+	then: (value: T) => unknown,
+): unknown {
+	return value instanceof Promise ? value.then(then) : then(value);
 }
 
 function toolRow(entry: ServerEntry, tool: Tool): List {
@@ -572,25 +592,71 @@ function toolRows(entry: ServerEntry): List[] {
 	return entry.tools.map((tool) => toolRow(entry, tool));
 }
 
-export function mcpExtension(host: McpExtensionHost): InterpExtension {
-	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
-		prompt: host.prompt(),
-		session: answerAuthorization,
+interface Rebound {
+	readonly bound: readonly string[];
+	readonly dropped: readonly string[];
+}
+
+export type Reconcile = () => Promise<Rebound>;
+
+function reboundText({ bound, dropped }: Rebound): string {
+	const lines: string[] = [];
+	if (bound.length > 0)
+		lines.push(
+			`MCP servers loaded elsewhere in this workspace are bound here too: ${bound.join(", ")}. Their tools are defined; (list-tools "name") lists them.`,
+		);
+	if (dropped.length > 0)
+		lines.push(
+			`MCP servers unloaded elsewhere in this workspace: ${dropped.join(", ")}. Their tools are no longer defined.`,
+		);
+	return lines.join("\n");
+}
+
+function reconcileEachTurn(
+	hooks: SessionHooks,
+	reconcilers: WeakMap<Interp, Reconcile>,
+): void {
+	hooks.turnStart.use(function* (ctx, next) {
+		const reconcile = reconcilers.get(ctx.interp);
+		if (reconcile !== undefined) {
+			const text = reboundText(yield* settled(reconcile()));
+			if (text !== "") ctx.emit(text);
+		}
+		yield* next(ctx);
 	});
+}
+
+export function mcpExtension(host: McpExtensionHost): InterpExtension {
+	const reconcilers = new WeakMap<Interp, Reconcile>();
+	const registry = host.registry ?? memoryRegistry();
+	return Object.assign(
+		(interp: Interp): void => {
+			reconcilers.set(interp, registerMcp(interp, { ...host, registry }));
+		},
+		{
+			prompt: host.prompt(),
+			session: (hooks: SessionHooks): void => {
+				answerAuthorization(hooks);
+				reconcileEachTurn(hooks, reconcilers);
+			},
+		},
+	);
 }
 
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy">,
-): void {
-	const { client, toolkit, search } = host;
+	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy"> & {
+		registry: McpRegistry;
+	},
+): Reconcile {
+	const { client, toolkit, search, registry } = host;
 	const policy = host.policy ?? openPolicy;
 
 	const servers = interp.state(
 		"mcp/servers",
 		serverCodec,
 		[],
-		"The MCP servers this session loaded, each with its state (:loaded, :dormant until its next call reconnects it, or :failed), its tools and the arguments it was loaded with. Kept by load-mcp and unload-mcp; read it, never set it.",
+		"The MCP servers bound in this session, each with its state (:loaded, :dormant until its next call reconnects it, or :failed), its tools and the arguments it was loaded with. The workspace's registry decides which servers are loaded; this is the session's copy, brought in line with it at every turn. Read it, never set it.",
 	);
 	const loadedServer: DocArgSpec = {
 		name: "server",
@@ -623,14 +689,28 @@ export function registerMcp(
 			);
 	}
 
-	function connect(args: List, signal: AbortSignal): Promise<List> {
+	function mountOf(conf: ConnConfig, tools: readonly Tool[]): McpMount {
+		return predefined.get(conf.name) === conf
+			? { server: conf.name, tools }
+			: { server: conf.name, conf: conf as HttpConnConfig, tools };
+	}
+
+	function connect(
+		args: List,
+		signal: AbortSignal,
+		progress?: Progress,
+	): Promise<List> {
 		const conf = connConfigFromArgs(args, predefined);
 		admit(conf);
-		return client.connect(conf, signal).then(
-			(res) => {
-				if (signal.aborted) {
+		return client.connect(conf, { signal, progress }).then(
+			async (res) => {
+				try {
+					if (signal.aborted)
+						throw new EvalException("MCP load cancelled", conf.name, false);
+					await registry.mount(mountOf(conf, res.tools));
+				} catch (error) {
 					void client.disconnect(res.serverId).catch(() => {});
-					throw new EvalException("MCP load cancelled", conf.name, false);
+					throw error;
 				}
 				return installServer(wiring, conf.name, res, args);
 			},
@@ -642,10 +722,10 @@ export function registerMcp(
 
 	function startLoad(args: List): LispPromise {
 		admit(connConfigFromArgs(args, predefined));
-		const promise = interp.async.start((signal) => connect(args, signal), {
-			kind: "load-mcp",
-			args: [args],
-		});
+		const promise = interp.async.start(
+			(signal, progress) => connect(args, signal, progress),
+			{ kind: "load-mcp", args: [args] },
+		);
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
 		void interp.async.promiseOf(promise).then(forget, forget);
@@ -688,7 +768,7 @@ export function registerMcp(
 		"load-mcp",
 		-1,
 		'(load-mcp "server") | (load-mcp :name "server")',
-		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url or :command to load an ad-hoc server instead.',
+		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url to load an ad-hoc remote server instead.',
 		z.tuple([zList]),
 		([rest]) => {
 			const conf = connConfigFromArgs(rest, predefined);
@@ -705,7 +785,17 @@ export function registerMcp(
 		'(unload-mcp "server")',
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
-		([name]) => arrayToList(doUnload(interp, client, servers, name)),
+		([name]) => {
+			if (entryOf(servers, name) === undefined)
+				throw new EvalException("MCP server not loaded", name, false);
+			return settle(registry.unmount(name), () =>
+				arrayToList(
+					entryOf(servers, name) === undefined
+						? []
+						: doUnload(interp, client, servers, name),
+				),
+			);
+		},
 		[loadedServer],
 	);
 
@@ -773,10 +863,14 @@ export function registerMcp(
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(predefined, name);
-			if (entryOf(servers, name)) doUnload(interp, client, servers, name);
-			return withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout").then(
-				() => newLispKeyword("logged-out"),
-			);
+			const unloaded = entryOf(servers, name)
+				? settle(registry.unmount(name), () => {
+						if (entryOf(servers, name)) doUnload(interp, client, servers, name);
+					})
+				: undefined;
+			return Promise.resolve(unloaded)
+				.then(() => withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout"))
+				.then(() => newLispKeyword("logged-out"));
 		},
 	);
 
@@ -928,8 +1022,17 @@ export function registerMcp(
 		"Disconnect every loaded MCP server and unload its bindings.",
 		z.tuple([]),
 		() => {
-			shutdown();
-			return true;
+			const names = servers.get().map((entry) => entry.name);
+			const unmounted = names.map((name) => registry.unmount(name));
+			return settle(
+				unmounted.some((done) => done instanceof Promise)
+					? Promise.all(unmounted)
+					: unmounted,
+				() => {
+					shutdown();
+					return true;
+				},
+			);
 		},
 	);
 
@@ -964,14 +1067,79 @@ export function registerMcp(
 				),
 		);
 	});
+
+	function bindMount(mount: McpMount): boolean {
+		const entry = entryOf(servers, mount.server);
+		const conf = mount.conf ?? predefined.get(mount.server);
+		if (conf === undefined || policy.server(mount.server).access !== "open") {
+			if (entry !== undefined) doUnload(interp, client, servers, mount.server);
+			return false;
+		}
+		const tools = mount.tools.filter((tool) =>
+			policy.tool(mount.server, tool.name),
+		);
+		if (
+			entry !== undefined &&
+			JSON.stringify(entry.tools) === JSON.stringify(tools)
+		)
+			return false;
+		if (entry !== undefined) doUnload(interp, client, servers, mount.server);
+		putEntry(servers, {
+			name: mount.server,
+			serverId: "",
+			state: "dormant",
+			reason: "loaded elsewhere in the workspace",
+			tools: defineTools(wiring, mount.server, mount.tools),
+			args: argsOf(mount),
+		});
+		return entry === undefined;
+	}
+
+	async function sleepIdle(): Promise<void> {
+		const loaded = servers.get().filter((entry) => entry.state === "loaded");
+		const asleep = await Promise.all(
+			loaded.map((entry) => client.asleep(entry.serverId).catch(() => false)),
+		);
+		loaded.forEach((entry, i) => {
+			const current = entryOf(servers, entry.name);
+			if (
+				!asleep[i] ||
+				current?.state !== "loaded" ||
+				current.serverId !== entry.serverId
+			)
+				return;
+			void client.disconnect(entry.serverId).catch(() => {});
+			putEntry(servers, {
+				...current,
+				state: "dormant",
+				reason: "stopped after going unused",
+			});
+		});
+	}
+
+	return async () => {
+		const mounts = new Map(
+			(await registry.mounts()).map((mount) => [mount.server, mount]),
+		);
+		const dropped = servers
+			.get()
+			.map((entry) => entry.name)
+			.filter((name) => !mounts.has(name));
+		for (const name of dropped) doUnload(interp, client, servers, name);
+		const bound = [...mounts.values()]
+			.filter((mount) => bindMount(mount))
+			.map((mount) => mount.server);
+		await sleepIdle();
+		return { bound, dropped };
+	};
 }
 
 function oauthServer(
 	predefined: Map<string, ConnConfig>,
 	name: string,
-): HttpConnConfig {
+): OAuthConnConfig {
 	const conf = predefined.get(name);
-	if (!conf || !("url" in conf))
+	if (!conf || !("url" in conf || ("image" in conf && conf.oauth)))
 		throw new EvalException("unknown OAuth MCP server", name, false);
 	return conf;
 }
@@ -1060,52 +1228,58 @@ function toolArgs(tool: Tool): DocArg[] {
 	}));
 }
 
+function argumentLine(
+	key: string,
+	spec: JsonSchema,
+	required: boolean,
+): string {
+	const req = required ? " (required)" : "";
+	const desc = spec.description ? ` — ${spec.description}` : "";
+	const allowed = spec.enum?.length
+		? ` (one of ${JSON.stringify(spec.enum)})`
+		: "";
+	const dflt =
+		spec.default !== undefined
+			? ` (default ${JSON.stringify(spec.default)})`
+			: "";
+	const example = spec.examples?.length
+		? ` (e.g. ${JSON.stringify(spec.examples[0])})`
+		: "";
+	return `  ${key}${schemaType(spec)}${req}${allowed}${dflt}${example}${desc}`;
+}
+
+function examplesBlock(
+	title: string,
+	examples: unknown[] | undefined,
+): string[] {
+	if (!examples?.length) return [];
+	return ["", title, ...examples.map((ex) => `  ${JSON.stringify(ex)}`)];
+}
+
+function returnsBlock(out: JsonSchema | undefined): string[] {
+	if (!out) return [];
+	const outType = schemaType(out);
+	const returns =
+		outType || out.description
+			? [
+					"",
+					`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
+				]
+			: [];
+	return [...returns, ...examplesBlock("Example outputs:", out.examples)];
+}
+
 function toolDocBody(tool: Tool): string {
-	const lines: string[] = [];
-	if (tool.description) lines.push(tool.description);
+	const lines: string[] = tool.description ? [tool.description] : [];
 	const entries = orderedProps(tool);
 	const required = new Set(tool.inputSchema?.required ?? []);
-
 	if (entries.length) {
 		if (lines.length) lines.push("");
 		lines.push("Arguments:");
-		for (const [key, spec] of entries) {
-			const req = required.has(key) ? " (required)" : "";
-			const type = schemaType(spec);
-			const desc = spec.description ? ` — ${spec.description}` : "";
-			const allowed = spec.enum?.length
-				? ` (one of ${JSON.stringify(spec.enum)})`
-				: "";
-			const dflt =
-				spec.default !== undefined
-					? ` (default ${JSON.stringify(spec.default)})`
-					: "";
-			const example = spec.examples?.length
-				? ` (e.g. ${JSON.stringify(spec.examples[0])})`
-				: "";
-			lines.push(`  ${key}${type}${req}${allowed}${dflt}${example}${desc}`);
-		}
+		for (const [key, spec] of entries)
+			lines.push(argumentLine(key, spec, required.has(key)));
 	}
-
-	const inputEx = tool.inputSchema?.examples;
-	if (inputEx?.length) {
-		lines.push("", "Example inputs:");
-		for (const ex of inputEx) lines.push(`  ${JSON.stringify(ex)}`);
-	}
-	if (tool.outputSchema) {
-		const out = tool.outputSchema;
-		const outType = schemaType(out);
-		if (outType || out.description) {
-			lines.push(
-				"",
-				`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
-			);
-		}
-		if (out.examples?.length) {
-			lines.push("", "Example outputs:");
-			for (const ex of out.examples) lines.push(`  ${JSON.stringify(ex)}`);
-		}
-	}
-
+	lines.push(...examplesBlock("Example inputs:", tool.inputSchema?.examples));
+	lines.push(...returnsBlock(tool.outputSchema));
 	return lines.join("\n");
 }
