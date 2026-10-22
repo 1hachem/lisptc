@@ -1,16 +1,8 @@
 import { annotationKey } from "@repo/interpreter/annotations";
-import { z } from "zod";
-import { STORE_FOLDERS } from "./ports.ts";
-
-const attachedFile = z.object({
-	folder: z.enum(STORE_FOLDERS),
-	name: z.string().min(1),
-});
-
-export type AttachedFile = z.infer<typeof attachedFile>;
+import { ATTACHMENTS_ANNOTATION, attachedFiles } from "@repo/shared/files";
 
 export const attachmentsKey = annotationKey({
-	name: "attachments",
+	name: ATTACHMENTS_ANNOTATION,
 	lane: "output",
-	schema: z.array(attachedFile),
+	schema: attachedFiles,
 });

@@ -1,10 +1,11 @@
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import type { AttachedFile } from "../src/attached.ts";
+import type { AttachedFile } from "@repo/shared/files";
 import { attached, knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
-import { type Downloader, MemoryKnowledgeStore } from "../src/ports.ts";
+import { MemoryKnowledgeStore } from "../src/memory-store.ts";
+import type { Downloader, PdfReader } from "../src/ports.ts";
 
 export interface World {
 	ev(code: string): Promise<string>;
@@ -18,12 +19,15 @@ const offline: Downloader = {
 	},
 };
 
-export async function world(downloader = offline): Promise<World> {
+export async function world(
+	downloader = offline,
+	pdf?: PdfReader,
+): Promise<World> {
 	const store = new MemoryKnowledgeStore();
 	const interp = new Interp({
 		extensions: [
 			knowledgeExtension(
-				knowledgeHostFor({ store, downloader, maxDownloadBytes: 1024 }),
+				knowledgeHostFor({ store, downloader, pdf, maxDownloadBytes: 1024 }),
 			),
 		],
 	});
