@@ -1,3 +1,4 @@
+import { type Clock, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import type { Downloader, KnowledgeHost, KnowledgeStore } from "./ports.ts";
 
@@ -56,10 +57,12 @@ export function knowledgeHostFor(options: {
 	store: KnowledgeStore;
 	maxDownloadBytes: number;
 	downloader?: Downloader;
+	clock?: Clock;
 }): KnowledgeHost {
 	return {
 		store: options.store,
 		downloader: options.downloader ?? httpDownloader(options.maxDownloadBytes),
 		prompt: knowledgePrompt,
+		clock: options.clock ?? systemClock,
 	};
 }
