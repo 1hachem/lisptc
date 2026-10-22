@@ -4,7 +4,7 @@ import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import { useEffect, useMemo, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
-import { attachedFiles } from "../lib/attached-files.ts";
+import { attachedTo } from "../lib/attached-files.ts";
 import { CHANNELS } from "../lib/channels.ts";
 import {
 	type ChatMessage,
@@ -155,7 +155,7 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 	const ui = toolUi(message);
 	const model = toolModelOutput(message).output;
 	const results = toolResults(message).join("\n");
-	const attachments = shown.attachments ? attachedFiles(message) : [];
+	const attachments = shown.attachments ? attachedTo(message) : [];
 	return {
 		output,
 		results,
@@ -304,7 +304,7 @@ function SystemLine({ message }: { message: ChatMessage }) {
 function UserMessage({ message }: { message: ChatMessage }) {
 	const { shown } = useUI();
 	const text = messageText(message);
-	const files = shown.attachments ? attachedFiles(message) : [];
+	const files = shown.attachments ? attachedTo(message) : [];
 	if (files.length === 0) return <UserLine text={text} />;
 	return (
 		<>

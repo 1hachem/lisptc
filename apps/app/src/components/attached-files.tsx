@@ -1,8 +1,8 @@
 import { FileTree, TreeFile } from "@repo/components";
-import type { AttachedFile } from "@repo/knowledge-extension/attached";
+import type { AttachedFile } from "@repo/shared/files";
 import { Link } from "@tanstack/react-router";
 import { useChatSession } from "../lib/chat.tsx";
-import { knowledgeIcon } from "../lib/knowledge.ts";
+import { knowledgeIcon } from "../lib/file-icons.ts";
 
 function AttachedRow({ file }: { file: AttachedFile }) {
 	const workspaceId = useChatSession((state) => state.workspaceId);

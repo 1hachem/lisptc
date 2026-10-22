@@ -1,12 +1,15 @@
-import { readAnnotation } from "@repo/interpreter/annotations";
 import {
+	ATTACHMENTS_ANNOTATION,
 	type AttachedFile,
-	attachmentsKey,
-} from "@repo/knowledge-extension/attached";
+	attachedFiles,
+} from "@repo/shared/files";
 import type { ChatMessage } from "./chat.tsx";
 
-export function attachedFiles(message: ChatMessage): AttachedFile[] {
-	return readAnnotation(message.additional_kwargs, attachmentsKey) ?? [];
+export function attachedTo(message: ChatMessage): AttachedFile[] {
+	return (
+		attachedFiles.safeParse(message.additional_kwargs?.[ATTACHMENTS_ANNOTATION])
+			.data ?? []
+	);
 }
 
 export function attachingFiles(
@@ -17,5 +20,5 @@ export function attachingFiles(
 		folder: "attachments",
 		name,
 	}));
-	return { [attachmentsKey.name]: attachments };
+	return { [ATTACHMENTS_ANNOTATION]: attachments };
 }
