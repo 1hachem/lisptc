@@ -4,7 +4,8 @@
   "ignorePatterns": [".agents/**", "tree-sitter-lisptc/**"],
   "entry": [
     "apps/app/server/routes/**/*.ts",
-    "apps/app/server/plugins/**/*.ts"
+    "apps/app/server/plugins/**/*.ts",
+    "apps/trace-viewer/evals/**/*.eval.ts"
   ],
   "usedClassMembers": [
     { "extends": "TextNode", "members": ["isSimpleText", "isUnmergeable"] }
