@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel.js";
 import { mutation, query } from "./_generated/server.js";
 import { requireUser } from "./lib/auth.js";
-import { withDefaultToggles } from "./lib/preferenceDefaults.js";
+import { withDefaults } from "./lib/preferenceDefaults.js";
 import { MAX_PREFERENCES_BYTES } from "./limits.js";
 
 const encoder = new TextEncoder();
@@ -14,6 +14,7 @@ const preferences = v.object({
 	channels: v.optional(v.record(v.string(), v.boolean())),
 	metadata: v.optional(v.record(v.string(), v.boolean())),
 	input: v.optional(v.record(v.string(), v.boolean())),
+	sendLabel: v.optional(v.string()),
 	sidebar: v.optional(v.array(v.string())),
 	hidden: v.optional(v.array(v.string())),
 	motion: v.optional(v.string()),
@@ -34,7 +35,7 @@ export const get = query({
 			.query("preferences")
 			.withIndex("by_user", (q) => q.eq("userId", user._id))
 			.unique();
-		return withDefaultToggles(stripped(row));
+		return withDefaults(stripped(row));
 	},
 });
 

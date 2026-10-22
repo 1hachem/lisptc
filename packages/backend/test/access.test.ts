@@ -1,7 +1,11 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
-import { DEFAULT_TOGGLES } from "../convex/lib/preferenceDefaults.ts";
+import {
+	DEFAULT_HIDDEN,
+	DEFAULT_SEND_LABEL,
+	DEFAULT_TOGGLES,
+} from "../convex/lib/preferenceDefaults.ts";
 import {
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
@@ -579,6 +583,12 @@ describe("oauth record access", () => {
 	});
 });
 
+const DEFAULTS = {
+	...DEFAULT_TOGGLES,
+	sendLabel: DEFAULT_SEND_LABEL,
+	hidden: DEFAULT_HIDDEN,
+};
+
 describe("preferences access", () => {
 	it("keeps a user's preferences to that user", async () => {
 		const t = harness();
@@ -587,12 +597,10 @@ describe("preferences access", () => {
 		const preferences = { theme: "dusk", font: "mono", themeUses: { dusk: 2 } };
 		await bob.as.mutation(api.preferences.put, { preferences });
 		expect(await bob.as.query(api.preferences.get, {})).toEqual({
-			...DEFAULT_TOGGLES,
+			...DEFAULTS,
 			...preferences,
 		});
-		expect(await alice.as.query(api.preferences.get, {})).toEqual(
-			DEFAULT_TOGGLES,
-		);
+		expect(await alice.as.query(api.preferences.get, {})).toEqual(DEFAULTS);
 		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
 	});
 
@@ -614,6 +622,8 @@ describe("preferences access", () => {
 			channels: { ...DEFAULT_TOGGLES.channels, lisp: false },
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
 			input: DEFAULT_TOGGLES.input,
+			sendLabel: DEFAULT_SEND_LABEL,
+			hidden: DEFAULT_HIDDEN,
 		});
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows).toHaveLength(1);
@@ -622,6 +632,20 @@ describe("preferences access", () => {
 			metadata: { tokens: true },
 		});
 		expect(rows[0].input).toBeUndefined();
+		expect(rows[0].hidden).toBeUndefined();
+	});
+
+	it("hides attachments and the bin until the user shows them", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		expect((await alice.as.query(api.preferences.get, {})).hidden).toEqual([
+			"attachments",
+			"bin",
+		]);
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { hidden: [] },
+		});
+		expect((await alice.as.query(api.preferences.get, {})).hidden).toEqual([]);
 	});
 
 	it("refuses preferences past the size limit", async () => {

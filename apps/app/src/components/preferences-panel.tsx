@@ -4,9 +4,15 @@ import { motions } from "@repo/ui/motions.ts";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { CHANNELS, type Channel } from "../lib/channels.ts";
-import { INPUT_HELPERS, type InputHelper } from "../lib/input-helpers.ts";
+import {
+	INPUT_GROUPS,
+	INPUT_HELPERS,
+	type InputGroup,
+	type InputHelper,
+} from "../lib/input-helpers.ts";
 import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
-import { useSidebarMotion } from "../lib/sidebar.ts";
+import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
+import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useUI } from "../lib/ui.tsx";
 import { SidePanel } from "./side-panel.tsx";
 
@@ -70,6 +76,100 @@ function InputToggle({
 			</span>
 			<span className="flex-none text-dim">{on ? "on" : "off"}</span>
 		</button>
+	);
+}
+
+const SEND_LABEL_MAX = 16;
+
+function SendLabel() {
+	const { sendLabel, setSendLabel, inputOn } = useUI();
+	const [draft, setDraft] = useState(sendLabel ?? "");
+	useEffect(() => setDraft(sendLabel ?? ""), [sendLabel]);
+	const commit = () => {
+		const label = draft.trim();
+		if (label === "" || label === sendLabel) setDraft(sendLabel ?? "");
+		else setSendLabel(label);
+	};
+	return (
+		<label
+			className={`flex w-full items-baseline gap-2 ${inputOn.send ? "" : "opacity-50"}`}
+		>
+			<span className="flex-none text-dim">label</span>
+			<input
+				value={draft}
+				maxLength={SEND_LABEL_MAX}
+				disabled={!inputOn.send}
+				aria-label="send button label"
+				onChange={(event) => setDraft(event.target.value)}
+				onBlur={commit}
+				onKeyDown={(event) => {
+					if (event.key === "Enter") event.currentTarget.blur();
+					if (event.key === "Escape") {
+						setDraft(sendLabel ?? "");
+						event.currentTarget.blur();
+					}
+				}}
+				className="min-w-0 flex-1 border-b border-bg2 bg-transparent text-right text-fg outline-none focus:border-yellow"
+			/>
+		</label>
+	);
+}
+
+function InputSection({ group }: { group: InputGroup }) {
+	return (
+		<>
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				input {group}
+			</div>
+			<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+				{INPUT_HELPERS.filter((helper) => helper.group === group).map(
+					(helper) => (
+						<InputToggle key={helper.id} helper={helper} />
+					),
+				)}
+				{group === "shows" && <SendLabel />}
+			</div>
+		</>
+	);
+}
+
+function SidebarToggle({
+	name,
+	on,
+	onToggle,
+}: {
+	name: SidebarEntry;
+	on: boolean;
+	onToggle: (name: SidebarEntry) => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-pressed={on}
+			onClick={() => onToggle(name)}
+			className="flex w-full cursor-pointer items-baseline gap-2 text-left"
+		>
+			<span className={`flex-1 ${on ? "text-fg" : "text-dim line-through"}`}>
+				{name}
+			</span>
+			<span className="flex-none text-dim">{on ? "on" : "off"}</span>
+		</button>
+	);
+}
+
+function SidebarList() {
+	const { order, shown, toggleHidden } = useSidebarOrder();
+	return (
+		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			{order.map((name) => (
+				<SidebarToggle
+					key={name}
+					name={name}
+					on={shown.includes(name)}
+					onToggle={toggleHidden}
+				/>
+			))}
+		</div>
 	);
 }
 
@@ -190,14 +290,13 @@ export function PreferencesPanel({ open }: { open: boolean }) {
 						<MetaToggle key={field.id} field={field} />
 					))}
 				</div>
+				{INPUT_GROUPS.map((group) => (
+					<InputSection key={group} group={group} />
+				))}
 				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-					input
+					sidebar
 				</div>
-				<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
-					{INPUT_HELPERS.map((helper) => (
-						<InputToggle key={helper.id} helper={helper} />
-					))}
-				</div>
+				<SidebarList />
 				<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 					recent themes
 				</div>

@@ -45,6 +45,7 @@ export function preferencesSource(preferences: {
 	channels: Record<string, boolean>;
 	metadata: Record<string, boolean>;
 	input: Record<string, boolean>;
+	sendLabel: string | undefined;
 	sidebar: readonly string[];
 	hidden: readonly string[];
 	motion: string;
@@ -55,6 +56,7 @@ export function preferencesSource(preferences: {
 		`  :channels ${toggles(preferences.channels)}`,
 		`  :metadata ${toggles(preferences.metadata)}`,
 		`  :input ${toggles(preferences.input)}`,
+		`  :send-label ${preferences.sendLabel === undefined ? "nil" : quoted(preferences.sendLabel)}`,
 		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
 		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
 		`  :motion ${quoted(preferences.motion)})`,
