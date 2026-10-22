@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Flash } from "./notice.ts";
 
 export type Upload =
 	| { state: "uploading" }
@@ -14,6 +15,18 @@ export interface Attachment {
 export type UploadFile = (file: File) => Promise<string>;
 
 export type DiscardUpload = (name: string) => void;
+
+export interface FileTransfer {
+	upload: UploadFile;
+	discard?: DiscardUpload;
+}
+
+export type SubmitMessage = (
+	text: string,
+	attached: string[],
+) => boolean | undefined | Promise<boolean | undefined>;
+
+const NOT_SENT = "not sent, the message is back in the input";
 
 function reasonOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -46,14 +59,14 @@ export function useAttachments(upload?: UploadFile, discard?: DiscardUpload) {
 	held.current = items;
 	const discardOnLeave = useRef(discard);
 	discardOnLeave.current = discard;
-	useEffect(
-		() => () => {
+	useEffect(() => {
+		live.current = true;
+		return () => {
 			live.current = false;
 			for (const name of attachedNames(held.current))
 				discardOnLeave.current?.(name);
-		},
-		[],
-	);
+		};
+	}, []);
 
 	const settle = useCallback(
 		(id: string, next: Upload) => {
@@ -97,7 +110,64 @@ export function useAttachments(upload?: UploadFile, discard?: DiscardUpload) {
 		[items, discard],
 	);
 
-	const clear = useCallback(() => setItems([]), []);
+	const clear = useCallback(() => {
+		held.current = [];
+		setItems([]);
+	}, []);
 
-	return { items, add, remove, clear, enabled: upload !== undefined };
+	const restore = useCallback(
+		(back: readonly Attachment[]) => {
+			if (!live.current) {
+				for (const name of attachedNames(back)) discard?.(name);
+				return;
+			}
+			setItems((prev) => [...back, ...prev]);
+		},
+		[discard],
+	);
+
+	return { items, add, remove, clear, restore, enabled: upload !== undefined };
+}
+
+export function useAttachedSend({
+	onSubmit,
+	flash,
+	files,
+	streaming,
+	held,
+}: {
+	onSubmit: SubmitMessage;
+	flash: Flash;
+	files?: FileTransfer;
+	streaming: boolean;
+	held?: string;
+}) {
+	const attachments = useAttachments(files?.upload, files?.discard);
+	const submit = useCallback(
+		(text: string): false | Promise<boolean> => {
+			const blocked = held ?? blockedSend(attachments.items, streaming);
+			if (blocked !== null) {
+				flash(blocked);
+				return false;
+			}
+			const sending = attachments.items;
+			attachments.clear();
+			return new Promise<unknown>((resolve) =>
+				resolve(onSubmit(text, attachedNames(sending))),
+			)
+				.then(
+					(sent) => sent !== false,
+					() => false,
+				)
+				.then((sent) => {
+					if (!sent) {
+						attachments.restore(sending);
+						flash(NOT_SENT);
+					}
+					return sent;
+				});
+		},
+		[attachments, onSubmit, flash, streaming, held],
+	);
+	return { attachments, submit };
 }
