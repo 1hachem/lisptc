@@ -51,6 +51,13 @@ from Tailwind's defaults. `packages/ui/AGENTS.md` holds the scale.
 **Every icon comes from hugeicons**, passed as the `icon` prop.
 `check:arch` fails on `lucide-react`.
 
+**Everything in the chat stays inside its bounds**, whatever a message, a
+question or a drawn view carries. Text wraps where it can, truncates where it
+cannot, and collapses when it is long; it is never clipped, and nothing scrolls
+the chat sideways. Every row item that holds text can shrink. `sidewaysLeaks`
+in `test/helpers.ts` is the check, and a new part of the chat or the composer
+is rendered under it with text wider than the pane.
+
 A message's extras arrive already shaped from the wire. Render them by lane.
 Do not reach for a key an extension owns and do not reimplement its meaning
 here.
