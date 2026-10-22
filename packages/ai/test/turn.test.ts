@@ -15,7 +15,15 @@ import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { extension, noting, receiving, riding, testRepl } from "./helpers.ts";
+import {
+	asking,
+	concluding,
+	extension,
+	noting,
+	receiving,
+	riding,
+	testRepl,
+} from "./helpers.ts";
 
 interface Seen {
 	messages: ChatMessage[];
@@ -211,6 +219,39 @@ describe("the agent turn", () => {
 			e.type === "assistant" ? [e.stepId] : [],
 		);
 		expect(images.origins()).toEqual(steps);
+	});
+
+	test("a step that ends the turn reports what it shows the person before halting, out of the model's sight", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "never asked." }]];
+
+		const events = await drain(ask, { repl: testRepl([asking("Pick")]) });
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"halt",
+		]);
+		expect(events[2]).toMatchObject({
+			type: "result",
+			quiet: true,
+			annotations: { output: { asked: ["Pick"] } },
+		});
+		expect(events[2]).not.toHaveProperty("riding");
+		expect(calls).toBe(1);
+	});
+
+	test("what the turn leaves as it settles is concluded before the turn ends", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		const events = await drain(ask, {
+			repl: testRepl([concluding("wrapped")]),
+		});
+
+		expect(events.slice(-2)).toEqual([
+			{ type: "concluded", annotations: { closed: ["wrapped"] } },
+			expect.objectContaining({ type: "halt" }),
+		]);
 	});
 
 	test("an answered step halts without a result event", async () => {

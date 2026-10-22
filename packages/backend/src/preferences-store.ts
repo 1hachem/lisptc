@@ -14,7 +14,6 @@ export class ConvexPreferencesStore implements PreferencesStore {
 		const stored = await this.connect().query(api.preferences.get, {});
 		const {
 			font,
-			channels,
 			metadata,
 			input,
 			sendLabel,
@@ -24,10 +23,11 @@ export class ConvexPreferencesStore implements PreferencesStore {
 			statusBarHidden,
 			motion,
 			panelMotion,
+			traceBesideChat,
+			traceLink,
 		} = stored;
 		return {
 			font,
-			channels,
 			metadata,
 			input,
 			sendLabel,
@@ -37,6 +37,8 @@ export class ConvexPreferencesStore implements PreferencesStore {
 			statusBarHidden,
 			motion,
 			panelMotion,
+			traceBesideChat,
+			traceLink,
 		};
 	}
 

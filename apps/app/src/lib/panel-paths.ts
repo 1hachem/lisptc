@@ -34,6 +34,8 @@ export function panelPath(content: PanelContent): string | undefined {
 			return undefined;
 		case "chat":
 			return content.chatId === null ? "" : `chat/${content.chatId}`;
+		case "trace":
+			return `trace/${content.chatId}`;
 		case "file":
 			return `${content.folder}/${content.name}`;
 		case "page":
@@ -61,6 +63,7 @@ export function panelAt(path: string): PanelContent | undefined {
 		};
 	if (rest === "") return undefined;
 	if (head === "chat") return { kind: "chat", chatId: rest, title: "chat" };
+	if (head === "trace") return { kind: "trace", chatId: rest, title: "trace" };
 	const folder = FOLDERS.find((f) => f === head);
 	if (folder !== undefined) return { kind: "file", folder, name: rest };
 	const page = (Object.keys(KEYED) as KeyedPage[]).find(

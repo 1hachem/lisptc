@@ -36,6 +36,29 @@ export function usePanelMotion() {
 	return { panelMotion: stored?.panelMotion ?? true, setPanelMotion };
 }
 
+export function useTraceBesideChat() {
+	const stored = usePreferences();
+	const put = usePutPreferences();
+	const setTraceBesideChat = useCallback(
+		(on: boolean) => put({ traceBesideChat: on }),
+		[put],
+	);
+	return {
+		traceBesideChat: stored?.traceBesideChat ?? false,
+		setTraceBesideChat,
+	};
+}
+
+export function useTraceLink() {
+	const stored = usePreferences();
+	const put = usePutPreferences();
+	const setTraceLink = useCallback(
+		(on: boolean) => put({ traceLink: on }),
+		[put],
+	);
+	return { traceLink: stored?.traceLink ?? true, setTraceLink };
+}
+
 export function usePutPreferences() {
 	const mutation = useConvexMutation(api.preferences.put);
 	const put = useMemo(
@@ -49,7 +72,6 @@ export function usePutPreferences() {
 					{
 						...current,
 						...preferences,
-						channels: { ...current.channels, ...preferences.channels },
 						metadata: { ...current.metadata, ...preferences.metadata },
 						input: { ...current.input, ...preferences.input },
 					},

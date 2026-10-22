@@ -1,4 +1,4 @@
-import type { Awaitable, PromptSource } from "@repo/shared/host";
+import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 
 export type StoreFolder = "attachments" | "knowledge";
 
@@ -39,6 +39,7 @@ export interface KnowledgeHost {
 	store: KnowledgeStore;
 	downloader: Downloader;
 	prompt: PromptSource;
+	clock: Clock;
 }
 
 export interface HeldFile {

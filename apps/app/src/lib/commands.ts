@@ -26,7 +26,6 @@ export const commands: Command[] = [
 	},
 	{ name: "/copy", desc: "copy the conversation to the clipboard" },
 	{ name: "/dark", desc: "switch to the dark variant of the theme" },
-	{ name: "/debug", desc: "show what each step sent back to the model" },
 	{ name: "/font", desc: "choose the font" },
 	{ name: "/light", desc: "switch to the light variant of the theme" },
 	{ name: "/model", desc: "choose the model this workspace runs on" },
@@ -87,7 +86,7 @@ function quietly(run: () => void) {
 }
 
 export function useCommandRunner() {
-	const { toggleLeft, toggleRight, toggleChannel, shown } = useUI();
+	const { toggleLeft, toggleRight } = useUI();
 	const store = useChatStore();
 	const newChat = useNewChat();
 	const { openModelPicker } = useModelPicker();
@@ -124,20 +123,12 @@ export function useCommandRunner() {
 				},
 				"/dark": () => switchScheme("dark"),
 				"/light": () => switchScheme("light"),
-				"/debug": () => {
-					toggleChannel("model");
-					return shown.model
-						? "the model channel is hidden"
-						: "the model channel is shown";
-				},
 			};
 			return (await actions[canonicalCommand(name)]?.()) ?? null;
 		},
 		[
 			toggleLeft,
 			toggleRight,
-			toggleChannel,
-			shown,
 			newChat,
 			store,
 			openModelPicker,

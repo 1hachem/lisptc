@@ -199,24 +199,26 @@ export const turn = {
 					distinctId: request.headers.get("x-distinct-id") ?? undefined,
 					sessionId: request.headers.get("x-posthog-session-id") ?? undefined,
 				},
+				onStep: async (produced) => {
+					const messages = toStored(produced);
+					if (messages.length > 0)
+						await convex.mutation(api.messages.append, { chatId, messages });
+				},
 				onTurn: async (produced, revised, failure) => {
 					try {
-						for (const [at, message] of revised) {
-							const stored = history[at];
-							if (
-								stored?.wireId === undefined ||
-								message.additional_kwargs === undefined
-							)
-								continue;
-							await convex.mutation(api.messages.annotate, {
-								chatId,
-								id: stored.wireId,
-								kwargs: message.additional_kwargs,
-							});
-						}
 						const messages = toStored(produced);
 						if (messages.length > 0)
 							await convex.mutation(api.messages.append, { chatId, messages });
+						for (const [at, message] of revised) {
+							const id = at < history.length ? history[at].wireId : message.id;
+							if (id === undefined || message.additional_kwargs === undefined)
+								continue;
+							await convex.mutation(api.messages.annotate, {
+								chatId,
+								id,
+								kwargs: message.additional_kwargs,
+							});
+						}
 					} finally {
 						await convex.mutation(api.chats.settle, {
 							chatId,

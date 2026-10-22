@@ -1,5 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
+import type { Question } from "@repo/interpreter/annotations";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { attachingFiles } from "../lib/attached-files.ts";
@@ -13,7 +14,13 @@ import { useUI } from "../lib/ui.tsx";
 import { ChatInput } from "./chat-input.tsx";
 import type { Mentionable } from "./mention-menu.tsx";
 
-export function ChatComposer({ about }: { about?: OpenFile }) {
+export function ChatComposer({
+	about,
+	question,
+}: {
+	about?: OpenFile;
+	question?: Question;
+}) {
 	const runCommand = useCommandRunner();
 	const { inputOn, sendLabel } = useUI();
 	const { workspaceId, chatId, draftChatId, send, sendAbout, stop, isLoading } =
@@ -54,11 +61,12 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 	const toAttachments = useAttachmentUpload(workspaceId);
 	const submit = useCallback(
 		(text: string, attached: string[]) => {
-			const annotations = attachingFiles(attached);
+			const files = attachingFiles(attached);
+			const annotations = question ? { ...files, answers: question.id } : files;
 			if (about) sendAbout(about, text, annotations);
 			else send(text, annotations);
 		},
-		[about, send, sendAbout],
+		[about, question, send, sendAbout],
 	);
 	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
@@ -76,6 +84,7 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 			symbols={symbols}
 			{...inputOn}
 			sendLabel={sendLabel}
+			question={question}
 		/>
 	);
 }

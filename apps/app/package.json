@@ -39,6 +39,7 @@
     "@repo/components": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
     "@repo/env": "workspace:*",
+    "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
     "@repo/knowledge-extension": "workspace:*",

@@ -173,13 +173,17 @@ export function sourceTokensIn(text: string) {
 export function formsIn(
 	text: string,
 	skipped: readonly FormSpan[] = [],
+	guessesProse = true,
 ): Forms {
 	const heads: string[] = [];
 	let prose = "";
 	let at = 0;
 	for (const [start, end] of formSpans(text)) {
 		const source = text.slice(start, end);
-		if (within(skipped, start, end) || looksLikeParenthesizedProse(source))
+		if (
+			within(skipped, start, end) ||
+			(guessesProse && looksLikeParenthesizedProse(source))
+		)
 			continue;
 		prose += text.slice(at, start);
 		at = end;

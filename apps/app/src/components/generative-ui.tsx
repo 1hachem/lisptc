@@ -258,12 +258,12 @@ function Table({ node }: { node: ViewNode }) {
 	const rows = Array.isArray(node.props.rows) ? node.props.rows : [];
 	return (
 		<div className="min-w-0 overflow-x-auto">
-			<table className="w-full text-left">
+			<table className="w-max min-w-full text-left">
 				<thead>
 					<tr className="border-dim/40 border-b text-dim">
 						{columns.map((column) => (
 							<th key={column} className="pr-4 pb-px font-normal">
-								{column}
+								<div className="max-w-80 wrap-anywhere">{column}</div>
 							</th>
 						))}
 					</tr>
@@ -276,7 +276,9 @@ function Table({ node }: { node: ViewNode }) {
 								const cell = (row as Record<string, unknown>)?.[column];
 								return (
 									<td key={column} className="pr-4">
-										{cell === null || cell === undefined ? "" : String(cell)}
+										<div className="max-w-80 wrap-anywhere">
+											{cell === null || cell === undefined ? "" : String(cell)}
+										</div>
 									</td>
 								);
 							})}

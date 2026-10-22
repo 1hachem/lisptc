@@ -1,12 +1,14 @@
 import {
+	type ActivityEntry,
 	annotate,
 	annotationKey,
 	readAnnotation,
+	recordActivity,
 } from "@repo/interpreter/annotations";
 import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import type { Interp } from "@repo/interpreter/lisp";
+import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -20,7 +22,7 @@ import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import type { Awaitable } from "@repo/shared/host";
+import type { Awaitable, Clock } from "@repo/shared/host";
 import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
 import type { Downloaded, KnowledgeHost, StoreFolder } from "./ports.ts";
@@ -338,8 +340,60 @@ function registerAttachments(
 	);
 }
 
+const fileActivity = topic<ActivityEntry>("knowledge-activity");
+
+const callSeqCodec: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
+
+interface Reporter {
+	readonly interp: Interp;
+	readonly calls: State<number>;
+	readonly clock: Clock;
+}
+
+function* reporting<T>(
+	{ interp, calls, clock }: Reporter,
+	verb: "read" | "write",
+	name: string,
+	run: () => Eval<T>,
+): Eval<T> {
+	const n = calls.get() + 1;
+	calls.set(n);
+	const startedAt = clock.now();
+	const report = (state: ActivityEntry["state"]): void =>
+		fileActivity.emit(interp.channels, {
+			user: {
+				kind: "file",
+				label: `knowledge · ${verb}`,
+				detail: name,
+				state,
+				id: `file-${n}`,
+				startedAt,
+				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
+			},
+		});
+	report("started");
+	try {
+		const value = yield* run();
+		report("done");
+		return value;
+	} catch (error) {
+		report("failed");
+		throw error;
+	}
+}
+
 function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
-	const { store } = host;
+	const { store, clock } = host;
+	const calls = interp.state(
+		"knowledge/calls",
+		callSeqCodec,
+		0,
+		"The number of the last knowledge file read or write, which numbers the activity the user sees.",
+	);
+	const reporter: Reporter = { interp, calls, clock };
 	registerAttachments(interp, host);
 	interp.defGen(
 		"knowledge/list",
@@ -360,10 +414,12 @@ function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 		z.tuple([zString]),
 		function* ([name]): Eval {
 			const checked = fileName(name);
-			const bytes = yield* settled(store.file(checked));
-			return bytes === undefined
-				? null
-				: yield* settled(readFile(checked, bytes));
+			return yield* reporting(reporter, "read", checked, function* () {
+				const bytes = yield* settled(store.file(checked));
+				return bytes === undefined
+					? null
+					: yield* settled(readFile(checked, bytes));
+			});
 		},
 	);
 
@@ -375,14 +431,16 @@ function registerKnowledge(interp: Interp, host: KnowledgeHost): void {
 		z.tuple([zString, zAny]),
 		function* ([name, value]): Eval {
 			const checked = fileName(name);
-			yield* settled(
-				store.write(
-					checked,
-					encodeFile(checked, value),
-					contentTypeOf(checked),
-				),
-			);
-			return checked;
+			return yield* reporting(reporter, "write", checked, function* () {
+				yield* settled(
+					store.write(
+						checked,
+						encodeFile(checked, value),
+						contentTypeOf(checked),
+					),
+				);
+				return checked;
+			});
 		},
 	);
 
@@ -510,9 +568,12 @@ function attachSession(hooks: SessionHooks): void {
 		const attachments = buffer.collect(attached);
 		return next(
 			buffer,
-			attachments.length === 0
-				? into
-				: annotate(into, attachmentsKey, attachments),
+			recordActivity(
+				attachments.length === 0
+					? into
+					: annotate(into, attachmentsKey, attachments),
+				buffer.collect(fileActivity),
+			),
 		);
 	});
 }

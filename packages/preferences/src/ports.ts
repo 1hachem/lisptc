@@ -4,7 +4,6 @@ export type Toggles = Readonly<Record<string, boolean>>;
 
 export interface Preferences {
 	font?: string;
-	channels?: Toggles;
 	metadata?: Toggles;
 	input?: Toggles;
 	sendLabel?: string;
@@ -14,6 +13,8 @@ export interface Preferences {
 	statusBarHidden?: string[];
 	motion?: string;
 	panelMotion?: boolean;
+	traceBesideChat?: boolean;
+	traceLink?: boolean;
 }
 
 export interface PreferencesStore {

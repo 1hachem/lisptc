@@ -10,7 +10,7 @@ import type {
 	StepVerdict,
 	TurnOutcome,
 } from "@repo/interpreter/session";
-import type { AgentRepl } from "@repo/repl/repl";
+import type { AgentRepl, LiveAnnotations } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
 import { type AgentConfig, streamAgent } from "./agent.ts";
@@ -66,8 +66,11 @@ export type TurnEvent =
 			riding?: string;
 			failed: boolean;
 			results: readonly string[];
+			quiet?: boolean;
 	  }
+	| { type: "live"; stepId: string; annotations: Annotations }
 	| { type: "collected"; annotations: Annotations }
+	| { type: "concluded"; annotations: Annotations }
 	| { type: "rode"; text: string }
 	| { type: "steered"; id: string; content: string }
 	| { type: "evaluated"; message: ToolMessage }
@@ -257,6 +260,36 @@ interface Answered {
 	reply: Reply;
 }
 
+async function* whileRunning<T>(
+	stepId: string,
+	run: (live: LiveAnnotations) => Promise<T>,
+): AsyncGenerator<TurnEvent, T> {
+	let latest: Annotations | undefined;
+	let done = false;
+	let wake = () => {};
+	const running = run((annotations) => {
+		latest = annotations;
+		wake();
+	});
+	const finish = () => {
+		done = true;
+		wake();
+	};
+	running.then(finish, finish);
+	while (!done) {
+		if (latest !== undefined) {
+			const annotations = latest;
+			latest = undefined;
+			yield { type: "live", stepId, annotations };
+			continue;
+		}
+		await new Promise<void>((resolve) => {
+			wake = resolve;
+		});
+	}
+	return running;
+}
+
 async function* evaluateStep(
 	turn: Turn,
 	answered: Answered,
@@ -284,7 +317,7 @@ async function* evaluateStep(
 		failed,
 		held,
 		results,
-	} = await evalCode(repl, code, stepId);
+	} = yield* whileRunning(stepId, (live) => evalCode(repl, code, stepId, live));
 	turn.steps += 1;
 	const step = turn.steps;
 
@@ -302,9 +335,9 @@ async function* evaluateStep(
 		ends(effects) ? "halt" : capped ? "capped" : "continue",
 		turn.telemetry.stepEnd,
 	);
-	if (verdict === "halt" && !held) return verdict;
-
-	const riding = emitted === "" ? {} : { riding: emitted };
+	const halting = verdict === "halt" && !held;
+	if (halting && Object.keys(annotations.output).length === 0) return verdict;
+	const riding = emitted === "" || halting ? {} : { riding: emitted };
 	yield {
 		type: "result",
 		step,
@@ -315,7 +348,9 @@ async function* evaluateStep(
 		failed,
 		results,
 		...riding,
+		...(halting ? { quiet: true } : {}),
 	};
+	if (halting) return verdict;
 	transcript.push({
 		role: "tool",
 		content: replResultContent(output, error),
@@ -339,6 +374,9 @@ async function* settle(turn: Turn): AsyncGenerator<TurnEvent, boolean> {
 	const taken = steps > 0 ? yield* takeSteers(turn) : 0;
 	const settled = await repl.beforeSettle(taken > 0);
 	if (settled.emitted !== "") transcript.push(noteEntry(settled.emitted));
+	yield* collect(settled.annotations);
+	if (Object.keys(settled.annotations.output).length > 0)
+		yield { type: "concluded", annotations: settled.annotations.output };
 	return settled.more && steps < maxSteps;
 }
 

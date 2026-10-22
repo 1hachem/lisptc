@@ -10,7 +10,6 @@ const encoder = new TextEncoder();
 const preferences = v.object({
 	font: v.optional(v.string()),
 	themeUses: v.optional(v.record(v.string(), v.number())),
-	channels: v.optional(v.record(v.string(), v.boolean())),
 	metadata: v.optional(v.record(v.string(), v.boolean())),
 	input: v.optional(v.record(v.string(), v.boolean())),
 	sendLabel: v.optional(v.string()),
@@ -20,11 +19,13 @@ const preferences = v.object({
 	statusBarHidden: v.optional(v.array(v.string())),
 	motion: v.optional(v.string()),
 	panelMotion: v.optional(v.boolean()),
+	traceBesideChat: v.optional(v.boolean()),
+	traceLink: v.optional(v.boolean()),
 });
 
 function stripped(row: Doc<"preferences"> | null) {
 	if (row === null) return {};
-	const { _id, _creationTime, userId, theme, ...stored } = row;
+	const { _id, _creationTime, userId, theme, channels, ...stored } = row;
 	return stored;
 }
 

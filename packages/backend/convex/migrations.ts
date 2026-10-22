@@ -35,8 +35,15 @@ export const moveThemeToWorkspaces = migrations.define({
 	},
 });
 
+export const dropChannelToggles = migrations.define({
+	table: "preferences",
+	migrateOne: (_ctx, preferences) =>
+		preferences.channels === undefined ? undefined : { channels: undefined },
+});
+
 export const runAll = migrations.runner([
 	internal.migrations.resetRetiredModels,
 	internal.migrations.dropRetiredInputToggles,
 	internal.migrations.moveThemeToWorkspaces,
+	internal.migrations.dropChannelToggles,
 ]);
