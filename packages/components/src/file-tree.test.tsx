@@ -4,12 +4,14 @@ import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	FileTree,
+	TreeAction,
 	TreeCommand,
 	TreeFile,
 	TreeFilter,
 	TreeFolder,
 	TreeMore,
 	TreePending,
+	TreeSelection,
 } from "./file-tree.tsx";
 
 beforeAll(() => {
@@ -158,5 +160,51 @@ describe("TreePending", () => {
 		expect(label?.textContent).toBe(name);
 		expect(label?.className).toContain("truncate");
 		expect(label?.className).toContain("whitespace-nowrap");
+	});
+});
+
+describe("TreeFile check", () => {
+	it("marks a checked file and passes a shift-click on as a range", async () => {
+		const onCheck = vi.fn();
+		const host = await mounted(
+			<TreeFile
+				name="notes.md"
+				selected={false}
+				link={anchor}
+				check={{ checked: true, selecting: true, onCheck }}
+			/>,
+		);
+		const box = host.querySelector<HTMLInputElement>(
+			'[aria-label="select notes.md"]',
+		);
+		expect(box?.checked).toBe(true);
+		expect(host.querySelector('[data-checked="true"]')).not.toBeNull();
+		await act(async () => {
+			box?.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, shiftKey: true }),
+			);
+		});
+		expect(onCheck).toHaveBeenCalledWith(true);
+	});
+});
+
+describe("TreeSelection", () => {
+	it("asks once more before a confirmed action runs", async () => {
+		const onRun = vi.fn();
+		const host = await mounted(
+			<TreeSelection count={2} total={5} onAll={() => {}} onClear={() => {}}>
+				<TreeAction label="delete" confirm="sure?" onRun={onRun} />
+			</TreeSelection>,
+		);
+		expect(host.textContent).toContain("2 selected");
+		const action = () =>
+			[...host.querySelectorAll("button")].find((each) =>
+				["delete", "sure?"].includes(each.textContent ?? ""),
+			);
+		await act(async () => action()?.click());
+		expect(onRun).not.toHaveBeenCalled();
+		expect(action()?.textContent).toBe("sure?");
+		await act(async () => action()?.click());
+		expect(onRun).toHaveBeenCalledOnce();
 	});
 });

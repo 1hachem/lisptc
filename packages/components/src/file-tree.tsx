@@ -2,14 +2,16 @@
 
 import {
 	Add01Icon,
+	CheckmarkSquare02Icon,
 	CommandLineIcon,
 	File01Icon,
 	Folder01Icon,
 	Folder02Icon,
 	Loading03Icon,
+	SquareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useEntryDragged } from "./sortable-tree.tsx";
 
 const INDENT_REM = 0.875;
@@ -71,6 +73,57 @@ export function TreeFolder({
 	);
 }
 
+type TreeCheck = {
+	checked: boolean;
+	selecting: boolean;
+	onCheck: (range: boolean) => void;
+};
+
+function CheckBox({
+	name,
+	check,
+	glyph,
+}: {
+	name: string;
+	check: TreeCheck;
+	glyph: ReactNode;
+}) {
+	const box = (
+		<HugeiconsIcon
+			className="size-icon-sm"
+			icon={check.checked ? CheckmarkSquare02Icon : SquareIcon}
+		/>
+	);
+	return (
+		<label
+			className={`flex flex-none cursor-pointer py-1 pr-1.5 has-[:focus-visible]:text-fg ${
+				check.checked ? "text-fg" : "text-dim hover:text-fg"
+			}`}
+		>
+			<input
+				type="checkbox"
+				checked={check.checked}
+				aria-label={`select ${name}`}
+				onChange={(event) =>
+					check.onCheck(
+						event.nativeEvent instanceof MouseEvent &&
+							event.nativeEvent.shiftKey,
+					)
+				}
+				className="sr-only"
+			/>
+			{check.checked || check.selecting ? (
+				box
+			) : (
+				<>
+					<span className="flex group-hover/row:hidden">{glyph}</span>
+					<span className="hidden group-hover/row:flex">{box}</span>
+				</>
+			)}
+		</label>
+	);
+}
+
 export function TreeFile({
 	name,
 	icon,
@@ -81,6 +134,7 @@ export function TreeFile({
 	depth = 0,
 	link,
 	trailing,
+	check,
 }: {
 	name: string;
 	icon?: IconSvgElement;
@@ -91,24 +145,32 @@ export function TreeFile({
 	depth?: number;
 	link: (content: ReactNode, className: string) => ReactNode;
 	trailing?: ReactNode;
+	check?: TreeCheck;
 }) {
+	const mark = (
+		<span title={iconLabel} className="flex flex-none">
+			{glyph ?? (
+				<HugeiconsIcon
+					className={`size-icon-sm ${iconClassName}`}
+					icon={icon ?? File01Icon}
+				/>
+			)}
+			{iconLabel && <span className="sr-only">{iconLabel}</span>}
+		</span>
+	);
 	return (
 		<div
 			data-selected={selected}
-			className={`group/row flex items-center ${selected ? "bg-bg2" : ""}`}
+			data-checked={check?.checked}
+			className={`group/row flex items-center ${
+				selected || check?.checked ? "bg-bg2" : ""
+			}`}
 		>
 			<div style={indent(depth)} className="flex min-w-0 flex-1">
+				{check && <CheckBox name={name} check={check} glyph={mark} />}
 				{link(
 					<>
-						<span title={iconLabel} className="flex flex-none">
-							{glyph ?? (
-								<HugeiconsIcon
-									className={`size-icon-sm ${iconClassName}`}
-									icon={icon ?? File01Icon}
-								/>
-							)}
-							{iconLabel && <span className="sr-only">{iconLabel}</span>}
-						</span>
+						{!check && mark}
 						<span className="truncate">{name}</span>
 					</>,
 					`flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-1 ${
@@ -117,6 +179,82 @@ export function TreeFile({
 				)}
 			</div>
 			{trailing}
+		</div>
+	);
+}
+
+export function TreeAction({
+	label,
+	confirm,
+	onRun,
+	danger = false,
+}: {
+	label: string;
+	confirm?: string;
+	onRun: () => void;
+	danger?: boolean;
+}) {
+	const [armed, setArmed] = useState(false);
+	return (
+		<button
+			type="button"
+			onClick={() => {
+				if (confirm && !armed) {
+					setArmed(true);
+					return;
+				}
+				setArmed(false);
+				onRun();
+			}}
+			onBlur={() => setArmed(false)}
+			className={`cursor-pointer px-1 ${
+				danger ? "hover:text-red" : "hover:text-fg"
+			} ${armed ? "text-red" : "text-dim"}`}
+		>
+			{armed ? confirm : label}
+		</button>
+	);
+}
+
+export function TreeSelection({
+	count,
+	total,
+	onAll,
+	onClear,
+	failure,
+	busy = false,
+	depth = 1,
+	children,
+}: {
+	count: number;
+	total: number;
+	onAll: () => void;
+	onClear: () => void;
+	failure?: string | null;
+	busy?: boolean;
+	depth?: number;
+	children: ReactNode;
+}) {
+	return (
+		<div
+			role="toolbar"
+			aria-label={`${count} selected`}
+			style={indent(depth)}
+			className="flex flex-wrap items-center gap-x-1 py-1 pr-1 text-[11.5px] text-dim"
+		>
+			<span className="pr-1 text-fg">{count} selected</span>
+			{count < total && <TreeAction label="all" onRun={onAll} />}
+			<TreeAction label="clear" onRun={onClear} />
+			<span className="flex-1" />
+			{busy ? (
+				<HugeiconsIcon
+					className="size-icon-sm animate-spin"
+					icon={Loading03Icon}
+				/>
+			) : (
+				children
+			)}
+			{failure && <div className="w-full text-red">{failure}</div>}
 		</div>
 	);
 }
