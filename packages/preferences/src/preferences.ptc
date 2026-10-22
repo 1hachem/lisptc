@@ -1,12 +1,12 @@
 PREFERENCES
 
-User's own preferences: font, which channels and metadata fields chat
-shows, what chat input shows and how it behaves. Belong to person you work for, not workspace; follow them into every
+User's own preferences: font, which metadata fields chat shows, what chat
+input shows and how it behaves. Belong to person you work for, not workspace; follow them into every
 workspace. App applies change at once, while they watch.
 
-- (preferences) gives (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t).
+- (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t).
 - (preferences/set :font "geist") changes only keys you give.
-  Toggles merge: (preferences/set :channels '(:lisp t)) turns lisp channel on,
+  Toggles merge: (preferences/set :metadata '(:tokens t)) turns tokens on,
   leaves others as they were.
 - :input is what chat input shows and how it behaves. Shows: :send is send
   button, :attach is attach button. Behaves: :lisp is highlight, completion,
@@ -31,6 +31,11 @@ workspace. App applies change at once, while they watch.
   animates, whatever :motion says.
 - :panel-motion t animates panels as they open, split, switch tab; nil keeps
   them still: (preferences/set :panel-motion nil). Reduced motion wins here too.
+- :trace-beside-chat t opens chat's trace in tab right of chat whenever chat
+  opens; nil opens trace only when asked. For developers. Default nil:
+  (preferences/set :trace-beside-chat t).
+- :trace-link t shows "show in trace" on message metadata; opens trace at
+  that message. Default t. nil hides it: (preferences/set :trace-link nil).
 - (fonts) gives alist of (id . name) to choose from.
 - Theme is not preference: belongs to workspace, see (settings).
 
@@ -39,7 +44,7 @@ changed, so screen moving is no surprise.
 
 GOTCHAS
 
-- Channel, metadata, input, sidebar, hidden, status-bar or status-bar-hidden id
+- Metadata, input, sidebar, hidden, status-bar or status-bar-hidden id
   must be one (preferences) already lists.
   Unknown one errors, naming valid ids.
-- Quote toggle plist, or keywords read as call: '(:lisp t).
+- Quote toggle plist, or keywords read as call: '(:tokens t).

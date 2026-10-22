@@ -16,7 +16,6 @@ import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
 
 const SET_KEYS = [
 	"font",
-	"channels",
 	"metadata",
 	"input",
 	"send-label",
@@ -26,6 +25,8 @@ const SET_KEYS = [
 	"status-bar-hidden",
 	"motion",
 	"panel-motion",
+	"trace-beside-chat",
+	"trace-link",
 ];
 
 const MAX_SEND_LABEL = 16;
@@ -36,13 +37,6 @@ const SET_ARGS = [
 		type: "string",
 		required: false,
 		description: "a font id from (fonts)",
-	},
-	{
-		name: "channels",
-		type: "plist",
-		required: false,
-		description:
-			"which channels of a step the chat shows, as (:id t-or-nil ...); ids not named keep their value",
 	},
 	{
 		name: "metadata",
@@ -106,6 +100,20 @@ const SET_ARGS = [
 		description:
 			"t to animate panels as they open, split and switch tabs, nil to keep them still; the system's reduced-motion setting still wins",
 	},
+	{
+		name: "trace-beside-chat",
+		type: "boolean",
+		required: false,
+		description:
+			"t to open a chat's trace in a tab to its right whenever the chat opens, nil to open the trace only when asked",
+	},
+	{
+		name: "trace-link",
+		type: "boolean",
+		required: false,
+		description:
+			"t to show a control on a message's metadata that opens the trace at that message, nil to hide it",
+	},
 ];
 
 function plist(entries: [string, unknown][]): List {
@@ -123,7 +131,6 @@ function togglesList(toggles: Toggles | undefined): List {
 export function preferencesList(preferences: Preferences): List {
 	return plist([
 		["font", preferences.font ?? null],
-		["channels", togglesList(preferences.channels)],
 		["metadata", togglesList(preferences.metadata)],
 		["input", togglesList(preferences.input)],
 		["send-label", preferences.sendLabel ?? null],
@@ -136,6 +143,8 @@ export function preferencesList(preferences: Preferences): List {
 		],
 		["motion", preferences.motion ?? null],
 		["panel-motion", preferences.panelMotion === false ? null : true],
+		["trace-beside-chat", preferences.traceBesideChat === true ? true : null],
+		["trace-link", preferences.traceLink === false ? null : true],
 	]);
 }
 
@@ -156,7 +165,7 @@ function chosen(
 }
 
 function toggled(
-	kind: "channels" | "metadata" | "input",
+	kind: "metadata" | "input",
 	value: unknown,
 	known: Toggles | undefined,
 ): Toggles {
@@ -230,7 +239,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
+		'Return the user\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -240,26 +249,20 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t])',
+		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :font :channels :metadata :input :send-label :sidebar :hidden :status-bar :status-bar-hidden :motion :panel-motion",
+					"nothing to set, give one of :font :metadata :input :send-label :sidebar :hidden :status-bar :status-bar-hidden :motion :panel-motion :trace-beside-chat :trace-link",
 					null,
 				);
 			const current = yield* settled(store.read());
 			const change: Preferences = {};
 			if (options.has("font"))
 				change.font = chosen("font", options.get("font"), host.fonts);
-			if (options.has("channels"))
-				change.channels = toggled(
-					"channels",
-					options.get("channels"),
-					current.channels,
-				);
 			if (options.has("metadata"))
 				change.metadata = toggled(
 					"metadata",
@@ -302,6 +305,10 @@ export function registerPreferences(
 				change.motion = chosen("motion", options.get("motion"), host.motions);
 			if (options.has("panel-motion"))
 				change.panelMotion = options.get("panel-motion") !== null;
+			if (options.has("trace-beside-chat"))
+				change.traceBesideChat = options.get("trace-beside-chat") !== null;
+			if (options.has("trace-link"))
+				change.traceLink = options.get("trace-link") !== null;
 			yield* settled(store.write(change));
 			return preferencesList({ ...current, ...change });
 		},
