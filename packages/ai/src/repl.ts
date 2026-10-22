@@ -1,6 +1,6 @@
 import type { Effect } from "@repo/interpreter/effects";
 import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
-import type { AgentRepl, EvalOutput } from "@repo/repl/repl";
+import type { AgentRepl, EvalOutput, LiveAnnotations } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
@@ -139,8 +139,13 @@ async function outcomeOf(
 	}
 }
 
-export function evalCode(repl: AgentRepl, code: string, origin?: string) {
-	return outcomeOf(repl, () => repl.evalOutput(code, origin));
+export function evalCode(
+	repl: AgentRepl,
+	code: string,
+	origin?: string,
+	live?: LiveAnnotations,
+) {
+	return outcomeOf(repl, () => repl.evalOutput(code, origin, live));
 }
 
 export function evalMessageCode(
