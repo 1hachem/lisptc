@@ -12,9 +12,9 @@ import {
 
 const PICKED_KEY = "lisptc.workspace";
 
-type Workspace = Doc<"workspaces">;
+export type Workspace = Doc<"workspaces">;
 
-interface WorkspaceSelection {
+export interface WorkspaceSelection {
 	workspaces: Workspace[];
 	workspace: Workspace | null;
 }

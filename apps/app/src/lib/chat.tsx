@@ -109,9 +109,11 @@ export interface ChatSession {
 	fail: (message: string) => void;
 }
 
-type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
+export type StoredMessage = FunctionReturnType<
+	typeof api.messages.transcript
+>[number];
 
-type MessageAnnotations = Record<string, unknown>;
+export type MessageAnnotations = Record<string, unknown>;
 
 const shaped = new WeakMap<StoredMessage, ChatMessage>();
 

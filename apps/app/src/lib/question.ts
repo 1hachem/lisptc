@@ -4,7 +4,7 @@ import {
 	readAnnotation,
 } from "@repo/interpreter/annotations";
 
-interface QuestionCarrier {
+export interface QuestionCarrier {
 	type: string;
 	additional_kwargs?: Record<string, unknown>;
 }
