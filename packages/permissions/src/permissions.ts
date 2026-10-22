@@ -11,6 +11,7 @@ import { requested } from "./channel.ts";
 import type {
 	ApprovalRequest,
 	PermissionsHost,
+	PermissionsStore,
 	Ruling,
 	ServerAccess,
 } from "./ports.ts";
@@ -56,39 +57,40 @@ export class PermissionRefusal extends EvalException {
 
 export class SessionRules {
 	private readonly asks: ReadonlySet<string>;
+	private read: PermissionRules;
 
 	constructor(
-		private held: PermissionRules,
+		private readonly store: PermissionsStore,
 		asks: readonly string[] = [],
 	) {
 		this.asks = new Set(asks);
+		this.read = parseRules(store.source());
 	}
 
 	get current(): PermissionRules {
-		return this.held;
-	}
-
-	replace(next: PermissionRules): void {
-		this.held = next;
+		const source = this.store.source();
+		if (source !== this.read.source) this.read = parseRules(source);
+		return this.read;
 	}
 
 	decide(name: string): Ruling {
-		const ruling = this.held.decide(name);
+		const held = this.current;
+		const ruling = held.decide(name);
 		if (
 			ruling.verdict !== "allow" ||
 			!this.asks.has(name) ||
-			this.held.named(name) !== undefined
+			held.named(name) !== undefined
 		)
 			return ruling;
 		return { verdict: "ask" };
 	}
 
 	server(name: string): ServerAccess {
-		return this.held.server(name);
+		return this.current.server(name);
 	}
 
 	tool(server: string, tool: string): boolean {
-		return this.held.tool(server, tool);
+		return this.current.tool(server, tool);
 	}
 }
 
@@ -99,7 +101,7 @@ export interface PermissionsExtension extends InterpExtension {
 export function permissionsExtension(
 	host: PermissionsHost,
 ): PermissionsExtension {
-	const rules = new SessionRules(parseRules(host.store.source()), host.asks);
+	const rules = new SessionRules(host.store, host.asks);
 	let armed = 0;
 	let issued = 0;
 
@@ -249,9 +251,7 @@ export function permissionsExtension(
 	}
 
 	function commit(form: Cell): unknown {
-		const next = changed(form);
-		rules.replace(next);
-		const saved = host.store.save(next.source);
+		const saved = host.store.save(changed(form).source);
 		return saved instanceof Promise ? saved.then(() => form) : form;
 	}
 
