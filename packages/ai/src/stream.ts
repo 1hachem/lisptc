@@ -120,17 +120,13 @@ function toEntry(m: ChatMessageInput): TranscriptEntry {
 }
 
 function received(input: ChatInput): Annotations | undefined {
-	const messages = input.messages ?? [];
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const type = wireType(messages[i].type ?? messages[i].role);
-		if (type === "system") return undefined;
-		if (type !== "human") continue;
-		const carried = Object.entries(messages[i].additional_kwargs ?? {}).filter(
-			([key]) => !ENVELOPE.has(key),
-		);
-		return carried.length === 0 ? undefined : Object.fromEntries(carried);
-	}
-	return undefined;
+	const newest = input.messages?.at(-1);
+	if (newest === undefined || wireType(newest.type ?? newest.role) !== "human")
+		return undefined;
+	const carried = Object.entries(newest.additional_kwargs ?? {}).filter(
+		([key]) => !ENVELOPE.has(key),
+	);
+	return carried.length === 0 ? undefined : Object.fromEntries(carried);
 }
 
 function toTranscript(input: ChatInput): TranscriptEntry[] {

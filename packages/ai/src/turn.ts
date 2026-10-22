@@ -228,7 +228,7 @@ async function* openTurn(
 	yield* collect(started.annotations);
 
 	if (turn.received !== undefined) {
-		const heard = await repl.received(turn.received);
+		const heard = await repl.received(turn.received, turn.telemetry.received);
 		yield* collect(heard.annotations);
 		if (heard.emitted !== "" && ride(transcript, heard.emitted))
 			yield { type: "rode", text: heard.emitted };
