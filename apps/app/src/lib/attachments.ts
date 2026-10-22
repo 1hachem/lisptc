@@ -32,13 +32,13 @@ function reasonOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-export function attachedNames(items: readonly Attachment[]): string[] {
+function attachedNames(items: readonly Attachment[]): string[] {
 	return items.flatMap(({ upload }) =>
 		upload.state === "done" ? [upload.name] : [],
 	);
 }
 
-export function blockedSend(
+function blockedSend(
 	items: readonly Attachment[],
 	streaming = false,
 ): string | null {
