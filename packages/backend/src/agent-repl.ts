@@ -48,7 +48,10 @@ import { ConvexSecretsStore } from "./secrets-store.ts";
 import type { ServerClient } from "./server-client.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
-export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
+export type WorkspaceClient = Pick<
+	ConvexHttpClient,
+	"query" | "mutation" | "url"
+>;
 
 export type Connect = () => WorkspaceClient;
 

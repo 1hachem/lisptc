@@ -262,6 +262,26 @@ describe("attachments", () => {
 		expect(await ev('(knowledge/read "spec.pdf")')).toMatch(/Q3 revenue up/);
 	});
 
+	it.each([
+		[
+			"logo (2).svg",
+			"image/svg+xml",
+			'<svg viewBox="0 0 1 1"><circle r="1"/></svg>',
+		],
+		["notes.md", "application/octet-stream", "# notes"],
+		["Makefile", "application/octet-stream", "CC = cc"],
+		["log.txt", "text/plain", "line one"],
+	])("reads %s as its text", async (name, contentType, text) => {
+		const { ev, store } = await world();
+		store.attachmentsHeld.set(name, {
+			bytes: new TextEncoder().encode(text),
+			contentType,
+		});
+		expect(await ev(`(attachments/read ${JSON.stringify(name)})`)).toBe(
+			JSON.stringify(text),
+		);
+	});
+
 	it("gives nil for a file attachments do not hold", async () => {
 		const { ev } = await world();
 		expect(await ev('(attachments/read "nope.md")')).toBe("nil");

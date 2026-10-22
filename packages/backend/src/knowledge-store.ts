@@ -6,7 +6,18 @@ import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
-export type KnowledgeStoreClient = Pick<ConvexHttpClient, "query" | "mutation">;
+export type KnowledgeStoreClient = Pick<
+	ConvexHttpClient,
+	"query" | "mutation" | "url"
+>;
+
+function onDeployment(served: string, client: KnowledgeStoreClient): string {
+	const url = new URL(served);
+	const deployment = new URL(client.url);
+	url.protocol = deployment.protocol;
+	url.host = deployment.host;
+	return url.href;
+}
 
 export interface BlobTransfer {
 	download(url: string): Promise<Uint8Array>;
@@ -48,12 +59,13 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 	}
 
 	async file(name: string): Promise<Uint8Array | undefined> {
-		const held = await this.connect().query(api.knowledge.get, {
+		const client = this.connect();
+		const held = await client.query(api.knowledge.get, {
 			workspaceId: this.workspaceId,
 			name,
 		});
 		if (held?.url == null) return undefined;
-		return await this.transfer.download(held.url);
+		return await this.transfer.download(onDeployment(held.url, client));
 	}
 
 	async write(name: string, text: string, contentType: string): Promise<void> {
@@ -62,7 +74,7 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 			workspaceId: this.workspaceId,
 		});
 		const storageId = await this.transfer.upload(
-			url,
+			onDeployment(url, client),
 			new Blob([text], { type: contentType }),
 		);
 		const refused = await client.mutation(api.knowledge.add, {
@@ -90,12 +102,13 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 	}
 
 	async attachment(name: string): Promise<Uint8Array | undefined> {
-		const held = await this.connect().query(api.attachments.get, {
+		const client = this.connect();
+		const held = await client.query(api.attachments.get, {
 			workspaceId: this.workspaceId,
 			name,
 		});
 		if (held?.url == null) return undefined;
-		return await this.transfer.download(held.url);
+		return await this.transfer.download(onDeployment(held.url, client));
 	}
 
 	async attach(
@@ -108,7 +121,7 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 			workspaceId: this.workspaceId,
 		});
 		const storageId = await this.transfer.upload(
-			url,
+			onDeployment(url, client),
 			new Blob([new Uint8Array(bytes)], { type: contentType }),
 		);
 		const added = await client.mutation(api.attachments.add, {
