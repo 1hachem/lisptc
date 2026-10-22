@@ -135,6 +135,24 @@ export const remove = mutation({
 	},
 });
 
+export const removeMany = mutation({
+	args: { workspaceId: v.id("workspaces"), names: v.array(v.string()) },
+	returns: v.array(v.string()),
+	handler: async (ctx, { workspaceId, names }) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (names.length > MAX_ATTACHMENTS)
+			throw new ConvexError({ code: "TOO_MANY_FILES" });
+		const removed: string[] = [];
+		for (const name of new Set(names)) {
+			const existing = await held(ctx, workspaceId, name);
+			if (existing === null) continue;
+			await intoBin(ctx, existing, "attachments");
+			removed.push(name);
+		}
+		return removed;
+	},
+});
+
 export const discard = mutation({
 	args: { workspaceId: v.id("workspaces"), name: v.string() },
 	returns: v.boolean(),

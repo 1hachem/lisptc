@@ -968,6 +968,12 @@ describe("knowledge access", () => {
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.knowledge.removeMany, {
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		).rejects.toThrow();
 		expect(
 			await bob.as.query(api.knowledge.list, { workspaceId: bob.workspace }),
 		).toHaveLength(1);
@@ -1000,6 +1006,12 @@ describe("attachments access", () => {
 			alice.as.mutation(api.attachments.remove, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.attachments.removeMany, {
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
 			}),
 		).rejects.toThrow();
 		expect(
@@ -1035,6 +1047,10 @@ describe("bin access", () => {
 			alice.as.mutation(api.bin.remove, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.removeMany, {
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
 			}),
 		])
 			await expect(denied).rejects.toThrow();

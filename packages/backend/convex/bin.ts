@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { held as heldAttachment } from "./attachments.js";
@@ -125,6 +125,25 @@ export const remove = mutation({
 		await ctx.storage.delete(row.storageId);
 		await ctx.db.delete(row._id);
 		return true;
+	},
+});
+
+export const removeMany = mutation({
+	args: { workspaceId: v.id("workspaces"), names: v.array(v.string()) },
+	returns: v.array(v.string()),
+	handler: async (ctx, { workspaceId, names }) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (names.length > MAX_BIN)
+			throw new ConvexError({ code: "TOO_MANY_FILES" });
+		const removed: string[] = [];
+		for (const name of new Set(names)) {
+			const row = await heldInBin(ctx, workspaceId, name);
+			if (row === null) continue;
+			await ctx.storage.delete(row.storageId);
+			await ctx.db.delete(row._id);
+			removed.push(name);
+		}
+		return removed;
 	},
 });
 
