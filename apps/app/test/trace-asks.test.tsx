@@ -61,7 +61,7 @@ async function mount(messages: ChatMessage[]) {
 		root.render(
 			<QueryClientProvider client={offline}>
 				<UIProvider>
-					<TraceLines messages={messages} />
+					<TraceLines messages={messages} turn="t1" />
 				</UIProvider>
 			</QueryClientProvider>,
 		);

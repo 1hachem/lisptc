@@ -14,7 +14,6 @@ import {
 } from "../lib/chat.tsx";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import {
-	collapsedByDefault,
 	stepHolding,
 	type TraceEntry,
 	type TraceStep,
@@ -123,7 +122,6 @@ function useFlash(target: string | undefined): string | undefined {
 
 function useOpenSteps(entries: readonly TraceEntry[], target?: string) {
 	const [overrides, setOverrides] = useState<Record<string, boolean>>({});
-	const collapsed = collapsedByDefault(entries);
 	const targeted = stepHolding(entries, target);
 	useEffect(() => {
 		if (targeted === undefined) return;
@@ -133,8 +131,7 @@ function useOpenSteps(entries: readonly TraceEntry[], target?: string) {
 			return rest;
 		});
 	}, [targeted]);
-	const isOpen = (step: string) =>
-		overrides[step] ?? (step === targeted || !collapsed);
+	const isOpen = (step: string) => overrides[step] ?? step === targeted;
 	const toggle = (step: string) =>
 		setOverrides((was) => ({ ...was, [step]: !isOpen(step) }));
 	return { isOpen, toggle };

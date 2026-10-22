@@ -10,8 +10,6 @@ import {
 	toolFailed,
 } from "./chat.tsx";
 
-const COLLAPSED_FROM = 8;
-
 const SNIPPET = 60;
 
 export interface TraceStep {
@@ -99,8 +97,4 @@ export function stepHolding(
 		)
 			return entry.step.id;
 	return undefined;
-}
-
-export function collapsedByDefault(entries: readonly TraceEntry[]): boolean {
-	return entries.filter((e) => e.kind === "step").length >= COLLAPSED_FROM;
 }

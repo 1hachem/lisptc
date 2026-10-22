@@ -366,6 +366,10 @@ describe("a call's progress", () => {
 describe("the trace", () => {
 	it("shows the code each step ran, what it printed and what it returned, every channel on", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
+		for (const header of host.querySelectorAll<HTMLButtonElement>(
+			"[data-step-header]",
+		))
+			await act(async () => header.click());
 		const text = host.textContent ?? "";
 
 		expect(text).toContain("(draw-chart)");
@@ -621,7 +625,17 @@ const STEPS: ChatMessage[] = [
 	]).flat(),
 ];
 
-describe("a long trace", () => {
+describe("a trace's steps", () => {
+	it("start folded, however few there are", async () => {
+		const host = await mount(<TraceLines messages={MESSAGES} />);
+		const headers = [...host.querySelectorAll("[data-step-header]")];
+
+		expect(headers.length).toBeGreaterThan(0);
+		expect(
+			headers.every((h) => h.getAttribute("aria-expanded") === "false"),
+		).toBe(true);
+	});
+
 	it("folds every step to a header and opens the one it was sent to", async () => {
 		const host = await mount(<TraceLines messages={STEPS} turn="t4" />);
 		const headers = [...host.querySelectorAll("[data-step-header]")];
