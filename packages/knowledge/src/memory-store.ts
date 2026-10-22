@@ -1,12 +1,12 @@
 import { fittedFileName, type StoreFolder } from "@repo/shared/files";
 import type { BinnedFile, KnowledgeStore } from "./ports.ts";
 
-interface HeldFile {
+export interface HeldFile {
 	bytes: Uint8Array;
 	contentType: string;
 }
 
-interface BinHeld extends HeldFile {
+export interface BinHeld extends HeldFile {
 	from: StoreFolder;
 	binnedAt: number;
 }
