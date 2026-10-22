@@ -89,22 +89,6 @@ services:
       - GOOGLE_CLIENT_SECRET
       - POSTHOG_API_KEY
       - POSTHOG_HOST
-    develop:
-      watch:
-        - action: rebuild
-          path: ./packages/shared/src
-        - action: rebuild
-          path: ./packages
-          ignore:
-            - "**"
-            - "!**/package.json"
-            - "**/node_modules/"
-        - action: rebuild
-          path: ./package.json
-        - action: rebuild
-          path: ./pnpm-workspace.yaml
-        - action: rebuild
-          path: ./pnpm-lock.yaml
 
   app:
     build:
@@ -139,22 +123,9 @@ services:
           target: /app/packages
           ignore:
             - node_modules/
-            - "**/package.json"
         - action: sync+restart
           path: ./apps/app/vite.config.ts
           target: /app/apps/app/vite.config.ts
-        - action: rebuild
-          path: ./packages
-          ignore:
-            - "**"
-            - "!**/package.json"
-            - "**/node_modules/"
-        - action: rebuild
-          path: ./apps/app/package.json
-        - action: rebuild
-          path: ./package.json
-        - action: rebuild
-          path: ./pnpm-workspace.yaml
         - action: rebuild
           path: ./pnpm-lock.yaml
     volumes:
