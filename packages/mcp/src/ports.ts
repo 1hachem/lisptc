@@ -16,7 +16,9 @@ export interface JsonSchema {
 
 export interface Tool {
 	name: string;
+	title?: string;
 	description?: string;
+	annotations?: { title?: string };
 	inputSchema?: JsonSchema;
 	outputSchema?: JsonSchema;
 }

@@ -1,3 +1,7 @@
+import {
+	type ActivityEntry,
+	recordActivity,
+} from "@repo/interpreter/annotations";
 import { isNumeric } from "@repo/interpreter/arith";
 import { type Ask, asking } from "@repo/interpreter/asks";
 import { topic } from "@repo/interpreter/channels";
@@ -25,7 +29,7 @@ import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
-import type { PromptSource } from "@repo/shared/host";
+import type { Clock, PromptSource } from "@repo/shared/host";
 import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import {
@@ -46,6 +50,34 @@ const CALL_TIMEOUT_MS = 30_000;
 const AUTHORIZE_ACTION = "mcp/authorize";
 
 const authorizationAsked = topic<Ask>("mcp-authorization");
+
+const toolActivity = topic<ActivityEntry>("mcp-activity");
+
+const DETAIL_MAX = 120;
+
+function toolLabel(server: string, tool: Tool): string {
+	return `${server} · ${tool.title ?? tool.annotations?.title ?? tool.name}`;
+}
+
+function toolDetail(description: string | undefined): string | undefined {
+	const line = firstLine(description).trim();
+	const sentence = line.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? line;
+	if (sentence === "") return undefined;
+	return sentence.length <= DETAIL_MAX
+		? sentence
+		: `${sentence.slice(0, DETAIL_MAX - 1).trimEnd()}…`;
+}
+
+function reportActivity(hooks: SessionHooks): void {
+	hooks.annotate.use((buffer, into, next) =>
+		next(buffer, recordActivity(into, buffer.collect(toolActivity))),
+	);
+}
+
+const callSeqCodec: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
 
 const authorizationAnswered = topic<{
 	id: string;
@@ -218,6 +250,7 @@ export interface McpExtensionHost {
 	toolkit: ToolkitRegistry;
 	search: SearchEngine;
 	prompt: PromptSource;
+	clock: Clock;
 	policy?: McpPolicy;
 }
 
@@ -484,10 +517,12 @@ interface Wiring {
 	readonly servers: Servers;
 	readonly policy: McpPolicy;
 	readonly reconnect: (entry: ServerEntry) => Promise<unknown>;
+	readonly calls: State<number>;
+	readonly clock: Clock;
 }
 
 function callTool(
-	{ client, servers }: Wiring,
+	{ interp, client, servers, calls, clock }: Wiring,
 	ref: ToolRef,
 	f: unknown[],
 ): Promise<unknown> {
@@ -506,11 +541,37 @@ function callTool(
 		throw new EvalException("MCP tool not loaded", name, false);
 	const args = plistToJson(f[0] as List);
 	validate(tool, args);
+	const n = calls.get() + 1;
+	calls.set(n);
+	const detail = toolDetail(tool.description);
+	const startedAt = clock.now();
+	const report = (state: ActivityEntry["state"]): void =>
+		toolActivity.emit(interp.channels, {
+			user: {
+				kind: "mcp",
+				label: toolLabel(ref.server, tool),
+				...(detail === undefined ? {} : { detail }),
+				state,
+				id: `mcp-${n}`,
+				startedAt,
+				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
+			},
+		});
+	report("started");
 	return withTimeout(
 		client.callTool({ serverId: entry.serverId, tool: tool.name, args }),
 		CALL_TIMEOUT_MS,
 		name,
-	).then(jsonToLisp);
+	).then(
+		(value) => {
+			report("done");
+			return jsonToLisp(value);
+		},
+		(error: unknown) => {
+			report("failed");
+			throw error;
+		},
+	);
 }
 
 function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
@@ -575,15 +636,21 @@ function toolRows(entry: ServerEntry): List[] {
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
-		session: answerAuthorization,
+		session(hooks: SessionHooks): void {
+			answerAuthorization(hooks);
+			reportActivity(hooks);
+		},
 	});
 }
 
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy">,
+	host: Pick<
+		McpExtensionHost,
+		"client" | "toolkit" | "search" | "policy" | "clock"
+	>,
 ): void {
-	const { client, toolkit, search } = host;
+	const { client, toolkit, search, clock } = host;
 	const policy = host.policy ?? openPolicy;
 
 	const servers = interp.state(
@@ -682,7 +749,21 @@ export function registerMcp(
 		return done;
 	}
 
-	const wiring: Wiring = { interp, client, servers, policy, reconnect };
+	const calls = interp.state(
+		"mcp/calls",
+		callSeqCodec,
+		0,
+		"The number of the last MCP tool call, which numbers the activity the user sees.",
+	);
+	const wiring: Wiring = {
+		interp,
+		client,
+		servers,
+		policy,
+		reconnect,
+		calls,
+		clock,
+	};
 
 	interp.def(
 		"load-mcp",
