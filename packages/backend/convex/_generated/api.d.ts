@@ -15,6 +15,7 @@ import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as knowledge from "../knowledge.js";
+import type * as lib_attached from "../lib/attached.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_bin from "../lib/bin.js";
 import type * as lib_chunks from "../lib/chunks.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   knowledge: typeof knowledge;
+  "lib/attached": typeof lib_attached;
   "lib/auth": typeof lib_auth;
   "lib/bin": typeof lib_bin;
   "lib/chunks": typeof lib_chunks;
