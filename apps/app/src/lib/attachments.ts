@@ -46,9 +46,13 @@ function blockedSend(
 		return "files go with the next message, once this reply ends";
 	if (items.some(({ upload }) => upload.state === "uploading"))
 		return "still uploading, sends once the files are in";
-	if (items.some(({ upload }) => upload.state === "failed"))
-		return "remove the files that failed to upload";
 	return null;
+}
+
+function dropFailed(count: number): string {
+	return count === 1
+		? "a file failed to upload, press enter again to remove it and send"
+		: "files failed to upload, press enter again to remove them and send";
 }
 
 export function useAttachments(upload?: UploadFile, discard?: DiscardUpload) {
@@ -143,14 +147,22 @@ export function useAttachedSend({
 	held?: string;
 }) {
 	const attachments = useAttachments(files?.upload, files?.discard);
+	const dropping = useRef(false);
 	const submit = useCallback(
 		(text: string): false | Promise<boolean> => {
 			const blocked = held ?? blockedSend(attachments.items, streaming);
-			if (blocked !== null) {
-				flash(blocked);
+			const failed = attachments.items.filter(
+				({ upload }) => upload.state === "failed",
+			).length;
+			const confirmed = blocked === null && failed > 0 && dropping.current;
+			dropping.current = blocked === null && failed > 0 && !confirmed;
+			if (blocked !== null || dropping.current) {
+				flash(blocked ?? dropFailed(failed));
 				return false;
 			}
-			const sending = attachments.items;
+			const sending = attachments.items.filter(
+				({ upload }) => upload.state !== "failed",
+			);
 			attachments.clear();
 			return new Promise<unknown>((resolve) =>
 				resolve(onSubmit(text, attachedNames(sending))),

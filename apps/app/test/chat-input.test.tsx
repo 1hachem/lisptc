@@ -349,7 +349,7 @@ describe("the chat input", () => {
 		expect(chip("spec.pdf")).toBeUndefined();
 	});
 
-	it("refuses to send while an upload has failed, and says why on the chip", async () => {
+	it("holds a send while an upload has failed, and drops it on a second enter", async () => {
 		const onSubmit = vi.fn();
 		const upload = vi.fn(() =>
 			Promise.reject(new Error("spec.pdf not uploaded: the folder is full")),
@@ -364,7 +364,13 @@ describe("the chat input", () => {
 		type(field, "see this");
 		enter(field, false);
 		expect(onSubmit).not.toHaveBeenCalled();
-		expect(host.textContent).toContain("remove the files that failed");
+		expect(host.textContent).toContain(
+			"a file failed to upload, press enter again to remove it and send",
+		);
+		expect(chip("spec.pdf")?.dataset.upload).toBe("failed");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("see this", []);
+		expect(chip("spec.pdf")).toBeUndefined();
 	});
 
 	it("deletes an uploaded file removed before sending", async () => {
