@@ -5,7 +5,7 @@ const jwks = createRemoteJWKSet(
 	new URL("/api/auth/convex/jwks", webEnv.CONVEX_SITE_URL),
 );
 
-export type Verdict =
+type Verdict =
 	| { signed: true; subject: string | undefined }
 	| { signed: false; forged: boolean };
 
