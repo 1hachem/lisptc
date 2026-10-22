@@ -7,7 +7,13 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import type { FiredMemory } from "@repo/components";
 import {
+	type ActivityEntry,
+	activityKey,
+	type Intent,
+	intentKey,
 	memoriesKey,
+	type Question,
+	questionKey,
 	readAnnotation,
 	type ViewNode,
 	viewKey,
@@ -60,7 +66,7 @@ function named(value: string | undefined): string | undefined {
 	return value === "" ? undefined : value;
 }
 
-function parseMeta(message: ChatMessage): StepMeta | undefined {
+export function stepMeta(message: ChatMessage): StepMeta | undefined {
 	const { meta } = envelopeOf(message.additional_kwargs);
 	if (meta === undefined) return undefined;
 	const fired = readAnnotation(meta, memoriesKey);
@@ -107,13 +113,23 @@ type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
 
 type MessageAnnotations = Record<string, unknown>;
 
-function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
-	return stored.map((message) => ({
+const shaped = new WeakMap<StoredMessage, ChatMessage>();
+
+function toChatMessage(message: StoredMessage): ChatMessage {
+	const known = shaped.get(message);
+	if (known !== undefined) return known;
+	const shown: ChatMessage = {
 		id: message.wireId ?? message._id,
 		type: message.type,
 		content: message.content,
 		additional_kwargs: message.kwargs,
-	}));
+	};
+	shaped.set(message, shown);
+	return shown;
+}
+
+export function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
+	return stored.map(toChatMessage);
 }
 
 function greetingMessage(): ChatMessage {
@@ -241,7 +257,7 @@ function freshMeta(
 		if (!m.id) continue;
 		const known = meta[m.id];
 		if (known?.memories) continue;
-		const parsed = parseMeta(m);
+		const parsed = stepMeta(m);
 		if (!parsed) continue;
 		if (known && !parsed.memories) continue;
 		found[m.id] = parsed;
@@ -404,7 +420,7 @@ export function ChatProvider({
 	const streamingFor = useRef<Id<"chats"> | null>(null);
 
 	const { data: stored } = useQuery(
-		convexQuery(api.messages.transcript, chatId ? { chatId } : "skip"),
+		convexQuery(api.messages.light, chatId ? { chatId } : "skip"),
 	);
 	const persisted = useMemo(() => toChatMessages(stored ?? []), [stored]);
 
@@ -648,8 +664,16 @@ export function isUserMessage(message: ChatMessage): boolean {
 	return message.type === "human" || message.type === "user";
 }
 
+export function messageClassified(message: ChatMessage): boolean {
+	return envelopeOf(message.additional_kwargs).prose !== undefined;
+}
+
 export function messageProse(message: ChatMessage): Skipped[] {
 	return [...(envelopeOf(message.additional_kwargs).prose ?? [])];
+}
+
+export function toolQuiet(message: ChatMessage): boolean {
+	return envelopeOf(message.additional_kwargs).quiet === true;
 }
 
 export function toolFailed(message: ChatMessage): boolean {
@@ -664,8 +688,20 @@ export function toolUi(message: ChatMessage): ViewNode | undefined {
 	return readAnnotation(message.additional_kwargs, viewKey);
 }
 
+export function toolActivity(message: ChatMessage): ActivityEntry[] {
+	return readAnnotation(message.additional_kwargs, activityKey) ?? [];
+}
+
+export function toolIntent(message: ChatMessage): Intent | undefined {
+	return readAnnotation(message.additional_kwargs, intentKey);
+}
+
 export function toolAsks(message: ChatMessage): Ask[] {
 	return asksOf(message.additional_kwargs);
+}
+
+export function toolQuestion(message: ChatMessage): Question | undefined {
+	return readAnnotation(message.additional_kwargs, questionKey);
 }
 
 export function toolAnswers(
@@ -698,21 +734,11 @@ export function toolResult(message: ChatMessage): {
 	output: string;
 	error: boolean;
 } {
-	const text = messageText(message);
-	const { display } = envelopeOf(message.additional_kwargs);
-	try {
-		const parsed = JSON.parse(text) as {
-			source?: unknown;
-			output?: unknown;
-			error?: unknown;
-		};
-		if (parsed?.source === "lisp-repl")
-			return {
-				output: display ?? String(parsed.output ?? ""),
-				error: Boolean(parsed.error),
-			};
-	} catch {}
-	return { output: text, error: false };
+	const { display, failed } = envelopeOf(message.additional_kwargs);
+	return {
+		output: display ?? "",
+		error: failed === true || toolModelOutput(message).error,
+	};
 }
 
 export function messageText(message: ChatMessage): string {

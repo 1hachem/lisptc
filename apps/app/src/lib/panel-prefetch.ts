@@ -52,7 +52,11 @@ function prefetch(
 	workspaceId: Id<"workspaces">,
 	content: PanelContent,
 ): Promise<unknown> {
-	if (content.kind === "chat" || content.kind === "view")
+	if (
+		content.kind === "chat" ||
+		content.kind === "view" ||
+		content.kind === "trace"
+	)
 		return prefetchTranscript(queryClient, content.chatId);
 	if (content.kind === "file")
 		return prefetchFile(queryClient, workspaceId, content);

@@ -98,3 +98,9 @@ export const CHANNELS: Channel[] = [
 		text: "text-dim",
 	},
 ];
+
+export type Shown = Record<ChannelId, boolean>;
+
+export const EVERY_CHANNEL = Object.fromEntries(
+	CHANNELS.map((c) => [c.id, true]),
+) as Shown;

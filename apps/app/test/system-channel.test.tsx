@@ -4,8 +4,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
+import { TraceLines } from "../src/components/trace-view.tsx";
 import { CHANNELS } from "../src/lib/channels.ts";
-import { UIProvider, useUI } from "../src/lib/ui.tsx";
+import { UIProvider } from "../src/lib/ui.tsx";
 
 const NOTE = "I approved (fs/write a). Carry on.";
 
@@ -31,7 +32,7 @@ vi.mock("../src/lib/chat.tsx", async (importOriginal) => ({
 }));
 const stored = vi.hoisted(() => {
 	const listeners = new Set<() => void>();
-	let value: { channels?: Record<string, boolean> } = {};
+	let value: Record<string, unknown> = {};
 	return {
 		get: () => value,
 		put: (change: typeof value) => {
@@ -54,6 +55,7 @@ vi.mock("../src/lib/preferences.ts", async () => {
 		usePreferences: () =>
 			useSyncExternalStore(stored.subscribe, stored.get, stored.get),
 		usePutPreferences: () => stored.put,
+		useTraceLink: () => ({ traceLink: true, setTraceLink: () => {} }),
 	};
 });
 const prefs = vi.hoisted(() => new Map<string, boolean>());
@@ -107,19 +109,11 @@ afterEach(() => {
 	stored.reset();
 });
 
-let toggle: (() => void) | undefined;
-
-function Toggle() {
-	const { toggleChannel } = useUI();
-	toggle = () => toggleChannel("system");
-	return null;
-}
-
 const offline = new QueryClient({
 	defaultOptions: { queries: { enabled: false } },
 });
 
-async function mount() {
+async function mount(view: React.ReactNode = <ChatView />) {
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
@@ -127,10 +121,7 @@ async function mount() {
 	await act(async () => {
 		root.render(
 			<QueryClientProvider client={offline}>
-				<UIProvider>
-					<Toggle />
-					<ChatView />
-				</UIProvider>
+				<UIProvider>{view}</UIProvider>
 			</QueryClientProvider>,
 		);
 	});
@@ -138,24 +129,25 @@ async function mount() {
 }
 
 describe("the system channel", () => {
-	it("is a channel the user toggles", () => {
+	it("is a channel the trace toggles", () => {
 		expect(CHANNELS.find((c) => c.id === "system")).toMatchObject({
 			label: "system",
 		});
 	});
 
-	it("hides what the system told the agent until it is shown, and never draws it as the user's words", async () => {
+	it("keeps what the system told the agent out of the chat", async () => {
 		const host = await mount();
 		expect(host.textContent).toContain("write a");
 		expect(host.textContent).not.toContain(NOTE);
+	});
 
-		await act(async () => toggle?.());
+	it("draws what the system told the agent in the trace, and never as the user's words", async () => {
+		const host = await mount(<TraceLines messages={session.messages} />);
 
 		expect(host.textContent).toContain(NOTE);
 		const userLines = [...host.querySelectorAll("[data-user-line]")].map(
 			(line) => line.textContent,
 		);
 		expect(userLines).toEqual(["write a"]);
-		expect(stored.get().channels?.system).toBe(true);
 	});
 });

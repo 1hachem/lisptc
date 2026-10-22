@@ -60,3 +60,15 @@ export function withAnswer(
 		[asksKey.name]: answering(readAnnotation(kwargs, asksKey), id, answer),
 	};
 }
+
+export function askText(ask: Ask, answered: Answered | undefined): string {
+	return [
+		ask.title,
+		ask.detail,
+		ask.prompt,
+		`choices: ${ask.choices.map((choice) => choice.label).join(" · ")}`,
+		answered === undefined ? "not answered" : `answered: ${answered.label}`,
+	]
+		.filter((line) => line !== undefined && line !== "")
+		.join("\n");
+}

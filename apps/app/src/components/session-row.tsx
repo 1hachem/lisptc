@@ -1,6 +1,10 @@
 import { useConvexMutation } from "@convex-dev/react-query";
-import { Alert02Icon, BubbleChatIcon } from "@hugeicons/core-free-icons";
-import type { IconSvgElement } from "@hugeicons/react";
+import {
+	Alert02Icon,
+	BubbleChatIcon,
+	Route01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Doc } from "@repo/backend/dataModel";
 import { TreeFile } from "@repo/components";
@@ -15,8 +19,9 @@ import {
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { abandonChat } from "../lib/chat.tsx";
-import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import { dragsAs, type PanelContent, traceOpen } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
+import { usePanels } from "../lib/panels.tsx";
 import { ConfirmItem } from "./confirm-item.tsx";
 import { PanelLink, useShown } from "./panel-link.tsx";
 
@@ -47,6 +52,7 @@ const item =
 
 export function SessionRow({ chat }: { chat: Doc<"chats"> }) {
 	const shown = useShown();
+	const { apply } = usePanels();
 	const opens: PanelContent = {
 		kind: "chat",
 		chatId: chat._id,
@@ -123,6 +129,16 @@ export function SessionRow({ chat }: { chat: Doc<"chats"> }) {
 								className={item}
 							>
 								rename
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								onSelect={() => apply([traceOpen(chat._id)])}
+								className={`${item} gap-1.5`}
+							>
+								<HugeiconsIcon
+									icon={Route01Icon}
+									className="size-icon-sm flex-none"
+								/>
+								open trace
 							</DropdownMenuItem>
 							<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
 							<ConfirmItem
