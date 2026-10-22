@@ -57,12 +57,14 @@ function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 					className={`absolute left-0 size-icon flex-none ${mark.tone}`}
 				/>
 				<span
-					className={`min-w-0 break-words ${entry.state === "failed" ? "text-red" : "text-fg"}`}
+					className={`min-w-0 truncate ${entry.state === "failed" ? "text-red" : "text-fg"}`}
 				>
 					{entry.label}
 				</span>
 				{entry.detail && (
-					<span className="min-w-0 truncate text-dim">{entry.detail}</span>
+					<span className="min-w-0 shrink-[100] truncate text-dim">
+						{entry.detail}
+					</span>
 				)}
 				{entry.ms !== undefined && (
 					<span
