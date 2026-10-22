@@ -7,13 +7,3 @@ const RESTORE_FAILURES: Record<string, string> = {
 export function restoreFailure(code: string | undefined): string {
 	return (code && RESTORE_FAILURES[code]) || code || "restore failed";
 }
-
-export function binSearched<T extends { name: string }>(
-	files: T[] | undefined,
-	query: string,
-): T[] | undefined {
-	const needle = query.trim().toLowerCase();
-	return needle === ""
-		? files
-		: files?.filter((file) => file.name.toLowerCase().includes(needle));
-}

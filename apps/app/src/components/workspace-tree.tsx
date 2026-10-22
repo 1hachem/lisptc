@@ -19,14 +19,16 @@ import type { Doc, Id } from "@repo/backend/dataModel";
 import {
 	FileTree,
 	SortableTree,
+	TreeAction,
 	TreeCommand,
 	TreeFile,
 	TreeFilter,
 	TreeFolder,
 	TreeMore,
 	TreePending,
+	TreeSelection,
 } from "@repo/components";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Link,
 	useLocation,
@@ -34,10 +36,12 @@ import {
 	useParams,
 } from "@tanstack/react-router";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
-import { binSearched, restoreFailure } from "../lib/bin.ts";
+import { useAttempt } from "../lib/attempt.ts";
+import { restoreFailure } from "../lib/bin.ts";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { byDate } from "../lib/date-groups.ts";
+import { eachOf, saveAs, searched, useSelection } from "../lib/file-list.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { knowledgeIcon, useKnowledgeUpload } from "../lib/knowledge.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
@@ -261,6 +265,109 @@ function PermissionFiles({
 	);
 }
 
+function useBulk(source: string) {
+	const { failure, attempt } = useAttempt(source);
+	const [busy, setBusy] = useState(false);
+	return {
+		failure,
+		busy,
+		run: (work: () => Promise<unknown>) =>
+			attempt(async () => {
+				setBusy(true);
+				try {
+					await work();
+				} finally {
+					setBusy(false);
+				}
+			}),
+	};
+}
+
+function useFileList<T extends { name: string }>(
+	files: T[] | undefined,
+	source: string,
+) {
+	const [query, setQuery] = useState("");
+	const shown = searched(files, query);
+	const selection = useSelection(shown?.map((file) => file.name));
+	const bulk = useBulk(source);
+	return { files, query, setQuery, shown, selection, bulk };
+}
+
+type ListedFiles = ReturnType<typeof useFileList>;
+
+function emptyOr(list: ListedFiles, empty: string) {
+	return list.query.trim() === "" ? empty : "nothing matches";
+}
+
+function FileFilter({ list, label }: { list: ListedFiles; label: string }) {
+	if (list.files === undefined || list.files.length === 0) return null;
+	return (
+		<TreeFilter value={list.query} onChange={list.setQuery} label={label} />
+	);
+}
+
+function Selected({
+	list,
+	current,
+	leave,
+	served,
+	confirm,
+	onDelete,
+	onRestore,
+}: {
+	list: ListedFiles;
+	current: string | undefined;
+	leave: (selected: boolean) => Promise<unknown>;
+	served: (name: string) => Promise<{ url: string | null } | null>;
+	confirm: string;
+	onDelete: (name: string) => Promise<unknown>;
+	onRestore?: (name: string) => Promise<unknown>;
+}) {
+	const { selection, bulk } = list;
+	const names = selection.selected;
+	if (names.length === 0) return null;
+	const leaving = (work: (name: string) => Promise<unknown>) =>
+		bulk.run(async () => {
+			await leave(current !== undefined && names.includes(current));
+			await eachOf(names, work);
+			selection.clear();
+		});
+
+	return (
+		<TreeSelection
+			count={names.length}
+			total={list.shown?.length ?? 0}
+			onAll={selection.all}
+			onClear={selection.clear}
+			busy={bulk.busy}
+			failure={bulk.failure}
+		>
+			<TreeAction
+				label="download"
+				onRun={() =>
+					bulk.run(() =>
+						eachOf(names, async (name) => {
+							const file = await served(name);
+							if (!file?.url) throw new Error("its bytes are gone");
+							await saveAs(name, file.url);
+						}),
+					)
+				}
+			/>
+			{onRestore && (
+				<TreeAction label="restore" onRun={() => leaving(onRestore)} />
+			)}
+			<TreeAction
+				label="delete"
+				confirm={confirm}
+				danger
+				onRun={() => leaving(onDelete)}
+			/>
+		</TreeSelection>
+	);
+}
+
 function KnowledgeFolder({
 	workspaceId,
 	current,
@@ -273,10 +380,12 @@ function KnowledgeFolder({
 	const { data: files } = useQuery(
 		convexQuery(api.knowledge.list, { workspaceId }),
 	);
+	const queryClient = useQueryClient();
 	const removeFile = useConvexMutation(api.knowledge.remove);
 	const leave = useLeave(workspaceId);
 	const picker = useRef<HTMLInputElement>(null);
 	const { upload, uploading, failures } = useKnowledgeUpload(workspaceId);
+	const list = useFileList(files, "knowledge bulk action");
 
 	return (
 		<>
@@ -300,9 +409,24 @@ function KnowledgeFolder({
 				onCreate={() => picker.current?.click()}
 				createLabel="upload to knowledge/"
 			>
+				<FileFilter list={list} label="search knowledge" />
+				<Selected
+					list={list}
+					current={current}
+					leave={leave}
+					served={(name) =>
+						queryClient.fetchQuery(
+							convexQuery(api.knowledge.get, { workspaceId, name }),
+						)
+					}
+					confirm="move them to the bin?"
+					onDelete={(name) => removeFile({ workspaceId, name })}
+				/>
 				<Listing
-					items={files}
-					empty={uploading.length > 0 ? null : "no knowledge yet"}
+					items={list.shown}
+					empty={
+						uploading.length > 0 ? null : emptyOr(list, "no knowledge yet")
+					}
 				>
 					{(file) => (
 						<TreeFile
@@ -311,6 +435,7 @@ function KnowledgeFolder({
 							icon={knowledgeIcon(file.name, file.contentType)}
 							depth={1}
 							selected={current === file.name}
+							check={list.selection.check(file.name)}
 							trailing={
 								<FileMenu
 									name={file.name}
@@ -359,15 +484,30 @@ function AttachmentsFolder({
 		...convexQuery(api.attachments.list, { workspaceId }),
 		enabled: folder.open,
 	});
+	const queryClient = useQueryClient();
 	const toBin = useConvexMutation(api.attachments.remove);
 	const leave = useLeave(workspaceId);
+	const list = useFileList(files, "attachments bulk action");
 
 	return (
 		<TreeFolder name="attachments" icon={FOLDER_ICONS.attachments} {...folder}>
+			<FileFilter list={list} label="search attachments" />
+			<Selected
+				list={list}
+				current={current}
+				leave={leave}
+				served={(name) =>
+					queryClient.fetchQuery(
+						convexQuery(api.attachments.get, { workspaceId, name }),
+					)
+				}
+				confirm="move them to the bin?"
+				onDelete={(name) => toBin({ workspaceId, name })}
+			/>
 			<DatedListing
-				items={files}
+				items={list.shown}
 				at={(file) => file.attachedAt}
-				empty="nothing attached lately"
+				empty={emptyOr(list, "nothing attached lately")}
 			>
 				{(file) => (
 					<TreeFile
@@ -376,6 +516,7 @@ function AttachmentsFolder({
 						icon={knowledgeIcon(file.name, file.contentType)}
 						depth={1}
 						selected={current === file.name}
+						check={list.selection.check(file.name)}
 						trailing={
 							<FileMenu
 								name={file.name}
@@ -417,25 +558,34 @@ function BinFolder({
 	});
 	const restore = useConvexMutation(api.bin.restore);
 	const removeFile = useConvexMutation(api.bin.remove);
+	const queryClient = useQueryClient();
 	const leave = useLeave(workspaceId);
-	const [query, setQuery] = useState("");
+	const list = useFileList(files, "bin bulk action");
 
 	return (
 		<TreeFolder name="bin" icon={FOLDER_ICONS.bin} {...folder}>
-			{files !== undefined && files.length > 0 && (
-				<input
-					type="search"
-					value={query}
-					onChange={(event) => setQuery(event.target.value)}
-					placeholder="search the bin"
-					aria-label="search the bin"
-					className="mx-3 my-1 w-[calc(100%-1.5rem)] border-bg2 border-b bg-transparent py-0.5 pl-6 text-[11.5px] outline-none placeholder:text-dim focus:border-dim"
-				/>
-			)}
+			<FileFilter list={list} label="search the bin" />
+			<Selected
+				list={list}
+				current={current}
+				leave={leave}
+				served={(name) =>
+					queryClient.fetchQuery(
+						convexQuery(api.bin.get, { workspaceId, name }),
+					)
+				}
+				confirm="delete them for good?"
+				onDelete={(name) => removeFile({ workspaceId, name })}
+				onRestore={async (name) => {
+					const restored = await restore({ workspaceId, name });
+					if ("refused" in restored)
+						throw new Error(restoreFailure(restored.refused));
+				}}
+			/>
 			<DatedListing
-				items={binSearched(files, query)}
+				items={list.shown}
 				at={(file) => file.binnedAt}
-				empty={query.trim() === "" ? "the bin is empty" : "nothing matches"}
+				empty={emptyOr(list, "the bin is empty")}
 			>
 				{(file) => (
 					<TreeFile
@@ -444,6 +594,7 @@ function BinFolder({
 						icon={knowledgeIcon(file.name, file.contentType)}
 						depth={1}
 						selected={current === file.name}
+						check={list.selection.check(file.name)}
 						trailing={
 							<FileMenu
 								name={file.name}
