@@ -321,16 +321,16 @@ function Selected({
 	leave: (selected: boolean) => Promise<unknown>;
 	served: (name: string) => Promise<{ url: string | null } | null>;
 	confirm: string;
-	onDelete: (name: string) => Promise<unknown>;
+	onDelete: (names: string[]) => Promise<unknown>;
 	onRestore?: (name: string) => Promise<unknown>;
 }) {
 	const { selection, bulk } = list;
 	const names = selection.selected;
 	if (names.length === 0) return null;
-	const leaving = (work: (name: string) => Promise<unknown>) =>
+	const leaving = (work: () => Promise<unknown>) =>
 		bulk.run(async () => {
 			await leave(current !== undefined && names.includes(current));
-			await eachOf(names, work);
+			await work();
 			selection.clear();
 		});
 
@@ -356,13 +356,16 @@ function Selected({
 				}
 			/>
 			{onRestore && (
-				<TreeAction label="restore" onRun={() => leaving(onRestore)} />
+				<TreeAction
+					label="restore"
+					onRun={() => leaving(() => eachOf(names, onRestore))}
+				/>
 			)}
 			<TreeAction
 				label="delete"
 				confirm={confirm}
 				danger
-				onRun={() => leaving(onDelete)}
+				onRun={() => leaving(() => onDelete(names))}
 			/>
 		</TreeSelection>
 	);
@@ -382,6 +385,7 @@ function KnowledgeFolder({
 	);
 	const queryClient = useQueryClient();
 	const removeFile = useConvexMutation(api.knowledge.remove);
+	const removeFiles = useConvexMutation(api.knowledge.removeMany);
 	const leave = useLeave(workspaceId);
 	const picker = useRef<HTMLInputElement>(null);
 	const { upload, uploading, failures } = useKnowledgeUpload(workspaceId);
@@ -420,7 +424,7 @@ function KnowledgeFolder({
 						)
 					}
 					confirm="move them to the bin?"
-					onDelete={(name) => removeFile({ workspaceId, name })}
+					onDelete={(names) => removeFiles({ workspaceId, names })}
 				/>
 				<Listing
 					items={list.shown}
@@ -486,6 +490,7 @@ function AttachmentsFolder({
 	});
 	const queryClient = useQueryClient();
 	const toBin = useConvexMutation(api.attachments.remove);
+	const allToBin = useConvexMutation(api.attachments.removeMany);
 	const leave = useLeave(workspaceId);
 	const list = useFileList(files, "attachments bulk action");
 
@@ -502,7 +507,7 @@ function AttachmentsFolder({
 					)
 				}
 				confirm="move them to the bin?"
-				onDelete={(name) => toBin({ workspaceId, name })}
+				onDelete={(names) => allToBin({ workspaceId, names })}
 			/>
 			<DatedListing
 				items={list.shown}
@@ -558,6 +563,7 @@ function BinFolder({
 	});
 	const restore = useConvexMutation(api.bin.restore);
 	const removeFile = useConvexMutation(api.bin.remove);
+	const removeFiles = useConvexMutation(api.bin.removeMany);
 	const queryClient = useQueryClient();
 	const leave = useLeave(workspaceId);
 	const list = useFileList(files, "bin bulk action");
@@ -575,7 +581,7 @@ function BinFolder({
 					)
 				}
 				confirm="delete them for good?"
-				onDelete={(name) => removeFile({ workspaceId, name })}
+				onDelete={(names) => removeFiles({ workspaceId, names })}
 				onRestore={async (name) => {
 					const restored = await restore({ workspaceId, name });
 					if ("refused" in restored)
