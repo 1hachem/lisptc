@@ -1,25 +1,22 @@
 PREFERENCES
 
 User's own preferences: theme, font, which channels and metadata fields chat
-shows, what chat input shows and how it behaves. Belong to person you work for, not workspace; follow them into every
+shows, which helpers chat input runs. Belong to person you work for, not workspace; follow them into every
 workspace. App applies change at once, while they watch.
 
-- (preferences) gives (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id).
+- (preferences) gives (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :motion id).
 - (preferences/set :theme "gruvbox-light") changes only keys you give.
   Toggles merge: (preferences/set :channels '(:lisp t)) turns lisp channel on,
   leaves others as they were.
-- :input is what chat input shows and how it behaves. Shows: :send is send
-  button, :attach is attach button. Behaves: :lisp is highlight, completion,
-  errors, docs for lisp in input. (preferences/set :input '(:send nil :lisp nil)).
-- :send-label is word on send button, 1 to 16 chars:
-  (preferences/set :send-label "go").
+- :input is helpers chat input runs while user types. :attach is attach
+  button. :lisp is highlight, completion, errors, docs for lisp in input:
+  (preferences/set :input '(:lisp nil)).
 - :sidebar is order of sidebar's top-level entries, top first.
   (preferences/set :sidebar '("README.md" "chat")) moves those two to top,
   keeps rest in their order. User also drags them by hand.
 - :hidden is every sidebar entry hidden. Replaces whole list:
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
-  '() shows all. Attachments and bin hidden until user
-  shows them.
+  '() shows all.
 - :motion is how sidebar animates that drag. (motions) gives alist of
   (id . description) to choose from. System asks for reduced motion: nothing
   animates, whatever :motion says.

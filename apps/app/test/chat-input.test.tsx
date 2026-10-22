@@ -522,22 +522,10 @@ describe("the chat input", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("shows the send button under the label the user chose", () => {
-		act(() => root.render(<ChatInput onSubmit={vi.fn()} sendLabel="go" />));
-		const buttons = [...host.querySelectorAll("button")].map(
-			(button) => button.textContent,
-		);
-		expect(buttons).toContain("go⏎");
-	});
-
-	it("hides the send and attach buttons, and Enter still sends", () => {
+	it("hides the attach button, and Enter still sends", () => {
 		const onSubmit = vi.fn();
-		act(() =>
-			root.render(
-				<ChatInput onSubmit={onSubmit} send={false} attach={false} />,
-			),
-		);
-		expect(host.querySelector("button")).toBeNull();
+		act(() => root.render(<ChatInput onSubmit={onSubmit} attach={false} />));
+		expect(host.querySelector('[aria-label="attach"]')).toBeNull();
 		const field = host.querySelector<HTMLElement>("[contenteditable]");
 		if (!field) throw new Error("no editor");
 		type(field, "hello");

@@ -26,13 +26,10 @@ const SET_KEYS = [
 	"channels",
 	"metadata",
 	"input",
-	"send-label",
 	"sidebar",
 	"hidden",
 	"motion",
 ];
-
-const MAX_SEND_LABEL = 16;
 
 const SET_ARGS = [
 	{
@@ -67,13 +64,7 @@ const SET_ARGS = [
 		type: "plist",
 		required: false,
 		description:
-			"what the chat input shows and how it behaves, as (:id t-or-nil ...); ids not named keep their value",
-	},
-	{
-		name: "send-label",
-		type: "string",
-		required: false,
-		description: `the word on the chat input's send button, at most ${MAX_SEND_LABEL} characters`,
+			"which helpers the chat input runs as the user types, as (:id t-or-nil ...); ids not named keep their value",
 	},
 	{
 		name: "sidebar",
@@ -117,7 +108,6 @@ export function preferencesList(preferences: Preferences): List {
 		["channels", togglesList(preferences.channels)],
 		["metadata", togglesList(preferences.metadata)],
 		["input", togglesList(preferences.input)],
-		["send-label", preferences.sendLabel ?? null],
 		["sidebar", arrayToList([...(preferences.sidebar ?? [])])],
 		["hidden", arrayToList([...(preferences.hidden ?? [])])],
 		["motion", preferences.motion ?? null],
@@ -176,18 +166,6 @@ function toggled(
 	return next;
 }
 
-function labelled(value: unknown): string {
-	if (typeof value !== "string")
-		throw new EvalException("a send label must be a string", value);
-	const label = value.trim();
-	if (label === "" || label.length > MAX_SEND_LABEL)
-		throw new EvalException(
-			`a send label takes 1 to ${MAX_SEND_LABEL} characters`,
-			value,
-		);
-	return label;
-}
-
 function sidebarNames(
 	kind: "sidebar" | "hidden",
 	value: unknown,
@@ -228,7 +206,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :motion id). They belong to the user, not the workspace, and the app applies them live.',
+		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :motion id). They belong to the user, not the workspace, and the app applies them live.',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -238,14 +216,14 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id])',
+		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :theme :font :channels :metadata :input :send-label :sidebar :hidden :motion",
+					"nothing to set, give one of :theme :font :channels :metadata :input :sidebar :hidden :motion",
 					null,
 				);
 			const current = yield* settled(store.read());
@@ -271,8 +249,6 @@ export function registerPreferences(
 				);
 			if (options.has("input"))
 				change.input = toggled("input", options.get("input"), current.input);
-			if (options.has("send-label"))
-				change.sendLabel = labelled(options.get("send-label"));
 			if (options.has("sidebar"))
 				change.sidebar = ordered(options.get("sidebar"), current.sidebar);
 			if (options.has("hidden"))

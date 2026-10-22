@@ -67,8 +67,6 @@ export interface ChatInputProps {
 	mentions?: readonly Mentionable[];
 	symbols?: SymbolTable;
 	lisp?: boolean;
-	send?: boolean;
-	sendLabel?: string;
 	attach?: boolean;
 }
 
@@ -131,14 +129,12 @@ function $replaceText(text: string) {
 }
 
 function SendAction({
-	label,
 	isStreaming,
 	empty,
 	disabled,
 	onStop,
 	onSend,
 }: {
-	label: string;
 	isStreaming?: boolean;
 	empty: boolean;
 	disabled?: boolean;
@@ -165,7 +161,7 @@ function SendAction({
 		);
 	return (
 		<InputAction
-			label={label}
+			label="send"
 			glyph="⏎"
 			tone="text-green hover:brightness-125"
 			onClick={onSend}
@@ -639,8 +635,6 @@ function Editor(props: ChatInputProps) {
 		mentions = [],
 		symbols = NO_SYMBOLS,
 		lisp = true,
-		send = true,
-		sendLabel = "send",
 		attach = true,
 	} = props;
 	const c = useComposer(props);
@@ -673,16 +667,13 @@ function Editor(props: ChatInputProps) {
 						{attach && c.attachments.enabled && (
 							<AttachAction onClick={c.attach} disabled={c.busy} />
 						)}
-						{send && (
-							<SendAction
-								label={sendLabel}
-								isStreaming={isStreaming}
-								empty={c.empty}
-								disabled={c.busy}
-								onStop={onStop}
-								onSend={c.sendNow}
-							/>
-						)}
+						<SendAction
+							isStreaming={isStreaming}
+							empty={c.empty}
+							disabled={c.busy}
+							onStop={onStop}
+							onSend={c.sendNow}
+						/>
 					</>
 				}
 			>

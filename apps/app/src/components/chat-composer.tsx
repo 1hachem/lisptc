@@ -15,7 +15,7 @@ import type { Mentionable } from "./mention-menu.tsx";
 
 export function ChatComposer({ about }: { about?: OpenFile }) {
 	const runCommand = useCommandRunner();
-	const { inputOn, sendLabel } = useUI();
+	const { inputOn } = useUI();
 	const { workspaceId, chatId, draftChatId, send, sendAbout, stop, isLoading } =
 		useChatSession((state) => ({
 			workspaceId: state.workspaceId,
@@ -75,7 +75,6 @@ export function ChatComposer({ about }: { about?: OpenFile }) {
 			onStop={stop}
 			symbols={symbols}
 			{...inputOn}
-			sendLabel={sendLabel}
 		/>
 	);
 }
