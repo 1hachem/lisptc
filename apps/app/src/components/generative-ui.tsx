@@ -288,7 +288,7 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
-				if (data.message) send(data.message);
+				if (data.message) void send(data.message);
 			} catch (ex) {
 				reportIssue(ex, { $exception_source: "ui action" });
 				setFailed(true);

@@ -92,12 +92,12 @@ export interface ChatSession {
 	draftChatId: Id<"chats"> | null;
 	workspaceId: Id<"workspaces">;
 	error?: string;
-	send: (text: string, annotations?: MessageAnnotations) => void;
+	send: (text: string, annotations?: MessageAnnotations) => Promise<boolean>;
 	sendAbout: (
 		file: OpenFile,
 		text: string,
 		annotations?: MessageAnnotations,
-	) => void;
+	) => Promise<boolean>;
 	resume: (event: SystemEventTicket) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
@@ -309,7 +309,12 @@ export function ChatProvider({
 					to: "/$workspaceId/chat/$chatId",
 					params: { workspaceId, chatId: opened },
 					replace: true,
-				});
+				}).catch((ex: unknown) =>
+					reportIssue(ex, {
+						$exception_source: "chat open",
+						thread_id: opened,
+					}),
+				);
 			}
 		},
 		[
@@ -329,30 +334,37 @@ export function ChatProvider({
 			text: string,
 			title = titleOf(text),
 			annotations?: MessageAnnotations,
-		) => {
+		): Promise<boolean> => {
 			const trimmed = text.trim();
-			if (!trimmed && annotations === undefined) return;
-			await submit(
-				{ message: trimmed, ...(annotations ? { annotations } : {}) },
-				{
-					type: "human",
-					content: trimmed,
-					id: crypto.randomUUID(),
-					...(annotations ? { additional_kwargs: annotations } : {}),
-				},
-				title,
-			);
+			if (!trimmed && annotations === undefined) return true;
+			try {
+				await submit(
+					{ message: trimmed, ...(annotations ? { annotations } : {}) },
+					{
+						type: "human",
+						content: trimmed,
+						id: crypto.randomUUID(),
+						...(annotations ? { additional_kwargs: annotations } : {}),
+					},
+					title,
+				);
+				return true;
+			} catch (ex: unknown) {
+				reportIssue(ex, { $exception_source: "chat send" });
+				setFailure({ chatId, message: "message not sent, try again" });
+				return false;
+			}
 		},
-		[submit],
+		[submit, chatId],
 	);
 
 	const sendAbout = useCallback(
 		async (file: OpenFile, text: string, annotations?: MessageAnnotations) => {
 			const trimmed = text.trim();
-			if (!trimmed) return;
-			await submitTurn(
+			if (!trimmed && annotations === undefined) return true;
+			return await submitTurn(
 				fileContext(file, trimmed),
-				titleOf(trimmed),
+				titleOf(trimmed || file.path),
 				annotations,
 			);
 		},
@@ -384,8 +396,10 @@ export function ChatProvider({
 	const send = useCallback(
 		async (text: string, annotations?: MessageAnnotations) => {
 			const trimmed = text.trim();
-			if (steering && trimmed && annotations === undefined) enqueue(trimmed);
-			else await submitTurn(trimmed, undefined, annotations);
+			if (!steering || !trimmed || annotations !== undefined)
+				return await submitTurn(trimmed, undefined, annotations);
+			enqueue(trimmed);
+			return true;
 		},
 		[steering, enqueue, submitTurn],
 	);
@@ -429,8 +443,8 @@ export function ChatProvider({
 			chatId,
 			draftChatId: null,
 			workspaceId,
-			send: () => {},
-			sendAbout: () => {},
+			send: () => Promise.resolve(false),
+			sendAbout: () => Promise.resolve(false),
 			resume: () => {},
 			stop: () => {},
 			withdraw: () => {},
@@ -456,12 +470,8 @@ export function ChatProvider({
 				streamingFor: streamingFor.current,
 				failure,
 			}),
-			send: (text, annotations) => {
-				void send(text, annotations);
-			},
-			sendAbout: (file, text, annotations) => {
-				void sendAbout(file, text, annotations);
-			},
+			send,
+			sendAbout,
 			resume,
 			stop,
 			withdraw,
