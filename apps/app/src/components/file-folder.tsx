@@ -2,6 +2,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import {
+	type TreeCheck,
 	TreeFile,
 	TreeFilter,
 	TreeFolder,
@@ -23,9 +24,112 @@ import {
 	useLeave,
 } from "./tree-listing.tsx";
 
-type FileFolderName = "knowledge" | "attachments" | "bin";
+export type FileFolderName = "knowledge" | "attachments" | "bin";
 
 type StoredFile = { name: string; contentType: string | null };
+
+type Restore<T> = {
+	run: (name: string) => Promise<unknown>;
+	label: (file: T) => string;
+};
+
+function newestFirst<T>(
+	found: T[] | undefined,
+	at: ((file: T) => number) | undefined,
+): T[] | undefined {
+	if (at === undefined || found === undefined) return found;
+	return [...found].sort((a, b) => at(b) - at(a));
+}
+
+function FileRow<T extends StoredFile>({
+	file,
+	workspaceId,
+	folder,
+	current,
+	check,
+	confirm,
+	restore,
+	leave,
+	onDelete,
+}: {
+	file: T;
+	workspaceId: Id<"workspaces">;
+	folder: FileFolderName;
+	current: string | undefined;
+	check: TreeCheck | undefined;
+	confirm: string;
+	restore?: Restore<T>;
+	leave: ReturnType<typeof useLeave>;
+	onDelete: (name: string) => Promise<unknown>;
+}) {
+	const open = current === file.name;
+	return (
+		<TreeFile
+			name={file.name}
+			icon={knowledgeIcon(file.name, file.contentType)}
+			depth={1}
+			selected={open}
+			check={check}
+			trailing={
+				<FileMenu
+					name={file.name}
+					confirm={confirm}
+					restoreLabel={restore?.label(file)}
+					onRestore={
+						restore &&
+						(async () => {
+							await restore.run(file.name);
+							await leave(open);
+						})
+					}
+					onDelete={async () => {
+						await leave(open);
+						await onDelete(file.name);
+					}}
+				/>
+			}
+			link={(content, className) => (
+				<Link
+					to={`/$workspaceId/${folder}/$name`}
+					params={{ workspaceId, name: file.name }}
+					className={className}
+				>
+					{content}
+				</Link>
+			)}
+		/>
+	);
+}
+
+function unmatched(empty: string | null, query: string): string | null {
+	return empty === null || query.trim() === "" ? empty : "nothing matches";
+}
+
+function FolderListing<T>({
+	items,
+	at,
+	empty,
+	check,
+	children,
+}: {
+	items: T[] | undefined;
+	at?: (file: T) => number;
+	empty: string | null;
+	check: (dated: T[]) => TreeCheck;
+	children: (file: T) => ReactNode;
+}) {
+	if (at === undefined)
+		return (
+			<Listing items={items} empty={empty}>
+				{children}
+			</Listing>
+		);
+	return (
+		<DatedListing items={items} at={at} empty={empty} check={check}>
+			{children}
+		</DatedListing>
+	);
+}
 
 function FileFolder<T extends StoredFile>({
 	workspaceId,
@@ -65,51 +169,22 @@ function FileFolder<T extends StoredFile>({
 }) {
 	const leave = useLeave(workspaceId);
 	const [query, setQuery] = useState("");
-	const found = searched(files, query);
-	const shown =
-		at === undefined || found === undefined
-			? found
-			: [...found].sort((a, b) => at(b) - at(a));
+	const shown = newestFirst(searched(files, query), at);
 	const selection = useSelection(shown?.map((file) => file.name));
-	const unmatched =
-		empty === null || query.trim() === "" ? empty : "nothing matches";
 	const namesOf = (listed: T[]) => listed.map((file) => file.name);
 
 	const row = (file: T) => (
-		<TreeFile
+		<FileRow
 			key={file.name}
-			name={file.name}
-			icon={knowledgeIcon(file.name, file.contentType)}
-			depth={1}
-			selected={current === file.name}
+			file={file}
+			workspaceId={workspaceId}
+			folder={folder.name}
+			current={current}
 			check={selection.check(file.name)}
-			trailing={
-				<FileMenu
-					name={file.name}
-					confirm={confirm.one}
-					restoreLabel={restore?.label(file)}
-					onRestore={
-						restore &&
-						(async () => {
-							await restore.run(file.name);
-							await leave(current === file.name);
-						})
-					}
-					onDelete={async () => {
-						await leave(current === file.name);
-						await onDelete(file.name);
-					}}
-				/>
-			}
-			link={(content, className) => (
-				<Link
-					to={`/$workspaceId/${folder.name}/$name`}
-					params={{ workspaceId, name: file.name }}
-					className={className}
-				>
-					{content}
-				</Link>
-			)}
+			confirm={confirm.one}
+			restore={restore}
+			leave={leave}
+			onDelete={onDelete}
 		/>
 	);
 
@@ -134,26 +209,20 @@ function FileFolder<T extends StoredFile>({
 				onDelete={onDeleteAll}
 				onRestore={restore?.run}
 			/>
-			{at === undefined ? (
-				<Listing items={shown} empty={unmatched}>
-					{row}
-				</Listing>
-			) : (
-				<DatedListing
-					items={shown}
-					at={at}
-					empty={unmatched}
-					check={(dated) => selection.among(namesOf(dated))}
-				>
-					{row}
-				</DatedListing>
-			)}
+			<FolderListing
+				items={shown}
+				at={at}
+				empty={unmatched(empty, query)}
+				check={(dated) => selection.among(namesOf(dated))}
+			>
+				{row}
+			</FolderListing>
 			{children}
 		</TreeFolder>
 	);
 }
 
-type FolderProps<Name extends FileFolderName> = {
+export type FolderProps<Name extends FileFolderName> = {
 	workspaceId: Id<"workspaces">;
 	current: string | undefined;
 	folder: FolderState<Name>;

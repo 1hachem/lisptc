@@ -92,11 +92,14 @@ export interface ChatSession {
 	draftChatId: Id<"chats"> | null;
 	workspaceId: Id<"workspaces">;
 	error?: string;
-	send: (text: string, annotations?: MessageAnnotations) => Promise<boolean>;
+	send: (
+		text: string,
+		annotations?: Record<string, unknown>,
+	) => Promise<boolean>;
 	sendAbout: (
 		file: OpenFile,
 		text: string,
-		annotations?: MessageAnnotations,
+		annotations?: Record<string, unknown>,
 	) => Promise<boolean>;
 	resume: (event: SystemEventTicket) => void;
 	stop: () => void;
@@ -105,8 +108,6 @@ export interface ChatSession {
 }
 
 type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
-
-type MessageAnnotations = Record<string, unknown>;
 
 function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	return stored.map((message) => ({
@@ -282,7 +283,7 @@ export function ChatProvider({
 	const submit = useCallback(
 		async (
 			input:
-				| { message: string; annotations?: MessageAnnotations }
+				| { message: string; annotations?: Record<string, unknown> }
 				| { event: { token: string } },
 			shown: ChatMessage,
 			title: string,
@@ -333,7 +334,7 @@ export function ChatProvider({
 		async (
 			text: string,
 			title = titleOf(text),
-			annotations?: MessageAnnotations,
+			annotations?: Record<string, unknown>,
 		): Promise<boolean> => {
 			const trimmed = text.trim();
 			if (!trimmed && annotations === undefined) return true;
@@ -359,7 +360,11 @@ export function ChatProvider({
 	);
 
 	const sendAbout = useCallback(
-		async (file: OpenFile, text: string, annotations?: MessageAnnotations) => {
+		async (
+			file: OpenFile,
+			text: string,
+			annotations?: Record<string, unknown>,
+		) => {
 			const trimmed = text.trim();
 			if (!trimmed && annotations === undefined) return true;
 			return await submitTurn(
@@ -394,7 +399,7 @@ export function ChatProvider({
 	const steering = stream.isLoading && streamingFor.current === chatId;
 
 	const send = useCallback(
-		async (text: string, annotations?: MessageAnnotations) => {
+		async (text: string, annotations?: Record<string, unknown>) => {
 			const trimmed = text.trim();
 			if (!steering || !trimmed || annotations !== undefined)
 				return await submitTurn(trimmed, undefined, annotations);
