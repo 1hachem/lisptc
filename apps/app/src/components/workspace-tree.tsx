@@ -309,6 +309,7 @@ function FileFilter({ list, label }: { list: ListedFiles; label: string }) {
 
 function Selected({
 	list,
+	where,
 	current,
 	leave,
 	served,
@@ -317,6 +318,7 @@ function Selected({
 	onRestore,
 }: {
 	list: ListedFiles;
+	where: string;
 	current: string | undefined;
 	leave: (selected: boolean) => Promise<unknown>;
 	served: (name: string) => Promise<{ url: string | null } | null>;
@@ -338,6 +340,7 @@ function Selected({
 		<TreeSelection
 			count={names.length}
 			total={list.shown?.length ?? 0}
+			where={where}
 			onAll={selection.all}
 			onClear={selection.clear}
 			busy={bulk.busy}
@@ -416,6 +419,7 @@ function KnowledgeFolder({
 				<FileFilter list={list} label="search knowledge" />
 				<Selected
 					list={list}
+					where="knowledge/"
 					current={current}
 					leave={leave}
 					served={(name) =>
@@ -499,6 +503,7 @@ function AttachmentsFolder({
 			<FileFilter list={list} label="search attachments" />
 			<Selected
 				list={list}
+				where="attachments/"
 				current={current}
 				leave={leave}
 				served={(name) =>
@@ -573,6 +578,7 @@ function BinFolder({
 			<FileFilter list={list} label="search the bin" />
 			<Selected
 				list={list}
+				where="bin/"
 				current={current}
 				leave={leave}
 				served={(name) =>
