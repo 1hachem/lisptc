@@ -618,6 +618,62 @@ describe("panel layout access", () => {
 		).toEqual(traced);
 	});
 
+	it("keeps a view the agent opened below the chat, tied to the chat that drew it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const viewed = {
+			root: "s",
+			focused: "v",
+			nodes: [
+				{
+					kind: "split" as const,
+					id: "s",
+					direction: "column" as const,
+					children: ["p", "v"],
+					sizes: [60, 40],
+				},
+				{
+					kind: "pane" as const,
+					id: "p",
+					tabs: [
+						{
+							id: "chat:c1",
+							content: {
+								kind: "chat" as const,
+								title: "issues",
+								chatId: "c1",
+							},
+						},
+					],
+					active: "chat:c1",
+				},
+				{
+					kind: "pane" as const,
+					id: "v",
+					tabs: [
+						{
+							id: "view:My Linear Issues",
+							content: {
+								kind: "view" as const,
+								title: "My Linear Issues",
+								node: { tag: "card", props: {}, children: [] },
+								chatId: "c1",
+							},
+						},
+					],
+					active: "view:My Linear Issues",
+				},
+			],
+		};
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: viewed,
+		});
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(viewed);
+	});
+
 	it("takes any number of panes side by side but refuses more than three stacked", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

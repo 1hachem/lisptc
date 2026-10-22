@@ -47,7 +47,12 @@ const panelTab = v.object({
 			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
 			name: v.string(),
 		}),
-		v.object({ kind: v.literal("view"), title: v.string(), node: v.any() }),
+		v.object({
+			kind: v.literal("view"),
+			title: v.string(),
+			node: v.any(),
+			chatId: v.optional(v.string()),
+		}),
 		v.object({
 			kind: v.literal("chat"),
 			chatId: v.union(v.string(), v.null()),

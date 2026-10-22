@@ -21,6 +21,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { reportIssue } from "./analytics.tsx";
 import type { ChatMessage } from "./chat.tsx";
 import { useChatSession } from "./chat.tsx";
 import {
@@ -105,7 +106,9 @@ function usePanelLayout(workspaceId: Id<"workspaces">) {
 		(layout: PanelLayout) => {
 			latest.current = layout;
 			setArranged(true);
-			void put({ workspaceId, layout: flatten(layout) });
+			put({ workspaceId, layout: flatten(layout) }).catch((error) =>
+				reportIssue(error, { $exception_source: "panel layout" }),
+			);
 		},
 		[put, workspaceId],
 	);
