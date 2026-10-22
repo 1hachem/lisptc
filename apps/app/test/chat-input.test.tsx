@@ -373,6 +373,32 @@ describe("the chat input", () => {
 		expect(chip("spec.pdf")).toBeUndefined();
 	});
 
+	it("warns again when a different upload fails after the first was removed", async () => {
+		const onSubmit = vi.fn();
+		const upload = vi.fn((file: File) =>
+			Promise.reject(new Error(`${file.name} not uploaded`)),
+		);
+		const field = renderUploading(onSubmit, upload);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		await settled();
+		type(field, "see this");
+		enter(field, false);
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>(
+					'button[aria-label="remove spec.pdf"]',
+				)
+				?.click(),
+		);
+		attach([new File(["%PDF"], "plan.pdf")]);
+		await settled();
+		enter(field, false);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(chip("plan.pdf")?.dataset.upload).toBe("failed");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("see this", []);
+	});
+
 	it("deletes an uploaded file removed before sending", async () => {
 		const discard = vi.fn();
 		const upload = vi.fn(() => Promise.resolve("spec.pdf"));

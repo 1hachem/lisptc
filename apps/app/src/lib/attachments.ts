@@ -147,17 +147,19 @@ export function useAttachedSend({
 	held?: string;
 }) {
 	const attachments = useAttachments(files?.upload, files?.discard);
-	const dropping = useRef(false);
+	const dropping = useRef<string | null>(null);
 	const submit = useCallback(
 		(text: string): false | Promise<boolean> => {
 			const blocked = held ?? blockedSend(attachments.items, streaming);
-			const failed = attachments.items.filter(
-				({ upload }) => upload.state === "failed",
-			).length;
-			const confirmed = blocked === null && failed > 0 && dropping.current;
-			dropping.current = blocked === null && failed > 0 && !confirmed;
-			if (blocked !== null || dropping.current) {
-				flash(blocked ?? dropFailed(failed));
+			const failed = attachments.items.flatMap(({ id, upload }) =>
+				upload.state === "failed" ? [id] : [],
+			);
+			const warned = failed.join(" ");
+			const confirmed = failed.length > 0 && dropping.current === warned;
+			dropping.current =
+				blocked === null && failed.length > 0 && !confirmed ? warned : null;
+			if (blocked !== null || dropping.current !== null) {
+				flash(blocked ?? dropFailed(failed.length));
 				return false;
 			}
 			const sending = attachments.items.filter(
