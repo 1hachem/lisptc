@@ -33,6 +33,19 @@ export function checkedAfter(
 	return next;
 }
 
+export function toggledAll(
+	picked: ReadonlySet<string>,
+	names: readonly string[],
+): Set<string> {
+	const next = new Set(picked);
+	const every = names.every((name) => picked.has(name));
+	for (const name of names) {
+		if (every) next.delete(name);
+		else next.add(name);
+	}
+	return next;
+}
+
 export function useSelection(order: readonly string[] | undefined) {
 	const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 	const anchor = useRef<string | null>(null);
@@ -48,6 +61,11 @@ export function useSelection(order: readonly string[] | undefined) {
 				setPicked(checkedAfter(present, picked, anchor.current, name, range));
 				anchor.current = name;
 			},
+		}),
+		among: (names: readonly string[]) => ({
+			checked: names.length > 0 && names.every((name) => picked.has(name)),
+			selecting: selected.length > 0,
+			onCheck: () => setPicked(toggledAll(picked, names)),
 		}),
 		all: () => setPicked(new Set(present)),
 		clear: () => {

@@ -20,10 +20,12 @@ import {
 	FileTree,
 	SortableTree,
 	TreeAction,
+	type TreeCheck,
 	TreeCommand,
 	TreeFile,
 	TreeFilter,
 	TreeFolder,
+	TreeGroup,
 	TreeMore,
 	TreePending,
 	TreeSelection,
@@ -115,18 +117,20 @@ function DatedListing<T>({
 	items,
 	at,
 	empty,
+	check,
 	children,
 }: {
 	items: T[] | undefined;
 	at: (item: T) => number;
 	empty: string;
+	check: (items: T[]) => TreeCheck;
 	children: (item: T) => ReactNode;
 }) {
 	if (items === undefined) return null;
 	if (items.length === 0) return <Empty>{empty}</Empty>;
 	return byDate(items, at, Date.now()).map(({ group, items: dated }) => (
 		<Fragment key={group}>
-			<div className="pt-1.5 pb-0.5 pl-9 text-[10.5px] text-dim">{group}</div>
+			<TreeGroup label={group} check={check(dated)} />
 			{dated.map(children)}
 		</Fragment>
 	));
@@ -286,9 +290,14 @@ function useBulk(source: string) {
 function useFileList<T extends { name: string }>(
 	files: T[] | undefined,
 	source: string,
+	at?: (file: T) => number,
 ) {
 	const [query, setQuery] = useState("");
-	const shown = searched(files, query);
+	const found = searched(files, query);
+	const shown =
+		at === undefined || found === undefined
+			? found
+			: [...found].sort((a, b) => at(b) - at(a));
 	const selection = useSelection(shown?.map((file) => file.name));
 	const bulk = useBulk(source);
 	return { files, query, setQuery, shown, selection, bulk };
@@ -303,7 +312,12 @@ function emptyOr(list: ListedFiles, empty: string) {
 function FileFilter({ list, label }: { list: ListedFiles; label: string }) {
 	if (list.files === undefined || list.files.length === 0) return null;
 	return (
-		<TreeFilter value={list.query} onChange={list.setQuery} label={label} />
+		<TreeFilter
+			value={list.query}
+			onChange={list.setQuery}
+			label={label}
+			check={list.selection.among(list.shown?.map((file) => file.name) ?? [])}
+		/>
 	);
 }
 
@@ -496,7 +510,11 @@ function AttachmentsFolder({
 	const toBin = useConvexMutation(api.attachments.remove);
 	const allToBin = useConvexMutation(api.attachments.removeMany);
 	const leave = useLeave(workspaceId);
-	const list = useFileList(files, "attachments bulk action");
+	const list = useFileList(
+		files,
+		"attachments bulk action",
+		(file) => file.attachedAt,
+	);
 
 	return (
 		<TreeFolder name="attachments" icon={FOLDER_ICONS.attachments} {...folder}>
@@ -518,6 +536,7 @@ function AttachmentsFolder({
 				items={list.shown}
 				at={(file) => file.attachedAt}
 				empty={emptyOr(list, "nothing attached lately")}
+				check={(dated) => list.selection.among(dated.map((file) => file.name))}
 			>
 				{(file) => (
 					<TreeFile
@@ -571,7 +590,7 @@ function BinFolder({
 	const removeFiles = useConvexMutation(api.bin.removeMany);
 	const queryClient = useQueryClient();
 	const leave = useLeave(workspaceId);
-	const list = useFileList(files, "bin bulk action");
+	const list = useFileList(files, "bin bulk action", (file) => file.binnedAt);
 
 	return (
 		<TreeFolder name="bin" icon={FOLDER_ICONS.bin} {...folder}>
@@ -598,6 +617,7 @@ function BinFolder({
 				items={list.shown}
 				at={(file) => file.binnedAt}
 				empty={emptyOr(list, "the bin is empty")}
+				check={(dated) => list.selection.among(dated.map((file) => file.name))}
 			>
 				{(file) => (
 					<TreeFile

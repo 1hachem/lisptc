@@ -1,5 +1,6 @@
 export type { Review, Thumb } from "./feedback.ts";
 export { quip, surveyResponse } from "./feedback.ts";
+export type { TreeCheck } from "./file-tree.tsx";
 export {
 	FileTree,
 	TreeAction,
@@ -7,6 +8,7 @@ export {
 	TreeFile,
 	TreeFilter,
 	TreeFolder,
+	TreeGroup,
 	TreeMore,
 	TreePending,
 	TreeSelection,

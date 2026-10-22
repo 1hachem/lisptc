@@ -74,7 +74,7 @@ export function TreeFolder({
 	);
 }
 
-type TreeCheck = {
+export type TreeCheck = {
 	checked: boolean;
 	selecting: boolean;
 	onCheck: (range: boolean) => void;
@@ -334,20 +334,59 @@ export function TreeCommand({
 	);
 }
 
+const blank = <span aria-hidden className="size-icon-sm flex-none" />;
+
+export function TreeGroup({
+	label,
+	check,
+	depth = 1,
+}: {
+	label: string;
+	check?: TreeCheck;
+	depth?: number;
+}) {
+	return (
+		<div
+			style={indent(depth)}
+			className="group/row flex items-center pt-1.5 pb-0.5 text-[10.5px] text-dim"
+		>
+			{check ? (
+				<CheckBox
+					name={`everything from ${label}`}
+					check={check}
+					glyph={blank}
+				/>
+			) : (
+				<span className="pr-1.5">{blank}</span>
+			)}
+			<span className="truncate">{label}</span>
+		</div>
+	);
+}
+
 export function TreeFilter({
 	value,
 	onChange,
 	label,
+	check,
 	depth = 1,
 }: {
 	value: string;
 	onChange: (value: string) => void;
 	label: string;
+	check?: TreeCheck;
 	depth?: number;
 }) {
 	return (
-		<div style={indent(depth)} className="flex items-center gap-1.5 pr-1">
-			<span aria-hidden className="size-icon-sm flex-none" />
+		<div
+			style={indent(depth)}
+			className={`group/row flex items-center pr-1 ${check ? "" : "gap-1.5"}`}
+		>
+			{check ? (
+				<CheckBox name="everything shown" check={check} glyph={blank} />
+			) : (
+				blank
+			)}
 			<input
 				type="search"
 				value={value}

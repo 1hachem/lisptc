@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { checkedAfter, eachOf, searched } from "../src/lib/file-list.ts";
+import {
+	checkedAfter,
+	eachOf,
+	searched,
+	toggledAll,
+} from "../src/lib/file-list.ts";
 
 const order = ["a.md", "b.md", "c.md", "d.md"];
 
@@ -30,6 +35,14 @@ describe("checkedAfter", () => {
 	it("falls back to a toggle when the anchor is gone", () => {
 		const next = checkedAfter(order, new Set(), "gone.md", "c.md", true);
 		expect([...next]).toEqual(["c.md"]);
+	});
+});
+
+describe("toggledAll", () => {
+	it("checks a whole group, and unchecks it once every name in it is checked", () => {
+		const some = toggledAll(new Set(["a.md", "d.md"]), ["a.md", "b.md"]);
+		expect([...some].sort()).toEqual(["a.md", "b.md", "d.md"]);
+		expect([...toggledAll(some, ["a.md", "b.md"])]).toEqual(["d.md"]);
 	});
 });
 

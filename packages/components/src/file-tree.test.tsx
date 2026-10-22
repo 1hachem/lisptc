@@ -9,6 +9,7 @@ import {
 	TreeFile,
 	TreeFilter,
 	TreeFolder,
+	TreeGroup,
 	TreeMore,
 	TreePending,
 	TreeSelection,
@@ -185,6 +186,24 @@ describe("TreeFile check", () => {
 			);
 		});
 		expect(onCheck).toHaveBeenCalledWith(true);
+	});
+});
+
+describe("TreeGroup check", () => {
+	it("checks everything under a date heading at once", async () => {
+		const onCheck = vi.fn();
+		const host = await mounted(
+			<TreeGroup
+				label="today"
+				check={{ checked: false, selecting: false, onCheck }}
+			/>,
+		);
+		expect(host.textContent).toBe("today");
+		const box = host.querySelector<HTMLInputElement>(
+			'[aria-label="select everything from today"]',
+		);
+		await act(async () => box?.click());
+		expect(onCheck).toHaveBeenCalledOnce();
 	});
 });
 
