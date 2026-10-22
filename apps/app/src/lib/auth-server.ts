@@ -1,13 +1,20 @@
 import { createIsomorphicFn } from "@tanstack/react-start";
-import { authToken } from "../../server/auth.ts";
+import { authToken, dropAuthCookies } from "../../server/auth.ts";
+import { verifyToken } from "../../server/token.ts";
 
-export type SsrAuth =
+type SsrAuth =
 	| { source: "server"; token: string | null }
 	| { source: "browser" };
 
 export const ssrAuth = createIsomorphicFn()
 	.server(async (): Promise<SsrAuth> => {
 		const token = await authToken();
-		return { source: "server", token: token ?? null };
+		if (token === undefined) return { source: "server", token: null };
+		const verdict = await verifyToken(token);
+		if (!verdict.signed && verdict.forged) {
+			dropAuthCookies();
+			return { source: "server", token: null };
+		}
+		return { source: "server", token };
 	})
 	.client((): SsrAuth => ({ source: "browser" }));
