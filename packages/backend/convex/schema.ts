@@ -3,6 +3,8 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { RETIRED_MODELS } from "./lib/models.js";
 
+export const replState = v.union(v.literal("open"), v.literal("closed"));
+
 export const messageType = v.union(
 	v.literal("human"),
 	v.literal("ai"),
@@ -123,7 +125,12 @@ export default defineSchema({
 	repls: defineTable({
 		workspaceId: v.id("workspaces"),
 		chatId: v.id("chats"),
+		state: v.optional(replState),
 		head: v.optional(v.id("replLayers")),
+		openedAt: v.optional(v.number()),
+		lastActiveAt: v.optional(v.number()),
+		closedAt: v.optional(v.number()),
+		closedSaved: v.optional(v.boolean()),
 	}).index("by_head", ["head"]),
 
 	replLayers: defineTable({

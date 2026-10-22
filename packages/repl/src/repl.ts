@@ -187,6 +187,8 @@ function snapshotOf(interp: Interp): Image | undefined {
 export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: Interp;
 	private inFlight: Promise<void> = Promise.resolve();
+	private queued = 0;
+	private lastStepAt = Date.now();
 	private parked: Parked[] = [];
 	private recorder: FormRecorder | undefined;
 	private betweenSteps:
@@ -236,6 +238,19 @@ export class MemoryRepl implements InMemoryRepl {
 		if (latest === undefined) return undefined;
 		this.load(latest);
 		return latest.depth;
+	}
+
+	async close(): Promise<void> {
+		await this.inFlight;
+		await this.saving;
+		try {
+			const { images, calls } = this;
+			if (images === undefined || calls === 0) return;
+			await images.save(snapshot(this.currentInterp));
+		} finally {
+			this.parked = [];
+			this.currentInterp.dispose();
+		}
 	}
 
 	recover(): Promise<number | undefined> {
@@ -337,12 +352,22 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private enqueue<T>(run: () => Promise<T>): Promise<T> {
+		this.queued++;
 		const done = this.inFlight.then(run, run);
 		this.inFlight = done.then(
-			() => undefined,
-			() => undefined,
+			() => this.settle(),
+			() => this.settle(),
 		);
 		return done;
+	}
+
+	private settle(): void {
+		this.queued--;
+		this.lastStepAt = Date.now();
+	}
+
+	get idleSince(): number | undefined {
+		return this.queued > 0 ? undefined : this.lastStepAt;
 	}
 
 	private listenBetweenSteps(channels: Channels): void {
