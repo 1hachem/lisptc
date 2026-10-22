@@ -134,6 +134,12 @@ lifecycle point or on a topic it declares, and collects only from a topic it
 declares itself. A driver collects. Nothing reads a payload it did not emit, and
 no other spelling for either direction survives review.
 
+Data also comes in, once. What the user's newest message carried beside its
+text reaches the `received` chain on the turn it was sent and on no other. An
+extension reads only a key it owns, checks it against that key's schema before
+it trusts a byte of it, and treats it as input from the user. A key no
+extension owns is dropped, and nothing above the seam interprets one.
+
 Needing something new is never a reason to import across the seam. A new point
 in the lifecycle is a new chain. A new capability is a new slot. A new thing to
 report is a new key. A payload a layer above would have to interpret belongs
