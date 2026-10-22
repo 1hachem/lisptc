@@ -1,10 +1,9 @@
+import { fittedFileName } from "@repo/shared/files";
+
 const MAX_RENAMES = 100;
 
 export function numbered(name: string, n: number | string): string {
-	const dot = name.lastIndexOf(".");
-	return dot <= 0
-		? `${name} (${n})`
-		: `${name.slice(0, dot)} (${n})${name.slice(dot)}`;
+	return fittedFileName(name, ` (${n})`);
 }
 
 export async function freeName(
