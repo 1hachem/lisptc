@@ -6,7 +6,7 @@ const crons = cronJobs();
 crons.interval(
 	"move week-old attachments to the bin",
 	{ hours: 24 },
-	internal.attachments.expire,
+	internal.files.expire,
 	{},
 );
 

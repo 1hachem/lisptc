@@ -1,33 +1,17 @@
-import type { Doc, Id } from "../_generated/dataModel.js";
-import type { MutationCtx, QueryCtx } from "../_generated/server.js";
-import { freeName, numbered } from "./names.js";
-
-export type BinnedFrom = Doc<"bin">["from"];
-
-export async function heldInBin(
-	ctx: QueryCtx | MutationCtx,
-	workspaceId: Id<"workspaces">,
-	name: string,
-) {
-	return await ctx.db
-		.query("bin")
-		.withIndex("by_workspace_name", (q) =>
-			q.eq("workspaceId", workspaceId).eq("name", name),
-		)
-		.unique();
-}
+import { internal } from "../_generated/api.js";
+import type { Id } from "../_generated/dataModel.js";
+import type { MutationCtx } from "../_generated/server.js";
+import { type Folder, type FolderRow, freeIn } from "./files.js";
+import { numbered } from "./names.js";
 
 export async function intoBin(
 	ctx: MutationCtx,
-	row: Doc<"knowledge"> | Doc<"attachments">,
-	from: BinnedFrom,
+	row: FolderRow,
+	from: Folder,
 ): Promise<string> {
 	const name =
-		(await freeName(
-			async (candidate) =>
-				(await heldInBin(ctx, row.workspaceId, candidate)) !== null,
-			row.name,
-		)) ?? numbered(row.name, row._id);
+		(await freeIn(ctx, "bin", row.workspaceId, row.name)) ??
+		numbered(row.name, row._id);
 	await ctx.db.insert("bin", {
 		workspaceId: row.workspaceId,
 		name,
@@ -39,4 +23,11 @@ export async function intoBin(
 	});
 	await ctx.db.delete(row._id);
 	return name;
+}
+
+export async function trimBinLater(
+	ctx: MutationCtx,
+	workspaceId: Id<"workspaces">,
+): Promise<void> {
+	await ctx.scheduler.runAfter(0, internal.bin.trim, { workspaceId });
 }

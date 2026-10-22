@@ -55,3 +55,15 @@ export function useShown(): (content: PanelContent) => boolean {
 	const at = useParams({ strict: false })._splat ?? "";
 	return (content) => at !== "" && panelPath(content) === at;
 }
+
+export function linkTo(workspaceId: Id<"workspaces">, content: PanelContent) {
+	return (children: ReactNode, className: string) => (
+		<PanelLink
+			workspaceId={workspaceId}
+			content={content}
+			className={className}
+		>
+			{children}
+		</PanelLink>
+	);
+}

@@ -7,7 +7,6 @@ export interface Preferences {
 	channels?: Toggles;
 	metadata?: Toggles;
 	input?: Toggles;
-	sendLabel?: string;
 	sidebar?: string[];
 	hidden?: string[];
 	statusBar?: string[];

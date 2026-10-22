@@ -1,6 +1,4 @@
-export const SIDEBAR_ENTRIES = [
-	"home",
-	"new_chat",
+export const SIDEBAR_FOLDERS = [
 	"chat",
 	"memories",
 	"permissions",
@@ -12,6 +10,14 @@ export const SIDEBAR_ENTRIES = [
 	"tasks",
 	"ui",
 	"tests",
+] as const;
+
+export type SidebarFolder = (typeof SIDEBAR_FOLDERS)[number];
+
+export const SIDEBAR_ENTRIES = [
+	"home",
+	"new_chat",
+	...SIDEBAR_FOLDERS,
 	"README.md",
 	"settings.ptc",
 	"preferences.ptc",
@@ -49,16 +55,4 @@ export function withHidden(
 	order: readonly SidebarEntry[],
 ): SidebarEntry[] {
 	return [...shown, ...order.filter((name) => !shown.includes(name))];
-}
-
-export function toggledHidden(
-	hidden: readonly string[] | undefined,
-	name: SidebarEntry,
-): SidebarEntry[] {
-	const kept = [
-		...new Set((hidden ?? []).map((entry) => RENAMED[entry] ?? entry)),
-	].filter(isEntry);
-	return kept.includes(name)
-		? kept.filter((entry) => entry !== name)
-		: [...kept, name];
 }

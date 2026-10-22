@@ -1,27 +1,15 @@
+import {
+	ATTACHMENTS_ANNOTATION,
+	type AttachedFile,
+	attachedFiles,
+} from "@repo/shared/files";
 import type { ChatMessage } from "./chat.tsx";
 
-export type AttachedFolder = "attachments" | "knowledge";
-
-export interface AttachedFile {
-	folder: AttachedFolder;
-	name: string;
-}
-
-const FOLDERS: readonly AttachedFolder[] = ["attachments", "knowledge"];
-
-function isAttachedFile(value: unknown): value is AttachedFile {
-	if (typeof value !== "object" || value === null) return false;
-	const { folder, name } = value as Record<string, unknown>;
+export function attachedTo(message: ChatMessage): AttachedFile[] {
 	return (
-		FOLDERS.includes(folder as AttachedFolder) &&
-		typeof name === "string" &&
-		name !== ""
+		attachedFiles.safeParse(message.additional_kwargs?.[ATTACHMENTS_ANNOTATION])
+			.data ?? []
 	);
-}
-
-export function attachedFiles(message: ChatMessage): AttachedFile[] {
-	const attachments = message.additional_kwargs?.attachments;
-	return Array.isArray(attachments) ? attachments.filter(isAttachedFile) : [];
 }
 
 export function attachingFiles(
@@ -32,5 +20,5 @@ export function attachingFiles(
 		folder: "attachments",
 		name,
 	}));
-	return { attachments };
+	return { [ATTACHMENTS_ANNOTATION]: attachments };
 }

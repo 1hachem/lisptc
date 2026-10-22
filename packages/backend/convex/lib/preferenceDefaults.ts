@@ -23,7 +23,6 @@ export const DEFAULT_TOGGLES = {
 		provider: false,
 	},
 	input: {
-		send: true,
 		attach: true,
 		lisp: true,
 	},
@@ -32,19 +31,13 @@ export const DEFAULT_TOGGLES = {
 	Record<string, boolean>
 >;
 
-export const DEFAULT_SEND_LABEL = "send";
-
-export const DEFAULT_HIDDEN: readonly string[] = ["attachments", "bin"];
-
-export type Toggles = Record<string, boolean>;
+type Toggles = Record<string, boolean>;
 
 export function withDefaults<
 	T extends {
 		channels?: Toggles;
 		metadata?: Toggles;
 		input?: Toggles;
-		sendLabel?: string;
-		hidden?: string[];
 		panelMotion?: boolean;
 	},
 >(
@@ -53,8 +46,6 @@ export function withDefaults<
 	channels: Toggles;
 	metadata: Toggles;
 	input: Toggles;
-	sendLabel: string;
-	hidden: string[];
 	panelMotion: boolean;
 } {
 	return {
@@ -62,22 +53,6 @@ export function withDefaults<
 		channels: { ...DEFAULT_TOGGLES.channels, ...stored.channels },
 		metadata: { ...DEFAULT_TOGGLES.metadata, ...stored.metadata },
 		input: { ...DEFAULT_TOGGLES.input, ...stored.input },
-		sendLabel: stored.sendLabel ?? DEFAULT_SEND_LABEL,
-		hidden: stored.hidden ?? [...DEFAULT_HIDDEN],
 		panelMotion: stored.panelMotion ?? true,
 	};
-}
-
-const RETIRED_INPUT_TOGGLES: readonly string[] = ["vim"];
-
-export function retiredInputTogglesDropped(
-	input: Toggles | undefined,
-): { input: Toggles } | undefined {
-	if (input === undefined) return undefined;
-	const kept = Object.fromEntries(
-		Object.entries(input).filter(([id]) => !RETIRED_INPUT_TOGGLES.includes(id)),
-	);
-	return Object.keys(kept).length === Object.keys(input).length
-		? undefined
-		: { input: kept };
 }

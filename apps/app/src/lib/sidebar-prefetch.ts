@@ -26,10 +26,10 @@ export async function prefetchSidebar(
 			convexQuery(api.permissions.get, { workspaceId }),
 		),
 		queryClient.ensureQueryData(
-			convexQuery(api.knowledge.list, { workspaceId }),
+			convexQuery(api.files.list, { workspaceId, folder: "knowledge" }),
 		),
 		queryClient.ensureQueryData(
-			convexQuery(api.attachments.list, { workspaceId }),
+			convexQuery(api.files.list, { workspaceId, folder: "attachments" }),
 		),
 		queryClient.ensureQueryData(
 			convexQuery(api.messages.sent, { workspaceId }),

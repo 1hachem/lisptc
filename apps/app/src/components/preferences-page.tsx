@@ -7,7 +7,7 @@ import { FileView } from "./file-view.tsx";
 
 export function PreferencesPage() {
 	const { font, openFontPicker } = useAppearance();
-	const { shown, metaShown, inputOn, sendLabel } = useUI();
+	const { shown, metaShown, inputOn } = useUI();
 	const { order, hidden } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
 	const { panelMotion } = usePanelMotion();
@@ -21,7 +21,6 @@ export function PreferencesPage() {
 					channels: shown,
 					metadata: metaShown,
 					input: inputOn,
-					sendLabel,
 					sidebar: order,
 					hidden,
 					motion,

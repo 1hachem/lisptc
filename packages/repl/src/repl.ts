@@ -558,12 +558,16 @@ export class AgentRepl extends MemoryRepl {
 		return { emitted, annotations };
 	}
 
-	received(received: Annotations): Promise<{
+	received(
+		received: Annotations,
+		around?: Middleware<[TurnContext, Annotations], Eval<void>>,
+	): Promise<{
 		emitted: string;
 		annotations: StepAnnotations;
 	}> {
+		const chain = outermost(this.hooks.received, around);
 		return this.emitting((ctx) =>
-			this.hooks.received.run(() => settled(undefined), ctx, received),
+			chain.run(() => settled(undefined), ctx, received),
 		);
 	}
 

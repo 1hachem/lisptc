@@ -4,6 +4,11 @@ import { v } from "convex/values";
 import { RETIRED_MODELS } from "./lib/models.js";
 import { WORKSPACE_ICONS } from "./lib/workspaceIcons.js";
 
+export const binnedFrom = v.union(
+	v.literal("knowledge"),
+	v.literal("attachments"),
+);
+
 export const messageType = v.union(
 	v.literal("human"),
 	v.literal("ai"),
@@ -129,7 +134,6 @@ export default defineSchema({
 		channels: v.optional(v.record(v.string(), v.boolean())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
 		input: v.optional(v.record(v.string(), v.boolean())),
-		sendLabel: v.optional(v.string()),
 		sidebar: v.optional(v.array(v.string())),
 		hidden: v.optional(v.array(v.string())),
 		statusBar: v.optional(v.array(v.string())),
@@ -222,7 +226,7 @@ export default defineSchema({
 	bin: defineTable({
 		workspaceId: v.id("workspaces"),
 		name: v.string(),
-		from: v.union(v.literal("knowledge"), v.literal("attachments")),
+		from: binnedFrom,
 		storageId: v.id("_storage"),
 		contentType: v.optional(v.string()),
 		size: v.number(),

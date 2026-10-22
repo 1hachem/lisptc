@@ -20,7 +20,10 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { ChatInput } from "../src/components/chat-input.tsx";
+import {
+	ChatInput,
+	type ChatInputProps,
+} from "../src/components/chat-input.tsx";
 
 vi.mock("../src/lib/commands.ts", () => ({
 	commands: [{ name: "/clear", desc: "start a fresh session" }],
@@ -72,12 +75,15 @@ const SYMBOLS = symbolTable([
 ]);
 
 function render(
-	onSubmit: (text: string, attached: string[]) => void,
+	onSubmit: ChatInputProps["onSubmit"],
 	onCommand?: (name: string) => Promise<string | null>,
 ): HTMLElement {
 	act(() =>
 		root.render(
-			<ChatInput onSubmit={onSubmit} onCommand={onCommand} symbols={SYMBOLS} />,
+			<ChatInput
+				onSubmit={onSubmit}
+				assist={{ onCommand, symbols: SYMBOLS }}
+			/>,
 		),
 	);
 	const field = host.querySelector<HTMLElement>("[contenteditable]");
@@ -86,10 +92,10 @@ function render(
 }
 
 function renderUploading(
-	onSubmit: (text: string, attached: string[]) => void,
+	onSubmit: ChatInputProps["onSubmit"],
 	upload: (file: File) => Promise<string>,
 ): HTMLElement {
-	act(() => root.render(<ChatInput onSubmit={onSubmit} upload={upload} />));
+	act(() => root.render(<ChatInput onSubmit={onSubmit} files={{ upload }} />));
 	const field = host.querySelector<HTMLElement>("[contenteditable]");
 	if (!field) throw new Error("no editor");
 	return field;
@@ -236,10 +242,12 @@ describe("the chat input", () => {
 			root.render(
 				<ChatInput
 					onSubmit={onSubmit}
-					mentions={[
-						{ folder: "knowledge", name: "report.md", contentType: null },
-						{ folder: "attachments", name: "spec.pdf", contentType: null },
-					]}
+					assist={{
+						mentions: [
+							{ folder: "knowledge", name: "report.md", contentType: null },
+							{ folder: "attachments", name: "spec.pdf", contentType: null },
+						],
+					}}
 				/>,
 			),
 		);
@@ -302,7 +310,9 @@ describe("the chat input", () => {
 	it("offers an attach button beside send only when it can upload", () => {
 		render(vi.fn());
 		expect(host.querySelector('button[aria-label="attach"]')).toBeNull();
-		act(() => root.render(<ChatInput onSubmit={vi.fn()} upload={vi.fn()} />));
+		act(() =>
+			root.render(<ChatInput onSubmit={vi.fn()} files={{ upload: vi.fn() }} />),
+		);
 		expect(host.querySelector('button[aria-label="attach"]')).not.toBeNull();
 		expect(host.querySelector('input[type="file"]')).not.toBeNull();
 	});
@@ -339,7 +349,7 @@ describe("the chat input", () => {
 		expect(chip("spec.pdf")).toBeUndefined();
 	});
 
-	it("refuses to send while an upload has failed, and says why on the chip", async () => {
+	it("holds a send while an upload has failed, and drops it on a second enter", async () => {
 		const onSubmit = vi.fn();
 		const upload = vi.fn(() =>
 			Promise.reject(new Error("spec.pdf not uploaded: the folder is full")),
@@ -354,16 +364,46 @@ describe("the chat input", () => {
 		type(field, "see this");
 		enter(field, false);
 		expect(onSubmit).not.toHaveBeenCalled();
-		expect(host.textContent).toContain("remove the files that failed");
+		expect(host.textContent).toContain(
+			"a file failed to upload, press enter again to remove it and send",
+		);
+		expect(chip("spec.pdf")?.dataset.upload).toBe("failed");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("see this", []);
+		expect(chip("spec.pdf")).toBeUndefined();
+	});
+
+	it("warns again when a different upload fails after the first was removed", async () => {
+		const onSubmit = vi.fn();
+		const upload = vi.fn((file: File) =>
+			Promise.reject(new Error(`${file.name} not uploaded`)),
+		);
+		const field = renderUploading(onSubmit, upload);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		await settled();
+		type(field, "see this");
+		enter(field, false);
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>(
+					'button[aria-label="remove spec.pdf"]',
+				)
+				?.click(),
+		);
+		attach([new File(["%PDF"], "plan.pdf")]);
+		await settled();
+		enter(field, false);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(chip("plan.pdf")?.dataset.upload).toBe("failed");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("see this", []);
 	});
 
 	it("deletes an uploaded file removed before sending", async () => {
 		const discard = vi.fn();
 		const upload = vi.fn(() => Promise.resolve("spec.pdf"));
 		act(() =>
-			root.render(
-				<ChatInput onSubmit={vi.fn()} upload={upload} discard={discard} />,
-			),
+			root.render(<ChatInput onSubmit={vi.fn()} files={{ upload, discard }} />),
 		);
 		attach([new File(["%PDF"], "spec.pdf")]);
 		await settled();
@@ -388,9 +428,7 @@ describe("the chat input", () => {
 				}),
 		);
 		act(() =>
-			root.render(
-				<ChatInput onSubmit={vi.fn()} upload={upload} discard={discard} />,
-			),
+			root.render(<ChatInput onSubmit={vi.fn()} files={{ upload, discard }} />),
 		);
 		attach([new File(["%PDF"], "spec.pdf")]);
 		act(() =>
@@ -403,6 +441,57 @@ describe("the chat input", () => {
 		expect(discard).not.toHaveBeenCalled();
 		await act(async () => finish("spec.pdf"));
 		expect(discard).toHaveBeenCalledWith("spec.pdf");
+	});
+
+	it("puts the text and the files back when a send fails", async () => {
+		const onSubmit = vi.fn(() => Promise.resolve(false));
+		const upload = vi.fn(() => Promise.resolve("spec.pdf"));
+		const field = renderUploading(onSubmit, upload);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		await settled();
+		type(field, "see this");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("see this", ["spec.pdf"]);
+		await settled();
+		expect(textOf(field)).toBe("see this");
+		expect(chip("spec.pdf")?.dataset.upload).toBe("done");
+		expect(host.textContent).toContain("not sent");
+	});
+
+	it("sends files alone, with no text", async () => {
+		const onSubmit = vi.fn();
+		const upload = vi.fn(() => Promise.resolve("spec.pdf"));
+		const field = renderUploading(onSubmit, upload);
+		attach([new File(["%PDF"], "spec.pdf")]);
+		await settled();
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("", ["spec.pdf"]);
+		await settled();
+		expect(chip("spec.pdf")).toBeUndefined();
+	});
+
+	it("holds a send while it is blocked, and says why on the button", () => {
+		const onSubmit = vi.fn();
+		act(() =>
+			root.render(
+				<ChatInput
+					onSubmit={onSubmit}
+					blocked="the file is still loading, send once it shows"
+				/>,
+			),
+		);
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		const button = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+			(candidate) => candidate.textContent?.startsWith("send"),
+		);
+		expect(button?.disabled).toBe(true);
+		expect(button?.title).toBe("the file is still loading, send once it shows");
+		type(field, "summarize it");
+		enter(field, false);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(textOf(field)).toBe("summarize it");
+		expect(host.textContent).toContain("still loading");
 	});
 
 	it("completes the highlighted symbol on Enter instead of sending", async () => {
@@ -522,22 +611,12 @@ describe("the chat input", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("shows the send button under the label the user chose", () => {
-		act(() => root.render(<ChatInput onSubmit={vi.fn()} sendLabel="go" />));
-		const buttons = [...host.querySelectorAll("button")].map(
-			(button) => button.textContent,
-		);
-		expect(buttons).toContain("go⏎");
-	});
-
-	it("hides the send and attach buttons, and Enter still sends", () => {
+	it("hides the attach button, and Enter still sends", () => {
 		const onSubmit = vi.fn();
 		act(() =>
-			root.render(
-				<ChatInput onSubmit={onSubmit} send={false} attach={false} />,
-			),
+			root.render(<ChatInput onSubmit={onSubmit} on={{ attach: false }} />),
 		);
-		expect(host.querySelector("button")).toBeNull();
+		expect(host.querySelector('[aria-label="attach"]')).toBeNull();
 		const field = host.querySelector<HTMLElement>("[contenteditable]");
 		if (!field) throw new Error("no editor");
 		type(field, "hello");
@@ -548,7 +627,11 @@ describe("the chat input", () => {
 	it("runs no lisp help in the input when the preference is off", async () => {
 		act(() =>
 			root.render(
-				<ChatInput onSubmit={vi.fn()} symbols={SYMBOLS} lisp={false} />,
+				<ChatInput
+					onSubmit={vi.fn()}
+					assist={{ symbols: SYMBOLS }}
+					on={{ lisp: false }}
+				/>,
 			),
 		);
 		const field = host.querySelector<HTMLElement>("[contenteditable]");
@@ -565,8 +648,8 @@ describe("the chat input", () => {
 					<ChatInput
 						placeholder="type a message"
 						onSubmit={vi.fn()}
-						onCommand={vi.fn()}
-						lisp={lisp}
+						assist={{ onCommand: vi.fn() }}
+						on={{ lisp }}
 					/>,
 				),
 			);

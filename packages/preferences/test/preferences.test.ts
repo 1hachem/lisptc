@@ -6,8 +6,7 @@ const HELD = {
 	font: "geist",
 	channels: { lisp: false, thinking: true },
 	metadata: { tokens: true },
-	input: { lisp: true, send: true },
-	sendLabel: "send",
+	input: { lisp: true },
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
 	statusBar: ["gap", "panes", "clock"],
@@ -20,7 +19,7 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t :send t) :send-label "send" :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("gap" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t)',
+			'(:font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("gap" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t)',
 		);
 	});
 
@@ -56,34 +55,12 @@ describe("changing preferences", () => {
 		expect(store.read().channels).toEqual({ lisp: true, thinking: true });
 	});
 
-	it("changes what the chat input shows and how it behaves, and keeps the rest", async () => {
+	it("turns a chat input helper off and keeps the rest", async () => {
 		const { ev, store } = await world(HELD);
-		expect(await ev("(preferences/set :input '(:send nil))")).toContain(
-			":input (:lisp t :send nil)",
+		expect(await ev("(preferences/set :input '(:lisp nil))")).toContain(
+			":input (:lisp nil)",
 		);
-		expect(store.read().input).toEqual({ lisp: true, send: false });
-	});
-
-	it("relabels the send button", async () => {
-		const { ev, store } = await world(HELD);
-		expect(await ev('(preferences/set :send-label " go ")')).toContain(
-			':send-label "go"',
-		);
-		expect(store.read().sendLabel).toBe("go");
-	});
-
-	it("refuses a send label that is empty or too long", async () => {
-		const { ev, store } = await world(HELD);
-		await expect(ev('(preferences/set :send-label "  ")')).rejects.toThrow(
-			/1 to 16 characters/,
-		);
-		await expect(
-			ev('(preferences/set :send-label "a label far too long")'),
-		).rejects.toThrow(/1 to 16 characters/);
-		await expect(ev("(preferences/set :send-label 3)")).rejects.toThrow(
-			/must be a string/,
-		);
-		expect(store.read()).toEqual(HELD);
+		expect(store.read().input).toEqual({ lisp: false });
 	});
 
 	it("refuses a font the app does not offer", async () => {

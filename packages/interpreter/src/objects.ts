@@ -147,6 +147,10 @@ export function jsonToLisp(x: unknown): unknown {
 	return String(x);
 }
 
+const JSON_FALSE = newLispKeyword("false");
+const EMPTY_ARRAY = newLispKeyword("[]");
+const EMPTY_OBJECT = newLispKeyword("{}");
+
 function properItems(list: Cell): unknown[] {
 	const items: unknown[] = [];
 	let j: unknown = list;
@@ -158,8 +162,7 @@ function properItems(list: Cell): unknown[] {
 function isPlist(items: unknown[]): boolean {
 	return (
 		items.length % 2 === 0 &&
-		items.every((item, i) => i % 2 === 1 || item instanceof LispKeyword) &&
-		!items.every((item) => item instanceof LispKeyword)
+		items.every((item, i) => i % 2 === 1 || item instanceof LispKeyword)
 	);
 }
 
@@ -167,6 +170,41 @@ function isAlist(items: unknown[]): items is Cell[] {
 	return items.every(
 		(item) => item instanceof Cell && typeof item.car === "string",
 	);
+}
+
+function writesAsArray(items: unknown[]): boolean {
+	return items[0] !== EMPTY_ARRAY && !isPlist(items) && !isAlist(items);
+}
+
+export function exactJsonToLisp(x: unknown): unknown {
+	if (x === null) return null;
+	if (x === true) return true;
+	if (x === false) return JSON_FALSE;
+	if (typeof x === "number" || typeof x === "string") return x;
+	if (Array.isArray(x)) {
+		if (x.length === 0) return EMPTY_ARRAY;
+		const items = x.map(exactJsonToLisp);
+		const list = arrayToList(items);
+		return writesAsArray(items) ? list : new Cell(EMPTY_ARRAY, list);
+	}
+	if (typeof x === "object") {
+		const entries = Object.entries(x as Record<string, unknown>);
+		if (entries.length === 0) return EMPTY_OBJECT;
+		return arrayToList(
+			entries.map(([k, v]) => new Cell(k, exactJsonToLisp(v))),
+		);
+	}
+	throw new TypeError(`${String(x)} is not JSON`);
+}
+
+function objectOf(entries: [string, unknown][]): Record<string, unknown> {
+	const seen = new Set<string>();
+	for (const [key] of entries) {
+		if (seen.has(key))
+			throw new TypeError(`key "${key}" appears twice in one object`);
+		seen.add(key);
+	}
+	return Object.fromEntries(entries);
 }
 
 export function lispToJson(x: unknown): unknown {
@@ -180,18 +218,22 @@ export function lispToJson(x: unknown): unknown {
 			throw new TypeError(`${x} is too large for JSON`);
 		return Number(x);
 	}
+	if (x === JSON_FALSE) return false;
+	if (x === EMPTY_ARRAY) return [];
+	if (x === EMPTY_OBJECT) return {};
 	if (x instanceof LispKeyword) return x.name;
 	if (!(x instanceof Cell))
 		throw new TypeError(`${String(x)} has no JSON form`);
 	const items = properItems(x);
+	if (items[0] === EMPTY_ARRAY) return items.slice(1).map(lispToJson);
 	if (isPlist(items)) {
-		const object: Record<string, unknown> = {};
+		const entries: [string, unknown][] = [];
 		for (let i = 0; i < items.length; i += 2)
-			object[(items[i] as LispKeyword).name] = lispToJson(items[i + 1]);
-		return object;
+			entries.push([(items[i] as LispKeyword).name, lispToJson(items[i + 1])]);
+		return objectOf(entries);
 	}
 	if (isAlist(items))
-		return Object.fromEntries(
+		return objectOf(
 			items.map((pair) => [pair.car as string, lispToJson(pair.cdr)]),
 		);
 	return items.map(lispToJson);

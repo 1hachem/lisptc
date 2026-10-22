@@ -4,11 +4,17 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useState } from "react";
+import { useAttempt } from "../lib/attempt.ts";
+import { knowledgeIcon } from "../lib/file-icons.ts";
+import { saveAs } from "../lib/file-list.ts";
 import {
 	type KnowledgeViewer,
-	knowledgeIcon,
 	knowledgeViewer,
-} from "../lib/knowledge.ts";
+	readsText,
+	type StoredText,
+	sendBlocked,
+	type TextViewer,
+} from "../lib/file-viewer.ts";
 import { usePageHost } from "../lib/page-host.tsx";
 import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
@@ -18,7 +24,6 @@ const StlViewer = lazy(async () => ({
 	default: (await import("@repo/components/stl-viewer.tsx")).StlViewer,
 }));
 
-type TextViewer = Extract<KnowledgeViewer, "markdown" | "text">;
 type MediaViewer = Exclude<KnowledgeViewer, TextViewer>;
 
 function NoPreview({ name, url }: { name: string; url: string }) {
@@ -30,15 +35,7 @@ function NoPreview({ name, url }: { name: string; url: string }) {
 			<HugeiconsIcon icon={knowledgeIcon(name, null)} className="size-icon" />
 			<span className="max-w-full truncate text-fg">{name}</span>
 			<span>no preview for {kind} yet</span>
-			<a
-				href={url}
-				download={name}
-				target="_blank"
-				rel="noreferrer"
-				className="hover:text-fg"
-			>
-				download
-			</a>
+			<DownloadButton name={name} url={url} />
 		</div>
 	);
 }
@@ -105,10 +102,6 @@ const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 	),
 };
 
-function readsText(viewer: KnowledgeViewer | undefined): viewer is TextViewer {
-	return viewer === "markdown" || viewer === "text";
-}
-
 async function fetchText(url: string): Promise<string> {
 	const response = await fetch(url);
 	if (!response.ok) throw new Error(`fetch failed (${response.status})`);
@@ -118,45 +111,50 @@ async function fetchText(url: string): Promise<string> {
 function useStoredText(
 	url: string | undefined,
 	viewer: KnowledgeViewer | undefined,
-): string | undefined {
-	const { data } = useQuery({
+): StoredText {
+	const { data, error } = useQuery({
 		queryKey: ["knowledge-text", url],
 		queryFn: () => fetchText(url ?? ""),
 		enabled: url !== undefined && readsText(viewer),
 		staleTime: Number.POSITIVE_INFINITY,
 	});
-	return data;
+	return { text: data, failure: error?.message };
 }
 
 function StoredBody({
 	name,
 	url,
 	viewer,
-	text,
+	loaded,
 }: {
 	name: string;
 	url: string | undefined;
 	viewer: KnowledgeViewer | undefined;
-	text: string | undefined;
+	loaded: StoredText;
 }) {
 	if (url === undefined || viewer === undefined)
 		return <div className="text-dim">this file is gone from storage</div>;
 	if (!readsText(viewer)) return MEDIA[viewer](name, url);
-	if (text === undefined) return <div className="text-dim">loading…</div>;
-	return TEXT[viewer](text);
+	if (loaded.failure !== undefined)
+		return (
+			<div className="text-red">this file did not load: {loaded.failure}</div>
+		);
+	if (loaded.text === undefined)
+		return <div className="text-dim">loading…</div>;
+	return TEXT[viewer](loaded.text);
 }
 
-function DownloadLink({ name, url }: { name: string; url: string }) {
+export function DownloadButton({ name, url }: { name: string; url: string }) {
+	const { failure, attempt } = useAttempt(`download ${name}`);
 	return (
-		<a
-			href={url}
-			download={name}
-			target="_blank"
-			rel="noreferrer"
-			className="text-dim hover:text-fg"
+		<button
+			type="button"
+			onClick={() => attempt(() => saveAs(name, url))}
+			title={failure ?? undefined}
+			className={failure ? "text-red" : "text-dim hover:text-fg"}
 		>
-			download
-		</a>
+			{failure ? "download failed" : "download"}
+		</button>
 	);
 }
 
@@ -171,9 +169,9 @@ function useStored(file: StoredFileRow | null | undefined) {
 	const viewer = file
 		? knowledgeViewer(file.name, file.contentType)
 		: undefined;
-	const text = useStoredText(url, viewer);
+	const loaded = useStoredText(url, viewer);
 	const fills = url !== undefined && viewer !== undefined && FILLS.has(viewer);
-	return { url, viewer, text, fills };
+	return { url, viewer, loaded, fills };
 }
 
 const KEEP_FAILURES: Record<string, string> = {
@@ -189,7 +187,7 @@ function KeepAction({
 	workspaceId: Id<"workspaces">;
 	name: string;
 }) {
-	const keep = useConvexMutation(api.attachments.keep);
+	const keep = useConvexMutation(api.files.keep);
 	const host = usePageHost();
 	const [failure, setFailure] = useState<string | null>(null);
 	return (
@@ -223,15 +221,9 @@ export function FilePreview({
 	name: string;
 }) {
 	const { data: file, error } = useQuery(
-		convexQuery(
-			folder === "knowledge" ? api.knowledge.get : api.attachments.get,
-			{
-				workspaceId,
-				name,
-			},
-		),
+		convexQuery(api.files.get, { workspaceId, folder, name }),
 	);
-	const { url, viewer, text, fills } = useStored(file);
+	const { url, viewer, loaded, fills } = useStored(file);
 	if (error) return <div className="p-3 text-dim">{error.message}</div>;
 	if (file === undefined) return <div className="p-3 text-dim">loading…</div>;
 	if (file === null)
@@ -250,7 +242,7 @@ export function FilePreview({
 					{folder === "attachments" && (
 						<KeepAction workspaceId={workspaceId} name={name} />
 					)}
-					{url && <DownloadLink name={name} url={url} />}
+					{url && <DownloadButton name={name} url={url} />}
 				</span>
 			</div>
 			<div
@@ -260,7 +252,7 @@ export function FilePreview({
 						: "min-h-0 flex-1 overflow-auto px-3 pb-3"
 				}
 			>
-				<StoredBody name={name} url={url} viewer={viewer} text={text} />
+				<StoredBody name={name} url={url} viewer={viewer} loaded={loaded} />
 			</div>
 		</div>
 	);
@@ -287,21 +279,24 @@ export function StoredFile({
 	file: StoredFileRow | null | undefined;
 	actions?: ReactNode;
 }) {
-	const { url, viewer, text, fills } = useStored(file);
+	const { url, viewer, loaded, fills } = useStored(file);
 
 	return (
 		<FileView
-			file={openedAs(folder, name, file, text)}
+			file={openedAs(folder, name, file, loaded.text)}
+			blocked={sendBlocked(viewer, loaded)}
 			missing={file === undefined ? undefined : `no file named ${name}`}
 			actions={
 				url && (
 					<>
 						{actions}
-						<DownloadLink name={name} url={url} />
+						<DownloadButton name={name} url={url} />
 					</>
 				)
 			}
-			body={<StoredBody name={name} url={url} viewer={viewer} text={text} />}
+			body={
+				<StoredBody name={name} url={url} viewer={viewer} loaded={loaded} />
+			}
 			fill={fills}
 		/>
 	);

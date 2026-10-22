@@ -29,10 +29,11 @@ function prefetchTranscript(
 
 const prefetchFile: Prefetch<"file"> = (queryClient, workspaceId, content) =>
 	queryClient.ensureQueryData(
-		convexQuery(
-			content.folder === "knowledge" ? api.knowledge.get : api.attachments.get,
-			{ workspaceId, name: content.name },
-		),
+		convexQuery(api.files.get, {
+			workspaceId,
+			folder: content.folder,
+			name: content.name,
+		}),
 	);
 
 const prefetchPage: Prefetch<"page"> = (queryClient, workspaceId, content) => {

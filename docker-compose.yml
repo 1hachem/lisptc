@@ -92,8 +92,6 @@ services:
     develop:
       watch:
         - action: rebuild
-          path: ./packages/backend/convex
-        - action: rebuild
           path: ./packages/shared/src
         - action: rebuild
           path: ./packages

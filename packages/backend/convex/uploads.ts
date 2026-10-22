@@ -1,31 +1,10 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
-import { internalMutation, type MutationCtx } from "./_generated/server.js";
+import { internalMutation } from "./_generated/server.js";
+import { claimed } from "./lib/claimed.js";
 import { UNCLAIMED_UPLOAD_TTL_MS } from "./limits.js";
 
 const SWEEP_BATCH = 64;
-
-async function claimed(
-	ctx: MutationCtx,
-	storageId: Id<"_storage">,
-): Promise<boolean> {
-	const holders = await Promise.all([
-		ctx.db
-			.query("knowledge")
-			.withIndex("by_storage", (q) => q.eq("storageId", storageId))
-			.first(),
-		ctx.db
-			.query("attachments")
-			.withIndex("by_storage", (q) => q.eq("storageId", storageId))
-			.first(),
-		ctx.db
-			.query("bin")
-			.withIndex("by_storage", (q) => q.eq("storageId", storageId))
-			.first(),
-	]);
-	return holders.some((holder) => holder !== null);
-}
 
 export const sweep = internalMutation({
 	args: { cursor: v.optional(v.union(v.string(), v.null())) },
