@@ -20,6 +20,8 @@ export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
 
+export const MAX_TRANSCRIPT = 200;
+
 export const MAX_REPL_LAYER_BYTES = 8_388_608;
 
 export const REPL_LAYER_CHUNK_CHARS = 262_144;
