@@ -345,6 +345,25 @@ describe("the chat input", () => {
 		vi.unstubAllGlobals();
 	});
 
+	it("shows the send button under the label the user chose", () => {
+		act(() => root.render(<ChatInput onSubmit={vi.fn()} sendLabel="go" />));
+		const buttons = [...host.querySelectorAll("button")].map(
+			(button) => button.textContent,
+		);
+		expect(buttons).toContain("go⏎");
+	});
+
+	it("hides the send button, and Enter still sends", () => {
+		const onSubmit = vi.fn();
+		act(() => root.render(<ChatInput onSubmit={onSubmit} send={false} />));
+		expect(host.querySelector("button")).toBeNull();
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		type(field, "hello");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("hello");
+	});
+
 	it("runs no lisp help in the input when the preference is off", async () => {
 		act(() =>
 			root.render(

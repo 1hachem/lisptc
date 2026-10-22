@@ -14,7 +14,7 @@ import { Greeting } from "./greeting.tsx";
 
 export function Chat() {
 	const runCommand = useCommandRunner();
-	const { inputOn } = useUI();
+	const { inputOn, sendLabel } = useUI();
 	const { workspaceId, chatId, draftChatId, send, stop, isLoading, fresh } =
 		useChatSession((state) => ({
 			workspaceId: state.workspaceId,
@@ -64,6 +64,8 @@ export function Chat() {
 					onStop={stop}
 					symbols={symbols}
 					lisp={inputOn.lisp}
+					send={inputOn.send}
+					sendLabel={sendLabel}
 				/>
 			</div>
 		</>

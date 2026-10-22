@@ -40,6 +40,8 @@ export interface ChatInputProps {
 	disabled?: boolean;
 	symbols?: SymbolTable;
 	lisp?: boolean;
+	send?: boolean;
+	sendLabel?: string;
 }
 
 const NO_SYMBOLS: SymbolTable = new Map();
@@ -101,18 +103,23 @@ function $replaceText(text: string) {
 }
 
 function SendAction({
+	shown = true,
+	label = "send",
 	isStreaming,
 	empty,
 	disabled,
 	onStop,
 	onSend,
 }: {
+	shown?: boolean;
+	label?: string;
 	isStreaming?: boolean;
 	empty: boolean;
 	disabled?: boolean;
 	onStop?: () => void;
 	onSend: () => void;
 }) {
+	if (!shown) return null;
 	if (isStreaming && empty)
 		return (
 			<InputAction
@@ -133,7 +140,7 @@ function SendAction({
 		);
 	return (
 		<InputAction
-			label="send"
+			label={label}
 			glyph="⏎"
 			tone="text-green hover:brightness-125"
 			onClick={onSend}
@@ -206,6 +213,14 @@ function useDraft(onSubmit: (text: string) => void, disabled?: boolean) {
 
 const ENABLED = { prompt: "›", tone: "text-green" };
 const DISABLED = { prompt: "⋯", tone: "text-dim" };
+
+function lookOf(disabled: boolean | undefined) {
+	return disabled ? DISABLED : ENABLED;
+}
+
+function stopsOnEnter(isStreaming: boolean | undefined, empty: boolean) {
+	return isStreaming === true && empty;
+}
 
 function Notice({ text }: { text: string | null }) {
 	if (!text) return null;
@@ -330,6 +345,8 @@ function Editor({
 	disabled,
 	symbols = NO_SYMBOLS,
 	lisp = true,
+	send: showsSend,
+	sendLabel,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const { text, empty, replace, send } = useDraft(onSubmit, disabled);
@@ -357,9 +374,9 @@ function Editor({
 		menuActive: () => menuActive.current || assistActive.current,
 		recall: (direction) => step(text, direction),
 		replace,
-		enter: isStreaming && empty ? onStop : send,
+		enter: stopsOnEnter(isStreaming, empty) ? onStop : send,
 	});
-	const look = disabled ? DISABLED : ENABLED;
+	const look = lookOf(disabled);
 
 	return (
 		<div className="relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
@@ -375,6 +392,8 @@ function Editor({
 				dim={disabled}
 				action={
 					<SendAction
+						shown={showsSend}
+						label={sendLabel}
 						isStreaming={isStreaming}
 						empty={empty}
 						disabled={disabled}

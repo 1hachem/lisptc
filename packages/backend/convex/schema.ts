@@ -48,6 +48,7 @@ export default defineSchema({
 		channels: v.optional(v.record(v.string(), v.boolean())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
 		input: v.optional(v.record(v.string(), v.boolean())),
+		sendLabel: v.optional(v.string()),
 		sidebar: v.optional(v.array(v.string())),
 		hidden: v.optional(v.array(v.string())),
 		motion: v.optional(v.string()),

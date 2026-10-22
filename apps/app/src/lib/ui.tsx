@@ -36,6 +36,8 @@ interface UIContextValue {
 	toggleMeta: (id: MetaField) => void;
 	inputOn: InputOn;
 	toggleInput: (id: InputHelper) => void;
+	sendLabel: string | undefined;
+	setSendLabel: (label: string) => void;
 }
 
 const UIContext = createContext<UIContextValue | null>(null);
@@ -72,6 +74,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		[stored?.input],
 	);
 
+	const sendLabel = stored?.sendLabel;
+
 	const toggleChannel = useCallback(
 		(id: ChannelId) => put({ channels: { ...shown, [id]: !shown[id] } }),
 		[shown, put],
@@ -88,6 +92,11 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		[inputOn, put],
 	);
 
+	const setSendLabel = useCallback(
+		(label: string) => put({ sendLabel: label }),
+		[put],
+	);
+
 	const value = useMemo<UIContextValue>(
 		() => ({
 			leftOpen,
@@ -102,6 +111,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 			toggleMeta,
 			inputOn,
 			toggleInput,
+			sendLabel,
+			setSendLabel,
 		}),
 		[
 			leftOpen,
@@ -114,6 +125,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 			toggleMeta,
 			inputOn,
 			toggleInput,
+			sendLabel,
+			setSendLabel,
 		],
 	);
 
