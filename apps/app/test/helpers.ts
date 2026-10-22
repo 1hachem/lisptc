@@ -171,6 +171,14 @@ function wrapping(
 	} else if (hasAny(classes, WRAPS)) reach.fits = true;
 }
 
+function holdsATable(at: Element): boolean {
+	return (
+		classesOf(at).has("min-w-0") &&
+		at.children.length === 1 &&
+		at.firstElementChild?.tagName === "TABLE"
+	);
+}
+
 function bounds(
 	at: Element,
 	classes: Set<string>,
@@ -179,7 +187,7 @@ function bounds(
 ): void {
 	if (hasAny(classes, CLIPS) && !ends(classes))
 		leaks.add(`clips: ${named(at)}`);
-	if (hasAny(classes, SCROLLS_SIDEWAYS))
+	if (hasAny(classes, SCROLLS_SIDEWAYS) && !holdsATable(at))
 		leaks.add(`scrolls sideways: ${named(at)}`);
 	const shrinks = classes.has("min-w-0") && !classes.has("flex-none");
 	if (at !== root && laidInARow(classesOf(at.parentElement)) && !shrinks)

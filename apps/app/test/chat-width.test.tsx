@@ -203,4 +203,30 @@ describe("the chat's width", () => {
 		expect(settled.querySelector("[data-turn-foot]")).not.toBeNull();
 		expect(sidewaysLeaks(settled)).toEqual([]);
 	});
+
+	it("scrolls a table wider than the pane inside its own box instead of squeezing its columns", async () => {
+		const columns = Array.from({ length: 20 }, (_, i) => `column${i}`);
+		const row = Object.fromEntries(columns.map((c) => [c, long]));
+		session.messages = [
+			{
+				id: "t1",
+				type: "tool",
+				content: "",
+				additional_kwargs: {
+					ui: { tag: "table", props: { columns, rows: [row] }, children: [] },
+				},
+			},
+		];
+		session.isLoading = false;
+		const host = await mount();
+
+		const table = host.querySelector("table");
+		expect(table?.classList.contains("w-max")).toBe(true);
+		expect(table?.parentElement?.classList.contains("overflow-x-auto")).toBe(
+			true,
+		);
+		for (const cell of host.querySelectorAll("th, td"))
+			expect(cell.classList.contains("wrap-anywhere")).toBe(false);
+		expect(sidewaysLeaks(host)).toEqual([]);
+	});
 });
