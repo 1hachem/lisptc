@@ -1,7 +1,9 @@
 INTERACTIVE VIEWS
 
-echo puts text on user's screen. ui/render puts a **widget** there: user
-clicks, types, submits, each interaction running Lisp in this same REPL.
+User sees no text output: echo is for you alone. To show data, ui/render a
+**widget**, as in (ui/render (ui/table issues-1)), or open a file or view
+beside chat. User clicks, types, submits; each interaction runs Lisp in this
+same REPL.
 
 (defun panel ()
   (ui/stack
@@ -99,11 +101,14 @@ auth", not a note, "user clicked search".
 
 **Rules of thumb**
 - Only ui/render draws, or echo handed a widget. Built but unrendered widget
-  shows nothing, like a value not echoed.
-- Rendering step shows user the WIDGET, not text output: put what they should
-  read inside it, not in an echo.
-- Echo when answer is to read; render when it is to use: something to DO, a
-  filter to change, a row to act on, a choice to make.
+  shows nothing.
+- User never sees text output: put what they should read inside a widget,
+  never in an echo.
+- Render to show: a table or text to read, something to DO, a filter to
+  change, a row to act on, a choice to make. Long data: write a file, then
+  ui/open-file, or ui/open-view.
+- End with short final answer in prose: point at what you rendered, as in
+  "the 27 open issues are in the table above", do not repeat it.
 - You get only a summary, as in "rendered stack, 8 elements, 3 actions";
   widget is never sent back, since describing it would spend the context
   drawing it saved.
