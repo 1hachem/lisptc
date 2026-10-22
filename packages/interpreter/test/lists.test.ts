@@ -255,3 +255,22 @@ describe("apply", () => {
 		expect(ev("(apply list '(1 2 3))")).toBe("(1 2 3)");
 	});
 });
+
+describe("the path forms on exactly read JSON", () => {
+	it("set-in fills an empty object and an empty array", () => {
+		expect(ev('(set-in :{} 1 "a")')).toBe('(("a" . 1))');
+		expect(ev("(set-in :{} 1 :a)")).toBe("(:a 1)");
+		expect(ev('(set-in :[] "x" 0)')).toBe('(:[] "x")');
+	});
+
+	it("an index skips the :[] tag of an array", () => {
+		const grid = `(setq g '(:[] ("a" 1) ("b" 2)))`;
+		expect(ev(`${grid} (get-in g 1 0)`)).toBe('"b"');
+		expect(ev(`${grid} (set-in g 9 0 1)`)).toBe('(:[] ("a" 9) ("b" 2))');
+		expect(ev(`${grid} (remove-in g 0)`)).toBe('(:[] ("b" 2))');
+	});
+
+	it("a tagged array is never read as a plist", () => {
+		expect(ev(`(get-in '(:[] 5 6) :[])`)).toBe("nil");
+	});
+});

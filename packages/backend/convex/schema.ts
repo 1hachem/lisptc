@@ -3,6 +3,11 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { RETIRED_MODELS } from "./lib/models.js";
 
+export const binnedFrom = v.union(
+	v.literal("knowledge"),
+	v.literal("attachments"),
+);
+
 export const messageType = v.union(
 	v.literal("human"),
 	v.literal("ai"),
@@ -109,6 +114,42 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	knowledge: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		storageId: v.id("_storage"),
+		contentType: v.optional(v.string()),
+		size: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"])
+		.index("by_storage", ["storageId"]),
+	attachments: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		storageId: v.id("_storage"),
+		contentType: v.optional(v.string()),
+		size: v.number(),
+		attachedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"])
+		.index("by_attached", ["attachedAt"])
+		.index("by_storage", ["storageId"]),
+	bin: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		from: binnedFrom,
+		storageId: v.id("_storage"),
+		contentType: v.optional(v.string()),
+		size: v.number(),
+		binnedAt: v.number(),
+	})
+		.index("by_workspace_binned", ["workspaceId", "binnedAt"])
+		.index("by_workspace_name", ["workspaceId", "name"])
+		.index("by_binned", ["binnedAt"])
+		.index("by_storage", ["storageId"]),
 
 	readmes: defineTable({
 		workspaceId: v.id("workspaces"),

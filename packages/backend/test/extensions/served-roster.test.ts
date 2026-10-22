@@ -37,22 +37,41 @@ describe("the agent the app serves", () => {
 			"settings/set",
 			"chat/archive",
 			"chat/read",
+			"knowledge/write",
+			"knowledge/delete",
+			"knowledge/keep",
+			"attachments/fetch",
+			"attachments/delete",
+			"bin/restore",
+			"bin/delete",
 		])
 			expect(await ev(`(permission/check '${form})`)).toBe("ask");
 	});
 
 	it("reads its settings and preferences without asking", async () => {
 		const ev = await served();
-		for (const form of ["settings", "chats", "preferences", "preferences/set"])
+		for (const form of [
+			"settings",
+			"chats",
+			"knowledge/list",
+			"knowledge/read",
+			"attachments/read",
+			"attachments/write",
+			"bin/list",
+			"bin/search",
+			"preferences",
+			"preferences/set",
+		])
 			expect(await ev(`(permission/check '${form})`)).toBe("allow");
 	});
 
-	it("teaches the model the workspace and its preferences", async () => {
+	it("teaches the model the workspace, its knowledge and its preferences", async () => {
 		const interp = new Interp({
 			extensions: await workspaceExtensions(WORKSPACE, offline),
 		});
 		const prompt = interp.systemPrompt();
 		expect(prompt).toContain("WORKSPACE");
+		expect(prompt).toContain("KNOWLEDGE");
 		expect(prompt).toContain("PREFERENCES");
 	});
 });

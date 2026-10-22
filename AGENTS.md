@@ -126,6 +126,7 @@ named only at a composition root:
 - `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when.
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
+- `packages/knowledge` (`@repo/knowledge-extension`) — the files the user uploaded to a workspace, read and written by the agent.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.

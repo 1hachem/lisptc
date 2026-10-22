@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import {
+	ConvexKnowledgeStore,
+	type KnowledgeStoreClient,
+} from "../src/knowledge-store.ts";
+import {
 	ConvexPreferencesStore,
 	type PreferencesClient,
 } from "../src/preferences-store.ts";
@@ -19,7 +23,7 @@ function named(reference: unknown): string {
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 
 function spyClient(answers: Record<string, unknown>): {
-	client: WorkspaceStoreClient & PreferencesClient;
+	client: WorkspaceStoreClient & PreferencesClient & KnowledgeStoreClient;
 	sent: Array<[string, Record<string, unknown>]>;
 } {
 	const sent: Array<[string, Record<string, unknown>]> = [];
@@ -33,7 +37,10 @@ function spyClient(answers: Record<string, unknown>): {
 		client: {
 			query: answer,
 			mutation: answer,
-		} as unknown as WorkspaceStoreClient & PreferencesClient,
+			url: "http://convex-backend:3210",
+		} as unknown as WorkspaceStoreClient &
+			PreferencesClient &
+			KnowledgeStoreClient,
 	};
 }
 
@@ -62,6 +69,90 @@ describe("the convex workspace store", () => {
 		const store = new ConvexWorkspaceStore(WORKSPACE, () => client);
 		await expect(store.choose("openai/gpt-9")).rejects.toThrow(/not offered/);
 		expect(sent).toEqual([]);
+	});
+});
+
+describe("the convex knowledge store", () => {
+	it("reads an uploaded file at the deployment the store reaches, whatever origin it was served on", async () => {
+		const { client } = spyClient({
+			[named(api.files.get)]: {
+				name: "a.md",
+				url: "https://convex.example.ts.net/api/storage/a",
+			},
+		});
+		const fetched: string[] = [];
+		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
+			download: async (url) => {
+				fetched.push(url);
+				return new TextEncoder().encode("# a");
+			},
+			upload: async () => "never" as Id<"_storage">,
+		});
+		expect(
+			new TextDecoder().decode(
+				(await store.read("knowledge", "a.md")) ?? new Uint8Array(),
+			),
+		).toBe("# a");
+		expect(fetched).toEqual(["http://convex-backend:3210/api/storage/a"]);
+	});
+
+	it("writes a file by uploading the blob and recording it", async () => {
+		const { client, sent } = spyClient({
+			[named(api.files.uploadUrl)]:
+				"https://convex.example.ts.net/api/storage/upload?token=t",
+			[named(api.files.add)]: { name: "a.md" },
+		});
+		const uploaded: Array<[string, string, string]> = [];
+		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
+			download: async () => new Uint8Array(),
+			upload: async (url, blob) => {
+				uploaded.push([url, blob.type, await blob.text()]);
+				return "blob-1" as Id<"_storage">;
+			},
+		});
+		await store.write(
+			"knowledge",
+			"a.md",
+			new TextEncoder().encode("# a"),
+			"text/markdown",
+		);
+		expect(uploaded).toEqual([
+			[
+				"http://convex-backend:3210/api/storage/upload?token=t",
+				"text/markdown",
+				"# a",
+			],
+		]);
+		expect(sent.at(-1)).toEqual([
+			named(api.files.add),
+			{
+				workspaceId: WORKSPACE,
+				folder: "knowledge",
+				name: "a.md",
+				storageId: "blob-1",
+				contentType: "text/markdown",
+			},
+		]);
+	});
+
+	it("raises the refusal a write comes back with", async () => {
+		const { client } = spyClient({
+			[named(api.files.uploadUrl)]:
+				"https://convex.example.ts.net/api/storage/upload?token=t",
+			[named(api.files.add)]: { refused: "FILE_TOO_LARGE" },
+		});
+		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
+			download: async () => new Uint8Array(),
+			upload: async () => "blob-1" as Id<"_storage">,
+		});
+		await expect(
+			store.write(
+				"knowledge",
+				"a.md",
+				new TextEncoder().encode("x"),
+				"text/markdown",
+			),
+		).rejects.toThrow(/FILE_TOO_LARGE/);
 	});
 });
 

@@ -1,7 +1,9 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import {
+	Attachment01Icon,
 	Book02Icon,
 	BubbleChatIcon,
+	Delete02Icon,
 	FlashIcon,
 	Home01Icon,
 	InformationCircleIcon,
@@ -19,47 +21,45 @@ import {
 	SortableTree,
 	TreeCommand,
 	TreeFile,
-	TreeFilter,
 	TreeFolder,
-	TreeMore,
 } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
-import {
-	Link,
-	useLocation,
-	useNavigate,
-	useParams,
-} from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
+import { type ReactNode, useState } from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
-import type { SidebarEntry } from "../lib/sidebar-order.ts";
+import {
+	SIDEBAR_FOLDERS,
+	type SidebarEntry,
+	type SidebarFolder,
+} from "../lib/sidebar-order.ts";
+import { ChatFolder } from "./chat-folder.tsx";
+import {
+	AttachmentsFolder,
+	BinFolder,
+	KnowledgeFolder,
+} from "./file-folder.tsx";
 import { FileMenu } from "./file-menu.tsx";
-import { SessionRow } from "./session-row.tsx";
+import { Empty, type FolderState, Listing, useLeave } from "./tree-listing.tsx";
 
 const PLACEHOLDERS = [
-	"knowledge",
 	"sub-agents",
 	"triggers",
 	"tasks",
 	"ui",
 	"tests",
-] as const;
+] as const satisfies readonly SidebarFolder[];
 
-type Folder =
-	| "chat"
-	| "memories"
-	| "permissions"
-	| (typeof PLACEHOLDERS)[number];
-
-const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
+const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	chat: BubbleChatIcon,
 	memories: StickyNote01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
+	attachments: Attachment01Icon,
+	bin: Delete02Icon,
 	"sub-agents": restingIcon(),
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
@@ -67,48 +67,11 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	tests: TestTube01Icon,
 };
 
-function useLeave(workspaceId: Id<"workspaces">) {
-	const navigate = useNavigate();
-	return (selected: boolean) =>
-		selected
-			? navigate({
-					to: "/$workspaceId",
-					params: { workspaceId },
-					replace: true,
-				})
-			: Promise.resolve();
+function isFolder(entry: SidebarEntry): entry is SidebarFolder {
+	return SIDEBAR_FOLDERS.some((folder) => folder === entry);
 }
 
-function Empty({ children }: { children: ReactNode }) {
-	return <div className="py-1 pl-9 text-dim">{children}</div>;
-}
-
-function Listing<T>({
-	items,
-	empty,
-	children,
-}: {
-	items: T[] | undefined;
-	empty: string;
-	children: (item: T) => ReactNode;
-}) {
-	if (items === undefined) return null;
-	if (items.length === 0) return <Empty>{empty}</Empty>;
-	return items.map(children);
-}
-
-const FOLDERS = [
-	"chat",
-	"memories",
-	"permissions",
-	...PLACEHOLDERS,
-] as const satisfies readonly Folder[];
-
-function isFolder(entry: SidebarEntry): entry is Folder {
-	return FOLDERS.some((folder) => folder === entry);
-}
-
-function folderCookie(folder: Folder) {
+function folderCookie(folder: SidebarFolder) {
 	return `ui.folder.${folder}`;
 }
 
@@ -116,13 +79,15 @@ function useFolders() {
 	const [opened, setOpened] = useState(
 		() =>
 			Object.fromEntries(
-				FOLDERS.map((folder) => [
+				SIDEBAR_FOLDERS.map((folder) => [
 					folder,
 					readBoolPref(folderCookie(folder), folder === "chat"),
 				]),
-			) as Record<Folder, boolean>,
+			) as Record<SidebarFolder, boolean>,
 	);
-	return (folder: Folder) => ({
+	return <F extends SidebarFolder>(folder: F): FolderState<F> => ({
+		name: folder,
+		icon: FOLDER_ICONS[folder],
 		open: opened[folder],
 		onToggle: () => {
 			const next = !opened[folder];
@@ -283,72 +248,6 @@ function RootFile({
 	);
 }
 
-const CHAT_PAGE = 20;
-const SEARCH_DELAY_MS = 200;
-
-function useSettled(value: string) {
-	const [settled, setSettled] = useState(value);
-	useEffect(() => {
-		const timer = setTimeout(() => setSettled(value), SEARCH_DELAY_MS);
-		return () => clearTimeout(timer);
-	}, [value]);
-	return settled;
-}
-
-function ChatFolder({
-	workspaceId,
-	current,
-	folder,
-}: {
-	workspaceId: Id<"workspaces">;
-	current: string | undefined;
-	folder: { open: boolean; onToggle: () => void };
-}) {
-	const newChat = useNewChat();
-	const [search, setSearch] = useState("");
-	const settled = useSettled(search);
-	const [limit, setLimit] = useState(CHAT_PAGE);
-	const { data: page } = useQuery({
-		...convexQuery(api.chats.list, { workspaceId, search: settled, limit }),
-		placeholderData: (previous) => previous,
-		enabled: folder.open,
-	});
-
-	return (
-		<TreeFolder
-			name="chat"
-			icon={FOLDER_ICONS.chat}
-			{...folder}
-			onCreate={() => void newChat()}
-			createLabel="new chat"
-		>
-			<TreeFilter
-				value={search}
-				onChange={(next) => {
-					setSearch(next);
-					setLimit(CHAT_PAGE);
-				}}
-				label="search chats"
-			/>
-			<Listing
-				items={page?.chats}
-				empty={settled ? `nothing matches ${settled}` : "no chats yet"}
-			>
-				{(chat) => (
-					<SessionRow
-						key={chat._id}
-						chat={chat}
-						current={chat._id === current}
-					/>
-				)}
-			</Listing>
-			{page?.more && (
-				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />
-			)}
-		</TreeFolder>
-	);
-}
-
 export function WorkspaceTree({
 	workspaceId,
 }: {
@@ -357,6 +256,9 @@ export function WorkspaceTree({
 	const newChat = useNewChat();
 	const folder = useFolders();
 	const params = useParams({ strict: false });
+	const fileFolder = useLocation({
+		select: (location) => location.pathname.split("/")[2],
+	});
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
@@ -365,13 +267,7 @@ export function WorkspaceTree({
 	const { motion } = useSidebarMotion();
 
 	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
-		<TreeFolder
-			name={name}
-			icon={FOLDER_ICONS[name]}
-			{...folder(name)}
-			onCreate="disabled"
-			createLabel="coming soon"
-		>
+		<TreeFolder {...folder(name)} onCreate="disabled" createLabel="coming soon">
 			<Empty>no {name} yet</Empty>
 		</TreeFolder>
 	);
@@ -389,11 +285,7 @@ export function WorkspaceTree({
 			/>
 		),
 		memories: () => (
-			<TreeFolder
-				name="memories"
-				icon={FOLDER_ICONS.memories}
-				{...folder("memories")}
-			>
+			<TreeFolder {...folder("memories")}>
 				<Listing items={memories} empty="no memories yet">
 					{(memory) => (
 						<MemoryFile
@@ -406,15 +298,31 @@ export function WorkspaceTree({
 			</TreeFolder>
 		),
 		permissions: () => (
-			<TreeFolder
-				name="permissions"
-				icon={FOLDER_ICONS.permissions}
-				{...folder("permissions")}
-			>
+			<TreeFolder {...folder("permissions")}>
 				<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
 			</TreeFolder>
 		),
-		knowledge: placeholder("knowledge"),
+		knowledge: () => (
+			<KnowledgeFolder
+				workspaceId={workspaceId}
+				current={fileFolder === "knowledge" ? params.name : undefined}
+				folder={folder("knowledge")}
+			/>
+		),
+		attachments: () => (
+			<AttachmentsFolder
+				workspaceId={workspaceId}
+				current={fileFolder === "attachments" ? params.name : undefined}
+				folder={folder("attachments")}
+			/>
+		),
+		bin: () => (
+			<BinFolder
+				workspaceId={workspaceId}
+				current={fileFolder === "bin" ? params.name : undefined}
+				folder={folder("bin")}
+			/>
+		),
 		"sub-agents": placeholder("sub-agents"),
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),

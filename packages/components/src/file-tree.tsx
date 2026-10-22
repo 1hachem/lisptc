@@ -2,13 +2,17 @@
 
 import {
 	Add01Icon,
+	CheckmarkSquare02Icon,
 	CommandLineIcon,
 	File01Icon,
 	Folder01Icon,
 	Folder02Icon,
+	Loading03Icon,
+	SquareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import type { ReactNode } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEntryDragged } from "./sortable-tree.tsx";
 
 const INDENT_REM = 0.875;
@@ -70,6 +74,57 @@ export function TreeFolder({
 	);
 }
 
+export type TreeCheck = {
+	checked: boolean;
+	selecting: boolean;
+	onCheck: (range: boolean) => void;
+};
+
+function CheckBox({
+	name,
+	check,
+	glyph,
+}: {
+	name: string;
+	check: TreeCheck;
+	glyph: ReactNode;
+}) {
+	const box = (
+		<HugeiconsIcon
+			className="size-icon-sm"
+			icon={check.checked ? CheckmarkSquare02Icon : SquareIcon}
+		/>
+	);
+	return (
+		<label
+			className={`relative flex flex-none cursor-pointer items-center py-1 pr-1.5 has-[:focus-visible]:text-fg ${
+				check.checked ? "text-fg" : "text-dim hover:text-fg"
+			}`}
+		>
+			<input
+				type="checkbox"
+				checked={check.checked}
+				aria-label={`select ${name}`}
+				onChange={(event) =>
+					check.onCheck(
+						event.nativeEvent instanceof MouseEvent &&
+							event.nativeEvent.shiftKey,
+					)
+				}
+				className="sr-only"
+			/>
+			{check.checked || check.selecting ? (
+				box
+			) : (
+				<>
+					<span className="flex group-hover/row:hidden">{glyph}</span>
+					<span className="hidden group-hover/row:flex">{box}</span>
+				</>
+			)}
+		</label>
+	);
+}
+
 export function TreeFile({
 	name,
 	icon,
@@ -80,6 +135,7 @@ export function TreeFile({
 	depth = 0,
 	link,
 	trailing,
+	check,
 }: {
 	name: string;
 	icon?: IconSvgElement;
@@ -90,24 +146,32 @@ export function TreeFile({
 	depth?: number;
 	link: (content: ReactNode, className: string) => ReactNode;
 	trailing?: ReactNode;
+	check?: TreeCheck;
 }) {
+	const mark = (
+		<span title={iconLabel} className="flex flex-none">
+			{glyph ?? (
+				<HugeiconsIcon
+					className={`size-icon-sm ${iconClassName}`}
+					icon={icon ?? File01Icon}
+				/>
+			)}
+			{iconLabel && <span className="sr-only">{iconLabel}</span>}
+		</span>
+	);
 	return (
 		<div
 			data-selected={selected}
-			className={`group/row flex items-center ${selected ? "bg-bg2" : ""}`}
+			data-checked={check?.checked}
+			className={`group/row flex items-center ${
+				selected || check?.checked ? "bg-bg2" : ""
+			}`}
 		>
 			<div style={indent(depth)} className="flex min-w-0 flex-1">
+				{check && <CheckBox name={name} check={check} glyph={mark} />}
 				{link(
 					<>
-						<span title={iconLabel} className="flex flex-none">
-							{glyph ?? (
-								<HugeiconsIcon
-									className={`size-icon-sm ${iconClassName}`}
-									icon={icon ?? File01Icon}
-								/>
-							)}
-							{iconLabel && <span className="sr-only">{iconLabel}</span>}
-						</span>
+						{!check && mark}
 						<span className="truncate">{name}</span>
 					</>,
 					`flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-1 ${
@@ -116,6 +180,126 @@ export function TreeFile({
 				)}
 			</div>
 			{trailing}
+		</div>
+	);
+}
+
+export function TreeAction({
+	label,
+	confirm,
+	onRun,
+	danger = false,
+}: {
+	label: string;
+	confirm?: string;
+	onRun: () => void;
+	danger?: boolean;
+}) {
+	const [armed, setArmed] = useState(false);
+	return (
+		<button
+			type="button"
+			onClick={() => {
+				if (confirm && !armed) {
+					setArmed(true);
+					return;
+				}
+				setArmed(false);
+				onRun();
+			}}
+			onBlur={() => setArmed(false)}
+			className={`cursor-pointer ${
+				danger ? "hover:text-red" : "hover:text-fg"
+			} ${armed ? "text-red" : "text-dim"}`}
+		>
+			{armed ? confirm : label}
+		</button>
+	);
+}
+
+const SelectionHost = createContext<{ host: HTMLElement | null } | undefined>(
+	undefined,
+);
+
+export function TreeSelection({
+	count,
+	total,
+	label,
+	summary,
+	allLabel,
+	clearLabel,
+	onAll,
+	onClear,
+	failure,
+	busy = false,
+	children,
+}: {
+	count: number;
+	total: number;
+	label: string;
+	summary: ReactNode;
+	allLabel: string;
+	clearLabel: string;
+	onAll: () => void;
+	onClear: () => void;
+	failure?: string | null;
+	busy?: boolean;
+	children: ReactNode;
+}) {
+	const floating = useContext(SelectionHost);
+	const toolbar = (
+		<div
+			role="toolbar"
+			aria-label={label}
+			className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 border border-bg2 bg-bg1 px-3 py-1.5 font-mono text-[11.5px] text-dim shadow-lg"
+		>
+			<span className="text-fg">{summary}</span>
+			{count < total && <TreeAction label={allLabel} onRun={onAll} />}
+			<TreeAction label={clearLabel} onRun={onClear} />
+			<span aria-hidden className="text-bg2">
+				|
+			</span>
+			{busy ? (
+				<HugeiconsIcon
+					className="size-icon-sm animate-spin"
+					icon={Loading03Icon}
+				/>
+			) : (
+				children
+			)}
+			{failure && (
+				<div role="alert" className="w-full text-red">
+					{failure}
+				</div>
+			)}
+		</div>
+	);
+	if (floating === undefined) return toolbar;
+	return floating.host === null ? null : createPortal(toolbar, floating.host);
+}
+
+export function TreePending({
+	name,
+	label,
+	depth = 0,
+}: {
+	name: string;
+	label: string;
+	depth?: number;
+}) {
+	return (
+		<div
+			role="status"
+			aria-label={`${label} ${name}`}
+			title={`${label} ${name}`}
+			style={indent(depth)}
+			className="flex min-w-0 items-center gap-1.5 py-1 pr-1 text-dim"
+		>
+			<HugeiconsIcon
+				className="size-icon-sm flex-none animate-spin"
+				icon={Loading03Icon}
+			/>
+			<span className="min-w-0 truncate whitespace-nowrap">{name}</span>
 		</div>
 	);
 }
@@ -146,27 +330,68 @@ export function TreeCommand({
 	);
 }
 
+const blank = <span aria-hidden className="size-icon-sm flex-none" />;
+
+export function TreeGroup({
+	label,
+	check,
+	depth = 1,
+}: {
+	label: string;
+	check?: TreeCheck;
+	depth?: number;
+}) {
+	return (
+		<div
+			style={indent(depth)}
+			className="group/row flex items-center pt-1.5 pb-0.5 text-[10.5px] text-dim"
+		>
+			{check ? (
+				<CheckBox
+					name={`everything from ${label}`}
+					check={check}
+					glyph={blank}
+				/>
+			) : (
+				<span className="pr-1.5">{blank}</span>
+			)}
+			<span className="truncate">{label}</span>
+		</div>
+	);
+}
+
 export function TreeFilter({
 	value,
 	onChange,
 	label,
+	check,
 	depth = 1,
 }: {
 	value: string;
 	onChange: (value: string) => void;
 	label: string;
+	check?: TreeCheck;
 	depth?: number;
 }) {
 	return (
-		<input
-			type="search"
-			value={value}
-			onChange={(event) => onChange(event.target.value)}
-			placeholder={label}
-			aria-label={label}
+		<div
 			style={indent(depth)}
-			className="w-full bg-transparent py-1 pr-1 text-fg outline-none placeholder:text-dim"
-		/>
+			className={`group/row flex items-center pr-1 ${check ? "" : "gap-1.5"}`}
+		>
+			{check ? (
+				<CheckBox name="everything shown" check={check} glyph={blank} />
+			) : (
+				blank
+			)}
+			<input
+				type="search"
+				value={value}
+				onChange={(event) => onChange(event.target.value)}
+				placeholder={label}
+				aria-label={label}
+				className="min-w-0 flex-1 bg-transparent py-1 text-fg outline-none placeholder:text-dim"
+			/>
+		</div>
 	);
 }
 
@@ -190,5 +415,16 @@ export function TreeMore({
 }
 
 export function FileTree({ children }: { children: ReactNode }) {
-	return <div className="font-mono">{children}</div>;
+	const [host, setHost] = useState<HTMLElement | null>(null);
+	return (
+		<SelectionHost.Provider value={{ host }}>
+			<div className="font-mono">
+				{children}
+				<div
+					ref={setHost}
+					className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4"
+				/>
+			</div>
+		</SelectionHost.Provider>
+	);
 }

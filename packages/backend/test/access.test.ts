@@ -921,3 +921,133 @@ describe("readme access", () => {
 		).rejects.toThrow("README_TOO_LARGE");
 	});
 });
+
+describe("knowledge access", () => {
+	it("keeps a workspace's knowledge to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.files.add, {
+			folder: "knowledge",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await expect(
+			alice.as.query(api.files.get, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.remove, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.removeMany, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		).rejects.toThrow();
+		expect(
+			await bob.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+			}),
+		).toHaveLength(1);
+	});
+});
+
+describe("attachments access", () => {
+	it("keeps a workspace's attachments to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await expect(
+			alice.as.query(api.files.get, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.keep, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.remove, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.removeMany, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		).rejects.toThrow();
+		expect(
+			await bob.as.query(api.files.list, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+			}),
+		).toHaveLength(1);
+	});
+});
+
+describe("bin access", () => {
+	it("keeps a workspace's bin to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await bob.as.mutation(api.files.remove, {
+			folder: "attachments",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+		});
+		for (const denied of [
+			alice.as.query(api.bin.list, { workspaceId: bob.workspace }),
+			alice.as.query(api.bin.get, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.restore, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.remove, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.removeMany, {
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		])
+			await expect(denied).rejects.toThrow();
+		expect(
+			await bob.as.query(api.bin.list, { workspaceId: bob.workspace }),
+		).toHaveLength(1);
+	});
+});

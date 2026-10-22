@@ -2,6 +2,7 @@ export type ChannelId =
 	| "user"
 	| "results"
 	| "ui"
+	| "attachments"
 	| "lisp"
 	| "thinking"
 	| "memory"
@@ -39,6 +40,13 @@ export const CHANNELS: Channel[] = [
 		hint: "widgets a step rendered",
 		dot: "bg-aqua",
 		text: "text-aqua",
+	},
+	{
+		id: "attachments",
+		label: "attachments",
+		hint: "files you or the agent attached to a message",
+		dot: "bg-blue",
+		text: "text-blue",
 	},
 	{
 		id: "lisp",

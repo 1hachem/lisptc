@@ -3,6 +3,7 @@ export const DEFAULT_TOGGLES = {
 		user: true,
 		results: true,
 		ui: true,
+		attachments: true,
 		lisp: false,
 		thinking: true,
 		memory: true,
@@ -22,6 +23,7 @@ export const DEFAULT_TOGGLES = {
 		provider: false,
 	},
 	input: {
+		attach: true,
 		lisp: true,
 	},
 } as const satisfies Record<

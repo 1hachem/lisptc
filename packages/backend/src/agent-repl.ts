@@ -7,6 +7,8 @@ import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
+import { knowledgeExtension } from "@repo/knowledge-extension";
+import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
@@ -35,7 +37,9 @@ import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import { ConvexImageStore } from "./image-store.ts";
+import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
@@ -44,7 +48,10 @@ import { ConvexSecretsStore } from "./secrets-store.ts";
 import type { ServerClient } from "./server-client.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
-export type WorkspaceClient = Pick<ConvexHttpClient, "query" | "mutation">;
+export type WorkspaceClient = Pick<
+	ConvexHttpClient,
+	"query" | "mutation" | "url"
+>;
 
 export type Connect = () => WorkspaceClient;
 
@@ -64,10 +71,16 @@ export async function workspaceExtensions(
 			chatId,
 		}),
 	);
+	const knowledge = knowledgeExtension(
+		knowledgeHostFor({
+			store: new ConvexKnowledgeStore(workspaceId, connect),
+			maxDownloadBytes: MAX_KNOWLEDGE_BYTES,
+		}),
+	);
 	const permissions = permissionsExtension(
 		permissionsHostFor({
 			store: await ConvexPermissionsStore.open(workspaceId, connect),
-			asks: [...memory.asks, ...workspace.asks],
+			asks: [...memory.asks, ...workspace.asks, ...knowledge.asks],
 		}),
 	);
 	return [
@@ -91,6 +104,7 @@ export async function workspaceExtensions(
 		compactionExtension(compactionHost),
 		memory,
 		workspace,
+		knowledge,
 		preferencesExtension(
 			preferencesHostFor({
 				store: new ConvexPreferencesStore(connect),
