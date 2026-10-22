@@ -1,6 +1,7 @@
 import type { Annotations } from "@repo/interpreter/session";
 import {
 	contentToText,
+	ENVELOPE_KEYS,
 	envelopeOf,
 	type MessageKwargs,
 } from "@repo/shared/messages";
@@ -37,6 +38,8 @@ export interface WireMessage {
 }
 
 const encoder = new TextEncoder();
+
+const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
 function mergeInto(
 	into: Record<string, unknown>,
@@ -116,6 +119,20 @@ function toEntry(m: ChatMessageInput): TranscriptEntry {
 	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
 }
 
+function received(input: ChatInput): Annotations | undefined {
+	const messages = input.messages ?? [];
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const type = wireType(messages[i].type ?? messages[i].role);
+		if (type === "system") return undefined;
+		if (type !== "human") continue;
+		const carried = Object.entries(messages[i].additional_kwargs ?? {}).filter(
+			([key]) => !ENVELOPE.has(key),
+		);
+		return carried.length === 0 ? undefined : Object.fromEntries(carried);
+	}
+	return undefined;
+}
+
 function toTranscript(input: ChatInput): TranscriptEntry[] {
 	const transcript: TranscriptEntry[] = [];
 	for (const entry of (input.messages ?? []).map(toEntry)) {
@@ -139,7 +156,6 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	steer?: { inbox: SteerInbox; key: string };
 	quiet?: boolean;
 	runsForms?: boolean;
-	received?: Annotations;
 };
 
 function steerLine(steer: ChatStreamOptions["steer"]) {
@@ -317,7 +333,6 @@ export function streamChatResponse<Id extends string>(
 		steer,
 		quiet,
 		runsForms,
-		received,
 	} = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
@@ -352,7 +367,7 @@ export function streamChatResponse<Id extends string>(
 						identity,
 						inbox: steering.take,
 						runsForms,
-						received,
+						received: received(input),
 					}))
 						if (!turn.apply(event)) break;
 				}
