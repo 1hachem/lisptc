@@ -98,7 +98,10 @@ const REVOKE_AFTER_MS = 1_000;
 export async function saveAs(name: string, url: string): Promise<void> {
 	const response = await fetch(url);
 	if (!response.ok) throw new Error(`download answered ${response.status}`);
-	const href = URL.createObjectURL(await response.blob());
+	const bytes = await response.arrayBuffer();
+	const href = URL.createObjectURL(
+		new Blob([bytes], { type: "application/octet-stream" }),
+	);
 	const link = document.createElement("a");
 	link.href = href;
 	link.download = name;
