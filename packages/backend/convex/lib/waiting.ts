@@ -1,4 +1,4 @@
-import { readAnnotation } from "@repo/interpreter/annotations";
+import { questionKey, readAnnotation } from "@repo/interpreter/annotations";
 import { asksKey, unansweredAsks } from "@repo/interpreter/asks";
 import type { Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
@@ -6,7 +6,10 @@ import type { QueryCtx } from "../_generated/server.js";
 const TURN_SCAN = 64;
 
 function unanswered(kwargs: Record<string, unknown> | undefined): boolean {
-	return unansweredAsks(readAnnotation(kwargs, asksKey)).length > 0;
+	return (
+		unansweredAsks(readAnnotation(kwargs, asksKey)).length > 0 ||
+		readAnnotation(kwargs, questionKey) !== undefined
+	);
 }
 
 export async function waitsOnUser(

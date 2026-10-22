@@ -233,6 +233,9 @@ describe("chat access", () => {
 		await expect(
 			alice.as.query(api.messages.transcript, { chatId }),
 		).rejects.toThrow();
+		await expect(
+			alice.as.query(api.messages.light, { chatId }),
+		).rejects.toThrow();
 	});
 
 	it("refuses appending to another user's chat", async () => {
@@ -325,6 +328,38 @@ describe("messages", () => {
 			[2, "tool", "three"],
 		]);
 		expect(transcript[2].kwargs).toEqual({ ui: { kind: "text" } });
+	});
+
+	it("reads a light transcript with only what the person sees", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId,
+			messages: [
+				{ type: "human", content: "one" },
+				{
+					type: "ai",
+					content: "(+ 1 2)",
+					kwargs: { reasoning_content: "hm", meta: { steps: 1 } },
+				},
+				{
+					type: "tool",
+					content: "three",
+					kwargs: { results: ["3"], display: "3", ui: { kind: "text" } },
+				},
+				{ type: "ai", content: "done" },
+			],
+		});
+		const light = await alice.as.query(api.messages.light, { chatId });
+		expect(light.map((m) => [m.seq, m.type, m.content, m.kwargs])).toEqual([
+			[0, "human", "one", undefined],
+			[1, "ai", "(+ 1 2)", { reasoning_content: "hm", meta: { steps: 1 } }],
+			[2, "tool", "", { ui: { kind: "text" } }],
+			[3, "ai", "done", undefined],
+		]);
 	});
 
 	it("keeps the wire id an appended message was sent with", async () => {
@@ -547,6 +582,40 @@ describe("panel layout access", () => {
 		expect(
 			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
 		).toBeNull();
+	});
+
+	it("keeps a trace tab beside the chat it traces", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const traced = {
+			root: "p",
+			focused: "p",
+			nodes: [
+				{
+					kind: "pane" as const,
+					id: "p",
+					tabs: [
+						{
+							id: "trace:c1",
+							content: {
+								kind: "trace" as const,
+								chatId: "c1",
+								title: "trace",
+								turn: "h1",
+							},
+						},
+					],
+					active: "trace:c1",
+				},
+			],
+		};
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: traced,
+		});
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(traced);
 	});
 
 	it("takes any number of panes side by side but refuses more than three stacked", async () => {
@@ -779,6 +848,8 @@ const DEFAULTS = {
 	sendLabel: DEFAULT_SEND_LABEL,
 	hidden: DEFAULT_HIDDEN,
 	panelMotion: true,
+	traceBesideChat: false,
+	traceLink: true,
 };
 
 describe("preferences access", () => {
@@ -800,10 +871,10 @@ describe("preferences access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { motion: "lift", channels: { lisp: true } },
+			preferences: { motion: "lift", input: { lisp: true } },
 		});
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { font: "mono", channels: { lisp: false } },
+			preferences: { font: "mono", input: { lisp: false } },
 		});
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { metadata: { tokens: true } },
@@ -811,21 +882,42 @@ describe("preferences access", () => {
 		expect(await alice.as.query(api.preferences.get, {})).toEqual({
 			motion: "lift",
 			font: "mono",
-			channels: { ...DEFAULT_TOGGLES.channels, lisp: false },
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
-			input: DEFAULT_TOGGLES.input,
+			input: { ...DEFAULT_TOGGLES.input, lisp: false },
 			sendLabel: DEFAULT_SEND_LABEL,
 			hidden: DEFAULT_HIDDEN,
 			panelMotion: true,
+			traceBesideChat: false,
+			traceLink: true,
 		});
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({
-			channels: { lisp: false },
+			input: { lisp: false },
 			metadata: { tokens: true },
 		});
-		expect(rows[0].input).toBeUndefined();
 		expect(rows[0].hidden).toBeUndefined();
+	});
+
+	it("reads a row that still carries channel toggles and drops them on the next save", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { font: "mono" },
+		});
+		await t.run(async (ctx) => {
+			const row = await ctx.db.query("preferences").unique();
+			if (row) await ctx.db.patch(row._id, { channels: { lisp: true } });
+		});
+		expect(await alice.as.query(api.preferences.get, {})).not.toHaveProperty(
+			"channels",
+		);
+		await alice.as.mutation(api.preferences.put, {
+			preferences: { motion: "lift" },
+		});
+		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
+		expect(rows[0].channels).toBeUndefined();
+		expect(rows[0]).toMatchObject({ font: "mono", motion: "lift" });
 	});
 
 	it("hides attachments and the bin until the user shows them", async () => {
@@ -1073,6 +1165,35 @@ describe("chat listing", () => {
 				id: "w1",
 				kwargs: { asks: { answered: { a1: { accepted: true, label: "ok" } } } },
 			});
+			expect(await status()).toBeUndefined();
+		});
+
+		it("waits on an open question until the user answers it", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			const question = {
+				type: "tool" as const,
+				content: "",
+				id: "q1",
+				kwargs: {
+					question: {
+						id: "q1",
+						prompt: "Which board?",
+						choices: ["Sales", "Support"],
+						multi: false,
+					},
+				},
+			};
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [question],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [{ type: "human", content: "Sales" }],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
 			expect(await status()).toBeUndefined();
 		});
 

@@ -52,6 +52,18 @@ const panelTab = v.object({
 			kind: v.literal("chat"),
 			chatId: v.union(v.string(), v.null()),
 			title: v.string(),
+			trace: v.optional(
+				v.object({
+					shown: v.union(v.literal("open"), v.literal("collapsed")),
+					turn: v.optional(v.string()),
+				}),
+			),
+		}),
+		v.object({
+			kind: v.literal("trace"),
+			chatId: v.string(),
+			title: v.string(),
+			turn: v.optional(v.string()),
 		}),
 		v.object({
 			kind: v.literal("page"),
@@ -136,6 +148,8 @@ export default defineSchema({
 		statusBarHidden: v.optional(v.array(v.string())),
 		motion: v.optional(v.string()),
 		panelMotion: v.optional(v.boolean()),
+		traceBesideChat: v.optional(v.boolean()),
+		traceLink: v.optional(v.boolean()),
 	}).index("by_user", ["userId"]),
 
 	workspaces: defineTable({

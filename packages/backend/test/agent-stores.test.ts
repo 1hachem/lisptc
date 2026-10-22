@@ -128,7 +128,6 @@ describe("the convex preferences store", () => {
 			[named(api.preferences.get)]: {
 				font: "mono",
 				themeUses: { borland: 3 },
-				channels: { lisp: true },
 				input: { lisp: false },
 				hidden: ["tests"],
 			},
@@ -136,7 +135,6 @@ describe("the convex preferences store", () => {
 		const store = new ConvexPreferencesStore(() => client);
 		expect(await store.read()).toEqual({
 			font: "mono",
-			channels: { lisp: true },
 			metadata: undefined,
 			input: { lisp: false },
 			hidden: ["tests"],
