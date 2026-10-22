@@ -927,31 +927,38 @@ describe("knowledge access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.knowledge.add, {
+		await bob.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
 		});
 		await expect(
-			alice.as.query(api.knowledge.get, {
+			alice.as.query(api.files.get, {
+				folder: "knowledge",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.knowledge.remove, {
+			alice.as.mutation(api.files.remove, {
+				folder: "knowledge",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.knowledge.removeMany, {
+			alice.as.mutation(api.files.removeMany, {
+				folder: "knowledge",
 				workspaceId: bob.workspace,
 				names: ["bob.txt"],
 			}),
 		).rejects.toThrow();
 		expect(
-			await bob.as.query(api.knowledge.list, { workspaceId: bob.workspace }),
+			await bob.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+			}),
 		).toHaveLength(1);
 	});
 });
@@ -961,37 +968,44 @@ describe("attachments access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.attachments.add, {
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
 		});
 		await expect(
-			alice.as.query(api.attachments.get, {
+			alice.as.query(api.files.get, {
+				folder: "attachments",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.attachments.keep, {
+			alice.as.mutation(api.files.keep, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.attachments.remove, {
+			alice.as.mutation(api.files.remove, {
+				folder: "attachments",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.attachments.removeMany, {
+			alice.as.mutation(api.files.removeMany, {
+				folder: "attachments",
 				workspaceId: bob.workspace,
 				names: ["bob.txt"],
 			}),
 		).rejects.toThrow();
 		expect(
-			await bob.as.query(api.attachments.list, { workspaceId: bob.workspace }),
+			await bob.as.query(api.files.list, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+			}),
 		).toHaveLength(1);
 	});
 });
@@ -1001,12 +1015,14 @@ describe("bin access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.attachments.add, {
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
 		});
-		await bob.as.mutation(api.attachments.remove, {
+		await bob.as.mutation(api.files.remove, {
+			folder: "attachments",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 		});

@@ -37,10 +37,10 @@ export function ChatComposer({
 	);
 	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
 	const { data: knowledge } = useQuery(
-		convexQuery(api.knowledge.list, { workspaceId }),
+		convexQuery(api.files.list, { workspaceId, folder: "knowledge" }),
 	);
 	const { data: attachments } = useQuery(
-		convexQuery(api.attachments.list, { workspaceId }),
+		convexQuery(api.files.list, { workspaceId, folder: "attachments" }),
 	);
 	const mentions = useMemo<Mentionable[]>(
 		() => [

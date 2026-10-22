@@ -19,7 +19,8 @@ describe("attachments", () => {
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		expect(
-			await alice.as.mutation(api.attachments.add, {
+			await alice.as.mutation(api.files.add, {
+				folder: "attachments",
 				workspaceId,
 				name: "spec.pdf",
 				storageId: await uploaded(t, "%PDF-1.7", "application/pdf"),
@@ -27,14 +28,21 @@ describe("attachments", () => {
 			}),
 		).toEqual({ name: "spec.pdf" });
 		expect(
-			await alice.as.query(api.attachments.list, { workspaceId }),
+			await alice.as.query(api.files.list, {
+				folder: "attachments",
+				workspaceId,
+			}),
 		).toMatchObject([
 			{ name: "spec.pdf", contentType: "application/pdf", size: 8 },
 		]);
-		expect(await alice.as.query(api.knowledge.list, { workspaceId })).toEqual(
-			[],
-		);
-		const served = await alice.as.query(api.attachments.get, {
+		expect(
+			await alice.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId,
+			}),
+		).toEqual([]);
+		const served = await alice.as.query(api.files.get, {
+			folder: "attachments",
 			workspaceId,
 			name: "spec.pdf",
 		});
@@ -46,7 +54,8 @@ describe("attachments", () => {
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		const add = async () =>
-			await alice.as.mutation(api.attachments.add, {
+			await alice.as.mutation(api.files.add, {
+				folder: "attachments",
 				workspaceId,
 				name: "image.png",
 				storageId: await uploaded(t, "png", "image/png"),
@@ -61,7 +70,8 @@ describe("attachments", () => {
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		expect(
-			await alice.as.mutation(api.attachments.add, {
+			await alice.as.mutation(api.files.add, {
+				folder: "attachments",
 				workspaceId,
 				name: "big.bin",
 				storageId: await uploaded(
@@ -72,7 +82,8 @@ describe("attachments", () => {
 			}),
 		).toEqual({ refused: "FILE_TOO_LARGE" });
 		expect(
-			await alice.as.mutation(api.attachments.add, {
+			await alice.as.mutation(api.files.add, {
+				folder: "attachments",
 				workspaceId,
 				name: "../x",
 				storageId: await uploaded(t, "x", "text/plain"),
@@ -85,27 +96,41 @@ describe("attachments", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
-		await alice.as.mutation(api.attachments.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId,
 			name: "notes.md",
 			storageId: await uploaded(t, "# notes", "text/markdown"),
 			contentType: "text/markdown",
 		});
 		expect(
-			await alice.as.mutation(api.attachments.keep, {
+			await alice.as.mutation(api.files.keep, {
 				workspaceId,
 				name: "notes.md",
 			}),
 		).toBeNull();
-		expect(await alice.as.query(api.attachments.list, { workspaceId })).toEqual(
-			[],
-		);
-		expect(await alice.as.query(api.knowledge.list, { workspaceId })).toEqual([
-			{ name: "notes.md", contentType: "text/markdown", size: 7 },
+		expect(
+			await alice.as.query(api.files.list, {
+				folder: "attachments",
+				workspaceId,
+			}),
+		).toEqual([]);
+		expect(
+			await alice.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId,
+			}),
+		).toEqual([
+			{
+				name: "notes.md",
+				contentType: "text/markdown",
+				size: 7,
+				addedAt: expect.any(Number),
+			},
 		]);
 		expect(await blobs(t)).toHaveLength(1);
 		expect(
-			await alice.as.mutation(api.attachments.keep, {
+			await alice.as.mutation(api.files.keep, {
 				workspaceId,
 				name: "notes.md",
 			}),
@@ -116,18 +141,20 @@ describe("attachments", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
-		await alice.as.mutation(api.knowledge.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId,
 			name: "a.md",
 			storageId: await uploaded(t, "kept", "text/markdown"),
 		});
-		await alice.as.mutation(api.attachments.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId,
 			name: "a.md",
 			storageId: await uploaded(t, "new", "text/markdown"),
 		});
 		expect(
-			await alice.as.mutation(api.attachments.keep, {
+			await alice.as.mutation(api.files.keep, {
 				workspaceId,
 				name: "a.md",
 			}),
@@ -138,7 +165,8 @@ describe("attachments", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
-		await alice.as.mutation(api.attachments.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId,
 			name: "new.txt",
 			storageId: await uploaded(t, "new", "text/plain"),
@@ -153,11 +181,14 @@ describe("attachments", () => {
 				attachedAt: Date.now() - ATTACHMENT_TTL_MS - 1,
 			}),
 		);
-		await t.mutation(internal.attachments.expire, {});
+		await t.mutation(internal.files.expire, {});
 		expect(
-			(await alice.as.query(api.attachments.list, { workspaceId })).map(
-				(f) => f.name,
-			),
+			(
+				await alice.as.query(api.files.list, {
+					folder: "attachments",
+					workspaceId,
+				})
+			).map((f) => f.name),
 		).toEqual(["new.txt"]);
 		expect(
 			(await alice.as.query(api.bin.list, { workspaceId })).map((f) => f.name),
@@ -192,10 +223,13 @@ describe("attachments", () => {
 				attachedAt: Date.now() - ATTACHMENT_TTL_MS - 1,
 			});
 		});
-		await t.mutation(internal.attachments.expire, {});
-		expect(await alice.as.query(api.attachments.list, { workspaceId })).toEqual(
-			[],
-		);
+		await t.mutation(internal.files.expire, {});
+		expect(
+			await alice.as.query(api.files.list, {
+				folder: "attachments",
+				workspaceId,
+			}),
+		).toEqual([]);
 		const binned = await alice.as.query(api.bin.list, { workspaceId });
 		expect(binned).toHaveLength(101);
 		expect(binned.map((f) => f.name)).toContain(`old (${attachedId}).txt`);

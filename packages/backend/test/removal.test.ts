@@ -151,24 +151,28 @@ describe("removing a workspace", () => {
 			workspaceId: doomed,
 			body: "# doomed",
 		});
-		await alice.as.mutation(api.knowledge.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId: doomed,
 			name: "doomed.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
 		});
-		await alice.as.mutation(api.attachments.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId: doomed,
 			name: "attached.txt",
 			storageId: await t.run((ctx) =>
 				ctx.storage.store(new Blob(["attached"])),
 			),
 		});
-		await alice.as.mutation(api.knowledge.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId: doomed,
 			name: "binned.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["binned"]))),
 		});
-		await alice.as.mutation(api.knowledge.remove, {
+		await alice.as.mutation(api.files.remove, {
+			folder: "knowledge",
 			workspaceId: doomed,
 			name: "binned.txt",
 		});
@@ -394,7 +398,8 @@ describe("deleting an account", () => {
 			workspaceId: alice.workspace,
 			body: "doomed",
 		});
-		await alice.as.mutation(api.knowledge.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId: alice.workspace,
 			name: "notes.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),

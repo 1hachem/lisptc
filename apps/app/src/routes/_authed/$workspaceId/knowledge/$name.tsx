@@ -8,8 +8,9 @@ export const Route = createFileRoute("/_authed/$workspaceId/knowledge/$name")({
 	loader: async ({ context, params }) => {
 		if (context.auth.source === "browser") return;
 		await context.queryClient.ensureQueryData(
-			convexQuery(api.knowledge.get, {
+			convexQuery(api.files.get, {
 				workspaceId: params.workspaceId,
+				folder: "knowledge",
 				name: params.name,
 			}),
 		);
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/_authed/$workspaceId/knowledge/$name")({
 function KnowledgeFile() {
 	const { workspaceId, name } = Route.useParams();
 	const { data: file, error } = useQuery(
-		convexQuery(api.knowledge.get, { workspaceId, name }),
+		convexQuery(api.files.get, { workspaceId, folder: "knowledge", name }),
 	);
 	if (error) throw error;
 	return <StoredFile folder="knowledge" name={name} file={file} />;

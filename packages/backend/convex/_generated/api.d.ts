@@ -8,19 +8,20 @@
  * @module
  */
 
-import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
 import type * as bin from "../bin.js";
 import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
+import type * as files from "../files.js";
 import type * as http from "../http.js";
-import type * as knowledge from "../knowledge.js";
 import type * as lib_attached from "../lib/attached.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_bin from "../lib/bin.js";
 import type * as lib_chunks from "../lib/chunks.js";
+import type * as lib_claimed from "../lib/claimed.js";
 import type * as lib_clamp from "../lib/clamp.js";
 import type * as lib_env from "../lib/env.js";
+import type * as lib_files from "../lib/files.js";
 import type * as lib_models from "../lib/models.js";
 import type * as lib_names from "../lib/names.js";
 import type * as lib_preferenceDefaults from "../lib/preferenceDefaults.js";
@@ -49,19 +50,20 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  attachments: typeof attachments;
   auth: typeof auth;
   bin: typeof bin;
   chats: typeof chats;
   crons: typeof crons;
+  files: typeof files;
   http: typeof http;
-  knowledge: typeof knowledge;
   "lib/attached": typeof lib_attached;
   "lib/auth": typeof lib_auth;
   "lib/bin": typeof lib_bin;
   "lib/chunks": typeof lib_chunks;
+  "lib/claimed": typeof lib_claimed;
   "lib/clamp": typeof lib_clamp;
   "lib/env": typeof lib_env;
+  "lib/files": typeof lib_files;
   "lib/models": typeof lib_models;
   "lib/names": typeof lib_names;
   "lib/preferenceDefaults": typeof lib_preferenceDefaults;

@@ -11,8 +11,9 @@ export const Route = createFileRoute("/_authed/$workspaceId/attachments/$name")(
 		loader: async ({ context, params }) => {
 			if (context.auth.source === "browser") return;
 			await context.queryClient.ensureQueryData(
-				convexQuery(api.attachments.get, {
+				convexQuery(api.files.get, {
 					workspaceId: params.workspaceId,
+					folder: "attachments",
 					name: params.name,
 				}),
 			);
@@ -34,7 +35,7 @@ function KeepAction({
 	workspaceId: Id<"workspaces">;
 	name: string;
 }) {
-	const keep = useConvexMutation(api.attachments.keep);
+	const keep = useConvexMutation(api.files.keep);
 	const navigate = useNavigate();
 	const [failure, setFailure] = useState<string | null>(null);
 	return (
@@ -65,7 +66,7 @@ function KeepAction({
 function AttachmentFile() {
 	const { workspaceId, name } = Route.useParams();
 	const { data: file, error } = useQuery(
-		convexQuery(api.attachments.get, { workspaceId, name }),
+		convexQuery(api.files.get, { workspaceId, folder: "attachments", name }),
 	);
 	if (error) throw error;
 	return (
