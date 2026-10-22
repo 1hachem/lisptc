@@ -612,6 +612,32 @@ describe("the turn timeline", () => {
 	});
 });
 
+describe("long text in the trace", () => {
+	const lines = Array.from({ length: 20 }, (_, at) => `line-${at}`).join("\\n");
+	const LONG: ChatMessage[] = [
+		{ id: "a1", type: "ai", content: "(read-log)" },
+		{
+			id: "t1",
+			type: "tool",
+			content: `{"source":"lisp-repl","output":"${lines}"}`,
+		},
+	];
+
+	it("folds behind read more, and opens on a click", async () => {
+		const host = await mount(<TraceLines messages={LONG} turn="t1" />);
+		const more = host.querySelector<HTMLButtonElement>("[data-read-more]");
+
+		expect(host.textContent).toContain("line-0");
+		expect(host.textContent).not.toContain("line-19");
+		expect(more?.textContent).toBe("read more");
+
+		await act(async () => more?.click());
+
+		expect(host.textContent).toContain("line-19");
+		expect(more?.textContent).toBe("read less");
+	});
+});
+
 const STEPS: ChatMessage[] = [
 	{ id: "h1", type: "human", content: "go" },
 	...Array.from({ length: 9 }, (_, at): ChatMessage[] => [

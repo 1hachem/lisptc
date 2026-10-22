@@ -1,3 +1,18 @@
+import {
+	AiChat02Icon,
+	Alert02Icon,
+	ArrowTurnBackwardIcon,
+	Attachment01Icon,
+	Brain02Icon,
+	BulbIcon,
+	CommandLineIcon,
+	DashboardSquare01Icon,
+	HelpCircleIcon,
+	InformationCircleIcon,
+	SourceCodeIcon,
+} from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
+
 export type ChannelId =
 	| "user"
 	| "results"
@@ -13,88 +28,88 @@ export type ChannelId =
 
 export interface Channel {
 	id: ChannelId;
+	icon: IconSvgElement;
 	label: string;
 	hint: string;
-	dot: string;
 	text: string;
 }
 
 export const CHANNELS: Channel[] = [
 	{
 		id: "user",
+		icon: CommandLineIcon,
 		label: "output",
 		hint: "what a step printed for you",
-		dot: "bg-fg",
 		text: "text-dim",
 	},
 	{
 		id: "results",
+		icon: ArrowTurnBackwardIcon,
 		label: "results",
 		hint: "the value each form returned, as the interpreter printed it",
-		dot: "bg-fg",
 		text: "text-fg",
 	},
 	{
 		id: "ui",
+		icon: DashboardSquare01Icon,
 		label: "ui",
 		hint: "widgets a step rendered",
-		dot: "bg-aqua",
 		text: "text-aqua",
 	},
 	{
 		id: "attachments",
+		icon: Attachment01Icon,
 		label: "attachments",
 		hint: "files you or the agent attached to a message",
-		dot: "bg-blue",
 		text: "text-blue",
 	},
 	{
 		id: "lisp",
+		icon: SourceCodeIcon,
 		label: "lisp",
 		hint: "the forms a step ran, as code rather than as tools at work",
-		dot: "bg-green",
 		text: "text-green",
 	},
 	{
 		id: "thinking",
+		icon: BulbIcon,
 		label: "thinking",
 		hint: "what the model reasoned before it answered",
-		dot: "bg-blue",
 		text: "text-blue",
 	},
 	{
 		id: "memory",
+		icon: Brain02Icon,
 		label: "memories",
 		hint: "what a step recalled",
-		dot: "bg-orange",
 		text: "text-orange",
 	},
 	{
 		id: "asks",
+		icon: HelpCircleIcon,
 		label: "asks",
 		hint: "what a step asked of you: an approval, a sign-in",
-		dot: "bg-yellow",
 		text: "text-yellow",
 	},
 	{
 		id: "errors",
+		icon: Alert02Icon,
 		label: "errors",
 		hint: "whether a step failed",
-		dot: "bg-red",
 		text: "text-red",
 	},
 	{
 		id: "model",
+		icon: AiChat02Icon,
 		label: "model",
 		hint: "what the step sent back to the model",
-		dot: "bg-purple",
 		text: "text-purple",
 	},
 	{
 		id: "system",
+		icon: InformationCircleIcon,
 		label: "system",
 		hint: "what the system told the agent between turns",
-		dot: "bg-dim",
 		text: "text-dim",
 	},
 ];

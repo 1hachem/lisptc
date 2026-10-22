@@ -1,4 +1,5 @@
 import { convexQuery } from "@convex-dev/react-query";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
@@ -49,11 +50,10 @@ function ChannelToggles({
 						shown[c.id] ? c.text : "text-dim/50 hover:text-dim"
 					}`}
 				>
-					<span
+					<HugeiconsIcon
+						icon={c.icon}
 						aria-hidden
-						className={`size-1.5 flex-none rounded-full ${
-							shown[c.id] ? c.dot : "bg-dim/30"
-						}`}
+						className="size-icon-sm flex-none"
 					/>
 					{c.label}
 				</button>
@@ -212,7 +212,7 @@ export function TraceLines({
 	const toggle = (id: keyof Shown) =>
 		setShown((was) => ({ ...was, [id]: !was[id] }));
 	return (
-		<ChannelsShown shown={shown}>
+		<ChannelsShown shown={shown} traced>
 			<div className="flex h-full min-h-0 flex-col">
 				<ChannelToggles shown={shown} toggle={toggle} />
 				<div

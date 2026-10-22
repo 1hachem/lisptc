@@ -1,3 +1,4 @@
+import { HugeiconsIcon } from "@hugeicons/react";
 import { MessageMemories } from "@repo/components";
 import type { Progress } from "@repo/interpreter/annotations";
 import type { Skipped } from "@repo/shared/lisp-forms";
@@ -65,7 +66,7 @@ import { AskCard } from "./ask-card.tsx";
 import { AttachedFiles } from "./attached-files.tsx";
 import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
-import { SkippedProse } from "./lisp-text.tsx";
+import { LispSource, SkippedProse } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { MessageFeedback } from "./message-feedback.tsx";
 import { MessageMeta } from "./message-meta.tsx";
@@ -74,58 +75,86 @@ import { TodoCard } from "./todo-card.tsx";
 import { CallTimeline, ProgressBar } from "./turn-intent.tsx";
 import { UserLine } from "./user-line.tsx";
 
-const FOLD_LINES = 25;
+const CHAT_FOLD = { lines: 25, chars: Number.POSITIVE_INFINITY };
+const TRACE_FOLD = { lines: 6, chars: 480 };
 const PAGE_LINES = 200;
+
+const Traced = createContext(false);
 
 const channel = (id: string) =>
 	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
 
 function ChannelLabel({ id }: { id: string }) {
-	const { label, dot, text } = channel(id);
+	const { label, icon, text } = channel(id);
 	return (
-		<div className="mt-2 mb-1 flex items-center gap-2">
-			<span aria-hidden className={`size-1.5 flex-none rounded-full ${dot}`} />
-			<span className={`flex-none text-[11px] tracking-[0.1em] ${text}`}>
-				{label}
-			</span>
+		<div className={`mt-2 mb-1 flex items-center gap-1.5 ${text}`}>
+			<HugeiconsIcon
+				icon={icon}
+				aria-hidden
+				className="size-icon-sm flex-none"
+			/>
+			<span className="flex-none text-[11px] tracking-[0.1em]">{label}</span>
 			<span aria-hidden className="h-px flex-1 bg-dim/20" />
 		</div>
 	);
 }
 
-function ChannelText({ text, tone }: { text: string; tone: string }) {
+function foldOf(text: string, fold: { lines: number; chars: number }) {
+	const head = text.split("\n").slice(0, fold.lines).join("\n");
+	return head.length > fold.chars ? head.slice(0, fold.chars) : head;
+}
+
+function ChannelBody({ text, code }: { text: string; code: boolean }) {
+	if (!code) return <Markdown>{text}</Markdown>;
+	return (
+		<pre className="whitespace-pre-wrap break-words font-mono">
+			<LispSource>{text}</LispSource>
+		</pre>
+	);
+}
+
+function ChannelText({
+	text,
+	tone,
+	code = false,
+}: {
+	text: string;
+	tone: string;
+	code?: boolean;
+}) {
+	const traced = useContext(Traced);
 	const [expanded, setExpanded] = useState(false);
 	const [page, setPage] = useState(0);
-	const lines = text.split("\n");
-	const long = lines.length > FOLD_LINES;
+	const head = foldOf(text, traced ? TRACE_FOLD : CHAT_FOLD);
+	const long = head.length < text.length;
 	const folded = long && !expanded;
+	const lines = text.split("\n");
 	const pages = Math.ceil(lines.length / PAGE_LINES);
 	const paged = !folded && pages > 1;
 	const shown = folded
-		? lines.slice(0, FOLD_LINES)
+		? `${head}…`
 		: paged
-			? lines.slice(page * PAGE_LINES, (page + 1) * PAGE_LINES)
-			: lines;
+			? lines.slice(page * PAGE_LINES, (page + 1) * PAGE_LINES).join("\n")
+			: text;
 	const step = (by: number) =>
 		setPage((p) => Math.min(pages - 1, Math.max(0, p + by)));
 	return (
 		<div className={`min-w-0 break-words ${tone}`}>
 			<div className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined}>
-				<Markdown>{shown.join("\n")}</Markdown>
+				<ChannelBody text={shown} code={code} />
 			</div>
 			{long && (
 				<div className="mt-1 flex items-center gap-3 text-dim">
 					<button
 						type="button"
+						data-read-more
 						onClick={() => {
 							setExpanded(!expanded);
 							setPage(0);
 						}}
 						className="underline decoration-dim/40 hover:text-fg"
 					>
-						{folded
-							? `see ${lines.length - FOLD_LINES} more lines`
-							: "see less"}
+						{folded ? "read more" : "read less"}
 					</button>
 					{paged && (
 						<span className="flex items-center gap-2">
@@ -188,13 +217,17 @@ const ShownChannels = createContext<Shown | null>(null);
 
 export function ChannelsShown({
 	shown,
+	traced = false,
 	children,
 }: {
 	shown: Shown;
+	traced?: boolean;
 	children: ReactNode;
 }) {
 	return (
-		<ShownChannels.Provider value={shown}>{children}</ShownChannels.Provider>
+		<ShownChannels.Provider value={shown}>
+			<Traced.Provider value={traced}>{children}</Traced.Provider>
+		</ShownChannels.Provider>
 	);
 }
 
@@ -268,6 +301,7 @@ function Channel({
 
 function ToolResult({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
+	const traced = useContext(Traced);
 	const channels = toolChannels(message, shown);
 	if (!drawsAny(channels)) return null;
 	const {
@@ -281,7 +315,7 @@ function ToolResult({ message }: { message: ChatMessage }) {
 		drawsError,
 		drawsModel,
 	} = channels;
-	const labelled = isLabelled(channels);
+	const labelled = traced || isLabelled(channels);
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
@@ -305,11 +339,18 @@ function ToolResult({ message }: { message: ChatMessage }) {
 			)}
 			{drawsResults && (
 				<Channel id="results" labelled={labelled}>
-					<ChannelText text={results} tone={channel("results").text} />
+					<ChannelText code text={results} tone={channel("results").text} />
 				</Channel>
 			)}
 			{drawsError && (
-				<div className={channel("errors").text}>a form in this step failed</div>
+				<div className={`flex items-center gap-1.5 ${channel("errors").text}`}>
+					<HugeiconsIcon
+						icon={channel("errors").icon}
+						aria-hidden
+						className="size-icon-sm flex-none"
+					/>
+					a form in this step failed
+				</div>
 			)}
 			{drawsModel && (
 				<Channel id="model" labelled={labelled}>
@@ -350,10 +391,8 @@ export function SystemLine({ message }: { message: ChatMessage }) {
 	return (
 		<div className="min-w-0 break-words">
 			<ChannelLabel id="system" />
-			<div
-				className={`whitespace-pre-wrap break-words border-dim/40 border-l pl-3 ${text}`}
-			>
-				{messageText(message)}
+			<div className="border-dim/40 border-l pl-3">
+				<ChannelText text={messageText(message)} tone={text} />
 			</div>
 		</div>
 	);
@@ -389,8 +428,8 @@ export function ChatLine({
 			{reasoning && (
 				<div className="mb-2">
 					<ChannelLabel id="thinking" />
-					<div className="whitespace-pre-wrap break-words border-blue/40 border-l pl-3 text-dim italic">
-						{reasoning}
+					<div className="border-blue/40 border-l pl-3">
+						<ChannelText text={reasoning} tone="text-dim italic" />
 					</div>
 				</div>
 			)}
