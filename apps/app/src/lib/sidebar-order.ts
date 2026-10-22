@@ -1,6 +1,4 @@
-export const SIDEBAR_ENTRIES = [
-	"home",
-	"new_chat",
+export const SIDEBAR_FOLDERS = [
 	"chat",
 	"memories",
 	"permissions",
@@ -12,6 +10,14 @@ export const SIDEBAR_ENTRIES = [
 	"tasks",
 	"ui",
 	"tests",
+] as const;
+
+export type SidebarFolder = (typeof SIDEBAR_FOLDERS)[number];
+
+export const SIDEBAR_ENTRIES = [
+	"home",
+	"new_chat",
+	...SIDEBAR_FOLDERS,
 	"README.md",
 	"settings.ptc",
 	"preferences.ptc",

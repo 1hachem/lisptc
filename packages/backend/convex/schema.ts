@@ -3,6 +3,11 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { RETIRED_MODELS } from "./lib/models.js";
 
+export const binnedFrom = v.union(
+	v.literal("knowledge"),
+	v.literal("attachments"),
+);
+
 export const messageType = v.union(
 	v.literal("human"),
 	v.literal("ai"),
@@ -135,7 +140,7 @@ export default defineSchema({
 	bin: defineTable({
 		workspaceId: v.id("workspaces"),
 		name: v.string(),
-		from: v.union(v.literal("knowledge"), v.literal("attachments")),
+		from: binnedFrom,
 		storageId: v.id("_storage"),
 		contentType: v.optional(v.string()),
 		size: v.number(),

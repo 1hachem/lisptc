@@ -1,6 +1,6 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import type { Id } from "@repo/backend/dataModel";
+import type { Doc, Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -27,7 +27,7 @@ function RestoreAction({
 }: {
 	workspaceId: Id<"workspaces">;
 	name: string;
-	from: "knowledge" | "attachments";
+	from: Doc<"bin">["from"];
 }) {
 	const restore = useConvexMutation(api.bin.restore);
 	const navigate = useNavigate();
@@ -45,10 +45,7 @@ function RestoreAction({
 						return;
 					}
 					await navigate({
-						to:
-							restored.folder === "knowledge"
-								? "/$workspaceId/knowledge/$name"
-								: "/$workspaceId/attachments/$name",
+						to: `/$workspaceId/${restored.folder}/$name`,
 						params: { workspaceId, name: restored.name },
 						replace: true,
 					});

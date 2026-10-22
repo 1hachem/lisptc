@@ -12,17 +12,16 @@ import {
 	MAX_BIN,
 	MAX_KNOWLEDGE,
 } from "./limits.js";
+import { binnedFrom } from "./schema.js";
 
 const EMPTY_BATCH = 64;
-
-const from = v.union(v.literal("knowledge"), v.literal("attachments"));
 
 export const list = query({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.array(
 		v.object({
 			name: v.string(),
-			from,
+			from: binnedFrom,
 			contentType: v.union(v.string(), v.null()),
 			size: v.number(),
 			binnedAt: v.number(),
@@ -50,7 +49,7 @@ export const get = query({
 	returns: v.union(
 		v.object({
 			name: v.string(),
-			from,
+			from: binnedFrom,
 			contentType: v.union(v.string(), v.null()),
 			size: v.number(),
 			url: v.union(v.string(), v.null()),
@@ -74,7 +73,7 @@ export const get = query({
 export const restore = mutation({
 	args: { workspaceId: v.id("workspaces"), name: v.string() },
 	returns: v.union(
-		v.object({ folder: from, name: v.string() }),
+		v.object({ folder: binnedFrom, name: v.string() }),
 		v.object({
 			refused: v.union(
 				v.literal("NO_SUCH_FILE"),

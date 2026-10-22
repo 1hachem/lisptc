@@ -48,7 +48,11 @@ import { permissionRules, withoutRule } from "../lib/files.ts";
 import { knowledgeIcon, useKnowledgeUpload } from "../lib/knowledge.ts";
 import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
-import type { SidebarEntry } from "../lib/sidebar-order.ts";
+import {
+	SIDEBAR_FOLDERS,
+	type SidebarEntry,
+	type SidebarFolder,
+} from "../lib/sidebar-order.ts";
 import { FileMenu } from "./file-menu.tsx";
 import { SessionRow } from "./session-row.tsx";
 
@@ -58,18 +62,9 @@ const PLACEHOLDERS = [
 	"tasks",
 	"ui",
 	"tests",
-] as const;
+] as const satisfies readonly SidebarFolder[];
 
-type Folder =
-	| "chat"
-	| "memories"
-	| "permissions"
-	| "knowledge"
-	| "attachments"
-	| "bin"
-	| (typeof PLACEHOLDERS)[number];
-
-const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
+const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	chat: BubbleChatIcon,
 	memories: StickyNote01Icon,
 	permissions: ShieldKeyIcon,
@@ -136,21 +131,11 @@ function DatedListing<T>({
 	));
 }
 
-const FOLDERS = [
-	"chat",
-	"memories",
-	"permissions",
-	"knowledge",
-	"attachments",
-	"bin",
-	...PLACEHOLDERS,
-] as const satisfies readonly Folder[];
-
-function isFolder(entry: SidebarEntry): entry is Folder {
-	return FOLDERS.some((folder) => folder === entry);
+function isFolder(entry: SidebarEntry): entry is SidebarFolder {
+	return SIDEBAR_FOLDERS.some((folder) => folder === entry);
 }
 
-function folderCookie(folder: Folder) {
+function folderCookie(folder: SidebarFolder) {
 	return `ui.folder.${folder}`;
 }
 
@@ -158,13 +143,13 @@ function useFolders() {
 	const [opened, setOpened] = useState(
 		() =>
 			Object.fromEntries(
-				FOLDERS.map((folder) => [
+				SIDEBAR_FOLDERS.map((folder) => [
 					folder,
 					readBoolPref(folderCookie(folder), folder === "chat"),
 				]),
-			) as Record<Folder, boolean>,
+			) as Record<SidebarFolder, boolean>,
 	);
-	return (folder: Folder) => ({
+	return (folder: SidebarFolder) => ({
 		open: opened[folder],
 		onToggle: () => {
 			const next = !opened[folder];
