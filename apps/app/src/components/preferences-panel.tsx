@@ -413,7 +413,7 @@ export function PreferencesPanel() {
 			<SidebarContent>
 				{state === "expanded" ? <Preferences /> : <SectionRail />}
 			</SidebarContent>
-			<SidebarRail className="hover:after:bg-transparent" />
+			<SidebarRail className="w-2 translate-x-0 hover:after:bg-transparent" />
 		</Sidebar>
 	);
 }
