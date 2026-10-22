@@ -189,16 +189,24 @@ describe("TreeFile check", () => {
 });
 
 describe("TreeSelection", () => {
-	it("asks once more before a confirmed action runs", async () => {
+	it("floats over the page and asks once more before a confirmed action runs", async () => {
 		const onRun = vi.fn();
 		const host = await mounted(
-			<TreeSelection count={2} total={5} onAll={() => {}} onClear={() => {}}>
+			<TreeSelection
+				count={1}
+				total={5}
+				where="bin/"
+				onAll={() => {}}
+				onClear={() => {}}
+			>
 				<TreeAction label="delete" confirm="sure?" onRun={onRun} />
 			</TreeSelection>,
 		);
-		expect(host.textContent).toContain("2 selected");
+		expect(host.querySelector('[role="toolbar"]')).toBeNull();
+		const toolbar = document.querySelector('#tree-selections [role="toolbar"]');
+		expect(toolbar?.textContent).toContain("1 file selected in bin/");
 		const action = () =>
-			[...host.querySelectorAll("button")].find((each) =>
+			[...(toolbar?.querySelectorAll("button") ?? [])].find((each) =>
 				["delete", "sure?"].includes(each.textContent ?? ""),
 			);
 		await act(async () => action()?.click());

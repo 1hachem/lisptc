@@ -11,7 +11,8 @@ import {
 	SquareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEntryDragged } from "./sortable-tree.tsx";
 
 const INDENT_REM = 0.875;
@@ -96,7 +97,7 @@ function CheckBox({
 	);
 	return (
 		<label
-			className={`flex flex-none cursor-pointer py-1 pr-1.5 has-[:focus-visible]:text-fg ${
+			className={`relative flex flex-none cursor-pointer items-center py-1 pr-1.5 has-[:focus-visible]:text-fg ${
 				check.checked ? "text-fg" : "text-dim hover:text-fg"
 			}`}
 		>
@@ -207,7 +208,7 @@ export function TreeAction({
 				onRun();
 			}}
 			onBlur={() => setArmed(false)}
-			className={`cursor-pointer px-1 ${
+			className={`cursor-pointer ${
 				danger ? "hover:text-red" : "hover:text-fg"
 			} ${armed ? "text-red" : "text-dim"}`}
 		>
@@ -216,36 +217,57 @@ export function TreeAction({
 	);
 }
 
+const SELECTIONS_HOST = "tree-selections";
+
+function selectionsHost(): HTMLElement {
+	const found = document.getElementById(SELECTIONS_HOST);
+	if (found !== null) return found;
+	const host = document.createElement("div");
+	host.id = SELECTIONS_HOST;
+	host.className =
+		"pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4";
+	document.body.append(host);
+	return host;
+}
+
 export function TreeSelection({
 	count,
 	total,
+	where,
 	onAll,
 	onClear,
 	failure,
 	busy = false,
-	depth = 1,
 	children,
 }: {
 	count: number;
 	total: number;
+	where: string;
 	onAll: () => void;
 	onClear: () => void;
 	failure?: string | null;
 	busy?: boolean;
-	depth?: number;
 	children: ReactNode;
 }) {
-	return (
+	const [host, setHost] = useState<HTMLElement | null>(null);
+	useEffect(() => setHost(selectionsHost()), []);
+	if (host === null) return null;
+	const picked = `${count} ${count === 1 ? "file" : "files"} selected`;
+
+	return createPortal(
 		<div
 			role="toolbar"
-			aria-label={`${count} selected`}
-			style={indent(depth)}
-			className="flex flex-wrap items-center gap-x-1 py-1 pr-1 text-[11.5px] text-dim"
+			aria-label={`${picked} in ${where}`}
+			className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 border border-bg2 bg-bg1 px-3 py-1.5 font-mono text-[11.5px] text-dim shadow-lg"
 		>
-			<span className="pr-1 text-fg">{count} selected</span>
+			<span className="text-fg">
+				{picked} in <span className="text-blue">{where}</span>
+			</span>
 			{count < total && <TreeAction label="all" onRun={onAll} />}
 			<TreeAction label="clear" onRun={onClear} />
-			<span className="flex-1" />
+			<span aria-hidden className="text-bg2">
+				|
+			</span>
 			{busy ? (
 				<HugeiconsIcon
 					className="size-icon-sm animate-spin"
@@ -255,7 +277,8 @@ export function TreeSelection({
 				children
 			)}
 			{failure && <div className="w-full text-red">{failure}</div>}
-		</div>
+		</div>,
+		host,
 	);
 }
 
@@ -323,15 +346,17 @@ export function TreeFilter({
 	depth?: number;
 }) {
 	return (
-		<input
-			type="search"
-			value={value}
-			onChange={(event) => onChange(event.target.value)}
-			placeholder={label}
-			aria-label={label}
-			style={indent(depth)}
-			className="w-full bg-transparent py-1 pr-1 text-fg outline-none placeholder:text-dim"
-		/>
+		<div style={indent(depth)} className="flex items-center gap-1.5 pr-1">
+			<span aria-hidden className="size-icon-sm flex-none" />
+			<input
+				type="search"
+				value={value}
+				onChange={(event) => onChange(event.target.value)}
+				placeholder={label}
+				aria-label={label}
+				className="min-w-0 flex-1 bg-transparent py-1 text-fg outline-none placeholder:text-dim"
+			/>
+		</div>
 	);
 }
 
