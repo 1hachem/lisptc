@@ -9,24 +9,24 @@ export type Folder = Infer<typeof binnedFrom>;
 
 export const FILE_TABLES = ["knowledge", "attachments", "bin"] as const;
 
-type FileTable = (typeof FILE_TABLES)[number];
+export type FileTable = (typeof FILE_TABLES)[number];
 
 export type FolderRow = Doc<Folder>;
 
-interface Listed {
-	name: string;
-	addedAt: number;
-}
-
-const byName = (a: Listed, b: Listed) => a.name.localeCompare(b.name);
-const newestFirst = (a: Listed, b: Listed) => b.addedAt - a.addedAt;
+const byName = (a: { name: string }, b: { name: string }) =>
+	a.name.localeCompare(b.name);
+const newestFirst = (a: { addedAt: number }, b: { addedAt: number }) =>
+	b.addedAt - a.addedAt;
 
 export const FOLDERS: Record<
 	Folder,
 	{
 		limit: number;
 		replacesOnAdd: boolean;
-		order: (a: Listed, b: Listed) => number;
+		order: (
+			a: { name: string; addedAt: number },
+			b: { name: string; addedAt: number },
+		) => number;
 	}
 > = {
 	knowledge: { limit: MAX_KNOWLEDGE, replacesOnAdd: true, order: byName },
