@@ -85,3 +85,42 @@ export function envelopeOf(
 ): MessageEnvelope {
 	return messageEnvelope.parse(kwargs ?? {});
 }
+
+export interface KwargMessage {
+	type: string;
+	content: string;
+	additional_kwargs?: MessageKwargs;
+}
+
+const TOOL_SHOWS: ReadonlySet<string> = new Set(["failed", "quiet"]);
+
+const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
+
+function keeping<M extends KwargMessage>(
+	message: M,
+	shown: (key: string) => boolean,
+): M {
+	const kwargs = message.additional_kwargs;
+	return {
+		...message,
+		content: "",
+		...(kwargs === undefined
+			? {}
+			: {
+					additional_kwargs: Object.fromEntries(
+						Object.entries(kwargs).filter(([key]) => shown(key)),
+					),
+				}),
+	};
+}
+
+export function lighten<M extends KwargMessage>(messages: readonly M[]): M[] {
+	return messages.map((message) => {
+		if (message.type === "tool")
+			return keeping(
+				message,
+				(key) => !ENVELOPE.has(key) || TOOL_SHOWS.has(key),
+			);
+		return message;
+	});
+}
