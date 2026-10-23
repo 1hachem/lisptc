@@ -102,8 +102,8 @@ describe("workspace model", () => {
 			model,
 		});
 		const next = {
-			provider: "digitalocean",
-			model: "gemma-4-31B-it",
+			provider: "openrouter",
+			model: "openai/gpt-6-luna",
 		} as const;
 		await alice.as.mutation(api.workspaces.setModel, {
 			workspaceId: alice.workspace,

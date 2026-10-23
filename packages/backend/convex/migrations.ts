@@ -12,6 +12,12 @@ export const resetRetiredModels = migrations.define({
 	migrateOne: (_ctx, workspace) => retiredModelReset(workspace.model),
 });
 
+export const resetDigitalOceanGemma = migrations.define({
+	table: "workspaces",
+	migrateOne: (_ctx, workspace) => retiredModelReset(workspace.model),
+});
+
 export const runAll = migrations.runner([
 	internal.migrations.resetRetiredModels,
+	internal.migrations.resetDigitalOceanGemma,
 ]);
