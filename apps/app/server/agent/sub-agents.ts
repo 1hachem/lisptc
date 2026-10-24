@@ -1,91 +1,64 @@
-import type {
-	AgentRunner,
-	ChatSeed,
-	Spawn,
-	SubAgent,
-} from "@repo/agents-extension/ports";
-import { Conversation, converse, toTranscript } from "@repo/ai";
+import type { ChatSeed, Spawn, SubAgent } from "@repo/agents-extension/ports";
+import { converse } from "@repo/ai";
 import {
 	type Connect,
 	type RunnerFor,
-	seededRepl,
+	spawnChat,
 } from "@repo/backend/agent-repl";
 import { api } from "@repo/backend/api";
-import { TURN_DEADLINE_MS } from "@repo/backend/limits";
+import type { Id } from "@repo/backend/dataModel";
+import type { ServerClient } from "@repo/backend/server-client";
+import { chatTurns, notice } from "./chat-turns.ts";
 import { delegated } from "./delegated.ts";
-import { toInput } from "./history.ts";
-import { chatModel } from "./model.ts";
-import { notice } from "./notices.ts";
 import { currentSession } from "./session.ts";
 
-const MAX_SPAWN_DEPTH = 2;
-
-export function subAgents(connect: Connect): RunnerFor {
-	return (workspaceId, chatId) => {
+export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
+	return (_workspaceId, chatId) => {
 		const session = currentSession();
-		const config = async () =>
-			chatModel(
-				(await connect().query(api.workspaces.get, { workspaceId })).model,
-			);
 
-		async function history(chat: ChatSeed) {
-			if (chat.from === "fresh") return [];
-			const stored = await connect().query(api.messages.transcript, {
+		async function forkChat(child: Id<"chats">, chat: ChatSeed) {
+			if (chat.from === "fresh") return;
+			const earlier = await connect().query(api.messages.transcript, {
 				chatId,
 			});
-			return toTranscript({ messages: toInput(stored) });
+			if (earlier.length === 0) return;
+			await connect().mutation(api.messages.append, {
+				chatId: child,
+				messages: earlier.map(({ wireId, type, content, kwargs }) => ({
+					...(wireId === undefined ? {} : { id: wireId }),
+					type,
+					content,
+					...(kwargs === undefined ? {} : { kwargs }),
+				})),
+			});
 		}
 
-		function runner(depth: number, bounds: readonly string[]): AgentRunner {
-			return { spawn: (spawn) => subAgent(spawn, depth, bounds) };
-		}
-
-		function subAgent(
-			{ definition, seed, chat }: Spawn,
-			depth: number,
-			bounds: readonly string[],
-		): SubAgent {
-			const bounded =
-				definition.permissions === undefined
-					? bounds
-					: [...bounds, definition.permissions];
-			const open = () =>
-				Promise.all([
-					seededRepl(workspaceId, connect, {
-						seed,
-						bounds: bounded,
-						...(depth < MAX_SPAWN_DEPTH
-							? { runner: runner(depth + 1, bounded) }
-							: {}),
-					}),
-					history(chat),
-				]).then(([repl, earlier]) => ({
-					repl,
-					conversation: new Conversation(
-						repl,
-						definition.prompt,
-						config,
-						earlier,
-					),
-				}));
-			let opening: ReturnType<typeof open> | undefined;
+		function subAgent({ definition, seed, chat }: Spawn): SubAgent {
+			const open = async () => {
+				const child = await spawnChat(connect, server, {
+					parent: chatId,
+					definition,
+					seed,
+				});
+				await forkChat(child, chat);
+				return child;
+			};
+			let opening: Promise<Id<"chats">> | undefined;
 			return {
 				async send({ message, maxSteps, signal }) {
 					opening ??= open();
-					const { repl, conversation } = await opening;
+					const child = await opening;
 					return converse(
-						conversation,
+						(said) =>
+							chatTurns().reply(session, child, said, { maxSteps, signal }),
 						message,
-						() => ({
-							maxSteps,
-							signal: AbortSignal.any([
-								signal,
-								AbortSignal.timeout(TURN_DEADLINE_MS),
-							]),
-						}),
 						async (held) => {
 							const id = crypto.randomUUID();
-							const answered = delegated.wait(id, repl, signal);
+							const answered = delegated.wait(
+								id,
+								chatTurns().source(child),
+								signal,
+							);
 							await connect().mutation(api.messages.append, {
 								chatId,
 								messages: [
@@ -105,7 +78,7 @@ export function subAgents(connect: Connect): RunnerFor {
 		}
 
 		return {
-			runner: runner(0, []),
+			runner: { spawn: subAgent },
 			notify: (reply) => notice({ session, chatId, notice: reply }),
 		};
 	};

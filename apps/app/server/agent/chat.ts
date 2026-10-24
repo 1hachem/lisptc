@@ -1,22 +1,24 @@
 import {
+	type ChatStreamOptions,
 	evalUserMessage,
 	MemorySteerInbox,
 	renderSystemEvent,
 	type SteerInbox,
 	streamChatResponse,
 	systemEventMessage,
+	type TurnOutcome,
 } from "@repo/ai";
 import { api } from "@repo/backend/api";
 import { TURN_DEADLINE_MS } from "@repo/backend/limits";
 import { ENVELOPE_KEYS } from "@repo/shared/messages";
 import { z } from "zod";
 import { body } from "./body.ts";
+import { serveTurns } from "./chat-turns.ts";
 import { convexAs } from "./convex.ts";
 import { events } from "./events.ts";
 import { type StoredMessage, toInput, toStored } from "./history.ts";
 import { convexId } from "./ids.ts";
 import { chatModel } from "./model.ts";
-import { onNotice } from "./notices.ts";
 import { repls } from "./repls.ts";
 import { type Authed, authed, type Session } from "./session.ts";
 
@@ -104,7 +106,7 @@ async function prepareTurn(
 	opening: StoredMessage,
 ) {
 	const { chatId } = input;
-	const { workspaceId } = await convex.query(api.chats.get, { chatId });
+	const { workspaceId, agent } = await convex.query(api.chats.get, { chatId });
 	const { provider, model } = chatModel(
 		(await convex.query(api.workspaces.get, { workspaceId })).model,
 	);
@@ -124,7 +126,14 @@ async function prepareTurn(
 			quiet,
 		};
 	});
-	return { provider, model, history, quiet, runsForms };
+	return {
+		provider,
+		model,
+		history,
+		quiet,
+		runsForms,
+		...(agent === undefined ? {} : { instructions: agent.prompt }),
+	};
 }
 
 export const steerRequestSchema = z.object({
@@ -148,29 +157,33 @@ interface Identity {
 	readonly sessionId?: string;
 }
 
+type Ending = Pick<ChatStreamOptions, "maxSteps" | "onOutcome">;
+
 async function runTurn(
 	session: Session,
 	input: TurnInput,
 	opening: StoredMessage,
 	signal: AbortSignal,
 	identity: Identity,
+	ending: Ending = {},
 ): Promise<Response> {
 	const { chatId } = input;
 	const convex = convexAs(session);
-	const { provider, model, history, quiet, runsForms } = await convex
-		.mutation(api.chats.start, { chatId })
-		.then(() => prepareTurn(convex, input, opening))
-		.catch(async (error: unknown) => {
-			await convex
-				.mutation(api.chats.settle, {
-					chatId,
-					failure: error instanceof Error ? error.message : String(error),
-				})
-				.catch((unsettled: unknown) =>
-					console.error(`chat=${chatId} was not settled:`, unsettled),
-				);
-			throw error;
-		});
+	const { provider, model, history, quiet, runsForms, instructions } =
+		await convex
+			.mutation(api.chats.start, { chatId })
+			.then(() => prepareTurn(convex, input, opening))
+			.catch(async (error: unknown) => {
+				await convex
+					.mutation(api.chats.settle, {
+						chatId,
+						failure: error instanceof Error ? error.message : String(error),
+					})
+					.catch((unsettled: unknown) =>
+						console.error(`chat=${chatId} was not settled:`, unsettled),
+					);
+				throw error;
+			});
 	if (signal.aborted) {
 		await convex.mutation(api.chats.settle, { chatId });
 		return new Response(null, { status: 204 });
@@ -185,8 +198,13 @@ async function runTurn(
 		{
 			repls,
 			threadId: chatId,
-			config: { provider, model },
+			config: {
+				provider,
+				model,
+				...(instructions === undefined ? {} : { instructions }),
+			},
 			signal: AbortSignal.any([signal, deadline]),
+			...ending,
 			quiet,
 			runsForms,
 			steer: {
@@ -247,21 +265,45 @@ export const turn = {
 	},
 };
 
-onNotice(async ({ session, chatId, notice: event }) => {
-	const steered = await steers.post(steerKey(session.subject, chatId), {
-		id: crypto.randomUUID(),
-		content: renderSystemEvent(event),
-	});
-	if (steered) return;
-	const opening = toStored([systemEventMessage(event, crypto.randomUUID())])[0];
-	const response = await runTurn(
-		session,
-		{ chatId, event: { token: "" } },
-		opening,
-		new AbortController().signal,
-		{},
-	);
+async function drained(response: Response): Promise<void> {
 	await response.body?.pipeTo(new WritableStream());
+}
+
+serveTurns({
+	async wake({ session, chatId, notice: event }) {
+		const steered = await steers.post(steerKey(session.subject, chatId), {
+			id: crypto.randomUUID(),
+			content: renderSystemEvent(event),
+		});
+		if (steered) return;
+		const opening = toStored([
+			systemEventMessage(event, crypto.randomUUID()),
+		])[0];
+		await drained(
+			await runTurn(
+				session,
+				{ chatId, event: { token: "" } },
+				opening,
+				new AbortController().signal,
+				{},
+			),
+		);
+	},
+	async reply(session, chatId, message, { maxSteps, signal }) {
+		let outcome: TurnOutcome = { stopped: "stopped without answering" };
+		await drained(
+			await runTurn(
+				session,
+				{ chatId, event: { token: "" } },
+				{ id: crypto.randomUUID(), type: "human", content: message },
+				signal,
+				{},
+				{ maxSteps, onOutcome: (ended) => (outcome = ended) },
+			),
+		);
+		return outcome;
+	},
+	source: (chatId) => ({ repls, threadId: chatId }),
 });
 
 export const steer = {

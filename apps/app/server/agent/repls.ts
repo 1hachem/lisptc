@@ -7,5 +7,9 @@ import { subAgents } from "./sub-agents.ts";
 const connect = () => convexAs(currentSession());
 
 export const repls = new ReplStore(
-	chatRepls(connect, convexAsServer, inProcessJobs(subAgents(connect))),
+	chatRepls(
+		connect,
+		convexAsServer,
+		inProcessJobs(subAgents(connect, convexAsServer)),
+	),
 );
