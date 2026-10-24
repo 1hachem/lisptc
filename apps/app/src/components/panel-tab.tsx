@@ -6,7 +6,7 @@ import { ChatProvider } from "../lib/chat.tsx";
 import { ForkPickerProvider } from "../lib/fork-picker.tsx";
 import { ClaimLead } from "../lib/lead-chat.tsx";
 import { PageHostProvider } from "../lib/page-host.tsx";
-import { leadChat, type PanelContent } from "../lib/panel-ops.ts";
+import { leadChat, type Page, type PanelContent } from "../lib/panel-ops.ts";
 import { PanelLiveOps, usePanels } from "../lib/panels.tsx";
 import { AccountPage } from "./account-page.tsx";
 import { AgentPage } from "./agent-page.tsx";
@@ -83,6 +83,24 @@ function ChatTab({
 	);
 }
 
+const PAGE_TABS: Record<
+	Page,
+	(workspaceId: Id<"workspaces">, id: string) => ReactNode
+> = {
+	memory: (workspaceId, id) => (
+		<MemoryPage workspaceId={workspaceId} memoryKey={id} />
+	),
+	agent: (workspaceId, id) => <AgentPage workspaceId={workspaceId} name={id} />,
+	permission: (workspaceId, id) => (
+		<PermissionPage workspaceId={workspaceId} rule={Number(id)} />
+	),
+	readme: (workspaceId) => <ReadmePage workspaceId={workspaceId} />,
+	settings: (workspaceId) => <SettingsPage workspaceId={workspaceId} />,
+	preferences: () => <PreferencesPage />,
+	account: () => <AccountPage />,
+	bin: (workspaceId, id) => <BinPage workspaceId={workspaceId} name={id} />,
+};
+
 function PageTab({
 	workspaceId,
 	content,
@@ -90,25 +108,7 @@ function PageTab({
 	workspaceId: Id<"workspaces">;
 	content: Extract<PanelContent, { kind: "page" }>;
 }) {
-	const id = content.id ?? "";
-	switch (content.page) {
-		case "memory":
-			return <MemoryPage workspaceId={workspaceId} memoryKey={id} />;
-		case "agent":
-			return <AgentPage workspaceId={workspaceId} name={id} />;
-		case "permission":
-			return <PermissionPage workspaceId={workspaceId} rule={Number(id)} />;
-		case "readme":
-			return <ReadmePage workspaceId={workspaceId} />;
-		case "settings":
-			return <SettingsPage workspaceId={workspaceId} />;
-		case "preferences":
-			return <PreferencesPage />;
-		case "account":
-			return <AccountPage />;
-		case "bin":
-			return <BinPage workspaceId={workspaceId} name={id} />;
-	}
+	return PAGE_TABS[content.page](workspaceId, content.id ?? "");
 }
 
 function ViewTab({
