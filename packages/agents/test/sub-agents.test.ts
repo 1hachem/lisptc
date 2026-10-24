@@ -1,35 +1,38 @@
+import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, test } from "vitest";
 import { agentsExtension, BOUNDED_DEFINE } from "../src/agents.ts";
 import { agentsHostFor, MemoryAgentDefinitions } from "../src/agents-host.ts";
-import type { AgentJobs, Job, JobState, Outcome, Spawn } from "../src/ports.ts";
+import type { Jobs, Outcome, Seen, Spawn, Work } from "../src/ports.ts";
 
-class RecordedJobs implements AgentJobs {
+class RecordedJobs implements Jobs {
 	readonly spawned: Spawn[] = [];
-	readonly sent: { agent: string; job: Job }[] = [];
+	readonly submitted: Work[] = [];
 	readonly cancelled: string[] = [];
+	readonly forgotten = new Set<string>();
 
-	spawn(spawn: Spawn): string {
+	async spawn(spawn: Spawn): Promise<string> {
 		this.spawned.push(spawn);
 		return `agent-${this.spawned.length}`;
 	}
 
-	send(agent: string, job: Job): string {
-		this.sent.push({ agent, job });
-		return `job-${this.sent.length}`;
+	submit(work: Work): string {
+		this.submitted.push(work);
+		return `job-${this.submitted.length}`;
 	}
 
-	state(_job: string): JobState {
-		return "running";
+	peek(job: string): Seen | undefined {
+		return this.forgotten.has(job) ? undefined : { state: "running" };
 	}
 
 	async wait(job: string): Promise<Outcome> {
-		const { message } = this.sent[Number(job.slice(4)) - 1].job;
-		return message === "fail"
+		const work = this.submitted[Number(job.slice(4)) - 1];
+		if (work.kind === "code") return { reply: `ran ${work.source}` };
+		return work.message === "fail"
 			? { failure: "it broke" }
-			: { reply: `got ${message}` };
+			: { reply: `got ${work.message}` };
 	}
 
 	cancel(job: string): boolean {
@@ -38,14 +41,21 @@ class RecordedJobs implements AgentJobs {
 	}
 }
 
-function world(withJobs = true) {
-	const jobs = new RecordedJobs();
+function session(jobs: RecordedJobs | undefined) {
 	const definitions = new MemoryAgentDefinitions();
 	const extension = agentsExtension(
-		agentsHostFor(withJobs ? { definitions, jobs } : { definitions }),
+		agentsHostFor(jobs === undefined ? { definitions } : { definitions, jobs }),
 	);
 	const interp = new Interp({ extensions: [extension] });
 	runSync(interp, prelude);
+	return { interp, extension, definitions };
+}
+
+function world(withJobs = true) {
+	const jobs = new RecordedJobs();
+	const { interp, extension, definitions } = session(
+		withJobs ? jobs : undefined,
+	);
 	const calls: string[] = [];
 	interp.hooks.call.use((i, name, args, next) => {
 		calls.push(name);
@@ -53,7 +63,7 @@ function world(withJobs = true) {
 	});
 	const run = (code: string) => runAsync(interp, code);
 	const shown = async (code: string) => str((await run(code)).value);
-	return { extension, jobs, definitions, calls, run, shown };
+	return { interp, extension, jobs, definitions, calls, run, shown };
 }
 
 describe("defagent", () => {
@@ -167,7 +177,7 @@ describe("spawn", () => {
 	test("says so in a session with no jobs", async () => {
 		const { run } = world(false);
 		await expect(run('(spawn "s" :prompt "p")')).rejects.toThrow(
-			"runs no sub-agents",
+			"runs no background jobs",
 		);
 	});
 });
@@ -177,15 +187,21 @@ describe("send", () => {
 		const { run, shown, jobs } = world();
 		await run('(spawn "r" :prompt "p")');
 		expect(await shown('(send :to "r" "hello" :max-steps 3)')).toBe('"job-1"');
-		expect(jobs.sent).toEqual([
-			{ agent: "agent-1", job: { message: "hello", maxSteps: 3 } },
+		expect(jobs.submitted).toEqual([
+			{
+				kind: "agent",
+				agent: "agent-1",
+				name: "r",
+				message: "hello",
+				maxSteps: 3,
+			},
 		]);
 	});
 
 	test("gives a job the default step budget", async () => {
 		const { run, jobs } = world();
 		await run('(spawn "r" :prompt "p") (send :to "r" "b")');
-		expect(jobs.sent[0].job.maxSteps).toBe(20);
+		expect(jobs.submitted[0]).toMatchObject({ maxSteps: 20 });
 	});
 
 	test("refuses an agent that was never spawned", async () => {
@@ -208,7 +224,7 @@ describe("a job", () => {
 	test("waited on returns its reply", async () => {
 		const { run, shown } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(agent-wait (send :to "r" "hello"))')).toBe(
+		expect(await shown('(job-wait (send :to "r" "hello"))')).toBe(
 			'"got hello"',
 		);
 	});
@@ -216,7 +232,7 @@ describe("a job", () => {
 	test("that failed raises when waited on", async () => {
 		const { run } = world();
 		await run('(spawn "r" :prompt "p")');
-		await expect(run('(agent-wait (send :to "r" "fail"))')).rejects.toThrow(
+		await expect(run('(job-wait (send :to "r" "fail"))')).rejects.toThrow(
 			"it broke",
 		);
 	});
@@ -224,13 +240,78 @@ describe("a job", () => {
 	test("reports where it stands as a keyword", async () => {
 		const { run, shown } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(agent-state (send :to "r" "hi"))')).toBe(":running");
+		expect(await shown('(job-state (send :to "r" "hi"))')).toBe(":running");
 	});
 
 	test("can be cancelled", async () => {
 		const { run, shown, jobs } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(agent-cancel (send :to "r" "hi"))')).toBe("t");
+		expect(await shown('(job-cancel (send :to "r" "hi"))')).toBe("t");
 		expect(jobs.cancelled).toEqual(["job-1"]);
+	});
+});
+
+describe("background code", () => {
+	test("runs a form on a copy of the image and hands back its job id", async () => {
+		const { run, shown, jobs } = world();
+		await run("(setq x 41)");
+		expect(await shown("(spawn :code '(+ x 1))")).toBe('"job-1"');
+		const [work] = jobs.submitted;
+		expect(work).toMatchObject({ kind: "code", source: "(+ x 1)" });
+		expect(JSON.stringify(work)).toContain('"x"');
+	});
+
+	test("returns what it printed when waited on", async () => {
+		const { shown } = world();
+		expect(await shown("(job-wait (spawn :code '(+ 1 2)))")).toBe(
+			'"ran (+ 1 2)"',
+		);
+	});
+
+	test("takes no name", async () => {
+		const { run } = world();
+		await expect(run('(spawn "r" :code \'(+ 1 2))')).rejects.toThrow(
+			"spawn :code takes no name",
+		);
+	});
+});
+
+describe("the job table", () => {
+	test("lists every job with where it stands", async () => {
+		const { run, shown } = world();
+		await run('(spawn "r" :prompt "p") (send :to "r" "hi")');
+		expect(await shown("(jobs)")).toBe(
+			'((:id "job-1" :kind :agent :label "r" :state :running))',
+		);
+	});
+
+	test("keeps a finished job's outcome once waited on", async () => {
+		const { run, shown } = world();
+		await run('(spawn "r" :prompt "p") (job-wait (send :to "r" "hi"))');
+		expect(await shown('(job-state "job-1")')).toBe(":done");
+		expect(await shown("(jobs)")).toContain(':reply "got hi"');
+	});
+
+	test("refuses a job it never started", async () => {
+		const { run } = world();
+		await expect(run('(job-state "nope")')).rejects.toThrow(
+			"no job by that id",
+		);
+	});
+
+	test("survives an image, agents and jobs alike", async () => {
+		const before = world();
+		await before.run('(spawn "r" :prompt "p") (send :to "r" "hi")');
+		const image = snapshot(before.interp);
+
+		const jobs = new RecordedJobs();
+		const after = session(jobs);
+		restore(after.interp, image);
+		const run = (code: string) => runAsync(after.interp, code);
+		await run('(send :to "r" "again")');
+		expect(jobs.submitted[0]).toMatchObject({ agent: "agent-1" });
+		jobs.forgotten.add("job-1");
+		expect(str((await run('(job-state "job-1")')).value)).toBe(":failed");
+		await expect(run('(job-wait "job-1")')).rejects.toThrow("interrupted");
 	});
 });

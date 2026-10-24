@@ -1,6 +1,6 @@
 import { filePrompt } from "@repo/shared/host-node";
 import type { AgentsHost } from "./agents.ts";
-import type { AgentDefinition, AgentDefinitions, AgentJobs } from "./ports.ts";
+import type { AgentDefinition, AgentDefinitions, Jobs } from "./ports.ts";
 
 export class MemoryAgentDefinitions implements AgentDefinitions {
 	private readonly saved = new Map<string, AgentDefinition>();
@@ -24,7 +24,7 @@ export class MemoryAgentDefinitions implements AgentDefinitions {
 
 export interface AgentsHostOptions {
 	definitions?: AgentDefinitions;
-	jobs?: AgentJobs;
+	jobs?: Jobs;
 }
 
 export function agentsHostFor(options: AgentsHostOptions = {}): AgentsHost {

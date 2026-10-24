@@ -1,8 +1,9 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { snapshot } from "@repo/interpreter/image";
-import { type Interp, runSync } from "@repo/interpreter/lisp";
+import { type Interp, runSync, type State } from "@repo/interpreter/lisp";
 import {
+	arrayToList,
 	Cell,
 	LispKeyword,
 	type List,
@@ -10,23 +11,34 @@ import {
 	newSym,
 } from "@repo/interpreter/objects";
 import { keyName } from "@repo/interpreter/plist";
+import { str } from "@repo/interpreter/print";
 import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
+import {
+	FINISHED,
+	type JobKind,
+	type JobRecord,
+	jobPlist,
+	jobsCodec,
+	type SpawnedAgent,
+	spawnedCodec,
+} from "./job-table.ts";
 import type {
 	AgentDefinition,
 	AgentDefinitions,
-	AgentJobs,
 	ChatSeed,
+	Jobs,
 	Outcome,
 	ReplSeed,
+	Work,
 } from "./ports.ts";
 
 export interface AgentsHost {
 	prompt: PromptSource;
 	definitions: AgentDefinitions;
-	jobs?: AgentJobs;
+	jobs?: Jobs;
 }
 
 export const DEFAULT_MAX_STEPS = 20;
@@ -101,13 +113,93 @@ function chatOf(value: unknown): ChatSeed {
 	throw new EvalException("spawn: :chat is :fresh or :fork", value);
 }
 
-export function registerAgents(interp: Interp, host: AgentsHost): void {
-	const spawned = new Map<string, string>();
+const INTERRUPTED: Outcome = {
+	failure: "interrupted: the host no longer runs this job",
+};
 
-	function jobs(form: string): AgentJobs {
+class JobTable {
+	constructor(
+		private readonly records: State<readonly JobRecord[]>,
+		private readonly spawned: State<readonly SpawnedAgent[]>,
+	) {}
+
+	agent(name: string): string | undefined {
+		return this.spawned.get().find((entry) => entry.name === name)?.agent;
+	}
+
+	adopt(name: string, agent: string): void {
+		this.spawned.set([
+			...this.spawned.get().filter((entry) => entry.name !== name),
+			{ name, agent },
+		]);
+	}
+
+	record(id: string): JobRecord | undefined {
+		return this.records.get().find((record) => record.id === id);
+	}
+
+	all(): readonly JobRecord[] {
+		return this.records.get();
+	}
+
+	put(record: JobRecord): JobRecord {
+		this.records.set([
+			...this.records.get().filter((held) => held.id !== record.id),
+			record,
+		]);
+		return record;
+	}
+}
+
+export function registerAgents(interp: Interp, host: AgentsHost): void {
+	const table = new JobTable(
+		interp.state(
+			"agents/jobs",
+			jobsCodec,
+			[],
+			"The background jobs this session started, with where each stands. Read it through job-state and jobs.",
+		),
+		interp.state(
+			"agents/spawned",
+			spawnedCodec,
+			[],
+			"The sub-agents this session spawned, by name.",
+		),
+	);
+
+	function jobs(form: string): Jobs {
 		if (host.jobs === undefined)
-			throw new EvalException("this session runs no sub-agents", form, false);
+			throw new EvalException(
+				"this session runs no background jobs",
+				form,
+				false,
+			);
 		return host.jobs;
+	}
+
+	function known(form: string, job: string): JobRecord {
+		const record = table.record(job);
+		if (record === undefined)
+			throw new EvalException(`${form}: no job by that id`, job);
+		return record;
+	}
+
+	async function refreshed(record: JobRecord): Promise<JobRecord> {
+		if (FINISHED.has(record.state)) return record;
+		const seen = await jobs("job-state").peek(record.id);
+		if (seen === undefined)
+			return table.put({ ...record, state: "failed", outcome: INTERRUPTED });
+		return table.put(
+			seen.outcome === undefined
+				? { ...record, state: seen.state }
+				: { ...record, state: seen.state, outcome: seen.outcome },
+		);
+	}
+
+	async function started(kind: JobKind, label: string, work: Work) {
+		const id = await jobs("spawn").submit(work);
+		table.put({ id, kind, label, state: "queued" });
+		return id;
 	}
 
 	async function definitionOf(
@@ -217,22 +309,34 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 	interp.def(
 		"spawn",
 		-1,
-		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork])',
-		"Start a sub-agent under a name and return the name. Without :prompt it runs the saved definition of that name. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over.",
+		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork]) or (spawn :code form)',
+		"Start a sub-agent under a name and return the name. Without :prompt it runs the saved definition of that name. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over. With :code, run the form in the background on a copy of this image and return its job id at once; what it prints comes back as a system event from job:id unless you job-wait on it.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("spawn", rest, [
 				"prompt",
 				"repl",
 				"chat",
+				"code",
 			]);
+			if (options.has("code")) {
+				if (values.length > 0)
+					throw new EvalException("spawn :code takes no name", rest);
+				const code = options.get("code");
+				const source = typeof code === "string" ? code : str(code);
+				return await started("code", source, {
+					kind: "code",
+					source,
+					image: snapshot(interp),
+				});
+			}
 			if (values.length !== 1)
 				throw new EvalException("spawn takes one name, then options", rest);
 			const name = nameOf("spawn", values[0]);
 			const seed = seedOf(interp, options.get("repl"));
 			const chat = chatOf(options.get("chat"));
 			const definition = await definitionOf(name, options.get("prompt"));
-			spawned.set(name, await jobs("spawn").spawn({ definition, seed, chat }));
+			table.adopt(name, await jobs("spawn").spawn({ definition, seed, chat }));
 			return name;
 		},
 	);
@@ -241,7 +345,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"send",
 		-1,
 		'(send :to "name" "message" [:max-steps n])',
-		"Hand a message to a spawned sub-agent as a job and return the job id at once; keep working. Unless you agent-wait on it, its reply comes back later as a system event from agent:name, waking you if your turn ended. Messages to one agent run in turn.",
+		"Hand a message to a spawned sub-agent as a job and return the job id at once; keep working. Unless you job-wait on it, its reply comes back later as a system event from agent:name, waking you if your turn ended. Messages to one agent run in turn.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("send", rest, ["to", "max-steps"]);
@@ -253,47 +357,86 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 				throw new EvalException("send: say who with :to", rest);
 			const name = nameOf("send", to);
 			const maxSteps = stepsOf(options.get("max-steps"));
-			const agent = spawned.get(name);
+			const agent = table.agent(name);
 			if (agent === undefined)
 				throw new EvalException(
 					"send: no running agent by that name; spawn it first",
 					name,
 				);
-			return await jobs("send").send(agent, { message, maxSteps });
+			return await started("agent", name, {
+				kind: "agent",
+				agent,
+				name,
+				message,
+				maxSteps,
+			});
 		},
 	);
 
 	interp.def(
-		"agent-wait",
+		"job-wait",
 		1,
-		'(agent-wait "job")',
-		"Wait in this step for a job's reply and return it. A job you wait on sends no system event later. A failed or cancelled job raises an error.",
+		'(job-wait "job")',
+		"Wait in this step for a job to finish and return what it replied or printed. A job you wait on sends no system event later. A failed, cancelled or interrupted job raises an error.",
 		z.tuple([zString]),
 		async ([job]) => {
-			const waiting = interp.async.start((signal) =>
-				jobs("agent-wait").wait(job, signal),
+			let record = await refreshed(known("job-wait", job));
+			if (!FINISHED.has(record.state)) {
+				const waiting = interp.async.start((signal) =>
+					jobs("job-wait").wait(job, signal),
+				);
+				const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
+				record = table.put({
+					...record,
+					state: "reply" in outcome ? "done" : "failed",
+					outcome,
+				});
+			}
+			const { outcome } = record;
+			if (outcome !== undefined && "reply" in outcome) return outcome.reply;
+			throw new EvalException(
+				`job ${job}`,
+				outcome?.failure ?? record.state,
+				false,
 			);
-			const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
-			if ("reply" in outcome) return outcome.reply;
-			throw new EvalException(`agent job ${job}`, outcome.failure, false);
 		},
 	);
 
 	interp.def(
-		"agent-state",
+		"job-state",
 		1,
-		'(agent-state "job")',
-		"Return where a job stands: :queued, :running, :done, :failed or :cancelled.",
+		'(job-state "job")',
+		"Return where a job stands: :queued, :running, :done, :failed or :cancelled. A job the host lost to a restart reads :failed.",
 		z.tuple([zString]),
-		async ([job]) => newLispKeyword(await jobs("agent-state").state(job)),
+		async ([job]) =>
+			newLispKeyword((await refreshed(known("job-state", job))).state),
 	);
 
 	interp.def(
-		"agent-cancel",
+		"job-cancel",
 		1,
-		'(agent-cancel "job")',
+		'(job-cancel "job")',
 		"Cancel a job that has not finished. Return t when it was cancelled, nil when it had already finished.",
 		z.tuple([zString]),
-		async ([job]) => ((await jobs("agent-cancel").cancel(job)) ? true : null),
+		async ([job]) => {
+			const record = await refreshed(known("job-cancel", job));
+			if (FINISHED.has(record.state)) return null;
+			if (!(await jobs("job-cancel").cancel(job))) return null;
+			table.put({ ...record, state: "cancelled" });
+			return true;
+		},
+	);
+
+	interp.def(
+		"jobs",
+		0,
+		"(jobs)",
+		"Return every job this session started, oldest first, each as (:id :kind :label :state) with :reply or :failure once it ended.",
+		z.tuple([]),
+		async () => {
+			const records: JobRecord[] = [];
+			for (const record of table.all()) records.push(await refreshed(record));
+			return arrayToList(records.map(jobPlist));
+		},
 	);
 }

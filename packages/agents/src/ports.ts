@@ -30,27 +30,43 @@ export interface Ask {
 	readonly signal: AbortSignal;
 }
 
-export interface SubAgent {
-	send(ask: Ask): Promise<string>;
-}
-
 export interface AgentRunner {
-	spawn(spawn: Spawn): SubAgent;
+	spawn(spawn: Spawn): Promise<string>;
+	send(agent: string, ask: Ask): Promise<string>;
 }
 
-export interface Job {
-	readonly message: string;
-	readonly maxSteps: number;
+export interface Code {
+	readonly source: string;
+	readonly image: Image;
 }
+
+export interface CodeRunner {
+	run(code: Code, signal: AbortSignal): Promise<string>;
+}
+
+export type Work =
+	| {
+			readonly kind: "agent";
+			readonly agent: string;
+			readonly name: string;
+			readonly message: string;
+			readonly maxSteps: number;
+	  }
+	| { readonly kind: "code"; readonly source: string; readonly image: Image };
 
 export type JobState = "queued" | "running" | "done" | "failed" | "cancelled";
 
 export type Outcome = { readonly reply: string } | { readonly failure: string };
 
-export interface AgentJobs {
-	spawn(spawn: Spawn): Awaitable<string>;
-	send(agent: string, job: Job): Awaitable<string>;
-	state(job: string): Awaitable<JobState>;
+export interface Seen {
+	readonly state: JobState;
+	readonly outcome?: Outcome;
+}
+
+export interface Jobs {
+	spawn(spawn: Spawn): Promise<string>;
+	submit(work: Work): Awaitable<string>;
+	peek(job: string): Awaitable<Seen | undefined>;
 	wait(job: string, signal: AbortSignal): Promise<Outcome>;
 	cancel(job: string): Awaitable<boolean>;
 }

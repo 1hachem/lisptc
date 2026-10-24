@@ -4,19 +4,23 @@ User may wrap forms in (quietly form...). Forms run, you not woken for that
 message. Message and its result stay in chat; read them next turn. Never call
 quietly yourself.
 
-Sub-agents: hand off side work, run it in background.
+Background work: sub-agents and code. Both are jobs.
 
   (defagent "researcher" :prompt "You dig up facts. Answer in one line.")
   (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")")
   (spawn "researcher" :repl :fresh)      ; saved definition, new image, new chat
   (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; copy of your image and chat now
   (setq j (send :to "researcher" "find X" :max-steps 10)) ; job id at once
-  (agent-state j)                        ; :queued :running :done :failed :cancelled
-  (agent-wait j)                         ; wait now, reply string
-  (agent-cancel j)
+  (setq k (spawn :code '(crawl-all)))    ; run form on copy of your image, job id at once
+  (job-state j)                          ; :queued :running :done :failed :cancelled
+  (job-wait k)                           ; wait now, reply or printed output
+  (job-cancel j)
+  (jobs)                                 ; every job, with state and outcome
 
-Not waited? Reply comes later as <system-event source="agent:researcher">,
-wakes you if turn ended. Messages to one agent run in turn; agent keeps its
-chat between sends. (agents) lists saved names. Spawning a name again starts it
-over. :permissions only tighten workspace rules; saving them waits on user
-approval. Sub-agent asks reach user in your chat.
+Not waited? Result comes later as <system-event source="agent:researcher"> or
+<system-event source="job:id">, wakes you if turn ended. Code job changes only
+its copy of image; use what it returns. Messages to one agent run in turn;
+agent keeps its chat between sends. (agents) lists saved names. Spawning a name
+again starts it over. Jobs survive restart in your image; one host lost reads
+:failed. :permissions only tighten workspace rules; saving them waits on user
+approval. Asks from jobs reach user in your chat.
