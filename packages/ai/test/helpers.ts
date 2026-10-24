@@ -1,5 +1,7 @@
 import { topic } from "@repo/interpreter/channels";
+import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
 import {
 	annotating,
 	type InterpExtension,
@@ -99,4 +101,42 @@ export function testRepl(
 
 export function testRepls(extensions: InterpExtension[] = []): ReplStore {
 	return new ReplStore(() => testRepl(extensions));
+}
+
+const waiting = topic<string>("waiting");
+
+const approved = topic<string>("approved");
+
+export function holding(): InterpExtension {
+	return Object.assign(
+		(interp: Interp) => {
+			interp.defineGlobal(
+				newSym("wait-for-human"),
+				interp.makeBuiltIn("wait-for-human", 0, () => {
+					waiting.emit(interp.channels, { user: "approve it" });
+					throw new StepHold("approve it");
+				}),
+			);
+		},
+		{
+			session: (hooks: SessionHooks) => {
+				hooks.annotate.use((buffer, into, next) => {
+					const seen = buffer.collect(waiting);
+					return next(
+						buffer,
+						seen.length === 0
+							? into
+							: annotating(into, "output", { waiting: seen }),
+					);
+				});
+				hooks.invoke.use(async (ctx, next) => {
+					if (ctx.action !== "approve") return next(ctx);
+					approved.emit(ctx.interp.channels, { user: "approved, carry on" });
+				});
+				hooks.message.use(
+					(buffer, next) => buffer.collect(approved)[0] ?? next(buffer),
+				);
+			},
+		},
+	);
 }

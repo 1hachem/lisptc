@@ -1,17 +1,9 @@
-import { topic } from "@repo/interpreter/channels";
-import { StepHold } from "@repo/interpreter/errors";
-import type { Interp } from "@repo/interpreter/lisp";
-import { newSym } from "@repo/interpreter/objects";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import { Conversation, ConversationStopped } from "../src/conversation.ts";
 import type { TranscriptEntry } from "../src/repl.ts";
-import { testRepl } from "./helpers.ts";
+import { holding, testRepl } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as AgentDelta[][],
@@ -52,34 +44,6 @@ function conversation(
 		"You are a researcher.",
 		async () => ({}),
 		history,
-	);
-}
-
-const waiting = topic<string>("waiting");
-
-function holding(): InterpExtension {
-	return Object.assign(
-		(interp: Interp) => {
-			interp.defineGlobal(
-				newSym("wait-for-human"),
-				interp.makeBuiltIn("wait-for-human", 0, () => {
-					waiting.emit(interp.channels, { user: "approve it" });
-					throw new StepHold("approve it");
-				}),
-			);
-		},
-		{
-			session: (hooks: SessionHooks) =>
-				hooks.annotate.use((buffer, into, next) => {
-					const seen = buffer.collect(waiting);
-					return next(
-						buffer,
-						seen.length === 0
-							? into
-							: annotating(into, "output", { waiting: seen }),
-					);
-				}),
-		},
 	);
 }
 

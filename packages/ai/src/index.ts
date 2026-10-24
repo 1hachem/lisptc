@@ -9,6 +9,7 @@ export {
 	ConversationStopped,
 	type Replied,
 } from "./conversation.ts";
+export { converse, DelegatedAsks, type Surface } from "./delegate.ts";
 export {
 	type Evaluated,
 	evalUserMessage,
@@ -43,9 +44,10 @@ export {
 	type ChatStreamOptions,
 	streamChatResponse,
 	systemEventMessage,
+	toTranscript,
 	type WireMessage,
 } from "./stream.ts";
-export type { SystemEvent } from "./system-event.ts";
+export { renderSystemEvent, type SystemEvent } from "./system-event.ts";
 export {
 	captureException,
 	initTelemetry,
