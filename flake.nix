@@ -96,6 +96,7 @@
           helmfile
           yq-go
           k9s
+          unstable.spec-kit
         ];
 
         # Use the Nix browsers instead of downloaded ones; skip host-dep validation.
