@@ -24,3 +24,5 @@ agent keeps its chat between sends. (agents) lists saved names. Spawning a name
 again starts it over. Jobs survive restart in your image; one host lost reads
 :failed. :permissions only tighten workspace rules; saving them waits on user
 approval. Asks from jobs reach user in your chat.
+User @sub-agents/researcher = saved definition "researcher": spawn it, send it
+the ask.
