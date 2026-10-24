@@ -11,6 +11,7 @@ const encoder = new TextEncoder();
 const stored = {
 	name: v.string(),
 	prompt: v.string(),
+	permissions: v.optional(v.string()),
 };
 
 const agent = v.object({
@@ -37,7 +38,10 @@ export const put = mutation({
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, agent }) => {
 		await requireWorkspace(ctx, workspaceId);
-		if (encoder.encode(agent.name + agent.prompt).length > MAX_AGENT_BYTES) {
+		if (
+			encoder.encode(agent.name + agent.prompt + (agent.permissions ?? ""))
+				.length > MAX_AGENT_BYTES
+		) {
 			throw new ConvexError({ code: "AGENT_TOO_LARGE" });
 		}
 		const existing = await ctx.db

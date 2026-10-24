@@ -1,6 +1,12 @@
 import { agentsExtension } from "@repo/agents-extension";
 import { agentsHostFor } from "@repo/agents-extension/host";
-import type { AgentRunner, ReplSeed } from "@repo/agents-extension/ports";
+import { MemoryAgentJobs } from "@repo/agents-extension/jobs";
+import type {
+	AgentJobs,
+	AgentRunner,
+	Notice,
+	ReplSeed,
+} from "@repo/agents-extension/ports";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -66,11 +72,16 @@ const themeChoices = themes.map((theme) => ({
 	scheme: theme.scheme,
 }));
 
+export interface SessionScope {
+	readonly chatId?: Id<"chats">;
+	readonly jobs?: AgentJobs;
+	readonly bounds?: readonly string[];
+}
+
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	chatId?: Id<"chats">,
-	runner?: AgentRunner,
+	{ chatId, jobs, bounds }: SessionScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -92,10 +103,22 @@ export async function workspaceExtensions(
 			maxDownloadBytes: MAX_KNOWLEDGE_BYTES,
 		}),
 	);
+	const agents = agentsExtension(
+		agentsHostFor({
+			definitions: new ConvexAgentStore(workspaceId, connect),
+			...(jobs === undefined ? {} : { jobs }),
+		}),
+	);
 	const permissions = permissionsExtension(
 		permissionsHostFor({
 			store: await ConvexPermissionsStore.open(workspaceId, connect),
-			asks: [...memory.asks, ...workspace.asks, ...knowledge.asks],
+			asks: [
+				...memory.asks,
+				...workspace.asks,
+				...knowledge.asks,
+				...agents.asks,
+			],
+			...(bounds === undefined ? {} : { bounds }),
 		}),
 	);
 	return [
@@ -106,12 +129,7 @@ export async function workspaceExtensions(
 		}),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
-		agentsExtension(
-			agentsHostFor({
-				definitions: new ConvexAgentStore(workspaceId, connect),
-				...(runner === undefined ? {} : { runner }),
-			}),
-		),
+		agents,
 		mcpExtension({
 			...mcpHostFor({
 				scope: workspaceId,
@@ -138,22 +156,45 @@ export async function workspaceExtensions(
 	];
 }
 
-export type RunnerFor = (workspaceId: Id<"workspaces">) => AgentRunner;
+export type JobsFor = (
+	workspaceId: Id<"workspaces">,
+	chatId: Id<"chats">,
+) => AgentJobs;
+
+export interface InProcess {
+	readonly runner: AgentRunner;
+	readonly notify?: (notice: Notice) => void;
+}
+
+export type RunnerFor = (
+	workspaceId: Id<"workspaces">,
+	chatId: Id<"chats">,
+) => InProcess;
+
+export function inProcessJobs(runnerFor: RunnerFor): JobsFor {
+	return (workspaceId, chatId) => {
+		const { runner, notify } = runnerFor(workspaceId, chatId);
+		return new MemoryAgentJobs(runner, notify);
+	};
+}
+
+export interface Seeded {
+	readonly seed: ReplSeed;
+	readonly bounds?: readonly string[];
+	readonly runner?: AgentRunner;
+}
 
 export async function seededRepl(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	seed: ReplSeed,
-	runner?: AgentRunner,
+	{ seed, bounds, runner }: Seeded,
 ): Promise<AgentRepl> {
 	const images = new MemoryImageStore();
 	const repl = new AgentRepl({
-		extensions: await workspaceExtensions(
-			workspaceId,
-			connect,
-			undefined,
-			runner,
-		),
+		extensions: await workspaceExtensions(workspaceId, connect, {
+			...(runner === undefined ? {} : { jobs: new MemoryAgentJobs(runner) }),
+			...(bounds === undefined ? {} : { bounds }),
+		}),
 		images,
 	});
 	if (seed.from === "fork") {
@@ -166,18 +207,18 @@ export async function seededRepl(
 export function chatRepls(
 	connect: Connect,
 	server: ServerClient,
-	runnerFor?: RunnerFor,
+	jobsFor?: JobsFor,
 ): (chatId: Id<"chats">) => Promise<AgentRepl> {
 	return async (chatId) => {
 		const { workspaceId } = await connect().query(api.chats.get, { chatId });
 		const replId = await connect().mutation(api.repls.open, { chatId });
 		const repl = new AgentRepl({
-			extensions: await workspaceExtensions(
-				workspaceId,
-				connect,
+			extensions: await workspaceExtensions(workspaceId, connect, {
 				chatId,
-				runnerFor?.(workspaceId),
-			),
+				...(jobsFor === undefined
+					? {}
+					: { jobs: jobsFor(workspaceId, chatId) }),
+			}),
 			images: new ConvexImageStore(replId, server),
 		});
 		await repl.resume().catch((ex) => {

@@ -2,6 +2,7 @@ import type {
 	AgentDefinition,
 	AgentDefinitions,
 } from "@repo/agents-extension/ports";
+import { parseRules } from "@repo/permissions-extension/rules";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
@@ -9,7 +10,9 @@ import type { Id } from "../convex/_generated/dataModel.js";
 export type AgentClient = Pick<ConvexHttpClient, "query" | "mutation">;
 
 function definitionOf(row: AgentDefinition): AgentDefinition {
-	return { name: row.name, prompt: row.prompt };
+	return row.permissions === undefined
+		? { name: row.name, prompt: row.prompt }
+		: { name: row.name, prompt: row.prompt, permissions: row.permissions };
 }
 
 export class ConvexAgentStore implements AgentDefinitions {
@@ -30,6 +33,8 @@ export class ConvexAgentStore implements AgentDefinitions {
 	}
 
 	async put(definition: AgentDefinition): Promise<void> {
+		if (definition.permissions !== undefined)
+			parseRules(definition.permissions);
 		await this.connect().mutation(api.agents.put, {
 			workspaceId: this.workspaceId,
 			agent: definitionOf(definition),
