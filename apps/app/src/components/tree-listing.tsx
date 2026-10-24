@@ -1,7 +1,5 @@
 import type { IconSvgElement } from "@hugeicons/react";
-import type { Id } from "@repo/backend/dataModel";
 import { type TreeCheck, TreeGroup } from "@repo/components";
-import { useNavigate } from "@tanstack/react-router";
 import { Fragment, type ReactNode } from "react";
 import { byDate } from "../lib/date-groups.ts";
 
@@ -11,18 +9,6 @@ export type FolderState<Name extends string = string> = {
 	open: boolean;
 	onToggle: () => void;
 };
-
-export function useLeave(workspaceId: Id<"workspaces">) {
-	const navigate = useNavigate();
-	return (selected: boolean) =>
-		selected
-			? navigate({
-					to: "/$workspaceId",
-					params: { workspaceId },
-					replace: true,
-				})
-			: Promise.resolve();
-}
 
 export function Empty({ children }: { children: ReactNode }) {
 	return <div className="py-1 pl-9 text-dim">{children}</div>;

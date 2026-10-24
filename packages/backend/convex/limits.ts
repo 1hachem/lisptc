@@ -41,3 +41,7 @@ export const REPL_LAYER_CHUNK_CHARS = 262_144;
 export const TURN_DEADLINE_MS = 600_000;
 
 export const STREAMING_LEASE_MS = TURN_DEADLINE_MS + 60_000;
+
+export const MAX_LAYOUT_BYTES = 262_144;
+
+export const MAX_SPLITS = 3;

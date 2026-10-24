@@ -1,4 +1,5 @@
 import { CATALOGUED_CHOICES, DEFAULT_CHOICE } from "@repo/shared/providers";
+import { defaultThemeId, themes } from "@repo/ui/themes";
 import type {
 	ChatLine,
 	ChatPage,
@@ -8,6 +9,11 @@ import type {
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import {
+	WORKSPACE_ICONS,
+	type WorkspaceIcon,
+	workspaceIcon,
+} from "../convex/lib/workspaceIcons.ts";
 
 export type WorkspaceStoreClient = Pick<ConvexHttpClient, "query" | "mutation">;
 
@@ -17,6 +23,16 @@ function modelName(choice: { provider: string; model: string }): string {
 
 export const OFFERED_MODELS: readonly string[] =
 	CATALOGUED_CHOICES.map(modelName);
+
+function offeredTheme(theme: string | undefined): string {
+	return themes.some((offered) => offered.id === theme) && theme !== undefined
+		? theme
+		: defaultThemeId;
+}
+
+function isWorkspaceIcon(icon: string): icon is WorkspaceIcon {
+	return (WORKSPACE_ICONS as readonly string[]).includes(icon);
+}
 
 export class ConvexWorkspaceStore implements WorkspaceStore {
 	constructor(
@@ -31,6 +47,8 @@ export class ConvexWorkspaceStore implements WorkspaceStore {
 		return {
 			name: workspace.name,
 			model: modelName(workspace.model ?? DEFAULT_CHOICE),
+			icon: workspaceIcon({ _id: this.workspaceId, icon: workspace.icon }),
+			theme: offeredTheme(workspace.theme),
 		};
 	}
 
@@ -47,6 +65,21 @@ export class ConvexWorkspaceStore implements WorkspaceStore {
 		await this.connect().mutation(api.workspaces.setModel, {
 			workspaceId: this.workspaceId,
 			model: choice,
+		});
+	}
+
+	async pickIcon(icon: string): Promise<void> {
+		if (!isWorkspaceIcon(icon)) throw new Error(`icon not offered: ${icon}`);
+		await this.connect().mutation(api.workspaces.setIcon, {
+			workspaceId: this.workspaceId,
+			icon,
+		});
+	}
+
+	async pickTheme(theme: string): Promise<void> {
+		await this.connect().mutation(api.workspaces.setTheme, {
+			workspaceId: this.workspaceId,
+			theme,
 		});
 	}
 

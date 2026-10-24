@@ -1,21 +1,12 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import { MAX_README_BYTES } from "@repo/backend/limits";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
 import { ConvexError } from "convex/values";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileView } from "../../../components/file-view.tsx";
-import { MarkdownEditor } from "../../../components/markdown-editor.tsx";
-
-export const Route = createFileRoute("/_authed/$workspaceId/readme")({
-	loader: async ({ context, params }) => {
-		await context.queryClient.ensureQueryData(
-			convexQuery(api.readmes.get, { workspaceId: params.workspaceId }),
-		);
-	},
-	component: ReadmeFile,
-});
+import { FileView } from "./file-view.tsx";
+import { MarkdownEditor } from "./markdown-editor.tsx";
 
 const SAVE_DELAY_MS = 500;
 
@@ -38,8 +29,7 @@ function saveFailure(error: unknown): string {
 	return `not saved: ${error instanceof Error ? error.message : "unknown error"}`;
 }
 
-function ReadmeFile() {
-	const { workspaceId } = Route.useParams();
+export function ReadmePage({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	const { data: stored } = useQuery(
 		convexQuery(api.readmes.get, { workspaceId }),
 	);

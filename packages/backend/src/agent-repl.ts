@@ -37,6 +37,7 @@ import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import { ConvexImageStore } from "./image-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
@@ -55,6 +56,13 @@ export type WorkspaceClient = Pick<
 
 export type Connect = () => WorkspaceClient;
 
+const themeChoices = themes.map((theme) => ({
+	id: theme.id,
+	name: `${theme.name} ${theme.scheme}`,
+	family: theme.name,
+	scheme: theme.scheme,
+}));
+
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
@@ -68,6 +76,9 @@ export async function workspaceExtensions(
 		workspaceHostFor({
 			store: new ConvexWorkspaceStore(workspaceId, connect),
 			models: OFFERED_MODELS,
+			icons: WORKSPACE_ICONS,
+			themes: themeChoices,
+			defaultDarkTheme: defaultThemeId,
 			chatId,
 		}),
 	);
@@ -108,13 +119,6 @@ export async function workspaceExtensions(
 		preferencesExtension(
 			preferencesHostFor({
 				store: new ConvexPreferencesStore(connect),
-				themes: themes.map((theme) => ({
-					id: theme.id,
-					name: `${theme.name} ${theme.scheme}`,
-					family: theme.name,
-					scheme: theme.scheme,
-				})),
-				defaultDarkTheme: defaultThemeId,
 				fonts,
 				motions,
 			}),

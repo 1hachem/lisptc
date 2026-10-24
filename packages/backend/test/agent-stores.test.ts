@@ -160,7 +160,7 @@ describe("the convex preferences store", () => {
 	it("reads what the app stored, leaving the app's own bookkeeping out", async () => {
 		const { client } = spyClient({
 			[named(api.preferences.get)]: {
-				theme: "borland",
+				font: "mono",
 				themeUses: { borland: 3 },
 				channels: { lisp: true },
 				input: { lisp: false },
@@ -169,8 +169,7 @@ describe("the convex preferences store", () => {
 		});
 		const store = new ConvexPreferencesStore(() => client);
 		expect(await store.read()).toEqual({
-			theme: "borland",
-			font: undefined,
+			font: "mono",
 			channels: { lisp: true },
 			metadata: undefined,
 			input: { lisp: false },

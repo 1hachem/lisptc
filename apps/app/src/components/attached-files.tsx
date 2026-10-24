@@ -1,37 +1,33 @@
 import { FileTree, TreeFile } from "@repo/components";
 import type { AttachedFile } from "@repo/shared/files";
-import { Link } from "@tanstack/react-router";
 import { useChatSession } from "../lib/chat.tsx";
 import { knowledgeIcon } from "../lib/file-icons.ts";
+import { type PanelContent, startPanelDrag } from "../lib/panel-ops.ts";
+import { PanelLink } from "./panel-link.tsx";
 
 function AttachedRow({ file }: { file: AttachedFile }) {
 	const workspaceId = useChatSession((state) => state.workspaceId);
-	const params = { workspaceId, name: file.name };
+	const opens: PanelContent = {
+		kind: "file",
+		folder: file.folder,
+		name: file.name,
+	};
 	return (
 		<TreeFile
 			name={file.name}
 			icon={knowledgeIcon(file.name, null)}
 			iconLabel={`${file.folder}/${file.name}`}
 			selected={false}
-			link={(content, className) =>
-				file.folder === "knowledge" ? (
-					<Link
-						to="/$workspaceId/knowledge/$name"
-						params={params}
-						className={className}
-					>
-						{content}
-					</Link>
-				) : (
-					<Link
-						to="/$workspaceId/attachments/$name"
-						params={params}
-						className={className}
-					>
-						{content}
-					</Link>
-				)
-			}
+			onDragStart={(event) => startPanelDrag(event.dataTransfer, opens)}
+			link={(content, className) => (
+				<PanelLink
+					workspaceId={workspaceId}
+					content={opens}
+					className={className}
+				>
+					{content}
+				</PanelLink>
+			)}
 		/>
 	);
 }

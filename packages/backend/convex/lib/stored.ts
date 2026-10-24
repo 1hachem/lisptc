@@ -1,8 +1,8 @@
 import { v } from "convex/values";
-import type { Doc } from "../_generated/dataModel.js";
+import type { Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 
-export const servedFile = v.union(
+export const storedFile = v.union(
 	v.object({
 		name: v.string(),
 		contentType: v.union(v.string(), v.null()),
@@ -12,9 +12,14 @@ export const servedFile = v.union(
 	v.null(),
 );
 
-export async function served(
+export async function withUrl(
 	ctx: QueryCtx,
-	row: Doc<"knowledge"> | Doc<"attachments"> | null,
+	row: {
+		name: string;
+		contentType?: string;
+		size: number;
+		storageId: Id<"_storage">;
+	} | null,
 ) {
 	if (row === null) return null;
 	return {

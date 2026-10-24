@@ -16,7 +16,7 @@ import {
 	isFull,
 	owned,
 } from "./lib/files.js";
-import { served, servedFile } from "./lib/served.js";
+import { storedFile, withUrl } from "./lib/stored.js";
 import { ATTACHMENT_TTL_MS, MAX_KNOWLEDGE_BYTES } from "./limits.js";
 import { binnedFrom } from "./schema.js";
 
@@ -62,10 +62,10 @@ export const get = query({
 		folder: binnedFrom,
 		name: v.string(),
 	},
-	returns: servedFile,
+	returns: storedFile,
 	handler: async (ctx, { workspaceId, folder, name }) => {
 		await requireWorkspace(ctx, workspaceId);
-		return await served(ctx, await held(ctx, folder, workspaceId, name));
+		return await withUrl(ctx, await held(ctx, folder, workspaceId, name));
 	},
 });
 

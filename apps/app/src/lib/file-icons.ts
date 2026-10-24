@@ -22,6 +22,7 @@ import {
 	Rar01Icon,
 	SqlIcon,
 	Svg01Icon,
+	ThreeDViewIcon,
 	Txt01Icon,
 	TypescriptIcon,
 	Xls01Icon,
@@ -76,6 +77,7 @@ const EXTENSION_ICONS = new Map<string, IconSvgElement>([
 	["gz", FileArchiveIcon],
 	["7z", FileArchiveIcon],
 	["mp3", Mp301Icon],
+	["stl", ThreeDViewIcon],
 ]);
 
 const KIND_ICONS = new Map<string, IconSvgElement>([

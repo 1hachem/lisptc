@@ -25,8 +25,7 @@ export function BulkToolbar({
 	selection,
 	total,
 	folder,
-	current,
-	leave,
+	close,
 	served,
 	confirm,
 	onDelete,
@@ -35,8 +34,7 @@ export function BulkToolbar({
 	selection: ReturnType<typeof useSelection>;
 	total: number;
 	folder: string;
-	current: string | undefined;
-	leave: (selected: boolean) => Promise<unknown>;
+	close: (names: readonly string[]) => void;
 	served: (name: string) => Promise<{ url: string | null } | null>;
 	confirm: string;
 	onDelete: (names: string[]) => Promise<unknown>;
@@ -48,7 +46,7 @@ export function BulkToolbar({
 	const picked = `${names.length} ${names.length === 1 ? "file" : "files"} selected`;
 	const leaving = (work: () => Promise<unknown>) =>
 		bulk.run(async () => {
-			await leave(current !== undefined && names.includes(current));
+			close(names);
 			await work();
 			selection.clear();
 		});

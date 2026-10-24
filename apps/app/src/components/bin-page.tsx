@@ -2,23 +2,10 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Doc, Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { StoredFile } from "../../../../components/stored-file.tsx";
-import { restoreFailure } from "../../../../lib/bin.ts";
-
-export const Route = createFileRoute("/_authed/$workspaceId/bin/$name")({
-	loader: async ({ context, params }) => {
-		if (context.auth.source === "browser") return;
-		await context.queryClient.ensureQueryData(
-			convexQuery(api.bin.get, {
-				workspaceId: params.workspaceId,
-				name: params.name,
-			}),
-		);
-	},
-	component: BinnedFile,
-});
+import { restoreFailure } from "../lib/bin.ts";
+import { usePageHost } from "../lib/page-host.tsx";
+import { StoredFile } from "./stored-file.tsx";
 
 function RestoreAction({
 	workspaceId,
@@ -30,7 +17,7 @@ function RestoreAction({
 	from: Doc<"bin">["from"];
 }) {
 	const restore = useConvexMutation(api.bin.restore);
-	const navigate = useNavigate();
+	const host = usePageHost();
 	const [failure, setFailure] = useState<string | null>(null);
 	return (
 		<>
@@ -44,10 +31,10 @@ function RestoreAction({
 						setFailure(restoreFailure(restored.refused));
 						return;
 					}
-					await navigate({
-						to: `/$workspaceId/${restored.folder}/$name`,
-						params: { workspaceId, name: restored.name },
-						replace: true,
+					host.show({
+						kind: "file",
+						folder: restored.folder,
+						name: restored.name,
 					});
 				}}
 			>
@@ -57,8 +44,13 @@ function RestoreAction({
 	);
 }
 
-function BinnedFile() {
-	const { workspaceId, name } = Route.useParams();
+export function BinPage({
+	workspaceId,
+	name,
+}: {
+	workspaceId: Id<"workspaces">;
+	name: string;
+}) {
 	const { data: file, error } = useQuery(
 		convexQuery(api.bin.get, { workspaceId, name }),
 	);

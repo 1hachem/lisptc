@@ -32,9 +32,6 @@ vi.mock("@convex-dev/react-query", () => ({
 vi.mock("@tanstack/react-query", () => ({
 	useQuery: () => ({ data: undefined }),
 }));
-vi.mock("@tanstack/react-router", () => ({
-	useNavigate: () => () => Promise.resolve(),
-}));
 vi.mock("@langchain/langgraph-sdk/react", () => ({
 	FetchStreamTransport: class {},
 	useStream: () => ({
@@ -71,7 +68,7 @@ function Grab() {
 function mount(chatId: Id<"chats"> | null): ChatStore {
 	act(() =>
 		root.render(
-			<ChatProvider workspaceId={WORKSPACE} chatId={chatId}>
+			<ChatProvider workspaceId={WORKSPACE} chatId={chatId} onOpened={() => {}}>
 				<Grab />
 			</ChatProvider>,
 		),

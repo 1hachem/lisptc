@@ -11,7 +11,13 @@ import {
 	SquareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { createContext, type ReactNode, useContext, useState } from "react";
+import {
+	createContext,
+	type DragEvent,
+	type ReactNode,
+	useContext,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useEntryDragged } from "./sortable-tree.tsx";
 
@@ -135,6 +141,7 @@ export function TreeFile({
 	depth = 0,
 	link,
 	trailing,
+	onDragStart,
 	check,
 }: {
 	name: string;
@@ -146,6 +153,7 @@ export function TreeFile({
 	depth?: number;
 	link: (content: ReactNode, className: string) => ReactNode;
 	trailing?: ReactNode;
+	onDragStart?: (event: DragEvent<HTMLElement>) => void;
 	check?: TreeCheck;
 }) {
 	const mark = (
@@ -160,7 +168,15 @@ export function TreeFile({
 		</span>
 	);
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: the whole row is what drags into a panel, while its link stays the control a keyboard reaches
 		<div
+			draggable={onDragStart !== undefined || undefined}
+			onDragStart={onDragStart}
+			onPointerDown={
+				onDragStart === undefined
+					? undefined
+					: (event) => event.stopPropagation()
+			}
 			data-selected={selected}
 			data-checked={check?.checked}
 			className={`group/row flex items-center ${
