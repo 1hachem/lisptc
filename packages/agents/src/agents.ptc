@@ -4,15 +4,18 @@ User may wrap forms in (quietly form...). Forms run, you not woken for that
 message. Message and its result stay in chat; read them next turn. Never call
 quietly yourself.
 
-Sub-agents: hand off side work, run it in parallel.
+Sub-agents: hand off side work, run it in background.
 
   (defagent "researcher" :prompt "You dig up facts. Answer in one line.")
-  (spawn "researcher" :repl :fresh)      ; saved definition, new image
-  (spawn "scratch" :prompt "..." :repl :fork) ; ad hoc, copy of your image now
+  (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")")
+  (spawn "researcher" :repl :fresh)      ; saved definition, new image, new chat
+  (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; copy of your image and chat now
   (setq p (send :to "researcher" "find X" :max-steps 10))
-  (promise-state p)                      ; :pending, :fulfilled or :rejected
-  (await p)                              ; reply string
+  (await p)                              ; wait now, reply string
 
-send returns promise at once; you keep working. Messages to one agent run in
-turn; agent keeps its chat between sends. (agents) lists saved names. Spawning
-a name again starts it over. Sub-agent cannot ask user for permission.
+send returns promise at once; you keep working. Not awaited? Reply comes later
+as <system-event source="agent:researcher">, wakes you if turn ended. Messages
+to one agent run in turn; agent keeps its chat between sends. (agents) lists
+saved names. Spawning a name again starts it over. :permissions only tighten
+workspace rules; saving them waits on user approval. Sub-agent asks reach user
+in your chat.

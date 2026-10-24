@@ -4,6 +4,7 @@ import type {
 	AgentDefinition,
 	AgentDefinitions,
 	AgentRunner,
+	Notice,
 } from "./ports.ts";
 
 export class MemoryAgentDefinitions implements AgentDefinitions {
@@ -29,6 +30,7 @@ export class MemoryAgentDefinitions implements AgentDefinitions {
 export interface AgentsHostOptions {
 	definitions?: AgentDefinitions;
 	runner?: AgentRunner;
+	notify?: (notice: Notice) => void;
 }
 
 export function agentsHostFor(options: AgentsHostOptions = {}): AgentsHost {
@@ -36,5 +38,6 @@ export function agentsHostFor(options: AgentsHostOptions = {}): AgentsHost {
 		prompt: filePrompt(new URL("./agents.ptc", import.meta.url)),
 		definitions: options.definitions ?? new MemoryAgentDefinitions(),
 		...(options.runner === undefined ? {} : { runner: options.runner }),
+		...(options.notify === undefined ? {} : { notify: options.notify }),
 	};
 }

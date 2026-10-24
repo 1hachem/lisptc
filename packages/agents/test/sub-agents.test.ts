@@ -3,10 +3,11 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
+import { newSessionHooks, type StepContext } from "@repo/interpreter/session";
 import { describe, expect, test } from "vitest";
-import { agentsExtension } from "../src/agents.ts";
+import { agentsExtension, BOUNDED_DEFINE } from "../src/agents.ts";
 import { agentsHostFor, MemoryAgentDefinitions } from "../src/agents-host.ts";
-import type { AgentRunner, Ask, Spawn } from "../src/ports.ts";
+import type { AgentRunner, Ask, Notice, Spawn } from "../src/ports.ts";
 
 interface Recorded {
 	readonly spawned: Spawn[];
@@ -22,6 +23,7 @@ function world(withRunner = true) {
 			return {
 				async send(ask) {
 					recorded.asked.push(ask);
+					if (ask.message === "fail") throw new Error("it broke");
 					if (ask.message === "hold")
 						await new Promise<void>((resolve) => {
 							recorded.release = resolve;
@@ -32,16 +34,42 @@ function world(withRunner = true) {
 		},
 	};
 	const definitions = new MemoryAgentDefinitions();
-	const interp = new Interp({
-		extensions: [
-			agentsExtension(
-				agentsHostFor(withRunner ? { definitions, runner } : { definitions }),
-			),
-		],
-	});
+	const notices: Notice[] = [];
+	const notify = (notice: Notice) => notices.push(notice);
+	const extension = agentsExtension(
+		agentsHostFor(
+			withRunner ? { definitions, runner, notify } : { definitions, notify },
+		),
+	);
+	const interp = new Interp({ extensions: [extension] });
 	runSync(interp, prelude);
+	const hooks = newSessionHooks();
+	extension.session?.(hooks);
 	const run = (code: string) => runAsync(interp, code);
-	return { interp, recorded, definitions, run };
+	const step = async (code: string) => {
+		let outcome: Outcome | undefined;
+		await hooks.evalStep.run(async () => {
+			outcome = await run(code);
+			if (outcome.value instanceof LispPromise)
+				await outcome.value.promise().catch(() => undefined);
+		}, {} as StepContext);
+		return outcome;
+	};
+	const calls: string[] = [];
+	interp.hooks.call.use((i, name, args, next) => {
+		calls.push(name);
+		return next(i, name, args);
+	});
+	return {
+		interp,
+		extension,
+		recorded,
+		definitions,
+		notices,
+		calls,
+		run,
+		step,
+	};
 }
 
 async function settled({ value }: Outcome): Promise<unknown> {
@@ -61,6 +89,7 @@ describe("defagent", () => {
 		expect(recorded.spawned[0]).toEqual({
 			definition: { name: "researcher", prompt: "dig" },
 			seed: { from: "fresh" },
+			chat: { from: "fresh" },
 		});
 	});
 
@@ -77,7 +106,53 @@ describe("defagent", () => {
 	});
 });
 
+describe("defagent with permissions", () => {
+	test("saves the rules with the definition", async () => {
+		const { run, definitions } = world();
+		await run(
+			'(defagent "r" :prompt "p" :permissions "(permission/deny fs/*)")',
+		);
+		expect(definitions.get("r")).toEqual({
+			name: "r",
+			prompt: "p",
+			permissions: "(permission/deny fs/*)",
+		});
+	});
+
+	test("goes through the form the host asks for", async () => {
+		const { run, extension, calls } = world();
+		await run('(defagent "r" :prompt "p" :permissions "")');
+		await run('(defagent "s" :prompt "p")');
+		expect(extension.asks).toEqual([BOUNDED_DEFINE]);
+		expect(calls).toContain(BOUNDED_DEFINE);
+		expect(calls.filter((name) => name === BOUNDED_DEFINE)).toHaveLength(1);
+	});
+
+	test("refuses rules that are not text", async () => {
+		const { run } = world();
+		await expect(
+			run('(defagent "r" :prompt "p" :permissions 3)'),
+		).rejects.toThrow(":permissions is a string");
+	});
+});
+
 describe("spawn", () => {
+	test("starts with a fresh chat unless told to fork it", async () => {
+		const { run, recorded } = world();
+		await run('(spawn "a" :prompt "p") (spawn "b" :prompt "p" :chat :fork)');
+		expect(recorded.spawned.map((spawn) => spawn.chat)).toEqual([
+			{ from: "fresh" },
+			{ from: "fork" },
+		]);
+	});
+
+	test("refuses an unknown chat seed", async () => {
+		const { run } = world();
+		await expect(
+			run('(spawn "s" :prompt "p" :chat :borrowed)'),
+		).rejects.toThrow(":chat is :fresh or :fork");
+	});
+
 	test("takes an ad hoc prompt without saving it", async () => {
 		const { run, recorded, definitions } = world();
 		await run('(spawn "scratch" :prompt "think")');
@@ -159,5 +234,32 @@ describe("send", () => {
 		await expect(run('(send :to "r" "hi" :max-steps 0)')).rejects.toThrow(
 			":max-steps is a positive integer",
 		);
+	});
+});
+
+describe("a reply", () => {
+	test("awaited within a step reaches nobody else", async () => {
+		const { run, step, notices } = world();
+		await run('(spawn "r" :prompt "p")');
+		await step('(send :to "r" "hello")');
+		expect(notices).toEqual([]);
+	});
+
+	test("landing outside a step is handed to the host", async () => {
+		const { run, notices } = world();
+		await run('(spawn "r" :prompt "p")');
+		await settled(await run('(send :to "r" "hello")'));
+		await Promise.resolve();
+		expect(notices).toEqual([{ agent: "r", reply: "r got hello" }]);
+	});
+
+	test("that fails is handed over as a failure", async () => {
+		const { run, notices } = world();
+		await run('(spawn "r" :prompt "p")');
+		await settled(await run('(send :to "r" "fail")')).catch(() => undefined);
+		await Promise.resolve();
+		expect(notices).toEqual([
+			{ agent: "r", failure: expect.stringContaining("it broke") },
+		]);
 	});
 });
