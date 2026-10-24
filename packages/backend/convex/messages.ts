@@ -16,8 +16,6 @@ import { waitsOnUser } from "./lib/waiting.js";
 import { collect, layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
 
-const MAX_TRANSCRIPT = 200;
-
 const MAX_SENT = 200;
 
 const PURGE_BATCH = 256;
@@ -69,7 +67,7 @@ export const transcript = query({
 		return await ctx.db
 			.query("messages")
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-			.take(MAX_TRANSCRIPT);
+			.collect();
 	},
 });
 
