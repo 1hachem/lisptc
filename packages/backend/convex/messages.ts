@@ -79,7 +79,7 @@ export const light = query({
 		const rows = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-			.take(MAX_TRANSCRIPT);
+			.collect();
 		return lighten(
 			rows.map(({ kwargs, ...row }) => ({ ...row, additional_kwargs: kwargs })),
 		).map(({ additional_kwargs, ...row }) => ({
