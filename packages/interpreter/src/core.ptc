@@ -46,7 +46,7 @@ language.
 - Numbers: see NUMBERS. nil and () same value: empty list and false. t is
   canonical true.
 - Comments: there is no comment syntax — prose around forms is the comment.
-  ; is ordinary symbol character, so "; note" inside a form is code.
+  Semicolon is ordinary symbol character, so "; note" inside a form is code.
 - Symbols: any token not number, string, keyword, nil or t. / and - legal in
   names, e.g. string-split, acme/get_widget.
 
@@ -55,7 +55,7 @@ DATA TYPES
 - nil = () = null = empty list = the ONLY false value.
 - t canonical true. Everything except nil truthy, including 0, "", empty
   structures.
-- Cons cell — pair (car . cdr) ; list is chain of cells ending in nil.
+- Cons cell — pair (car . cdr) , list is chain of cells ending in nil.
 - Symbol — interned name; gensym and make-symbol make uninterned ones,
   printed #:name.
 - Keyword — :foo, self-evaluating.

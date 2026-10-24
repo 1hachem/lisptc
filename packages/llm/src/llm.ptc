@@ -31,7 +31,7 @@ llm/extract-1: alist, keys "title" "stars" "state" "links"
   :string, :number, :integer, :boolean, :any; plain string = string field
   described by its text;
 (:string "what it means") and same for other scalars;
-(:enum "a" "b") ; (:list field) ; (:optional field) , only field model may
+(:enum "a" "b") , (:list field) , (:optional field) , only field model may
   omit; nested alist = nested object. Alist shape returns alist, (:list …)
   returns list. :instructions "..." says what to pull out.
   Nested group = nested object; (:list …) and (:optional …) take groups too:

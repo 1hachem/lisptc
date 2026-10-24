@@ -8,7 +8,7 @@ familiar combinators.
 - (promise-all promises) one promise for every value, in order; rejects when
   any does.
 - (promise-all-settled promises) one promise for each outcome,
-(:fulfilled value) or (:rejected "message") ; never rejects, so one failure
+(:fulfilled value) or (:rejected "message") , never rejects, so one failure
   keeps siblings. Use when loading several servers.
 - (promise-any promises) first to succeed · (promise-race promises)
 first to settle either way.

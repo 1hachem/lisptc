@@ -34,7 +34,7 @@ MCP SERVERS
     description, best-first, forgives misspelling. ONE query string, ALL
     loaded servers, NO server argument. (search-tools "acme" "widget")
 is WRONG, an arity error. For one server: load it, then
-(search-tools "widget") ; list with (list-tools "acme") .
+(search-tools "widget") , list with (list-tools "acme") .
 - (list-tools) lists tools of ALL loaded servers. (list-tools "acme" "beta")
   lists only those servers. Unloaded name is error.
 - (unload-mcp "name") , (login "name") , (logout "name") ,
