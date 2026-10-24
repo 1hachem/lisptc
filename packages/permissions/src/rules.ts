@@ -26,9 +26,9 @@ export const RULE_FORMS = [
 	"permission/hide-server",
 ] as const;
 
-const STRENGTH: Record<Verdict, number> = { allow: 0, ask: 1, deny: 2 };
+export const STRENGTH: Record<Verdict, number> = { allow: 0, ask: 1, deny: 2 };
 
-const SERVER_STRENGTH: Record<ServerAccess["access"], number> = {
+export const SERVER_STRENGTH: Record<ServerAccess["access"], number> = {
 	open: 0,
 	denied: 1,
 	hidden: 2,
