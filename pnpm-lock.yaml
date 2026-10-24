@@ -1113,6 +1113,9 @@ importers:
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
+      fuse.js:
+        specifier: ^7.5.0
+        version: 7.5.0
       vscode-languageserver-textdocument:
         specifier: ^1.0.12
         version: 1.0.12

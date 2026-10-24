@@ -292,6 +292,20 @@ describe("the agent turn", () => {
 		]);
 	});
 
+	test("a steer's lisp does not run when the turn runs no forms, and the model reads the steer as plain text", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
+		const pending = [{ id: "s1", content: "(+ 40 2)" }];
+
+		const events = await drain(ask, {
+			inbox: async () => pending.splice(0),
+			runsForms: false,
+		});
+
+		expect(events.map((e) => e.type)).not.toContain("evaluated");
+		expect(seen[1].messages.at(-1)).toMatchObject({ content: "(+ 40 2)" });
+		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
+	});
+
 	test("the inbox is not read before the first step", async () => {
 		script = [[{ text: "three." }]];
 		let readBeforeModel = false;

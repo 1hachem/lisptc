@@ -46,6 +46,7 @@ export interface TurnOptions {
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
 	inbox?: () => Promise<Steer[]>;
+	runsForms?: boolean;
 }
 
 export interface StepMeta {
@@ -130,12 +131,15 @@ async function* takeSteers({
 	repl,
 	inbox,
 	transcript,
+	runsForms,
 }: Turn): AsyncGenerator<TurnEvent, number> {
 	let taken = 0;
 	for (const steer of (await inbox?.()) ?? []) {
 		const prompt: TranscriptEntry = { role: "user", content: steer.content };
 		yield { type: "steered", ...steer };
-		const evaluated = await evalMessage(repl, steer.content);
+		const evaluated = runsForms
+			? await evalMessage(repl, steer.content)
+			: undefined;
 		if (evaluated === undefined) {
 			transcript.push(prompt);
 			taken += 1;
@@ -211,6 +215,7 @@ interface Turn {
 	readonly maxSteps: number;
 	readonly signal?: AbortSignal;
 	readonly inbox?: () => Promise<Steer[]>;
+	readonly runsForms: boolean;
 	readonly agent: AgentTurn;
 	readonly telemetry: TurnTelemetry;
 	steps: number;
@@ -492,6 +497,7 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 		maxSteps: options.maxSteps ?? MAX_STEPS,
 		signal,
 		inbox,
+		runsForms: options.runsForms ?? true,
 		steps: 0,
 	};
 }

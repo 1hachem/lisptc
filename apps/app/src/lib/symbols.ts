@@ -10,31 +10,26 @@ import { apiHeaders } from "./api.ts";
 
 const NONE: SymbolTable = new Map();
 
-type SymbolsOf = { chatId: Id<"chats"> } | { workspaceId: Id<"workspaces"> };
-
-async function fetchSymbols(target: SymbolsOf): Promise<SymbolEntry[]> {
+async function fetchSymbols(chatId: Id<"chats">): Promise<SymbolEntry[]> {
 	const res = await fetch("/api/symbols", {
 		method: "POST",
 		headers: await apiHeaders(),
-		body: JSON.stringify(target),
+		body: JSON.stringify({ chatId }),
 	});
 	if (!res.ok) throw new Error(`symbols: ${res.status}`);
 	return res.json();
 }
 
 export function useSymbols(
-	workspaceId: Id<"workspaces">,
 	chatId: Id<"chats"> | null,
 	isLoading: boolean,
 ): SymbolTable {
 	const queryClient = useQueryClient();
-	const queryKey = useMemo(
-		() => ["lisp-symbols", chatId ?? workspaceId] as const,
-		[chatId, workspaceId],
-	);
+	const queryKey = useMemo(() => ["lisp-symbols", chatId] as const, [chatId]);
 	const { data } = useQuery({
 		queryKey,
-		queryFn: () => fetchSymbols(chatId === null ? { workspaceId } : { chatId }),
+		queryFn: () => (chatId === null ? [] : fetchSymbols(chatId)),
+		enabled: chatId !== null,
 		placeholderData: (previous) => previous,
 		staleTime: Number.POSITIVE_INFINITY,
 	});
@@ -44,5 +39,8 @@ export function useSymbols(
 			void queryClient.invalidateQueries({ queryKey });
 		wasLoading.current = isLoading;
 	}, [isLoading, queryClient, queryKey]);
-	return useMemo(() => (data === undefined ? NONE : symbolTable(data)), [data]);
+	return useMemo(
+		() => (chatId === null || data === undefined ? NONE : symbolTable(data)),
+		[chatId, data],
+	);
 }

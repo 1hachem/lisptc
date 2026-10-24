@@ -1,6 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
+import { DEFAULT_TOGGLES } from "../convex/lib/preferenceDefaults.ts";
 import {
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
@@ -585,8 +586,13 @@ describe("preferences access", () => {
 		const bob = await signIn(t, "bob@example.com");
 		const preferences = { theme: "dusk", font: "mono", themeUses: { dusk: 2 } };
 		await bob.as.mutation(api.preferences.put, { preferences });
-		expect(await bob.as.query(api.preferences.get, {})).toEqual(preferences);
-		expect(await alice.as.query(api.preferences.get, {})).toBeNull();
+		expect(await bob.as.query(api.preferences.get, {})).toEqual({
+			...DEFAULT_TOGGLES,
+			...preferences,
+		});
+		expect(await alice.as.query(api.preferences.get, {})).toEqual(
+			DEFAULT_TOGGLES,
+		);
 		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
 	});
 
@@ -605,11 +611,17 @@ describe("preferences access", () => {
 		expect(await alice.as.query(api.preferences.get, {})).toEqual({
 			theme: "dusk",
 			font: "mono",
-			channels: { lisp: false },
-			metadata: { tokens: true },
+			channels: { ...DEFAULT_TOGGLES.channels, lisp: false },
+			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
+			input: DEFAULT_TOGGLES.input,
 		});
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			channels: { lisp: false },
+			metadata: { tokens: true },
+		});
+		expect(rows[0].input).toBeUndefined();
 	});
 
 	it("refuses preferences past the size limit", async () => {
@@ -674,6 +686,73 @@ describe("chat listing", () => {
 			workspaceId: alice.workspace,
 		});
 		expect(chats[0]?._id).toBe(fresh);
+	});
+
+	it("hands back the same unsent draft however often a new chat is opened", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const draft = await alice.as.mutation(api.chats.draft, {
+			workspaceId: alice.workspace,
+		});
+		expect(
+			await alice.as.mutation(api.chats.draft, {
+				workspaceId: alice.workspace,
+			}),
+		).toBe(draft);
+		const rows = await t.run((ctx) => ctx.db.query("chats").collect());
+		expect(rows).toHaveLength(1);
+	});
+
+	it("keeps an unsent draft out of the list until its first message", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const draft = await alice.as.mutation(api.chats.draft, {
+			workspaceId: alice.workspace,
+		});
+		const listed = async () =>
+			(
+				await alice.as.query(api.chats.list, { workspaceId: alice.workspace })
+			).chats.map((c) => c._id);
+		expect(await listed()).toEqual([]);
+		await alice.as.mutation(api.messages.append, {
+			chatId: draft,
+			messages: [{ type: "human", content: "hello" }],
+		});
+		expect(await listed()).toEqual([draft]);
+	});
+
+	it("opens a fresh draft once the last one has been sent", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const sent = await alice.as.mutation(api.chats.draft, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: sent,
+			messages: [{ type: "human", content: "hello" }],
+		});
+		expect(
+			await alice.as.mutation(api.chats.draft, {
+				workspaceId: alice.workspace,
+			}),
+		).not.toBe(sent);
+	});
+
+	it("keeps each user's draft to that user", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const own = await alice.as.mutation(api.chats.draft, {
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			bob.as.mutation(api.chats.draft, { workspaceId: alice.workspace }),
+		).rejects.toThrow();
+		expect(
+			await alice.as.mutation(api.chats.draft, {
+				workspaceId: alice.workspace,
+			}),
+		).toBe(own);
 	});
 
 	describe("status", () => {

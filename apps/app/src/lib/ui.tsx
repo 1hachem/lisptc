@@ -2,7 +2,6 @@ import {
 	createContext,
 	useCallback,
 	useContext,
-	useEffect,
 	useMemo,
 	useState,
 } from "react";
@@ -72,13 +71,6 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		() => togglesOf(INPUT_HELPERS, stored?.input),
 		[stored?.input],
 	);
-
-	useEffect(() => {
-		if (stored === undefined) return;
-		if (!stored.channels) put({ channels: togglesOf(CHANNELS, undefined) });
-		if (!stored.metadata) put({ metadata: togglesOf(META_FIELDS, undefined) });
-		if (!stored.input) put({ input: togglesOf(INPUT_HELPERS, undefined) });
-	}, [stored, put]);
 
 	const toggleChannel = useCallback(
 		(id: ChannelId) => put({ channels: { ...shown, [id]: !shown[id] } }),

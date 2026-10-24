@@ -15,6 +15,7 @@
       "types": "./convex/_generated/dataModel.d.ts"
     },
     "./limits": "./convex/limits.ts",
+    "./preference-defaults": "./convex/lib/preferenceDefaults.ts",
     "./agent-repl": "./src/agent-repl.ts",
     "./memory-store": "./src/memory-store.ts",
     "./secrets-store": "./src/secrets-store.ts",

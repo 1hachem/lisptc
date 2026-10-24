@@ -17,7 +17,6 @@ export interface Channel {
 	hint: string;
 	dot: string;
 	text: string;
-	shownByDefault: boolean;
 }
 
 export const CHANNELS: Channel[] = [
@@ -27,7 +26,6 @@ export const CHANNELS: Channel[] = [
 		hint: "what a step printed for you",
 		dot: "bg-fg",
 		text: "text-dim",
-		shownByDefault: true,
 	},
 	{
 		id: "results",
@@ -35,7 +33,6 @@ export const CHANNELS: Channel[] = [
 		hint: "the value each form returned, as the interpreter printed it",
 		dot: "bg-fg",
 		text: "text-fg",
-		shownByDefault: true,
 	},
 	{
 		id: "ui",
@@ -43,7 +40,6 @@ export const CHANNELS: Channel[] = [
 		hint: "widgets a step rendered",
 		dot: "bg-aqua",
 		text: "text-aqua",
-		shownByDefault: true,
 	},
 	{
 		id: "lisp",
@@ -51,7 +47,6 @@ export const CHANNELS: Channel[] = [
 		hint: "the forms a step ran, as code rather than as tools at work",
 		dot: "bg-green",
 		text: "text-green",
-		shownByDefault: false,
 	},
 	{
 		id: "thinking",
@@ -59,7 +54,6 @@ export const CHANNELS: Channel[] = [
 		hint: "what the model reasoned before it answered",
 		dot: "bg-blue",
 		text: "text-blue",
-		shownByDefault: true,
 	},
 	{
 		id: "edits",
@@ -75,7 +69,6 @@ export const CHANNELS: Channel[] = [
 		hint: "what a step recalled",
 		dot: "bg-orange",
 		text: "text-orange",
-		shownByDefault: true,
 	},
 	{
 		id: "asks",
@@ -83,7 +76,6 @@ export const CHANNELS: Channel[] = [
 		hint: "what a step asked of you: an approval, a sign-in",
 		dot: "bg-yellow",
 		text: "text-yellow",
-		shownByDefault: true,
 	},
 	{
 		id: "errors",
@@ -91,7 +83,6 @@ export const CHANNELS: Channel[] = [
 		hint: "whether a step failed",
 		dot: "bg-red",
 		text: "text-red",
-		shownByDefault: true,
 	},
 	{
 		id: "model",
@@ -99,7 +90,6 @@ export const CHANNELS: Channel[] = [
 		hint: "what the step sent back to the model",
 		dot: "bg-purple",
 		text: "text-purple",
-		shownByDefault: false,
 	},
 	{
 		id: "system",
@@ -107,6 +97,5 @@ export const CHANNELS: Channel[] = [
 		hint: "what the system told the agent between turns",
 		dot: "bg-dim",
 		text: "text-dim",
-		shownByDefault: false,
 	},
 ];

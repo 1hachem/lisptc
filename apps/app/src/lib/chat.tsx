@@ -104,6 +104,7 @@ export interface ChatSession {
 	fresh: boolean;
 	isLoading: boolean;
 	chatId: Id<"chats"> | null;
+	draftChatId: Id<"chats"> | null;
 	workspaceId: Id<"workspaces">;
 	error?: string;
 	send: (text: string) => void;
@@ -169,7 +170,24 @@ export function ChatProvider({
 	children: React.ReactNode;
 }) {
 	const navigate = useNavigate();
-	const createChat = useConvexMutation(api.chats.create);
+	const draftChat = useConvexMutation(api.chats.draft);
+	const renameChat = useConvexMutation(api.chats.rename);
+	const [drafted, setDrafted] = useState<Id<"chats"> | null>(null);
+	useEffect(() => {
+		setDrafted(null);
+		if (chatId !== null) return;
+		let current = true;
+		draftChat({ workspaceId })
+			.then((draft) => {
+				if (current) setDrafted(draft);
+			})
+			.catch((ex: unknown) =>
+				reportIssue(ex, { $exception_source: "chat draft" }),
+			);
+		return () => {
+			current = false;
+		};
+	}, [chatId, workspaceId, draftChat]);
 	const startChat = useConvexMutation(api.chats.start);
 	const settleChat = useConvexMutation(api.chats.settle);
 	const markStreaming = useMemo(
@@ -277,7 +295,14 @@ export function ChatProvider({
 			title: string,
 		) => {
 			setFailure(null);
-			const opened = chatId ?? (await createChat({ workspaceId, title }));
+			const opened = chatId ?? (await draftChat({ workspaceId }));
+			if (chatId === null && title.trim() !== "")
+				renameChat({ chatId: opened, title }).catch((ex: unknown) =>
+					reportIssue(ex, {
+						$exception_source: "chat title",
+						thread_id: opened,
+					}),
+				);
 			streamingFor.current = opened;
 			markStreaming({ chatId: opened }).catch((ex: unknown) =>
 				reportIssue(ex, { $exception_source: "chat start", thread_id: opened }),
@@ -297,7 +322,8 @@ export function ChatProvider({
 		[
 			chatId,
 			workspaceId,
-			createChat,
+			draftChat,
+			renameChat,
 			markStreaming,
 			navigate,
 			persisted,
@@ -395,6 +421,7 @@ export function ChatProvider({
 			fresh,
 			isLoading: false,
 			chatId,
+			draftChatId: null,
 			workspaceId,
 			send: () => {},
 			sendAbout: () => {},
@@ -416,6 +443,7 @@ export function ChatProvider({
 			fresh,
 			isLoading: stream.isLoading,
 			chatId,
+			draftChatId: chatId === null ? drafted : null,
 			workspaceId,
 			error: errorFor(chatId, {
 				stream: stream.error,
@@ -445,6 +473,7 @@ export function ChatProvider({
 		stream.error,
 		failure,
 		chatId,
+		drafted,
 		workspaceId,
 		send,
 		sendAbout,

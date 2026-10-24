@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel.js";
 import { mutation, query } from "./_generated/server.js";
 import { requireUser } from "./lib/auth.js";
+import { withDefaultToggles } from "./lib/preferenceDefaults.js";
 import { MAX_PREFERENCES_BYTES } from "./limits.js";
 
 const encoder = new TextEncoder();
@@ -26,14 +27,14 @@ function stripped(row: Doc<"preferences"> | null) {
 
 export const get = query({
 	args: {},
-	returns: v.union(preferences, v.null()),
+	returns: preferences,
 	handler: async (ctx) => {
 		const user = await requireUser(ctx);
 		const row = await ctx.db
 			.query("preferences")
 			.withIndex("by_user", (q) => q.eq("userId", user._id))
 			.unique();
-		return row === null ? null : stripped(row);
+		return withDefaultToggles(stripped(row));
 	},
 });
 

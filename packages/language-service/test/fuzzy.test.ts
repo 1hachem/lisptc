@@ -17,10 +17,10 @@ describe("rankCompletions", () => {
 		expect(labels("le", "file", "length")).toEqual(["length", "file"]);
 	});
 
-	it("ranks a match at the start of a word part above one inside it", () => {
-		expect(labels("len", "silence", "list-length")).toEqual([
-			"list-length",
+	it("ranks a match nearer the start of the label above a later one", () => {
+		expect(labels("len", "list-length", "silence")).toEqual([
 			"silence",
+			"list-length",
 		]);
 	});
 
@@ -50,9 +50,9 @@ describe("rankCompletions", () => {
 		expect(ranked.map(({ item }) => item.label)).toEqual(["map-a", "map-b"]);
 	});
 
-	it("reports where each typed letter matched", () => {
-		expect(rankCompletions(items("list-length"), "ll")[0]?.matched).toEqual([
-			0, 5,
+	it("reports the characters the match covers", () => {
+		expect(rankCompletions(items("list-length"), "len")[0]?.matched).toEqual([
+			5, 6, 7,
 		]);
 	});
 });
