@@ -14,8 +14,6 @@ import { currentSession } from "./session.ts";
 
 export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 	return (_workspaceId, chatId) => {
-		const session = currentSession();
-
 		async function forkChat(child: Id<"chats">, chat: ChatSeed) {
 			if (chat.from === "fresh") return;
 			const earlier = await connect().query(api.messages.transcript, {
@@ -46,6 +44,7 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 			let opening: Promise<Id<"chats">> | undefined;
 			return {
 				async send({ message, maxSteps, signal }) {
+					const session = currentSession();
 					opening ??= open();
 					const child = await opening;
 					return converse(
@@ -79,7 +78,13 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 
 		return {
 			runner: { spawn: subAgent },
-			notify: (reply) => notice({ session, chatId, notice: reply }),
+			notify: (reply) => {
+				try {
+					notice({ session: currentSession(), chatId, notice: reply });
+				} catch (error) {
+					console.error(`chat=${chatId} has no session to wake with:`, error);
+				}
+			},
 		};
 	};
 }
