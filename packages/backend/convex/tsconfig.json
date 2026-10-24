@@ -8,7 +8,7 @@
     "allowSyntheticDefaultImports": true,
     "module": "ESNext",
     "target": "ESNext",
-    "lib": ["ES2021", "dom"],
+    "lib": ["ES2022", "dom"],
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "noEmit": true

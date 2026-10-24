@@ -1,11 +1,18 @@
 import { providerSpecs } from "@repo/env/providers";
+import type { ModelDelta } from "@repo/interpreter/session";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { AgentDelta } from "../src/agent.ts";
 import { MemorySteerInbox } from "../src/inbox.ts";
 import { replResultContent } from "../src/repl.ts";
 import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { extension, hearing, reporting, riding, testRepl } from "./helpers.ts";
+import {
+	extension,
+	hearing,
+	receiving,
+	reporting,
+	riding,
+	testRepl,
+} from "./helpers.ts";
 
 const emitting = (text: string) =>
 	extension((hooks) =>
@@ -15,7 +22,7 @@ const emitting = (text: string) =>
 		}),
 	);
 
-const TURNS: AgentDelta[][] = [
+const TURNS: ModelDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
 	[{ text: "three." }, { usage: { input: 20, output: 6, cachedInput: 10 } }],
 ];
@@ -302,6 +309,65 @@ describe("chat stream", () => {
 		expect(messages[0].content).toBe("what is 1 + 2?");
 		expect(messages[0].additional_kwargs?.riding).toBe("you are a pirate");
 		expect(revised.get(0)?.additional_kwargs?.riding).toBe("you are a pirate");
+	});
+
+	describe("what the user's newest message carried", () => {
+		const told = () =>
+			sent[0].some((m) => m.content.includes("the user also said: in hex"));
+
+		test("reaches the extensions on the turn it was sent", async () => {
+			await stream(
+				{
+					messages: [
+						{
+							type: "human",
+							content: "what is 1 + 2?",
+							additional_kwargs: { said: "in hex" },
+						},
+					],
+				},
+				{ repl: testRepl([receiving()]) },
+			).text();
+
+			expect(told()).toBe(true);
+		});
+
+		test("is not told again when the request ends past it", async () => {
+			await stream(
+				{
+					messages: [
+						{
+							type: "human",
+							content: "what is 1 + 2?",
+							additional_kwargs: { said: "in hex" },
+						},
+						{ type: "ai", content: "(+ 1 2)" },
+						{ type: "tool", content: "3" },
+					],
+				},
+				{ repl: testRepl([receiving()]) },
+			).text();
+
+			expect(told()).toBe(false);
+		});
+
+		test("is not told when a system event is the newest message", async () => {
+			await stream(
+				{
+					messages: [
+						{
+							type: "human",
+							content: "what is 1 + 2?",
+							additional_kwargs: { said: "in hex" },
+						},
+						{ type: "system", content: "a timer fired" },
+					],
+				},
+				{ repl: testRepl([receiving()]) },
+			).text();
+
+			expect(told()).toBe(false);
+		});
 	});
 
 	test("a REPL result carries no cost of its own", async () => {

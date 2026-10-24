@@ -1,8 +1,13 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { snapshot } from "@repo/interpreter/image";
-import type { Interp } from "@repo/interpreter/lisp";
-import { Cell, LispKeyword, type List } from "@repo/interpreter/objects";
+import { type Interp, runSync } from "@repo/interpreter/lisp";
+import {
+	Cell,
+	LispKeyword,
+	type List,
+	newSym,
+} from "@repo/interpreter/objects";
 import { keyName } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
@@ -28,12 +33,6 @@ export function agentsExtension(host: AgentsHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
 	});
-}
-
-function lastOf(values: List): unknown {
-	let last: unknown = null;
-	for (let at: unknown = values; at instanceof Cell; at = at.cdr) last = at.car;
-	return last;
 }
 
 interface Parsed {
@@ -121,14 +120,25 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 	}
 
 	interp.def(
-		"quietly",
-		-1,
-		"(quietly form...)",
-		"Run the forms of a message without handing the message to the agent. The message and what the forms printed stay in the chat, so the agent reads them on its next turn. Return the value of the last form.",
-		z.tuple([zList]),
-		([forms]) => {
+		"agents/quiet",
+		0,
+		"(agents/quiet)",
+		"Ask the harness not to hand this message to the agent. quietly calls it before its forms run; call quietly instead.",
+		z.tuple([]),
+		() => {
 			effect.emit(interp.channels, { harness: { type: "quiet" } });
-			return lastOf(forms);
+			return null;
+		},
+	);
+	interp.defineGlobal(
+		newSym("quietly"),
+		runSync(
+			interp,
+			"(macro (&rest forms) (cons 'progn (cons '(agents/quiet) forms)))",
+		),
+		{
+			signature: "(quietly form...)",
+			doc: "Run the forms of a message without handing the message to the agent, even when a form inside fails or waits. The message and what the forms printed stay in the chat, so the agent reads them on its next turn. Return the value of the last form.",
 		},
 	);
 

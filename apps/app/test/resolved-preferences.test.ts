@@ -28,14 +28,14 @@ describe("resolving stored preferences", () => {
 		expect(motionOf({ motion: "spin" })).toBe("slide");
 	});
 
-	it("fills each toggle the store does not name with its default", () => {
-		const fields = [
-			{ id: "lisp", shownByDefault: true },
-			{ id: "system", shownByDefault: false },
-		] as const;
-		expect(togglesOf(fields, undefined)).toEqual({ lisp: true, system: false });
+	it("reads each toggle the app offers off the store, and drops the rest", () => {
+		const fields = [{ id: "lisp" }, { id: "system" }] as const;
+		expect(togglesOf(fields, undefined)).toEqual({
+			lisp: false,
+			system: false,
+		});
 		expect(togglesOf(fields, { system: true, stray: true })).toEqual({
-			lisp: true,
+			lisp: false,
 			system: true,
 		});
 	});

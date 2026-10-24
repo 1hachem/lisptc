@@ -1,3 +1,8 @@
+import {
+	annotate,
+	type ViewNode,
+	viewKey,
+} from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
 import { driveAsync } from "@repo/interpreter/drive";
@@ -23,6 +28,26 @@ import {
 } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
+import {
+	FOLDERS,
+	type Folder,
+	fileTab,
+	type PanelOp,
+	panelOps,
+	SPLITS,
+	type Split,
+	viewTab,
+} from "./panel.ts";
+import type { UiNode, UiValue } from "./view.ts";
+
+export {
+	fileTab,
+	type PanelContent,
+	type PanelOp,
+	panelOps,
+	viewTab,
+} from "./panel.ts";
+export type { UiNode, UiValue } from "./view.ts";
 
 const MAX_HANDLERS = 500;
 
@@ -35,20 +60,6 @@ export function joinMessages(parts: readonly string[]): string | undefined {
 	const text = parts.join("\n\n");
 	if (text.length <= MAX_MESSAGE_CHARS) return text;
 	return `${text.slice(0, MAX_MESSAGE_CHARS)}\n… (message truncated)`;
-}
-
-export type UiValue =
-	| string
-	| number
-	| boolean
-	| null
-	| UiValue[]
-	| { [key: string]: UiValue };
-
-export interface UiNode {
-	tag: string;
-	props: Record<string, UiValue>;
-	children: UiNode[];
 }
 
 export const rendered = topic<UiNode>("ui");
@@ -200,6 +211,14 @@ function toJson(x: unknown): UiValue {
 		return items.map(toJson);
 	}
 	return str(x, false);
+}
+
+function viewOf(node: UiNode): ViewNode {
+	return {
+		tag: node.tag,
+		props: node.props,
+		children: node.children.map(viewOf),
+	};
 }
 
 export function nodeToJson(node: UiNode): UiValue {
@@ -364,6 +383,25 @@ const INPUT_ARGS: DocArg[] = [
 		description: "the field's initial contents",
 	},
 ];
+
+function folderOf(folder: string): Folder {
+	if (!(FOLDERS as readonly string[]).includes(folder))
+		throw new EvalException(
+			`unknown folder; expected one of ${FOLDERS.join(" ")}`,
+			folder,
+		);
+	return folder as Folder;
+}
+
+function splitOf(opts: Map<string, unknown>): Split {
+	const split = stringOption(opts, "split") ?? "here";
+	if (!(SPLITS as readonly string[]).includes(split))
+		throw new EvalException(
+			`unknown split; expected one of ${SPLITS.join(" ")}`,
+			split,
+		);
+	return split as Split;
+}
 
 function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
@@ -616,6 +654,81 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 	);
 
 	interp.def(
+		"ui/file-link",
+		3,
+		"(ui/file-link text folder name)",
+		`A link to a stored file. \`folder\` is one of ${FOLDERS.join(" ")}. A click opens the file's preview in a tab of the panel beside the chat, the way \`ui/open-file\` would. Put several in a \`ui/stack\` to list files the user can open.`,
+		z.tuple([zString, zString, zString]),
+		([text, folder, name]) =>
+			new UiElement("file-link", { text, folder: folderOf(folder), name }),
+	);
+
+	const emit = (op: PanelOp) => panelOps.emit(interp.channels, { user: op });
+
+	interp.def(
+		"ui/open-file",
+		-3,
+		'(ui/open-file folder name [:split "right"])',
+		`Open a stored file's preview in a tab of the panel beside the chat. \`folder\` is one of ${FOLDERS.join(" ")}; list it first, since a name that is not there opens a tab that says so. \`:split\` is one of ${SPLITS.join(" ")}: here adds the tab to the focused split, right and down open a new split beside it. A file already open is focused instead. Returns the tab id.`,
+		z.tuple([zString, zString, zList]),
+		([folder, name, rest]) => {
+			const checked = folderOf(folder);
+			const tab = fileTab(checked, name);
+			emit({
+				op: "open",
+				tab,
+				split: splitOf(plistOptions(rest, ["split"])),
+				content: { kind: "file", folder: checked, name },
+			});
+			return tab;
+		},
+	);
+
+	interp.def(
+		"ui/open-view",
+		-3,
+		'(ui/open-view title view [:split "right"])',
+		`Open a widget in a tab of the panel beside the chat, titled \`title\`, instead of under your message. Its controls run in this REPL like any other view's. Opening the same title again replaces that tab. \`:split\` is as for \`ui/open-file\`. Returns the tab id.`,
+		z.tuple([zString, zAny, zList]),
+		([title, view, rest]) => {
+			if (!(view instanceof UiElement))
+				throw new EvalException("ui element expected", view);
+			const tab = viewTab(title);
+			emit({
+				op: "open",
+				tab,
+				split: splitOf(plistOptions(rest, ["split"])),
+				content: { kind: "view", title, node: nodeToJson(view) },
+			});
+			return tab;
+		},
+	);
+
+	interp.def(
+		"ui/close",
+		1,
+		"(ui/close tab)",
+		"Close a panel tab by the id `ui/open-file` or `ui/open-view` returned. A split left empty folds into its neighbour.",
+		z.tuple([zString]),
+		([tab]) => {
+			emit({ op: "close", tab });
+			return Unspecified;
+		},
+	);
+
+	interp.def(
+		"ui/focus",
+		1,
+		"(ui/focus tab)",
+		"Bring a panel tab to the front by the id `ui/open-file` or `ui/open-view` returned.",
+		z.tuple([zString]),
+		([tab]) => {
+			emit({ op: "focus", tab });
+			return Unspecified;
+		},
+	);
+
+	interp.def(
 		"ui/send",
 		-1,
 		"(ui/send text...)",
@@ -710,11 +823,12 @@ export function uiExtension(
 			});
 			hooks.annotate.use((buffer, into, next) => {
 				const view = buffer.collect(rendered).at(-1);
+				const panel = buffer.collect(panelOps);
+				const viewed =
+					view === undefined ? into : annotate(into, viewKey, viewOf(view));
 				return next(
 					buffer,
-					view === undefined
-						? into
-						: annotating(into, "output", { ui: nodeToJson(view) }),
+					panel.length === 0 ? viewed : annotating(viewed, "output", { panel }),
 				);
 			});
 			hooks.message.use(

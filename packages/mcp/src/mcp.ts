@@ -1,7 +1,7 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import { type Ask, asking } from "@repo/interpreter/asks";
 import { topic } from "@repo/interpreter/channels";
-import type { DocArg } from "@repo/interpreter/docs";
+import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import {
 	EvalException,
 	StepHold,
@@ -26,6 +26,7 @@ import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
 import type { PromptSource } from "@repo/shared/host";
+import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import {
 	AuthorizationRequired,
@@ -36,8 +37,6 @@ import {
 	type McpClient,
 	type McpPolicy,
 	openPolicy,
-	type SearchDocument,
-	type SearchEngine,
 	type Tool,
 	type ToolkitRegistry,
 } from "./ports.ts";
@@ -377,13 +376,14 @@ function lookupPredefined(
 	return conf;
 }
 
-const LOAD_MCP_ARGS: DocArg[] = [
-	{
-		name: "name",
-		type: "string",
-		required: true,
-		description: "A name for this server; its tools install as `name/tool`.",
-	},
+const LOAD_MCP_NAME: DocArg = {
+	name: "name",
+	type: "string",
+	required: true,
+	description: "A name for this server; its tools install as `name/tool`.",
+};
+
+const LOAD_MCP_OPTIONS: DocArg[] = [
 	{
 		name: "command",
 		type: "string",
@@ -429,6 +429,14 @@ const LOAD_MCP_ARGS: DocArg[] = [
 		description: "OAuth scopes to request when `:oauth` is set.",
 	},
 ];
+
+function loadMcpArgs(predefined: Map<string, ConnConfig>): DocArg[] {
+	const values = [...predefined.values()].map((conf) => ({
+		value: conf.name,
+		description: conf.description,
+	}));
+	return [{ ...LOAD_MCP_NAME, values }, ...LOAD_MCP_OPTIONS];
+}
 
 function doUnload(
 	interp: Interp,
@@ -584,6 +592,17 @@ export function registerMcp(
 		[],
 		"The MCP servers this session loaded, each with its state (:loaded, :dormant until its next call reconnects it, or :failed), its tools and the arguments it was loaded with. Kept by load-mcp and unload-mcp; read it, never set it.",
 	);
+	const loadedServer: DocArgSpec = {
+		name: "server",
+		type: "string",
+		required: true,
+		description: "A loaded MCP server.",
+		values: () =>
+			servers.get().map((entry) => ({
+				value: entry.name,
+				description: `${entry.tools.length} tools, ${entry.state}`,
+			})),
+	};
 	const predefined = new Map<string, ConnConfig>();
 	const loading = new Set<LispPromise>();
 	for (const conf of toolkit.all())
@@ -677,7 +696,7 @@ export function registerMcp(
 				doUnload(interp, client, servers, conf.name);
 			return startLoad(rest);
 		},
-		LOAD_MCP_ARGS,
+		loadMcpArgs(predefined),
 	);
 
 	interp.def(
@@ -687,6 +706,7 @@ export function registerMcp(
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
 		([name]) => arrayToList(doUnload(interp, client, servers, name)),
+		[loadedServer],
 	);
 
 	interp.def(
@@ -837,20 +857,23 @@ export function registerMcp(
 	interp.def(
 		"list-tools",
 		-1,
-		'(list-tools ["server"])',
-		"Return the tools of all loaded MCP servers (or one server).",
+		'(list-tools "server"...)',
+		"Return the tools of the named loaded MCP servers, or of every loaded server when none is named.",
 		z.tuple([zList]),
 		([rest]) => {
-			const only = rest !== null ? asName(rest.car) : null;
-			const rows: unknown[] = [];
-			for (const entry of servers.get()) {
-				if (only !== null && entry.name !== only) continue;
-				rows.push(...toolRows(entry));
-			}
-			if (only !== null && entryOf(servers, only) === undefined)
-				throw new EvalException("MCP server not loaded", only, false);
-			return arrayToList(rows);
+			const names = listToArray(rest).map(asName);
+			for (const name of names)
+				if (entryOf(servers, name) === undefined)
+					throw new EvalException("MCP server not loaded", name, false);
+			const only = new Set(names);
+			return arrayToList(
+				servers
+					.get()
+					.filter((entry) => only.size === 0 || only.has(entry.name))
+					.flatMap(toolRows),
+			);
 		},
+		[{ ...loadedServer, required: false, repeats: true }],
 	);
 
 	interp.def(
@@ -1020,6 +1043,12 @@ function toolSignature(name: string, tool: Tool): string {
 	return `(${name} ${sig})`;
 }
 
+function enumValues(spec: JsonSchema): DocValue[] | undefined {
+	return spec.enum?.map((value) => ({
+		value: typeof value === "string" ? value : JSON.stringify(value),
+	}));
+}
+
 function toolArgs(tool: Tool): DocArg[] {
 	const required = new Set(tool.inputSchema?.required ?? []);
 	return orderedProps(tool).map(([key, spec]) => ({
@@ -1027,6 +1056,7 @@ function toolArgs(tool: Tool): DocArg[] {
 		type: schemaType(spec),
 		required: required.has(key),
 		description: spec.description,
+		values: enumValues(spec),
 	}));
 }
 

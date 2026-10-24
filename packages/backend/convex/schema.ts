@@ -2,6 +2,12 @@ import { CATALOGUED_CHOICES, type ProviderName } from "@repo/shared/providers";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { RETIRED_MODELS } from "./lib/models.js";
+import { WORKSPACE_ICONS } from "./lib/workspaceIcons.js";
+
+export const binnedFrom = v.union(
+	v.literal("knowledge"),
+	v.literal("attachments"),
+);
 
 export const messageType = v.union(
 	v.literal("human"),
@@ -28,9 +34,90 @@ function pair<P extends ProviderName, M extends string>(choice: {
 
 export const modelChoice = v.union(...CATALOGUED_CHOICES.map(pair));
 
+export const workspaceIcon = v.union(
+	...WORKSPACE_ICONS.map((icon) => v.literal(icon)),
+);
+
 export const storedModel = v.union(
 	...[...CATALOGUED_CHOICES, ...RETIRED_MODELS].map(pair),
 );
+
+const panelTab = v.object({
+	id: v.string(),
+	fixed: v.optional(v.boolean()),
+	content: v.union(
+		v.object({ kind: v.literal("main") }),
+		v.object({
+			kind: v.literal("file"),
+			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
+			name: v.string(),
+		}),
+		v.object({ kind: v.literal("view"), title: v.string(), node: v.any() }),
+		v.object({
+			kind: v.literal("chat"),
+			chatId: v.union(v.string(), v.null()),
+			title: v.string(),
+		}),
+		v.object({
+			kind: v.literal("page"),
+			page: v.union(
+				v.literal("memory"),
+				v.literal("agent"),
+				v.literal("permission"),
+				v.literal("readme"),
+				v.literal("settings"),
+				v.literal("preferences"),
+				v.literal("account"),
+				v.literal("bin"),
+			),
+			id: v.optional(v.string()),
+			title: v.string(),
+		}),
+	),
+});
+
+const legacyLayout = v.object({
+	direction: v.union(v.literal("row"), v.literal("column")),
+	dock: v.optional(v.union(v.literal("side"), v.literal("below"))),
+	focused: v.union(v.string(), v.null()),
+	groups: v.array(
+		v.object({
+			id: v.string(),
+			size: v.number(),
+			panes: v.array(
+				v.object({
+					id: v.string(),
+					size: v.number(),
+					tabs: v.array(panelTab),
+					active: v.union(v.string(), v.null()),
+				}),
+			),
+		}),
+	),
+});
+
+export const panelLayout = v.object({
+	root: v.union(v.string(), v.null()),
+	focused: v.union(v.string(), v.null()),
+	minimized: v.optional(v.array(panelTab)),
+	nodes: v.array(
+		v.union(
+			v.object({
+				kind: v.literal("pane"),
+				id: v.string(),
+				tabs: v.array(panelTab),
+				active: v.union(v.string(), v.null()),
+			}),
+			v.object({
+				kind: v.literal("split"),
+				id: v.string(),
+				direction: v.union(v.literal("row"), v.literal("column")),
+				children: v.array(v.string()),
+				sizes: v.array(v.number()),
+			}),
+		),
+	),
+});
 
 export default defineSchema({
 	users: defineTable({
@@ -47,9 +134,13 @@ export default defineSchema({
 		themeUses: v.optional(v.record(v.string(), v.number())),
 		channels: v.optional(v.record(v.string(), v.boolean())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
+		input: v.optional(v.record(v.string(), v.boolean())),
 		sidebar: v.optional(v.array(v.string())),
 		hidden: v.optional(v.array(v.string())),
+		statusBar: v.optional(v.array(v.string())),
+		statusBarHidden: v.optional(v.array(v.string())),
 		motion: v.optional(v.string()),
+		panelMotion: v.optional(v.boolean()),
 	}).index("by_user", ["userId"]),
 
 	workspaces: defineTable({
@@ -57,6 +148,8 @@ export default defineSchema({
 		name: v.string(),
 		slug: v.string(),
 		model: v.optional(storedModel),
+		icon: v.optional(workspaceIcon),
+		theme: v.optional(v.string()),
 	})
 		.index("by_owner", ["ownerId"])
 		.index("by_owner_slug", ["ownerId", "slug"]),
@@ -109,6 +202,42 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
 
+	knowledge: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		storageId: v.id("_storage"),
+		contentType: v.optional(v.string()),
+		size: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"])
+		.index("by_storage", ["storageId"]),
+	attachments: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		storageId: v.id("_storage"),
+		contentType: v.optional(v.string()),
+		size: v.number(),
+		attachedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"])
+		.index("by_attached", ["attachedAt"])
+		.index("by_storage", ["storageId"]),
+	bin: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		from: binnedFrom,
+		storageId: v.id("_storage"),
+		contentType: v.optional(v.string()),
+		size: v.number(),
+		binnedAt: v.number(),
+	})
+		.index("by_workspace_binned", ["workspaceId", "binnedAt"])
+		.index("by_workspace_name", ["workspaceId", "name"])
+		.index("by_binned", ["binnedAt"])
+		.index("by_storage", ["storageId"]),
+
 	readmes: defineTable({
 		workspaceId: v.id("workspaces"),
 		body: v.string(),
@@ -117,6 +246,11 @@ export default defineSchema({
 	permissions: defineTable({
 		workspaceId: v.id("workspaces"),
 		source: v.string(),
+	}).index("by_workspace", ["workspaceId"]),
+
+	layouts: defineTable({
+		workspaceId: v.id("workspaces"),
+		layout: v.union(panelLayout, legacyLayout),
 	}).index("by_workspace", ["workspaceId"]),
 
 	repls: defineTable({

@@ -12,23 +12,15 @@ import type {
 	EvalSpec as BaseEvalSpec,
 	EvalRunContext,
 	EvalRuntime,
-	Target,
 	TranscriptEntry,
 } from "@repo/evals/runner";
 import { createEvalSuite, runCase as runEvalCase } from "@repo/evals/runner";
+import type { Target } from "@repo/evals/targets";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { ExtensionsFor } from "./harness.ts";
 import { tracedRepl } from "./harness.ts";
 import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
 import type { MockSpec } from "./mocks.ts";
-
-export type { RunResult, Target } from "@repo/evals/runner";
-export {
-	evalConcurrency,
-	evalMatrix,
-	gate,
-	reachable,
-} from "@repo/evals/runner";
 
 export interface TraceViewerEvalSpec extends BaseEvalSpec {
 	mocks?: MockSpec;

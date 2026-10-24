@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	type ClientRect,
 	closestCenter,
 	DndContext,
 	type DragEndEvent,
@@ -14,6 +15,7 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import {
+	restrictToHorizontalAxis,
 	restrictToParentElement,
 	restrictToVerticalAxis,
 } from "@dnd-kit/modifiers";
@@ -22,6 +24,7 @@ import {
 	arrayMove,
 	defaultAnimateLayoutChanges,
 	SortableContext,
+	type SortingStrategy,
 	sortableKeyboardCoordinates,
 	useSortable,
 	verticalListSortingStrategy,
@@ -42,6 +45,48 @@ const SETTLE = { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" };
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 const REMEASURE_AS_ENTRIES_COLLAPSE = {
 	droppable: { strategy: MeasuringStrategy.Always },
+};
+
+export function slotShift(
+	rects: readonly ClientRect[],
+	activeIndex: number,
+	overIndex: number,
+	index: number,
+): number {
+	const rect = rects[index];
+	if (!rect || index === activeIndex) return 0;
+	if (index > activeIndex && index <= overIndex) {
+		const slot = rects[index - 1];
+		return slot ? slot.left - rect.left : 0;
+	}
+	if (index < activeIndex && index >= overIndex) {
+		const slot = rects[index + 1];
+		return slot ? slot.right - rect.right : 0;
+	}
+	return 0;
+}
+
+const horizontalSlotStrategy: SortingStrategy = ({
+	rects,
+	activeIndex,
+	overIndex,
+	index,
+}) => ({
+	x: slotShift(rects, activeIndex, overIndex, index),
+	y: 0,
+	scaleX: 1,
+	scaleY: 1,
+});
+
+const AXES = {
+	vertical: {
+		modifier: restrictToVerticalAxis,
+		strategy: verticalListSortingStrategy,
+	},
+	horizontal: {
+		modifier: restrictToHorizontalAxis,
+		strategy: horizontalSlotStrategy,
+	},
 };
 
 const EntryDragged = createContext(false);
@@ -77,6 +122,11 @@ export function unzoomed(
 ): Transform | null {
 	if (transform === null || zoom === 1) return transform;
 	return { ...transform, x: transform.x / zoom, y: transform.y / zoom };
+}
+
+export function ownSize(transform: Transform, motion: MotionId): Transform {
+	const scale = motion === "lift" ? LIFT_SCALE : 1;
+	return { ...transform, scaleX: scale, scaleY: scale };
 }
 
 function subscribeReducedMotion(onChange: () => void) {
@@ -115,10 +165,12 @@ const DRAGGING_CLASS: Record<MotionId, string> = {
 function SortableEntry({
 	id,
 	motion,
+	className = "",
 	children,
 }: {
 	id: string;
 	motion: MotionId;
+	className?: string;
 	children: ReactNode;
 }) {
 	const {
@@ -133,10 +185,7 @@ function SortableEntry({
 	} = useSortable({ id, ...ENTRY_MOTION[motion] });
 	const zoom = node.current?.currentCSSZoom ?? 1;
 	const shifted = unzoomed(transform, zoom);
-	const lifted =
-		shifted && isDragging && motion === "lift"
-			? { ...shifted, scaleX: LIFT_SCALE, scaleY: LIFT_SCALE }
-			: shifted;
+	const lifted = shifted && isDragging ? ownSize(shifted, motion) : shifted;
 	return (
 		<div
 			ref={(element) => {
@@ -148,7 +197,7 @@ function SortableEntry({
 			data-entry={id}
 			data-dragging={isDragging}
 			style={{ transform: CSS.Transform.toString(lifted), transition }}
-			className={`outline-none focus-visible:bg-bg2 ${
+			className={`outline-none focus-visible:bg-bg2 ${className} ${
 				isDragging ? DRAGGING_CLASS[motion] : ""
 			}`}
 		>
@@ -162,12 +211,18 @@ export function SortableTree<Id extends string>({
 	onReorder,
 	onPickUp,
 	motion = "slide",
+	axis = "vertical",
+	className,
+	entryClassName,
 	children,
 }: {
 	order: readonly Id[];
 	onReorder: (next: Id[]) => void;
 	onPickUp?: (id: Id) => void;
 	motion?: MotionId;
+	axis?: keyof typeof AXES;
+	className?: string;
+	entryClassName?: (id: Id, index: number) => string;
 	children: (id: Id) => ReactNode;
 }) {
 	const reduced = usePrefersReducedMotion();
@@ -204,22 +259,24 @@ export function SortableTree<Id extends string>({
 	};
 	const zoom = root?.currentCSSZoom ?? 1;
 	return (
-		<div ref={setRoot} data-motion={shown}>
+		<div ref={setRoot} data-motion={shown} className={className}>
 			<DndContext
 				sensors={sensors}
 				measuring={REMEASURE_AS_ENTRIES_COLLAPSE}
 				collisionDetection={closestCenter}
-				modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+				modifiers={[AXES[axis].modifier, restrictToParentElement]}
 				onDragStart={onDragStart}
 				onDragEnd={onDragEnd}
 				onDragCancel={() => setDragged(undefined)}
 			>
-				<SortableContext
-					items={[...order]}
-					strategy={verticalListSortingStrategy}
-				>
-					{order.map((id) => (
-						<SortableEntry key={id} id={id} motion={shown}>
+				<SortableContext items={[...order]} strategy={AXES[axis].strategy}>
+					{order.map((id, index) => (
+						<SortableEntry
+							key={id}
+							id={id}
+							motion={shown}
+							className={entryClassName?.(id, index)}
+						>
 							{children(id)}
 						</SortableEntry>
 					))}

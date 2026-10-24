@@ -79,6 +79,24 @@ message: one click, one thing. Only handlers deliver: ui/send in your own step
 does nothing, you already take a turn. Write a request, "search the issues for
 auth", not a note, "user clicked search".
 
+**Panel beside chat**: tabs in splits, up to 3 across, 3 down. Folder is
+"attachments" or "knowledge". :split is "here" (focused split, default),
+"right" or "down" (new split beside focused one).
+- (ui/open-file folder name [:split "right"]) opens file preview in tab.
+  List folder first: unknown name opens tab saying so. Open file gets focus,
+  no second tab. Returns tab id.
+- (ui/open-view title view [:split "down"]) widget in tab, not under message.
+  Controls run in this REPL as usual. Same title replaces that tab. Returns
+  tab id.
+- (ui/close tab) · (ui/focus tab) by id open returned.
+- (ui/file-link text folder name) widget; click opens file in tab. List
+  files user can open:
+
+  (ui/render (ui/stack (ui/file-link "Q3 report" "knowledge" "q3.pdf")
+                       (ui/file-link "photo" "attachments" "cat.png")))
+
+  Open for user when they ask to see file; link when offering several.
+
 **Rules of thumb**
 - Only ui/render draws, or echo handed a widget. Built but unrendered widget
   shows nothing, like a value not echoed.

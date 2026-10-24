@@ -1,3 +1,4 @@
+import { themes } from "@repo/ui/themes";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -10,7 +11,7 @@ import {
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
 import { dropRepl } from "./repls.js";
-import { modelChoice, storedModel } from "./schema.js";
+import { modelChoice, storedModel, workspaceIcon } from "./schema.js";
 
 export const MAX_WORKSPACES = 25;
 
@@ -23,6 +24,8 @@ const workspace = v.object({
 	name: v.string(),
 	slug: v.string(),
 	model: v.optional(storedModel),
+	icon: v.optional(workspaceIcon),
+	theme: v.optional(v.string()),
 });
 
 export async function dropWorkspace(
@@ -37,6 +40,8 @@ export async function dropWorkspace(
 	await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.permissions.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.readmes.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.files.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.layouts.purge, { workspaceId });
 }
 
 export const list = query({
@@ -101,6 +106,29 @@ export const setModel = mutation({
 	handler: async (ctx, { workspaceId, model }) => {
 		await requireWorkspace(ctx, workspaceId);
 		await ctx.db.patch(workspaceId, { model });
+		return null;
+	},
+});
+
+export const setIcon = mutation({
+	args: { workspaceId: v.id("workspaces"), icon: workspaceIcon },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, icon }) => {
+		await requireWorkspace(ctx, workspaceId);
+		await ctx.db.patch(workspaceId, { icon });
+		return null;
+	},
+});
+
+export const setTheme = mutation({
+	args: { workspaceId: v.id("workspaces"), theme: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, theme }) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (!themes.some((offered) => offered.id === theme)) {
+			throw new ConvexError({ code: "UNKNOWN_THEME" });
+		}
+		await ctx.db.patch(workspaceId, { theme });
 		return null;
 	},
 });
