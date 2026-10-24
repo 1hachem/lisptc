@@ -5,8 +5,8 @@ import { chatModel } from "../../server/agent/model.ts";
 describe("the model a chat runs on", () => {
 	it("is the one its workspace chose", () => {
 		const chosen = {
-			provider: "digitalocean",
-			model: "gemma-4-31B-it",
+			provider: "openrouter",
+			model: "openai/gpt-6-luna",
 		} as const;
 		expect(chatModel(chosen)).toEqual(chosen);
 	});
