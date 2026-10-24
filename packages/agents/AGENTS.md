@@ -22,8 +22,7 @@ request is a new variant of the effect union, not a key of this package's own.
 
 This package never runs an agent itself. Another agent is asked of the host
 through a port, and a session whose host offers none refuses the forms that
-need one. A running agent is never part of the image, so nothing a session must
-keep across a restore is held by one.
+need one.
 
 Work a sub-agent does in the background is a job on the jobs port, and
 whoever implements the port owns when it runs and what happens when it ends.
