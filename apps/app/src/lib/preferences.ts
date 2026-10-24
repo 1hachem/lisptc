@@ -26,6 +26,16 @@ export function useCachedPreferences(
 	);
 }
 
+export function usePanelMotion() {
+	const stored = usePreferences();
+	const put = usePutPreferences();
+	const setPanelMotion = useCallback(
+		(on: boolean) => put({ panelMotion: on }),
+		[put],
+	);
+	return { panelMotion: stored?.panelMotion ?? true, setPanelMotion };
+}
+
 export function usePutPreferences() {
 	const mutation = useConvexMutation(api.preferences.put);
 	const put = useMemo(

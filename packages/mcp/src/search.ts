@@ -1,6 +1,10 @@
+import type {
+	SearchDocument,
+	SearchEngine,
+	SearchHit,
+} from "@repo/shared/search";
 import { beyondStopWords, STOP_WORDS } from "@repo/shared/search";
 import MiniSearch from "minisearch";
-import type { SearchDocument, SearchEngine, SearchHit } from "./ports.ts";
 
 const FIELDS = ["name", "keywords", "description"];
 const BOOST = { name: 3, keywords: 2, description: 1 };

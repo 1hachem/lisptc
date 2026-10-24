@@ -1,13 +1,9 @@
-import {
-	ASKS_KEY,
-	type Ask,
-	type AskChoice,
-	type Asks,
-} from "@repo/interpreter/asks";
+import { readAnnotation } from "@repo/interpreter/annotations";
+import { type Ask, type AskChoice, asksKey } from "@repo/interpreter/asks";
 import type { StepAnnotations } from "@repo/interpreter/session";
 
 export function openAsks(annotations: StepAnnotations): readonly Ask[] {
-	return ((annotations.output[ASKS_KEY] ?? {}) as Asks).open ?? [];
+	return readAnnotation(annotations.output, asksKey)?.open ?? [];
 }
 
 export function question(ask: Ask): string {

@@ -7,6 +7,7 @@ import {
 } from "@repo/ai";
 import { api } from "@repo/backend/api";
 import { TURN_DEADLINE_MS } from "@repo/backend/limits";
+import { ENVELOPE_KEYS } from "@repo/shared/messages";
 import { z } from "zod";
 import { body } from "./body.ts";
 import { convexAs } from "./convex.ts";
@@ -17,11 +18,23 @@ import { chatModel } from "./model.ts";
 import { repls } from "./repls.ts";
 import { type Authed, authed } from "./session.ts";
 
+const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
+
+const carried = z
+	.record(z.string(), z.json())
+	.refine(
+		(annotations) => !Object.keys(annotations).some((key) => ENVELOPE.has(key)),
+		{
+			message: "a message envelope field cannot be sent with a message",
+		},
+	);
+
 export const chatRequestSchema = z.object({
 	input: z.union([
 		z.object({
 			chatId: convexId<"chats">(),
 			message: z.string(),
+			annotations: carried.optional(),
 		}),
 		z.object({
 			chatId: convexId<"chats">(),
@@ -37,7 +50,12 @@ async function openingMessage(
 	subject: string,
 ): Promise<StoredMessage | undefined> {
 	if ("message" in input)
-		return { id: crypto.randomUUID(), type: "human", content: input.message };
+		return {
+			id: crypto.randomUUID(),
+			type: "human",
+			content: input.message,
+			...(input.annotations ? { kwargs: input.annotations } : {}),
+		};
 	const event = await events.redeem(input.event.token, {
 		subject,
 		chatId: input.chatId,

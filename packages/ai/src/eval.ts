@@ -1,22 +1,12 @@
 import { quiets } from "@repo/interpreter/effects";
 import type { AgentRepl } from "@repo/repl/repl";
 import { formsOnly, type Skipped } from "@repo/shared/lisp-forms";
-import {
-	checkResultContent,
-	evalMessageCode,
-	replResultContent,
-} from "./repl.ts";
+import { checkResultContent, evalMessageCode } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
-
-export interface EvalMessage {
-	type: "tool";
-	content: string;
-	id: string;
-	additional_kwargs?: Record<string, unknown>;
-}
+import { type ToolMessage, toolMessage } from "./tool-message.ts";
 
 export interface Evaluated {
-	message: EvalMessage;
+	message: ToolMessage;
 	quiet: boolean;
 }
 
@@ -47,29 +37,18 @@ export async function evalMessage(
 			quiet: false,
 		};
 	const id = crypto.randomUUID();
-	const {
-		output,
-		display,
-		error,
-		failed,
-		annotations,
-		effects,
-		emitted,
-		results,
-	} = await evalMessageCode(repl, code, id);
-	const extras: Record<string, unknown> = { ...annotations.output };
-	if (display !== output) extras.display = display;
-	if (failed) extras.failed = true;
-	if (emitted !== "") extras.riding = emitted;
-	if (results.length > 0) extras.results = results;
+	const { effects, emitted, ...outcome } = await evalMessageCode(
+		repl,
+		code,
+		id,
+	);
+	const quiet = quiets(effects);
 	return {
-		message: {
-			type: "tool",
-			content: replResultContent(output, error),
+		message: toolMessage(
+			{ ...outcome, quiet, ...(emitted === "" ? {} : { riding: emitted }) },
 			id,
-			...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
-		},
-		quiet: quiets(effects),
+		),
+		quiet,
 	};
 }
 

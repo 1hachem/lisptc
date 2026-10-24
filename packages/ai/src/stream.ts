@@ -1,16 +1,21 @@
-import { contentToText } from "@repo/shared/messages";
+import type { Annotations } from "@repo/interpreter/session";
+import {
+	contentToText,
+	ENVELOPE_KEYS,
+	envelopeOf,
+	type MessageKwargs,
+} from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import type { Steer, SteerInbox } from "./inbox.ts";
 import {
-	checkResultContent,
 	isUserPrompt,
 	joinRiding,
-	replResultContent,
 	type TranscriptEntry,
 	withItsResult,
 } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
+import { toolMessage } from "./tool-message.ts";
 import { runAgentTurn, type TurnEvent } from "./turn.ts";
 
 export interface ChatMessageInput {
@@ -18,7 +23,7 @@ export interface ChatMessageInput {
 	type?: string;
 	role?: string;
 	content?: unknown;
-	additional_kwargs?: Record<string, unknown>;
+	additional_kwargs?: MessageKwargs;
 }
 
 export interface ChatInput {
@@ -29,10 +34,12 @@ export interface WireMessage {
 	type: string;
 	content: string;
 	id: string;
-	additional_kwargs?: Record<string, unknown>;
+	additional_kwargs?: MessageKwargs;
 }
 
 const encoder = new TextEncoder();
+
+const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
 function mergeInto(
 	into: Record<string, unknown>,
@@ -58,32 +65,13 @@ function annotate(
 	annotations: Record<string, unknown>,
 ): WireMessage {
 	const kwargs = message.additional_kwargs ?? {};
-	const meta = { ...((kwargs.meta as Record<string, unknown>) ?? {}) };
+	const meta: Record<string, unknown> = { ...envelopeOf(kwargs).meta };
 	mergeInto(meta, annotations);
 	return { ...message, additional_kwargs: { ...kwargs, meta } };
 }
 
-function resultMessage(
-	event: Extract<TurnEvent, { type: "result" }>,
-): WireMessage {
-	const extras: Record<string, unknown> = { ...event.annotations.output };
-	if (event.display !== event.output) extras.display = event.display;
-	if (event.failed) extras.failed = true;
-	if (event.riding !== undefined) extras.riding = event.riding;
-	if (event.results.length > 0) extras.results = event.results;
-	return {
-		type: "tool",
-		content: event.rejected
-			? checkResultContent(event.output, event.problems)
-			: replResultContent(event.output, event.error),
-		id: crypto.randomUUID(),
-		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
-	};
-}
-
-function riding(message: { additional_kwargs?: Record<string, unknown> }) {
-	const standing = message.additional_kwargs?.riding;
-	return typeof standing === "string" ? standing : undefined;
+function riding(message: { additional_kwargs?: MessageKwargs }) {
+	return envelopeOf(message.additional_kwargs).riding;
 }
 
 function sse(event: string, data: unknown): Uint8Array {
@@ -106,8 +94,6 @@ function wireType(
 	return "human";
 }
 
-const SOURCE_KEY = "source";
-
 export function systemEventMessage(
 	event: SystemEvent,
 	id: string,
@@ -116,13 +102,12 @@ export function systemEventMessage(
 		type: "system",
 		content: event.text,
 		id,
-		additional_kwargs: { [SOURCE_KEY]: event.source },
+		additional_kwargs: { source: event.source },
 	};
 }
 
 function eventSource(message: ChatMessageInput): string {
-	const source = message.additional_kwargs?.[SOURCE_KEY];
-	return typeof source === "string" ? source : "system";
+	return envelopeOf(message.additional_kwargs).source ?? "system";
 }
 
 function toEntry(m: ChatMessageInput): TranscriptEntry {
@@ -132,6 +117,16 @@ function toEntry(m: ChatMessageInput): TranscriptEntry {
 		return { role: "user", content, event: { source: eventSource(m) } };
 	const rode = riding(m);
 	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
+}
+
+function received(input: ChatInput): Annotations | undefined {
+	const newest = input.messages?.at(-1);
+	if (newest === undefined || wireType(newest.type ?? newest.role) !== "human")
+		return undefined;
+	const carried = Object.entries(newest.additional_kwargs ?? {}).filter(
+		([key]) => !ENVELOPE.has(key),
+	);
+	return carried.length === 0 ? undefined : Object.fromEntries(carried);
 }
 
 function toTranscript(input: ChatInput): TranscriptEntry[] {
@@ -281,7 +276,7 @@ class TurnWire {
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
 		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
-		this.wire.push(resultMessage(event));
+		this.wire.push(toolMessage(event, crypto.randomUUID()));
 		return this.snapshot();
 	}
 
@@ -369,6 +364,7 @@ export function streamChatResponse<Id extends string>(
 						identity,
 						inbox: steering.take,
 						runsForms,
+						received: received(input),
 					}))
 						if (!turn.apply(event)) break;
 				}

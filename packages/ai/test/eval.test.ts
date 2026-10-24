@@ -3,7 +3,8 @@ import type { Interp } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { type FormSpan, formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, test } from "vitest";
-import { type EvalMessage, evalUserMessage } from "../src/eval.ts";
+import { evalUserMessage } from "../src/eval.ts";
+import type { ToolMessage } from "../src/tool-message.ts";
 import { extension, testRepls } from "./helpers.ts";
 
 const repls = testRepls();
@@ -12,17 +13,17 @@ async function evaluated(
 	message: string,
 	threadId: string,
 	from = repls,
-): Promise<EvalMessage> {
+): Promise<ToolMessage> {
 	const result = await evalUserMessage(message, { repls: from, threadId });
 	if (result === undefined) throw new Error(`nothing ran for ${message}`);
 	return result.message;
 }
 
-function result(message: EvalMessage): { output: string; error: boolean } {
+function result(message: ToolMessage): { output: string; error: boolean } {
 	return JSON.parse(message.content) as { output: string; error: boolean };
 }
 
-function display(message: EvalMessage): string {
+function display(message: ToolMessage): string {
 	return (message.additional_kwargs?.display as string) ?? "";
 }
 
@@ -140,6 +141,8 @@ describe("a user message", () => {
 		});
 		expect(loud?.quiet).toBe(false);
 		expect(hushed?.quiet).toBe(true);
+		expect(loud?.message.additional_kwargs?.quiet).toBeUndefined();
+		expect(hushed?.message.additional_kwargs?.quiet).toBe(true);
 	});
 });
 

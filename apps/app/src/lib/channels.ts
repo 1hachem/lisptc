@@ -2,6 +2,7 @@ export type ChannelId =
 	| "user"
 	| "results"
 	| "ui"
+	| "attachments"
 	| "lisp"
 	| "thinking"
 	| "edits"
@@ -42,6 +43,13 @@ export const CHANNELS: Channel[] = [
 		text: "text-aqua",
 	},
 	{
+		id: "attachments",
+		label: "attachments",
+		hint: "files you or the agent attached to a message",
+		dot: "bg-blue",
+		text: "text-blue",
+	},
+	{
 		id: "lisp",
 		label: "lisp",
 		hint: "the forms a step ran, as code rather than as tools at work",
@@ -61,7 +69,6 @@ export const CHANNELS: Channel[] = [
 		hint: "what a step was written as, when it ran as something else",
 		dot: "bg-yellow",
 		text: "text-yellow",
-		shownByDefault: true,
 	},
 	{
 		id: "memory",

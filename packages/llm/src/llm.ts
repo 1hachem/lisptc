@@ -32,15 +32,13 @@ import { z } from "zod";
 
 export const LLM_TIMEOUT_MS = 60_000;
 
-export type LlmMessage = ChatMessage;
-
 export interface LlmSchema {
 	name: string;
 	schema: Record<string, unknown>;
 }
 
 export interface LlmRequest {
-	messages: LlmMessage[];
+	messages: ChatMessage[];
 	provider?: string;
 	model?: string;
 	maxTokens?: number;
@@ -208,7 +206,7 @@ function optionsFor(
 
 function requestFrom(
 	options: Map<string, unknown>,
-	messages: LlmMessage[],
+	messages: ChatMessage[],
 ): LlmRequest {
 	const system = options.get("system");
 	const req: LlmRequest = {
@@ -243,7 +241,7 @@ function timeoutOf(options: Map<string, unknown>): number {
 	return ms;
 }
 
-function messageFrom(x: unknown): LlmMessage {
+function messageFrom(x: unknown): ChatMessage {
 	if (typeof x === "string") return { role: "user", content: x };
 	const fields = elements(
 		x,
@@ -271,7 +269,7 @@ function messageFrom(x: unknown): LlmMessage {
 	return { role: role as Role, content };
 }
 
-function messagesFrom(x: unknown): LlmMessage[] {
+function messagesFrom(x: unknown): ChatMessage[] {
 	if (typeof x === "string") return [{ role: "user", content: x }];
 	const items = elements(x, "a list of messages expected");
 	if (items.length === 0) throw new EvalException("no messages to send", x);

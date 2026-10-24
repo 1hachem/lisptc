@@ -4,6 +4,7 @@ export interface UiActionResponse {
 	output?: string;
 	error?: boolean;
 	ui?: unknown;
+	panel?: unknown;
 	message?: string;
 	event?: unknown;
 }

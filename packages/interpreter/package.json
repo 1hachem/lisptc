@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/lisp.ts",
     "./arith": "./src/arith.ts",
+    "./annotations": "./src/annotations.ts",
     "./asks": "./src/asks.ts",
     "./async": "./src/async.ts",
     "./channels": "./src/channels.ts",
@@ -46,14 +47,14 @@
     "bench": "node --experimental-transform-types --no-warnings bench/eval.ts"
   },
   "dependencies": {
-    "@repo/shared": "workspace:*"
+    "@repo/shared": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.7",
     "typescript": "^5.9.3",
-    "vitest": "^3.0.0",
-    "zod": "^4.4.3"
+    "vitest": "^3.0.0"
   }
 }

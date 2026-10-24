@@ -4,7 +4,9 @@ import {
 	type AgentFailure,
 	type AgentTurn,
 	type Annotations,
+	type ModelDelta,
 	type ModelRequest,
+	type ModelUsage,
 	noAnnotations,
 	type Problem,
 	type StepAnnotations,
@@ -13,16 +15,12 @@ import {
 } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
-import {
-	type AgentConfig,
-	type AgentDelta,
-	streamAgent,
-	type TokenUsage,
-} from "./agent.ts";
-import { type EvalMessage, evalMessage } from "./eval.ts";
+import type { StepMeta } from "@repo/shared/messages";
+import { type AgentConfig, streamAgent } from "./agent.ts";
+import { evalMessage } from "./eval.ts";
 import type { Steer } from "./inbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
-import { resolveModel } from "./provider.ts";
+import { resolveModel } from "./provider/registry.ts";
 import {
 	checkResultContent,
 	evalCode,
@@ -36,6 +34,7 @@ import {
 	withItsResult,
 } from "./repl.ts";
 import type { TraceContext } from "./telemetry.ts";
+import type { ToolMessage } from "./tool-message.ts";
 import { type TurnTelemetry, turnTelemetry } from "./turn-telemetry.ts";
 
 export interface TurnOptions {
@@ -47,16 +46,7 @@ export interface TurnOptions {
 	maxSteps?: number;
 	inbox?: () => Promise<Steer[]>;
 	runsForms?: boolean;
-}
-
-export interface StepMeta {
-	at: string;
-	durationMs: number;
-	provider: string;
-	model: string;
-	inputTokens?: number;
-	outputTokens?: number;
-	cachedInputTokens?: number;
+	received?: Annotations;
 }
 
 export type TurnEvent =
@@ -86,7 +76,7 @@ export type TurnEvent =
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
 	| { type: "steered"; id: string; content: string }
-	| { type: "evaluated"; message: EvalMessage }
+	| { type: "evaluated"; message: ToolMessage }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
@@ -98,7 +88,7 @@ function lastUserPrompt(transcript: TranscriptEntry[]): string {
 
 function stepMeta(
 	startedAt: number,
-	usage: TokenUsage | undefined,
+	usage: ModelUsage | undefined,
 	ran: { provider: string; model: string },
 ): StepMeta {
 	return {
@@ -118,7 +108,7 @@ function stepMeta(
 	};
 }
 
-function resultEntry(message: EvalMessage): TranscriptEntry {
+function resultEntry(message: ToolMessage): TranscriptEntry {
 	const riding = message.additional_kwargs?.riding;
 	return {
 		role: "tool",
@@ -181,14 +171,14 @@ async function* prepareStep(
 interface Reply {
 	full: string;
 	reasoning: string;
-	usage?: TokenUsage;
+	usage?: ModelUsage;
 }
 
 async function* callModel(
 	repl: AgentRepl,
 	request: ModelRequest,
 	stepId: string,
-	call: (request: ModelRequest) => AsyncIterable<AgentDelta>,
+	call: (request: ModelRequest) => AsyncIterable<ModelDelta>,
 ): AsyncGenerator<TurnEvent, Reply> {
 	const reply: Reply = { full: "", reasoning: "" };
 	for await (const delta of repl.modelCall(request, call)) {
@@ -216,12 +206,13 @@ interface Turn {
 	readonly signal?: AbortSignal;
 	readonly inbox?: () => Promise<Steer[]>;
 	readonly runsForms: boolean;
+	readonly received?: Annotations;
 	readonly agent: AgentTurn;
 	readonly telemetry: TurnTelemetry;
 	steps: number;
 }
 
-type ModelCall = (request: ModelRequest) => AsyncIterable<AgentDelta>;
+type ModelCall = (request: ModelRequest) => AsyncIterable<ModelDelta>;
 
 function* collect(annotations: StepAnnotations): Generator<TurnEvent> {
 	if (Object.keys(annotations.step).length > 0)
@@ -240,6 +231,13 @@ async function* openTurn(
 	const started = await repl.turnStart(turn.telemetry.turnStart);
 	if (started.emitted !== "") transcript.push(noteEntry(started.emitted));
 	yield* collect(started.annotations);
+
+	if (turn.received !== undefined) {
+		const heard = await repl.received(turn.received, turn.telemetry.received);
+		yield* collect(heard.annotations);
+		if (heard.emitted !== "" && ride(transcript, heard.emitted))
+			yield { type: "rode", text: heard.emitted };
+	}
 
 	const { prompt: system, annotations } = await repl.system(
 		config?.system ?? systemPromptFor(repl.interp),
@@ -498,6 +496,7 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 		signal,
 		inbox,
 		runsForms: options.runsForms ?? true,
+		received: options.received,
 		steps: 0,
 	};
 }

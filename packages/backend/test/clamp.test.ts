@@ -38,6 +38,15 @@ describe("clamp", () => {
 		expect(clamped.kwargs).toEqual({ meta: { durationMs: 12 } });
 	});
 
+	it("keeps an open ask over a view that would spend the budget first", () => {
+		const asks = { open: [{ id: "a1", title: "t", prompt: "p", choices: [] }] };
+		const clamped = clamp("x".repeat(MAX_MESSAGE_BYTES * 4), {
+			ui: "y".repeat(Math.floor(MAX_MESSAGE_BYTES / 2) - 64),
+			asks,
+		});
+		expect(clamped.kwargs?.asks).toEqual(asks);
+	});
+
 	it("never splits a multi-byte character", () => {
 		const clamped = clamp("é".repeat(MAX_MESSAGE_BYTES), undefined);
 		expect(clamped.truncated).toBe(true);

@@ -1,4 +1,4 @@
-import { ASKS_KEY, type Asks } from "@repo/interpreter/asks";
+import { type Asks, asksKey } from "@repo/interpreter/asks";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { StepHold } from "@repo/interpreter/errors";
 import { Interp, runSync } from "@repo/interpreter/lisp";
@@ -50,7 +50,7 @@ function asksOf(
 	buffer: ReturnType<typeof bufferTransport>,
 ): Asks {
 	return hooks.annotate.run((_b, into) => into, buffer, noAnnotations()).output[
-		ASKS_KEY
+		asksKey.name
 	] as Asks;
 }
 

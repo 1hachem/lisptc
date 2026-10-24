@@ -66,8 +66,6 @@ export function compare(x: Numeric, y: Numeric): number {
 	}
 }
 
-export { numberIn as tryToParse } from "@repo/shared/lisp-tokens";
-
 export function convertToString(x: Numeric): string {
 	const s = `${x}`;
 	if (typeof x === "number" && Number.isInteger(x) && !s.includes("e"))

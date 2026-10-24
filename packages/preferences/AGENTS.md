@@ -1,7 +1,8 @@
 # @repo/preferences-extension
 
-The user's preferences as a language surface: the theme, the font, and which
-channels and metadata fields the chat shows.
+The user's preferences as a language surface: the font, and which channels
+and metadata fields the chat shows. The theme is a workspace setting, so it
+lives in `packages/workspace`.
 
 Turbo tag: `extension`.
 
@@ -20,7 +21,7 @@ Preferences belong to a user, not a workspace. The store a root hands in
 reads and writes as the person in the chat, and this package never learns who
 that is.
 
-What can be chosen comes in through the host: the themes and fonts as data,
+What can be chosen comes in through the host: the fonts as data,
 the channel and metadata ids as whatever the store already holds. This
 package names none of them.
 
