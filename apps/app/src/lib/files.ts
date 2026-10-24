@@ -25,9 +25,15 @@ export function memorySource(
 }
 
 export function agentSource(
-	agent: Pick<Doc<"agents">, "name" | "prompt">,
+	agent: Pick<Doc<"agents">, "name" | "prompt" | "permissions">,
 ): string {
-	return `(defagent ${quoted(agent.name)}\n  :prompt ${quoted(agent.prompt)})`;
+	const lines = [
+		`(defagent ${quoted(agent.name)}`,
+		`  :prompt ${quoted(agent.prompt)}`,
+	];
+	if (agent.permissions !== undefined)
+		lines.push(`  :permissions ${quoted(agent.permissions)}`);
+	return `${lines.join("\n")})`;
 }
 
 export function settingsSource(

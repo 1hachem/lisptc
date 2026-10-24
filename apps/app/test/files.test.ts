@@ -1,6 +1,7 @@
 import type { Id } from "@repo/backend/dataModel";
 import { describe, expect, it } from "vitest";
 import {
+	agentSource,
 	fileContext,
 	memorySource,
 	permissionRules,
@@ -29,6 +30,23 @@ describe("memorySource", () => {
 			}),
 		).toBe(
 			'(memory/remember "retry"\n  (retry 3)\n  :on (error "timeout")\n  :links ("net" "say \\"hi\\""))',
+		);
+	});
+});
+
+describe("agentSource", () => {
+	it("writes the defagent call, with permissions only when it has some", () => {
+		expect(agentSource({ name: "r", prompt: "dig" })).toBe(
+			'(defagent "r"\n  :prompt "dig")',
+		);
+		expect(
+			agentSource({
+				name: "r",
+				prompt: "dig",
+				permissions: "(permission/deny fs/*)",
+			}),
+		).toBe(
+			'(defagent "r"\n  :prompt "dig"\n  :permissions "(permission/deny fs/*)")',
 		);
 	});
 });

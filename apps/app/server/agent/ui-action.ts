@@ -4,6 +4,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { z } from "zod";
 import { body } from "./body.ts";
 import { convexAs } from "./convex.ts";
+import { delegated } from "./delegated.ts";
 import { ticket } from "./events.ts";
 import { convexId } from "./ids.ts";
 import { repls } from "./repls.ts";
@@ -34,12 +35,19 @@ export const uiAction = {
 		const { chatId, messageId, action, values } = context.body;
 		const convex = convexAs(context.session);
 		await convex.query(api.chats.get, { chatId });
-		const result = await runUiAction(repls, chatId, action, values ?? {});
+		const delegate =
+			messageId !== undefined && delegated.holds(messageId)
+				? messageId
+				: undefined;
+		const result =
+			delegate === undefined
+				? await runUiAction(repls, chatId, action, values ?? {})
+				: await delegated.answer(delegate, action, values ?? {});
 		const { annotations, ...reply } = result;
 		if (messageId !== undefined && !result.error)
 			await annotateMessage(convex, chatId, messageId, annotations);
 		const event =
-			result.message === undefined || result.error
+			delegate !== undefined || result.message === undefined || result.error
 				? undefined
 				: await ticket(
 						{ subject: context.session.subject, chatId },

@@ -1,3 +1,5 @@
+import { asking } from "@repo/interpreter/asks";
+import { noAnnotations } from "@repo/interpreter/session";
 import { describe, expect, test } from "vitest";
 import type { ChatMessage } from "../src/lib/chat.tsx";
 import { isFreshChat, turnsToShow } from "../src/lib/turns.ts";
@@ -27,6 +29,21 @@ describe("which turns the view reads", () => {
 	test("hands over when convex runs ahead of a stale stream", () => {
 		const persisted = messages("a", "b", "c", "d");
 		expect(turnsToShow(messages("a", "b"), persisted, false)).toBe(persisted);
+	});
+
+	test("shows an ask posted to the chat while the stream runs", () => {
+		const asked: ChatMessage = {
+			id: "ask",
+			type: "tool",
+			content: "agent r is waiting on you",
+			additional_kwargs: asking(noAnnotations(), {
+				open: [{ id: "1", title: "t", prompt: "p", choices: [] }],
+			}).output,
+		};
+		const streamed = messages("a", "b");
+		expect(turnsToShow(streamed, [...messages("a", "z"), asked], true)).toEqual(
+			[...streamed, asked],
+		);
 	});
 
 	test("takes an empty stream over an empty transcript while running", () => {
