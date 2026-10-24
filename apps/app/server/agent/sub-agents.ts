@@ -1,19 +1,25 @@
-import type { ChatSeed, Spawn, SubAgent } from "@repo/agents-extension/ports";
-import { converse } from "@repo/ai";
+import type {
+	AgentRunner,
+	ChatSeed,
+	CodeRunner,
+} from "@repo/agents-extension/ports";
+import { converse, type ReplSource } from "@repo/ai";
 import {
 	type Connect,
+	forkedRepl,
 	type RunnerFor,
 	spawnChat,
 } from "@repo/backend/agent-repl";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import type { ServerClient } from "@repo/backend/server-client";
+import type { StepAnnotations } from "@repo/interpreter/session";
 import { chatTurns, notice } from "./chat-turns.ts";
 import { delegated } from "./delegated.ts";
 import { currentSession } from "./session.ts";
 
 export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
-	return (_workspaceId, chatId) => {
+	return (workspaceId, chatId) => {
 		async function forkChat(child: Id<"chats">, chat: ChatSeed) {
 			if (chat.from === "fresh") return;
 			const earlier = await connect().query(api.messages.transcript, {
@@ -31,8 +37,30 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 			});
 		}
 
-		function subAgent({ definition, seed, chat }: Spawn): SubAgent {
-			const open = async () => {
+		async function surface<Id extends string>(
+			who: string,
+			held: StepAnnotations,
+			source: ReplSource<Id>,
+			signal: AbortSignal,
+		): Promise<string> {
+			const id = crypto.randomUUID();
+			const answered = delegated.wait(id, source, signal);
+			await connect().mutation(api.messages.append, {
+				chatId,
+				messages: [
+					{
+						id,
+						type: "tool",
+						content: `${who} is waiting on you`,
+						kwargs: held.output,
+					},
+				],
+			});
+			return answered;
+		}
+
+		const agents: AgentRunner = {
+			async spawn({ definition, seed, chat }) {
 				const child = await spawnChat(connect, server, {
 					parent: chatId,
 					definition,
@@ -40,44 +68,46 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 				});
 				await forkChat(child, chat);
 				return child;
-			};
-			let opening: Promise<Id<"chats">> | undefined;
-			return {
-				async send({ message, maxSteps, signal }) {
-					const session = currentSession();
-					opening ??= open();
-					const child = await opening;
-					return converse(
-						(said) =>
-							chatTurns().reply(session, child, said, { maxSteps, signal }),
-						message,
-						async (held) => {
-							const id = crypto.randomUUID();
-							const answered = delegated.wait(
-								id,
-								chatTurns().source(child),
-								signal,
-							);
-							await connect().mutation(api.messages.append, {
-								chatId,
-								messages: [
-									{
-										id,
-										type: "tool",
-										content: `agent ${definition.name} is waiting on you`,
-										kwargs: held.output,
-									},
-								],
-							});
-							return answered;
-						},
+			},
+			async send(agent, { message, maxSteps, signal }) {
+				const session = currentSession();
+				const child = agent as Id<"chats">;
+				const { title } = await connect().query(api.chats.get, {
+					chatId: child,
+				});
+				return converse(
+					(said) =>
+						chatTurns().reply(session, child, said, { maxSteps, signal }),
+					message,
+					(held) =>
+						surface(`agent ${title}`, held, chatTurns().source(child), signal),
+				);
+			},
+		};
+
+		const code: CodeRunner = {
+			async run({ source, image }, signal) {
+				const { agent } = await connect().query(api.chats.get, { chatId });
+				const repl = await forkedRepl(workspaceId, connect, {
+					image,
+					bounds: agent?.bounds ?? [],
+				});
+				const ran = await repl.evalOutput(source);
+				if (ran.held)
+					return await surface(
+						"background code",
+						ran.annotations,
+						{ repl },
+						signal,
 					);
-				},
-			};
-		}
+				if (ran.failed) throw new Error(ran.model);
+				return ran.model;
+			},
+		};
 
 		return {
-			runner: { spawn: subAgent },
+			agents,
+			code,
 			notify: (reply) => {
 				try {
 					notice({ session: currentSession(), chatId, notice: reply });
