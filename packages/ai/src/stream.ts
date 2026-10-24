@@ -1,4 +1,4 @@
-import type { Annotations } from "@repo/interpreter/session";
+import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
 import {
 	contentToText,
 	ENVELOPE_KEYS,
@@ -129,7 +129,7 @@ function received(input: ChatInput): Annotations | undefined {
 	return carried.length === 0 ? undefined : Object.fromEntries(carried);
 }
 
-export function toTranscript(input: ChatInput): TranscriptEntry[] {
+function toTranscript(input: ChatInput): TranscriptEntry[] {
 	const transcript: TranscriptEntry[] = [];
 	for (const entry of (input.messages ?? []).map(toEntry)) {
 		const previous = transcript.at(-1);
@@ -152,7 +152,14 @@ export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
 	steer?: { inbox: SteerInbox; key: string };
 	quiet?: boolean;
 	runsForms?: boolean;
+	maxSteps?: number;
+	onOutcome?: (outcome: TurnOutcome) => void;
 };
+
+export type TurnOutcome =
+	| { readonly answer: string }
+	| { readonly held: StepAnnotations }
+	| { readonly stopped: string };
 
 function steerLine(steer: ChatStreamOptions["steer"]) {
 	if (steer === undefined)
@@ -177,6 +184,8 @@ class TurnWire {
 	readonly revised = new Map<number, WireMessage>();
 	steps = 0;
 	failure: string | undefined;
+	outcome: TurnOutcome = { stopped: "stopped without answering" };
+	private held: StepAnnotations | undefined;
 	private lastMeta: Record<string, unknown> | undefined;
 
 	constructor(
@@ -223,14 +232,22 @@ class TurnWire {
 				return this.result(event);
 			case "halt":
 				this.steps = event.steps;
+				this.outcome =
+					this.held === undefined
+						? { answer: event.answer }
+						: { held: this.held };
 				if (this.lastMeta) this.lastMeta.steps = event.steps;
 				this.snapshot();
 				return true;
 			case "capped":
 				this.steps = event.steps;
+				this.outcome = {
+					stopped: `used its ${event.steps} steps without answering`,
+				};
 				return true;
 			case "silent":
 				this.steps = event.steps;
+				this.outcome = { stopped: "replied with nothing" };
 				console.error(
 					`[ai] the model returned an empty reply after ${event.steps} step(s)`,
 				);
@@ -238,6 +255,7 @@ class TurnWire {
 			case "failed":
 				console.error("[ai] chat stream failed:", event.error);
 				this.failure = event.message;
+				this.outcome = { stopped: `failed: ${event.message}` };
 				this.write(
 					sse("error", { error: "AgentError", message: event.message }),
 				);
@@ -274,6 +292,7 @@ class TurnWire {
 
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
+		if (event.held) this.held = event.annotations;
 		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
 		this.wire.push(toolMessage(event, crypto.randomUUID()));
 		return this.snapshot();
@@ -329,6 +348,8 @@ export function streamChatResponse<Id extends string>(
 		steer,
 		quiet,
 		runsForms,
+		maxSteps,
+		onOutcome,
 	} = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
@@ -363,6 +384,7 @@ export function streamChatResponse<Id extends string>(
 						identity,
 						inbox: steering.take,
 						runsForms,
+						...(maxSteps === undefined ? {} : { maxSteps }),
 						received: received(input),
 					}))
 						if (!turn.apply(event)) break;
@@ -370,6 +392,7 @@ export function streamChatResponse<Id extends string>(
 			} catch (error) {
 				console.error("[ai] the turn could not run:", error);
 				turn.failure = errorText(error);
+				turn.outcome = { stopped: `failed: ${errorText(error)}` };
 				write(sse("error", { error: "AgentError", message: errorText(error) }));
 			} finally {
 				await steering
@@ -378,6 +401,7 @@ export function streamChatResponse<Id extends string>(
 						console.error("[ai] the steer inbox did not close:", error),
 					);
 				await record(onTurn, turn);
+				onOutcome?.(turn.outcome);
 				console.log(
 					`[ai] chat stream closed after ${turn.steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);

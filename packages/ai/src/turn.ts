@@ -77,6 +77,12 @@ export type TurnEvent =
 	| { type: "silent"; steps: number }
 	| { type: "failed"; message: string; error: unknown };
 
+function withInstructions(prompt: string, config?: AgentConfig): string {
+	return config?.instructions === undefined
+		? prompt
+		: `${prompt}\n\n${config.instructions}`;
+}
+
 function lastUserPrompt(transcript: TranscriptEntry[]): string {
 	return transcript.filter(isUserPrompt).at(-1)?.content ?? "";
 }
@@ -236,7 +242,7 @@ async function* openTurn(
 	}
 
 	const { prompt: system, annotations } = await repl.system(
-		config?.system ?? systemPromptFor(repl.interp),
+		config?.system ?? withInstructions(systemPromptFor(repl.interp), config),
 	);
 	yield* collect(annotations);
 	const traced: AgentConfig = { ...config, trace };

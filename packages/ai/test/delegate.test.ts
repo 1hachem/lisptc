@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
-import { Conversation } from "../src/conversation.ts";
 import { converse, DelegatedAsks } from "../src/delegate.ts";
+import { streamChatResponse, type TurnOutcome } from "../src/stream.ts";
 import { holding, testRepl } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
@@ -28,28 +28,43 @@ beforeEach(() => {
 	model.calls = 0;
 });
 
-const reply = () => ({ maxSteps: 5, signal: new AbortController().signal });
-
 describe("a delegated conversation", () => {
 	test("surfaces a held step, then carries on with what the user answered", async () => {
 		model.script = [[{ text: "(wait-for-human)" }], [{ text: "done." }]];
 		const repl = testRepl([holding()]);
 		const asks = new DelegatedAsks();
 		const surfaced: unknown[] = [];
-		const answer = converse(
-			new Conversation(repl, "help", async () => ({})),
-			"go",
-			reply,
-			(held) => {
-				surfaced.push(held.output);
-				const waiting = asks.wait("ask-1", repl, new AbortController().signal);
-				setTimeout(() => void asks.answer("ask-1", "approve", {}), 0);
-				return waiting;
-			},
-		);
+		const reply = async (message: string) => {
+			let outcome: TurnOutcome = { stopped: "never ended" };
+			await streamChatResponse(
+				{ messages: [{ type: "human", content: message }] },
+				{ repl, onOutcome: (ended) => (outcome = ended) },
+			).text();
+			return outcome;
+		};
+		const answer = converse(reply, "go", (held) => {
+			surfaced.push(held.output);
+			const waiting = asks.wait(
+				"ask-1",
+				{ repl },
+				new AbortController().signal,
+			);
+			setTimeout(() => void asks.answer("ask-1", "approve", {}), 0);
+			return waiting;
+		});
 		expect(await answer).toBe("done.");
 		expect(surfaced).toEqual([{ waiting: ["approve it"] }]);
 		expect(asks.holds("ask-1")).toBe(false);
+	});
+
+	test("fails with why the turn stopped", async () => {
+		await expect(
+			converse(
+				async () => ({ stopped: "replied with nothing" }),
+				"go",
+				() => Promise.resolve(""),
+			),
+		).rejects.toThrow("replied with nothing");
 	});
 });
 
@@ -64,7 +79,11 @@ describe("delegated asks", () => {
 	test("let go of an ask whose sender gave up", async () => {
 		const asks = new DelegatedAsks();
 		const stop = new AbortController();
-		const waiting = asks.wait("ask-1", testRepl([holding()]), stop.signal);
+		const waiting = asks.wait(
+			"ask-1",
+			{ repl: testRepl([holding()]) },
+			stop.signal,
+		);
 		stop.abort(new Error("cancelled"));
 		await expect(waiting).rejects.toThrow("cancelled");
 		expect(asks.holds("ask-1")).toBe(false);

@@ -5,11 +5,11 @@ export {
 	streamAgent,
 } from "./agent.ts";
 export {
-	Conversation,
-	ConversationStopped,
-	type Replied,
-} from "./conversation.ts";
-export { converse, DelegatedAsks, type Surface } from "./delegate.ts";
+	converse,
+	DelegatedAsks,
+	type Reply,
+	type Surface,
+} from "./delegate.ts";
 export {
 	type Evaluated,
 	evalUserMessage,
@@ -44,7 +44,7 @@ export {
 	type ChatStreamOptions,
 	streamChatResponse,
 	systemEventMessage,
-	toTranscript,
+	type TurnOutcome,
 	type WireMessage,
 } from "./stream.ts";
 export { renderSystemEvent, type SystemEvent } from "./system-event.ts";

@@ -1,17 +1,17 @@
 import type { StepAnnotations } from "@repo/interpreter/session";
-import type { AgentRepl } from "@repo/repl/repl";
-import type { Conversation, Reply } from "./conversation.ts";
+import { type ReplSource, replFrom } from "./repl-store.ts";
+import type { TurnOutcome } from "./stream.ts";
 import { type UiActionResult, uiActionOn } from "./ui-action.ts";
 
 interface Waiting {
-	readonly repl: AgentRepl;
+	readonly source: ReplSource;
 	readonly resume: (message: string) => void;
 }
 
 export class DelegatedAsks {
 	private readonly waiting = new Map<string, Waiting>();
 
-	wait(id: string, repl: AgentRepl, signal: AbortSignal): Promise<string> {
+	wait(id: string, source: ReplSource, signal: AbortSignal): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const abandon = () => {
 				this.waiting.delete(id);
@@ -20,7 +20,7 @@ export class DelegatedAsks {
 			if (signal.aborted) return abandon();
 			signal.addEventListener("abort", abandon, { once: true });
 			this.waiting.set(id, {
-				repl,
+				source,
 				resume: (message) => {
 					signal.removeEventListener("abort", abandon);
 					this.waiting.delete(id);
@@ -42,23 +42,28 @@ export class DelegatedAsks {
 		const waiting = this.waiting.get(id);
 		if (waiting === undefined)
 			return { output: "nothing is waiting on this ask", error: true };
-		const result = await uiActionOn(waiting.repl, action, values);
+		const result = await uiActionOn(
+			await replFrom(waiting.source),
+			action,
+			values,
+		);
 		if (result.message !== undefined && !result.error)
 			waiting.resume(result.message);
 		return result;
 	}
 }
 
+export type Reply = (message: string) => Promise<TurnOutcome>;
+
 export type Surface = (held: StepAnnotations) => Promise<string>;
 
 export async function converse(
-	conversation: Conversation,
+	reply: Reply,
 	message: string,
-	reply: () => Reply,
 	surface: Surface,
 ): Promise<string> {
-	let replied = await conversation.reply(message, reply());
-	while ("held" in replied)
-		replied = await conversation.reply(await surface(replied.held), reply());
-	return replied.answer;
+	let outcome = await reply(message);
+	while ("held" in outcome) outcome = await reply(await surface(outcome.held));
+	if ("stopped" in outcome) throw new Error(outcome.stopped);
+	return outcome.answer;
 }
