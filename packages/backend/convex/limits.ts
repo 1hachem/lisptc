@@ -24,8 +24,6 @@ export const MAX_KNOWLEDGE_BYTES = 20_971_520;
 
 export const MAX_KNOWLEDGE = 200;
 
-export const MAX_KNOWLEDGE_NAME = 128;
-
 export const MAX_ATTACHMENTS = 200;
 
 export const ATTACHMENT_TTL_MS = 604_800_000;

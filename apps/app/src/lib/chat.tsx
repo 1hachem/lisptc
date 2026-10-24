@@ -97,12 +97,15 @@ export interface ChatSession {
 	draftChatId: Id<"chats"> | null;
 	workspaceId: Id<"workspaces">;
 	error?: string;
-	send: (text: string, annotations?: MessageAnnotations) => void;
+	send: (
+		text: string,
+		annotations?: Record<string, unknown>,
+	) => Promise<boolean>;
 	sendAbout: (
 		file: OpenFile,
 		text: string,
-		annotations?: MessageAnnotations,
-	) => void;
+		annotations?: Record<string, unknown>,
+	) => Promise<boolean>;
 	resume: (event: SystemEventTicket) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
@@ -112,8 +115,6 @@ export interface ChatSession {
 export type StoredMessage = FunctionReturnType<
 	typeof api.messages.transcript
 >[number];
-
-export type MessageAnnotations = Record<string, unknown>;
 
 const shaped = new WeakMap<StoredMessage, ChatMessage>();
 
@@ -138,41 +139,64 @@ function greetingMessage(): ChatMessage {
 	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
 }
 
-export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
-
-const ChatContext = createContext<ChatStore | null>(null);
-
-const abandoning = new Set<(chatId: Id<"chats">) => void>();
-
-export function abandonChat(chatId: Id<"chats">): void {
-	for (const abandon of abandoning) abandon(chatId);
+function withGreeting(
+	greeting: ChatMessage | null,
+	turns: ChatMessage[],
+): ChatMessage[] {
+	if (greeting === null || turns.some((m) => m.id === GREETING_ID))
+		return turns;
+	return [greeting, ...turns];
 }
 
-function titleOf(message: string): string {
-	const line = message.trim().split("\n")[0] ?? "";
-	return line.length > 60 ? `${line.slice(0, 57)}…` : line;
+function greetingText(greeting: ChatMessage | null): string | null {
+	return greeting === null ? null : messageText(greeting);
 }
 
-function errorFor(
-	chatId: Id<"chats"> | null,
-	sources: {
-		stream: unknown;
-		streamingFor: Id<"chats"> | null;
-		failure: { chatId: Id<"chats"> | null; message: string } | null;
-	},
-): string | undefined {
-	const { stream, streamingFor, failure } = sources;
-	if (stream && streamingFor === chatId)
-		return stream instanceof Error ? stream.message : String(stream);
-	if (failure?.chatId === chatId) return failure.message;
-	return undefined;
+function useGreeting(): ChatMessage | null {
+	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
+	useEffect(() => {
+		setGreeting(greetingMessage());
+	}, []);
+	return greeting;
 }
 
-function useDraftedChat(
-	chatId: Id<"chats"> | null,
+function freshMeta(
+	known: Readonly<Record<string, StepMeta>>,
+	message: ChatMessage,
+): StepMeta | undefined {
+	if (!message.id || known[message.id]?.memories) return undefined;
+	const parsed = stepMeta(message);
+	if (parsed && known[message.id] && !parsed.memories) return undefined;
+	return parsed;
+}
+
+function newMeta(
+	known: Readonly<Record<string, StepMeta>>,
+	turns: readonly ChatMessage[],
+): Record<string, StepMeta> {
+	const found: Record<string, StepMeta> = {};
+	for (const message of turns) {
+		const parsed = freshMeta(known, message);
+		if (parsed && message.id) found[message.id] = parsed;
+	}
+	return found;
+}
+
+function useTurnMeta(turns: ChatMessage[]): Record<string, StepMeta> {
+	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
+	useEffect(() => {
+		const found = newMeta(meta, turns);
+		if (Object.keys(found).length > 0)
+			setMeta((prev) => ({ ...prev, ...found }));
+	}, [turns, meta]);
+	return meta;
+}
+
+function useDrafted(
 	workspaceId: Id<"workspaces">,
-	draftChat: (args: { workspaceId: Id<"workspaces"> }) => Promise<Id<"chats">>,
+	chatId: Id<"chats"> | null,
 ): Id<"chats"> | null {
+	const draftChat = useConvexMutation(api.chats.draft);
 	const [drafted, setDrafted] = useState<Id<"chats"> | null>(null);
 	useEffect(() => {
 		setDrafted(null);
@@ -213,15 +237,16 @@ function useMarkStreaming() {
 	);
 }
 
+function messageOf(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 function useStreamFailure(
 	error: unknown,
 	chatId: Id<"chats"> | null,
 	streamingFor: { readonly current: Id<"chats"> | null },
-	settleChat: (args: {
-		chatId: Id<"chats">;
-		failure?: string;
-	}) => Promise<unknown>,
-) {
+): void {
+	const settleChat = useConvexMutation(api.chats.settle);
 	useEffect(() => {
 		if (error)
 			reportIssue(error, {
@@ -233,134 +258,99 @@ function useStreamFailure(
 	useEffect(() => {
 		const failed = streamingFor.current;
 		if (!error || failed === null) return;
-		settleChat({
-			chatId: failed,
-			failure: error instanceof Error ? error.message : String(error),
-		}).catch((ex: unknown) =>
-			reportIssue(ex, { $exception_source: "chat settle", thread_id: failed }),
+		settleChat({ chatId: failed, failure: messageOf(error) }).catch(
+			(ex: unknown) =>
+				reportIssue(ex, {
+					$exception_source: "chat settle",
+					thread_id: failed,
+				}),
 		);
 	}, [error, settleChat, streamingFor]);
 }
 
-function useGreeting(): ChatMessage | null {
-	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
-	useEffect(() => {
-		setGreeting(greetingMessage());
-	}, []);
-	return greeting;
+export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
+
+const ChatContext = createContext<ChatStore | null>(null);
+
+const abandoning = new Set<(chatId: Id<"chats">) => void>();
+
+export function abandonChat(chatId: Id<"chats">): void {
+	for (const abandon of abandoning) abandon(chatId);
 }
 
-function freshMeta(
-	turns: readonly ChatMessage[],
-	meta: Record<string, StepMeta>,
-): Record<string, StepMeta> {
-	const found: Record<string, StepMeta> = {};
-	for (const m of turns) {
-		if (!m.id) continue;
-		const known = meta[m.id];
-		if (known?.memories) continue;
-		const parsed = stepMeta(m);
-		if (!parsed) continue;
-		if (known && !parsed.memories) continue;
-		found[m.id] = parsed;
-	}
-	return found;
+function titleOf(message: string): string {
+	const line = message.trim().split("\n")[0] ?? "";
+	return line.length > 60 ? `${line.slice(0, 57)}…` : line;
 }
 
-function useStepMeta(turns: readonly ChatMessage[]): Record<string, StepMeta> {
-	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
-	useEffect(() => {
-		const found = freshMeta(turns, meta);
-		if (Object.keys(found).length > 0)
-			setMeta((prev) => ({ ...prev, ...found }));
-	}, [turns, meta]);
-	return meta;
+function errorFor(
+	chatId: Id<"chats"> | null,
+	sources: {
+		stream: unknown;
+		streamingFor: Id<"chats"> | null;
+		failure: { chatId: Id<"chats"> | null; message: string } | null;
+	},
+): string | undefined {
+	const { stream, streamingFor, failure } = sources;
+	if (stream && streamingFor === chatId)
+		return stream instanceof Error ? stream.message : String(stream);
+	if (failure?.chatId === chatId) return failure.message;
+	return undefined;
 }
 
-function useAbandoning(abandon: (target: Id<"chats">) => void) {
-	useEffect(() => {
-		abandoning.add(abandon);
-		return () => {
-			abandoning.delete(abandon);
-		};
-	}, [abandon]);
+function reported(source: string, thread: string) {
+	return (ex: unknown) =>
+		reportIssue(ex, { $exception_source: source, thread_id: thread });
 }
 
-type Stream = ReturnType<typeof useStream>;
+function isEmptyTurn(
+	trimmed: string,
+	annotations: Record<string, unknown> | undefined,
+): boolean {
+	return trimmed === "" && annotations === undefined;
+}
 
-function useSubmit({
-	chatId,
-	workspaceId,
-	draftChat,
-	renameChat,
-	markStreaming,
-	persisted,
-	stream,
-	streamingFor,
-	announce,
-	setFailure,
-}: {
-	chatId: Id<"chats"> | null;
-	workspaceId: Id<"workspaces">;
-	draftChat: (args: { workspaceId: Id<"workspaces"> }) => Promise<Id<"chats">>;
-	renameChat: (args: {
-		chatId: Id<"chats">;
-		title: string;
-	}) => Promise<unknown>;
-	markStreaming: (args: { chatId: Id<"chats"> }) => Promise<unknown>;
-	persisted: ChatMessage[];
-	stream: Stream;
-	streamingFor: { current: Id<"chats"> | null };
-	announce: { readonly current: (chatId: Id<"chats">) => void };
-	setFailure: (failure: null) => void;
-}) {
-	return useCallback(
-		async (
-			input:
-				| { message: string; annotations?: MessageAnnotations }
-				| { event: { token: string } },
-			shown: ChatMessage,
-			title: string,
-		) => {
-			setFailure(null);
-			const opened = chatId ?? (await draftChat({ workspaceId }));
-			if (chatId === null && title.trim() !== "")
-				renameChat({ chatId: opened, title }).catch((ex: unknown) =>
-					reportIssue(ex, {
-						$exception_source: "chat title",
-						thread_id: opened,
-					}),
-				);
-			streamingFor.current = opened;
-			markStreaming({ chatId: opened }).catch((ex: unknown) =>
-				reportIssue(ex, { $exception_source: "chat start", thread_id: opened }),
-			);
-			stream.submit(
-				{ chatId: opened, ...input },
-				{ optimisticValues: { messages: [...persisted, shown] } },
-			);
-			if (!chatId) announce.current(opened);
-		},
-		[
-			chatId,
-			workspaceId,
-			draftChat,
-			renameChat,
-			markStreaming,
-			persisted,
-			stream,
-			streamingFor,
-			announce,
-			setFailure,
-		],
+function turnInput(
+	message: string,
+	annotations: Record<string, unknown> | undefined,
+): { message: string; annotations?: Record<string, unknown> } {
+	return annotations === undefined ? { message } : { message, annotations };
+}
+
+function humanMessage(
+	content: string,
+	annotations: Record<string, unknown> | undefined,
+): ChatMessage {
+	const message: ChatMessage = {
+		type: "human",
+		content,
+		id: crypto.randomUUID(),
+	};
+	return annotations === undefined
+		? message
+		: { ...message, additional_kwargs: annotations };
+}
+
+function useChatStream() {
+	const transport = useMemo(
+		() =>
+			new FetchStreamTransport({
+				apiUrl: "/api/chat",
+				onRequest: async (_url, init) => ({
+					...init,
+					headers: { ...init.headers, ...(await apiHeaders()) },
+				}),
+			}),
+		[],
 	);
+	return useStream({ transport });
 }
 
-function useStopping(
-	stream: Stream,
+function useHalt(
+	stream: { isLoading: boolean; stop: () => unknown },
 	streamingFor: { readonly current: Id<"chats"> | null },
-	settleChat: (args: { chatId: Id<"chats"> }) => Promise<unknown>,
 	clear: () => void,
+	settleChat: (args: { chatId: Id<"chats"> }) => Promise<unknown>,
 ) {
 	const halt = useCallback(() => {
 		clear();
@@ -370,12 +360,7 @@ function useStopping(
 	const stop = useCallback(() => {
 		const stopped = streamingFor.current;
 		if (stream.isLoading && stopped !== null)
-			settleChat({ chatId: stopped }).catch((ex: unknown) =>
-				reportIssue(ex, {
-					$exception_source: "chat settle",
-					thread_id: stopped,
-				}),
-			);
+			settleChat({ chatId: stopped }).catch(reported("chat settle", stopped));
 		halt();
 	}, [stream, halt, settleChat, streamingFor]);
 
@@ -388,110 +373,99 @@ function useStopping(
 	return { stop, abandon };
 }
 
-export function ChatProvider({
-	workspaceId,
-	chatId,
-	onOpened,
-	children,
-}: {
-	workspaceId: Id<"workspaces">;
-	chatId: Id<"chats"> | null;
-	onOpened: (chatId: Id<"chats">) => void;
-	children: React.ReactNode;
-}) {
-	const announce = useRef(onOpened);
-	announce.current = onOpened;
+type Failure = { chatId: Id<"chats"> | null; message: string } | null;
+
+type TurnInput =
+	| { message: string; annotations?: Record<string, unknown> }
+	| { event: { token: string } };
+
+function useSubmit(
+	workspaceId: Id<"workspaces">,
+	chatId: Id<"chats"> | null,
+	stream: ReturnType<typeof useChatStream>,
+	streamingFor: { current: Id<"chats"> | null },
+	persisted: ChatMessage[],
+	setFailure: (failure: Failure) => void,
+	announce: { readonly current: (chatId: Id<"chats">) => void },
+) {
 	const draftChat = useConvexMutation(api.chats.draft);
 	const renameChat = useConvexMutation(api.chats.rename);
-	const drafted = useDraftedChat(chatId, workspaceId, draftChat);
-	const settleChat = useConvexMutation(api.chats.settle);
 	const markStreaming = useMarkStreaming();
-	const transport = useMemo(
-		() =>
-			new FetchStreamTransport({
-				apiUrl: "/api/chat",
-				onRequest: async (_url, init) => ({
-					...init,
-					headers: { ...init.headers, ...(await apiHeaders()) },
-				}),
-			}),
-		[],
+	return useCallback(
+		async (input: TurnInput, shown: ChatMessage, title: string) => {
+			setFailure(null);
+			const opened = chatId ?? (await draftChat({ workspaceId }));
+			if (chatId === null && title.trim() !== "")
+				renameChat({ chatId: opened, title }).catch(
+					reported("chat title", opened),
+				);
+			streamingFor.current = opened;
+			markStreaming({ chatId: opened }).catch(reported("chat start", opened));
+			stream.submit(
+				{ chatId: opened, ...input },
+				{ optimisticValues: { messages: [...persisted, shown] } },
+			);
+			if (chatId === null) announce.current(opened);
+		},
+		[
+			chatId,
+			workspaceId,
+			draftChat,
+			renameChat,
+			markStreaming,
+			persisted,
+			stream,
+			streamingFor,
+			setFailure,
+			announce,
+		],
 	);
-	const stream = useStream({ transport });
-	const streamed: ChatMessage[] = stream.messages;
-	const streamingFor = useRef<Id<"chats"> | null>(null);
+}
 
-	const { data: stored } = useQuery(
-		convexQuery(api.messages.light, chatId ? { chatId } : "skip"),
-	);
-	const persisted = useMemo(() => toChatMessages(stored ?? []), [stored]);
-
-	useStreamFailure(stream.error, chatId, streamingFor, settleChat);
-
-	const greeting = useGreeting();
-
-	const [failure, setFailure] = useState<{
-		chatId: Id<"chats"> | null;
-		message: string;
-	} | null>(null);
-
-	const turns =
-		streamingFor.current === chatId
-			? turnsToShow(streamed, persisted, stream.isLoading)
-			: persisted;
-
-	const messages = useMemo(
-		() =>
-			!greeting || turns.some((m) => m.id === GREETING_ID)
-				? turns
-				: [greeting, ...turns],
-		[greeting, turns],
-	);
-
-	const meta = useStepMeta(turns);
-
-	const submit = useSubmit({
-		chatId,
-		workspaceId,
-		draftChat,
-		renameChat,
-		markStreaming,
-		persisted,
-		stream,
-		streamingFor,
-		announce,
-		setFailure,
-	});
-
+function useTurnSend(
+	chatId: Id<"chats"> | null,
+	submit: (
+		input: TurnInput,
+		shown: ChatMessage,
+		title: string,
+	) => Promise<void>,
+	setFailure: (failure: Failure) => void,
+) {
 	const submitTurn = useCallback(
 		async (
 			text: string,
 			title = titleOf(text),
-			annotations?: MessageAnnotations,
-		) => {
+			annotations?: Record<string, unknown>,
+		): Promise<boolean> => {
 			const trimmed = text.trim();
-			if (!trimmed && annotations === undefined) return;
-			await submit(
-				{ message: trimmed, ...(annotations ? { annotations } : {}) },
-				{
-					type: "human",
-					content: trimmed,
-					id: crypto.randomUUID(),
-					...(annotations ? { additional_kwargs: annotations } : {}),
-				},
-				title,
-			);
+			if (isEmptyTurn(trimmed, annotations)) return true;
+			try {
+				await submit(
+					turnInput(trimmed, annotations),
+					humanMessage(trimmed, annotations),
+					title,
+				);
+				return true;
+			} catch (ex: unknown) {
+				reportIssue(ex, { $exception_source: "chat send" });
+				setFailure({ chatId, message: "message not sent, try again" });
+				return false;
+			}
 		},
-		[submit],
+		[submit, chatId, setFailure],
 	);
 
 	const sendAbout = useCallback(
-		async (file: OpenFile, text: string, annotations?: MessageAnnotations) => {
+		async (
+			file: OpenFile,
+			text: string,
+			annotations?: Record<string, unknown>,
+		) => {
 			const trimmed = text.trim();
-			if (!trimmed) return;
-			await submitTurn(
+			if (isEmptyTurn(trimmed, annotations)) return true;
+			return await submitTurn(
 				fileContext(file, trimmed),
-				titleOf(trimmed),
+				titleOf(trimmed || file.path),
 				annotations,
 			);
 		},
@@ -512,35 +486,53 @@ export function ChatProvider({
 		(text: string) => void submitTurn(text),
 		[submitTurn],
 	);
-	const { queued, enqueue, withdraw, clear } = useSteerQueue({
-		chatId,
-		landed: streamed,
-		streaming: stream.isLoading,
-		resend,
-	});
-	const steering = stream.isLoading && streamingFor.current === chatId;
+	return { submitTurn, sendAbout, resume, resend };
+}
 
-	const send = useCallback(
-		async (text: string, annotations?: MessageAnnotations) => {
+function usePersisted(chatId: Id<"chats"> | null): ChatMessage[] {
+	const { data: stored } = useQuery(
+		convexQuery(api.messages.light, chatId ? { chatId } : "skip"),
+	);
+	return useMemo(() => toChatMessages(stored ?? []), [stored]);
+}
+
+function shownTurns(
+	streamingHere: boolean,
+	streamed: ChatMessage[],
+	persisted: ChatMessage[],
+	loading: boolean,
+): ChatMessage[] {
+	return streamingHere ? turnsToShow(streamed, persisted, loading) : persisted;
+}
+
+function useSend(
+	steering: boolean,
+	enqueue: (text: string) => void,
+	submitTurn: (
+		text: string,
+		title?: string,
+		annotations?: Record<string, unknown>,
+	) => Promise<boolean>,
+) {
+	return useCallback(
+		async (text: string, annotations?: Record<string, unknown>) => {
 			const trimmed = text.trim();
-			if (steering && trimmed && annotations === undefined) enqueue(trimmed);
-			else await submitTurn(trimmed, undefined, annotations);
+			if (!steering || !trimmed || annotations !== undefined)
+				return await submitTurn(trimmed, undefined, annotations);
+			enqueue(trimmed);
+			return true;
 		},
 		[steering, enqueue, submitTurn],
 	);
+}
 
-	const { stop, abandon } = useStopping(
-		stream,
-		streamingFor,
-		settleChat,
-		clear,
-	);
-
-	const fresh = isFreshChat(chatId, turns);
-
-	const storeRef = useRef<ChatStore | null>(null);
-	if (storeRef.current === null) {
-		storeRef.current = create<ChatSession>(() => ({
+function useSessionStore(
+	fresh: boolean,
+	chatId: Id<"chats"> | null,
+	workspaceId: Id<"workspaces">,
+): ChatStore {
+	const [store] = useState(() =>
+		create<ChatSession>(() => ({
 			messages: [],
 			saved: [],
 			queued: [],
@@ -551,15 +543,88 @@ export function ChatProvider({
 			chatId,
 			draftChatId: null,
 			workspaceId,
-			send: () => {},
-			sendAbout: () => {},
+			send: () => Promise.resolve(false),
+			sendAbout: () => Promise.resolve(false),
 			resume: () => {},
 			stop: () => {},
 			withdraw: () => {},
 			fail: () => {},
-		}));
-	}
-	const store = storeRef.current;
+		})),
+	);
+	return store;
+}
+
+export function ChatProvider({
+	workspaceId,
+	chatId,
+	onOpened,
+	children,
+}: {
+	workspaceId: Id<"workspaces">;
+	chatId: Id<"chats"> | null;
+	onOpened: (chatId: Id<"chats">) => void;
+	children: React.ReactNode;
+}) {
+	const announce = useRef(onOpened);
+	announce.current = onOpened;
+	const drafted = useDrafted(workspaceId, chatId);
+	const settleChat = useConvexMutation(api.chats.settle);
+	const stream = useChatStream();
+	const streamed: ChatMessage[] = stream.messages;
+	const streamingFor = useRef<Id<"chats"> | null>(null);
+
+	const persisted = usePersisted(chatId);
+
+	useStreamFailure(stream.error, chatId, streamingFor);
+
+	const greeting = useGreeting();
+
+	const [failure, setFailure] = useState<Failure>(null);
+
+	const turns = shownTurns(
+		streamingFor.current === chatId,
+		streamed,
+		persisted,
+		stream.isLoading,
+	);
+
+	const messages = useMemo(
+		() => withGreeting(greeting, turns),
+		[greeting, turns],
+	);
+	const meta = useTurnMeta(turns);
+
+	const submit = useSubmit(
+		workspaceId,
+		chatId,
+		stream,
+		streamingFor,
+		persisted,
+		setFailure,
+		announce,
+	);
+	const { submitTurn, sendAbout, resume, resend } = useTurnSend(
+		chatId,
+		submit,
+		setFailure,
+	);
+	const { queued, enqueue, withdraw, clear } = useSteerQueue({
+		chatId,
+		landed: streamed,
+		streaming: stream.isLoading,
+		resend,
+	});
+	const send = useSend(
+		stream.isLoading && streamingFor.current === chatId,
+		enqueue,
+		submitTurn,
+	);
+
+	const { stop, abandon } = useHalt(stream, streamingFor, clear, settleChat);
+
+	const fresh = isFreshChat(chatId, turns);
+
+	const store = useSessionStore(fresh, chatId, workspaceId);
 
 	useEffect(() => {
 		store.setState({
@@ -567,7 +632,7 @@ export function ChatProvider({
 			saved: persisted,
 			queued,
 			meta,
-			greeting: greeting ? messageText(greeting) : null,
+			greeting: greetingText(greeting),
 			fresh,
 			isLoading: stream.isLoading,
 			chatId,
@@ -578,12 +643,8 @@ export function ChatProvider({
 				streamingFor: streamingFor.current,
 				failure,
 			}),
-			send: (text, annotations) => {
-				void send(text, annotations);
-			},
-			sendAbout: (file, text, annotations) => {
-				void sendAbout(file, text, annotations);
-			},
+			send,
+			sendAbout,
 			resume,
 			stop,
 			withdraw,
@@ -610,7 +671,12 @@ export function ChatProvider({
 		withdraw,
 	]);
 
-	useAbandoning(abandon);
+	useEffect(() => {
+		abandoning.add(abandon);
+		return () => {
+			abandoning.delete(abandon);
+		};
+	}, [abandon]);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }

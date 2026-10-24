@@ -2,7 +2,10 @@ import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
-import { ConvexKnowledgeStore } from "../src/knowledge-store.ts";
+import {
+	ConvexKnowledgeStore,
+	type KnowledgeStoreClient,
+} from "../src/knowledge-store.ts";
 import {
 	ConvexPreferencesStore,
 	type PreferencesClient,
@@ -20,7 +23,7 @@ function named(reference: unknown): string {
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 
 function spyClient(answers: Record<string, unknown>): {
-	client: WorkspaceStoreClient & PreferencesClient;
+	client: WorkspaceStoreClient & PreferencesClient & KnowledgeStoreClient;
 	sent: Array<[string, Record<string, unknown>]>;
 } {
 	const sent: Array<[string, Record<string, unknown>]> = [];
@@ -34,7 +37,10 @@ function spyClient(answers: Record<string, unknown>): {
 		client: {
 			query: answer,
 			mutation: answer,
-		} as unknown as WorkspaceStoreClient & PreferencesClient,
+			url: "http://convex-backend:3210",
+		} as unknown as WorkspaceStoreClient &
+			PreferencesClient &
+			KnowledgeStoreClient,
 	};
 }
 
@@ -67,9 +73,12 @@ describe("the convex workspace store", () => {
 });
 
 describe("the convex knowledge store", () => {
-	it("reads an uploaded file through its served url", async () => {
+	it("reads an uploaded file at the deployment the store reaches, whatever origin it was served on", async () => {
 		const { client } = spyClient({
-			[named(api.knowledge.get)]: { name: "a.md", url: "https://blob/a" },
+			[named(api.files.get)]: {
+				name: "a.md",
+				url: "https://convex.example.ts.net/api/storage/a",
+			},
 		});
 		const fetched: string[] = [];
 		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
@@ -79,13 +88,19 @@ describe("the convex knowledge store", () => {
 			},
 			upload: async () => "never" as Id<"_storage">,
 		});
-		expect(new TextDecoder().decode(await store.file("a.md"))).toBe("# a");
-		expect(fetched).toEqual(["https://blob/a"]);
+		expect(
+			new TextDecoder().decode(
+				(await store.read("knowledge", "a.md")) ?? new Uint8Array(),
+			),
+		).toBe("# a");
+		expect(fetched).toEqual(["http://convex-backend:3210/api/storage/a"]);
 	});
 
 	it("writes a file by uploading the blob and recording it", async () => {
 		const { client, sent } = spyClient({
-			[named(api.knowledge.uploadUrl)]: "https://upload",
+			[named(api.files.uploadUrl)]:
+				"https://convex.example.ts.net/api/storage/upload?token=t",
+			[named(api.files.add)]: { name: "a.md" },
 		});
 		const uploaded: Array<[string, string, string]> = [];
 		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
@@ -95,12 +110,24 @@ describe("the convex knowledge store", () => {
 				return "blob-1" as Id<"_storage">;
 			},
 		});
-		await store.write("a.md", "# a", "text/markdown");
-		expect(uploaded).toEqual([["https://upload", "text/markdown", "# a"]]);
+		await store.write(
+			"knowledge",
+			"a.md",
+			new TextEncoder().encode("# a"),
+			"text/markdown",
+		);
+		expect(uploaded).toEqual([
+			[
+				"http://convex-backend:3210/api/storage/upload?token=t",
+				"text/markdown",
+				"# a",
+			],
+		]);
 		expect(sent.at(-1)).toEqual([
-			named(api.knowledge.add),
+			named(api.files.add),
 			{
 				workspaceId: WORKSPACE,
+				folder: "knowledge",
 				name: "a.md",
 				storageId: "blob-1",
 				contentType: "text/markdown",
@@ -110,15 +137,22 @@ describe("the convex knowledge store", () => {
 
 	it("raises the refusal a write comes back with", async () => {
 		const { client } = spyClient({
-			[named(api.knowledge.add)]: "FILE_TOO_LARGE",
+			[named(api.files.uploadUrl)]:
+				"https://convex.example.ts.net/api/storage/upload?token=t",
+			[named(api.files.add)]: { refused: "FILE_TOO_LARGE" },
 		});
 		const store = new ConvexKnowledgeStore(WORKSPACE, () => client, {
 			download: async () => new Uint8Array(),
 			upload: async () => "blob-1" as Id<"_storage">,
 		});
-		await expect(store.write("a.md", "x", "text/markdown")).rejects.toThrow(
-			/FILE_TOO_LARGE/,
-		);
+		await expect(
+			store.write(
+				"knowledge",
+				"a.md",
+				new TextEncoder().encode("x"),
+				"text/markdown",
+			),
+		).rejects.toThrow(/FILE_TOO_LARGE/);
 	});
 });
 

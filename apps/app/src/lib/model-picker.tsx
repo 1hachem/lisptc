@@ -26,7 +26,7 @@ const providers: ProviderOption[] = PROVIDER_NAMES.map((id) => ({
 	name: PROVIDER_CATALOG[id].label,
 	logo: LOGOS[id],
 	models: [...PROVIDER_CATALOG[id].models],
-}));
+})).filter((p) => p.models.length > 0);
 
 interface ModelPicker {
 	choice: ModelChoice;

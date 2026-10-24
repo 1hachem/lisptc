@@ -1,6 +1,6 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import type { Id } from "@repo/backend/dataModel";
+import type { Doc, Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { restoreFailure } from "../lib/bin.ts";
@@ -14,7 +14,7 @@ function RestoreAction({
 }: {
 	workspaceId: Id<"workspaces">;
 	name: string;
-	from: "knowledge" | "attachments";
+	from: Doc<"bin">["from"];
 }) {
 	const restore = useConvexMutation(api.bin.restore);
 	const host = usePageHost();

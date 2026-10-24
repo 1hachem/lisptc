@@ -4,13 +4,13 @@ import { openSession } from "@repo/interpreter/session";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
-import { MemoryKnowledgeStore } from "../src/ports.ts";
+import { MemoryKnowledgeStore } from "../src/memory-store.ts";
 import { pdfSaying, type World, world } from "./helpers.ts";
 
 const decoder = new TextDecoder();
 
 function held(store: World["store"], name: string) {
-	const file = store.filesHeld.get(name);
+	const file = store.held.knowledge.get(name);
 	return file && { text: decoder.decode(file.bytes), type: file.contentType };
 }
 
@@ -87,17 +87,32 @@ describe("knowledge", () => {
 
 	it("never runs what a .ptc file holds", async () => {
 		const { ev, store } = await world();
-		store.write("a.md", "# a", "text/markdown");
-		store.write("trap.ptc", '(knowledge/delete "a.md")\n', "text/plain");
+		store.write(
+			"knowledge",
+			"a.md",
+			new TextEncoder().encode("# a"),
+			"text/markdown",
+		);
+		store.write(
+			"knowledge",
+			"trap.ptc",
+			new TextEncoder().encode('(knowledge/delete "a.md")\n'),
+			"text/plain",
+		);
 		expect(await ev('(knowledge/read "trap.ptc")')).toBe(
 			'(knowledge/delete "a.md")',
 		);
-		expect(store.files()).toEqual(["a.md", "trap.ptc"]);
+		expect(store.names("knowledge")).toEqual(["a.md", "trap.ptc"]);
 	});
 
 	it("edits a .ptc file in place with the core data forms", async () => {
 		const { ev, store } = await world();
-		store.write("notes.ptc", '(:status "open")\n', "text/plain");
+		store.write(
+			"knowledge",
+			"notes.ptc",
+			new TextEncoder().encode('(:status "open")\n'),
+			"text/plain",
+		);
 		await ev(
 			'(knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))',
 		);
@@ -107,8 +122,9 @@ describe("knowledge", () => {
 	it("reads an uploaded .json file as data", async () => {
 		const { ev, store } = await world();
 		store.write(
+			"knowledge",
 			"Q3 Sales.json",
-			'{"region": "north", "rows": [{"total": 12}]}',
+			new TextEncoder().encode('{"region": "north", "rows": [{"total": 12}]}'),
 			"application/json",
 		);
 		expect(
@@ -118,7 +134,12 @@ describe("knowledge", () => {
 
 	it("reads any other text file as a string", async () => {
 		const { ev, store } = await world();
-		store.write("report.md", "# Q3\n\nUp 4%.\n", "text/markdown");
+		store.write(
+			"knowledge",
+			"report.md",
+			new TextEncoder().encode("# Q3\n\nUp 4%.\n"),
+			"text/markdown",
+		);
 		expect(await ev('(knowledge/read "report.md")')).toBe(
 			'"# Q3\\n\\nUp 4%.\\n"',
 		);
@@ -171,12 +192,12 @@ describe("knowledge", () => {
 		await expect(ev(`(knowledge/write "notes.md" '(:a 1))`)).rejects.toThrow(
 			/write a string/,
 		);
-		expect(store.files()).toEqual([]);
+		expect(store.names("knowledge")).toEqual([]);
 	});
 
 	it("refuses to read a binary file as text", async () => {
 		const { ev, store } = await world();
-		store.filesHeld.set("logo.png", {
+		store.held.knowledge.set("logo.png", {
 			bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]),
 			contentType: "image/png",
 		});
@@ -185,7 +206,7 @@ describe("knowledge", () => {
 
 	it("reads the text of every page of a .pdf file", async () => {
 		const { ev, store } = await world();
-		store.filesHeld.set("spec.pdf", {
+		store.held.knowledge.set("spec.pdf", {
 			bytes: pdfSaying("Q3 revenue up", "Churn flat"),
 			contentType: "application/pdf",
 		});
@@ -195,7 +216,7 @@ describe("knowledge", () => {
 
 	it("refuses a .pdf file that is not a PDF", async () => {
 		const { ev, store } = await world();
-		store.filesHeld.set("spec.pdf", {
+		store.held.knowledge.set("spec.pdf", {
 			bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]),
 			contentType: "application/pdf",
 		});
@@ -206,7 +227,12 @@ describe("knowledge", () => {
 
 	it("refuses malformed JSON", async () => {
 		const { ev, store } = await world();
-		store.write("broken.json", "{", "application/json");
+		store.write(
+			"knowledge",
+			"broken.json",
+			new TextEncoder().encode("{"),
+			"application/json",
+		);
 		await expect(ev('(knowledge/read "broken.json")')).rejects.toThrow(
 			/not JSON/,
 		);
@@ -219,9 +245,14 @@ describe("knowledge", () => {
 
 	it("deletes a file into the bin", async () => {
 		const { ev, store } = await world();
-		store.write("a.md", "# a", "text/markdown");
+		store.write(
+			"knowledge",
+			"a.md",
+			new TextEncoder().encode("# a"),
+			"text/markdown",
+		);
 		expect(await ev('(knowledge/delete "a.md")')).toBe("t");
-		expect(store.files()).toEqual([]);
+		expect(store.names("knowledge")).toEqual([]);
 		expect(store.binned()).toEqual([{ name: "a.md", from: "knowledge" }]);
 	});
 
@@ -230,12 +261,17 @@ describe("knowledge", () => {
 		await expect(
 			ev('(knowledge/write "f.ptc" (lambda (x) x))'),
 		).rejects.toThrow(/only data/);
-		expect(store.files()).toEqual([]);
+		expect(store.names("knowledge")).toEqual([]);
 	});
 
 	it("refuses a .ptc file holding more than one form", async () => {
 		const { ev, store } = await world();
-		store.write("two.ptc", "(:a 1)\n(:b 2)\n", "text/plain");
+		store.write(
+			"knowledge",
+			"two.ptc",
+			new TextEncoder().encode("(:a 1)\n(:b 2)\n"),
+			"text/plain",
+		);
 		await expect(ev('(knowledge/read "two.ptc")')).rejects.toThrow(
 			/not one data form/,
 		);
@@ -250,16 +286,36 @@ describe("knowledge", () => {
 describe("attachments", () => {
 	it("reads what the user attached, then keeps it as knowledge", async () => {
 		const { ev, store } = await world();
-		store.attachmentsHeld.set("spec.pdf", {
+		store.held.attachments.set("spec.pdf", {
 			bytes: pdfSaying("Q3 revenue up"),
 			contentType: "application/pdf",
 		});
 		expect(await ev("(attachments/list)")).toBe('("spec.pdf")');
 		expect(await ev('(attachments/read "spec.pdf")')).toMatch(/Q3 revenue up/);
 		expect(await ev('(knowledge/keep "spec.pdf")')).toBe('"spec.pdf"');
-		expect(store.attachments()).toEqual([]);
-		expect(store.files()).toEqual(["spec.pdf"]);
+		expect(store.names("attachments")).toEqual([]);
+		expect(store.names("knowledge")).toEqual(["spec.pdf"]);
 		expect(await ev('(knowledge/read "spec.pdf")')).toMatch(/Q3 revenue up/);
+	});
+
+	it.each([
+		[
+			"logo (2).svg",
+			"image/svg+xml",
+			'<svg viewBox="0 0 1 1"><circle r="1"/></svg>',
+		],
+		["notes.md", "application/octet-stream", "# notes"],
+		["Makefile", "application/octet-stream", "CC = cc"],
+		["log.txt", "text/plain", "line one"],
+	])("reads %s as its text", async (name, contentType, text) => {
+		const { ev, store } = await world();
+		store.held.attachments.set(name, {
+			bytes: new TextEncoder().encode(text),
+			contentType,
+		});
+		expect(await ev(`(attachments/read ${JSON.stringify(name)})`)).toBe(
+			JSON.stringify(text),
+		);
 	});
 
 	it("gives nil for a file attachments do not hold", async () => {
@@ -270,13 +326,13 @@ describe("attachments", () => {
 	it("writes text, or bytes given as base64, into attachments", async () => {
 		const { ev, store } = await world();
 		expect(await ev('(attachments/write "note.md" "# hi")')).toBe('"note.md"');
-		expect(store.attachmentsHeld.get("note.md")?.contentType).toBe(
+		expect(store.held.attachments.get("note.md")?.contentType).toBe(
 			"text/markdown",
 		);
 		await ev(
 			'(attachments/write "dot.png" (list :base64 "iVBORw0K" :type "image/png"))',
 		);
-		expect(store.attachmentsHeld.get("dot.png")).toEqual({
+		expect(store.held.attachments.get("dot.png")).toEqual({
 			bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
 			contentType: "image/png",
 		});
@@ -307,7 +363,7 @@ describe("attachments", () => {
 			"https://example.com/docs/spec.pdf",
 			"https://example.com/a",
 		]);
-		expect(store.attachments()).toEqual(["named.pdf", "spec.pdf"]);
+		expect(store.names("attachments")).toEqual(["named.pdf", "spec.pdf"]);
 	});
 
 	it("refuses a url that is not http, and says why a fetch failed", async () => {
@@ -322,8 +378,18 @@ describe("attachments", () => {
 
 	it("refuses to keep a name knowledge already holds", async () => {
 		const { ev, store } = await world();
-		store.write("a.md", "kept", "text/markdown");
-		store.attach("a.md", new TextEncoder().encode("new"), "text/markdown");
+		store.write(
+			"knowledge",
+			"a.md",
+			new TextEncoder().encode("kept"),
+			"text/markdown",
+		);
+		store.write(
+			"attachments",
+			"a.md",
+			new TextEncoder().encode("new"),
+			"text/markdown",
+		);
 		await expect(ev('(knowledge/keep "a.md")')).rejects.toThrow(
 			/already holds/,
 		);
@@ -332,7 +398,12 @@ describe("attachments", () => {
 			it("shows an attachments or knowledge file to the user, naming its folder", async () => {
 				const { ev, store, attached } = await world();
 				await ev('(attachments/write "chart.svg" "<svg/>")');
-				store.write("report.md", "# r", "text/markdown");
+				store.write(
+					"knowledge",
+					"report.md",
+					new TextEncoder().encode("# r"),
+					"text/markdown",
+				);
 				expect(await ev('(attachments/attach "chart.svg")')).toBe(
 					'"chart.svg"',
 				);
@@ -345,7 +416,12 @@ describe("attachments", () => {
 
 			it("refuses a file the folder does not hold", async () => {
 				const { ev, store, attached } = await world();
-				store.write("report.md", "# r", "text/markdown");
+				store.write(
+					"knowledge",
+					"report.md",
+					new TextEncoder().encode("# r"),
+					"text/markdown",
+				);
 				await expect(ev('(attachments/attach "report.md")')).rejects.toThrow(
 					/no file named report.md in attachments/,
 				);
@@ -358,7 +434,12 @@ describe("attachments", () => {
 describe("bin", () => {
 	async function binned() {
 		const w = await world();
-		w.store.write("Q3 Report.md", "# q3", "text/markdown");
+		w.store.write(
+			"knowledge",
+			"Q3 Report.md",
+			new TextEncoder().encode("# q3"),
+			"text/markdown",
+		);
 		await w.ev('(attachments/write "spec.pdf" "spec")');
 		await w.ev('(knowledge/delete "Q3 Report.md")');
 		await w.ev('(attachments/delete "spec.pdf")');
@@ -367,9 +448,9 @@ describe("bin", () => {
 
 	it("takes what knowledge and attachments delete", async () => {
 		const { ev, store } = await binned();
-		expect(store.files()).toEqual([]);
-		expect(store.attachments()).toEqual([]);
-		expect(await ev("(bin/list)")).toBe('("Q3 Report.md" "spec.pdf")');
+		expect(store.names("knowledge")).toEqual([]);
+		expect(store.names("attachments")).toEqual([]);
+		expect(await ev("(bin/list)")).toBe('("spec.pdf" "Q3 Report.md")');
 	});
 
 	it("searches names, ignoring case", async () => {
@@ -384,8 +465,8 @@ describe("bin", () => {
 			'"knowledge/Q3 Report.md"',
 		);
 		expect(await ev('(bin/restore "spec.pdf")')).toBe('"attachments/spec.pdf"');
-		expect(store.files()).toEqual(["Q3 Report.md"]);
-		expect(store.attachments()).toEqual(["spec.pdf"]);
+		expect(store.names("knowledge")).toEqual(["Q3 Report.md"]);
+		expect(store.names("attachments")).toEqual(["spec.pdf"]);
 		expect(await ev("(bin/list)")).toBe("nil");
 	});
 
@@ -437,5 +518,103 @@ describe("a message the user attached files to", () => {
 			await told({ attachments: [{ folder: "elsewhere", name: "x" }] }),
 		).toEqual([]);
 		expect(await told({})).toEqual([]);
+	});
+});
+
+describe("a .json file", () => {
+	it("reads and writes back false, [], {} and a list of pairs unchanged", async () => {
+		const { ev, store } = await world();
+		const source =
+			'{"off":false,"none":[],"empty":{},"pairs":[["a",1]],"nil":null}';
+		store.write(
+			"knowledge",
+			"data.json",
+			new TextEncoder().encode(source),
+			"application/json",
+		);
+		await ev('(knowledge/write "copy.json" (knowledge/read "data.json"))');
+		expect(JSON.parse(held(store, "copy.json")?.text ?? "")).toEqual(
+			JSON.parse(source),
+		);
+	});
+});
+
+describe("a file name", () => {
+	it("reads and writes a name that is a prototype key as plain text", async () => {
+		const { ev, store } = await world();
+		await ev('(knowledge/write "x.constructor" "built")');
+		await ev('(knowledge/write "x.__proto__" "proto")');
+		expect(held(store, "x.constructor")).toEqual({
+			text: "built",
+			type: "text/plain",
+		});
+		expect(await ev('(knowledge/read "x.constructor")')).toBe('"built"');
+		expect(await ev('(knowledge/read "x.__proto__")')).toBe('"proto"');
+	});
+
+	it("is refused when it is not one, offering a safe one", async () => {
+		const { ev, store } = await world();
+		await expect(ev('(knowledge/write "../notes.md" "x")')).rejects.toThrow(
+			/use "-notes.md"/,
+		);
+		await expect(ev('(attachments/write ".hidden" "x")')).rejects.toThrow(
+			/not a file name/,
+		);
+		expect(store.names("knowledge")).toEqual([]);
+		expect(store.names("attachments")).toEqual([]);
+	});
+
+	it("is taken from a url with a malformed escape, and made safe", async () => {
+		const { ev, store } = await world({
+			download: async () => ({
+				bytes: new TextEncoder().encode("x"),
+				contentType: "text/plain",
+			}),
+		});
+		expect(await ev('(attachments/fetch "https://x.test/%E0%A4%A")')).toBe(
+			'"%E0%A4%A"',
+		);
+		expect(await ev('(attachments/fetch "https://x.test/a%2Fb%0Ac.txt")')).toBe(
+			'"a-b c.txt"',
+		);
+		expect(await ev('(attachments/fetch "https://x.test/")')).toBe('"x.test"');
+		expect(store.names("attachments")).toEqual([
+			"%E0%A4%A",
+			"a-b c.txt",
+			"x.test",
+		]);
+	});
+});
+
+describe("a .pdf file", () => {
+	it("is read through the host's pdf reader", async () => {
+		const seen: number[] = [];
+		const { ev, store } = await world(undefined, {
+			text: (bytes) => {
+				seen.push(bytes.byteLength);
+				return "stubbed text";
+			},
+		});
+		store.held.knowledge.set("spec.pdf", {
+			bytes: new Uint8Array(3),
+			contentType: "application/pdf",
+		});
+		expect(await ev('(knowledge/read "spec.pdf")')).toBe('"stubbed text"');
+		expect(seen).toEqual([3]);
+	});
+
+	it("says which file a failing reader could not read", async () => {
+		const { ev, store } = await world(undefined, {
+			text: async () => {
+				throw new Error("encrypted");
+			},
+		});
+		store.held.knowledge.set("locked.pdf", {
+			bytes: new Uint8Array(3),
+			contentType: "application/pdf",
+		});
+		await expect(ev('(knowledge/read "locked.pdf")')).rejects.toThrow(
+			/locked.pdf is not a readable PDF: encrypted/,
+		);
 	});
 });

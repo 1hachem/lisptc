@@ -1,9 +1,3 @@
-import {
-	Attachment01Icon,
-	Cancel01Icon,
-	Loading03Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -13,151 +7,84 @@ import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
 import type { Question } from "@repo/interpreter/annotations";
 import type { SymbolTable } from "@repo/language-service";
-import { Button, cn } from "@repo/ui";
+import { cn } from "@repo/ui";
+import { useCallback, useEffect, useRef } from "react";
 import {
-	$createLineBreakNode,
-	$createParagraphNode,
-	$createTextNode,
-	$getRoot,
-	COMMAND_PRIORITY_HIGH,
-	KEY_DOWN_COMMAND,
-} from "lexical";
-import {
-	type DragEvent,
-	type RefObject,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
-import {
-	type Attachment,
-	attachedNames,
-	blockedSend,
-	type DiscardUpload,
-	type UploadFile,
-	useAttachments,
+	type FileTransfer,
+	type SubmitMessage,
+	useAttachedSend,
 } from "../lib/attachments.ts";
-import type { Command } from "../lib/commands.ts";
-import { knowledgeIcon } from "../lib/knowledge.ts";
+import { useDraft, useKeys, useRecall } from "../lib/chat-draft.ts";
+import { useMenus, usePick, usePromptSearch } from "../lib/chat-menus.ts";
+import { useDropZone } from "../lib/drop-zone.ts";
+import type { InputHelper } from "../lib/input-helpers.ts";
+import { useNotice } from "../lib/notice.ts";
 import {
-	newestFirst,
-	type RecallDirection,
-	type Recalled,
-	rebase,
-	recall,
-} from "../lib/message-history.ts";
-import { answerOf } from "../lib/question.ts";
-import { quietly } from "../lib/quietly.ts";
+	AttachAction,
+	AttachmentChips,
+	FilePicker,
+} from "./attachment-chips.tsx";
 import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispAssistPlugin } from "./lisp-assist.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 import { type Mentionable, MentionMenuPlugin } from "./mention-menu.tsx";
+import { QuestionPicker, useOpenQuestion } from "./question-picker.tsx";
+
+export interface Streaming {
+	active: boolean;
+	onStop: () => void;
+}
+
+export interface Assist {
+	history?: string[];
+	onCommand?: (name: string) => Promise<string | null>;
+	mentions?: readonly Mentionable[];
+	symbols?: SymbolTable;
+}
 
 export interface ChatInputProps {
 	placeholder?: string;
-	onSubmit: (text: string, attached: string[]) => void | Promise<void>;
-	upload?: UploadFile;
-	discard?: DiscardUpload;
-	history?: string[];
-	onCommand?: (name: string) => Promise<string | null>;
-	isStreaming?: boolean;
-	onStop?: () => void;
+	onSubmit: SubmitMessage;
+	blocked?: string;
 	disabled?: boolean;
-	mentions?: readonly Mentionable[];
-	symbols?: SymbolTable;
-	lisp?: boolean;
-	send?: boolean;
-	sendLabel?: string;
-	attach?: boolean;
+	streaming?: Streaming;
+	files?: FileTransfer;
+	assist?: Assist;
+	on?: Partial<Record<InputHelper, boolean>>;
 	question?: Question;
 }
 
 const NO_SYMBOLS: SymbolTable = new Map();
 
-const NOTICE_MS = 2000;
+const NO_HISTORY: string[] = [];
 
-function useNotice(): [string | null, (message: string) => void] {
-	const [notice, setNotice] = useState<string | null>(null);
-	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	useEffect(() => () => clearTimeout(timer.current ?? undefined), []);
-	const flash = useCallback((message: string) => {
-		setNotice(message);
-		clearTimeout(timer.current ?? undefined);
-		timer.current = setTimeout(() => setNotice(null), NOTICE_MS);
-	}, []);
-	return [notice, flash];
-}
-
-const RECALL_KEYS: Record<string, RecallDirection> = {
-	ArrowUp: "back",
-	ArrowDown: "forward",
-};
-
-function useRecall(history: string[]) {
-	const recalled = useRef<Recalled | null>(null);
-	const recalledIn = useRef(history);
-	return useCallback(
-		(text: string, direction: RecallDirection): string | null => {
-			const standing =
-				recalledIn.current === history
-					? recalled.current
-					: rebase(recalled.current, history);
-			const next = recall(history, standing, text, direction);
-			if (!next) return null;
-			recalled.current = next.recalled;
-			recalledIn.current = history;
-			return next.text;
-		},
-		[history],
-	);
-}
-
-function submitsOnEnter(event: KeyboardEvent): boolean {
-	return event.key === "Enter" && !event.shiftKey;
-}
-
-function sendsQuietly(event: KeyboardEvent): boolean {
-	return event.ctrlKey || event.metaKey;
-}
-
-function $replaceText(text: string) {
-	const paragraph = $createParagraphNode();
-	text.split("\n").forEach((line, i) => {
-		if (i > 0) paragraph.append($createLineBreakNode());
-		if (line) paragraph.append($createTextNode(line));
-	});
-	$getRoot().clear().append(paragraph);
-	paragraph.selectEnd();
-}
+const ENABLED = { prompt: "›", tone: "text-green" };
+const DISABLED = { prompt: "⋯", tone: "text-dim" };
 
 function SendAction({
-	label,
-	isStreaming,
+	streaming,
 	empty,
 	disabled,
-	onStop,
+	blocked,
 	onSend,
 }: {
-	label: string;
-	isStreaming?: boolean;
+	streaming?: Streaming;
 	empty: boolean;
 	disabled?: boolean;
-	onStop?: () => void;
+	blocked?: string;
 	onSend: () => void;
 }) {
-	if (isStreaming && empty)
+	if (streaming?.active && empty)
 		return (
 			<InputAction
 				label="stop"
 				glyph="■"
 				tone="text-red hover:brightness-125"
-				onClick={onStop}
+				onClick={streaming.onStop}
 			/>
 		);
-	if (isStreaming)
+	if (streaming?.active)
 		return (
 			<InputAction
 				label="queue"
@@ -168,88 +95,15 @@ function SendAction({
 		);
 	return (
 		<InputAction
-			label={label}
+			label="send"
 			glyph="⏎"
 			tone="text-green hover:brightness-125"
 			onClick={onSend}
-			disabled={disabled}
+			disabled={disabled || blocked !== undefined}
+			title={blocked}
 		/>
 	);
 }
-
-function usePick({
-	replace,
-	onCommand,
-	flash,
-	search,
-	attach,
-}: {
-	replace: (text: string) => void;
-	onCommand?: (name: string) => Promise<string | null>;
-	flash: (message: string) => void;
-	search: (open: boolean) => void;
-	attach: () => void;
-}) {
-	const [editor] = useLexicalComposerContext();
-	return useCallback(
-		(command: Command) => {
-			if (command.takesArgument) {
-				replace(`${command.name} `);
-				editor.focus();
-				return;
-			}
-			replace("");
-			if (command.name === "/prompt") {
-				search(true);
-				return;
-			}
-			if (command.name === "/attachment") {
-				attach();
-				return;
-			}
-			void Promise.resolve(onCommand?.(command.name)).then((shown) => {
-				if (shown) flash(shown);
-			});
-		},
-		[editor, replace, onCommand, flash, search, attach],
-	);
-}
-
-function useDraft(
-	onSubmit: (text: string) => boolean,
-	disabled: boolean | undefined,
-	attached: boolean,
-) {
-	const [editor] = useLexicalComposerContext();
-	const [text, setText] = useState("");
-	const empty = text.trim() === "" && !attached;
-
-	useEffect(() => {
-		editor.setEditable(!disabled);
-	}, [editor, disabled]);
-
-	useEffect(() => editor.registerTextContentListener(setText), [editor]);
-
-	const replace = useCallback(
-		(next: string) =>
-			editor.update(() => $replaceText(next), { discrete: true }),
-		[editor],
-	);
-
-	const send = useCallback(
-		(quiet = false) => {
-			if (disabled || empty) return;
-			const message = text.trim();
-			if (onSubmit(quiet ? quietly(message) : message)) replace("");
-		},
-		[text, empty, onSubmit, disabled, replace],
-	);
-
-	return { text, empty, replace, send };
-}
-
-const ENABLED = { prompt: "›", tone: "text-green" };
-const DISABLED = { prompt: "⋯", tone: "text-dim" };
 
 function Notice({ text }: { text: string | null }) {
 	if (!text) return null;
@@ -258,185 +112,6 @@ function Notice({ text }: { text: string | null }) {
 			{text}
 		</div>
 	);
-}
-
-function useKeys({
-	disabled,
-	menuActive,
-	recall,
-	replace,
-	enter,
-}: {
-	disabled?: boolean;
-	menuActive: () => boolean;
-	recall: (direction: RecallDirection) => string | null;
-	replace: (text: string) => void;
-	enter?: (quiet: boolean) => void;
-}) {
-	const [editor] = useLexicalComposerContext();
-	const onKeyDown = (event: KeyboardEvent): boolean => {
-		if (event.isComposing || disabled) return true;
-		if (menuActive()) return false;
-		const direction = RECALL_KEYS[event.key];
-		const recalled = direction ? recall(direction) : null;
-		if (recalled !== null) replace(recalled);
-		const handled = direction ? recalled !== null : submitsOnEnter(event);
-		if (!handled) return false;
-		event.preventDefault();
-		if (!direction) enter?.(sendsQuietly(event));
-		return true;
-	};
-	const keys = useRef(onKeyDown);
-	keys.current = onKeyDown;
-	useEffect(
-		() =>
-			editor.registerCommand(
-				KEY_DOWN_COMMAND,
-				(event) => keys.current(event),
-				COMMAND_PRIORITY_HIGH,
-			),
-		[editor],
-	);
-}
-
-function useAttach(
-	onSubmit: ChatInputProps["onSubmit"],
-	flash: (message: string) => void,
-	upload: UploadFile | undefined,
-	discard: DiscardUpload | undefined,
-	streaming: boolean,
-) {
-	const attachments = useAttachments(upload, discard);
-	const submit = useCallback(
-		(text: string): boolean => {
-			const blocked = blockedSend(attachments.items, streaming);
-			if (blocked !== null) {
-				flash(blocked);
-				return false;
-			}
-			void onSubmit(text, attachedNames(attachments.items));
-			attachments.clear();
-			return true;
-		},
-		[attachments, onSubmit, flash, streaming],
-	);
-	return { attachments, submit };
-}
-
-function AttachAction({
-	onClick,
-	disabled,
-}: {
-	onClick: () => void;
-	disabled?: boolean;
-}) {
-	return (
-		<button
-			type="button"
-			aria-label="attach"
-			title="attach files"
-			onClick={onClick}
-			disabled={disabled}
-			className={cn(
-				"group flex h-auto flex-none items-center self-center rounded-none bg-bg2 px-[9px] py-px text-[11.5px]",
-				disabled ? "cursor-not-allowed text-dim" : "text-dim hover:text-fg",
-			)}
-		>
-			<span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover:mr-[7px] group-hover:max-w-16 group-hover:opacity-100 group-focus-visible:mr-[7px] group-focus-visible:max-w-16 group-focus-visible:opacity-100">
-				attach
-			</span>
-			<HugeiconsIcon
-				icon={Attachment01Icon}
-				className="size-icon-sm flex-none"
-			/>
-		</button>
-	);
-}
-
-function ChipIcon({ item }: { item: Attachment }) {
-	if (item.upload.state === "uploading")
-		return (
-			<HugeiconsIcon
-				icon={Loading03Icon}
-				className="size-icon-sm flex-none animate-spin text-dim"
-			/>
-		);
-	return (
-		<HugeiconsIcon
-			icon={knowledgeIcon(item.file.name, item.file.type)}
-			className={cn(
-				"size-icon-sm flex-none",
-				item.upload.state === "failed" ? "text-red" : "text-dim",
-			)}
-		/>
-	);
-}
-
-function AttachmentChips({
-	items,
-	onRemove,
-}: {
-	items: readonly Attachment[];
-	onRemove: (id: string) => void;
-}) {
-	if (items.length === 0) return null;
-	return (
-		<div className="flex flex-wrap gap-1.5 border-b border-bg2 bg-bg1 px-3 py-1">
-			{items.map((item) => (
-				<span
-					key={item.id}
-					data-upload={item.upload.state}
-					title={
-						item.upload.state === "failed" ? item.upload.reason : undefined
-					}
-					className={cn(
-						"flex h-control-xs min-w-0 max-w-full items-center gap-1.5 bg-bg2 px-2 text-[11.5px]",
-						item.upload.state === "failed" && "text-red",
-					)}
-				>
-					<ChipIcon item={item} />
-					<span className="min-w-0 max-w-48 truncate whitespace-nowrap">
-						{item.file.name}
-					</span>
-					<button
-						type="button"
-						aria-label={`remove ${item.file.name}`}
-						onClick={() => onRemove(item.id)}
-						className="flex flex-none items-center text-dim hover:text-red"
-					>
-						<HugeiconsIcon icon={Cancel01Icon} className="size-icon-xs" />
-					</button>
-				</span>
-			))}
-		</div>
-	);
-}
-
-function useDropZone(add: (files: File[]) => void, disabled?: boolean) {
-	const [over, setOver] = useState(false);
-	const carriesFiles = (event: DragEvent) =>
-		!disabled && event.dataTransfer.types.includes("Files");
-	return {
-		over,
-		zone: {
-			onDragOver: (event: DragEvent) => {
-				if (!carriesFiles(event)) return;
-				event.preventDefault();
-				setOver(true);
-			},
-			onDragLeave: (event: DragEvent) => {
-				if (event.currentTarget.contains(event.relatedTarget as Node | null))
-					return;
-				setOver(false);
-			},
-			onDrop: (event: DragEvent) => {
-				setOver(false);
-				if (!carriesFiles(event)) return;
-				event.preventDefault();
-				add([...event.dataTransfer.files]);
-			},
-		},
-	};
 }
 
 function Field({
@@ -487,169 +162,15 @@ function hintOf(lead: string, lisp: boolean, commands: boolean): string {
 	return commands ? `${typed}  ·  / for commands` : typed;
 }
 
-const PICKABLE = 9;
-
-function typingIn(target: EventTarget | null): boolean {
-	if (!(target instanceof HTMLElement)) return false;
-	return (
-		target.isContentEditable ||
-		target instanceof HTMLInputElement ||
-		target instanceof HTMLTextAreaElement ||
-		target instanceof HTMLSelectElement
-	);
-}
-
-function pickedBy(key: string, choices: number): number | undefined {
-	const at = Number(key) - 1;
-	return Number.isInteger(at) && at >= 0 && at < Math.min(choices, PICKABLE)
-		? at
-		: undefined;
-}
-
-function usePickerKeys(handlers: {
-	pick: (at: number) => void;
-	submit: () => void;
-	dismiss: () => void;
-	choices: number;
-	multi: boolean;
-}) {
-	const latest = useRef(handlers);
-	latest.current = handlers;
-	useEffect(() => {
-		const onKey = (event: KeyboardEvent) => {
-			if (event.defaultPrevented || event.isComposing) return;
-			if (event.ctrlKey || event.metaKey || event.altKey) return;
-			if (typingIn(event.target)) return;
-			const { pick, submit, dismiss, choices, multi } = latest.current;
-			const at = pickedBy(event.key, choices);
-			if (at !== undefined) pick(at);
-			else if (event.key === "Escape") dismiss();
-			else if (event.key === "Enter" && multi) submit();
-			else return;
-			event.preventDefault();
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, []);
-}
-
-function QuestionPicker({
-	question,
-	disabled,
-	sendLabel,
-	onAnswer,
-	onDismiss,
-}: {
-	question: Question;
-	disabled?: boolean;
-	sendLabel: string;
-	onAnswer: (text: string) => void;
-	onDismiss: () => void;
-}) {
-	const [checked, setChecked] = useState<ReadonlySet<number>>(new Set());
-	const submit = () => {
-		if (disabled || checked.size === 0) return;
-		onAnswer(
-			answerOf(
-				question,
-				[...checked].sort((a, b) => a - b),
-			),
-		);
-	};
-	const pick = (at: number) => {
-		if (disabled) return;
-		if (!question.multi) {
-			onAnswer(answerOf(question, [at]));
-			return;
-		}
-		setChecked((current) => {
-			const next = new Set(current);
-			if (!next.delete(at)) next.add(at);
-			return next;
-		});
-	};
-	usePickerKeys({
-		pick,
-		submit,
-		dismiss: onDismiss,
-		choices: question.choices.length,
-		multi: question.multi,
-	});
-
-	return (
-		<div className="relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			<InputShell
-				prompt="?"
-				tone="text-yellow"
-				dim={disabled}
-				action={
-					<>
-						<InputAction
-							label="type instead"
-							glyph="esc"
-							tone="text-dim hover:text-fg"
-							onClick={onDismiss}
-						/>
-						{question.multi && (
-							<InputAction
-								label={sendLabel}
-								glyph="⏎"
-								tone="text-green hover:brightness-125"
-								onClick={submit}
-								disabled={disabled || checked.size === 0}
-							/>
-						)}
-					</>
-				}
-			>
-				<fieldset
-					aria-label={question.prompt}
-					className="flex min-w-0 flex-col gap-1.5 py-1"
-				>
-					<legend className="whitespace-pre-wrap break-words text-fg">
-						{question.prompt}
-					</legend>
-					<div className="flex flex-wrap gap-1.5">
-						{question.choices.map((choice, at) => (
-							<Button
-								key={choice}
-								type="button"
-								size="sm"
-								variant={checked.has(at) ? "secondary" : "outline"}
-								aria-pressed={question.multi ? checked.has(at) : undefined}
-								disabled={disabled}
-								onClick={() => pick(at)}
-								className="min-w-0 max-w-full shrink rounded-none font-mono"
-							>
-								{at < PICKABLE && <span className="text-dim">{at + 1}</span>}
-								<span className="min-w-0 truncate">{choice}</span>
-							</Button>
-						))}
-					</div>
-				</fieldset>
-			</InputShell>
-		</div>
-	);
-}
-
-function useOpenQuestion(question: Question | undefined, streaming: boolean) {
-	const [typing, setTyping] = useState<string | undefined>(undefined);
-	const open =
-		question !== undefined && !streaming && typing !== question.id
-			? question
-			: undefined;
-	const dismiss = useCallback(() => setTyping(question?.id), [question]);
-	return {
-		open,
-		dismiss,
-		typed: question !== undefined && typing === question.id,
-	};
+function noticeOf(over: boolean, notice: string | null) {
+	if (over) return "drop to attach";
+	return notice;
 }
 
 export function ChatInput(props: ChatInputProps) {
 	const { open, dismiss, typed } = useOpenQuestion(
 		props.question,
-		props.isStreaming === true,
+		props.streaming?.active === true,
 	);
 	if (open)
 		return (
@@ -657,7 +178,6 @@ export function ChatInput(props: ChatInputProps) {
 				key={open.id}
 				question={open}
 				disabled={props.disabled}
-				sendLabel={props.sendLabel ?? "send"}
 				onAnswer={(text) => void props.onSubmit(text, [])}
 				onDismiss={dismiss}
 			/>
@@ -685,82 +205,24 @@ function FocusOnMount() {
 	return null;
 }
 
-function useMenus() {
-	const host = useRef<HTMLDivElement>(null);
-	const commandOpen = useRef(false);
-	const mentionOpen = useRef(false);
-	const assistOpen = useRef(false);
-	const active = useMemo(
-		() => ({
-			get current() {
-				return commandOpen.current || mentionOpen.current || assistOpen.current;
-			},
-		}),
-		[],
-	);
-	return { host, commandOpen, mentionOpen, assistOpen, active };
-}
-
-function FilePicker({
-	picker,
-	onPick,
-}: {
-	picker: RefObject<HTMLInputElement | null>;
-	onPick: (files: File[]) => void;
-}) {
-	return (
-		<input
-			ref={picker}
-			type="file"
-			multiple
-			hidden
-			onChange={(event) => {
-				const picked = event.target.files;
-				if (picked !== null) onPick([...picked]);
-				event.target.value = "";
-			}}
-		/>
-	);
-}
-
-function noticeOf(over: boolean, notice: string | null) {
-	if (over) return "drop to attach";
-	return notice;
-}
-
-function usePromptSearch(history: string[], replace: (text: string) => void) {
-	const [editor] = useLexicalComposerContext();
-	const [searching, setSearching] = useState(false);
-	const prompts = useMemo(() => newestFirst(history), [history]);
-	const insert = useCallback(
-		(prompt: string) => {
-			replace(prompt);
-			editor.focus();
-		},
-		[editor, replace],
-	);
-	return { searching, setSearching, prompts, insert };
-}
-
 function useComposer({
 	onSubmit,
-	history = [],
-	onCommand,
-	isStreaming,
-	onStop,
+	blocked,
 	disabled,
-	upload,
-	discard,
+	streaming,
+	files,
+	assist,
 }: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
 	const [notice, flash] = useNotice();
-	const { attachments, submit } = useAttach(
+	const history = assist?.history ?? NO_HISTORY;
+	const { attachments, submit } = useAttachedSend({
 		onSubmit,
 		flash,
-		upload,
-		discard,
-		isStreaming === true,
-	);
+		files,
+		streaming: streaming?.active === true,
+		held: blocked,
+	});
 	const busy = disabled === true;
 	const { text, empty, replace, send } = useDraft(
 		submit,
@@ -778,19 +240,19 @@ function useComposer({
 	const menus = useMenus();
 	const pick = usePick({
 		replace,
-		onCommand,
+		onCommand: assist?.onCommand,
 		flash,
 		search: search.setSearching,
 		attach,
 	});
-	const stops = isStreaming === true && empty;
+	const stops = streaming?.active === true && empty;
 
 	useKeys({
 		disabled: busy,
 		menuActive: () => menus.active.current,
 		recall: (direction) => step(text, direction),
 		replace,
-		enter: stops ? onStop : send,
+		enter: stops ? streaming?.onStop : send,
 	});
 
 	return {
@@ -806,8 +268,8 @@ function useComposer({
 		pick,
 		look: busy ? DISABLED : ENABLED,
 		notice: noticeOf(over, notice),
-		pickFiles: (files: File[]) => {
-			attachments.add(files);
+		pickFiles: (picked: File[]) => {
+			attachments.add(picked);
 			editor.focus();
 		},
 		sendNow: () => send(),
@@ -815,18 +277,9 @@ function useComposer({
 }
 
 function Editor(props: ChatInputProps) {
-	const {
-		placeholder = "",
-		onCommand,
-		isStreaming,
-		onStop,
-		mentions = [],
-		symbols = NO_SYMBOLS,
-		lisp = true,
-		send = true,
-		sendLabel = "send",
-		attach = true,
-	} = props;
+	const { placeholder = "", streaming, assist, blocked } = props;
+	const lisp = props.on?.lisp ?? true;
+	const attach = props.on?.attach ?? true;
 	const c = useComposer(props);
 
 	return (
@@ -857,21 +310,22 @@ function Editor(props: ChatInputProps) {
 						{attach && c.attachments.enabled && (
 							<AttachAction onClick={c.attach} disabled={c.busy} />
 						)}
-						{send && (
-							<SendAction
-								label={sendLabel}
-								isStreaming={isStreaming}
-								empty={c.empty}
-								disabled={c.busy}
-								onStop={onStop}
-								onSend={c.sendNow}
-							/>
-						)}
+						<SendAction
+							streaming={streaming}
+							empty={c.empty}
+							disabled={c.busy}
+							blocked={blocked}
+							onSend={c.sendNow}
+						/>
 					</>
 				}
 			>
 				<Field
-					placeholder={hintOf(placeholder, lisp, onCommand !== undefined)}
+					placeholder={hintOf(
+						placeholder,
+						lisp,
+						assist?.onCommand !== undefined,
+					)}
 					disabled={c.busy}
 				/>
 			</InputShell>
@@ -882,13 +336,13 @@ function Editor(props: ChatInputProps) {
 				active={c.menus.commandOpen}
 			/>
 			<MentionMenuPlugin
-				files={mentions}
+				files={assist?.mentions ?? []}
 				host={c.menus.host}
 				active={c.menus.mentionOpen}
 			/>
 			<LispPlugins
 				on={lisp}
-				symbols={symbols}
+				symbols={assist?.symbols ?? NO_SYMBOLS}
 				host={c.menus.host}
 				active={c.menus.assistOpen}
 			/>

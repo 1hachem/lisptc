@@ -1,12 +1,17 @@
 import { knowledgeExtension } from "@repo/knowledge-extension";
 import { knowledgeHostFor } from "@repo/knowledge-extension/host";
-import { MemoryKnowledgeStore } from "@repo/knowledge-extension/ports";
+import { MemoryKnowledgeStore } from "@repo/knowledge-extension/memory-store";
 import { describe, expect, it } from "vitest";
 import { memoryRepl, modelFacing } from "./helpers.ts";
 
 function attachingRepl() {
 	const store = new MemoryKnowledgeStore();
-	store.write("report.md", "# r", "text/markdown");
+	store.write(
+		"knowledge",
+		"report.md",
+		new TextEncoder().encode("# r"),
+		"text/markdown",
+	);
 	return memoryRepl([
 		...modelFacing(),
 		knowledgeExtension(knowledgeHostFor({ store, maxDownloadBytes: 1024 })),

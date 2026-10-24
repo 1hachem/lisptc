@@ -7,22 +7,24 @@ import { attachingFiles } from "../lib/attached-files.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
 import type { OpenFile } from "../lib/files.ts";
-import { useAttachmentUpload } from "../lib/knowledge.ts";
 import { sentHistory } from "../lib/message-history.ts";
 import { useSymbols } from "../lib/symbols.ts";
 import { useUI } from "../lib/ui.tsx";
+import { useAttachmentUpload } from "../lib/uploads.ts";
 import { ChatInput } from "./chat-input.tsx";
 import type { Mentionable } from "./mention-menu.tsx";
 
 export function ChatComposer({
 	about,
+	blocked,
 	question,
 }: {
 	about?: OpenFile;
+	blocked?: string;
 	question?: Question;
 }) {
 	const runCommand = useCommandRunner();
-	const { inputOn, sendLabel } = useUI();
+	const { inputOn } = useUI();
 	const { workspaceId, chatId, draftChatId, send, sendAbout, stop, isLoading } =
 		useChatSession((state) => ({
 			workspaceId: state.workspaceId,
@@ -38,10 +40,10 @@ export function ChatComposer({
 	);
 	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
 	const { data: knowledge } = useQuery(
-		convexQuery(api.knowledge.list, { workspaceId }),
+		convexQuery(api.files.list, { workspaceId, folder: "knowledge" }),
 	);
 	const { data: attachments } = useQuery(
-		convexQuery(api.attachments.list, { workspaceId }),
+		convexQuery(api.files.list, { workspaceId, folder: "attachments" }),
 	);
 	const mentions = useMemo<Mentionable[]>(
 		() => [
@@ -63,8 +65,9 @@ export function ChatComposer({
 		(text: string, attached: string[]) => {
 			const files = attachingFiles(attached);
 			const annotations = question ? { ...files, answers: question.id } : files;
-			if (about) sendAbout(about, text, annotations);
-			else send(text, annotations);
+			return about
+				? sendAbout(about, text, annotations)
+				: send(text, annotations);
 		},
 		[about, question, send, sendAbout],
 	);
@@ -74,16 +77,11 @@ export function ChatComposer({
 		<ChatInput
 			placeholder={about ? `ask about ${about.path}` : "type a message"}
 			onSubmit={submit}
-			upload={toAttachments.upload}
-			discard={toAttachments.discard}
-			mentions={mentions}
-			history={history}
-			onCommand={runCommand}
-			isStreaming={isLoading}
-			onStop={stop}
-			symbols={symbols}
-			{...inputOn}
-			sendLabel={sendLabel}
+			blocked={blocked}
+			files={{ upload: toAttachments.upload, discard: toAttachments.discard }}
+			assist={{ mentions, history, onCommand: runCommand, symbols }}
+			streaming={{ active: isLoading, onStop: stop }}
+			on={inputOn}
 			question={question}
 		/>
 	);

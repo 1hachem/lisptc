@@ -2,11 +2,23 @@ import type {
 	BinnedFile,
 	KnowledgeStore,
 } from "@repo/knowledge-extension/ports";
+import type { StoreFolder } from "@repo/shared/files";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
-export type KnowledgeStoreClient = Pick<ConvexHttpClient, "query" | "mutation">;
+export type KnowledgeStoreClient = Pick<
+	ConvexHttpClient,
+	"query" | "mutation" | "url"
+>;
+
+function onDeployment(served: string, client: KnowledgeStoreClient): string {
+	const url = new URL(served);
+	const deployment = new URL(client.url);
+	url.protocol = deployment.protocol;
+	url.host = deployment.host;
+	return url.href;
+}
 
 export interface BlobTransfer {
 	download(url: string): Promise<Uint8Array>;
@@ -40,79 +52,45 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 		private readonly transfer: BlobTransfer = httpTransfer,
 	) {}
 
-	async files(): Promise<string[]> {
-		const entries = await this.connect().query(api.knowledge.list, {
+	async names(folder: StoreFolder): Promise<string[]> {
+		const entries = await this.connect().query(api.files.list, {
 			workspaceId: this.workspaceId,
+			folder,
 		});
 		return entries.map((entry) => entry.name);
 	}
 
-	async file(name: string): Promise<Uint8Array | undefined> {
-		const held = await this.connect().query(api.knowledge.get, {
-			workspaceId: this.workspaceId,
-			name,
-		});
-		if (held?.url == null) return undefined;
-		return await this.transfer.download(held.url);
-	}
-
-	async write(name: string, text: string, contentType: string): Promise<void> {
+	async read(
+		folder: StoreFolder,
+		name: string,
+	): Promise<Uint8Array | undefined> {
 		const client = this.connect();
-		const url = await client.mutation(api.knowledge.uploadUrl, {
+		const held = await client.query(api.files.get, {
 			workspaceId: this.workspaceId,
-		});
-		const storageId = await this.transfer.upload(
-			url,
-			new Blob([text], { type: contentType }),
-		);
-		const refused = await client.mutation(api.knowledge.add, {
-			workspaceId: this.workspaceId,
-			name,
-			storageId,
-			contentType,
-		});
-		if (refused !== null) throw new Error(`${refused}: ${name}`);
-	}
-
-	async remove(name: string): Promise<void> {
-		const removed = await this.connect().mutation(api.knowledge.remove, {
-			workspaceId: this.workspaceId,
-			name,
-		});
-		if (!removed) throw new Error(`no file ${name}`);
-	}
-
-	async attachments(): Promise<string[]> {
-		const entries = await this.connect().query(api.attachments.list, {
-			workspaceId: this.workspaceId,
-		});
-		return entries.map((entry) => entry.name);
-	}
-
-	async attachment(name: string): Promise<Uint8Array | undefined> {
-		const held = await this.connect().query(api.attachments.get, {
-			workspaceId: this.workspaceId,
+			folder,
 			name,
 		});
 		if (held?.url == null) return undefined;
-		return await this.transfer.download(held.url);
+		return await this.transfer.download(onDeployment(held.url, client));
 	}
 
-	async attach(
+	async write(
+		folder: StoreFolder,
 		name: string,
 		bytes: Uint8Array,
 		contentType: string,
 	): Promise<string> {
 		const client = this.connect();
-		const url = await client.mutation(api.knowledge.uploadUrl, {
+		const url = await client.mutation(api.files.uploadUrl, {
 			workspaceId: this.workspaceId,
 		});
 		const storageId = await this.transfer.upload(
-			url,
+			onDeployment(url, client),
 			new Blob([new Uint8Array(bytes)], { type: contentType }),
 		);
-		const added = await client.mutation(api.attachments.add, {
+		const added = await client.mutation(api.files.add, {
 			workspaceId: this.workspaceId,
+			folder,
 			name,
 			storageId,
 			contentType,
@@ -121,20 +99,21 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 		return added.name;
 	}
 
+	async remove(folder: StoreFolder, name: string): Promise<void> {
+		const removed = await this.connect().mutation(api.files.remove, {
+			workspaceId: this.workspaceId,
+			folder,
+			name,
+		});
+		if (!removed) throw new Error(`no file ${name} in ${folder}`);
+	}
+
 	async keep(name: string): Promise<void> {
-		const refused = await this.connect().mutation(api.attachments.keep, {
+		const refused = await this.connect().mutation(api.files.keep, {
 			workspaceId: this.workspaceId,
 			name,
 		});
 		if (refused !== null) throw new Error(`${refused}: ${name}`);
-	}
-
-	async unattach(name: string): Promise<void> {
-		const removed = await this.connect().mutation(api.attachments.remove, {
-			workspaceId: this.workspaceId,
-			name,
-		});
-		if (!removed) throw new Error(`no file ${name} in attachments`);
 	}
 
 	async binned(): Promise<BinnedFile[]> {

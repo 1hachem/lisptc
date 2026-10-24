@@ -66,8 +66,8 @@ function useMockSession(
 		chatId: null,
 		draftChatId: null,
 		workspaceId,
-		send: () => {},
-		sendAbout: () => {},
+		send: async () => false,
+		sendAbout: async () => false,
 		resume: () => {},
 		stop: () => {},
 		withdraw: () => {},
@@ -100,16 +100,20 @@ function useMockSession(
 			isLoading: stream.isLoading,
 			workspaceId,
 			error,
-			send: (text) =>
+			send: async (text) => {
 				submit(
 					{ message: text },
 					{ type: "human", content: text, id: crypto.randomUUID() },
-				),
-			sendAbout: (_file, text) =>
+				);
+				return true;
+			},
+			sendAbout: async (_file, text) => {
 				submit(
 					{ message: text },
 					{ type: "human", content: text, id: crypto.randomUUID() },
-				),
+				);
+				return true;
+			},
 			resume: (event) =>
 				submit(
 					{ event: { token: event.token } },

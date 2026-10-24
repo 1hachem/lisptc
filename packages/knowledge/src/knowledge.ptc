@@ -5,17 +5,22 @@ change shows there at once.
 
 - (knowledge/list) lists file names, like "report.md".
 - (knowledge/read "name") by extension: .ptc gives its one form as data, never
-  run; .json gives JSON as data, object as alist; .pdf gives page text as
-  string; other text gives string. Other binary (image) refused. nil when no
-  file.
+  run; .json gives JSON as data: object as alist, array as list, null as nil,
+  false as :false, [] as :[], {} as :{}; array that would read back as object
+  comes led by :[], number index skips it. .pdf gives page text as string;
+  other text gives string. Other binary (image) refused. nil when no file.
 - (knowledge/write "name" value) replaces file, old one to bin; user can open
   and download it. User approves it. .ptc takes data, printed; function
   refused. .json takes data, written as JSON: plist or alist becomes object,
-  other list becomes array, keywords alone like (:red :green) become array,
-  keyword becomes its name; or takes JSON text string. Other file takes
-  string.
+  keyword values too, (:status :done) gives {"status": "done"}; list led by
+  :[] becomes array of rest, (:[] :red :green) gives ["red", "green"]; other
+  list becomes array; nil becomes null; :false :[] :{} become false [] {};
+  other keyword becomes its name. Same key twice refused. Or takes JSON text
+  string. Other file takes string.
 - Edit .ptc file: read, change with set-in / update-in / remove-in, write back:
   (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
+  Same for .json. Removing last entry leaves nil, written null; set :[] or :{}
+  to keep it empty.
 - (knowledge/delete "name") moves file to bin. User approves it.
 
 ATTACHMENTS

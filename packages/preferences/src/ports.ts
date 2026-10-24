@@ -6,7 +6,6 @@ export interface Preferences {
 	font?: string;
 	metadata?: Toggles;
 	input?: Toggles;
-	sendLabel?: string;
 	sidebar?: string[];
 	hidden?: string[];
 	statusBar?: string[];

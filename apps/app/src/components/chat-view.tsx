@@ -22,7 +22,7 @@ import {
 	pickStatusLine,
 } from "../lib/agent-status.ts";
 import { askText } from "../lib/asks.ts";
-import { attachedFiles } from "../lib/attached-files.ts";
+import { attachedTo } from "../lib/attached-files.ts";
 import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
 import {
 	type ChatMessage,
@@ -240,7 +240,7 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 	const ui = toolUi(message);
 	const model = toolModelOutput(message).output;
 	const results = toolResults(message).join("\n");
-	const attachments = shown.attachments ? attachedFiles(message) : [];
+	const attachments = shown.attachments ? attachedTo(message) : [];
 	return {
 		output,
 		results,
@@ -401,7 +401,7 @@ export function SystemLine({ message }: { message: ChatMessage }) {
 function UserMessage({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
 	const text = messageText(message);
-	const files = shown.attachments ? attachedFiles(message) : [];
+	const files = shown.attachments ? attachedTo(message) : [];
 	if (files.length === 0) return <UserLine text={text} />;
 	return (
 		<>
@@ -472,7 +472,7 @@ function ScrollToLatest() {
 
 function TurnOutput({ message }: { message: ChatMessage }) {
 	const ui = toolUi(message);
-	const attachments = attachedFiles(message);
+	const attachments = attachedTo(message);
 	const asks = toolAsks(message);
 	const answers = toolAnswers(message);
 	return (

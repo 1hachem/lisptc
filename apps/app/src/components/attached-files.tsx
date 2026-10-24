@@ -1,7 +1,7 @@
 import { FileTree, TreeFile } from "@repo/components";
-import type { AttachedFile } from "../lib/attached-files.ts";
+import type { AttachedFile } from "@repo/shared/files";
 import { useChatSession } from "../lib/chat.tsx";
-import { knowledgeIcon } from "../lib/knowledge.ts";
+import { knowledgeIcon } from "../lib/file-icons.ts";
 import { type PanelContent, startPanelDrag } from "../lib/panel-ops.ts";
 import { PanelLink } from "./panel-link.tsx";
 

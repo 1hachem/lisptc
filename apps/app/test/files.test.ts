@@ -40,7 +40,6 @@ describe("preferencesSource", () => {
 				font: "mono",
 				metadata: { tokens: true },
 				input: { lisp: true },
-				sendLabel: "go",
 				sidebar: ["README.md", "home"],
 				hidden: ["tests"],
 				motion: "lift",
@@ -49,7 +48,7 @@ describe("preferencesSource", () => {
 				traceLink: false,
 			}),
 		).toBe(
-			'(preferences :font "mono"\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :send-label "go"\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift"\n  :panel-motion nil\n  :trace-beside-chat t\n  :trace-link nil)',
+			'(preferences :font "mono"\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift"\n  :panel-motion nil\n  :trace-beside-chat t\n  :trace-link nil)',
 		);
 	});
 });

@@ -18,7 +18,6 @@ const SET_KEYS = [
 	"font",
 	"metadata",
 	"input",
-	"send-label",
 	"sidebar",
 	"hidden",
 	"status-bar",
@@ -28,8 +27,6 @@ const SET_KEYS = [
 	"trace-beside-chat",
 	"trace-link",
 ];
-
-const MAX_SEND_LABEL = 16;
 
 const SET_ARGS = [
 	{
@@ -50,13 +47,7 @@ const SET_ARGS = [
 		type: "plist",
 		required: false,
 		description:
-			"what the chat input shows and how it behaves, as (:id t-or-nil ...); ids not named keep their value",
-	},
-	{
-		name: "send-label",
-		type: "string",
-		required: false,
-		description: `the word on the chat input's send button, at most ${MAX_SEND_LABEL} characters`,
+			"which helpers the chat input runs as the user types, as (:id t-or-nil ...); ids not named keep their value",
 	},
 	{
 		name: "sidebar",
@@ -133,7 +124,6 @@ export function preferencesList(preferences: Preferences): List {
 		["font", preferences.font ?? null],
 		["metadata", togglesList(preferences.metadata)],
 		["input", togglesList(preferences.input)],
-		["send-label", preferences.sendLabel ?? null],
 		["sidebar", arrayToList([...(preferences.sidebar ?? [])])],
 		["hidden", arrayToList([...(preferences.hidden ?? [])])],
 		["status-bar", arrayToList([...(preferences.statusBar ?? [])])],
@@ -182,18 +172,6 @@ function toggled(
 	return next;
 }
 
-function labelled(value: unknown): string {
-	if (typeof value !== "string")
-		throw new EvalException("a send label must be a string", value);
-	const label = value.trim();
-	if (label === "" || label.length > MAX_SEND_LABEL)
-		throw new EvalException(
-			`a send label takes 1 to ${MAX_SEND_LABEL} characters`,
-			value,
-		);
-	return label;
-}
-
 type Listed = "sidebar entry" | "status bar item";
 
 function names(
@@ -239,7 +217,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :send-label "send" :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
+		'Return the user\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -249,14 +227,14 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:send-label "word"] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
+		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :font :metadata :input :send-label :sidebar :hidden :status-bar :status-bar-hidden :motion :panel-motion :trace-beside-chat :trace-link",
+					"nothing to set, give one of :font :metadata :input :sidebar :hidden :status-bar :status-bar-hidden :motion :panel-motion :trace-beside-chat :trace-link",
 					null,
 				);
 			const current = yield* settled(store.read());
@@ -271,8 +249,6 @@ export function registerPreferences(
 				);
 			if (options.has("input"))
 				change.input = toggled("input", options.get("input"), current.input);
-			if (options.has("send-label"))
-				change.sendLabel = labelled(options.get("send-label"));
 			if (options.has("sidebar"))
 				change.sidebar = ordered(
 					"sidebar",

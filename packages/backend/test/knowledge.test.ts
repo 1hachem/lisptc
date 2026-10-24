@@ -18,36 +18,56 @@ describe("knowledge", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
-		await alice.as.mutation(api.knowledge.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId,
 			name: "spec.pdf",
 			storageId: await uploaded(t, "%PDF-1.7", "application/pdf"),
 			contentType: "application/pdf",
 		});
-		await alice.as.mutation(api.knowledge.add, {
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId,
 			name: "notes.md",
 			storageId: await uploaded(t, "# notes", "text/markdown"),
 			contentType: "text/markdown",
 		});
-		expect(await alice.as.query(api.knowledge.list, { workspaceId })).toEqual([
-			{ name: "notes.md", contentType: "text/markdown", size: 7 },
-			{ name: "spec.pdf", contentType: "application/pdf", size: 8 },
+		expect(
+			await alice.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId,
+			}),
+		).toEqual([
+			{
+				name: "notes.md",
+				contentType: "text/markdown",
+				size: 7,
+				addedAt: expect.any(Number),
+			},
+			{
+				name: "spec.pdf",
+				contentType: "application/pdf",
+				size: 8,
+				addedAt: expect.any(Number),
+			},
 		]);
-		const served = await alice.as.query(api.knowledge.get, {
+		const served = await alice.as.query(api.files.get, {
+			folder: "knowledge",
 			workspaceId,
 			name: "spec.pdf",
 		});
 		expect(served).toMatchObject({ name: "spec.pdf", size: 8 });
 		expect(served?.url).toEqual(expect.any(String));
 		expect(
-			await alice.as.mutation(api.knowledge.remove, {
+			await alice.as.mutation(api.files.remove, {
+				folder: "knowledge",
 				workspaceId,
 				name: "spec.pdf",
 			}),
 		).toBe(true);
 		expect(
-			await alice.as.query(api.knowledge.get, {
+			await alice.as.query(api.files.get, {
+				folder: "knowledge",
 				workspaceId,
 				name: "spec.pdf",
 			}),
@@ -65,14 +85,25 @@ describe("knowledge", () => {
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		for (const body of ["one", "three"])
-			await alice.as.mutation(api.knowledge.add, {
+			await alice.as.mutation(api.files.add, {
+				folder: "knowledge",
 				workspaceId,
 				name: "notes.txt",
 				storageId: await uploaded(t, body, "text/plain"),
 				contentType: "text/plain",
 			});
-		expect(await alice.as.query(api.knowledge.list, { workspaceId })).toEqual([
-			{ name: "notes.txt", contentType: "text/plain", size: 5 },
+		expect(
+			await alice.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId,
+			}),
+		).toEqual([
+			{
+				name: "notes.txt",
+				contentType: "text/plain",
+				size: 5,
+				addedAt: expect.any(Number),
+			},
 		]);
 		expect(
 			(await alice.as.query(api.bin.list, { workspaceId })).map(
@@ -87,19 +118,23 @@ describe("knowledge", () => {
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
-			alice.as.mutation(api.knowledge.uploadUrl, {
+			alice.as.mutation(api.files.uploadUrl, {
 				workspaceId: bob.workspace,
 			}),
 		).rejects.toThrow(/FORBIDDEN/);
 		await expect(
-			alice.as.mutation(api.knowledge.add, {
+			alice.as.mutation(api.files.add, {
+				folder: "knowledge",
 				workspaceId: bob.workspace,
 				name: "x.txt",
 				storageId: await uploaded(t, "x", "text/plain"),
 			}),
 		).rejects.toThrow(/FORBIDDEN/);
 		await expect(
-			alice.as.query(api.knowledge.list, { workspaceId: bob.workspace }),
+			alice.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+			}),
 		).rejects.toThrow(/FORBIDDEN/);
 	});
 
@@ -113,12 +148,13 @@ describe("knowledge", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
-			alice.as.mutation(api.knowledge.add, {
+			alice.as.mutation(api.files.add, {
+				folder: "knowledge",
 				workspaceId: alice.workspace,
 				name,
 				storageId: await uploaded(t, "x", "text/plain"),
 			}),
-		).resolves.toBe("BAD_KNOWLEDGE_NAME");
+		).resolves.toEqual({ refused: "BAD_KNOWLEDGE_NAME" });
 		expect(await blobs(t)).toEqual([]);
 	});
 
@@ -126,7 +162,8 @@ describe("knowledge", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
-			alice.as.mutation(api.knowledge.add, {
+			alice.as.mutation(api.files.add, {
+				folder: "knowledge",
 				workspaceId: alice.workspace,
 				name: "big.bin",
 				storageId: await uploaded(
@@ -135,7 +172,7 @@ describe("knowledge", () => {
 					"application/octet-stream",
 				),
 			}),
-		).resolves.toBe("FILE_TOO_LARGE");
+		).resolves.toEqual({ refused: "FILE_TOO_LARGE" });
 		expect(await blobs(t)).toEqual([]);
 	});
 
@@ -154,11 +191,12 @@ describe("knowledge", () => {
 				});
 		});
 		await expect(
-			alice.as.mutation(api.knowledge.add, {
+			alice.as.mutation(api.files.add, {
+				folder: "knowledge",
 				workspaceId,
 				name: "one-more.txt",
 				storageId: await uploaded(t, "y", "text/plain"),
 			}),
-		).resolves.toBe("TOO_MANY_FILES");
+		).resolves.toEqual({ refused: "TOO_MANY_FILES" });
 	});
 });
