@@ -25,6 +25,11 @@ through a port, and a session whose host offers none refuses the forms that
 need one. A running agent is never part of the image, so nothing a session must
 keep across a restore is held by one.
 
+Work a sub-agent does in the background is a job on the jobs port, and
+whoever implements the port owns when it runs and what happens when it ends.
+A job crosses the port as plain data, ids and payload alike, so a queue in
+another process can carry it. The language holds a job's id, never the job.
+
 ## Tests
 
 `test/`. A test installs this extension and no other, and asserts on the
