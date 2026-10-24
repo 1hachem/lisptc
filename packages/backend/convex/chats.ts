@@ -9,9 +9,9 @@ import {
 } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { waitsOnUser } from "./lib/waiting.js";
-import { STREAMING_LEASE_MS } from "./limits.js";
+import { MAX_SPAWN_DEPTH, STREAMING_LEASE_MS } from "./limits.js";
 import { dropRepl, forkRepl } from "./repls.js";
-import { chatStatus } from "./schema.js";
+import { chatStatus, subAgent } from "./schema.js";
 
 const MAX_CHATS = 200;
 const PAGE = 20;
@@ -28,6 +28,8 @@ const chat = v.object({
 	streamingSince: v.optional(v.number()),
 	failure: v.optional(v.string()),
 	replId: v.optional(v.id("repls")),
+	parentChatId: v.optional(v.id("chats")),
+	agent: v.optional(subAgent),
 });
 
 export const list = query({
@@ -48,7 +50,8 @@ export const list = query({
 						q
 							.search("title", term)
 							.eq("workspaceId", workspaceId)
-							.eq("archivedAt", undefined),
+							.eq("archivedAt", undefined)
+							.eq("parentChatId", undefined),
 					)
 					.take(wanted + 1)
 			: await ctx.db
@@ -57,6 +60,7 @@ export const list = query({
 						q
 							.eq("workspaceId", workspaceId)
 							.eq("archivedAt", undefined)
+							.eq("parentChatId", undefined)
 							.gte("lastMessageAt", 0),
 					)
 					.order("desc")
@@ -99,6 +103,7 @@ export const draft = mutation({
 				q
 					.eq("workspaceId", workspaceId)
 					.eq("archivedAt", undefined)
+					.eq("parentChatId", undefined)
 					.eq("lastMessageAt", undefined),
 			)
 			.filter((q) => q.eq(q.field("userId"), user._id))
@@ -111,6 +116,30 @@ export const draft = mutation({
 				title: "",
 			}))
 		);
+	},
+});
+
+async function depthOf(ctx: MutationCtx, chat: Doc<"chats">): Promise<number> {
+	let depth = 0;
+	for (let at = chat.parentChatId; at !== undefined; depth++)
+		at = (await ctx.db.get(at))?.parentChatId;
+	return depth;
+}
+
+export const spawn = mutation({
+	args: { chatId: v.id("chats"), agent: subAgent },
+	returns: v.id("chats"),
+	handler: async (ctx, { chatId, agent }) => {
+		const { user, chat } = await requireChat(ctx, chatId);
+		if ((await depthOf(ctx, chat)) >= MAX_SPAWN_DEPTH)
+			throw new ConvexError({ code: "SPAWN_TOO_DEEP" });
+		return await ctx.db.insert("chats", {
+			workspaceId: chat.workspaceId,
+			userId: user._id,
+			title: agent.name,
+			parentChatId: chatId,
+			agent,
+		});
 	},
 });
 
@@ -256,14 +285,25 @@ export const fork = mutation({
 	},
 });
 
+async function dropChat(ctx: MutationCtx, chat: Doc<"chats">): Promise<void> {
+	const children = await ctx.db
+		.query("chats")
+		.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
+		.collect();
+	for (const child of children) await dropChat(ctx, child);
+	await ctx.db.delete(chat._id);
+	await dropRepl(ctx, chat);
+	await ctx.scheduler.runAfter(0, internal.messages.purge, {
+		chatId: chat._id,
+	});
+}
+
 export const remove = mutation({
 	args: { chatId: v.id("chats") },
 	returns: v.null(),
 	handler: async (ctx, { chatId }) => {
 		const { chat } = await requireChat(ctx, chatId);
-		await ctx.db.delete(chatId);
-		await dropRepl(ctx, chat);
-		await ctx.scheduler.runAfter(0, internal.messages.purge, { chatId });
+		await dropChat(ctx, chat);
 		return null;
 	},
 });

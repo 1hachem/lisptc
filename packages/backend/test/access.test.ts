@@ -6,6 +6,7 @@ import {
 	MAX_AGENT_BYTES,
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
+	MAX_SPAWN_DEPTH,
 	STREAMING_LEASE_MS,
 } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
@@ -959,6 +960,32 @@ describe("chat listing", () => {
 		expect(chats[0]?._id).toBe(fresh);
 	});
 
+	it("keeps a sub-agent's chat out of the list", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "lead",
+		});
+		const child = await alice.as.mutation(api.chats.spawn, {
+			chatId,
+			agent: { name: "r", prompt: "dig", bounds: [] },
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: child,
+			messages: [{ type: "human", content: "find it" }],
+		});
+		const { chats } = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		const found = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			search: "r",
+		});
+		expect(chats.map((c) => c._id)).toEqual([chatId]);
+		expect(found.chats).toEqual([]);
+	});
+
 	it("hands back the same unsent draft however often a new chat is opened", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -1320,5 +1347,55 @@ describe("bin access", () => {
 		expect(
 			await bob.as.query(api.bin.list, { workspaceId: bob.workspace }),
 		).toHaveLength(1);
+	});
+});
+
+describe("spawning a sub-agent's chat", () => {
+	const agent = {
+		name: "r",
+		prompt: "dig",
+		bounds: ["(permission/deny fs/*)"],
+	};
+
+	it("files it under the chat that spawned it, with its definition", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		expect(
+			await alice.as.query(api.chats.get, { chatId: child }),
+		).toMatchObject({
+			parentChatId: chatId,
+			agent,
+			title: "r",
+			workspaceId: alice.workspace,
+		});
+	});
+
+	it("refuses another user's chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		await expect(
+			alice.as.mutation(api.chats.spawn, { chatId, agent }),
+		).rejects.toThrow();
+	});
+
+	it("refuses to nest deeper than the limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		let chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		for (let depth = 0; depth < MAX_SPAWN_DEPTH; depth++)
+			chatId = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		await expect(
+			alice.as.mutation(api.chats.spawn, { chatId, agent }),
+		).rejects.toThrow("SPAWN_TOO_DEEP");
 	});
 });

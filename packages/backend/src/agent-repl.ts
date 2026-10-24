@@ -2,6 +2,7 @@ import { agentsExtension } from "@repo/agents-extension";
 import { agentsHostFor } from "@repo/agents-extension/host";
 import { MemoryAgentJobs } from "@repo/agents-extension/jobs";
 import type {
+	AgentDefinition,
 	AgentJobs,
 	AgentRunner,
 	Notice,
@@ -31,7 +32,6 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
-import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
@@ -178,30 +178,31 @@ export function inProcessJobs(runnerFor: RunnerFor): JobsFor {
 	};
 }
 
-export interface Seeded {
+export interface SpawnedChat {
+	readonly parent: Id<"chats">;
+	readonly definition: AgentDefinition;
 	readonly seed: ReplSeed;
-	readonly bounds?: readonly string[];
-	readonly runner?: AgentRunner;
 }
 
-export async function seededRepl(
-	workspaceId: Id<"workspaces">,
+export async function spawnChat(
 	connect: Connect,
-	{ seed, bounds, runner }: Seeded,
-): Promise<AgentRepl> {
-	const images = new MemoryImageStore();
-	const repl = new AgentRepl({
-		extensions: await workspaceExtensions(workspaceId, connect, {
-			...(runner === undefined ? {} : { jobs: new MemoryAgentJobs(runner) }),
-			...(bounds === undefined ? {} : { bounds }),
-		}),
-		images,
+	server: ServerClient,
+	{ parent, definition, seed }: SpawnedChat,
+): Promise<Id<"chats">> {
+	const above = await connect().query(api.chats.get, { chatId: parent });
+	const bounds = [
+		...(above.agent?.bounds ?? []),
+		...(definition.permissions === undefined ? [] : [definition.permissions]),
+	];
+	const chatId = await connect().mutation(api.chats.spawn, {
+		chatId: parent,
+		agent: { name: definition.name, prompt: definition.prompt, bounds },
 	});
 	if (seed.from === "fork") {
-		await images.save(seed.image);
-		await repl.resume();
+		const replId = await connect().mutation(api.repls.open, { chatId });
+		await new ConvexImageStore(replId, server).save(seed.image);
 	}
-	return repl;
+	return chatId;
 }
 
 export function chatRepls(
@@ -210,11 +211,14 @@ export function chatRepls(
 	jobsFor?: JobsFor,
 ): (chatId: Id<"chats">) => Promise<AgentRepl> {
 	return async (chatId) => {
-		const { workspaceId } = await connect().query(api.chats.get, { chatId });
+		const { workspaceId, agent } = await connect().query(api.chats.get, {
+			chatId,
+		});
 		const replId = await connect().mutation(api.repls.open, { chatId });
 		const repl = new AgentRepl({
 			extensions: await workspaceExtensions(workspaceId, connect, {
 				chatId,
+				...(agent === undefined ? {} : { bounds: agent.bounds }),
 				...(jobsFor === undefined
 					? {}
 					: { jobs: jobsFor(workspaceId, chatId) }),
