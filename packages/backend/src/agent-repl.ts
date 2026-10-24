@@ -1,10 +1,11 @@
 import { agentsExtension } from "@repo/agents-extension";
 import { agentsHostFor } from "@repo/agents-extension/host";
-import { MemoryAgentJobs } from "@repo/agents-extension/jobs";
+import { MemoryJobs } from "@repo/agents-extension/jobs";
 import type {
 	AgentDefinition,
-	AgentJobs,
 	AgentRunner,
+	CodeRunner,
+	Jobs,
 	Notice,
 	ReplSeed,
 } from "@repo/agents-extension/ports";
@@ -12,6 +13,7 @@ import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
+import type { Image } from "@repo/interpreter/image";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
@@ -32,6 +34,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
@@ -74,7 +77,7 @@ const themeChoices = themes.map((theme) => ({
 
 export interface SessionScope {
 	readonly chatId?: Id<"chats">;
-	readonly jobs?: AgentJobs;
+	readonly jobs?: Jobs;
 	readonly bounds?: readonly string[];
 }
 
@@ -159,10 +162,11 @@ export async function workspaceExtensions(
 export type JobsFor = (
 	workspaceId: Id<"workspaces">,
 	chatId: Id<"chats">,
-) => AgentJobs;
+) => Jobs;
 
 export interface InProcess {
-	readonly runner: AgentRunner;
+	readonly agents: AgentRunner;
+	readonly code: CodeRunner;
 	readonly notify?: (notice: Notice) => void;
 }
 
@@ -172,10 +176,35 @@ export type RunnerFor = (
 ) => InProcess;
 
 export function inProcessJobs(runnerFor: RunnerFor): JobsFor {
+	const hosted = new Map<Id<"chats">, Jobs>();
 	return (workspaceId, chatId) => {
-		const { runner, notify } = runnerFor(workspaceId, chatId);
-		return new MemoryAgentJobs(runner, notify);
+		const standing = hosted.get(chatId);
+		if (standing !== undefined) return standing;
+		const { agents, code, notify } = runnerFor(workspaceId, chatId);
+		const jobs = new MemoryJobs({ agents, code }, notify);
+		hosted.set(chatId, jobs);
+		return jobs;
 	};
+}
+
+export interface Forked {
+	readonly image: Image;
+	readonly bounds: readonly string[];
+}
+
+export async function forkedRepl(
+	workspaceId: Id<"workspaces">,
+	connect: Connect,
+	{ image, bounds }: Forked,
+): Promise<AgentRepl> {
+	const images = new MemoryImageStore();
+	await images.save(image);
+	const repl = new AgentRepl({
+		extensions: await workspaceExtensions(workspaceId, connect, { bounds }),
+		images,
+	});
+	await repl.resume();
+	return repl;
 }
 
 export interface SpawnedChat {
