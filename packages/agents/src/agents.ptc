@@ -10,12 +10,13 @@ Sub-agents: hand off side work, run it in background.
   (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")")
   (spawn "researcher" :repl :fresh)      ; saved definition, new image, new chat
   (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; copy of your image and chat now
-  (setq p (send :to "researcher" "find X" :max-steps 10))
-  (await p)                              ; wait now, reply string
+  (setq j (send :to "researcher" "find X" :max-steps 10)) ; job id at once
+  (agent-state j)                        ; :queued :running :done :failed :cancelled
+  (agent-wait j)                         ; wait now, reply string
+  (agent-cancel j)
 
-send returns promise at once; you keep working. Not awaited? Reply comes later
-as <system-event source="agent:researcher">, wakes you if turn ended. Messages
-to one agent run in turn; agent keeps its chat between sends. (agents) lists
-saved names. Spawning a name again starts it over. :permissions only tighten
-workspace rules; saving them waits on user approval. Sub-agent asks reach user
-in your chat.
+Not waited? Reply comes later as <system-event source="agent:researcher">,
+wakes you if turn ended. Messages to one agent run in turn; agent keeps its
+chat between sends. (agents) lists saved names. Spawning a name again starts it
+over. :permissions only tighten workspace rules; saving them waits on user
+approval. Sub-agent asks reach user in your chat.

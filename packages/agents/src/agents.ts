@@ -6,28 +6,27 @@ import {
 	Cell,
 	LispKeyword,
 	type List,
+	newLispKeyword,
 	newSym,
 } from "@repo/interpreter/objects";
 import { keyName } from "@repo/interpreter/plist";
-import { zList } from "@repo/interpreter/schema";
-import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { zList, zString } from "@repo/interpreter/schema";
+import type { InterpExtension } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 import type {
 	AgentDefinition,
 	AgentDefinitions,
-	AgentRunner,
+	AgentJobs,
 	ChatSeed,
-	Notice,
+	Outcome,
 	ReplSeed,
-	SubAgent,
 } from "./ports.ts";
 
 export interface AgentsHost {
 	prompt: PromptSource;
 	definitions: AgentDefinitions;
-	runner?: AgentRunner;
-	notify?: (notice: Notice) => void;
+	jobs?: AgentJobs;
 }
 
 export const DEFAULT_MAX_STEPS = 20;
@@ -39,24 +38,10 @@ export interface AgentsExtension extends InterpExtension {
 }
 
 export function agentsExtension(host: AgentsHost): AgentsExtension {
-	const stepping = { depth: 0 };
-	return Object.assign(
-		(interp: Interp): void => registerAgents(interp, host, stepping),
-		{
-			prompt: host.prompt(),
-			asks: [BOUNDED_DEFINE],
-			session(hooks: SessionHooks): void {
-				hooks.evalStep.use(async (ctx, next) => {
-					stepping.depth++;
-					try {
-						await next(ctx);
-					} finally {
-						stepping.depth--;
-					}
-				});
-			},
-		},
-	);
+	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
+		prompt: host.prompt(),
+		asks: [BOUNDED_DEFINE],
+	});
 }
 
 interface Parsed {
@@ -116,30 +101,13 @@ function chatOf(value: unknown): ChatSeed {
 	throw new EvalException("spawn: :chat is :fresh or :fork", value);
 }
 
-function failureOf(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
+export function registerAgents(interp: Interp, host: AgentsHost): void {
+	const spawned = new Map<string, string>();
 
-interface Running {
-	readonly agent: SubAgent;
-	queue: Promise<unknown>;
-}
-
-export function registerAgents(
-	interp: Interp,
-	host: AgentsHost,
-	stepping: { readonly depth: number } = { depth: 0 },
-): void {
-	const running = new Map<string, Running>();
-
-	function runner(): AgentRunner {
-		if (host.runner === undefined)
-			throw new EvalException(
-				"this session runs no sub-agents",
-				"spawn",
-				false,
-			);
-		return host.runner;
+	function jobs(form: string): AgentJobs {
+		if (host.jobs === undefined)
+			throw new EvalException("this session runs no sub-agents", form, false);
+		return host.jobs;
 	}
 
 	async function definitionOf(
@@ -264,10 +232,7 @@ export function registerAgents(
 			const seed = seedOf(interp, options.get("repl"));
 			const chat = chatOf(options.get("chat"));
 			const definition = await definitionOf(name, options.get("prompt"));
-			running.set(name, {
-				agent: runner().spawn({ definition, seed, chat }),
-				queue: Promise.resolve(),
-			});
+			spawned.set(name, await jobs("spawn").spawn({ definition, seed, chat }));
 			return name;
 		},
 	);
@@ -276,9 +241,9 @@ export function registerAgents(
 		"send",
 		-1,
 		'(send :to "name" "message" [:max-steps n])',
-		"Send a message to a spawned sub-agent. Return a promise of its reply right away and keep working. Wait with await to have the reply in this step. A reply that lands outside a step comes back as a system event from agent:name, waking you if your turn ended. Messages to one agent run in turn.",
+		"Hand a message to a spawned sub-agent as a job and return the job id at once; keep working. Unless you agent-wait on it, its reply comes back later as a system event from agent:name, waking you if your turn ended. Messages to one agent run in turn.",
 		z.tuple([zList]),
-		([rest]) => {
+		async ([rest]) => {
 			const { values, options } = parse("send", rest, ["to", "max-steps"]);
 			if (values.length !== 1)
 				throw new EvalException("send takes one message string", rest);
@@ -288,35 +253,47 @@ export function registerAgents(
 				throw new EvalException("send: say who with :to", rest);
 			const name = nameOf("send", to);
 			const maxSteps = stepsOf(options.get("max-steps"));
-			const target = running.get(name);
-			if (target === undefined)
+			const agent = spawned.get(name);
+			if (agent === undefined)
 				throw new EvalException(
 					"send: no running agent by that name; spawn it first",
 					name,
 				);
-			return interp.async.start((signal) => {
-				const sent = target.queue
-					.catch(() => undefined)
-					.then(() => target.agent.send({ message, maxSteps, signal }))
-					.catch((error: unknown) => {
-						throw new EvalException(`agent ${name}`, failureOf(error), false);
-					});
-				target.queue = sent;
-				sent.then(
-					(reply) => {
-						if (stepping.depth === 0)
-							host.notify?.({ agent: name, reply: String(reply) });
-					},
-					(error: unknown) => {
-						if (stepping.depth === 0)
-							host.notify?.({
-								agent: name,
-								failure: failureOf(error),
-							});
-					},
-				);
-				return sent;
-			});
+			return await jobs("send").send(agent, { message, maxSteps });
 		},
+	);
+
+	interp.def(
+		"agent-wait",
+		1,
+		'(agent-wait "job")',
+		"Wait in this step for a job's reply and return it. A job you wait on sends no system event later. A failed or cancelled job raises an error.",
+		z.tuple([zString]),
+		async ([job]) => {
+			const waiting = interp.async.start((signal) =>
+				jobs("agent-wait").wait(job, signal),
+			);
+			const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
+			if ("reply" in outcome) return outcome.reply;
+			throw new EvalException(`agent job ${job}`, outcome.failure, false);
+		},
+	);
+
+	interp.def(
+		"agent-state",
+		1,
+		'(agent-state "job")',
+		"Return where a job stands: :queued, :running, :done, :failed or :cancelled.",
+		z.tuple([zString]),
+		async ([job]) => newLispKeyword(await jobs("agent-state").state(job)),
+	);
+
+	interp.def(
+		"agent-cancel",
+		1,
+		'(agent-cancel "job")',
+		"Cancel a job that has not finished. Return t when it was cancelled, nil when it had already finished.",
+		z.tuple([zString]),
+		async ([job]) => ((await jobs("agent-cancel").cancel(job)) ? true : null),
 	);
 }

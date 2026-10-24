@@ -19,9 +19,10 @@ export interface Spawn {
 	readonly chat: ChatSeed;
 }
 
-export type Notice =
-	| { readonly agent: string; readonly reply: string }
-	| { readonly agent: string; readonly failure: string };
+export interface Notice {
+	readonly source: string;
+	readonly text: string;
+}
 
 export interface Ask {
 	readonly message: string;
@@ -35,6 +36,23 @@ export interface SubAgent {
 
 export interface AgentRunner {
 	spawn(spawn: Spawn): SubAgent;
+}
+
+export interface Job {
+	readonly message: string;
+	readonly maxSteps: number;
+}
+
+export type JobState = "queued" | "running" | "done" | "failed" | "cancelled";
+
+export type Outcome = { readonly reply: string } | { readonly failure: string };
+
+export interface AgentJobs {
+	spawn(spawn: Spawn): Awaitable<string>;
+	send(agent: string, job: Job): Awaitable<string>;
+	state(job: string): Awaitable<JobState>;
+	wait(job: string, signal: AbortSignal): Promise<Outcome>;
+	cancel(job: string): Awaitable<boolean>;
 }
 
 export interface AgentDefinitions {

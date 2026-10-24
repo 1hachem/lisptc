@@ -1,11 +1,6 @@
 import { filePrompt } from "@repo/shared/host-node";
 import type { AgentsHost } from "./agents.ts";
-import type {
-	AgentDefinition,
-	AgentDefinitions,
-	AgentRunner,
-	Notice,
-} from "./ports.ts";
+import type { AgentDefinition, AgentDefinitions, AgentJobs } from "./ports.ts";
 
 export class MemoryAgentDefinitions implements AgentDefinitions {
 	private readonly saved = new Map<string, AgentDefinition>();
@@ -29,15 +24,13 @@ export class MemoryAgentDefinitions implements AgentDefinitions {
 
 export interface AgentsHostOptions {
 	definitions?: AgentDefinitions;
-	runner?: AgentRunner;
-	notify?: (notice: Notice) => void;
+	jobs?: AgentJobs;
 }
 
 export function agentsHostFor(options: AgentsHostOptions = {}): AgentsHost {
 	return {
 		prompt: filePrompt(new URL("./agents.ptc", import.meta.url)),
 		definitions: options.definitions ?? new MemoryAgentDefinitions(),
-		...(options.runner === undefined ? {} : { runner: options.runner }),
-		...(options.notify === undefined ? {} : { notify: options.notify }),
+		...(options.jobs === undefined ? {} : { jobs: options.jobs }),
 	};
 }

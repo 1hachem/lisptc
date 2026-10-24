@@ -1,92 +1,71 @@
-import type { Outcome } from "@repo/interpreter/drive";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { LispPromise } from "@repo/interpreter/promise";
-import { newSessionHooks, type StepContext } from "@repo/interpreter/session";
 import { describe, expect, test } from "vitest";
 import { agentsExtension, BOUNDED_DEFINE } from "../src/agents.ts";
 import { agentsHostFor, MemoryAgentDefinitions } from "../src/agents-host.ts";
-import type { AgentRunner, Ask, Notice, Spawn } from "../src/ports.ts";
+import type { AgentJobs, Job, JobState, Outcome, Spawn } from "../src/ports.ts";
 
-interface Recorded {
-	readonly spawned: Spawn[];
-	readonly asked: Ask[];
-	release: () => void;
+class RecordedJobs implements AgentJobs {
+	readonly spawned: Spawn[] = [];
+	readonly sent: { agent: string; job: Job }[] = [];
+	readonly cancelled: string[] = [];
+
+	spawn(spawn: Spawn): string {
+		this.spawned.push(spawn);
+		return `agent-${this.spawned.length}`;
+	}
+
+	send(agent: string, job: Job): string {
+		this.sent.push({ agent, job });
+		return `job-${this.sent.length}`;
+	}
+
+	state(_job: string): JobState {
+		return "running";
+	}
+
+	async wait(job: string): Promise<Outcome> {
+		const { message } = this.sent[Number(job.slice(4)) - 1].job;
+		return message === "fail"
+			? { failure: "it broke" }
+			: { reply: `got ${message}` };
+	}
+
+	cancel(job: string): boolean {
+		this.cancelled.push(job);
+		return true;
+	}
 }
 
-function world(withRunner = true) {
-	const recorded: Recorded = { spawned: [], asked: [], release: () => {} };
-	const runner: AgentRunner = {
-		spawn(spawn) {
-			recorded.spawned.push(spawn);
-			return {
-				async send(ask) {
-					recorded.asked.push(ask);
-					if (ask.message === "fail") throw new Error("it broke");
-					if (ask.message === "hold")
-						await new Promise<void>((resolve) => {
-							recorded.release = resolve;
-						});
-					return `${spawn.definition.name} got ${ask.message}`;
-				},
-			};
-		},
-	};
+function world(withJobs = true) {
+	const jobs = new RecordedJobs();
 	const definitions = new MemoryAgentDefinitions();
-	const notices: Notice[] = [];
-	const notify = (notice: Notice) => notices.push(notice);
 	const extension = agentsExtension(
-		agentsHostFor(
-			withRunner ? { definitions, runner, notify } : { definitions, notify },
-		),
+		agentsHostFor(withJobs ? { definitions, jobs } : { definitions }),
 	);
 	const interp = new Interp({ extensions: [extension] });
 	runSync(interp, prelude);
-	const hooks = newSessionHooks();
-	extension.session?.(hooks);
-	const run = (code: string) => runAsync(interp, code);
-	const step = async (code: string) => {
-		let outcome: Outcome | undefined;
-		await hooks.evalStep.run(async () => {
-			outcome = await run(code);
-			if (outcome.value instanceof LispPromise)
-				await outcome.value.promise().catch(() => undefined);
-		}, {} as StepContext);
-		return outcome;
-	};
 	const calls: string[] = [];
 	interp.hooks.call.use((i, name, args, next) => {
 		calls.push(name);
 		return next(i, name, args);
 	});
-	return {
-		interp,
-		extension,
-		recorded,
-		definitions,
-		notices,
-		calls,
-		run,
-		step,
-	};
-}
-
-async function settled({ value }: Outcome): Promise<unknown> {
-	if (!(value instanceof LispPromise)) throw new Error("not a promise");
-	return value.promise();
+	const run = (code: string) => runAsync(interp, code);
+	const shown = async (code: string) => str((await run(code)).value);
+	return { extension, jobs, definitions, calls, run, shown };
 }
 
 describe("defagent", () => {
 	test("saves a definition spawn reuses by name", async () => {
-		const { run, recorded, definitions } = world();
+		const { run, jobs, definitions } = world();
 		await run('(defagent "researcher" :prompt "dig")');
 		expect(definitions.get("researcher")).toEqual({
 			name: "researcher",
 			prompt: "dig",
 		});
 		expect(str((await run('(spawn "researcher")')).value)).toBe('"researcher"');
-		expect(recorded.spawned[0]).toEqual({
+		expect(jobs.spawned[0]).toEqual({
 			definition: { name: "researcher", prompt: "dig" },
 			seed: { from: "fresh" },
 			chat: { from: "fresh" },
@@ -138,9 +117,9 @@ describe("defagent with permissions", () => {
 
 describe("spawn", () => {
 	test("starts with a fresh chat unless told to fork it", async () => {
-		const { run, recorded } = world();
+		const { run, jobs } = world();
 		await run('(spawn "a" :prompt "p") (spawn "b" :prompt "p" :chat :fork)');
-		expect(recorded.spawned.map((spawn) => spawn.chat)).toEqual([
+		expect(jobs.spawned.map((spawn) => spawn.chat)).toEqual([
 			{ from: "fresh" },
 			{ from: "fork" },
 		]);
@@ -154,9 +133,9 @@ describe("spawn", () => {
 	});
 
 	test("takes an ad hoc prompt without saving it", async () => {
-		const { run, recorded, definitions } = world();
+		const { run, jobs, definitions } = world();
 		await run('(spawn "scratch" :prompt "think")');
-		expect(recorded.spawned[0].definition).toEqual({
+		expect(jobs.spawned[0].definition).toEqual({
 			name: "scratch",
 			prompt: "think",
 		});
@@ -164,9 +143,9 @@ describe("spawn", () => {
 	});
 
 	test("forks a copy of the image as it stands", async () => {
-		const { run, recorded } = world();
+		const { run, jobs } = world();
 		await run('(setq x 41) (spawn "scratch" :prompt "p" :repl :fork)');
-		const { seed } = recorded.spawned[0];
+		const { seed } = jobs.spawned[0];
 		expect(seed.from).toBe("fork");
 		expect(JSON.stringify(seed)).toContain('"x"');
 	});
@@ -185,7 +164,7 @@ describe("spawn", () => {
 		);
 	});
 
-	test("says so in a session with no runner", async () => {
+	test("says so in a session with no jobs", async () => {
 		const { run } = world(false);
 		await expect(run('(spawn "s" :prompt "p")')).rejects.toThrow(
 			"runs no sub-agents",
@@ -194,31 +173,19 @@ describe("spawn", () => {
 });
 
 describe("send", () => {
-	test("returns a promise of the reply at once", async () => {
-		const { run } = world();
+	test("hands the message to the agent's jobs and returns the job id", async () => {
+		const { run, shown, jobs } = world();
 		await run('(spawn "r" :prompt "p")');
-		const promise = await run('(send :to "r" "hello" :max-steps 3)');
-		expect(await settled(promise)).toBe("r got hello");
+		expect(await shown('(send :to "r" "hello" :max-steps 3)')).toBe('"job-1"');
+		expect(jobs.sent).toEqual([
+			{ agent: "agent-1", job: { message: "hello", maxSteps: 3 } },
+		]);
 	});
 
-	test("hands the agent its step budget, with a default", async () => {
-		const { run, recorded } = world();
-		await run('(spawn "r" :prompt "p")');
-		await settled(await run('(send :to "r" "a" :max-steps 3)'));
-		await settled(await run('(send :to "r" "b")'));
-		expect(recorded.asked.map((ask) => ask.maxSteps)).toEqual([3, 20]);
-	});
-
-	test("runs the messages to one agent in turn", async () => {
-		const { run, recorded } = world();
-		await run('(spawn "r" :prompt "p")');
-		const first = await run('(send :to "r" "hold")');
-		const second = await run('(send :to "r" "next")');
-		await new Promise((resolve) => setTimeout(resolve, 5));
-		expect(recorded.asked.map((ask) => ask.message)).toEqual(["hold"]);
-		recorded.release();
-		expect(await settled(second)).toBe("r got next");
-		expect(await settled(first)).toBe("r got hold");
+	test("gives a job the default step budget", async () => {
+		const { run, jobs } = world();
+		await run('(spawn "r" :prompt "p") (send :to "r" "b")');
+		expect(jobs.sent[0].job.maxSteps).toBe(20);
 	});
 
 	test("refuses an agent that was never spawned", async () => {
@@ -237,29 +204,33 @@ describe("send", () => {
 	});
 });
 
-describe("a reply", () => {
-	test("awaited within a step reaches nobody else", async () => {
-		const { run, step, notices } = world();
+describe("a job", () => {
+	test("waited on returns its reply", async () => {
+		const { run, shown } = world();
 		await run('(spawn "r" :prompt "p")');
-		await step('(send :to "r" "hello")');
-		expect(notices).toEqual([]);
+		expect(await shown('(agent-wait (send :to "r" "hello"))')).toBe(
+			'"got hello"',
+		);
 	});
 
-	test("landing outside a step is handed to the host", async () => {
-		const { run, notices } = world();
+	test("that failed raises when waited on", async () => {
+		const { run } = world();
 		await run('(spawn "r" :prompt "p")');
-		await settled(await run('(send :to "r" "hello")'));
-		await Promise.resolve();
-		expect(notices).toEqual([{ agent: "r", reply: "r got hello" }]);
+		await expect(run('(agent-wait (send :to "r" "fail"))')).rejects.toThrow(
+			"it broke",
+		);
 	});
 
-	test("that fails is handed over as a failure", async () => {
-		const { run, notices } = world();
+	test("reports where it stands as a keyword", async () => {
+		const { run, shown } = world();
 		await run('(spawn "r" :prompt "p")');
-		await settled(await run('(send :to "r" "fail")')).catch(() => undefined);
-		await Promise.resolve();
-		expect(notices).toEqual([
-			{ agent: "r", failure: expect.stringContaining("it broke") },
-		]);
+		expect(await shown('(agent-state (send :to "r" "hi"))')).toBe(":running");
+	});
+
+	test("can be cancelled", async () => {
+		const { run, shown, jobs } = world();
+		await run('(spawn "r" :prompt "p")');
+		expect(await shown('(agent-cancel (send :to "r" "hi"))')).toBe("t");
+		expect(jobs.cancelled).toEqual(["job-1"]);
 	});
 });
