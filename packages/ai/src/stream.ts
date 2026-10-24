@@ -129,7 +129,7 @@ function received(input: ChatInput): Annotations | undefined {
 	return carried.length === 0 ? undefined : Object.fromEntries(carried);
 }
 
-function toTranscript(input: ChatInput): TranscriptEntry[] {
+export function toTranscript(input: ChatInput): TranscriptEntry[] {
 	const transcript: TranscriptEntry[] = [];
 	for (const entry of (input.messages ?? []).map(toEntry)) {
 		const previous = transcript.at(-1);

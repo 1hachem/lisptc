@@ -65,6 +65,7 @@ export type TurnEvent =
 			annotations: StepAnnotations;
 			riding?: string;
 			failed: boolean;
+			held?: true;
 			results: readonly string[];
 	  }
 	| { type: "collected"; annotations: Annotations }
@@ -315,6 +316,7 @@ async function* evaluateStep(
 		failed,
 		results,
 		...riding,
+		...(held ? { held: true as const } : {}),
 	};
 	transcript.push({
 		role: "tool",

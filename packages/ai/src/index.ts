@@ -4,7 +4,11 @@ export {
 	DEFAULT_SYSTEM_PROMPT,
 	streamAgent,
 } from "./agent.ts";
-export { Conversation, ConversationStopped } from "./conversation.ts";
+export {
+	Conversation,
+	ConversationStopped,
+	type Replied,
+} from "./conversation.ts";
 export {
 	type Evaluated,
 	evalUserMessage,

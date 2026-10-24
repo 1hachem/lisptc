@@ -1,3 +1,4 @@
+import type { StepAnnotations } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { AgentConfig } from "./agent.ts";
 import { systemPromptFor } from "./prompts/lisp.ts";
@@ -11,18 +12,26 @@ export interface Reply {
 	readonly signal: AbortSignal;
 }
 
+export type Replied =
+	| { readonly answer: string }
+	| { readonly held: StepAnnotations };
+
 export class Conversation {
-	private readonly transcript: TranscriptEntry[] = [];
+	private readonly transcript: TranscriptEntry[];
 
 	constructor(
 		private readonly repl: AgentRepl,
 		private readonly instructions: string,
 		private readonly config: () => Promise<AgentConfig>,
-	) {}
+		history: readonly TranscriptEntry[] = [],
+	) {
+		this.transcript = [...history];
+	}
 
-	async reply(message: string, { maxSteps, signal }: Reply): Promise<string> {
+	async reply(message: string, { maxSteps, signal }: Reply): Promise<Replied> {
 		const config = await this.config();
 		this.transcript.push({ role: "user", content: message });
+		let held: StepAnnotations | undefined;
 		for await (const event of runAgentTurn(this.transcript, {
 			repl: this.repl,
 			maxSteps,
@@ -32,6 +41,7 @@ export class Conversation {
 				system: `${systemPromptFor(this.repl.interp)}\n\n${this.instructions}`,
 			},
 		})) {
+			if (event.type === "result" && event.held) held = event.annotations;
 			if (event.type === "assistant")
 				this.transcript.push({ role: "assistant", content: event.code });
 			if (event.type === "result")
@@ -39,7 +49,8 @@ export class Conversation {
 					role: "tool",
 					content: replResultContent(event.output, event.error),
 				});
-			if (event.type === "halt") return event.answer;
+			if (event.type === "halt")
+				return held === undefined ? { answer: event.answer } : { held };
 			if (event.type === "capped")
 				throw new ConversationStopped(
 					`used its ${event.steps} steps without answering`,
@@ -49,8 +60,6 @@ export class Conversation {
 			if (event.type === "failed")
 				throw new ConversationStopped(`failed: ${event.message}`);
 		}
-		throw new ConversationStopped(
-			"stopped without answering; a step may be waiting on an approval no one can give",
-		);
+		throw new ConversationStopped("stopped without answering");
 	}
 }
