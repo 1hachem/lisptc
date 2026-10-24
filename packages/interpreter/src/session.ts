@@ -1,11 +1,11 @@
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
-import type { Addressed } from "./channels.ts";
+import type { Reader } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
 import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
 import type { Installable, Interp } from "./lisp.ts";
-export type Bounded = Required<Addressed<string>>;
+export type Bounded = Record<Reader, string>;
 
 export type Annotations = Record<string, unknown>;
 
@@ -116,6 +116,10 @@ export interface InterpExtension extends Installable {
 
 export interface SessionHooks {
 	readonly turnStart: Chain<[ctx: TurnContext], Eval<void>>;
+	readonly received: Chain<
+		[ctx: TurnContext, received: Annotations],
+		Eval<void>
+	>;
 	readonly system: Chain<[interp: Interp, prompt: string], Eval<string>>;
 	readonly beginStep: Chain<[ctx: TurnContext], Eval<void>>;
 	readonly context: Chain<
@@ -155,6 +159,7 @@ export function newSessionHooks(): SessionHooks {
 	const slots = new Map<string, unknown>();
 	return {
 		turnStart: new Chain(),
+		received: new Chain(),
 		system: new Chain(),
 		beginStep: new Chain(),
 		context: new Chain(),

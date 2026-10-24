@@ -1,10 +1,9 @@
 import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
+import { type FormSpan, openForms } from "@repo/shared/lisp-forms";
 import { describe, expect, test } from "vitest";
 import {
-	type FormSpan,
 	formsIn,
 	highlighter,
-	openForms,
 	sourceTokensIn,
 	tokensIn,
 } from "../src/index.ts";
@@ -34,6 +33,20 @@ describe("reading lisptc", () => {
 			['"hi"', "string"],
 			["42", "number"],
 			[":loud", "attr"],
+			["x", "variable"],
+			[")", "operator"],
+		]);
+	});
+
+	test("an atom is a number or a keyword exactly when the reader reads one", () => {
+		expect(tokens("(f 1e3 0x1F Infinity : ~ x)")).toEqual([
+			["(", "operator"],
+			["f", "function"],
+			["1e3", "number"],
+			["0x1F", "number"],
+			["Infinity", "number"],
+			[":", "variable"],
+			["~", "variable"],
 			["x", "variable"],
 			[")", "operator"],
 		]);
@@ -178,6 +191,10 @@ describe("formsIn", () => {
 		const { prose, heads } = formsIn('Working on it.\n(load-mcp "playw');
 		expect(prose).toBe("Working on it.");
 		expect(heads).toEqual(["load-mcp"]);
+	});
+
+	test("names no call for a keyword in head position, as the language server does", () => {
+		expect(formsIn("(echo :k (:a x))").heads).toEqual(["echo"]);
 	});
 
 	test("takes no call out of a parenthesis inside a string", () => {

@@ -66,16 +66,6 @@ export function compare(x: Numeric, y: Numeric): number {
 	}
 }
 
-export function tryToParse(token: string): Numeric | null {
-	try {
-		return BigInt(token);
-	} catch (_ex) {
-		const n = Number(token);
-		if (Number.isNaN(n)) return null;
-		return n;
-	}
-}
-
 export function convertToString(x: Numeric): string {
 	const s = `${x}`;
 	if (typeof x === "number" && Number.isInteger(x) && !s.includes("e"))

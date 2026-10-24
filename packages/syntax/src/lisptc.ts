@@ -1,16 +1,19 @@
 import { type FormSpan, formSpans } from "@repo/shared/lisp-forms";
 import { looksLikeParenthesizedProse } from "@repo/shared/lisp-prose";
-import { tokenPattern } from "@repo/shared/lisp-tokens";
+import {
+	isKeywordToken,
+	isQuoteToken,
+	numberIn,
+	type QuoteToken,
+	tokenPattern,
+} from "@repo/shared/lisp-tokens";
 import {
 	createHighlighter,
 	defineLanguage,
 	type TokenRange,
 } from "@tanstack/highlight/core";
 
-const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)$/;
-const QUOTE = new Set(["'", "`", "~", ",", ",@"]);
-const QUOTES = new Set(["'", "`"]);
-const UNQUOTES = new Set([",", ",@"]);
+const QUOTES: ReadonlySet<QuoteToken> = new Set(["'", "`"]);
 
 interface Scan {
 	ranges: TokenRange[];
@@ -23,8 +26,8 @@ export interface Forms {
 }
 
 function atomClass(text: string, head: boolean): TokenRange["className"] {
-	if (text.startsWith(":")) return "attr";
-	if (NUMBER.test(text)) return "number";
+	if (isKeywordToken(text)) return "attr";
+	if (numberIn(text) !== null) return "number";
 	return head ? "function" : "variable";
 }
 
@@ -68,12 +71,11 @@ function scan(text: string, prose: readonly FormSpan[]): Scan {
 			const start = base + m.index;
 			const end = start + word.length;
 
-			if (QUOTE.has(word)) {
+			if (isQuoteToken(word)) {
 				if (depth > 0) push(start, end, "operator");
 				else if (quoteEnd !== start) quoteAt = start;
 				quoteEnd = end;
-				if (QUOTES.has(word)) mark = "quote";
-				else if (UNQUOTES.has(word)) mark = "unquote";
+				mark = QUOTES.has(word) ? "quote" : "unquote";
 				continue;
 			}
 
@@ -111,6 +113,7 @@ function scan(text: string, prose: readonly FormSpan[]): Scan {
 				if (
 					head &&
 					!quoted &&
+					!isKeywordToken(word) &&
 					!prose.some(
 						([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
 					)

@@ -1,16 +1,10 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
-import { useWorkspace } from "./workspace.tsx";
+import { NEW_CHAT } from "./panel-ops.ts";
+import { requestPanel } from "./panel-requests.ts";
 
-export function useNewChat(): () => Promise<void> {
-	const navigate = useNavigate();
-	const { workspace } = useWorkspace();
+function openNewChat(): void {
+	requestPanel(NEW_CHAT);
+}
 
-	return useCallback(async () => {
-		if (!workspace) return;
-		await navigate({
-			to: "/$workspaceId",
-			params: { workspaceId: workspace._id },
-		});
-	}, [workspace, navigate]);
+export function useNewChat(): () => void {
+	return openNewChat;
 }

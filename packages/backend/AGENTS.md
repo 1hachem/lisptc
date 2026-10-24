@@ -69,6 +69,10 @@ pnpm --filter @repo/backend test       # convex-test, in memory
 `dev` wants `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` in its
 environment. Under `task`, Infisical supplies them.
 
+An agent may run `task convex:generate` without asking. It is how
+`convex/_generated/` is brought up to date, and the way out when a bare
+`convex codegen` fails for want of a deployment.
+
 ## Tests
 
 `test/helpers.ts` builds a signed-in world. Use it rather than assembling

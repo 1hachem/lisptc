@@ -4,14 +4,18 @@ import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import {
+	fileTab,
 	joinMessages,
 	nodeToJson,
+	type PanelOp,
+	panelOps,
 	rendered,
 	sent,
 	type UiNode,
 	UiSurface,
 	type UiValue,
 	uiExtension,
+	viewTab,
 } from "../src/ui.ts";
 import { uiHost } from "../src/ui-host.ts";
 
@@ -197,6 +201,30 @@ describe("the display widgets", () => {
 			props: { text: "PR 12", href: "https://example.com/12" },
 			children: [],
 		});
+	});
+
+	it("serialises a file link as text, folder and name, inside a stack", () => {
+		const { view } = render(
+			'(ui/render (ui/stack (ui/file-link "Q3" "knowledge" "q3.pdf")))',
+		);
+		expect(view).toEqual({
+			tag: "stack",
+			props: {},
+			children: [
+				{
+					tag: "file-link",
+					props: { text: "Q3", folder: "knowledge", name: "q3.pdf" },
+					children: [],
+				},
+			],
+		});
+	});
+
+	it("rejects a file link to a folder the app does not have", () => {
+		const { interp } = fresh();
+		expect(() =>
+			runSync(interp, '(ui/file-link "x" "downloads" "x.txt")'),
+		).toThrow(/unknown folder/);
 	});
 
 	it("carries a badge's tone only when one was given", () => {
@@ -448,5 +476,88 @@ describe("handing a turn back to the agent", () => {
 		);
 		await surface.invoke("a1", {});
 		expect(ui.takeMessage()).toBeUndefined();
+	});
+});
+
+describe("the panel beside the chat", () => {
+	function opened(code: string) {
+		const { interp } = fresh();
+		const ops: PanelOp[] = [];
+		panelOps.on(interp.channels, (op) => {
+			ops.push(op);
+		});
+		const result = runSync(interp, code);
+		return { ops, result };
+	}
+
+	it("opens a file in the focused split by default and returns its tab id", () => {
+		const { ops, result } = opened('(ui/open-file "attachments" "cat.png")');
+		expect(result).toBe(fileTab("attachments", "cat.png"));
+		expect(ops).toEqual([
+			{
+				op: "open",
+				tab: "file:attachments/cat.png",
+				split: "here",
+				content: { kind: "file", folder: "attachments", name: "cat.png" },
+			},
+		]);
+	});
+
+	it("opens a file in a new split to the right or below", () => {
+		expect(
+			opened('(ui/open-file "knowledge" "a.md" :split "down")').ops[0],
+		).toMatchObject({ split: "down" });
+	});
+
+	it("rejects a split or a folder it cannot place", () => {
+		const { interp } = fresh();
+		expect(() =>
+			runSync(interp, '(ui/open-file "knowledge" "a.md" :split "left")'),
+		).toThrow(/unknown split/);
+		expect(() => runSync(interp, '(ui/open-file "bin" "a.md")')).toThrow(
+			/unknown folder/,
+		);
+	});
+
+	it("opens a widget as a view tab keyed by its title", () => {
+		const { ops, result } = opened(
+			'(ui/open-view "counts" (ui/kpi "open" 3) :split "right")',
+		);
+		expect(result).toBe(viewTab("counts"));
+		expect(ops[0]).toEqual({
+			op: "open",
+			tab: "view:counts",
+			split: "right",
+			content: {
+				kind: "view",
+				title: "counts",
+				node: {
+					tag: "kpi",
+					props: { label: "open", value: "3" },
+					children: [],
+				},
+			},
+		});
+	});
+
+	it("refuses to open something that is not a widget as a view", () => {
+		const { interp } = fresh();
+		expect(() => runSync(interp, '(ui/open-view "x" 3)')).toThrow(
+			/ui element expected/,
+		);
+	});
+
+	it("closes and focuses tabs by id", () => {
+		const { ops } = opened('(ui/focus "view:counts") (ui/close "view:counts")');
+		expect(ops).toEqual([
+			{ op: "focus", tab: "view:counts" },
+			{ op: "close", tab: "view:counts" },
+		]);
+	});
+
+	it("puts nothing under the message when it opens a tab", () => {
+		const { interp, ui } = fresh();
+		runSync(interp, '(ui/open-file "knowledge" "a.md")');
+		expect(ui.takeView()).toBeUndefined();
 	});
 });

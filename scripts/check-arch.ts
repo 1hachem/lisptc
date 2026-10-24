@@ -16,9 +16,11 @@ const RULES: Rule[] = [
 	{
 		manifest: "packages/shared/package.json",
 		fields: ["dependencies", "peerDependencies"],
-		forbidden: () => true,
-		reason: "@repo/shared is the no-dependency utility layer.",
+		forbidden: (name) => name !== "zod",
+		reason:
+			"@repo/shared is the utility layer and carries zod, the schemas its contracts are written in, and nothing else.",
 	},
+	...staticRules(),
 	{
 		manifest: "packages/ui/package.json",
 		fields: ["dependencies", "devDependencies", "peerDependencies"],
@@ -62,9 +64,11 @@ const IMPORTS: ImportRule[] = [
 ];
 
 const EXTENSION_DIRS = [
+	"packages/agents/src/",
 	"packages/compaction/src/",
 	"packages/diagnostics/src/",
 	"packages/introspection/src/",
+	"packages/knowledge/src/",
 	"packages/memory/src/",
 	"packages/permissions/src/",
 	"packages/preferences/src/",
@@ -87,6 +91,7 @@ const HOST_REACHES: { pattern: RegExp; what: string }[] = [
 	{ pattern: /^@modelcontextprotocol\/sdk/, what: "the MCP SDK" },
 	{ pattern: /^@langchain\//, what: "a langchain package" },
 	{ pattern: /^dotenv$/, what: "dotenv" },
+	{ pattern: /^unpdf$/, what: "the PDF parser" },
 ];
 
 const HOST_GLOBALS = /\bprocess\.(env|cwd|platform|kill)\b/;
@@ -143,6 +148,47 @@ function runtimeImports(text: string): Import[] {
 	for (let m = re.exec(text); m !== null; m = re.exec(text))
 		if (m[1] === undefined) out.push({ module: m[3], names: valueNames(m[2]) });
 	return out;
+}
+
+function manifestsTagged(tag: string): string[] {
+	return execFileSync(
+		"git",
+		["ls-files", "packages/*/turbo.json", "apps/*/turbo.json"],
+		{ encoding: "utf8" },
+	)
+		.split("\n")
+		.filter((file) => file !== "")
+		.filter((file) =>
+			(
+				JSON.parse(readFileSync(file, "utf8")) as { tags?: string[] }
+			).tags?.includes(tag),
+		)
+		.map((file) => join(dirname(file), "package.json"));
+}
+
+function staticRules(): Rule[] {
+	const foundation = new Set(
+		manifestsTagged("foundation").map(
+			(manifest) =>
+				(JSON.parse(readFileSync(manifest, "utf8")) as { name: string }).name,
+		),
+	);
+	return manifestsTagged("static").flatMap((manifest): Rule[] => [
+		{
+			manifest,
+			fields: ["dependencies", "peerDependencies"],
+			forbidden: (name) => !foundation.has(name),
+			reason:
+				"A static package is data and depends on a foundation package at most.",
+		},
+		{
+			manifest,
+			fields: ["devDependencies"],
+			forbidden: (name) => name.startsWith("@repo/") && !foundation.has(name),
+			reason:
+				"A static package builds on no workspace package outside the foundation.",
+		},
+	]);
 }
 
 function exportedFiles(): Map<string, string> {
@@ -279,6 +325,58 @@ const sniffers = sources.flatMap((file) =>
 	})),
 );
 
+const entrypoints = new Set(
+	[...exported]
+		.filter(
+			([name]) => name.split("/").length === (name.startsWith("@") ? 2 : 1),
+		)
+		.map(([, file]) => file),
+);
+
+function importedNames(text: string): Set<string> {
+	const names = new Set<string>();
+	const re = /import\s+(?:type\s+)?([\s\S]*?)\s+from\s+"[^"]+"/g;
+	for (let m = re.exec(text); m !== null; m = re.exec(text))
+		for (const part of m[1].replace(/[{}]/g, ",").split(",")) {
+			const name = part
+				.trim()
+				.replace(/^type\s+/, "")
+				.split(/\s+as\s+/)
+				.pop()
+				?.replace(/^\*\s*/, "")
+				.trim();
+			if (name) names.add(name);
+		}
+	return names;
+}
+
+function relaysIn(file: string, text: string): string[] {
+	const found: string[] = [];
+	const entry = entrypoints.has(file);
+	for (const m of text.matchAll(
+		/^export\s+(?:type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\})\s*from\s+"([^"]+)"/gm,
+	))
+		if (!entry || !m[1].startsWith(".")) found.push(`re-exports from ${m[1]}`);
+	const imported = importedNames(text);
+	for (const m of text.matchAll(/^export\s+(?:type\s+)?\{([^}]*)\}\s*;/gm))
+		for (const part of m[1].split(",")) {
+			const name = part
+				.trim()
+				.replace(/^type\s+/, "")
+				.split(/\s+as\s+/)[0];
+			if (imported.has(name)) found.push(`re-exports ${name}`);
+		}
+	for (const m of text.matchAll(
+		/^export\s+(?:type|const)\s+(\w+)\s*=\s*(\w+)\s*;/gm,
+	))
+		if (imported.has(m[2])) found.push(`renames ${m[2]} to ${m[1]}`);
+	return found;
+}
+
+const relays = sources.flatMap((file) =>
+	relaysIn(file, readFileSync(file, "utf8")).map((what) => ({ file, what })),
+);
+
 if (
 	offenders.length === 0 &&
 	reaches.length === 0 &&
@@ -287,7 +385,8 @@ if (
 	drifted.length === 0 &&
 	blinded.length === 0 &&
 	interpreting.length === 0 &&
-	sniffers.length === 0
+	sniffers.length === 0 &&
+	relays.length === 0
 ) {
 	console.log(
 		`No architecture violations in ${RULES.length} manifests, ${sources.length} sources, ${extensionModules.length} extension modules, ${many(DRIVERS.length, "session driver")}, ${many(BLIND.length, "extension-blind tree")} and ${many(CARRIERS.length, "carrier tree")}.`,
@@ -386,6 +485,22 @@ for (const { file, name } of sniffers) {
 	console.error("  the extension list.");
 }
 
+for (const { file, what } of relays) {
+	console.error(`${file} ${what}`);
+	console.error(
+		"  A name is exported once, by the module that declares it, and every",
+	);
+	console.error(
+		"  importer names that module. Import it from where it is declared, and",
+	);
+	console.error(
+		"  add a package.json export for that module if it has none. Only a",
+	);
+	console.error(
+		"  package's root entrypoint gathers names, and only from its own files.",
+	);
+}
+
 console.error("");
 const total =
 	offenders.length +
@@ -395,7 +510,8 @@ const total =
 	drifted.length +
 	blinded.length +
 	interpreting.length +
-	sniffers.length;
+	sniffers.length +
+	relays.length;
 console.error(`${total} forbidden dependenc${total === 1 ? "y" : "ies"}.`);
 console.error("");
 console.error("`turbo boundaries` holds the layer direction; these are the");

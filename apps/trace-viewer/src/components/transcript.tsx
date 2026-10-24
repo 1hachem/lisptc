@@ -3,11 +3,11 @@
 import { firedMemories } from "@repo/components/memories.ts";
 import { MessageFeedback } from "@repo/components/message-feedback.tsx";
 import { MessageMemories } from "@repo/components/message-memories.tsx";
+import type { ReportRow } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
 import { Turn } from "@/components/ui.tsx";
 import { captureReview } from "@/lib/analytics.ts";
-import type { ReportRow } from "@/lib/reports.ts";
 import type { ReviewTarget } from "@/lib/reviews.ts";
 
 export function Transcript({

@@ -5,10 +5,19 @@
 		--app-zoom: 1.75;
 		zoom: var(--app-zoom);
 	}
+	html,
+	body {
+		overscroll-behavior-x: none;
+	}
 	[data-radix-popper-content-wrapper] {
 		zoom: calc(1 / var(--app-zoom));
 	}
 	[data-radix-popper-content-wrapper] > * {
 		zoom: var(--app-zoom);
 	}
+}
+
+::highlight(lisp-error) {
+	text-decoration: underline wavy var(--color-red);
+	text-decoration-skip-ink: none;
 }

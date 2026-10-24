@@ -6,7 +6,9 @@ import { TreeFolder } from "./file-tree.tsx";
 import {
 	awaitingOrder,
 	moved,
+	ownSize,
 	SortableTree,
+	slotShift,
 	unzoomed,
 } from "./sortable-tree.tsx";
 
@@ -63,6 +65,65 @@ describe("awaitingOrder", () => {
 		const elsewhere = ["memories", "home", "chat"];
 		expect(awaitingOrder(elsewhere, { next, over: order })).toBe(elsewhere);
 		expect(awaitingOrder(order, undefined)).toBe(order);
+	});
+});
+
+describe("slotShift", () => {
+	const rect = (left: number, width: number) => ({
+		left,
+		width,
+		right: left + width,
+		top: 0,
+		bottom: 24,
+		height: 24,
+	});
+	const bar = [rect(0, 60), rect(470, 40), rect(700, 300)];
+
+	it("moves a neighbour onto the slot it takes, however far apart the slots sit", () => {
+		expect(slotShift(bar, 0, 2, 1)).toBe(-470);
+		expect(slotShift(bar, 0, 2, 2)).toBe(-230);
+		expect(slotShift(bar, 2, 0, 0)).toBe(450);
+		expect(slotShift(bar, 2, 0, 1)).toBe(490);
+	});
+
+	it("keeps every shifted entry inside the bar", () => {
+		for (const [active, over] of [
+			[0, 2],
+			[2, 0],
+			[1, 2],
+			[1, 0],
+		] as const) {
+			bar.forEach((at, index) => {
+				const x = slotShift(bar, active, over, index);
+				expect(at.left + x).toBeGreaterThanOrEqual(-at.width);
+				expect(at.right + x).toBeLessThanOrEqual(1000);
+			});
+		}
+	});
+
+	it("leaves the dragged entry and those outside the move alone", () => {
+		expect(slotShift(bar, 0, 1, 0)).toBe(0);
+		expect(slotShift(bar, 0, 1, 2)).toBe(0);
+	});
+});
+
+describe("ownSize", () => {
+	const overNarrower = { x: -400, y: 0, scaleX: 0.05, scaleY: 1 };
+
+	it("keeps the dragged entry its own size whatever it is over", () => {
+		expect(ownSize(overNarrower, "slide")).toEqual({
+			x: -400,
+			y: 0,
+			scaleX: 1,
+			scaleY: 1,
+		});
+	});
+
+	it("lifts it by the lift scale alone", () => {
+		expect(ownSize(overNarrower, "lift")).toMatchObject({
+			scaleX: 1.02,
+			scaleY: 1.02,
+		});
 	});
 });
 

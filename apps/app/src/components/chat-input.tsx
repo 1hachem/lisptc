@@ -1,477 +1,333 @@
-import { ClearEditorPlugin } from "@lexical/react/LexicalClearEditorPlugin";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import {
-	LexicalTypeaheadMenuPlugin,
-	MenuOption,
-	useBasicTypeaheadTriggerMatch,
-} from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { PromptDialog } from "@repo/components";
-import { cn, useIsMobile } from "@repo/ui";
+import type { SymbolTable } from "@repo/language-service";
+import { cn } from "@repo/ui";
+import { useCallback, useRef } from "react";
 import {
-	$createLineBreakNode,
-	$createParagraphNode,
-	$createTextNode,
-	$getRoot,
-	CLEAR_EDITOR_COMMAND,
-	COMMAND_PRIORITY_LOW,
-	KEY_ARROW_DOWN_COMMAND,
-	KEY_ARROW_UP_COMMAND,
-	KEY_ENTER_COMMAND,
-	type TextNode,
-} from "lexical";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { type Command, commands, matchesCommand } from "../lib/commands.ts";
+	type FileTransfer,
+	type SubmitMessage,
+	useAttachedSend,
+} from "../lib/attachments.ts";
+import { useDraft, useKeys, useRecall } from "../lib/chat-draft.ts";
+import { useMenus, usePick, usePromptSearch } from "../lib/chat-menus.ts";
+import { useDropZone } from "../lib/drop-zone.ts";
+import type { InputHelper } from "../lib/input-helpers.ts";
+import { useNotice } from "../lib/notice.ts";
 import {
-	newestFirst,
-	type RecallDirection,
-	type Recalled,
-	rebase,
-	recall,
-} from "../lib/message-history.ts";
+	AttachAction,
+	AttachmentChips,
+	FilePicker,
+} from "./attachment-chips.tsx";
+import { CommandMenuPlugin } from "./command-menu.tsx";
 import { InputAction, InputShell } from "./input-shell.tsx";
-import { LispEditor } from "./lisp-editor.tsx";
+import { LispAssistPlugin } from "./lisp-assist.tsx";
+import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
+import { type Mentionable, MentionMenuPlugin } from "./mention-menu.tsx";
+
+export interface Streaming {
+	active: boolean;
+	onStop: () => void;
+}
+
+export interface Assist {
+	history?: string[];
+	onCommand?: (name: string) => Promise<string | null>;
+	mentions?: readonly Mentionable[];
+	symbols?: SymbolTable;
+}
 
 export interface ChatInputProps {
 	placeholder?: string;
-	onSubmit: (text: string) => void;
-	history?: string[];
-	onLisp: (code: string) => void;
-	onCommand?: (name: string) => Promise<string | null>;
-	isStreaming?: boolean;
-	onStop?: () => void;
+	onSubmit: SubmitMessage;
+	blocked?: string;
 	disabled?: boolean;
+	streaming?: Streaming;
+	files?: FileTransfer;
+	assist?: Assist;
+	on?: Partial<Record<InputHelper, boolean>>;
 }
 
-const LISP_PREFIX = "!";
-const NOTICE_MS = 2000;
+const NO_SYMBOLS: SymbolTable = new Map();
 
-class CommandOption extends MenuOption {
-	command: Command;
-	constructor(command: Command) {
-		super(command.name);
-		this.command = command;
-	}
-}
+const NO_HISTORY: string[] = [];
 
-export function ChatInput({
-	placeholder = "",
-	onSubmit,
-	history,
-	onLisp,
-	onCommand,
-	isStreaming,
-	onStop,
+const ENABLED = { prompt: "›", tone: "text-green" };
+const DISABLED = { prompt: "⋯", tone: "text-dim" };
+
+function SendAction({
+	streaming,
+	empty,
 	disabled,
-}: ChatInputProps) {
-	const [lisp, setLisp] = useState<string | null>(null);
-
+	blocked,
+	onSend,
+}: {
+	streaming?: Streaming;
+	empty: boolean;
+	disabled?: boolean;
+	blocked?: string;
+	onSend: () => void;
+}) {
+	if (streaming?.active && empty)
+		return (
+			<InputAction
+				label="stop"
+				glyph="■"
+				tone="text-red hover:brightness-125"
+				onClick={streaming.onStop}
+			/>
+		);
+	if (streaming?.active)
+		return (
+			<InputAction
+				label="queue"
+				glyph="⏎"
+				tone="text-yellow hover:brightness-125"
+				onClick={onSend}
+			/>
+		);
 	return (
-		<div className="mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
-			{lisp === null ? (
-				<LexicalComposer
-					initialConfig={{
-						namespace: "chat-input",
-						theme: {},
-						nodes: [],
-						onError: (error) => {
-							throw error;
-						},
-					}}
-				>
-					<Editor
-						placeholder={placeholder}
-						onSubmit={onSubmit}
-						history={history}
-						onLisp={onLisp}
-						onEnterLisp={setLisp}
-						onCommand={onCommand}
-						isStreaming={isStreaming}
-						onStop={onStop}
-						disabled={disabled}
-					/>
-				</LexicalComposer>
-			) : (
-				<LispEditor
-					initial={lisp}
-					onRun={onLisp}
-					onExit={() => setLisp(null)}
-					isStreaming={isStreaming}
-					onStop={onStop}
-				/>
-			)}
+		<InputAction
+			label="send"
+			glyph="⏎"
+			tone="text-green hover:brightness-125"
+			onClick={onSend}
+			disabled={disabled || blocked !== undefined}
+			title={blocked}
+		/>
+	);
+}
+
+function Notice({ text }: { text: string | null }) {
+	if (!text) return null;
+	return (
+		<div className="border-b border-bg2 bg-bg1 px-3 py-0.5 text-dim">
+			{text}
 		</div>
 	);
 }
 
-function Editor({
-	placeholder = "",
-	onSubmit,
-	history = [],
-	onEnterLisp,
-	onCommand,
-	isStreaming,
-	onStop,
+function Field({
+	placeholder,
 	disabled,
-}: ChatInputProps & { onEnterLisp: (code: string) => void }) {
-	const [editor] = useLexicalComposerContext();
-	const menuOpen = useRef(false);
-	const menuHost = useRef<HTMLDivElement>(null);
-	const [notice, setNotice] = useState<string | null>(null);
-	const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	useEffect(() => () => clearTimeout(noticeTimer.current ?? undefined), []);
-
-	const flash = useCallback((text: string) => {
-		setNotice(text);
-		clearTimeout(noticeTimer.current ?? undefined);
-		noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
-	}, []);
-
-	useEffect(() => {
-		editor.setEditable(!disabled);
-	}, [editor, disabled]);
-
-	useEffect(() => {
-		if (disabled) return;
-		return editor.registerUpdateListener(({ editorState }) => {
-			const text = editorState.read(() => $getRoot().getTextContent());
-			if (!text.startsWith(LISP_PREFIX)) return;
-			queueMicrotask(() => {
-				editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
-				onEnterLisp(text.slice(LISP_PREFIX.length));
-			});
-		});
-	}, [editor, onEnterLisp, disabled]);
-
-	const runText = useCallback(() => {
-		if (disabled) return;
-		const text = editor
-			.getEditorState()
-			.read(() => $getRoot().getTextContent())
-			.trim();
-		if (!text) return;
-		onSubmit(text);
-		editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
-	}, [editor, onSubmit, disabled]);
-
-	const [empty, setEmpty] = useState(true);
-	useEffect(
-		() =>
-			editor.registerUpdateListener(({ editorState }) => {
-				setEmpty(
-					editorState.read(() => $getRoot().getTextContent()).trim() === "",
-				);
-			}),
-		[editor],
-	);
-
-	const steerOrStop = useCallback(() => {
-		if (empty) onStop?.();
-		else runText();
-	}, [empty, onStop, runText]);
-
-	const [searching, setSearching] = useState(false);
-	const prompts = useMemo(() => newestFirst(history), [history]);
-
-	const insertPrompt = useCallback(
-		(prompt: string) => {
-			editor.update(() => $replaceText(prompt));
-			editor.focus();
-		},
-		[editor],
-	);
-
-	const runCommand = useCallback(
-		(name: string) => {
-			editor.dispatchCommand(CLEAR_EDITOR_COMMAND, undefined);
-			if (name === "/prompt") {
-				setSearching(true);
-				return;
+}: {
+	placeholder: string;
+	disabled?: boolean;
+}) {
+	return (
+		<PlainTextPlugin
+			contentEditable={
+				<ContentEditable
+					aria-label={placeholder}
+					aria-placeholder={placeholder}
+					spellCheck={false}
+					placeholder={
+						<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
+							{placeholder}
+						</div>
+					}
+					className={cn(
+						"max-h-40 min-h-0 overflow-y-auto [scrollbar-gutter:stable] whitespace-pre-wrap break-words py-1 outline-none",
+						disabled ? "cursor-not-allowed text-dim" : "text-fg caret-yellow",
+					)}
+				/>
 			}
-			void Promise.resolve(onCommand?.(name)).then((text) => {
-				if (text) flash(text);
-			});
-		},
-		[editor, onCommand, flash],
+			ErrorBoundary={LexicalErrorBoundary}
+		/>
 	);
+}
 
+function LispPlugins({
+	on,
+	...props
+}: Parameters<typeof LispAssistPlugin>[0] & { on: boolean }) {
+	if (!on) return null;
 	return (
 		<>
-			<div ref={menuHost} />
-			{notice && (
-				<div className="border-b border-bg2 bg-bg1 px-3 py-0.5 text-dim">
-					{notice}
-				</div>
-			)}
-			<InputShell
-				prompt={disabled ? "⋯" : "›"}
-				tone={disabled ? "text-dim" : "text-green"}
-				dim={disabled}
-				action={
-					isStreaming && empty ? (
-						<InputAction
-							label="stop"
-							glyph="■"
-							tone="text-red hover:brightness-125"
-							onClick={onStop}
-						/>
-					) : isStreaming ? (
-						<InputAction
-							label="queue"
-							glyph="⏎"
-							tone="text-yellow hover:brightness-125"
-							onClick={runText}
-						/>
-					) : (
-						<InputAction
-							label="send"
-							glyph="⏎"
-							tone="text-green hover:brightness-125"
-							onClick={runText}
-							disabled={disabled}
-						/>
-					)
-				}
-			>
-				<PlainTextPlugin
-					contentEditable={
-						<ContentEditable
-							aria-placeholder={placeholder}
-							placeholder={
-								<div className="pointer-events-none absolute inset-0 truncate py-1 text-dim">
-									{placeholder}
-								</div>
-							}
-							className={cn(
-								"max-h-40 min-h-0 overflow-y-auto py-1 outline-none",
-								disabled
-									? "cursor-not-allowed text-dim"
-									: "text-yellow caret-yellow",
-							)}
-						/>
-					}
-					ErrorBoundary={LexicalErrorBoundary}
-				/>
-			</InputShell>
-
-			<PromptDialog
-				onOpenChange={setSearching}
-				onSelect={insertPrompt}
-				open={searching}
-				prompts={prompts}
-			/>
-			<HistoryPlugin />
-			<ClearEditorPlugin />
-			<CommandMenuPlugin
-				onPick={runCommand}
-				menuHost={menuHost}
-				onOpenChange={(open) => {
-					menuOpen.current = open;
-				}}
-			/>
-			<RecallPlugin
-				history={history}
-				disabled={disabled}
-				isMenuOpen={() => menuOpen.current}
-			/>
-			<EnterSubmitPlugin
-				onEnter={isStreaming ? steerOrStop : runText}
-				disabled={disabled}
-				isMenuOpen={() => menuOpen.current}
-			/>
+			<LispHighlightPlugin />
+			<LispAssistPlugin {...props} />
 		</>
 	);
 }
 
-function RecallPlugin({
-	history,
-	isMenuOpen,
-	disabled,
-}: {
-	history: string[];
-	isMenuOpen: () => boolean;
-	disabled?: boolean;
-}) {
-	const [editor] = useLexicalComposerContext();
-	const recalled = useRef<Recalled | null>(null);
-	const recalledIn = useRef(history);
-	useEffect(() => {
-		if (disabled) return;
-		const step = (direction: RecallDirection) => (event: KeyboardEvent) => {
-			if (isMenuOpen()) return false;
-			const text = editor
-				.getEditorState()
-				.read(() => $getRoot().getTextContent());
-			const standing =
-				recalledIn.current === history
-					? recalled.current
-					: rebase(recalled.current, history);
-			const next = recall(history, standing, text, direction);
-			if (!next) return false;
-			event.preventDefault();
-			recalled.current = next.recalled;
-			recalledIn.current = history;
-			editor.update(() => $replaceText(next.text));
-			return true;
-		};
-		const unregisterUp = editor.registerCommand(
-			KEY_ARROW_UP_COMMAND,
-			step("back"),
-			COMMAND_PRIORITY_LOW,
-		);
-		const unregisterDown = editor.registerCommand(
-			KEY_ARROW_DOWN_COMMAND,
-			step("forward"),
-			COMMAND_PRIORITY_LOW,
-		);
-		return () => {
-			unregisterUp();
-			unregisterDown();
-		};
-	}, [editor, history, isMenuOpen, disabled]);
-	return null;
+function hintOf(lead: string, lisp: boolean, commands: boolean): string {
+	const typed = lisp ? `${lead}, (lisp) runs inline` : lead;
+	return commands ? `${typed}  ·  / for commands` : typed;
 }
 
-function $replaceText(text: string) {
-	const paragraph = $createParagraphNode();
-	text.split("\n").forEach((line, i) => {
-		if (i > 0) paragraph.append($createLineBreakNode());
-		if (line) paragraph.append($createTextNode(line));
-	});
-	$getRoot().clear().append(paragraph);
-	paragraph.selectEnd();
+function noticeOf(over: boolean, notice: string | null) {
+	if (over) return "drop to attach";
+	return notice;
 }
 
-function EnterSubmitPlugin({
-	onEnter,
-	isMenuOpen,
-	disabled,
-}: {
-	onEnter: () => void;
-	isMenuOpen: () => boolean;
-	disabled?: boolean;
-}) {
-	const [editor] = useLexicalComposerContext();
-	useEffect(
-		() =>
-			editor.registerCommand(
-				KEY_ENTER_COMMAND,
-				(event) => {
-					if (disabled) {
-						event?.preventDefault();
-						return true;
-					}
-					if (isMenuOpen() || event?.shiftKey) return false;
-					event?.preventDefault();
-					onEnter();
-					return true;
+export function ChatInput(props: ChatInputProps) {
+	return (
+		<LexicalComposer
+			initialConfig={{
+				namespace: "chat-input",
+				theme: {},
+				nodes: [LispTokenNode],
+				onError: (error) => {
+					throw error;
 				},
-				COMMAND_PRIORITY_LOW,
-			),
-		[editor, onEnter, isMenuOpen, disabled],
+			}}
+		>
+			<Editor {...props} />
+		</LexicalComposer>
 	);
-	return null;
 }
 
-function CommandMenuPlugin({
-	onPick,
-	onOpenChange,
-	menuHost,
-}: {
-	onPick: (name: string) => void;
-	onOpenChange: (open: boolean) => void;
-	menuHost: React.RefObject<HTMLDivElement | null>;
-}) {
+function useComposer({
+	onSubmit,
+	blocked,
+	disabled,
+	streaming,
+	files,
+	assist,
+}: ChatInputProps) {
 	const [editor] = useLexicalComposerContext();
-	const [query, setQuery] = useState<string | null>(null);
-	const isMobile = useIsMobile();
-	const triggerFn = useBasicTypeaheadTriggerMatch("/", { minLength: 0 });
-
-	const options = useMemo(() => {
-		return commands
-			.filter((c) => !(isMobile && c.desktopOnly))
-			.filter((c) => matchesCommand(c, query ?? ""))
-			.map((c) => new CommandOption(c));
-	}, [query, isMobile]);
-
-	const onSelectOption = useCallback(
-		(
-			option: CommandOption,
-			nodeToRemove: TextNode | null,
-			closeMenu: () => void,
-		) => {
-			if (option.command.takesArgument) {
-				editor.update(() => {
-					const typed = $createTextNode(`${option.command.name} `);
-					if (nodeToRemove) nodeToRemove.replace(typed);
-					else $getRoot().getLastChild()?.insertAfter(typed);
-					typed.selectEnd();
-				});
-				closeMenu();
-				return;
-			}
-			editor.update(() => nodeToRemove?.remove());
-			closeMenu();
-			onPick(option.command.name);
-		},
-		[editor, onPick],
+	const [notice, flash] = useNotice();
+	const history = assist?.history ?? NO_HISTORY;
+	const { attachments, submit } = useAttachedSend({
+		onSubmit,
+		flash,
+		files,
+		streaming: streaming?.active === true,
+		held: blocked,
+	});
+	const busy = disabled === true;
+	const { text, empty, replace, send } = useDraft(
+		submit,
+		busy,
+		attachments.items.length > 0,
 	);
+	const picker = useRef<HTMLInputElement>(null);
+	const attach = useCallback(() => picker.current?.click(), []);
+	const { over, zone } = useDropZone(
+		attachments.add,
+		busy || !attachments.enabled,
+	);
+	const search = usePromptSearch(history, replace);
+	const step = useRecall(history);
+	const menus = useMenus();
+	const pick = usePick({
+		replace,
+		onCommand: assist?.onCommand,
+		flash,
+		search: search.setSearching,
+		attach,
+	});
+	const stops = streaming?.active === true && empty;
+
+	useKeys({
+		disabled: busy,
+		menuActive: () => menus.active.current,
+		recall: (direction) => step(text, direction),
+		replace,
+		enter: stops ? streaming?.onStop : send,
+	});
+
+	return {
+		attachments,
+		busy,
+		empty,
+		over,
+		zone,
+		picker,
+		attach,
+		search,
+		menus,
+		pick,
+		look: busy ? DISABLED : ENABLED,
+		notice: noticeOf(over, notice),
+		pickFiles: (picked: File[]) => {
+			attachments.add(picked);
+			editor.focus();
+		},
+		sendNow: () => send(),
+	};
+}
+
+function Editor(props: ChatInputProps) {
+	const { placeholder = "", streaming, assist, blocked } = props;
+	const lisp = props.on?.lisp ?? true;
+	const attach = props.on?.attach ?? true;
+	const c = useComposer(props);
 
 	return (
-		<LexicalTypeaheadMenuPlugin<CommandOption>
-			options={options}
-			triggerFn={triggerFn}
-			onQueryChange={setQuery}
-			onSelectOption={onSelectOption}
-			onOpen={() => onOpenChange(true)}
-			onClose={() => onOpenChange(false)}
-			anchorClassName="hidden!"
-			menuRenderFn={(
-				_anchorRef,
-				{ selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
-			) =>
-				menuHost.current && options.length
-					? createPortal(
-							<div className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]">
-								{options.map((opt, i) => (
-									<button
-										type="button"
-										key={opt.key}
-										ref={(el) => opt.setRefElement(el)}
-										onMouseEnter={() => setHighlightedIndex(i)}
-										onClick={() => {
-											setHighlightedIndex(i);
-											selectOptionAndCleanUp(opt);
-										}}
-										className={cn(
-											"flex items-baseline gap-2.5 px-3 py-0.5 text-left",
-											i === selectedIndex ? "bg-bg2" : "hover:brightness-125",
-										)}
-									>
-										<span className="flex-none whitespace-nowrap text-fg">
-											{opt.command.name}
-										</span>
-										<span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-dim">
-											{opt.command.desc}
-										</span>
-										{opt.command.hint && (
-											<span className="flex-none text-[10.5px] text-dim">
-												{opt.command.hint}
-											</span>
-										)}
-									</button>
-								))}
-							</div>,
-							menuHost.current,
-						)
-					: null
-			}
-		/>
+		<div
+			{...c.zone}
+			className={cn(
+				"relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]",
+				c.over && "outline outline-1 outline-dashed outline-yellow",
+			)}
+		>
+			<FilePicker picker={c.picker} onPick={c.pickFiles} />
+			<div
+				ref={c.menus.host}
+				className="absolute inset-x-0 bottom-full z-10 flex flex-col"
+			>
+				<Notice text={c.notice} />
+			</div>
+			<AttachmentChips
+				items={c.attachments.items}
+				onRemove={c.attachments.remove}
+			/>
+			<InputShell
+				prompt={c.look.prompt}
+				tone={c.look.tone}
+				dim={c.busy}
+				action={
+					<>
+						{attach && c.attachments.enabled && (
+							<AttachAction onClick={c.attach} disabled={c.busy} />
+						)}
+						<SendAction
+							streaming={streaming}
+							empty={c.empty}
+							disabled={c.busy}
+							blocked={blocked}
+							onSend={c.sendNow}
+						/>
+					</>
+				}
+			>
+				<Field
+					placeholder={hintOf(
+						placeholder,
+						lisp,
+						assist?.onCommand !== undefined,
+					)}
+					disabled={c.busy}
+				/>
+			</InputShell>
+			<HistoryPlugin />
+			<CommandMenuPlugin
+				onPick={c.pick}
+				host={c.menus.host}
+				active={c.menus.commandOpen}
+			/>
+			<MentionMenuPlugin
+				files={assist?.mentions ?? []}
+				host={c.menus.host}
+				active={c.menus.mentionOpen}
+			/>
+			<LispPlugins
+				on={lisp}
+				symbols={assist?.symbols ?? NO_SYMBOLS}
+				host={c.menus.host}
+				active={c.menus.assistOpen}
+			/>
+			<PromptDialog
+				onOpenChange={c.search.setSearching}
+				onSelect={c.search.insert}
+				open={c.search.searching}
+				prompts={c.search.prompts}
+			/>
+		</div>
 	);
 }

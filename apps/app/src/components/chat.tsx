@@ -1,31 +1,11 @@
-import { convexQuery } from "@convex-dev/react-query";
-import { api } from "@repo/backend/api";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
 import { useChatSession } from "../lib/chat.tsx";
-import { useCommandRunner } from "../lib/commands.ts";
-import { sentHistory } from "../lib/message-history.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
-import { ChatInput } from "./chat-input.tsx";
+import { ChatComposer } from "./chat-composer.tsx";
 import { ChatView } from "./chat-view.tsx";
 import { Greeting } from "./greeting.tsx";
 
 export function Chat() {
-	const runCommand = useCommandRunner();
-	const { workspaceId, send, runLisp, stop, isLoading, fresh } = useChatSession(
-		(state) => ({
-			workspaceId: state.workspaceId,
-			send: state.send,
-			runLisp: state.runLisp,
-			stop: state.stop,
-			isLoading: state.isLoading,
-			fresh: state.fresh,
-		}),
-	);
-	const { data: sent } = useQuery(
-		convexQuery(api.messages.sent, { workspaceId }),
-	);
-	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
+	const fresh = useChatSession((state) => state.fresh);
 
 	return (
 		<>
@@ -51,15 +31,7 @@ export function Chat() {
 						</>
 					) : null}
 				</div>
-				<ChatInput
-					placeholder="type a message  ·  / for commands  ·  ! for lisp"
-					onSubmit={send}
-					history={history}
-					onLisp={runLisp}
-					onCommand={runCommand}
-					isStreaming={isLoading}
-					onStop={stop}
-				/>
+				<ChatComposer />
 			</div>
 		</>
 	);

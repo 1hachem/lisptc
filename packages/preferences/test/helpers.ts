@@ -17,10 +17,6 @@ export async function world(held: Preferences = {}): Promise<World> {
 			preferencesExtension(
 				preferencesHostFor({
 					store,
-					themes: [
-						{ id: "gruvbox-dark", name: "gruvbox dark" },
-						{ id: "gruvbox-light", name: "gruvbox light" },
-					],
 					fonts: [{ id: "geist", name: "Geist" }],
 					motions: [
 						{ id: "slide", name: "rows slide" },

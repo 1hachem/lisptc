@@ -1,13 +1,13 @@
 export {
 	Agent,
 	type AgentConfig,
-	type AgentDelta,
-	type AgentMessage,
 	DEFAULT_SYSTEM_PROMPT,
-	type Role,
 	streamAgent,
 } from "./agent.ts";
-export { type EvalMessage, evalUserCode } from "./eval.ts";
+export {
+	type Evaluated,
+	evalUserMessage,
+} from "./eval.ts";
 export {
 	type EventOwner,
 	MemorySystemEventBox,
@@ -19,13 +19,8 @@ export {
 	type SteerInbox,
 } from "./inbox.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
-export {
-	getProvider,
-	type ModelOptions,
-	type Provider,
-	type ProviderName,
-	providers,
-} from "./provider.ts";
+export type { ModelOptions, Provider } from "./provider/core.ts";
+export { getProvider, providers } from "./provider/registry.ts";
 export {
 	evalCode,
 	replResultContent,
@@ -55,7 +50,6 @@ export {
 } from "./telemetry.ts";
 export {
 	runAgentTurn,
-	type StepMeta,
 	type TurnEvent,
 	type TurnOptions,
 } from "./turn.ts";

@@ -12,6 +12,16 @@
           }
         ]
       },
+      {
+        "matcher": "apply_patch|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/convex-generated.sh\"",
+            "statusMessage": "Checking for writes to convex/_generated"
+          }
+        ]
+      }
     ],
     "PostToolUse": [
       {

@@ -1,6 +1,7 @@
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@repo/ui";
 import { useAttempt } from "../lib/attempt.ts";
@@ -13,10 +14,14 @@ export function FileMenu({
 	name,
 	confirm,
 	onDelete,
+	onRestore,
+	restoreLabel = "restore",
 }: {
 	name: string;
 	confirm: string;
 	onDelete: () => Promise<unknown>;
+	onRestore?: () => Promise<unknown>;
+	restoreLabel?: string;
 }) {
 	const { failure, attempt } = useAttempt(`delete ${name}`);
 
@@ -33,6 +38,14 @@ export function FileMenu({
 				sideOffset={2}
 				className="min-w-[9rem] rounded-none border-bg2 bg-bg1 p-0 text-[11.5px] shadow-none"
 			>
+				{onRestore && (
+					<DropdownMenuItem
+						className={item}
+						onSelect={() => attempt(onRestore)}
+					>
+						{restoreLabel}
+					</DropdownMenuItem>
+				)}
 				<ConfirmItem
 					label="delete"
 					confirm={confirm}

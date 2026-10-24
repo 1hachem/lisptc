@@ -2,6 +2,7 @@ import { topic } from "@repo/interpreter/channels";
 import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
+import type { ModelDelta } from "@repo/interpreter/session";
 import {
 	annotating,
 	type InterpExtension,
@@ -10,19 +11,19 @@ import {
 } from "@repo/interpreter/session";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
+import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { AgentDelta, AgentMessage } from "../src/agent.ts";
 import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { extension, noting, riding, testRepl } from "./helpers.ts";
+import { extension, noting, receiving, riding, testRepl } from "./helpers.ts";
 
 interface Seen {
-	messages: AgentMessage[];
+	messages: ChatMessage[];
 	system?: string;
 }
 
 const seen: Seen[] = [];
-let script: AgentDelta[][] = [];
+let script: ModelDelta[][] = [];
 let throws: string | undefined;
 let calls = 0;
 let onCall: (() => void) | undefined;
@@ -31,6 +32,7 @@ const turns = vi.hoisted(
 	() => [] as { prompt: string; answer: string; halted: boolean }[],
 );
 const exceptions = vi.hoisted(() => [] as unknown[]);
+const exceptionProperties = vi.hoisted(() => [] as unknown[]);
 
 const spans = vi.hoisted(
 	() => [] as { step: number; source: string; error: boolean }[],
@@ -44,14 +46,15 @@ vi.mock("../src/telemetry.ts", () => ({
 		turns.push(turn);
 	},
 	captureLlmCall: () => {},
-	captureException: (error: unknown) => {
+	captureException: (error: unknown, _ctx: unknown, properties: unknown) => {
 		exceptions.push(error);
+		exceptionProperties.push(properties);
 	},
 }));
 
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (
-		messages: AgentMessage[],
+		messages: ChatMessage[],
 		config?: { system?: string },
 	) {
 		seen.push({ messages, system: config?.system });
@@ -111,6 +114,7 @@ describe("the agent turn", () => {
 		spans.length = 0;
 		turns.length = 0;
 		exceptions.length = 0;
+		exceptionProperties.length = 0;
 		script = [];
 		throws = undefined;
 		calls = 0;
@@ -238,6 +242,31 @@ describe("the agent turn", () => {
 		expect(ask[0].riding).toBeUndefined();
 	});
 
+	test("what the user's message carried beside its text rides it, told by whoever reads it", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask, {
+			repl: testRepl([receiving()]),
+			received: { said: "in hex" },
+		});
+
+		expect(events.filter((e) => e.type === "rode")).toEqual([
+			{ type: "rode", text: "the user also said: in hex" },
+		]);
+		expect(seen[0].messages[0].content).toBe(
+			"what is 1 + 2?\n\nthe user also said: in hex",
+		);
+	});
+
+	test("what a message carried rides nothing when no extension reads it", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask, { received: { said: "in hex" } });
+
+		expect(events.some((e) => e.type === "rode")).toBe(false);
+		expect(seen[0].messages[0].content).toBe("what is 1 + 2?");
+	});
+
 	test("what rode an earlier message reaches the model, but not the conversation vars", async () => {
 		script = [[{ text: "three." }]];
 		const history: TranscriptEntry[] = [
@@ -276,6 +305,37 @@ describe("the agent turn", () => {
 			content: "use hex",
 		});
 		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });
+		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
+	});
+
+	test("a steer's lisp runs when the steer is taken, and the model reads its result as a system event after the steer", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
+		const pending = [{ id: "s1", content: "(+ 40 2)" }];
+
+		const events = await drain(ask, { inbox: async () => pending.splice(0) });
+
+		const steered = events.findIndex((e) => e.type === "steered");
+		expect(events[steered + 1]).toMatchObject({
+			type: "evaluated",
+			message: { type: "tool", additional_kwargs: { results: ["42"] } },
+		});
+		expect(seen[1].messages.slice(-2).map((m) => m.content)).toEqual([
+			"(+ 40 2)",
+			'<system-event source="lisp-repl">the user ran the code in their message above:\n\n(no output)</system-event>',
+		]);
+	});
+
+	test("a steer's lisp does not run when the turn runs no forms, and the model reads the steer as plain text", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
+		const pending = [{ id: "s1", content: "(+ 40 2)" }];
+
+		const events = await drain(ask, {
+			inbox: async () => pending.splice(0),
+			runsForms: false,
+		});
+
+		expect(events.map((e) => e.type)).not.toContain("evaluated");
+		expect(seen[1].messages.at(-1)).toMatchObject({ content: "(+ 40 2)" });
 		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
 	});
 
@@ -358,7 +418,6 @@ describe("the agent turn", () => {
 	test("withheld prose feedback reaches the model, and the caller's transcript is untouched", async () => {
 		const repl = testRepl([noting("(see above)")]);
 		await repl.evalOutput("all done");
-		repl.takeFinished();
 		script = [[{ text: "three." }]];
 
 		await drain(ask, { repl });
@@ -506,7 +565,7 @@ describe("the agent turn", () => {
 		});
 	});
 
-	test.each<[string, AgentDelta[][], TurnOutcome]>([
+	test.each<[string, ModelDelta[][], TurnOutcome]>([
 		["halt", [[{ text: "three." }]], "halt"],
 		["capped", [[{ text: "(+ 1 2)" }]], "capped"],
 		["silent", [[{ text: "" }]], "silent"],
@@ -584,5 +643,23 @@ describe("the agent turn", () => {
 		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "three." });
 		expect(turns).toHaveLength(1);
 		expect(exceptions).toEqual([broken]);
+	});
+
+	test("a hook that throws on what the message carried is traced with the keys it carried, never their values", async () => {
+		script = [[{ text: "three." }]];
+		const broken = new Error("reader broke");
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.received.use(() => {
+					throw broken;
+				}),
+			),
+		]);
+
+		await drain(ask, { repl, received: { said: "a secret" } });
+
+		expect(exceptions[0]).toBe(broken);
+		expect(exceptionProperties[0]).toEqual({ received: ["said"] });
+		expect(JSON.stringify(exceptionProperties)).not.toContain("a secret");
 	});
 });

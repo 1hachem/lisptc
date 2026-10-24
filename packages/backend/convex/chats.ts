@@ -54,7 +54,10 @@ export const list = query({
 			: await ctx.db
 					.query("chats")
 					.withIndex("by_workspace_live_activity", (q) =>
-						q.eq("workspaceId", workspaceId).eq("archivedAt", undefined),
+						q
+							.eq("workspaceId", workspaceId)
+							.eq("archivedAt", undefined)
+							.gte("lastMessageAt", 0),
 					)
 					.order("desc")
 					.take(wanted + 1);
@@ -82,6 +85,32 @@ export const create = mutation({
 			title: title ?? "",
 			lastMessageAt: Date.now(),
 		});
+	},
+});
+
+export const draft = mutation({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.id("chats"),
+	handler: async (ctx, { workspaceId }) => {
+		const { user } = await requireWorkspace(ctx, workspaceId);
+		const unsent = await ctx.db
+			.query("chats")
+			.withIndex("by_workspace_live_activity", (q) =>
+				q
+					.eq("workspaceId", workspaceId)
+					.eq("archivedAt", undefined)
+					.eq("lastMessageAt", undefined),
+			)
+			.filter((q) => q.eq(q.field("userId"), user._id))
+			.first();
+		return (
+			unsent?._id ??
+			(await ctx.db.insert("chats", {
+				workspaceId,
+				userId: user._id,
+				title: "",
+			}))
+		);
 	},
 });
 

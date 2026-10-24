@@ -19,7 +19,8 @@ A form that changes what the user decided, or brings another conversation into
 this one, is in the extension's `asks`, so it waits on a human unless a rule
 says otherwise. Adding such a form means adding it there.
 
-The models on offer and the chat a session is in come from the host. This
+The models, icons and themes on offer and the chat a session is in come from
+the host. This
 package knows no provider and opens no chat.
 
 ## Tests

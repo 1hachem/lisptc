@@ -1,4 +1,5 @@
 import type { Doc } from "@repo/backend/dataModel";
+import { workspaceIcon } from "@repo/backend/workspace-icons";
 import { formSpans } from "@repo/shared/lisp-forms";
 
 export interface OpenFile {
@@ -24,12 +25,15 @@ export function memorySource(
 }
 
 export function settingsSource(
-	workspace: Pick<Doc<"workspaces">, "name">,
+	workspace: Pick<Doc<"workspaces">, "_id" | "name" | "icon">,
 	model: { provider: string; model: string },
+	theme: string,
 ): string {
 	return [
 		`(settings :name ${quoted(workspace.name)}`,
-		`  :model ${quoted(`${model.provider}/${model.model}`)})`,
+		`  :model ${quoted(`${model.provider}/${model.model}`)}`,
+		`  :icon ${quoted(workspaceIcon(workspace))}`,
+		`  :theme ${quoted(theme)})`,
 	].join("\n");
 }
 
@@ -40,22 +44,24 @@ function toggles(shown: Record<string, boolean>): string {
 }
 
 export function preferencesSource(preferences: {
-	theme: string;
 	font: string;
 	channels: Record<string, boolean>;
 	metadata: Record<string, boolean>;
+	input: Record<string, boolean>;
 	sidebar: readonly string[];
 	hidden: readonly string[];
 	motion: string;
+	panelMotion: boolean;
 }): string {
 	return [
-		`(preferences :theme ${quoted(preferences.theme)}`,
-		`  :font ${quoted(preferences.font)}`,
+		`(preferences :font ${quoted(preferences.font)}`,
 		`  :channels ${toggles(preferences.channels)}`,
 		`  :metadata ${toggles(preferences.metadata)}`,
+		`  :input ${toggles(preferences.input)}`,
 		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
 		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
-		`  :motion ${quoted(preferences.motion)})`,
+		`  :motion ${quoted(preferences.motion)}`,
+		`  :panel-motion ${preferences.panelMotion ? "t" : "nil"})`,
 	].join("\n");
 }
 

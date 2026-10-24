@@ -1,0 +1,78 @@
+import type { Arity, DocArg } from "@repo/interpreter/docs";
+import {
+	type Diagnostic,
+	DiagnosticSeverity,
+} from "vscode-languageserver-types";
+import {
+	type Call,
+	collectCalls,
+	parseForms,
+	tokenizeWithPositions,
+} from "./tokenize.ts";
+
+export interface CallDoc {
+	args?: DocArg[];
+	arity?: Arity;
+}
+
+export function expectedArgs({ min, max }: Arity): string {
+	if (max === undefined) return `at least ${min}`;
+	return min === max ? `${min}` : `${min}-${max}`;
+}
+
+export function diagnosticsForCalls(
+	calls: Call[],
+	docByName: ReadonlyMap<string, CallDoc>,
+): Diagnostic[] {
+	const diagnostics: Diagnostic[] = [];
+	for (const call of calls) {
+		const range = {
+			start: { line: call.head.line, character: call.head.char },
+			end: {
+				line: call.head.line,
+				character: call.head.char + call.name.length,
+			},
+		};
+		const { args, arity } = docByName.get(call.name) ?? {};
+		const positional =
+			arity !== undefined && (call.keywords.size === 0 || !args?.length);
+		if (
+			positional &&
+			(call.argCount < arity.min ||
+				(arity.max !== undefined && call.argCount > arity.max))
+		) {
+			const expected = expectedArgs(arity);
+			const plural = expected !== "1";
+			diagnostics.push({
+				severity: DiagnosticSeverity.Error,
+				range,
+				message: `${call.name}: expected ${expected} ${plural ? "arguments" : "argument"}, got ${call.argCount}`,
+				source: "lisptc",
+			});
+			continue;
+		}
+		for (const [index, arg] of (args ?? []).entries()) {
+			const supplied = positional
+				? index < call.argCount
+				: call.keywords.has(arg.name);
+			if (!arg.required || supplied) continue;
+			diagnostics.push({
+				severity: DiagnosticSeverity.Error,
+				range,
+				message: `${call.name}: missing required argument ":${arg.name}"`,
+				source: "lisptc",
+			});
+		}
+	}
+	return diagnostics;
+}
+
+export function callDiagnostics(
+	text: string,
+	docByName: ReadonlyMap<string, CallDoc>,
+): Diagnostic[] {
+	return diagnosticsForCalls(
+		collectCalls(parseForms(tokenizeWithPositions(text))),
+		docByName,
+	);
+}
