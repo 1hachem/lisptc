@@ -297,16 +297,6 @@ first.
 `pnpm check:comments` lists offenders; `pnpm fix:comments` strips them (then run
 `pnpm format`).
 
-## The lockfile
-
-**`pnpm-lock.yaml` is generated, never edited.** Not by hand, not by a
-script, not to resolve a merge conflict. A dependency changes in the
-`package.json` that declares it, and pnpm install writes the lockfile from
-there. A conflict in it is resolved by taking either side and running
-pnpm install again.
-
-`.agents/hooks/lockfile-policy.sh` refuses an agent's edit of it.
-
 ## Environment variables
 
 **Never read `process.env` directly.** Every variable the code reads is declared

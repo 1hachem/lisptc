@@ -23,7 +23,7 @@
         ]
       },
       {
-        "matcher": "apply_patch",
+        "matcher": "apply_patch|Bash",
         "hooks": [
           {
             "type": "command",
