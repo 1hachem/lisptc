@@ -105,6 +105,28 @@ function useLinkReturn(
 	}, [awaited, open]);
 }
 
+function answerState(mutation: {
+	data?: { ok: true } | { ok: false; error: string };
+	error: unknown;
+	isError: boolean;
+	variables?: AskChoice;
+}) {
+	const refused =
+		mutation.data && !mutation.data.ok
+			? `${mutation.data.error}; ask again to get a new request`
+			: undefined;
+	const failure = mutation.error
+		? mutation.error instanceof Error
+			? mutation.error.message
+			: String(mutation.error)
+		: undefined;
+	const chosen: Answered | undefined =
+		mutation.variables && !mutation.isError && !refused
+			? { accepted: mutation.variables.accepts, label: mutation.variables.done }
+			: undefined;
+	return { refused, failure, chosen };
+}
+
 export function AskCard({
 	ask,
 	messageId,
@@ -149,19 +171,7 @@ export function AskCard({
 			if (!outcome.ok && context) rollback(context.snapshot);
 		},
 	});
-	const refused =
-		mutation.data && !mutation.data.ok
-			? `${mutation.data.error}; ask again to get a new request`
-			: undefined;
-	const failure = mutation.error
-		? mutation.error instanceof Error
-			? mutation.error.message
-			: String(mutation.error)
-		: undefined;
-	const chosen =
-		mutation.variables && !mutation.isError && !refused
-			? { accepted: mutation.variables.accepts, label: mutation.variables.done }
-			: undefined;
+	const { refused, failure, chosen } = answerState(mutation);
 	const shown = answered ?? chosen;
 	const approval: ConfirmationApproval =
 		shown === undefined || refused
