@@ -14,11 +14,8 @@ import { z } from "zod";
 import { attachmentsKey } from "./attached.ts";
 import { ATTACHMENT_ASKS, registerAttachments } from "./attachment-forms.ts";
 import { BIN_ASKS, registerBin } from "./bin-forms.ts";
-import {
-	fileActivity,
-	KNOWLEDGE_ASKS,
-	registerKnowledge,
-} from "./knowledge-forms.ts";
+import { fileActivity } from "./file-activity.ts";
+import { KNOWLEDGE_ASKS, registerKnowledge } from "./knowledge-forms.ts";
 import { fileName } from "./names.ts";
 import type { KnowledgeHost } from "./ports.ts";
 

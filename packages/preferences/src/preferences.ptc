@@ -1,7 +1,7 @@
 PREFERENCES
 
-User's own preferences: font, which metadata fields chat shows, which helpers
-chat input runs. Belong to person you work for, not workspace; follow them into every
+User's own preferences: font, which metadata fields chat shows, which
+helpers chat input runs. Belong to person you work for, not workspace; follow them into every
 workspace. App applies change at once, while they watch.
 
 - (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t).

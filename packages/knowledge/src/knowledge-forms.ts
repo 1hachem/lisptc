@@ -1,12 +1,10 @@
-import type { ActivityEntry } from "@repo/interpreter/annotations";
-import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
-import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
+import type { Interp } from "@repo/interpreter/lisp";
 import { arrayToList } from "@repo/interpreter/objects";
 import { zAny, zString } from "@repo/interpreter/schema";
-import type { Clock } from "@repo/shared/host";
 import { z } from "zod";
 import { codecFor } from "./codecs.ts";
+import { reporterFor, reporting } from "./file-activity.ts";
 import { fileName } from "./names.ts";
 import type { KnowledgeHost } from "./ports.ts";
 
@@ -15,62 +13,11 @@ const KNOWLEDGE_DELETE = "knowledge/delete";
 
 export const KNOWLEDGE_ASKS = [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE] as const;
 
-export const fileActivity = topic<ActivityEntry>("knowledge-activity");
-
-const callSeqCodec: StateCodec<number> = {
-	toLisp: (n) => BigInt(n),
-	fromLisp: (x) => Number(x),
-};
-
-interface Reporter {
-	readonly interp: Interp;
-	readonly calls: State<number>;
-	readonly clock: Clock;
-}
-
-function* reporting<T>(
-	{ interp, calls, clock }: Reporter,
-	verb: "read" | "write",
-	name: string,
-	run: () => Eval<T>,
-): Eval<T> {
-	const n = calls.get() + 1;
-	calls.set(n);
-	const startedAt = clock.now();
-	const report = (state: ActivityEntry["state"]): void =>
-		fileActivity.emit(interp.channels, {
-			user: {
-				kind: "file",
-				label: `knowledge · ${verb}`,
-				detail: name,
-				state,
-				id: `file-${n}`,
-				startedAt,
-				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
-			},
-		});
-	report("started");
-	try {
-		const value = yield* run();
-		report("done");
-		return value;
-	} catch (error) {
-		report("failed");
-		throw error;
-	}
-}
-
 export function registerKnowledge(
 	interp: Interp,
 	{ store, pdf, clock }: KnowledgeHost,
 ): void {
-	const calls = interp.state(
-		"knowledge/calls",
-		callSeqCodec,
-		0,
-		"The number of the last knowledge file read or write, which numbers the activity the user sees.",
-	);
-	const reporter: Reporter = { interp, calls, clock };
+	const reporter = reporterFor(interp, clock);
 	interp.defGen(
 		"knowledge/list",
 		0,
