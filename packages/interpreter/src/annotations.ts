@@ -132,6 +132,7 @@ const activityEntry = z.object({
 	id: z.string(),
 	startedAt: z.number().optional(),
 	ms: z.number().optional(),
+	chat: z.string().optional(),
 });
 
 export type ActivityEntry = z.infer<typeof activityEntry>;
