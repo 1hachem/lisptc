@@ -24,7 +24,7 @@ const preferences = v.object({
 
 function stripped(row: Doc<"preferences"> | null) {
 	if (row === null) return {};
-	const { _id, _creationTime, userId, theme, channels, ...stored } = row;
+	const { _id, _creationTime, userId, channels, ...stored } = row;
 	return stored;
 }
 

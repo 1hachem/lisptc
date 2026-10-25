@@ -26,10 +26,7 @@ what to change.
 
 The only prose that stays is what is written for someone who is not reading the
 code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, and what an
-agent runner itself reads under `.agents/` and `.github/`. Two guards back the
-rule: a `PreToolUse` hook in `.claude/settings.json` refuses to create a new
-markdown file, and `pnpm check:docs` fails CI on any tracked markdown outside
-that allowlist.
+agent runner itself reads under `.agents/` and `.github/`.
 
 ## The IO goes out to an agent
 
@@ -63,10 +60,6 @@ Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
 theirs.
 
-`.agents/hooks/io-budget.sh` holds you to it. A refusal names the agent that
-should have had the call, so take it and spawn that agent instead of retrying.
-An agent's own calls are never refused.
-
 ## Worktrees
 
 Every git worktree lives in `worktrees/` at the repository root, at the path of
@@ -80,10 +73,6 @@ repository, a temporary directory, or flat at the top of `worktrees/`.
 The directory is tracked through its `.gitkeep`, and `.gitignore` keeps
 everything else in it out of git. Move a worktree with `git worktree move`,
 never `mv`, so git keeps track of where it is.
-
-`.husky/post-checkout` removes a worktree added anywhere else, home directory
-included, and the hooks under `.agents/hooks/` hold Claude's own worktrees and
-its `git worktree move` to the same path.
 
 Remove a worktree with `git worktree remove` once its pull request is merged,
 and delete its branch with it. Do the same for a worktree whose branch has no
