@@ -22,18 +22,15 @@ cancelled through the jobs port, and every wait a watch form makes is that
 port's sleep, never a timer of its own. The runtime owns the jobs, where they
 run and what happens when they end.
 
-A job spec is plain data that survives JSON: no closure, no live object, a
-forked image as the image itself. That is what lets a durable engine, a
-workflow or a queued function, implement the port: start enqueues a run, sleep
-is a durable timer, and the finished value is posted back to the parent
-thread. A new field of the spec is data of the same kind.
+A job spec is plain data that survives JSON: no closure, no live object. Never
+add a field to it that a durable engine could not store.
 
 Permissions arrive as rules text. This package checks that the text reads as
 Lisp and nothing more; narrowing them against the parent is the composition
 root's work, so this package names no other extension.
 
-The language holds the started job ids in a sealed state global, so they are
-saved in the image and Lisp code cannot set them, and never the job itself.
+Never keep a job in a language global, only its id. Lisp code never sets the
+ids.
 
 ## Tests
 
