@@ -765,7 +765,7 @@ const PICK_ONE = {
 const PICK_MANY = { ...PICK_ONE, id: "q2", multi: true };
 
 function renderAsking(
-	onSubmit: (text: string, attached: string[]) => void,
+	onSubmit: ChatInputProps["onSubmit"],
 	question: typeof PICK_ONE | undefined,
 ) {
 	act(() => root.render(<ChatInput onSubmit={onSubmit} question={question} />));

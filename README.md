@@ -88,6 +88,8 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
   packages/shared         @repo/shared. The no-dependency utility layer.
   packages/syntax         @repo/syntax. The lisptc language for the
                           highlighter.
+  packages/tree-sitter    @repo/tree-sitter. The tree-sitter grammar for the
+                          dialect, compiled by nix for ptcfmt.
   packages/ui             @repo/ui. The base design system.
   packages/components     @repo/components. The components we wrote, on top of
                           @repo/ui.
@@ -121,7 +123,6 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
   editors/nvim            A Neovim plugin: filetype detection, LSP client
                           wiring, and a REPL client against the shared
                           session.
-  tree-sitter-lisptc      The tree-sitter grammar for the dialect.
   examples/               Runnable .ptc walkthroughs: basics, control flow,
                           macros and functions, json, memory, secrets, and
                           MCP including Linear and Playwright.

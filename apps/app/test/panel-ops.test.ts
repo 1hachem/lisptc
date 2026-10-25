@@ -8,7 +8,6 @@ import {
 	PANEL_DRAG,
 	type PanelContent,
 	readPanelDrag,
-	retireMain,
 	SIDE_TRACE_MIN_WIDTH,
 	STARTING_LAYOUT,
 	sideTraceShown,
@@ -130,15 +129,6 @@ describe("chats in the layout", () => {
 		expect(leadChat(layout)).toBe("chat:c1");
 		const closed = applyPanelOps(layout, [{ op: "close", tab: "chat:c1" }]);
 		expect(leadChat(closed)).toBeUndefined();
-	});
-
-	it("turns a layout saved with the old main tab into a new chat", () => {
-		const saved = applyPanelOps(emptyLayout(), [
-			{ op: "open", tab: "main", split: "here", content: chat },
-		]);
-		const [tab] = allTabs(retireMain(saved));
-		expect(tab?.id.startsWith("chat:new:")).toBe(true);
-		expect(tab?.content).toEqual(NEW_CHAT);
 	});
 
 	it("keeps the chat a drawn view came from", () => {

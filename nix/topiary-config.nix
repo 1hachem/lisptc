@@ -6,7 +6,7 @@
 {
   writeText,
   tree-sitter,
-  # tree-sitter-lisptc/ (grammar.js), not the repo root — so unrelated
+  # packages/tree-sitter/ (grammar.js), not the repo root — so unrelated
   # working-tree edits don't rebuild the grammar.
   grammarSrc,
 }: rec {

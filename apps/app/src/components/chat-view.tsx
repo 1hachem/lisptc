@@ -472,7 +472,7 @@ function ScrollToLatest() {
 
 function TurnOutput({ message }: { message: ChatMessage }) {
 	const ui = toolUi(message);
-	const attachments = attachedFiles(message);
+	const attachments = attachedTo(message);
 	const asks = toolAsks(message);
 	const answers = toolAnswers(message);
 	return (

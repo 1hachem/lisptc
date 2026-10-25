@@ -66,8 +66,8 @@ function useMockSession(
 		chatId: null,
 		draftChatId: null,
 		workspaceId,
-		send: () => {},
-		sendAbout: () => {},
+		send: () => Promise.resolve(false),
+		sendAbout: () => Promise.resolve(false),
 		resume: () => {},
 		stop: () => {},
 		withdraw: () => {},
@@ -76,11 +76,15 @@ function useMockSession(
 	const store = storeRef.current;
 
 	useEffect(() => {
-		const submit = (input: Record<string, unknown>, shown: ChatMessage) => {
-			if (stream.isLoading) return;
+		const submit = async (
+			input: Record<string, unknown>,
+			shown: ChatMessage,
+		): Promise<boolean> => {
+			if (stream.isLoading) return false;
 			stream.submit(input, {
 				optimisticValues: { messages: [...messages, shown] },
 			});
+			return true;
 		};
 		const meta = Object.fromEntries(
 			messages.flatMap((m) => {
