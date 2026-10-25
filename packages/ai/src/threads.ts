@@ -125,6 +125,10 @@ export class Threads {
 		return thread;
 	}
 
+	watch(threadId: string, signal?: AbortSignal): Response {
+		return this.get(threadId).watch(signal);
+	}
+
 	repl(threadId: string): Promise<AgentRepl> {
 		this.get(threadId);
 		const live = this.live.get(threadId);

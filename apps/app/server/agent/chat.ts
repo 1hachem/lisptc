@@ -5,12 +5,7 @@ import { body, params } from "./body.ts";
 import { convexAs } from "./convex.ts";
 import { convexId } from "./ids.ts";
 import { type Authed, authed } from "./session.ts";
-import {
-	post,
-	stop as stopThread,
-	watch as watchThread,
-	withdraw as withdrawPost,
-} from "./threads.ts";
+import { post, stopThread, watchThread, withdrawPost } from "./threads.ts";
 
 const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 

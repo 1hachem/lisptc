@@ -46,8 +46,8 @@ vi.mock("../../server/agent/threads.ts", () => ({
 			ended: Promise.resolve({ answer: "done." }),
 		};
 	},
-	withdraw: async () => true,
-	stop: async (chatId: string) => {
+	withdrawPost: async () => true,
+	stopThread: async (chatId: string) => {
 		world.cancelled.push(chatId);
 		return true;
 	},

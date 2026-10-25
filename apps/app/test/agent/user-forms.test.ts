@@ -42,12 +42,12 @@ vi.mock("../../server/agent/threads.ts", () => ({
 		world.posted.push({ chatId, envelope, options });
 		return { ended: Promise.resolve({ answer: "done." }) };
 	},
-	watch: (chatId: string, signal: AbortSignal) => {
+	watchThread: (chatId: string, signal: AbortSignal) => {
 		world.watching.push({ chatId, signal });
 		return new Response("event: status\ndata: {}\n\n");
 	},
-	stop: () => world.running,
-	withdraw: async () => true,
+	stopThread: () => world.running,
+	withdrawPost: async () => true,
 }));
 
 let turn: Method;

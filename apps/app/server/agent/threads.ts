@@ -50,11 +50,14 @@ export function post(
 	return threads.get(chatId).post(envelope, options);
 }
 
-export function watch(chatId: Id<"chats">, signal: AbortSignal): Response {
-	return threads.get(chatId).watch(signal);
+export function watchThread(
+	chatId: Id<"chats">,
+	signal: AbortSignal,
+): Response {
+	return threads.watch(chatId, signal);
 }
 
-export function stop(chatId: Id<"chats">): Promise<boolean> {
+export function stopThread(chatId: Id<"chats">): Promise<boolean> {
 	return threads.cancel(chatId);
 }
 
@@ -67,6 +70,9 @@ export function answer(
 	return threads.answer(chatId, action, values, ask);
 }
 
-export function withdraw(chatId: Id<"chats">, id: string): Promise<boolean> {
+export function withdrawPost(
+	chatId: Id<"chats">,
+	id: string,
+): Promise<boolean> {
 	return threads.get(chatId).withdraw(id);
 }
