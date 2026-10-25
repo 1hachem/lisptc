@@ -228,6 +228,8 @@ export class Thread {
 		this.watchers.begin();
 		this.watchers.publish({ type: "status", status: "running" });
 		this.taken(opening);
+		const halting = new AbortController();
+		this.halting = halting;
 		let prepared: Awaited<ReturnType<Thread["prepare"]>>;
 		let left: Limits = {};
 		try {
@@ -247,14 +249,13 @@ export class Thread {
 				status: "errored",
 				failure: errorText(error),
 			});
+			if (this.halting === halting) this.halting = undefined;
 			endAll({ stopped: `failed: ${errorText(error)}` });
 			return;
 		}
 		const { setup, history, quiet, repl } = prepared;
 		const deadline = deadlineOf(setup.deadlineMs, left.deadline);
-		const halting = new AbortController();
 		const overspent = new AbortController();
-		this.halting = halting;
 		const signal = AbortSignal.any(
 			[halting.signal, overspent.signal, budget.signal, deadline].filter(
 				(s): s is AbortSignal => s !== undefined,
