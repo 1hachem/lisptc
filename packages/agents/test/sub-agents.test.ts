@@ -3,7 +3,12 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, test } from "vitest";
-import { agentsExtension, BOUNDED_DEFINE } from "../src/agents.ts";
+import {
+	agentsExtension,
+	BOUNDED_DEFINE,
+	DEFINE,
+	KEEP,
+} from "../src/agents.ts";
 import { agentsHostFor, MemorySourceFolder } from "../src/agents-host.ts";
 import { readDefinition, writeDefinition } from "../src/definition.ts";
 import type {
@@ -180,8 +185,9 @@ describe("defagent with permissions", () => {
 		const { run, extension, calls } = world();
 		await run('(defagent "r" :prompt "p" :permissions "")');
 		await run('(defagent "s" :prompt "p")');
-		expect(extension.asks).toEqual([BOUNDED_DEFINE]);
+		expect(extension.asks).toEqual([DEFINE, BOUNDED_DEFINE, KEEP]);
 		expect(calls.filter((name) => name === BOUNDED_DEFINE)).toHaveLength(1);
+		expect(calls.filter((name) => name === DEFINE)).toHaveLength(1);
 	});
 
 	test("refuses rules that do not read", async () => {
@@ -201,6 +207,21 @@ describe("spawn", () => {
 		expect(spawned?.seed.from).toBe("fork");
 		expect(spawned?.chat).toEqual({ from: "fork" });
 		expect(JSON.stringify(spawned?.seed)).toContain('"x"');
+	});
+
+	test("with :prompt saves nothing", async () => {
+		const { run, folder } = world();
+		await run('(spawn "scratch" :prompt "p")');
+		expect(folder.list("w", "sub-agents")).toEqual([]);
+	});
+
+	test("refuses :prompt on a name a saved agent holds", async () => {
+		const { run, threads } = world();
+		await run('(defagent "researcher" :prompt "dig")');
+		await expect(run('(spawn "researcher" :prompt "other")')).rejects.toThrow(
+			"a saved agent has that name",
+		);
+		expect(threads.spawned).toEqual([]);
 	});
 
 	test("refuses a name never defined", async () => {
@@ -302,5 +323,67 @@ describe("a spawned agent's handle", () => {
 		await expect(
 			run('(setq *agents/spawned* \'(("r" "elsewhere")))'),
 		).rejects.toThrow();
+	});
+});
+
+describe("a saved definition", () => {
+	test("reads back as its file's text, or nil", async () => {
+		const { run, shown } = world();
+		await run('(defagent "r" :prompt "dig")');
+		expect(await shown('(agent-definition "r")')).toBe(
+			str('(defagent "r"\n  :prompt "dig")'),
+		);
+		expect(await shown('(agent-definition "nobody")')).toBe("nil");
+	});
+});
+
+describe("agent-keep", () => {
+	test("saves a temporary agent so spawn reuses it by name", async () => {
+		const { run, shown, threads, folder, calls } = world();
+		await run('(spawn "scratch" :prompt "dig" :budget 5)');
+		expect(await shown('(agent-keep "scratch")')).toBe('"scratch"');
+		expect(calls).toContain(KEEP);
+		expect(
+			readDefinition(folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
+		).toEqual({ name: "scratch", prompt: "dig", budget: 5 });
+		await run('(spawn "scratch")');
+		expect(threads.spawned[1]?.definition).toEqual({
+			name: "scratch",
+			prompt: "dig",
+			budget: 5,
+		});
+	});
+
+	test("refuses an agent saved already, and one never spawned", async () => {
+		const { run } = world();
+		await run('(spawn "scratch" :prompt "dig") (agent-keep "scratch")');
+		await expect(run('(agent-keep "scratch")')).rejects.toThrow(
+			"saved already",
+		);
+		await expect(run('(agent-keep "nobody")')).rejects.toThrow(
+			"no agent spawned by that name",
+		);
+	});
+
+	test("refuses a temporary agent once defagent saved its name", async () => {
+		const { run } = world();
+		await run('(spawn "scratch" :prompt "dig")');
+		await run('(defagent "scratch" :prompt "better")');
+		await expect(run('(agent-keep "scratch")')).rejects.toThrow(
+			"saved already",
+		);
+	});
+
+	test("still knows a temporary agent after snapshot and restore", async () => {
+		const before = world();
+		await before.run('(spawn "scratch" :prompt "dig")');
+		const image = snapshot(before.interp);
+
+		const after = session(new FakeThreads());
+		restore(after.interp, image);
+		await runAsync(after.interp, '(agent-keep "scratch")');
+		expect(
+			readDefinition(after.folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
+		).toEqual({ name: "scratch", prompt: "dig" });
 	});
 });
