@@ -14,6 +14,10 @@ vi.mock("../src/lib/panels.tsx", () => ({
 }));
 vi.mock("@convex-dev/react-query", () => ({
 	useConvexMutation: () => vi.fn(),
+	convexQuery: () => ({}),
+}));
+vi.mock("@tanstack/react-query", () => ({
+	useQuery: () => ({ data: undefined }),
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/chat.tsx", () => ({ abandonChat: vi.fn() }));
