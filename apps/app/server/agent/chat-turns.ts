@@ -19,6 +19,10 @@ export interface ChatTurns {
 		message: string,
 		budget: Budget,
 	): Promise<TurnOutcome>;
+	spawn(
+		parent: Id<"chats">,
+		create: () => Promise<Id<"chats">>,
+	): Promise<Id<"chats">>;
 	source(chatId: Id<"chats">): ReplSource<Id<"chats">>;
 }
 

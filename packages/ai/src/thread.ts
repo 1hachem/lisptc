@@ -2,6 +2,7 @@ import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import type { MessageKwargs } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
+import { exhausted, type Limits, type Usage } from "./budget.ts";
 import { evalMessage } from "./eval.ts";
 import type { Envelope, Mailbox } from "./mailbox.ts";
 import {
@@ -13,7 +14,7 @@ import {
 	Watchers,
 	type WireMessage,
 } from "./stream.ts";
-import { runAgentTurn } from "./turn.ts";
+import { runAgentTurn, type TurnEvent } from "./turn.ts";
 
 export interface TranscriptStore {
 	read(threadId: string): Promise<ChatMessageInput[]>;
@@ -34,8 +35,14 @@ export interface TurnSetup {
 	identity?: { distinctId?: string; sessionId?: string };
 }
 
+export interface ThreadBudget {
+	remaining(): Awaitable<Limits>;
+	charge(usage: Usage): void;
+}
+
 export interface ThreadPorts {
 	mailbox: Mailbox;
+	budget?: ThreadBudget;
 	repl(threadId: string): Awaitable<AgentRepl>;
 	transcript: TranscriptStore;
 	status: ThreadStatus;
@@ -58,6 +65,8 @@ interface Tracked {
 
 const WITHDRAWN: TurnOutcome = { stopped: "withdrawn before a turn took it" };
 
+const CANCELLED: TurnOutcome = { stopped: "cancelled" };
+
 function openingMessage(envelope: Envelope): WireMessage {
 	if (envelope.kind === "event")
 		return systemEventMessage(envelope, envelope.id);
@@ -76,6 +85,36 @@ function stepCap(...caps: (number | undefined)[]): { maxSteps?: number } {
 	return set.length === 0 ? {} : { maxSteps: Math.min(...set) };
 }
 
+function deadlineOf(
+	setupMs: number | undefined,
+	until: number | undefined,
+): AbortSignal | undefined {
+	const left = until === undefined ? undefined : until - Date.now();
+	const ms =
+		setupMs === undefined
+			? left
+			: left === undefined
+				? setupMs
+				: Math.min(setupMs, left);
+	return ms === undefined ? undefined : AbortSignal.timeout(Math.max(ms, 0));
+}
+
+async function* billed(
+	events: AsyncIterable<TurnEvent>,
+	budget: ThreadBudget | undefined,
+	overspent: () => void,
+): AsyncGenerator<TurnEvent> {
+	for await (const event of events) {
+		if (budget !== undefined && event.type === "assistant") {
+			const { inputTokens = 0, outputTokens = 0 } = event.meta;
+			budget.charge({ steps: 1, tokens: inputTokens + outputTokens });
+			const left = await budget.remaining();
+			if (left.tokens !== undefined && left.tokens <= 0) overspent();
+		}
+		yield event;
+	}
+}
+
 function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -90,6 +129,7 @@ function settledState(
 
 export class Thread {
 	private running = false;
+	private held = false;
 	private posted = 0;
 	private readonly tracked = new Map<string, Tracked>();
 	private readonly watchers = new Watchers();
@@ -115,6 +155,10 @@ export class Thread {
 		return { ended };
 	}
 
+	get busy(): boolean {
+		return this.running || this.held || this.watchers.size > 0;
+	}
+
 	watch(signal?: AbortSignal): Response {
 		return this.watchers.attach(signal);
 	}
@@ -123,6 +167,13 @@ export class Thread {
 		if (this.halting === undefined || this.halting.signal.aborted) return false;
 		this.halting.abort();
 		return true;
+	}
+
+	async cancel(): Promise<boolean> {
+		const stopped = this.stop();
+		const dropped = await this.ports.mailbox.take(this.id);
+		for (const envelope of dropped) this.release(envelope.id, CANCELLED);
+		return stopped || dropped.length > 0;
 	}
 
 	relay(message: WireMessage): void {
@@ -171,11 +222,16 @@ export class Thread {
 		const endAll = (outcome: TurnOutcome) => {
 			for (const taken of consumed) this.release(taken, outcome);
 		};
+		this.held = false;
 		this.watchers.begin();
 		this.watchers.publish({ type: "status", status: "running" });
 		this.taken(opening);
 		let prepared: Awaited<ReturnType<Thread["prepare"]>>;
+		let left: Limits = {};
 		try {
+			left = (await ports.budget?.remaining()) ?? {};
+			const spent = exhausted(left);
+			if (spent !== undefined) throw new Error(`the thread is ${spent}`);
 			await ports.status.start(id);
 			prepared = await this.prepare(opening);
 		} catch (error) {
@@ -193,14 +249,12 @@ export class Thread {
 			return;
 		}
 		const { setup, history, quiet, repl } = prepared;
-		const deadline =
-			setup.deadlineMs === undefined
-				? undefined
-				: AbortSignal.timeout(setup.deadlineMs);
+		const deadline = deadlineOf(setup.deadlineMs, left.deadline);
 		const halting = new AbortController();
+		const overspent = new AbortController();
 		this.halting = halting;
 		const signal = AbortSignal.any(
-			[halting.signal, budget.signal, deadline].filter(
+			[halting.signal, overspent.signal, budget.signal, deadline].filter(
 				(s): s is AbortSignal => s !== undefined,
 			),
 		);
@@ -213,24 +267,28 @@ export class Thread {
 		const response = streamTurn(
 			{ messages: history },
 			(transcript, received, aborted) =>
-				runAgentTurn(transcript, {
-					repl,
-					threadId: id,
-					config: setup.config,
-					signal: aborted,
-					identity: setup.identity,
-					runsForms: setup.runsForms,
-					received,
-					...stepCap(budget.maxSteps, setup.maxSteps),
-					inbox: async () => {
-						const taken = await ports.mailbox.take(id);
-						for (const envelope of taken) {
-							consumed.push(envelope.id);
-							this.taken(envelope);
-						}
-						return taken;
-					},
-				}),
+				billed(
+					runAgentTurn(transcript, {
+						repl,
+						threadId: id,
+						config: setup.config,
+						signal: aborted,
+						identity: setup.identity,
+						runsForms: setup.runsForms,
+						received,
+						...stepCap(budget.maxSteps, setup.maxSteps, left.steps),
+						inbox: async () => {
+							const taken = await ports.mailbox.take(id);
+							for (const envelope of taken) {
+								consumed.push(envelope.id);
+								this.taken(envelope);
+							}
+							return taken;
+						},
+					}),
+					ports.budget,
+					() => overspent.abort(),
+				),
 			{
 				signal,
 				quiet,
@@ -239,7 +297,9 @@ export class Thread {
 						failure ??
 						(deadline?.aborted === true
 							? "the turn ran past its deadline"
-							: undefined);
+							: overspent.signal.aborted
+								? "the turn ran out of tokens"
+								: undefined);
 					return this.record(history, produced, revised, failed);
 				},
 				onOutcome: finished,
@@ -248,6 +308,7 @@ export class Thread {
 		await this.pump(response);
 		const ended = await outcome;
 		if (this.halting === halting) this.halting = undefined;
+		this.held = "held" in ended;
 		this.watchers.publish({ type: "status", ...settledState(ended, failed) });
 		endAll(ended);
 	}

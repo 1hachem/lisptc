@@ -41,7 +41,9 @@ export function subAgents(host: ThreadHost, relay: Relay): RunnerFor {
 
 		const agents: AgentRunner = {
 			async spawn({ definition, seed, chat }) {
-				const child = await host.spawn(chatId, definition, seed);
+				const child = await chatTurns().spawn(chatId, () =>
+					host.spawn(chatId, definition, seed),
+				);
 				await forkChat(child, chat);
 				return child;
 			},

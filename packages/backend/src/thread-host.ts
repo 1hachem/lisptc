@@ -1,13 +1,13 @@
 import type { AgentDefinition, ReplSeed } from "@repo/agents-extension/ports";
-import {
-	type ChatMessageInput,
-	type Mailbox,
-	ReplStore,
-	type ThreadPorts,
-	type ThreadStatus,
-	type TranscriptStore,
-	type TurnSetup,
-	type WireMessage,
+import type {
+	ChatMessageInput,
+	Lineage,
+	Mailbox,
+	ThreadStatus,
+	ThreadsHost,
+	TranscriptStore,
+	TurnSetup,
+	WireMessage,
 } from "@repo/ai";
 import type { Image } from "@repo/interpreter/image";
 import { type ImageStore, MemoryImageStore } from "@repo/repl/image-store";
@@ -25,7 +25,9 @@ import {
 import { ConvexImageStore } from "./image-store.ts";
 import type { Owner, ServerClient } from "./server-client.ts";
 
-type Lineage = FunctionReturnType<typeof internal.threads.record>["lineage"];
+type RecordLineage = FunctionReturnType<
+	typeof internal.threads.record
+>["lineage"];
 
 export interface ThreadProfile {
 	readonly instructions?: string;
@@ -43,7 +45,7 @@ function narrowed(
 	return roster.filter((name) => by.includes(name));
 }
 
-export function profileOf(lineage: Lineage): ThreadProfile {
+export function profileOf(lineage: RecordLineage): ThreadProfile {
 	const agents = lineage.flatMap(({ agent }) =>
 		agent === undefined ? [] : [agent],
 	);
@@ -110,13 +112,11 @@ export interface ThreadHostOptions {
 const asChat = (threadId: string) => threadId as Id<"chats">;
 
 export class ThreadHost {
-	readonly repls: ReplStore<Id<"chats">>;
 	readonly transcript: TranscriptStore;
 	readonly status: ThreadStatus;
 
 	constructor(private readonly options: ThreadHostOptions) {
 		const { server } = options;
-		this.repls = new ReplStore((chatId) => this.open(chatId));
 		this.transcript = {
 			async read(threadId) {
 				return toInput(
@@ -159,7 +159,20 @@ export class ThreadHost {
 			internal.threads.record,
 			{ chatId: asChat(threadId) },
 		);
-		return { ...record, profile: profileOf(lineage) };
+		return {
+			...record,
+			profile: profileOf(lineage),
+			budget: lineage[0]?.agent?.budget,
+		};
+	}
+
+	async lineage(threadId: string): Promise<Lineage> {
+		const { parentId, title, budget } = await this.record(threadId);
+		return {
+			...(parentId === undefined ? {} : { parent: parentId }),
+			title,
+			...(budget === undefined ? {} : { limits: { steps: budget } }),
+		};
 	}
 
 	async setup(threadId: string): Promise<TurnSetup> {
@@ -175,17 +188,19 @@ export class ThreadHost {
 			},
 			runsForms,
 			deadlineMs: TURN_DEADLINE_MS,
-			...(profile.budget === undefined ? {} : { maxSteps: profile.budget }),
 		};
 	}
 
-	ports(mailbox: Mailbox): ThreadPorts {
+	supervised(mailbox: Mailbox): ThreadsHost {
 		return {
-			mailbox,
-			repl: (threadId) => this.repls.get(asChat(threadId)),
-			transcript: this.transcript,
-			status: this.status,
-			setup: (threadId) => this.setup(threadId),
+			ports: {
+				mailbox,
+				transcript: this.transcript,
+				status: this.status,
+				setup: (threadId) => this.setup(threadId),
+			},
+			repl: (threadId) => this.repl(asChat(threadId)),
+			lineage: (threadId) => this.lineage(threadId),
 		};
 	}
 
@@ -234,7 +249,7 @@ export class ThreadHost {
 		return await this.build(threadId, images, false);
 	}
 
-	private async open(chatId: Id<"chats">): Promise<AgentRepl> {
+	async repl(chatId: Id<"chats">): Promise<AgentRepl> {
 		const replId = await this.options.server.mutation(internal.threads.repl, {
 			chatId,
 		});

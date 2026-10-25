@@ -4,6 +4,7 @@ export {
 	DEFAULT_SYSTEM_PROMPT,
 	streamAgent,
 } from "./agent.ts";
+export { Budget, type Limits, type Usage } from "./budget.ts";
 export {
 	converse,
 	DelegatedAsks,
@@ -19,12 +20,7 @@ export {
 	replResultContent,
 	type TranscriptEntry,
 } from "./repl.ts";
-export {
-	type OpenRepl,
-	type ReplSource,
-	ReplStore,
-	replFrom,
-} from "./repl-store.ts";
+export { type ReplSource, type Repls, replFrom } from "./repl-store.ts";
 export type {
 	ChatInput,
 	ChatMessageInput,
@@ -43,12 +39,22 @@ export {
 	type Posted,
 	type PostOptions,
 	Thread,
+	type ThreadBudget,
 	type ThreadPorts,
 	type ThreadStatus,
 	type TranscriptStore,
 	type TurnSetup,
 } from "./thread.ts";
-export { Threads } from "./threads.ts";
+export {
+	type AskOptions,
+	type JobState,
+	type Lineage,
+	type Seen,
+	type ThreadRunState,
+	Threads,
+	type ThreadsHost,
+	type ThreadsOptions,
+} from "./threads.ts";
 export {
 	runAgentTurn,
 	type TurnEvent,

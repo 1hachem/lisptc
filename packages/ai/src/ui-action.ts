@@ -1,5 +1,5 @@
 import type { AgentRepl } from "@repo/repl/repl";
-import type { ReplStore } from "./repl-store.ts";
+import type { Repls } from "./repl-store.ts";
 
 export interface UiActionResult extends Record<string, unknown> {
 	output: string;
@@ -9,12 +9,12 @@ export interface UiActionResult extends Record<string, unknown> {
 }
 
 export async function runUiAction<Id extends string>(
-	repls: ReplStore<Id>,
+	repls: Repls<Id>,
 	threadId: Id,
 	action: string,
 	values: Record<string, unknown>,
 ): Promise<UiActionResult> {
-	return uiActionOn(await repls.get(threadId), action, values);
+	return uiActionOn(await repls.repl(threadId), action, values);
 }
 
 export async function uiActionOn(

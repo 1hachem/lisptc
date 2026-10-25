@@ -31,7 +31,8 @@ vi.mock("../../server/agent/convex.ts", () => ({
 }));
 
 vi.mock("../../server/agent/threads.ts", () => ({
-	host: { repls: {} },
+	threads: {},
+	spawn: async () => "child",
 	post: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
 		world.posted.push({ chatId, envelope, options });
 		return {
@@ -39,6 +40,11 @@ vi.mock("../../server/agent/threads.ts", () => ({
 			ended: Promise.resolve({ answer: "done." }),
 		};
 	},
+	ask: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
+		world.posted.push({ chatId, envelope, options });
+		return "job-1";
+	},
+	wait: async () => ({ answer: "done." }),
 	withdraw: async () => true,
 }));
 

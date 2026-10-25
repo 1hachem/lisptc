@@ -10,7 +10,7 @@ import {
 import { note } from "@repo/interpreter/topics";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
-import { ReplStore } from "../src/repl-store.ts";
+import type { Repls } from "../src/repl-store.ts";
 import {
 	type ChatInput,
 	streamTurn,
@@ -105,8 +105,26 @@ export function testRepl(
 	return new AgentRepl({ extensions: [answering(), ...extensions], images });
 }
 
-export function testRepls(extensions: InterpExtension[] = []): ReplStore {
-	return new ReplStore(() => testRepl(extensions));
+class TestRepls implements Repls {
+	private readonly opened = new Map<string, AgentRepl>();
+
+	constructor(private readonly extensions: InterpExtension[]) {}
+
+	repl(threadId: string): AgentRepl {
+		const standing = this.opened.get(threadId);
+		if (standing !== undefined) return standing;
+		const opened = testRepl(this.extensions);
+		this.opened.set(threadId, opened);
+		return opened;
+	}
+
+	peek(threadId: string): AgentRepl | undefined {
+		return this.opened.get(threadId);
+	}
+}
+
+export function testRepls(extensions: InterpExtension[] = []): TestRepls {
+	return new TestRepls(extensions);
 }
 
 const waiting = topic<string>("waiting");

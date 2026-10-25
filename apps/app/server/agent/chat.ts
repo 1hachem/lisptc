@@ -7,9 +7,12 @@ import { convexAs } from "./convex.ts";
 import { convexId } from "./ids.ts";
 import { type Authed, authed } from "./session.ts";
 import {
-	host,
+	ask,
 	post,
+	spawn,
 	stop as stopThread,
+	threads,
+	wait,
 	watch as watchThread,
 	withdraw as withdrawPost,
 } from "./threads.ts";
@@ -113,14 +116,15 @@ serveTurns({
 		});
 	},
 	async reply(chatId, message, { maxSteps, signal }) {
-		const posted = await post(
+		const job = await ask(
 			chatId,
 			{ kind: "user", id: crypto.randomUUID(), text: message, forms: false },
 			{ maxSteps, signal },
 		);
-		return posted.ended;
+		return await wait(job, signal);
 	},
-	source: (chatId) => ({ repls: host.repls, threadId: chatId }),
+	spawn,
+	source: (chatId) => ({ repls: threads, threadId: chatId }),
 });
 
 export const steer = {

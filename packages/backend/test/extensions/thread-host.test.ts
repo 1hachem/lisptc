@@ -98,15 +98,25 @@ describe("the thread factory", () => {
 		expect(profileOf(lineage).roster).toEqual([]);
 	});
 
-	it("sets up the turn with the record's instructions and budget", async () => {
+	it("sets up the turn with the record's instructions", async () => {
 		const host = new ThreadHost({
 			server: serverOver([child, middle, root]),
 			actAs: () => offline(),
 		});
 		const setup = await host.setup(CHAT);
 		expect(setup.config?.instructions).toBe("dig only");
-		expect(setup.maxSteps).toBe(12);
 		expect(setup.runsForms).toBe(true);
+	});
+
+	it("seeds a thread's budget with its own agent's", async () => {
+		const host = new ThreadHost({
+			server: serverOver([child, middle, root]),
+			actAs: () => offline(),
+		});
+		expect(await host.lineage(CHAT)).toEqual({
+			title: "child",
+			limits: { steps: 30 },
+		});
 	});
 
 	it("builds a repl bound by every ancestor and shown only its roster", async () => {
@@ -114,7 +124,7 @@ describe("the thread factory", () => {
 			server: serverOver([child, middle]),
 			actAs: () => offline(),
 		});
-		const repl = await host.repls.get(CHAT);
+		const repl = await host.repl(CHAT);
 		const ev = async (code: string) =>
 			(await repl.evalOutput(code)).results.at(-1);
 		expect(await ev("(permission/check 'memory/forget-all)")).toBe("deny");
@@ -139,7 +149,7 @@ describe("the thread factory", () => {
 				};
 			},
 		});
-		const repl = await host.repls.get(CHAT);
+		const repl = await host.repl(CHAT);
 		expect((await repl.evalOutput("(agents)")).results.at(-1)).toContain(
 			"scout",
 		);

@@ -7,7 +7,7 @@ import { convexAs } from "./convex.ts";
 import { delegated } from "./delegated.ts";
 import { convexId } from "./ids.ts";
 import { type Authed, authed } from "./session.ts";
-import { host, post } from "./threads.ts";
+import { post, threads } from "./threads.ts";
 
 const uiActionSchema = z.object({
 	chatId: convexId<"chats">(),
@@ -40,7 +40,7 @@ export const uiAction = {
 				: undefined;
 		const result =
 			delegate === undefined
-				? await runUiAction(host.repls, chatId, action, values ?? {})
+				? await runUiAction(threads, chatId, action, values ?? {})
 				: await delegated.answer(delegate, action, values ?? {});
 		const { annotations, ...reply } = result;
 		if (messageId !== undefined && !result.error)
