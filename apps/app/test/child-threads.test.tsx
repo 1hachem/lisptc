@@ -85,4 +85,20 @@ describe("child threads", () => {
 		expect(rows(host)).toHaveLength(5);
 		expect(host.querySelector("[data-child-threads=more]")).toBeNull();
 	});
+
+	it("collapses to a chip and opens again", () => {
+		const host = mount(THREADS);
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>("[data-child-threads=collapse]")
+				?.click(),
+		);
+		expect(rows(host)).toHaveLength(0);
+		const chip = host.querySelector<HTMLButtonElement>(
+			"[data-child-threads=chip]",
+		);
+		expect(chip?.textContent).toBe("3/3");
+		act(() => chip?.click());
+		expect(rows(host)).toHaveLength(3);
+	});
 });

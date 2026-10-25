@@ -98,7 +98,7 @@ export function ChildThreadStrip({
 	const area = useRef<HTMLDivElement>(null);
 	const wide = useWide(area);
 	const [expanded, setExpanded] = useState(false);
-	const [opened, setOpened] = useState(false);
+	const [opened, setOpened] = useState<boolean | null>(null);
 	if (threads.length === 0) return null;
 	const running = threads.filter(
 		(thread) => thread.status !== undefined,
@@ -106,14 +106,15 @@ export function ChildThreadStrip({
 	const count = threads.length === 1 ? "1 thread" : `${threads.length} threads`;
 	const hidden = expanded ? 0 : Math.max(0, threads.length - LATEST);
 	const shown = threads.slice(hidden);
-	const place = "absolute right-2 bottom-7 z-10";
-	if (!wide && !opened)
+	const place = "absolute left-2 bottom-7 z-10";
+	if (!(opened ?? wide))
 		return (
 			<div ref={area} className={place}>
 				<button
 					type="button"
 					data-child-threads="chip"
 					aria-expanded={false}
+					aria-label="show sub-agents"
 					onClick={() => setOpened(true)}
 					className="flex items-center gap-1.5 border border-bg2 bg-bg1 px-2 py-0.5 text-[11px] text-dim tabular-nums hover:text-fg"
 				>
@@ -133,8 +134,13 @@ export function ChildThreadStrip({
 		>
 			<button
 				type="button"
-				aria-expanded={expanded}
-				onClick={() => (wide ? setExpanded(!expanded) : setOpened(false))}
+				data-child-threads="collapse"
+				aria-expanded={true}
+				aria-label="hide sub-agents"
+				onClick={() => {
+					setOpened(false);
+					setExpanded(false);
+				}}
 				className="flex items-center gap-2 text-left text-[11px] text-dim hover:text-fg"
 			>
 				<HugeiconsIcon
