@@ -116,6 +116,9 @@ importers:
       '@repo/backend':
         specifier: workspace:*
         version: link:../../packages/backend
+      '@repo/background-extension':
+        specifier: workspace:*
+        version: link:../../packages/background
       '@repo/bloub':
         specifier: workspace:*
         version: link:../../packages/bloub
