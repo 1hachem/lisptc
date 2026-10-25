@@ -14,7 +14,7 @@ const world = vi.hoisted(() => ({
 	failed: false,
 	answered: [] as unknown[][],
 	annotated: [] as unknown[],
-	cancelled: [] as string[],
+	cancelled: [] as [string, string][],
 }));
 
 vi.mock("../../server/agent/session.ts", async () => {
@@ -47,8 +47,8 @@ vi.mock("../../server/agent/threads.ts", () => ({
 		};
 	},
 	withdrawPost: async () => true,
-	stopThread: async (chatId: string) => {
-		world.cancelled.push(chatId);
+	stopThread: async (chatId: string, scope: string) => {
+		world.cancelled.push([chatId, scope]);
 		return true;
 	},
 	answer: async (...args: unknown[]) => {
@@ -115,10 +115,22 @@ describe("a ui action", () => {
 		expect(world.annotated).toEqual([]);
 	});
 
-	test("cancels the chat's whole tree when the user stops it", async () => {
+	test("stops only the chat's own thread when the user stops it", async () => {
 		const response = await send(stop, { chatId: CHAT });
 		expect(response.status).toBe(200);
-		expect(world.cancelled).toEqual([CHAT]);
+		expect(world.cancelled).toEqual([[CHAT, "thread"]]);
+	});
+
+	test("cancels the chat's whole tree when the user stops them all", async () => {
+		const response = await send(stop, { chatId: CHAT, scope: "tree" });
+		expect(response.status).toBe(200);
+		expect(world.cancelled).toEqual([[CHAT, "tree"]]);
+	});
+
+	test("refuses a stop scope it does not know", async () => {
+		const response = await send(stop, { chatId: CHAT, scope: "siblings" });
+		expect(response.ok).toBe(false);
+		expect(world.cancelled).toEqual([]);
 	});
 
 	test("cannot be sent by the browser as a turn", async () => {

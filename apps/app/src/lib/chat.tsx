@@ -97,6 +97,7 @@ export interface ChatSession {
 		annotations?: Record<string, unknown>,
 	) => Promise<boolean>;
 	stop: () => void;
+	stopAll: () => void;
 	withdraw: (id: string) => void;
 	fail: (message: string) => void;
 }
@@ -291,25 +292,34 @@ async function postTurn(
 		throw new Error(`the message was refused: ${response.status}`);
 }
 
-function useHalt(chatId: Id<"chats"> | null, clear: () => void) {
-	const halt = useCallback((target: Id<"chats">) => {
-		postTo("/api/chat/stop", { chatId: target }).catch(
-			reported("chat stop", target),
-		);
-	}, []);
+export type StopScope = "thread" | "tree";
 
-	const stop = useCallback(() => {
-		clear();
-		if (chatId !== null) halt(chatId);
-	}, [chatId, clear, halt]);
+export function stopChat(chatId: string, scope: StopScope): void {
+	postTo("/api/chat/stop", { chatId, scope }).catch(
+		reported("chat stop", chatId),
+	);
+}
+
+function useHalt(chatId: Id<"chats"> | null, clear: () => void) {
+	const halt = useCallback(
+		(scope: StopScope) => {
+			clear();
+			if (chatId !== null) stopChat(chatId, scope);
+		},
+		[chatId, clear],
+	);
+
+	const stop = useCallback(() => halt("thread"), [halt]);
+
+	const stopAll = useCallback(() => halt("tree"), [halt]);
 
 	const abandon = useCallback(
 		(target: Id<"chats">) => {
-			if (target === chatId) stop();
+			if (target === chatId) stopAll();
 		},
-		[chatId, stop],
+		[chatId, stopAll],
 	);
-	return { stop, abandon };
+	return { stop, stopAll, abandon };
 }
 
 type Failure = { chatId: Id<"chats"> | null; message: string } | null;
@@ -474,6 +484,7 @@ function useSessionStore(
 			send: () => Promise.resolve(false),
 			sendAbout: () => Promise.resolve(false),
 			stop: () => {},
+			stopAll: () => {},
 			withdraw: () => {},
 			fail: () => {},
 		})),
@@ -536,7 +547,7 @@ export function ChatProvider({
 	});
 	const send = useSend(running, enqueue, submitTurn);
 
-	const { stop, abandon } = useHalt(chatId, clear);
+	const { stop, stopAll, abandon } = useHalt(chatId, clear);
 
 	const fresh = isFreshChat(chatId, turns);
 
@@ -562,6 +573,7 @@ export function ChatProvider({
 			send,
 			sendAbout,
 			stop,
+			stopAll,
 			withdraw,
 			fail: (message) => setFailure({ chatId, message }),
 		});
@@ -582,6 +594,7 @@ export function ChatProvider({
 		send,
 		sendAbout,
 		stop,
+		stopAll,
 		withdraw,
 	]);
 
