@@ -27,13 +27,7 @@ afterEach(() => {
 
 function mount(
 	threads: ChildThread[],
-	{
-		onOpen = vi.fn(),
-		onStop = vi.fn(),
-		mainRunning = false,
-		onStopMain = vi.fn(),
-		onStopAll = vi.fn(),
-	} = {},
+	{ onOpen = vi.fn(), onStop = vi.fn(), onStopAll = vi.fn() } = {},
 ) {
 	const host = document.createElement("div");
 	document.body.append(host);
@@ -45,8 +39,6 @@ function mount(
 				threads={threads}
 				onOpen={onOpen}
 				onStop={onStop}
-				mainRunning={mainRunning}
-				onStopMain={onStopMain}
 				onStopAll={onStopAll}
 			/>,
 		),
@@ -99,7 +91,7 @@ describe("child threads", () => {
 		]);
 		expect(rows(host).map((b) => b.dataset.state)).toEqual([
 			"errored",
-			"idle",
+			"done",
 			"running",
 		]);
 		expect(rows(host)[1].textContent).toContain("untitled");
@@ -123,7 +115,7 @@ describe("child threads", () => {
 		const chip = host.querySelector<HTMLButtonElement>(
 			"[data-child-threads=chip]",
 		);
-		expect(chip?.textContent).toBe("3/3");
+		expect(chip?.textContent).toBe("2/3");
 		act(() => chip?.click());
 		expect(rows(host)).toHaveLength(3);
 	});
@@ -142,26 +134,45 @@ describe("child threads", () => {
 		expect(onStop).toHaveBeenCalledWith(THREADS[1]);
 	});
 
-	it("stops the main agent alone or everything, while something runs", () => {
-		const onStopMain = vi.fn();
+	it("stops everything while a child runs, and offers no stop for the main agent alone", () => {
 		const onStopAll = vi.fn();
-		const host = mount(THREADS, { mainRunning: true, onStopMain, onStopAll });
-		act(() => control(host, "stop-main")?.click());
-		expect(onStopMain).toHaveBeenCalledOnce();
-		expect(onStopAll).not.toHaveBeenCalled();
+		const host = mount(THREADS, { onStopAll });
+		expect(control(host, "stop-main")).toBeNull();
 		act(() => control(host, "stop-all")?.click());
 		expect(onStopAll).toHaveBeenCalledOnce();
 	});
 
-	it("offers stop all without stop main when only children run", () => {
+	it("draws every stop as the filled square the chat input stops with", () => {
 		const host = mount(THREADS);
-		expect(control(host, "stop-main")).toBeNull();
-		expect(control(host, "stop-all")).not.toBeNull();
+		for (const stop of host.querySelectorAll("[data-child-threads^=stop]"))
+			expect(stop.textContent).toContain("■");
+	});
+
+	it("checks only a child that finished, and marks a stopped or failed one apart", () => {
+		const host = mount([
+			{ _id: "d", title: "done" },
+			{ _id: "s", title: "halted", status: "stopped" },
+			{ _id: "e", title: "broke", status: "errored", failure: "boom" },
+		]);
+		expect(rows(host).map((b) => b.dataset.state)).toEqual([
+			"done",
+			"stopped",
+			"errored",
+		]);
+		const icons = rows(host).map((b) => b.querySelector("svg")?.innerHTML);
+		expect(new Set(icons).size).toBe(3);
 	});
 
 	it("offers no stop at all once everything settled", () => {
-		const host = mount([{ _id: "d", title: "done" }]);
+		const host = mount([
+			{ _id: "d", title: "done" },
+			{ _id: "s", title: "halted", status: "stopped" },
+		]);
 		expect(control(host, "stop-all")).toBeNull();
 		expect(control(host, "stop")).toBeNull();
+		expect(
+			host.querySelector<HTMLButtonElement>("[data-child-threads=collapse]")
+				?.textContent,
+		).not.toContain("active");
 	});
 });
