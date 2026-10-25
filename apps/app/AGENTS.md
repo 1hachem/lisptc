@@ -60,7 +60,11 @@ annotation lanes come out of `@repo/ai` already shaped, and a route writes them
 to the wire without unpacking a key. If a payload has to be interpreted here,
 the interpretation belongs below the seam, in the extension that produced it.
 
-A route never names an extension. It builds a turn and streams what comes back.
+A route never names an extension. **`server/agent/` posts, watches and
+answers. It never starts a turn itself.** A message, a steer, an ask's
+follow-up and a sub-agent's notice are each posted to the chat's thread, and
+the thread decides when a turn runs. A route streams what the thread sends
+back, and satisfies the ports the thread declares.
 
 `server/agent/` holds routes and the wiring a route needs, and no logic of its
 own. A codec, a cache, a store belongs to the layer whose shape it knows: a
@@ -78,8 +82,8 @@ A request envelope is validated by its schema at the edge, through `body()` in
 the handler's middleware, never parsed inside the handler. Add the field to the
 schema before reading it.
 
-The agent keeps each chat's REPL, its steering inbox and its pending system
-events in this process. The app runs as one replica, and a rollout replaces it
+The agent keeps each chat's REPL, its thread and what waits in its mailbox in
+this process. The app runs as one replica, and a rollout replaces it
 rather than running two side by side.
 
 A prompt the served agent runs on ships only because this app says so. An
