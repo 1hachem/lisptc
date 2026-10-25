@@ -8,7 +8,9 @@ import {
 	type ChatMessageInput,
 	streamTurn,
 	systemEventMessage,
+	type ThreadState,
 	type TurnOutcome,
+	Watchers,
 	type WireMessage,
 } from "./stream.ts";
 import { runAgentTurn } from "./turn.ts";
@@ -42,17 +44,14 @@ export interface ThreadPorts {
 export interface PostOptions {
 	maxSteps?: number;
 	signal?: AbortSignal;
-	watch?: boolean;
 }
 
 export interface Posted {
-	opened: Promise<Response | undefined>;
 	ended: Promise<TurnOutcome>;
 }
 
 interface Tracked {
 	readonly options: PostOptions;
-	readonly open: (stream: Response | undefined) => void;
 	readonly end: (outcome: TurnOutcome) => void;
 }
 
@@ -75,14 +74,20 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-async function drained(response: Response): Promise<void> {
-	await response.body?.pipeTo(new WritableStream());
+function settledState(
+	outcome: TurnOutcome,
+	failure: string | undefined,
+): { status: ThreadState; failure?: string } {
+	if (failure !== undefined) return { status: "errored", failure };
+	return { status: "held" in outcome ? "waiting" : "idle" };
 }
 
 export class Thread {
 	private running = false;
 	private posted = 0;
 	private readonly tracked = new Map<string, Tracked>();
+	private readonly watchers = new Watchers();
+	private halting: AbortController | undefined;
 
 	constructor(
 		readonly id: string,
@@ -90,41 +95,48 @@ export class Thread {
 	) {}
 
 	async post(envelope: Envelope, options: PostOptions = {}): Promise<Posted> {
-		let open: Tracked["open"] = () => {};
 		let end: Tracked["end"] = () => {};
-		const opened = new Promise<Response | undefined>((done) => {
-			open = done;
-		});
 		const ended = new Promise<TurnOutcome>((done) => {
 			end = done;
 		});
-		this.tracked.set(envelope.id, { options, open, end });
+		this.tracked.set(envelope.id, { options, end });
 		await this.ports.mailbox.post(this.id, envelope);
 		this.posted += 1;
 		if (!this.running) {
 			this.running = true;
 			void this.drive();
 		}
-		return { opened, ended };
+		return { ended };
+	}
+
+	watch(signal?: AbortSignal): Response {
+		return this.watchers.attach(signal);
+	}
+
+	stop(): boolean {
+		if (this.halting === undefined || this.halting.signal.aborted) return false;
+		this.halting.abort();
+		return true;
+	}
+
+	relay(message: WireMessage): void {
+		this.watchers.publish({ type: "relayed", message });
 	}
 
 	async withdraw(id: string): Promise<boolean> {
 		const withdrawn = await this.ports.mailbox.withdraw(this.id, id);
-		if (withdrawn) this.release(id, undefined, WITHDRAWN);
+		if (withdrawn) this.release(id, WITHDRAWN);
 		return withdrawn;
 	}
 
-	private release(
-		id: string,
-		stream: Response | undefined,
-		outcome?: TurnOutcome,
-	): void {
-		const tracked = this.tracked.get(id);
-		if (tracked === undefined) return;
-		tracked.open(stream);
-		if (outcome === undefined) return;
-		tracked.end(outcome);
+	private release(id: string, outcome: TurnOutcome): void {
+		this.tracked.get(id)?.end(outcome);
 		this.tracked.delete(id);
+	}
+
+	private taken(envelope: Envelope): void {
+		if (envelope.kind === "event")
+			this.relay(systemEventMessage(envelope, envelope.id));
 	}
 
 	private async drive(): Promise<void> {
@@ -151,8 +163,11 @@ export class Thread {
 		const budget = this.tracked.get(opening.id)?.options ?? {};
 		const consumed = [opening.id];
 		const endAll = (outcome: TurnOutcome) => {
-			for (const taken of consumed) this.release(taken, undefined, outcome);
+			for (const taken of consumed) this.release(taken, outcome);
 		};
+		this.watchers.begin();
+		this.watchers.publish({ type: "status", status: "running" });
+		this.taken(opening);
 		let prepared: Awaited<ReturnType<Thread["prepare"]>>;
 		try {
 			await ports.status.start(id);
@@ -163,6 +178,11 @@ export class Thread {
 				.catch((unsettled: unknown) =>
 					console.error(`[ai] thread=${id} was not settled:`, unsettled),
 				);
+			this.watchers.publish({
+				type: "status",
+				status: "errored",
+				failure: errorText(error),
+			});
 			endAll({ stopped: `failed: ${errorText(error)}` });
 			return;
 		}
@@ -171,11 +191,14 @@ export class Thread {
 			setup.deadlineMs === undefined
 				? undefined
 				: AbortSignal.timeout(setup.deadlineMs);
+		const halting = new AbortController();
+		this.halting = halting;
 		const signal = AbortSignal.any(
-			[budget.signal, deadline].filter(
+			[halting.signal, budget.signal, deadline].filter(
 				(s): s is AbortSignal => s !== undefined,
 			),
 		);
+		let failed: string | undefined;
 		let finished: (outcome: TurnOutcome) => void = () => {};
 		const outcome = new Promise<TurnOutcome>((done) => {
 			finished = done;
@@ -199,7 +222,7 @@ export class Thread {
 						const taken = await ports.mailbox.take(id);
 						for (const envelope of taken) {
 							consumed.push(envelope.id);
-							this.release(envelope.id, undefined);
+							this.taken(envelope);
 						}
 						return taken;
 					},
@@ -207,17 +230,32 @@ export class Thread {
 			{
 				signal,
 				quiet,
-				onTurn: (produced, revised, failure) =>
-					this.record(history, produced, revised, {
-						failure,
-						late: deadline?.aborted === true,
-					}),
+				onTurn: (produced, revised, failure) => {
+					failed =
+						failure ??
+						(deadline?.aborted === true
+							? "the turn ran past its deadline"
+							: undefined);
+					return this.record(history, produced, revised, failed);
+				},
 				onOutcome: finished,
 			},
 		);
-		if (budget.watch === true) this.release(opening.id, response);
-		else void drained(response);
-		endAll(await outcome);
+		await this.pump(response);
+		const ended = await outcome;
+		if (this.halting === halting) this.halting = undefined;
+		this.watchers.publish({ type: "status", ...settledState(ended, failed) });
+		endAll(ended);
+	}
+
+	private async pump(response: Response): Promise<void> {
+		const reader = response.body?.getReader();
+		if (reader === undefined) return;
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) return;
+			this.watchers.publish({ type: "wire", chunk: value });
+		}
 	}
 
 	private async prepare(opening: Envelope) {
@@ -241,7 +279,7 @@ export class Thread {
 		history: ChatMessageInput[],
 		produced: WireMessage[],
 		revised: ReadonlyMap<number, WireMessage>,
-		ending: { failure: string | undefined; late: boolean },
+		failure: string | undefined,
 	): Promise<void> {
 		const { id, ports } = this;
 		try {
@@ -253,11 +291,7 @@ export class Thread {
 			}
 			if (produced.length > 0) await ports.transcript.append(id, produced);
 		} finally {
-			await ports.status.settle(
-				id,
-				ending.failure ??
-					(ending.late ? "the turn ran past its deadline" : undefined),
-			);
+			await ports.status.settle(id, failure);
 		}
 	}
 }

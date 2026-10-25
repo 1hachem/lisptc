@@ -381,11 +381,91 @@ export function streamTurn(
 		},
 	});
 
-	return new Response(body, {
-		headers: {
-			"content-type": "text/event-stream; charset=utf-8",
-			"cache-control": "no-cache, no-transform",
-			connection: "keep-alive",
-		},
-	});
+	return new Response(body, { headers: SSE_HEADERS });
+}
+
+export type ThreadState = "running" | "idle" | "waiting" | "errored";
+
+export type ThreadEvent =
+	| { readonly type: "wire"; readonly chunk: Uint8Array }
+	| { readonly type: "relayed"; readonly message: WireMessage }
+	| {
+			readonly type: "status";
+			readonly status: ThreadState;
+			readonly failure?: string;
+	  };
+
+const SSE_HEADERS = {
+	"content-type": "text/event-stream; charset=utf-8",
+	"cache-control": "no-cache, no-transform",
+	connection: "keep-alive",
+};
+
+type Client = (chunk: Uint8Array) => boolean;
+
+export class Watchers {
+	private readonly clients = new Set<Client>();
+	private turn: Uint8Array[] = [];
+	private status: Uint8Array = sse("status", { status: "idle" });
+
+	get size(): number {
+		return this.clients.size;
+	}
+
+	begin(): void {
+		this.turn = [];
+	}
+
+	publish(event: ThreadEvent): void {
+		const chunk = this.encode(event);
+		for (const client of this.clients)
+			if (!client(chunk)) this.clients.delete(client);
+	}
+
+	attach(signal?: AbortSignal): Response {
+		let detach = () => {};
+		const body = new ReadableStream<Uint8Array>({
+			start: (controller) => {
+				const client: Client = (chunk) => {
+					try {
+						controller.enqueue(chunk);
+						return true;
+					} catch {
+						return false;
+					}
+				};
+				detach = () => {
+					this.clients.delete(client);
+					try {
+						controller.close();
+					} catch {}
+				};
+				if (signal?.aborted) return detach();
+				signal?.addEventListener("abort", detach, { once: true });
+				client(this.status);
+				for (const chunk of this.turn) client(chunk);
+				this.clients.add(client);
+			},
+			cancel: () => detach(),
+		});
+		return new Response(body, { headers: SSE_HEADERS });
+	}
+
+	private encode(event: ThreadEvent): Uint8Array {
+		switch (event.type) {
+			case "wire":
+				this.turn.push(event.chunk);
+				return event.chunk;
+			case "relayed": {
+				const chunk = sse("relayed", event.message);
+				this.turn.push(chunk);
+				return chunk;
+			}
+			case "status": {
+				const { type: _, ...status } = event;
+				this.status = sse("status", status);
+				return this.status;
+			}
+		}
+	}
 }

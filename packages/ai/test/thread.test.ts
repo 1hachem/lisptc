@@ -45,6 +45,7 @@ class World implements TranscriptStore {
 	running = 0;
 	overlapped = false;
 	onAppend: (messages: WireMessage[]) => void = () => {};
+	broken = false;
 
 	async read(): Promise<ChatMessageInput[]> {
 		return this.stored.map((m) => ({ ...m }));
@@ -60,7 +61,10 @@ class World implements TranscriptStore {
 	thread(): Thread {
 		return new Thread("t1", {
 			mailbox: new MemoryMailbox(),
-			repl: () => testRepl(),
+			repl: () => {
+				if (this.broken) throw new Error("no repl here");
+				return testRepl();
+			},
 			transcript: this,
 			status: {
 				start: async () => {
@@ -81,6 +85,41 @@ class World implements TranscriptStore {
 function user(id: string, text: string): Envelope {
 	return { kind: "user", id, text, forms: true };
 }
+
+class Watched {
+	private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
+	private readonly decoder = new TextDecoder();
+	text = "";
+
+	constructor(response: Response) {
+		const body = response.body;
+		if (body === null) throw new Error("the watch has no body");
+		this.reader = body.getReader();
+	}
+
+	async until(seen: (text: string) => boolean): Promise<string> {
+		while (!seen(this.text)) {
+			const { done, value } = await this.reader.read();
+			if (done)
+				throw new Error(`the watch ended before it saw enough:\n${this.text}`);
+			this.text += this.decoder.decode(value, { stream: true });
+		}
+		return this.text;
+	}
+
+	async ended(): Promise<boolean> {
+		return (await this.reader.read()).done;
+	}
+}
+
+function statuses(text: string): string[] {
+	return [...text.matchAll(/event: status\ndata: (.*)\n/g)].map(
+		([, data]) => (JSON.parse(data) as { status: string }).status,
+	);
+}
+
+const settledTwice = (text: string) =>
+	statuses(text).filter((status) => status !== "running").length >= 2;
 
 function gated(): { open: () => void; entered: Promise<void> } {
 	let open: () => void = () => {};
@@ -116,7 +155,6 @@ describe("a thread", () => {
 		const second = await thread.post(user("b", "use hex"));
 		gate.open();
 
-		expect(await second.opened).toBeUndefined();
 		expect(await first.ended).toEqual({ answer: "three." });
 		expect(await second.ended).toEqual({ answer: "three." });
 		expect(world.turns).toEqual(["start", "settle"]);
@@ -138,14 +176,6 @@ describe("a thread", () => {
 
 		expect(world.turns).toEqual(["start", "settle", "start", "settle"]);
 		expect(model.calls).toHaveLength(2);
-	});
-
-	test("streams the turn a watched post opens", async () => {
-		const world = new World();
-		const opened = await (
-			await world.thread().post(user("a", "hello"), { watch: true })
-		).opened;
-		expect(await opened?.text()).toContain("event: values");
 	});
 
 	test("never runs an event as lisp", async () => {
@@ -191,5 +221,104 @@ describe("a thread", () => {
 			stopped: "withdrawn before a turn took it",
 		});
 		expect(model.calls).toHaveLength(1);
+	});
+});
+
+describe("a thread's watchers", () => {
+	test("see a turn they did not start", async () => {
+		const world = new World();
+		const thread = world.thread();
+		const watched = new Watched(thread.watch());
+		await (await thread.post(user("a", "hello"))).ended;
+		const text = await watched.until(settledTwice);
+
+		expect(text).toContain("event: values");
+		expect(text).toContain("done.");
+	});
+
+	test("get the turn so far when they attach mid-turn", async () => {
+		const world = new World();
+		const thread = world.thread();
+		const gate = gated();
+		const posted = await thread.post(user("a", "hello"));
+		await gate.entered;
+		const watched = new Watched(thread.watch());
+		const sofar = await watched.until((text) => text.includes("hello"));
+
+		expect(statuses(sofar)).toEqual(["running"]);
+		expect(sofar).toContain("event: values");
+		gate.open();
+		await posted.ended;
+		expect(
+			await watched.until((text) => statuses(text).includes("idle")),
+		).toContain("done.");
+	});
+
+	test("are told each status the thread passes through", async () => {
+		const world = new World();
+		const thread = world.thread();
+		const watched = new Watched(thread.watch());
+		await (await thread.post(user("a", "hello"))).ended;
+		world.broken = true;
+		await (await thread.post(user("b", "again"))).ended;
+		const text = await watched.until((seen) =>
+			statuses(seen).includes("errored"),
+		);
+
+		expect(statuses(text)).toEqual([
+			"idle",
+			"running",
+			"idle",
+			"running",
+			"errored",
+		]);
+		expect(text).toContain("no repl here");
+	});
+
+	test("see a message relayed from another thread", async () => {
+		const world = new World();
+		const thread = world.thread();
+		const watched = new Watched(thread.watch());
+		await (
+			await thread.post({
+				kind: "event",
+				id: "e1",
+				source: "agent:r",
+				text: "found it",
+			})
+		).ended;
+		thread.relay({ id: "ask", type: "tool", content: "agent r is waiting" });
+		const text = await watched.until((seen) =>
+			seen.includes("agent r is waiting"),
+		);
+
+		expect(text).toMatch(
+			/event: relayed\ndata: .*"id":"e1".*"source":"agent:r"/,
+		);
+		expect(text).toMatch(/event: relayed\ndata: .*"id":"ask"/);
+	});
+
+	test("are let go when their signal aborts", async () => {
+		const world = new World();
+		const watching = new AbortController();
+		const watched = new Watched(world.thread().watch(watching.signal));
+		await watched.until((text) => text.includes("idle"));
+		watching.abort();
+		expect(await watched.ended()).toBe(true);
+	});
+});
+
+describe("stopping a thread", () => {
+	test("aborts the turn that runs, and only one that runs", async () => {
+		const world = new World();
+		const thread = world.thread();
+		expect(thread.stop()).toBe(false);
+		const gate = gated();
+		const posted = await thread.post(user("a", "hello"));
+		await gate.entered;
+		expect(thread.stop()).toBe(true);
+		gate.open();
+		expect(await posted.ended).not.toEqual({ answer: "done." });
+		expect(thread.stop()).toBe(false);
 	});
 });
