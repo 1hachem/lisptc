@@ -10,6 +10,8 @@ const ALLOWED = [
 	/^\.agents\/skills\//,
 	/^\.agents\/agents\//,
 	/^\.agents\/plugins\//,
+	/^\.specify\//,
+	/^specs\//,
 ];
 
 function tracked(): string[] {
@@ -49,10 +51,11 @@ console.error(
 	"This repo keeps no design notes: the code is the only source of",
 );
 console.error("truth. A constraint worth keeping goes in a name, a type or a");
-console.error("test. Only a README.md, an AGENTS.md, .github/ and");
+console.error("test. Only a README.md, an AGENTS.md, .github/, the spec kit");
 console.error(
-	"the skills, agents and plugins under .agents/ or .claude/ may be markdown. Run",
+	"under .specify/ and specs/, and the skills, agents and plugins under .agents/",
 );
+console.error("or .claude/ may be markdown. Run");
 console.error("`pnpm fix:docs` to delete them, or widen");
 console.error(
 	"ALLOWED in scripts/check-docs.ts if the repo really gained one.",
