@@ -192,7 +192,7 @@ export class Thread {
 	}
 
 	private taken(envelope: Envelope): void {
-		if (envelope.kind === "event")
+		if (envelope.kind === "event" && envelope.replyTo !== undefined)
 			this.relay(systemEventMessage(envelope, envelope.id));
 	}
 

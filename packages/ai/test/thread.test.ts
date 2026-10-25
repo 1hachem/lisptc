@@ -296,6 +296,15 @@ describe("a thread's watchers", () => {
 				id: "e1",
 				source: "agent:r",
 				text: "found it",
+				replyTo: "r",
+			})
+		).ended;
+		await (
+			await thread.post({
+				kind: "event",
+				id: "e2",
+				source: "permissions/decide",
+				text: "decided here",
 			})
 		).ended;
 		thread.relay({ id: "ask", type: "tool", content: "agent r is waiting" });
@@ -307,6 +316,7 @@ describe("a thread's watchers", () => {
 			/event: relayed\ndata: .*"id":"e1".*"source":"agent:r"/,
 		);
 		expect(text).toMatch(/event: relayed\ndata: .*"id":"ask"/);
+		expect(text).not.toMatch(/event: relayed\ndata: .*"id":"e2"/);
 	});
 
 	test("are let go when their signal aborts", async () => {

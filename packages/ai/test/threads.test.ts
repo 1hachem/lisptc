@@ -251,4 +251,61 @@ describe("a thread's budget", () => {
 			stopped: expect.stringContaining("out of steps"),
 		});
 	});
+
+	test("surface a grandchild's ask in the root and carry its answer back down", async () => {
+		const world = new World();
+		family(world);
+		world.extensions = [holding()];
+		model.script = ["(wait-for-human)"];
+		const threads = world.threads();
+		const job = await threads.ask("grand", user("dig"), { replyTo: "child" });
+		const finished = threads.wait(job);
+		const asked = () =>
+			(world.stored.get("root") ?? []).find(
+				(m) => m.additional_kwargs?.thread === "grand",
+			);
+		await vi.waitFor(() => expect(asked()).toBeDefined());
+		expect(asked()?.content).toBe("agent grand is waiting on you");
+		expect(threads.state(job)).toMatchObject({ state: "held" });
+
+		const answered = await threads.answer("root", "approve", {}, asked()?.id);
+
+		expect(answered).toMatchObject({
+			error: false,
+			message: "approved, carry on",
+		});
+		expect(await finished).toEqual({ answer: "done." });
+		expect(world.heard("grand", "approve")).toBe(true);
+		expect(world.heard("root", "approve")).toBe(false);
+	});
+
+	test("refuse an answer stamped with a thread outside the caller's tree", async () => {
+		const world = new World();
+		family(world);
+		world.lineages.set("stranger", { parent: "elsewhere" });
+		world.stored.set("root", [
+			{
+				id: "ask-x",
+				type: "tool",
+				content: "agent stranger is waiting on you",
+				additional_kwargs: { thread: "stranger" },
+			},
+		]);
+		const threads = world.threads();
+
+		const answered = await threads.answer("root", "approve", {}, "ask-x");
+
+		expect(answered.error).toBe(true);
+		expect(world.opened).not.toContain("stranger");
+	});
+
+	test("post an unstamped answer's follow-up to the caller's own thread", async () => {
+		const world = new World();
+		world.extensions = [holding()];
+		const threads = world.threads();
+
+		await threads.answer("root", "approve", {});
+
+		await vi.waitFor(() => expect(world.heard("root", "approve")).toBe(true));
+	});
 });

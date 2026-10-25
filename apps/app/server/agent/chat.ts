@@ -11,7 +11,6 @@ import {
 	post,
 	spawn,
 	stop as stopThread,
-	threads,
 	wait,
 	watch as watchThread,
 	withdraw as withdrawPost,
@@ -101,7 +100,7 @@ export const stop = {
 	}: Authed<z.infer<typeof chatOnlySchema>>): Promise<Response> => {
 		const { chatId } = context.body;
 		await convexAs(context.session).query(api.chats.get, { chatId });
-		const stopped = stopThread(chatId);
+		const stopped = await stopThread(chatId);
 		return Response.json({ stopped }, { status: stopped ? 200 : 409 });
 	},
 };
@@ -124,7 +123,6 @@ serveTurns({
 		return await wait(job, signal);
 	},
 	spawn,
-	source: (chatId) => ({ repls: threads, threadId: chatId }),
 });
 
 export const steer = {

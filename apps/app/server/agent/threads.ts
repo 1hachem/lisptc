@@ -6,7 +6,7 @@ import {
 	type PostOptions,
 	Threads,
 	type TurnOutcome,
-	type WireMessage,
+	type UiActionResult,
 } from "@repo/ai";
 import { inProcessJobs } from "@repo/backend/agent-repl";
 import type { Id } from "@repo/backend/dataModel";
@@ -24,7 +24,7 @@ const host: ThreadHost = new ThreadHost({
 	server: convexAsServer,
 	actAs: convexActingAs,
 	jobs: inProcessJobs((workspaceId, chatId) =>
-		subAgents(host, relay)(workspaceId, chatId),
+		subAgents(host)(workspaceId, chatId),
 	),
 });
 
@@ -79,12 +79,17 @@ export function watch(chatId: Id<"chats">, signal: AbortSignal): Response {
 	return threads.get(chatId).watch(signal);
 }
 
-export function stop(chatId: Id<"chats">): boolean {
-	return threads.get(chatId).stop();
+export function stop(chatId: Id<"chats">): Promise<boolean> {
+	return threads.cancel(chatId);
 }
 
-function relay(chatId: Id<"chats">, message: WireMessage): void {
-	threads.get(chatId).relay(message);
+export function answer(
+	chatId: Id<"chats">,
+	action: string,
+	values: Record<string, unknown>,
+	ask?: string,
+): Promise<UiActionResult> {
+	return threads.answer(chatId, action, values, ask);
 }
 
 export function withdraw(chatId: Id<"chats">, id: string): Promise<boolean> {

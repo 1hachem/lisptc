@@ -1,9 +1,12 @@
+import type { StepAnnotations } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
+import { envelopeOf } from "@repo/shared/messages";
 import { Budget, type Limits } from "./budget.ts";
 import type { Envelope } from "./mailbox.ts";
-import type { TurnOutcome } from "./stream.ts";
+import type { TurnOutcome, WireMessage } from "./stream.ts";
 import { type PostOptions, Thread, type ThreadPorts } from "./thread.ts";
+import { type UiActionResult, uiActionOn } from "./ui-action.ts";
 
 export interface Lineage {
 	readonly parent?: string;
@@ -47,7 +50,7 @@ interface Live {
 
 interface Job {
 	readonly thread: string;
-	readonly envelope: string;
+	envelope: string;
 	readonly replyTo?: string;
 	state: JobState;
 	outcome?: TurnOutcome;
@@ -55,6 +58,13 @@ interface Job {
 }
 
 const LOST: TurnOutcome = { stopped: "lost in a restart" };
+
+const CANCELLED: TurnOutcome = { stopped: "cancelled" };
+
+const OUTSIDE: UiActionResult = {
+	output: "that ask belongs to no thread under this one",
+	error: true,
+};
 
 const MAX_LIVE = 50;
 
@@ -77,6 +87,7 @@ export class Threads {
 	private readonly parents = new Map<string, string | undefined>();
 	private readonly jobs = new Map<string, Job>();
 	private readonly returns = new Map<string, string>();
+	private readonly asking = new Map<string, string>();
 	private readonly maxLive: number;
 	private readonly maxDepth: number;
 
@@ -194,9 +205,79 @@ export class Threads {
 			},
 			{ once: true },
 		);
-		const posted = await this.get(to).post(envelope, options);
-		void posted.ended.then((outcome) => this.settle(id, job, outcome));
+		await this.run(id, job, envelope, options);
 		return id;
+	}
+
+	async answer(
+		root: string,
+		action: string,
+		values: Record<string, unknown>,
+		ask?: string,
+	): Promise<UiActionResult> {
+		const target = ask === undefined ? root : await this.asker(root, ask);
+		if (target === undefined) return OUTSIDE;
+		const result = await uiActionOn(await this.repl(target), action, values);
+		if (result.message !== undefined && !result.error)
+			await this.followUp(target, {
+				kind: "event",
+				id: crypto.randomUUID(),
+				source: action,
+				text: result.message,
+			});
+		return result;
+	}
+
+	private async asker(root: string, ask: string): Promise<string | undefined> {
+		const asked = (await this.host.ports.transcript.read(root)).find(
+			(message) => message.id === ask,
+		);
+		const stamped = envelopeOf(asked?.additional_kwargs).thread;
+		if (stamped === undefined || stamped === root) return root;
+		return (await this.ancestors(stamped)).includes(root) ? stamped : undefined;
+	}
+
+	private async followUp(target: string, envelope: Envelope): Promise<void> {
+		const id = this.asking.get(target);
+		const job = id === undefined ? undefined : this.jobs.get(id);
+		if (id === undefined || job === undefined || job.state !== "held") {
+			await this.get(target).post(envelope);
+			return;
+		}
+		this.asking.delete(target);
+		job.state = "pending";
+		job.envelope = envelope.id;
+		await this.run(id, job, envelope);
+	}
+
+	private async run(
+		id: string,
+		job: Job,
+		envelope: Envelope,
+		options?: PostOptions,
+	): Promise<void> {
+		const posted = await this.get(job.thread).post(envelope, options);
+		void posted.ended
+			.then((outcome) => this.settle(id, job, outcome))
+			.catch((error: unknown) =>
+				console.error(`[ai] job=${id} was not settled:`, error),
+			);
+	}
+
+	private async surface(
+		thread: string,
+		root: string,
+		held: StepAnnotations,
+	): Promise<void> {
+		const { title } = await this.lineage(thread);
+		const message: WireMessage = {
+			id: crypto.randomUUID(),
+			type: "tool",
+			content: `agent ${title ?? thread} is waiting on you`,
+			additional_kwargs: { ...held.output, thread },
+		};
+		await this.host.ports.transcript.append(root, [message]);
+		this.get(root).relay(message);
 	}
 
 	wait(job: string, signal?: AbortSignal): Promise<TurnOutcome> {
@@ -235,15 +316,32 @@ export class Threads {
 		const job = this.jobs.get(id);
 		if (job !== undefined) {
 			if (job.outcome !== undefined) return false;
+			if (job.state === "held") {
+				this.release(job);
+				return true;
+			}
 			job.state = "cancelled";
 			if (await this.get(job.thread).withdraw(job.envelope)) return true;
 			return await this.cancel(job.thread);
 		}
 		const doomed = [id, ...(await this.descendants(id))];
+		const released = doomed.map((threadId) => {
+			const job = this.jobs.get(this.asking.get(threadId) ?? "");
+			if (job === undefined || job.state !== "held") return false;
+			this.release(job);
+			return true;
+		});
 		const cancelled = await Promise.all(
 			doomed.map((threadId) => this.live.get(threadId)?.thread.cancel()),
 		);
-		return cancelled.some((done) => done === true);
+		return [...released, ...cancelled].some((done) => done === true);
+	}
+
+	private release(job: Job): void {
+		this.asking.delete(job.thread);
+		job.state = "cancelled";
+		job.outcome = CANCELLED;
+		job.waiter?.(CANCELLED);
 	}
 
 	private async descendants(threadId: string): Promise<string[]> {
@@ -259,7 +357,20 @@ export class Threads {
 		return below;
 	}
 
-	private settle(id: string, job: Job, outcome: TurnOutcome): void {
+	private async settle(
+		id: string,
+		job: Job,
+		outcome: TurnOutcome,
+	): Promise<void> {
+		if ("held" in outcome && job.state !== "cancelled") {
+			const root = await this.root(job.thread);
+			if (root !== job.thread) {
+				job.state = "held";
+				this.asking.set(job.thread, id);
+				await this.surface(job.thread, root, outcome.held);
+				return;
+			}
+		}
 		job.outcome = outcome;
 		if (job.state !== "cancelled")
 			job.state =

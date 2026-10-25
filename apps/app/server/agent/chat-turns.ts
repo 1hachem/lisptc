@@ -1,5 +1,5 @@
 import type { Notice } from "@repo/agents-extension/ports";
-import type { ReplSource, TurnOutcome } from "@repo/ai";
+import type { TurnOutcome } from "@repo/ai";
 import type { Id } from "@repo/backend/dataModel";
 
 export interface Noticed {
@@ -23,7 +23,6 @@ export interface ChatTurns {
 		parent: Id<"chats">,
 		create: () => Promise<Id<"chats">>,
 	): Promise<Id<"chats">>;
-	source(chatId: Id<"chats">): ReplSource<Id<"chats">>;
 }
 
 let served: ChatTurns | undefined;

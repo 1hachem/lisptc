@@ -12,6 +12,9 @@ const world = vi.hoisted(() => ({
 		options?: PostOptions;
 	}[],
 	failed: false,
+	answered: [] as unknown[][],
+	annotated: [] as unknown[],
+	cancelled: [] as string[],
 }));
 
 vi.mock("../../server/agent/session.ts", async () => {
@@ -26,7 +29,12 @@ vi.mock("../../server/agent/session.ts", async () => {
 });
 
 vi.mock("../../server/agent/convex.ts", () => ({
-	convexAs: () => ({ query: async () => ({}), mutation: async () => {} }),
+	convexAs: () => ({
+		query: async () => ({}),
+		mutation: async (_: unknown, args: unknown) => {
+			world.annotated.push(args);
+		},
+	}),
 }));
 
 vi.mock("../../server/agent/threads.ts", () => ({
@@ -45,20 +53,24 @@ vi.mock("../../server/agent/threads.ts", () => ({
 	},
 	wait: async () => ({ answer: "done." }),
 	withdraw: async () => true,
-}));
-
-vi.mock("@repo/ai", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@repo/ai")>()),
-	runUiAction: async () => ({
-		output: "",
-		error: world.failed,
-		message: NOTE,
-		annotations: {},
-	}),
+	stop: async (chatId: string) => {
+		world.cancelled.push(chatId);
+		return true;
+	},
+	answer: async (...args: unknown[]) => {
+		world.answered.push(args);
+		return {
+			output: "",
+			error: world.failed,
+			message: NOTE,
+			annotations: { decided: true },
+		};
+	},
 }));
 
 let chat: Method;
 let uiAction: Method;
+let stop: Method;
 let chatTurns: typeof import("../../server/agent/chat-turns.ts").chatTurns;
 
 beforeAll(async () => {
@@ -68,7 +80,7 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-	({ turn: chat } = await import("../../server/agent/chat.ts"));
+	({ turn: chat, stop } = await import("../../server/agent/chat.ts"));
 	({ uiAction } = await import("../../server/agent/ui-action.ts"));
 	({ chatTurns } = await import("../../server/agent/chat-turns.ts"));
 });
@@ -76,38 +88,45 @@ beforeAll(async () => {
 beforeEach(() => {
 	world.posted.length = 0;
 	world.failed = false;
+	world.answered.length = 0;
+	world.annotated.length = 0;
+	world.cancelled.length = 0;
 });
 
-const decide = () =>
+const decide = (messageId?: string) =>
 	send(uiAction, {
 		chatId: CHAT,
+		messageId,
 		action: "permissions/decide",
 		values: { id: "r1" },
 	});
 
-describe("the follow-up to a ui action", () => {
-	test("is posted by the server to the chat's thread as an event", async () => {
-		const body = (await (await decide()).json()) as Record<string, unknown>;
+describe("a ui action", () => {
+	test("is answered on the chat's thread tree with the ask it names", async () => {
+		const body = (await (await decide("ask-1")).json()) as Record<
+			string,
+			unknown
+		>;
 		expect(body.message).toBe(NOTE);
-		expect(body.event).toBeUndefined();
-		expect(world.posted).toEqual([
-			{
-				chatId: CHAT,
-				envelope: {
-					kind: "event",
-					id: expect.any(String),
-					source: "permissions/decide",
-					text: NOTE,
-				},
-				options: undefined,
-			},
+		expect(world.answered).toEqual([
+			[CHAT, "permissions/decide", { id: "r1" }, "ask-1"],
 		]);
+		expect(world.annotated).toEqual([
+			{ chatId: CHAT, id: "ask-1", kwargs: { decided: true } },
+		]);
+		expect(world.posted).toEqual([]);
 	});
 
-	test("is not posted when the action failed", async () => {
+	test("annotates nothing when the action failed", async () => {
 		world.failed = true;
-		await decide();
-		expect(world.posted).toEqual([]);
+		await decide("ask-1");
+		expect(world.annotated).toEqual([]);
+	});
+
+	test("cancels the chat's whole tree when the user stops it", async () => {
+		const response = await send(stop, { chatId: CHAT });
+		expect(response.status).toBe(200);
+		expect(world.cancelled).toEqual([CHAT]);
 	});
 
 	test("cannot be sent by the browser as a turn", async () => {
