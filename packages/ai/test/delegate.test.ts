@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { converse, DelegatedAsks } from "../src/delegate.ts";
-import { streamChatResponse, type TurnOutcome } from "../src/stream.ts";
-import { holding, testRepl } from "./helpers.ts";
+import type { TurnOutcome } from "../src/stream.ts";
+import { holding, streamChat, testRepl } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as AgentDelta[][],
@@ -36,7 +36,7 @@ describe("a delegated conversation", () => {
 		const surfaced: unknown[] = [];
 		const reply = async (message: string) => {
 			let outcome: TurnOutcome = { stopped: "never ended" };
-			await streamChatResponse(
+			await streamChat(
 				{ messages: [{ type: "human", content: message }] },
 				{ repl, onOutcome: (ended) => (outcome = ended) },
 			).text();

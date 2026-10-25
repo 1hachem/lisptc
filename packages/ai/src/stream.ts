@@ -5,18 +5,15 @@ import {
 	envelopeOf,
 	type MessageKwargs,
 } from "@repo/shared/messages";
-import type { AgentConfig } from "./agent.ts";
-import type { Steer, SteerInbox } from "./inbox.ts";
 import {
 	isUserPrompt,
 	joinRiding,
 	type TranscriptEntry,
 	withItsResult,
 } from "./repl.ts";
-import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
 import { toolMessage } from "./tool-message.ts";
-import { runAgentTurn, type TurnEvent } from "./turn.ts";
+import type { TurnEvent } from "./turn.ts";
 
 export interface ChatMessageInput {
 	id?: string;
@@ -140,41 +137,27 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	return transcript;
 }
 
-export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
-	config?: AgentConfig;
+export interface TurnStreamOptions {
 	signal?: AbortSignal;
-	identity?: { distinctId?: string; sessionId?: string };
 	onTurn?: (
 		messages: WireMessage[],
 		revised: ReadonlyMap<number, WireMessage>,
 		failure: string | undefined,
 	) => Promise<void> | void;
-	steer?: { inbox: SteerInbox; key: string };
 	quiet?: boolean;
-	runsForms?: boolean;
-	maxSteps?: number;
 	onOutcome?: (outcome: TurnOutcome) => void;
-};
+}
+
+export type TurnRun = (
+	transcript: TranscriptEntry[],
+	received: Annotations | undefined,
+	signal: AbortSignal,
+) => AsyncIterable<TurnEvent>;
 
 export type TurnOutcome =
 	| { readonly answer: string }
 	| { readonly held: StepAnnotations }
 	| { readonly stopped: string };
-
-function steerLine(steer: ChatStreamOptions["steer"]) {
-	if (steer === undefined)
-		return {
-			open: async () => {},
-			take: async (): Promise<Steer[]> => [],
-			close: async () => {},
-		};
-	const { inbox, key } = steer;
-	return {
-		open: () => inbox.open(key),
-		take: () => inbox.take(key),
-		close: () => inbox.close(key),
-	};
-}
 
 type Of<T extends TurnEvent["type"]> = Extract<TurnEvent, { type: T }>;
 
@@ -212,7 +195,14 @@ class TurnWire {
 			case "delta":
 				return this.delta(event);
 			case "steered":
-				this.wire.push({ type: "human", content: event.content, id: event.id });
+				this.wire.push(
+					event.source === undefined
+						? { type: "human", content: event.content, id: event.id }
+						: systemEventMessage(
+								{ source: event.source, text: event.content },
+								event.id,
+							),
+				);
 				return this.snapshot();
 			case "evaluated":
 				this.wire.push(event.message);
@@ -320,7 +310,7 @@ function carrying(message: WireMessage, text: string): WireMessage {
 }
 
 async function record(
-	onTurn: ChatStreamOptions["onTurn"],
+	onTurn: TurnStreamOptions["onTurn"],
 	turn: TurnWire,
 ): Promise<void> {
 	if (!onTurn) return;
@@ -335,22 +325,12 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-export function streamChatResponse<Id extends string>(
+export function streamTurn(
 	input: ChatInput,
-	options: ChatStreamOptions<Id>,
+	run: TurnRun,
+	options: TurnStreamOptions = {},
 ): Response {
-	const {
-		threadId,
-		config,
-		identity,
-		onTurn,
-		signal,
-		steer,
-		quiet,
-		runsForms,
-		maxSteps,
-		onOutcome,
-	} = options;
+	const { onTurn, signal, quiet, onOutcome } = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
 	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
@@ -369,37 +349,22 @@ export function streamChatResponse<Id extends string>(
 				}
 			};
 			const turn = new TurnWire(input, write);
-			const steering = steerLine(steer);
 
 			try {
-				await steering.open();
 				turn.snapshot();
-				if (!quiet) {
-					const repl = await replFrom(options);
-					for await (const event of runAgentTurn(toTranscript(input), {
-						repl,
-						threadId,
-						config,
-						signal: abort.signal,
-						identity,
-						inbox: steering.take,
-						runsForms,
-						...(maxSteps === undefined ? {} : { maxSteps }),
-						received: received(input),
-					}))
+				if (!quiet)
+					for await (const event of run(
+						toTranscript(input),
+						received(input),
+						abort.signal,
+					))
 						if (!turn.apply(event)) break;
-				}
 			} catch (error) {
 				console.error("[ai] the turn could not run:", error);
 				turn.failure = errorText(error);
 				turn.outcome = { stopped: `failed: ${errorText(error)}` };
 				write(sse("error", { error: "AgentError", message: errorText(error) }));
 			} finally {
-				await steering
-					.close()
-					.catch((error) =>
-						console.error("[ai] the steer inbox did not close:", error),
-					);
 				await record(onTurn, turn);
 				onOutcome?.(turn.outcome);
 				console.log(

@@ -10,20 +10,7 @@ export {
 	type Reply,
 	type Surface,
 } from "./delegate.ts";
-export {
-	type Evaluated,
-	evalUserMessage,
-} from "./eval.ts";
-export {
-	type EventOwner,
-	MemorySystemEventBox,
-	type SystemEventBox,
-} from "./event-box.ts";
-export {
-	MemorySteerInbox,
-	type Steer,
-	type SteerInbox,
-} from "./inbox.ts";
+export { type Envelope, type Mailbox, MemoryMailbox } from "./mailbox.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 export type { ModelOptions, Provider } from "./provider/core.ts";
 export { getProvider, providers } from "./provider/registry.ts";
@@ -38,14 +25,11 @@ export {
 	ReplStore,
 	replFrom,
 } from "./repl-store.ts";
-export {
-	type ChatInput,
-	type ChatMessageInput,
-	type ChatStreamOptions,
-	streamChatResponse,
-	systemEventMessage,
-	type TurnOutcome,
-	type WireMessage,
+export type {
+	ChatInput,
+	ChatMessageInput,
+	TurnOutcome,
+	WireMessage,
 } from "./stream.ts";
 export { renderSystemEvent, type SystemEvent } from "./system-event.ts";
 export {
@@ -55,6 +39,16 @@ export {
 	shutdownTelemetry,
 	withRequestContext,
 } from "./telemetry.ts";
+export {
+	type Posted,
+	type PostOptions,
+	Thread,
+	type ThreadPorts,
+	type ThreadStatus,
+	type TranscriptStore,
+	type TurnSetup,
+} from "./thread.ts";
+export { Threads } from "./threads.ts";
 export {
 	runAgentTurn,
 	type TurnEvent,

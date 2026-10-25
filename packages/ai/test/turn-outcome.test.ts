@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
+import type { TurnOutcome } from "../src/stream.ts";
 import {
 	type ChatStreamOptions,
-	streamChatResponse,
-	type TurnOutcome,
-} from "../src/stream.ts";
-import { holding, testRepl } from "./helpers.ts";
+	holding,
+	streamChat,
+	testRepl,
+} from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as AgentDelta[][],
@@ -41,7 +42,7 @@ async function outcomeOf(
 	options: Partial<ChatStreamOptions> = {},
 ): Promise<TurnOutcome | undefined> {
 	let outcome: TurnOutcome | undefined;
-	const response = streamChatResponse(
+	const response = streamChat(
 		{ messages: [{ type: "human", content: "go" }] },
 		{
 			repl: testRepl(),

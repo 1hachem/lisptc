@@ -11,6 +11,12 @@ import { note } from "@repo/interpreter/topics";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { ReplStore } from "../src/repl-store.ts";
+import {
+	type ChatInput,
+	streamTurn,
+	type TurnStreamOptions,
+} from "../src/stream.ts";
+import { runAgentTurn, type TurnOptions } from "../src/turn.ts";
 
 export function extension(
 	session: (hooks: SessionHooks) => void,
@@ -138,5 +144,21 @@ export function holding(): InterpExtension {
 				);
 			},
 		},
+	);
+}
+
+export type ChatStreamOptions = Omit<TurnOptions, "received"> &
+	TurnStreamOptions;
+
+export function streamChat(
+	input: ChatInput,
+	options: ChatStreamOptions,
+): Response {
+	const { onTurn, quiet, onOutcome, signal, ...turn } = options;
+	return streamTurn(
+		input,
+		(transcript, received, aborted) =>
+			runAgentTurn(transcript, { ...turn, signal: aborted, received }),
+		{ signal, onTurn, quiet, onOutcome },
 	);
 }
