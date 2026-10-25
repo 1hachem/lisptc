@@ -7,7 +7,7 @@ import {
 	GitBranchIcon,
 	HelpCircleIcon,
 	Loading03Icon,
-	StopIcon,
+	StopCircleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
@@ -15,33 +15,43 @@ import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { stopChat, useChatSession } from "../lib/chat.tsx";
-import { usePageHost } from "../lib/page-host.tsx";
+import { requestPanel } from "../lib/panel-requests.ts";
 
 export interface ChildThread {
 	_id: string;
 	title: string;
-	status?: "streaming" | "waiting" | "errored";
+	status?: "streaming" | "waiting" | "errored" | "stopped";
 	failure?: string;
 	job?: boolean;
 }
 
-type ThreadState = "running" | "waiting" | "errored" | "idle";
+type ThreadState = "running" | "waiting" | "errored" | "stopped" | "done";
 
 const STATE_OF: Record<NonNullable<ChildThread["status"]>, ThreadState> = {
 	streaming: "running",
 	waiting: "waiting",
 	errored: "errored",
+	stopped: "stopped",
 };
 
 const ICON_OF: Record<ThreadState, IconSvgElement> = {
 	running: Loading03Icon,
 	waiting: HelpCircleIcon,
 	errored: AlertCircleIcon,
-	idle: CheckmarkCircle02Icon,
+	stopped: StopCircleIcon,
+	done: CheckmarkCircle02Icon,
+};
+
+const TONE_OF: Record<ThreadState, string> = {
+	running: "text-fg",
+	waiting: "text-fg",
+	errored: "text-destructive",
+	stopped: "text-dim",
+	done: "text-dim",
 };
 
 function threadState(thread: ChildThread): ThreadState {
-	return thread.status === undefined ? "idle" : STATE_OF[thread.status];
+	return thread.status === undefined ? "done" : STATE_OF[thread.status];
 }
 
 const LATEST = 3;
@@ -87,7 +97,7 @@ function ThreadRow({
 				data-state={state}
 				title={thread.failure ?? state}
 				onClick={() => onOpen(thread)}
-				className={`flex min-w-0 flex-1 items-center gap-2 text-left hover:text-fg ${state === "errored" ? "text-destructive" : state === "idle" ? "text-dim" : "text-fg"}`}
+				className={`flex min-w-0 flex-1 items-center gap-2 text-left hover:text-fg ${TONE_OF[state]}`}
 			>
 				<HugeiconsIcon
 					icon={ICON_OF[state]}
@@ -108,34 +118,12 @@ function ThreadRow({
 					aria-label={`stop ${name}`}
 					title={`stop ${name}`}
 					onClick={() => onStop(thread)}
-					className="flex-none text-dim hover:text-red"
+					className="flex-none text-red hover:brightness-125"
 				>
-					<HugeiconsIcon icon={StopIcon} className="size-icon-sm" />
+					■
 				</button>
 			)}
 		</li>
-	);
-}
-
-function StopAction({
-	what,
-	label,
-	onClick,
-}: {
-	what: string;
-	label: string;
-	onClick: () => void;
-}) {
-	return (
-		<button
-			type="button"
-			data-child-threads={what}
-			onClick={onClick}
-			className="flex items-center gap-1 text-dim hover:text-red"
-		>
-			<HugeiconsIcon icon={StopIcon} className="size-icon-sm flex-none" />
-			{label}
-		</button>
 	);
 }
 
@@ -143,15 +131,11 @@ export function ChildThreadStrip({
 	threads,
 	onOpen,
 	onStop,
-	mainRunning,
-	onStopMain,
 	onStopAll,
 }: {
 	threads: readonly ChildThread[];
 	onOpen: (thread: ChildThread) => void;
 	onStop: (thread: ChildThread) => void;
-	mainRunning: boolean;
-	onStopMain: () => void;
 	onStopAll: () => void;
 }) {
 	const area = useRef<HTMLDivElement>(null);
@@ -159,10 +143,7 @@ export function ChildThreadStrip({
 	const [expanded, setExpanded] = useState(false);
 	const [opened, setOpened] = useState<boolean | null>(null);
 	if (threads.length === 0) return null;
-	const running = threads.filter(
-		(thread) => thread.status !== undefined,
-	).length;
-	const active = threads.some(isActive);
+	const running = threads.filter(isActive).length;
 	const count = threads.length === 1 ? "1 thread" : `${threads.length} threads`;
 	const hidden = expanded ? 0 : Math.max(0, threads.length - LATEST);
 	const shown = threads.slice(hidden);
@@ -210,17 +191,16 @@ export function ChildThreadStrip({
 				<span className="flex-1">{count}</span>
 				{running > 0 && <span className="tabular-nums">{running} active</span>}
 			</button>
-			{(mainRunning || active) && (
-				<div className="flex items-center gap-3 text-[11px]">
-					{mainRunning && (
-						<StopAction
-							what="stop-main"
-							label="stop main"
-							onClick={onStopMain}
-						/>
-					)}
-					<StopAction what="stop-all" label="stop all" onClick={onStopAll} />
-				</div>
+			{running > 0 && (
+				<button
+					type="button"
+					data-child-threads="stop-all"
+					onClick={onStopAll}
+					className="flex items-center gap-[7px] self-start bg-bg2 px-[9px] py-px text-[11px] text-red hover:brightness-125"
+				>
+					<span>stop all</span>
+					<span className="text-dim">■</span>
+				</button>
 			)}
 			{hidden > 0 && (
 				<button
@@ -247,12 +227,7 @@ export function ChildThreadStrip({
 }
 
 export function ChildThreads({ chatId }: { chatId: Id<"chats"> | null }) {
-	const host = usePageHost();
-	const { mainRunning, stop, stopAll } = useChatSession((state) => ({
-		mainRunning: state.isLoading,
-		stop: state.stop,
-		stopAll: state.stopAll,
-	}));
+	const stopAll = useChatSession((state) => state.stopAll);
 	const { data } = useQuery(
 		convexQuery(api.chats.children, chatId === null ? "skip" : { chatId }),
 	);
@@ -260,11 +235,9 @@ export function ChildThreads({ chatId }: { chatId: Id<"chats"> | null }) {
 		<ChildThreadStrip
 			threads={data ?? []}
 			onOpen={(thread) =>
-				host.show({ kind: "chat", chatId: thread._id, title: thread.title })
+				requestPanel({ kind: "chat", chatId: thread._id, title: thread.title })
 			}
 			onStop={(thread) => stopChat(thread._id, "tree")}
-			mainRunning={mainRunning}
-			onStopMain={stop}
 			onStopAll={stopAll}
 		/>
 	);

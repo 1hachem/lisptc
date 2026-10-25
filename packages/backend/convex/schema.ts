@@ -29,6 +29,7 @@ export const chatStatus = v.union(
 	v.literal("streaming"),
 	v.literal("waiting"),
 	v.literal("errored"),
+	v.literal("stopped"),
 );
 
 function pair<P extends ProviderName, M extends string>(choice: {

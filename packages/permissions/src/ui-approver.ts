@@ -2,7 +2,7 @@ import { type Ask, asking } from "@repo/interpreter/asks";
 import { EvalException } from "@repo/interpreter/errors";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { resolveApproval } from "./approvals.ts";
-import { decided, requested, settled } from "./channel.ts";
+import { decided, lapsed, requested, settled } from "./channel.ts";
 import type { ApprovalRequest, Approvals, Approver, Scope } from "./ports.ts";
 
 export const DECIDE_ACTION = "permissions/decide";
@@ -14,6 +14,8 @@ const DONE = {
 	session: "Allowed for session",
 	once: "Allowed",
 } as const;
+
+const EXPIRED = "Expired";
 
 function approvalAsk(request: ApprovalRequest): Ask {
 	const answer = (approved: boolean, scope: Scope) => ({
@@ -64,12 +66,14 @@ export const uiApprover: Approver = {
 				scope: scopeOf(scope),
 				by: "ui",
 			});
-			if (resolution === undefined)
+			if (resolution === undefined) {
+				lapsed.emit(ctx.interp.channels, { user: id });
 				throw new EvalException(
 					"no such approval request, or it was already decided",
 					id,
 					false,
 				);
+			}
 			settled.emit(ctx.interp.channels, {
 				user: {
 					id,
@@ -84,15 +88,18 @@ export const uiApprover: Approver = {
 				buffer,
 				asking(into, {
 					open: buffer.collect(requested).map(approvalAsk),
-					answered: Object.fromEntries(
-						buffer.collect(settled).map((d) => [
+					answered: Object.fromEntries([
+						...buffer
+							.collect(lapsed)
+							.map((id) => [id, { accepted: false, label: EXPIRED }]),
+						...buffer.collect(settled).map((d) => [
 							d.id,
 							{
 								accepted: d.approved,
 								label: d.approved ? DONE[d.scope] : DONE.denied,
 							},
 						]),
-					),
+					]),
 				}),
 			),
 		);

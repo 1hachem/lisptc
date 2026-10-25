@@ -1464,7 +1464,9 @@ describe("a child chat", () => {
 		await alice.as.mutation(api.chats.spawn, { chatId: child, agent });
 		await expect(
 			alice.as.query(api.chats.children, { chatId }),
-		).resolves.toEqual([{ _id: child, title: "r" }]);
+		).resolves.toEqual([
+			{ _id: child, workspaceId: alice.workspace, title: "r" },
+		]);
 		await expect(
 			bob.as.query(api.chats.children, { chatId }),
 		).rejects.toThrow();
@@ -1570,6 +1572,11 @@ describe("a thread's server functions", () => {
 		expect(
 			(await alice.as.query(api.chats.get, { chatId })).status,
 		).toBeUndefined();
+		await t.mutation(internal.threads.start, { chatId });
+		await t.mutation(internal.threads.settle, { chatId, stopped: true });
+		expect((await alice.as.query(api.chats.get, { chatId })).status).toBe(
+			"stopped",
+		);
 	});
 
 	it("refuses a chat that is gone", async () => {

@@ -84,6 +84,7 @@ export const children = query({
 	returns: v.array(
 		v.object({
 			_id: v.id("chats"),
+			workspaceId: v.id("workspaces"),
 			title: v.string(),
 			status: v.optional(chatStatus),
 			failure: v.optional(v.string()),
@@ -96,8 +97,9 @@ export const children = query({
 			.query("chats")
 			.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
 			.take(MAX_CHATS);
-		return rows.map(({ _id, title, status, failure, agent }) => ({
+		return rows.map(({ _id, workspaceId, title, status, failure, agent }) => ({
 			_id,
+			workspaceId,
 			title,
 			status,
 			failure,
@@ -229,13 +231,21 @@ export const expire = internalMutation({
 export async function settleChat(
 	ctx: MutationCtx,
 	chatId: Id<"chats">,
-	failure: string | undefined,
+	{ failure, stopped }: { failure?: string; stopped?: boolean },
 ): Promise<void> {
 	if (failure !== undefined) {
 		await ctx.db.patch(chatId, {
 			status: "errored",
 			streamingSince: undefined,
 			failure,
+		});
+		return;
+	}
+	if (stopped) {
+		await ctx.db.patch(chatId, {
+			status: "stopped",
+			streamingSince: undefined,
+			failure: undefined,
 		});
 		return;
 	}
@@ -252,7 +262,7 @@ export const settle = mutation({
 	returns: v.null(),
 	handler: async (ctx, { chatId, failure }) => {
 		await requireChat(ctx, chatId);
-		await settleChat(ctx, chatId, failure);
+		await settleChat(ctx, chatId, { failure });
 		return null;
 	},
 });

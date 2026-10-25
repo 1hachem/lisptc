@@ -151,10 +151,10 @@ export class ThreadHost {
 					chatId: asChat(threadId),
 				});
 			},
-			async settle(threadId, failure) {
+			async settle(threadId, ending) {
 				await server.mutation(internal.threads.settle, {
 					chatId: asChat(threadId),
-					failure,
+					...ending,
 				});
 			},
 		};
