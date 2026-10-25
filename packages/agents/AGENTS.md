@@ -27,7 +27,10 @@ need one.
 
 A definition lives in the workspace's sub-agents folder as name.ptc,
 read and written through the source folder port. This package owns its format
-and parses it; no root does.
+and parses it; no root does. Every form that writes one is listed in the
+extension's asks, so a definition is saved only once the user consents unless
+their rules allow it. A sub-agent spawned with a prompt is temporary and writes
+nothing until it is kept.
 
 A sub-agent runs on a thread the runtime owns. Spawning, sending, waiting and
 cancelling go through the agent threads port, and the runtime owns the jobs,

@@ -35,6 +35,10 @@ export const steerRequestSchema = z.object({
 
 export const chatOnlySchema = z.object({ chatId: convexId<"chats">() });
 
+const stopRequestSchema = chatOnlySchema.extend({
+	scope: z.enum(["thread", "tree"]).default("thread"),
+});
+
 const withdrawRequestSchema = steerRequestSchema.pick({
 	chatId: true,
 	id: true,
@@ -85,13 +89,13 @@ export const watch = {
 };
 
 export const stop = {
-	middleware: [...authed, body(chatOnlySchema)] as const,
+	middleware: [...authed, body(stopRequestSchema)] as const,
 	handler: async ({
 		context,
-	}: Authed<z.infer<typeof chatOnlySchema>>): Promise<Response> => {
-		const { chatId } = context.body;
+	}: Authed<z.infer<typeof stopRequestSchema>>): Promise<Response> => {
+		const { chatId, scope } = context.body;
 		await convexAs(context.session).query(api.chats.get, { chatId });
-		const stopped = await stopThread(chatId);
+		const stopped = await stopThread(chatId, scope);
 		return Response.json({ stopped }, { status: stopped ? 200 : 409 });
 	},
 };

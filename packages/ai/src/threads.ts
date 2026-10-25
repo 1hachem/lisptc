@@ -331,7 +331,14 @@ export class Threads {
 			if (await this.get(job.thread).withdraw(job.envelope)) return true;
 			return await this.cancel(job.thread);
 		}
-		const doomed = [id, ...(await this.descendants(id))];
+		return await this.halt([id, ...(await this.descendants(id))]);
+	}
+
+	stop(threadId: string): Promise<boolean> {
+		return this.halt([threadId]);
+	}
+
+	private async halt(doomed: readonly string[]): Promise<boolean> {
 		const released = doomed.map((threadId) => {
 			const job = this.jobs.get(this.asking.get(threadId) ?? "");
 			if (job === undefined || job.state !== "held") return false;

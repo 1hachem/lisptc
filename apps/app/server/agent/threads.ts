@@ -57,8 +57,11 @@ export function watchThread(
 	return threads.watch(chatId, signal);
 }
 
-export function stopThread(chatId: Id<"chats">): Promise<boolean> {
-	return threads.cancel(chatId);
+export function stopThread(
+	chatId: Id<"chats">,
+	scope: "thread" | "tree",
+): Promise<boolean> {
+	return scope === "tree" ? threads.cancel(chatId) : threads.stop(chatId);
 }
 
 export function answer(

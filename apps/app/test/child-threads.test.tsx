@@ -7,6 +7,11 @@ import {
 	ChildThreadStrip,
 } from "../src/components/child-threads.tsx";
 
+vi.mock("../src/lib/chat.tsx", () => ({
+	stopChat: vi.fn(),
+	useChatSession: vi.fn(),
+}));
+
 beforeAll(() => {
 	(
 		globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -20,16 +25,37 @@ afterEach(() => {
 	document.body.replaceChildren();
 });
 
-function mount(threads: ChildThread[], onOpen = vi.fn()) {
+function mount(
+	threads: ChildThread[],
+	{
+		onOpen = vi.fn(),
+		onStop = vi.fn(),
+		mainRunning = false,
+		onStopMain = vi.fn(),
+		onStopAll = vi.fn(),
+	} = {},
+) {
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
 	roots.push(root);
 	act(() =>
-		root.render(<ChildThreadStrip threads={threads} onOpen={onOpen} />),
+		root.render(
+			<ChildThreadStrip
+				threads={threads}
+				onOpen={onOpen}
+				onStop={onStop}
+				mainRunning={mainRunning}
+				onStopMain={onStopMain}
+				onStopAll={onStopAll}
+			/>,
+		),
 	);
 	return host;
 }
+
+const control = (host: HTMLElement, name: string) =>
+	host.querySelector<HTMLButtonElement>(`[data-child-threads=${name}]`);
 
 const THREADS: ChildThread[] = [
 	{ _id: "a", title: "researcher", status: "streaming" },
@@ -38,7 +64,7 @@ const THREADS: ChildThread[] = [
 ];
 
 const rows = (host: HTMLElement) => [
-	...host.querySelectorAll<HTMLButtonElement>("li button"),
+	...host.querySelectorAll<HTMLButtonElement>("li button[data-state]"),
 ];
 
 describe("child threads", () => {
@@ -71,7 +97,7 @@ describe("child threads", () => {
 
 	it("opens the child it was clicked on", () => {
 		const onOpen = vi.fn();
-		const host = mount(THREADS, onOpen);
+		const host = mount(THREADS, { onOpen });
 		act(() => rows(host)[1].click());
 		expect(onOpen).toHaveBeenCalledWith(THREADS[1]);
 	});
@@ -111,5 +137,42 @@ describe("child threads", () => {
 		expect(chip?.textContent).toBe("3/3");
 		act(() => chip?.click());
 		expect(rows(host)).toHaveLength(3);
+	});
+
+	it("stops one active child from its row, and offers no stop on a settled one", () => {
+		const onStop = vi.fn();
+		const host = mount(THREADS, { onStop });
+		const stops = [
+			...host.querySelectorAll<HTMLButtonElement>("[data-child-threads=stop]"),
+		];
+		expect(stops.map((b) => b.getAttribute("aria-label"))).toEqual([
+			"stop researcher",
+			"stop reviewer",
+		]);
+		act(() => stops[1].click());
+		expect(onStop).toHaveBeenCalledWith(THREADS[1]);
+	});
+
+	it("stops the main agent alone or everything, while something runs", () => {
+		const onStopMain = vi.fn();
+		const onStopAll = vi.fn();
+		const host = mount(THREADS, { mainRunning: true, onStopMain, onStopAll });
+		act(() => control(host, "stop-main")?.click());
+		expect(onStopMain).toHaveBeenCalledOnce();
+		expect(onStopAll).not.toHaveBeenCalled();
+		act(() => control(host, "stop-all")?.click());
+		expect(onStopAll).toHaveBeenCalledOnce();
+	});
+
+	it("offers stop all without stop main when only children run", () => {
+		const host = mount(THREADS);
+		expect(control(host, "stop-main")).toBeNull();
+		expect(control(host, "stop-all")).not.toBeNull();
+	});
+
+	it("offers no stop at all once everything settled", () => {
+		const host = mount([{ _id: "d", title: "done" }]);
+		expect(control(host, "stop-all")).toBeNull();
+		expect(control(host, "stop")).toBeNull();
 	});
 });
