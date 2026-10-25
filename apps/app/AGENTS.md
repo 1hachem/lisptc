@@ -101,7 +101,7 @@ and that extension does not expose fails the rule.
 ## Tests
 
 `test/` holds them, under happy-dom. `test/chat-turns.test.ts` and
-`test/chat-transport.test.ts` are where the turn shaping and the stream contract
+`test/chat-watch.test.ts` are where the turn shaping and the stream contract
 are pinned. `test/agent/` covers the server: `chat-request.test.ts` pins the
 request envelope and `session.test.ts` the token path. A test there runs a handler
 through its whole middleware chain with `serve` from `test/helpers.ts`, never
