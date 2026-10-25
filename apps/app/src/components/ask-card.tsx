@@ -105,6 +105,28 @@ function useLinkReturn(
 	}, [awaited, open]);
 }
 
+function answerState(mutation: {
+	data?: { ok: true } | { ok: false; error: string };
+	error: unknown;
+	isError: boolean;
+	variables?: AskChoice;
+}) {
+	const refused =
+		mutation.data && !mutation.data.ok
+			? `${mutation.data.error}; ask again to get a new request`
+			: undefined;
+	const failure = mutation.error
+		? mutation.error instanceof Error
+			? mutation.error.message
+			: String(mutation.error)
+		: undefined;
+	const chosen: Answered | undefined =
+		mutation.variables && !mutation.isError && !refused
+			? { accepted: mutation.variables.accepts, label: mutation.variables.done }
+			: undefined;
+	return { refused, failure, chosen };
+}
+
 export function AskCard({
 	ask,
 	messageId,
@@ -149,19 +171,12 @@ export function AskCard({
 			if (!outcome.ok && context) rollback(context.snapshot);
 		},
 	});
-	const refused =
-		mutation.data && !mutation.data.ok
-			? `${mutation.data.error}; ask again to get a new request`
-			: undefined;
-	const failure = mutation.error
-		? mutation.error instanceof Error
-			? mutation.error.message
-			: String(mutation.error)
-		: undefined;
+	const { refused, failure, chosen } = answerState(mutation);
+	const shown = answered ?? chosen;
 	const approval: ConfirmationApproval =
-		answered === undefined || refused
+		shown === undefined || refused
 			? { id: ask.id }
-			: { id: ask.id, approved: answered.accepted };
+			: { id: ask.id, approved: shown.accepted };
 	const open = approval.approved === undefined && !refused;
 
 	const answer = (choice: AskChoice) => {
@@ -208,13 +223,13 @@ export function AskCard({
 				<ConfirmationAccepted>
 					<span className="flex items-center gap-1 text-green">
 						<HugeiconsIcon icon={CheckmarkCircle02Icon} size={12} />
-						{answered?.label}
+						{shown?.label}
 					</span>
 				</ConfirmationAccepted>
 				<ConfirmationRejected>
 					<span className="flex items-center gap-1 text-red">
 						<HugeiconsIcon icon={Cancel01Icon} size={12} />
-						{answered?.label}
+						{shown?.label}
 					</span>
 				</ConfirmationRejected>
 				{refused && <span className="block text-red">{refused}</span>}

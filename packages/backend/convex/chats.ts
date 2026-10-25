@@ -84,6 +84,7 @@ export const children = query({
 	returns: v.array(
 		v.object({
 			_id: v.id("chats"),
+			workspaceId: v.id("workspaces"),
 			title: v.string(),
 			status: v.optional(chatStatus),
 			failure: v.optional(v.string()),
@@ -95,8 +96,9 @@ export const children = query({
 			.query("chats")
 			.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
 			.take(MAX_CHATS);
-		return rows.map(({ _id, title, status, failure }) => ({
+		return rows.map(({ _id, workspaceId, title, status, failure }) => ({
 			_id,
+			workspaceId,
 			title,
 			status,
 			failure,

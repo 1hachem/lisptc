@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 import type { OpenFile } from "../lib/files.ts";
-import { OnLeadChat } from "../lib/lead-chat.tsx";
-import { ChatComposer } from "./chat-composer.tsx";
 import { LispSource } from "./lisp-text.tsx";
 
 const LAYOUT = {
@@ -38,36 +36,27 @@ export function FileView({
 	actions,
 	body,
 	fill = false,
-	blocked,
 }: {
 	file: OpenFile | undefined;
 	missing?: string;
 	actions?: ReactNode;
 	body?: ReactNode;
 	fill?: boolean;
-	blocked?: string;
 }) {
 	const layout = fill ? LAYOUT.fill : LAYOUT.scroll;
 	return (
-		<>
+		<div
+			className={`min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] px-8 pt-6 pb-7 ${layout.outer}`}
+		>
 			<div
-				className={`min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] px-8 pt-6 ${layout.outer}`}
+				className={`mx-auto flex w-full max-w-[680px] flex-col gap-3 ${layout.inner}`}
 			>
-				<div
-					className={`mx-auto flex w-full max-w-[680px] flex-col gap-3 ${layout.inner}`}
-				>
-					<div className="flex items-baseline gap-3 font-mono text-[11.5px] text-dim">
-						<span className="min-w-0 flex-1 truncate">{file?.path ?? ""}</span>
-						{actions}
-					</div>
-					<FileBody file={file} missing={missing} body={body} />
+				<div className="flex items-baseline gap-3 font-mono text-[11.5px] text-dim">
+					<span className="min-w-0 flex-1 truncate">{file?.path ?? ""}</span>
+					{actions}
 				</div>
+				<FileBody file={file} missing={missing} body={body} />
 			</div>
-			<div className="px-8 pb-7">
-				<OnLeadChat>
-					<ChatComposer about={file} blocked={blocked} />
-				</OnLeadChat>
-			</div>
-		</>
+		</div>
 	);
 }

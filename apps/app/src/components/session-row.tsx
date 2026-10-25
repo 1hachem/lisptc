@@ -1,4 +1,4 @@
-import { useConvexMutation } from "@convex-dev/react-query";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import {
 	Alert02Icon,
 	BubbleChatIcon,
@@ -17,6 +17,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@repo/ui";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { abandonChat } from "../lib/chat.tsx";
@@ -35,7 +36,12 @@ const STATUS_ICONS = {
 	{ icon: IconSvgElement; iconClassName: string }
 >;
 
-function statusGlyph(chat: Doc<"chats">) {
+export type SessionChat = Pick<
+	Doc<"chats">,
+	"_id" | "workspaceId" | "title" | "status" | "failure"
+>;
+
+function statusGlyph(chat: SessionChat) {
 	if (chat.status === undefined) return {};
 	if (chat.status === "streaming")
 		return {
@@ -52,7 +58,22 @@ function statusGlyph(chat: Doc<"chats">) {
 const item =
 	"rounded-none px-2.5 py-1 text-[11.5px] text-dim focus:bg-bg2 focus:text-fg";
 
-export function SessionRow({ chat }: { chat: Doc<"chats"> }) {
+function SubAgentRows({ chat, depth }: { chat: SessionChat; depth: number }) {
+	const { data } = useQuery(
+		convexQuery(api.chats.children, { chatId: chat._id }),
+	);
+	return data?.map((child) => (
+		<SessionRow key={child._id} chat={child} depth={depth} />
+	));
+}
+
+export function SessionRow({
+	chat,
+	depth = 1,
+}: {
+	chat: SessionChat;
+	depth?: number;
+}) {
 	const shown = useShown();
 	const { apply } = usePanels();
 	const opens: PanelContent = {
@@ -99,7 +120,7 @@ export function SessionRow({ chat }: { chat: Doc<"chats"> }) {
 				name={chat.title === "" ? "untitled" : chat.title}
 				{...statusGlyph(chat)}
 				selected={shown(opens)}
-				depth={1}
+				depth={depth}
 				onDragStart={dragsAs(opens)}
 				link={(content, className) => (
 					<PanelLink
@@ -162,6 +183,7 @@ export function SessionRow({ chat }: { chat: Doc<"chats"> }) {
 			{failure && (
 				<div className="px-2.5 py-1 text-[11px] text-red">{failure}</div>
 			)}
+			<SubAgentRows chat={chat} depth={depth + 1} />
 		</>
 	);
 }

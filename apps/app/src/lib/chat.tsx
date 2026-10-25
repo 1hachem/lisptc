@@ -634,16 +634,6 @@ export function useChatSession<U>(selector: (state: ChatSession) => U): U {
 	return store(useShallow(selector));
 }
 
-export function ChatStoreProvider({
-	store,
-	children,
-}: {
-	store: ChatStore;
-	children: React.ReactNode;
-}) {
-	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
-}
-
 export function useChatStore(): ChatStore {
 	const store = useContext(ChatContext);
 	if (!store) {

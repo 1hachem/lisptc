@@ -1620,7 +1620,9 @@ describe("a child chat", () => {
 		await alice.as.mutation(api.chats.spawn, { chatId: child, agent });
 		await expect(
 			alice.as.query(api.chats.children, { chatId }),
-		).resolves.toEqual([{ _id: child, title: "r" }]);
+		).resolves.toEqual([
+			{ _id: child, workspaceId: alice.workspace, title: "r" },
+		]);
 		await expect(
 			bob.as.query(api.chats.children, { chatId }),
 		).rejects.toThrow();
