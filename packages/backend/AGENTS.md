@@ -20,7 +20,8 @@ beside them.
 `convex/auth.ts` is where Better Auth is set up against the deployment, and
 where the `users` table and a workspace are kept in step with the auth user.
 `convex/auth.config.ts` and `convex/http.ts` serve it. `convex/convex.config.ts`
-declares the components the deployment uses.
+declares the components the deployment uses, and `convex/migrations.ts` holds
+the migration runner.
 
 `src/` holds what runs outside the deployment against it: the stores a REPL
 talks to. A store here satisfies a port and owns the codec between the row and
@@ -52,8 +53,9 @@ can be wiped. So a schema change replaces the old shape outright. Do not keep a
 legacy validator in a union, a retired value in a literal list, an optional
 field for rows written before it existed, a converter that reads an old row, or
 a migration that moves one. A row the new schema rejects is cleared from the
-dev deployment, never accommodated in code. Once production data exists, this
-rule is replaced here, and not before.
+dev deployment, never accommodated in code. The migration runner stays wired
+into every deploy with an empty series, so it is ready the day it is needed.
+Once production data exists, this rule is replaced here, and not before.
 
 Size limits belong to the data, so they live in `convex/limits.ts` and are
 enforced where a row is written.
