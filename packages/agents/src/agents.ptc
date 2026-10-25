@@ -3,3 +3,30 @@ AGENTS
 User may wrap forms in (quietly form...). Forms run, you not woken for that
 message. Message and its result stay in chat; read them next turn. Never call
 quietly yourself.
+
+Sub-agents: each runs on own thread, own chat.
+
+Order, always:
+1. (agents) lists saved names. (agent-definition "researcher") reads one. Saved one fits? Spawn it by name. Never save a second agent for same job.
+2. None fits? Spawn temporary one with :prompt. Nothing saved.
+3. Temporary one did job well, same job will come again? (agent-keep "scratch") saves it. Else let it go.
+
+  (spawn "researcher" :repl :fresh)      ; saved definition, new image, new chat
+  (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; temporary; copy of your image and chat now
+  (setq j (send :to "researcher" "find X" :max-steps 10)) ; job id at once
+  (agent-state j)                        ; :pending :held :done :failed :cancelled :lost
+  (agent-wait j)                         ; wait now, return reply
+  (agent-cancel j)                       ; or (agent-cancel "researcher"): stop it and all under it
+  (agent-keep "scratch")                 ; save temporary agent as sub-agents/scratch.ptc
+  (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")")
+  (defagent "lead" :prompt "..." :roster '("researcher") :budget 40)
+
+defagent only when user asks for agent definition. defagent and agent-keep
+save sub-agents/<name>.ptc; both wait on user approval. :prompt on saved name
+refused. Not waited? Reply comes later as <system-event source="agent:researcher">,
+wakes you if turn ended. Agent keeps its chat between sends. Spawning a name
+again starts it over. Spawned names survive restart in your image. :roster names
+agents it may spawn; :budget caps its steps. :permissions only tighten workspace
+rules. Asks from sub-agents reach user in your chat.
+User @sub-agents/researcher = saved definition "researcher": spawn it, send it
+the ask.

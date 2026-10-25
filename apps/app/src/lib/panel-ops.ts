@@ -30,6 +30,7 @@ export interface SideTrace {
 
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
+	| { kind: "source"; folder: string; name: string }
 	| { kind: "view"; title: string; node: unknown; chatId?: string }
 	| { kind: "chat"; chatId: string | null; title: string; trace?: SideTrace }
 	| { kind: "page"; page: Page; id?: string; title: string }
@@ -131,6 +132,16 @@ function fileOf(content: Fields): PanelContent | undefined {
 	return { kind: "file", folder: content.folder, name: content.name };
 }
 
+export function sourcePanel(folder: string, name: string): PanelContent {
+	return { kind: "source", folder, name };
+}
+
+function sourceOf(content: Fields): PanelContent | undefined {
+	if (typeof content.folder !== "string" || typeof content.name !== "string")
+		return undefined;
+	return sourcePanel(content.folder, content.name);
+}
+
 function viewOf(content: Fields): PanelContent | undefined {
 	if (typeof content.title !== "string") return undefined;
 	return {
@@ -188,7 +199,14 @@ function pageOf(content: Fields): PanelContent | undefined {
 const CONTENT_OF: Record<
 	PanelContent["kind"],
 	(content: Fields) => PanelContent | undefined
-> = { file: fileOf, view: viewOf, chat: chatOf, page: pageOf, trace: traceOf };
+> = {
+	file: fileOf,
+	source: sourceOf,
+	view: viewOf,
+	chat: chatOf,
+	page: pageOf,
+	trace: traceOf,
+};
 
 function contentOf(value: unknown): PanelContent | undefined {
 	const content = record(value);
@@ -199,7 +217,9 @@ function contentOf(value: unknown): PanelContent | undefined {
 }
 
 export function tabLabel(content: PanelContent): string {
-	return content.kind === "file" ? content.name : content.title;
+	return content.kind === "file" || content.kind === "source"
+		? content.name
+		: content.title;
 }
 
 export const CHAT_MIN_WIDTH = 360;
@@ -218,6 +238,8 @@ function tabId(content: PanelContent): string {
 	switch (content.kind) {
 		case "file":
 			return fileTab(content.folder, content.name);
+		case "source":
+			return `source:${content.folder}/${content.name}`;
 		case "view":
 			return `view:${content.title}`;
 		case "chat":

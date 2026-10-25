@@ -4,16 +4,19 @@ import { openQuestion } from "../lib/question.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ChatComposer } from "./chat-composer.tsx";
 import { ChatView } from "./chat-view.tsx";
+import { ChildThreads } from "./child-threads.tsx";
 import { Greeting } from "./greeting.tsx";
 
 export function Chat() {
 	const fresh = useChatSession((state) => state.fresh);
 	const messages = useChatSession((state) => state.messages);
+	const chatId = useChatSession((state) => state.chatId);
 	const question = useMemo(() => openQuestion(messages), [messages]);
 
 	return (
-		<div data-chat className="flex min-h-0 min-w-0 flex-1 flex-col">
+		<div data-chat className="relative flex min-h-0 min-w-0 flex-1 flex-col">
 			{fresh ? null : <ChatView />}
+			<ChildThreads chatId={chatId} />
 			<div
 				className={
 					fresh

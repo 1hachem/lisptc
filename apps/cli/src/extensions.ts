@@ -1,5 +1,5 @@
 import { agentsExtension } from "@repo/agents-extension";
-import { agentsHost } from "@repo/agents-extension/host";
+import { agentsHostFor } from "@repo/agents-extension/host";
 import { Compactor, compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -37,7 +37,7 @@ export function cliExtensions(): InterpExtension[] {
 		secretsExtension(secretsHostFor({ envFile: true })),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
-		agentsExtension(agentsHost),
+		agentsExtension(agentsHostFor()),
 		intentExtension(intentHost),
 		mcpExtension({
 			...mcpHostFor({ host: new DockerHost(), oauth: new FileOAuthStore() }),
@@ -61,7 +61,7 @@ export function sessionExtensions(): InterpExtension[] {
 		secretsExtension(secretsHost),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
-		agentsExtension(agentsHost),
+		agentsExtension(agentsHostFor()),
 		intentExtension(intentHost),
 		mcpExtension({
 			...mcpHostFor({

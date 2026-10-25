@@ -49,10 +49,10 @@ import {
 } from "./file-folder.tsx";
 import { FileMenu } from "./file-menu.tsx";
 import { linkTo, useShown } from "./panel-link.tsx";
+import { SourceFolder } from "./source-folder.tsx";
 import { Empty, type FolderState, Listing } from "./tree-listing.tsx";
 
 const PLACEHOLDERS = [
-	"sub-agents",
 	"triggers",
 	"tasks",
 	"ui",
@@ -288,7 +288,13 @@ export function WorkspaceTree({
 			/>
 		),
 		bin: () => <BinFolder workspaceId={workspaceId} folder={folder("bin")} />,
-		"sub-agents": placeholder("sub-agents"),
+		"sub-agents": () => (
+			<SourceFolder
+				workspaceId={workspaceId}
+				folder={folder("sub-agents")}
+				empty="no sub-agents yet"
+			/>
+		),
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),
 		ui: placeholder("ui"),

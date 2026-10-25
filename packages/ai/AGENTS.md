@@ -19,8 +19,14 @@ side, and `src/turn-telemetry.ts` lays it over the turn's chains as their
 outermost layer, so no hook can drop a trace and the loop names no capture.
 `src/ui-action.ts` runs an action the browser sent back.
 
-`src/repl-store.ts` keeps a REPL per thread. It builds none, so what a REPL
-carries is decided by whoever constructed the store.
+`src/thread.ts` is the actor a conversation runs in, and `src/mailbox.ts` is
+what reaches it. `src/threads.ts` supervises them: it opens a thread through
+its host, evicts an idle one, and keeps each thread's lineage, its jobs and its
+REPL. `src/budget.ts` is what a thread may still spend, billed to every
+ancestor.
+
+`src/threads.ts` builds no REPL, so what one carries is decided by the host it
+was handed. `src/repl-store.ts` is the shape a caller reads a REPL through.
 
 ## Rules
 
@@ -31,6 +37,19 @@ exceptions is empty. The manifest carries none either: the `runtime` tag denies
 as well as on an import. Do not open one.
 If the loop needs something an extension knows, it arrives as an annotation or
 through a slot, and the way to add it is in `packages/interpreter/AGENTS.md`.
+
+**A turn starts from a post, never from a request.** Everything that reaches
+a conversation, a message, a steer, a follow-up or a notice, is posted to its
+thread. The thread runs one turn at a time, and what arrives while one runs
+reaches it at the next step. Only the thread calls the loop, and `check:arch`
+fails on any other caller here or in the app's server. An event posted from
+outside the user never runs as Lisp. What the thread writes or reads outside
+the process goes through a port it declares, and the carrier satisfies it.
+
+**A thread never runs past what its parent has left.** A child's budget is
+sliced from its parent's, a spawn past the depth cap is refused, and a cancel
+reaches every descendant. A running thread, and one that holds a paused step,
+is never evicted.
 
 **The turn is handed a REPL, it never builds one.** Every entry point here
 takes one, or the store and the thread to draw one from. The extensions in it,

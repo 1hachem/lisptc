@@ -16,6 +16,10 @@ describe("panel paths", () => {
 			"attachments/a.png",
 		],
 		[
+			{ kind: "source", folder: "sub-agents", name: "researcher.ptc" },
+			"sub-agents/researcher.ptc",
+		],
+		[
 			{ kind: "page", page: "memory", id: "tone", title: "memories/tone" },
 			"memories/tone",
 		],

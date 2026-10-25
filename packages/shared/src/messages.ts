@@ -72,6 +72,7 @@ export const messageEnvelope = z.object({
 	meta: lenient(messageMeta),
 	source: lenient(z.string()),
 	quiet: lenient(z.literal(true)),
+	thread: lenient(z.string()),
 });
 
 export type MessageEnvelope = z.infer<typeof messageEnvelope>;

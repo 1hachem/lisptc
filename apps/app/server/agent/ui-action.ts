@@ -1,13 +1,12 @@
-import { runUiAction, type UiActionResult } from "@repo/ai";
+import type { UiActionResult } from "@repo/ai";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { z } from "zod";
 import { body } from "./body.ts";
 import { convexAs } from "./convex.ts";
-import { ticket } from "./events.ts";
 import { convexId } from "./ids.ts";
-import { repls } from "./repls.ts";
 import { type Authed, authed } from "./session.ts";
+import { answer } from "./threads.ts";
 
 const uiActionSchema = z.object({
 	chatId: convexId<"chats">(),
@@ -34,20 +33,13 @@ export const uiAction = {
 		const { chatId, messageId, action, values } = context.body;
 		const convex = convexAs(context.session);
 		await convex.query(api.chats.get, { chatId });
-		const result = await runUiAction(repls, chatId, action, values ?? {});
+		const result = await answer(chatId, action, values ?? {}, messageId);
 		const { annotations, ...reply } = result;
 		if (messageId !== undefined && !result.error)
 			await annotateMessage(convex, chatId, messageId, annotations);
-		const event =
-			result.message === undefined || result.error
-				? undefined
-				: await ticket(
-						{ subject: context.session.subject, chatId },
-						{ source: action, text: result.message },
-					);
 		console.log(
 			`ui action chat=${chatId} action=${action}${result.message ? " sent" : ""}${result.error ? " error" : ""}`,
 		);
-		return Response.json(event === undefined ? reply : { ...reply, event });
+		return Response.json(reply);
 	},
 };

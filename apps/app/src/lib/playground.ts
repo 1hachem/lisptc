@@ -347,6 +347,12 @@ function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
+interface TurnInput {
+	id?: string;
+	message?: string;
+	event?: { token: string };
+}
+
 interface Ticket {
 	messageId: string;
 	askId: string;
@@ -361,16 +367,39 @@ export class MockAgent {
 	private readonly listeners = new Set<() => void>();
 	private queued: string | undefined;
 	private pending: Scenario["next"];
+	private readonly followers = new Set<(turn: Response) => void>();
+	private halting: AbortController | undefined;
 
 	queue(id: string): void {
 		this.queued = id;
 	}
 
 	reset(): void {
+		this.stop();
 		this.wire = [];
 		this.queued = undefined;
 		this.pending = undefined;
 		this.save();
+	}
+
+	readonly follow = (follower: (turn: Response) => void): (() => void) => {
+		this.followers.add(follower);
+		return () => this.followers.delete(follower);
+	};
+
+	readonly stop = (): void => {
+		this.halting?.abort();
+		this.halting = undefined;
+	};
+
+	private begin(input: TurnInput): void {
+		this.stop();
+		const halting = new AbortController();
+		this.halting = halting;
+		const turn = this.turn(input, halting.signal);
+		const followers = [...this.followers];
+		for (const [at, follower] of followers.entries())
+			follower(at === followers.length - 1 ? turn : turn.clone());
 	}
 
 	readonly subscribe = (listener: () => void): (() => void) => {
@@ -393,20 +422,22 @@ export class MockAgent {
 		const body = JSON.parse(String(init?.body ?? "{}"));
 		if (url.endsWith("/api/ui-action")) return this.uiAction(body);
 		if (url.endsWith("/api/chat/steer")) return Response.json({ ok: true });
-		return this.turn(body.input ?? {}, init?.signal ?? undefined);
+		if (url.endsWith("/api/chat/stop")) {
+			this.stop();
+			return Response.json({ stopped: true });
+		}
+		this.begin(body.input ?? {});
+		return Response.json({ accepted: true }, { status: 202 });
 	};
 
-	private turn(
-		input: { message?: string; event?: { token: string } },
-		signal: AbortSignal | undefined,
-	): Response {
+	private turn(input: TurnInput, signal: AbortSignal | undefined): Response {
 		let answer = input.message ?? "";
 		if (input.event) answer = this.answer(JSON.parse(input.event.token));
 		else
 			this.wire.push({
 				type: "human",
 				content: answer,
-				id: crypto.randomUUID(),
+				id: input.id ?? crypto.randomUUID(),
 			});
 
 		this.save();
@@ -484,14 +515,8 @@ export class MockAgent {
 				label: choice.done ?? choice.label,
 				accepted: choice.accepts,
 			};
-			return Response.json({
-				output: "",
-				event: {
-					token: JSON.stringify(ticket),
-					source: "permissions/decide",
-					text: `I answered "${ticket.label}". Carry on.`,
-				},
-			});
+			this.begin({ event: { token: JSON.stringify(ticket) } });
+			return Response.json({ output: "" });
 		}
 		return Response.json({ output: "no such ask", error: true });
 	}

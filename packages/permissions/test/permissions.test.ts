@@ -221,6 +221,47 @@ describe("a form the host asks for", () => {
 	});
 });
 
+describe("a bound the session cannot change", () => {
+	it("denies what the bound denies, though the config allows it", async () => {
+		const s = session(
+			"(permission/allow string-upcase)",
+			undefined,
+			undefined,
+			["(permission/deny string-upcase)"],
+		);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("asks for what the bound asks for", async () => {
+		const s = session("", undefined, undefined, ["(permission/ask string-*)"]);
+		expect((await s.step(UPCASE)).held).toBe(true);
+	});
+
+	it("never loosens what the config denies", async () => {
+		const s = session("(permission/deny string-upcase)", undefined, undefined, [
+			"(permission/allow string-upcase)",
+		]);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("leaves a form it never names to the config", async () => {
+		const s = session("", undefined, undefined, ["(permission/deny string-*)"]);
+		expect((await s.step("(+ 1 2)")).value).toBe("3");
+	});
+
+	it("hides a server's tool the config shows", () => {
+		const s = session("", undefined, undefined, [
+			"(permission/hide-server fx)",
+		]);
+		expect(s.extension.rules.server("fx").access).toBe("hidden");
+	});
+
+	it("stays out of the saved config", async () => {
+		const s = session("", undefined, undefined, ["(permission/deny string-*)"]);
+		expect((await s.step("(permission/list)")).value).toBe("nil");
+	});
+});
+
 describe("evaluating a permissions form", () => {
 	it("asks before any change, even one that tightens the config", async () => {
 		const s = session("");

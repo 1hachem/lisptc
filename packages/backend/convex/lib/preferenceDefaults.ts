@@ -15,7 +15,7 @@ export const DEFAULT_TOGGLES = {
 	},
 } as const satisfies Record<"metadata" | "input", Record<string, boolean>>;
 
-type Toggles = Record<string, boolean>;
+export type Toggles = Record<string, boolean>;
 
 export function withDefaults<
 	T extends {

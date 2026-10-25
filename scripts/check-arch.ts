@@ -121,6 +121,18 @@ const BLIND: BlindRule[] = [
 
 const CARRIERS = ["apps/app/server/agent/"];
 
+interface TurnStarterRule {
+	dir: string;
+	allowed: string[];
+}
+
+const TURN_STARTERS: TurnStarterRule[] = [
+	{ dir: "packages/ai/src/", allowed: ["packages/ai/src/thread.ts"] },
+	{ dir: "apps/app/server/", allowed: [] },
+];
+
+const STARTS_A_TURN = /(?<!function\*?\s*)\brunAgentTurn\s*\(/;
+
 const SNIFFER = /export function (\w+)\([^)]*: InterpExtension[,)]/g;
 
 function isExtensionModule(file: string): boolean {
@@ -319,6 +331,13 @@ const interpreting = CARRIERS.flatMap((dir) =>
 		),
 );
 
+const starters = TURN_STARTERS.flatMap(({ dir, allowed }) =>
+	sources
+		.filter((file) => file.startsWith(dir) && !allowed.includes(file))
+		.filter((file) => STARTS_A_TURN.test(readFileSync(file, "utf8")))
+		.map((file) => ({ file })),
+);
+
 const sniffers = sources.flatMap((file) =>
 	[...readFileSync(file, "utf8").matchAll(SNIFFER)].map((found) => ({
 		file,
@@ -387,7 +406,8 @@ if (
 	blinded.length === 0 &&
 	interpreting.length === 0 &&
 	sniffers.length === 0 &&
-	relays.length === 0
+	relays.length === 0 &&
+	starters.length === 0
 ) {
 	console.log(
 		`No architecture violations in ${RULES.length} manifests, ${sources.length} sources, ${extensionModules.length} extension modules, ${many(DRIVERS.length, "session driver")}, ${many(BLIND.length, "extension-blind tree")} and ${many(CARRIERS.length, "carrier tree")}.`,
@@ -473,6 +493,17 @@ for (const { file, module } of interpreting) {
 	console.error("  extension for types only.");
 }
 
+for (const { file } of starters) {
+	console.error(`${file} calls runAgentTurn`);
+	console.error(
+		"  A turn starts from a post, never from a request. Post an envelope to",
+	);
+	console.error("  the thread, and the thread runs the turn. TURN_STARTERS in");
+	console.error(
+		"  scripts/check-arch.ts names the one file that may start one.",
+	);
+}
+
 for (const { file, name } of sniffers) {
 	console.error(
 		`${file} exports ${name}, which digs a capability out of an extension`,
@@ -512,7 +543,8 @@ const total =
 	blinded.length +
 	interpreting.length +
 	sniffers.length +
-	relays.length;
+	relays.length +
+	starters.length;
 console.error(`${total} forbidden dependenc${total === 1 ? "y" : "ies"}.`);
 console.error("");
 console.error("`turbo boundaries` holds the layer direction; these are the");

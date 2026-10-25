@@ -112,7 +112,7 @@ The extensions, one language surface each. Every one depends on the
 interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
-- `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when.
+- `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when, and the sub-agents it starts.
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
 - `packages/intent` (`@repo/intent-extension`) — what the agent shows the user of its intent: what it does now, its todo, the question it asks.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.

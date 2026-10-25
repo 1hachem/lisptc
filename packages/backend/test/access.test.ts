@@ -1,13 +1,78 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
+import { ACTING_ISSUER } from "../convex/lib/acting.ts";
 import { DEFAULT_TOGGLES } from "../convex/lib/preferenceDefaults.ts";
 import {
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
+	MAX_SOURCE_BYTES,
+	MAX_SPAWN_DEPTH,
 	STREAMING_LEASE_MS,
 } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
+
+describe("a thread acting as its record's owner", () => {
+	it("reaches the owner's workspace with no session behind it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const thread = t.withIdentity({
+			issuer: ACTING_ISSUER,
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		await thread.mutation(api.memories.put, {
+			workspaceId: alice.workspace,
+			memory: {
+				key: "k",
+				body: "v",
+				links: [],
+				score: 0,
+				used: 0,
+				lastUsed: 0,
+			},
+		});
+		expect(
+			await alice.as.query(api.memories.get, {
+				workspaceId: alice.workspace,
+				key: "k",
+			}),
+		).toMatchObject({ body: "v" });
+	});
+
+	it("stays inside the workspace it acts for", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const other = await t.run((ctx) =>
+			ctx.db.insert("workspaces", {
+				ownerId: alice.user,
+				name: "other",
+				slug: "other",
+			}),
+		);
+		const thread = t.withIdentity({
+			issuer: ACTING_ISSUER,
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			thread.query(api.memories.list, { workspaceId: other }),
+		).rejects.toThrow();
+	});
+
+	it("is refused when the issuer is any other", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const forged = t.withIdentity({
+			issuer: "https://elsewhere",
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			forged.query(api.memories.list, { workspaceId: alice.workspace }),
+		).rejects.toThrow();
+	});
+});
 
 describe("repl checkpoint access", () => {
 	it("refuses to open another user's repl", async () => {
@@ -721,6 +786,79 @@ describe("permissions access", () => {
 	});
 });
 
+describe("source folder access", () => {
+	it("keeps a workspace's sources to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const at = {
+			workspaceId: bob.workspace,
+			folder: "sub-agents",
+			name: "researcher.ptc",
+		};
+		await bob.as.mutation(api.sources.put, { ...at, text: "(dig)" });
+		await expect(
+			alice.as.query(api.sources.list, {
+				workspaceId: bob.workspace,
+				folder: "sub-agents",
+			}),
+		).rejects.toThrow();
+		await expect(alice.as.query(api.sources.get, at)).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.sources.put, { ...at, text: "(mine now)" }),
+		).rejects.toThrow();
+		await expect(alice.as.mutation(api.sources.remove, at)).rejects.toThrow();
+		await expect(t.query(api.sources.get, at)).rejects.toThrow();
+		expect(await bob.as.query(api.sources.get, at)).toBe("(dig)");
+	});
+
+	it("holds one source per folder and name, replaced on write", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const at = {
+			workspaceId: alice.workspace,
+			folder: "sub-agents",
+			name: "researcher.ptc",
+		};
+		await alice.as.mutation(api.sources.put, { ...at, text: "(dig)" });
+		await alice.as.mutation(api.sources.put, { ...at, text: "(dig deeper)" });
+		await alice.as.mutation(api.sources.put, {
+			...at,
+			folder: "elsewhere",
+			text: "(other)",
+		});
+		expect(
+			await alice.as.query(api.sources.list, {
+				workspaceId: alice.workspace,
+				folder: "sub-agents",
+			}),
+		).toEqual(["researcher.ptc"]);
+		expect(await alice.as.query(api.sources.get, at)).toBe("(dig deeper)");
+		expect(await alice.as.mutation(api.sources.remove, at)).toBe(true);
+		expect(await alice.as.query(api.sources.get, at)).toBeNull();
+	});
+
+	it("refuses a source past the size limit or with a path in its name", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const at = { workspaceId: alice.workspace, folder: "sub-agents" };
+		await expect(
+			alice.as.mutation(api.sources.put, {
+				...at,
+				name: "big.ptc",
+				text: "x".repeat(MAX_SOURCE_BYTES + 1),
+			}),
+		).rejects.toThrow(/SOURCE_TOO_LARGE/);
+		await expect(
+			alice.as.mutation(api.sources.put, {
+				...at,
+				name: "../escape.ptc",
+				text: "()",
+			}),
+		).rejects.toThrow(/BAD_SOURCE_PATH/);
+	});
+});
+
 describe("secret access", () => {
 	it("refuses listing another user's secrets", async () => {
 		const t = harness();
@@ -994,6 +1132,32 @@ describe("chat listing", () => {
 			workspaceId: alice.workspace,
 		});
 		expect(chats[0]?._id).toBe(fresh);
+	});
+
+	it("keeps a sub-agent's chat out of the list", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "lead",
+		});
+		const child = await alice.as.mutation(api.chats.spawn, {
+			chatId,
+			agent: { name: "r", prompt: "dig", bounds: [] },
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: child,
+			messages: [{ type: "human", content: "find it" }],
+		});
+		const { chats } = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		const found = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			search: "r",
+		});
+		expect(chats.map((c) => c._id)).toEqual([chatId]);
+		expect(found.chats).toEqual([]);
 	});
 
 	it("hands back the same unsent draft however often a new chat is opened", async () => {
@@ -1386,5 +1550,209 @@ describe("bin access", () => {
 		expect(
 			await bob.as.query(api.bin.list, { workspaceId: bob.workspace }),
 		).toHaveLength(1);
+	});
+});
+
+describe("spawning a sub-agent's chat", () => {
+	const agent = {
+		name: "r",
+		prompt: "dig",
+		bounds: ["(permission/deny fs/*)"],
+	};
+
+	it("files it under the chat that spawned it, with its definition", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		expect(
+			await alice.as.query(api.chats.get, { chatId: child }),
+		).toMatchObject({
+			parentChatId: chatId,
+			agent,
+			title: "r",
+			workspaceId: alice.workspace,
+		});
+	});
+
+	it("refuses another user's chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		await expect(
+			alice.as.mutation(api.chats.spawn, { chatId, agent }),
+		).rejects.toThrow();
+	});
+
+	it("refuses to nest deeper than the limit", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		let chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		for (let depth = 0; depth < MAX_SPAWN_DEPTH; depth++)
+			chatId = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		await expect(
+			alice.as.mutation(api.chats.spawn, { chatId, agent }),
+		).rejects.toThrow("SPAWN_TOO_DEEP");
+	});
+});
+
+describe("a child chat", () => {
+	const agent = { name: "r", prompt: "dig", bounds: [] };
+
+	it("lists its children to its root's owner and nobody else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			alice.as.query(api.chats.children, { chatId }),
+		).resolves.toEqual([]);
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		await alice.as.mutation(api.chats.spawn, { chatId: child, agent });
+		await expect(
+			alice.as.query(api.chats.children, { chatId }),
+		).resolves.toEqual([{ _id: child, title: "r" }]);
+		await expect(
+			bob.as.query(api.chats.children, { chatId }),
+		).rejects.toThrow();
+		await expect(
+			bob.as.query(api.chats.children, { chatId: child }),
+		).rejects.toThrow();
+	});
+
+	it("is reachable by its root's owner and nobody else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const grandchild = await alice.as.mutation(api.chats.spawn, {
+			chatId: child,
+			agent,
+		});
+		for (const chatId of [child, grandchild]) {
+			await expect(
+				alice.as.query(api.chats.get, { chatId }),
+			).resolves.toMatchObject({ workspaceId: alice.workspace });
+			await expect(bob.as.query(api.chats.get, { chatId })).rejects.toThrow();
+			await expect(
+				bob.as.query(api.messages.transcript, { chatId }),
+			).rejects.toThrow();
+			await expect(
+				bob.as.mutation(api.chats.spawn, { chatId, agent }),
+			).rejects.toThrow();
+		}
+	});
+
+	it("is kept out of the workspace's chat list", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const { chats } = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(chats.map((chat) => chat._id)).toEqual([chatId]);
+	});
+});
+
+describe("a thread's server functions", () => {
+	const lead = {
+		name: "lead",
+		prompt: "lead",
+		bounds: ["(permission/deny fs/*)"],
+		roster: ["r"],
+		budget: 5,
+	};
+
+	it("records the lineage from the thread up to its root", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await t.mutation(internal.threads.spawn, {
+			chatId,
+			agent: lead,
+		});
+		const record = await t.query(internal.threads.record, { chatId: child });
+		expect(record).toMatchObject({
+			workspaceId: alice.workspace,
+			title: "lead",
+			runsForms: true,
+		});
+		expect(record.lineage).toEqual([{ agent: lead }, {}]);
+	});
+
+	it("writes only the thread's own chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const other = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await t.mutation(internal.threads.append, {
+			chatId,
+			messages: [{ id: "h1", type: "human", content: "hi" }],
+		});
+		await t.mutation(internal.threads.start, { chatId });
+		expect(
+			(await t.query(internal.threads.transcript, { chatId })).map(
+				(m) => m.wireId,
+			),
+		).toEqual(["h1"]);
+		expect(
+			await t.query(internal.threads.transcript, { chatId: other }),
+		).toEqual([]);
+		expect(await alice.as.query(api.chats.get, { chatId })).toMatchObject({
+			status: "streaming",
+		});
+		await t.mutation(internal.threads.settle, { chatId });
+		expect(
+			(await alice.as.query(api.chats.get, { chatId })).status,
+		).toBeUndefined();
+	});
+
+	it("refuses a chat that is gone", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await expect(
+			t.mutation(internal.threads.append, { chatId, messages: [] }),
+		).rejects.toThrow("NOT_FOUND");
+	});
+
+	it("refuses to spawn past the depth cap", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		let chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		for (let depth = 0; depth < MAX_SPAWN_DEPTH; depth++)
+			chatId = await t.mutation(internal.threads.spawn, {
+				chatId,
+				agent: lead,
+			});
+		await expect(
+			t.mutation(internal.threads.spawn, { chatId, agent: lead }),
+		).rejects.toThrow("SPAWN_TOO_DEEP");
 	});
 });

@@ -1,7 +1,3 @@
-import {
-	FetchStreamTransport,
-	useStream,
-} from "@langchain/langgraph-sdk/react";
 import type { Id } from "@repo/backend/dataModel";
 import { Button } from "@repo/ui";
 import {
@@ -23,6 +19,13 @@ import {
 } from "../lib/chat.tsx";
 import { ForkPickerProvider } from "../lib/fork-picker.tsx";
 import { MockAgent, SCENARIOS } from "../lib/playground.ts";
+import {
+	applyWatched,
+	readSse,
+	shownMessages,
+	UNWATCHED,
+	type Watched,
+} from "../lib/watch.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { ChatSurface } from "./chat-surface.tsx";
 import { TraceLines } from "./trace-view.tsx";
@@ -44,16 +47,58 @@ function useMockedFetch(agent: MockAgent) {
 	}, [agent]);
 }
 
+async function played(
+	turn: Response,
+	update: (apply: (watched: Watched) => Watched) => void,
+): Promise<void> {
+	const reader = turn.body?.pipeThrough(new TextDecoderStream()).getReader();
+	if (reader === undefined) return;
+	let buffer = "";
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) return;
+		const { events, rest } = readSse(buffer + value);
+		buffer = rest;
+		update((watched) => events.reduce(applyWatched, watched));
+	}
+}
+
+function useMockWatch(agent: MockAgent): Watched {
+	const [watched, setWatched] = useState<Watched>(UNWATCHED);
+	useEffect(
+		() =>
+			agent.follow((turn) => {
+				setWatched((was) => ({
+					...was,
+					status: "running",
+					failure: undefined,
+				}));
+				played(turn, setWatched)
+					.catch((error: unknown) =>
+						setWatched((was) => ({ ...was, failure: String(error) })),
+					)
+					.finally(() => setWatched((was) => ({ ...was, status: "idle" })));
+			}),
+		[agent],
+	);
+	return watched;
+}
+
 function useMockSession(
 	agent: MockAgent,
 	workspaceId: Id<"workspaces">,
 ): ChatStore {
-	const transport = useMemo(
-		() => new FetchStreamTransport({ apiUrl: "/api/chat", fetch: agent.fetch }),
-		[agent],
+	const watched = useMockWatch(agent);
+	const [pending, setPending] = useState<ChatMessage | null>(null);
+	const streamed = useMemo(() => shownMessages(watched), [watched]);
+	const messages = useMemo(
+		() =>
+			pending === null || streamed.some((m) => m.id === pending.id)
+				? streamed
+				: [...streamed, pending],
+		[streamed, pending],
 	);
-	const stream = useStream({ transport });
-	const messages: ChatMessage[] = stream.messages;
+	const running = watched.status === "running";
 	const storeRef = useRef<ChatStore | null>(null);
 	storeRef.current ??= create<ChatSession>(() => ({
 		messages: [],
@@ -68,19 +113,23 @@ function useMockSession(
 		workspaceId,
 		send: async () => false,
 		sendAbout: async () => false,
-		resume: () => {},
 		stop: () => {},
+		stopAll: () => {},
 		withdraw: () => {},
 		fail: () => {},
 	}));
 	const store = storeRef.current;
 
 	useEffect(() => {
-		const submit = (input: Record<string, unknown>, shown: ChatMessage) => {
-			if (stream.isLoading) return;
-			stream.submit(input, {
-				optimisticValues: { messages: [...messages, shown] },
+		const submit = async (text: string): Promise<boolean> => {
+			if (running) return false;
+			const id = crypto.randomUUID();
+			setPending({ type: "human", content: text, id });
+			await agent.fetch("/api/chat", {
+				method: "POST",
+				body: JSON.stringify({ input: { id, message: text } }),
 			});
+			return true;
 		};
 		const meta = Object.fromEntries(
 			messages.flatMap((m) => {
@@ -88,45 +137,19 @@ function useMockSession(
 				return m.id && found ? [[m.id, found]] : [];
 			}),
 		);
-		const error = stream.error
-			? stream.error instanceof Error
-				? stream.error.message
-				: String(stream.error)
-			: undefined;
 		store.setState({
 			messages,
 			meta,
 			fresh: messages.length === 0,
-			isLoading: stream.isLoading,
+			isLoading: running,
 			workspaceId,
-			error,
-			send: async (text) => {
-				submit(
-					{ message: text },
-					{ type: "human", content: text, id: crypto.randomUUID() },
-				);
-				return true;
-			},
-			sendAbout: async (_file, text) => {
-				submit(
-					{ message: text },
-					{ type: "human", content: text, id: crypto.randomUUID() },
-				);
-				return true;
-			},
-			resume: (event) =>
-				submit(
-					{ event: { token: event.token } },
-					{
-						type: "system",
-						content: event.text,
-						id: crypto.randomUUID(),
-						additional_kwargs: { source: event.source },
-					},
-				),
-			stop: () => void stream.stop(),
+			error: watched.failure,
+			send: (text) => submit(text),
+			sendAbout: (_file, text) => submit(text),
+			stop: agent.stop,
+			stopAll: agent.stop,
 		});
-	}, [store, stream, messages, workspaceId]);
+	}, [store, agent, messages, running, watched.failure, workspaceId]);
 
 	return store;
 }

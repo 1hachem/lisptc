@@ -7,9 +7,9 @@ import {
 	type ModelDelta,
 	type SessionHooks,
 } from "@repo/interpreter/session";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { WireMessage } from "../src/stream.ts";
-import { testRepl } from "./helpers.ts";
+import { streamChat, testRepl } from "./helpers.ts";
 
 const TURNS: ModelDelta[][] = [
 	[{ text: "(progress 1) (pause 250) (progress 2) (pause 250)" }],
@@ -79,15 +79,9 @@ function snapshots(text: string): WireMessage[][] {
 const isLive = (m: WireMessage) => m.id.endsWith(":live");
 
 describe("a step that is still running", () => {
-	let streamChatResponse: typeof import("../src/stream.ts").streamChatResponse;
-
-	beforeAll(async () => {
-		({ streamChatResponse } = await import("../src/stream.ts"));
-	});
-
 	test("shows what it has annotated so far, until its result replaces it, and is never recorded", async () => {
 		const recorded: WireMessage[] = [];
-		const body = await streamChatResponse(
+		const body = await streamChat(
 			{ messages: [{ type: "human", content: "count to two" }] },
 			{
 				repl: testRepl([progressing()]),

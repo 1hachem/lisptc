@@ -89,6 +89,33 @@ describe("removing a chat", () => {
 			alice.as.mutation(api.chats.remove, { chatId }),
 		).rejects.toThrow();
 	});
+	it("takes the sub-agent chats it spawned, and theirs, with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const agent = { name: "r", prompt: "dig", bounds: [] };
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const grandchild = await alice.as.mutation(api.chats.spawn, {
+			chatId: child,
+			agent,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: grandchild,
+			messages: [{ type: "human", content: "hello" }],
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("chats").collect()),
+			...(await ctx.db.query("messages").collect()),
+		]);
+		expect(left).toEqual([]);
+	});
 });
 
 describe("removing a workspace", () => {
@@ -321,6 +348,7 @@ async function remaining(t: TestConvex<typeof schema>) {
 		replLayers: await ctx.db.query("replLayers").collect(),
 		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
+		sources: await ctx.db.query("sources").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
 		permissions: await ctx.db.query("permissions").collect(),
@@ -339,6 +367,7 @@ const nothing = {
 	replLayers: [],
 	replLayerChunks: [],
 	memories: [],
+	sources: [],
 	secrets: [],
 	oauthRecords: [],
 	permissions: [],
@@ -398,9 +427,15 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
+	it("takes its memories, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.sources.put, {
+			workspaceId: alice.workspace,
+			folder: "sub-agents",
+			name: "doomed.ptc",
+			text: "doomed",
+		});
 		await alice.as.mutation(api.readmes.put, {
 			workspaceId: alice.workspace,
 			body: "doomed",

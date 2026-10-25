@@ -15,6 +15,14 @@ export const messageType = v.union(
 	v.literal("tool"),
 );
 
+export const subAgent = v.object({
+	name: v.string(),
+	prompt: v.string(),
+	bounds: v.array(v.string()),
+	roster: v.optional(v.array(v.string())),
+	budget: v.optional(v.number()),
+});
+
 export const chatStatus = v.union(
 	v.literal("streaming"),
 	v.literal("waiting"),
@@ -44,6 +52,11 @@ const panelTab = v.object({
 		v.object({
 			kind: v.literal("file"),
 			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
+			name: v.string(),
+		}),
+		v.object({
+			kind: v.literal("source"),
+			folder: v.string(),
 			name: v.string(),
 		}),
 		v.object({
@@ -153,17 +166,21 @@ export default defineSchema({
 		streamingSince: v.optional(v.number()),
 		failure: v.optional(v.string()),
 		replId: v.optional(v.id("repls")),
+		parentChatId: v.optional(v.id("chats")),
+		agent: v.optional(subAgent),
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_repl", ["replId"])
+		.index("by_parent", ["parentChatId"])
 		.index("by_workspace_live_activity", [
 			"workspaceId",
 			"archivedAt",
+			"parentChatId",
 			"lastMessageAt",
 		])
 		.searchIndex("search_title", {
 			searchField: "title",
-			filterFields: ["workspaceId", "archivedAt"],
+			filterFields: ["workspaceId", "archivedAt", "parentChatId"],
 		}),
 
 	messages: defineTable({
@@ -288,4 +305,11 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	sources: defineTable({
+		workspaceId: v.id("workspaces"),
+		folder: v.string(),
+		name: v.string(),
+		text: v.string(),
+	}).index("by_workspace_folder_name", ["workspaceId", "folder", "name"]),
 });

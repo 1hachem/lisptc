@@ -6,11 +6,10 @@ import {
 	answering,
 	asksKey,
 } from "@repo/interpreter/asks";
-import { type SystemEventTicket, systemEventTicket } from "./system-event.ts";
 import { postUiAction } from "./ui-action.ts";
 
 export type AskOutcome =
-	| { readonly ok: true; readonly event?: SystemEventTicket }
+	| { readonly ok: true }
 	| { readonly ok: false; readonly error: string };
 
 export interface AskTransport {
@@ -33,8 +32,7 @@ export const uiActionTransport: AskTransport = {
 			return { ok: false, error: "this session is no longer live" };
 		const { error, output } = result.response;
 		if (error) return { ok: false, error: output || "the answer was refused" };
-		const event = systemEventTicket(result.response.event);
-		return event === undefined ? { ok: true } : { ok: true, event };
+		return { ok: true };
 	},
 };
 

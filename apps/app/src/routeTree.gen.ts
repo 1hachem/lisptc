@@ -22,6 +22,8 @@ import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$wo
 import { Route as AuthedWorkspaceIdSplatRouteImport } from './routes/_authed/$workspaceId/$'
 import { Route as AuthedDevChatRouteImport } from './routes/_authed/dev.chat'
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
+import { Route as ApiChatStopRouteImport } from './routes/api.chat.stop'
+import { Route as ApiChatWatchRouteImport } from './routes/api.chat.watch'
 import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
 
 const AuthedRoute = AuthedRouteImport.update({
@@ -88,6 +90,16 @@ const ApiChatSteerRoute = ApiChatSteerRouteImport.update({
   path: '/steer',
   getParentRoute: () => ApiChatRoute,
 } as any)
+const ApiChatStopRoute = ApiChatStopRouteImport.update({
+  id: '/stop',
+  path: '/stop',
+  getParentRoute: () => ApiChatRoute,
+} as any)
+const ApiChatWatchRoute = ApiChatWatchRouteImport.update({
+  id: '/watch',
+  path: '/watch',
+  getParentRoute: () => ApiChatRoute,
+} as any)
 const ApiOauthCallbackRoute = ApiOauthCallbackRouteImport.update({
   id: '/api/oauth/callback',
   path: '/api/oauth/callback',
@@ -106,6 +118,8 @@ export interface FileRoutesByFullPath {
   '/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
   '/dev/chat': typeof AuthedDevChatRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
+  '/api/chat/stop': typeof ApiChatStopRoute
+  '/api/chat/watch': typeof ApiChatWatchRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
@@ -120,6 +134,8 @@ export interface FileRoutesByTo {
   '/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
   '/dev/chat': typeof AuthedDevChatRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
+  '/api/chat/stop': typeof ApiChatStopRoute
+  '/api/chat/watch': typeof ApiChatWatchRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
 }
@@ -137,6 +153,8 @@ export interface FileRoutesById {
   '/_authed/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
   '/_authed/dev/chat': typeof AuthedDevChatRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
+  '/api/chat/stop': typeof ApiChatStopRoute
+  '/api/chat/watch': typeof ApiChatWatchRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
@@ -154,6 +172,8 @@ export interface FileRouteTypes {
     | '/$workspaceId/$'
     | '/dev/chat'
     | '/api/chat/steer'
+    | '/api/chat/stop'
+    | '/api/chat/watch'
     | '/api/oauth/callback'
     | '/$workspaceId/'
   fileRoutesByTo: FileRoutesByTo
@@ -168,6 +188,8 @@ export interface FileRouteTypes {
     | '/$workspaceId/$'
     | '/dev/chat'
     | '/api/chat/steer'
+    | '/api/chat/stop'
+    | '/api/chat/watch'
     | '/api/oauth/callback'
     | '/$workspaceId'
   id:
@@ -184,6 +206,8 @@ export interface FileRouteTypes {
     | '/_authed/$workspaceId/$'
     | '/_authed/dev/chat'
     | '/api/chat/steer'
+    | '/api/chat/stop'
+    | '/api/chat/watch'
     | '/api/oauth/callback'
     | '/_authed/$workspaceId/'
   fileRoutesById: FileRoutesById
@@ -292,6 +316,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatSteerRouteImport
       parentRoute: typeof ApiChatRoute
     }
+    '/api/chat/stop': {
+      id: '/api/chat/stop'
+      path: '/stop'
+      fullPath: '/api/chat/stop'
+      preLoaderRoute: typeof ApiChatStopRouteImport
+      parentRoute: typeof ApiChatRoute
+    }
+    '/api/chat/watch': {
+      id: '/api/chat/watch'
+      path: '/watch'
+      fullPath: '/api/chat/watch'
+      preLoaderRoute: typeof ApiChatWatchRouteImport
+      parentRoute: typeof ApiChatRoute
+    }
     '/api/oauth/callback': {
       id: '/api/oauth/callback'
       path: '/api/oauth/callback'
@@ -335,10 +373,14 @@ const AuthedRouteWithChildren =
 
 interface ApiChatRouteChildren {
   ApiChatSteerRoute: typeof ApiChatSteerRoute
+  ApiChatStopRoute: typeof ApiChatStopRoute
+  ApiChatWatchRoute: typeof ApiChatWatchRoute
 }
 
 const ApiChatRouteChildren: ApiChatRouteChildren = {
   ApiChatSteerRoute: ApiChatSteerRoute,
+  ApiChatStopRoute: ApiChatStopRoute,
+  ApiChatWatchRoute: ApiChatWatchRoute,
 }
 
 const ApiChatRouteWithChildren =

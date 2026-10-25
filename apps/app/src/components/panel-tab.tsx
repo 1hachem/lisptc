@@ -14,6 +14,7 @@ import { ClaimLead } from "../lib/lead-chat.tsx";
 import { PageHostProvider } from "../lib/page-host.tsx";
 import {
 	leadChat,
+	type Page,
 	type PanelContent,
 	sideTraceShown,
 } from "../lib/panel-ops.ts";
@@ -34,6 +35,7 @@ import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
 import { ReadmePage } from "./readme-page.tsx";
 import { SettingsPage } from "./settings-page.tsx";
+import { SourcePage } from "./source-page.tsx";
 import { FilePreview } from "./stored-file.tsx";
 import { TraceView } from "./trace-view.tsx";
 
@@ -166,6 +168,23 @@ function ChatTab({
 	);
 }
 
+const PAGE_TABS: Record<
+	Page,
+	(workspaceId: Id<"workspaces">, id: string) => ReactNode
+> = {
+	memory: (workspaceId, id) => (
+		<MemoryPage workspaceId={workspaceId} memoryKey={id} />
+	),
+	permission: (workspaceId, id) => (
+		<PermissionPage workspaceId={workspaceId} rule={Number(id)} />
+	),
+	readme: (workspaceId) => <ReadmePage workspaceId={workspaceId} />,
+	settings: (workspaceId) => <SettingsPage workspaceId={workspaceId} />,
+	preferences: () => <PreferencesPage />,
+	account: () => <AccountPage />,
+	bin: (workspaceId, id) => <BinPage workspaceId={workspaceId} name={id} />,
+};
+
 function PageTab({
 	workspaceId,
 	content,
@@ -173,23 +192,7 @@ function PageTab({
 	workspaceId: Id<"workspaces">;
 	content: Extract<PanelContent, { kind: "page" }>;
 }) {
-	const id = content.id ?? "";
-	switch (content.page) {
-		case "memory":
-			return <MemoryPage workspaceId={workspaceId} memoryKey={id} />;
-		case "permission":
-			return <PermissionPage workspaceId={workspaceId} rule={Number(id)} />;
-		case "readme":
-			return <ReadmePage workspaceId={workspaceId} />;
-		case "settings":
-			return <SettingsPage workspaceId={workspaceId} />;
-		case "preferences":
-			return <PreferencesPage />;
-		case "account":
-			return <AccountPage />;
-		case "bin":
-			return <BinPage workspaceId={workspaceId} name={id} />;
-	}
+	return PAGE_TABS[content.page](workspaceId, content.id ?? "");
 }
 
 function ViewTab({
@@ -260,6 +263,13 @@ export function PanelTab({
 		<PageHostProvider host={host}>
 			{content.kind === "file" && (
 				<FilePreview
+					workspaceId={workspaceId}
+					folder={content.folder}
+					name={content.name}
+				/>
+			)}
+			{content.kind === "source" && (
+				<SourcePage
 					workspaceId={workspaceId}
 					folder={content.folder}
 					name={content.name}
