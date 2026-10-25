@@ -1,6 +1,8 @@
 import { agentsExtension } from "@repo/agents-extension";
 import { agentsHostFor } from "@repo/agents-extension/host";
 import type { Threads } from "@repo/ai";
+import { backgroundExtension } from "@repo/background-extension";
+import { backgroundHostFor, timerSleep } from "@repo/background-extension/host";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -42,6 +44,7 @@ import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
+import { SupervisedBackground } from "./background-threads.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
@@ -138,6 +141,16 @@ export async function workspaceExtensions(
 			store: await ConvexSecretsStore.open(workspaceId, connect),
 		}),
 		promisesExtension(promisesHost),
+		backgroundExtension(
+			backgroundHostFor(
+				supervisor === undefined || chatId === undefined
+					? {}
+					: {
+							jobs: new SupervisedBackground(supervisor, timerSleep),
+							thread: chatId,
+						},
+			),
+		),
 		introspectionExtension(introspectionHost),
 		agents,
 		mcpExtension({

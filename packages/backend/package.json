@@ -41,6 +41,7 @@
     "@convex-dev/migrations": "^0.3.6",
     "@posthog/convex": "^2.1.5",
     "@repo/agents-extension": "workspace:*",
+    "@repo/background-extension": "workspace:*",
     "@repo/ai": "workspace:*",
     "@repo/compaction-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",

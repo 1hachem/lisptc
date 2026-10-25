@@ -1,13 +1,14 @@
-import type {
-	ChatMessageInput,
-	Lineage,
-	Mailbox,
-	ThreadStatus,
-	Threads,
-	ThreadsHost,
-	TranscriptStore,
-	TurnSetup,
-	WireMessage,
+import {
+	type ChatMessageInput,
+	codeRunner,
+	type Lineage,
+	type Mailbox,
+	type ThreadStatus,
+	type Threads,
+	type ThreadsHost,
+	type TranscriptStore,
+	type TurnSetup,
+	type WireMessage,
 } from "@repo/ai";
 import type { Image } from "@repo/interpreter/image";
 import { type ImageStore, MemoryImageStore } from "@repo/repl/image-store";
@@ -34,6 +35,8 @@ export interface ThreadProfile {
 	readonly bounds: readonly string[];
 	readonly roster?: readonly string[];
 	readonly budget?: number;
+	readonly code?: string;
+	readonly deadlineMs?: number;
 }
 
 function narrowed(
@@ -56,9 +59,12 @@ export function profileOf(lineage: RecordLineage): ThreadProfile {
 	const budgets = agents.flatMap(({ budget }) =>
 		budget === undefined ? [] : [budget],
 	);
-	const instructions = lineage[0]?.agent?.prompt;
+	const own = lineage[0]?.agent;
+	const instructions = own?.code === undefined ? own?.prompt : undefined;
 	return {
 		...(instructions === undefined ? {} : { instructions }),
+		...(own?.code === undefined ? {} : { code: own.code }),
+		...(own?.deadlineMs === undefined ? {} : { deadlineMs: own.deadlineMs }),
 		bounds: [...new Set(agents.flatMap((agent) => agent.bounds))],
 		...(lineage.length > MAX_SPAWN_DEPTH
 			? { roster: [] }
@@ -187,7 +193,13 @@ export class ThreadHost {
 					: { instructions: profile.instructions }),
 			},
 			runsForms,
-			deadlineMs: TURN_DEADLINE_MS,
+			deadlineMs: Math.min(
+				TURN_DEADLINE_MS,
+				profile.deadlineMs ?? TURN_DEADLINE_MS,
+			),
+			...(profile.code === undefined
+				? {}
+				: { runner: codeRunner(profile.code) }),
 		};
 	}
 

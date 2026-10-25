@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/background.ts",
     "./host": "./src/background-host.ts",
-    "./ports": "./src/ports.ts"
+    "./ports": "./src/ports.ts",
+    "./contract": "./test/contract.ts"
   },
   "engines": {
     "node": ">=22.6.0"

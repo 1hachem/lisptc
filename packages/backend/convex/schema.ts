@@ -21,6 +21,8 @@ export const subAgent = v.object({
 	bounds: v.array(v.string()),
 	roster: v.optional(v.array(v.string())),
 	budget: v.optional(v.number()),
+	code: v.optional(v.string()),
+	deadlineMs: v.optional(v.number()),
 });
 
 export const chatStatus = v.union(
