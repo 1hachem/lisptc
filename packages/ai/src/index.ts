@@ -15,6 +15,11 @@ export {
 	type TranscriptEntry,
 } from "./repl.ts";
 export { type ReplSource, type Repls, replFrom } from "./repl-store.ts";
+export {
+	codeRunner,
+	type RunnerContext,
+	type TurnRunner,
+} from "./runner.ts";
 export type {
 	ChatInput,
 	ChatMessageInput,

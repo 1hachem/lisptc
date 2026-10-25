@@ -27,6 +27,7 @@ export interface ThreadsOptions {
 
 export interface AskOptions extends PostOptions {
 	readonly replyTo?: string;
+	readonly replyAs?: string;
 }
 
 export type JobState =
@@ -52,6 +53,7 @@ interface Job {
 	readonly thread: string;
 	envelope: string;
 	readonly replyTo?: string;
+	readonly replyAs?: string;
 	state: JobState;
 	outcome?: TurnOutcome;
 	waiter?: (outcome: TurnOutcome) => void;
@@ -191,7 +193,7 @@ export class Threads {
 	async ask(
 		to: string,
 		envelope: Envelope,
-		{ replyTo, ...options }: AskOptions = {},
+		{ replyTo, replyAs, ...options }: AskOptions = {},
 	): Promise<string> {
 		const id = crypto.randomUUID();
 		const job: Job = {
@@ -199,6 +201,7 @@ export class Threads {
 			envelope: envelope.id,
 			state: "pending",
 			...(replyTo === undefined ? {} : { replyTo }),
+			...(replyAs === undefined ? {} : { replyAs }),
 		};
 		this.jobs.set(id, job);
 		if (replyTo !== undefined) this.returns.set(to, replyTo);
@@ -395,7 +398,10 @@ export class Threads {
 		const envelope: Envelope = {
 			kind: "event",
 			id: crypto.randomUUID(),
-			source: `agent:${lineage.title ?? job.thread}`,
+			source:
+				job.replyAs === undefined
+					? `agent:${lineage.title ?? job.thread}`
+					: `${job.replyAs}:${id}`,
 			text,
 			replyTo: job.thread,
 			job: id,

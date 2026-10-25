@@ -332,8 +332,11 @@ export function streamTurn(
 ): Response {
 	const { onTurn, signal, quiet, onOutcome } = options;
 	const abort = new AbortController();
-	if (signal?.aborted) abort.abort();
-	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
+	if (signal?.aborted) abort.abort(signal.reason);
+	else
+		signal?.addEventListener("abort", () => abort.abort(signal.reason), {
+			once: true,
+		});
 
 	const body = new ReadableStream<Uint8Array>({
 		async start(controller) {

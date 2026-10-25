@@ -5,6 +5,7 @@ import type { AgentConfig } from "./agent.ts";
 import { exhausted, type Limits, type Usage } from "./budget.ts";
 import { evalMessage } from "./eval.ts";
 import type { Envelope, Mailbox } from "./mailbox.ts";
+import type { TurnRunner } from "./runner.ts";
 import {
 	type ChatMessageInput,
 	streamTurn,
@@ -33,6 +34,7 @@ export interface TurnSetup {
 	deadlineMs?: number;
 	maxSteps?: number;
 	identity?: { distinctId?: string; sessionId?: string };
+	runner?: TurnRunner;
 }
 
 export interface ThreadBudget {
@@ -268,24 +270,25 @@ export class Thread {
 			{ messages: history },
 			(transcript, received, aborted) =>
 				billed(
-					runAgentTurn(transcript, {
-						repl,
-						threadId: id,
-						config: setup.config,
-						signal: aborted,
-						identity: setup.identity,
-						runsForms: setup.runsForms,
-						received,
-						...stepCap(budget.maxSteps, setup.maxSteps, left.steps),
-						inbox: async () => {
-							const taken = await ports.mailbox.take(id);
-							for (const envelope of taken) {
-								consumed.push(envelope.id);
-								this.taken(envelope);
-							}
-							return taken;
-						},
-					}),
+					setup.runner?.(transcript, { repl, signal: aborted }) ??
+						runAgentTurn(transcript, {
+							repl,
+							threadId: id,
+							config: setup.config,
+							signal: aborted,
+							identity: setup.identity,
+							runsForms: setup.runsForms,
+							received,
+							...stepCap(budget.maxSteps, setup.maxSteps, left.steps),
+							inbox: async () => {
+								const taken = await ports.mailbox.take(id);
+								for (const envelope of taken) {
+									consumed.push(envelope.id);
+									this.taken(envelope);
+								}
+								return taken;
+							},
+						}),
 					ports.budget,
 					() => overspent.abort(),
 				),
