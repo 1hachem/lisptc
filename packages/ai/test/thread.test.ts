@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
 import type { ChatMessageInput, WireMessage } from "../src/stream.ts";
-import { Thread, type TranscriptStore } from "../src/thread.ts";
+import { Thread, type TranscriptStore, type TurnSetup } from "../src/thread.ts";
 import { testRepl } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
@@ -46,6 +46,7 @@ class World implements TranscriptStore {
 	overlapped = false;
 	onAppend: (messages: WireMessage[]) => void = () => {};
 	broken = false;
+	setup: TurnSetup = { runsForms: true };
 
 	async read(): Promise<ChatMessageInput[]> {
 		return this.stored.map((m) => ({ ...m }));
@@ -77,7 +78,7 @@ class World implements TranscriptStore {
 					this.turns.push("settle");
 				},
 			},
-			setup: async () => ({ runsForms: true }),
+			setup: async () => this.setup,
 		});
 	}
 }
@@ -133,6 +134,16 @@ function gated(): { open: () => void; entered: Promise<void> } {
 }
 
 describe("a thread", () => {
+	test("caps a turn at the tighter of its post's and its setup's steps", async () => {
+		const world = new World();
+		world.setup = { runsForms: true, maxSteps: 2 };
+		model.script = ["(+ 1 2)", "(+ 1 2)", "(+ 1 2)", "done."];
+		const posted = await world.thread().post(user("a", "go"), { maxSteps: 3 });
+		expect(await posted.ended).toEqual({
+			stopped: "used its 2 steps without answering",
+		});
+	});
+
 	test("runs one turn at a time", async () => {
 		const world = new World();
 		const thread = world.thread();

@@ -30,6 +30,7 @@ export interface TurnSetup {
 	config?: AgentConfig;
 	runsForms: boolean;
 	deadlineMs?: number;
+	maxSteps?: number;
 	identity?: { distinctId?: string; sessionId?: string };
 }
 
@@ -68,6 +69,11 @@ function openingMessage(envelope: Envelope): WireMessage {
 			? {}
 			: { additional_kwargs: envelope.annotations }),
 	};
+}
+
+function stepCap(...caps: (number | undefined)[]): { maxSteps?: number } {
+	const set = caps.filter((cap): cap is number => cap !== undefined);
+	return set.length === 0 ? {} : { maxSteps: Math.min(...set) };
 }
 
 function errorText(error: unknown): string {
@@ -215,9 +221,7 @@ export class Thread {
 					identity: setup.identity,
 					runsForms: setup.runsForms,
 					received,
-					...(budget.maxSteps === undefined
-						? {}
-						: { maxSteps: budget.maxSteps }),
+					...stepCap(budget.maxSteps, setup.maxSteps),
 					inbox: async () => {
 						const taken = await ports.mailbox.take(id);
 						for (const envelope of taken) {
