@@ -8,7 +8,8 @@ Turbo tag: `extension`.
 ## Shape
 
 `src/agents.ts` is the extension, `src/agents-host.ts` the host a root passes
-in, `src/agents.ptc` the prompt.
+in, `src/agents.ptc` the prompt, `src/ports.ts` the port a root implements and
+`src/definition.ts` the definition file.
 
 ## Rules
 
@@ -24,10 +25,15 @@ This package never runs an agent itself. Another agent is asked of the host
 through a port, and a session whose host offers none refuses the forms that
 need one.
 
-Work a sub-agent does in the background is a job on the jobs port, and
-whoever implements the port owns when it runs and what happens when it ends.
-A job crosses the port as plain data, ids and payload alike, so a queue in
-another process can carry it. The language holds a job's id, never the job.
+A definition lives in the workspace's sub-agents folder as name.ptc,
+read and written through the source folder port. This package owns its format
+and parses it; no root does.
+
+A sub-agent runs on a thread the runtime owns. Spawning, sending, waiting and
+cancelling go through the agent threads port, and the runtime owns the jobs,
+when they run and what happens when they end. This package keeps no job table.
+The language holds a spawned agent's handle in a sealed state global, so it is
+saved in the image and Lisp code cannot set it, and a job's id, never the job.
 
 ## Tests
 
