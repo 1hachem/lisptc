@@ -286,7 +286,7 @@ describe("the agent turn", () => {
 
 	test("a steer taken between steps reaches the next model call after the tool result", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-		const pending = [{ id: "s1", content: "use hex" }];
+		const pending = [{ kind: "user" as const, id: "s1", content: "use hex" }];
 
 		const events = await drain(ask, { inbox: async () => pending.splice(0) });
 
@@ -310,7 +310,7 @@ describe("the agent turn", () => {
 
 	test("a steer's lisp runs when the steer is taken, and the model reads its result as a system event after the steer", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
-		const pending = [{ id: "s1", content: "(+ 40 2)" }];
+		const pending = [{ kind: "user" as const, id: "s1", content: "(+ 40 2)" }];
 
 		const events = await drain(ask, { inbox: async () => pending.splice(0) });
 
@@ -327,7 +327,7 @@ describe("the agent turn", () => {
 
 	test("a steer's lisp does not run when the turn runs no forms, and the model reads the steer as plain text", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
-		const pending = [{ id: "s1", content: "(+ 40 2)" }];
+		const pending = [{ kind: "user" as const, id: "s1", content: "(+ 40 2)" }];
 
 		const events = await drain(ask, {
 			inbox: async () => pending.splice(0),
@@ -337,6 +337,16 @@ describe("the agent turn", () => {
 		expect(events.map((e) => e.type)).not.toContain("evaluated");
 		expect(seen[1].messages.at(-1)).toMatchObject({ content: "(+ 40 2)" });
 		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
+	});
+
+	test("a steer from another session never runs as lisp, even when the turn runs forms", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
+		const pending = [{ kind: "event" as const, id: "s1", content: "(+ 40 2)" }];
+
+		const events = await drain(ask, { inbox: async () => pending.splice(0) });
+
+		expect(events.map((e) => e.type)).not.toContain("evaluated");
+		expect(seen[1].messages.at(-1)).toMatchObject({ content: "(+ 40 2)" });
 	});
 
 	test("the inbox is not read before the first step", async () => {
@@ -526,7 +536,7 @@ describe("the agent turn", () => {
 
 	test("a steer that lands during the answering step buys one more step", async () => {
 		script = [[{ text: "three." }], [{ text: "0x3." }]];
-		const pending = [{ id: "s1", content: "use hex" }];
+		const pending = [{ kind: "user" as const, id: "s1", content: "use hex" }];
 
 		const events = await drain(ask, { inbox: async () => pending.splice(0) });
 

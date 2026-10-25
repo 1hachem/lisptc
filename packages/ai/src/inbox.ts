@@ -1,7 +1,6 @@
-export interface Steer {
-	id: string;
-	content: string;
-}
+export type Steer =
+	| { kind: "user"; id: string; content: string }
+	| { kind: "event"; id: string; content: string };
 
 export interface SteerInbox {
 	open(key: string): Promise<void>;

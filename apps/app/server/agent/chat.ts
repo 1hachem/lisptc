@@ -272,6 +272,7 @@ async function drained(response: Response): Promise<void> {
 serveTurns({
 	async wake({ session, chatId, notice: event }) {
 		const steered = await steers.post(steerKey(session.subject, chatId), {
+			kind: "event",
 			id: crypto.randomUUID(),
 			content: renderSystemEvent(event),
 		});
@@ -314,7 +315,7 @@ export const steer = {
 		const { chatId, id, message } = context.body;
 		const accepted = await steers.post(
 			steerKey(context.session.subject, chatId),
-			{ id, content: message },
+			{ kind: "user", id, content: message },
 		);
 		return Response.json({ accepted }, { status: accepted ? 202 : 409 });
 	},

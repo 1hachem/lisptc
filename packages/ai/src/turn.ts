@@ -127,10 +127,11 @@ async function* takeSteers({
 	let taken = 0;
 	for (const steer of (await inbox?.()) ?? []) {
 		const prompt: TranscriptEntry = { role: "user", content: steer.content };
-		yield { type: "steered", ...steer };
-		const evaluated = runsForms
-			? await evalMessage(repl, steer.content)
-			: undefined;
+		yield { type: "steered", id: steer.id, content: steer.content };
+		const evaluated =
+			runsForms && steer.kind === "user"
+				? await evalMessage(repl, steer.content)
+				: undefined;
 		if (evaluated === undefined) {
 			transcript.push(prompt);
 			taken += 1;

@@ -75,7 +75,7 @@ vi.mock("@repo/ai", async (importOriginal) => {
 		MemorySteerInbox: class extends real.MemorySteerInbox {
 			override async post(
 				_key: string,
-				message: { id: string; content: string },
+				message: { kind: string; id: string; content: string },
 			): Promise<boolean> {
 				world.steered.push(message.content);
 				return true;

@@ -131,7 +131,13 @@ describe("chat stream", () => {
 				},
 			},
 		);
-		expect(await inbox.post("t", { id: "s1", content: "use hex" })).toBe(true);
+		expect(
+			await inbox.post("t", {
+				kind: "user" as const,
+				id: "s1",
+				content: "use hex",
+			}),
+		).toBe(true);
 
 		const messages = await finalMessages(response);
 
@@ -144,7 +150,13 @@ describe("chat stream", () => {
 		]);
 		expect(recorded.map((m) => m.type)).toEqual(["ai", "tool", "human", "ai"]);
 		expect(recorded[2]).toMatchObject({ id: "s1", content: "use hex" });
-		expect(await inbox.post("t", { id: "s2", content: "late" })).toBe(false);
+		expect(
+			await inbox.post("t", {
+				kind: "user" as const,
+				id: "s2",
+				content: "late",
+			}),
+		).toBe(false);
 	});
 
 	test("every model call reports what it cost, and only its own", async () => {

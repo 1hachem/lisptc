@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { MemorySteerInbox } from "../src/inbox.ts";
 
-const steer = { id: "s1", content: "use hex" };
+const steer = { kind: "user" as const, id: "s1", content: "use hex" };
 
 describe("the in-memory steer inbox", () => {
 	test("a post with no open turn is refused", async () => {
@@ -24,9 +24,11 @@ describe("the in-memory steer inbox", () => {
 		const inbox = new MemorySteerInbox();
 		await inbox.open("t");
 		await inbox.post("t", steer);
-		await inbox.post("t", { id: "s2", content: "stop" });
+		await inbox.post("t", { kind: "user" as const, id: "s2", content: "stop" });
 		expect(await inbox.withdraw("t", "s1")).toBe(true);
-		expect(await inbox.take("t")).toEqual([{ id: "s2", content: "stop" }]);
+		expect(await inbox.take("t")).toEqual([
+			{ kind: "user", id: "s2", content: "stop" },
+		]);
 		expect(await inbox.withdraw("t", "s2")).toBe(false);
 	});
 
