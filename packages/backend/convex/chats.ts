@@ -84,6 +84,7 @@ export const children = query({
 	returns: v.array(
 		v.object({
 			_id: v.id("chats"),
+			workspaceId: v.id("workspaces"),
 			title: v.string(),
 			status: v.optional(chatStatus),
 			failure: v.optional(v.string()),
