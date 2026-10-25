@@ -4,7 +4,6 @@ import { type Method, post as send } from "../helpers.ts";
 
 const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 const NOTE = 'I approved (fs/write "a"). Carry on.';
-const SESSION = { token: "u1", subject: "u1" };
 
 const world = vi.hoisted(() => ({
 	posted: [] as {
@@ -27,19 +26,13 @@ vi.mock("../../server/agent/session.ts", async () => {
 	};
 });
 
-vi.mock("../../server/agent/repls.ts", () => ({ repls: {} }));
-
 vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({ query: async () => ({}), mutation: async () => {} }),
 }));
 
 vi.mock("../../server/agent/threads.ts", () => ({
-	post: async (
-		_poster: unknown,
-		chatId: string,
-		envelope: Envelope,
-		options?: PostOptions,
-	) => {
+	host: { repls: {} },
+	post: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
 		world.posted.push({ chatId, envelope, options });
 		return {
 			opened: Promise.resolve(undefined),
@@ -124,7 +117,6 @@ describe("the follow-up to a ui action", () => {
 describe("a sub-agent's chat", () => {
 	test("is woken by a notice posted as an event, never a user message", async () => {
 		await chatTurns().wake({
-			session: SESSION,
 			chatId: CHAT as never,
 			notice: { source: "agent:r", text: "(+ 1 2)" },
 		});
@@ -137,7 +129,7 @@ describe("a sub-agent's chat", () => {
 	});
 
 	test("runs none of the forms in a message sent to it", async () => {
-		const outcome = await chatTurns().reply(SESSION, CHAT as never, "(+ 1 2)", {
+		const outcome = await chatTurns().reply(CHAT as never, "(+ 1 2)", {
 			maxSteps: 3,
 			signal: new AbortController().signal,
 		});

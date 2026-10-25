@@ -19,13 +19,17 @@ export class ConvexAgentStore implements AgentDefinitions {
 	constructor(
 		private readonly workspaceId: Id<"workspaces">,
 		private readonly connect: () => AgentClient,
+		private readonly roster?: readonly string[],
 	) {}
 
 	async all(): Promise<AgentDefinition[]> {
 		const rows = await this.connect().query(api.agents.list, {
 			workspaceId: this.workspaceId,
 		});
-		return rows.map(definitionOf);
+		const { roster } = this;
+		return rows
+			.filter((row) => roster === undefined || roster.includes(row.name))
+			.map(definitionOf);
 	}
 
 	async get(name: string): Promise<AgentDefinition | undefined> {

@@ -2,18 +2,15 @@ import { agentsExtension } from "@repo/agents-extension";
 import { agentsHostFor } from "@repo/agents-extension/host";
 import { MemoryJobs } from "@repo/agents-extension/jobs";
 import type {
-	AgentDefinition,
 	AgentRunner,
 	CodeRunner,
 	Jobs,
 	Notice,
-	ReplSeed,
 } from "@repo/agents-extension/ports";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
-import type { Image } from "@repo/interpreter/image";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
@@ -34,8 +31,6 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
-import { MemoryImageStore } from "@repo/repl/image-store";
-import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
@@ -46,19 +41,16 @@ import { uiHost } from "@repo/ui-extension/host";
 import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
-import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import { ConvexAgentStore } from "./agent-store.ts";
-import { ConvexImageStore } from "./image-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
-import type { ServerClient } from "./server-client.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
 export type WorkspaceClient = Pick<
@@ -75,16 +67,17 @@ const themeChoices = themes.map((theme) => ({
 	scheme: theme.scheme,
 }));
 
-export interface SessionScope {
+export interface ThreadScope {
 	readonly chatId?: Id<"chats">;
 	readonly jobs?: Jobs;
 	readonly bounds?: readonly string[];
+	readonly roster?: readonly string[];
 }
 
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, jobs, bounds }: SessionScope = {},
+	{ chatId, jobs, bounds, roster }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -108,7 +101,7 @@ export async function workspaceExtensions(
 	);
 	const agents = agentsExtension(
 		agentsHostFor({
-			definitions: new ConvexAgentStore(workspaceId, connect),
+			definitions: new ConvexAgentStore(workspaceId, connect, roster),
 			...(jobs === undefined ? {} : { jobs }),
 		}),
 	);
@@ -184,79 +177,5 @@ export function inProcessJobs(runnerFor: RunnerFor): JobsFor {
 		const jobs = new MemoryJobs({ agents, code }, notify);
 		hosted.set(chatId, jobs);
 		return jobs;
-	};
-}
-
-export interface Forked {
-	readonly image: Image;
-	readonly bounds: readonly string[];
-}
-
-export async function forkedRepl(
-	workspaceId: Id<"workspaces">,
-	connect: Connect,
-	{ image, bounds }: Forked,
-): Promise<AgentRepl> {
-	const images = new MemoryImageStore();
-	await images.save(image);
-	const repl = new AgentRepl({
-		extensions: await workspaceExtensions(workspaceId, connect, { bounds }),
-		images,
-	});
-	await repl.resume();
-	return repl;
-}
-
-export interface SpawnedChat {
-	readonly parent: Id<"chats">;
-	readonly definition: AgentDefinition;
-	readonly seed: ReplSeed;
-}
-
-export async function spawnChat(
-	connect: Connect,
-	server: ServerClient,
-	{ parent, definition, seed }: SpawnedChat,
-): Promise<Id<"chats">> {
-	const above = await connect().query(api.chats.get, { chatId: parent });
-	const bounds = [
-		...(above.agent?.bounds ?? []),
-		...(definition.permissions === undefined ? [] : [definition.permissions]),
-	];
-	const chatId = await connect().mutation(api.chats.spawn, {
-		chatId: parent,
-		agent: { name: definition.name, prompt: definition.prompt, bounds },
-	});
-	if (seed.from === "fork") {
-		const replId = await connect().mutation(api.repls.open, { chatId });
-		await new ConvexImageStore(replId, server).save(seed.image);
-	}
-	return chatId;
-}
-
-export function chatRepls(
-	connect: Connect,
-	server: ServerClient,
-	jobsFor?: JobsFor,
-): (chatId: Id<"chats">) => Promise<AgentRepl> {
-	return async (chatId) => {
-		const { workspaceId, agent } = await connect().query(api.chats.get, {
-			chatId,
-		});
-		const replId = await connect().mutation(api.repls.open, { chatId });
-		const repl = new AgentRepl({
-			extensions: await workspaceExtensions(workspaceId, connect, {
-				chatId,
-				...(agent === undefined ? {} : { bounds: agent.bounds }),
-				...(jobsFor === undefined
-					? {}
-					: { jobs: jobsFor(workspaceId, chatId) }),
-			}),
-			images: new ConvexImageStore(replId, server),
-		});
-		await repl.resume().catch((ex) => {
-			console.error(`[backend] chat ${chatId} resumed fresh:`, ex);
-		});
-		return repl;
 	};
 }

@@ -1,10 +1,8 @@
 import type { Notice } from "@repo/agents-extension/ports";
 import type { ReplSource, TurnOutcome } from "@repo/ai";
 import type { Id } from "@repo/backend/dataModel";
-import type { Session } from "./session.ts";
 
 export interface Noticed {
-	readonly session: Session;
 	readonly chatId: Id<"chats">;
 	readonly notice: Notice;
 }
@@ -17,7 +15,6 @@ export interface Budget {
 export interface ChatTurns {
 	wake(noticed: Noticed): Promise<void>;
 	reply(
-		session: Session,
 		chatId: Id<"chats">,
 		message: string,
 		budget: Budget,

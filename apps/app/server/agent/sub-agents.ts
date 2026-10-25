@@ -3,39 +3,21 @@ import type {
 	ChatSeed,
 	CodeRunner,
 } from "@repo/agents-extension/ports";
-import { converse, type ReplSource } from "@repo/ai";
-import {
-	type Connect,
-	forkedRepl,
-	type RunnerFor,
-	spawnChat,
-} from "@repo/backend/agent-repl";
-import { api } from "@repo/backend/api";
+import { converse, type ReplSource, type WireMessage } from "@repo/ai";
+import type { RunnerFor } from "@repo/backend/agent-repl";
 import type { Id } from "@repo/backend/dataModel";
-import type { ServerClient } from "@repo/backend/server-client";
+import type { ThreadHost } from "@repo/backend/thread-host";
 import type { StepAnnotations } from "@repo/interpreter/session";
 import { chatTurns, notice } from "./chat-turns.ts";
 import { delegated } from "./delegated.ts";
-import { currentSession } from "./session.ts";
-import { relay } from "./threads.ts";
 
-export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
-	return (workspaceId, chatId) => {
+export type Relay = (chatId: Id<"chats">, message: WireMessage) => void;
+
+export function subAgents(host: ThreadHost, relay: Relay): RunnerFor {
+	return (_workspaceId, chatId) => {
 		async function forkChat(child: Id<"chats">, chat: ChatSeed) {
 			if (chat.from === "fresh") return;
-			const earlier = await connect().query(api.messages.transcript, {
-				chatId,
-			});
-			if (earlier.length === 0) return;
-			await connect().mutation(api.messages.append, {
-				chatId: child,
-				messages: earlier.map(({ wireId, type, content, kwargs }) => ({
-					...(wireId === undefined ? {} : { id: wireId }),
-					type,
-					content,
-					...(kwargs === undefined ? {} : { kwargs }),
-				})),
-			});
+			await host.copyTranscript(chatId, child);
 		}
 
 		async function surface<Id extends string>(
@@ -46,39 +28,28 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 		): Promise<string> {
 			const id = crypto.randomUUID();
 			const answered = delegated.wait(id, source, signal);
-			const content = `${who} is waiting on you`;
-			await connect().mutation(api.messages.append, {
-				chatId,
-				messages: [{ id, type: "tool", content, kwargs: held.output }],
-			});
-			relay(chatId, {
+			const message: WireMessage = {
 				id,
 				type: "tool",
-				content,
+				content: `${who} is waiting on you`,
 				additional_kwargs: held.output,
-			});
+			};
+			await host.transcript.append(chatId, [message]);
+			relay(chatId, message);
 			return answered;
 		}
 
 		const agents: AgentRunner = {
 			async spawn({ definition, seed, chat }) {
-				const child = await spawnChat(connect, server, {
-					parent: chatId,
-					definition,
-					seed,
-				});
+				const child = await host.spawn(chatId, definition, seed);
 				await forkChat(child, chat);
 				return child;
 			},
 			async send(agent, { message, maxSteps, signal }) {
-				const session = currentSession();
 				const child = agent as Id<"chats">;
-				const { title } = await connect().query(api.chats.get, {
-					chatId: child,
-				});
+				const { title } = await host.record(child);
 				return converse(
-					(said) =>
-						chatTurns().reply(session, child, said, { maxSteps, signal }),
+					(said) => chatTurns().reply(child, said, { maxSteps, signal }),
 					message,
 					(held) =>
 						surface(`agent ${title}`, held, chatTurns().source(child), signal),
@@ -88,11 +59,7 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 
 		const code: CodeRunner = {
 			async run({ source, image }, signal) {
-				const { agent } = await connect().query(api.chats.get, { chatId });
-				const repl = await forkedRepl(workspaceId, connect, {
-					image,
-					bounds: agent?.bounds ?? [],
-				});
+				const repl = await host.fork(chatId, image);
 				const ran = await repl.evalOutput(source);
 				if (ran.held)
 					return await surface(
@@ -109,13 +76,7 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 		return {
 			agents,
 			code,
-			notify: (reply) => {
-				try {
-					notice({ session: currentSession(), chatId, notice: reply });
-				} catch (error) {
-					console.error(`chat=${chatId} has no session to wake with:`, error);
-				}
-			},
+			notify: (reply) => notice({ chatId, notice: reply }),
 		};
 	};
 }

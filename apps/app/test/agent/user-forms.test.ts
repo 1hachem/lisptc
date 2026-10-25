@@ -27,8 +27,6 @@ vi.mock("../../server/agent/session.ts", async () => {
 	};
 });
 
-vi.mock("../../server/agent/repls.ts", () => ({ repls: {} }));
-
 vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({
 		query: async () => {
@@ -40,12 +38,8 @@ vi.mock("../../server/agent/convex.ts", () => ({
 }));
 
 vi.mock("../../server/agent/threads.ts", () => ({
-	post: async (
-		_poster: unknown,
-		chatId: string,
-		envelope: Envelope,
-		options?: PostOptions,
-	) => {
+	host: { repls: {} },
+	post: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
 		world.posted.push({ chatId, envelope, options });
 		return { ended: Promise.resolve({ answer: "done." }) };
 	},

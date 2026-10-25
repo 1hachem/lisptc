@@ -719,6 +719,9 @@ importers:
       '@repo/agents-extension':
         specifier: workspace:*
         version: link:../agents
+      '@repo/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../compaction

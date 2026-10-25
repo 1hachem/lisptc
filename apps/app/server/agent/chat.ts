@@ -5,9 +5,9 @@ import { body, params } from "./body.ts";
 import { serveTurns } from "./chat-turns.ts";
 import { convexAs } from "./convex.ts";
 import { convexId } from "./ids.ts";
-import { repls } from "./repls.ts";
 import { type Authed, authed } from "./session.ts";
 import {
+	host,
 	post,
 	stop as stopThread,
 	watch as watchThread,
@@ -64,7 +64,6 @@ export const turn = {
 		const id = context.body.input.id ?? crypto.randomUUID();
 		await convexAs(context.session).query(api.chats.get, { chatId });
 		await post(
-			{ session: context.session, identity: identityOf(request) },
 			chatId,
 			{
 				kind: "user",
@@ -73,6 +72,8 @@ export const turn = {
 				forms: true,
 				...(annotations === undefined ? {} : { annotations }),
 			},
+			undefined,
+			identityOf(request),
 		);
 		return Response.json({ accepted: true, id }, { status: 202 });
 	},
@@ -103,24 +104,23 @@ export const stop = {
 };
 
 serveTurns({
-	async wake({ session, chatId, notice }) {
-		await post({ session }, chatId, {
+	async wake({ chatId, notice }) {
+		await post(chatId, {
 			kind: "event",
 			id: crypto.randomUUID(),
 			source: notice.source,
 			text: notice.text,
 		});
 	},
-	async reply(session, chatId, message, { maxSteps, signal }) {
+	async reply(chatId, message, { maxSteps, signal }) {
 		const posted = await post(
-			{ session },
 			chatId,
 			{ kind: "user", id: crypto.randomUUID(), text: message, forms: false },
 			{ maxSteps, signal },
 		);
 		return posted.ended;
 	},
-	source: (chatId) => ({ repls, threadId: chatId }),
+	source: (chatId) => ({ repls: host.repls, threadId: chatId }),
 });
 
 export const steer = {
@@ -132,9 +132,10 @@ export const steer = {
 		const { chatId, id, message } = context.body;
 		await convexAs(context.session).query(api.chats.get, { chatId });
 		await post(
-			{ session: context.session, identity: identityOf(request) },
 			chatId,
 			{ kind: "user", id, text: message, forms: true },
+			undefined,
+			identityOf(request),
 		);
 		return Response.json({ accepted: true }, { status: 202 });
 	},
