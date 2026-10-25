@@ -20,7 +20,7 @@ export interface Identity {
 	readonly sessionId?: string;
 }
 
-export const host: ThreadHost = new ThreadHost({
+const host: ThreadHost = new ThreadHost({
 	server: convexAsServer,
 	actAs: convexActingAs,
 	jobs: inProcessJobs((workspaceId, chatId) =>

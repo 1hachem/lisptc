@@ -22,7 +22,6 @@ vi.mock("../../server/agent/session.ts", async () => {
 	);
 	return {
 		authed: [...edge, session],
-		currentSession: () => ({ token: "u1", subject: "u1" }),
 	};
 });
 
