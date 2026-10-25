@@ -11,7 +11,6 @@ import { useSymbols } from "../lib/symbols.ts";
 import { useUI } from "../lib/ui.tsx";
 import { useAttachmentUpload } from "../lib/uploads.ts";
 import { ChatInput } from "./chat-input.tsx";
-import { ChildThreads } from "./child-threads.tsx";
 import type { Mentionable } from "./mention-menu.tsx";
 
 export function ChatComposer({
@@ -79,17 +78,14 @@ export function ChatComposer({
 	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
 	return (
-		<>
-			<ChildThreads chatId={chatId} />
-			<ChatInput
-				placeholder={about ? `ask about ${about.path}` : "type a message"}
-				onSubmit={submit}
-				blocked={blocked}
-				files={{ upload: toAttachments.upload, discard: toAttachments.discard }}
-				assist={{ mentions, history, onCommand: runCommand, symbols }}
-				streaming={{ active: isLoading, onStop: stop }}
-				on={inputOn}
-			/>
-		</>
+		<ChatInput
+			placeholder={about ? `ask about ${about.path}` : "type a message"}
+			onSubmit={submit}
+			blocked={blocked}
+			files={{ upload: toAttachments.upload, discard: toAttachments.discard }}
+			assist={{ mentions, history, onCommand: runCommand, symbols }}
+			streaming={{ active: isLoading, onStop: stop }}
+			on={inputOn}
+		/>
 	);
 }
