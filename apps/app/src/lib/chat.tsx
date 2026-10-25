@@ -665,7 +665,19 @@ export function isSystemMessage(message: ChatMessage): boolean {
 }
 
 export function isUserMessage(message: ChatMessage): boolean {
-	return message.type === "human" || message.type === "user";
+	return (
+		message.type === "human" ||
+		message.type === "user" ||
+		isAgentRequest(message)
+	);
+}
+
+function isAgentRequest(message: ChatMessage): boolean {
+	return (
+		isSystemMessage(message) &&
+		(envelopeOf(message.additional_kwargs).source?.startsWith("agent:") ??
+			false)
+	);
 }
 
 export function messageClassified(message: ChatMessage): boolean {

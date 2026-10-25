@@ -1,6 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { ChatMessage } from "../src/lib/chat.tsx";
+import { groupTurns } from "../src/lib/turn-groups.ts";
 import { isFreshChat, turnsToShow } from "../src/lib/turns.ts";
+
+vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: () => {} }));
 
 function messages(...ids: string[]): ChatMessage[] {
 	return ids.map((id) => ({ id, type: "ai", content: id }));
@@ -46,5 +49,29 @@ describe("where the input sits", () => {
 
 	test("never centres a chat opened by id, even before its turns land", () => {
 		expect(isFreshChat("chat-1", [])).toBe(false);
+	});
+});
+
+describe("a sub-agent's conversation", () => {
+	test("opens on the request its parent sent", () => {
+		const request: ChatMessage = {
+			id: "ask",
+			type: "system",
+			content: "summarise the upload",
+			additional_kwargs: { source: "agent:parent" },
+		};
+		const [turn] = groupTurns([request, ...messages("a")]);
+		expect(turn?.asked).toBe(request);
+	});
+
+	test("keeps any other system event inside the turn", () => {
+		const event: ChatMessage = {
+			id: "e",
+			type: "system",
+			content: "timer fired",
+			additional_kwargs: { source: "timer" },
+		};
+		const [turn] = groupTurns([event]);
+		expect(turn?.asked).toBeUndefined();
 	});
 });
