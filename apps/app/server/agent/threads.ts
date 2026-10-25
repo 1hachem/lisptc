@@ -10,8 +10,7 @@ import {
 import { inProcessJobs } from "@repo/backend/agent-repl";
 import type { Id } from "@repo/backend/dataModel";
 import { ThreadHost } from "@repo/backend/thread-host";
-import { convexAs, convexAsServer } from "./convex.ts";
-import { currentSession } from "./session.ts";
+import { convexActingAs, convexAsServer } from "./convex.ts";
 import { subAgents } from "./sub-agents.ts";
 
 export interface Identity {
@@ -21,7 +20,7 @@ export interface Identity {
 
 export const host: ThreadHost = new ThreadHost({
 	server: convexAsServer,
-	connect: () => convexAs(currentSession()),
+	actAs: convexActingAs,
 	jobs: inProcessJobs((workspaceId, chatId) =>
 		subAgents(host, relay)(workspaceId, chatId),
 	),

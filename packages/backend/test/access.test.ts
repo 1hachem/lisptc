@@ -1,6 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
+import { ACTING_ISSUER } from "../convex/lib/acting.ts";
 import { DEFAULT_TOGGLES } from "../convex/lib/preferenceDefaults.ts";
 import {
 	MAX_AGENT_BYTES,
@@ -10,6 +11,68 @@ import {
 	STREAMING_LEASE_MS,
 } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
+
+describe("a thread acting as its record's owner", () => {
+	it("reaches the owner's workspace with no session behind it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const thread = t.withIdentity({
+			issuer: ACTING_ISSUER,
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		await thread.mutation(api.memories.put, {
+			workspaceId: alice.workspace,
+			memory: {
+				key: "k",
+				body: "v",
+				links: [],
+				score: 0,
+				used: 0,
+				lastUsed: 0,
+			},
+		});
+		expect(
+			await alice.as.query(api.memories.get, {
+				workspaceId: alice.workspace,
+				key: "k",
+			}),
+		).toMatchObject({ body: "v" });
+	});
+
+	it("stays inside the workspace it acts for", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const other = await t.run((ctx) =>
+			ctx.db.insert("workspaces", {
+				ownerId: alice.user,
+				name: "other",
+				slug: "other",
+			}),
+		);
+		const thread = t.withIdentity({
+			issuer: ACTING_ISSUER,
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			thread.query(api.memories.list, { workspaceId: other }),
+		).rejects.toThrow();
+	});
+
+	it("is refused when the issuer is any other", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const forged = t.withIdentity({
+			issuer: "https://elsewhere",
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			forged.query(api.memories.list, { workspaceId: alice.workspace }),
+		).rejects.toThrow();
+	});
+});
 
 describe("repl checkpoint access", () => {
 	it("refuses to open another user's repl", async () => {

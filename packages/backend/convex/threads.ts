@@ -30,6 +30,7 @@ export const record = internalQuery({
 	args: { chatId: v.id("chats") },
 	returns: v.object({
 		workspaceId: v.id("workspaces"),
+		ownerId: v.id("users"),
 		title: v.string(),
 		model: v.optional(storedModel),
 		runsForms: v.boolean(),
@@ -42,6 +43,7 @@ export const record = internalQuery({
 		const preferences = await preferencesOf(ctx, workspace.ownerId);
 		return {
 			workspaceId: chat.workspaceId,
+			ownerId: workspace.ownerId,
 			title: chat.title,
 			...(workspace.model === undefined ? {} : { model: workspace.model }),
 			runsForms: preferences.input?.lisp !== false,

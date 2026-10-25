@@ -3,11 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import { MAX_SPAWN_DEPTH } from "../../convex/limits.ts";
 import type { Connect } from "../../src/agent-repl.ts";
-import type { ServerClient } from "../../src/server-client.ts";
+import type { Owner, ServerClient } from "../../src/server-client.ts";
 import { profileOf, ThreadHost } from "../../src/thread-host.ts";
 
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 const CHAT = "chat-1" as Id<"chats">;
+const OWNER = "user-1" as Id<"users">;
 
 type Agent = {
 	name: string;
@@ -26,6 +27,7 @@ function serverOver(lineage: { agent?: Agent }[]): ServerClient {
 		if (name === "threads:record")
 			return Promise.resolve({
 				workspaceId: WORKSPACE,
+				ownerId: OWNER,
 				title: "child",
 				runsForms: true,
 				lineage,
@@ -99,7 +101,7 @@ describe("the thread factory", () => {
 	it("sets up the turn with the record's instructions and budget", async () => {
 		const host = new ThreadHost({
 			server: serverOver([child, middle, root]),
-			connect: offline,
+			actAs: () => offline(),
 		});
 		const setup = await host.setup(CHAT);
 		expect(setup.config?.instructions).toBe("dig only");
@@ -110,7 +112,7 @@ describe("the thread factory", () => {
 	it("builds a repl bound by every ancestor and shown only its roster", async () => {
 		const host = new ThreadHost({
 			server: serverOver([child, middle]),
-			connect: offline,
+			actAs: () => offline(),
 		});
 		const repl = await host.repls.get(CHAT);
 		const ev = async (code: string) =>
@@ -118,5 +120,30 @@ describe("the thread factory", () => {
 		expect(await ev("(permission/check 'memory/forget-all)")).toBe("deny");
 		expect(await ev("(permission/check 'knowledge/write)")).toBe("deny");
 		expect(await ev("(agents)")).toBe('("digger")');
+	});
+
+	it("runs its stores as the record's owner with no request behind it", async () => {
+		const actedFor: Owner[] = [];
+		const asked: string[] = [];
+		const host = new ThreadHost({
+			server: serverOver([root]),
+			actAs: (owner) => {
+				actedFor.push(owner);
+				const client = offline();
+				return {
+					...client,
+					query: ((reference: unknown, args: unknown) => {
+						asked.push(named(reference));
+						return client.query(reference as never, args as never);
+					}) as typeof client.query,
+				};
+			},
+		});
+		const repl = await host.repls.get(CHAT);
+		expect((await repl.evalOutput("(agents)")).results.at(-1)).toContain(
+			"scout",
+		);
+		expect(actedFor).toEqual([{ userId: OWNER, workspaceId: WORKSPACE }]);
+		expect(asked).toContain("agents:list");
 	});
 });

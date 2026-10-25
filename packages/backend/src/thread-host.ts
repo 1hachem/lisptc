@@ -18,12 +18,12 @@ import { internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { MAX_SPAWN_DEPTH, TURN_DEADLINE_MS } from "../convex/limits.js";
 import {
-	type Connect,
 	type JobsFor,
+	type WorkspaceClient,
 	workspaceExtensions,
 } from "./agent-repl.ts";
 import { ConvexImageStore } from "./image-store.ts";
-import type { ServerClient } from "./server-client.ts";
+import type { Owner, ServerClient } from "./server-client.ts";
 
 type Lineage = FunctionReturnType<typeof internal.threads.record>["lineage"];
 
@@ -103,7 +103,7 @@ function toStored(wire: WireMessage[]) {
 
 export interface ThreadHostOptions {
 	readonly server: ServerClient;
-	readonly connect: Connect;
+	readonly actAs: (owner: Owner) => WorkspaceClient;
 	readonly jobs?: JobsFor;
 }
 
@@ -250,10 +250,11 @@ export class ThreadHost {
 		images: ImageStore,
 		own: boolean,
 	): Promise<AgentRepl> {
-		const { workspaceId, profile } = await this.record(chatId);
-		const { connect, jobs } = this.options;
+		const { workspaceId, ownerId, profile } = await this.record(chatId);
+		const { actAs, jobs } = this.options;
+		const owner = actAs({ userId: ownerId, workspaceId });
 		const repl = new AgentRepl({
-			extensions: await workspaceExtensions(workspaceId, connect, {
+			extensions: await workspaceExtensions(workspaceId, () => owner, {
 				bounds: profile.bounds,
 				...(profile.roster === undefined ? {} : { roster: profile.roster }),
 				...(own ? { chatId } : {}),
