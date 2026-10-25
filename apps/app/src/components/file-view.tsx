@@ -38,12 +38,14 @@ export function FileView({
 	actions,
 	body,
 	fill = false,
+	blocked,
 }: {
 	file: OpenFile | undefined;
 	missing?: string;
 	actions?: ReactNode;
 	body?: ReactNode;
 	fill?: boolean;
+	blocked?: string;
 }) {
 	const layout = fill ? LAYOUT.fill : LAYOUT.scroll;
 	return (
@@ -63,7 +65,7 @@ export function FileView({
 			</div>
 			<div className="px-8 pb-7">
 				<OnLeadChat>
-					<ChatComposer about={file} />
+					<ChatComposer about={file} blocked={blocked} />
 				</OnLeadChat>
 			</div>
 		</>

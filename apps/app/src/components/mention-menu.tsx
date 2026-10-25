@@ -5,6 +5,7 @@ import {
 	MenuOption,
 	type MenuTextMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
+import type { StoreFolder } from "@repo/shared/files";
 import { $createTextNode, type TextNode } from "lexical";
 import {
 	type RefObject,
@@ -13,11 +14,11 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { knowledgeIcon } from "../lib/knowledge.ts";
+import { knowledgeIcon } from "../lib/file-icons.ts";
 import { typeaheadList } from "./typeahead-list.tsx";
 
 export interface Mentionable {
-	folder: "knowledge" | "attachments";
+	folder: StoreFolder;
 	name: string;
 	contentType: string | null;
 }

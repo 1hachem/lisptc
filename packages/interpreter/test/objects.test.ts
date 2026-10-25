@@ -4,6 +4,7 @@ import {
 	assert,
 	Cell,
 	EndOfFile,
+	exactJsonToLisp,
 	isSpecialForm,
 	jsonToLisp,
 	lispToJson,
@@ -95,10 +96,45 @@ describe("objects", () => {
 		]);
 	});
 
-	it("writes a list of keywords alone as an array of their names", () => {
+	it("writes a plist whose values are keywords as an object", () => {
 		expect(
-			lispToJson(arrayToList([newLispKeyword("red"), newLispKeyword("green")])),
+			lispToJson(
+				arrayToList([newLispKeyword("status"), newLispKeyword("done")]),
+			),
+		).toEqual({ status: "done" });
+	});
+
+	it("writes a list led by :[] as an array of the rest", () => {
+		expect(
+			lispToJson(
+				arrayToList([
+					newLispKeyword("[]"),
+					newLispKeyword("red"),
+					newLispKeyword("green"),
+				]),
+			),
 		).toEqual(["red", "green"]);
+	});
+
+	it("writes :false, :[] and :{} as false, [] and {}", () => {
+		expect(lispToJson(newLispKeyword("false"))).toBe(false);
+		expect(lispToJson(newLispKeyword("[]"))).toEqual([]);
+		expect(lispToJson(newLispKeyword("{}"))).toEqual({});
+	});
+
+	it("keeps a __proto__ key as data", () => {
+		const written = lispToJson(
+			arrayToList([new Cell("__proto__", arrayToList([new Cell("x", 1)]))]),
+		);
+		expect(JSON.stringify(written)).toBe('{"__proto__":{"x":1}}');
+	});
+
+	it("refuses an object that names one key twice", () => {
+		expect(() =>
+			lispToJson(
+				arrayToList([newLispKeyword("a"), 1n, newLispKeyword("a"), 2n]),
+			),
+		).toThrow(/appears twice/);
 	});
 
 	it("refuses what JSON cannot hold", () => {
@@ -108,5 +144,60 @@ describe("objects", () => {
 		);
 		expect(() => lispToJson(Number.NaN)).toThrow(/no JSON form/);
 		expect(() => lispToJson(2n ** 64n)).toThrow(/too large/);
+	});
+});
+
+describe("a JSON document read exactly", () => {
+	const documents: [string, unknown][] = [
+		["false", false],
+		["true", true],
+		["null", null],
+		["zero", 0],
+		["an empty string", ""],
+		["an empty array", []],
+		["an empty object", {}],
+		["an array holding an empty array", [[]]],
+		["an array holding an empty object", [{}]],
+		["an object holding an empty array", { a: [] }],
+		["an object holding an empty object", { a: {} }],
+		["an array of string-led arrays", [["a", 1]]],
+		["an array of one-string arrays", [["a"]]],
+		["an array led by false and a value", [false, "x"]],
+		["an array led by an empty object", [{}, 1]],
+		["an array led by an empty array", [[], 1]],
+		["false and null side by side", { off: false, none: null, on: true }],
+		["unicode keys", { café: 1, 日本: [2], "🚀": { "": "" } }],
+		[
+			"a nested mix",
+			{
+				rows: [
+					{ total: 12, open: true, tags: [] },
+					{ total: 7, open: false, tags: ["a"], meta: {} },
+				],
+				grid: [
+					["name", "age"],
+					["bob", 3],
+				],
+				empty: [[], {}, [[]], [{}]],
+			},
+		],
+	];
+
+	it.each(documents)("writes back %s unchanged", (_, json) => {
+		expect(lispToJson(exactJsonToLisp(json))).toEqual(json);
+	});
+
+	it("reads a plist written from keywords back to the same object", () => {
+		const written = lispToJson(
+			arrayToList([newLispKeyword("status"), newLispKeyword("done")]),
+		);
+		expect(lispToJson(exactJsonToLisp(written))).toEqual({ status: "done" });
+	});
+
+	it("reads false, [] and {} as values that stay apart", () => {
+		expect(exactJsonToLisp(false)).toBe(newLispKeyword("false"));
+		expect(exactJsonToLisp([])).toBe(newLispKeyword("[]"));
+		expect(exactJsonToLisp({})).toBe(newLispKeyword("{}"));
+		expect(exactJsonToLisp(null)).toBeNull();
 	});
 });

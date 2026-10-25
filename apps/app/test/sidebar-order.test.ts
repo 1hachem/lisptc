@@ -3,7 +3,6 @@ import {
 	SIDEBAR_ENTRIES,
 	shownEntries,
 	sidebarOrder,
-	toggledHidden,
 	withHidden,
 } from "../src/lib/sidebar-order.ts";
 
@@ -44,20 +43,5 @@ describe("hidden entries", () => {
 	it("keeps the hidden entries in the stored order after a drag", () => {
 		const next = withHidden(["chat", "README.md", "home"], order.slice(0, 4));
 		expect(next).toEqual(["chat", "README.md", "home", "tests"]);
-	});
-
-	it("hides a shown entry and shows a hidden one", () => {
-		expect(toggledHidden(["attachments"], "tests")).toEqual([
-			"attachments",
-			"tests",
-		]);
-		expect(toggledHidden(["attachments", "tests"], "attachments")).toEqual([
-			"tests",
-		]);
-		expect(toggledHidden(undefined, "ui")).toEqual(["ui"]);
-	});
-
-	it("shows a renamed entry and drops names the sidebar no longer has", () => {
-		expect(toggledHidden(["agents", "gone"], "sub-agents")).toEqual([]);
 	});
 });

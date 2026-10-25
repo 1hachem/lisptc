@@ -1,11 +1,7 @@
 import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
-import {
-	DEFAULT_HIDDEN,
-	DEFAULT_SEND_LABEL,
-	DEFAULT_TOGGLES,
-} from "../convex/lib/preferenceDefaults.ts";
+import { DEFAULT_TOGGLES } from "../convex/lib/preferenceDefaults.ts";
 import {
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
@@ -178,8 +174,8 @@ describe("workspace model", () => {
 			model,
 		});
 		const next = {
-			provider: "digitalocean",
-			model: "gemma-4-31B-it",
+			provider: "openrouter",
+			model: "openai/gpt-6-luna",
 		} as const;
 		await alice.as.mutation(api.workspaces.setModel, {
 			workspaceId: alice.workspace,
@@ -901,8 +897,6 @@ describe("oauth record access", () => {
 
 const DEFAULTS = {
 	...DEFAULT_TOGGLES,
-	sendLabel: DEFAULT_SEND_LABEL,
-	hidden: DEFAULT_HIDDEN,
 	panelMotion: true,
 	traceBesideChat: false,
 	traceLink: true,
@@ -940,8 +934,6 @@ describe("preferences access", () => {
 			font: "mono",
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
 			input: { ...DEFAULT_TOGGLES.input, lisp: false },
-			sendLabel: DEFAULT_SEND_LABEL,
-			hidden: DEFAULT_HIDDEN,
 			panelMotion: true,
 			traceBesideChat: false,
 			traceLink: true,
@@ -952,7 +944,6 @@ describe("preferences access", () => {
 			input: { lisp: false },
 			metadata: { tokens: true },
 		});
-		expect(rows[0].hidden).toBeUndefined();
 	});
 
 	it("reads a row that still carries channel toggles and drops them on the next save", async () => {
@@ -974,19 +965,6 @@ describe("preferences access", () => {
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows[0].channels).toBeUndefined();
 		expect(rows[0]).toMatchObject({ font: "mono", motion: "lift" });
-	});
-
-	it("hides attachments and the bin until the user shows them", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		expect((await alice.as.query(api.preferences.get, {})).hidden).toEqual([
-			"attachments",
-			"bin",
-		]);
-		await alice.as.mutation(api.preferences.put, {
-			preferences: { hidden: [] },
-		});
-		expect((await alice.as.query(api.preferences.get, {})).hidden).toEqual([]);
 	});
 
 	it("refuses preferences past the size limit", async () => {
@@ -1330,25 +1308,38 @@ describe("knowledge access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.knowledge.add, {
+		await bob.as.mutation(api.files.add, {
+			folder: "knowledge",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
 		});
 		await expect(
-			alice.as.query(api.knowledge.get, {
+			alice.as.query(api.files.get, {
+				folder: "knowledge",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.knowledge.remove, {
+			alice.as.mutation(api.files.remove, {
+				folder: "knowledge",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.removeMany, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		).rejects.toThrow();
 		expect(
-			await bob.as.query(api.knowledge.list, { workspaceId: bob.workspace }),
+			await bob.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+			}),
 		).toHaveLength(1);
 	});
 });
@@ -1358,31 +1349,44 @@ describe("attachments access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.attachments.add, {
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
 		});
 		await expect(
-			alice.as.query(api.attachments.get, {
+			alice.as.query(api.files.get, {
+				folder: "attachments",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.attachments.keep, {
+			alice.as.mutation(api.files.keep, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
 			}),
 		).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.attachments.remove, {
+			alice.as.mutation(api.files.remove, {
+				folder: "attachments",
 				workspaceId: bob.workspace,
 				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.removeMany, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
 			}),
 		).rejects.toThrow();
 		expect(
-			await bob.as.query(api.attachments.list, { workspaceId: bob.workspace }),
+			await bob.as.query(api.files.list, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+			}),
 		).toHaveLength(1);
 	});
 });
@@ -1392,12 +1396,14 @@ describe("bin access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.attachments.add, {
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
 		});
-		await bob.as.mutation(api.attachments.remove, {
+		await bob.as.mutation(api.files.remove, {
+			folder: "attachments",
 			workspaceId: bob.workspace,
 			name: "bob.txt",
 		});
@@ -1414,6 +1420,10 @@ describe("bin access", () => {
 			alice.as.mutation(api.bin.remove, {
 				workspaceId: bob.workspace,
 				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.removeMany, {
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
 			}),
 		])
 			await expect(denied).rejects.toThrow();

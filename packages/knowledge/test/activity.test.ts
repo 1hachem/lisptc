@@ -6,7 +6,7 @@ import { noAnnotations, openSession } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
-import { MemoryKnowledgeStore } from "../src/ports.ts";
+import { MemoryKnowledgeStore } from "../src/memory-store.ts";
 
 class FullStore extends MemoryKnowledgeStore {
 	override write(): void {

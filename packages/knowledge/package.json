@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/knowledge.ts",
     "./host": "./src/knowledge-host.ts",
+    "./memory-store": "./src/memory-store.ts",
     "./ports": "./src/ports.ts"
   },
   "engines": {

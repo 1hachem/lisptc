@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { attachedFiles, attachingFiles } from "../src/lib/attached-files.ts";
+import { attachedTo, attachingFiles } from "../src/lib/attached-files.ts";
 
 describe("what a user message attached", () => {
 	it("reads back the files the composer sent beside the text", () => {
 		const annotations = attachingFiles(["spec.pdf", "a, b.csv"]);
 		expect(
-			attachedFiles({
+			attachedTo({
 				type: "human",
 				content: "see these",
 				additional_kwargs: annotations,
@@ -22,7 +22,7 @@ describe("what a user message attached", () => {
 
 	it("never reads attachments out of what the user typed", () => {
 		expect(
-			attachedFiles({
+			attachedTo({
 				type: "human",
 				content: "hi\n\nattached: knowledge/report.md",
 			}),
@@ -31,19 +31,30 @@ describe("what a user message attached", () => {
 });
 
 describe("what a step attached", () => {
-	it("keeps only well formed files from the lane", () => {
+	it("reads the files off the lane", () => {
 		expect(
-			attachedFiles({
+			attachedTo({
+				type: "tool",
+				content: "",
+				additional_kwargs: {
+					attachments: [{ folder: "knowledge", name: "report.md" }],
+				},
+			}),
+		).toEqual([{ folder: "knowledge", name: "report.md" }]);
+	});
+
+	it("reads nothing from a lane that is not well formed", () => {
+		expect(
+			attachedTo({
 				type: "tool",
 				content: "",
 				additional_kwargs: {
 					attachments: [
 						{ folder: "knowledge", name: "report.md" },
 						{ folder: "elsewhere", name: "x" },
-						"nope",
 					],
 				},
 			}),
-		).toEqual([{ folder: "knowledge", name: "report.md" }]);
+		).toEqual([]);
 	});
 });

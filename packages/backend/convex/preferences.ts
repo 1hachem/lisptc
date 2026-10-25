@@ -12,7 +12,6 @@ const preferences = v.object({
 	themeUses: v.optional(v.record(v.string(), v.number())),
 	metadata: v.optional(v.record(v.string(), v.boolean())),
 	input: v.optional(v.record(v.string(), v.boolean())),
-	sendLabel: v.optional(v.string()),
 	sidebar: v.optional(v.array(v.string())),
 	hidden: v.optional(v.array(v.string())),
 	statusBar: v.optional(v.array(v.string())),

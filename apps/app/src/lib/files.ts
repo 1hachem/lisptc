@@ -47,7 +47,6 @@ export function preferencesSource(preferences: {
 	font: string;
 	metadata: Record<string, boolean>;
 	input: Record<string, boolean>;
-	sendLabel: string | undefined;
 	sidebar: readonly string[];
 	hidden: readonly string[];
 	motion: string;
@@ -59,7 +58,6 @@ export function preferencesSource(preferences: {
 		`(preferences :font ${quoted(preferences.font)}`,
 		`  :metadata ${toggles(preferences.metadata)}`,
 		`  :input ${toggles(preferences.input)}`,
-		`  :send-label ${preferences.sendLabel === undefined ? "nil" : quoted(preferences.sendLabel)}`,
 		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
 		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
 		`  :motion ${quoted(preferences.motion)}`,

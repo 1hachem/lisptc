@@ -190,7 +190,6 @@ export const turn = {
 				signal: AbortSignal.any([request.signal, deadline]),
 				quiet,
 				runsForms,
-				received: "message" in input ? input.annotations : undefined,
 				steer: {
 					inbox: steers,
 					key: steerKey(context.session.subject, chatId),

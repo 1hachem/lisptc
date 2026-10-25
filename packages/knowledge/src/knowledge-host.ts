@@ -1,10 +1,43 @@
 import { type Clock, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
-import type { Downloader, KnowledgeHost, KnowledgeStore } from "./ports.ts";
+import { getDocumentProxy } from "unpdf";
+import type {
+	Downloader,
+	KnowledgeHost,
+	KnowledgeStore,
+	PdfReader,
+} from "./ports.ts";
 
 const knowledgePrompt = filePrompt(new URL("./knowledge.ptc", import.meta.url));
 
 const FETCH_TIMEOUT_MS = 30_000;
+
+const MAX_PDF_PAGES = 200;
+
+function unpdfReader(maxPages: number): PdfReader {
+	return {
+		async text(bytes) {
+			const pdf = await getDocumentProxy(bytes.slice());
+			try {
+				const read = Math.min(pdf.numPages, maxPages);
+				const pages: string[] = [];
+				for (let n = 1; n <= read; n++) {
+					const page = await pdf.getPage(n);
+					const { items } = await page.getTextContent();
+					pages.push(
+						items.map((item) => ("str" in item ? item.str : "")).join(" "),
+					);
+				}
+				const skipped = pdf.numPages - read;
+				if (skipped > 0)
+					pages.push(`[${skipped} more pages past page ${read} not read]`);
+				return pages.join("\n");
+			} finally {
+				await pdf.loadingTask.destroy();
+			}
+		},
+	};
+}
 
 async function cappedBody(
 	response: Response,
@@ -58,10 +91,12 @@ export function knowledgeHostFor(options: {
 	maxDownloadBytes: number;
 	downloader?: Downloader;
 	clock?: Clock;
+	pdf?: PdfReader;
 }): KnowledgeHost {
 	return {
 		store: options.store,
 		downloader: options.downloader ?? httpDownloader(options.maxDownloadBytes),
+		pdf: options.pdf ?? unpdfReader(MAX_PDF_PAGES),
 		prompt: knowledgePrompt,
 		clock: options.clock ?? systemClock,
 	};
