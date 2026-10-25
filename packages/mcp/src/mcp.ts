@@ -1141,52 +1141,53 @@ function toolArgs(tool: Tool): DocArg[] {
 	}));
 }
 
+function argLine(key: string, spec: JsonSchema, required: boolean): string {
+	const req = required ? " (required)" : "";
+	const desc = spec.description ? ` — ${spec.description}` : "";
+	const allowed = spec.enum?.length
+		? ` (one of ${JSON.stringify(spec.enum)})`
+		: "";
+	const dflt =
+		spec.default !== undefined
+			? ` (default ${JSON.stringify(spec.default)})`
+			: "";
+	const example = spec.examples?.length
+		? ` (e.g. ${JSON.stringify(spec.examples[0])})`
+		: "";
+	return `  ${key}${schemaType(spec)}${req}${allowed}${dflt}${example}${desc}`;
+}
+
+function examplesSection(title: string, examples?: unknown[]): string[] {
+	if (!examples?.length) return [];
+	return ["", title, ...examples.map((ex) => `  ${JSON.stringify(ex)}`)];
+}
+
+function returnsSection(out?: JsonSchema): string[] {
+	if (!out) return [];
+	const outType = schemaType(out);
+	const returns =
+		outType || out.description
+			? [
+					"",
+					`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
+				]
+			: [];
+	return [...returns, ...examplesSection("Example outputs:", out.examples)];
+}
+
 function toolDocBody(tool: Tool): string {
-	const lines: string[] = [];
-	if (tool.description) lines.push(tool.description);
+	const lines: string[] = tool.description ? [tool.description] : [];
 	const entries = orderedProps(tool);
 	const required = new Set(tool.inputSchema?.required ?? []);
-
 	if (entries.length) {
 		if (lines.length) lines.push("");
 		lines.push("Arguments:");
-		for (const [key, spec] of entries) {
-			const req = required.has(key) ? " (required)" : "";
-			const type = schemaType(spec);
-			const desc = spec.description ? ` — ${spec.description}` : "";
-			const allowed = spec.enum?.length
-				? ` (one of ${JSON.stringify(spec.enum)})`
-				: "";
-			const dflt =
-				spec.default !== undefined
-					? ` (default ${JSON.stringify(spec.default)})`
-					: "";
-			const example = spec.examples?.length
-				? ` (e.g. ${JSON.stringify(spec.examples[0])})`
-				: "";
-			lines.push(`  ${key}${type}${req}${allowed}${dflt}${example}${desc}`);
-		}
+		for (const [key, spec] of entries)
+			lines.push(argLine(key, spec, required.has(key)));
 	}
-
-	const inputEx = tool.inputSchema?.examples;
-	if (inputEx?.length) {
-		lines.push("", "Example inputs:");
-		for (const ex of inputEx) lines.push(`  ${JSON.stringify(ex)}`);
-	}
-	if (tool.outputSchema) {
-		const out = tool.outputSchema;
-		const outType = schemaType(out);
-		if (outType || out.description) {
-			lines.push(
-				"",
-				`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
-			);
-		}
-		if (out.examples?.length) {
-			lines.push("", "Example outputs:");
-			for (const ex of out.examples) lines.push(`  ${JSON.stringify(ex)}`);
-		}
-	}
-
+	lines.push(
+		...examplesSection("Example inputs:", tool.inputSchema?.examples),
+		...returnsSection(tool.outputSchema),
+	);
 	return lines.join("\n");
 }
