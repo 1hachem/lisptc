@@ -76,7 +76,8 @@ services:
       - |
         set -e
         pnpm run env:seed
-        exec pnpm exec convex deploy --typecheck disable --codegen disable
+        pnpm exec convex deploy --typecheck disable --codegen disable
+        exec pnpm run migrate
     environment:
       - CONVEX_SELF_HOSTED_URL=http://convex-backend:3210
       - CONVEX_SELF_HOSTED_ADMIN_KEY

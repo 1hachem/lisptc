@@ -23,7 +23,8 @@ spec:
                 sleep 2
               done
               pnpm run env:seed
-              exec pnpm exec convex deploy --typecheck disable --codegen disable
+              pnpm exec convex deploy --typecheck disable --codegen disable
+              exec pnpm run migrate
           envFrom:
             - secretRef:
                 name: lisptc-convex-deploy

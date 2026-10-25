@@ -32,6 +32,7 @@ import type * as lib_workspaceIcons from "../lib/workspaceIcons.js";
 import type * as limits from "../limits.js";
 import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
+import type * as migrations from "../migrations.js";
 import type * as oauth from "../oauth.js";
 import type * as permissions from "../permissions.js";
 import type * as posthog from "../posthog.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   limits: typeof limits;
   memories: typeof memories;
   messages: typeof messages;
+  migrations: typeof migrations;
   oauth: typeof oauth;
   permissions: typeof permissions;
   posthog: typeof posthog;
@@ -114,5 +116,6 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };
