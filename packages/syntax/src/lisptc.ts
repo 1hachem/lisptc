@@ -37,99 +37,118 @@ function proseIn(text: string): FormSpan[] {
 	);
 }
 
-function scan(text: string, prose: readonly FormSpan[]): Scan {
-	const token = tokenPattern();
-	const ranges: TokenRange[] = [];
-	const heads: string[] = [];
-	const enclosing: boolean[] = [];
-	let depth = 0;
-	let head = false;
-	let quoted = false;
-	let mark: "quote" | "unquote" | undefined;
-	let base = 0;
-	let quoteAt = -1;
-	let quoteEnd = -1;
+class Scanner {
+	readonly ranges: TokenRange[] = [];
+	readonly heads: string[] = [];
+	private readonly token = tokenPattern();
+	private readonly enclosing: boolean[] = [];
+	private depth = 0;
+	private head = false;
+	private quoted = false;
+	private mark: "quote" | "unquote" | undefined;
+	private base = 0;
+	private quoteAt = -1;
+	private quoteEnd = -1;
 
-	const push = (
-		start: number,
-		end: number,
-		className: TokenRange["className"],
-	) => {
-		if (
-			depth > 0 &&
-			!prose.some(
-				([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
-			)
-		)
-			ranges.push({ className, start, end });
-	};
+	constructor(private readonly prose: readonly FormSpan[]) {}
 
-	for (const line of text.split("\n")) {
+	scan(text: string): Scan {
+		for (const line of text.split("\n")) {
+			this.line(line);
+			this.base += line.length + 1;
+			this.quoteAt = -1;
+			this.quoteEnd = -1;
+			this.mark = undefined;
+		}
+		return { ranges: this.ranges, heads: this.heads };
+	}
+
+	private line(line: string): void {
+		const token = this.token;
 		for (let m = token.exec(line); m !== null; m = token.exec(line)) {
 			const word = m[1];
 			if (word === undefined) continue;
-			const start = base + m.index;
-			const end = start + word.length;
-
+			const start = this.base + m.index;
 			if (isQuoteToken(word)) {
-				if (depth > 0) push(start, end, "operator");
-				else if (quoteEnd !== start) quoteAt = start;
-				quoteEnd = end;
-				mark = QUOTES.has(word) ? "quote" : "unquote";
+				this.quote(word, start);
 				continue;
 			}
-
-			const from = quoteEnd === start && quoteAt >= 0 ? quoteAt : start;
-			quoteAt = -1;
-			quoteEnd = -1;
-
-			if (word === "(") {
-				enclosing.push(quoted);
-				if (mark !== undefined) quoted = mark === "quote";
-				depth += 1;
-				head = true;
-				push(from, end, "operator");
-			} else if (word === ")") {
-				push(start, end, "operator");
-				if (depth > 0) {
-					depth -= 1;
-					quoted = enclosing.pop() ?? false;
-				}
-				head = false;
-			} else if (word.startsWith('"')) {
-				if (depth === 0) {
-					const paren = word.indexOf("(", 1);
-					if (paren >= 0) token.lastIndex = m.index + paren;
-				} else if (word === '"') {
-					push(start, base + line.length, "string");
-					token.lastIndex = 0;
-					break;
-				} else {
-					push(start, end, "string");
-					head = false;
-				}
-			} else {
-				push(start, end, atomClass(word, head && !quoted));
-				if (
-					head &&
-					!quoted &&
-					!isKeywordToken(word) &&
-					!prose.some(
-						([proseStart, proseEnd]) => start >= proseStart && end <= proseEnd,
-					)
-				)
-					heads.push(word);
-				head = false;
-			}
-			mark = undefined;
+			const from =
+				this.quoteEnd === start && this.quoteAt >= 0 ? this.quoteAt : start;
+			this.quoteAt = -1;
+			this.quoteEnd = -1;
+			if (word.startsWith('"')) {
+				if (this.string(word, line, m.index)) return;
+			} else this.atom(word, from, start);
+			this.mark = undefined;
 		}
-		base += line.length + 1;
-		quoteAt = -1;
-		quoteEnd = -1;
-		mark = undefined;
 	}
 
-	return { ranges, heads };
+	private push(start: number, end: number, className: TokenRange["className"]) {
+		if (this.depth > 0 && !within(this.prose, start, end))
+			this.ranges.push({ className, start, end });
+	}
+
+	private quote(word: QuoteToken, start: number): void {
+		const end = start + word.length;
+		if (this.depth > 0) this.push(start, end, "operator");
+		else if (this.quoteEnd !== start) this.quoteAt = start;
+		this.quoteEnd = end;
+		this.mark = QUOTES.has(word) ? "quote" : "unquote";
+	}
+
+	private string(word: string, line: string, index: number): boolean {
+		const start = this.base + index;
+		if (this.depth === 0) {
+			const paren = word.indexOf("(", 1);
+			if (paren >= 0) this.token.lastIndex = index + paren;
+			return false;
+		}
+		if (word === '"') {
+			this.push(start, this.base + line.length, "string");
+			this.token.lastIndex = 0;
+			return true;
+		}
+		this.push(start, start + word.length, "string");
+		this.head = false;
+		return false;
+	}
+
+	private atom(word: string, from: number, start: number): void {
+		const end = start + word.length;
+		if (word === "(") this.open(from, end);
+		else if (word === ")") this.close(start, end);
+		else this.symbol(word, start, end);
+	}
+
+	private open(from: number, end: number): void {
+		this.enclosing.push(this.quoted);
+		if (this.mark !== undefined) this.quoted = this.mark === "quote";
+		this.depth += 1;
+		this.head = true;
+		this.push(from, end, "operator");
+	}
+
+	private close(start: number, end: number): void {
+		this.push(start, end, "operator");
+		if (this.depth > 0) {
+			this.depth -= 1;
+			this.quoted = this.enclosing.pop() ?? false;
+		}
+		this.head = false;
+	}
+
+	private symbol(word: string, start: number, end: number): void {
+		const head = this.head && !this.quoted;
+		this.push(start, end, atomClass(word, head));
+		if (head && !isKeywordToken(word) && !within(this.prose, start, end))
+			this.heads.push(word);
+		this.head = false;
+	}
+}
+
+function scan(text: string, prose: readonly FormSpan[]): Scan {
+	return new Scanner(prose).scan(text);
 }
 
 export const lisptc = defineLanguage({
