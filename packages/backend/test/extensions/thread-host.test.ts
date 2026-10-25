@@ -83,11 +83,11 @@ const child: { agent: Agent } = {
 };
 
 describe("the thread factory", () => {
-	it("narrows roster, bounds and budget down the lineage", () => {
+	it("narrows bounds and budget down the lineage and leaves a sub-agent no roster", () => {
 		expect(profileOf([child, middle])).toEqual({
 			instructions: "dig only",
 			bounds: ["(permission/deny knowledge/*)", "(permission/deny memory/*)"],
-			roster: ["digger"],
+			roster: [],
 			budget: 12,
 		});
 	});
@@ -125,7 +125,7 @@ describe("the thread factory", () => {
 		});
 	});
 
-	it("builds a repl bound by every ancestor and shown only its roster", async () => {
+	it("builds a repl bound by every ancestor and shown no agents to spawn", async () => {
 		const host = new ThreadHost({
 			server: serverOver([child, middle]),
 			actAs: () => offline(),
@@ -135,7 +135,7 @@ describe("the thread factory", () => {
 			(await repl.evalOutput(code)).results.at(-1);
 		expect(await ev("(permission/check 'memory/forget-all)")).toBe("deny");
 		expect(await ev("(permission/check 'knowledge/write)")).toBe("deny");
-		expect(await ev("(agents)")).toBe('("digger")');
+		expect(await ev("(agents)")).toBe("nil");
 	});
 
 	it("runs its stores as the record's owner with no request behind it", async () => {

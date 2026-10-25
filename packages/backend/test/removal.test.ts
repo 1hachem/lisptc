@@ -89,22 +89,21 @@ describe("removing a chat", () => {
 			alice.as.mutation(api.chats.remove, { chatId }),
 		).rejects.toThrow();
 	});
-	it("takes the sub-agent chats it spawned, and theirs, with it", async () => {
+	it("takes the sub-agent chats it spawned, and their messages, with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
 		const agent = { name: "r", prompt: "dig", bounds: [] };
-		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
-		const grandchild = await alice.as.mutation(api.chats.spawn, {
-			chatId: child,
-			agent,
-		});
-		await alice.as.mutation(api.messages.append, {
-			chatId: grandchild,
-			messages: [{ type: "human", content: "hello" }],
-		});
+		const first = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const second = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		for (const child of [first, second]) {
+			await alice.as.mutation(api.messages.append, {
+				chatId: child,
+				messages: [{ type: "human", content: "hello" }],
+			});
+		}
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.chats.remove, { chatId });

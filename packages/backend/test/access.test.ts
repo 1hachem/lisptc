@@ -1460,18 +1460,19 @@ describe("a child chat", () => {
 		await expect(
 			alice.as.query(api.chats.children, { chatId }),
 		).resolves.toEqual([]);
-		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
-		await alice.as.mutation(api.chats.spawn, { chatId: child, agent });
+		const first = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const second = await alice.as.mutation(api.chats.spawn, { chatId, agent });
 		await expect(
 			alice.as.query(api.chats.children, { chatId }),
 		).resolves.toEqual([
-			{ _id: child, workspaceId: alice.workspace, title: "r" },
+			{ _id: first, workspaceId: alice.workspace, title: "r" },
+			{ _id: second, workspaceId: alice.workspace, title: "r" },
 		]);
 		await expect(
 			bob.as.query(api.chats.children, { chatId }),
 		).rejects.toThrow();
 		await expect(
-			bob.as.query(api.chats.children, { chatId: child }),
+			bob.as.query(api.chats.children, { chatId: first }),
 		).rejects.toThrow();
 	});
 
@@ -1482,12 +1483,9 @@ describe("a child chat", () => {
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
-		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
-		const grandchild = await alice.as.mutation(api.chats.spawn, {
-			chatId: child,
-			agent,
-		});
-		for (const chatId of [child, grandchild]) {
+		const first = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const second = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		for (const chatId of [first, second]) {
 			await expect(
 				alice.as.query(api.chats.get, { chatId }),
 			).resolves.toMatchObject({ workspaceId: alice.workspace });
