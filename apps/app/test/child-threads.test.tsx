@@ -35,7 +35,10 @@ const THREADS: ChildThread[] = [
 	{ _id: "a", title: "researcher", status: "streaming" },
 	{ _id: "b", title: "reviewer", status: "waiting" },
 	{ _id: "c", title: "coder", status: "errored", failure: "boom" },
-	{ _id: "d", title: "" },
+];
+
+const rows = (host: HTMLElement) => [
+	...host.querySelectorAll<HTMLButtonElement>("li button"),
 ];
 
 describe("child threads", () => {
@@ -45,27 +48,41 @@ describe("child threads", () => {
 
 	it("counts the children and shows a state for each", () => {
 		const host = mount(THREADS);
-		expect(host.textContent).toContain("4 threads");
-		const buttons = [...host.querySelectorAll("button")];
+		expect(host.textContent).toContain("3 threads");
+		const buttons = rows(host);
 		expect(buttons.map((b) => b.dataset.state)).toEqual([
 			"running",
 			"waiting",
 			"errored",
-			"idle",
 		]);
-		expect(buttons.map((b) => b.title)).toEqual([
-			"running",
-			"waiting",
-			"boom",
-			"idle",
-		]);
-		expect(buttons[3].textContent).toContain("untitled");
+		expect(buttons.map((b) => b.title)).toEqual(["running", "waiting", "boom"]);
 	});
 
 	it("opens the child it was clicked on", () => {
 		const onOpen = vi.fn();
 		const host = mount(THREADS, onOpen);
-		act(() => host.querySelectorAll("button")[1].click());
+		act(() => rows(host)[1].click());
 		expect(onOpen).toHaveBeenCalledWith(THREADS[1]);
+	});
+
+	it("shows the latest children and expands to the earlier ones", () => {
+		const host = mount([
+			...THREADS,
+			{ _id: "d", title: "" },
+			{ _id: "e", title: "tester", status: "streaming" },
+		]);
+		expect(rows(host).map((b) => b.dataset.state)).toEqual([
+			"errored",
+			"idle",
+			"running",
+		]);
+		expect(rows(host)[1].textContent).toContain("untitled");
+		const more = host.querySelector<HTMLButtonElement>(
+			"[data-child-threads=more]",
+		);
+		expect(more?.textContent).toBe("+2 earlier");
+		act(() => more?.click());
+		expect(rows(host)).toHaveLength(5);
+		expect(host.querySelector("[data-child-threads=more]")).toBeNull();
 	});
 });
