@@ -35,7 +35,7 @@ export const uiAction = {
 		await convex.query(api.chats.get, { chatId });
 		const result = await answer(chatId, action, values ?? {}, messageId);
 		const { annotations, ...reply } = result;
-		if (messageId !== undefined && !result.error)
+		if (messageId !== undefined)
 			await annotateMessage(convex, chatId, messageId, annotations);
 		console.log(
 			`ui action chat=${chatId} action=${action}${result.message ? " sent" : ""}${result.error ? " error" : ""}`,
