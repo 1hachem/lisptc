@@ -9,6 +9,7 @@ import { CallTimeline } from "../src/components/turn-intent.tsx";
 import type { ChatMessage } from "../src/lib/chat.tsx";
 import { traceOpen } from "../src/lib/panel-ops.ts";
 import { SideTraceProvider } from "../src/lib/side-trace.tsx";
+import { TraceSourceProvider } from "../src/lib/trace-source.tsx";
 import { groupTurns, shapeTurn } from "../src/lib/turn-groups.ts";
 import { formatElapsed, turnTimeline } from "../src/lib/turn-timeline.ts";
 import { UIProvider } from "../src/lib/ui.tsx";
@@ -703,6 +704,53 @@ describe("a trace's steps", () => {
 
 		expect(first?.getAttribute("aria-expanded")).toBe("true");
 		expect(host.textContent).toContain("OUT-0");
+	});
+
+	it("opens a sub-agent's own trace under the step that started it", async () => {
+		const spawned: ChatMessage[] = [
+			{ id: "h1", type: "human", content: "ask the scout" },
+			{ id: "a1", type: "ai", content: "(agents/spawn scout)" },
+			{
+				id: "t1",
+				type: "tool",
+				content: '{"source":"lisp-repl","output":"spawned"}',
+				additional_kwargs: {
+					activity: [
+						{
+							kind: "agent",
+							label: "scout",
+							state: "started",
+							id: "scout",
+							chat: "child-chat",
+						},
+					],
+				},
+			},
+		];
+		const child: ChatMessage[] = [
+			{ id: "c1", type: "ai", content: "(look-around)" },
+			{
+				id: "c2",
+				type: "tool",
+				content: '{"source":"lisp-repl","output":"CHILD-SAW"}',
+			},
+		];
+		const source = (chatId: string) => (chatId === "child-chat" ? child : []);
+		const host = await mount(
+			<TraceSourceProvider source={source}>
+				<TraceLines messages={spawned} turn="t1" />
+			</TraceSourceProvider>,
+		);
+		const opener = host.querySelector<HTMLButtonElement>(
+			'[data-child-trace="child-chat"] > button',
+		);
+
+		expect(opener?.textContent).toContain("scout");
+		expect(host.textContent).not.toContain("(look-around)");
+
+		await act(async () => opener?.click());
+
+		expect(host.textContent).toContain("(look-around)");
 	});
 });
 

@@ -7,15 +7,22 @@ import {
 	messageProse,
 	messageText,
 	stepMeta,
+	toolActivity,
 	toolFailed,
 } from "./chat.tsx";
 
 const SNIPPET = 60;
 
+export interface TraceChild {
+	chatId: string;
+	label: string;
+}
+
 export interface TraceStep {
 	id: string;
 	number: number;
 	messages: ChatMessage[];
+	children: TraceChild[];
 	title: string;
 	failed: boolean;
 	durationMs?: number;
@@ -49,11 +56,22 @@ function durationOf(messages: readonly ChatMessage[]): number | undefined {
 	return timed.length === 0 ? undefined : timed.reduce((a, b) => a + b, 0);
 }
 
+function childrenOf(messages: readonly ChatMessage[]): TraceChild[] {
+	const children = new Map<string, TraceChild>();
+	for (const message of messages)
+		if (isToolMessage(message))
+			for (const { chat, label } of toolActivity(message))
+				if (chat !== undefined && !children.has(chat))
+					children.set(chat, { chatId: chat, label });
+	return [...children.values()];
+}
+
 function stepOf(messages: ChatMessage[], number: number): TraceStep {
 	return {
 		id: messages[0]?.id ?? `step:${number}`,
 		number,
 		messages,
+		children: childrenOf(messages),
 		title: titleOf(messages),
 		failed: messages.some((m) => isToolMessage(m) && toolFailed(m)),
 		durationMs: durationOf(messages),

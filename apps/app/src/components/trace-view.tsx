@@ -1,9 +1,6 @@
-import { convexQuery } from "@convex-dev/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
 import {
@@ -11,11 +8,12 @@ import {
 	isSystemMessage,
 	isToolMessage,
 	stepMeta,
-	toChatMessages,
 } from "../lib/chat.tsx";
 import { useModelPicker } from "../lib/model-picker.tsx";
+import { useTrace } from "../lib/trace-source.tsx";
 import {
 	stepHolding,
+	type TraceChild,
 	type TraceEntry,
 	type TraceStep,
 	traceEntries,
@@ -27,6 +25,7 @@ import {
 	ChatLine,
 	SystemLine,
 	ToolMessage,
+	useChannels,
 } from "./chat-view.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 
@@ -196,6 +195,104 @@ function TracedMessage({
 	);
 }
 
+function ChildTrace({ child }: { child: TraceChild }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div
+			data-child-trace={child.chatId}
+			className="flex min-w-0 flex-col gap-2"
+		>
+			<button
+				type="button"
+				aria-expanded={open}
+				onClick={() => setOpen((was) => !was)}
+				className="flex w-full min-w-0 items-center gap-2 text-left text-[11.5px] text-dim hover:text-fg"
+			>
+				<span aria-hidden className="w-2 flex-none">
+					{open ? "▾" : "▸"}
+				</span>
+				<span className="flex-none">agent</span>
+				<span className="min-w-0 truncate text-fg">{child.label}</span>
+			</button>
+			{open && (
+				<div className="min-w-0 border-dim/20 border-l pl-3">
+					<NestedTrace chatId={child.chatId} />
+				</div>
+			)}
+		</div>
+	);
+}
+
+function NestedTrace({ chatId }: { chatId: string }) {
+	const messages = useTrace(chatId as Id<"chats">);
+	const entries = useMemo(() => traceEntries(messages), [messages]);
+	const steps = useOpenSteps(entries);
+	return <TraceEntries entries={entries} steps={steps} />;
+}
+
+function TraceEntries({
+	entries,
+	steps,
+	flashing,
+}: {
+	entries: readonly TraceEntry[];
+	steps: ReturnType<typeof useOpenSteps>;
+	flashing?: string;
+}) {
+	const shown = useChannels();
+	return (
+		<div className="flex w-full min-w-0 flex-col gap-3">
+			{entries.map((entry) => {
+				if (entry.kind === "message") {
+					const { message, at } = entry;
+					return (
+						<TracedMessage
+							key={message.id ?? at}
+							message={message}
+							flashing={flashing}
+						>
+							{isSystemMessage(message) ? (
+								shown.system && <SystemLine message={message} />
+							) : (
+								<TraceLine message={message} index={at} />
+							)}
+						</TracedMessage>
+					);
+				}
+				const { step } = entry;
+				const open = steps.isOpen(step.id);
+				return (
+					<div
+						key={step.id}
+						data-step={step.number}
+						className="flex min-w-0 flex-col gap-2"
+					>
+						<StepHeader
+							step={step}
+							open={open}
+							toggle={() => steps.toggle(step.id)}
+						/>
+						{open &&
+							step.messages.map((message, at) => (
+								<TracedMessage
+									key={message.id ?? at}
+									message={message}
+									flashing={flashing}
+								>
+									<TraceLine message={message} index={at} />
+								</TracedMessage>
+							))}
+						{open &&
+							step.children.map((child) => (
+								<ChildTrace key={child.chatId} child={child} />
+							))}
+					</div>
+				);
+			})}
+		</div>
+	);
+}
+
 export function TraceLines({
 	messages,
 	turn,
@@ -206,7 +303,7 @@ export function TraceLines({
 	const [shown, setShown] = useState<Shown>(EVERY_CHANNEL);
 	const scroller = useRef<HTMLDivElement>(null);
 	const entries = useMemo(() => traceEntries(messages), [messages]);
-	const { isOpen, toggle: toggleStep } = useOpenSteps(entries, turn);
+	const steps = useOpenSteps(entries, turn);
 	const flashing = useFlash(turn);
 	useScrollTo(scroller, turn, messages.length > 0);
 	const toggle = (id: keyof Shown) =>
@@ -219,50 +316,8 @@ export function TraceLines({
 					ref={scroller}
 					className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4"
 				>
-					<div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
-						{entries.map((entry) => {
-							if (entry.kind === "message") {
-								const { message, at } = entry;
-								return (
-									<TracedMessage
-										key={message.id ?? at}
-										message={message}
-										flashing={flashing}
-									>
-										{isSystemMessage(message) ? (
-											shown.system && <SystemLine message={message} />
-										) : (
-											<TraceLine message={message} index={at} />
-										)}
-									</TracedMessage>
-								);
-							}
-							const { step } = entry;
-							const open = isOpen(step.id);
-							return (
-								<div
-									key={step.id}
-									data-step={step.number}
-									className="flex min-w-0 flex-col gap-2"
-								>
-									<StepHeader
-										step={step}
-										open={open}
-										toggle={() => toggleStep(step.id)}
-									/>
-									{open &&
-										step.messages.map((message, at) => (
-											<TracedMessage
-												key={message.id ?? at}
-												message={message}
-												flashing={flashing}
-											>
-												<TraceLine message={message} index={at} />
-											</TracedMessage>
-										))}
-								</div>
-							);
-						})}
+					<div className="mx-auto w-full max-w-[680px]">
+						<TraceEntries entries={entries} steps={steps} flashing={flashing} />
 					</div>
 				</div>
 			</div>
@@ -271,9 +326,6 @@ export function TraceLines({
 }
 
 export function TraceView({ chatId, turn }: { chatId: string; turn?: string }) {
-	const { data } = useQuery(
-		convexQuery(api.messages.transcript, { chatId: chatId as Id<"chats"> }),
-	);
-	const messages = useMemo(() => toChatMessages(data ?? []), [data]);
+	const messages = useTrace(chatId as Id<"chats">);
 	return <TraceLines messages={messages} turn={turn} />;
 }

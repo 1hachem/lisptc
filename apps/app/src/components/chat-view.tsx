@@ -231,7 +231,7 @@ export function ChannelsShown({
 	);
 }
 
-function useChannels(): Shown {
+export function useChannels(): Shown {
 	return useContext(ShownChannels) ?? EVERY_CHANNEL;
 }
 
