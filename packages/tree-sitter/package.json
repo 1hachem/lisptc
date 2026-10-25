@@ -1,5 +1,5 @@
 {
-  "name": "tree-sitter-lisptc",
+  "name": "@repo/tree-sitter",
   "version": "0.1.0",
   "private": true,
   "type": "commonjs"
