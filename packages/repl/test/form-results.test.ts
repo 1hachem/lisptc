@@ -1,6 +1,8 @@
 import { settled } from "@repo/interpreter/drive";
 import type { Interp } from "@repo/interpreter/lisp";
 import { describe, expect, test } from "vitest";
+import { MemoryImageStore } from "../src/image-store.ts";
+import { AgentRepl } from "../src/repl.ts";
 import { memoryRepl } from "./helpers.ts";
 
 function skippingFailures(interp: Interp): void {
@@ -28,5 +30,14 @@ describe("a step's results", () => {
 			"(+ 1 1) (car 5) (+ 2 2)",
 		);
 		expect(results).toEqual(["2"]);
+	});
+
+	test("are still recorded once the session resumed from an image", async () => {
+		const images = new MemoryImageStore();
+		await new AgentRepl({ extensions: [], images }).evalOutput("(setq n 41)");
+		const resumed = new AgentRepl({ extensions: [], images });
+		await resumed.resume();
+		const { results } = await resumed.evalOutput("(+ n 1)");
+		expect(results).toEqual(["42"]);
 	});
 });

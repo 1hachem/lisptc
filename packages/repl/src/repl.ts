@@ -211,6 +211,13 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private freshInterp(): Interp {
+		const interp = this.recorded();
+		runSync(interp, prelude);
+		this.setup(interp);
+		return interp;
+	}
+
+	private recorded(): Interp {
 		const interp = new Interp({ extensions: this.extensions });
 		const recording = () => this.recorder;
 		interp.hooks.evalForm.use(function* (i, form, next) {
@@ -227,8 +234,6 @@ export class MemoryRepl implements InMemoryRepl {
 			record.end(mark, value);
 			return value;
 		});
-		runSync(interp, prelude);
-		this.setup(interp);
 		return interp;
 	}
 
@@ -259,7 +264,7 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private load({ depth, image }: Checkpoint): void {
-		const interp = new Interp({ extensions: this.extensions });
+		const interp = this.recorded();
 		try {
 			restore(interp, image);
 		} catch (ex) {
