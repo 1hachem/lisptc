@@ -1726,6 +1726,11 @@ describe("a thread's server functions", () => {
 		expect(
 			(await alice.as.query(api.chats.get, { chatId })).status,
 		).toBeUndefined();
+		await t.mutation(internal.threads.start, { chatId });
+		await t.mutation(internal.threads.settle, { chatId, stopped: true });
+		expect((await alice.as.query(api.chats.get, { chatId })).status).toBe(
+			"stopped",
+		);
 	});
 
 	it("refuses a chat that is gone", async () => {

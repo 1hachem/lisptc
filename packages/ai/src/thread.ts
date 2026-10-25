@@ -22,9 +22,11 @@ export interface TranscriptStore {
 	annotate(threadId: string, id: string, kwargs: MessageKwargs): Promise<void>;
 }
 
+export type TurnEnding = { failure: string } | { stopped: true };
+
 export interface ThreadStatus {
 	start(threadId: string): Promise<void>;
-	settle(threadId: string, failure?: string): Promise<void>;
+	settle(threadId: string, ending?: TurnEnding): Promise<void>;
 }
 
 export interface TurnSetup {
@@ -236,7 +238,7 @@ export class Thread {
 			prepared = await this.prepare(opening);
 		} catch (error) {
 			await ports.status
-				.settle(id, errorText(error))
+				.settle(id, { failure: errorText(error) })
 				.catch((unsettled: unknown) =>
 					console.error(`[ai] thread=${id} was not settled:`, unsettled),
 				);
@@ -301,7 +303,16 @@ export class Thread {
 							: overspent.signal.aborted
 								? "the turn ran out of tokens"
 								: undefined);
-					return this.record(history, produced, revised, failed);
+					return this.record(
+						history,
+						produced,
+						revised,
+						failed !== undefined
+							? { failure: failed }
+							: halting.signal.aborted
+								? { stopped: true }
+								: undefined,
+					);
 				},
 				onOutcome: finished,
 			},
@@ -345,7 +356,7 @@ export class Thread {
 		history: ChatMessageInput[],
 		produced: WireMessage[],
 		revised: ReadonlyMap<number, WireMessage>,
-		failure: string | undefined,
+		ending: TurnEnding | undefined,
 	): Promise<void> {
 		const { id, ports } = this;
 		try {
@@ -357,7 +368,7 @@ export class Thread {
 			}
 			if (produced.length > 0) await ports.transcript.append(id, produced);
 		} finally {
-			await ports.status.settle(id, failure);
+			await ports.status.settle(id, ending);
 		}
 	}
 }

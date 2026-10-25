@@ -3,6 +3,7 @@ import {
 	Alert02Icon,
 	BubbleChatIcon,
 	Route01Icon,
+	StopCircleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
@@ -28,6 +29,7 @@ import { PanelLink, useShown } from "./panel-link.tsx";
 const STATUS_ICONS = {
 	waiting: { icon: BubbleChatIcon, iconClassName: "text-yellow" },
 	errored: { icon: Alert02Icon, iconClassName: "text-red" },
+	stopped: { icon: StopCircleIcon, iconClassName: "text-dim" },
 } satisfies Record<
 	Exclude<Doc<"chats">["status"], "streaming" | undefined>,
 	{ icon: IconSvgElement; iconClassName: string }

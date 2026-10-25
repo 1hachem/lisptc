@@ -95,10 +95,14 @@ export const start = internalMutation({
 });
 
 export const settle = internalMutation({
-	args: { chatId: v.id("chats"), failure: v.optional(v.string()) },
+	args: {
+		chatId: v.id("chats"),
+		failure: v.optional(v.string()),
+		stopped: v.optional(v.boolean()),
+	},
 	returns: v.null(),
-	handler: async (ctx, { chatId, failure }) => {
-		await settleChat(ctx, (await threadChat(ctx, chatId))._id, failure);
+	handler: async (ctx, { chatId, ...ending }) => {
+		await settleChat(ctx, (await threadChat(ctx, chatId))._id, ending);
 		return null;
 	},
 });

@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
 import type { ChatMessageInput, WireMessage } from "../src/stream.ts";
-import { Thread, type TranscriptStore, type TurnSetup } from "../src/thread.ts";
+import {
+	Thread,
+	type TranscriptStore,
+	type TurnEnding,
+	type TurnSetup,
+} from "../src/thread.ts";
 import { testRepl } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
@@ -42,6 +47,7 @@ beforeEach(() => {
 class World implements TranscriptStore {
 	readonly stored: WireMessage[] = [];
 	readonly turns: string[] = [];
+	readonly endings: (TurnEnding | undefined)[] = [];
 	running = 0;
 	overlapped = false;
 	onAppend: (messages: WireMessage[]) => void = () => {};
@@ -73,8 +79,9 @@ class World implements TranscriptStore {
 					if (this.running > 1) this.overlapped = true;
 					this.turns.push("start");
 				},
-				settle: async () => {
+				settle: async (_id, ending) => {
 					this.running -= 1;
+					this.endings.push(ending);
 					this.turns.push("settle");
 				},
 			},
@@ -341,5 +348,13 @@ describe("stopping a thread", () => {
 		gate.open();
 		expect(await posted.ended).not.toEqual({ answer: "done." });
 		expect(thread.stop()).toBe(false);
+		expect(world.endings).toEqual([{ stopped: true }]);
+	});
+
+	test("settles a turn that finished as neither stopped nor failed", async () => {
+		const world = new World();
+		const posted = await world.thread().post(user("a", "hello"));
+		await posted.ended;
+		expect(world.endings).toEqual([undefined]);
 	});
 });

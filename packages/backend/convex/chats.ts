@@ -227,13 +227,21 @@ export const expire = internalMutation({
 export async function settleChat(
 	ctx: MutationCtx,
 	chatId: Id<"chats">,
-	failure: string | undefined,
+	{ failure, stopped }: { failure?: string; stopped?: boolean },
 ): Promise<void> {
 	if (failure !== undefined) {
 		await ctx.db.patch(chatId, {
 			status: "errored",
 			streamingSince: undefined,
 			failure,
+		});
+		return;
+	}
+	if (stopped) {
+		await ctx.db.patch(chatId, {
+			status: "stopped",
+			streamingSince: undefined,
+			failure: undefined,
 		});
 		return;
 	}
@@ -250,7 +258,7 @@ export const settle = mutation({
 	returns: v.null(),
 	handler: async (ctx, { chatId, failure }) => {
 		await requireChat(ctx, chatId);
-		await settleChat(ctx, chatId, failure);
+		await settleChat(ctx, chatId, { failure });
 		return null;
 	},
 });
