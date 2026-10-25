@@ -22,3 +22,5 @@ turn ended. Agent keeps its chat between sends. Spawning a name again starts it
 over. Spawned names survive restart in your image. :roster names agents it may
 spawn; :budget caps its steps. :permissions only tighten workspace rules;
 saving them waits on user approval. Asks from sub-agents reach user in your chat.
+User @sub-agents/researcher = saved definition "researcher": spawn it, send it
+the ask.

@@ -14,13 +14,20 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { restingIcon } from "../lib/bot-icon.ts";
 import { knowledgeIcon } from "../lib/file-icons.ts";
 import { typeaheadList } from "./typeahead-list.tsx";
 
 export interface Mentionable {
-	folder: StoreFolder;
+	folder: StoreFolder | "sub-agents";
 	name: string;
 	contentType: string | null;
+}
+
+function mentionIcon({ folder, name, contentType }: Mentionable) {
+	return folder === "sub-agents"
+		? restingIcon()
+		: knowledgeIcon(name, contentType);
 }
 
 const MENTION_QUERY = /(^|\s)@([^\s@"]*)$/;
@@ -120,7 +127,7 @@ export function MentionMenuPlugin({
 					(option) => (
 						<>
 							<HugeiconsIcon
-								icon={knowledgeIcon(option.file.name, option.file.contentType)}
+								icon={mentionIcon(option.file)}
 								className="size-icon-sm flex-none text-dim"
 							/>
 							<span className="min-w-0 flex-1 truncate text-fg">

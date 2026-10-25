@@ -43,6 +43,9 @@ export function ChatComposer({
 	const { data: attachments } = useQuery(
 		convexQuery(api.files.list, { workspaceId, folder: "attachments" }),
 	);
+	const { data: agents } = useQuery(
+		convexQuery(api.agents.list, { workspaceId }),
+	);
 	const mentions = useMemo<Mentionable[]>(
 		() => [
 			...(knowledge ?? []).map(({ name, contentType }) => ({
@@ -55,8 +58,13 @@ export function ChatComposer({
 				name,
 				contentType,
 			})),
+			...(agents ?? []).map(({ name }) => ({
+				folder: "sub-agents" as const,
+				name,
+				contentType: null,
+			})),
 		],
-		[knowledge, attachments],
+		[knowledge, attachments, agents],
 	);
 	const toAttachments = useAttachmentUpload(workspaceId);
 	const submit = useCallback(
