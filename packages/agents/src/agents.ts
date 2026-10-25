@@ -1,3 +1,8 @@
+import {
+	type ActivityEntry,
+	recordActivity,
+} from "@repo/interpreter/annotations";
+import { topic } from "@repo/interpreter/channels";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { snapshot } from "@repo/interpreter/image";
@@ -14,7 +19,7 @@ import {
 import { keyName } from "@repo/interpreter/plist";
 import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
-import type { InterpExtension } from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
 import {
@@ -53,10 +58,19 @@ export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
 
+const agentActivity = topic<ActivityEntry>("agents-activity");
+
+function reportActivity(hooks: SessionHooks): void {
+	hooks.annotate.use((buffer, into, next) =>
+		next(buffer, recordActivity(into, buffer.collect(agentActivity))),
+	);
+}
+
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
 		asks: [DEFINE, BOUNDED_DEFINE, KEEP],
+		session: reportActivity,
 	});
 }
 
@@ -183,6 +197,12 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			"The sub-agents this session spawned, by name, with the thread each runs on.",
 		),
 	);
+
+	function report(id: string, name: string, detail: string, chat: string) {
+		agentActivity.emit(interp.channels, {
+			user: { kind: "agent", label: name, detail, state: "done", id, chat },
+		});
+	}
 
 	function threads(form: string): AgentThreads {
 		if (host.threads === undefined)
@@ -356,6 +376,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			const chat = chatOf(options.get("chat"));
 			const definition = await definitionOf(name, options);
 			const child = await threads("spawn").spawn({ definition, seed, chat });
+			report(`agent-${child}`, name, "spawned", child);
 			handles.adopt(
 				options.has("prompt")
 					? { name, child, unsaved: writeDefinition(definition) }
@@ -415,7 +436,9 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 					"send: no running agent by that name; spawn it first",
 					name,
 				);
-			return await threads("send").send(child, { text, maxSteps });
+			const job = await threads("send").send(child, { text, maxSteps });
+			report(job, name, text, child);
+			return job;
 		},
 	);
 
