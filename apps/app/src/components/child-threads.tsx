@@ -13,7 +13,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { stopChat, useChatSession } from "../lib/chat.tsx";
-import { usePageHost } from "../lib/page-host.tsx";
+import { requestPanel } from "../lib/panel-requests.ts";
 
 export interface ChildThread {
 	_id: string;
@@ -219,7 +219,6 @@ export function ChildThreadStrip({
 }
 
 export function ChildThreads({ chatId }: { chatId: Id<"chats"> | null }) {
-	const host = usePageHost();
 	const stopAll = useChatSession((state) => state.stopAll);
 	const { data } = useQuery(
 		convexQuery(api.chats.children, chatId === null ? "skip" : { chatId }),
@@ -228,7 +227,7 @@ export function ChildThreads({ chatId }: { chatId: Id<"chats"> | null }) {
 		<ChildThreadStrip
 			threads={data ?? []}
 			onOpen={(thread) =>
-				host.show({ kind: "chat", chatId: thread._id, title: thread.title })
+				requestPanel({ kind: "chat", chatId: thread._id, title: thread.title })
 			}
 			onStop={(thread) => stopChat(thread._id, "tree")}
 			onStopAll={stopAll}

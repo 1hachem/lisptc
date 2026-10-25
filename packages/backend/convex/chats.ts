@@ -95,8 +95,9 @@ export const children = query({
 			.query("chats")
 			.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
 			.take(MAX_CHATS);
-		return rows.map(({ _id, title, status, failure }) => ({
+		return rows.map(({ _id, workspaceId, title, status, failure }) => ({
 			_id,
+			workspaceId,
 			title,
 			status,
 			failure,
