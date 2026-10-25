@@ -1,11 +1,16 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import {
+	Add01Icon,
+	Attachment01Icon,
 	Book02Icon,
 	BubbleChatIcon,
+	Delete02Icon,
+	File01Icon,
 	FlashIcon,
 	Home01Icon,
 	InformationCircleIcon,
 	PaintBoardIcon,
+	Settings02Icon,
 	ShieldKeyIcon,
 	StickyNote01Icon,
 	TaskDone01Icon,
@@ -19,47 +24,48 @@ import {
 	SortableTree,
 	TreeCommand,
 	TreeFile,
-	TreeFilter,
 	TreeFolder,
-	TreeMore,
 } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
-import {
-	Link,
-	useLocation,
-	useNavigate,
-	useParams,
-} from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
-import { readBoolPref, writeBoolPref } from "../lib/prefs.ts";
+import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
+import { requestPanelClosed } from "../lib/panel-requests.ts";
+import { writeBoolPref } from "../lib/prefs.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
-import type { SidebarEntry } from "../lib/sidebar-order.ts";
+import {
+	SIDEBAR_FOLDERS,
+	type SidebarEntry,
+	type SidebarFolder,
+} from "../lib/sidebar-order.ts";
+import { folderCookie, folderOpen } from "../lib/sidebar-prefetch.ts";
+import { ChatFolder } from "./chat-folder.tsx";
+import {
+	AttachmentsFolder,
+	BinFolder,
+	KnowledgeFolder,
+} from "./file-folder.tsx";
 import { FileMenu } from "./file-menu.tsx";
-import { SessionRow } from "./session-row.tsx";
+import { linkTo, useShown } from "./panel-link.tsx";
+import { Empty, type FolderState, Listing } from "./tree-listing.tsx";
 
 const PLACEHOLDERS = [
-	"knowledge",
 	"sub-agents",
 	"triggers",
 	"tasks",
 	"ui",
 	"tests",
-] as const;
+] as const satisfies readonly SidebarFolder[];
 
-type Folder =
-	| "chat"
-	| "memories"
-	| "permissions"
-	| (typeof PLACEHOLDERS)[number];
-
-const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
+const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	chat: BubbleChatIcon,
 	memories: StickyNote01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
+	attachments: Attachment01Icon,
+	bin: Delete02Icon,
 	"sub-agents": restingIcon(),
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
@@ -67,62 +73,46 @@ const FOLDER_ICONS: Record<Folder, IconSvgElement> = {
 	tests: TestTube01Icon,
 };
 
-function useLeave(workspaceId: Id<"workspaces">) {
-	const navigate = useNavigate();
-	return (selected: boolean) =>
-		selected
-			? navigate({
-					to: "/$workspaceId",
-					params: { workspaceId },
-					replace: true,
-				})
-			: Promise.resolve();
+export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
+	...FOLDER_ICONS,
+	home: Home01Icon,
+	new_chat: Add01Icon,
+	"README.md": InformationCircleIcon,
+	"settings.ptc": Settings02Icon,
+	"preferences.ptc": File01Icon,
+};
+
+function memoryPage(key: string): PanelContent {
+	return { kind: "page", page: "memory", id: key, title: `memories/${key}` };
 }
 
-function Empty({ children }: { children: ReactNode }) {
-	return <div className="py-1 pl-9 text-dim">{children}</div>;
+function permissionPage(index: number, name: string): PanelContent {
+	return {
+		kind: "page",
+		page: "permission",
+		id: String(index),
+		title: `permissions/${name}`,
+	};
 }
 
-function Listing<T>({
-	items,
-	empty,
-	children,
-}: {
-	items: T[] | undefined;
-	empty: string;
-	children: (item: T) => ReactNode;
-}) {
-	if (items === undefined) return null;
-	if (items.length === 0) return <Empty>{empty}</Empty>;
-	return items.map(children);
+function isFolder(entry: SidebarEntry): entry is SidebarFolder {
+	return SIDEBAR_FOLDERS.some((folder) => folder === entry);
 }
 
-const FOLDERS = [
-	"chat",
-	"memories",
-	"permissions",
-	...PLACEHOLDERS,
-] as const satisfies readonly Folder[];
-
-function isFolder(entry: SidebarEntry): entry is Folder {
-	return FOLDERS.some((folder) => folder === entry);
-}
-
-function folderCookie(folder: Folder) {
-	return `ui.folder.${folder}`;
+export function openFolderOnMount(entry: SidebarEntry) {
+	if (isFolder(entry)) writeBoolPref(folderCookie(entry), true);
 }
 
 function useFolders() {
 	const [opened, setOpened] = useState(
 		() =>
 			Object.fromEntries(
-				FOLDERS.map((folder) => [
-					folder,
-					readBoolPref(folderCookie(folder), folder === "chat"),
-				]),
-			) as Record<Folder, boolean>,
+				SIDEBAR_FOLDERS.map((folder) => [folder, folderOpen(folder)]),
+			) as Record<SidebarFolder, boolean>,
 	);
-	return (folder: Folder) => ({
+	return <F extends SidebarFolder>(folder: F): FolderState<F> => ({
+		name: folder,
+		icon: FOLDER_ICONS[folder],
 		open: opened[folder],
 		onToggle: () => {
 			const next = !opened[folder];
@@ -132,27 +122,23 @@ function useFolders() {
 	});
 }
 
-function MemoryFile({
-	memory,
-	selected,
-}: {
-	memory: Doc<"memories">;
-	selected: boolean;
-}) {
+function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 	const removeMemory = useConvexMutation(api.memories.remove);
-	const leave = useLeave(memory.workspaceId);
+	const shown = useShown();
+	const page = memoryPage(memory.key);
 
 	return (
 		<TreeFile
 			name={memory.key}
 			depth={1}
-			selected={selected}
+			selected={shown(page)}
+			onDragStart={dragsAs(page)}
 			trailing={
 				<FileMenu
 					name={memory.key}
 					confirm="forget it for good?"
 					onDelete={async () => {
-						await leave(selected);
+						requestPanelClosed(page);
 						await removeMemory({
 							workspaceId: memory.workspaceId,
 							key: memory.key,
@@ -160,31 +146,17 @@ function MemoryFile({
 					}}
 				/>
 			}
-			link={(content, className) => (
-				<Link
-					to="/$workspaceId/memories/$key"
-					params={{ workspaceId: memory.workspaceId, key: memory.key }}
-					className={className}
-				>
-					{content}
-				</Link>
-			)}
+			link={linkTo(memory.workspaceId, page)}
 		/>
 	);
 }
 
-function PermissionFiles({
-	workspaceId,
-	selected,
-}: {
-	workspaceId: Id<"workspaces">;
-	selected: number | undefined;
-}) {
+function PermissionFiles({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	const { data: source } = useQuery(
 		convexQuery(api.permissions.get, { workspaceId }),
 	);
 	const putPermissions = useConvexMutation(api.permissions.put);
-	const leave = useLeave(workspaceId);
+	const shown = useShown();
 	const rules =
 		source === undefined ? undefined : permissionRules(source ?? "");
 
@@ -192,18 +164,20 @@ function PermissionFiles({
 		<Listing items={rules} empty="no rules yet">
 			{(rule) => {
 				const index = rules?.indexOf(rule) ?? -1;
+				const page = permissionPage(index, rule.name);
 				return (
 					<TreeFile
 						key={rule.start}
 						name={rule.name}
 						depth={1}
-						selected={selected === index}
+						selected={shown(page)}
+						onDragStart={dragsAs(page)}
 						trailing={
 							<FileMenu
 								name={rule.name}
 								confirm="drop this rule?"
 								onDelete={async () => {
-									await leave(selected === index);
+									requestPanelClosed(page);
 									await putPermissions({
 										workspaceId,
 										source: withoutRule(source ?? "", rule),
@@ -211,15 +185,7 @@ function PermissionFiles({
 								}}
 							/>
 						}
-						link={(content, className) => (
-							<Link
-								to="/$workspaceId/permissions/$rule"
-								params={{ workspaceId, rule: index }}
-								className={className}
-							>
-								{content}
-							</Link>
-						)}
+						link={linkTo(workspaceId, page)}
 					/>
 				);
 			}}
@@ -228,20 +194,13 @@ function PermissionFiles({
 }
 
 function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
-	const selected = useLocation({
-		select: (location) =>
-			location.pathname.replace(/\/$/, "") === `/${workspaceId}`,
-	});
 	return (
 		<TreeFile
 			name="home"
 			icon={Home01Icon}
-			selected={selected}
-			link={(content, className) => (
-				<Link to="/$workspaceId" params={{ workspaceId }} className={className}>
-					{content}
-				</Link>
-			)}
+			selected={false}
+			onDragStart={dragsAs(NEW_CHAT)}
+			link={linkTo(workspaceId, NEW_CHAT)}
 		/>
 	);
 }
@@ -262,90 +221,20 @@ function RootFile({
 	workspaceId: Id<"workspaces">;
 	page: keyof typeof ROOT_FILES;
 }) {
-	const selected = useLocation({
-		select: (location) => location.pathname.endsWith(`/${page}`),
-	});
+	const shown = useShown();
+	const content: PanelContent = {
+		kind: "page",
+		page,
+		title: ROOT_FILES[page].name,
+	};
 	return (
 		<TreeFile
 			name={ROOT_FILES[page].name}
 			icon={ROOT_FILES[page].icon}
-			selected={selected}
-			link={(content, className) => (
-				<Link
-					to={`/$workspaceId/${page}`}
-					params={{ workspaceId }}
-					className={className}
-				>
-					{content}
-				</Link>
-			)}
+			selected={shown(content)}
+			onDragStart={dragsAs(content)}
+			link={linkTo(workspaceId, content)}
 		/>
-	);
-}
-
-const CHAT_PAGE = 20;
-const SEARCH_DELAY_MS = 200;
-
-function useSettled(value: string) {
-	const [settled, setSettled] = useState(value);
-	useEffect(() => {
-		const timer = setTimeout(() => setSettled(value), SEARCH_DELAY_MS);
-		return () => clearTimeout(timer);
-	}, [value]);
-	return settled;
-}
-
-function ChatFolder({
-	workspaceId,
-	current,
-	folder,
-}: {
-	workspaceId: Id<"workspaces">;
-	current: string | undefined;
-	folder: { open: boolean; onToggle: () => void };
-}) {
-	const newChat = useNewChat();
-	const [search, setSearch] = useState("");
-	const settled = useSettled(search);
-	const [limit, setLimit] = useState(CHAT_PAGE);
-	const { data: page } = useQuery({
-		...convexQuery(api.chats.list, { workspaceId, search: settled, limit }),
-		placeholderData: (previous) => previous,
-		enabled: folder.open,
-	});
-
-	return (
-		<TreeFolder
-			name="chat"
-			icon={FOLDER_ICONS.chat}
-			{...folder}
-			onCreate={() => void newChat()}
-			createLabel="new chat"
-		>
-			<TreeFilter
-				value={search}
-				onChange={(next) => {
-					setSearch(next);
-					setLimit(CHAT_PAGE);
-				}}
-				label="search chats"
-			/>
-			<Listing
-				items={page?.chats}
-				empty={settled ? `nothing matches ${settled}` : "no chats yet"}
-			>
-				{(chat) => (
-					<SessionRow
-						key={chat._id}
-						chat={chat}
-						current={chat._id === current}
-					/>
-				)}
-			</Listing>
-			{page?.more && (
-				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />
-			)}
-		</TreeFolder>
 	);
 }
 
@@ -356,7 +245,6 @@ export function WorkspaceTree({
 }) {
 	const newChat = useNewChat();
 	const folder = useFolders();
-	const params = useParams({ strict: false });
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
@@ -365,13 +253,7 @@ export function WorkspaceTree({
 	const { motion } = useSidebarMotion();
 
 	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
-		<TreeFolder
-			name={name}
-			icon={FOLDER_ICONS[name]}
-			{...folder(name)}
-			onCreate="disabled"
-			createLabel="coming soon"
-		>
+		<TreeFolder {...folder(name)} onCreate="disabled" createLabel="coming soon">
 			<Empty>no {name} yet</Empty>
 		</TreeFolder>
 	);
@@ -382,39 +264,30 @@ export function WorkspaceTree({
 			<TreeCommand name="new_chat" onRun={() => void newChat()} />
 		),
 		chat: () => (
-			<ChatFolder
-				workspaceId={workspaceId}
-				current={params.chatId}
-				folder={folder("chat")}
-			/>
+			<ChatFolder workspaceId={workspaceId} folder={folder("chat")} />
 		),
 		memories: () => (
-			<TreeFolder
-				name="memories"
-				icon={FOLDER_ICONS.memories}
-				{...folder("memories")}
-			>
+			<TreeFolder {...folder("memories")}>
 				<Listing items={memories} empty="no memories yet">
-					{(memory) => (
-						<MemoryFile
-							key={memory._id}
-							memory={memory}
-							selected={params.key === memory.key}
-						/>
-					)}
+					{(memory) => <MemoryFile key={memory._id} memory={memory} />}
 				</Listing>
 			</TreeFolder>
 		),
 		permissions: () => (
-			<TreeFolder
-				name="permissions"
-				icon={FOLDER_ICONS.permissions}
-				{...folder("permissions")}
-			>
-				<PermissionFiles workspaceId={workspaceId} selected={params.rule} />
+			<TreeFolder {...folder("permissions")}>
+				<PermissionFiles workspaceId={workspaceId} />
 			</TreeFolder>
 		),
-		knowledge: placeholder("knowledge"),
+		knowledge: () => (
+			<KnowledgeFolder workspaceId={workspaceId} folder={folder("knowledge")} />
+		),
+		attachments: () => (
+			<AttachmentsFolder
+				workspaceId={workspaceId}
+				folder={folder("attachments")}
+			/>
+		),
+		bin: () => <BinFolder workspaceId={workspaceId} folder={folder("bin")} />,
 		"sub-agents": placeholder("sub-agents"),
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),

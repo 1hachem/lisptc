@@ -1,7 +1,7 @@
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { authToken } from "../../server/auth.ts";
 
-export type SsrAuth =
+type SsrAuth =
 	| { source: "server"; token: string | null }
 	| { source: "browser" };
 

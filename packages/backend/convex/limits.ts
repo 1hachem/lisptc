@@ -24,6 +24,20 @@ export const MAX_MCP_REASON_LENGTH = 4_096;
 
 export const MAX_MCP_MOUNT_BYTES = 524_288;
 
+export const MAX_KNOWLEDGE_BYTES = 20_971_520;
+
+export const MAX_KNOWLEDGE = 200;
+
+export const MAX_ATTACHMENTS = 200;
+
+export const ATTACHMENT_TTL_MS = 604_800_000;
+
+export const MAX_BIN = 1_000;
+
+export const BIN_TTL_MS = 2_592_000_000;
+
+export const UNCLAIMED_UPLOAD_TTL_MS = 86_400_000;
+
 export const MAX_REPL_LAYER_BYTES = 8_388_608;
 
 export const REPL_LAYER_CHUNK_CHARS = 262_144;
@@ -31,3 +45,7 @@ export const REPL_LAYER_CHUNK_CHARS = 262_144;
 export const TURN_DEADLINE_MS = 600_000;
 
 export const STREAMING_LEASE_MS = TURN_DEADLINE_MS + 60_000;
+
+export const MAX_LAYOUT_BYTES = 262_144;
+
+export const MAX_SPLITS = 3;

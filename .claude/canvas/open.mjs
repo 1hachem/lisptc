@@ -1,1 +1,0 @@
-../../.agents/canvas/open.mjs

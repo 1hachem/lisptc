@@ -8,13 +8,12 @@ import {
 	mutation,
 	query,
 } from "./_generated/server.js";
+import { checkAttachments } from "./lib/attached.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
 import { waitsOnUser } from "./lib/waiting.js";
 import { collect, layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
-
-const MAX_TRANSCRIPT = 200;
 
 const MAX_SENT = 200;
 
@@ -67,7 +66,7 @@ export const transcript = query({
 		return await ctx.db
 			.query("messages")
 			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-			.take(MAX_TRANSCRIPT);
+			.collect();
 	},
 });
 
@@ -118,6 +117,7 @@ export const append = mutation({
 			.order("desc")
 			.first();
 		let seq = last === null ? 0 : last.seq + 1;
+		for (const entry of messages) checkAttachments(entry.kwargs);
 		const layers = await layersOf(ctx, chat, messages);
 		const ids = [];
 		for (const [at, entry] of messages.entries()) {
@@ -156,7 +156,9 @@ export const annotate = mutation({
 			.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
 			.first();
 		if (row === null) throw new ConvexError({ code: "MESSAGE_NOT_FOUND" });
-		const clamped = clamp(row.content, deepMerge(row.kwargs ?? {}, kwargs));
+		const merged = deepMerge(row.kwargs ?? {}, kwargs);
+		checkAttachments(merged);
+		const clamped = clamp(row.content, merged);
 		await ctx.db.patch(row._id, {
 			content: clamped.content,
 			kwargs: clamped.kwargs,

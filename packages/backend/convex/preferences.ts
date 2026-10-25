@@ -2,13 +2,12 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel.js";
 import { mutation, query } from "./_generated/server.js";
 import { requireUser } from "./lib/auth.js";
-import { withDefaultToggles } from "./lib/preferenceDefaults.js";
+import { withDefaults } from "./lib/preferenceDefaults.js";
 import { MAX_PREFERENCES_BYTES } from "./limits.js";
 
 const encoder = new TextEncoder();
 
 const preferences = v.object({
-	theme: v.optional(v.string()),
 	font: v.optional(v.string()),
 	themeUses: v.optional(v.record(v.string(), v.number())),
 	channels: v.optional(v.record(v.string(), v.boolean())),
@@ -16,12 +15,15 @@ const preferences = v.object({
 	input: v.optional(v.record(v.string(), v.boolean())),
 	sidebar: v.optional(v.array(v.string())),
 	hidden: v.optional(v.array(v.string())),
+	statusBar: v.optional(v.array(v.string())),
+	statusBarHidden: v.optional(v.array(v.string())),
 	motion: v.optional(v.string()),
+	panelMotion: v.optional(v.boolean()),
 });
 
 function stripped(row: Doc<"preferences"> | null) {
 	if (row === null) return {};
-	const { _id, _creationTime, userId, ...stored } = row;
+	const { _id, _creationTime, userId, theme, ...stored } = row;
 	return stored;
 }
 
@@ -34,7 +36,7 @@ export const get = query({
 			.query("preferences")
 			.withIndex("by_user", (q) => q.eq("userId", user._id))
 			.unique();
-		return withDefaultToggles(stripped(row));
+		return withDefaults(stripped(row));
 	},
 });
 

@@ -1,5 +1,7 @@
+import type { Annotations } from "@repo/interpreter/session";
 import {
 	contentToText,
+	ENVELOPE_KEYS,
 	envelopeOf,
 	type MessageKwargs,
 } from "@repo/shared/messages";
@@ -36,6 +38,8 @@ export interface WireMessage {
 }
 
 const encoder = new TextEncoder();
+
+const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
 function mergeInto(
 	into: Record<string, unknown>,
@@ -113,6 +117,16 @@ function toEntry(m: ChatMessageInput): TranscriptEntry {
 		return { role: "user", content, event: { source: eventSource(m) } };
 	const rode = riding(m);
 	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
+}
+
+function received(input: ChatInput): Annotations | undefined {
+	const newest = input.messages?.at(-1);
+	if (newest === undefined || wireType(newest.type ?? newest.role) !== "human")
+		return undefined;
+	const carried = Object.entries(newest.additional_kwargs ?? {}).filter(
+		([key]) => !ENVELOPE.has(key),
+	);
+	return carried.length === 0 ? undefined : Object.fromEntries(carried);
 }
 
 function toTranscript(input: ChatInput): TranscriptEntry[] {
@@ -349,6 +363,7 @@ export function streamChatResponse<Id extends string>(
 						identity,
 						inbox: steering.take,
 						runsForms,
+						received: received(input),
 					}))
 						if (!turn.apply(event)) break;
 				}

@@ -79,6 +79,78 @@ describe("workspace access", () => {
 	});
 });
 
+describe("workspace icon", () => {
+	it("lets the owner pick one, and no one else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await alice.as.mutation(api.workspaces.setIcon, {
+			workspaceId: alice.workspace,
+			icon: "rocket",
+		});
+		expect(
+			(
+				await alice.as.query(api.workspaces.get, {
+					workspaceId: alice.workspace,
+				})
+			).icon,
+		).toBe("rocket");
+		await expect(
+			bob.as.mutation(api.workspaces.setIcon, {
+				workspaceId: alice.workspace,
+				icon: "leaf",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses an icon the app cannot draw", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setIcon, {
+				workspaceId: alice.workspace,
+				icon: "unicorn" as "rocket",
+			}),
+		).rejects.toThrow();
+	});
+});
+
+describe("workspace theme", () => {
+	it("lets the owner pick one per workspace, and no one else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await alice.as.mutation(api.workspaces.setTheme, {
+			workspaceId: alice.workspace,
+			theme: "borland",
+		});
+		expect(
+			(
+				await alice.as.query(api.workspaces.get, {
+					workspaceId: alice.workspace,
+				})
+			).theme,
+		).toBe("borland");
+		await expect(
+			bob.as.mutation(api.workspaces.setTheme, {
+				workspaceId: alice.workspace,
+				theme: "gruvbox-light",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses a theme the app does not offer", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.workspaces.setTheme, {
+				workspaceId: alice.workspace,
+				theme: "neon",
+			}),
+		).rejects.toThrow("UNKNOWN_THEME");
+	});
+});
+
 describe("workspace model", () => {
 	const model = {
 		provider: "openrouter",
@@ -102,8 +174,8 @@ describe("workspace model", () => {
 			model,
 		});
 		const next = {
-			provider: "digitalocean",
-			model: "gemma-4-31B-it",
+			provider: "openrouter",
+			model: "openai/gpt-6-luna",
 		} as const;
 		await alice.as.mutation(api.workspaces.setModel, {
 			workspaceId: alice.workspace,
@@ -372,6 +444,125 @@ describe("messages", () => {
 	});
 });
 
+describe("panel layout access", () => {
+	const tab = (name: string) => ({
+		id: `file:knowledge/${name}`,
+		content: { kind: "file" as const, folder: "knowledge" as const, name },
+	});
+	const pane = (id: string) => ({
+		kind: "pane" as const,
+		id,
+		tabs: [tab(`${id}.md`)],
+		active: `file:knowledge/${id}.md`,
+	});
+	const split = (
+		id: string,
+		direction: "row" | "column",
+		children: string[],
+	) => ({
+		kind: "split" as const,
+		id,
+		direction,
+		children,
+		sizes: children.map(() => 100 / children.length),
+	});
+	const layout = (columns: number, rows = 1) => {
+		const ids = Array.from({ length: columns }, (_, c) => `c${c}`);
+		const cells = ids.flatMap((column) =>
+			Array.from({ length: rows }, (_, r) => `${column}-${r}`),
+		);
+		return {
+			root: "root",
+			focused: null,
+			nodes: [
+				split("root", "row", ids),
+				...ids.map((column) =>
+					split(
+						column,
+						"column",
+						cells.filter((cell) => cell.startsWith(`${column}-`)),
+					),
+				),
+				...cells.map(pane),
+			],
+		};
+	};
+
+	it("keeps a workspace's layout to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.layouts.put, {
+			workspaceId: bob.workspace,
+			layout: layout(2),
+		});
+		expect(
+			await bob.as.query(api.layouts.get, { workspaceId: bob.workspace }),
+		).toEqual(layout(2));
+		await expect(
+			alice.as.query(api.layouts.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.layouts.put, {
+				workspaceId: bob.workspace,
+				layout: layout(1),
+			}),
+		).rejects.toThrow();
+	});
+
+	it("holds one layout per workspace, replaced on save, and none before the first", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toBeNull();
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: layout(1),
+		});
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: layout(3, 3),
+		});
+		const rows = await t.run((ctx) => ctx.db.query("layouts").collect());
+		expect(rows).toHaveLength(1);
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(layout(3, 3));
+	});
+
+	it("reads a layout stored in the old shape as none", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await t.run((ctx) =>
+			ctx.db.insert("layouts", {
+				workspaceId: alice.workspace,
+				layout: { direction: "row", focused: null, groups: [] },
+			}),
+		);
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toBeNull();
+	});
+
+	it("takes any number of panes side by side but refuses more than three stacked", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.layouts.put, {
+				workspaceId: alice.workspace,
+				layout: layout(6),
+			}),
+		).resolves.toBeNull();
+		await expect(
+			alice.as.mutation(api.layouts.put, {
+				workspaceId: alice.workspace,
+				layout: layout(1, 4),
+			}),
+		).rejects.toThrow(/LAYOUT_TOO_MANY_SPLITS/);
+	});
+});
+
 describe("permissions access", () => {
 	it("keeps a workspace's config to its owner", async () => {
 		const t = harness();
@@ -579,20 +770,23 @@ describe("oauth record access", () => {
 	});
 });
 
+const DEFAULTS = {
+	...DEFAULT_TOGGLES,
+	panelMotion: true,
+};
+
 describe("preferences access", () => {
 	it("keeps a user's preferences to that user", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		const preferences = { theme: "dusk", font: "mono", themeUses: { dusk: 2 } };
+		const preferences = { font: "mono", themeUses: { dusk: 2 } };
 		await bob.as.mutation(api.preferences.put, { preferences });
 		expect(await bob.as.query(api.preferences.get, {})).toEqual({
-			...DEFAULT_TOGGLES,
+			...DEFAULTS,
 			...preferences,
 		});
-		expect(await alice.as.query(api.preferences.get, {})).toEqual(
-			DEFAULT_TOGGLES,
-		);
+		expect(await alice.as.query(api.preferences.get, {})).toEqual(DEFAULTS);
 		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
 	});
 
@@ -600,7 +794,7 @@ describe("preferences access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { theme: "dusk", channels: { lisp: true } },
+			preferences: { motion: "lift", channels: { lisp: true } },
 		});
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { font: "mono", channels: { lisp: false } },
@@ -609,11 +803,12 @@ describe("preferences access", () => {
 			preferences: { metadata: { tokens: true } },
 		});
 		expect(await alice.as.query(api.preferences.get, {})).toEqual({
-			theme: "dusk",
+			motion: "lift",
 			font: "mono",
 			channels: { ...DEFAULT_TOGGLES.channels, lisp: false },
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
 			input: DEFAULT_TOGGLES.input,
+			panelMotion: true,
 		});
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows).toHaveLength(1);
@@ -630,11 +825,20 @@ describe("preferences access", () => {
 		await expect(
 			alice.as.mutation(api.preferences.put, {
 				preferences: {
-					theme: "x".repeat(MAX_PREFERENCES_BYTES),
+					font: "x".repeat(MAX_PREFERENCES_BYTES),
 					themeUses: {},
 				},
 			}),
 		).rejects.toThrow("PREFERENCES_TOO_LARGE");
+	});
+
+	it("leaves out a theme stored before it became the workspace's", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await t.run((ctx) =>
+			ctx.db.insert("preferences", { userId: alice.user, theme: "borland" }),
+		);
+		expect(await alice.as.query(api.preferences.get, {})).toEqual(DEFAULTS);
 	});
 });
 
@@ -919,5 +1123,135 @@ describe("readme access", () => {
 				body: "x".repeat(MAX_README_BYTES + 1),
 			}),
 		).rejects.toThrow("README_TOO_LARGE");
+	});
+});
+
+describe("knowledge access", () => {
+	it("keeps a workspace's knowledge to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.files.add, {
+			folder: "knowledge",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await expect(
+			alice.as.query(api.files.get, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.remove, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.removeMany, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		).rejects.toThrow();
+		expect(
+			await bob.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId: bob.workspace,
+			}),
+		).toHaveLength(1);
+	});
+});
+
+describe("attachments access", () => {
+	it("keeps a workspace's attachments to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await expect(
+			alice.as.query(api.files.get, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.keep, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.remove, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.files.removeMany, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		).rejects.toThrow();
+		expect(
+			await bob.as.query(api.files.list, {
+				folder: "attachments",
+				workspaceId: bob.workspace,
+			}),
+		).toHaveLength(1);
+	});
+});
+
+describe("bin access", () => {
+	it("keeps a workspace's bin to its owner", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.files.add, {
+			folder: "attachments",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["bob"]))),
+		});
+		await bob.as.mutation(api.files.remove, {
+			folder: "attachments",
+			workspaceId: bob.workspace,
+			name: "bob.txt",
+		});
+		for (const denied of [
+			alice.as.query(api.bin.list, { workspaceId: bob.workspace }),
+			alice.as.query(api.bin.get, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.restore, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.remove, {
+				workspaceId: bob.workspace,
+				name: "bob.txt",
+			}),
+			alice.as.mutation(api.bin.removeMany, {
+				workspaceId: bob.workspace,
+				names: ["bob.txt"],
+			}),
+		])
+			await expect(denied).rejects.toThrow();
+		expect(
+			await bob.as.query(api.bin.list, { workspaceId: bob.workspace }),
+		).toHaveLength(1);
 	});
 });

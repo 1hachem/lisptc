@@ -3,6 +3,15 @@ import type { Awaitable, PromptSource } from "@repo/shared/host";
 export interface Settings {
 	name: string;
 	model: string;
+	icon: string;
+	theme: string;
+}
+
+export interface ThemeChoice {
+	id: string;
+	name: string;
+	family: string;
+	scheme: "light" | "dark";
 }
 
 export interface ChatEntry {
@@ -25,6 +34,8 @@ export interface WorkspaceStore {
 	settings(): Awaitable<Settings>;
 	rename(name: string): Awaitable<void>;
 	choose(model: string): Awaitable<void>;
+	pickIcon(icon: string): Awaitable<void>;
+	pickTheme(theme: string): Awaitable<void>;
 	chats(query: { search?: string; limit: number }): Awaitable<ChatPage>;
 	retitle(chatId: string, title: string): Awaitable<void>;
 	archive(chatId: string): Awaitable<void>;
@@ -34,6 +45,9 @@ export interface WorkspaceStore {
 export interface WorkspaceHost {
 	store: WorkspaceStore;
 	models: readonly string[];
+	icons: readonly string[];
+	themes: readonly ThemeChoice[];
+	defaultDarkTheme?: string;
 	chatId?: string;
 	prompt: PromptSource;
 }
@@ -59,6 +73,14 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
 
 	choose(model: string): void {
 		this.held = { ...this.held, model };
+	}
+
+	pickIcon(icon: string): void {
+		this.held = { ...this.held, icon };
+	}
+
+	pickTheme(theme: string): void {
+		this.held = { ...this.held, theme };
 	}
 
 	chats({ search, limit }: { search?: string; limit: number }): ChatPage {
