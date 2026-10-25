@@ -44,7 +44,7 @@ export function ChatComposer({
 		convexQuery(api.files.list, { workspaceId, folder: "attachments" }),
 	);
 	const { data: agents } = useQuery(
-		convexQuery(api.agents.list, { workspaceId }),
+		convexQuery(api.sources.list, { workspaceId, folder: "sub-agents" }),
 	);
 	const mentions = useMemo<Mentionable[]>(
 		() => [
@@ -58,9 +58,9 @@ export function ChatComposer({
 				name,
 				contentType,
 			})),
-			...(agents ?? []).map(({ name }) => ({
+			...(agents ?? []).map((file) => ({
 				folder: "sub-agents" as const,
-				name,
+				name: file.replace(/\.ptc$/, ""),
 				contentType: null,
 			})),
 		],
