@@ -8,6 +8,7 @@ const envelope = {
 
 let chatRequestSchema: typeof import("../../server/agent/chat.ts").chatRequestSchema;
 let steerRequestSchema: typeof import("../../server/agent/chat.ts").steerRequestSchema;
+let chatOnlySchema: typeof import("../../server/agent/chat.ts").chatOnlySchema;
 
 beforeAll(async () => {
 	process.env.VITE_CONVEX_URL = "http://127.0.0.1:3210";
@@ -17,7 +18,7 @@ beforeAll(async () => {
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
 	process.env.CONVEX_SELF_HOSTED_ADMIN_KEY = "test-admin-key";
-	({ chatRequestSchema, steerRequestSchema } = await import(
+	({ chatRequestSchema, steerRequestSchema, chatOnlySchema } = await import(
 		"../../server/agent/chat.ts"
 	));
 });
@@ -48,6 +49,12 @@ describe("the chat request contract", () => {
 		expect(chatRequestSchema.safeParse({ input }).success).toBe(false);
 	});
 
+	test("carries the id the browser shows the message under", () => {
+		const input = { ...envelope.input, id: "m1" };
+		const parsed = chatRequestSchema.safeParse({ input });
+		expect(parsed.success && parsed.data.input.id).toBe("m1");
+	});
+
 	test("refuses a turn posted without the envelope", () => {
 		expect(chatRequestSchema.safeParse(envelope.input).success).toBe(false);
 	});
@@ -67,5 +74,17 @@ describe("the steer request contract", () => {
 		expect(steerRequestSchema.safeParse({ ...steer, id: "" }).success).toBe(
 			false,
 		);
+	});
+});
+
+describe("the watch and stop contract", () => {
+	const chatId = envelope.input.chatId;
+
+	test("names the chat to watch or stop", () => {
+		expect(chatOnlySchema.safeParse({ chatId }).success).toBe(true);
+	});
+
+	test("refuses a request that names no chat", () => {
+		expect(chatOnlySchema.safeParse({}).success).toBe(false);
 	});
 });

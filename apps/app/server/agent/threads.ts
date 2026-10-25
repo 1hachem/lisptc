@@ -8,6 +8,7 @@ import {
 	Threads,
 	type TranscriptStore,
 	type TurnSetup,
+	type WireMessage,
 } from "@repo/ai";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
@@ -115,6 +116,18 @@ export function post(
 ): Promise<Posted> {
 	posters.set(chatId, poster);
 	return threads.get(chatId).post(envelope, options);
+}
+
+export function watch(chatId: Id<"chats">, signal: AbortSignal): Response {
+	return threads.get(chatId).watch(signal);
+}
+
+export function stop(chatId: Id<"chats">): boolean {
+	return threads.get(chatId).stop();
+}
+
+export function relay(chatId: Id<"chats">, message: WireMessage): void {
+	threads.get(chatId).relay(message);
 }
 
 export function withdraw(chatId: Id<"chats">, id: string): Promise<boolean> {

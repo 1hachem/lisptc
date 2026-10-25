@@ -1,8 +1,4 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
-import {
-	FetchStreamTransport,
-	useStream,
-} from "@langchain/langgraph-sdk/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import type { FiredMemory } from "@repo/components";
@@ -35,6 +31,7 @@ import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
+import { shownMessages, useWatch } from "./watch.ts";
 
 export interface ChatMessage {
 	id?: string;
@@ -217,37 +214,6 @@ function useMarkStreaming() {
 	);
 }
 
-function messageOf(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
-function useStreamFailure(
-	error: unknown,
-	chatId: Id<"chats"> | null,
-	streamingFor: { readonly current: Id<"chats"> | null },
-): void {
-	const settleChat = useConvexMutation(api.chats.settle);
-	useEffect(() => {
-		if (error)
-			reportIssue(error, {
-				$exception_source: "chat stream",
-				thread_id: chatId ?? "draft",
-			});
-	}, [error, chatId]);
-
-	useEffect(() => {
-		const failed = streamingFor.current;
-		if (!error || failed === null) return;
-		settleChat({ chatId: failed, failure: messageOf(error) }).catch(
-			(ex: unknown) =>
-				reportIssue(ex, {
-					$exception_source: "chat settle",
-					thread_id: failed,
-				}),
-		);
-	}, [error, settleChat, streamingFor]);
-}
-
 export type ChatStore = UseBoundStore<StoreApi<ChatSession>>;
 
 const ChatContext = createContext<ChatStore | null>(null);
@@ -265,17 +231,11 @@ function titleOf(message: string): string {
 
 function errorFor(
 	chatId: Id<"chats"> | null,
-	sources: {
-		stream: unknown;
-		streamingFor: Id<"chats"> | null;
-		failure: { chatId: Id<"chats"> | null; message: string } | null;
-	},
+	failed: string | undefined,
+	failure: Failure,
 ): string | undefined {
-	const { stream, streamingFor, failure } = sources;
-	if (stream && streamingFor === chatId)
-		return stream instanceof Error ? stream.message : String(stream);
 	if (failure?.chatId === chatId) return failure.message;
-	return undefined;
+	return failed;
 }
 
 function reported(source: string, thread: string) {
@@ -311,44 +271,43 @@ function humanMessage(
 		: { ...message, additional_kwargs: annotations };
 }
 
-function useChatStream() {
-	const transport = useMemo(
-		() =>
-			new FetchStreamTransport({
-				apiUrl: "/api/chat",
-				onRequest: async (_url, init) => ({
-					...init,
-					headers: { ...init.headers, ...(await apiHeaders()) },
-				}),
-			}),
-		[],
-	);
-	return useStream({ transport });
+async function postTo(path: string, body: unknown): Promise<Response> {
+	return await fetch(path, {
+		method: "POST",
+		headers: await apiHeaders(),
+		body: JSON.stringify(body),
+	});
 }
 
-function useHalt(
-	stream: { isLoading: boolean; stop: () => unknown },
-	streamingFor: { readonly current: Id<"chats"> | null },
-	clear: () => void,
-	settleChat: (args: { chatId: Id<"chats"> }) => Promise<unknown>,
-) {
-	const halt = useCallback(() => {
-		clear();
-		stream.stop();
-	}, [stream, clear]);
+async function postTurn(
+	chatId: Id<"chats">,
+	id: string,
+	input: TurnInput,
+): Promise<void> {
+	const response = await postTo("/api/chat", {
+		input: { chatId, id, ...input },
+	});
+	if (!response.ok)
+		throw new Error(`the message was refused: ${response.status}`);
+}
+
+function useHalt(chatId: Id<"chats"> | null, clear: () => void) {
+	const halt = useCallback((target: Id<"chats">) => {
+		postTo("/api/chat/stop", { chatId: target }).catch(
+			reported("chat stop", target),
+		);
+	}, []);
 
 	const stop = useCallback(() => {
-		const stopped = streamingFor.current;
-		if (stream.isLoading && stopped !== null)
-			settleChat({ chatId: stopped }).catch(reported("chat settle", stopped));
-		halt();
-	}, [stream, halt, settleChat, streamingFor]);
+		clear();
+		if (chatId !== null) halt(chatId);
+	}, [chatId, clear, halt]);
 
 	const abandon = useCallback(
 		(target: Id<"chats">) => {
-			if (streamingFor.current === target) halt();
+			if (target === chatId) stop();
 		},
-		[halt, streamingFor],
+		[chatId, stop],
 	);
 	return { stop, abandon };
 }
@@ -357,12 +316,15 @@ type Failure = { chatId: Id<"chats"> | null; message: string } | null;
 
 type TurnInput = { message: string; annotations?: Record<string, unknown> };
 
+interface Pending {
+	readonly chatId: Id<"chats">;
+	readonly message: ChatMessage;
+}
+
 function useSubmit(
 	workspaceId: Id<"workspaces">,
 	chatId: Id<"chats"> | null,
-	stream: ReturnType<typeof useChatStream>,
-	streamingFor: { current: Id<"chats"> | null },
-	persisted: ChatMessage[],
+	setPending: (pending: Pending | null) => void,
 	setFailure: (failure: Failure) => void,
 	announce: { readonly current: (chatId: Id<"chats">) => void },
 ) {
@@ -377,12 +339,14 @@ function useSubmit(
 				renameChat({ chatId: opened, title }).catch(
 					reported("chat title", opened),
 				);
-			streamingFor.current = opened;
 			markStreaming({ chatId: opened }).catch(reported("chat start", opened));
-			stream.submit(
-				{ chatId: opened, ...input },
-				{ optimisticValues: { messages: [...persisted, shown] } },
-			);
+			setPending({ chatId: opened, message: shown });
+			try {
+				await postTurn(opened, shown.id ?? crypto.randomUUID(), input);
+			} catch (error) {
+				setPending(null);
+				throw error;
+			}
 			if (chatId === null) announce.current(opened);
 		},
 		[
@@ -391,9 +355,7 @@ function useSubmit(
 			draftChat,
 			renameChat,
 			markStreaming,
-			persisted,
-			stream,
-			streamingFor,
+			setPending,
 			setFailure,
 			announce,
 		],
@@ -460,13 +422,15 @@ function usePersisted(chatId: Id<"chats"> | null): ChatMessage[] {
 	return useMemo(() => toChatMessages(stored ?? []), [stored]);
 }
 
-function shownTurns(
-	streamingHere: boolean,
-	streamed: ChatMessage[],
-	persisted: ChatMessage[],
-	loading: boolean,
+function withPending(
+	turns: ChatMessage[],
+	pending: Pending | null,
+	chatId: Id<"chats"> | null,
 ): ChatMessage[] {
-	return streamingHere ? turnsToShow(streamed, persisted, loading) : persisted;
+	if (pending === null || (chatId !== null && pending.chatId !== chatId))
+		return turns;
+	if (turns.some((message) => message.id === pending.message.id)) return turns;
+	return [...turns, pending.message];
 }
 
 function useSend(
@@ -531,24 +495,24 @@ export function ChatProvider({
 	const announce = useRef(onOpened);
 	announce.current = onOpened;
 	const drafted = useDrafted(workspaceId, chatId);
-	const settleChat = useConvexMutation(api.chats.settle);
-	const stream = useChatStream();
-	const streamed: ChatMessage[] = stream.messages;
-	const streamingFor = useRef<Id<"chats"> | null>(null);
+	const watched = useWatch(chatId);
+	const streamed = useMemo(() => shownMessages(watched), [watched]);
+	const running = watched.status === "running";
 
 	const persisted = usePersisted(chatId);
-
-	useStreamFailure(stream.error, chatId, streamingFor);
 
 	const greeting = useGreeting();
 
 	const [failure, setFailure] = useState<Failure>(null);
+	const [pending, setPending] = useState<Pending | null>(null);
+	useEffect(() => {
+		if (chatId === null) setPending(null);
+	}, [chatId]);
 
-	const turns = shownTurns(
-		streamingFor.current === chatId,
-		streamed,
-		persisted,
-		stream.isLoading,
+	const turns = useMemo(
+		() =>
+			withPending(turnsToShow(streamed, persisted, running), pending, chatId),
+		[streamed, persisted, running, pending, chatId],
 	);
 
 	const messages = useMemo(
@@ -560,9 +524,7 @@ export function ChatProvider({
 	const submit = useSubmit(
 		workspaceId,
 		chatId,
-		stream,
-		streamingFor,
-		persisted,
+		setPending,
 		setFailure,
 		announce,
 	);
@@ -570,15 +532,11 @@ export function ChatProvider({
 	const { queued, enqueue, withdraw, clear } = useSteerQueue({
 		chatId,
 		landed: streamed,
-		streaming: stream.isLoading,
+		streaming: running,
 	});
-	const send = useSend(
-		stream.isLoading && streamingFor.current === chatId,
-		enqueue,
-		submitTurn,
-	);
+	const send = useSend(running, enqueue, submitTurn);
 
-	const { stop, abandon } = useHalt(stream, streamingFor, clear, settleChat);
+	const { stop, abandon } = useHalt(chatId, clear);
 
 	const fresh = isFreshChat(chatId, turns);
 
@@ -592,15 +550,15 @@ export function ChatProvider({
 			meta,
 			greeting: greetingText(greeting),
 			fresh,
-			isLoading: stream.isLoading,
+			isLoading: running,
 			chatId,
 			draftChatId: chatId === null ? drafted : null,
 			workspaceId,
-			error: errorFor(chatId, {
-				stream: stream.error,
-				streamingFor: streamingFor.current,
+			error: errorFor(
+				chatId,
+				watched.status === "errored" ? watched.failure : undefined,
 				failure,
-			}),
+			),
 			send,
 			sendAbout,
 			stop,
@@ -615,8 +573,8 @@ export function ChatProvider({
 		meta,
 		greeting,
 		fresh,
-		stream.isLoading,
-		stream.error,
+		running,
+		watched,
 		failure,
 		chatId,
 		drafted,

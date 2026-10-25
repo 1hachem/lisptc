@@ -17,6 +17,7 @@ import type { StepAnnotations } from "@repo/interpreter/session";
 import { chatTurns, notice } from "./chat-turns.ts";
 import { delegated } from "./delegated.ts";
 import { currentSession } from "./session.ts";
+import { relay } from "./threads.ts";
 
 export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 	return (workspaceId, chatId) => {
@@ -45,16 +46,16 @@ export function subAgents(connect: Connect, server: ServerClient): RunnerFor {
 		): Promise<string> {
 			const id = crypto.randomUUID();
 			const answered = delegated.wait(id, source, signal);
+			const content = `${who} is waiting on you`;
 			await connect().mutation(api.messages.append, {
 				chatId,
-				messages: [
-					{
-						id,
-						type: "tool",
-						content: `${who} is waiting on you`,
-						kwargs: held.output,
-					},
-				],
+				messages: [{ id, type: "tool", content, kwargs: held.output }],
+			});
+			relay(chatId, {
+				id,
+				type: "tool",
+				content,
+				additional_kwargs: held.output,
 			});
 			return answered;
 		}

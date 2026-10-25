@@ -1,13 +1,18 @@
 import { api } from "@repo/backend/api";
 import { ENVELOPE_KEYS } from "@repo/shared/messages";
 import { z } from "zod";
-import { body } from "./body.ts";
+import { body, params } from "./body.ts";
 import { serveTurns } from "./chat-turns.ts";
 import { convexAs } from "./convex.ts";
 import { convexId } from "./ids.ts";
 import { repls } from "./repls.ts";
 import { type Authed, authed } from "./session.ts";
-import { post, withdraw as withdrawPost } from "./threads.ts";
+import {
+	post,
+	stop as stopThread,
+	watch as watchThread,
+	withdraw as withdrawPost,
+} from "./threads.ts";
 
 const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
@@ -23,6 +28,7 @@ const carried = z
 export const chatRequestSchema = z.object({
 	input: z.object({
 		chatId: convexId<"chats">(),
+		id: z.string().min(1).optional(),
 		message: z.string(),
 		annotations: carried.optional(),
 	}),
@@ -33,6 +39,8 @@ export const steerRequestSchema = z.object({
 	id: z.string().min(1),
 	message: z.string().trim().min(1),
 });
+
+export const chatOnlySchema = z.object({ chatId: convexId<"chats">() });
 
 const withdrawRequestSchema = steerRequestSchema.pick({
 	chatId: true,
@@ -53,19 +61,44 @@ export const turn = {
 		context,
 	}: Authed<z.infer<typeof chatRequestSchema>>): Promise<Response> => {
 		const { chatId, message, annotations } = context.body.input;
-		const posted = await post(
+		const id = context.body.input.id ?? crypto.randomUUID();
+		await convexAs(context.session).query(api.chats.get, { chatId });
+		await post(
 			{ session: context.session, identity: identityOf(request) },
 			chatId,
 			{
 				kind: "user",
-				id: crypto.randomUUID(),
+				id,
 				text: message,
 				forms: true,
 				...(annotations === undefined ? {} : { annotations }),
 			},
-			{ watch: true, signal: request.signal },
 		);
-		return (await posted.opened) ?? new Response(null, { status: 204 });
+		return Response.json({ accepted: true, id }, { status: 202 });
+	},
+};
+
+export const watch = {
+	middleware: [...authed, params(chatOnlySchema)] as const,
+	handler: async ({
+		request,
+		context,
+	}: Authed<z.infer<typeof chatOnlySchema>>): Promise<Response> => {
+		const { chatId } = context.body;
+		await convexAs(context.session).query(api.chats.get, { chatId });
+		return watchThread(chatId, request.signal);
+	},
+};
+
+export const stop = {
+	middleware: [...authed, body(chatOnlySchema)] as const,
+	handler: async ({
+		context,
+	}: Authed<z.infer<typeof chatOnlySchema>>): Promise<Response> => {
+		const { chatId } = context.body;
+		await convexAs(context.session).query(api.chats.get, { chatId });
+		const stopped = stopThread(chatId);
+		return Response.json({ stopped }, { status: stopped ? 200 : 409 });
 	},
 };
 
