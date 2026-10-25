@@ -23,9 +23,6 @@ where the `users` table and a workspace are kept in step with the auth user.
 declares the components the deployment uses, and `convex/migrations.ts` holds
 the migration runner.
 
-`convex/_generated/` is generated. Never edit it, and never hand-write what
-belongs there.
-
 `src/` holds what runs outside the deployment against it: the stores a REPL
 talks to. A store here satisfies a port and owns the codec between the row and
 the domain value. A port is declared with the extension and satisfied here,
@@ -68,6 +65,10 @@ pnpm --filter @repo/backend test       # convex-test, in memory
 
 `dev` wants `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` in its
 environment. Under `task`, Infisical supplies them.
+
+An agent may run `task convex:generate` without asking. It is how
+`convex/_generated/` is brought up to date, and the way out when a bare
+`convex codegen` fails for want of a deployment.
 
 ## Tests
 

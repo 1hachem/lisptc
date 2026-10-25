@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
+    "./files": "./src/files.ts",
     "./host": "./src/host.ts",
     "./host-node": "./src/host-node.ts",
     "./lisp-form-fixtures": "./src/lisp-form-fixtures.ts",

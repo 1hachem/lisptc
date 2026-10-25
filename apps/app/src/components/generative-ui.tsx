@@ -1,8 +1,10 @@
 import type { ViewNode } from "@repo/interpreter/annotations";
 import { viewKey } from "@repo/interpreter/annotations";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
+import { startPanelDrag, toPanelOps } from "../lib/panel-ops.ts";
+import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
 import { Markdown } from "./markdown.tsx";
 
@@ -62,6 +64,220 @@ function changed(
 	if (action) fire(action, controlValues(el));
 }
 
+type WidgetProps = {
+	node: ViewNode;
+	kids: ReactNode;
+	fire: Fire;
+	busy: boolean;
+};
+
+const BUTTON =
+	"border border-dim/50 px-2 py-px text-fg hover:border-accent hover:text-accent disabled:opacity-40";
+
+function FieldLabel({
+	node,
+	className = "text-dim",
+}: {
+	node: ViewNode;
+	className?: string;
+}) {
+	if (node.props.label === undefined) return null;
+	return <span className={className}>{text(node.props, "label")}</span>;
+}
+
+function Link({ node }: WidgetProps) {
+	return (
+		<a
+			href={text(node.props, "href")}
+			target="_blank"
+			rel="noreferrer"
+			className="text-accent underline decoration-dim/50 hover:decoration-accent"
+		>
+			{text(node.props, "text") || text(node.props, "href")}
+		</a>
+	);
+}
+
+function FileLink({ node }: WidgetProps) {
+	const { openFile } = usePanels();
+	const folder = text(node.props, "folder");
+	const name = text(node.props, "name");
+	if (folder !== "knowledge" && folder !== "attachments")
+		return <span className="text-dim">{text(node.props, "text") || name}</span>;
+	return (
+		<button
+			type="button"
+			title={`${folder}/${name}`}
+			draggable
+			onDragStart={(event) =>
+				startPanelDrag(event.dataTransfer, { kind: "file", folder, name })
+			}
+			onClick={() => openFile(folder, name)}
+			className="w-fit cursor-pointer text-left text-accent underline decoration-dim/50 hover:decoration-accent"
+		>
+			{text(node.props, "text") || name}
+		</button>
+	);
+}
+
+function Badge({ node }: WidgetProps) {
+	const tone =
+		TONE_CLASSES[text(node.props, "tone")] ?? "border-dim/50 text-dim";
+	return (
+		<span className={`w-fit border px-1 ${tone}`}>
+			{text(node.props, "text")}
+		</span>
+	);
+}
+
+function Kpi({ node }: WidgetProps) {
+	return (
+		<div className="flex min-w-0 flex-col">
+			<span className="text-dim">{text(node.props, "label")}</span>
+			<span className="font-bold text-2xl text-fg leading-tight">
+				{text(node.props, "value")}
+			</span>
+			{node.props.hint !== undefined && (
+				<span className="text-dim">{text(node.props, "hint")}</span>
+			)}
+		</div>
+	);
+}
+
+function Button({ node, fire, busy }: WidgetProps) {
+	return (
+		<button
+			type="button"
+			disabled={busy}
+			onClick={(e) =>
+				fire(text(node.props, "action"), formValues(e.currentTarget))
+			}
+			className={BUTTON}
+		>
+			{text(node.props, "label")}
+		</button>
+	);
+}
+
+function Input({ node, busy }: WidgetProps) {
+	return (
+		<label className="flex min-w-0 flex-col gap-px">
+			<FieldLabel node={node} />
+			<input
+				name={text(node.props, "name")}
+				defaultValue={text(node.props, "value")}
+				placeholder={text(node.props, "placeholder")}
+				disabled={busy}
+				className="border border-dim/50 bg-transparent px-2 py-px text-fg outline-none placeholder:text-dim/60 focus:border-accent"
+			/>
+		</label>
+	);
+}
+
+function Select({ node, fire, busy }: WidgetProps) {
+	return (
+		<label className="flex min-w-0 flex-col gap-px">
+			<FieldLabel node={node} />
+			<select
+				name={text(node.props, "name")}
+				defaultValue={text(node.props, "value")}
+				disabled={busy}
+				onChange={(e) => changed(node, fire, e.currentTarget)}
+				className="border border-dim/50 bg-bg px-2 py-px text-fg outline-none focus:border-accent"
+			>
+				{strings(node.props, "options").map((option) => (
+					<option key={option} value={option}>
+						{option}
+					</option>
+				))}
+			</select>
+		</label>
+	);
+}
+
+function Checkbox({ node, fire, busy }: WidgetProps) {
+	return (
+		<label className="flex min-w-0 items-center gap-2">
+			<input
+				type="checkbox"
+				name={text(node.props, "name")}
+				defaultChecked={node.props.checked === true}
+				disabled={busy}
+				onChange={(e) => changed(node, fire, e.currentTarget)}
+			/>
+			<FieldLabel node={node} className="text-fg" />
+		</label>
+	);
+}
+
+function Form({ node, kids, fire, busy }: WidgetProps) {
+	return (
+		<form
+			onSubmit={(e) => {
+				e.preventDefault();
+				fire(text(node.props, "action"), formValues(e.currentTarget));
+			}}
+			className="flex min-w-0 flex-col items-start gap-2"
+		>
+			{kids}
+			<button type="submit" disabled={busy} className={BUTTON}>
+				{text(node.props, "submit") || "submit"}
+			</button>
+		</form>
+	);
+}
+
+const WIDGETS = new Map<string, (props: WidgetProps) => ReactNode>([
+	[
+		"stack",
+		({ kids }) => <div className="flex min-w-0 flex-col gap-2">{kids}</div>,
+	],
+	[
+		"row",
+		({ kids }) => (
+			<div className="flex min-w-0 flex-wrap items-end gap-3">{kids}</div>
+		),
+	],
+	[
+		"card",
+		({ node, kids }) => (
+			<div className="flex min-w-0 flex-col gap-2 border border-dim/40 p-2">
+				<div className="font-bold text-accent">{text(node.props, "title")}</div>
+				{kids}
+			</div>
+		),
+	],
+	[
+		"heading",
+		({ node }) => (
+			<div className="font-bold text-accent">{text(node.props, "text")}</div>
+		),
+	],
+	[
+		"text",
+		({ node }) => (
+			<div className="whitespace-pre-wrap break-words">
+				{text(node.props, "text")}
+			</div>
+		),
+	],
+	["markdown", ({ node }) => <Markdown>{text(node.props, "text")}</Markdown>],
+	["link", Link],
+	["file-link", FileLink],
+	["badge", Badge],
+	["kpi", Kpi],
+	["button", Button],
+	["input", Input],
+	["select", Select],
+	["checkbox", Checkbox],
+	["form", Form],
+	["table", ({ node }) => <Table node={node} />],
+]);
+
+function Unknown({ node }: WidgetProps) {
+	return <div className="text-yellow">unknown widget: {node.tag}</div>;
+}
+
 function Node({
 	node,
 	fire,
@@ -75,156 +291,8 @@ function Node({
 		// biome-ignore lint/suspicious/noArrayIndexKey: no stable id in the tree
 		<Node key={i} node={child} fire={fire} busy={busy} />
 	));
-
-	switch (node.tag) {
-		case "stack":
-			return <div className="flex min-w-0 flex-col gap-2">{kids}</div>;
-		case "row":
-			return (
-				<div className="flex min-w-0 flex-wrap items-end gap-3">{kids}</div>
-			);
-		case "card":
-			return (
-				<div className="flex min-w-0 flex-col gap-2 border border-dim/40 p-2">
-					<div className="font-bold text-accent">
-						{text(node.props, "title")}
-					</div>
-					{kids}
-				</div>
-			);
-		case "heading":
-			return (
-				<div className="font-bold text-accent">{text(node.props, "text")}</div>
-			);
-		case "text":
-			return (
-				<div className="whitespace-pre-wrap break-words">
-					{text(node.props, "text")}
-				</div>
-			);
-		case "markdown":
-			return <Markdown>{text(node.props, "text")}</Markdown>;
-		case "link":
-			return (
-				<a
-					href={text(node.props, "href")}
-					target="_blank"
-					rel="noreferrer"
-					className="text-accent underline decoration-dim/50 hover:decoration-accent"
-				>
-					{text(node.props, "text") || text(node.props, "href")}
-				</a>
-			);
-		case "badge":
-			return (
-				<span
-					className={`w-fit border px-1 ${
-						TONE_CLASSES[text(node.props, "tone")] ?? "border-dim/50 text-dim"
-					}`}
-				>
-					{text(node.props, "text")}
-				</span>
-			);
-		case "kpi":
-			return (
-				<div className="flex min-w-0 flex-col">
-					<span className="text-dim">{text(node.props, "label")}</span>
-					<span className="font-bold text-2xl text-fg leading-tight">
-						{text(node.props, "value")}
-					</span>
-					{node.props.hint !== undefined && (
-						<span className="text-dim">{text(node.props, "hint")}</span>
-					)}
-				</div>
-			);
-		case "button":
-			return (
-				<button
-					type="button"
-					disabled={busy}
-					onClick={(e) =>
-						fire(text(node.props, "action"), formValues(e.currentTarget))
-					}
-					className="border border-dim/50 px-2 py-px text-fg hover:border-accent hover:text-accent disabled:opacity-40"
-				>
-					{text(node.props, "label")}
-				</button>
-			);
-		case "input":
-			return (
-				<label className="flex min-w-0 flex-col gap-px">
-					{node.props.label !== undefined && (
-						<span className="text-dim">{text(node.props, "label")}</span>
-					)}
-					<input
-						name={text(node.props, "name")}
-						defaultValue={text(node.props, "value")}
-						placeholder={text(node.props, "placeholder")}
-						disabled={busy}
-						className="border border-dim/50 bg-transparent px-2 py-px text-fg outline-none placeholder:text-dim/60 focus:border-accent"
-					/>
-				</label>
-			);
-		case "select":
-			return (
-				<label className="flex min-w-0 flex-col gap-px">
-					{node.props.label !== undefined && (
-						<span className="text-dim">{text(node.props, "label")}</span>
-					)}
-					<select
-						name={text(node.props, "name")}
-						defaultValue={text(node.props, "value")}
-						disabled={busy}
-						onChange={(e) => changed(node, fire, e.currentTarget)}
-						className="border border-dim/50 bg-bg px-2 py-px text-fg outline-none focus:border-accent"
-					>
-						{strings(node.props, "options").map((option) => (
-							<option key={option} value={option}>
-								{option}
-							</option>
-						))}
-					</select>
-				</label>
-			);
-		case "checkbox":
-			return (
-				<label className="flex min-w-0 items-center gap-2">
-					<input
-						type="checkbox"
-						name={text(node.props, "name")}
-						defaultChecked={node.props.checked === true}
-						disabled={busy}
-						onChange={(e) => changed(node, fire, e.currentTarget)}
-					/>
-					{node.props.label !== undefined && (
-						<span className="text-fg">{text(node.props, "label")}</span>
-					)}
-				</label>
-			);
-		case "form":
-			return (
-				<form
-					onSubmit={(e) => {
-						e.preventDefault();
-						fire(text(node.props, "action"), formValues(e.currentTarget));
-					}}
-					className="flex min-w-0 flex-col items-start gap-2"
-				>
-					{kids}
-					<button
-						type="submit"
-						disabled={busy}
-						className="border border-dim/50 px-2 py-px text-fg hover:border-accent hover:text-accent disabled:opacity-40"
-					>
-						{text(node.props, "submit") || "submit"}
-					</button>
-				</form>
-			);
-		case "table":
-			return <Table node={node} />;
-		default:
-			return <div className="text-yellow">unknown widget: {node.tag}</div>;
-	}
+	const Widget = WIDGETS.get(node.tag) ?? Unknown;
+	return <Widget node={node} kids={kids} fire={fire} busy={busy} />;
 }
 
 function Table({ node }: { node: ViewNode }) {
@@ -267,6 +335,7 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 		chatId: state.chatId,
 		send: state.send,
 	}));
+	const { apply } = usePanels();
 	const [ui, setUi] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
@@ -286,9 +355,10 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 				const data = result.response;
 				const next = viewKey.schema.safeParse(data.ui).data;
 				if (next) setUi(next);
+				apply(toPanelOps(data.panel));
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
-				if (data.message) send(data.message);
+				if (data.message) void send(data.message);
 			} catch (ex) {
 				reportIssue(ex, { $exception_source: "ui action" });
 				setFailed(true);

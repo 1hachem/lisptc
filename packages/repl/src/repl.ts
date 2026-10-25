@@ -30,6 +30,7 @@ import {
 	type AgentEnd,
 	type AgentStep,
 	type AgentTurn,
+	type Annotations,
 	type Bounded,
 	type InterpExtension,
 	type ModelDelta,
@@ -555,6 +556,19 @@ export class AgentRepl extends MemoryRepl {
 			chain.run(() => settled(undefined), ctx),
 		);
 		return { emitted, annotations };
+	}
+
+	received(
+		received: Annotations,
+		around?: Middleware<[TurnContext, Annotations], Eval<void>>,
+	): Promise<{
+		emitted: string;
+		annotations: StepAnnotations;
+	}> {
+		const chain = outermost(this.hooks.received, around);
+		return this.emitting((ctx) =>
+			chain.run(() => settled(undefined), ctx, received),
+		);
 	}
 
 	async system(

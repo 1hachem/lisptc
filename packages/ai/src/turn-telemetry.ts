@@ -5,6 +5,7 @@ import type {
 	AgentEnd,
 	AgentStep,
 	AgentTurn,
+	Annotations,
 	SessionHooks,
 	StepVerdict,
 	TurnContext,
@@ -19,6 +20,7 @@ import {
 
 export interface TurnTelemetry {
 	readonly turnStart: Middleware<[TurnContext], Eval<void>>;
+	readonly received: Middleware<[TurnContext, Annotations], Eval<void>>;
 	readonly stepEnd: Middleware<
 		[AgentTurn, AgentStep, StepVerdict],
 		StepVerdict
@@ -35,6 +37,14 @@ export function turnTelemetry(
 			const observed = hooks.filled(llmSlot);
 			if (observed) observed.observe = (call) => captureLlmCall(trace, call);
 			yield* next(ctx);
+		},
+		received: function* (ctx, received, next) {
+			try {
+				yield* next(ctx, received);
+			} catch (err) {
+				captureException(err, trace, { received: Object.keys(received) });
+				throw err;
+			}
 		},
 		stepEnd: (turn, step, verdict, next) => {
 			captureReplEval(trace, {

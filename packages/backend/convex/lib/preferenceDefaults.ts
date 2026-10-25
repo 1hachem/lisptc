@@ -3,6 +3,7 @@ export const DEFAULT_TOGGLES = {
 		user: true,
 		results: true,
 		ui: true,
+		attachments: true,
 		lisp: false,
 		thinking: true,
 		memory: true,
@@ -22,6 +23,7 @@ export const DEFAULT_TOGGLES = {
 		provider: false,
 	},
 	input: {
+		attach: true,
 		lisp: true,
 	},
 } as const satisfies Record<
@@ -31,13 +33,26 @@ export const DEFAULT_TOGGLES = {
 
 type Toggles = Record<string, boolean>;
 
-export function withDefaultToggles<
-	T extends { channels?: Toggles; metadata?: Toggles; input?: Toggles },
->(stored: T): T & { channels: Toggles; metadata: Toggles; input: Toggles } {
+export function withDefaults<
+	T extends {
+		channels?: Toggles;
+		metadata?: Toggles;
+		input?: Toggles;
+		panelMotion?: boolean;
+	},
+>(
+	stored: T,
+): T & {
+	channels: Toggles;
+	metadata: Toggles;
+	input: Toggles;
+	panelMotion: boolean;
+} {
 	return {
 		...stored,
 		channels: { ...DEFAULT_TOGGLES.channels, ...stored.channels },
 		metadata: { ...DEFAULT_TOGGLES.metadata, ...stored.metadata },
 		input: { ...DEFAULT_TOGGLES.input, ...stored.input },
+		panelMotion: stored.panelMotion ?? true,
 	};
 }

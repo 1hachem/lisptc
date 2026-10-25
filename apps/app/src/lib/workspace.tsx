@@ -1,9 +1,14 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Doc } from "@repo/backend/dataModel";
-import { useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { createContext, useContext, useEffect } from "react";
+import {
+	createContext,
+	useContext,
+	useEffect,
+	useSyncExternalStore,
+} from "react";
 
 const PICKED_KEY = "lisptc.workspace";
 
@@ -25,17 +30,39 @@ function remembered(): string | null {
 	}
 }
 
+const workspacesQuery = convexQuery(api.workspaces.list, {});
+
+function picked(
+	workspaces: Workspace[],
+	inRoute: string | undefined,
+): Workspace | null {
+	return (
+		workspaces.find((candidate) => candidate._id === inRoute) ??
+		workspaces.find((candidate) => candidate._id === remembered()) ??
+		workspaces[0] ??
+		null
+	);
+}
+
+export function useCachedWorkspace(
+	queryClient: QueryClient,
+	inRoute: string | undefined,
+): Workspace | null {
+	const workspaces = useSyncExternalStore(
+		(onChange) => queryClient.getQueryCache().subscribe(onChange),
+		() => queryClient.getQueryData<Workspace[]>(workspacesQuery.queryKey),
+		() => queryClient.getQueryData<Workspace[]>(workspacesQuery.queryKey),
+	);
+	return picked(workspaces ?? [], inRoute);
+}
+
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
-	const { data, error } = useQuery(convexQuery(api.workspaces.list, {}));
+	const { data, error } = useQuery(workspacesQuery);
 	if (error) throw error;
 	const workspaces = data ?? [];
 	const inRoute = useParams({ strict: false }).workspaceId;
 
-	const workspace =
-		workspaces.find((candidate) => candidate._id === inRoute) ??
-		workspaces.find((candidate) => candidate._id === remembered()) ??
-		workspaces[0] ??
-		null;
+	const workspace = picked(workspaces, inRoute);
 
 	useEffect(() => {
 		if (!workspace) return;

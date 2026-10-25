@@ -15,7 +15,7 @@ import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
-import { extension, noting, riding, testRepl } from "./helpers.ts";
+import { extension, noting, receiving, riding, testRepl } from "./helpers.ts";
 
 interface Seen {
 	messages: ChatMessage[];
@@ -32,6 +32,7 @@ const turns = vi.hoisted(
 	() => [] as { prompt: string; answer: string; halted: boolean }[],
 );
 const exceptions = vi.hoisted(() => [] as unknown[]);
+const exceptionProperties = vi.hoisted(() => [] as unknown[]);
 
 const spans = vi.hoisted(
 	() => [] as { step: number; source: string; error: boolean }[],
@@ -45,8 +46,9 @@ vi.mock("../src/telemetry.ts", () => ({
 		turns.push(turn);
 	},
 	captureLlmCall: () => {},
-	captureException: (error: unknown) => {
+	captureException: (error: unknown, _ctx: unknown, properties: unknown) => {
 		exceptions.push(error);
+		exceptionProperties.push(properties);
 	},
 }));
 
@@ -112,6 +114,7 @@ describe("the agent turn", () => {
 		spans.length = 0;
 		turns.length = 0;
 		exceptions.length = 0;
+		exceptionProperties.length = 0;
 		script = [];
 		throws = undefined;
 		calls = 0;
@@ -237,6 +240,31 @@ describe("the agent turn", () => {
 				"what is 1 + 2?\n\nyou are a pirate",
 			);
 		expect(ask[0].riding).toBeUndefined();
+	});
+
+	test("what the user's message carried beside its text rides it, told by whoever reads it", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask, {
+			repl: testRepl([receiving()]),
+			received: { said: "in hex" },
+		});
+
+		expect(events.filter((e) => e.type === "rode")).toEqual([
+			{ type: "rode", text: "the user also said: in hex" },
+		]);
+		expect(seen[0].messages[0].content).toBe(
+			"what is 1 + 2?\n\nthe user also said: in hex",
+		);
+	});
+
+	test("what a message carried rides nothing when no extension reads it", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask, { received: { said: "in hex" } });
+
+		expect(events.some((e) => e.type === "rode")).toBe(false);
+		expect(seen[0].messages[0].content).toBe("what is 1 + 2?");
 	});
 
 	test("what rode an earlier message reaches the model, but not the conversation vars", async () => {
@@ -615,5 +643,23 @@ describe("the agent turn", () => {
 		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "three." });
 		expect(turns).toHaveLength(1);
 		expect(exceptions).toEqual([broken]);
+	});
+
+	test("a hook that throws on what the message carried is traced with the keys it carried, never their values", async () => {
+		script = [[{ text: "three." }]];
+		const broken = new Error("reader broke");
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.received.use(() => {
+					throw broken;
+				}),
+			),
+		]);
+
+		await drain(ask, { repl, received: { said: "a secret" } });
+
+		expect(exceptions[0]).toBe(broken);
+		expect(exceptionProperties[0]).toEqual({ received: ["said"] });
+		expect(JSON.stringify(exceptionProperties)).not.toContain("a secret");
 	});
 });

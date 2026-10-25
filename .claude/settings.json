@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Edit(./.claude/canvas/sessions/**)",
       "Edit(./artifacts/**/*.html)"
     ],
     "deny": [
@@ -30,6 +29,16 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.agents/hooks/convex-generated.sh\"",
             "statusMessage": "Checking for writes to convex/_generated"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.agents/hooks/lockfile-policy.sh\"",
+            "statusMessage": "Checking for a hand edit of the lockfile"
           }
         ]
       },

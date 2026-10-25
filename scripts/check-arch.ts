@@ -68,6 +68,7 @@ const EXTENSION_DIRS = [
 	"packages/compaction/src/",
 	"packages/diagnostics/src/",
 	"packages/introspection/src/",
+	"packages/knowledge/src/",
 	"packages/memory/src/",
 	"packages/permissions/src/",
 	"packages/preferences/src/",
@@ -90,6 +91,7 @@ const HOST_REACHES: { pattern: RegExp; what: string }[] = [
 	{ pattern: /^@modelcontextprotocol\/sdk/, what: "the MCP SDK" },
 	{ pattern: /^@langchain\//, what: "a langchain package" },
 	{ pattern: /^dotenv$/, what: "dotenv" },
+	{ pattern: /^unpdf$/, what: "the PDF parser" },
 ];
 
 const HOST_GLOBALS = /\bprocess\.(env|cwd|platform|kill)\b/;
