@@ -34,7 +34,7 @@ const STATUS_ICONS = {
 	{ icon: IconSvgElement; iconClassName: string }
 >;
 
-type SessionChat = Pick<
+export type SessionChat = Pick<
 	Doc<"chats">,
 	"_id" | "workspaceId" | "title" | "status" | "failure"
 >;
