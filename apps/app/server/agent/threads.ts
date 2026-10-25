@@ -23,6 +23,7 @@ export interface Identity {
 const host: ThreadHost = new ThreadHost({
 	server: convexAsServer,
 	actAs: convexActingAs,
+	threads: () => threads,
 	jobs: inProcessJobs((workspaceId, chatId) =>
 		subAgents(host)(workspaceId, chatId),
 	),

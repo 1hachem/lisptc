@@ -1,9 +1,9 @@
-import type { AgentDefinition, ReplSeed } from "@repo/agents-extension/ports";
 import type {
 	ChatMessageInput,
 	Lineage,
 	Mailbox,
 	ThreadStatus,
+	Threads,
 	ThreadsHost,
 	TranscriptStore,
 	TurnSetup,
@@ -18,6 +18,7 @@ import { internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { MAX_SPAWN_DEPTH, TURN_DEADLINE_MS } from "../convex/limits.js";
 import {
+	type ChildRecord,
 	type JobsFor,
 	type WorkspaceClient,
 	workspaceExtensions,
@@ -107,6 +108,7 @@ export interface ThreadHostOptions {
 	readonly server: ServerClient;
 	readonly actAs: (owner: Owner) => WorkspaceClient;
 	readonly jobs?: JobsFor;
+	readonly threads?: () => Threads;
 }
 
 const asChat = (threadId: string) => threadId as Id<"chats">;
@@ -206,22 +208,17 @@ export class ThreadHost {
 
 	async spawn(
 		parent: Id<"chats">,
-		definition: AgentDefinition,
-		seed: ReplSeed,
+		agent: ChildRecord,
+		image?: Image,
 	): Promise<Id<"chats">> {
 		const { server } = this.options;
 		const chatId = await server.mutation(internal.threads.spawn, {
 			chatId: parent,
-			agent: {
-				name: definition.name,
-				prompt: definition.prompt,
-				bounds:
-					definition.permissions === undefined ? [] : [definition.permissions],
-			},
+			agent,
 		});
-		if (seed.from === "fork") {
+		if (image !== undefined) {
 			const replId = await server.mutation(internal.threads.repl, { chatId });
-			await new ConvexImageStore(replId, server).save(seed.image);
+			await new ConvexImageStore(replId, server).save(image);
 		}
 		return chatId;
 	}
@@ -266,13 +263,24 @@ export class ThreadHost {
 		own: boolean,
 	): Promise<AgentRepl> {
 		const { workspaceId, ownerId, profile } = await this.record(chatId);
-		const { actAs, jobs } = this.options;
+		const { actAs, jobs, threads } = this.options;
 		const owner = actAs({ userId: ownerId, workspaceId });
+		const supervisor =
+			own && threads !== undefined
+				? {
+						threads: threads(),
+						spawn: (parent: Id<"chats">, agent: ChildRecord, image?: Image) =>
+							this.spawn(parent, agent, image),
+						copyTranscript: (from: Id<"chats">, to: Id<"chats">) =>
+							this.copyTranscript(from, to),
+					}
+				: undefined;
 		const repl = new AgentRepl({
 			extensions: await workspaceExtensions(workspaceId, () => owner, {
 				bounds: profile.bounds,
 				...(profile.roster === undefined ? {} : { roster: profile.roster }),
 				...(own ? { chatId } : {}),
+				...(supervisor === undefined ? {} : { supervisor }),
 				...(own && jobs !== undefined
 					? { jobs: jobs(workspaceId, chatId) }
 					: {}),

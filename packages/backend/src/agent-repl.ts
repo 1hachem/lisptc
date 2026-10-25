@@ -7,10 +7,12 @@ import type {
 	Jobs,
 	Notice,
 } from "@repo/agents-extension/ports";
+import type { Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
+import type { Image } from "@repo/interpreter/image";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
@@ -41,9 +43,11 @@ import { uiHost } from "@repo/ui-extension/host";
 import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
+import type { Infer } from "convex/values";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
+import type { subAgent } from "../convex/schema.js";
 import { SourceAgentStore } from "./agent-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -68,8 +72,21 @@ const themeChoices = themes.map((theme) => ({
 	scheme: theme.scheme,
 }));
 
+export type ChildRecord = Infer<typeof subAgent>;
+
+export interface Supervisor {
+	readonly threads: Threads;
+	spawn(
+		parent: Id<"chats">,
+		agent: ChildRecord,
+		image?: Image,
+	): Promise<Id<"chats">>;
+	copyTranscript(from: Id<"chats">, to: Id<"chats">): Promise<void>;
+}
+
 export interface ThreadScope {
 	readonly chatId?: Id<"chats">;
+	readonly supervisor?: Supervisor;
 	readonly jobs?: Jobs;
 	readonly bounds?: readonly string[];
 	readonly roster?: readonly string[];
