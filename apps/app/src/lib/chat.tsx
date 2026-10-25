@@ -34,7 +34,6 @@ import { answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, pickGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
-import type { SystemEventTicket } from "./system-event.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 
 export interface ChatMessage {
@@ -100,7 +99,6 @@ export interface ChatSession {
 		text: string,
 		annotations?: Record<string, unknown>,
 	) => Promise<boolean>;
-	resume: (event: SystemEventTicket) => void;
 	stop: () => void;
 	withdraw: (id: string) => void;
 	fail: (message: string) => void;
@@ -357,9 +355,7 @@ function useHalt(
 
 type Failure = { chatId: Id<"chats"> | null; message: string } | null;
 
-type TurnInput =
-	| { message: string; annotations?: Record<string, unknown> }
-	| { event: { token: string } };
+type TurnInput = { message: string; annotations?: Record<string, unknown> };
 
 function useSubmit(
 	workspaceId: Id<"workspaces">,
@@ -454,21 +450,7 @@ function useTurnSend(
 		[submitTurn],
 	);
 
-	const resume = useCallback(
-		(event: SystemEventTicket) =>
-			void submit(
-				{ event: { token: event.token } },
-				systemMessage(event),
-				titleOf(event.text),
-			),
-		[submit],
-	);
-
-	const resend = useCallback(
-		(text: string) => void submitTurn(text),
-		[submitTurn],
-	);
-	return { submitTurn, sendAbout, resume, resend };
+	return { submitTurn, sendAbout };
 }
 
 function usePersisted(chatId: Id<"chats"> | null): ChatMessage[] {
@@ -527,7 +509,6 @@ function useSessionStore(
 			workspaceId,
 			send: () => Promise.resolve(false),
 			sendAbout: () => Promise.resolve(false),
-			resume: () => {},
 			stop: () => {},
 			withdraw: () => {},
 			fail: () => {},
@@ -585,16 +566,11 @@ export function ChatProvider({
 		setFailure,
 		announce,
 	);
-	const { submitTurn, sendAbout, resume, resend } = useTurnSend(
-		chatId,
-		submit,
-		setFailure,
-	);
+	const { submitTurn, sendAbout } = useTurnSend(chatId, submit, setFailure);
 	const { queued, enqueue, withdraw, clear } = useSteerQueue({
 		chatId,
 		landed: streamed,
 		streaming: stream.isLoading,
-		resend,
 	});
 	const send = useSend(
 		stream.isLoading && streamingFor.current === chatId,
@@ -627,7 +603,6 @@ export function ChatProvider({
 			}),
 			send,
 			sendAbout,
-			resume,
 			stop,
 			withdraw,
 			fail: (message) => setFailure({ chatId, message }),
@@ -648,7 +623,6 @@ export function ChatProvider({
 		workspaceId,
 		send,
 		sendAbout,
-		resume,
 		stop,
 		withdraw,
 	]);
@@ -699,15 +673,6 @@ export function isToolMessage(message: ChatMessage): boolean {
 
 export function isSystemMessage(message: ChatMessage): boolean {
 	return message.type === "system";
-}
-
-function systemMessage(event: SystemEventTicket): ChatMessage {
-	return {
-		type: "system",
-		content: event.text,
-		id: crypto.randomUUID(),
-		additional_kwargs: { source: event.source },
-	};
 }
 
 export function isUserMessage(message: ChatMessage): boolean {

@@ -116,10 +116,9 @@ export function AskCard({
 	answered?: Answered;
 	transport?: AskTransport;
 }) {
-	const { chatId, workspaceId, resume } = useChatSession((state) => ({
+	const { chatId, workspaceId } = useChatSession((state) => ({
 		chatId: state.chatId,
 		workspaceId: state.workspaceId,
-		resume: state.resume,
 	}));
 	const queryClient = useQueryClient();
 	const [linked, setLinked] = useState<string | undefined>(undefined);
@@ -147,11 +146,7 @@ export function AskCard({
 			if (context) rollback(context.snapshot);
 		},
 		onSuccess: (outcome, _choice, context) => {
-			if (!outcome.ok) {
-				if (context) rollback(context.snapshot);
-				return;
-			}
-			if (outcome.event) resume(outcome.event);
+			if (!outcome.ok && context) rollback(context.snapshot);
 		},
 	});
 	const refused =

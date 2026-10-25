@@ -5,10 +5,10 @@ import { z } from "zod";
 import { body } from "./body.ts";
 import { convexAs } from "./convex.ts";
 import { delegated } from "./delegated.ts";
-import { ticket } from "./events.ts";
 import { convexId } from "./ids.ts";
 import { repls } from "./repls.ts";
 import { type Authed, authed } from "./session.ts";
+import { post } from "./threads.ts";
 
 const uiActionSchema = z.object({
 	chatId: convexId<"chats">(),
@@ -46,16 +46,16 @@ export const uiAction = {
 		const { annotations, ...reply } = result;
 		if (messageId !== undefined && !result.error)
 			await annotateMessage(convex, chatId, messageId, annotations);
-		const event =
-			delegate !== undefined || result.message === undefined || result.error
-				? undefined
-				: await ticket(
-						{ subject: context.session.subject, chatId },
-						{ source: action, text: result.message },
-					);
+		if (delegate === undefined && result.message !== undefined && !result.error)
+			await post({ session: context.session }, chatId, {
+				kind: "event",
+				id: crypto.randomUUID(),
+				source: action,
+				text: result.message,
+			});
 		console.log(
 			`ui action chat=${chatId} action=${action}${result.message ? " sent" : ""}${result.error ? " error" : ""}`,
 		);
-		return Response.json(event === undefined ? reply : { ...reply, event });
+		return Response.json(reply);
 	},
 };
