@@ -24,7 +24,6 @@ import type * as lib_claimed from "../lib/claimed.js";
 import type * as lib_clamp from "../lib/clamp.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_files from "../lib/files.js";
-import type * as lib_models from "../lib/models.js";
 import type * as lib_names from "../lib/names.js";
 import type * as lib_preferenceDefaults from "../lib/preferenceDefaults.js";
 import type * as lib_slug from "../lib/slug.js";
@@ -71,7 +70,6 @@ declare const fullApi: ApiFromModules<{
   "lib/clamp": typeof lib_clamp;
   "lib/env": typeof lib_env;
   "lib/files": typeof lib_files;
-  "lib/models": typeof lib_models;
   "lib/names": typeof lib_names;
   "lib/preferenceDefaults": typeof lib_preferenceDefaults;
   "lib/slug": typeof lib_slug;

@@ -3,12 +3,7 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { type FlatLayout, unflatten } from "@repo/components";
 import type { QueryClient } from "@tanstack/react-query";
-import {
-	type PanelContent,
-	type PanelLayout,
-	retireMain,
-	shownTabs,
-} from "./panel-ops.ts";
+import { type PanelContent, type PanelLayout, shownTabs } from "./panel-ops.ts";
 import { panelAt } from "./panel-paths.ts";
 
 type Prefetch<K extends PanelContent["kind"]> = (
@@ -78,9 +73,7 @@ export async function prefetchPanels(
 		.ensureQueryData(convexQuery(api.layouts.get, { workspaceId }))
 		.catch(() => null);
 	if (!saved) return;
-	const layout: PanelLayout = retireMain(
-		unflatten(saved as FlatLayout<PanelContent>),
-	);
+	const layout: PanelLayout = unflatten(saved as FlatLayout<PanelContent>);
 	await Promise.allSettled(
 		shownTabs(layout).map((tab) =>
 			prefetch(queryClient, workspaceId, tab.content),

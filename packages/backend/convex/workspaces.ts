@@ -11,7 +11,7 @@ import {
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
 import { dropRepl } from "./repls.js";
-import { modelChoice, storedModel, workspaceIcon } from "./schema.js";
+import { modelChoice, workspaceIcon } from "./schema.js";
 
 export const MAX_WORKSPACES = 25;
 
@@ -23,7 +23,7 @@ const workspace = v.object({
 	ownerId: v.id("users"),
 	name: v.string(),
 	slug: v.string(),
-	model: v.optional(storedModel),
+	model: v.optional(modelChoice),
 	icon: v.optional(workspaceIcon),
 	theme: v.optional(v.string()),
 });
