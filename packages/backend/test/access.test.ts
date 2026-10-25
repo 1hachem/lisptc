@@ -1399,3 +1399,134 @@ describe("spawning a sub-agent's chat", () => {
 		).rejects.toThrow("SPAWN_TOO_DEEP");
 	});
 });
+
+describe("a child chat", () => {
+	const agent = { name: "r", prompt: "dig", bounds: [] };
+
+	it("is reachable by its root's owner and nobody else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const grandchild = await alice.as.mutation(api.chats.spawn, {
+			chatId: child,
+			agent,
+		});
+		for (const chatId of [child, grandchild]) {
+			await expect(
+				alice.as.query(api.chats.get, { chatId }),
+			).resolves.toMatchObject({ workspaceId: alice.workspace });
+			await expect(bob.as.query(api.chats.get, { chatId })).rejects.toThrow();
+			await expect(
+				bob.as.query(api.messages.transcript, { chatId }),
+			).rejects.toThrow();
+			await expect(
+				bob.as.mutation(api.chats.spawn, { chatId, agent }),
+			).rejects.toThrow();
+		}
+	});
+
+	it("is kept out of the workspace's chat list", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const { chats } = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(chats.map((chat) => chat._id)).toEqual([chatId]);
+	});
+});
+
+describe("a thread's server functions", () => {
+	const lead = {
+		name: "lead",
+		prompt: "lead",
+		bounds: ["(permission/deny fs/*)"],
+		roster: ["r"],
+		budget: 5,
+	};
+
+	it("records the lineage from the thread up to its root", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await t.mutation(internal.threads.spawn, {
+			chatId,
+			agent: lead,
+		});
+		const record = await t.query(internal.threads.record, { chatId: child });
+		expect(record).toMatchObject({
+			workspaceId: alice.workspace,
+			title: "lead",
+			runsForms: true,
+		});
+		expect(record.lineage).toEqual([{ agent: lead }, {}]);
+	});
+
+	it("writes only the thread's own chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const other = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await t.mutation(internal.threads.append, {
+			chatId,
+			messages: [{ id: "h1", type: "human", content: "hi" }],
+		});
+		await t.mutation(internal.threads.start, { chatId });
+		expect(
+			(await t.query(internal.threads.transcript, { chatId })).map(
+				(m) => m.wireId,
+			),
+		).toEqual(["h1"]);
+		expect(
+			await t.query(internal.threads.transcript, { chatId: other }),
+		).toEqual([]);
+		expect(await alice.as.query(api.chats.get, { chatId })).toMatchObject({
+			status: "streaming",
+		});
+		await t.mutation(internal.threads.settle, { chatId });
+		expect(
+			(await alice.as.query(api.chats.get, { chatId })).status,
+		).toBeUndefined();
+	});
+
+	it("refuses a chat that is gone", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await expect(
+			t.mutation(internal.threads.append, { chatId, messages: [] }),
+		).rejects.toThrow("NOT_FOUND");
+	});
+
+	it("refuses to spawn past the depth cap", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		let chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		for (let depth = 0; depth < MAX_SPAWN_DEPTH; depth++)
+			chatId = await t.mutation(internal.threads.spawn, {
+				chatId,
+				agent: lead,
+			});
+		await expect(
+			t.mutation(internal.threads.spawn, { chatId, agent: lead }),
+		).rejects.toThrow("SPAWN_TOO_DEEP");
+	});
+});

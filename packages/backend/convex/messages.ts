@@ -1,11 +1,12 @@
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import {
 	internalMutation,
 	type MutationCtx,
 	mutation,
+	type QueryCtx,
 	query,
 } from "./_generated/server.js";
 import { checkAttachments } from "./lib/attached.js";
@@ -60,15 +61,24 @@ export const list = query({
 	},
 });
 
+export const transcriptMessages = v.array(message);
+
+export async function transcriptOf(
+	ctx: QueryCtx,
+	chatId: Id<"chats">,
+): Promise<Doc<"messages">[]> {
+	return await ctx.db
+		.query("messages")
+		.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+		.take(MAX_TRANSCRIPT);
+}
+
 export const transcript = query({
 	args: { chatId: v.id("chats") },
-	returns: v.array(message),
+	returns: transcriptMessages,
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
-		return await ctx.db
-			.query("messages")
-			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-			.take(MAX_TRANSCRIPT);
+		return await transcriptOf(ctx, chatId);
 	},
 });
 
@@ -108,41 +118,74 @@ async function layersOf(
 	});
 }
 
+export const incomingMessages = v.array(incoming);
+
+export async function appendTo(
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+	messages: Infer<typeof incomingMessages>,
+): Promise<Id<"messages">[]> {
+	const chatId = chat._id;
+	const last = await ctx.db
+		.query("messages")
+		.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+		.order("desc")
+		.first();
+	let seq = last === null ? 0 : last.seq + 1;
+	for (const entry of messages) checkAttachments(entry.kwargs);
+	const layers = await layersOf(ctx, chat, messages);
+	const ids = [];
+	for (const [at, entry] of messages.entries()) {
+		const clamped = clamp(entry.content, entry.kwargs);
+		ids.push(
+			await ctx.db.insert("messages", {
+				chatId,
+				workspaceId: chat.workspaceId,
+				seq,
+				type: entry.type,
+				content: clamped.content,
+				kwargs: clamped.kwargs,
+				truncated: clamped.truncated ? true : undefined,
+				wireId: entry.id,
+				layerId: layers[at],
+			}),
+		);
+		seq += 1;
+	}
+	await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
+	return ids;
+}
+
 export const append = mutation({
-	args: { chatId: v.id("chats"), messages: v.array(incoming) },
+	args: { chatId: v.id("chats"), messages: incomingMessages },
 	returns: v.array(v.id("messages")),
-	handler: async (ctx, { chatId, messages }) => {
-		const { chat } = await requireChat(ctx, chatId);
-		const last = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-			.order("desc")
-			.first();
-		let seq = last === null ? 0 : last.seq + 1;
-		for (const entry of messages) checkAttachments(entry.kwargs);
-		const layers = await layersOf(ctx, chat, messages);
-		const ids = [];
-		for (const [at, entry] of messages.entries()) {
-			const clamped = clamp(entry.content, entry.kwargs);
-			ids.push(
-				await ctx.db.insert("messages", {
-					chatId,
-					workspaceId: chat.workspaceId,
-					seq,
-					type: entry.type,
-					content: clamped.content,
-					kwargs: clamped.kwargs,
-					truncated: clamped.truncated ? true : undefined,
-					wireId: entry.id,
-					layerId: layers[at],
-				}),
-			);
-			seq += 1;
-		}
-		await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
-		return ids;
-	},
+	handler: async (ctx, { chatId, messages }) =>
+		await appendTo(ctx, (await requireChat(ctx, chatId)).chat, messages),
 });
+
+export async function annotateIn(
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+	id: string,
+	kwargs: Record<string, unknown>,
+): Promise<void> {
+	const chatId = chat._id;
+	const row = await ctx.db
+		.query("messages")
+		.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
+		.first();
+	if (row === null) throw new ConvexError({ code: "MESSAGE_NOT_FOUND" });
+	const merged = deepMerge(row.kwargs ?? {}, kwargs);
+	checkAttachments(merged);
+	const clamped = clamp(row.content, merged);
+	await ctx.db.patch(row._id, {
+		content: clamped.content,
+		kwargs: clamped.kwargs,
+		truncated: clamped.truncated || row.truncated ? true : undefined,
+	});
+	if (chat.status === "waiting" && !(await waitsOnUser(ctx, chatId)))
+		await ctx.db.patch(chatId, { status: undefined });
+}
 
 export const annotate = mutation({
 	args: {
@@ -152,22 +195,7 @@ export const annotate = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { chatId, id, kwargs }) => {
-		const { chat } = await requireChat(ctx, chatId);
-		const row = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
-			.first();
-		if (row === null) throw new ConvexError({ code: "MESSAGE_NOT_FOUND" });
-		const merged = deepMerge(row.kwargs ?? {}, kwargs);
-		checkAttachments(merged);
-		const clamped = clamp(row.content, merged);
-		await ctx.db.patch(row._id, {
-			content: clamped.content,
-			kwargs: clamped.kwargs,
-			truncated: clamped.truncated || row.truncated ? true : undefined,
-		});
-		if (chat.status === "waiting" && !(await waitsOnUser(ctx, chatId)))
-			await ctx.db.patch(chatId, { status: undefined });
+		await annotateIn(ctx, (await requireChat(ctx, chatId)).chat, id, kwargs);
 		return null;
 	},
 });

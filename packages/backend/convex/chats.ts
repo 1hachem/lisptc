@@ -1,10 +1,11 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import {
 	internalMutation,
 	type MutationCtx,
 	mutation,
+	type QueryCtx,
 	query,
 } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
@@ -119,45 +120,65 @@ export const draft = mutation({
 	},
 });
 
-async function depthOf(ctx: MutationCtx, chat: Doc<"chats">): Promise<number> {
-	let depth = 0;
-	for (let at = chat.parentChatId; at !== undefined; depth++)
-		at = (await ctx.db.get(at))?.parentChatId;
-	return depth;
+export async function lineageOf(
+	ctx: QueryCtx,
+	chat: Doc<"chats">,
+): Promise<Doc<"chats">[]> {
+	const lineage = [chat];
+	for (let at = chat.parentChatId; at !== undefined; ) {
+		const above = await ctx.db.get(at);
+		if (above === null) break;
+		lineage.push(above);
+		at = above.parentChatId;
+	}
+	return lineage;
+}
+
+export async function spawnUnder(
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+	agent: Infer<typeof subAgent>,
+): Promise<Id<"chats">> {
+	if ((await lineageOf(ctx, chat)).length > MAX_SPAWN_DEPTH)
+		throw new ConvexError({ code: "SPAWN_TOO_DEEP" });
+	return await ctx.db.insert("chats", {
+		workspaceId: chat.workspaceId,
+		userId: chat.userId,
+		title: agent.name,
+		parentChatId: chat._id,
+		agent,
+	});
 }
 
 export const spawn = mutation({
 	args: { chatId: v.id("chats"), agent: subAgent },
 	returns: v.id("chats"),
-	handler: async (ctx, { chatId, agent }) => {
-		const { user, chat } = await requireChat(ctx, chatId);
-		if ((await depthOf(ctx, chat)) >= MAX_SPAWN_DEPTH)
-			throw new ConvexError({ code: "SPAWN_TOO_DEEP" });
-		return await ctx.db.insert("chats", {
-			workspaceId: chat.workspaceId,
-			userId: user._id,
-			title: agent.name,
-			parentChatId: chatId,
-			agent,
-		});
-	},
+	handler: async (ctx, { chatId, agent }) =>
+		await spawnUnder(ctx, (await requireChat(ctx, chatId)).chat, agent),
 });
+
+export async function startChat(
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+): Promise<void> {
+	const since = Date.now();
+	await ctx.db.patch(chatId, {
+		status: "streaming",
+		streamingSince: since,
+		failure: undefined,
+	});
+	await ctx.scheduler.runAfter(STREAMING_LEASE_MS, internal.chats.expire, {
+		chatId,
+		since,
+	});
+}
 
 export const start = mutation({
 	args: { chatId: v.id("chats") },
 	returns: v.null(),
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
-		const since = Date.now();
-		await ctx.db.patch(chatId, {
-			status: "streaming",
-			streamingSince: since,
-			failure: undefined,
-		});
-		await ctx.scheduler.runAfter(STREAMING_LEASE_MS, internal.chats.expire, {
-			chatId,
-			since,
-		});
+		await startChat(ctx, chatId);
 		return null;
 	},
 });
@@ -178,25 +199,33 @@ export const expire = internalMutation({
 	},
 });
 
+export async function settleChat(
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+	failure: string | undefined,
+): Promise<void> {
+	if (failure !== undefined) {
+		await ctx.db.patch(chatId, {
+			status: "errored",
+			streamingSince: undefined,
+			failure,
+		});
+		return;
+	}
+	const waiting = await waitsOnUser(ctx, chatId);
+	await ctx.db.patch(chatId, {
+		status: waiting ? "waiting" : undefined,
+		streamingSince: undefined,
+		failure: undefined,
+	});
+}
+
 export const settle = mutation({
 	args: { chatId: v.id("chats"), failure: v.optional(v.string()) },
 	returns: v.null(),
 	handler: async (ctx, { chatId, failure }) => {
 		await requireChat(ctx, chatId);
-		if (failure !== undefined) {
-			await ctx.db.patch(chatId, {
-				status: "errored",
-				streamingSince: undefined,
-				failure,
-			});
-			return null;
-		}
-		const waiting = await waitsOnUser(ctx, chatId);
-		await ctx.db.patch(chatId, {
-			status: waiting ? "waiting" : undefined,
-			streamingSince: undefined,
-			failure: undefined,
-		});
+		await settleChat(ctx, chatId, failure);
 		return null;
 	},
 });

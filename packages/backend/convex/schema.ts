@@ -20,6 +20,8 @@ export const subAgent = v.object({
 	name: v.string(),
 	prompt: v.string(),
 	bounds: v.array(v.string()),
+	roster: v.optional(v.array(v.string())),
+	budget: v.optional(v.number()),
 });
 
 export const chatStatus = v.union(
