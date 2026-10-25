@@ -348,7 +348,7 @@ async function remaining(t: TestConvex<typeof schema>) {
 		replLayers: await ctx.db.query("replLayers").collect(),
 		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
-		agents: await ctx.db.query("agents").collect(),
+		sources: await ctx.db.query("sources").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
 		permissions: await ctx.db.query("permissions").collect(),
@@ -367,7 +367,7 @@ const nothing = {
 	replLayers: [],
 	replLayerChunks: [],
 	memories: [],
-	agents: [],
+	sources: [],
 	secrets: [],
 	oauthRecords: [],
 	permissions: [],
@@ -427,12 +427,14 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, agents, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
+	it("takes its memories, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
-		await alice.as.mutation(api.agents.put, {
+		await alice.as.mutation(api.sources.put, {
 			workspaceId: alice.workspace,
-			agent: { name: "doomed", prompt: "doomed" },
+			folder: "sub-agents",
+			name: "doomed.ptc",
+			text: "doomed",
 		});
 		await alice.as.mutation(api.readmes.put, {
 			workspaceId: alice.workspace,

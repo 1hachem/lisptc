@@ -8,7 +8,6 @@
  * @module
  */
 
-import type * as agents from "../agents.js";
 import type * as auth from "../auth.js";
 import type * as bin from "../bin.js";
 import type * as chats from "../chats.js";
@@ -17,6 +16,7 @@ import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as layouts from "../layouts.js";
 import type * as lib_acting from "../lib/acting.js";
+import type * as lib_agentSource from "../lib/agentSource.js";
 import type * as lib_attached from "../lib/attached.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_bin from "../lib/bin.js";
@@ -43,6 +43,7 @@ import type * as preferences from "../preferences.js";
 import type * as readmes from "../readmes.js";
 import type * as repls from "../repls.js";
 import type * as secrets from "../secrets.js";
+import type * as sources from "../sources.js";
 import type * as threads from "../threads.js";
 import type * as uploads from "../uploads.js";
 import type * as users from "../users.js";
@@ -55,7 +56,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  agents: typeof agents;
   auth: typeof auth;
   bin: typeof bin;
   chats: typeof chats;
@@ -64,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   layouts: typeof layouts;
   "lib/acting": typeof lib_acting;
+  "lib/agentSource": typeof lib_agentSource;
   "lib/attached": typeof lib_attached;
   "lib/auth": typeof lib_auth;
   "lib/bin": typeof lib_bin;
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   readmes: typeof readmes;
   repls: typeof repls;
   secrets: typeof secrets;
+  sources: typeof sources;
   threads: typeof threads;
   uploads: typeof uploads;
   users: typeof users;

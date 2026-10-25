@@ -24,18 +24,6 @@ export function memorySource(
 	return `${lines.join("\n")})`;
 }
 
-export function agentSource(
-	agent: Pick<Doc<"agents">, "name" | "prompt" | "permissions">,
-): string {
-	const lines = [
-		`(defagent ${quoted(agent.name)}`,
-		`  :prompt ${quoted(agent.prompt)}`,
-	];
-	if (agent.permissions !== undefined)
-		lines.push(`  :permissions ${quoted(agent.permissions)}`);
-	return `${lines.join("\n")})`;
-}
-
 export function settingsSource(
 	workspace: Pick<Doc<"workspaces">, "_id" | "name" | "icon">,
 	model: { provider: string; model: string },

@@ -41,10 +41,6 @@ const prefetchPage: Prefetch<"page"> = (queryClient, workspaceId, content) => {
 		return queryClient.ensureQueryData(
 			convexQuery(api.memories.list, { workspaceId }),
 		);
-	if (content.page === "agent")
-		return queryClient.ensureQueryData(
-			convexQuery(api.agents.list, { workspaceId }),
-		);
 	if (content.page === "bin" && content.id !== undefined)
 		return queryClient.ensureQueryData(
 			convexQuery(api.bin.get, { workspaceId, name: content.id }),
@@ -61,6 +57,14 @@ function prefetch(
 		return prefetchTranscript(queryClient, content.chatId);
 	if (content.kind === "file")
 		return prefetchFile(queryClient, workspaceId, content);
+	if (content.kind === "source")
+		return queryClient.ensureQueryData(
+			convexQuery(api.sources.get, {
+				workspaceId,
+				folder: content.folder,
+				name: content.name,
+			}),
+		);
 	if (content.kind === "page")
 		return prefetchPage(queryClient, workspaceId, content);
 	return Promise.resolve();

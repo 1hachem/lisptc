@@ -1,6 +1,7 @@
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
+import { agentFileName, agentSource } from "../../convex/lib/agentSource.ts";
 import { MAX_SPAWN_DEPTH } from "../../convex/limits.ts";
 import type { Connect } from "../../src/agent-repl.ts";
 import type { Owner, ServerClient } from "../../src/server-client.ts";
@@ -41,16 +42,22 @@ function serverOver(lineage: { agent?: Agent }[]): ServerClient {
 	} as unknown as ServerClient;
 }
 
-const workspaceAgents = ["scout", "digger", "writer"].map((name) => ({
-	name,
-	prompt: `be ${name}`,
-}));
+const workspaceAgents = ["scout", "digger", "writer"];
 
 const offline: Connect = () =>
 	({
-		query: (reference: unknown) => {
+		query: (reference: unknown, args: { name?: string }) => {
 			const name = named(reference);
-			if (name === "agents:list") return Promise.resolve(workspaceAgents);
+			if (name === "sources:list")
+				return Promise.resolve(workspaceAgents.map(agentFileName));
+			if (name === "sources:get") {
+				const agent = args.name?.replace(/\.ptc$/, "") ?? "";
+				return Promise.resolve(
+					workspaceAgents.includes(agent)
+						? agentSource({ name: agent, prompt: `be ${agent}` })
+						: null,
+				);
+			}
 			return Promise.resolve(name.endsWith(":list") ? [] : null);
 		},
 		mutation: () => Promise.resolve(null),
@@ -154,6 +161,6 @@ describe("the thread factory", () => {
 			"scout",
 		);
 		expect(actedFor).toEqual([{ userId: OWNER, workspaceId: WORKSPACE }]);
-		expect(asked).toContain("agents:list");
+		expect(asked).toContain("sources:list");
 	});
 });

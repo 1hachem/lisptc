@@ -6,9 +6,9 @@ export const MAX_MEMORY_BYTES = 32_768;
 
 export const MAX_MEMORIES = 500;
 
-export const MAX_AGENT_BYTES = 32_768;
+export const MAX_SOURCE_BYTES = 32_768;
 
-export const MAX_AGENTS = 100;
+export const MAX_SOURCES = 100;
 
 export const MAX_SECRET_BYTES = 8_192;
 

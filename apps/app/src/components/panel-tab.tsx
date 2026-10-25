@@ -9,7 +9,6 @@ import { PageHostProvider } from "../lib/page-host.tsx";
 import { leadChat, type Page, type PanelContent } from "../lib/panel-ops.ts";
 import { PanelLiveOps, usePanels } from "../lib/panels.tsx";
 import { AccountPage } from "./account-page.tsx";
-import { AgentPage } from "./agent-page.tsx";
 import { AnimatedFavicon } from "./animated-favicon.tsx";
 import { BinPage } from "./bin-page.tsx";
 import { Chat } from "./chat.tsx";
@@ -19,6 +18,7 @@ import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
 import { ReadmePage } from "./readme-page.tsx";
 import { SettingsPage } from "./settings-page.tsx";
+import { SourcePage } from "./source-page.tsx";
 import { FilePreview } from "./stored-file.tsx";
 
 function Column({ children }: { children: ReactNode }) {
@@ -90,7 +90,6 @@ const PAGE_TABS: Record<
 	memory: (workspaceId, id) => (
 		<MemoryPage workspaceId={workspaceId} memoryKey={id} />
 	),
-	agent: (workspaceId, id) => <AgentPage workspaceId={workspaceId} name={id} />,
 	permission: (workspaceId, id) => (
 		<PermissionPage workspaceId={workspaceId} rule={Number(id)} />
 	),
@@ -159,6 +158,13 @@ export function PanelTab({
 		<PageHostProvider host={host}>
 			{content.kind === "file" && (
 				<FilePreview
+					workspaceId={workspaceId}
+					folder={content.folder}
+					name={content.name}
+				/>
+			)}
+			{content.kind === "source" && (
+				<SourcePage
 					workspaceId={workspaceId}
 					folder={content.folder}
 					name={content.name}

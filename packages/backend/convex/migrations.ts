@@ -1,7 +1,9 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
+import { AGENT_FOLDER, agentFileName, agentSource } from "./lib/agentSource.js";
 import { retiredModelReset } from "./lib/models.js";
+import { writeSource } from "./sources.js";
 import { MAX_WORKSPACES } from "./workspaces.js";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
@@ -33,8 +35,24 @@ export const moveThemeToWorkspaces = migrations.define({
 	},
 });
 
+export const moveAgentsToSources = migrations.define({
+	table: "agents",
+	migrateOne: async (ctx, agent) => {
+		if ((await ctx.db.get(agent.workspaceId)) !== null)
+			await writeSource(
+				ctx,
+				agent.workspaceId,
+				AGENT_FOLDER,
+				agentFileName(agent.name),
+				agentSource(agent),
+			);
+		await ctx.db.delete(agent._id);
+	},
+});
+
 export const runAll = migrations.runner([
 	internal.migrations.resetRetiredModels,
 	internal.migrations.resetDigitalOceanGemma,
 	internal.migrations.moveThemeToWorkspaces,
+	internal.migrations.moveAgentsToSources,
 ]);

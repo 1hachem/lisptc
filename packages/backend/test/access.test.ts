@@ -4,9 +4,9 @@ import { api, internal } from "../convex/_generated/api.js";
 import { ACTING_ISSUER } from "../convex/lib/acting.ts";
 import { DEFAULT_TOGGLES } from "../convex/lib/preferenceDefaults.ts";
 import {
-	MAX_AGENT_BYTES,
 	MAX_PREFERENCES_BYTES,
 	MAX_README_BYTES,
+	MAX_SOURCE_BYTES,
 	MAX_SPAWN_DEPTH,
 	STREAMING_LEASE_MS,
 } from "../convex/limits.ts";
@@ -675,69 +675,76 @@ describe("permissions access", () => {
 	});
 });
 
-describe("agent definition access", () => {
-	it("keeps a workspace's agents to its owner", async () => {
+describe("source folder access", () => {
+	it("keeps a workspace's sources to its owner", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		await bob.as.mutation(api.agents.put, {
+		const at = {
 			workspaceId: bob.workspace,
-			agent: { name: "researcher", prompt: "dig" },
-		});
+			folder: "sub-agents",
+			name: "researcher.ptc",
+		};
+		await bob.as.mutation(api.sources.put, { ...at, text: "(dig)" });
 		await expect(
-			alice.as.query(api.agents.list, { workspaceId: bob.workspace }),
-		).rejects.toThrow();
-		await expect(
-			alice.as.mutation(api.agents.put, {
+			alice.as.query(api.sources.list, {
 				workspaceId: bob.workspace,
-				agent: { name: "researcher", prompt: "mine now" },
+				folder: "sub-agents",
 			}),
 		).rejects.toThrow();
+		await expect(alice.as.query(api.sources.get, at)).rejects.toThrow();
 		await expect(
-			alice.as.mutation(api.agents.remove, {
-				workspaceId: bob.workspace,
-				name: "researcher",
-			}),
+			alice.as.mutation(api.sources.put, { ...at, text: "(mine now)" }),
 		).rejects.toThrow();
-		await expect(
-			t.query(api.agents.list, { workspaceId: bob.workspace }),
-		).rejects.toThrow();
+		await expect(alice.as.mutation(api.sources.remove, at)).rejects.toThrow();
+		await expect(t.query(api.sources.get, at)).rejects.toThrow();
+		expect(await bob.as.query(api.sources.get, at)).toBe("(dig)");
 	});
 
-	it("holds one definition per name, replaced on save", async () => {
+	it("holds one source per folder and name, replaced on write", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
-		const workspaceId = alice.workspace;
-		await alice.as.mutation(api.agents.put, {
-			workspaceId,
-			agent: { name: "researcher", prompt: "dig" },
+		const at = {
+			workspaceId: alice.workspace,
+			folder: "sub-agents",
+			name: "researcher.ptc",
+		};
+		await alice.as.mutation(api.sources.put, { ...at, text: "(dig)" });
+		await alice.as.mutation(api.sources.put, { ...at, text: "(dig deeper)" });
+		await alice.as.mutation(api.sources.put, {
+			...at,
+			folder: "elsewhere",
+			text: "(other)",
 		});
-		await alice.as.mutation(api.agents.put, {
-			workspaceId,
-			agent: { name: "researcher", prompt: "dig deeper" },
-		});
-		const listed = await alice.as.query(api.agents.list, { workspaceId });
-		expect(listed.map(({ name, prompt }) => ({ name, prompt }))).toEqual([
-			{ name: "researcher", prompt: "dig deeper" },
-		]);
 		expect(
-			await alice.as.mutation(api.agents.remove, {
-				workspaceId,
-				name: "researcher",
+			await alice.as.query(api.sources.list, {
+				workspaceId: alice.workspace,
+				folder: "sub-agents",
 			}),
-		).toBe(true);
-		expect(await alice.as.query(api.agents.list, { workspaceId })).toEqual([]);
+		).toEqual(["researcher.ptc"]);
+		expect(await alice.as.query(api.sources.get, at)).toBe("(dig deeper)");
+		expect(await alice.as.mutation(api.sources.remove, at)).toBe(true);
+		expect(await alice.as.query(api.sources.get, at)).toBeNull();
 	});
 
-	it("refuses a definition past the size limit", async () => {
+	it("refuses a source past the size limit or with a path in its name", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
+		const at = { workspaceId: alice.workspace, folder: "sub-agents" };
 		await expect(
-			alice.as.mutation(api.agents.put, {
-				workspaceId: alice.workspace,
-				agent: { name: "big", prompt: "x".repeat(MAX_AGENT_BYTES) },
+			alice.as.mutation(api.sources.put, {
+				...at,
+				name: "big.ptc",
+				text: "x".repeat(MAX_SOURCE_BYTES + 1),
 			}),
-		).rejects.toThrow(/AGENT_TOO_LARGE/);
+		).rejects.toThrow(/SOURCE_TOO_LARGE/);
+		await expect(
+			alice.as.mutation(api.sources.put, {
+				...at,
+				name: "../escape.ptc",
+				text: "()",
+			}),
+		).rejects.toThrow(/BAD_SOURCE_PATH/);
 	});
 });
 

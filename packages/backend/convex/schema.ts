@@ -60,6 +60,11 @@ const panelTab = v.object({
 			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
 			name: v.string(),
 		}),
+		v.object({
+			kind: v.literal("source"),
+			folder: v.string(),
+			name: v.string(),
+		}),
 		v.object({ kind: v.literal("view"), title: v.string(), node: v.any() }),
 		v.object({
 			kind: v.literal("chat"),
@@ -320,4 +325,11 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_name", ["workspaceId", "name"]),
+
+	sources: defineTable({
+		workspaceId: v.id("workspaces"),
+		folder: v.string(),
+		name: v.string(),
+		text: v.string(),
+	}).index("by_workspace_folder_name", ["workspaceId", "folder", "name"]),
 });

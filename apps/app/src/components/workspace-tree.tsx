@@ -49,6 +49,7 @@ import {
 } from "./file-folder.tsx";
 import { FileMenu } from "./file-menu.tsx";
 import { linkTo, useShown } from "./panel-link.tsx";
+import { SourceFolder } from "./source-folder.tsx";
 import { Empty, type FolderState, Listing } from "./tree-listing.tsx";
 
 const PLACEHOLDERS = [
@@ -150,39 +151,6 @@ function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 	);
 }
 
-function agentPage(name: string): PanelContent {
-	return { kind: "page", page: "agent", id: name, title: `sub-agents/${name}` };
-}
-
-function AgentFile({ agent }: { agent: Doc<"agents"> }) {
-	const removeAgent = useConvexMutation(api.agents.remove);
-	const shown = useShown();
-	const page = agentPage(agent.name);
-
-	return (
-		<TreeFile
-			name={agent.name}
-			depth={1}
-			selected={shown(page)}
-			onDragStart={dragsAs(page)}
-			trailing={
-				<FileMenu
-					name={agent.name}
-					confirm="delete this agent for good?"
-					onDelete={async () => {
-						requestPanelClosed(page);
-						await removeAgent({
-							workspaceId: agent.workspaceId,
-							name: agent.name,
-						});
-					}}
-				/>
-			}
-			link={linkTo(agent.workspaceId, page)}
-		/>
-	);
-}
-
 function PermissionFiles({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	const { data: source } = useQuery(
 		convexQuery(api.permissions.get, { workspaceId }),
@@ -280,9 +248,6 @@ export function WorkspaceTree({
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
-	const { data: agents } = useQuery(
-		convexQuery(api.agents.list, { workspaceId }),
-	);
 
 	const { shown, reorder } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
@@ -324,11 +289,11 @@ export function WorkspaceTree({
 		),
 		bin: () => <BinFolder workspaceId={workspaceId} folder={folder("bin")} />,
 		"sub-agents": () => (
-			<TreeFolder {...folder("sub-agents")}>
-				<Listing items={agents} empty="no sub-agents yet">
-					{(agent) => <AgentFile key={agent._id} agent={agent} />}
-				</Listing>
-			</TreeFolder>
+			<SourceFolder
+				workspaceId={workspaceId}
+				folder={folder("sub-agents")}
+				empty="no sub-agents yet"
+			/>
 		),
 		triggers: placeholder("triggers"),
 		tasks: placeholder("tasks"),
