@@ -39,7 +39,6 @@ vi.mock("../../server/agent/convex.ts", () => ({
 
 vi.mock("../../server/agent/threads.ts", () => ({
 	threads: {},
-	spawn: async () => "child",
 	post: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
 		world.posted.push({ chatId, envelope, options });
 		return {
@@ -47,11 +46,6 @@ vi.mock("../../server/agent/threads.ts", () => ({
 			ended: Promise.resolve({ answer: "done." }),
 		};
 	},
-	ask: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
-		world.posted.push({ chatId, envelope, options });
-		return "job-1";
-	},
-	wait: async () => ({ answer: "done." }),
 	withdraw: async () => true,
 	stop: async (chatId: string) => {
 		world.cancelled.push(chatId);
@@ -71,7 +65,6 @@ vi.mock("../../server/agent/threads.ts", () => ({
 let chat: Method;
 let uiAction: Method;
 let stop: Method;
-let chatTurns: typeof import("../../server/agent/chat-turns.ts").chatTurns;
 
 beforeAll(async () => {
 	process.env.VITE_CONVEX_URL = "http://127.0.0.1:3210";
@@ -82,7 +75,6 @@ beforeAll(async () => {
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
 	({ turn: chat, stop } = await import("../../server/agent/chat.ts"));
 	({ uiAction } = await import("../../server/agent/ui-action.ts"));
-	({ chatTurns } = await import("../../server/agent/chat-turns.ts"));
 });
 
 beforeEach(() => {
@@ -135,30 +127,5 @@ describe("a ui action", () => {
 		});
 		expect(response.ok).toBe(false);
 		expect(world.posted).toEqual([]);
-	});
-});
-
-describe("a sub-agent's chat", () => {
-	test("is woken by a notice posted as an event, never a user message", async () => {
-		await chatTurns().wake({
-			chatId: CHAT as never,
-			notice: { source: "agent:r", text: "(+ 1 2)" },
-		});
-		expect(world.posted[0].envelope).toEqual({
-			kind: "event",
-			id: expect.any(String),
-			source: "agent:r",
-			text: "(+ 1 2)",
-		});
-	});
-
-	test("runs none of the forms in a message sent to it", async () => {
-		const outcome = await chatTurns().reply(CHAT as never, "(+ 1 2)", {
-			maxSteps: 3,
-			signal: new AbortController().signal,
-		});
-		expect(outcome).toEqual({ answer: "done." });
-		expect(world.posted[0].envelope).toMatchObject({ forms: false });
-		expect(world.posted[0].options).toMatchObject({ maxSteps: 3 });
 	});
 });

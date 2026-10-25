@@ -5,6 +5,8 @@ export interface AgentDefinition {
 	readonly name: string;
 	readonly prompt: string;
 	readonly permissions?: string;
+	readonly roster?: readonly string[];
+	readonly budget?: number;
 }
 
 export type ReplSeed =
@@ -19,42 +21,18 @@ export interface Spawn {
 	readonly chat: ChatSeed;
 }
 
-export interface Notice {
-	readonly source: string;
+export interface Message {
 	readonly text: string;
-}
-
-export interface Ask {
-	readonly message: string;
 	readonly maxSteps: number;
-	readonly signal: AbortSignal;
 }
 
-export interface AgentRunner {
-	spawn(spawn: Spawn): Promise<string>;
-	send(agent: string, ask: Ask): Promise<string>;
-}
-
-export interface Code {
-	readonly source: string;
-	readonly image: Image;
-}
-
-export interface CodeRunner {
-	run(code: Code, signal: AbortSignal): Promise<string>;
-}
-
-export type Work =
-	| {
-			readonly kind: "agent";
-			readonly agent: string;
-			readonly name: string;
-			readonly message: string;
-			readonly maxSteps: number;
-	  }
-	| { readonly kind: "code"; readonly source: string; readonly image: Image };
-
-export type JobState = "queued" | "running" | "done" | "failed" | "cancelled";
+export type JobState =
+	| "pending"
+	| "held"
+	| "done"
+	| "failed"
+	| "cancelled"
+	| "lost";
 
 export type Outcome = { readonly reply: string } | { readonly failure: string };
 
@@ -63,17 +41,10 @@ export interface Seen {
 	readonly outcome?: Outcome;
 }
 
-export interface Jobs {
+export interface AgentThreads {
 	spawn(spawn: Spawn): Promise<string>;
-	submit(work: Work): Awaitable<string>;
-	peek(job: string): Awaitable<Seen | undefined>;
+	send(child: string, message: Message): Promise<string>;
 	wait(job: string, signal: AbortSignal): Promise<Outcome>;
-	cancel(job: string): Awaitable<boolean>;
-}
-
-export interface AgentDefinitions {
-	all(): Awaitable<AgentDefinition[]>;
-	get(name: string): Awaitable<AgentDefinition | undefined>;
-	put(definition: AgentDefinition): Awaitable<void>;
-	delete(name: string): Awaitable<boolean>;
+	state(job: string): Awaitable<Seen>;
+	cancel(id: string): Awaitable<boolean>;
 }

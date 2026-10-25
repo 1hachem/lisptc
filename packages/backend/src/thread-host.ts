@@ -19,7 +19,6 @@ import type { Id } from "../convex/_generated/dataModel.js";
 import { MAX_SPAWN_DEPTH, TURN_DEADLINE_MS } from "../convex/limits.js";
 import {
 	type ChildRecord,
-	type JobsFor,
 	type WorkspaceClient,
 	workspaceExtensions,
 } from "./agent-repl.ts";
@@ -107,7 +106,6 @@ function toStored(wire: WireMessage[]) {
 export interface ThreadHostOptions {
 	readonly server: ServerClient;
 	readonly actAs: (owner: Owner) => WorkspaceClient;
-	readonly jobs?: JobsFor;
 	readonly threads?: () => Threads;
 }
 
@@ -263,7 +261,7 @@ export class ThreadHost {
 		own: boolean,
 	): Promise<AgentRepl> {
 		const { workspaceId, ownerId, profile } = await this.record(chatId);
-		const { actAs, jobs, threads } = this.options;
+		const { actAs, threads } = this.options;
 		const owner = actAs({ userId: ownerId, workspaceId });
 		const supervisor =
 			own && threads !== undefined
@@ -281,9 +279,6 @@ export class ThreadHost {
 				...(profile.roster === undefined ? {} : { roster: profile.roster }),
 				...(own ? { chatId } : {}),
 				...(supervisor === undefined ? {} : { supervisor }),
-				...(own && jobs !== undefined
-					? { jobs: jobs(workspaceId, chatId) }
-					: {}),
 			}),
 			images,
 		});

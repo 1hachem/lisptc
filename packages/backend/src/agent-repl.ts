@@ -1,12 +1,5 @@
 import { agentsExtension } from "@repo/agents-extension";
 import { agentsHostFor } from "@repo/agents-extension/host";
-import { MemoryJobs } from "@repo/agents-extension/jobs";
-import type {
-	AgentRunner,
-	CodeRunner,
-	Jobs,
-	Notice,
-} from "@repo/agents-extension/ports";
 import type { Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
@@ -48,7 +41,7 @@ import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
-import { SourceAgentStore } from "./agent-store.ts";
+import { SupervisedAgents } from "./agent-threads.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
@@ -87,7 +80,6 @@ export interface Supervisor {
 export interface ThreadScope {
 	readonly chatId?: Id<"chats">;
 	readonly supervisor?: Supervisor;
-	readonly jobs?: Jobs;
 	readonly bounds?: readonly string[];
 	readonly roster?: readonly string[];
 }
@@ -95,7 +87,7 @@ export interface ThreadScope {
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, jobs, bounds, roster }: ThreadScope = {},
+	{ chatId, supervisor, bounds, roster }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -119,12 +111,12 @@ export async function workspaceExtensions(
 	);
 	const agents = agentsExtension(
 		agentsHostFor({
-			definitions: new SourceAgentStore(
-				new ConvexSourceFolder(connect),
-				workspaceId,
-				roster,
-			),
-			...(jobs === undefined ? {} : { jobs }),
+			folder: new ConvexSourceFolder(connect),
+			workspace: workspaceId,
+			...(roster === undefined ? {} : { roster }),
+			...(supervisor === undefined || chatId === undefined
+				? {}
+				: { threads: new SupervisedAgents(supervisor, chatId) }),
 		}),
 	);
 	const permissions = permissionsExtension(
@@ -172,32 +164,4 @@ export async function workspaceExtensions(
 		uiExtension(uiHost),
 		diagnosticsExtension(diagnosticsHost),
 	];
-}
-
-export type JobsFor = (
-	workspaceId: Id<"workspaces">,
-	chatId: Id<"chats">,
-) => Jobs;
-
-export interface InProcess {
-	readonly agents: AgentRunner;
-	readonly code: CodeRunner;
-	readonly notify?: (notice: Notice) => void;
-}
-
-export type RunnerFor = (
-	workspaceId: Id<"workspaces">,
-	chatId: Id<"chats">,
-) => InProcess;
-
-export function inProcessJobs(runnerFor: RunnerFor): JobsFor {
-	const hosted = new Map<Id<"chats">, Jobs>();
-	return (workspaceId, chatId) => {
-		const standing = hosted.get(chatId);
-		if (standing !== undefined) return standing;
-		const { agents, code, notify } = runnerFor(workspaceId, chatId);
-		const jobs = new MemoryJobs({ agents, code }, notify);
-		hosted.set(chatId, jobs);
-		return jobs;
-	};
 }

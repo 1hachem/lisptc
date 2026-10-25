@@ -38,9 +38,6 @@ vi.mock("../../server/agent/convex.ts", () => ({
 
 vi.mock("../../server/agent/threads.ts", () => ({
 	threads: {},
-	spawn: async () => "child",
-	ask: async () => "job-1",
-	wait: async () => ({ answer: "done." }),
 	post: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
 		world.posted.push({ chatId, envelope, options });
 		return { ended: Promise.resolve({ answer: "done." }) };

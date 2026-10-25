@@ -2,16 +2,12 @@ import { api } from "@repo/backend/api";
 import { ENVELOPE_KEYS } from "@repo/shared/messages";
 import { z } from "zod";
 import { body, params } from "./body.ts";
-import { serveTurns } from "./chat-turns.ts";
 import { convexAs } from "./convex.ts";
 import { convexId } from "./ids.ts";
 import { type Authed, authed } from "./session.ts";
 import {
-	ask,
 	post,
-	spawn,
 	stop as stopThread,
-	wait,
 	watch as watchThread,
 	withdraw as withdrawPost,
 } from "./threads.ts";
@@ -104,26 +100,6 @@ export const stop = {
 		return Response.json({ stopped }, { status: stopped ? 200 : 409 });
 	},
 };
-
-serveTurns({
-	async wake({ chatId, notice }) {
-		await post(chatId, {
-			kind: "event",
-			id: crypto.randomUUID(),
-			source: notice.source,
-			text: notice.text,
-		});
-	},
-	async reply(chatId, message, { maxSteps, signal }) {
-		const job = await ask(
-			chatId,
-			{ kind: "user", id: crypto.randomUUID(), text: message, forms: false },
-			{ maxSteps, signal },
-		);
-		return await wait(job, signal);
-	},
-	spawn,
-});
 
 export const steer = {
 	middleware: [...authed, body(steerRequestSchema)] as const,

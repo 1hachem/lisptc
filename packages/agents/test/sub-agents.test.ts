@@ -4,57 +4,68 @@ import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, test } from "vitest";
 import { agentsExtension, BOUNDED_DEFINE } from "../src/agents.ts";
-import { agentsHostFor, MemoryAgentDefinitions } from "../src/agents-host.ts";
-import type { Jobs, Outcome, Seen, Spawn, Work } from "../src/ports.ts";
+import { agentsHostFor, MemorySourceFolder } from "../src/agents-host.ts";
+import { readDefinition, writeDefinition } from "../src/definition.ts";
+import type {
+	AgentThreads,
+	Message,
+	Outcome,
+	Seen,
+	Spawn,
+} from "../src/ports.ts";
 
-class RecordedJobs implements Jobs {
+class FakeThreads implements AgentThreads {
 	readonly spawned: Spawn[] = [];
-	readonly submitted: Work[] = [];
+	readonly sent: { child: string; message: Message }[] = [];
 	readonly cancelled: string[] = [];
-	readonly forgotten = new Set<string>();
 
 	async spawn(spawn: Spawn): Promise<string> {
 		this.spawned.push(spawn);
-		return `agent-${this.spawned.length}`;
+		return `child-${this.spawned.length}`;
 	}
 
-	submit(work: Work): string {
-		this.submitted.push(work);
-		return `job-${this.submitted.length}`;
-	}
-
-	peek(job: string): Seen | undefined {
-		return this.forgotten.has(job) ? undefined : { state: "running" };
+	async send(child: string, message: Message): Promise<string> {
+		this.sent.push({ child, message });
+		return `job-${this.sent.length}`;
 	}
 
 	async wait(job: string): Promise<Outcome> {
-		const work = this.submitted[Number(job.slice(4)) - 1];
-		if (work.kind === "code") return { reply: `ran ${work.source}` };
-		return work.message === "fail"
+		const { message } = this.sent[Number(job.slice(4)) - 1] ?? {};
+		if (message === undefined) return { failure: "lost in a restart" };
+		return message.text === "fail"
 			? { failure: "it broke" }
-			: { reply: `got ${work.message}` };
+			: { reply: `got ${message.text}` };
 	}
 
-	cancel(job: string): boolean {
-		this.cancelled.push(job);
+	state(job: string): Seen {
+		return job.startsWith("job-") ? { state: "pending" } : { state: "lost" };
+	}
+
+	cancel(id: string): boolean {
+		this.cancelled.push(id);
 		return true;
 	}
 }
 
-function session(jobs: RecordedJobs | undefined) {
-	const definitions = new MemoryAgentDefinitions();
+function session(threads?: FakeThreads, roster?: readonly string[]) {
+	const folder = new MemorySourceFolder();
 	const extension = agentsExtension(
-		agentsHostFor(jobs === undefined ? { definitions } : { definitions, jobs }),
+		agentsHostFor({
+			folder,
+			workspace: "w",
+			...(threads === undefined ? {} : { threads }),
+			...(roster === undefined ? {} : { roster }),
+		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
 	runSync(interp, prelude);
-	return { interp, extension, definitions };
+	return { interp, extension, folder };
 }
 
-function world(withJobs = true) {
-	const jobs = new RecordedJobs();
-	const { interp, extension, definitions } = session(
-		withJobs ? jobs : undefined,
+function world(withThreads = true) {
+	const threads = new FakeThreads();
+	const { interp, extension, folder } = session(
+		withThreads ? threads : undefined,
 	);
 	const calls: string[] = [];
 	interp.hooks.call.use((i, name, args, next) => {
@@ -63,45 +74,102 @@ function world(withJobs = true) {
 	});
 	const run = (code: string) => runAsync(interp, code);
 	const shown = async (code: string) => str((await run(code)).value);
-	return { interp, extension, jobs, definitions, calls, run, shown };
+	return { interp, extension, threads, folder, calls, run, shown };
 }
 
+describe("a definition file", () => {
+	test("round-trips every field", () => {
+		const full = {
+			name: "lead",
+			prompt: 'say "hi"\nthen dig',
+			permissions: '(permission/deny "fs/*")',
+			roster: ["scout", "digger"],
+			budget: 40,
+		};
+		expect(readDefinition(writeDefinition(full))).toEqual(full);
+		expect(readDefinition(writeDefinition({ name: "r", prompt: "p" }))).toEqual(
+			{ name: "r", prompt: "p" },
+		);
+		expect(writeDefinition({ name: "r", prompt: "dig" })).toBe(
+			'(defagent "r"\n  :prompt "dig")',
+		);
+		expect(readDefinition("not a form")).toBeUndefined();
+		expect(readDefinition("(defagent")).toBeUndefined();
+	});
+});
+
 describe("defagent", () => {
-	test("saves a definition spawn reuses by name", async () => {
-		const { run, jobs, definitions } = world();
-		await run('(defagent "researcher" :prompt "dig")');
-		expect(definitions.get("researcher")).toEqual({
+	test("writes sub-agents/<name>.ptc that spawn reuses by name", async () => {
+		const { run, threads, folder } = world();
+		await run(
+			'(defagent "researcher" :prompt "dig" :roster \'("scout") :budget 9)',
+		);
+		expect(folder.list("w", "sub-agents")).toEqual(["researcher.ptc"]);
+		expect(
+			readDefinition(folder.read("w", "sub-agents", "researcher.ptc") ?? ""),
+		).toEqual({
 			name: "researcher",
 			prompt: "dig",
+			roster: ["scout"],
+			budget: 9,
 		});
 		expect(str((await run('(spawn "researcher")')).value)).toBe('"researcher"');
-		expect(jobs.spawned[0]).toEqual({
-			definition: { name: "researcher", prompt: "dig" },
+		expect(threads.spawned[0]).toEqual({
+			definition: {
+				name: "researcher",
+				prompt: "dig",
+				roster: ["scout"],
+				budget: 9,
+			},
 			seed: { from: "fresh" },
 			chat: { from: "fresh" },
 		});
 	});
 
-	test("lists what was saved", async () => {
-		const { run } = world();
+	test("lists what the folder holds", async () => {
+		const { run, folder } = world();
 		await run('(defagent "a" :prompt "x")');
-		await run('(defagent "b" :prompt "y")');
+		folder.write("w", "sub-agents", "b.ptc", '(defagent "b" :prompt "y")');
+		folder.write("w", "sub-agents", "notes.txt", "not an agent");
 		expect(str((await run("(agents)")).value)).toBe('("a" "b")');
+	});
+
+	test("shows only the roster the session was handed", async () => {
+		const { interp, folder } = session(new FakeThreads(), ["shown"]);
+		folder.write(
+			"w",
+			"sub-agents",
+			"hidden.ptc",
+			'(defagent "hidden" :prompt "x")',
+		);
+		expect(str((await runAsync(interp, "(agents)")).value)).toBe("nil");
+		await expect(runAsync(interp, '(spawn "hidden")')).rejects.toThrow(
+			"no saved agent by that name",
+		);
 	});
 
 	test("refuses a definition without a prompt", async () => {
 		const { run } = world();
 		await expect(run('(defagent "a")')).rejects.toThrow(":prompt is a string");
 	});
+
+	test("refuses a budget that is not a positive integer", async () => {
+		const { run } = world();
+		await expect(run('(defagent "a" :prompt "p" :budget 0)')).rejects.toThrow(
+			":budget is a positive integer",
+		);
+	});
 });
 
 describe("defagent with permissions", () => {
 	test("saves the rules with the definition", async () => {
-		const { run, definitions } = world();
+		const { run, folder } = world();
 		await run(
 			'(defagent "r" :prompt "p" :permissions "(permission/deny fs/*)")',
 		);
-		expect(definitions.get("r")).toEqual({
+		expect(
+			readDefinition(folder.read("w", "sub-agents", "r.ptc") ?? ""),
+		).toEqual({
 			name: "r",
 			prompt: "p",
 			permissions: "(permission/deny fs/*)",
@@ -113,95 +181,57 @@ describe("defagent with permissions", () => {
 		await run('(defagent "r" :prompt "p" :permissions "")');
 		await run('(defagent "s" :prompt "p")');
 		expect(extension.asks).toEqual([BOUNDED_DEFINE]);
-		expect(calls).toContain(BOUNDED_DEFINE);
 		expect(calls.filter((name) => name === BOUNDED_DEFINE)).toHaveLength(1);
 	});
 
-	test("refuses rules that are not text", async () => {
+	test("refuses rules that do not read", async () => {
 		const { run } = world();
 		await expect(
-			run('(defagent "r" :prompt "p" :permissions 3)'),
-		).rejects.toThrow(":permissions is a string");
+			run('(defagent "r" :prompt "p" :permissions "(permission/deny")'),
+		).rejects.toThrow(":permissions does not read");
 	});
 });
 
 describe("spawn", () => {
-	test("starts with a fresh chat unless told to fork it", async () => {
-		const { run, jobs } = world();
-		await run('(spawn "a" :prompt "p") (spawn "b" :prompt "p" :chat :fork)');
-		expect(jobs.spawned.map((spawn) => spawn.chat)).toEqual([
-			{ from: "fresh" },
-			{ from: "fork" },
-		]);
+	test("forks the image and the chat when asked", async () => {
+		const { run, threads } = world();
+		await run("(setq x 41)");
+		await run('(spawn "s" :prompt "p" :repl :fork :chat :fork)');
+		const [spawned] = threads.spawned;
+		expect(spawned?.seed.from).toBe("fork");
+		expect(spawned?.chat).toEqual({ from: "fork" });
+		expect(JSON.stringify(spawned?.seed)).toContain('"x"');
 	});
 
-	test("refuses an unknown chat seed", async () => {
+	test("refuses a name never defined", async () => {
 		const { run } = world();
-		await expect(
-			run('(spawn "s" :prompt "p" :chat :borrowed)'),
-		).rejects.toThrow(":chat is :fresh or :fork");
-	});
-
-	test("takes an ad hoc prompt without saving it", async () => {
-		const { run, jobs, definitions } = world();
-		await run('(spawn "scratch" :prompt "think")');
-		expect(jobs.spawned[0].definition).toEqual({
-			name: "scratch",
-			prompt: "think",
-		});
-		expect(definitions.all()).toEqual([]);
-	});
-
-	test("forks a copy of the image as it stands", async () => {
-		const { run, jobs } = world();
-		await run('(setq x 41) (spawn "scratch" :prompt "p" :repl :fork)');
-		const { seed } = jobs.spawned[0];
-		expect(seed.from).toBe("fork");
-		expect(JSON.stringify(seed)).toContain('"x"');
-	});
-
-	test("refuses an unknown repl seed", async () => {
-		const { run } = world();
-		await expect(
-			run('(spawn "s" :prompt "p" :repl :borrowed)'),
-		).rejects.toThrow(":repl is :fresh or :fork");
-	});
-
-	test("refuses a name nothing defines", async () => {
-		const { run } = world();
-		await expect(run('(spawn "ghost")')).rejects.toThrow(
+		await expect(run('(spawn "nobody")')).rejects.toThrow(
 			"no saved agent by that name",
 		);
 	});
 
-	test("says so in a session with no jobs", async () => {
+	test("is refused by a session that runs no sub-agents", async () => {
 		const { run } = world(false);
-		await expect(run('(spawn "s" :prompt "p")')).rejects.toThrow(
-			"runs no background jobs",
+		await expect(run('(spawn "r" :prompt "p")')).rejects.toThrow(
+			"runs no sub-agents",
 		);
 	});
 });
 
 describe("send", () => {
-	test("hands the message to the agent's jobs and returns the job id", async () => {
-		const { run, shown, jobs } = world();
+	test("asks the port for a job on the spawned child", async () => {
+		const { run, shown, threads } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(send :to "r" "hello" :max-steps 3)')).toBe('"job-1"');
-		expect(jobs.submitted).toEqual([
-			{
-				kind: "agent",
-				agent: "agent-1",
-				name: "r",
-				message: "hello",
-				maxSteps: 3,
-			},
+		expect(await shown('(send :to "r" "hi" :max-steps 3)')).toBe('"job-1"');
+		expect(threads.sent).toEqual([
+			{ child: "child-1", message: { text: "hi", maxSteps: 3 } },
 		]);
 	});
 
 	test("gives a job the default step budget", async () => {
-		const { run, jobs } = world();
+		const { run, threads } = world();
 		await run('(spawn "r" :prompt "p") (send :to "r" "b")');
-		expect(jobs.submitted[0]).toMatchObject({ maxSteps: 20 });
+		expect(threads.sent[0]?.message.maxSteps).toBe(20);
 	});
 
 	test("refuses an agent that was never spawned", async () => {
@@ -224,7 +254,7 @@ describe("a job", () => {
 	test("waited on returns its reply", async () => {
 		const { run, shown } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(job-wait (send :to "r" "hello"))')).toBe(
+		expect(await shown('(agent-wait (send :to "r" "hello"))')).toBe(
 			'"got hello"',
 		);
 	});
@@ -232,7 +262,7 @@ describe("a job", () => {
 	test("that failed raises when waited on", async () => {
 		const { run } = world();
 		await run('(spawn "r" :prompt "p")');
-		await expect(run('(job-wait (send :to "r" "fail"))')).rejects.toThrow(
+		await expect(run('(agent-wait (send :to "r" "fail"))')).rejects.toThrow(
 			"it broke",
 		);
 	});
@@ -240,78 +270,37 @@ describe("a job", () => {
 	test("reports where it stands as a keyword", async () => {
 		const { run, shown } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(job-state (send :to "r" "hi"))')).toBe(":running");
+		expect(await shown('(agent-state (send :to "r" "hi"))')).toBe(":pending");
+		expect(await shown('(agent-state "gone")')).toBe(":lost");
 	});
 
-	test("can be cancelled", async () => {
-		const { run, shown, jobs } = world();
+	test("is cancelled by id, and an agent by its name", async () => {
+		const { run, shown, threads } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(job-cancel (send :to "r" "hi"))')).toBe("t");
-		expect(jobs.cancelled).toEqual(["job-1"]);
+		expect(await shown('(agent-cancel (send :to "r" "hi"))')).toBe("t");
+		expect(await shown('(agent-cancel "r")')).toBe("t");
+		expect(threads.cancelled).toEqual(["job-1", "child-1"]);
 	});
 });
 
-describe("background code", () => {
-	test("runs a form on a copy of the image and hands back its job id", async () => {
-		const { run, shown, jobs } = world();
-		await run("(setq x 41)");
-		expect(await shown("(spawn :code '(+ x 1))")).toBe('"job-1"');
-		const [work] = jobs.submitted;
-		expect(work).toMatchObject({ kind: "code", source: "(+ x 1)" });
-		expect(JSON.stringify(work)).toContain('"x"');
-	});
-
-	test("returns what it printed when waited on", async () => {
-		const { shown } = world();
-		expect(await shown("(job-wait (spawn :code '(+ 1 2)))")).toBe(
-			'"ran (+ 1 2)"',
-		);
-	});
-
-	test("takes no name", async () => {
-		const { run } = world();
-		await expect(run('(spawn "r" :code \'(+ 1 2))')).rejects.toThrow(
-			"spawn :code takes no name",
-		);
-	});
-});
-
-describe("the job table", () => {
-	test("lists every job with where it stands", async () => {
-		const { run, shown } = world();
-		await run('(spawn "r" :prompt "p") (send :to "r" "hi")');
-		expect(await shown("(jobs)")).toBe(
-			'((:id "job-1" :kind :agent :label "r" :state :running))',
-		);
-	});
-
-	test("keeps a finished job's outcome once waited on", async () => {
-		const { run, shown } = world();
-		await run('(spawn "r" :prompt "p") (job-wait (send :to "r" "hi"))');
-		expect(await shown('(job-state "job-1")')).toBe(":done");
-		expect(await shown("(jobs)")).toContain(':reply "got hi"');
-	});
-
-	test("refuses a job it never started", async () => {
-		const { run } = world();
-		await expect(run('(job-state "nope")')).rejects.toThrow(
-			"no job by that id",
-		);
-	});
-
-	test("survives an image, agents and jobs alike", async () => {
+describe("a spawned agent's handle", () => {
+	test("survives snapshot and restore, so send reopens the same child", async () => {
 		const before = world();
-		await before.run('(spawn "r" :prompt "p") (send :to "r" "hi")');
+		await before.run('(spawn "r" :prompt "p")');
 		const image = snapshot(before.interp);
 
-		const jobs = new RecordedJobs();
-		const after = session(jobs);
+		const threads = new FakeThreads();
+		const after = session(threads);
 		restore(after.interp, image);
-		const run = (code: string) => runAsync(after.interp, code);
-		await run('(send :to "r" "again")');
-		expect(jobs.submitted[0]).toMatchObject({ agent: "agent-1" });
-		jobs.forgotten.add("job-1");
-		expect(str((await run('(job-state "job-1")')).value)).toBe(":failed");
-		await expect(run('(job-wait "job-1")')).rejects.toThrow("interrupted");
+		await runAsync(after.interp, '(send :to "r" "again")');
+		expect(threads.spawned).toEqual([]);
+		expect(threads.sent[0]?.child).toBe("child-1");
+	});
+
+	test("cannot be set by Lisp code", async () => {
+		const { run } = world();
+		await expect(
+			run('(setq *agents/spawned* \'(("r" "elsewhere")))'),
+		).rejects.toThrow();
 	});
 });

@@ -1,19 +1,15 @@
 import {
-	type AskOptions,
 	type Envelope,
 	MemoryMailbox,
 	type Posted,
 	type PostOptions,
 	Threads,
-	type TurnOutcome,
 	type UiActionResult,
 } from "@repo/ai";
-import { inProcessJobs } from "@repo/backend/agent-repl";
 import type { Id } from "@repo/backend/dataModel";
 import { MAX_SPAWN_DEPTH } from "@repo/backend/limits";
 import { ThreadHost } from "@repo/backend/thread-host";
 import { convexActingAs, convexAsServer } from "./convex.ts";
-import { subAgents } from "./sub-agents.ts";
 
 export interface Identity {
 	readonly distinctId?: string;
@@ -24,9 +20,6 @@ const host: ThreadHost = new ThreadHost({
 	server: convexAsServer,
 	actAs: convexActingAs,
 	threads: () => threads,
-	jobs: inProcessJobs((workspaceId, chatId) =>
-		subAgents(host)(workspaceId, chatId),
-	),
 });
 
 const telemetry = new Map<string, Identity>();
@@ -55,25 +48,6 @@ export function post(
 ): Promise<Posted> {
 	if (identity !== undefined) telemetry.set(chatId, identity);
 	return threads.get(chatId).post(envelope, options);
-}
-
-export function ask(
-	chatId: Id<"chats">,
-	envelope: Envelope,
-	options?: AskOptions,
-): Promise<string> {
-	return threads.ask(chatId, envelope, options);
-}
-
-export function wait(job: string, signal?: AbortSignal): Promise<TurnOutcome> {
-	return threads.wait(job, signal);
-}
-
-export async function spawn(
-	parent: Id<"chats">,
-	create: () => Promise<Id<"chats">>,
-): Promise<Id<"chats">> {
-	return (await threads.spawn(parent, create)) as Id<"chats">;
 }
 
 export function watch(chatId: Id<"chats">, signal: AbortSignal): Response {

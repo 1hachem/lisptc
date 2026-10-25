@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/agents.ts",
     "./host": "./src/agents-host.ts",
-    "./jobs": "./src/memory-jobs.ts",
     "./ports": "./src/ports.ts"
   },
   "engines": {

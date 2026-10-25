@@ -7,38 +7,38 @@ import {
 	Cell,
 	LispKeyword,
 	type List,
+	listToArray,
 	newLispKeyword,
 	newSym,
 } from "@repo/interpreter/objects";
 import { keyName } from "@repo/interpreter/plist";
-import { str } from "@repo/interpreter/print";
+import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
-import type { PromptSource } from "@repo/shared/host";
+import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
 import {
-	FINISHED,
-	type JobKind,
-	type JobRecord,
-	jobPlist,
-	jobsCodec,
-	type SpawnedAgent,
-	spawnedCodec,
-} from "./job-table.ts";
+	AGENT_FOLDER,
+	agentFileName,
+	agentNameOf,
+	readDefinition,
+	writeDefinition,
+} from "./definition.ts";
+import { type Handle, handlesCodec } from "./handles.ts";
 import type {
 	AgentDefinition,
-	AgentDefinitions,
+	AgentThreads,
 	ChatSeed,
-	Jobs,
 	Outcome,
 	ReplSeed,
-	Work,
 } from "./ports.ts";
 
 export interface AgentsHost {
 	prompt: PromptSource;
-	definitions: AgentDefinitions;
-	jobs?: Jobs;
+	folder: SourceFolder;
+	workspace: string;
+	roster?: readonly string[];
+	threads?: AgentThreads;
 }
 
 export const DEFAULT_MAX_STEPS = 20;
@@ -93,11 +93,16 @@ function textOf(form: string, what: string, value: unknown): string {
 	throw new EvalException(`${form}: ${what} is a string`, value);
 }
 
-function stepsOf(value: unknown): number {
-	if (value === undefined) return DEFAULT_MAX_STEPS;
-	const steps = Number(value);
-	if (Number.isInteger(steps) && steps > 0) return steps;
-	throw new EvalException("send: :max-steps is a positive integer", value);
+function countOf(form: string, what: string, value: unknown): number {
+	const count = Number(value);
+	if (Number.isInteger(count) && count > 0) return count;
+	throw new EvalException(`${form}: ${what} is a positive integer`, value);
+}
+
+function rosterOf(value: unknown): readonly string[] {
+	if (value !== null && !(value instanceof Cell))
+		throw new EvalException("defagent: :roster is a list of names", value);
+	return listToArray(value).map((member) => nameOf("defagent", member));
 }
 
 function seedOf(interp: Interp, value: unknown): ReplSeed {
@@ -113,108 +118,96 @@ function chatOf(value: unknown): ChatSeed {
 	throw new EvalException("spawn: :chat is :fresh or :fork", value);
 }
 
-const INTERRUPTED: Outcome = {
-	failure: "interrupted: the host no longer runs this job",
-};
+function definitionFrom(
+	form: string,
+	name: string,
+	options: Map<string, unknown>,
+): AgentDefinition {
+	const prompt = textOf(form, ":prompt", options.get("prompt"));
+	const permissions = options.get("permissions");
+	const roster = options.get("roster");
+	const budget = options.get("budget");
+	if (permissions !== undefined) {
+		const rules = textOf(form, ":permissions", permissions);
+		const failure = readFailure(rules);
+		if (failure !== undefined)
+			throw new EvalException(
+				`${form}: :permissions does not read: ${failure.reason}`,
+				rules,
+			);
+	}
+	return {
+		name,
+		prompt,
+		...(permissions === undefined
+			? {}
+			: { permissions: permissions as string }),
+		...(options.has("roster") ? { roster: rosterOf(roster) } : {}),
+		...(budget === undefined
+			? {}
+			: { budget: countOf(form, ":budget", budget) }),
+	};
+}
 
-class JobTable {
-	constructor(
-		private readonly records: State<readonly JobRecord[]>,
-		private readonly spawned: State<readonly SpawnedAgent[]>,
-	) {}
+class Handles {
+	constructor(private readonly held: State<readonly Handle[]>) {}
 
-	agent(name: string): string | undefined {
-		return this.spawned.get().find((entry) => entry.name === name)?.agent;
+	child(name: string): string | undefined {
+		return this.held.get().find((entry) => entry.name === name)?.child;
 	}
 
-	adopt(name: string, agent: string): void {
-		this.spawned.set([
-			...this.spawned.get().filter((entry) => entry.name !== name),
-			{ name, agent },
+	adopt(name: string, child: string): void {
+		this.held.set([
+			...this.held.get().filter((entry) => entry.name !== name),
+			{ name, child },
 		]);
-	}
-
-	record(id: string): JobRecord | undefined {
-		return this.records.get().find((record) => record.id === id);
-	}
-
-	all(): readonly JobRecord[] {
-		return this.records.get();
-	}
-
-	put(record: JobRecord): JobRecord {
-		this.records.set([
-			...this.records.get().filter((held) => held.id !== record.id),
-			record,
-		]);
-		return record;
 	}
 }
 
+const DEFINE_KEYS = ["prompt", "roster", "budget"];
+
 export function registerAgents(interp: Interp, host: AgentsHost): void {
-	const table = new JobTable(
-		interp.state(
-			"agents/jobs",
-			jobsCodec,
-			[],
-			"The background jobs this session started, with where each stands. Read it through job-state and jobs.",
-		),
+	const handles = new Handles(
 		interp.state(
 			"agents/spawned",
-			spawnedCodec,
+			handlesCodec,
 			[],
-			"The sub-agents this session spawned, by name.",
+			"The sub-agents this session spawned, by name, with the thread each runs on.",
 		),
 	);
 
-	function jobs(form: string): Jobs {
-		if (host.jobs === undefined)
-			throw new EvalException(
-				"this session runs no background jobs",
-				form,
-				false,
-			);
-		return host.jobs;
+	function threads(form: string): AgentThreads {
+		if (host.threads === undefined)
+			throw new EvalException("this session runs no sub-agents", form, false);
+		return host.threads;
 	}
 
-	function known(form: string, job: string): JobRecord {
-		const record = table.record(job);
-		if (record === undefined)
-			throw new EvalException(`${form}: no job by that id`, job);
-		return record;
+	function shown(name: string): boolean {
+		return host.roster === undefined || host.roster.includes(name);
 	}
 
-	async function refreshed(record: JobRecord): Promise<JobRecord> {
-		if (FINISHED.has(record.state)) return record;
-		const seen = await jobs("job-state").peek(record.id);
-		if (seen === undefined)
-			return table.put({ ...record, state: "failed", outcome: INTERRUPTED });
-		return table.put(
-			seen.outcome === undefined
-				? { ...record, state: seen.state }
-				: { ...record, state: seen.state, outcome: seen.outcome },
+	async function saved(name: string): Promise<AgentDefinition | undefined> {
+		if (!shown(name)) return undefined;
+		const text = await host.folder.read(
+			host.workspace,
+			AGENT_FOLDER,
+			agentFileName(name),
 		);
-	}
-
-	async function started(kind: JobKind, label: string, work: Work) {
-		const id = await jobs("spawn").submit(work);
-		table.put({ id, kind, label, state: "queued" });
-		return id;
+		return text === undefined ? undefined : readDefinition(text);
 	}
 
 	async function definitionOf(
 		name: string,
-		prompt: unknown,
+		options: Map<string, unknown>,
 	): Promise<AgentDefinition> {
-		if (prompt !== undefined)
-			return { name, prompt: textOf("spawn", ":prompt", prompt) };
-		const saved = await host.definitions.get(name);
-		if (saved === undefined)
+		if (options.has("prompt")) return definitionFrom("spawn", name, options);
+		const definition = await saved(name);
+		if (definition === undefined)
 			throw new EvalException(
 				"spawn: no saved agent by that name; define it with defagent or pass :prompt",
 				name,
 			);
-		return saved;
+		return definition;
 	}
 
 	interp.def(
@@ -240,22 +233,18 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		},
 	);
 
-	function define(form: string, allowed: readonly string[]) {
+	function define(allowed: readonly string[]) {
 		return async ([rest]: [List]) => {
-			const { values, options } = parse(form, rest, allowed);
+			const { values, options } = parse("defagent", rest, allowed);
 			if (values.length !== 1)
 				throw new EvalException("defagent takes one name, then :prompt", rest);
 			const name = nameOf("defagent", values[0]);
-			const prompt = textOf("defagent", ":prompt", options.get("prompt"));
-			const permissions = options.get("permissions");
-			await host.definitions.put(
-				permissions === undefined
-					? { name, prompt }
-					: {
-							name,
-							prompt,
-							permissions: textOf("defagent", ":permissions", permissions),
-						},
+			const definition = definitionFrom("defagent", name, options);
+			await host.folder.write(
+				host.workspace,
+				AGENT_FOLDER,
+				agentFileName(name),
+				writeDefinition(definition),
 			);
 			return name;
 		};
@@ -267,7 +256,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		'(agents/define "name" :prompt "...")',
 		"Save an agent definition without permissions. defagent calls it; call defagent instead.",
 		z.tuple([zList]),
-		define("defagent", ["prompt"]),
+		define(DEFINE_KEYS),
 	);
 
 	interp.def(
@@ -276,7 +265,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		`(${BOUNDED_DEFINE} "name" :prompt "..." :permissions "...")`,
 		"Save an agent definition with the permission rules that bound it. It waits on the user's approval. defagent calls it; call defagent instead.",
 		z.tuple([zList]),
-		define("defagent", ["prompt", "permissions"]),
+		define([...DEFINE_KEYS, "permissions"]),
 	);
 
 	interp.defineGlobal(
@@ -286,8 +275,9 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			`(macro (&rest args) (cons (if (member :permissions args) '${BOUNDED_DEFINE} 'agents/define) args))`,
 		),
 		{
-			signature: '(defagent "name" :prompt "..." [:permissions "rules"])',
-			doc: "Save an agent definition under a name, replacing one of the same name. Spawn it later by that name. :permissions holds permission forms as text; they bound the agent on top of the workspace's rules and can only tighten them. Saving permissions waits on the user's approval. Return the name.",
+			signature:
+				'(defagent "name" :prompt "..." [:permissions "rules"] [:roster \'("name"...)] [:budget n])',
+			doc: `Save an agent definition as ${AGENT_FOLDER}/<name>.ptc, replacing one of the same name. Spawn it later by that name. :permissions holds permission forms as text; they bound the agent on top of the workspace's rules and can only tighten them. Saving permissions waits on the user's approval. :roster names the agents it may spawn in turn. :budget caps the steps it may spend. Return the name.`,
 		},
 	);
 
@@ -295,48 +285,42 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"agents",
 		0,
 		"(agents)",
-		"Return the names of the saved agent definitions.",
+		`Return the names of the agent definitions saved in ${AGENT_FOLDER}/.`,
 		z.tuple([]),
 		async () => {
-			let names: List = null;
-			const saved = await host.definitions.all();
-			for (const { name } of [...saved].reverse())
-				names = new Cell(name, names);
-			return names;
+			const files = await host.folder.list(host.workspace, AGENT_FOLDER);
+			const names = files.flatMap((file) => {
+				const name = agentNameOf(file);
+				return name === undefined || !shown(name) ? [] : [name];
+			});
+			return arrayToList(names);
 		},
 	);
 
 	interp.def(
 		"spawn",
 		-1,
-		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork]) or (spawn :code form)',
-		"Start a sub-agent under a name and return the name. Without :prompt it runs the saved definition of that name. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over. With :code, run the form in the background on a copy of this image and return its job id at once; what it prints comes back as a system event from job:id unless you job-wait on it.",
+		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork])',
+		"Start a sub-agent on a thread of its own under a name and return the name. Without :prompt it runs the saved definition of that name. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("spawn", rest, [
 				"prompt",
 				"repl",
 				"chat",
-				"code",
+				...DEFINE_KEYS,
+				"permissions",
 			]);
-			if (options.has("code")) {
-				if (values.length > 0)
-					throw new EvalException("spawn :code takes no name", rest);
-				const code = options.get("code");
-				const source = typeof code === "string" ? code : str(code);
-				return await started("code", source, {
-					kind: "code",
-					source,
-					image: snapshot(interp),
-				});
-			}
 			if (values.length !== 1)
 				throw new EvalException("spawn takes one name, then options", rest);
 			const name = nameOf("spawn", values[0]);
 			const seed = seedOf(interp, options.get("repl"));
 			const chat = chatOf(options.get("chat"));
-			const definition = await definitionOf(name, options.get("prompt"));
-			table.adopt(name, await jobs("spawn").spawn({ definition, seed, chat }));
+			const definition = await definitionOf(name, options);
+			handles.adopt(
+				name,
+				await threads("spawn").spawn({ definition, seed, chat }),
+			);
 			return name;
 		},
 	);
@@ -345,98 +329,66 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"send",
 		-1,
 		'(send :to "name" "message" [:max-steps n])',
-		"Hand a message to a spawned sub-agent as a job and return the job id at once; keep working. Unless you job-wait on it, its reply comes back later as a system event from agent:name, waking you if your turn ended. Messages to one agent run in turn.",
+		"Hand a message to a spawned sub-agent and return its job id at once; keep working. Unless you agent-wait on it, its reply comes back later as a system event from agent:name, waking you if your turn ended.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("send", rest, ["to", "max-steps"]);
 			if (values.length !== 1)
 				throw new EvalException("send takes one message string", rest);
-			const message = textOf("send", "the message", values[0]);
+			const text = textOf("send", "the message", values[0]);
 			const to = options.get("to");
 			if (to === undefined)
 				throw new EvalException("send: say who with :to", rest);
 			const name = nameOf("send", to);
-			const maxSteps = stepsOf(options.get("max-steps"));
-			const agent = table.agent(name);
-			if (agent === undefined)
+			const steps = options.get("max-steps");
+			const maxSteps =
+				steps === undefined
+					? DEFAULT_MAX_STEPS
+					: countOf("send", ":max-steps", steps);
+			const child = handles.child(name);
+			if (child === undefined)
 				throw new EvalException(
 					"send: no running agent by that name; spawn it first",
 					name,
 				);
-			return await started("agent", name, {
-				kind: "agent",
-				agent,
-				name,
-				message,
-				maxSteps,
-			});
+			return await threads("send").send(child, { text, maxSteps });
 		},
 	);
 
 	interp.def(
-		"job-wait",
+		"agent-wait",
 		1,
-		'(job-wait "job")',
-		"Wait in this step for a job to finish and return what it replied or printed. A job you wait on sends no system event later. A failed, cancelled or interrupted job raises an error.",
+		'(agent-wait "job")',
+		"Wait in this step for a job to finish and return what the agent replied. A job you wait on sends no system event later. A failed, cancelled or lost job raises an error.",
 		z.tuple([zString]),
 		async ([job]) => {
-			let record = await refreshed(known("job-wait", job));
-			if (!FINISHED.has(record.state)) {
-				const waiting = interp.async.start((signal) =>
-					jobs("job-wait").wait(job, signal),
-				);
-				const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
-				record = table.put({
-					...record,
-					state: "reply" in outcome ? "done" : "failed",
-					outcome,
-				});
-			}
-			const { outcome } = record;
-			if (outcome !== undefined && "reply" in outcome) return outcome.reply;
-			throw new EvalException(
-				`job ${job}`,
-				outcome?.failure ?? record.state,
-				false,
-			);
+			const port = threads("agent-wait");
+			const waiting = interp.async.start((signal) => port.wait(job, signal));
+			const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
+			if ("reply" in outcome) return outcome.reply;
+			throw new EvalException(`job ${job}`, outcome.failure, false);
 		},
 	);
 
 	interp.def(
-		"job-state",
+		"agent-state",
 		1,
-		'(job-state "job")',
-		"Return where a job stands: :queued, :running, :done, :failed or :cancelled. A job the host lost to a restart reads :failed.",
+		'(agent-state "job")',
+		"Return where a job stands: :pending, :held, :done, :failed, :cancelled or :lost. A job the runtime lost to a restart reads :lost.",
 		z.tuple([zString]),
 		async ([job]) =>
-			newLispKeyword((await refreshed(known("job-state", job))).state),
+			newLispKeyword((await threads("agent-state").state(job)).state),
 	);
 
 	interp.def(
-		"job-cancel",
+		"agent-cancel",
 		1,
-		'(job-cancel "job")',
-		"Cancel a job that has not finished. Return t when it was cancelled, nil when it had already finished.",
+		'(agent-cancel "job-or-name")',
+		"Cancel a job that has not finished, or given a spawned agent's name, stop that agent and every agent under it. Return t when something was cancelled, nil otherwise.",
 		z.tuple([zString]),
-		async ([job]) => {
-			const record = await refreshed(known("job-cancel", job));
-			if (FINISHED.has(record.state)) return null;
-			if (!(await jobs("job-cancel").cancel(job))) return null;
-			table.put({ ...record, state: "cancelled" });
-			return true;
-		},
-	);
-
-	interp.def(
-		"jobs",
-		0,
-		"(jobs)",
-		"Return every job this session started, oldest first, each as (:id :kind :label :state) with :reply or :failure once it ended.",
-		z.tuple([]),
-		async () => {
-			const records: JobRecord[] = [];
-			for (const record of table.all()) records.push(await refreshed(record));
-			return arrayToList(records.map(jobPlist));
+		async ([target]) => {
+			const id = handles.child(target) ?? target;
+			return (await threads("agent-cancel").cancel(id)) ? true : null;
 		},
 	);
 }
