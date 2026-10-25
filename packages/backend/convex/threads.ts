@@ -15,7 +15,7 @@ import {
 } from "./messages.js";
 import { preferencesOf } from "./preferences.js";
 import { openRepl } from "./repls.js";
-import { storedModel, subAgent } from "./schema.js";
+import { modelChoice, subAgent } from "./schema.js";
 
 async function threadChat(
 	ctx: QueryCtx,
@@ -33,7 +33,7 @@ export const record = internalQuery({
 		ownerId: v.id("users"),
 		parentId: v.optional(v.id("chats")),
 		title: v.string(),
-		model: v.optional(storedModel),
+		model: v.optional(modelChoice),
 		runsForms: v.boolean(),
 		lineage: v.array(v.object({ agent: v.optional(subAgent) })),
 	}),
