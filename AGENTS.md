@@ -90,8 +90,8 @@ workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point
 for working in it.
 
 Not all of it is a workspace. The dialect is served outside the node build too,
-and those parts answer to `task` rather than to `pnpm`: `tree-sitter-lisptc/` is
-the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
+and those parts answer to `task` rather than to `pnpm`: `nix/` builds the
+`ptcfmt` formatter from the grammar in `packages/tree-sitter` and holds its checks,
 `editors/nvim` is the editor plugin, and `examples/` is the dialect written out.
 A change to the language surface is not done until they still pass.
 
@@ -136,6 +136,7 @@ Everything else:
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
+- `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
