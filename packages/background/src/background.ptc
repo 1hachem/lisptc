@@ -1,0 +1,30 @@
+BACKGROUND
+
+Run Lisp in background, own REPL, own thread. Get job id at once; keep working.
+
+  (setq j (background (fetch-report) :fork t :deadline 60))
+  (background '(+ 1 2))                  ; fresh REPL by default
+  (background (scan) :permissions "(permission/deny \"fs/*\")")
+  (background-state j)                   ; :pending :held :done :failed :cancelled :lost
+  (background-wait j)                    ; wait now, return printed value
+  (background-cancel j)                  ; t if cancelled
+
+:fork t = copy of your image now. :permissions only narrow your rules.
+:deadline in seconds. Not waited? Value comes later as
+<system-event source="background:<job>">, wakes you if turn ended. Asks from
+job reach user in root chat. Job ids survive restart in your image.
+
+Watch, all times in ms:
+
+  (sleep 500)
+  (poll-until (ready-p) :every 1000 :timeout 30000)
+  (watch-until (status) (lambda (s) (equal s "up")) :every 2000 :timeout 60000)
+  (retry 5 :backoff (backoff :exponential :base 100 :factor 2 :max 5000 :jitter 0.1) (call-api))
+  (backoff :constant :base 1000)         ; also :linear, :factor = ms added each try
+  (backoff-delay (backoff :exponential :base 100) 3) ; => 800
+  (with-timeout 5000 (await p))
+  (every 1000 :times 3 (check))          ; list of 3 values
+
+Past :timeout, poll-until, watch-until, with-timeout raise error. retry raises
+last error. every without :times runs until cancel or deadline: run it in
+background.
