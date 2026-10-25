@@ -49,7 +49,7 @@ export function serve(method: Method): (request: Request) => Promise<Response> {
 	};
 }
 
-export function post(
+export function postJson(
 	method: Method,
 	body: unknown,
 	headers: Record<string, string> = {},

@@ -23,7 +23,7 @@ export interface Tool {
 	outputSchema?: JsonSchema;
 }
 
-interface ConnMeta {
+export interface ConnMeta {
 	description?: string;
 	keywords?: string[];
 }
