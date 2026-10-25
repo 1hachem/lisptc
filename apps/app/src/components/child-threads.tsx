@@ -1,7 +1,9 @@
 import { convexQuery } from "@convex-dev/react-query";
 import {
+	AiBrain01Icon,
 	AlertCircleIcon,
 	CheckmarkCircle02Icon,
+	CommandLineIcon,
 	GitBranchIcon,
 	HelpCircleIcon,
 	Loading03Icon,
@@ -18,6 +20,7 @@ export interface ChildThread {
 	title: string;
 	status?: "streaming" | "waiting" | "errored";
 	failure?: string;
+	job?: boolean;
 }
 
 type ThreadState = "running" | "waiting" | "errored" | "idle";
@@ -72,6 +75,11 @@ export function ChildThreadStrip({
 									? "size-icon-sm animate-spin"
 									: "size-icon-sm"
 							}
+						/>
+						<HugeiconsIcon
+							icon={thread.job ? CommandLineIcon : AiBrain01Icon}
+							data-kind={thread.job ? "job" : "agent"}
+							className="size-icon-sm text-dim"
 						/>
 						{thread.title || "untitled"}
 						<span className="sr-only">{state}</span>

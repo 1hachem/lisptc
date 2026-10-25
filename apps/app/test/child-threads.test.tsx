@@ -62,6 +62,17 @@ describe("child threads", () => {
 		expect(buttons[3].textContent).toContain("untitled");
 	});
 
+	it("marks a background job apart from a sub-agent", () => {
+		const host = mount([
+			THREADS[0],
+			{ _id: "j", title: "poll", status: "streaming", job: true },
+		]);
+		const kinds = [
+			...host.querySelectorAll<SVGElement>("button[data-state] [data-kind]"),
+		];
+		expect(kinds.map((icon) => icon.dataset.kind)).toEqual(["agent", "job"]);
+	});
+
 	it("opens the child it was clicked on", () => {
 		const onOpen = vi.fn();
 		const host = mount(THREADS, onOpen);

@@ -87,6 +87,7 @@ export const children = query({
 			title: v.string(),
 			status: v.optional(chatStatus),
 			failure: v.optional(v.string()),
+			job: v.boolean(),
 		}),
 	),
 	handler: async (ctx, { chatId }) => {
@@ -95,11 +96,12 @@ export const children = query({
 			.query("chats")
 			.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
 			.take(MAX_CHATS);
-		return rows.map(({ _id, title, status, failure }) => ({
+		return rows.map(({ _id, title, status, failure, agent }) => ({
 			_id,
 			title,
 			status,
 			failure,
+			job: agent?.code !== undefined,
 		}));
 	},
 });
