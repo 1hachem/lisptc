@@ -24,18 +24,17 @@ export function extension(
 	return Object.assign((_interp: Interp): void => {}, { session });
 }
 
-export function answering(): InterpExtension {
-	return extension((hooks) =>
-		hooks.answered.use((ctx, out, next) =>
-			ctx.code.includes("(") ? next(ctx, out) : true,
-		),
-	);
-}
+const answersOnForms = extension((hooks) =>
+	hooks.answered.use((ctx, out, next) =>
+		ctx.code.includes("(") ? next(ctx, out) : true,
+	),
+);
 
 export function noting(text: string): InterpExtension {
+	const skipped = { model: { kind: "skipped" as const, text } };
 	return extension((hooks) =>
 		hooks.evalStep.use((ctx, next) => {
-			note.emit(ctx.interp.channels, { model: { kind: "skipped", text } });
+			note.emit(ctx.interp.channels, skipped);
 			return next(ctx);
 		}),
 	);
@@ -102,7 +101,7 @@ export function testRepl(
 	extensions: InterpExtension[] = [],
 	images: MemoryImageStore = new MemoryImageStore(),
 ): AgentRepl {
-	return new AgentRepl({ extensions: [answering(), ...extensions], images });
+	return new AgentRepl({ extensions: [answersOnForms, ...extensions], images });
 }
 
 class TestRepls implements Repls {
@@ -123,7 +122,9 @@ class TestRepls implements Repls {
 	}
 }
 
-export function testRepls(extensions: InterpExtension[] = []): TestRepls {
+export function testRepls(
+	extensions: InterpExtension[] = [],
+): Repls & { peek(threadId: string): AgentRepl | undefined } {
 	return new TestRepls(extensions);
 }
 
