@@ -28,7 +28,6 @@
     "dev": "convex dev",
     "deploy": "convex deploy",
     "env:seed": "sh scripts/seed-env.sh",
-    "migrate": "convex run migrations:runAll",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -37,7 +36,6 @@
   "dependencies": {
     "@better-auth/passkey": "~1.6.33",
     "@convex-dev/better-auth": "^0.12.5",
-    "@convex-dev/migrations": "^0.3.6",
     "@posthog/convex": "^2.1.5",
     "@repo/agents-extension": "workspace:*",
     "@repo/compaction-extension": "workspace:*",

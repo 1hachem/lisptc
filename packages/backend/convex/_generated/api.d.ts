@@ -23,7 +23,6 @@ import type * as lib_claimed from "../lib/claimed.js";
 import type * as lib_clamp from "../lib/clamp.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_files from "../lib/files.js";
-import type * as lib_models from "../lib/models.js";
 import type * as lib_names from "../lib/names.js";
 import type * as lib_preferenceDefaults from "../lib/preferenceDefaults.js";
 import type * as lib_slug from "../lib/slug.js";
@@ -33,7 +32,6 @@ import type * as lib_workspaceIcons from "../lib/workspaceIcons.js";
 import type * as limits from "../limits.js";
 import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
-import type * as migrations from "../migrations.js";
 import type * as oauth from "../oauth.js";
 import type * as permissions from "../permissions.js";
 import type * as posthog from "../posthog.js";
@@ -67,7 +65,6 @@ declare const fullApi: ApiFromModules<{
   "lib/clamp": typeof lib_clamp;
   "lib/env": typeof lib_env;
   "lib/files": typeof lib_files;
-  "lib/models": typeof lib_models;
   "lib/names": typeof lib_names;
   "lib/preferenceDefaults": typeof lib_preferenceDefaults;
   "lib/slug": typeof lib_slug;
@@ -77,7 +74,6 @@ declare const fullApi: ApiFromModules<{
   limits: typeof limits;
   memories: typeof memories;
   messages: typeof messages;
-  migrations: typeof migrations;
   oauth: typeof oauth;
   permissions: typeof permissions;
   posthog: typeof posthog;
@@ -118,6 +114,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
-  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };

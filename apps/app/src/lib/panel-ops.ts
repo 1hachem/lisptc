@@ -5,7 +5,6 @@ import {
 	openTab,
 	type Placement,
 	paneOf,
-	replaceTab,
 	type SplitLayout,
 	type Tab,
 } from "@repo/components";
@@ -31,8 +30,6 @@ export type PanelContent =
 	| { kind: "page"; page: Page; id?: string; title: string };
 
 export type PanelLayout = SplitLayout<PanelContent>;
-
-const RETIRED_MAIN = "main";
 
 export const NEW_CHAT: PanelContent = {
 	kind: "chat",
@@ -62,11 +59,6 @@ export function leadChat(layout: PanelLayout): string | undefined {
 	const focused = focusedTab(layout);
 	if (focused?.content.kind === "chat") return focused.id;
 	return shownTabs(layout).find((t) => t.content.kind === "chat")?.id;
-}
-
-export function retireMain(layout: PanelLayout): PanelLayout {
-	if (paneOf(layout, RETIRED_MAIN) === undefined) return layout;
-	return replaceTab(layout, RETIRED_MAIN, panelTab(NEW_CHAT));
 }
 
 function placed(
