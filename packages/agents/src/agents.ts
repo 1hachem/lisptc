@@ -49,6 +49,11 @@ export const BOUNDED_DEFINE = "agents/define-bounded";
 
 export const KEEP = "agent-keep";
 
+export const DELEGATE_PREFIX = "delegate-";
+
+export const DELEGATE_PROMPT =
+	"Do the brief, nothing else. Final answer: result first, then evidence (forms run, values seen, paths), then what not checked.";
+
 export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
@@ -162,6 +167,10 @@ class Handles {
 
 	child(name: string): string | undefined {
 		return this.of(name)?.child;
+	}
+
+	names(): string[] {
+		return this.held.get().map((entry) => entry.name);
 	}
 
 	adopt(handle: Handle): void {
@@ -352,6 +361,11 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			if (values.length !== 1)
 				throw new EvalException("spawn takes one name, then options", rest);
 			const name = nameOf("spawn", values[0]);
+			if (name.startsWith(DELEGATE_PREFIX))
+				throw new EvalException(
+					`spawn: names starting ${DELEGATE_PREFIX} are kept for delegate`,
+					name,
+				);
 			const seed = seedOf(interp, options.get("repl"));
 			const chat = chatOf(options.get("chat"));
 			const definition = await definitionOf(name, options);
@@ -376,6 +390,8 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			const handle = handles.of(name);
 			if (handle === undefined)
 				throw new EvalException(`${KEEP}: no agent spawned by that name`, name);
+			if (name.startsWith(DELEGATE_PREFIX))
+				throw new EvalException(`${KEEP}: a delegate cannot be kept`, name);
 			if (handle.unsaved === undefined)
 				throw new EvalException(`${KEEP}: that agent is saved already`, name);
 			if ((await sourceOf(name)) !== undefined)
@@ -404,11 +420,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			if (to === undefined)
 				throw new EvalException("send: say who with :to", rest);
 			const name = nameOf("send", to);
-			const steps = options.get("max-steps");
-			const maxSteps =
-				steps === undefined
-					? DEFAULT_MAX_STEPS
-					: countOf("send", ":max-steps", steps);
+			const maxSteps = stepsOf("send", options);
 			const child = handles.child(name);
 			if (child === undefined)
 				throw new EvalException(
@@ -416,6 +428,48 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 					name,
 				);
 			return await threads("send").send(child, { text, maxSteps });
+		},
+	);
+
+	function stepsOf(form: string, options: Map<string, unknown>): number {
+		const steps = options.get("max-steps");
+		return steps === undefined
+			? DEFAULT_MAX_STEPS
+			: countOf(form, ":max-steps", steps);
+	}
+
+	function delegateName(): string {
+		const taken = new Set(handles.names());
+		let n = 1;
+		while (taken.has(`${DELEGATE_PREFIX}${n}`)) n += 1;
+		return `${DELEGATE_PREFIX}${n}`;
+	}
+
+	interp.def(
+		"delegate",
+		-1,
+		'(delegate "brief" [:max-steps n] [:repl :fresh|:fork])',
+		"Hand self-contained work to a new temporary sub-agent with a fresh chat and return its job id at once; keep working. Its reply comes back later as a system event from agent:delegate-n, or agent-wait the job. The brief carries all it needs: goal, inputs, what done means. Nothing is saved and it cannot be kept.",
+		z.tuple([zList]),
+		async ([rest]) => {
+			const { values, options } = parse("delegate", rest, [
+				"max-steps",
+				"repl",
+			]);
+			if (values.length !== 1)
+				throw new EvalException("delegate takes one brief string", rest);
+			const text = textOf("delegate", "the brief", values[0]);
+			const maxSteps = stepsOf("delegate", options);
+			const seed = seedOf(interp, options.get("repl"));
+			const port = threads("delegate");
+			const name = delegateName();
+			const child = await port.spawn({
+				definition: { name, prompt: DELEGATE_PROMPT },
+				seed,
+				chat: { from: "fresh" },
+			});
+			handles.adopt({ name, child });
+			return await port.send(child, { text, maxSteps });
 		},
 	);
 

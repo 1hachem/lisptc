@@ -6,7 +6,20 @@ quietly yourself.
 
 Sub-agents: each runs on own thread, own chat.
 
-Order, always:
+Default: do work yourself, in own loop. Spawn only when:
+- several jobs independent: run them in parallel;
+- job floods your chat with output you not need after;
+- job needs little from this chat.
+Never split one job into chain of agents by role. Each handoff loses detail.
+Sub-agents cannot spawn. Fan out from here only.
+
+One-off job: (delegate "brief") spawns fresh temporary agent, sends brief,
+returns job id at once. Reply comes as <system-event source="agent:delegate-1">,
+or agent-wait job. Delegate replies result, evidence, what not checked.
+  (setq a (delegate "read A, reply path and line")) (setq b (delegate "read B"))
+  (list (agent-wait a) (agent-wait b))   ; parallel: delegate all first, wait after
+
+Named agent, kept chat across sends, order always:
 1. (agents) lists saved names. (agent-definition "researcher") reads one. Saved one fits? Spawn it by name. Never save a second agent for same job.
 2. None fits? Spawn temporary one with :prompt. Nothing saved.
 3. Temporary one did job well, same job will come again? (agent-keep "scratch") saves it. Else let it go.
@@ -18,15 +31,18 @@ Order, always:
   (agent-wait j)                         ; wait now, return reply
   (agent-cancel j)                       ; or (agent-cancel "researcher"): stop it and all under it
   (agent-keep "scratch")                 ; save temporary agent as sub-agents/scratch.ptc
-  (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")")
-  (defagent "lead" :prompt "..." :roster '("researcher") :budget 40)
+  (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)
+
+Brief: carries all it needs: goal, inputs, what done means. Spawn: prefer
+:chat :fresh; :chat :fork only to continue this exact work, and ask reply as
+result, evidence, what not checked. Reply is claim, not fact: check key fact
+yourself before acting on it.
 
 defagent only when user asks for agent definition. defagent and agent-keep
 save sub-agents/<name>.ptc; both wait on user approval. :prompt on saved name
 refused. Not waited? Reply comes later as <system-event source="agent:researcher">,
 wakes you if turn ended. Agent keeps its chat between sends. Spawning a name
-again starts it over. Spawned names survive restart in your image. :roster names
-agents it may spawn; :budget caps its steps. :permissions only tighten workspace
-rules. Asks from sub-agents reach user in your chat.
+again starts it over. Spawned names survive restart in your image. :budget caps
+its steps. :permissions only tighten workspace rules. Asks from sub-agents reach user in your chat.
 User @sub-agents/researcher = saved definition "researcher": spawn it, send it
 the ask.
