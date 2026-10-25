@@ -5,7 +5,7 @@ import type { ChatMessage } from "./chat.tsx";
 
 export type ThreadState = "running" | "idle" | "waiting" | "errored";
 
-interface Relayed {
+export interface Relayed {
 	readonly after: string | undefined;
 	readonly message: ChatMessage;
 }

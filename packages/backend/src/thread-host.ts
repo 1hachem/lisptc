@@ -25,7 +25,7 @@ import {
 import { ConvexImageStore } from "./image-store.ts";
 import type { Owner, ServerClient } from "./server-client.ts";
 
-type RecordLineage = FunctionReturnType<
+export type RecordLineage = FunctionReturnType<
 	typeof internal.threads.record
 >["lineage"];
 
