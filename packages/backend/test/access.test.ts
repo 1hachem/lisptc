@@ -1473,6 +1473,29 @@ describe("spawning a sub-agent's chat", () => {
 describe("a child chat", () => {
 	const agent = { name: "r", prompt: "dig", bounds: [] };
 
+	it("lists its children to its root's owner and nobody else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await expect(
+			alice.as.query(api.chats.children, { chatId }),
+		).resolves.toEqual([]);
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		await alice.as.mutation(api.chats.spawn, { chatId: child, agent });
+		await expect(
+			alice.as.query(api.chats.children, { chatId }),
+		).resolves.toEqual([{ _id: child, title: "r" }]);
+		await expect(
+			bob.as.query(api.chats.children, { chatId }),
+		).rejects.toThrow();
+		await expect(
+			bob.as.query(api.chats.children, { chatId: child }),
+		).rejects.toThrow();
+	});
+
 	it("is reachable by its root's owner and nobody else", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

@@ -79,6 +79,31 @@ export const get = query({
 	handler: async (ctx, { chatId }) => (await requireChat(ctx, chatId)).chat,
 });
 
+export const children = query({
+	args: { chatId: v.id("chats") },
+	returns: v.array(
+		v.object({
+			_id: v.id("chats"),
+			title: v.string(),
+			status: v.optional(chatStatus),
+			failure: v.optional(v.string()),
+		}),
+	),
+	handler: async (ctx, { chatId }) => {
+		const { chat } = await requireChat(ctx, chatId);
+		const rows = await ctx.db
+			.query("chats")
+			.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
+			.take(MAX_CHATS);
+		return rows.map(({ _id, title, status, failure }) => ({
+			_id,
+			title,
+			status,
+			failure,
+		}));
+	},
+});
+
 export const create = mutation({
 	args: { workspaceId: v.id("workspaces"), title: v.optional(v.string()) },
 	returns: v.id("chats"),
