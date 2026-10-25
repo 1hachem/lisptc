@@ -16,7 +16,6 @@ import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as layouts from "../layouts.js";
 import type * as lib_acting from "../lib/acting.js";
-import type * as lib_agentSource from "../lib/agentSource.js";
 import type * as lib_attached from "../lib/attached.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_bin from "../lib/bin.js";
@@ -64,7 +63,6 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   layouts: typeof layouts;
   "lib/acting": typeof lib_acting;
-  "lib/agentSource": typeof lib_agentSource;
   "lib/attached": typeof lib_attached;
   "lib/auth": typeof lib_auth;
   "lib/bin": typeof lib_bin;

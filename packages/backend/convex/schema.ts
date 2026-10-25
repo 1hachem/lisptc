@@ -75,7 +75,6 @@ const panelTab = v.object({
 			kind: v.literal("page"),
 			page: v.union(
 				v.literal("memory"),
-				v.literal("agent"),
 				v.literal("permission"),
 				v.literal("readme"),
 				v.literal("settings"),
@@ -316,15 +315,6 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
-
-	agents: defineTable({
-		workspaceId: v.id("workspaces"),
-		name: v.string(),
-		prompt: v.string(),
-		permissions: v.optional(v.string()),
-	})
-		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_name", ["workspaceId", "name"]),
 
 	sources: defineTable({
 		workspaceId: v.id("workspaces"),

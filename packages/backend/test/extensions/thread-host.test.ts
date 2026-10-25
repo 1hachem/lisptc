@@ -1,7 +1,6 @@
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
-import { agentFileName, agentSource } from "../../convex/lib/agentSource.ts";
 import { MAX_SPAWN_DEPTH } from "../../convex/limits.ts";
 import type { Connect } from "../../src/agent-repl.ts";
 import type { Owner, ServerClient } from "../../src/server-client.ts";
@@ -49,12 +48,12 @@ const offline: Connect = () =>
 		query: (reference: unknown, args: { name?: string }) => {
 			const name = named(reference);
 			if (name === "sources:list")
-				return Promise.resolve(workspaceAgents.map(agentFileName));
+				return Promise.resolve(workspaceAgents.map((agent) => `${agent}.ptc`));
 			if (name === "sources:get") {
 				const agent = args.name?.replace(/\.ptc$/, "") ?? "";
 				return Promise.resolve(
 					workspaceAgents.includes(agent)
-						? agentSource({ name: agent, prompt: `be ${agent}` })
+						? `(defagent "${agent}"\n  :prompt "be ${agent}")`
 						: null,
 				);
 			}
