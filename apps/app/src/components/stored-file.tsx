@@ -12,7 +12,6 @@ import {
 	knowledgeViewer,
 	readsText,
 	type StoredText,
-	sendBlocked,
 	type TextViewer,
 } from "../lib/file-viewer.ts";
 import { usePageHost } from "../lib/page-host.tsx";
@@ -284,7 +283,6 @@ export function StoredFile({
 	return (
 		<FileView
 			file={openedAs(folder, name, file, loaded.text)}
-			blocked={sendBlocked(viewer, loaded)}
 			missing={file === undefined ? undefined : `no file named ${name}`}
 			actions={
 				url && (
