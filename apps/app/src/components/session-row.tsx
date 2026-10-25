@@ -1,5 +1,9 @@
 import { useConvexMutation } from "@convex-dev/react-query";
-import { Alert02Icon, BubbleChatIcon } from "@hugeicons/core-free-icons";
+import {
+	Alert02Icon,
+	BubbleChatIcon,
+	StopCircleIcon,
+} from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Doc } from "@repo/backend/dataModel";
@@ -23,6 +27,7 @@ import { PanelLink, useShown } from "./panel-link.tsx";
 const STATUS_ICONS = {
 	waiting: { icon: BubbleChatIcon, iconClassName: "text-yellow" },
 	errored: { icon: Alert02Icon, iconClassName: "text-red" },
+	stopped: { icon: StopCircleIcon, iconClassName: "text-dim" },
 } satisfies Record<
 	Exclude<Doc<"chats">["status"], "streaming" | undefined>,
 	{ icon: IconSvgElement; iconClassName: string }
