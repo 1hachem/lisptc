@@ -158,10 +158,15 @@ export function AskCard({
 			? mutation.error.message
 			: String(mutation.error)
 		: undefined;
+	const chosen =
+		mutation.variables && !mutation.isError && !refused
+			? { accepted: mutation.variables.accepts, label: mutation.variables.done }
+			: undefined;
+	const shown = answered ?? chosen;
 	const approval: ConfirmationApproval =
-		answered === undefined || refused
+		shown === undefined || refused
 			? { id: ask.id }
-			: { id: ask.id, approved: answered.accepted };
+			: { id: ask.id, approved: shown.accepted };
 	const open = approval.approved === undefined && !refused;
 
 	const answer = (choice: AskChoice) => {
@@ -208,13 +213,13 @@ export function AskCard({
 				<ConfirmationAccepted>
 					<span className="flex items-center gap-1 text-green">
 						<HugeiconsIcon icon={CheckmarkCircle02Icon} size={12} />
-						{answered?.label}
+						{shown?.label}
 					</span>
 				</ConfirmationAccepted>
 				<ConfirmationRejected>
 					<span className="flex items-center gap-1 text-red">
 						<HugeiconsIcon icon={Cancel01Icon} size={12} />
-						{answered?.label}
+						{shown?.label}
 					</span>
 				</ConfirmationRejected>
 				{refused && <span className="block text-red">{refused}</span>}
