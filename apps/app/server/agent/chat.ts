@@ -35,7 +35,7 @@ export const steerRequestSchema = z.object({
 
 export const chatOnlySchema = z.object({ chatId: convexId<"chats">() });
 
-export const stopRequestSchema = chatOnlySchema.extend({
+const stopRequestSchema = chatOnlySchema.extend({
 	scope: z.enum(["thread", "tree"]).default("thread"),
 });
 
