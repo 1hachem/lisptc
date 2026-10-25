@@ -221,6 +221,39 @@ describe("threads", () => {
 		expect(await grand.ended).not.toEqual({ answer: "done." });
 		expect(model.calls).toHaveLength(2);
 	});
+
+	test("stop only the thread asked for, leaving its descendants running", async () => {
+		const world = new World();
+		family(world);
+		const threads = world.threads();
+		const open = gate();
+		const child = await threads.get("child").post(user("work"));
+		const grand = await threads.get("grand").post(user("dig"));
+		await vi.waitFor(() => expect(model.calls).toHaveLength(2));
+
+		expect(await threads.stop("child")).toBe(true);
+		open();
+		expect(await child.ended).not.toEqual({ answer: "done." });
+		expect(await grand.ended).toEqual({ answer: "done." });
+	});
+
+	test("cancel one child's subtree, leaving its parent and siblings running", async () => {
+		const world = new World();
+		family(world);
+		world.lineages.set("sibling", { parent: "root", title: "sibling" });
+		const threads = world.threads();
+		const open = gate();
+		const root = await threads.get("root").post(user("lead"));
+		const sibling = await threads.get("sibling").post(user("work"));
+		const grand = await threads.get("grand").post(user("dig"));
+		await vi.waitFor(() => expect(model.calls).toHaveLength(3));
+
+		expect(await threads.cancel("child")).toBe(true);
+		open();
+		expect(await grand.ended).not.toEqual({ answer: "done." });
+		expect(await root.ended).toEqual({ answer: "done." });
+		expect(await sibling.ended).toEqual({ answer: "done." });
+	});
 });
 
 describe("a thread's budget", () => {
