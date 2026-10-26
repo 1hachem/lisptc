@@ -26,6 +26,7 @@ describe("what waits on the user", () => {
 			"knowledge/write",
 			"knowledge/delete",
 			"knowledge/keep",
+			"knowledge/unkeep",
 			"attachments/fetch",
 			"attachments/delete",
 			"bin/restore",
@@ -296,6 +297,9 @@ describe("attachments", () => {
 		expect(store.names("attachments")).toEqual([]);
 		expect(store.names("knowledge")).toEqual(["spec.pdf"]);
 		expect(await ev('(knowledge/read "spec.pdf")')).toMatch(/Q3 revenue up/);
+		expect(await ev('(knowledge/unkeep "spec.pdf")')).toBe('"spec.pdf"');
+		expect(store.names("attachments")).toEqual(["spec.pdf"]);
+		expect(store.names("knowledge")).toEqual([]);
 	});
 
 	it.each([
