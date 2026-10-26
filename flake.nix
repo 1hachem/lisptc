@@ -23,7 +23,7 @@
 
       # Hermetic topiary grammar/config, independent of the working tree.
       topiaryConfig = pkgs.callPackage ./nix/topiary-config.nix {
-        grammarSrc = ./tree-sitter-lisptc;
+        grammarSrc = ./packages/tree-sitter;
       };
 
       # Hermetic packages for `nix run .#…`, CI, and distribution; scoped src.
@@ -96,6 +96,7 @@
           helmfile
           yq-go
           k9s
+          unstable.spec-kit
         ];
 
         # Use the Nix browsers instead of downloaded ones; skip host-dep validation.

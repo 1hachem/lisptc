@@ -1,5 +1,5 @@
 ; Topiary formatting queries for Lisptc (.ptc). The grammar they run against is
-; tree-sitter-lisptc/grammar.js.
+; packages/tree-sitter/grammar.js.
 ;
 ; Strategy: Topiary does NOT reflow s-expressions semantically (that would
 ; need per-form indentation rules for defun/let/if/... ). Instead it respects

@@ -21,7 +21,10 @@ export interface ModelEntry {
 export const PROVIDER_CATALOG = {
 	digitalocean: {
 		label: "DigitalOcean",
-		models: [],
+		models: [
+			{ id: "gemma-4-31B-it", name: "Gemma 4 31B" },
+			{ id: "anthropic-claude-5.5-haiku", name: "Claude Haiku 5.5" },
+		],
 	},
 	openrouter: {
 		label: "OpenRouter",

@@ -32,7 +32,6 @@ import {
 	type PanelLayout,
 	type PanelOp,
 	panelTab,
-	retireMain,
 	STARTING_LAYOUT,
 	toPanelOps,
 } from "./panel-ops.ts";
@@ -96,7 +95,7 @@ function usePanelLayout(workspaceId: Id<"workspaces">) {
 		const saved =
 			data === null
 				? emptyLayout<PanelContent>()
-				: retireMain(unflatten(data as FlatLayout<PanelContent>));
+				: unflatten(data as FlatLayout<PanelContent>);
 		return saved.root === null && !arranged ? STARTING_LAYOUT : saved;
 	}, [data, arranged]);
 	const latest = useRef(stored);
