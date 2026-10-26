@@ -481,13 +481,20 @@ export function parentSourceOf(
 	return opening && envelopeOf(opening.additional_kwargs).source;
 }
 
-export function agentSender(
+export function useAgentSender(
 	message: ChatMessage,
+	chatId: Id<"chats"> | null,
 	parentSource: string | undefined,
-): string {
+): { parent: boolean; name: string } {
 	const source = envelopeOf(message.additional_kwargs).source ?? "";
-	if (source === parentSource) return "parent agent";
-	return `sub-agent ${source.slice("agent:".length)}`;
+	const sender = source.slice("agent:".length);
+	const { data: children } = useQuery(
+		convexQuery(api.chats.children, chatId ? { chatId } : "skip"),
+	);
+	if (source === parentSource || sender === chatId)
+		return { parent: true, name: "parent agent" };
+	const name = children?.find((child) => child._id === sender)?.title;
+	return { parent: false, name: name ?? sender };
 }
 
 export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {

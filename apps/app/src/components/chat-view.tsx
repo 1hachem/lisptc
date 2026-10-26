@@ -25,7 +25,6 @@ import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
 import {
-	agentSender,
 	type ChatMessage,
 	isParentMessage,
 	isSystemMessage,
@@ -46,6 +45,7 @@ import {
 	toolResult,
 	toolResults,
 	toolUi,
+	useAgentSender,
 	useBriefing,
 	useChatSession,
 } from "../lib/chat.tsx";
@@ -427,13 +427,41 @@ export function SystemLine({ message }: { message: ChatMessage }) {
 	);
 }
 
-function AgentMessage({ message }: { message: ChatMessage }) {
-	const parentSource = useContext(ParentSource);
+function AgentMessage({
+	message,
+	onTrace,
+}: {
+	message: ChatMessage;
+	onTrace?: () => void;
+}) {
+	const chatId = useChatSession((state) => state.chatId);
+	const sender = useAgentSender(message, chatId, useContext(ParentSource));
+	const traced = useContext(Traced);
+	if (!traced && !sender.parent) {
+		const { icon, text } = channel("agents");
+		return (
+			<button
+				type="button"
+				data-agent-message
+				disabled={onTrace === undefined}
+				onClick={onTrace}
+				title="open the full reply in the trace"
+				className="flex min-w-0 items-center gap-1.5 text-left font-mono text-dim text-xs enabled:hover:text-fg"
+			>
+				<HugeiconsIcon
+					icon={icon}
+					aria-hidden
+					className={`size-icon-sm flex-none ${text}`}
+				/>
+				<span className="min-w-0 truncate">agent {sender.name} responded</span>
+			</button>
+		);
+	}
 	return (
 		<div className="min-w-0 break-words">
 			<ChannelLabel
 				id="agents"
-				label={agentSender(message, parentSource)}
+				label={sender.parent ? sender.name : `sub-agent ${sender.name}`}
 				tight
 			/>
 			<div className="border-purple/40 border-l pl-3">
@@ -729,7 +757,7 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 			{turn.asked && (!isParentMessage(turn.asked) || shown.agents) && (
 				<div className="min-w-0 break-words text-fg">
 					{isParentMessage(turn.asked) ? (
-						<AgentMessage message={turn.asked} />
+						<AgentMessage message={turn.asked} onTrace={traceAt(turn.asked)} />
 					) : (
 						<UserMessage message={turn.asked} />
 					)}
