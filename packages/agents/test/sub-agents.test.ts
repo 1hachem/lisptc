@@ -242,22 +242,40 @@ describe("spawn", () => {
 			"runs no sub-agents",
 		);
 	});
+
+	test("with :prompt starts the agent on its prompt and returns its name", async () => {
+		const { shown, threads } = world();
+		expect(await shown('(spawn "scout" :prompt "look around")')).toBe(
+			'"scout"',
+		);
+		expect(threads.sent).toEqual([
+			{ child: "child-1", message: { text: "look around", maxSteps: 20 } },
+		]);
+	});
+
+	test("of a saved definition waits for a send", async () => {
+		const { run, threads } = world();
+		await run('(defagent "researcher" :prompt "dig") (spawn "researcher")');
+		expect(threads.spawned).toHaveLength(1);
+		expect(threads.sent).toEqual([]);
+	});
 });
 
 describe("send", () => {
 	test("asks the port for a job on the spawned child", async () => {
 		const { run, shown, threads } = world();
 		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(send :to "r" "hi" :max-steps 3)')).toBe('"job-1"');
-		expect(threads.sent).toEqual([
-			{ child: "child-1", message: { text: "hi", maxSteps: 3 } },
-		]);
+		expect(await shown('(send :to "r" "hi" :max-steps 3)')).toBe('"job-2"');
+		expect(threads.sent.at(-1)).toEqual({
+			child: "child-1",
+			message: { text: "hi", maxSteps: 3 },
+		});
 	});
 
 	test("gives a job the default step budget", async () => {
 		const { run, threads } = world();
 		await run('(spawn "r" :prompt "p") (send :to "r" "b")');
-		expect(threads.sent[0]?.message.maxSteps).toBe(20);
+		expect(threads.sent.at(-1)?.message.maxSteps).toBe(20);
 	});
 
 	test("refuses an agent that was never spawned", async () => {
@@ -372,7 +390,7 @@ describe("a job", () => {
 		await run('(spawn "r" :prompt "p")');
 		expect(await shown('(agent-cancel (send :to "r" "hi"))')).toBe("t");
 		expect(await shown('(agent-cancel "r")')).toBe("t");
-		expect(threads.cancelled).toEqual(["job-1", "child-1"]);
+		expect(threads.cancelled).toEqual(["job-2", "child-1"]);
 	});
 });
 
@@ -505,9 +523,17 @@ describe("a spawn or a send", () => {
 			{
 				kind: "agent",
 				label: "scout",
-				detail: "go",
+				detail: "look",
 				state: "done",
 				id: "job-1",
+				chat: "child-1",
+			},
+			{
+				kind: "agent",
+				label: "scout",
+				detail: "go",
+				state: "done",
+				id: "job-2",
 				chat: "child-1",
 			},
 		]);

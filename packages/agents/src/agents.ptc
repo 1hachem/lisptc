@@ -21,11 +21,11 @@ or agent-wait job. Delegate replies result, evidence, what not checked.
 
 Named agent, kept chat across sends, order always:
 1. (agents) lists saved names. (agent-definition "researcher") reads one. Saved one fits? Spawn it by name. Never save a second agent for same job.
-2. None fits? Spawn temporary one with :prompt. Nothing saved.
+2. None fits? Spawn temporary one with :prompt. Nothing saved. Starts on prompt at once; reply comes as <system-event source="agent:scratch">.
 3. Temporary one did job well, same job will come again? (agent-keep "scratch") saves it. Else let it go.
 
-  (spawn "researcher" :repl :fresh)      ; saved definition, new image, new chat
-  (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; temporary; copy of your image and chat now
+  (spawn "researcher" :repl :fresh)      ; saved definition, new image, new chat; idle till send
+  (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; temporary, runs prompt now; copy of your image and chat
   (setq j (send :to "researcher" "find X" :max-steps 10)) ; job id at once
   (agent-state j)                        ; :pending :held :done :failed :cancelled :lost
   (agent-wait j)                         ; wait now, return reply
