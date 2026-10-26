@@ -62,6 +62,8 @@ const offline: Connect = () =>
 		mutation: () => Promise.resolve(null),
 	}) as unknown as ReturnType<Connect>;
 
+const ROOT_ONLY = /^(AGENTS|WORKSPACE|PREFERENCES|INTERACTIVE VIEWS)$/gm;
+
 const root = {};
 const middle: { agent: Agent } = {
 	agent: {
@@ -89,6 +91,7 @@ describe("the thread factory", () => {
 			bounds: ["(permission/deny knowledge/*)", "(permission/deny memory/*)"],
 			roster: [],
 			budget: 12,
+			subAgent: true,
 		});
 	});
 
@@ -125,7 +128,7 @@ describe("the thread factory", () => {
 		});
 	});
 
-	it("builds a repl bound by every ancestor and shown no agents to spawn", async () => {
+	it("builds a repl bound by every ancestor, without the root's own surfaces", async () => {
 		const host = new ThreadHost({
 			server: serverOver([child, middle]),
 			actAs: () => offline(),
@@ -135,7 +138,11 @@ describe("the thread factory", () => {
 			(await repl.evalOutput(code)).results.at(-1);
 		expect(await ev("(permission/check 'memory/forget-all)")).toBe("deny");
 		expect(await ev("(permission/check 'knowledge/write)")).toBe("deny");
-		expect(await ev("(agents)")).toBe("nil");
+		expect(await repl.eval('(spawn "scout")')).toContain("undefined: spawn");
+		expect(await repl.eval('(preferences/set :font "geist")')).toContain(
+			"undefined: preferences/set",
+		);
+		expect(repl.interp.systemPrompt().match(ROOT_ONLY)).toBeNull();
 	});
 
 	it("runs its stores as the record's owner with no request behind it", async () => {
@@ -159,6 +166,12 @@ describe("the thread factory", () => {
 		expect((await repl.evalOutput("(agents)")).results.at(-1)).toContain(
 			"scout",
 		);
+		expect(repl.interp.systemPrompt().match(ROOT_ONLY)).toEqual([
+			"AGENTS",
+			"WORKSPACE",
+			"PREFERENCES",
+			"INTERACTIVE VIEWS",
+		]);
 		expect(actedFor).toEqual([{ userId: OWNER, workspaceId: WORKSPACE }]);
 		expect(asked).toContain("sources:list");
 	});
