@@ -6,6 +6,7 @@ const REACHES: { pattern: RegExp; what: string }[] = [
 	{ pattern: /^@modelcontextprotocol\/sdk/, what: "the MCP SDK" },
 	{ pattern: /^@langchain\//, what: "a langchain package" },
 	{ pattern: /^dotenv$/, what: "dotenv" },
+	{ pattern: /^unpdf$/, what: "the PDF parser" },
 ];
 
 const GLOBALS = /\bprocess\.(env|cwd|platform|kill)\b/;
