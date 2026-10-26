@@ -91,6 +91,45 @@ describe("a light transcript", () => {
 		expect(shown).toEqual({ type: "tool", content: "", additional_kwargs: {} });
 	});
 
+	test("keeps what a form the person ran printed, since the chat body shows it", () => {
+		const ran = {
+			display: "(1 2 3)",
+			failure: "boom",
+			failed: true as const,
+			results: ["(1 2 3)"],
+			riding: "a note for the model",
+		};
+		const [, result] = lighten([
+			{ type: "human", content: "(list 1 2 3)" },
+			{ type: "tool", content: "(1 2 3)", additional_kwargs: ran },
+		]);
+
+		expect(result).toEqual({
+			type: "tool",
+			content: "",
+			additional_kwargs: {
+				display: "(1 2 3)",
+				failure: "boom",
+				failed: true,
+				results: ["(1 2 3)"],
+			},
+		});
+	});
+
+	test("drops what a step the model ran printed", () => {
+		const [, , result] = lighten([
+			{ type: "human", content: "hi" },
+			ai("(+ 1 2)"),
+			{ type: "tool", content: "3", additional_kwargs: { display: "3" } },
+		]);
+
+		expect(result).toEqual({
+			type: "tool",
+			content: "",
+			additional_kwargs: {},
+		});
+	});
+
 	test("drops an echo, which is for the agent alone", () => {
 		const content = '{"source":"lisp-repl","output":"hello"}';
 		const [shown] = lighten([

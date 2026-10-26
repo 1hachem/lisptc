@@ -1,9 +1,11 @@
+import { type KwargMessage, lighten } from "@repo/shared/messages";
 import { describe, expect, test, vi } from "vitest";
 import {
 	briefingOf,
 	type ChatMessage,
 	isParentMessage,
 	isUserMessage,
+	toolResult,
 } from "../src/lib/chat.tsx";
 import { groupTurns, shapeTurn } from "../src/lib/turn-groups.ts";
 import { isFreshChat, turnsToShow } from "../src/lib/turns.ts";
@@ -100,7 +102,7 @@ describe("a sub-agent's briefing", () => {
 });
 
 describe("a form the user ran from the input", () => {
-	const ran = (quiet: boolean): ChatMessage => ({
+	const ran = (quiet: boolean): ChatMessage & KwargMessage => ({
 		id: "ran",
 		type: "tool",
 		content: "",
@@ -109,7 +111,7 @@ describe("a form the user ran from the input", () => {
 			...(quiet ? { quiet: true } : {}),
 		},
 	});
-	const asked: ChatMessage = {
+	const asked: ChatMessage & KwargMessage = {
 		id: "u",
 		type: "human",
 		content: "(list 1 2 3)",
@@ -119,9 +121,12 @@ describe("a form the user ran from the input", () => {
 		false,
 		true,
 	])("stays in the chat body when quiet is %s", (quiet) => {
-		const [turn] = groupTurns([asked, ran(quiet)]);
+		const [turn] = groupTurns(lighten([asked, ran(quiet)]));
 		const chain = turn === undefined ? [] : shapeTurn(turn).chain;
 		expect(chain).toMatchObject([{ kind: "call", ran: true }]);
+		const [link] = chain;
+		const printed = link?.kind === "call" ? toolResult(link.result).output : "";
+		expect(printed).toBe("(1 2 3)");
 	});
 
 	test("leaves a quiet step the agent ran out of it", () => {

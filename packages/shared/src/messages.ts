@@ -96,6 +96,15 @@ export interface KwargMessage {
 
 const TOOL_SHOWS: ReadonlySet<string> = new Set(["failed", "quiet"]);
 
+const USER_RUN_SHOWS: ReadonlySet<string> = new Set([
+	...TOOL_SHOWS,
+	"display",
+	"failure",
+	"results",
+]);
+
+const SAID_BY_USER: ReadonlySet<string> = new Set(["human", "user"]);
+
 const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
 function keeping<M extends KwargMessage>(
@@ -117,12 +126,13 @@ function keeping<M extends KwargMessage>(
 }
 
 export function lighten<M extends KwargMessage>(messages: readonly M[]): M[] {
-	return messages.map((message) => {
-		if (message.type === "tool")
-			return keeping(
-				message,
-				(key) => !ENVELOPE.has(key) || TOOL_SHOWS.has(key),
-			);
-		return message;
+	return messages.map((message, at) => {
+		if (message.type !== "tool") return message;
+		const before = messages[at - 1];
+		const shows =
+			before !== undefined && SAID_BY_USER.has(before.type)
+				? USER_RUN_SHOWS
+				: TOOL_SHOWS;
+		return keeping(message, (key) => !ENVELOPE.has(key) || shows.has(key));
 	});
 }

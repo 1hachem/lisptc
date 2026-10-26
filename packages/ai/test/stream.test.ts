@@ -661,7 +661,7 @@ describe("chat stream", () => {
 			expect.objectContaining({
 				type: "tool",
 				content: "",
-				additional_kwargs: {},
+				additional_kwargs: { display: "3", results: ["3"] },
 			}),
 		]);
 	});
