@@ -115,7 +115,8 @@ export function TodoCard({
 							className={`size-icon flex-none ${todo.done ? "text-green" : "text-dim"}`}
 						/>
 						<span
-							className={`min-w-0 break-words ${todo.done ? "text-dim line-through" : "text-fg"}`}
+							title={todo.label}
+							className={`min-w-0 truncate ${todo.done ? "text-dim line-through" : "text-fg"}`}
 						>
 							{todo.label}
 						</span>
