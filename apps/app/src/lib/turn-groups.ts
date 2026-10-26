@@ -1,6 +1,7 @@
 import type { ActivityEntry, Intent } from "@repo/interpreter/annotations";
 import {
 	type ChatMessage,
+	isParentMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
@@ -20,7 +21,7 @@ export function groupTurns(messages: readonly ChatMessage[]): Turn[] {
 	const turns: Turn[] = [];
 	for (const [at, message] of messages.entries()) {
 		const open = turns.at(-1);
-		if (isUserMessage(message))
+		if (isUserMessage(message) || isParentMessage(message))
 			turns.push({ id: message.id ?? `turn:${at}`, asked: message, steps: [] });
 		else if (open === undefined)
 			turns.push({ id: `turn:${at}`, steps: [message] });

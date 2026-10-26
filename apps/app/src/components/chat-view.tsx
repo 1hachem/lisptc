@@ -1,3 +1,4 @@
+import { AiChat02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MessageMemories } from "@repo/components";
 import type { Progress } from "@repo/interpreter/annotations";
@@ -26,6 +27,7 @@ import { attachedTo } from "../lib/attached-files.ts";
 import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
 import {
 	type ChatMessage,
+	isParentMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
@@ -398,6 +400,27 @@ export function SystemLine({ message }: { message: ChatMessage }) {
 	);
 }
 
+function ParentMessage({ message }: { message: ChatMessage }) {
+	return (
+		<div className="min-w-0 break-words">
+			<div className="mt-2 mb-1 flex items-center gap-1.5 text-purple">
+				<HugeiconsIcon
+					icon={AiChat02Icon}
+					aria-hidden
+					className="size-icon-sm flex-none"
+				/>
+				<span className="flex-none text-[11px] tracking-[0.1em]">
+					parent agent
+				</span>
+				<span aria-hidden className="h-px flex-1 bg-dim/20" />
+			</div>
+			<div className="border-purple/40 border-l pl-3">
+				<ChannelText text={messageText(message)} tone="text-fg" />
+			</div>
+		</div>
+	);
+}
+
 function UserMessage({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
 	const text = messageText(message);
@@ -680,7 +703,11 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 		<div data-turn={turn.id} className="flex min-w-0 flex-col gap-3">
 			{turn.asked && (
 				<div className="min-w-0 break-words text-fg">
-					<UserMessage message={turn.asked} />
+					{isParentMessage(turn.asked) ? (
+						<ParentMessage message={turn.asked} />
+					) : (
+						<UserMessage message={turn.asked} />
+					)}
 				</div>
 			)}
 			{items}

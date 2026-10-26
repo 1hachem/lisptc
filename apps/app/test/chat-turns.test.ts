@@ -1,5 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
-import type { ChatMessage } from "../src/lib/chat.tsx";
+import {
+	type ChatMessage,
+	isParentMessage,
+	isUserMessage,
+} from "../src/lib/chat.tsx";
 import { groupTurns } from "../src/lib/turn-groups.ts";
 import { isFreshChat, turnsToShow } from "../src/lib/turns.ts";
 
@@ -62,6 +66,8 @@ describe("a sub-agent's conversation", () => {
 		};
 		const [turn] = groupTurns([request, ...messages("a")]);
 		expect(turn?.asked).toBe(request);
+		expect(isParentMessage(request)).toBe(true);
+		expect(isUserMessage(request)).toBe(false);
 	});
 
 	test("keeps any other system event inside the turn", () => {

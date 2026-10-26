@@ -665,14 +665,10 @@ export function isSystemMessage(message: ChatMessage): boolean {
 }
 
 export function isUserMessage(message: ChatMessage): boolean {
-	return (
-		message.type === "human" ||
-		message.type === "user" ||
-		isAgentRequest(message)
-	);
+	return message.type === "human" || message.type === "user";
 }
 
-function isAgentRequest(message: ChatMessage): boolean {
+export function isParentMessage(message: ChatMessage): boolean {
 	return (
 		isSystemMessage(message) &&
 		(envelopeOf(message.additional_kwargs).source?.startsWith("agent:") ??
