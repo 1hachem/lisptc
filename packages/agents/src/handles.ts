@@ -1,4 +1,4 @@
-import type { StateCodec } from "@repo/interpreter/lisp";
+import type { State, StateCodec } from "@repo/interpreter/lisp";
 import { arrayToList, Cell } from "@repo/interpreter/objects";
 
 export interface Handle {
@@ -31,3 +31,26 @@ export const handlesCodec: StateCodec<readonly Handle[]> = {
 				: [{ name, child }];
 		}),
 };
+
+export class Handles {
+	constructor(private readonly held: State<readonly Handle[]>) {}
+
+	of(name: string): Handle | undefined {
+		return this.held.get().find((entry) => entry.name === name);
+	}
+
+	child(name: string): string | undefined {
+		return this.of(name)?.child;
+	}
+
+	names(): string[] {
+		return this.held.get().map((entry) => entry.name);
+	}
+
+	adopt(handle: Handle): void {
+		this.held.set([
+			...this.held.get().filter((entry) => entry.name !== handle.name),
+			handle,
+		]);
+	}
+}
