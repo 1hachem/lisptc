@@ -1682,6 +1682,22 @@ describe("a child chat", () => {
 		).rejects.toThrow();
 	});
 
+	it("tells a child that never ran a turn from one that finished", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const [spawned] = await alice.as.query(api.chats.children, { chatId });
+		expect(spawned?.lastStartedAt).toBeUndefined();
+		await t.mutation(internal.threads.start, { chatId: child });
+		await t.mutation(internal.threads.settle, { chatId: child });
+		const [finished] = await alice.as.query(api.chats.children, { chatId });
+		expect(finished?.status).toBeUndefined();
+		expect(finished?.lastStartedAt).toEqual(expect.any(Number));
+	});
+
 	it("is reachable by its root's owner and nobody else", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

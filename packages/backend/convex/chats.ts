@@ -27,6 +27,7 @@ const chat = v.object({
 	archivedAt: v.optional(v.number()),
 	status: v.optional(chatStatus),
 	streamingSince: v.optional(v.number()),
+	lastStartedAt: v.optional(v.number()),
 	failure: v.optional(v.string()),
 	replId: v.optional(v.id("repls")),
 	parentChatId: v.optional(v.id("chats")),
@@ -87,6 +88,7 @@ export const children = query({
 			workspaceId: v.id("workspaces"),
 			title: v.string(),
 			status: v.optional(chatStatus),
+			lastStartedAt: v.optional(v.number()),
 			failure: v.optional(v.string()),
 		}),
 	),
@@ -96,13 +98,16 @@ export const children = query({
 			.query("chats")
 			.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
 			.take(MAX_CHATS);
-		return rows.map(({ _id, workspaceId, title, status, failure }) => ({
-			_id,
-			workspaceId,
-			title,
-			status,
-			failure,
-		}));
+		return rows.map(
+			({ _id, workspaceId, title, status, lastStartedAt, failure }) => ({
+				_id,
+				workspaceId,
+				title,
+				status,
+				lastStartedAt,
+				failure,
+			}),
+		);
 	},
 });
 
@@ -192,6 +197,7 @@ export async function startChat(
 	await ctx.db.patch(chatId, {
 		status: "streaming",
 		streamingSince: since,
+		lastStartedAt: since,
 		failure: undefined,
 	});
 	await ctx.scheduler.runAfter(STREAMING_LEASE_MS, internal.chats.expire, {

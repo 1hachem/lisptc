@@ -165,6 +165,7 @@ export default defineSchema({
 		archivedAt: v.optional(v.number()),
 		status: v.optional(chatStatus),
 		streamingSince: v.optional(v.number()),
+		lastStartedAt: v.optional(v.number()),
 		failure: v.optional(v.string()),
 		replId: v.optional(v.id("repls")),
 		parentChatId: v.optional(v.id("chats")),
