@@ -68,6 +68,7 @@ export interface ToolCall {
 	serverId: string;
 	tool: string;
 	args: Record<string, unknown>;
+	timeoutMs?: number;
 }
 
 export interface McpClient {
