@@ -485,7 +485,7 @@ export function useAgentSender(
 	message: ChatMessage,
 	chatId: Id<"chats"> | null,
 	parentSource: string | undefined,
-): { parent: boolean; name: string; failed: boolean } {
+): { parent: boolean; name: string; failed: boolean; cleared: boolean } {
 	const envelope = envelopeOf(message.additional_kwargs);
 	const source = envelope.source ?? "";
 	const failed = envelope.failed === true;
@@ -494,9 +494,16 @@ export function useAgentSender(
 		convexQuery(api.chats.children, chatId ? { chatId } : "skip"),
 	);
 	if (source === parentSource || sender === chatId)
-		return { parent: true, name: "parent agent", failed };
-	const name = children?.find((child) => child._id === sender)?.title;
-	return { parent: false, name: name ?? sender, failed };
+		return { parent: true, name: "parent agent", failed, cleared: false };
+	const child = children?.find(
+		(child) => child._id === sender || child.title === sender,
+	);
+	return {
+		parent: false,
+		name: child?.title ?? sender,
+		failed,
+		cleared: children !== undefined && child === undefined,
+	};
 }
 
 export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {

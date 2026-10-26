@@ -1,4 +1,4 @@
-import { convexQuery } from "@convex-dev/react-query";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import {
 	AlertCircleIcon,
 	CheckmarkCircle02Icon,
@@ -80,10 +80,12 @@ function ThreadRow({
 	thread,
 	onOpen,
 	onStop,
+	onClear,
 }: {
 	thread: ChildThread;
 	onOpen: (thread: ChildThread) => void;
 	onStop: (thread: ChildThread) => void;
+	onClear: (thread: ChildThread) => void;
 }) {
 	const state = threadState(thread);
 	const name = thread.title || "untitled";
@@ -115,6 +117,16 @@ function ThreadRow({
 					■
 				</button>
 			)}
+			<button
+				type="button"
+				data-child-threads="clear"
+				aria-label={`clear ${name}`}
+				title={`clear ${name}`}
+				onClick={() => onClear(thread)}
+				className="flex-none text-dim hover:text-fg"
+			>
+				×
+			</button>
 		</li>
 	);
 }
@@ -124,11 +136,15 @@ export function ChildThreadStrip({
 	onOpen,
 	onStop,
 	onStopAll,
+	onClear,
+	onClearAll,
 }: {
 	threads: readonly ChildThread[];
 	onOpen: (thread: ChildThread) => void;
 	onStop: (thread: ChildThread) => void;
 	onStopAll: () => void;
+	onClear: (thread: ChildThread) => void;
+	onClearAll: () => void;
 }) {
 	const area = useRef<HTMLDivElement>(null);
 	const wide = useWide(area);
@@ -194,6 +210,15 @@ export function ChildThreadStrip({
 					<span className="text-dim">■</span>
 				</button>
 			)}
+			<button
+				type="button"
+				data-child-threads="clear-all"
+				onClick={onClearAll}
+				className="flex items-center gap-[7px] self-start bg-bg2 px-[9px] py-px text-[11px] text-dim hover:text-fg"
+			>
+				<span>clear all</span>
+				<span>×</span>
+			</button>
 			{hidden > 0 && (
 				<button
 					type="button"
@@ -211,6 +236,7 @@ export function ChildThreadStrip({
 						thread={thread}
 						onOpen={onOpen}
 						onStop={onStop}
+						onClear={onClear}
 					/>
 				))}
 			</ul>
@@ -220,9 +246,14 @@ export function ChildThreadStrip({
 
 export function ChildThreads({ chatId }: { chatId: Id<"chats"> | null }) {
 	const stopAll = useChatSession((state) => state.stopAll);
+	const removeChat = useConvexMutation(api.chats.remove);
 	const { data } = useQuery(
 		convexQuery(api.chats.children, chatId === null ? "skip" : { chatId }),
 	);
+	const clear = (thread: ChildThread) => {
+		if (isActive(thread)) stopChat(thread._id, "tree");
+		void removeChat({ chatId: thread._id as Id<"chats"> });
+	};
 	return (
 		<ChildThreadStrip
 			threads={data ?? []}
@@ -231,6 +262,10 @@ export function ChildThreads({ chatId }: { chatId: Id<"chats"> | null }) {
 			}
 			onStop={(thread) => stopChat(thread._id, "tree")}
 			onStopAll={stopAll}
+			onClear={clear}
+			onClearAll={() => {
+				for (const thread of data ?? []) clear(thread);
+			}}
 		/>
 	);
 }

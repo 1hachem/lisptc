@@ -437,6 +437,7 @@ function AgentMessage({
 	const chatId = useChatSession((state) => state.chatId);
 	const sender = useAgentSender(message, chatId, useContext(ParentSource));
 	const traced = useContext(Traced);
+	if (sender.cleared && !traced) return null;
 	if (!traced && !sender.parent) {
 		const { icon, text } = channel("agents");
 		return (
@@ -457,6 +458,23 @@ function AgentMessage({
 					agent {sender.name} {sender.failed ? "failed" : "responded"}
 				</span>
 			</button>
+		);
+	}
+	if (!traced) {
+		const { icon, text } = channel("agents");
+		return (
+			<UserLine
+				text={messageText(message)}
+				title="parent agent"
+				tone={text}
+				mark={
+					<HugeiconsIcon
+						icon={icon}
+						aria-label="parent agent"
+						className="size-icon-sm mt-[3px] flex-none"
+					/>
+				}
+			/>
 		);
 	}
 	return (
