@@ -291,7 +291,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"spawn",
 		-1,
 		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork])',
-		"Start a sub-agent on a thread of its own under a name and return the name. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent: nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over.",
+		"Start a sub-agent on a thread of its own under a name and return the name. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that starts at once on that prompt; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("spawn", rest, [
@@ -312,12 +312,17 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			const seed = seedOf(interp, options.get("repl"));
 			const chat = chatOf(options.get("chat"));
 			const definition = await definitionOf(name, options);
-			const child = await threads("spawn").spawn({ definition, seed, chat });
-			handles.adopt(
-				options.has("prompt")
-					? { name, child, unsaved: writeDefinition(definition) }
-					: { name, child },
-			);
+			const port = threads("spawn");
+			const child = await port.spawn({ definition, seed, chat });
+			if (!options.has("prompt")) {
+				handles.adopt({ name, child });
+				return name;
+			}
+			handles.adopt({ name, child, unsaved: writeDefinition(definition) });
+			await port.send(child, {
+				text: definition.prompt,
+				maxSteps: DEFAULT_MAX_STEPS,
+			});
 			return name;
 		},
 	);
