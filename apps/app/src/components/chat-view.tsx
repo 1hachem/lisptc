@@ -40,6 +40,7 @@ import {
 	toolAnswers,
 	toolAsks,
 	toolFailed,
+	toolFailure,
 	toolModelOutput,
 	toolQuestion,
 	toolResult,
@@ -68,7 +69,6 @@ import { useUI } from "../lib/ui.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { AskCard } from "./ask-card.tsx";
 import { AttachedFiles } from "./attached-files.tsx";
-import { Building } from "./building.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { LispSource, SkippedProse } from "./lisp-text.tsx";
 import { Markdown } from "./markdown.tsx";
@@ -203,29 +203,17 @@ function ChannelText({
 }
 
 function AssistantText({
-	id,
 	text,
 	skipped,
-	busy,
 }: {
-	id: string;
 	text: string;
 	skipped: Skipped[];
-	busy: boolean;
 }) {
-	const shown = useChannels();
 	const spans = useMemo(() => skipped.map((s) => s.span), [skipped]);
-	const { prose, heads } = useMemo(() => formsIn(text, spans), [text, spans]);
+	const { prose } = useMemo(() => formsIn(text, spans), [text, spans]);
 	return (
 		<SkippedProse text={text} spans={spans}>
-			{shown.lisp ? (
-				<Markdown lisp>{text}</Markdown>
-			) : (
-				<>
-					{prose && <Markdown>{prose}</Markdown>}
-					<Building id={id} heads={heads} busy={busy} />
-				</>
-			)}
+			{prose && <Markdown>{prose}</Markdown>}
 		</SkippedProse>
 	);
 }
@@ -253,50 +241,36 @@ export function useChannels(): Shown {
 }
 
 function toolChannels(message: ChatMessage, shown: Shown) {
-	const { output } = toolResult(message);
+	const output = [toolResult(message).output, ...toolResults(message)]
+		.filter((part) => part !== "")
+		.join("\n");
 	const ui = toolUi(message);
 	const model = toolModelOutput(message).output;
-	const results = toolResults(message).join("\n");
+	const failure = toolFailure(message);
 	const attachments = shown.attachments ? attachedTo(message) : [];
 	return {
 		output,
-		results,
+		failure,
 		ui: shown.ui ? ui : undefined,
 		attachments,
 		model,
-		drawsUser: shown.user && output !== "",
-		drawsResults: shown.results && results !== "",
-		drawsError: shown.errors && toolFailed(message),
+		drawsOutput: shown.output && output !== "",
+		drawsError: shown.errors && failure !== "",
 		drawsModel: shown.model && model !== "",
 	};
 }
 
 type ToolChannels = ReturnType<typeof toolChannels>;
 
-function drawsAny(channels: ToolChannels): boolean {
-	const { ui, attachments, drawsUser, drawsResults, drawsError, drawsModel } =
-		channels;
-	return (
-		ui !== undefined ||
-		attachments.length > 0 ||
-		drawsUser ||
-		drawsResults ||
-		drawsError ||
-		drawsModel
-	);
-}
-
-function isLabelled(channels: ToolChannels): boolean {
-	const { ui, attachments, drawsUser, drawsResults, drawsError, drawsModel } =
-		channels;
-	const drawn = [
+function drawnCount(channels: ToolChannels): number {
+	const { ui, attachments, drawsOutput, drawsError, drawsModel } = channels;
+	return [
 		ui !== undefined,
 		attachments.length > 0,
-		drawsUser,
-		drawsResults,
+		drawsOutput,
+		drawsError,
 		drawsModel,
-	].filter(Boolean);
-	return drawn.length > 1 || (drawsError && drawsModel);
+	].filter(Boolean).length;
 }
 
 function Channel({
@@ -320,19 +294,19 @@ function ToolResult({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
 	const traced = useContext(Traced);
 	const channels = toolChannels(message, shown);
-	if (!drawsAny(channels)) return null;
+	const drawn = drawnCount(channels);
+	if (drawn === 0) return null;
 	const {
 		output,
-		results,
+		failure,
 		ui,
 		attachments,
 		model,
-		drawsUser,
-		drawsResults,
+		drawsOutput,
 		drawsError,
 		drawsModel,
 	} = channels;
-	const labelled = traced || isLabelled(channels);
+	const labelled = traced || drawn > 1;
 	return (
 		<div
 			className={`min-w-0 break-words border-l pl-3 ${
@@ -357,25 +331,15 @@ function ToolResult({ message }: { message: ChatMessage }) {
 					<AttachedFiles files={attachments} />
 				</Channel>
 			)}
-			{drawsUser && (
-				<Channel id="user" labelled={labelled}>
-					<ChannelText text={output} tone="text-dim" />
-				</Channel>
-			)}
-			{drawsResults && (
-				<Channel id="results" labelled={labelled}>
-					<ChannelText code text={results} tone={channel("results").text} />
+			{drawsOutput && (
+				<Channel id="output" labelled={labelled}>
+					<ChannelText code text={output} tone={channel("output").text} />
 				</Channel>
 			)}
 			{drawsError && (
-				<div className={`flex items-center gap-1.5 ${channel("errors").text}`}>
-					<HugeiconsIcon
-						icon={channel("errors").icon}
-						aria-hidden
-						className="size-icon-sm flex-none"
-					/>
-					a form in this step failed
-				</div>
+				<Channel id="errors" labelled={labelled}>
+					<ChannelText code text={failure} tone={channel("errors").text} />
+				</Channel>
 			)}
 			{drawsModel && (
 				<Channel id="model" labelled={labelled}>
@@ -504,15 +468,7 @@ function UserMessage({ message }: { message: ChatMessage }) {
 	);
 }
 
-export function ChatLine({
-	message,
-	index,
-	busy,
-}: {
-	message: ChatMessage;
-	index: number;
-	busy: boolean;
-}) {
+export function ChatLine({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
@@ -530,10 +486,8 @@ export function ChatLine({
 				<UserMessage message={message} />
 			) : (
 				<AssistantText
-					id={message.id ?? String(index)}
 					text={messageText(message)}
 					skipped={messageProse(message)}
-					busy={busy}
 				/>
 			)}
 		</div>

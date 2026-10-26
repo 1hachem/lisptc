@@ -775,6 +775,10 @@ export function toolFailed(message: ChatMessage): boolean {
 	return envelopeOf(message.additional_kwargs).failed === true;
 }
 
+export function toolFailure(message: ChatMessage): string {
+	return envelopeOf(message.additional_kwargs).failure ?? "";
+}
+
 export function toolResults(message: ChatMessage): string[] {
 	return [...(envelopeOf(message.additional_kwargs).results ?? [])];
 }

@@ -1,7 +1,6 @@
 import {
 	AiChat02Icon,
 	Alert02Icon,
-	ArrowTurnBackwardIcon,
 	Attachment01Icon,
 	Brain02Icon,
 	BulbIcon,
@@ -9,17 +8,14 @@ import {
 	DashboardSquare01Icon,
 	HelpCircleIcon,
 	InformationCircleIcon,
-	SourceCodeIcon,
 	UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
 export type ChannelId =
-	| "user"
-	| "results"
+	| "output"
 	| "ui"
 	| "attachments"
-	| "lisp"
 	| "thinking"
 	| "memory"
 	| "asks"
@@ -38,18 +34,11 @@ export interface Channel {
 
 export const CHANNELS: Channel[] = [
 	{
-		id: "user",
+		id: "output",
 		icon: CommandLineIcon,
 		label: "output",
-		hint: "what a step printed for you",
+		hint: "what a step printed for you, and the value each form returned",
 		text: "text-dim",
-	},
-	{
-		id: "results",
-		icon: ArrowTurnBackwardIcon,
-		label: "results",
-		hint: "the value each form returned, as the interpreter printed it",
-		text: "text-fg",
 	},
 	{
 		id: "ui",
@@ -64,13 +53,6 @@ export const CHANNELS: Channel[] = [
 		label: "attachments",
 		hint: "files you or the agent attached to a message",
 		text: "text-blue",
-	},
-	{
-		id: "lisp",
-		icon: SourceCodeIcon,
-		label: "lisp",
-		hint: "the forms a step ran, as code rather than as tools at work",
-		text: "text-green",
 	},
 	{
 		id: "thinking",
@@ -97,7 +79,7 @@ export const CHANNELS: Channel[] = [
 		id: "errors",
 		icon: Alert02Icon,
 		label: "errors",
-		hint: "whether a step failed",
+		hint: "the error a failed step raised",
 		text: "text-red",
 	},
 	{

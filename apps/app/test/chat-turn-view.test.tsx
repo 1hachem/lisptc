@@ -381,14 +381,15 @@ describe("the trace", () => {
 
 	it("hides a channel its toolbar turns off", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
-		const results = [...host.querySelectorAll("button[aria-pressed]")].find(
-			(b) => b.textContent === "results",
+		const output = [...host.querySelectorAll("button[aria-pressed]")].find(
+			(b) => b.textContent === "output",
 		) as HTMLButtonElement;
 
-		await act(async () => results.click());
+		await act(async () => output.click());
 
-		expect(results.getAttribute("aria-pressed")).toBe("false");
+		expect(output.getAttribute("aria-pressed")).toBe("false");
 		expect(host.textContent).not.toContain("RESULT-VALUE");
+		expect(host.textContent).not.toContain("drawn for you");
 	});
 });
 

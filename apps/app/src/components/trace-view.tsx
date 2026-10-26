@@ -61,13 +61,7 @@ function ChannelToggles({
 	);
 }
 
-function TraceLine({
-	message,
-	index,
-}: {
-	message: ChatMessage;
-	index: number;
-}) {
+function TraceLine({ message }: { message: ChatMessage }) {
 	const { metaShown } = useUI();
 	const { openModelPicker } = useModelPicker();
 	const shown = useChannels();
@@ -77,7 +71,7 @@ function TraceLine({
 			{isToolMessage(message) ? (
 				<ToolMessage message={message} />
 			) : (
-				<ChatLine message={message} index={index} busy={false} />
+				<ChatLine message={message} />
 			)}
 			{shown.memory && stats?.memories && (
 				<MessageMemories memories={stats.memories} />
@@ -162,13 +156,11 @@ function StepHeader({
 			</span>
 			<span className="flex-none">step {step.number}</span>
 			<span className="min-w-0 flex-1 truncate text-fg">{step.title}</span>
-			{(!step.failed || shown.errors) && (
-				<span
-					className={`ml-auto flex-none ${step.failed ? "text-red" : "text-green"}`}
-				>
-					{step.failed ? "failed" : "ok"}
-				</span>
-			)}
+			<span
+				className={`ml-auto flex-none ${step.failed ? "text-red" : "text-green"}`}
+			>
+				{step.failed ? "failed" : "ok"}
+			</span>
 			{step.durationMs !== undefined && (
 				<span className="flex-none tabular-nums">
 					{formatElapsed(step.durationMs)}
@@ -260,7 +252,7 @@ function TraceEntries({
 							{isSystemMessage(message) ? (
 								<SystemLine message={message} />
 							) : (
-								<TraceLine message={message} index={at} />
+								<TraceLine message={message} />
 							)}
 						</TracedMessage>
 					);
@@ -286,7 +278,7 @@ function TraceEntries({
 									message={message}
 									flashing={flashing}
 								>
-									<TraceLine message={message} index={at} />
+									<TraceLine message={message} />
 								</TracedMessage>
 							))}
 						{open &&
