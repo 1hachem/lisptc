@@ -8,6 +8,7 @@ import {
 	BOUNDED_DEFINE,
 	DEFINE,
 	DELEGATE_PROMPT,
+	FORGET,
 	KEEP,
 } from "../src/agents.ts";
 import { agentsHostFor, MemorySourceFolder } from "../src/agents-host.ts";
@@ -186,7 +187,7 @@ describe("defagent with permissions", () => {
 		const { run, extension, calls } = world();
 		await run('(defagent "r" :prompt "p" :permissions "")');
 		await run('(defagent "s" :prompt "p")');
-		expect(extension.asks).toEqual([DEFINE, BOUNDED_DEFINE, KEEP]);
+		expect(extension.asks).toEqual([DEFINE, BOUNDED_DEFINE, KEEP, FORGET]);
 		expect(calls.filter((name) => name === BOUNDED_DEFINE)).toHaveLength(1);
 		expect(calls.filter((name) => name === DEFINE)).toHaveLength(1);
 	});
@@ -402,6 +403,21 @@ describe("a saved definition", () => {
 			str('(defagent "r"\n  :prompt "dig")'),
 		);
 		expect(await shown('(agent-definition "nobody")')).toBe("nil");
+	});
+});
+
+describe("agent-forget", () => {
+	test("deletes a saved definition through the form the host asks for", async () => {
+		const { run, shown, folder, calls } = world();
+		await run('(defagent "researcher" :prompt "dig")');
+		expect(await shown('(agent-forget "researcher")')).toBe("t");
+		expect(calls).toContain(FORGET);
+		expect(folder.list("w", "sub-agents")).toEqual([]);
+	});
+
+	test("returns nil when no definition of that name is saved", async () => {
+		const { shown } = world();
+		expect(await shown('(agent-forget "ghost")')).toBe("nil");
 	});
 });
 

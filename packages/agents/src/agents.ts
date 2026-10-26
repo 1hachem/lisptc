@@ -49,6 +49,8 @@ export const BOUNDED_DEFINE = "agents/define-bounded";
 
 export const KEEP = "agent-keep";
 
+export const FORGET = "agent-forget";
+
 export const DELEGATE_PREFIX = "delegate-";
 
 export const DELEGATE_PROMPT =
@@ -61,7 +63,7 @@ export interface AgentsExtension extends InterpExtension {
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
-		asks: [DEFINE, BOUNDED_DEFINE, KEEP],
+		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
 	});
 }
 
@@ -402,6 +404,24 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			await save(name, handle.unsaved);
 			handles.adopt({ name, child: handle.child });
 			return name;
+		},
+	);
+
+	interp.def(
+		FORGET,
+		1,
+		`(${FORGET} "name")`,
+		`Delete the saved definition ${AGENT_FOLDER}/<name>.ptc. It waits on the user's approval. An agent already spawned from it keeps running. Return t when one was deleted, nil when none was saved.`,
+		z.tuple([zString]),
+		async ([target]) => {
+			const name = nameOf(FORGET, target);
+			return (await host.folder.remove(
+				host.workspace,
+				AGENT_FOLDER,
+				agentFileName(name),
+			))
+				? true
+				: null;
 		},
 	);
 

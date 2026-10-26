@@ -31,6 +31,7 @@ Named agent, kept chat across sends, order always:
   (agent-wait j)                         ; wait now, return reply
   (agent-cancel j)                       ; or (agent-cancel "researcher"): stop it and all under it
   (agent-keep "scratch")                 ; save temporary agent as sub-agents/scratch.ptc
+  (agent-forget "scratch")               ; delete sub-agents/scratch.ptc; t, or nil if none
   (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)
 
 Brief: carries all it needs: goal, inputs, what done means. Spawn: prefer
@@ -39,7 +40,8 @@ result, evidence, what not checked. Reply is claim, not fact: check key fact
 yourself before acting on it.
 
 defagent only when user asks for agent definition. defagent and agent-keep
-save sub-agents/<name>.ptc; both wait on user approval. :prompt on saved name
+save sub-agents/<name>.ptc; agent-forget deletes it, only when user asks. All
+three wait on user approval. :prompt on saved name
 refused. Not waited? Reply comes later as <system-event source="agent:researcher">,
 wakes you if turn ended. Agent keeps its chat between sends. Spawning a name
 again starts it over. Spawned names survive restart in your image. :budget caps
