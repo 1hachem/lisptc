@@ -101,9 +101,11 @@ function SessionMenu({
 	opens,
 	onRename,
 	attempt,
+	deletable,
 }: {
 	chat: SessionChat;
 	opens: PanelContent;
+	deletable: boolean;
 	onRename: () => void;
 	attempt: (run: () => Promise<unknown>) => void;
 }) {
@@ -135,19 +137,23 @@ function SessionMenu({
 					/>
 					open trace
 				</DropdownMenuItem>
-				<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
-				<ConfirmItem
-					label="delete"
-					confirm="delete for good?"
-					className={`${item} focus:text-red`}
-					onConfirm={() => {
-						attempt(async () => {
-							abandonChat(chat._id);
-							requestPanelClosed(opens);
-							await removeChat({ chatId: chat._id });
-						});
-					}}
-				/>
+				{deletable && (
+					<>
+						<DropdownMenuSeparator className="mx-0 my-0 bg-bg2" />
+						<ConfirmItem
+							label="delete"
+							confirm="delete for good?"
+							className={`${item} focus:text-red`}
+							onConfirm={() => {
+								attempt(async () => {
+									abandonChat(chat._id);
+									requestPanelClosed(opens);
+									await removeChat({ chatId: chat._id });
+								});
+							}}
+						/>
+					</>
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
@@ -262,6 +268,7 @@ export function SessionRow({
 						<SessionMenu
 							chat={chat}
 							opens={opens}
+							deletable={depth === 1}
 							onRename={() => setRenaming(true)}
 							attempt={attempt}
 						/>

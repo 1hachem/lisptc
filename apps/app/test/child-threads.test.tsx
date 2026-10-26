@@ -27,13 +27,7 @@ afterEach(() => {
 
 function mount(
 	threads: ChildThread[],
-	{
-		onOpen = vi.fn(),
-		onStop = vi.fn(),
-		onStopAll = vi.fn(),
-		onClear = vi.fn(),
-		onClearAll = vi.fn(),
-	} = {},
+	{ onOpen = vi.fn(), onStop = vi.fn(), onStopAll = vi.fn() } = {},
 ) {
 	const host = document.createElement("div");
 	document.body.append(host);
@@ -46,8 +40,6 @@ function mount(
 				onOpen={onOpen}
 				onStop={onStop}
 				onStopAll={onStopAll}
-				onClear={onClear}
-				onClearAll={onClearAll}
 			/>,
 		),
 	);
@@ -91,17 +83,10 @@ describe("child threads", () => {
 		expect(onOpen).toHaveBeenCalledWith(THREADS[1]);
 	});
 
-	it("clears the child it was cleared on, and clears them all", () => {
-		const onClear = vi.fn();
-		const onClearAll = vi.fn();
-		const host = mount(THREADS, { onClear, onClearAll });
-		const clears = host.querySelectorAll<HTMLButtonElement>(
-			"[data-child-threads=clear]",
-		);
-		act(() => clears[2].click());
-		expect(onClear).toHaveBeenCalledWith(THREADS[2]);
-		act(() => control(host, "clear-all")?.click());
-		expect(onClearAll).toHaveBeenCalledOnce();
+	it("offers no way to delete a child", () => {
+		const host = mount(THREADS);
+		expect(control(host, "clear")).toBeNull();
+		expect(control(host, "clear-all")).toBeNull();
 	});
 
 	it("shows the latest children and expands to the earlier ones", () => {
