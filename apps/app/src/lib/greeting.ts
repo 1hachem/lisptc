@@ -34,7 +34,7 @@ const LINES: Record<Moment, string[]> = {
 	],
 };
 
-export function pickGreeting(now: Date, roll: number = Math.random()): string {
+function pickGreeting(now: Date, roll: number = Math.random()): string {
 	const lines = LINES[momentOf(now.getHours())];
 	return lines[Math.floor(roll * lines.length) % lines.length];
 }

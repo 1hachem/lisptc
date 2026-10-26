@@ -132,12 +132,7 @@ export function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	return stored.map(toChatMessage);
 }
 
-interface Greeting {
-	message: ChatMessage;
-	typed: boolean;
-}
-
-function greetingOf(line: string, typed: boolean): Greeting {
+function greetingOf(line: string, typed: boolean): Greeted {
 	return { message: { id: GREETING_ID, type: "ai", content: line }, typed };
 }
 
@@ -154,13 +149,20 @@ function greetingText(greeting: ChatMessage | null): string | null {
 	return greeting === null ? null : messageText(greeting);
 }
 
-function useGreeting(key: string | undefined): Greeting | null {
-	const [greeting, setGreeting] = useState<Greeting | null>(() => {
+interface Greeted {
+	message: ChatMessage | null;
+	typed: boolean;
+}
+
+function useGreeting(key: string | undefined): Greeted {
+	const [greeting, setGreeting] = useState<Greeted>(() => {
 		const known = rememberedGreeting(key);
-		return known === undefined ? null : greetingOf(known, true);
+		return known === undefined
+			? { message: null, typed: false }
+			: greetingOf(known, true);
 	});
 	useEffect(() => {
-		if (greeting !== null) return;
+		if (greeting.message !== null) return;
 		const { line, typed } = greetingFor(key, new Date());
 		setGreeting(greetingOf(line, typed));
 	}, [greeting, key]);
@@ -454,7 +456,7 @@ function useTurnSend(
 	return { submitTurn, sendAbout };
 }
 
-interface Briefed {
+export interface Briefed {
 	_id: string;
 	parentChatId?: string;
 	agent?: { prompt: string };
@@ -547,6 +549,23 @@ function useSessionStore(
 	return store;
 }
 
+function usePending(chatId: Id<"chats"> | null) {
+	const [pending, setPending] = useState<Pending | null>(null);
+	useEffect(() => {
+		if (chatId === null) setPending(null);
+	}, [chatId]);
+	return [pending, setPending] as const;
+}
+
+function useAbandoning(abandon: (chatId: Id<"chats">) => void) {
+	useEffect(() => {
+		abandoning.add(abandon);
+		return () => {
+			abandoning.delete(abandon);
+		};
+	}, [abandon]);
+}
+
 export function ChatProvider({
 	workspaceId,
 	chatId,
@@ -572,10 +591,7 @@ export function ChatProvider({
 	const greeting = useGreeting(greetingKey);
 
 	const [failure, setFailure] = useState<Failure>(null);
-	const [pending, setPending] = useState<Pending | null>(null);
-	useEffect(() => {
-		if (chatId === null) setPending(null);
-	}, [chatId]);
+	const [pending, setPending] = usePending(chatId);
 
 	const turns = useMemo(
 		() =>
@@ -584,7 +600,7 @@ export function ChatProvider({
 	);
 
 	const messages = useMemo(
-		() => withGreeting(greeting?.message ?? null, turns),
+		() => withGreeting(greeting.message, turns),
 		[greeting, turns],
 	);
 	const meta = useTurnMeta(turns);
@@ -616,8 +632,8 @@ export function ChatProvider({
 			saved: persisted,
 			queued,
 			meta,
-			greeting: greetingText(greeting?.message ?? null),
-			greetingTyped: greeting?.typed ?? false,
+			greeting: greetingText(greeting.message),
+			greetingTyped: greeting.typed,
 			fresh,
 			isLoading: running,
 			chatId,
@@ -656,12 +672,7 @@ export function ChatProvider({
 		withdraw,
 	]);
 
-	useEffect(() => {
-		abandoning.add(abandon);
-		return () => {
-			abandoning.delete(abandon);
-		};
-	}, [abandon]);
+	useAbandoning(abandon);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }
