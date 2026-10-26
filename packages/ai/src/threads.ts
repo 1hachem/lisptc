@@ -392,10 +392,16 @@ export class Threads {
 		}
 		if (job.replyTo === undefined || job.state === "cancelled") return;
 		const text = replyText(outcome);
-		if (text !== undefined) void this.deliver(job, id, text);
+		if (text !== undefined)
+			void this.deliver(job, id, text, "stopped" in outcome);
 	}
 
-	private async deliver(job: Job, id: string, text: string): Promise<void> {
+	private async deliver(
+		job: Job,
+		id: string,
+		text: string,
+		failed: boolean,
+	): Promise<void> {
 		const to = job.replyTo;
 		if (to === undefined) return;
 		const lineage = await this.lineage(job.thread).catch((): Lineage => ({}));
@@ -406,6 +412,7 @@ export class Threads {
 			text,
 			replyTo: job.thread,
 			job: id,
+			...(failed ? { failed: true } : {}),
 		};
 		const onward = this.returns.get(to);
 		try {

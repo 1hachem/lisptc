@@ -16,6 +16,7 @@ export type Envelope =
 			text: string;
 			replyTo?: string;
 			job?: string;
+			failed?: true;
 	  };
 
 export interface Mailbox {

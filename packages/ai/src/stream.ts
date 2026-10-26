@@ -99,7 +99,10 @@ export function systemEventMessage(
 		type: "system",
 		content: event.text,
 		id,
-		additional_kwargs: { source: event.source },
+		additional_kwargs: {
+			source: event.source,
+			...(event.failed ? { failed: true } : {}),
+		},
 	};
 }
 
@@ -199,7 +202,11 @@ class TurnWire {
 					event.source === undefined
 						? { type: "human", content: event.content, id: event.id }
 						: systemEventMessage(
-								{ source: event.source, text: event.content },
+								{
+									source: event.source,
+									text: event.content,
+									failed: event.failed,
+								},
 								event.id,
 							),
 				);

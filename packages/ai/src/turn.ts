@@ -70,7 +70,13 @@ export type TurnEvent =
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
-	| { type: "steered"; id: string; content: string; source?: string }
+	| {
+			type: "steered";
+			id: string;
+			content: string;
+			source?: string;
+			failed?: true;
+	  }
 	| { type: "evaluated"; message: ToolMessage }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -127,8 +133,8 @@ async function* takeSteers({
 	let taken = 0;
 	for (const envelope of (await inbox?.()) ?? []) {
 		if (envelope.kind === "event") {
-			const { id, source, text } = envelope;
-			yield { type: "steered", id, content: text, source };
+			const { id, source, text, failed } = envelope;
+			yield { type: "steered", id, content: text, source, failed };
 			transcript.push({ role: "user", content: text, event: { source } });
 			taken += 1;
 			continue;
