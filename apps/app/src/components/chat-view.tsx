@@ -519,6 +519,26 @@ function ScrollToLatest() {
 	);
 }
 
+function RanOutput({ message }: { message: ChatMessage }) {
+	const { output, failure } = toolChannels(message, EVERY_CHANNEL);
+	if (output === "" && failure === "") return null;
+	return (
+		<div
+			data-step-ran
+			className={`min-w-0 break-words border-l pl-3 ${
+				failure !== "" ? "border-red/60" : "border-dim/40"
+			}`}
+		>
+			{output !== "" && (
+				<ChannelText code text={output} tone={channel("output").text} />
+			)}
+			{failure !== "" && (
+				<ChannelText code text={failure} tone={channel("errors").text} />
+			)}
+		</div>
+	);
+}
+
 function TurnOutput({ message }: { message: ChatMessage }) {
 	const ui = toolUi(message);
 	const attachments = attachedTo(message);
@@ -600,8 +620,10 @@ function StepCall({
 	entries,
 	progress,
 	live,
+	ran,
 }: {
 	result: ChatMessage;
+	ran: boolean;
 	doing: string | undefined;
 	entries: readonly TimelineEntry[];
 	progress: Progress | undefined;
@@ -624,6 +646,7 @@ function StepCall({
 			)}
 			<CallTimeline entries={entries} live={live} />
 			{progress && <ProgressBar progress={progress} />}
+			{ran && <RanOutput message={result} />}
 			{result && <TurnOutput message={result} />}
 		</div>
 	);
@@ -712,6 +735,7 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 			<StepCall
 				key={`call:${link.call?.id ?? link.result.id ?? at}`}
 				result={link.result}
+				ran={link.ran}
 				doing={link.doing}
 				entries={placed.get(at) ?? []}
 				progress={link.progress ? shape.intent?.progress : undefined}

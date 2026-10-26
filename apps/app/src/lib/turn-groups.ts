@@ -43,6 +43,7 @@ export type TurnLink =
 			doing?: string;
 			introduces: string[];
 			progress: boolean;
+			ran: boolean;
 	  };
 
 function mergeIntent(
@@ -77,12 +78,14 @@ export function shapeTurn(turn: Turn): TurnShape {
 	let doing: string | undefined;
 	let logged = 0;
 	let progressed = false;
+	let userRun = turn.asked !== undefined && isUserMessage(turn.asked);
 	for (const message of turn.steps) {
 		if (isSystemMessage(message)) continue;
 		if (!isToolMessage(message)) {
 			shape.answer = message;
 			shape.chain.push({ kind: "text", message });
 			call = message;
+			userRun = false;
 			continue;
 		}
 		shape.steps += 1;
@@ -95,7 +98,9 @@ export function shapeTurn(turn: Turn): TurnShape {
 				.map((entry) => `activity:${entry.id}`),
 		];
 		const progress: boolean = !progressed && intent?.progress !== undefined;
-		if (!toolQuiet(message)) {
+		const ran = userRun;
+		userRun = false;
+		if (ran || !toolQuiet(message)) {
 			shape.chain.push({
 				kind: "call",
 				call,
@@ -105,6 +110,7 @@ export function shapeTurn(turn: Turn): TurnShape {
 					: {}),
 				introduces,
 				progress,
+				ran,
 			});
 			logged = Math.max(logged, log.length);
 			progressed ||= progress;

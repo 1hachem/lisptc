@@ -5,7 +5,7 @@ import {
 	isParentMessage,
 	isUserMessage,
 } from "../src/lib/chat.tsx";
-import { groupTurns } from "../src/lib/turn-groups.ts";
+import { groupTurns, shapeTurn } from "../src/lib/turn-groups.ts";
 import { isFreshChat, turnsToShow } from "../src/lib/turns.ts";
 
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: () => {} }));
@@ -96,5 +96,38 @@ describe("a sub-agent's briefing", () => {
 
 	test("is empty on a chat no agent spawned", () => {
 		expect(briefingOf({ _id: "chat" })).toEqual([]);
+	});
+});
+
+describe("a form the user ran from the input", () => {
+	const ran = (quiet: boolean): ChatMessage => ({
+		id: "ran",
+		type: "tool",
+		content: "",
+		additional_kwargs: {
+			display: "(1 2 3)",
+			...(quiet ? { quiet: true } : {}),
+		},
+	});
+	const asked: ChatMessage = {
+		id: "u",
+		type: "human",
+		content: "(list 1 2 3)",
+	};
+
+	test.each([
+		false,
+		true,
+	])("stays in the chat body when quiet is %s", (quiet) => {
+		const [turn] = groupTurns([asked, ran(quiet)]);
+		const chain = turn === undefined ? [] : shapeTurn(turn).chain;
+		expect(chain).toMatchObject([{ kind: "call", ran: true }]);
+	});
+
+	test("leaves a quiet step the agent ran out of it", () => {
+		const call: ChatMessage = { id: "c", type: "ai", content: "" };
+		const [turn] = groupTurns([asked, call, ran(true)]);
+		const chain = turn === undefined ? [] : shapeTurn(turn).chain;
+		expect(chain).toMatchObject([{ kind: "text" }]);
 	});
 });
