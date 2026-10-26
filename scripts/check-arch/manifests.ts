@@ -1,9 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { Check } from "./check.ts";
-
-type Field = "dependencies" | "devDependencies" | "peerDependencies";
-
-type Manifest = Partial<Record<Field, Record<string, string>>>;
+import type { Check, Field, Manifest } from "./check.ts";
 
 interface ManifestRule {
 	manifest: string;

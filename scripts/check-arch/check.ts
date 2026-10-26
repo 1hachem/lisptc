@@ -2,6 +2,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+export type Field = "dependencies" | "devDependencies" | "peerDependencies";
+
+export type Manifest = Partial<Record<Field, Record<string, string>>>;
+
 export interface Violation {
 	file: string;
 	what: string;
