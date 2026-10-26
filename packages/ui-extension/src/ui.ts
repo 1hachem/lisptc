@@ -442,10 +442,44 @@ function tabList(tab: PanelTab): List {
 	]);
 }
 
+class PanelLedger {
+	private readonly pending = new Map<string, PanelTab | null>();
+
+	constructor(private readonly reader: PanelReader) {}
+
+	opened(tab: PanelTab): void {
+		this.pending.delete(tab.id);
+		this.pending.set(tab.id, tab);
+	}
+
+	closed(id: string): void {
+		this.pending.set(id, null);
+	}
+
+	sent(): void {
+		this.pending.clear();
+	}
+
+	*tabs(): Eval<PanelTab[]> {
+		const saved = yield* settled(this.reader.tabs());
+		const opened = [...this.pending.values()].filter(
+			(tab): tab is PanelTab => tab !== null,
+		);
+		const focus = opened.at(-1)?.id;
+		const kept = saved
+			.filter((tab) => !this.pending.has(tab.id))
+			.map((tab) => (focus === undefined ? tab : { ...tab, focused: false }));
+		return [
+			...kept,
+			...opened.map((tab) => ({ ...tab, focused: tab.id === focus })),
+		];
+	}
+}
+
 function registerUi(
 	interp: Interp,
 	surface: UiSurface,
-	panel: PanelReader,
+	panel: PanelLedger,
 ): void {
 	surface.bind(interp);
 	surface.reset();
@@ -713,6 +747,13 @@ function registerUi(
 		([folder, name, rest]) => {
 			const checked = folderOf(folder);
 			const tab = fileTab(checked, name);
+			panel.opened({
+				id: tab,
+				kind: "file",
+				title: name,
+				shown: true,
+				focused: true,
+			});
 			emit({
 				op: "open",
 				tab,
@@ -733,6 +774,13 @@ function registerUi(
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			const tab = viewTab(title);
+			panel.opened({
+				id: tab,
+				kind: "view",
+				title,
+				shown: true,
+				focused: true,
+			});
 			emit({
 				op: "open",
 				tab,
@@ -743,15 +791,18 @@ function registerUi(
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/close",
 		1,
 		"(ui/close tab)",
-		"Close a panel tab by the id `ui/open-file` or `ui/open-view` returned. A split left empty folds into its neighbour.",
+		"Close a panel tab by the id `ui/open-file`, `ui/open-view` or `ui/tabs` gave. A split left empty folds into its neighbour. Returns t if the tab was open, nil if it was not.",
 		z.tuple([zString]),
-		([tab]) => {
+		function* ([tab]): Eval {
+			const tabs = yield* panel.tabs();
+			if (!tabs.some((open) => open.id === tab)) return null;
+			panel.closed(tab);
 			emit({ op: "close", tab });
-			return Unspecified;
+			return true;
 		},
 	);
 
@@ -774,7 +825,7 @@ function registerUi(
 		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
 		z.tuple([]),
 		function* (): Eval {
-			const tabs = yield* settled(panel.tabs());
+			const tabs = yield* panel.tabs();
 			return arrayToList(tabs.map(tabList));
 		},
 	);
@@ -879,7 +930,7 @@ export function uiExtension(
 	options: UiOptions = {},
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
-	const panel = host.panel ?? noPanel;
+	const panel = new PanelLedger(host.panel ?? noPanel);
 	return Object.assign(
 		(interp: Interp): void => registerUi(interp, surface, panel),
 		{
@@ -890,15 +941,16 @@ export function uiExtension(
 					await surface.invoke(ctx.action, ctx.values);
 				});
 				hooks.annotate.use((buffer, into, next) => {
+					panel.sent();
 					const view = buffer.collect(rendered).at(-1);
-					const panel = buffer.collect(panelOps);
+					const ops = buffer.collect(panelOps);
 					const viewed =
 						view === undefined ? into : annotate(into, viewKey, viewOf(view));
 					return next(
 						buffer,
-						panel.length === 0
+						ops.length === 0
 							? viewed
-							: annotating(viewed, "output", { panel }),
+							: annotating(viewed, "output", { panel: ops }),
 					);
 				});
 				hooks.message.use(

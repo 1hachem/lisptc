@@ -8,6 +8,7 @@ import {
 	joinMessages,
 	nodeToJson,
 	type PanelOp,
+	type PanelTab,
 	panelOps,
 	rendered,
 	sent,
@@ -557,36 +558,55 @@ describe("the panel beside the chat", () => {
 		);
 	});
 
-	it("lists the tabs the panel reader reports", () => {
+	const saved: PanelTab[] = [
+		{
+			id: "file:knowledge/notes.md",
+			kind: "file",
+			title: "notes.md",
+			shown: true,
+			focused: true,
+		},
+		{
+			id: "view:counts",
+			kind: "view",
+			title: "counts",
+			shown: false,
+			focused: false,
+		},
+	];
+
+	function onPanel(tabs: PanelTab[]) {
 		const interp = new Interp({
-			extensions: [
-				uiExtension({
-					...uiHost,
-					panel: {
-						tabs: () => [
-							{
-								id: "file:knowledge/notes.md",
-								kind: "file",
-								title: "notes.md",
-								shown: true,
-								focused: true,
-							},
-							{
-								id: "view:counts",
-								kind: "view",
-								title: "counts",
-								shown: false,
-								focused: false,
-							},
-						],
-					},
-				}),
-			],
+			extensions: [uiExtension({ ...uiHost, panel: { tabs: () => tabs } })],
 		});
 		runSync(interp, prelude);
-		expect(str(runSync(interp, "(ui/tabs)"))).toBe(
+		const ops: PanelOp[] = [];
+		panelOps.on(interp.channels, (op) => {
+			ops.push(op);
+		});
+		return { ops, ev: (code: string) => str(runSync(interp, code)) };
+	}
+
+	it("lists the tabs the panel reader reports", () => {
+		expect(onPanel(saved).ev("(ui/tabs)")).toBe(
 			'((:id "file:knowledge/notes.md" :kind :file :title "notes.md" :shown t :focused t) (:id "view:counts" :kind :view :title "counts" :shown nil :focused nil))',
 		);
+	});
+
+	it("counts the tabs this step opened and closed before the panel saves them", () => {
+		const { ev } = onPanel(saved);
+		ev('(ui/open-view "plan" (ui/text "x")) (ui/close "view:counts")');
+		expect(ev("(ui/tabs)")).toBe(
+			'((:id "file:knowledge/notes.md" :kind :file :title "notes.md" :shown t :focused nil) (:id "view:plan" :kind :view :title "plan" :shown t :focused t))',
+		);
+	});
+
+	it("closes an open tab and says whether there was one", () => {
+		const { ev, ops } = onPanel(saved);
+		expect(ev('(ui/close "view:counts")')).toBe("t");
+		expect(ev('(ui/close "view:counts")')).toBe("nil");
+		expect(ev('(ui/close "view:gone")')).toBe("nil");
+		expect(ops).toEqual([{ op: "close", tab: "view:counts" }]);
 	});
 
 	it("lists no tabs without a panel", () => {
@@ -595,11 +615,14 @@ describe("the panel beside the chat", () => {
 	});
 
 	it("closes and focuses tabs by id", () => {
-		const { ops } = opened('(ui/focus "view:counts") (ui/close "view:counts")');
-		expect(ops).toEqual([
+		const { ops, result } = opened(
+			'(ui/open-view "counts" (ui/text "1")) (ui/focus "view:counts") (ui/close "view:counts")',
+		);
+		expect(ops.slice(1)).toEqual([
 			{ op: "focus", tab: "view:counts" },
 			{ op: "close", tab: "view:counts" },
 		]);
+		expect(str(result)).toBe("t");
 	});
 
 	it("puts nothing under the message when it opens a tab", () => {
