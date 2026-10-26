@@ -34,6 +34,7 @@ export interface ThreadProfile {
 	readonly bounds: readonly string[];
 	readonly roster?: readonly string[];
 	readonly budget?: number;
+	readonly subAgent?: true;
 }
 
 function narrowed(
@@ -66,6 +67,7 @@ export function profileOf(lineage: RecordLineage): ThreadProfile {
 				? {}
 				: { roster }),
 		...(budgets.length === 0 ? {} : { budget: Math.min(...budgets) }),
+		...(lineage[0]?.agent === undefined ? {} : { subAgent: true }),
 	};
 }
 
@@ -277,6 +279,7 @@ export class ThreadHost {
 			extensions: await workspaceExtensions(workspaceId, () => owner, {
 				bounds: profile.bounds,
 				...(profile.roster === undefined ? {} : { roster: profile.roster }),
+				...(profile.subAgent === undefined ? {} : { subAgent: true }),
 				...(own ? { chatId } : {}),
 				...(supervisor === undefined ? {} : { supervisor }),
 			}),
