@@ -193,5 +193,32 @@
       "project:read",
       "user:read"
     ]
+  },
+  {
+    "name": "apify",
+    "description": "Apify over OAuth: search the Actor store and run Actors that scrape websites, crawl pages, and extract structured data, then read their results; also browse the web for RAG and fetch a page's content. First (load-mcp \"apify\") returns an authorization link; once approved, load again, running (mcp-authorize \"apify\" \"<code>\") first only if the user hands back a code.",
+    "keywords": [
+      "apify",
+      "actor",
+      "actors",
+      "scrape",
+      "scraper",
+      "scraping",
+      "crawl",
+      "crawler",
+      "extract",
+      "web",
+      "webpage",
+      "url",
+      "search",
+      "rag",
+      "dataset",
+      "social-media",
+      "maps",
+      "ecommerce",
+      "automation"
+    ],
+    "url": "https://mcp.apify.com",
+    "oauth": true
   }
 ]
