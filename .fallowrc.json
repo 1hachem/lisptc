@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "minimumVersion": "3.28.0",
-  "ignorePatterns": [".agents/**", "tree-sitter-lisptc/**"],
+  "ignorePatterns": [".agents/**", "packages/tree-sitter/**"],
   "entry": [
     "apps/app/server/routes/**/*.ts",
     "apps/app/server/plugins/**/*.ts"

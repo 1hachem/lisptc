@@ -1,7 +1,6 @@
 import { CATALOGUED_CHOICES, type ProviderName } from "@repo/shared/providers";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { RETIRED_MODELS } from "./lib/models.js";
 import { WORKSPACE_ICONS } from "./lib/workspaceIcons.js";
 
 export const binnedFrom = v.union(
@@ -52,15 +51,10 @@ export const workspaceIcon = v.union(
 	...WORKSPACE_ICONS.map((icon) => v.literal(icon)),
 );
 
-export const storedModel = v.union(
-	...[...CATALOGUED_CHOICES, ...RETIRED_MODELS].map(pair),
-);
-
 const panelTab = v.object({
 	id: v.string(),
 	fixed: v.optional(v.boolean()),
 	content: v.union(
-		v.object({ kind: v.literal("main") }),
 		v.object({
 			kind: v.literal("file"),
 			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
@@ -89,30 +83,9 @@ const panelTab = v.object({
 	),
 });
 
-const legacyLayout = v.object({
-	direction: v.union(v.literal("row"), v.literal("column")),
-	dock: v.optional(v.union(v.literal("side"), v.literal("below"))),
-	focused: v.union(v.string(), v.null()),
-	groups: v.array(
-		v.object({
-			id: v.string(),
-			size: v.number(),
-			panes: v.array(
-				v.object({
-					id: v.string(),
-					size: v.number(),
-					tabs: v.array(panelTab),
-					active: v.union(v.string(), v.null()),
-				}),
-			),
-		}),
-	),
-});
-
 export const panelLayout = v.object({
 	root: v.union(v.string(), v.null()),
 	focused: v.union(v.string(), v.null()),
-	minimized: v.optional(v.array(panelTab)),
 	nodes: v.array(
 		v.union(
 			v.object({
@@ -142,7 +115,6 @@ export default defineSchema({
 
 	preferences: defineTable({
 		userId: v.id("users"),
-		theme: v.optional(v.string()),
 		font: v.optional(v.string()),
 		themeUses: v.optional(v.record(v.string(), v.number())),
 		channels: v.optional(v.record(v.string(), v.boolean())),
@@ -160,7 +132,7 @@ export default defineSchema({
 		ownerId: v.id("users"),
 		name: v.string(),
 		slug: v.string(),
-		model: v.optional(storedModel),
+		model: v.optional(modelChoice),
 		icon: v.optional(workspaceIcon),
 		theme: v.optional(v.string()),
 	})
@@ -263,7 +235,7 @@ export default defineSchema({
 
 	layouts: defineTable({
 		workspaceId: v.id("workspaces"),
-		layout: v.union(panelLayout, legacyLayout),
+		layout: panelLayout,
 	}).index("by_workspace", ["workspaceId"]),
 
 	repls: defineTable({

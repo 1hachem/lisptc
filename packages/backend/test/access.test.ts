@@ -531,20 +531,6 @@ describe("panel layout access", () => {
 		).toEqual(layout(3, 3));
 	});
 
-	it("reads a layout stored in the old shape as none", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		await t.run((ctx) =>
-			ctx.db.insert("layouts", {
-				workspaceId: alice.workspace,
-				layout: { direction: "row", focused: null, groups: [] },
-			}),
-		);
-		expect(
-			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
-		).toBeNull();
-	});
-
 	it("takes any number of panes side by side but refuses more than three stacked", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -830,15 +816,6 @@ describe("preferences access", () => {
 				},
 			}),
 		).rejects.toThrow("PREFERENCES_TOO_LARGE");
-	});
-
-	it("leaves out a theme stored before it became the workspace's", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		await t.run((ctx) =>
-			ctx.db.insert("preferences", { userId: alice.user, theme: "borland" }),
-		);
-		expect(await alice.as.query(api.preferences.get, {})).toEqual(DEFAULTS);
 	});
 });
 
