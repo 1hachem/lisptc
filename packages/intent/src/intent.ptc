@@ -10,6 +10,8 @@ questions, final answer. Say intent through these forms.
   list before keeps its done mark.
 - (intent/check "label") marks one todo done. Unknown label fails and names
   open ones.
+- (intent/drop "label") removes one todo. (intent/move "label" position) moves
+  it, 0 first. (intent/clear) empties list. Plan changed: edit list, keep it true.
 - (intent/progress done total ["label"]) progress bar, done of total. Integers,
   total at least 1, done at most total. Independent of todo.
 - (intent/ask "prompt" '("A" "B") [:multi t]) closed question, one pick; :multi t

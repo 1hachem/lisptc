@@ -132,13 +132,14 @@ export function latestTodos(turns: readonly Turn[]): TurnTodos | undefined {
 		const turn = turns[at];
 		if (turn === undefined) continue;
 		const { intent } = shapeTurn(turn);
-		if (intent?.todos && intent.todos.length > 0)
-			return {
-				turn: turn.id,
-				todos: intent.todos,
-				progress: intent.progress,
-				last: at === turns.length - 1,
-			};
+		if (intent?.todos === undefined) continue;
+		if (intent.todos.length === 0) return undefined;
+		return {
+			turn: turn.id,
+			todos: intent.todos,
+			progress: intent.progress,
+			last: at === turns.length - 1,
+		};
 	}
 	return undefined;
 }

@@ -303,6 +303,53 @@ function registerIntent(interp: Interp, clock: Clock): void {
 		},
 	);
 
+	const known = (label: string): Todo[] => {
+		const now = todos.get();
+		if (!now.some((t) => t.label === label))
+			throw new EvalException(`no such todo; ${openLabels(now)}`, label);
+		return now;
+	};
+
+	interp.def(
+		"intent/drop",
+		1,
+		'(intent/drop "label")',
+		"Remove a todo from the list the user sees, by its label. An unknown label fails and names the open ones.",
+		z.tuple([zString]),
+		([label]) => {
+			todos.set(known(label).filter((t) => t.label !== label));
+			return show();
+		},
+	);
+
+	interp.def(
+		"intent/move",
+		2,
+		'(intent/move "label" position)',
+		"Move a todo to a position in the list, 0 first. A position past the end puts it last.",
+		z.tuple([zString, zAny]),
+		([label, rawAt]) => {
+			const at = count(rawAt, "position", 0);
+			const now = known(label);
+			const moved = now.find((t) => t.label === label) as Todo;
+			const rest = now.filter((t) => t.label !== label);
+			todos.set([...rest.slice(0, at), moved, ...rest.slice(at)]);
+			return show();
+		},
+	);
+
+	interp.def(
+		"intent/clear",
+		0,
+		"(intent/clear)",
+		"Empty the todo list the user sees.",
+		z.tuple([]),
+		() => {
+			todos.set([]);
+			return show();
+		},
+	);
+
 	interp.def(
 		"intent/progress",
 		-3,

@@ -129,6 +129,53 @@ describe("intent forms", () => {
 		expect((thrown as Error).message).toContain('open: "b"');
 		expect((thrown as Error).message).not.toContain('"a"');
 	});
+
+	test("drop a todo and keep the rest in order", () => {
+		const { interp } = fresh();
+		step(interp, '(intent/todo "a" "b" "c") (intent/check "c")');
+		const { buffer } = step(interp, '(intent/drop "b")');
+		expect(buffer.collect(intended).at(-1)?.todos).toEqual([
+			{ label: "a", done: false },
+			{ label: "c", done: true },
+		]);
+	});
+
+	test("move a todo to a position, and past the end to last", () => {
+		const { interp } = fresh();
+		step(interp, '(intent/todo "a" "b" "c")');
+		const first = step(interp, '(intent/move "c" 0)');
+		expect(
+			first.buffer
+				.collect(intended)
+				.at(-1)
+				?.todos?.map((t) => t.label),
+		).toEqual(["c", "a", "b"]);
+		const last = step(interp, '(intent/move "c" 9)');
+		expect(
+			last.buffer
+				.collect(intended)
+				.at(-1)
+				?.todos?.map((t) => t.label),
+		).toEqual(["a", "b", "c"]);
+	});
+
+	test("clear the list", () => {
+		const { interp } = fresh();
+		step(interp, '(intent/todo "a" "b")');
+		const { buffer } = step(interp, "(intent/clear)");
+		expect(buffer.collect(intended).at(-1)?.todos).toEqual([]);
+	});
+
+	test("refuse to drop or move a label not on the list", () => {
+		const { interp } = fresh();
+		step(interp, '(intent/todo "a")');
+		expect(step(interp, '(intent/drop "z")').thrown).toBeInstanceOf(
+			EvalException,
+		);
+		expect(step(interp, '(intent/move "z" 0)').thrown).toBeInstanceOf(
+			EvalException,
+		);
+	});
 });
 
 describe("a progress bar", () => {
