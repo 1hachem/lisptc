@@ -42,20 +42,32 @@ const STATE_MARK = {
 
 const STALLED_MARK = { icon: SquareIcon, tone: "text-dim" } as const;
 
+function markOf(entry: TimelineEntry, live: boolean) {
+	if (entry.kind === "intent") return undefined;
+	if (entry.state === "running" && !live) return STALLED_MARK;
+	return STATE_MARK[entry.state];
+}
+
 function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
-	const mark =
-		entry.state === "running" && !live ? STALLED_MARK : STATE_MARK[entry.state];
+	const mark = markOf(entry, live);
 	return (
 		<li
 			data-timeline={entry.state}
-			className="relative flex flex-col gap-0.5 pl-5 before:absolute before:top-4 before:bottom-[-0.125rem] before:left-[0.4375rem] before:w-px before:bg-dim/25 last:before:hidden"
+			data-kind={entry.kind}
+			className={
+				mark
+					? "relative flex flex-col gap-0.5 pl-5 before:absolute before:top-4 before:bottom-[-0.125rem] before:left-[0.4375rem] before:w-px before:bg-dim/25 last:before:hidden"
+					: "flex flex-col gap-0.5"
+			}
 		>
 			<div title={entry.detail} className="flex min-w-0 items-center gap-2">
-				<HugeiconsIcon
-					icon={mark.icon}
-					aria-label={entry.state}
-					className={`absolute left-0 size-icon flex-none ${mark.tone}`}
-				/>
+				{mark && (
+					<HugeiconsIcon
+						icon={mark.icon}
+						aria-label={entry.state}
+						className={`absolute left-0 size-icon flex-none ${mark.tone}`}
+					/>
+				)}
 				<span
 					className={`min-w-0 truncate ${entry.state === "failed" ? "text-red" : "text-fg"}`}
 				>

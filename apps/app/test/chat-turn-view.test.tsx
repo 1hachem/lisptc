@@ -651,13 +651,32 @@ describe("the turn timeline", () => {
 		expect(host.textContent).not.toContain("steps");
 	});
 
-	it("spins on the running line while the turn is live", async () => {
+	it("spins on the running call while the turn is live", async () => {
 		const host = await mount(
-			<CallTimeline entries={turnTimeline(logged, [], true)} live />,
+			<CallTimeline
+				entries={turnTimeline(undefined, [timed("a", 100, "started")], true)}
+				live
+			/>,
 		);
 		const running = host.querySelector('[data-timeline="running"] svg');
 
 		expect(running?.getAttribute("class")).toContain("animate-spin");
+	});
+
+	it("draws no mark on an intent line, whatever its state", async () => {
+		const host = await mount(
+			<CallTimeline
+				entries={turnTimeline(logged, [timed("a", 1200, "done", 90)], true)}
+				live
+			/>,
+		);
+		const marked = [...host.querySelectorAll("[data-kind]")].map((li) => [
+			li.getAttribute("data-kind"),
+			li.querySelector(":scope > div > svg") !== null,
+		]);
+
+		expect(marked).toContainEqual(["intent", false]);
+		expect(marked).toEqual(marked.map(([kind]) => [kind, kind === "activity"]));
 	});
 });
 

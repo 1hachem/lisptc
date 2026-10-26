@@ -9,6 +9,7 @@ export type TimelineState = "running" | "done" | "failed";
 
 export interface TimelineEntry {
 	id: string;
+	kind: "intent" | "activity";
 	label: string;
 	detail?: string;
 	state: TimelineState;
@@ -25,6 +26,7 @@ const ACTIVITY_STATE: Record<ActivityEntry["state"], TimelineState> = {
 function activityEntry(entry: ActivityEntry): TimelineEntry {
 	return {
 		id: `activity:${entry.id}`,
+		kind: "activity",
 		label: entry.label,
 		detail: entry.detail,
 		state: ACTIVITY_STATE[entry.state],
@@ -64,6 +66,7 @@ export function turnTimeline(
 	const lines: (TimelineEntry & { startedAt?: number })[] = log.map(
 		(line, at) => ({
 			id: `intent:${at}`,
+			kind: "intent",
 			label: line.text,
 			...settledLine(line, at === log.length - 1, live),
 			startedAt: line.startedAt,
