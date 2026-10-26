@@ -62,6 +62,8 @@ are not asked. So every branch you anticipate is free.
 - Actions close over their environment, REPL persistent, so
   (setq counter (+ counter 1)) in a handler sticks; later step reads it like
   any global. They die with REPL: clearing conversation drops every action.
+- (ui/forget view) drops actions behind view's controls; clicks then run
+  nothing. Use on view you replaced or closed. Returns count dropped.
 
 **Handing work back to you, the (ui/send text...) call**: arguments join as
 echo joins them; result joins conversation as user message, so you take next

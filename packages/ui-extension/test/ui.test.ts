@@ -352,6 +352,16 @@ describe("actions", () => {
 		});
 	});
 
+	it("forgets the handlers behind a view's controls", async () => {
+		const { surface, interp } = render(`
+			(setq view (ui/stack (ui/button "a" (lambda () 1)) (ui/checkbox :name "b" :on-change (lambda (v) v))))
+			(ui/render view)
+		`);
+		expect(str(runSync(interp, "(ui/forget view)"))).toBe("2");
+		await expect(surface.invoke("a1", {})).rejects.toThrow(/no such ui action/);
+		expect(str(runSync(interp, "(ui/forget view)"))).toBe("0");
+	});
+
 	it("reports an id it does not know rather than doing nothing", async () => {
 		const { surface } = render('(ui/render (ui/text "hi"))');
 		await expect(surface.invoke("a99", {})).rejects.toThrow(

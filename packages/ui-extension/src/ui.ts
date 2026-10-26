@@ -136,6 +136,13 @@ export class UiSurface {
 		return id;
 	}
 
+	drop(ids: readonly string[]): number {
+		const held = this.handlers?.get() ?? [];
+		const kept = held.filter(([id]) => !ids.includes(id));
+		this.handlers?.set(kept);
+		return held.length - kept.length;
+	}
+
 	private handler(id: string): unknown {
 		return this.handlers?.get().find(([at]) => at === id)?.[1];
 	}
@@ -338,6 +345,13 @@ function actionOption(
 ): string | undefined {
 	if (!opts.has(name)) return undefined;
 	return surface.action(opts.get(name));
+}
+
+function actionsOf(node: UiNode): string[] {
+	const own = ACTION_PROPS.map((prop) => node.props[prop]).filter(
+		(id): id is string => typeof id === "string",
+	);
+	return [...own, ...node.children.flatMap(actionsOf)];
 }
 
 function summarize(node: UiNode): { elements: number; actions: number } {
@@ -753,6 +767,19 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			return renderView(surface, view);
+		},
+	);
+
+	interp.def(
+		"ui/forget",
+		1,
+		"(ui/forget view)",
+		"Drop the handlers behind every control in `view`, so clicking them runs nothing any more. Use it on a view you replaced or closed. Returns how many were dropped.",
+		z.tuple([zAny]),
+		([view]) => {
+			if (!(view instanceof UiElement))
+				throw new EvalException("ui element expected", view);
+			return BigInt(surface.drop(actionsOf(view)));
 		},
 	);
 
