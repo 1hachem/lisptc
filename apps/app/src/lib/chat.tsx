@@ -443,6 +443,31 @@ function useTurnSend(
 	return { submitTurn, sendAbout };
 }
 
+interface Briefed {
+	_id: string;
+	parentChatId?: string;
+	agent?: { prompt: string };
+}
+
+export function briefingOf(chat: Briefed | undefined): ChatMessage[] {
+	if (chat?.agent === undefined || chat.parentChatId === undefined) return [];
+	return [
+		{
+			id: `briefing:${chat._id}`,
+			type: "system",
+			content: chat.agent.prompt,
+			additional_kwargs: { source: `agent:${chat.parentChatId}` },
+		},
+	];
+}
+
+export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {
+	const { data: chat } = useQuery(
+		convexQuery(api.chats.get, chatId ? { chatId } : "skip"),
+	);
+	return useMemo(() => briefingOf(chat), [chat]);
+}
+
 function usePersisted(chatId: Id<"chats"> | null): ChatMessage[] {
 	const { data: stored } = useQuery(
 		convexQuery(api.messages.light, chatId ? { chatId } : "skip"),

@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import {
+	briefingOf,
 	type ChatMessage,
 	isParentMessage,
 	isUserMessage,
@@ -79,5 +80,21 @@ describe("a sub-agent's conversation", () => {
 		};
 		const [turn] = groupTurns([event]);
 		expect(turn?.asked).toBeUndefined();
+	});
+});
+
+describe("a sub-agent's briefing", () => {
+	test("opens the conversation on the prompt it was spawned with", () => {
+		const [briefing] = briefingOf({
+			_id: "child",
+			parentChatId: "parent",
+			agent: { prompt: "you review uploads" },
+		});
+		expect(briefing && isParentMessage(briefing)).toBe(true);
+		expect(briefing?.content).toBe("you review uploads");
+	});
+
+	test("is empty on a chat no agent spawned", () => {
+		expect(briefingOf({ _id: "chat" })).toEqual([]);
 	});
 });

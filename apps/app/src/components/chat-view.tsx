@@ -45,6 +45,7 @@ import {
 	toolResult,
 	toolResults,
 	toolUi,
+	useBriefing,
 	useChatSession,
 } from "../lib/chat.tsx";
 import { isGreetingMessage } from "../lib/greeting.ts";
@@ -773,9 +774,14 @@ export function ChatView() {
 	const lastSent = messages
 		.filter((m) => isUserMessage(m) || isSystemMessage(m))
 		.at(-1)?.id;
+	const briefing = useBriefing(chatId);
 	const turns = useMemo(
-		() => groupTurns(messages.filter((m) => !isGreetingMessage(m))),
-		[messages],
+		() =>
+			groupTurns([
+				...briefing,
+				...messages.filter((m) => !isGreetingMessage(m)),
+			]),
+		[briefing, messages],
 	);
 	const { traceLink } = useTraceLink();
 	const sideTrace = useSideTrace();
