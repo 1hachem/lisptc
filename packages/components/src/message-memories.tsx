@@ -75,7 +75,7 @@ export function MessageMemories({
 				title={label}
 				className="group inline-flex items-center gap-1.5 text-dim transition-colors hover:text-fg"
 			>
-				<span className="inline-flex items-center [perspective:24px] [transform-style:preserve-3d]">
+				<span className="inline-flex items-center">
 					{stacked.map((memory, index) => (
 						<Dot
 							key={memory.key}
