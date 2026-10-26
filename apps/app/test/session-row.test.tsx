@@ -7,7 +7,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { SessionRow } from "../src/components/session-row.tsx";
 import { traceOpen } from "../src/lib/panel-ops.ts";
 
-const panels = vi.hoisted(() => ({ apply: vi.fn() }));
+const panels = vi.hoisted(() => ({ apply: vi.fn(), shown: false }));
 
 vi.mock("../src/lib/panels.tsx", () => ({
 	usePanels: () => ({ apply: panels.apply }),
@@ -17,13 +17,18 @@ vi.mock("@convex-dev/react-query", () => ({
 	convexQuery: () => ({}),
 }));
 vi.mock("@tanstack/react-query", () => ({
-	useQuery: () => ({ data: undefined }),
+	useQuery: () => ({
+		data: panels.shown
+			? [{ _id: "c2", workspaceId: "w1", title: "a sub-agent" }]
+			: undefined,
+	}),
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/chat.tsx", () => ({ abandonChat: vi.fn() }));
 vi.mock("../src/components/panel-link.tsx", () => ({
 	PanelLink: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-	useShown: () => () => false,
+	useShown: () => (content: { chatId?: string }) =>
+		panels.shown && content.chatId === "c1",
 }));
 vi.mock("@repo/ui", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@repo/ui")>()),
@@ -62,6 +67,7 @@ afterEach(() => {
 	for (const root of roots.splice(0)) act(() => root.unmount());
 	document.body.replaceChildren();
 	panels.apply.mockClear();
+	panels.shown = false;
 });
 
 const CHAT = {
@@ -87,5 +93,17 @@ describe("a chat's row in the sidebar", () => {
 
 		expect(item).toBeDefined();
 		expect(panels.apply).toHaveBeenCalledWith([traceOpen("c1")]);
+	});
+	it("lists its sub-agents only once the chat is opened", async () => {
+		const host = document.createElement("div");
+		document.body.append(host);
+		const root = createRoot(host);
+		roots.push(root);
+		await act(async () => root.render(<SessionRow chat={CHAT} />));
+		expect(host.textContent).not.toContain("a sub-agent");
+
+		panels.shown = true;
+		await act(async () => root.render(<SessionRow chat={{ ...CHAT }} />));
+		expect(host.textContent).toContain("a sub-agent");
 	});
 });

@@ -18,7 +18,7 @@ import {
 	DropdownMenuTrigger,
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { abandonChat } from "../lib/chat.tsx";
 import { dragsAs, type PanelContent, traceOpen } from "../lib/panel-ops.ts";
@@ -86,6 +86,9 @@ export function SessionRow({
 	const { failure, attempt } = useAttempt("session action");
 	const [renaming, setRenaming] = useState(false);
 	const [title, setTitle] = useState(chat.title);
+	const selected = shown(opens);
+	const [opened, setOpened] = useState(selected);
+	if (selected && !opened) setOpened(true);
 
 	if (renaming) {
 		return (
@@ -119,7 +122,7 @@ export function SessionRow({
 			<TreeFile
 				name={chat.title === "" ? "untitled" : chat.title}
 				{...statusGlyph(chat)}
-				selected={shown(opens)}
+				selected={selected}
 				depth={depth}
 				onDragStart={dragsAs(opens)}
 				link={(content, className) => (
@@ -183,7 +186,14 @@ export function SessionRow({
 			{failure && (
 				<div className="px-2.5 py-1 text-[11px] text-red">{failure}</div>
 			)}
-			<SubAgentRows chat={chat} depth={depth + 1} />
+			{opened && (
+				<div
+					className="relative before:absolute before:inset-y-0 before:left-[var(--rail)] before:border-bg2 before:border-l"
+					style={{ "--rail": `${1.0625 + depth * 0.875}rem` } as CSSProperties}
+				>
+					<SubAgentRows chat={chat} depth={depth + 1} />
+				</div>
+			)}
 		</>
 	);
 }
