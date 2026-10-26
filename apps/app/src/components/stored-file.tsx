@@ -20,6 +20,10 @@ import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
 import { Markdown } from "./markdown.tsx";
 
+const JsonView = lazy(async () => ({
+	default: (await import("@repo/components/json-view.tsx")).JsonView,
+}));
+
 const StlViewer = lazy(async () => ({
 	default: (await import("@repo/components/stl-viewer.tsx")).StlViewer,
 }));
@@ -97,6 +101,11 @@ const FILLS: ReadonlySet<KnowledgeViewer> = new Set([
 
 const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 	markdown: (text) => <Markdown>{text}</Markdown>,
+	json: (text) => (
+		<Suspense fallback={<div className="text-dim">loading…</div>}>
+			<JsonView text={text} />
+		</Suspense>
+	),
 	text: (text) => (
 		<pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>
 	),

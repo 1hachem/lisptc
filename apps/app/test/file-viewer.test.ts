@@ -16,7 +16,9 @@ describe("knowledgeViewer", () => {
 		["plan", "image/vnd.dwg", "download"],
 		["notes.md", "text/plain", "markdown"],
 		["data.csv", null, "text"],
-		["config.json", "application/json", "text"],
+		["config.json", "application/json", "json"],
+		["config.json", null, "json"],
+		["shape", "application/geo+json", "json"],
 		["deck.pptx", "application/octet-stream", "download"],
 	] as const)("opens %s (%s) as %s", (name, contentType, viewer) => {
 		expect(knowledgeViewer(name, contentType)).toBe(viewer);

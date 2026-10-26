@@ -3,7 +3,6 @@ const TEXT_EXTENSIONS = new Set([
 	"log",
 	"csv",
 	"tsv",
-	"json",
 	"yaml",
 	"yml",
 	"toml",
@@ -33,15 +32,16 @@ export type KnowledgeViewer =
 	| "audio"
 	| "stl"
 	| "markdown"
+	| "json"
 	| "text"
 	| "download";
 
-export type TextViewer = Extract<KnowledgeViewer, "markdown" | "text">;
+export type TextViewer = Extract<KnowledgeViewer, "markdown" | "json" | "text">;
 
 export function readsText(
 	viewer: KnowledgeViewer | undefined,
 ): viewer is TextViewer {
-	return viewer === "markdown" || viewer === "text";
+	return viewer === "markdown" || viewer === "json" || viewer === "text";
 }
 
 export interface StoredText {
@@ -80,10 +80,11 @@ export function knowledgeViewer(
 	)
 		return "markdown";
 	if (
-		type.startsWith("text/") ||
 		type === "application/json" ||
-		TEXT_EXTENSIONS.has(extension)
+		type.endsWith("+json") ||
+		extension === "json"
 	)
-		return "text";
+		return "json";
+	if (type.startsWith("text/") || TEXT_EXTENSIONS.has(extension)) return "text";
 	return "download";
 }
