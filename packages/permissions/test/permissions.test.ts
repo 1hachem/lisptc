@@ -153,6 +153,17 @@ describe("the permissions guard", () => {
 		expect(decided.failed).toBe(true);
 	});
 
+	it("closes a request that is not open as expired, so nothing waits on it", async () => {
+		const s = session("(permission/ask string-upcase)");
+		const decided = await s.invoke(DECIDE_ACTION, {
+			id: "nope",
+			approved: true,
+		});
+		expect(decided.annotations.output).toEqual({
+			asks: { answered: { nope: { accepted: false, label: "Expired" } } },
+		});
+	});
+
 	it("passes every other action on", async () => {
 		const s = session("(permission/ask string-upcase)");
 		expect((await s.invoke("ui/click", {})).failed).toBe(true);

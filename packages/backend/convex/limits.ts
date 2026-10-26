@@ -50,4 +50,4 @@ export const MAX_LAYOUT_BYTES = 262_144;
 
 export const MAX_SPLITS = 3;
 
-export const MAX_SPAWN_DEPTH = 2;
+export const MAX_SPAWN_DEPTH = 1;

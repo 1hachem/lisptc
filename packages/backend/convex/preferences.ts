@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import { mutation, type QueryCtx, query } from "./_generated/server.js";
-import { requireUser } from "./lib/auth.js";
+import { requireUserOrThread } from "./lib/auth.js";
 import { withDefaults } from "./lib/preferenceDefaults.js";
 import { MAX_PREFERENCES_BYTES } from "./limits.js";
 
@@ -40,14 +40,14 @@ export const get = query({
 	args: {},
 	returns: preferences,
 	handler: async (ctx) =>
-		await preferencesOf(ctx, (await requireUser(ctx))._id),
+		await preferencesOf(ctx, (await requireUserOrThread(ctx))._id),
 });
 
 export const put = mutation({
 	args: { preferences },
 	returns: v.null(),
 	handler: async (ctx, { preferences }) => {
-		const user = await requireUser(ctx);
+		const user = await requireUserOrThread(ctx);
 		const existing = await ctx.db
 			.query("preferences")
 			.withIndex("by_user", (q) => q.eq("userId", user._id))

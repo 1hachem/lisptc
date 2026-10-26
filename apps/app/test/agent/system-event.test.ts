@@ -109,10 +109,12 @@ describe("a ui action", () => {
 		expect(world.posted).toEqual([]);
 	});
 
-	test("annotates nothing when the action failed", async () => {
+	test("still annotates what a failed action recorded", async () => {
 		world.failed = true;
 		await decide("ask-1");
-		expect(world.annotated).toEqual([]);
+		expect(world.annotated).toEqual([
+			expect.objectContaining({ id: "ask-1", kwargs: { decided: true } }),
+		]);
 	});
 
 	test("stops only the chat's own thread when the user stops it", async () => {

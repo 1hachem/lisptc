@@ -10,6 +10,8 @@ import {
 	agentsExtension,
 	BOUNDED_DEFINE,
 	DEFINE,
+	DELEGATE_PROMPT,
+	FORGET,
 	KEEP,
 } from "../src/agents.ts";
 import { agentsHostFor, MemorySourceFolder } from "../src/agents-host.ts";
@@ -188,7 +190,7 @@ describe("defagent with permissions", () => {
 		const { run, extension, calls } = world();
 		await run('(defagent "r" :prompt "p" :permissions "")');
 		await run('(defagent "s" :prompt "p")');
-		expect(extension.asks).toEqual([DEFINE, BOUNDED_DEFINE, KEEP]);
+		expect(extension.asks).toEqual([DEFINE, BOUNDED_DEFINE, KEEP, FORGET]);
 		expect(calls.filter((name) => name === BOUNDED_DEFINE)).toHaveLength(1);
 		expect(calls.filter((name) => name === DEFINE)).toHaveLength(1);
 	});
@@ -274,6 +276,73 @@ describe("send", () => {
 	});
 });
 
+describe("delegate", () => {
+	test("spawns a fresh temporary agent, sends the brief, and returns the job at once", async () => {
+		const { shown, threads } = world();
+		expect(await shown('(delegate "find X" :max-steps 5)')).toBe('"job-1"');
+		expect(threads.spawned).toEqual([
+			{
+				definition: { name: "delegate-1", prompt: DELEGATE_PROMPT },
+				seed: { from: "fresh" },
+				chat: { from: "fresh" },
+			},
+		]);
+		expect(threads.sent).toEqual([
+			{ child: "child-1", message: { text: "find X", maxSteps: 5 } },
+		]);
+	});
+
+	test("names each delegate apart, so several run at once", async () => {
+		const { run, threads } = world();
+		await run('(delegate "a") (delegate "b")');
+		expect(threads.spawned.map((s) => s.definition.name)).toEqual([
+			"delegate-1",
+			"delegate-2",
+		]);
+		expect(threads.sent.map((s) => s.child)).toEqual(["child-1", "child-2"]);
+	});
+
+	test("hands back a job agent-wait returns the reply of", async () => {
+		const { shown } = world();
+		expect(await shown('(agent-wait (delegate "hello"))')).toBe('"got hello"');
+	});
+
+	test("can be cancelled by its name", async () => {
+		const { run, threads } = world();
+		await run('(delegate "a") (agent-cancel "delegate-1")');
+		expect(threads.cancelled).toEqual(["child-1"]);
+	});
+
+	test("cannot be kept", async () => {
+		const { run } = world();
+		await run('(delegate "a")');
+		await expect(run('(agent-keep "delegate-1")')).rejects.toThrow(
+			"a delegate cannot be kept",
+		);
+	});
+
+	test("keeps its name prefix from spawn", async () => {
+		const { run } = world();
+		await expect(run('(spawn "delegate-1" :prompt "p")')).rejects.toThrow(
+			"kept for delegate",
+		);
+	});
+
+	test("refuses without a brief", async () => {
+		const { run } = world();
+		await expect(run("(delegate :max-steps 3)")).rejects.toThrow(
+			"one brief string",
+		);
+	});
+
+	test("is refused where the host runs no sub-agents", async () => {
+		const { run } = world(false);
+		await expect(run('(delegate "a")')).rejects.toThrow(
+			"this session runs no sub-agents",
+		);
+	});
+});
+
 describe("a job", () => {
 	test("waited on returns its reply", async () => {
 		const { run, shown } = world();
@@ -337,6 +406,21 @@ describe("a saved definition", () => {
 			str('(defagent "r"\n  :prompt "dig")'),
 		);
 		expect(await shown('(agent-definition "nobody")')).toBe("nil");
+	});
+});
+
+describe("agent-forget", () => {
+	test("deletes a saved definition through the form the host asks for", async () => {
+		const { run, shown, folder, calls } = world();
+		await run('(defagent "researcher" :prompt "dig")');
+		expect(await shown('(agent-forget "researcher")')).toBe("t");
+		expect(calls).toContain(FORGET);
+		expect(folder.list("w", "sub-agents")).toEqual([]);
+	});
+
+	test("returns nil when no definition of that name is saved", async () => {
+		const { shown } = world();
+		expect(await shown('(agent-forget "ghost")')).toBe("nil");
 	});
 });
 
