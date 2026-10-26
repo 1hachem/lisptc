@@ -93,6 +93,7 @@ async function outcomeOf(
 	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
+	failure: string;
 	held: boolean;
 	results: readonly string[];
 }> {
@@ -104,12 +105,14 @@ async function outcomeOf(
 			effects,
 			emitted,
 			failed,
+			failure = "",
 			held,
 			results,
 		} = await run();
 		return {
 			output: model,
-			display: user,
+			display: without(user, failure),
+			failure,
 			error: false,
 			annotations,
 			effects,
@@ -127,7 +130,8 @@ async function outcomeOf(
 				: `REPL error: ${msg} (interpreter restored to its last checkpoint, changes since then lost)`;
 		return {
 			output: text,
-			display: text,
+			display: "",
+			failure: text,
 			error: true,
 			annotations: noAnnotations(),
 			effects: [],
@@ -137,6 +141,11 @@ async function outcomeOf(
 			results: [],
 		};
 	}
+}
+
+function without(text: string, part: string): string {
+	const at = part === "" ? -1 : text.lastIndexOf(part);
+	return at < 0 ? text : text.slice(0, at) + text.slice(at + part.length);
 }
 
 export function evalCode(

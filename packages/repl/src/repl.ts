@@ -115,6 +115,7 @@ export interface EvalOutput extends Bounded {
 	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
+	failure?: string;
 	held: boolean;
 	message?: string;
 	results: readonly string[];
@@ -220,6 +221,7 @@ function render(result: StepResult): EvalOutput {
 		held: result.held,
 		message: result.message,
 		results: result.results,
+		failure: result.failure,
 	};
 }
 
@@ -498,6 +500,7 @@ export class MemoryRepl implements InMemoryRepl {
 			annotations: this.annotations(buffer),
 			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
+			failure: carriedError.user + error.user,
 			held: held.length > 0,
 			message: carried
 				? [message, carriedOn(bounded.model + carriedError.model + holding)]
@@ -609,6 +612,7 @@ export class AgentRepl extends MemoryRepl {
 			effects: [...result.effects, END],
 			emitted: result.emitted,
 			failed: result.failed,
+			failure: result.failure,
 			held: result.held,
 			message: result.message,
 			results: result.results,

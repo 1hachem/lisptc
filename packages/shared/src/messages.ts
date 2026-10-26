@@ -64,6 +64,7 @@ const skipped = z.object({
 
 export const messageEnvelope = z.object({
 	display: lenient(z.string()),
+	failure: lenient(z.string()),
 	failed: lenient(z.literal(true)),
 	riding: lenient(z.string()),
 	results: lenient(z.array(z.string())),
