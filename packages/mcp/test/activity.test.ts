@@ -114,6 +114,7 @@ describe("a tool call from lisp", () => {
 				kind: "mcp",
 				label: "acme · explode",
 				state: "failed",
+				error: "boom",
 				id: "mcp-1",
 				startedAt: 1000,
 				ms: 25,

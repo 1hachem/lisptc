@@ -329,12 +329,24 @@ describe("the doing log", () => {
 		const out = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
 		expect(readAnnotation(out.output, intentKey)?.log).toEqual([
 			{ text: "fetch", startedAt: 1000, ms: 400, state: "done" },
-			{ text: "parse", startedAt: 1400, ms: 0, state: "failed" },
+			{
+				text: "parse",
+				startedAt: 1400,
+				ms: 0,
+				state: "failed",
+				error: "boom",
+			},
 		]);
 		clock.at = 1500;
 		const next = step(interp, '(intent/doing "retry")');
 		expect(next.buffer.collect(intended).at(-1)?.log?.slice(1)).toEqual([
-			{ text: "parse", startedAt: 1400, ms: 0, state: "failed" },
+			{
+				text: "parse",
+				startedAt: 1400,
+				ms: 0,
+				state: "failed",
+				error: "boom",
+			},
 			{ text: "retry", startedAt: 1500, state: "running" },
 		]);
 	});
@@ -346,7 +358,13 @@ describe("the doing log", () => {
 		const { buffer } = failStep(interp, hooks, "(car 1)");
 		const out = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
 		expect(readAnnotation(out.output, intentKey)?.log).toEqual([
-			{ text: "fetch", startedAt: 1000, ms: 800, state: "failed" },
+			{
+				text: "fetch",
+				startedAt: 1000,
+				ms: 800,
+				state: "failed",
+				error: "boom",
+			},
 		]);
 		const quiet = step(interp, "(+ 1 2)");
 		expect(

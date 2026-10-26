@@ -684,6 +684,35 @@ describe("the turn timeline", () => {
 		expect(running?.getAttribute("class")).toContain("animate-spin");
 	});
 
+	it("prints the whole error under a failed line and a failed call", async () => {
+		const long = `dataset not found: ${"x".repeat(200)}`;
+		const host = await mount(
+			<CallTimeline
+				entries={turnTimeline(
+					{
+						log: [
+							{
+								text: "fetch",
+								startedAt: 0,
+								ms: 5,
+								state: "failed",
+								error: "step blew up",
+							},
+						],
+					},
+					[{ ...timed("a", 1, "failed", 3), error: long }],
+					false,
+				)}
+				live={false}
+			/>,
+		);
+		const errors = [...host.querySelectorAll("[data-timeline-error]")].map(
+			(pre) => pre.textContent,
+		);
+
+		expect(errors).toEqual(["step blew up", long]);
+	});
+
 	it("draws no mark on an intent line, whatever its state", async () => {
 		const host = await mount(
 			<CallTimeline

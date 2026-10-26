@@ -1,6 +1,7 @@
 import type { ActivityEntry } from "@repo/interpreter/annotations";
 import { topic } from "@repo/interpreter/channels";
 import type { Eval } from "@repo/interpreter/drive";
+import { messageOf } from "@repo/interpreter/errors";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import type { Clock } from "@repo/shared/host";
 
@@ -36,13 +37,14 @@ export function* reporting<T>(
 	const n = calls.get() + 1;
 	calls.set(n);
 	const startedAt = clock.now();
-	const report = (state: ActivityEntry["state"]): void =>
+	const report = (state: ActivityEntry["state"], error?: unknown): void =>
 		fileActivity.emit(interp.channels, {
 			user: {
 				kind: "file",
 				label: `knowledge · ${verb}`,
 				detail: name,
 				state,
+				...(error === undefined ? {} : { error: messageOf(error) }),
 				id: `file-${n}`,
 				startedAt,
 				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
@@ -54,7 +56,7 @@ export function* reporting<T>(
 		report("done");
 		return value;
 	} catch (error) {
-		report("failed");
+		report("failed", error);
 		throw error;
 	}
 }

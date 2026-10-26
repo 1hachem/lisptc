@@ -87,6 +87,14 @@ function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 					</span>
 				)}
 			</div>
+			{entry.error && (
+				<pre
+					data-timeline-error
+					className="min-w-0 whitespace-pre-wrap break-words font-mono text-red"
+				>
+					{entry.error}
+				</pre>
+			)}
 			{entry.children.length > 0 && (
 				<Timeline entries={entry.children} live={live} />
 			)}

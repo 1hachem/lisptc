@@ -13,6 +13,7 @@ export interface TimelineEntry {
 	label: string;
 	detail?: string;
 	state: TimelineState;
+	error?: string;
 	ms?: number;
 	children: TimelineEntry[];
 }
@@ -30,6 +31,7 @@ function activityEntry(entry: ActivityEntry): TimelineEntry {
 		label: entry.label,
 		detail: entry.detail,
 		state: ACTIVITY_STATE[entry.state],
+		...(entry.error === undefined ? {} : { error: entry.error }),
 		ms: entry.ms,
 		children: [],
 	};
@@ -68,6 +70,7 @@ export function turnTimeline(
 			id: `intent:${at}`,
 			kind: "intent",
 			label: line.text,
+			...(line.error === undefined ? {} : { error: line.error }),
 			...settledLine(line, at === log.length - 1, live),
 			startedAt: line.startedAt,
 			children: [],

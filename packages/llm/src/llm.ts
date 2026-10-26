@@ -4,7 +4,7 @@ import {
 } from "@repo/interpreter/annotations";
 import { isNumeric } from "@repo/interpreter/arith";
 import { topic } from "@repo/interpreter/channels";
-import { EvalException } from "@repo/interpreter/errors";
+import { EvalException, messageOf } from "@repo/interpreter/errors";
 import {
 	type Interp,
 	runSync,
@@ -60,16 +60,18 @@ type Announce = (
 	state: ActivityEntry["state"],
 	target: { provider?: string; model?: string },
 	timing: Timing,
+	error?: string,
 ) => void;
 
 function announcer(interp: Interp): Announce {
-	return (id, builtin, state, { provider, model }, timing) =>
+	return (id, builtin, state, { provider, model }, timing, error) =>
 		modelActivity.emit(interp.channels, {
 			user: {
 				kind: "llm",
 				label: `llm · ${model ?? provider ?? "default model"}`,
 				detail: builtin,
 				state,
+				...(error === undefined ? {} : { error }),
 				id,
 				...timing,
 			},
@@ -450,8 +452,7 @@ function traceOf(
 		if (res.inputTokens !== undefined) call.inputTokens = res.inputTokens;
 		if (res.outputTokens !== undefined) call.outputTokens = res.outputTokens;
 	}
-	if (error !== undefined)
-		call.error = error instanceof Error ? error.message : String(error);
+	if (error !== undefined) call.error = messageOf(error);
 	return call;
 }
 
@@ -494,7 +495,7 @@ function caller(
 			},
 			(ex) => {
 				const ms = clock.now() - startedAt;
-				announce(id, builtin, "failed", req, { startedAt, ms });
+				announce(id, builtin, "failed", req, { startedAt, ms }, messageOf(ex));
 				controller.abort();
 				report(traceOf(builtin, req, ms, undefined, ex));
 				throw ex;

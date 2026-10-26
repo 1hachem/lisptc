@@ -76,6 +76,7 @@ const intentStep = z.object({
 	startedAt: z.number(),
 	ms: z.number().optional(),
 	state: z.enum(["running", "done", "failed"]),
+	error: z.string().optional(),
 });
 
 export type IntentStep = z.infer<typeof intentStep>;
@@ -129,6 +130,7 @@ const activityEntry = z.object({
 	label: z.string(),
 	detail: z.string().optional(),
 	state: z.enum(["started", "done", "failed"]),
+	error: z.string().optional(),
 	id: z.string(),
 	startedAt: z.number().optional(),
 	ms: z.number().optional(),

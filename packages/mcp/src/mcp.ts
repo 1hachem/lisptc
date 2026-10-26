@@ -8,6 +8,7 @@ import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import {
 	EvalException,
+	messageOf,
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
@@ -545,13 +546,14 @@ function callTool(
 	calls.set(n);
 	const detail = toolDetail(tool.description);
 	const startedAt = clock.now();
-	const report = (state: ActivityEntry["state"]): void =>
+	const report = (state: ActivityEntry["state"], error?: unknown): void =>
 		toolActivity.emit(interp.channels, {
 			user: {
 				kind: "mcp",
 				label: toolLabel(ref.server, tool),
 				...(detail === undefined ? {} : { detail }),
 				state,
+				...(error === undefined ? {} : { error: messageOf(error) }),
 				id: `mcp-${n}`,
 				startedAt,
 				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
@@ -568,7 +570,7 @@ function callTool(
 			return jsonToLisp(value);
 		},
 		(error: unknown) => {
-			report("failed");
+			report("failed", error);
 			throw error;
 		},
 	);

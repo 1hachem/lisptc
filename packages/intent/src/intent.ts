@@ -72,23 +72,25 @@ const progressCodec: StateCodec<Progress | undefined> = {
 const logCodec: StateCodec<IntentStep[]> = {
 	toLisp: (log) =>
 		arrayToList(
-			log.map(({ text, startedAt, ms, state }) =>
+			log.map(({ text, startedAt, ms, state, error }) =>
 				arrayToList([
 					text,
 					BigInt(Math.trunc(startedAt)),
 					ms === undefined ? null : BigInt(Math.trunc(ms)),
 					state,
+					...(error === undefined ? [] : [error]),
 				]),
 			),
 		),
 	fromLisp: (list) =>
 		listToArray(list as List).map((entry) => {
-			const [text, startedAt, ms, state] = listToArray(entry as List);
+			const [text, startedAt, ms, state, error] = listToArray(entry as List);
 			return {
 				text: text as string,
 				startedAt: Number(startedAt),
 				...(ms === null ? {} : { ms: Number(ms) }),
 				state: state as IntentStep["state"],
+				...(typeof error === "string" ? { error } : {}),
 			};
 		}),
 };
@@ -99,10 +101,16 @@ function closeRunning(
 	log: readonly IntentStep[],
 	state: Closing,
 	now: number,
+	error?: string,
 ): IntentStep[] {
 	return log.map((step) =>
 		step.state === "running"
-			? { ...step, state, ms: Math.max(0, now - step.startedAt) }
+			? {
+					...step,
+					state,
+					ms: Math.max(0, now - step.startedAt),
+					...(error === undefined ? {} : { error }),
+				}
 			: step,
 	);
 }
@@ -132,12 +140,13 @@ function close(
 	interp: Interp,
 	state: Closing,
 	clock: Clock,
+	error?: string,
 ): Intent | undefined {
 	const states = statesOf.get(interp);
 	if (states === undefined) return undefined;
 	const log = states.log.get();
 	if (!log.some((step) => step.state === "running")) return undefined;
-	states.log.set(closeRunning(log, state, clock.now()));
+	states.log.set(closeRunning(log, state, clock.now(), error));
 	return shown(states);
 }
 
@@ -181,7 +190,9 @@ export function intentExtension(host: IntentHost): InterpExtension {
 					return next(ctx);
 				});
 				hooks.stepError.use((ctx, text, next) => {
-					closed = close(ctx.interp, "failed", clock) ?? closed;
+					closed =
+						close(ctx.interp, "failed", clock, text.trim() || undefined) ??
+						closed;
 					return next(ctx, text);
 				});
 				hooks.beforeSettle.use(function* (ctx, more, next) {

@@ -94,5 +94,6 @@ describe("a knowledge file read or write", () => {
 		expect(activity?.map((a) => [a.id, a.state, a.startedAt, a.ms])).toEqual([
 			["file-1", "failed", 1000, 25],
 		]);
+		expect(activity?.[0]?.error).toEqual(expect.stringMatching(/\S/));
 	});
 });

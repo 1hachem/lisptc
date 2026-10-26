@@ -74,10 +74,17 @@ describe("a model call from lisp", () => {
 			return { text: "ok" };
 		}, '(llm/complete "a") (llm/complete "b" :model "broken")');
 		expect(
-			activity?.map((a) => [a.id, a.label, a.state, a.startedAt, a.ms]),
+			activity?.map((a) => [
+				a.id,
+				a.label,
+				a.state,
+				a.startedAt,
+				a.ms,
+				a.error,
+			]),
 		).toEqual([
-			["llm-1", "llm · default model", "done", 1000, 25],
-			["llm-2", "llm · broken", "failed", 1050, 25],
+			["llm-1", "llm · default model", "done", 1000, 25, undefined],
+			["llm-2", "llm · broken", "failed", 1050, 25, "down"],
 		]);
 	});
 });
