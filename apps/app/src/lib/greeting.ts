@@ -39,6 +39,25 @@ export function pickGreeting(now: Date, roll: number = Math.random()): string {
 	return lines[Math.floor(roll * lines.length) % lines.length];
 }
 
+const greeted = new Map<string, string>();
+
+export function greetingFor(
+	key: string | undefined,
+	now: Date,
+): { line: string; typed: boolean } {
+	const known = key === undefined ? undefined : greeted.get(key);
+	if (known !== undefined) return { line: known, typed: true };
+	const line = pickGreeting(now);
+	if (key !== undefined) greeted.set(key, line);
+	return { line, typed: false };
+}
+
+export function rememberedGreeting(
+	key: string | undefined,
+): string | undefined {
+	return key === undefined ? undefined : greeted.get(key);
+}
+
 export const GREETING_ID = "greeting";
 
 export function isGreetingMessage(message: { id?: string }): boolean {

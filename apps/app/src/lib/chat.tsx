@@ -34,7 +34,7 @@ import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
-import { GREETING_ID, pickGreeting } from "./greeting.ts";
+import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { isFreshChat, turnsToShow } from "./turns.ts";
 import { shownMessages, useWatch } from "./watch.ts";
@@ -86,6 +86,7 @@ export interface ChatSession {
 	saved: ChatMessage[];
 	queued: QueuedMessage[];
 	greeting: string | null;
+	greetingTyped: boolean;
 	meta: Record<string, StepMeta>;
 	fresh: boolean;
 	isLoading: boolean;
@@ -131,8 +132,13 @@ export function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	return stored.map(toChatMessage);
 }
 
-function greetingMessage(): ChatMessage {
-	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
+interface Greeting {
+	message: ChatMessage;
+	typed: boolean;
+}
+
+function greetingOf(line: string, typed: boolean): Greeting {
+	return { message: { id: GREETING_ID, type: "ai", content: line }, typed };
 }
 
 function withGreeting(
@@ -148,11 +154,16 @@ function greetingText(greeting: ChatMessage | null): string | null {
 	return greeting === null ? null : messageText(greeting);
 }
 
-function useGreeting(): ChatMessage | null {
-	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
+function useGreeting(key: string | undefined): Greeting | null {
+	const [greeting, setGreeting] = useState<Greeting | null>(() => {
+		const known = rememberedGreeting(key);
+		return known === undefined ? null : greetingOf(known, true);
+	});
 	useEffect(() => {
-		setGreeting(greetingMessage());
-	}, []);
+		if (greeting !== null) return;
+		const { line, typed } = greetingFor(key, new Date());
+		setGreeting(greetingOf(line, typed));
+	}, [greeting, key]);
 	return greeting;
 }
 
@@ -518,6 +529,7 @@ function useSessionStore(
 			saved: [],
 			queued: [],
 			greeting: null,
+			greetingTyped: false,
 			meta: {},
 			fresh,
 			isLoading: false,
@@ -539,11 +551,13 @@ export function ChatProvider({
 	workspaceId,
 	chatId,
 	onOpened,
+	greetingKey,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
 	onOpened: (chatId: Id<"chats">) => void;
+	greetingKey?: string;
 	children: React.ReactNode;
 }) {
 	const announce = useRef(onOpened);
@@ -555,7 +569,7 @@ export function ChatProvider({
 
 	const persisted = usePersisted(chatId);
 
-	const greeting = useGreeting();
+	const greeting = useGreeting(greetingKey);
 
 	const [failure, setFailure] = useState<Failure>(null);
 	const [pending, setPending] = useState<Pending | null>(null);
@@ -570,7 +584,7 @@ export function ChatProvider({
 	);
 
 	const messages = useMemo(
-		() => withGreeting(greeting, turns),
+		() => withGreeting(greeting?.message ?? null, turns),
 		[greeting, turns],
 	);
 	const meta = useTurnMeta(turns);
@@ -602,7 +616,8 @@ export function ChatProvider({
 			saved: persisted,
 			queued,
 			meta,
-			greeting: greetingText(greeting),
+			greeting: greetingText(greeting?.message ?? null),
+			greetingTyped: greeting?.typed ?? false,
 			fresh,
 			isLoading: running,
 			chatId,

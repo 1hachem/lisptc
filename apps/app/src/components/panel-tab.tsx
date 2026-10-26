@@ -82,6 +82,7 @@ function ChatPane({
 	trace,
 	onOpened,
 	onForked,
+	greetingKey,
 }: {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
@@ -89,9 +90,15 @@ function ChatPane({
 	trace: SideTraceControl;
 	onOpened: (chatId: Id<"chats">) => void;
 	onForked: (chatId: Id<"chats">) => void;
+	greetingKey: string;
 }) {
 	return (
-		<ChatProvider workspaceId={workspaceId} chatId={chatId} onOpened={onOpened}>
+		<ChatProvider
+			workspaceId={workspaceId}
+			chatId={chatId}
+			onOpened={onOpened}
+			greetingKey={greetingKey}
+		>
 			<ForkPickerProvider onForked={onForked}>
 				<AgentProvider>
 					{lead && (
@@ -157,6 +164,7 @@ function ChatTab({
 			workspaceId={workspaceId}
 			chatId={content.chatId as Id<"chats"> | null}
 			lead={leadChat(layout) === id}
+			greetingKey={id}
 			trace={control}
 			onOpened={(opened) =>
 				retab(id, { ...content, chatId: opened, title: "chat" }, true)
