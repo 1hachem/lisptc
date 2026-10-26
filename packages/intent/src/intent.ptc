@@ -17,17 +17,24 @@ questions, final answer. Say intent through these forms.
 - (intent/ask "prompt" '("A" "B") [:multi t]) closed question, one pick; :multi t
   allows several. Ends turn after this step. Answer arrives as next message.
 
-Work of more than one step: intent/todo first, intent/check each item once done.
+Work of more than one step: intent/todo first. Code checks each item, never
+memory: intent/check is next form after work form, same block, same step. Work
+returns, item done at once. Never leave check for later step or final answer.
+Work raises: check never runs, item stays open. Promise work: await before check.
 
-(intent/todo "find open issues" "group by owner")
-(intent/doing "reading the tracker")
-(intent/check "find open issues")
+(intent/todo "sum scores" "average")
+(let ((scores '(3 9 4)))
+  (let ((total (apply + scores)))
+    (intent/check "sum scores")
+    (let ((mean (/ total (length scores))))
+      (intent/check "average")
+      (list total mean))))
 
 Known step count (loop over N items, batch): intent/progress each item. Named
 steps: intent/todo.
 
 Write intent forms inside the code, never a step of their own: intent/doing
-before each slow call, intent/check right after the form that does the work,
+before each slow call, intent/check chained after the form that does the work,
 intent/progress per item in a loop. User sees each update live while step runs.
 
 intent/doing before every outward call: mcp tool, web, llm. System reports each
