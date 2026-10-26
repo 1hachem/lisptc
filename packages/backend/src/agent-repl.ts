@@ -85,12 +85,13 @@ export interface ThreadScope {
 	readonly supervisor?: Supervisor;
 	readonly bounds?: readonly string[];
 	readonly roster?: readonly string[];
+	readonly subAgent?: boolean;
 }
 
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, supervisor, bounds, roster }: ThreadScope = {},
+	{ chatId, supervisor, bounds, roster, subAgent }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -134,6 +135,17 @@ export async function workspaceExtensions(
 			...(bounds === undefined ? {} : { bounds }),
 		}),
 	);
+	const preferences = preferencesExtension(
+		preferencesHostFor({
+			store: new ConvexPreferencesStore(connect),
+			fonts,
+			motions,
+		}),
+	);
+	const ui = uiExtension(uiHost);
+	const rootOnly: InterpExtension[] = subAgent
+		? [agents, workspace, preferences, ui]
+		: [];
 	return [
 		permissions,
 		secretsExtension({
@@ -166,15 +178,9 @@ export async function workspaceExtensions(
 		memory,
 		workspace,
 		knowledge,
-		preferencesExtension(
-			preferencesHostFor({
-				store: new ConvexPreferencesStore(connect),
-				fonts,
-				motions,
-			}),
-		),
+		preferences,
 		proseExtension(proseHost),
-		uiExtension(uiHost),
+		ui,
 		diagnosticsExtension(diagnosticsHost),
-	];
+	].filter((extension) => !rootOnly.includes(extension));
 }

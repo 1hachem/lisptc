@@ -1,7 +1,7 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { snapshot } from "@repo/interpreter/image";
-import { type Interp, runSync, type State } from "@repo/interpreter/lisp";
+import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -17,14 +17,10 @@ import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
-import {
-	AGENT_FOLDER,
-	agentFileName,
-	agentNameOf,
-	readDefinition,
-	writeDefinition,
-} from "./definition.ts";
-import { type Handle, handlesCodec } from "./handles.ts";
+import { AGENT_FOLDER, writeDefinition } from "./definition.ts";
+import { Handles, handlesCodec } from "./handles.ts";
+import { AgentLibrary } from "./library.ts";
+import { DELEGATE_PREFIX, delegateName, isDelegateName } from "./names.ts";
 import type {
 	AgentDefinition,
 	AgentThreads,
@@ -49,6 +45,11 @@ export const BOUNDED_DEFINE = "agents/define-bounded";
 
 export const KEEP = "agent-keep";
 
+export const FORGET = "agent-forget";
+
+export const DELEGATE_PROMPT =
+	"Do the brief, nothing else. Final answer: result first, then evidence (forms run, values seen, paths), then what not checked.";
+
 export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
@@ -56,7 +57,7 @@ export interface AgentsExtension extends InterpExtension {
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
-		asks: [DEFINE, BOUNDED_DEFINE, KEEP],
+		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
 	});
 }
 
@@ -153,25 +154,6 @@ function definitionFrom(
 	};
 }
 
-class Handles {
-	constructor(private readonly held: State<readonly Handle[]>) {}
-
-	of(name: string): Handle | undefined {
-		return this.held.get().find((entry) => entry.name === name);
-	}
-
-	child(name: string): string | undefined {
-		return this.of(name)?.child;
-	}
-
-	adopt(handle: Handle): void {
-		this.held.set([
-			...this.held.get().filter((entry) => entry.name !== handle.name),
-			handle,
-		]);
-	}
-}
-
 const DEFINE_KEYS = ["prompt", "roster", "budget"];
 
 export function registerAgents(interp: Interp, host: AgentsHost): void {
@@ -184,37 +166,12 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		),
 	);
 
+	const library = new AgentLibrary(host.folder, host.workspace, host.roster);
+
 	function threads(form: string): AgentThreads {
 		if (host.threads === undefined)
 			throw new EvalException("this session runs no sub-agents", form, false);
 		return host.threads;
-	}
-
-	function shown(name: string): boolean {
-		return host.roster === undefined || host.roster.includes(name);
-	}
-
-	async function sourceOf(name: string): Promise<string | undefined> {
-		return await host.folder.read(
-			host.workspace,
-			AGENT_FOLDER,
-			agentFileName(name),
-		);
-	}
-
-	async function saved(name: string): Promise<AgentDefinition | undefined> {
-		if (!shown(name)) return undefined;
-		const text = await sourceOf(name);
-		return text === undefined ? undefined : readDefinition(text);
-	}
-
-	async function save(name: string, text: string): Promise<void> {
-		await host.folder.write(
-			host.workspace,
-			AGENT_FOLDER,
-			agentFileName(name),
-			text,
-		);
 	}
 
 	async function definitionOf(
@@ -222,14 +179,14 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		options: Map<string, unknown>,
 	): Promise<AgentDefinition> {
 		if (options.has("prompt")) {
-			if ((await saved(name)) !== undefined)
+			if ((await library.saved(name)) !== undefined)
 				throw new EvalException(
 					"spawn: a saved agent has that name; spawn it without :prompt, or give this one another name",
 					name,
 				);
 			return definitionFrom("spawn", name, options);
 		}
-		const definition = await saved(name);
+		const definition = await library.saved(name);
 		if (definition === undefined)
 			throw new EvalException(
 				"spawn: no saved agent by that name; define it with defagent or pass :prompt",
@@ -268,7 +225,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 				throw new EvalException("defagent takes one name, then :prompt", rest);
 			const name = nameOf("defagent", values[0]);
 			const definition = definitionFrom("defagent", name, options);
-			await save(name, writeDefinition(definition));
+			await library.save(name, writeDefinition(definition));
 			const spawned = handles.of(name);
 			if (spawned?.unsaved !== undefined)
 				handles.adopt({ name, child: spawned.child });
@@ -313,14 +270,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"(agents)",
 		`Return the names of the agent definitions saved in ${AGENT_FOLDER}/.`,
 		z.tuple([]),
-		async () => {
-			const files = await host.folder.list(host.workspace, AGENT_FOLDER);
-			const names = files.flatMap((file) => {
-				const name = agentNameOf(file);
-				return name === undefined || !shown(name) ? [] : [name];
-			});
-			return arrayToList(names);
-		},
+		async () => arrayToList(await library.names()),
 	);
 
 	interp.def(
@@ -331,7 +281,9 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		z.tuple([zString]),
 		async ([target]) => {
 			const name = nameOf("agent-definition", target);
-			return shown(name) ? ((await sourceOf(name)) ?? null) : null;
+			return library.shows(name)
+				? ((await library.source(name)) ?? null)
+				: null;
 		},
 	);
 
@@ -339,7 +291,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"spawn",
 		-1,
 		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork])',
-		"Start a sub-agent on a thread of its own under a name and return the name. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent: nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over.",
+		"Start a sub-agent on a thread of its own under a name and return the name. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that starts at once on that prompt; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("spawn", rest, [
@@ -352,15 +304,25 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			if (values.length !== 1)
 				throw new EvalException("spawn takes one name, then options", rest);
 			const name = nameOf("spawn", values[0]);
+			if (isDelegateName(name))
+				throw new EvalException(
+					`spawn: names starting ${DELEGATE_PREFIX} are kept for delegate`,
+					name,
+				);
 			const seed = seedOf(interp, options.get("repl"));
 			const chat = chatOf(options.get("chat"));
 			const definition = await definitionOf(name, options);
-			const child = await threads("spawn").spawn({ definition, seed, chat });
-			handles.adopt(
-				options.has("prompt")
-					? { name, child, unsaved: writeDefinition(definition) }
-					: { name, child },
-			);
+			const port = threads("spawn");
+			const child = await port.spawn({ definition, seed, chat });
+			if (!options.has("prompt")) {
+				handles.adopt({ name, child });
+				return name;
+			}
+			handles.adopt({ name, child, unsaved: writeDefinition(definition) });
+			await port.send(child, {
+				text: definition.prompt,
+				maxSteps: DEFAULT_MAX_STEPS,
+			});
 			return name;
 		},
 	);
@@ -376,16 +338,30 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			const handle = handles.of(name);
 			if (handle === undefined)
 				throw new EvalException(`${KEEP}: no agent spawned by that name`, name);
+			if (isDelegateName(name))
+				throw new EvalException(`${KEEP}: a delegate cannot be kept`, name);
 			if (handle.unsaved === undefined)
 				throw new EvalException(`${KEEP}: that agent is saved already`, name);
-			if ((await sourceOf(name)) !== undefined)
+			if ((await library.source(name)) !== undefined)
 				throw new EvalException(
 					`${KEEP}: a saved agent has that name already`,
 					name,
 				);
-			await save(name, handle.unsaved);
+			await library.save(name, handle.unsaved);
 			handles.adopt({ name, child: handle.child });
 			return name;
+		},
+	);
+
+	interp.def(
+		FORGET,
+		1,
+		`(${FORGET} "name")`,
+		`Delete the saved definition ${AGENT_FOLDER}/<name>.ptc. It waits on the user's approval. An agent already spawned from it keeps running. Return t when one was deleted, nil when none was saved.`,
+		z.tuple([zString]),
+		async ([target]) => {
+			const name = nameOf(FORGET, target);
+			return (await library.forget(name)) ? true : null;
 		},
 	);
 
@@ -404,11 +380,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			if (to === undefined)
 				throw new EvalException("send: say who with :to", rest);
 			const name = nameOf("send", to);
-			const steps = options.get("max-steps");
-			const maxSteps =
-				steps === undefined
-					? DEFAULT_MAX_STEPS
-					: countOf("send", ":max-steps", steps);
+			const maxSteps = stepsOf("send", options);
 			const child = handles.child(name);
 			if (child === undefined)
 				throw new EvalException(
@@ -416,6 +388,41 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 					name,
 				);
 			return await threads("send").send(child, { text, maxSteps });
+		},
+	);
+
+	function stepsOf(form: string, options: Map<string, unknown>): number {
+		const steps = options.get("max-steps");
+		return steps === undefined
+			? DEFAULT_MAX_STEPS
+			: countOf(form, ":max-steps", steps);
+	}
+
+	interp.def(
+		"delegate",
+		-1,
+		'(delegate "brief" [:max-steps n] [:repl :fresh|:fork])',
+		"Hand self-contained work to a new temporary sub-agent with a fresh chat and return its job id at once; keep working. Its reply comes back later as a system event from agent:delegate-n, or agent-wait the job. The brief carries all it needs: goal, inputs, what done means. Nothing is saved and it cannot be kept.",
+		z.tuple([zList]),
+		async ([rest]) => {
+			const { values, options } = parse("delegate", rest, [
+				"max-steps",
+				"repl",
+			]);
+			if (values.length !== 1)
+				throw new EvalException("delegate takes one brief string", rest);
+			const text = textOf("delegate", "the brief", values[0]);
+			const maxSteps = stepsOf("delegate", options);
+			const seed = seedOf(interp, options.get("repl"));
+			const port = threads("delegate");
+			const name = delegateName(handles.names());
+			const child = await port.spawn({
+				definition: { name, prompt: DELEGATE_PROMPT },
+				seed,
+				chat: { from: "fresh" },
+			});
+			handles.adopt({ name, child });
+			return await port.send(child, { text, maxSteps });
 		},
 	);
 

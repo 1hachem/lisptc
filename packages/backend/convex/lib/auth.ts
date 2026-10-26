@@ -18,7 +18,8 @@ async function requireCaller(ctx: QueryCtx | MutationCtx): Promise<Caller> {
 			String(identity.workspaceId),
 		);
 		const user = userId === null ? null : await ctx.db.get(userId);
-		if (user === null || scope === null)
+		const workspace = scope === null ? null : await ctx.db.get(scope);
+		if (user === null || scope === null || workspace?.ownerId !== user._id)
 			throw new ConvexError({ code: "UNAUTHENTICATED" });
 		return { user, scope };
 	}
@@ -30,6 +31,14 @@ function inScope(caller: Caller, workspaceId: Id<"workspaces">): boolean {
 }
 
 export async function requireUser(
+	ctx: QueryCtx | MutationCtx,
+): Promise<Doc<"users">> {
+	const caller = await requireCaller(ctx);
+	if (caller.scope !== undefined) throw new ConvexError({ code: "FORBIDDEN" });
+	return caller.user;
+}
+
+export async function requireUserOrThread(
 	ctx: QueryCtx | MutationCtx,
 ): Promise<Doc<"users">> {
 	return (await requireCaller(ctx)).user;

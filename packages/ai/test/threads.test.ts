@@ -76,7 +76,11 @@ class World {
 	}
 
 	heard(id: string, source: string): boolean {
-		return (this.stored.get(id) ?? []).some(
+		return this.told(id, source).length > 0;
+	}
+
+	told(id: string, source: string): WireMessage[] {
+		return (this.stored.get(id) ?? []).filter(
 			(m) => m.additional_kwargs?.source === source,
 		);
 	}
@@ -253,6 +257,70 @@ describe("threads", () => {
 		expect(await grand.ended).not.toEqual({ answer: "done." });
 		expect(await root.ended).toEqual({ answer: "done." });
 		expect(await sibling.ended).toEqual({ answer: "done." });
+	});
+
+	test("tell the parent the user stopped the child that was working for it", async () => {
+		const world = new World();
+		family(world);
+		const threads = world.threads();
+		const open = gate();
+		const job = await threads.ask("child", user("work"), { replyTo: "root" });
+		await vi.waitFor(() => expect(model.calls).toHaveLength(1));
+
+		expect(await threads.stop("child")).toBe(true);
+		open();
+
+		await vi.waitFor(() =>
+			expect(world.told("root", "agent:child")).toEqual([
+				expect.objectContaining({
+					content: "failed: stopped by the user",
+					additional_kwargs: { source: "agent:child", failed: true },
+				}),
+			]),
+		);
+		expect(threads.state(job)).toMatchObject({ state: "failed" });
+	});
+
+	test("tell the parent the user stopped the child that was waiting on them", async () => {
+		const world = new World();
+		family(world);
+		world.extensions = [holding()];
+		model.script = ["(wait-for-human)"];
+		const threads = world.threads();
+		const job = await threads.ask("child", user("ask"), { replyTo: "root" });
+		await vi.waitFor(() =>
+			expect(threads.state(job)).toMatchObject({ state: "held" }),
+		);
+
+		expect(await threads.stop("child")).toBe(true);
+
+		await vi.waitFor(() =>
+			expect(world.told("root", "agent:child")).toEqual([
+				expect.objectContaining({ content: "failed: stopped by the user" }),
+			]),
+		);
+	});
+
+	test("wake no parent the user stopped along with its child", async () => {
+		const world = new World();
+		family(world);
+		const threads = world.threads();
+		const open = gate();
+		const root = await threads.get("root").post(user("lead"));
+		const child = await threads.ask("child", user("work"), {
+			replyTo: "root",
+		});
+		await vi.waitFor(() => expect(model.calls).toHaveLength(2));
+
+		expect(await threads.stop("root", "tree")).toBe(true);
+		open();
+
+		expect(await root.ended).toEqual({ stopped: "stopped by the user" });
+		expect(await threads.wait(child)).toEqual({
+			stopped: "stopped by the user",
+		});
+		expect(world.told("root", "agent:child")).toEqual([]);
+		expect(model.calls).toHaveLength(2);
 	});
 });
 

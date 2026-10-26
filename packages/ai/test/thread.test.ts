@@ -340,14 +340,15 @@ describe("stopping a thread", () => {
 	test("aborts the turn that runs, and only one that runs", async () => {
 		const world = new World();
 		const thread = world.thread();
-		expect(thread.stop()).toBe(false);
+		const halted = { stopped: "halted" };
+		expect(thread.stop(halted)).toBe(false);
 		const gate = gated();
 		const posted = await thread.post(user("a", "hello"));
 		await gate.entered;
-		expect(thread.stop()).toBe(true);
+		expect(thread.stop(halted)).toBe(true);
 		gate.open();
-		expect(await posted.ended).not.toEqual({ answer: "done." });
-		expect(thread.stop()).toBe(false);
+		expect(await posted.ended).toEqual(halted);
+		expect(thread.stop(halted)).toBe(false);
 		expect(world.endings).toEqual([{ stopped: true }]);
 	});
 

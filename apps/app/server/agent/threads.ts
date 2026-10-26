@@ -61,7 +61,7 @@ export function stopThread(
 	chatId: Id<"chats">,
 	scope: "thread" | "tree",
 ): Promise<boolean> {
-	return scope === "tree" ? threads.cancel(chatId) : threads.stop(chatId);
+	return threads.stop(chatId, scope);
 }
 
 export function answer(
