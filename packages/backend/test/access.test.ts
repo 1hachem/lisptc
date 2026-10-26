@@ -292,6 +292,49 @@ describe("chat access", () => {
 		});
 		expect(listed.chats.map((c) => c._id)).toEqual([kept]);
 	});
+
+	it("lists an archived chat apart and restores it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const kept = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "kept",
+		});
+		const gone = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "gone",
+		});
+		await alice.as.mutation(api.chats.archive, { chatId: gone });
+		const archived = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			archived: true,
+		});
+		expect(archived.chats.map((c) => c._id)).toEqual([gone]);
+		await alice.as.mutation(api.chats.unarchive, { chatId: gone });
+		const listed = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(listed.chats.map((c) => c._id).sort()).toEqual([gone, kept].sort());
+		const left = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			archived: true,
+		});
+		expect(left.chats).toEqual([]);
+	});
+
+	it("refuses to restore a chat of another user", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "mine",
+		});
+		await alice.as.mutation(api.chats.archive, { chatId });
+		await expect(
+			bob.as.mutation(api.chats.unarchive, { chatId }),
+		).rejects.toThrow();
+	});
 });
 
 describe("messages", () => {

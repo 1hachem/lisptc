@@ -20,10 +20,13 @@ sidebar; every change shows there at once.
   you know its topic: few words, no full stop.
 - (chat/rename id "…") retitles another chat.
 - (chat/archive id) takes chat out of sidebar. User approves it.
+- (chats :archived t) lists archived chats, latest archived first.
+  (chat/unarchive id) puts one back in sidebar.
 - (chat/read id :last 10) gives another chat's last messages as (role . text).
   User approves it: it brings whole other conversation into this one.
 
 GOTCHAS
 
-- Ids come from (chats). Never guess one.
+- Ids come from (chats), or (chats :archived t) for archived ones. Never guess
+  one.
 - Cannot archive current chat.
