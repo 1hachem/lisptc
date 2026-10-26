@@ -60,6 +60,56 @@ describe("a thread acting as its record's owner", () => {
 		).rejects.toThrow();
 	});
 
+	it("is refused what belongs to the account rather than the workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const thread = t.withIdentity({
+			issuer: ACTING_ISSUER,
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		await expect(thread.query(api.workspaces.list, {})).rejects.toThrow(
+			/FORBIDDEN/,
+		);
+		await expect(
+			thread.mutation(api.workspaces.create, { name: "elsewhere" }),
+		).rejects.toThrow(/FORBIDDEN/);
+		await expect(thread.query(api.users.me, {})).rejects.toThrow(/FORBIDDEN/);
+		await expect(
+			thread.query(api.oauth.pendingFor, { state: "s" }),
+		).rejects.toThrow(/FORBIDDEN/);
+	});
+
+	it("reads and writes its owner's preferences", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const thread = t.withIdentity({
+			issuer: ACTING_ISSUER,
+			subject: alice.user,
+			workspaceId: alice.workspace,
+		});
+		const before = await thread.query(api.preferences.get, {});
+		await thread.mutation(api.preferences.put, { preferences: before });
+		expect(await alice.as.query(api.preferences.get, {})).toEqual(before);
+	});
+
+	it("is refused when its user does not own the workspace it acts for", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const mismatched = t.withIdentity({
+			issuer: ACTING_ISSUER,
+			subject: bob.user,
+			workspaceId: alice.workspace,
+		});
+		await expect(mismatched.query(api.preferences.get, {})).rejects.toThrow(
+			/UNAUTHENTICATED/,
+		);
+		await expect(
+			mismatched.query(api.memories.list, { workspaceId: alice.workspace }),
+		).rejects.toThrow(/UNAUTHENTICATED/);
+	});
+
 	it("is refused when the issuer is any other", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
