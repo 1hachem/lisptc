@@ -1,9 +1,7 @@
 import type { V1DaemonSet } from "@kubernetes/client-node";
 import { imagesOf } from "@repo/mcp-extension/kubernetes";
-import toolkit from "@repo/mcp-extension/mcp.toolkit.json" with {
-	type: "json",
-};
 import type { ConnConfig } from "@repo/mcp-extension/ports";
+import toolkit from "@repo/toolkit/mcp.toolkit.json" with { type: "json" };
 import type { Cluster } from "./cluster.ts";
 import { pullStalled } from "./state.ts";
 import { PREPULL_SELECTOR, repositoryOf } from "./workload.ts";

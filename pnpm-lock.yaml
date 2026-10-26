@@ -538,6 +538,9 @@ importers:
       '@repo/mcp-extension':
         specifier: workspace:*
         version: link:../../packages/mcp
+      '@repo/toolkit':
+        specifier: workspace:*
+        version: link:../../packages/toolkit
       convex:
         specifier: ^1.46.0
         version: 1.46.0(react@19.2.8)
